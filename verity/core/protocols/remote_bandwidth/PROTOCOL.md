@@ -10,8 +10,9 @@ live-coin design and what it would cost.
 
 The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (seeds, plans, receipts and trees),
 `codec.py` (the store's encoding), `memory_map.py` (serving's record of the KV blocks it wrote and freed, the audit's
-input from serving), `store.py` (a registered store bound to a pinned model, §3) and `timing.py` (the honest schedule,
-and where the sketch's bound is read). Every byte format below is pinned by
+input from serving), `store.py` (a registered store bound to a pinned model, §3), `timing.py` (the honest schedule,
+and where the sketch's bound is read) and `p2.py` (the audit over PoUS's P2 store, §11). Every byte format below is
+pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
 checks are the specification of what each zero-knowledge proof unit proves on the deployed path (§8). The verifier's
 definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
@@ -1540,6 +1541,85 @@ At the stated \(T\) = 60 s with 789 GB over every tier and RTT 1 ms, the horizon
 by \(q^k\)). 16 KiB receipts make it 0.58%, and a 26 µs flush with them 0.23%. The worst window's \(\gamma_t\) goes
 from 0.896% to 0.81% and 0.46%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's
 steady state and \(\mu_{\text{rebuild}}\) alone exceed 0.15%.
+
+## 11. The P2 store
+
+`p2.py` runs the audit over PoUS's P2-encoded weights store: the store is PoUS's `C*`, `W` encoded under P2
+(`pous.schemes.p2`, `p2-16448/v4`) at PoUS's setup, and the receipts are made by the GPU's own decode of it while it
+serves. This section is what differs from §1–§8; the rest (seeds, plans, leaves, trees, windows, deadlines, coins,
+draws) is unchanged, over units where those sections say blocks. Its byte formats are pinned by `tests/test_p2.py`
+and held to the Lean by `lean/tests/test_p2.py`.
+
+**The store.** Block \(j\) is 2,056 bytes, a big-endian integer below \(p = 2^{16448} - 21065\), at byte \(2056j\);
+\(j = \text{blocks\_per\_segment} \cdot s + v\). A unit is four consecutive blocks, unit \(g\) blocks \(4g \ldots 4g +
+3\): 8,224 bytes, 257 whole 32-byte sectors. The store's \(U = \lfloor N/4 \rfloor\) units are what plans range over,
+and the last \(N - 4U\) blocks are in no unit and no receipt certifies them (none in PoUS's store of \(2^{16}\)-block
+segments). The receipt's vector is a unit, not a block, because block \(j\) starts at byte \(8j \bmod 32\): a
+receipt of one block would leave sectors half read, and `SketchBoundSession`'s guess term, over sectors, would grow
+from \(Q/2^{96}\) to \(Q/2^{64}\).
+
+**Registration** (`p2.Registration`, `p2.register`). PoUS's setup: the prover commits to `W` (`setup.commit`), the
+verifier draws the salt from its own secret after the commitment (`setup.draw_salt`), and builds `vk` from the `C*` it
+decodes to the committed `W` (`setup.verifier_key_from_encoding`). The registration is the node, P2's parameters, the
+commitment, the salt, `vk`'s root and \(k_s\); its digest is `p2.py`'s table, and it is the session's
+\(\text{root}_{(0,-1)}\) as in §4. The setup of record is MEM-69's: commitment `9aaaf192…` (#4477) and its salt.
+
+**The decode kernel's sketch.** This is the interface the kernel computes, and `p2.Sketcher` is its CPU reference.
+Per pass \(i\), after root \(i-1\):
+
+~~~text
+seed_i     the audit's (receipts.seed): SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)), 64 bytes
+S_i        k_s rows (16) of 1,028 bytes, from seed_i on the host: K = derive(seed_i,
+           "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}), row c =
+           K.stream(("row", c), 1028) (verity.ml.randomness); bit x of a row (byte x // 8, bit x % 8, LSB first) is
+           the sign of the unit's byte x: 1 → −1, 0 → +1
+~~~
+
+Per block \(j\) the kernel decodes, from the 2,056 bytes it read of `C*`, before decoding them:
+
+~~~text
+b          j mod 4, the block's place in its unit
+signs      bytes 257·b … 257·b + 256 of each row: bit x of that slice is block byte x's sign
+π_j[c]     Σ_(x < 2056) sign_c(x) · int8(c_j[x]), c_j's bytes as stored (byte 0 the integer's most significant),
+           int8 two's complement; k_s int32, |π_j[c]| ≤ 128·2056
+~~~
+
+Per unit \(g\), once its four blocks are decoded (in any order):
+
+~~~text
+σ_g[c]     π_(4g)[c] + π_(4g+1)[c] + π_(4g+2)[c] + π_(4g+3)[c], exact in int32 (|σ_g[c]| ≤ 128·8224 < 2^21)
+y_g        SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ σ_g as k_s int32 little-endian):
+           one compression after the pass's 128-byte prefix, whose midstate every unit shares
+~~~
+
+The host commits the \(y_g\) in plan order as §4's tree (`p2.Prover.commit`). The partial is a function of the bytes
+the decode read, so the receipt binds the read the decode made; computing it from the decoded `W`, or from a second
+read, is another protocol. Per block it is \(16 \times 2056\) sign-and-add steps beside the decode's two 16,448-bit
+squarings. The fixture kernels build against comes from the serving loop over #4455's toy `C*` (`serve.py fixture`,
+pinned there by its SHA-512 and published as `art:23a1667b4d4515f46fabea029492a1ca3788eef0771b115642f21e18f58f3da2`):
+a pinned seed, the sign rows, every block's \(\pi\), every unit's \(\sigma\) and \(y\).
+
+**Openings** (`p2.Opening`, `p2.Session.verify`). An opening of unit \(g\) is its four blocks, each with its path to
+`vk`'s root, and the receipt leaf with its salt and path. The verifier checks the leaf on the pass's root, each block on
+`vk` under PoUS's leaf (`pous.verifier.leaf_hash`, `payload-path` if one fails; in the Lean, PoUS's own leaf and
+path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p2.check`). It decodes nothing: `vk`'s leaves are of the `C*` the verifier decoded to the committed `W`, so a block on its
+path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
+nothing (`append`).
+
+**What it rests on, and what is open.**
+
+- The record (`Session.record`) is §7's, with `block_bytes` 8,224, `codec` `p2-16448/v4` and layout `p2-unit4/v0`.
+  `audit.Rebuild` refuses a P2 codec, so `audit.ledger` refuses a P2 record: \(\mu_{\text{rebuild}}\) at P2's encode
+  waits on `WorkHardnessP2` and `SquaringCeilingP2`, drafted (not decided) in Accounting's assumptions, which need the
+  H200's squaring rate at 16,448 bits measured. Claims are Daniel's.
+- The sketch bound at units is `SketchBoundSession` at \(m = 257\) sectors, drafted as `SketchBoundP2`:
+  \(\delta_s = Q/2^{96} + (Q + P)(\varepsilon + N/2^{512}) + (Q + P)^2/2^{257}\) at `SketchRank 16 257 12 ε`, with
+  \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
+  blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
+  \(m\).
+- Not yet built: the Lean session over a P2 store (the Lean ports here are the registration digest, the partials,
+  the unit receipt and the opening check, `lean/RemoteAudit/P2.lean`), the registry's one live registration a node for
+  P2, and the zero-knowledge opening unit of a P2 unit (§8).
 
 ## Appendix A. Live coins, and why the protocol doesn't use them
 
