@@ -13,9 +13,12 @@
 #          never landed: what the gate would flag once it does
 #   check  (vy-dc-h200, under gpu-lease) job.sh's j10r90: unitsbench.py's J10-R gates at its own shapes, then j10r90.py
 #          check at the frozen shape
-#   time   (vy-dc-h200, under gpu-lease) job.sh's j10r90t: j10r90.py time
+#   time   (vy-dc-h200, under gpu-lease) job.sh's j10r90t: j10r90.py time; with an s8-ship.tar sent (KP2-S8's
+#          s8_linear/build.sh ship plus its wgmma.py and configs.py, #4520), wgmma.linear as a second plain arm
 #
 #   research run --on auto --cwd source --timeout 30m -- bash benchmarks/hash/dither/j10r90.sh build
+#   (or on the H200's host, outside any lease; where the host has no /workspace/cp/venv312, VERITY_BENCH_VENV names a
+#   torch venv for check and time)
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 30m \
 #     --env GPU_LEASE_WHO=kernels-kcommitfb --send BUILD_RUN/out/lib/sm_90a/h1u_kr.so --send .../h1u_kra.so \
 #     --send .../h1u_kraq.so --send .../BUILD.txt -- bash benchmarks/hash/dither/j10r90.sh check
@@ -70,6 +73,11 @@ EOF
   check|time)
     old=/workspace/research/runs/r20261023-120437-0149/out/sass_pins.json
     [ -f "$old" ] && cp "$old" "$OUT/sass_pins.r20261023-120437-0149.json"
+    s8=${LIBS:-${RESEARCH_RUN_DIR:-.}/inputs}/s8-ship.tar
+    if [ "$WHAT" = time ] && [ -f "$s8" ]; then
+      mkdir -p "$OUT/s8_linear" && tar -C "$OUT/s8_linear" -xf "$s8" || exit 2
+      export BENCH_ARGS="--wgmma $OUT/s8_linear ${BENCH_ARGS:-}"
+    fi
     HB_WHO=${HB_WHO:-${GPU_LEASE_WHO:-kernels-kcommitfb}} LEASE=${LEASE:---max-min 20} \
       exec bash "$HERE/job.sh" sm_90a "$([ "$WHAT" = check ] && echo j10r90 || echo j10r90t)" ;;
   *) echo "j10r90.sh: no $WHAT (build, check or time)" >&2; exit 2 ;;

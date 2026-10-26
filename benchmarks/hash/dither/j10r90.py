@@ -3,7 +3,7 @@ kh_units_multi_j10r_sm) at the frozen shape's linears (s8_simple's SHAPES: width
 M = 4,096 and 16,384 token rows, one call a linear, every row live (HASH-21):
 
     python j10r90.py check  --lib NAME=PATH ... --out OUT [--ms 4096,16384] [--linears q,kv,o,up,down,head] [--picks 24]
-    python j10r90.py time   --lib NAME=PATH ... --out OUT [--ms ...] [--linears ...] [--reps 5]
+    python j10r90.py time   --lib NAME=PATH ... --out OUT [--ms ...] [--linears ...] [--reps 5] [--wgmma DIR]
     python j10r90.py verify --dump DIR --out OUT [--jobs 8] [--v6 1]
 
 A and B are `operand`'s, a counter hash of (seed, row, column) that `verify` regenerates row by row; salt, roots and the
@@ -25,14 +25,16 @@ PAIRS through the Definition and on every cell of the tile against the int64 pro
 time (on the GPU): plain INT8 as s8_simple (#4472) runs it, torch._int_mm and the f32 epilogue as four eager kernels,
 against each build's J10-R call (seeds, rows and units: kh_units_multi_j10r_sm on every SM, the served launch), arms
 interleaved rep by rep; overhead = units / plain and gamma = (plain + units) / plain, a call and summed over a layer's
-linears (q, kv, o, up, down; the head once a step). After the reps every build's receipts are compared word for word
-with the base's.
+linears (q, kv, o, up, down; the head once a step). With --wgmma, KP2-S8's wgmma.linear (the fastest exact plain INT8 on
+the H200, #4463 and #4520) at its tuned config is a second plain arm in the same rotation, its bf16 output equal to
+plain's on every cell. After the reps every build's receipts are compared word for word with the base's.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 import random
 import statistics
 import sys
@@ -299,6 +301,24 @@ def scale(acc: torch.Tensor, sx: torch.Tensor, sw: torch.Tensor) -> torch.Tensor
     return y.to(torch.bfloat16)
 
 
+def wgmma_of(d: str):
+    """KP2-S8's wgmma.linear (HASH-10, #4463 and #4520): its wgmma.py and configs.py from DIR beside build.sh's ship
+    (s8_wgmma.cubin, sass.json, MANIFEST.sha256), and a (M, N, K) -> Cfg pick by its tuned table as its run.py's
+    table_cfg reads it, else its default."""
+    os.environ.setdefault("S8_WGMMA_CUBIN", str(Path(d) / "s8_wgmma.cubin"))
+    sys.path.insert(0, d)
+    import wgmma as W
+    from configs import CONFIGS
+    table = CONFIGS.get("wgmma:sm_90", {})
+
+    def pick(m: int, n: int, k: int):
+        rows = table.get((n, k))
+        if not rows:
+            return W.default_cfg(m, n, k, W.lib().sms)
+        return W.Cfg.parse(next((t for m_max, t in rows if m <= m_max), rows[-1][1]))
+    return W, pick
+
+
 def time_(args) -> int:
     import unitsbench as U
     from hb_kbench import Clock
@@ -307,8 +327,12 @@ def time_(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     clock = Clock()
+    W, wpick = wgmma_of(args.wgmma) if args.wgmma else (None, None)
+    plains = ["plain"] + (["wgmma"] if W else [])
     doc = {"schema": "j10r90/time/v1", "device": clock.name, "sms": torch.cuda.get_device_properties(0).multi_processor_count,
            "libs": dict(v.partition("=")[::2] for v in args.lib), "plain": "s8_simple: torch._int_mm + scale",
+           **({"wgmma": "KP2-S8's wgmma.scaled_mm at its tuned table's config", "wgmma_identity": W.lib().identity()}
+              if W else {}),
            "units": "kh_seeds_j10r + kh_units_multi_j10r_sm at 1/1", "reps": args.reps,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "calls": []}
     e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
@@ -320,6 +344,10 @@ def time_(args) -> int:
         sx = (torch.rand(c["m"], device="cuda", generator=g) + 0.5) / 127
         sw = (torch.rand(c["n"], device="cuda", generator=g) + 0.5) * 0.02 / 127
         arms: dict = {"plain": lambda: scale(torch._int_mm(a, b.t()), sx, sw)}
+        if W:
+            cfg = wpick(c["m"], c["n"], c["k"])
+            yw = torch.empty((c["m"], c["n"]), dtype=torch.bfloat16, device="cuda")
+            arms["wgmma"] = lambda: W.scaled_mm(a, sx, b, sw, yw, cfg)
         keep: dict = {}
         for nm in names:
             jc = JCall(libs[nm], a, b, c)
@@ -350,12 +378,20 @@ def time_(args) -> int:
         o0 = keep[names[0]][1]
         same = {nm: int((keep[nm][1] != o0).sum()) for nm in names[1:]}
         left = {nm: int((keep[nm][1] == POISON).sum()) for nm in names}
+        wbad = None
+        if W:
+            yw.fill_(-1)
+            arms["wgmma"]()
+            wbad = int((yw.view(torch.int16) != arms["plain"]().view(torch.int16)).sum())
         med = {k: statistics.median(v) for k, v in ms_.items()}
         rec = {**{x: c[x] for x in ("linear", "m", "n", "k")}, "units": keep[names[0]][0].units,
                "median_ms": {k: round(v, 4) for k, v in med.items()},
                "ms": {k: [round(x, 4) for x in v] for k, v in ms_.items()}, "sm_mhz": mhz,
-               "overhead": {nm: round(med[nm] / med["plain"], 3) for nm in names},
-               "gamma": {nm: round((med["plain"] + med[nm]) / med["plain"], 3) for nm in names},
+               **({"wgmma_cfg": str(cfg), "wgmma_vs_plain_bad_cells": wbad} if W else {}),
+               **{("overhead" if p == "plain" else f"overhead_{p}"): {nm: round(med[nm] / med[p], 3) for nm in names}
+                  for p in plains},
+               **{("gamma" if p == "plain" else f"gamma_{p}"): {nm: round((med[p] + med[nm]) / med[p], 3) for nm in names}
+                  for p in plains},
                "vs_base_bad_words": same, "poison_left": left}
         print(json.dumps({k: v for k, v in rec.items() if k not in ("ms", "sm_mhz")}), flush=True)
         doc["calls"].append(rec)
@@ -367,12 +403,17 @@ def time_(args) -> int:
         rows = {r["linear"]: r for r in doc["calls"] if r["m"] == m}
         if not all(x in rows for x in LAYER):
             continue
-        plain = sum(rows[x]["median_ms"]["plain"] for x in LAYER)
-        lay = doc["layer"][str(m)] = {"plain_ms": round(plain, 3)}
-        for nm in names:
-            u = sum(rows[x]["median_ms"][nm] for x in LAYER)
-            lay[nm] = {"units_ms": round(u, 3), "overhead": round(u / plain, 3), "gamma": round((plain + u) / plain, 3)}
-    doc["ok"] = all(not any(r["vs_base_bad_words"].values()) and not any(r["poison_left"].values()) for r in doc["calls"])
+        lay = doc["layer"][str(m)] = {}
+        for p in plains:
+            base = sum(rows[x]["median_ms"][p] for x in LAYER)
+            lay[f"{p}_ms"] = round(base, 3)
+            for nm in names:
+                u = sum(rows[x]["median_ms"][nm] for x in LAYER)
+                lay.setdefault(nm, {"units_ms": round(u, 3)})
+                lay[nm][f"overhead_vs_{p}"] = round(u / base, 3)
+                lay[nm][f"gamma_vs_{p}"] = round((base + u) / base, 3)
+    doc["ok"] = all(not any(r["vs_base_bad_words"].values()) and not any(r["poison_left"].values())
+                    and not r.get("wgmma_vs_plain_bad_cells") for r in doc["calls"])
     doc["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     (out / "j10r90-time.json").write_text(json.dumps(doc, indent=1))
     print(json.dumps({"layer": doc["layer"], "ok": doc["ok"]}, indent=1), flush=True)
@@ -454,6 +495,7 @@ def main() -> int:
     ap.add_argument("--dump", help="verify: check's out/ (j10r90-check.json and .npz)")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--v6", type=int, default=1, help="verify: units a call also taken through v6 (stream=True)")
+    ap.add_argument("--wgmma", help="time: a dir with KP2-S8's s8_linear ship and its wgmma.py, configs.py: a second plain arm")
     args = ap.parse_args()
     args.ms = [int(x) for x in args.ms.split(",")]
     args.linears = [x for x in LINEARS if x in args.linears.split(",")]
