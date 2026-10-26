@@ -198,7 +198,9 @@ theorem colsRV_plainView {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} 
     rw [List.map_snd_zip (by omega), List.map_append, List.map_map]
     congr 1
     conv_rhs => rw [← List.map_id cs.dropLast]
-    exact List.map_congr_left fun c _ => coinOf_bytes c
+    refine List.map_congr_left fun c _ => ?_
+    rw [Function.comp_apply, id_eq, outCoin]
+    exact coinOf_bytes c
 
 /-- **`LastStepBinds` at the deployed bound record at the deployed reader's steps and columns**, from `RLastBinds`,
 at SHA-512, whatever the code side's other choices. -/
