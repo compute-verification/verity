@@ -27,8 +27,8 @@ open scoped NNRat
 
 /-- `WorkSound` gives the headline on every card table. -/
 theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
-    (pb : PubBest c) : WorkSoundAt c pb := by
-  intro x _ _ D P L G e _ k verdict Pd μ Hmm Hsha Ho η δ nmax macs Ein Eout κS κx Δ t cin cout arrive
+    (pb : PubBest c) (hr : HostRow) : WorkSoundAt c pb hr := by
+  intro x _ _ D P L G e _ _ k verdict Pd μ Hmm Hsha Ho η δ nmax macs comps Ein Eout κS κx Δ t cin cout arrive
     hdual hmm hsha ho hH hpm hps hη hδ hδ1 hn hm hEi hEo hkΔ g1 g2 p1 p2 sak sha svc sees clock ext
   have hβ : 0 ≤ nmax * Hmm / macs := div_nonneg (mul_nonneg hn hmm.le) hm.le
   have hK : 0 ≤ Ein + Eout := add_nonneg hEi hEo
@@ -36,7 +36,8 @@ theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ver
     le_trans (prob_mono fun ox hox => ⟨hox.1.1.1, hox.2⟩) (svc A)
   have imp : ImportWithinCertifier G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) (Ein + Eout) :=
     fun A o x hv => (sees A o x).trans (hv.1.2.1.trans (le_add_of_nonneg_right hEo))
-  refine ⟨h G P k _ Pd μ (pubCost e μ pb.mm) (pubCost e μ pb.sha) Hmm Hsha Ho η δ (nmax * Hmm / macs) (Ein + Eout)
+  refine ⟨h G P k _ Pd μ (pubCost e μ pb.mm macs) (pubCost e μ pb.sha comps) Hmm Hsha Ho η δ (nmax * Hmm / macs)
+    (Ein + Eout)
     κS κx hdual hmm hsha ho hH hpm hps hη hδ hδ1 hβ hK g1 g2 p1 p2 sak sha svc' imp ext, ?_⟩
   intro A o x hv r
   have hrate : 0 ≤ G.rate r := (g2.1 r).le
@@ -55,10 +56,10 @@ theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ver
     _ ≤ G.rate r * Pd.T := mul_le_mul_of_nonneg_left hkΔ hrate
 
 theorem workSoundH200_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : WorkSoundH200 :=
-  workSoundAt_of_workSound h _ _
+  workSoundAt_of_workSound h _ _ _
 
 theorem workSoundSm120_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : WorkSoundSm120 :=
-  workSoundAt_of_workSound h _ _
+  workSoundAt_of_workSound h _ _ _
 
 /-- **The headline on the H200 at θ**, from `WorkSound`'s proof. -/
 theorem WorkSoundH200 : Pouw.Guarantees.DitherInstance.WorkSoundH200 :=
@@ -226,6 +227,18 @@ theorem sm120_onCard (D : Devices Verity.Accel.Sm120.card) (P : RoundProto) (L :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
       OnCard G Verity.Accel.Sm120.card floorOpen D P L e ∧ G.G1 ∧ G.G2 :=
   ⟨_, _, cardAccel_onCard _ _ D P L sm120_rates_pos hf hoth hmem⟩
+
+/-- **The hosts are counted at devices whose other devices are the row's hosts** (rule I): with `h200_onCard` and
+`sm120_onCard` at such devices, `OnCard` and `HostsCounted` hold together. -/
+theorem hostsCounted_others {c : Verity.Accel.Card} (h : HostRow) (n : ℕ) (hn : 0 < n) (f mem : ℝ) :
+    HostsCounted (⟨n, hn, f, h.others n mem⟩ : Devices c) h :=
+  ⟨id, Function.injective_id, le_rfl, le_rfl⟩
+
+theorem hostH200_pos : 0 < hostH200.amx ∧ 0 < hostH200.sha := by
+  constructor <;> norm_num [hostH200]
+
+theorem hostSm120_pos : 0 < hostSm120.amx ∧ 0 < hostSm120.sha := by
+  constructor <;> norm_num [hostSm120]
 
 end Witness
 

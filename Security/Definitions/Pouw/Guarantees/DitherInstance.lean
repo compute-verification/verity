@@ -24,7 +24,10 @@ ticks a second, and the other devices), every round protocol `P` and layout `L`,
 `x` under the resource match `e` (`OnCard`), every service verdict and period `Pd` with its dual price `μ` at `k`
 credited rounds: with `WorkSound`'s hypotheses, and
 
-* the public bests fixed by the card: `pub_mm` and `pub_sha` are `pb`'s units priced at `μ` (`pubCost`);
+* the public bests fixed by the card: `pub_mm` and `pub_sha` are the cheapest of `pb`'s named programs at the period's
+  dual price `μ`, for the honest round's `macs` MACs and `comps` compressions (`pubCost`);
+* the cards' hosts in the period's devices at the row `hr`'s AMX and SHA-512 rates (`HostsCounted`), so the capacity
+  `C` counts them (RT-UNITS U9);
 * the network term from the network certifier's counts: the verdict refuses a period whose signed counts into or out
   of the devices pass the caps `E_in`, `E_out` (`Counted`), the certifier counts every imported bit
   (`CertifierSeesImports`), and `K = E_in + E_out` (egress counted as well as ingress), with `β = n_max H_mm / macs`,
@@ -47,37 +50,36 @@ what the deadline buys.
 The other devices are resources of `G` at their θ rates (RT-PROTO P9): the honest optimum and the capacity count them,
 and `SAKMatmul` and `ShaSpeed` hold at the dual price over them too. That they are all of the processors the cards
 reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. -/
-def WorkSoundAt (c : Verity.Accel.Card) (pb : PubBest c) : Prop :=
+def WorkSoundAt (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=
   ∀ (x : Verity.Accel.Open), c.floors x → Verity.Assumptions.AccelProductForm x →
   ∀ (D : Devices c) (P : RoundProto) (L : Layout (D.machine x) P) (G : Accel)
-    (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res), OnCard G c x D P L e →
+    (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res), OnCard G c x D P L e → HostsCounted D hr →
   ∀ (k : ℕ) (verdict : Verdict G P k) (Pd : Period G) (μ : G.Res → ℝ)
-    (Hmm Hsha Ho η δ nmax macs Ein Eout κS κx Δ : ℝ) (t : Fin k → ℝ) (cin cout : Count G P k)
+    (Hmm Hsha Ho η δ nmax macs comps Ein Eout κS κx Δ : ℝ) (t : Fin k → ℝ) (cin cout : Count G P k)
     (arrive : Arrival G P k),
     Pd.DualOpt μ k → 0 < Hmm → 0 < Hsha → 0 ≤ Ho → Hmm + Hsha + Ho = ∑ r, μ r * Pd.hon r →
-    pubCost e μ pb.mm ≤ Hmm → pubCost e μ pb.sha ≤ Hsha → 0 < η → 0 < δ → δ ≤ 1 → 0 ≤ nmax → 0 < macs →
-    0 ≤ Ein → 0 ≤ Eout → k * Δ ≤ Pd.T →
+    pubCost e μ pb.mm macs ≤ Hmm → pubCost e μ pb.sha comps ≤ Hsha → 0 < η → 0 < δ → δ ≤ 1 → 0 ≤ nmax →
+    0 < macs → 0 ≤ Ein → 0 ≤ Eout → k * Δ ≤ Pd.T →
     G.G1 → G.G2 → G.P1 → G.P2 →
-    SAKMatmul G P μ (pubCost e μ pb.mm / Hmm) η (nmax * Hmm / macs) Hmm →
-    ShaSpeed G P μ (pubCost e μ pb.sha / Hsha) η (nmax * Hmm / macs) Hsha →
+    SAKMatmul G P μ (pubCost e μ pb.mm macs / Hmm) η (nmax * Hmm / macs) Hmm →
+    ShaSpeed G P μ (pubCost e μ pb.sha comps / Hsha) η (nmax * Hmm / macs) Hsha →
     ServiceSound G P k verdict κS → CertifierSeesImports G P k cin → RootAfterCoin G P k t arrive →
     ExtractAdv G P k κx →
     FreedSound G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) Pd k
-      (epsWorkSound (pubCost e μ pb.mm / Hmm) (pubCost e μ pb.sha / Hsha) Hmm Hsha Ho η δ (nmax * Hmm / macs)
-        (Ein + Eout) k)
+      (epsWorkSound (pubCost e μ pb.mm macs / Hmm) (pubCost e μ pb.sha comps / Hsha) Hmm Hsha Ho η δ
+        (nmax * Hmm / macs) (Ein + Eout) k)
       (∑ r, μ r * (k * Pd.hon r)) (δ + κS + κx) ∧
     TimedWorkFits (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) Pd
 
 /-- **The headline on the H200 SXM at θ**: `WorkSoundAt` on `Verity.Accel.H200.card`, whose floors are `sync ≥ 1`
 (the data sheet's tensor peak is the core's, whichever instruction issues it), `b1 ≥ 1/8` (CALIB's BGMMA measurement)
 `madHi ≥ 2` (`IMAD.HI` at 32 lanes a SM-clock, CPG Table 7; RT-MODEL M12) and `slack ≥ 1` (the kernel idles a tick
-after every 20 `wgmma`s; RT-MODEL M1), with the H200's public bests (the
-placeholder until D5). -/
-def WorkSoundH200 : Prop := WorkSoundAt Verity.Accel.H200.card pubBestH200Placeholder
+after every 20 `wgmma`s; RT-MODEL M1), with D5 v1's public bests on the H200 and the H200 node's hosts. -/
+def WorkSoundH200 : Prop := WorkSoundAt Verity.Accel.H200.card pubBestH200 hostH200
 
 /-- **The headline on the RTX PRO 6000 (sm_120) at θ**: `WorkSoundAt` on `Verity.Accel.Sm120.card`, whose floor is
-`madHi ≥ 2` and which has no native `b1` MMA (ptxas emulates it; RT-MODEL M13), with its public bests (the
-placeholder until D5). -/
-def WorkSoundSm120 : Prop := WorkSoundAt Verity.Accel.Sm120.card pubBestSm120Placeholder
+`madHi ≥ 2` and which has no native `b1` MMA (ptxas emulates it; RT-MODEL M13), with D5 v1's public bests on the
+RTX PRO 6000 and its node's hosts. -/
+def WorkSoundSm120 : Prop := WorkSoundAt Verity.Accel.Sm120.card pubBestSm120 hostSm120
 
 end Pouw.Guarantees.DitherInstance
