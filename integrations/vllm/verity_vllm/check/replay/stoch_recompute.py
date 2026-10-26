@@ -147,19 +147,22 @@ def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane"
         return list(pool.imap(fn, jobs, chunksize=1))
 
 
-def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -> dict[str, list[int] | int | dict | None]:
+def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -> tuple[dict[str, list[int] | int | dict | None], list[str]]:
     """The PROGRAM's S per request: `sampling.splits` of the Build's `result.json` for the request's (LP, T) shape --
     `"derived"` (the Program takes S as its `splits` Input and declares the relation S_t = SplitsFor_v1(|live(t)|,
     num_SMs); returned as {"derived": num_sms} so the check derives S_t from the record's live rows at step t), else a fixed int / per-event
-    schedule.  {request_id: splits}; a request whose shape has no Build result maps to None."""
+    schedule.  ({request_id: splits}, unreadable): a request whose shape has no Build result maps to None, and each Build result that
+    could not be read is named with its error."""
     if build_dir is None or workload is None:
-        return {}
+        return {}, []
     import glob
     by_shape: dict[tuple[int, int], list[int] | int | dict] = {}
+    unreadable: list[str] = []
     for p in sorted(glob.glob(str(Path(build_dir) / "build_request*" / "result.json"))):
         try:
             r = json.loads(Path(p).read_text())
-        except Exception:
+        except Exception as e:
+            unreadable.append(f"{p}: {e!r}"[:300])
             continue
         if not r.get("ok", True) or r.get("wrapper") != "request":
             continue
@@ -176,7 +179,7 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
         rid = r.get("request_id") or r.get("id")
         lp, cap = int(r.get("prompt_len") or len(r.get("prompt_token_ids") or [])), int(r.get("max_tokens") or 0)
         out[rid] = by_shape.get((lp, cap - 1))
-    return out
+    return out, unreadable
 
 
 def _stop_rule(build_dir: str | Path | None) -> dict:
@@ -454,7 +457,8 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     rows_without_seed = 0             # skipped rows whose request record declares no seed: a FAIL, not an INCOMPLETE
     steps_seen = 0
     sampled_rows_total = 0            # [rev-pm M-0541 T1] every sampled row of the record counts; the verdict names k of n value-checked
-    program_S = _program_splits(build_dir, workload)      # [T3] the Program's S per request (int or per-event schedule), if a Build is given
+    program_S, splits_unreadable = _program_splits(build_dir, workload)      # [T3] the Program's S per request (int or per-event schedule), if a Build is given
+    reasons.extend(f"Build result unreadable ({u}): the Program's S of its request shape is not read" for u in splits_unreadable)
     events_of: dict[str, int] = {}                         # sampled events attributed to each request so far (the event index of the next row)
     s_disagree: list[str] = []
     chain_absent: list[str] = []      # [rev-pm M-0738] engine steps whose sampler chain is incomplete in the record are NAMED, not dropped
