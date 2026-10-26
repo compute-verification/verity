@@ -1,4 +1,5 @@
 set -euo pipefail
+export PYTHONPATH=integrations/torch_loop
 uv sync -q --all-packages --extra torch
 git rev-parse HEAD
 echo "nproc $(nproc)"; free -g | sed -n 2p; df -h /workspace | tail -1
@@ -26,7 +27,7 @@ dd if="$T" of=/dev/null bs=64M count=320 skip=1024 iflag=direct 2>&1 | tail -1
 
 uv run --no-sync python - "$T" "$M" <<'PY'
 import json, os, sys, time
-sys.path[:0] = ["benchmarks/e2e_h200"]
+sys.path[:0] = ["benchmarks/e2e_h200", "integrations/torch_loop"]
 from e2e_h200.shape import FROZEN
 from e2e_h200.store import FileStore
 from e2e_h200.weights import SW, Weights
@@ -43,7 +44,7 @@ for c in /usr/local/cuda /usr/local/cuda-13.0 /usr/local/cuda-12.8 /usr/local/cu
 export PATH="${CUDA:-/usr/local/cuda}/bin:$PATH"
 CUBIN_ONLY=1 bash benchmarks/torch_gpu/attn_ref/build.sh "$OUT/attn_ship" 2>&1 | tail -1
 export ATTN_REF_CUBIN="$OUT/attn_ship/attn_ref.sm_90a.cubin" PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-export E2E_H200_SEED=demo E2E_H200_WEIGHTS_FILE="$T" E2E_H200_WEIGHTS_MANIFEST="$M" PYTHONPATH=benchmarks/e2e_h200
+export E2E_H200_SEED=demo E2E_H200_WEIGHTS_FILE="$T" E2E_H200_WEIGHTS_MANIFEST="$M" PYTHONPATH=benchmarks/e2e_h200:integrations/torch_loop
 t3=$(date +%s)
 uv run --no-sync python benchmarks/network_traces/demo_endpoint.py --out "$OUT/endpoint" --engine e2e_h200.engine:frozen \
   --host 127.0.0.1 --port 18780 --eos 0 --max-num-seqs 4 > "$OUT/endpoint.log" 2>&1 &
