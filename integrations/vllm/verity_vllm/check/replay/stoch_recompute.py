@@ -1,4 +1,4 @@
-"""[R15 stoch] Value check of a stochastic (seeded temperature + top-p) row: recompute every snapshotted sampled row of the M1 capture
+"""Value check of a stochastic (seeded temperature + top-p) row: recompute every snapshotted sampled row of the M1 capture
 with the Program's own sampler Definition under the DECLARED inputs, and compare with the served token -- no tolerance.
 
 For every snapshotted engine step with a `_gumbel_sample_kernel` launch (row_pod's Match snapshots steps `MATCH_SNAP_STEPS`, default 0,1):
@@ -12,12 +12,12 @@ StepStart position, temperature / top_p the declared policy, and S the split ker
   * `token' == SampleEnd.sampled_token_ids[row]` (the served token)                             -> rows[*].status exact-match / mismatch
   * `masked' == _gumbel_sample_kernel.logits_ptr[row]` (the fp32 row the kernel consumed)        -> rows[*].masked_row_equal_lanes == V
   * the kernel-consumed facts (`seeds_ptr[idx_mapping[row]]`, `temp_ptr[..]`, the mask kernel's `P[row]`, `pos_ptr[row]`) equal the
-    declared ones; a fact that was NOT snapshotted at a checked row FAILS (rev-pm M-0541 T2)   -> rows[*].device_facts_match
+    declared ones; a fact that was NOT snapshotted at a checked row FAILS                      -> rows[*].device_facts_match
   * with `--build <row dir>`: the mask kernel's constexpr S equals the PROGRAM's S for the request's shape at this sampled event
-    (Build result.json `sampling.splits`: 'derived' -> S_t = SplitsFor_v1(#logits rows at t, geometry.num_sms) [R16 M-0169]; an R15 int or
-    per-event schedule otherwise; rev-pm M-0541 T3)  -> rows[*].S_agree
-  * every sampled row of the record is value-checked, else INCOMPLETE (rev-pm M-0541 T1); the report's `structure_note` says what
-    is DECLARED (fold Const/Param from the run header) vs OBSERVED (device-tied, here)         (rev-pm M-0541 T4)
+    (Build result.json `sampling.splits`: 'derived' -> S_t = SplitsFor_v1(#logits rows at t, geometry.num_sms); a fixed int or
+    per-event schedule otherwise)  -> rows[*].S_agree
+  * every sampled row of the record is value-checked, else INCOMPLETE; the report's `structure_note` says what
+    is DECLARED (fold Const/Param from the run header) vs OBSERVED (device-tied, here)
 
 A wrong declared seed (manifest vs run) fails here by name: the kernel consumed another seed (device_facts_match False) AND the
 recomputed token differs (mismatch, with probability ~1).  A mutated sampler chain (another kernel / another noise / another mask)
@@ -100,7 +100,7 @@ def _eval_job(job: tuple) -> tuple[int, "np.ndarray", float]:
 
 
 def _eval_job_rows(job: tuple) -> tuple[int, "np.ndarray", float]:
-    """[R17 stoch, COORD R17-34 (3) lever (a)] the same Definition over the whole row at once: `sampling_rows.gumbel_topp_token_select_row`
+    """The same Definition over the whole row at once: `sampling_rows.gumbel_topp_token_select_row`
     (numpy twins of the registered gates, held word-equal to `evaluate_spec` in tests/program/test_sampling_rows.py) -> the same
     (token, masked fp32 row, seconds) triple.  The words layout is `_eval_job`'s: [bf16 row, top_p, seed, pos, temp] (uint64 arrays)."""
     from verity_vllm.program.registry import sampling_rows as SR
@@ -148,9 +148,9 @@ def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane"
 
 
 def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -> dict[str, list[int] | int | dict | None]:
-    """[rev-pm M-0541 T3] the PROGRAM's S per request: `sampling.splits` of the Build's `result.json` for the request's (LP, T) shape --
-    [R16 stoch, coord M-0169] `"derived"` (the Program takes S as its `splits` Input and declares the relation S_t = SplitsFor_v1(|live(t)|,
-    num_SMs); returned as {"derived": num_sms} so the check derives S_t from the record's live rows at step t), else an R15 int / per-event
+    """The PROGRAM's S per request: `sampling.splits` of the Build's `result.json` for the request's (LP, T) shape --
+    `"derived"` (the Program takes S as its `splits` Input and declares the relation S_t = SplitsFor_v1(|live(t)|,
+    num_SMs); returned as {"derived": num_sms} so the check derives S_t from the record's live rows at step t), else a fixed int / per-event
     schedule.  {request_id: splits}; a request whose shape has no Build result maps to None."""
     if build_dir is None or workload is None:
         return {}
@@ -197,7 +197,7 @@ def _stop_rule(build_dir: str | Path | None) -> dict:
 
 
 def record_lag_rows(header, snapshots_dir: Path | None = None) -> tuple[int | None, str]:
-    """[COORD M-0213 / ruling 21] the scheduler's EOS lag rows read from the RECORD's own attestation of `async_scheduling` (True -> 1,
+    """The scheduler's EOS lag rows read from the RECORD's own attestation of `async_scheduling` (True -> 1,
     False -> 0): RunHeader.profile.engine_kwargs, RunHeader.engine_kwargs, capture/versions.json engine_kwargs -- the same locations GM-01
     reads (global_match.record_engine_facts); None when the record does not attest it (the lag slot is then unjudgeable, said so)."""
     cands: list[tuple[str, object]] = []
@@ -224,11 +224,11 @@ def record_lag_rows(header, snapshots_dir: Path | None = None) -> tuple[int | No
 
 
 def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set | None) -> tuple[list[int] | None, dict]:
-    """[R3's one mechanism, revb M-0615] the executed set {t : r_t = 1} (t from 1) the Program's stop rule PREDICTS for one request from
+    """[R3's one mechanism] the executed set {t : r_t = 1} (t from 1) the Program's stop rule PREDICTS for one request from
     its SERVED tokens (draw k serves slot k + 1), its cap C and the scheduler profile A (0 = sync, 1 = async: one lag slot after an EOS):
     r_1 = 1; while no served token is an EOS, every slot up to C executes; the first EOS at slot t_eos (before C) is followed by exactly
     min(A, C - t_eos) executed lag slot(s) and nothing after -- the same rule as pad's `verity_vllm.program.lifting.continuation.recurrence` /
-    `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and moe's executed-prefix rule (R17-27).  Returns
+    `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and moe's executed-prefix rule (`check.executed_prefix`).  Returns
     None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer draws than the cap, or an EOS before the cap
     with the profile unattested.  When pad's module is importable the two computations are compared and a disagreement is named."""
     from verity_vllm.program.lifting import continuation as CT  # pad's Continuation_v1 recurrence (lane/r17-pad 61fe06dff): THE mechanism, not a twin of it
@@ -258,7 +258,7 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
 
 def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | None, build_dir: str | Path | None,
                     lag_attested: tuple[int | None, str] | None = None) -> dict:
-    """[R17-32 R5, revb S-r17b-16 / M-0566 'the record half'; F-r17b-35 M-0615] the DRAW LEDGER of the record, per request, measured --
+    """The DRAW LEDGER of the record, per request, measured --
     not stated: 'RNG advances iff r_t' read LITERALLY as an ordered-set comparison of the DRAWN positions against the positions the
     Program's rule says are executed:
 
@@ -274,7 +274,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         named, never a pass.
 
     Returns the ledger + the list of PROBLEMS (each a FAIL reason by name) and whether the lag slot was EXERCISED on this record at all
-    (when it was not, R5's record half stays 'stated, not measured on this record', said so)."""
+    (when it was not, the record half of 'RNG advances iff r_t' stays 'stated, not measured on this record', said so)."""
     out: dict = {"convention": "draw k of a request = its k-th sampled row (k from 0) = slot t = k + 1 at pos = prompt_len - 1 + k, keyed Philox(seed, pos); "
                                "expected draws = {pos of slot t : r_t = 1} under the Program's stop rule (EOS at slot t < C -> min(A, C - t) lag slot(s))",
                  "requests": {}, "problems": [], "lag_slot_exercised": False, "requests_with_eos_before_cap": 0, "requests_at_cap": 0,
@@ -451,6 +451,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     pending: list[tuple[int, tuple, np.ndarray | None]] = []      # (row index, (V, S, words), observed masked row)
     reasons: list[str] = list(header_vs_manifest)
     tally = {"exact-match": 0, "mismatch": 0, "no-snapshot": 0, "skipped": 0}
+    rows_without_seed = 0             # skipped rows whose request record declares no seed: a FAIL, not an INCOMPLETE
     steps_seen = 0
     sampled_rows_total = 0            # [rev-pm M-0541 T1] every sampled row of the record counts; the verdict names k of n value-checked
     program_S = _program_splits(build_dir, workload)      # [T3] the Program's S per request (int or per-event schedule), if a Build is given
@@ -556,6 +557,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             if f is None or f["seed"] is None:
                 rec.update(status="skipped", why="request record has no declared seed")
                 tally["skipped"] += 1
+                rows_without_seed += 1
                 rows.append(rec)
                 reasons.append(f"step {step} row {row}: no declared seed for {rid!r}")
                 continue
@@ -664,7 +666,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     if checked == 0:
         verdict = "NOTHING-CHECKED"
     elif tally["mismatch"] or not device_ok or not masked_ok or not s_ok or header_vs_manifest or ref_check["disagreements"] or \
-            ledger["problems"] or any(r.get("status") == "skipped" and "declared seed" in str(r.get("why")) for r in rows):
+            ledger["problems"] or rows_without_seed:
         verdict = "FAIL"
     elif not complete:
         verdict = "INCOMPLETE"          # [rev-pm M-0541 T1] k of n value-checked is not a PASS (row_pod: anything but PASS fails the Match)

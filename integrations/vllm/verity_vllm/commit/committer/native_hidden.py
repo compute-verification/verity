@@ -3,10 +3,10 @@ replaced by one C++ callable each (`Fa2Wrap`, `Fa3Wrap` in native_collect.cpp, b
 bounded split driver, which taps a multi-sequence launch in sequence groups when its tap buffer would exceed the cap."""
 from __future__ import annotations
 
-import os
 import time
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.acquire.sources.hidden_source import (
     HiddenM1Source,
     HiddenM1SourceFA3,
@@ -29,13 +29,14 @@ class NativeHiddenM1Source(HiddenM1Source):
         super().__init__(committer, so_path, ns)
         self._w = committer.native_ext().Fa2Wrap(committer._nc, self.orig_op, self.tapped_op, committer._intern, ns)
         # R13 P0 (p0b): per-sequence compaction of multi-sequence launches (only the rows the kernel wrote are staged; B=1 unchanged)
-        self._w.compact = os.environ.get("VERITY_FA2_COMPACT", "1").strip() not in ("0", "false", "no")
-        self._w.zero_after = os.environ.get("VERITY_FA2_ZERO", "1").strip() not in ("0", "false", "no")
+        self._w.compact = settings.VERITY_FA2_COMPACT
+        self._w.zero_after = settings.VERITY_FA2_ZERO
         self.short_name, self._w.ms = "hidden_m1", self.ms              # the MS class sizes every buffer and is a seventh compacted plane
         # [R18 tap, F-r17-23] bounded tap: one device buffer of <= cap bytes; a multi-sequence launch whose padded tap buffer exceeds it is
         # split into consecutive sequence groups (hidden_source.plan_fa2_tap_groups) tapped one after another into that buffer (C++ Fa2Wrap
         # seq_base / hold_launch / bound_words).  Names and bytes of the staged compacted rectangles are those of the unsplit launch.
-        cap_mb = int(os.environ.get("VERITY_FA2_TAP_CAP_MB", str(self.DEFAULT_TAP_CAP_MB)).strip() or 0)
+        cap = settings.VERITY_FA2_TAP_CAP_MB
+        cap_mb = self.DEFAULT_TAP_CAP_MB if cap is None else cap
         self.tap_cap_bytes = max(0, cap_mb) << 20
         self._w.bound_words = self.tap_cap_bytes // 4
         self.telemetry_path: str | None = None           # commit_delta: <out>/fa2_tap_windows.jsonl (one line per tapped window / group)
@@ -221,8 +222,8 @@ class NativeHiddenM1Source(HiddenM1Source):
         if self._tel_fh is not None:
             try:
                 self._tel_fh.close()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as e:  # noqa: BLE001
+                self.c.errors.append(f"fa2 tap telemetry close: {e!r}"[:200])
             self._tel_fh = None
 
 
@@ -235,7 +236,8 @@ class NativeHiddenM1SourceFA3(HiddenM1SourceFA3):
         super().__init__(committer, so_path, ns)
         self._w = committer.native_ext().Fa3Wrap(committer._nc, self.orig_op, self.tapped_op, committer._intern, ns)
         # P0-03's rule for the FA3 tap: zero the staged whole buffer after staging on multi-sequence launches (B=1 unchanged)
-        self._w.zero_after = os.environ.get("VERITY_FA3_ZERO", os.environ.get("VERITY_FA2_ZERO", "1")).strip() not in ("0", "false", "no")
+        zero = settings.VERITY_FA3_ZERO
+        self._w.zero_after = settings.VERITY_FA2_ZERO if zero is None else zero
         self.short_name, self._w.ms = "hidden_m1_fa3", self.ms
 
     def _wrapper(self):
