@@ -278,8 +278,8 @@ state, so nothing before block `b`'s commitment depends on its check coin or on 
 
 **The challenger times the work** (`timedUse`, `calls`): each block's work runs from its dither coins to its
 commitment, inside the period on its devices, one block at a time. Only selected blocks are answered, beside later
-blocks. No later program reads an answer, and an honest answer's cost is in the honest cost's `W_ans`, which the
-headline's `ε` charges at full weight, so no answer's use, calls or exchanged bits are credited or counted against the
+blocks. No later program reads an answer, and an honest answer's cost is in the honest cost's `W_ans` (`WorkSound`'s
+`H_o`), which the headline's `ε` charges at full weight, so no answer's use, calls or exchanged bits are credited or counted against the
 period.
 
 The sampling blocks of a period are one sequence in the order their coins went out: a fleet whose replicas' coins
