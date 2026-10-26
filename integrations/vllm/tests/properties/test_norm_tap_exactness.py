@@ -146,7 +146,7 @@ def test_source_diff_accepts_only_the_tap_lines():
 @pytest.mark.parametrize("kernel", X.KERNELS)
 def test_ir_scale_is_the_twins_scale(kernel):
     """The scale gate read off the IR transcript (`ir_scale`) is the twin's `s` / `inv` on random rows (N = 64): the gate lookup is right."""
-    from verity_vllm.program.kernels import derived_rows as D
+    from verity.ml.definitions.numerics import derived_rows as D
     try:
         D._rms_tables()
     except Exception as e:  # pragma: no cover
