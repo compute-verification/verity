@@ -25,7 +25,8 @@ accumulator, and dp4a2 on the IMAD pipe) is a route of its own, each with its in
 LOP3 and IADD3 on alu, IMAD and IDP.4A two slots on fma, POPC on an XU row added to θ (16 lane-ops a SM-clock, the
 census's 0.5 warp instructions), every one of them on issue and vec, the registers each reads (AND 2, a carry-save
 LOP3 3, POPC 1, IADD3 3, IMAD 2, IDP.4A 3, the chain's mask 1), and its operands from shared memory on D5's DP4A tile
-(`BESIDE_TILE`: 8 bytes and half an LDS.128 a word pair, over t). The LP mixes them per job.
+(`BESIDE_TILE`: 8 bytes and half an LDS.128 a word pair, over t). The LP mixes them per job. --no-dp4a2: the trees
+alone.
 """
 import json
 import pickle
@@ -76,7 +77,8 @@ def census_routes(card):
             out[f"{name}/{acc}"] = {r: x / (32 * g) for r, x in ld.items() if x}
     ext = 1.5 / b1c.DP4A_CHAIN
     ld = dict(fma=2.0, alu=ext, vec=1 + ext, issue=1 + ext + 1 / (2 * t), rf=3 + 2.5 / b1c.DP4A_CHAIN, smem=8 / t)
-    out["dp4a2"] = {r: x / b1c.DP4A_BITS for r, x in ld.items()}
+    if "--no-dp4a2" not in sys.argv:
+        out["dp4a2"] = {r: x / b1c.DP4A_BITS for r, x in ld.items()}
     return out
 
 
@@ -140,7 +142,8 @@ if __name__ == "__main__":
         cap0 = pb.cap
         pb.RES = pb.RES + ("xu",)
         pb.cap = lambda card: {**cap0(card), "xu": XU_LANES if card.family == "sm_120" else math.inf}
-        out["b1 census routes"] = run(("RTX PRO 6000",), "+ b1 census routes")
+        label = "b1 census trees" if "--no-dp4a2" in sys.argv else "b1 census routes"
+        out[label] = run(("RTX PRO 6000",), f"+ {label}")
     for A7_ALU in () if CENSUS else COSTS:
         out[f"b1 {A7_ALU} on {'+'.join(PIPES)}"] = run(("RTX PRO 6000",), f"+ b1 {A7_ALU} {'+'.join(PIPES)}")
     json.dump({lab: {" | ".join(map(str, k)): v for k, v in r.items()} for lab, r in out.items()},
