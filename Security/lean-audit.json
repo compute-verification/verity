@@ -893,10 +893,6 @@
    "owner": "@proofs",
    "digest": "002a8a72fb2acb6018f56a8187b93d942d09335444dca0828c4f13f5e91d000c"
   },
-  "Flock.Guarantees.Period.CR": {
-   "owner": "@proofs",
-   "digest": "7674ea20b0d5386d4b3fa68d2d6a86ccc3bebce6b17e6e48446443e429c9b9de"
-  },
   "Flock.Guarantees.SessionsCoined": {
    "owner": "@proofs",
    "digest": "ab28d1707da3d17764910d77bb753fff4d819a925426b03e90595154924c080d"
@@ -2785,7 +2781,13 @@
    "type_hash": "9c51b9643d2338efb76b1fb71c237e7e91a2aa0a1cff5a71cc0797723a71b639"
   },
   "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock :",
+    "  Accounting.Guarantees.Bridge.JointHorizonBlocksAOfIntegrityBlock"
+   ],
+   "assumptions": [],
+   "type_hash": "0e86137edd9f0ec0919f5f1c5fea69b1ede75195a36c664f4a616590569b82f5"
   },
   "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock": {
    "owner": "@lean",
@@ -12809,6 +12811,7 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.Compose.CircuitCredit",
@@ -14569,6 +14572,7 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
@@ -14614,7 +14618,6 @@
     "Accounting.BlocksRun.wipe": "085e4093e9e5cc263b651909d4b218d8325e397865b1ee6fa2b276f7836ff0c7"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.JointHorizonBlocks"
    ]
@@ -14678,6 +14681,7 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
@@ -17506,6 +17510,7 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
@@ -17870,6 +17875,7 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
@@ -18309,6 +18315,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -18375,6 +18382,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -18448,6 +18456,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -18528,6 +18537,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -18607,6 +18617,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -18679,6 +18690,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -18767,6 +18779,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -18820,6 +18833,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -18931,6 +18945,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -18968,6 +18983,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -19004,6 +19020,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -19064,6 +19081,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -19100,6 +19118,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -19147,6 +19166,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -19282,6 +19302,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -19325,6 +19346,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -19376,6 +19398,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -19440,6 +19463,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -19479,6 +19503,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -19519,6 +19544,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -19620,6 +19646,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -23493,6 +23520,7 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
@@ -28645,6 +28673,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -28738,6 +28767,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -28897,6 +28927,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -29025,6 +29056,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -29112,6 +29144,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -29210,6 +29243,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -29282,6 +29316,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -29428,6 +29463,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -29541,6 +29577,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -29617,6 +29654,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -29718,6 +29756,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -29802,6 +29841,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -29922,6 +29962,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -30137,6 +30178,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -30246,6 +30288,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -30420,6 +30463,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -30639,6 +30683,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -30816,6 +30861,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -30895,6 +30941,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -31013,6 +31060,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -31101,6 +31149,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -31184,6 +31233,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -31309,6 +31359,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -31403,6 +31454,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -31536,6 +31588,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -31643,6 +31696,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -31744,6 +31798,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -31990,6 +32045,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -32136,6 +32192,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -32260,6 +32317,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -32398,6 +32456,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -32482,6 +32541,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -32786,6 +32846,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -33030,6 +33091,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -33131,6 +33193,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -33242,6 +33305,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -33358,6 +33422,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -33617,6 +33682,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -33788,6 +33854,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -33879,6 +33946,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -34004,6 +34072,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -34074,6 +34143,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -34218,6 +34288,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -34317,6 +34388,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -34433,6 +34505,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -34508,6 +34581,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -34588,6 +34662,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -34673,6 +34748,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -34767,6 +34843,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -34846,6 +34923,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -34949,6 +35027,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -35006,6 +35085,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -35105,6 +35185,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -35206,6 +35287,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -35293,6 +35375,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -35421,6 +35504,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -35499,6 +35583,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -35587,6 +35672,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -35720,24 +35806,26 @@
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": {
-   "digest": "f1871c7e44077c1c5e66f245bdd5401320055195e92de8d720f473b01c1275e9",
+   "digest": "2192cb57b4fd45bc75a3f19796d8df85db090f8f3226f5286bd38d3ef51fc7c6",
    "definitions": {
-    "Accounting.Guarantees.Bridge.IntegrityOfIntegrityBlock": "8e778818e7e46c4790b5810bc8677bd63399669ebedfb545b50002a3d7ca452d",
-    "Accounting.Guarantees.Bridge.JointHorizonBlocksOfIntegrityBlock": "8644ef8609bb04b3f4f3ddbe67bd7058e27386346fecc524b4bd8f04e230a1bb",
-    "Accounting.RealizesIntegrityOfIntegrityBlock": "0d62786a9527c409226a3e974428ef48d797f985ce4ca439e11d53fdce432935",
-    "Accounting.RealizesIntegrityOfIntegrityBlock.strat": "417e11bf0ac42e6e20001e03fcf3631fee1d4645ef754e8b7a15ba444902c756"
+    "Accounting.Guarantees.Bridge.IntegrityOfIntegrityBlock": "501accf17823eb948e174affa0931c55deadb1cb1560c1453be4e15ab8eabebb",
+    "Accounting.Guarantees.Bridge.JointHorizonBlocksAOfIntegrityBlock": "e45c3e3663083f84e7eee9f03eefafcba8845cc4f3c6f492948cdb06880abdb3",
+    "Accounting.Guarantees.Bridge.JointHorizonBlocksOfIntegrityBlock": "bc658dab2da6e26fb02d80934d11d7a42e34335b219b4b8ba251a122d71236b5",
+    "Accounting.RealizesIntegrityOfIntegrityBlock": "6051c0820cf8b0d2c2e18fbad171ee327e368239a79dfb1de8e067b1ca4d1999",
+    "Accounting.RealizesIntegrityOfIntegrityBlock.strat": "5e434fec2984fb4bb1c5dff1e7ed6d890b61cc9387c770669916c101b3e93dd0"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock"
    ]
   },
   "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": {
-   "digest": "5582104d5afba5aca4183c3343e37a1440b4cdaf72e27e4e9ceb77e3d72f88ff",
+   "digest": "9365bad207e9eb5c1224b67eb02f4d2ee78749499fa89b5ccbda509d7782835b",
    "definitions": {
-    "Accounting.Guarantees.Bridge.IntegrityOfIntegrityPeriod": "26f81485aa7601e8ede17dd7e82ce32085f76d0b6592f75b47ebaec29d1c56b8",
-    "Accounting.RealizesIntegrityOfIntegrityPeriod": "9c2d43c4a896b6402ec320508dd5cdecb002822d67d9356567b75d690c389b63",
-    "Accounting.RealizesIntegrityOfIntegrityPeriod.strat": "c32f7ef034912f7b6435f4fc61da3b73fcc2065915b8844f91798516a6e2d95b"
+    "Accounting.Guarantees.Bridge.IntegrityOfIntegrityPeriod": "0c71bea40a618890c95a3d0ade5775f562d545ad86bdae851d519da0abaacf87",
+    "Accounting.RealizesIntegrityOfIntegrityPeriod": "d31c89f672afee09ae37398529c1186e85070174ed5c24323cc23f6ea17993ad",
+    "Accounting.RealizesIntegrityOfIntegrityPeriod.strat": "be4461252f779e2133d84666b701e2f260e9e1e09e404733613cb061bf5bac07"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod"]
   },
@@ -35992,18 +36080,18 @@
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Flock.EndToEnd.Blocks.Statement": {
-   "digest": "0db39cc5d1067db06d6a56b50536076b626caed822b100a0feaa51661259608c",
+   "digest": "3ca0455f62b778a49e6ee7cedfcb57cc75c7ec8913d55441bf893cdb5364714b",
    "definitions": {
-    "Flock.Guarantees.IntegrityBlock": "bf0e6f951502c90ee6a3650cd43027776a573bf4077a055f7741055e89a54b70",
-    "Flock.Guarantees.IntegrityBlocks": "d4d683b0613ffa3ff35721011e2d76ead508dd735f5265498bbc654c2ac8b4c6",
-    "Flock.Guarantees.IntegrityHorizonBlocks": "f156d6e1787e6c38dbd4c04518b9278064585f7b83480c344d1d620b83e2b50d",
-    "Flock.Guarantees.ServerBlocks": "2bdc4119b6d361e7b9db427f1b32a2d8eaf08caf15141e5a56c206f0124af2fe",
+    "Flock.Guarantees.IntegrityBlock": "5bcee6668e8c245e59a9fb2f6626ced821b30b9a7b17e3da0ea84e96839454d9",
+    "Flock.Guarantees.IntegrityBlocks": "06e155846654ccff77b72796baf3df2f3498adb7ede04a747c6393d6ce3ea06f",
+    "Flock.Guarantees.IntegrityHorizonBlocks": "72c6d6f33341ee48dff8d67c01a046ce23df5a5df3e5d7f469cc46801342f32e",
+    "Flock.Guarantees.ServerBlocks": "eb58a654954c3dd2899b9f354a48149427a34a5e057accd980ef47ca976b8cd0",
     "Flock.Guarantees.ServerBlocks.B": "f23a3b2c1c8872071c32d29c689897b1bd9afe004cd2d42cedac8ee04360c990",
     "Flock.Guarantees.ServerBlocks.BlockEscapes": "8315a8d605d7bf0d51e5d9e5a2f246590ae7c4a163a9b0daddea3e3e50c6d3c7",
     "Flock.Guarantees.ServerBlocks.T": "5fdca4918bfb46193fabe73d812e963c087ca41b58dba3ce568756f32407e80b",
-    "Flock.Guarantees.ServerBlocks.W": "bb3d0174259c103a680b55829531bd0b4ba9ab4680e786f63cbbd3548f7803bd",
+    "Flock.Guarantees.ServerBlocks.W": "3e317fda29f8f0195d34eeef80d380ebb669bd9a048e42644a0cdac12dbada34",
     "Flock.Guarantees.ServerBlocks.blockWrong": "439527aed93ffdccf97c5b56bafb95886ef1956f699ed2e2b1ea9567b25f8010",
-    "Flock.Guarantees.ServerBlocks.err": "81888273e9939b33c89cbe52a6357a0e727608ccd0c169cdfeee37cdddeee120",
+    "Flock.Guarantees.ServerBlocks.err": "0bf604a231ffee16f6baa3464490624c2537f96d960470d6bd53f8e6773f6983",
     "Flock.Guarantees.ServerBlocks.game": "e96d0c64e442ed197bd4180eee2f094c6dfa2320538d6a28993c8690f06ecb0b",
     "Flock.Guarantees.ServerBlocks.run": "5e4d76bc791d12d13da49e01b4682d8414604ff8042f6d66ff733f936d8d1272",
     "Flock.Guarantees.ServerBlocks.sessions": "2746915ff7aa2abc95983194c4b7a0a5307b2e2e0f66fd3a120545e45368e5f0",
@@ -36011,6 +36099,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlocks",
@@ -36018,10 +36107,10 @@
    ]
   },
   "Proofs.Flock.EndToEnd.Period.Run": {
-   "digest": "0daf9d8cee948fc9d60bf016213131de5c838a65eae33c8aadf333259ed23ddb",
+   "digest": "e6e9363264cd338bfcd5ff8374c60d85b1cea0b279d025f095a8fca6a305093d",
    "definitions": {
-    "FlockSoundness.Game.AtEnds": "769b6ec06f3d39a46856cb1cdbac4736d7ce0fc6250ec64739432388491da3d4",
-    "FlockSoundness.Game.PeriodGood": "c76457ead71c31a0a3cee774e387071d10128c62272bf98b052ac67210804390",
+    "FlockSoundness.Game.AtSomeEnd": "61fba8447199358661a777427dce9dd69ae867bfbeab28d974f940bac995631c",
+    "FlockSoundness.Game.PeriodPlays": "70488fdbec971ccc094a6f6bee3b9b1f46428cd5038141cc809aafc56949e673",
     "FlockSoundness.Game.periodG": "ef8424ff161447a22f52e784b397053700eb2ac63b89d6e1fcc301db0f6255c7",
     "FlockSoundness.Game.periodRun": "a76fc2f0c1c74bf734bc725d0565f6ee5f33bba6310ad9e52aaf25c9e96e1eb6",
     "FlockSoundness.Game.runBind": "724c0b185e4b1d3b4a9a3b995f531d69ff33bea1cc2911ce5255719a89486c6c"
@@ -36029,6 +36118,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlocks",
@@ -36039,51 +36129,50 @@
    ]
   },
   "Proofs.Flock.EndToEnd.Period.Statement": {
-   "digest": "419ce64828ff14a4b61fc9b138f974ae14acea6053661cad2f23a06f915f7301",
+   "digest": "d7ef1ca07194c695d3485a4fe494fe3e793dc7c733b769e1821e761195993a7a",
    "definitions": {
-    "Flock.Guarantees.HiddenWindow": "d824b53128f44c68dead1ca63362dc7217773727de7479528d15ec434c05ea57",
-    "Flock.Guarantees.HiddenWindow.CR": "2f35aff2693b2a37400d572183a21f7c1183a75a51849c7d83dcdb2e3c05b64f",
-    "Flock.Guarantees.HiddenWindow.D": "0c3234a6ae28e5029f23b9d5d3872a578410ee72130a5cac456a46f57e44fead",
-    "Flock.Guarantees.HiddenWindow.I": "a5970a62798004fc948f7a74f286713c5f0fe90e45e3a03570625a871de4b03e",
-    "Flock.Guarantees.HiddenWindow.K₀": "921c7a88e3e9060680acfb49168cc253efff86f65fc94ff012118360bfee52c6",
-    "Flock.Guarantees.HiddenWindow.L": "8727ebc3e572dee7128fd56a3f87b1e62540517268694634317fb59e3a30bd30",
-    "Flock.Guarantees.HiddenWindow.Lb": "494d4347700b02311fd9a100aefb2be1eb8c8b47d0659c71265d582e3102b408",
-    "Flock.Guarantees.HiddenWindow.M": "08e8de5d340b7ec35523e62b80c7d93b14250a363850fc98dd6338cd87d467aa",
-    "Flock.Guarantees.HiddenWindow.N": "3192fc944c487bf49443f9d9f6abe76cfb668d6cbca12c174473e017bc4d1224",
-    "Flock.Guarantees.HiddenWindow.P": "19858b0fd9b04faaaad4b16c66f1479805cc6bf108c829b93b78680ba97d1c93",
-    "Flock.Guarantees.HiddenWindow.Reg": "384892a392654c074602891d90aeb75492742fccba643ad1d5cf4037b0fced75",
-    "Flock.Guarantees.HiddenWindow.Rw": "0b6d0fae9f837f416960101320fafcf6760f3dc9cbd0e7deded90d9f6a069dd2",
-    "Flock.Guarantees.HiddenWindow.S₀": "a66f65cd43b0579f2ef9a6d5d5e1f805183526e1f9ba12fd9cd610952e0ad1c6",
-    "Flock.Guarantees.HiddenWindow.dg": "53a058405c06c415ba69f7209decd5d17e258f31122c4a59090d7cb7d6e69011",
-    "Flock.Guarantees.HiddenWindow.dj": "9ba39bb8f75e2255343f6144157914b82b62c6bf4d8b0bebe281fbfdd3e498d9",
-    "Flock.Guarantees.HiddenWindow.d₀": "db991c272f51a3f73d60f0ded956b1ff86e98c97ef432c6dee61eaa729b31c92",
-    "Flock.Guarantees.HiddenWindow.fintypeΩ": "b58c8101df8f58fa29bcbe0754931f6e87809e247537419f4aecd18279619317",
-    "Flock.Guarantees.HiddenWindow.game": "e7150e9ca251f70885d6941ac064404bdbc48890e883f30a76bdb05d1585a06b",
-    "Flock.Guarantees.HiddenWindow.k": "8351a7b65b53e1f4cdd6ddf1d5aaf95126e40712e6363a8444f0d83ca8c42fe7",
-    "Flock.Guarantees.HiddenWindow.kd": "a7372b1d611234e877d44288b4d2222ef2dc6a15fd114d39c5aefb56a30ad295",
-    "Flock.Guarantees.HiddenWindow.ks": "2f07975614c88f5f91c10dd1e13199d331e08ddd3cd2697eb6eeb8a6243bae94",
-    "Flock.Guarantees.HiddenWindow.link": "d55e8d0b16a3f5fbf3f6d1a32116336934b1a1a000e4abebff693e90b6760395",
-    "Flock.Guarantees.HiddenWindow.miss": "3e2d786743e0c2e66276b4021292d3a3c601ca79ac94108b8850d704e5df5176",
-    "Flock.Guarantees.HiddenWindow.n": "b855dfd52ffc5739afb672dbb56b2a890f8312b3a71c6e68a824b0c65764d45b",
-    "Flock.Guarantees.HiddenWindow.pub": "31711476402df320ab25da7a7f9a0ac727adf35527aaca677e65f1e21271bc0b",
-    "Flock.Guarantees.HiddenWindow.qF": "9fb7da2541fa090b1a3a26508857edb8ba1e7fca1cd893a51d57960c3f690947",
-    "Flock.Guarantees.HiddenWindow.qS": "482e5973eca27d1e43ee0543b46c24e615b9145fda096b0250968466d13b021b",
-    "Flock.Guarantees.HiddenWindow.record": "66040b830026c75e08a185148a94dd742a6b16f43ecad786f1e7f33ffb94631b",
-    "Flock.Guarantees.HiddenWindow.sim": "69c9bde2fbbcb0532c8ffcb262391594766d61eee4057a2e41d69c7a86c985d3",
-    "Flock.Guarantees.HiddenWindow.src": "b96e181b1dd8f948204d991419b37ff5d5522eff99b5649ab817599618e72fd8",
-    "Flock.Guarantees.HiddenWindow.t'": "8dd0dfac6a07532e082d9206471d53f419d9745b569ca94832796c0614a85e69",
-    "Flock.Guarantees.HiddenWindow.vb": "2c89c324538ea92d4d0da113b4692be4c500dd4ce5c7bb5032e8b43231448657",
-    "Flock.Guarantees.HiddenWindow.wr": "6238c27e50b5ad833ff98cc8e6f119c5f11c7d3ffe952c5da9a1e0319bbc1d75",
-    "Flock.Guarantees.HiddenWindow.wrongSet": "d38d97a6c6b3a4a15b7d519c89f189a0141ab7bdab92726dce758d8c080964b2",
-    "Flock.Guarantees.HiddenWindow.y₀": "274c411274c40a0b92e118b335fbf38a1147b33b35964b311683a61533954ef1",
-    "Flock.Guarantees.HiddenWindow.Ω": "790e2591397c7d52f3c267d1edb52d4ed6b81ca37434aa45977de8d3a5564a97",
-    "Flock.Guarantees.HiddenWindow.ρ": "44009d6fe6efcae9a48733a62bd7fd1cdd15ee0cd7e36ed3d8cd47a81c84dfcc",
-    "Flock.Guarantees.IntegrityHorizon": "5132ea8a1e6e63a28325360ac2fe284fe4619dc3afc7739abff6a829a2e0f34a",
-    "Flock.Guarantees.IntegrityPeriod": "309888a8d80c20011e47c55090a1f5230ee395ce022120a533748b2e710c401a",
-    "Flock.Guarantees.IntegrityPeriodLog": "3839ee0d3c90c7fd3f8038224f9862104169ed456d19b9d1c46f2683bf0a9b9b",
-    "Flock.Guarantees.Period.CR": "7674ea20b0d5386d4b3fa68d2d6a86ccc3bebce6b17e6e48446443e429c9b9de",
-    "Flock.Guarantees.Period.game": "1315bccfd6af89c07a376b036a402f30e3816e8b30b13775a30d9963555b42c4",
-    "Flock.Guarantees.Period.run": "9cd4fd9b04a1a1294aa159595b918f5c9502e675ba6a6963def484fe09391e8d",
+    "Flock.Guarantees.IntegrityHorizon": "5782d3d9dea1e39bebdab2e650c7212865069af2a2cb896f23b50df3adf7b417",
+    "Flock.Guarantees.IntegrityPeriod": "05ffe43214af0a2f9746bbda7320d6cdc90a4c7b64e0721263554a3175327653",
+    "Flock.Guarantees.IntegrityPeriodLog": "c180761467b874fc673eb2e21c002b9378d19f5d9739b6da980d110c691dc293",
+    "Flock.Guarantees.Period.Plays": "d02a58098bc2353568ddd848f7041feb6a713dbef1d81fba22576b711b65777c",
+    "Flock.Guarantees.Period.game": "0a92e48a1af8f5d2f54d17124b6e3d1464cf64f1d3f1753fa45f57ca76eae7d9",
+    "Flock.Guarantees.Period.run": "546dd4214f635c0853152821691fcb7a05c3403decf71aafa414aea54d69b401",
+    "Flock.Guarantees.SamplingBlock": "542d30f8edc0335e9a51a5c585e43d3174d64e21ba5ad2529d927b57862af11d",
+    "Flock.Guarantees.SamplingBlock.D": "8bf434ba29b2eb55908c982d94a335ac783ba17be58f0862b810c1fa5087b550",
+    "Flock.Guarantees.SamplingBlock.I": "88817af6fba5b999dc67b3859bbb019751d14bc2ebe6d90eb1c1e5cb8644194d",
+    "Flock.Guarantees.SamplingBlock.K₀": "03e1933e4ccc9a1bb9a55fa5bf24bbdf929ac84362e63f813dc9eda56cc65325",
+    "Flock.Guarantees.SamplingBlock.L": "0b145066a6e24189a8fc18625f3b704023f801b88fd9f5d0a93b584b2c21d997",
+    "Flock.Guarantees.SamplingBlock.Lb": "ccd3d10be04595b554f257ac1f99aae9001bf0ba2260ee4c837577745719c69c",
+    "Flock.Guarantees.SamplingBlock.M": "0654fb949af7d1669c36270ca8cdd77f44f2aa7ed217a5e1206757181bafea8a",
+    "Flock.Guarantees.SamplingBlock.N": "2607835d94c0109e7639b6a06518056b801e7a04f374bcd3a89086a64f13907f",
+    "Flock.Guarantees.SamplingBlock.P": "c00efae90131511f87bde7120a729b7741bceac4c95d8d23496a921253e24647",
+    "Flock.Guarantees.SamplingBlock.Reg": "3d270c22c55ee2f4214933d4a03e6409a8461adf92dd04a095dbac1e7d94795a",
+    "Flock.Guarantees.SamplingBlock.Rw": "ed01fc44fff52b7ca45914e0ea041d103276fb6b4f6b4ecef7deab1b48aae542",
+    "Flock.Guarantees.SamplingBlock.S₀": "98c6158a191e7ff130a08e8a2d7102e6058a4f9b05072ab0adfe1c692b166633",
+    "Flock.Guarantees.SamplingBlock.dg": "a1109a0c53f0625dd892b631047301ce93325b7b454fa856ee092a04a0f64c0d",
+    "Flock.Guarantees.SamplingBlock.dj": "ba96d5b01d6bea21f7162a0ce9236ab22cbfdd32cf151f2b0c5eb5a85eeeba19",
+    "Flock.Guarantees.SamplingBlock.d₀": "9b04a7e625943a6c4e31265e4f5e418549674ff58af564cc4324a99a069e19df",
+    "Flock.Guarantees.SamplingBlock.fintypeΩ": "05f53c1fe2a181e77d117c801f989154665c337404f31007d15856b89490cae7",
+    "Flock.Guarantees.SamplingBlock.game": "cfdec8d8d31d09773e9663454f5caec40cecbcfc58f575a486da462d54c28503",
+    "Flock.Guarantees.SamplingBlock.k": "aa8cd3d1b51d103dc3d381ac3ca6e766589437f30477588860afdc60f2c7313a",
+    "Flock.Guarantees.SamplingBlock.kd": "6b8ecaffedd57e1cd5a72f30243edfef5e13ac307e48f93cbe76cc443acbc834",
+    "Flock.Guarantees.SamplingBlock.ks": "4d2fb9b16cfbba4b36ff93d830f2744beceaf7d070a21884e013f71ac2b06991",
+    "Flock.Guarantees.SamplingBlock.link": "9452e511927c4caf1f8b4c474edb9df71eb1682b091c5146eb7cebe7e2ae38e8",
+    "Flock.Guarantees.SamplingBlock.miss": "50889edeae6ad36ab4f4bdd930b44d99c9ae6bbe1ddf1812f02698e3f8fdf646",
+    "Flock.Guarantees.SamplingBlock.n": "687c9013d23ac7d1ab931e6fbc4c32e09a2e6ac63ff25c9f115575c3d0f0e1a4",
+    "Flock.Guarantees.SamplingBlock.pub": "4c37474ae1e875ff608deb6ad7ef049e7305d71f99110c27524bb3f4ea5157e4",
+    "Flock.Guarantees.SamplingBlock.qF": "3d0635a76b56465730e74c5b9163802508d3eec789dc5932a24c24158a61c75c",
+    "Flock.Guarantees.SamplingBlock.qS": "5d5fe537747dda638e175725236d20e64c3253bd2b821726077a51ba5c74b2ac",
+    "Flock.Guarantees.SamplingBlock.record": "f345daf7ed0aa915e82c5bc9c856466fa313c428dd47a0f4db62e084e839e6b9",
+    "Flock.Guarantees.SamplingBlock.sim": "aa4b7471790a51cfe387af06eb293d0da33264ab8f7e07ffb0e3f6e682354117",
+    "Flock.Guarantees.SamplingBlock.src": "1b379c8f7c6987a43855f7bb45213f69a47e2793c74993f8a03b4e3c758e77bf",
+    "Flock.Guarantees.SamplingBlock.t'": "ea3635cdfb469d4cf8eea0d72eb97a5ab6a9ffe1fc71fd052002959acc5fbae2",
+    "Flock.Guarantees.SamplingBlock.vb": "2df4c164bc90193da99ba3a8b0c78bb174d825cb22bdc139b7bbc87f41aae9f6",
+    "Flock.Guarantees.SamplingBlock.wr": "633f41fc564f7046bf2ee1b4c83a1fa9801ea9ed70faa69f60204af4ea190b91",
+    "Flock.Guarantees.SamplingBlock.wrongSet": "088da8d3345b4b899b73a79db3b35958ce4f8f985645986b04bfe63fbfb435a9",
+    "Flock.Guarantees.SamplingBlock.y₀": "11f1649c463ea73e4465c50c057fce128b64523208ef79aa82d791f95ef23c1c",
+    "Flock.Guarantees.SamplingBlock.Ω": "6c2b55772c9f647fc52a98c8cde6ee186396b43944d74f847218d05cf80331b5",
+    "Flock.Guarantees.SamplingBlock.ρ": "d65ebee1b1eb57f92a99f55517ca52b9efe1f615d79ff6f215238ba468a9ccec",
     "Flock.Guarantees.WindowRec": "e4909a2323dcb961a84cd4eb1f58eb949351c16b5bf6cba6ae99894c4d38cf12",
     "Flock.Guarantees.WindowRec.accepted": "28abd5b0dea77810b810ab28979b5e1be6682b3de26c981a5a00a83818d7dc72",
     "Flock.Guarantees.WindowRec.idx": "77d79ff8a5e9b4972bafa35ecc99d29c36dc273c8ca29c580873a15e4875db5c",
@@ -36092,6 +36181,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlock",
     "Flock.SecurityProofs.IntegrityBlocks",
@@ -36163,6 +36253,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -36243,6 +36334,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -36286,6 +36378,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -36329,6 +36422,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -36376,6 +36470,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -36475,6 +36570,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -36524,6 +36620,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -36566,6 +36663,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -36608,6 +36706,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -36656,6 +36755,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -36697,6 +36797,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -37611,6 +37712,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -37708,6 +37810,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -37752,6 +37855,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -37817,6 +37921,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -37951,6 +38056,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -38033,6 +38139,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -38256,6 +38363,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -38304,6 +38412,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -38355,6 +38464,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -38427,6 +38537,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -38503,6 +38614,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -38540,6 +38652,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -38602,6 +38715,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -38679,6 +38793,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -38866,6 +38981,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -39065,6 +39181,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -39107,6 +39224,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -39142,6 +39260,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -39210,6 +39329,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -39245,6 +39365,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -39308,6 +39429,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -39343,6 +39465,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -39397,6 +39520,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -39520,6 +39644,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -39617,6 +39742,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -39857,6 +39983,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -39894,6 +40021,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -39931,6 +40059,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -39969,6 +40098,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40008,6 +40138,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40046,6 +40177,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40083,6 +40215,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40131,6 +40264,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40228,6 +40362,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40285,6 +40420,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40322,6 +40458,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40360,6 +40497,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40398,6 +40536,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40458,6 +40597,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40574,6 +40714,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40740,6 +40881,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40791,6 +40933,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40845,6 +40988,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40900,6 +41044,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40940,6 +41085,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -40984,6 +41130,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41023,6 +41170,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41084,6 +41232,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41125,6 +41274,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41165,6 +41315,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41211,6 +41362,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41257,6 +41409,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41319,6 +41472,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41382,6 +41536,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41427,6 +41582,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41553,6 +41709,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -41587,6 +41744,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41667,6 +41825,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -41758,6 +41917,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -41802,6 +41962,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEndHidden",
     "Flock.SecurityProofs.EndToEndHiddenDrawn",
@@ -41854,6 +42015,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -41900,6 +42062,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -41987,6 +42150,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42021,6 +42185,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -42087,6 +42252,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42187,6 +42353,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -42243,6 +42410,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -42300,6 +42468,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42389,6 +42558,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42440,6 +42610,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42475,6 +42646,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42542,6 +42714,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -42591,6 +42764,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42646,6 +42820,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42686,6 +42861,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42721,6 +42897,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42760,6 +42937,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42795,6 +42973,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42837,6 +43016,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -42889,6 +43069,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43064,6 +43245,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43120,6 +43302,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43175,6 +43358,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43235,6 +43419,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43370,6 +43555,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43409,6 +43595,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -43448,6 +43635,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -43484,6 +43672,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43543,6 +43732,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43591,6 +43781,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43653,6 +43844,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43693,6 +43885,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -43729,6 +43922,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -43764,6 +43958,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43808,6 +44003,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -43843,6 +44039,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -43920,6 +44117,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -43955,6 +44153,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -44036,6 +44235,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -44079,6 +44279,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -44114,6 +44315,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -44148,6 +44350,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -44198,6 +44401,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -44233,6 +44437,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -44299,6 +44504,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -44369,6 +44575,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -44411,6 +44618,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -44457,6 +44665,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -44519,6 +44728,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -44558,6 +44768,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -44600,6 +44811,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -44671,6 +44883,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -44723,6 +44936,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -44760,6 +44974,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -44869,6 +45084,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
     "Accounting.SecurityProofs.TS.HeldSessionSound",
@@ -44919,6 +45135,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
@@ -44966,6 +45183,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
+    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Flock.SecurityProofs.EndToEnd",
     "Flock.SecurityProofs.EndToEndDrawn",
