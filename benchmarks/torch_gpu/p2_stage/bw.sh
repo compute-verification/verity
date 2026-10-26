@@ -11,8 +11,12 @@
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/torch_gpu/p2_stage
-PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
-CUDA=${CUDA:-/usr/local/cuda-13.0}
+for v in ${VERITY_BENCH_VENV:-} /workspace/jobs/venv312 /workspace/cp/venv312; do
+  [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3
+done
+PY=${PY:-python3}
+TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
+for c in ${CUDA:-} "/usr/local/cuda-$TV" /usr/local/cuda /usr/local/cuda-13.0; do [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
 RANDOM_UNITS=${RANDOM_UNITS:-262144}
 SAMPLE=${SAMPLE:-4000}
 LEASE_MIN=${LEASE_MIN:-10}

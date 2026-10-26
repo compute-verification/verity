@@ -23,8 +23,6 @@ import stage as S  # noqa: E402
 import test_p2_stage as T  # noqa: E402
 from p2_v1 import serve  # noqa: E402
 
-from verity.core.protocols.remote_bandwidth import receipts as R  # noqa: E402
-
 
 @pytest.fixture(scope="module")
 def fx() -> dict:
@@ -83,7 +81,7 @@ def test_the_decode_sketches_each_chunk_before_decoding_it(fx, monkeypatch):
     """A store with a pass attached sketches the units of every chunk `decode_rows` reads, in chunks that split
     units, before the decode; the toy's layers read units 0 .. 7."""
     monkeypatch.setattr(S.gpu, "Kernels", T.RefKernels)
-    _, doc, c_star = serve.toy()
+    doc = serve.toy()[1]
     lay = L.store_layout(doc, L.registered_prefix(bytes.fromhex(doc["salt"])))
     p = fx["passes"][1]
     P = K.Pass(bytes.fromhex(p["seed"]), fx["store"]["units"], "cpu")
