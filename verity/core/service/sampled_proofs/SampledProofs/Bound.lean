@@ -5,7 +5,8 @@ draws of `k_s` of the `n_s` units of each stratum miss a set of `m_s` wrong unit
 bounds by. `miss K` is the largest escape of a set of `K` wrong units: the product of the `K` largest factors
 `(n_s − j − k_s) / (n_s − j)` over every stratum `s` and `j < finite_s`, taken greedily because each stratum's factors fall
 as `j` grows. `countBound δ` is the largest `K` with `miss K ≥ δ`: except with probability δ (plus the soundness terms), an
-accepted transcript has at most that many wrong units.
+accepted transcript has at most that many wrong units. `densityBound` is the harm such a set holds at δ in closed form
+(`optimize.density_bound`, which `certify` reports), in rationals.
 -/
 import CoreProtocol.Profile
 
@@ -98,6 +99,73 @@ def boundOf (population : Nat) (d : Core.Draw) (δ : Ratio) : Nat :=
   | d => match strataOf population d with
     | some ss => countBound ss δ
     | none => 0
+
+/-! ## The harm bound in closed form
+
+`optimize.density_bound`, exactly. A set with `c_s` wrong units in stratum `s` escapes with probability at most
+`exp(−∑ s k_s c_s / n_s)` and holds none past `n_s − k_s`, so at δ its harm, `h_s` per unit, is at most the fractional
+knapsack's value over `∑ s k_s c_s / n_s ≤ ln(1/δ)`: `Security/Proofs/Flock/Soundness/Audit/HarmBound.lean`'s
+`stratified_isHarmBound_fill` at the greedy fill, and `stratified_isHarmBound_dual` at any budget above `ln(1/δ)`, which
+`lnUpper` is. -/
+
+/-- `optimize.LN_TERMS`: the atanh series' terms `lnUpper` sums. -/
+def lnTerms : Nat := 32
+
+/-- `optimize.LN_BITS`: `lnUpper` rounds up to a multiple of `2^-lnBits`. -/
+def lnBits : Nat := 64
+
+/-- At least `2 atanh t = ln((1 + t)/(1 − t))` for `0 ≤ t ≤ 1/3`: the series `2 ∑ i t^(2i+1)/(2i+1)` to `lnTerms` terms,
+plus `2 t^(2N+1) / ((2N + 1)(1 − t²))`, which bounds the rest. -/
+def twoAtanhUpper (t : Rat) : Rat := Id.run do
+  let t2 := t * t
+  let mut s : Rat := 0
+  let mut p := t
+  for i in [0:lnTerms] do
+    s := s + p / ((2 * i + 1 : Nat) : Rat)
+    p := p * t2
+  return 2 * (s + p / (((2 * lnTerms + 1 : Nat) : Rat) * (1 - t2)))
+
+/-- `optimize.ln_upper`: a rational at least `ln(1/δ)` for `0 < δ < 1`, within about `2^-lnBits` of it. With
+`1/δ = 2^j z`, `1 ≤ z < 2`, it is `j ln 2 + ln z`, `ln 2 = 2 atanh(1/3)` and `ln z = 2 atanh((z − 1)/(z + 1))`, rounded
+up. -/
+def lnUpper (δ : Rat) : Rat :=
+  let y := 1 / δ
+  let j0 := y.num.toNat.log2 - y.den.log2
+  let j := if y < ((2 ^ j0 : Nat) : Rat) then j0 - 1 else j0
+  let z := y / ((2 ^ j : Nat) : Rat)
+  let v := (j : Rat) * twoAtanhUpper (1 / 3) + twoAtanhUpper ((z - 1) / (z + 1))
+  ((v * ((2 ^ lnBits : Nat) : Rat)).ceil : Rat) / ((2 ^ lnBits : Nat) : Rat)
+
+/-- `optimize.fill`: the greedy fill of rows `(n, k, h)` at a risk budget. A stratum with none drawn counts whole and one
+drawn whole not at all; the rest go in decreasing harm per unit of risk `h n / k`, each whole (`n − k` units at risk
+`k / n` each) until the budget runs out, the last one fractionally. Strata of equal `h n / k` add the same value per unit
+of risk, so their order doesn't change it. -/
+def fill (rows : Array (Nat × Nat × Rat)) (budget : Rat) : Rat := Id.run do
+  let mut out : Rat := 0
+  let mut items : Array (Rat × Nat × Nat × Nat × Rat) := #[]
+  for (n, k, h) in rows do
+    if h ≤ 0 ∨ n ≤ k then continue
+    if k == 0 then
+      out := out + (n : Rat) * h
+    else
+      items := items.push (h * n / k, n - k, n, k, h)
+  let mut b := budget
+  for (_, top, n, k, h) in items.qsort (fun a c => c.1 < a.1) do
+    let x := min (top : Rat) (b * n / k)
+    out := out + x * h
+    b := b - x * k / n
+    if b ≤ 0 then break
+  return out
+
+/-- The closed form's harm bound at δ: `fill` at `lnUpper δ`. Its floor is the bits form's (`stratified_isHarmBound_bits`)
+when `h` is a unit's output bits. -/
+def densityBound (rows : Array (Nat × Nat × Rat)) (δ : Rat) : Rat := fill rows (lnUpper δ)
+
+#guard lnUpper (1 / 2) == 3196577161300663915 / 4611686018427387904
+#guard lnUpper (1 / 100) == 10618799479599967255 / 2305843009213693952
+#guard fill #[(10, 1, 1), (100, 0, 2), (10, 10, 5)] 1 == 209
+#guard fill #[(10, 1, 1), (20, 2, 3)] (1 / 2) == 15
+#guard fill #[(10, 1, 1), (20, 2, 0)] 100 == 9
 
 #guard countBound #[{ name := "unit", size := 10, k := 3 }] ⟨1, 10⟩ == 4
 #guard countBound #[{ name := "unit", size := 6, k := 0 }] ⟨1, 2⟩ == 6

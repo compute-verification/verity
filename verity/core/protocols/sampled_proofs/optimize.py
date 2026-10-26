@@ -34,10 +34,11 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from math import ceil, exp, expm1, fsum, inf, lgamma, log, log1p
+from fractions import Fraction
+from math import ceil, exp, expm1, fsum, inf, lgamma, log, log1p, nextafter
 
 from verity.ml.circuits.cut import fits
-from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
+from verity.core.protocols.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
 
 #: ANDs of one SHA-512 compression in Boolean form (hm96 PROTOCOL §5)
@@ -327,27 +328,72 @@ def replay_cost(sizes: Mapping[str, int], chosen: Sequence[Candidate], costs: Co
     return total
 
 
-def density_bound(rows: Iterable[tuple[int, int, float]], delta: float) -> float:
-    """The most harm a wrong set escaping with probability at least `delta` holds, when a stratum of n units with k drawn
-    and harm h per unit, holding x of the set, escapes with at most (1 - x/n)^k <= exp(-k x / n), and never once
-    x > n - k.  So sum_s k_s x_s / n_s <= ln(1/delta), and the bound is that fractional knapsack's value: strata in the
-    order of harm per unit of risk, the last one fractionally."""
-    budget = log(1 / delta)
-    out, items = 0.0, []
+#: `ln_upper`'s atanh terms and the dyadic it rounds up to (`SampledProofs.Bound.lnTerms`, `lnBits`)
+LN_TERMS, LN_BITS = 32, 64
+
+
+def _two_atanh_upper(t: Fraction) -> Fraction:
+    """At least 2 atanh(t) = ln((1 + t) / (1 - t)) for 0 <= t <= 1/3: the series to `LN_TERMS` terms, plus
+    2 t^(2N+1) / ((2N + 1)(1 - t^2)), which bounds the rest."""
+    s, p, t2 = Fraction(0), t, t * t
+    for i in range(LN_TERMS):
+        s += p / (2 * i + 1)
+        p *= t2
+    return 2 * (s + p / ((2 * LN_TERMS + 1) * (1 - t2)))
+
+
+def ln_upper(delta: Fraction | float) -> Fraction:
+    """A rational at least ln(1/delta), for 0 < delta < 1, within about 2^-LN_BITS of it: with 1/delta = 2^j z,
+    1 <= z < 2, it is j ln 2 + ln z, each 2 atanh((z - 1)/(z + 1)) (ln 2 at z = 2), rounded up.  Lean's
+    `SampledProofs.Bound.lnUpper` is its definition."""
+    delta = Fraction(delta)
+    if not 0 < delta < 1:
+        raise ValueError("0 < delta < 1")
+    y = 1 / delta
+    j = y.numerator.bit_length() - y.denominator.bit_length()
+    if y < 2 ** j:
+        j -= 1
+    z = y / 2 ** j
+    v = j * _two_atanh_upper(Fraction(1, 3)) + _two_atanh_upper((z - 1) / (z + 1))
+    return Fraction(ceil(v * 2 ** LN_BITS), 2 ** LN_BITS)
+
+
+def fill(rows: Iterable[tuple[int, int, float | Fraction]], budget: float | Fraction) -> float | Fraction:
+    """The fractional knapsack's value at a risk budget: a stratum of n units with k drawn and harm h per unit counts
+    whole when k = 0 and not at all when k = n; the rest go in decreasing harm per unit of risk h n / k, each whole
+    (n - k units at risk k / n each) until the budget runs out, the last one fractionally.  Exact on Fractions, where
+    Lean's `SampledProofs.Bound.fill` is its definition."""
+    out, items = 0, []
     for n, k, h in rows:
         if h <= 0 or k >= n:
             continue
         if k == 0:
             out += n * h
             continue
-        items.append((h * n / k, n - k, k / n, h))
-    for _, top, rate, h in sorted(items, reverse=True):
-        x = min(top, budget / rate)
+        items.append((h * n / k, n - k, n, k, h))
+    for _, top, n, k, h in sorted(items, reverse=True):
+        x = min(top, budget * n / k)
         out += x * h
-        budget -= x * rate
+        budget -= x * k / n
         if budget <= 0:
             break
     return out
+
+
+def density_bound(rows: Iterable[tuple[int, int, float]], delta: float) -> float:
+    """The most harm a wrong set escaping with probability at least `delta` holds, when a stratum of n units with k drawn
+    and harm h per unit, holding x of the set, escapes with at most (1 - x/n)^k <= exp(-k x / n), and never once
+    x > n - k.  So sum_s k_s x_s / n_s <= ln(1/delta), and the bound is that fractional knapsack's value (`fill`).  In
+    floats, the budget and the value raised by `HARM_MARGIN` (the budget also by 2^-60, for delta near 1), so it is at
+    least `density_exact`, its definition."""
+    v = fill(rows, -log(delta) * (1 + HARM_MARGIN) + 2.0 ** -60)
+    return nextafter(v * (1 + HARM_MARGIN), inf) if v > 0 else 0.0
+
+
+def density_exact(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | Fraction) -> Fraction:
+    """`density_bound` exactly, harms and delta read as rationals: `fill` at `ln_upper(delta)`.  Lean's
+    `SampledProofs.Bound.densityBound` is its definition."""
+    return fill(((n, k, Fraction(h)) for n, k, h in rows), ln_upper(delta))
 
 
 def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective: Objective, *,
@@ -697,7 +743,8 @@ def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
     return {"law": "work:1", "table": {c.template: {"work": c.work, "floor": plan.sizes[c.template]} for c in chosen}}
 
 
-__all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "HM96_ANDS", "Objective", "Plan", "ReplayDomain",
-           "SHA512_ANDS", "TemplateCost", "certify", "density_bound", "for_budget", "for_target", "frontier",
-           "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
+__all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "HM96_ANDS", "LN_BITS", "LN_TERMS", "Objective", "Plan",
+           "ReplayDomain", "SHA512_ANDS", "TemplateCost", "certify", "density_bound", "density_exact", "fill",
+           "for_budget", "for_target", "frontier", "ln_upper", "needs_benchmark", "overlaps", "perturb", "replay_cost",
+           "row_ands", "sensitivity", "structure",
            "template_cost", "touched", "weigh", "work_law"]

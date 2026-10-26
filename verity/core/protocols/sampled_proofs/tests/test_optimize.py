@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import replace
+from fractions import Fraction
 from itertools import combinations, product
 from math import ceil, exp, fsum, log, log1p, ulp
 
@@ -15,10 +16,10 @@ import pytest
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
-                                                           TemplateCost, _hit, _miss, certify, density_bound, for_budget,
-                                                           for_target, frontier, needs_benchmark, overlaps, perturb,
-                                                           replay_cost, row_ands, sensitivity, template_cost, touched,
-                                                           weigh, work_law)
+                                                           TemplateCost, _hit, _miss, certify, density_bound, density_exact,
+                                                           for_budget, for_target, frontier, ln_upper, needs_benchmark,
+                                                           overlaps, perturb, replay_cost, row_ands, sensitivity,
+                                                           template_cost, touched, weigh, work_law)
 
 SLACK = 1 + 2.0 ** -18
 
@@ -48,6 +49,22 @@ def test_density_bound_is_above_core_harm_bound():
         law = Stratified(tuple(Stratum(name, n, k) for name, n, k, _ in strata))
         core = law.harm_bound({name: h for name, _, _, h in strata}, delta)
         assert at_most(core, density_bound(((n, k, h) for _, n, k, h in strata), delta))
+
+
+def test_density_bound_is_its_exact_value_rounded_up():
+    """`density_bound`'s float is at least `density_exact`, Lean's rational (the sampled proofs service's `harm_bound`
+    difftest holds the two equal), and within 2^-18 of it unless delta is within 2^-40 of 1, where the budget's 2^-60
+    is most of ln(1/delta)."""
+    assert ln_upper(Fraction(1, 2)) == Fraction(3196577161300663915, 2 ** 62)
+    assert abs(ln_upper(Fraction(1, 100)) - Fraction(log(100))) < 2.0 ** -48
+    rng = random.Random(0)
+    for _ in range(500):
+        rows = [(n, rng.randint(0, min(n, rng.choice([1, 10, 1000, n]))),
+                 rng.choice([0.0, rng.random() * 10.0 ** rng.randint(-20, 20)]))
+                for n in (rng.randint(1, 10 ** rng.randint(1, 16)) for _ in range(rng.randint(0, 8)))]
+        delta = rng.choice([0.5, 0.01, 1e-6, 2.0 ** -40, 1 - 2.0 ** -40, 1 - 2.0 ** -53, rng.uniform(1e-9, 0.999)])
+        exact, f = density_exact(rows, delta), density_bound(rows, delta)
+        assert exact <= Fraction(f) and (delta > 1 - 2.0 ** -40 or Fraction(f) <= exact * Fraction(SLACK))
 
 
 def test_certificate_of_a_full_law_is_zero_and_the_leak_adds_location():

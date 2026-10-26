@@ -20,6 +20,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `slots`: the claims' partition over the program and query, and that draw's checked proof units in its slots
   (`Slots.select`);
 * `bound`: the exact bounds on wrong units at δ;
+* `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`), which `certify` is held to;
 * `hidden_offsets`, `hidden_locate`, `hidden_witness`: the draw over hidden positions (`HiddenDraw`): the honest table's
   offsets and total, the honest prover's witnesses, and the witness for a named call;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
@@ -286,6 +287,27 @@ def bound (j : Json) : V Json := do
   return Json.mkObj [("bound", Lean.toJson (Bound.countBound strata δ)),
     ("per_stratum", Json.mkObj (strata.toList.map fun s => (s.name, Lean.toJson (Bound.stratumBound s δ))))]
 
+/-- `{"rows": [{"size", "k", "harm"}], "delta"}` to `{"budget", "value", "floor"}`: `Bound.lnUpper δ` and the greedy fill
+at it (`Bound.densityBound`), ratios `n` or `n/d`, and the fill's floor; refused where a row is not exactly
+`{size, k, harm}` of natural numbers `k ≤ size` and a ratio, or δ not in (0, 1). -/
+def harmBound (j : Json) : V Json := do
+  if keys? j != some #["delta", "rows"] then throw "exactly {rows, delta}"
+  let .arr rs := getD j "rows" | throw "rows is not a list"
+  let rows ← rs.mapM fun r => do
+    if keys? r != some #["harm", "k", "size"] then throw "a row is exactly {size, k, harm}"
+    let (some size, some k, .str h) := (nat? (getD r "size"), nat? (getD r "k"), getD r "harm")
+      | throw "a row's size and k are natural numbers and its harm a ratio"
+    if size < k then throw "a row needs k <= size"
+    let h ← Core.Ratio.ofString h "harm"
+    pure (size, k, (h.num : Rat) / (h.den : Rat))
+  let .str d := getD j "delta" | throw "delta is not a ratio"
+  let δ ← Core.Ratio.ofString d "delta"
+  if δ.num == 0 || δ.den ≤ δ.num then throw "delta is not in (0, 1)"
+  let budget := Bound.lnUpper ((δ.num : Rat) / (δ.den : Rat))
+  let value := Bound.fill rows budget
+  return Json.mkObj [("budget", .str (toString budget)), ("floor", Lean.toJson value.floor.toNat),
+    ("value", .str (toString value))]
+
 /-- `{"population", "p", "delta"}` to `{"bound"}` (`Bernoulli.count_bound`); refused where `Bernoulli` is: `p` not a
 ratio in [0, 1], δ not in (0, 1). -/
 def bernoulliBound (j : Json) : V Json := do
@@ -514,7 +536,7 @@ def table : List (String × (Json → V Json)) :=
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
-   ("bound", bound), ("bernoulli_bound", bernoulliBound),
+   ("bound", bound), ("harm_bound", harmBound), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
