@@ -62,12 +62,13 @@ from verity.ml.commitments.gates import embedding as E
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.b1_tp2 import AllGather
 from verity.ml.windows import interface as IF
+from verity_vllm.check import weights_of_record as WR
 
 from .build import Unexpressible
 from .steps import RequestUnit, request_program
 
 NAME = "verity-vllm/window"
-WEIGHTS = "weights"
+WEIGHTS = WR.PARAM
 PROMPT = "prompt"
 GREEDY = {"kind": "greedy"}
 #: the step a class Program's slot is the system's ingress at: its anchor, the window's start (N1's start cadence)
@@ -527,7 +528,6 @@ def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: s
     the verifier pins for ``weights`` before the run and a window's registration records (`verity-vllm advice
     --weights-of-record`), and a weight read counts registered exactly when the two are one (`interface.input_count`). The
     weights record is the model's, one at every class."""
-    from verity_vllm.check import weights_of_record as WR
     from verity_vllm.config import CHECKPOINTS
 
     from .common import _arr_shape

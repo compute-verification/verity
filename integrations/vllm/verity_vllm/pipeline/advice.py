@@ -390,22 +390,23 @@ def _sha(p: Path) -> str:
 
 def registered_weights(record: dict[str, Any], serve: dict[str, Any] | None = None) -> dict[str, str]:
     """What a window's registration records of the weights it served (``registered``): the window circuit's registered
-    parameter (`window_circuit.WEIGHTS`) and ``record``'s root of record (`check.weights_of_record`), the root the verifier
+    parameter (`weights_of_record.PARAM`, `window_circuit.WEIGHTS`) and ``record``'s root of record (`check.weights_of_record`), the root the verifier
     pins before the run from the checkpoint's pinned shards, so the circuit's weight reads count registered exactly when the
     two are one (`interface.input_count`).  Refused unless the record is of record under the current schema (every field
     composed from the pinned shards) and, given the run's ``serve.json``, of its model at its revision."""
     from verity_vllm.check import weights_of_record as WR
-    from verity_vllm.program.predict.window_circuit import WEIGHTS
 
     root = record.get("root_of_record")
     if record.get("schema") != WR.SCHEMA or record.get("of_record") is not True or not isinstance(root, str):
         raise ValueError(f"the weights record is {record.get('schema')!r}, of record {record.get('of_record')!r}: a window "
                          f"registers the root of a record of record under {WR.SCHEMA}")
-    entry = (record.get("checkpoint") or {}).get("entry") or {}
-    if serve is not None and (entry.get("repo"), entry.get("revision")) != (serve.get("model"), serve.get("revision")):
-        raise ValueError(f"the weights record is {entry.get('repo')}@{entry.get('revision')}, and the run served "
+    pin = record.get("checkpoint")
+    entry = pin.get("entry") if isinstance(pin, dict) else None
+    model = (entry.get("repo"), entry.get("revision")) if isinstance(entry, dict) else None
+    if serve is not None and model != (serve.get("model"), serve.get("revision")):
+        raise ValueError(f"the weights record is of checkpoint {model}, and the run served "
                          f"{serve.get('model')}@{serve.get('revision')}")
-    return {WEIGHTS: root}
+    return {WR.PARAM: root}
 
 
 def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int,
