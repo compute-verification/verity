@@ -1,6 +1,7 @@
 {
   "rule": "P10 (size ratchet)",
   "entries": [
+    {"file": "verity_vllm/check/fold_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 897},
     {"file": "verity_vllm/check/gates.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1397},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "function", "symbol": "decompose", "detail": "lines", "count": 348},
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "function", "symbol": "cross_rank_check", "detail": "lines", "count": 267},
@@ -46,7 +47,6 @@
     {"file": "verity/ml/definitions/registry/lifted.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2228},
     {"file": "verity/ml/definitions/registry/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
     {"file": "verity/ml/definitions/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 805},
-    {"file": "verity_vllm/query/required.py", "kind": "function", "symbol": "request_manifest", "detail": "lines", "count": 177},
-    {"file": "verity_vllm/check/fold_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 897}
+    {"file": "verity_vllm/query/required.py", "kind": "function", "symbol": "request_manifest", "detail": "lines", "count": 177}
   ]
 }
