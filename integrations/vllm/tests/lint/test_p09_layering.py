@@ -6,8 +6,8 @@ Checked today, against ``allowlists/p09_layering.json``:
   (``_imports.LAYER``; order ``pipeline`` > ``check|properties`` > ``acquire`` > ``observe|commit`` > ``engine`` >
   ``query|correspondence`` > ``program`` > ``collectives`` > ``config`` > core).  One entry per (importer, imported)
   module pair.
-* ``package-cycle``: two top-level packages importing each other (``engine.hooks`` and ``engine.env``, which import
-  nothing, count apart from ``engine``).
+* ``package-cycle``: two top-level packages importing each other (``engine.hooks``, ``engine.env`` and
+  ``engine.profiles.layer_classes``, which import nothing, count apart from ``engine``).
 * ``module-cycle``: a strongly connected component of the module import graph.  The entry names its members, so a
   cycle that gains a member fails too.
 * ``forbidden-import``: library code importing ``tests``, ``tools``, ``research`` (tools/research) or ``relayout``.
@@ -58,20 +58,22 @@ def layer_violations() -> list[R.Violation]:
     return out
 
 
-#: Engine modules every layer calls (the patch owner and the env-pin writer); they import nothing from the package.
-LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_OWNERS) | {"verity_vllm.engine.env"}
+#: Engine modules every layer calls (the patch owner, the env-pin writer and the value check's layer-class table); they import
+#: nothing from the package.
+LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_OWNERS) | {
+    "verity_vllm.engine.env", "verity_vllm.engine.profiles.layer_classes"}
 
 
 #: The unit a package cycle counts these modules and subpackages in (longest prefix wins), whatever package they sit in:
 #: the allowlist's cycles are between these units.
 PACKAGE_OF = {
-    "verity_vllm.protocol_options": "protocol_options",
-    "verity_vllm.linear": "linear",
-    "verity_vllm.store": "store",
-    "verity_vllm.predict": "predict",
-    "verity_vllm.collectives": "collectives",
-    "verity_vllm.pipeline.engine_spec": "pipeline",
-    "verity_vllm.pipeline.llm": "pipeline",
+    "verity_vllm.protocols": "protocol_options",
+    "verity_vllm.protocols.linear": "linear",
+    "verity_vllm.protocols.remote_bandwidth": "store",
+    "verity_vllm.program.predict": "predict",
+    "verity_vllm.engine.collectives": "collectives",
+    "verity_vllm.engine.spec": "pipeline",
+    "verity_vllm.llm": "pipeline",
 }
 
 
@@ -277,7 +279,7 @@ def test_allowlist_has_no_stale_entries() -> None:
 
 def test_leaf_modules_import_nothing() -> None:
     out = [f"{e.file}:{e.line} {_short(e.dst)}" for e in I.edges() if e.src in LEAF_MODULES]
-    assert not out, f"engine.hooks and engine.env must import nothing from verity_vllm (every layer calls them): {out}"
+    assert not out, f"{sorted(_short(m) for m in LEAF_MODULES)} must import nothing from verity_vllm (every layer calls them): {out}"
 
 
 def test_layer_map_names_existing_modules() -> None:

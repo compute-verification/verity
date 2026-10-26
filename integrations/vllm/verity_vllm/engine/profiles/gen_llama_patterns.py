@@ -33,7 +33,7 @@ from verity_vllm.observe.fold.patterns import GemmLaunch, base_op, bound_args, g
 from verity_vllm.observe.fold.resolver import Resolution, StepContext
 from verity_vllm.observe.fold.tree import TreeNode
 
-#: [R13 ampere] the pinned sm_89 table now lives in the GEMM target registry (`verity_vllm.program.frontend.gemm_targets.ADA_TUNED_GEMM`, the
+#: the pinned sm_89 table now lives in the GEMM target registry (`verity_vllm.program.frontend.gemm_targets.ADA_TUNED_GEMM`, the
 #: `ada` record's `tuned_table`) and is re-exported here unchanged for the tests / profile notes that cite it by this name.
 from verity_vllm.program.frontend.gemm_targets import ADA_TUNED_GEMM  # noqa: E402,F401
 
@@ -60,7 +60,7 @@ class GemmLaunchTuned:
     (`Gemm_v1{K,N}`, rows=M, (PerRow(a), Shared(w)) -> (PerRow(c),)), same operand / dtype / bias / weight-view checks
     (delegated to a `GemmLaunch` pinned to the bucket's tiling), different pins.
 
-    [R13 ampere] `table=None` (the default) means the registered GEMM target's table (`patterns.gemm_target_of(ctx)` ->
+    `table=None` (the default) means the registered GEMM target's table (`patterns.gemm_target_of(ctx)` ->
     `GemmTarget.tuned_table`: the sm_89 rows on an `ada` target, nothing on an `ampere` target, whose every launch is the base
     `GemmLaunch`'s default tiling); the pattern is named after the target (`…tuned_ada`).  An explicit `table` keeps the old
     behaviour for synthetic tests.  A target without a registered specialization: None here, refused by the base pattern."""

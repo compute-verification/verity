@@ -13,7 +13,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 - `verity/`: the distribution `verity` (the root `pyproject.toml`), in two parts. The module list is `verity/README.md`.
   Import from the owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing. Each directory's
   tests sit beside it as their own suite.
-  - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Models/` states their guarantees, and one whose
+  - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Definitions/` states their guarantees, and one whose
     proof isn't in `Security/Proofs/` is open: that verifier's properties aren't proven yet.
     - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
       its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`), the
@@ -167,7 +167,7 @@ the standing rulings stated nowhere else.
 - **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
   witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
-  assumption (`trusted-nebius-host`). Nothing the prover runs or hosts is trusted. A network certifier functions as an
+  assumption (`trusted-host`). Nothing the prover runs or hosts is trusted. A network certifier functions as an
   active warden, in network steganography's sense, but "network certifier" is its one name: never "warden" or "tap"
   (Daniel, 25 Oct; old names in `ARCHITECTURE.md`'s Glossary).
 - **The audited hardware is untrusted, and so is its vendor** (Daniel, 17 Oct: an international scheme may treat the chip
@@ -296,10 +296,11 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   the lock) waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
   the reviewed prefix's top (`train.sh TOP MACHINES --deferred lean-audit`), and after a failure there on the PR's own commit;
   only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too. The top
-  stops below a PR that came onto `next` in the same tick, and while a lower check runs, one at the top starts too when a
-  machine has a free Lean check slot (at most two running). A rebuilt `next` with the same PRs at the same heads keeps the
-  check, and an eject from its prefix rebuilds `next` only once it ends. A PR containing an unmarked PR of the same owner, or
-  one its owner withdrew, carries that change and doesn't wait for it.
+  stops below a PR that came onto `next` in the same tick. While a check runs, a Lean change above it, reviewed or not, gets
+  one stacked at `next`'s top (at most `max_lean_checks` running, drive.toml); the lower one runs on. A rebuilt `next` with
+  the same PRs at the same heads keeps a check, and an eject from its prefix rebuilds `next` only once it ends (a stacked
+  check's: at once). A PR containing an unmarked PR of the same owner, or one its owner withdrew, carries that change and
+  doesn't wait for it.
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
   itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
@@ -352,14 +353,14 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
     each proved guarantee.
     `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean functions
-    (`Properties.<Protocol>`) and proved (`Properties.Proofs.<Protocol>`). It may require `security` and that code, never
+    (`Properties.<Protocol>`) and proved (`Proofs.Properties.<Protocol>`). It may require `security` and that code, never
     `security_proofs`.
   - A component's Lean goes in its own area of each tree it has Lean in (`Core`, `Nci`, `Pouw`, `Pous`,
     `NetworkCertifier`, `Flock`; `Accounting` is the device model the resource audits share, and their joint guarantee).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's
     `Definitions/Flock` holds what has been extracted so far (`Definitions/Flock.lean` lists it): its
-    guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock` until its spec is
+    guarantees are `Definitions/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock` until its spec is
     extracted.
   - `Security/` is three trees (Daniel, 24 Oct): definitions (what Daniel reads: vocabulary, named assumptions,
     guarantee statements), properties (statements about the code, reading only the definitions and that code) and

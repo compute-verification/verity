@@ -1,4 +1,4 @@
-"""[R15 hopper HOP-03, M-0225] The LAUNCH CONTEXT of every request shape of a workload -- what `build --launch-context` needs.
+"""The LAUNCH CONTEXT of every request shape of a workload -- what `build --launch-context` needs.
 
 FA3's forward tile (`verity_vllm.program.frontend.targets.fa3_kblock_n`: vllm-flash-attn `tile_size_fwd_sm90` + `heuristics.h::use_one_mma_wg`) reads
 the varlen launch's `max_seqlen_q` = the most query rows any ONE sequence of the launch has.  A request Program built alone sees its own rows

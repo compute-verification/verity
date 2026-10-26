@@ -55,7 +55,7 @@ from verity.core.protocols.pouw.coins import CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-from verity_vllm.protocol_options import pouw_pearl_c_device as PD
+from verity_vllm.protocols.pouw import pearl_c as PD
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))

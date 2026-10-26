@@ -9,10 +9,11 @@ Every path git sees changed must be one of:
   is rewritten to where it is now, in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
   the file's own directory first, in a `*.py` file a pathlib chain `ROOT / "a" / "b"` read as `"a/b"`. Each changed
   line left may only rewrite a moved path as written below a directory its old and new places share
-  (`verity_vllm/predict/`), or a dotted name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.store`'s) from where a
+  (`verity_vllm/program/predict/`), or a dotted name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a
   renamed module was to where it is now; in any of them, the modules a run of import lines binds each name to
-  (`from a import m as M` to `from b import m2 as M`, a line split in two; in a heredoc, or in a string literal
-  `"from a import m\n"` whose quotes the move keeps); in a `*.py` file, also the module of an `import M` /
+  (`from a import m as M` to `from b import m2 as M`, a line split in two, a `from a import (x,` whose names go on
+  past the change; in a heredoc, or in a string literal `"from a import m\n"` whose quotes the move keeps); in a
+  `*.py` file, also the module of an `import M` /
   `from M import` line (a relative one, `.m`, read from the file's own place), or a `Path(__file__).parents[N]` anchor
   (or `Path(m.__file__)`'s, and the path joined to it) recounted to name, from where it now is, what the old one named,
   moved;
@@ -255,8 +256,8 @@ def substitute(text: str, pmap: dict[str, str]) -> str:
 
 
 def short_forms(pmap: dict[str, str], base: Tree) -> dict[str, str]:
-    """Each moved path as written below a directory its old and new paths share (`verity_vllm/predict` for
-    `integrations/vllm/verity_vllm/predict`), keeping at least one shared part; dropped where two moves disagree or where it
+    """Each moved path as written below a directory its old and new paths share (`verity_vllm/program/predict` for
+    `integrations/vllm/verity_vllm/program/predict`), keeping at least one shared part; dropped where two moves disagree or where it
     names a path of BASE's tree from the root."""
     out: dict[str, str] = {}
     bad: set[str] = set()
@@ -347,15 +348,20 @@ def import_rewrite(old: str, new: str, modules: Modules, old_path: str = "", new
 _OPEN, _CLOSE = r"""(\s*(?:[rbfu]*["'])?)""", r"""(#.*|(?:\\n)?["'][\s,)]*)?"""
 FROM = re.compile(rf"^{_OPEN}from\s+([\w.]+)\s+import\s+([\w\s,]+?)\s*{_CLOSE}$")
 IMPORT_AS = re.compile(rf"^{_OPEN}import\s+([\w.]+)(?:\s+as\s+(\w+))?\s*{_CLOSE}$")
+#: `from a import (x, y,`, its names continued on lines the move may leave as they were, or `from a import (x, y)`
+FROM_PAREN = re.compile(r"^(\s*)from\s+([\w.]+)\s+import\s+\(([\w\s,]*?),?\s*\)?\s*(#.*)?$")
 
 
 def bindings(lines: list[str], path: str) -> list[tuple[str, str, str, str]] | None:
     """Each name the import lines bind, as (indent, comment, the dotted name it binds, the name), or None if a line isn't
-    one such import."""
+    one such import. A parenthesized `from a import (` also binds `a` itself, under the name `(`: its continuation lines
+    may be unchanged context, so `a`'s rewrite must be checked even when the line names nothing."""
     out = []
     for line in lines:
-        if m := FROM.match(line):
-            for part in m.group(3).split(","):
+        if (m := FROM.match(line)) or (m := FROM_PAREN.match(line)):
+            if m.re is FROM_PAREN:
+                out.append((m.group(1), m.group(4) or "", absolute(m.group(2), path), "("))
+            for part in filter(str.strip, m.group(3).split(",")) if m.re is FROM_PAREN else m.group(3).split(","):
                 name, _, alias = (w.strip() for w in part.partition(" as "))
                 if not name.isidentifier() or (alias and not alias.isidentifier()):
                     return None

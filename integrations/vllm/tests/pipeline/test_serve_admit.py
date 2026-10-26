@@ -26,7 +26,7 @@ from verity_vllm.pipeline import serve_admit as sa
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline.serve_openai import SSE_DONE
-from verity_vllm.protocol_options import pouw_h1_requests as RQ
+from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 
 class Timers:
