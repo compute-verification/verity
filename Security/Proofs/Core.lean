@@ -24,6 +24,7 @@ import Proofs.Core.TC
 import Proofs.Core.Fp32
 import Proofs.Core.Device
 import Proofs.Core.Accel.Principles
+import Proofs.Core.Accel.Witness
 
 /-!
 # Proofs of core's guarantees
