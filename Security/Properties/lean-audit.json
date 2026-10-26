@@ -5900,6 +5900,9 @@
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
@@ -5990,6 +5993,9 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -6250,6 +6256,9 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -6357,6 +6366,9 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -6602,7 +6614,10 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
-    "Properties.Pouw.LiveSalt.oneRoot"
+    "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
    ]
   },
   "MemoryChallenger.FrameV3": {
@@ -7912,6 +7927,9 @@
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
@@ -7984,7 +8002,10 @@
     "Properties.Pouw.Check.commitmentKeepsBytes",
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
-    "Properties.Pouw.Check.undecidedOnlyFromService"
+    "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
    ]
   },
   "PouwCommit.Coins": {
@@ -8118,7 +8139,10 @@
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.LiveSalt.acceptMeans",
-    "Properties.Pouw.LiveSalt.oneRoot"
+    "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
    ]
   },
   "PouwCommit.Rows": {
@@ -10315,7 +10339,10 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
-    "Properties.Pouw.LiveSalt.oneRoot"
+    "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
    ]
   },
   "SampledProofs.ChallengerRecord": {
@@ -10355,7 +10382,10 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
-    "Properties.Pouw.LiveSalt.oneRoot"
+    "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
    ]
   },
   "SampledProofs.ChallengerSession": {
@@ -10508,7 +10538,10 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
-    "Properties.Pouw.LiveSalt.oneRoot"
+    "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
    ]
   },
   "SampledProofs.Draw": {
@@ -10617,6 +10650,9 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -10748,6 +10784,9 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.SampledProofs.haltEndsOpen",
     "Properties.SampledProofs.haltIsFinal",
     "Properties.SampledProofs.noAcceptAfterHalt"
