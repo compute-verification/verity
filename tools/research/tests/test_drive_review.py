@@ -15,12 +15,13 @@ from pathlib import Path
 import pytest
 
 import research.queue as Q
+from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP
 from research.queue import QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
 from test_drive_postland import _registry
 from test_queue import World, _git
-from test_queue_drive import Harness, _failed_run, _steps_run, _tip
+from test_queue_drive import Harness, _failed_run, _live_run, _steps_run, _tip
 
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
 
@@ -237,6 +238,85 @@ def test_a_moved_lean_check_that_regenerated_locks_runs_again_on_the_rebuilt_com
     assert not h.tick().startswith("landed")
     assert len(h.launched) == 2 and h.launched[1][0] == new, h.launched
     assert h.d.q.load_state()["drive"]["lean"][new]["state"] is None
+
+
+def _lock_landing(world, monkeypatch, tmp_path, above: dict[str, str]) -> tuple[Review, str, str, dict]:
+    """#1 (a Lean change with its lock) checked and landed with the records its check regenerated, `{"records": 2}`, while a
+    check stacked at `next`'s top for #2 (a Lean change in the same package, without its lock) runs; its run dir holds
+    ``above``'s records.  (the harness, that check's run id, the commit it ran on, {run: its fetch})"""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    h.d.regenerate_locks = True
+    world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
+    world.gh.put(2, world.change({"pkg/B.lean": "theorem b : True := trivial\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    h.review(1)
+    h.tick()
+    h.tick()
+    one, top = h.q.chain()[0].commit, _tip(world)
+    assert [c for c, *_ in h.launched] == [one, top], world.logs        # #1's, and one stacked at the top for #2
+    first, second = h.lean_ids()
+    runs = {first: _live_run(tmp_path, first, one, {"pkg": '{"records": 2}\n'})[1],
+            second: _live_run(tmp_path, second, top, above)[1]}
+    h.d.fetch = lambda r, names: runs[r](r, names) if r in runs else None
+    h.run_state[first] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, first, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #1"), world.logs
+    assert _subject(world, "main").startswith("Lock records regenerated for #1") and _git(world.origin, "rev-parse", "main^") == one
+    world.gh.prs.pop(1)                                                 # GitHub closes it as merged
+    return h, second, top, runs
+
+
+@pytest.mark.parametrize("records", ['{"records": 3}\n', '{"records": 2}\n'])
+def test_a_landing_with_regenerated_locks_rebuilds_next_on_its_lock_commit_and_the_check_above_moves_with_it(
+        world, monkeypatch, tmp_path, records):
+    """26 Oct 22:40Z: drive landed 17 PRs with a `Lock records regenerated` commit on top, `main` was no commit of `next`, and the
+    next sync merged all 93 members again: a passed Lean check at 41 and the running ones above went with their commits (CI-167
+    item 2; 20:47Z too).  `next` is rebuilt on the lock commit at once, each member with its merge's tree and those records, the
+    next sync keeps them, and the check above, running on, moves to its commit's image and lands it with its own records: the
+    tree it checked with them, which the lock gate checks against the commit it ran on.  When its records are the ones below,
+    the image holds them already, and it lands as it is."""
+    h, rid, top, runs = _lock_landing(world, monkeypatch, tmp_path, {"pkg": records})
+    lock, new = _main(world), _tip(world)
+    assert _git(world.origin, "rev-parse", f"{new}~2") == lock                  # #2's image, then #3's, on the lock commit
+    assert _git(world.origin, "diff", "--name-only", top, new) == "pkg/lean-audit.json"
+    assert _git(world.origin, "show", f"{new}:pkg/lean-audit.json") == '{"records": 2}'
+    lean = h.d.q.load_state()["drive"]["lean"]
+    assert top not in lean and lean[new]["carried"] == {"from": top, "files": ["pkg/lean-audit.json"]}, lean
+    assert lean[new]["state"] is None and h.cancelled == []
+    logged = len(world.logs)
+    h.tick()
+    assert any("2 PR(s) above `main`, kept 2, merged 0" in x for x in world.logs[logged:]), world.logs[logged:]
+    assert _tip(world) == new and h.cancelled == [] and list(h.d.q.load_state()["drive"]["lean"]) == [new]
+    h.review(2)
+    h.review(3)
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #3"), world.logs
+    main = _main(world)
+    assert len(h.launched) == 2 and _git(world.origin, "show", f"{main}:pkg/lean-audit.json") == records.strip()
+    assert _git(world.origin, "diff", "--name-only", top, main) == "pkg/lean-audit.json"
+    if records == '{"records": 2}\n':
+        assert main == new
+        return
+    assert _git(world.origin, "rev-parse", "main^") == new
+    kw = {"tool": "check", "kinds": merge.produced(h.q.workdir, "check"), "command": merge.declared_command(h.q.workdir, "check"),
+          "deferred": rid, "fetch": h.d.fetch}
+    assert merge.regenerated_parent(world.origin, main, h.q.store, ran=top, **kw) == rid
+    assert merge.regenerated_parent(world.origin, main, h.q.store, **kw) is None     # it didn't run on the parent
+
+
+def test_a_moved_check_that_didnt_regenerate_the_records_below_it_covers_nothing(world, monkeypatch, tmp_path):
+    """The image holds the lock commit's records, and a check that passed without regenerating them checked a tree with other
+    ones: it covers nothing, and the commit is checked again."""
+    h, rid, top, _ = _lock_landing(world, monkeypatch, tmp_path, {})
+    lock, new = _main(world), _tip(world)
+    h.review(2)
+    h.review(3)
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert not h.tick().startswith("landed"), world.logs
+    assert _main(world) == lock and len(h.launched) == 3 and h.launched[2][0] == new, h.launched
+    assert any(f"{rid} ran on {top[:12]} and didn't regenerate pkg/lean-audit.json" in x for x in world.logs), world.logs
 
 
 def test_the_lean_check_stops_below_a_member_that_came_onto_next_within_the_settle_ticks(world, monkeypatch):
