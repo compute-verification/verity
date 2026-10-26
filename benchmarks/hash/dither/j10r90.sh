@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # J10-R's per-call-noise units (h1u.cu's kh_units_multi_j10r and _sm; PouwH1Tile_v5 / _v6's receipt) on the H200, sm_90a
-# (HASH-21): the served RTX arms built for sm_90a with nothing else changed:
-#   kr    the receipts-only base (job.sh's kr: H1U_KSPLIT = 4, H1K_AUTO, H1K_RONLY)
-#   kra   A: kr + H1U_JCTA, H1U_WARPS = 4, H1U_JX, H1U_JBW
-#   kraq  AQ: kra + H1U_PF, H1U_JPI, H1U_JCS = 2 (H1U_JXS stays off: it stalls under PREQ on the RTX)
+# (HASH-21): the served RTX arms built for sm_90a with nothing else changed, and the sm_90a arm (HASH-22):
+#   kr        the receipts-only base (job.sh's kr: H1U_KSPLIT = 4, H1K_AUTO, H1K_RONLY)
+#   kra       A: kr + H1U_JCTA, H1U_WARPS = 4, H1U_JX, H1U_JBW
+#   kraq      AQ: kra + H1U_PF, H1U_JPI, H1U_JCS = 2 (H1U_JXS stays off: it stalls under PREQ on the RTX)
+#   kraqwxsc  the sm_90a arm: kra + H1U_PF, H1U_JPI, H1U_JW, H1U_JXS, H1U_JWS, H1U_JPC (no JCS: the column blocks and
+#             W' once a call, X and W' in fragment order, their prep's stores coalesced)
 #
-#   build  (a CPU node) job.sh's build of the three at sm_90a with --no-compress ($OUT/lib/sm_90a), then the SASS gate on
+#   build  (a CPU node) job.sh's build of the four at sm_90a with --no-compress ($OUT/lib/sm_90a), then the SASS gate on
 #          each: sass-gate.json on sass_pins.json as it stands (the verdict, the script's exit), and sass-gate-sm90pin.json
 #          on a scratch copy of the gate whose 13.0.1-sm_90a entry is pinned as jobs/pin_target.sh pins it (ieee_pin.cu's
 #          pinned builds at sm_90a, sass_gate.py --pin) and given the numeric run that pinned it on the H200,
@@ -20,8 +22,8 @@
 #   (or on the H200's host, outside any lease; where the host has no /workspace/cp/venv312, VERITY_BENCH_VENV names a
 #   torch venv for check and time)
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 30m \
-#     --env GPU_LEASE_WHO=kernels-kcommitfb --send BUILD_RUN/out/lib/sm_90a/h1u_kr.so --send .../h1u_kra.so \
-#     --send .../h1u_kraq.so --send .../BUILD.txt -- bash benchmarks/hash/dither/j10r90.sh check
+#     --env GPU_LEASE_WHO=kernels-kcommitfb --send BUILD_RUN/out/lib/sm_90a/h1u_kr.so --send .../h1u_kraqwxsc.so \
+#     [--send .../h1u_kra.so ...] --send .../BUILD.txt -- bash benchmarks/hash/dither/j10r90.sh check
 # then on a CPU node with check's out/j10r90-check.json and .npz sent: j10r90.py verify and j10r_units.py anchor.
 # Env: NVCC (default CUDA 13.0's), LEASE (default "--max-min 20"), HB_WHO (default $GPU_LEASE_WHO), BENCH_ARGS.
 set -uo pipefail
@@ -32,10 +34,12 @@ export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 export NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 BASE=-DH1U_KSPLIT=4,-DH1K_AUTO=1,-DH1K_RONLY=1
 A=$BASE,-DH1U_JCTA=1,-DH1U_WARPS=4,-DH1U_JX=1,-DH1U_JBW=1
+Q=$A,-DH1U_PF=1,-DH1U_JPI=1
 mkdir -p "$OUT"
 case $WHAT in
   build)
-    BUILDS="" VARIANTS="kr=$BASE kra=$A kraq=$A,-DH1U_PF=1,-DH1U_JPI=1,-DH1U_JCS=2" NVCC_EXTRA=--no-compress \
+    BUILDS="" VARIANTS="kr=$BASE kra=$A kraq=$Q,-DH1U_JCS=2 kraqwxsc=$Q,-DH1U_JW=1,-DH1U_JXS=1,-DH1U_JWS=1,-DH1U_JPC=1" \
+      NVCC_EXTRA=--no-compress \
       bash "$HERE/job.sh" sm_90a build || exit 2
     LIB=$OUT/lib/sm_90a
     H=$ROOT/benchmarks/pouw/harness
