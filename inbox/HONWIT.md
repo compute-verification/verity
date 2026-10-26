@@ -82,3 +82,4 @@ Notes:
 - `honest_half` is fixed to one statement `x`, so a proof only at that `x` would be enough there. All three quantify over every `x`, though, because `vstar_complete_run_setup` takes them in that form. A per-`x` version would need that lemma restated.
 - `bL.st` is `b0.st`: `bringsAt`, `deployedB`, `tr` and `rd` don't touch `st`. So `NumsFixed` and `StagedSetsUp` are about the stage alone (plus the inner prover, for `StagedSetsUp`).
 - `WitSatisfies` reads `b.ref.wit` (= `witFin (A0 mask) (Ir.fit x) x`). It is V*'s honest completeness at the deployed assigner.
+- 21:11Z coordinator: cpu-4 proofs slots p1-p4 STOP taking new runs at Tue 01:00Z (M3 proper gets those cores 01:30-06:00Z). Launch long builds before ~00:15Z, or after 01:00Z use p0 or cpu-1.
