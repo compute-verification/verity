@@ -3,10 +3,12 @@
 The executor at each linear layer's ``quant_method.apply`` (``EXECUTES``; innermost, `protocol_options.SITES`).  In the
 composition's weight phase, with the model untouched and no coin opened, `commit_weights` finds the linear layers by
 type (vLLM's ``LinearBase``, `linear_types`) and commits every layer's int7 weight rows (`verity.core.protocols.pouw.audit.commit_rows`).
-`install` then asks the epoch's challenger (the setting ``coins``) for its salt coin, opened after those roots' weights
-root, and starts the epoch from it (`verity.core.protocols.pouw.audit.Epoch.start`, which refuses any other
-coin), and replaces each ``apply`` through the composition's tagged `Hooks`.  There is no beacon and no salt without a
-coin.  Each call of a replaced ``apply(layer, x, bias)`` is one unit of the run's workload:
+`install` then asks the epoch's challenger (the setting ``coins``, or under ``ncp-v2`` and Pearl-C the auditor host's
+session, ``challenger``: `pouw_h1_window.salt_session`) for its salt coin, opened after those roots' weights root, and
+starts the epoch from it (`verity.core.protocols.pouw.audit.Epoch.start`, which refuses any other coin; Pearl-C's
+`pouw_pearl_c_host.epoch_of`, a live session's under the same rules), and replaces each ``apply`` through the
+composition's tagged `Hooks`.  There is no beacon and no salt without a coin.  Each call of a replaced
+``apply(layer, x, bias)`` is one unit of the run's workload:
 
 1. quantize x's rows to int7 per row (`quantize`), and prepare the weight operands (`weight_operands`: the int7 weight per
    output channel with the epoch's noise, Y = [B + F₁ ; B + F₂ ; B + F₃], and c₀) from the weight of the layer the call
@@ -69,7 +71,6 @@ from verity.core.protocols.sampled_proofs.challenger import LiveRecord
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import device as PD
 from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import hooks as PHK
 from verity_vllm.protocols.pouw.h1 import settings as PHS
 from verity_vllm.protocols.pouw.h1.settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
@@ -168,18 +169,18 @@ class Settings:
     #: after round s's root
     runner: Any = None
     rounds: Any = None
-    #: H1's salt and round coins (``ncp-v2``'s salt) from the auditor host's challenger, ``HOST:PORT``
+    #: H1's salt and round coins (``ncp-v2``'s and Pearl-C's salt) from the auditor host's challenger, ``HOST:PORT``
     #: (`pouw_h1_challenger`); ``coins`` and ``rounds`` held in this process in its place are for tests, and credit
     #: nothing; ``session`` is the challenger gate's reply for the window: ncp-v2's its open answer for the window's
-    #: Commit (`pouw_h1_challenger.session_of`), H1's its reserve answer (`pouw_h1_window.reserved_of`), which
-    #: the window opens itself on its window-open root
+    #: Commit (`pouw_h1_challenger.session_of`), H1's and Pearl-C's its reserve answer (`pouw_h1_window.reserved_of`),
+    #: which the install opens itself, on H1's window-open root or Pearl-C's weights' root (`pouw_h1_settings.OPENS`)
     challenger: str | None = None
     session: Mapping[str, Any] | None = None
     #: H1's admissions (`pouw_h1_requests.ADMISSIONS`): None or ``round-0``, admit in round 0 only (#2722's live tiles
     #: are fixed before the first coin), or ``per-round``
     admission: str | None = None
-    #: H1's ``gate(session, root)``: the challenger gate's open of the reserved session on the window's open root
-    #: (`pouw_h1_window.Gate`, `pouw_h1_window.Window`)
+    #: H1's and Pearl-C's ``gate(session, root)``: the challenger gate's open of the reserved session on that root
+    #: (`pouw_h1_window.Gate`; `pouw_h1_window.Window`, `pouw_h1_window.salt_session`)
     gate: Any = None
     #: H1's served tables (`pouw_h1_served.Served`): each call's and the weights' registered values, under the round roots;
     #: ``graphs`` the engine's CUDA-graph capture sizes, none when eager (`pouw_h1_static.graph_pad`)
@@ -552,8 +553,8 @@ class _CircuitRun:
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
 #: replay (`check.replay.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[_CircuitRun, dict[str, int]]] = {}
-# The Pearl-C prover's hm96 salt key per entry: its weight trees' salts, shared by `commit_weights` and `install` and never in the
-# record (published weight commitments without it fail the install's root check).
+# The Pearl-C prover's hm96 salt key per entry: its weight trees' salts, drawn afresh by each `commit_weights` (so each install's W,
+# and its salt session, is its own) and read by `install`, never in the record (published commitments without it fail its root check).
 _SALT_KEYS: dict[str, bytes] = {}
 
 
@@ -652,7 +653,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
-        key = _SALT_KEYS.setdefault(f"{NAME}:{scheme}", PPD.new_salt_key(scheme))
+        key = _SALT_KEYS[f"{NAME}:{scheme}"] = PPD.new_salt_key(scheme)
         roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)}, scheme,
                                  salt_key=key)
         return {"weight_roots": {str(w): r.hex() for w, r in roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
@@ -681,10 +682,10 @@ def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: i
     """`settings` (the loaded protocols config) with PoUW's ``coins`` a challenger of `epoch` held in this process
     (`verity.core.protocols.pouw.coins.Challenger`, its coins the Lean verifier of record's, `pouw.verifier.coins`) when
     `enabled` (the protocol set) has PoUW, for a pipeline that is its run's own auditor (it replays and judges what it
-    served); a config's own ``coins`` is kept."""
+    served); a config's own ``coins``, or its auditor host's ``challenger`` (the coins' one source), is kept alone."""
     out = {k: dict(v) for k, v in settings.items()}
     if any(str(e).partition(":")[0] == NAME for e in (enabled or ())):
-        if "coins" not in out.get(NAME, {}):
+        if not {"coins", "challenger"} & set(out.get(NAME, {})):
             out.setdefault(NAME, {})["coins"] = Challenger(epoch, verifier.coins)
     return out
 
@@ -701,36 +702,32 @@ def install(scheme: str, target: Target) -> Option:
     committed = target.weight_commitments.get(entry) or commit_weights(scheme, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(w, Shape(16, k, n), w) for w, (n, k) in shapes.items()))
-    session = None
+    session, device, k = None, scheme in PPD.SCHEMES, None
     if settings.challenger is not None:
-        session, commitment, opening, _rounds, salt = PHW.session(entry, settings.challenger, 0, weights_root(roots),
-                                                                    settings.session)
+        session, commitment, opening, salt, carried, k = PHW.salt_session(entry, settings, weights_root(roots), device)
     else:
         commitment, opening = settings.coins.commitment, settings.coins.open("salt", weights_root(roots))
         salt = Epoch.start(declared, roots, commitment, opening).salt
-    if scheme in PPD.SCHEMES:
-        run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
-                                  {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
-                                  schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry))
-        run.commits["registration"] = weights_claim(s)
+    with PHW.closed_on_error(session):
+        if device:
+            run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
+                                      {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
+                                      schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry), pass_index=k)
+            run.commits["registration"] = weights_claim(s)
+        else:
+            run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
+                   else _Run(s, entry, settings, roots, salt))
+            run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
+        if session is not None:
+            run.commits.update(coin_source=PH.CHALLENGER, session=carried)
+        if isinstance(run, _CircuitRun):
+            _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
             h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
-        PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir)
-        return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=run.finish,
-                      end_pass=run.end_pass)
-    else:
-        run = (_CircuitRun(scheme, entry, settings, roots, salt, commit=target.context.stage != "capture") if s is None
-               else _Run(s, entry, settings, roots, salt))
-        run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
-    if session is not None:
-        run.commits.update(coin_source=PH.CHALLENGER, session=PHC.carried(settings.session))
-    if isinstance(run, _CircuitRun):
-        _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
-    h = target.hooks(entry)
-    for w, layer in enumerate(layers):
-        h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
-    return Option(name=entry, hooks=h, commits=run.commits, details=run.details,
+        if device:
+            PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir)
+    return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=run.end_pass if device else None,
                   release=run.finish if session is None else lambda: PHW.finish(run, session))
 
 

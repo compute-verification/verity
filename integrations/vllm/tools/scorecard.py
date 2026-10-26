@@ -15,7 +15,7 @@
   functions and methods with a parameter or return that has no annotation; the whole package, and the modules outside
   code imports.
 * **settings**: uses of the process environment (``os.environ``, ``os.getenv``, ...) outside the settings module
-  ``verity_vllm/envs.py``.
+  ``verity_vllm/settings.py``.
 
 Nothing scanned is imported, so it needs only the standard library. Outside files are those ``git grep`` finds (tracked
 and untracked, not ignored) when the root is a Git checkout, else every ``*.py`` under the root outside hidden
@@ -36,7 +36,7 @@ from pathlib import Path
 
 INTEGRATION = "integrations/vllm"
 PACKAGE = "verity_vllm"
-SETTINGS = f"{PACKAGE}/envs.py"
+SETTINGS = f"{PACKAGE}/settings.py"
 SIZE_BANDS = (800, 600, 400)
 FUNCTION_BANDS = (150, 100)
 SKIP_DIRS = frozenset({"__pycache__", "tests"})

@@ -174,7 +174,7 @@ theorem drawMatchesZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claim
   | some d =>
     rintro ⟨d', hd', hs⟩
     rw [hd']
-    exact (drawEq_iff _ _).2 (.some hs.symm.jsonEquiv)
+    exact (drawEq_iff _ _).2 (.some hs)
 
 /-- **Custody: the record's `root_B` is the link message's**: the goal `CustodyRootB`. -/
 theorem custodyRootBZk_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hS : StmtOkZk H rel)
