@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # M3's rehearsal (PRF-172) on the torch loop's fixture, in M3's slot with M3's binaries, before the delivered tree arrives:
-# 1. `research data fetch` of a store art works inside the run (M3 reads its tree with PB_IN_ART);
+# 0. the binaries: PB_BINARIES when it holds all three of this source's (a finished run's out/bin is evicted once custody
+#    preserves it, and a run on the node has no store remote to restore it from), else built here (PB_BUILD_ONLY);
+# 1. `research data put` then `fetch` round-trips in the node's own store (M3 reads its tree with PB_IN_ART, which a run
+#    can fetch only from the node's local store: runs have no remote);
 # 2. a registered step (prove_bundle.py --step): the fixture's step registered, K blocks drawn live over every
 #    (slot, layout unit) by Lean's coin, a one-unit bundle a drawn block, delivered as a tree (PB_IN) and proved;
 # 3. that tree with one block's step path tampered and another block's bundle under a third's index, the other blocks
@@ -8,25 +11,42 @@
 # 4. the single-bundle delivery (window/, bundle.{json,bin}, tampered/), K units drawn live over the window.
 #   research run --on vy-nebius-cpu-4 --as proofs --project verity --source . --cwd clone -- \
 #     env CHECK_SLOTS=/workspace/research/locks/m3/slots python3 tools/verity/check/slot.py --by proofs -- \
-#     bash benchmarks/one_stage/prove_bundle_rehearsal.sh PB_BINARIES=DIR [PB_K=8] [FETCH_ART=art:…]
+#     bash benchmarks/one_stage/prove_bundle_rehearsal.sh [PB_BINARIES=DIR] [PB_K=8]
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
-REPO=$(pwd); O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"; K=${PB_K:-8}; B=${PB_BINARIES:?}
+REPO=$(pwd); O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"; K=${PB_K:-8}
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] REHEARSAL $*" | tee -a "$O/rehearsal.log"; }
-if [ -n "${FETCH_ART:-}" ]; then
-  research data fetch "$FETCH_ART" --to "$T/f" --path stdout.log > "$O/fetch-check.log" 2>&1 && log "fetch ok" || log "fetch FAILED"
-fi
 uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 PY=$REPO/.venv/bin/python
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/torch_loop:$REPO/benchmarks/e2e_demo:$REPO/benchmarks/numerical/python
+STAMP=$(git rev-parse HEAD:verity/ml/flock HEAD:verity/core/service/flock | tr '\n' ' ')
+B=${PB_BINARIES:-}
+if [ -n "$B" ] && [ "$(cat "$B/stamp" 2>/dev/null)" = "$STAMP" ] && [ -x "$B/flock-circuit" ] && [ -x "$B/flock-verify" ] \
+    && [ -x "$B/flock-firewall" ]; then
+  log "binaries: $B (stamp $STAMP)"
+else
+  log "binaries: ${B:-none given} lacks this source's three (stamp $STAMP); building"
+  OUT=$O/build bash benchmarks/one_stage/prove_bundle.sh PB_BUILD_ONLY=1 > "$O/build.log" 2>&1 || { tail -20 "$O/build.log"; exit 6; }
+  B=$O/build/bin
+  log "binaries: built in $B ($(grep -h 'build only' "$O/build/job.log" | tail -1))"
+fi
 run_pb() { OUT=$O/$1 bash benchmarks/one_stage/prove_bundle.sh "${@:2}" PB_BINARIES="$B" PB_FLIPS=1 PB_LEAN_JOBS=2; }
 
 log "step: make (k $K, live over the step registration)"
 "$PY" benchmarks/one_stage/prove_bundle.py make --step --k "$K" --lean "$B/flock-verify" --scratch "$T/s" --out "$T/step" \
   > "$O/step-make.log" 2>&1 || { tail -20 "$O/step-make.log"; exit 8; }
 grep '^MAKE' "$O/step-make.log" | tee -a "$O/rehearsal.log"
+art=$(research data put --kind m3-rehearsal-fetch-check --file "$T/step/step-registration.json" 2> "$O/fetch-check.log" | tail -1)
+if [ -n "$art" ] && research data fetch "$art" --to "$T/f" >> "$O/fetch-check.log" 2>&1 \
+    && cmp -s "$T/step/step-registration.json" "$(find "$T/f" -type f | head -1)"; then
+  log "fetch ok: $art (put then fetched in the node's store, the same bytes)"
+else
+  log "fetch FAILED: $(tail -1 "$O/fetch-check.log")"
+fi
+t0=$(date +%s)
 run_pb step PB_IN="$T/step"; rc_step=$?
+log "step: the drawn blocks proved and verified in $(( $(date +%s) - t0 )) s wall (sessions one at a time, 2 Lean verifies beside)"
 log "step: prove_bundle.sh rc $rc_step"
 
 log "step negatives: a tampered step path, a block under another index"

@@ -35,11 +35,13 @@ PY=$REPO/.venv/bin/python
 STAMP=$(git rev-parse HEAD:verity/ml/flock HEAD:verity/core/service/flock 2>/dev/null | tr '\n' ' ')
 [ -n "${STAMP// }" ] || { echo "prove-bundle: no git trees to stamp binaries with"; exit 4; }
 log "prove-bundle: source $(git rev-parse HEAD), draw ${PB_K:+live, k }${PB_K:-FIXTURE_DRAW}, builds in $W"
-if [ -n "${PB_BINARIES:-}" ] && [ "$(cat "$PB_BINARIES/stamp" 2>/dev/null)" = "$STAMP" ]; then
+if [ -n "${PB_BINARIES:-}" ] && [ "$(cat "$PB_BINARIES/stamp" 2>/dev/null)" = "$STAMP" ] \
+    && [ -x "$PB_BINARIES/flock-circuit" ] && [ -x "$PB_BINARIES/flock-verify" ] && [ -x "$PB_BINARIES/flock-firewall" ]; then
   BIN=$PB_BINARIES/flock-circuit LEAN=$PB_BINARIES/flock-verify FWL=$PB_BINARIES/flock-firewall
   log "binaries: prebuilt in $PB_BINARIES, stamp $STAMP"
 else
-  [ -n "${PB_BINARIES:-}" ] && log "binaries: $PB_BINARIES's stamp is not this source's ($STAMP), so they're built here"
+  # a finished run's out/bin is evicted once custody has preserved it (run-files.evicted.json), leaving only its stamp
+  [ -n "${PB_BINARIES:-}" ] && log "binaries: $PB_BINARIES has not all three of this source's ($STAMP), so they're built here"
   (cd verity/core/service/flock && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
   LP=$!
   mkdir -p "$O/m0-build"
