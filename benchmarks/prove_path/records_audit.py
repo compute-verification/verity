@@ -21,11 +21,13 @@ this circuit from the advice and charges the registered length. A circuit with n
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the draw on live coins read after
 the receipt, C-Flock ``--zk`` behind the Lean firewall on the drawn members, Lean's verdicts and the audit record. Then the
 advice was fixed before the draw (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
+Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) are
+proved whole beside the draw, under a work law: every draw's closure (a5's `output_closure`).
 The summary reports the leak bound's count beside the advice's charge, ``vacuous`` while the circuit's other inputs exceed
 it (`leak_count`; a record that declares its inputs, `declared_count`). An integration's labels are never read.
 
 A circuit that reads registered values at public positions (`interface.Read`) is audited against the entries the verifier
-pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}``, each entry core's
+pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}`` or a list of them, each entry core's
 ``registered.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each drawn
 member's ``--registered`` file comes from the record and those entries alone (`interface.registered_reads`), and Lean's
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
@@ -35,16 +37,18 @@ leave the free inputs: `declared_count` counts them registered.
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, the torch
 loop's activation rows, `TorchLoop.commit_activations`) has them fixed before the draw with the rest of the registration;
 the audit holds each entry's domain to the one core's ``registered.domain`` makes of the program, the value, its rows and
-the window's run root (`committed_activations`), and reports their roots. The loop's own circuit reads none of them; a
-circuit that does (PoUW's H1 tiles, `verity_torch_loop.pouw_audit`) reads them as registered reads, pinned from the
-window's entries.
+the window's run root (`committed_activations`), and reports their roots. Those the circuit doesn't read take nothing from
+the free inputs. Those it reads (the wired loop's ties, each read by its writer's output port and its reader's input port)
+are pinned from the registration beside ``--registered``'s (`window_pins`), so Lean's registered reads tie each reader's
+row to its writer's. PoUW's H1 tiles (`verity_torch_loop.pouw_audit`) read theirs the same way, pinned from the window's
+entries.
 
 The negatives (`negatives` before the draw, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
-        [--template-sets DIR] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-        --out DIR [--delta D] [--port P] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
+        [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
+        --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...]
 
@@ -82,6 +86,7 @@ import contextlib
 import hashlib
 import importlib
 import json
+import math
 import os
 import random
 import socket
@@ -109,8 +114,9 @@ REFUSED = 2
 
 def free_ports(span: int, bases: Iterable[int] | None = None) -> int:
     """A base port whose ``span`` loopback ports are all free now, the first of ``bases`` (default every base of `PORTS` in
-    random order). An audit's sessions listen at fixed offsets from it (``a5.RANK_PORTS`` a rank); a fixed default made two
-    audits on one node collide, the second's verifier failing to bind and its prover reaching the first's, which refused it."""
+    random order). An audit's sessions listen at fixed offsets from it (here one a member with a proved unit, within
+    ``--ports``, `a5.port_refusal`; ``a5.RANK_PORTS`` a rank in prove_path's); a fixed default made two audits on one node
+    collide, the second's verifier failing to bind and its prover reaching the first's, which refused it."""
     if bases is None:
         bases = list(range(PORTS.start, PORTS.stop - span + 1, span))
         random.SystemRandom().shuffle(bases)
@@ -275,7 +281,17 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
 def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     """The registered values' entries the verifier pinned before the run (``--registered``), by parameter, each refused
     (ValueError) unless it names its parameter and its domain is the one core's ``registered.domain`` makes of the pin's
-    program, the value and its rows: a root is pinned under its domain, never the prover's word for one."""
+    program, the value and its rows: a root is pinned under its domain, never the prover's word for one. A list of pins
+    is their values together, each under its own program (the weights under the model's, the output a network certifier
+    relayed under the reading program's), a value pinned once."""
+    if isinstance(doc, list):
+        out: dict[str, dict[str, Any]] = {}
+        for d in doc:
+            got = pinned(d)
+            if twice := sorted(set(got) & set(out)):
+                raise ValueError(f"values {twice} pinned twice")
+            out |= got
+        return out
     try:
         program, values = doc["program"], doc["values"]
         for v, e in values.items():
@@ -283,8 +299,25 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
             if e.get("value") != v or e.get("domain") != want or not isinstance(e.get("root"), str):
                 raise ValueError(f"the pin of {v!r} names another value or domain than {program!r}'s, or no root")
     except (KeyError, TypeError, AttributeError) as e:
-        raise ValueError(f"a pin is {{program, values: {{param: entry}}}}: {type(e).__name__}: {e}") from e
+        raise ValueError(f"a pin is {{program, values: {{param: entry}}}}, or a list of them: {type(e).__name__}: {e}") from e
     return {str(v): dict(e) for v, e in values.items()}
+
+
+def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """The per-window values the circuit reads (its registered parameters among the registration's ``activations``: a wired
+    loop's ties, each read by its writer's output port and its reader's input port), by parameter, each refused
+    (ValueError) unless it names its value and a root and its domain binds the window's run root. The registration fixes
+    them before the draw, so the Lean verifier's registered reads open each tie's rows against a root the prover chose
+    before it knew which units are drawn."""
+    params = set((circuit.get("registered") or {}).get("params") or {})
+    acts = w.get("activations") or {}
+    values = {v: dict(e) for v, e in (acts.get("values") or {}).items() if v in params}
+    for v, e in values.items():
+        want = REG.domain(acts["program"], v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+                          window=w.get("run")).domain_id.hex()
+        if e.get("value") != v or e.get("domain") != want or not isinstance(e.get("root"), str):
+            raise ValueError(f"the window's value {v!r} names another value or a domain not bound to its run root, or no root")
+    return values
 
 
 def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -407,6 +440,30 @@ def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Pat
     return mine, doc, sets
 
 
+def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = (), own: Iterable[str] = ()) -> list[list[int]]:
+    """The units the verifier proves whole (a5's output class), as ascending ``[lo, hi)`` ranges: the ``given`` ranges (the
+    verifier's own, from the circuit's shape) and every unit an uncut registered read of an output port (``o<j>``)
+    covers in the circuit record (``registered``'s ``reads``: units ``[at, at + prod(radix))`` of its reader template,
+    the population's indices from the templates' order), unless it reads one of the window's ``own`` values
+    (`window_pins`: a tie inside the window, a wired loop's activations), whose units the draw samples like any other. A
+    value pinned from outside the window (a served ``out`` that the next step also reads) keeps its units in the class."""
+    base, at = {}, 0
+    for t, n in circuit["templates"]:
+        base[t], at = at, at + n
+    units, own = {u for lo, hi in given for u in range(lo, hi)}, set(own)
+    for r in (circuit.get("registered") or {}).get("reads", ()):
+        j = r["port"][1:]
+        if r["port"][:1] == "o" and j.isascii() and j.isdigit() and r.get("cut", [0, 1]) == [0, 1] and r.get("param") not in own:
+            units.update(range(base[r["reader"]] + r["at"], base[r["reader"]] + r["at"] + math.prod(r["radix"])))
+    out: list[list[int]] = []
+    for u in sorted(units):
+        if out and out[-1][1] == u:
+            out[-1][1] = u + 1
+        else:
+            out.append([u, u + 1])
+    return out
+
+
 def _code(fn: Any) -> str | None:
     """The module a Definition's code is in: where the summary says each template's Definition came from."""
     d = getattr(fn, "defn", fn)
@@ -425,6 +482,10 @@ def audit(a: argparse.Namespace) -> int:
     try:
         mine, doc, sets = verifier_window(wdir, law, Path(a.template_sets) if a.template_sets else None)
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
+        ties = window_pins(json.loads((wdir / "registration.json").read_text()).get("window") or {}, doc)
+        if twice := sorted(set(ties) & set(pins)):
+            raise ValueError(f"values {twice} are both pinned and the window's own")
+        pins |= ties
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
@@ -447,9 +508,11 @@ def audit(a: argparse.Namespace) -> int:
                     output=json.loads(output.read_text()) if compiled["ok"] else None)
     window_s = round(time.time() - t0, 2)
     more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
-    a.port = a.port if a.port is not None else free_ports(A5.RANK_PORTS)
+    a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
+    a.port = a.port if a.port is not None else free_ports(a.ports)
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.compose_cache = None
+    a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (), own=ties)
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     if a.challenger:
@@ -458,7 +521,7 @@ def audit(a: argparse.Namespace) -> int:
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
-                         more, rank=0, registered=reads or None)
+                         more, rank=0, registered=reads or None, ports=a.ports)
     finally:
         if a.coins is not None:
             a.coins.skip(0)
@@ -469,7 +532,7 @@ def audit(a: argparse.Namespace) -> int:
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
-                                    "timing")}}
+                                    "timing", "outputs")}}
     bits = int((held["advice"] or {}).get("bits", 0))
     row["leak"] = (declared_count(doc, bits, lambda t: sets[t][1] if t in sets else IF.resolve(t))
                    if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
@@ -507,7 +570,7 @@ def audit(a: argparse.Namespace) -> int:
         row["ok"] = row["ok"] and not row["coins_session"]["error"]
     row["ok"] = row["ok"] and (acts is None or acts["ok"])
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
-    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "seconds")}
+    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
                                   | {"compile": (compiled or {}).get("ok"), "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
@@ -520,6 +583,8 @@ def audit(a: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    import a5 as A5
+
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("audit", help="a window's audit from its records alone")
@@ -533,15 +598,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--circuit", help="instead: the SHA-512 of the circuit record the verifier registered, a circuit with no compiler")
     p.add_argument("--run", required=True, help="the run root the verifier holds the window to, the one the run published")
     p.add_argument("--template-sets", help="the verifier's own input sets, for templates whose units are not bit rows")
+    p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out, proved "
+                   "whole beside the draw (`output_class`; a work law)")
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
     p.add_argument("--firewall", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--delta", type=float, default=0.5)
-    p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose ports are free now)")
+    p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose --ports ports are "
+                   "free now)")
+    p.add_argument("--ports", type=int, default=None, help="how many ports from --port are the audit's: a session each for "
+                   "every member with a proved unit, a draw needing more refused before any listens (default one a member)")
     p.add_argument("--session-timeout", type=float, default=14400)
-    p.add_argument("--session-jobs", type=int, default=1, help="run up to this many drawn members' sessions at once (a5.session_jobs)")
+    p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
     p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, or "
                    "gate:USER@HOST (vy-challenger-1 through infra's gate, with --peer and --challenger-key)")

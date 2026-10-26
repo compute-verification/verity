@@ -1,18 +1,19 @@
-"""`verity bench all-protocols`'s runner: every window, one run of the torch loop audited by every protocol's leg, and the
+"""`verity bench all-protocols`'s runner: every window, one run of the toy audited by every protocol's leg, and the
 result over each monitoring period of a datacenter.
 
-    python -m verity_all_protocols.runner --out DIR --tools FILE [--windows N] [--start I] [--window-s S] [--jobs J]
-        [--session-jobs S] [--node NAME] [--tamper W,...] [--law L] [--delta D] [--cap N] [--requests 3,7] [--steps 2] [--pouw h1]
-        [--deployment ID] [--onsite EXE] [--scratch DIR] [--registered]
+    python -m verity_all_protocols.runner --out DIR --tools FILE [--windows N] [--start I] [--window-s S] [--jobs 1]
+        [--session-jobs 1] [--node NAME] [--tamper W,...] [--law L] [--delta D] [--cap N] [--requests 3,7] [--steps 2] [--pouw h1]
+        [--deployment ID] [--onsite EXE] [--scratch DIR] [--registered] [--tie [--tie-tamper W,...]]
 
 A window is one stretch of one machine's serving and its audits, and a monitoring period is the many windows on every
 machine of a deployment a result is about (`ARCHITECTURE.md`'s Glossary). Per window W (``--start`` on): the verifier
 registers the loop's circuit from its shape and run id (``serve --circuit-only``), the loop serves once
 (`integrations/torch_loop`, run id ``RUN/wW``, so each window has a root of its own) and writes its window into scratch
 with ``period.json`` beside it (the legs' records, `table.PERIOD`); each protocol of `table.TABLE` audits it through its leg
-(`decide`), up to ``--jobs`` windows at once, each audit on ports of its own and with up to ``--session-jobs`` of its
-drawn members' proof sessions at once; and ``DIR/wW/report.json`` holds the window's
-report, also appended to ``DIR/reports.jsonl``:
+(`decide`). Outer proofs go through the firewall one at a time, one firewalled session on the run whichever window it
+belongs to, so the windows are audited one after another and each audit's drawn members' proof sessions too (``--jobs``
+and ``--session-jobs`` take only 1); only what never goes through the firewall, the next window's loop, overlaps an
+audit. ``DIR/wW/report.json`` holds the window's report, also appended to ``DIR/reports.jsonl``:
 
     {"format": "verity/all-protocols-window/v1", "window": W, "node": NAME, "run": RUN, "loop": {...},
      "protocols": {NAME: ROW, ...}, "composed": {...}, "seconds": {...}}
@@ -39,6 +40,20 @@ committed once before the first window (`serve --commit-weights`), their opening
 ``DIR/weights-pin.json``, which ``period.json`` names (``registered``) and the integrity leg's audit holds every window's
 reads to; its members are then shared-row. ``period.json``'s ``periods`` is the windows the run's one certifier session
 serves (`legs/certifier.py`), ``--windows``, so each window's ``period`` (its place in this run) is one of them.
+
+``--tie``: the loop's outputs tied to what the network certifier relayed (`tie`). Before the first window the
+communication leg's session is relayed (its `relay`, in scratch, where the leg finds it) with the reading program's
+digest (``serve --circuit-only``'s, the same every window), and the network certifier commits the output it relayed in
+each link-window as the registered value ``out`` and signs its head with its session's own key. Each window, before
+the loop serves, the verifier pins the root of its period's link-window's record (``DIR/wW/out-record.json``) from
+that record alone under the deployment's certifier key and session (``DIR/wW/pin.json``, beside the weights' pin,
+which ``period.json`` then names), and the loop serves with each output unit's ``o0`` a registered read of ``out``,
+opened from the rows and salts the certifier handed the prover (`serve --tie --out-opening`). ``period.json``'s ``tie``
+names the value, the port, the stratum the integrity audit proves whole (`tie.STRATUM`), the relay's run and
+link-window and the pinned root. ``--tie-tamper W,...``: those windows' output is the ``CERTIFIER_TAMPER=byte``
+relay's, one output byte changed on the egress, which Lean's registered read of ``o0`` must refuse. ``--tie`` needs a
+work law (``--law work:K``, default ``work:64``): a5 proves the output class only beside a streamed work draw, so any
+other law is refused here rather than in every window's audit.
 """
 from __future__ import annotations
 
@@ -58,7 +73,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from . import compose as C, monitoring as M
+from . import compose as C, monitoring as M, tie as T
 from .table import ANSWERS, PERIOD, TABLE, Entry, LegFn, check_answer, leg_of
 
 FORMAT = "verity/all-protocols-window/v1"
@@ -68,6 +83,9 @@ PUBLIC = ("registration.json", "window.json", "index.json", "circuit.json", "ser
 #: ``--registered``'s weights, committed once a run: their opening (the prover's salts) in scratch, the verifier's pin
 #: of their roots in ``DIR``
 WEIGHTS_OPENING, WEIGHTS_PIN = "weights-opening.json", "weights-pin.json"
+#: ``--law``'s default (k = 64: about 74 wrong units over a whole monitoring period at δ = 1% and n = 1024), and its
+#: default with ``--tie``, whose output class a5 proves only beside a streamed work draw
+LAW, TIE_LAW = "subset:64", "work:64"
 
 
 def epsilon(a: Mapping[str, Any]) -> str | None:
@@ -122,7 +140,9 @@ def decide(period_dir: Path, node: str, out: Path, table: Sequence[Entry] = TABL
     p = json.loads((period_dir / PERIOD).read_text())
     report = {"format": FORMAT, "window": p["window"], "node": node, "run": os.environ.get("RESEARCH_RUN_ID"),
               "loop": {"circuit": p["circuit"], "run_root": p["run_root"], "law": p["law"], "cap": p["cap"],
-                       "delta": p.get("delta"), "tampered": bool(p.get("prover_env")), "pouw": p.get("pouw")},
+                       "delta": p.get("delta"), "tampered": bool(p.get("prover_env")), "pouw": p.get("pouw"),
+                       **({"tie": {k: p["tie"][k] for k in ("strategy", "window", "stratum", "root")}}
+                          if p.get("tie") else {})},
               "protocols": rows, "seconds": seconds,
               "composed": C.composed(rows, {e.name: e.component if e.onsite else None for e in table}, cases, onsite, exe)}
     out.mkdir(parents=True, exist_ok=True)
@@ -147,26 +167,42 @@ def serve(argv: Sequence[str]) -> dict[str, Any]:
     return json.loads(p.stdout.strip().splitlines()[-1])
 
 
+def shape_of(index: int, run: str, a: argparse.Namespace) -> list[str]:
+    """The loop's shape and window ``index``'s run id, as ``serve`` takes them."""
+    return ["--law", a.law, "--cap", str(a.cap), "--requests", a.requests, "--steps", str(a.steps), "--run-id",
+            f"{run}/w{index}", *(["--pouw", a.pouw] if a.pouw else []), *(["--registered"] if a.weights else []),
+            *(["--tie"] if getattr(a, "tie", False) else [])]
+
+
 def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out: Path) -> tuple[Path, dict]:
     """The window's loop: the circuit registered before it runs, then its window in scratch with ``period.json`` (and with
-    ``--pouw h1`` PoUW's window in its ``pouw/``); its public files in ``out/window``. -> the window's directory and what
-    the loop printed."""
-    weights = a.weights
-    shape = ["--law", a.law, "--cap", str(a.cap), "--requests", a.requests, "--steps", str(a.steps), "--run-id",
-             f"{run}/w{index}", *(["--pouw", a.pouw] if a.pouw else []), *(["--registered"] if weights else [])]
+    ``--pouw h1`` PoUW's window in its ``pouw/``); its public files in ``out/window``. With ``--tie``, the out record the
+    network certifier signed for its period's link-window pinned before the loop serves (`tie.period`), the window's pins
+    ``out/pin.json`` (the weights' and ``out``'s). -> the window's directory and what the loop printed."""
+    weights, tied = a.weights, getattr(a, "tie", False)
+    shape = shape_of(index, run, a)
     registered = serve([*shape, "--circuit-only"])
+    pins, tie = weights and weights["pin"], None
     window = scratch / f"w{index}"
     tampered = index in a.tamper
+    if tied:
+        rows = len(a.requests.split(",")) * a.steps * a.relay["h"]
+        tie = T.period(a.relay, index - getattr(a, "start", 0), "byte" if index in a.tie_tamper else "honest",
+                       registered["program"], rows, scratch, out)
+        pins = out / "pin.json"
+        pins.write_text(json.dumps([*([json.loads(weights["pin"].read_text())] if weights else []), tie.pop("pin")],
+                                   indent=1, sort_keys=True))
     got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else []),
-                 *(["--weights", str(weights["opening"])] if weights else [])])
+                 *(["--weights", str(weights["opening"])] if weights else []),
+                 *(["--out-opening", str(tie.pop("opening"))] if tie else [])])
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
     (window / PERIOD).write_text(json.dumps({
         "window": index, "period": index - getattr(a, "start", 0), "periods": a.windows, "node": a.node,
         "circuit": registered["circuit"], "run_root": got["run"], "law": a.law, "delta": a.delta, "cap": a.cap,
-        "tools": a.tools, "session_jobs": a.session_jobs,
+        "tools": a.tools,
         "pouw": {"mode": a.pouw, "circuit": registered.get("pouw")} if a.pouw else None,
         "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {},
-        **({"registered": str(weights["pin"])} if weights else {})}, sort_keys=True))
+        **({"registered": str(pins)} if pins else {}), **({"tie": tie} if tie else {})}, sort_keys=True))
     kept = out / "window"
     kept.mkdir(parents=True, exist_ok=True)
     for f in [*PUBLIC, *(p.name for p in window.glob("m*-public.bin"))]:
@@ -214,6 +250,24 @@ def window(index: int, run: str, a: argparse.Namespace, scratch: Path, out: Path
     return report
 
 
+#: AGENTS.md's live-coins rule (a5's `ONE_AT_A_TIME`), which keeps the run to one firewalled session at a time
+ONE_AT_A_TIME = ("outer proofs go through the firewall one at a time (AGENTS.md, \"Live coins only\"): one firewalled "
+                 "session at a time on the run, whichever window it belongs to")
+
+
+def only_one(what: str) -> Callable[[str], int]:
+    """An option whose only value is 1 (`ONE_AT_A_TIME`), kept so commands that pass it still run."""
+    def parse(s: str) -> int:
+        if s.strip() != "1":
+            raise argparse.ArgumentTypeError(f"{s}: {ONE_AT_A_TIME}, so {what}; pass 1 or omit it")
+        return 1
+    return parse
+
+
+one_window = only_one("the windows are audited one at a time")
+one_session = only_one("an audit runs its sessions one at a time")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True)
@@ -222,13 +276,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--start", type=int, default=0, help="the first window's index (another machine's windows start apart)")
     ap.add_argument("--window-s", type=float, default=0, help="each window's loop starts this long after the one before (at "
                     "once when the one before took longer)")
-    ap.add_argument("--jobs", type=int, default=1, help="windows audited at once, each on ports of its own")
-    ap.add_argument("--session-jobs", type=int, default=16,
-                    help="each integrity audit's drawn members' sessions run at once (a5.session_jobs)")
+    ap.add_argument("--jobs", type=one_window, default=1, help="1 only: the windows are audited one at a time (ONE_AT_A_TIME)")
+    ap.add_argument("--session-jobs", type=one_session, default=1,
+                    help="1 only: each integrity audit runs its sessions one at a time (ONE_AT_A_TIME)")
     ap.add_argument("--node", default=os.environ.get("RESEARCH_MACHINE") or os.uname().nodename)
     ap.add_argument("--tamper", default="", help="windows whose loop tampers with its outputs, e.g. 1,3")
-    ap.add_argument("--law", default="subset:64", help="the proof service's law of each window (k = 64: about 74 wrong "
-                    "units over a whole monitoring period at δ = 1% and n = 1024)")
+    ap.add_argument("--law", help=f"the proof service's law of each window (default {LAW}, and {TIE_LAW} with --tie, "
+                    "which needs a work law)")
     ap.add_argument("--delta", default="1/100", help="each window's audit record's own δ")
     ap.add_argument("--cap", type=int, default=8)
     ap.add_argument("--requests", default="3,7")
@@ -239,8 +293,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scratch", help="where the loop's windows go (default a temporary directory, removed after)")
     ap.add_argument("--registered", action="store_true", help="the loop reads its weights as registered values "
                     "(`serve --registered`), committed once before the first window")
+    ap.add_argument("--tie", action="store_true", help="each output unit's o0 reads the output the network certifier "
+                    "relayed in the window's link-window, committed and signed by it and pinned from its record (`tie`)")
+    ap.add_argument("--tie-tamper", default="", help="with --tie: windows whose output is the CERTIFIER_TAMPER=byte "
+                    "relay's, one egress byte changed, e.g. 0")
     a = ap.parse_args(argv)
     a.tamper = {int(x) for x in a.tamper.split(",") if x.strip()}
+    a.tie_tamper = {int(x) for x in a.tie_tamper.split(",") if x.strip()}
+    if a.tie_tamper and not a.tie:
+        ap.error("--tie-tamper needs --tie")
+    a.law = a.law or (TIE_LAW if a.tie else LAW)
+    if a.tie and a.law.partition(":")[0] != "work":
+        ap.error(f"--tie proves the output class whole beside a streamed work draw, and a5 refuses it under any other "
+                 f"law (output-class-needs-a-streamed-work-draw): give --law work:K (the default with --tie is "
+                 f"{TIE_LAW}), not {a.law}")
     a.tools = json.loads(Path(a.tools).read_text())
     dep = M.deployment(a.deployment)
     out = Path(a.out)
@@ -248,8 +314,6 @@ def main(argv: list[str] | None = None) -> int:
     run = os.environ.get("RESEARCH_RUN_ID") or "local"
     reports: list[dict] = []
     lock = threading.Lock()
-    if a.jobs > 1 and "RAYON_NUM_THREADS" in os.environ:
-        os.environ["RAYON_NUM_THREADS"] = str(max(1, int(os.environ["RAYON_NUM_THREADS"]) // a.jobs))
 
     def finish(report: dict[str, Any]) -> None:
         with lock:
@@ -264,10 +328,16 @@ def main(argv: list[str] | None = None) -> int:
             print("ALLP " + json.dumps({"monitoring_period": M.lead(m), "window": summary_line(report)}, sort_keys=True),
                   flush=True)
 
-    with tempfile.TemporaryDirectory(dir=a.scratch) as scratch, ThreadPoolExecutor(max(1, a.jobs)) as pool:
+    # one worker: every firewalled session (PoUW's audit, each leg) is a window's audit, and they run one after another,
+    # while this thread serves the next window's loop
+    with tempfile.TemporaryDirectory(dir=a.scratch) as scratch, ThreadPoolExecutor(1) as pool:
         a.weights = {"opening": Path(scratch) / WEIGHTS_OPENING, "pin": out / WEIGHTS_PIN} if a.registered else None
         if a.weights:
             serve(["--commit-weights", str(a.weights["opening"]), "--pin", str(a.weights["pin"])])
+        if a.tie:
+            program = serve([*shape_of(a.start, run, a), "--circuit-only"])["program"]
+            a.relay = T.relay(Path(scratch), [int(x) for x in a.requests.split(",")], a.steps, a.windows, a.tools,
+                              bool(a.tie_tamper), program)
         t0 = time.monotonic()
         jobs = []
         for i, w in enumerate(range(a.start, a.start + a.windows)):
@@ -292,6 +362,7 @@ def summary_line(report: dict[str, Any]) -> dict[str, Any]:
     if "error" in report:
         return {"window": report["window"], "error": report["error"]}
     return {"window": report["window"], "tampered": report["loop"]["tampered"],
+            **({"tie": report["loop"]["tie"]["strategy"]} if report["loop"].get("tie") else {}),
             "protocols": {n: {"verdict": r["verdict"],
                               **({"bound": r["quantity"].get("bound")} if isinstance(r.get("quantity"), dict)
                                  and "bound" in r["quantity"] else {}),
