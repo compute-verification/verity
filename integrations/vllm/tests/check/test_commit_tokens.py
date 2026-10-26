@@ -19,11 +19,11 @@ import pytest
 
 from tests.check.opened import commit_host_steps
 from tests.commit.test_binding_negatives import PD
-from verity_vllm.check import commit_tokens as CT, executed_prefix as EP
+from verity_vllm.check import commit_tokens as CT
 from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay.linkage import boundary_linkage, linkage_horizon
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.commit import binding as B
+from verity_vllm.commit import binding as B, executed_prefix as EP
 from verity_vllm.commit.opened import OpenedReader, UnverifiedUnlinked
 
 C = CT.CommitTokens

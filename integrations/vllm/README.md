@@ -24,8 +24,8 @@ verity_vllm/
   observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py chunks.py fold/
   acquire/            value acquisition  plan.py install.py stage.py gate.py compiled.py sources/ *_tap_src/
   protocol_options/   protocol options   __init__.py (selector, composition) interface.py sampled_proofs.py pous.py pouw.py
-  commit/             commitment         merkle.py hashing.py identity.py binding.py padding_steps.py hidden_*.py committer/
-  check/              checks -> verdicts match/ replay/ executed_prefix.py verdict.py gates.py weights_of_record.py root_policy.py ...
+  commit/             commitment         merkle.py hashing.py identity.py binding.py executed_prefix.py padding_steps.py hidden_*.py committer/
+  check/              checks -> verdicts match/ replay/ verdict.py gates.py weights_of_record.py root_policy.py ...
   properties/         property harnesses noninterference.py census.py kernel_allowlist.py golden.py holdout.py admission.py ...
   collectives/        collectives        collective_record.py collective_sites.py embedding_shard.py
   config.py target_family.py             run-definition locations; the target-family preflight
@@ -105,13 +105,13 @@ range bits per token, from the fused embedding's ids, no kernel change).  `ops/p
 Never: decide what is required; never a model-name list.
 
 **`commit/`** implements *commitment*: `merkle.py` (trees over canonical ids, `path_shape` / `fold_path`, openings), `hashing.py`
-(`H(tag, *parts)`), `identity.py`, `binding.py` (binding map + coverage), `padding_steps.py`, `hidden_stream.py`, `step_rows.py` (the commitment scheme `rows-sha512`, the Commit's default), `scheme.py` (`vllm-v1`, by name: every leaf and root rule, over `verity.ml.commitments.vllm_v1`), and `committer/`, the GPU committer (`native_host.py`, the host committer every collector extends;
+(`H(tag, *parts)`), `identity.py`, `binding.py` (binding map + coverage), execution extent (`executed_prefix.py`), `padding_steps.py`, `hidden_stream.py`, `step_rows.py` (the commitment scheme `rows-sha512`, the Commit's default), `scheme.py` (`vllm-v1`, by name: every leaf and root rule, over `verity.ml.commitments.vllm_v1`), and `committer/`, the GPU committer (`native_host.py`, the host committer every collector extends;
 `native_collect.py`, the collector of record (`native_collect_v2b`, the windowed worker), + `native_*.cu` / `.cpp`, `native_jit.py`, `leafhash.py`, `flush_points.py`, `hidden_gpu_src/`).  Never:
 runtime metadata in the identity tuple.
 
 **`check/`** implements *checks -> verdicts*: `match/` (`global_match.py`, `global_match_fast.py`, `program_compare.py`,
 `batch_decomp.py`, `rank_match.py`, `xrank_collectives.py`), `replay/` (`driver.py` with `sampled_replay`, `replay*.py`,
-`stoch_recompute.py`, `compiled_kernel_check.py`, `vu_query.py`), `gates.py` G1..G8, execution extent (`executed_prefix.py`),
+`stoch_recompute.py`, `compiled_kernel_check.py`, `vu_query.py`), `gates.py` G1..G8,
 `verdict.py` (with `commit_verdict`), `value_check.py` / `compiled_value_check.py` / `oracle_compare.py`, `kernel_identity.py`,
 `fold_compare.py`, `operand_provenance.py`, input provenance (`weights_of_record.py`: checkpoint basis, `weights_pin`;
 `root_policy.py`), and batch invariance (`batch.py`: a template's outputs read no other owner's rows, and its launch shape doesn't
@@ -196,7 +196,7 @@ Layers and where they live (Draft 3 §12.1):
 | observation + resolution | capture log, fold, occurrence resolution | `pipeline/m1_capture.py`, `observe/fold/fold.py`, `check/match/batch_decomp.py` |
 | input provenance | weights of record, prompt ids, checkpoint pin | `check/weights_of_record.py`, `check/root_policy.py`, `manifests/checkpoints.json` |
 | commitment | position-identified roots, openings, binding map | `commit/binding.py`, `commit/scheme.py`, `commit/committer/leafhash.py` |
-| checks → verdicts | the seven checks above, one verdict of record per row | `check/match/global_match.py`, `check/replay/driver.py` (`sampled_replay`), `check/executed_prefix.py`, `query/manifest/verify.py`, `check/verdict.py` (`verdict.json`) |
+| checks → verdicts | the seven checks above, one verdict of record per row | `check/match/global_match.py`, `check/replay/driver.py` (`sampled_replay`), `commit/executed_prefix.py`, `query/manifest/verify.py`, `check/verdict.py` (`verdict.json`) |
 
 `tests/test_no_by_name_rules.py` pins every remaining by-name rule (model names, module-path predicates, family tables) in
 `tests/by_name_allowlist.json` with the phase that retires it; the list only shrinks.  `tests/regression/` is the R19 reference

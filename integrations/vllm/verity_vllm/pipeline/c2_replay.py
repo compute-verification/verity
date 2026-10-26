@@ -306,11 +306,11 @@ def cached_prefixes(reqs: list[dict[str, Any]], rl: dict[str, str]) -> dict[str,
 
 
 def executed_prefix_kw(s: Site, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -> tuple[dict[str, Any], Any]:
-    """ONE mechanism for the not-executed class (`check.executed_prefix`): sampled_replay's
+    """ONE mechanism for the not-executed class (`commit.executed_prefix`): sampled_replay's
     `population.not_executed_by_rule`, fed with named record facts (`EPX.executed_prefix_facts`) -- never literals.  On a tree without
     reqval's kwarg nothing bounds the replay population: an EOS-stopped request's rows past the stop are sampled and grade 'not
     evaluated' -> partial, never PASS.  An older signature receives only the arithmetic's facts."""
-    from verity_vllm.check import executed_prefix as EPX
+    from verity_vllm.commit import executed_prefix as EPX
     from verity_vllm.check.replay import driver as SR
 
     _sr_kw: dict[str, Any] = {}
@@ -354,7 +354,7 @@ def plan(s: Site, planner: Any = None) -> dict[str, Any]:
 def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the draw's reads only (`plan`), with the Programs and the draw the ``planner``'s when there is one."""
-    from verity_vllm.check import executed_prefix as EPX
+    from verity_vllm.commit import executed_prefix as EPX
     from verity_vllm.check.replay import driver as SR
 
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
@@ -453,7 +453,7 @@ def reconcile(s: Site, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr_kw: dict
     """ONE mechanism, reconciled on the record: the Commit's classification of the manifest identities
     (binding coverage) and the population's third bucket must name the same identities -- n_exec per request, count per row family; a
     batch-level / named-input family is outside the population split's reach and is named, not equal."""
-    from verity_vllm.check import executed_prefix as EPX
+    from verity_vllm.commit import executed_prefix as EPX
 
     row, pair = s.row, s.pair
     if getattr(s.com, "_padding", None):

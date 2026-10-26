@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from verity_vllm.check import executed_prefix as EP
+from verity_vllm.commit import executed_prefix as EP
 from verity_vllm.commit import padding_steps as PS
 from verity_vllm.commit import scheme
 from verity_vllm.commit.merkle import fold_path

@@ -76,7 +76,7 @@ def expected(row: resolver.Row) -> dict:
 
 
 def actual(row: resolver.Row) -> dict:
-    from verity_vllm.check.executed_prefix import executed_prefix_of_record
+    from verity_vllm.commit.executed_prefix import executed_prefix_of_record
     fx, order, caps, treqs, stop = _facts(row)
     served = {order[str(e["request_id"])]: [int(t) for t in (e.get("generated_token_ids") or [])] for e in treqs if str(e.get("request_id")) in order}
     epr = executed_prefix_of_record(sorted(caps, key=lambda r: int(r[1:])), served, caps=caps, eos_of_record=stop.get("eos_token_ids"), lag=stop.get("lag"))

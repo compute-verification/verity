@@ -10,8 +10,7 @@ from __future__ import annotations
 import pytest
 
 from tests.commit.test_binding_negatives import B8_CAP, B8_LP, PD, b8_engine_rows, b8_manifest, b8_stream, commit
-from verity_vllm.commit import binding as B
-from verity_vllm.check import executed_prefix as EP
+from verity_vllm.commit import binding as B, executed_prefix as EP
 from verity_vllm.check.replay.linkage import linkage_horizon
 
 EOS = 50279
