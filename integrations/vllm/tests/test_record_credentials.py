@@ -99,7 +99,7 @@ def test_a_record_names_a_credential_and_never_holds_its_value(site: tuple[str, 
         names = [n for n in ast.walk(expr) if isinstance(n, ast.Name)]
         free = {n.id for n in names if isinstance(n.ctx, ast.Load)} - {n.id for n in names if isinstance(n.ctx, ast.Store)}
         handed = {n: dict(os.environ) for n in free if n not in vars(module) and not hasattr(builtins, n)}
-        got = eval(compile(ast.Expression(expr), path, "eval"), {**vars(module), **handed})
+        got = eval(compile(ast.Expression(expr), path, "eval"), {**vars(module), **handed})  # noqa: S307 (evaluates the record expression the repository's own source builds)
         held = json.dumps(got)
         assert KEY not in held and TOKEN not in held, f"{path}:{node.lineno} holds a credential's value"
         named = {k for k in got if S.is_secret(k)}

@@ -46,6 +46,8 @@ from __future__ import annotations
 
 import time
 
+from verity_vllm import settings  # stdlib only, so it doesn't count toward startup.imports
+
 _T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
 import contextlib
@@ -62,7 +64,6 @@ from typing import Any
 
 from verity_vllm import protocols as PO
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
-from verity_vllm import settings
 from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 

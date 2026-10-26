@@ -344,7 +344,6 @@
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "RUF100", "symbol": "draw_accounting", "detail": "Unused `noqa` directive (unused: `BLE001`)"},
     {"file": "verity_vllm/check/root_policy.py", "kind": "F401", "symbol": "evaluate", "detail": "`verity_vllm.check.fold_compare._extent` imported but unused"},
     {"file": "verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py", "kind": "F841", "symbol": "cmd_bench", "detail": "Local variable `e` is assigned to but never used"},
-    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "BLE001", "symbol": "plan_key_of", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "RUF100", "symbol": "NativeCollectCommitter._commit_step", "detail": "Unused `noqa` directive (unused: `BLE001`)"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "F401", "symbol": "NativeHostCommitter._commit_step_gpu", "detail": "`verity_vllm.commit.hidden_stream` imported but unused"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "F401", "symbol": "NativeHostCommitter._gpu_layout", "detail": "`verity_vllm.commit.hidden_stream` imported but unused"},
