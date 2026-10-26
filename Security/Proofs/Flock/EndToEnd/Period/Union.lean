@@ -123,7 +123,8 @@ theorem periodGood_of_plays (G : (i : ℕ) → Game (β i)) (good : (i : ℕ) �
   | 0, _, _, _ => trivial
   | T + 1, i, s, h =>
       ⟨h i _ (Or.inl ⟨rfl, HEq.rfl⟩),
-        atEnds_of_atSomeEnd (P := fun x _ s' => PeriodPlays G (i + 1) T s' x.1 x.2) (good := fun x => good x.1 x.2)
+        atEnds_of_atSomeEnd (ι := (j : ℕ) × Strategy (G j))
+          (P := fun x _ s' => PeriodPlays G (i + 1) T s' x.1 x.2) (good := fun x => good x.1 x.2)
           (fun _ s' h' => periodGood_of_plays G good T (i + 1) s' fun j τ hp => h' ⟨j, τ⟩ hp) (G i) s
           fun x hx => h x.1 x.2 (Or.inr hx)⟩
 
