@@ -3,12 +3,15 @@ import Definitions.Pouw.RelativeSecurity
 import Proofs.Pouw.RelativeSecurity
 
 /-!
-# Theorem K's count for the ring fragment (statement, red-teamed; the proof in progress)
+# Theorem K's count for the degree-2, fork-free ring fragment (proved)
 
-BET-K-DISCHARGE (CMP-123, ACCEL): every program of the ring fragment pays at least Theorem K's count for Dither's
-transcript, with `theoremK` reused as it stands. This module states that count (`RingKCount`) and its cost form
-(`RingKCost`, from the count by `ringKCost_of_count`), and proves the honest naive kernel its non-vacuity witness
-(`honestWitness : HonestWitness`, rule I; `honest_tight`: the count holds there with equality). It is the base O-CHARGE
+BET-K-DISCHARGE (CMP-123, ACCEL): every program of the degree-2, fork-free ring fragment pays at least Theorem K's
+count for Dither's transcript, with `theoremK` reused as it stands. This module states that count (`RingKCount`) and
+its cost form (`RingKCost`), proves both (`ringKCount`, `ringKCost`) from the prefix-difference rank (`PrefixDiffRank`,
+proved: `prefixDiffRank`), and proves the honest naive kernel its non-vacuity witness (`honestWitness :
+HonestWitness`, rule I; `honest_tight`: the count holds there with equality). Under R-ACCEL-6 this is part of the
+unconditional ring side: forks and products of products (K1, K2 below) are matmul algorithms, which SAK(matmul)
+covers, so what this module proves is what SAK no longer has to carry. It is the base O-CHARGE
 (CMP-111) builds its Lean on. MODEL-SPEC's machine
 (`Verity.Accel.Machine`, CMP-109) is a run-level model of the card that isn't on `main` yet, and it has no
 straight-line layer, so the fragment is stated here on Theorem K's own programs (`SlpG`). The map from a run of
@@ -31,8 +34,7 @@ split into `a` blocks that each have `L` products of their own and `b` blocks th
 (`RingKCost`): `min(κ L, d) · #certified ≤ κ · #products + d · #deliveries`. No row purity: the delivery charge
 replaces it.
 
-**What it would discharge**, once `RingKCount` is proved, given the price obligation below and a bridge (not yet
-written) from `RingKCost` to `RoundsHypKSt`'s cost line. For degree-2 ring programs, `KScopeAffine`'s third conjunct
+**What it discharges**, given the price obligation below and a bridge (not yet written) from `RingKCost` to `RoundsHypKSt`'s cost line. For degree-2 ring programs, `KScopeAffine`'s third conjunct
 (row purity), and `ChargeVF3j16`'s cost line in this form: a machine that charges `κ` a product and `d` a delivery
 charges at least `min(κ L, d)` a certified cell-block, so at `κ_eff = min(κ, d/L)` a product of the floor. That is
 Theorem K's full count only when `d ≥ κ L`. `KScopeAffine`'s first
@@ -52,8 +54,11 @@ them.
   `mma.sync`, MODEL-SPEC's `D = C + A·B` with `D ≠ C`) gives one word two free readers. `Flow.WF` refuses that, so
   such a program is in the fragment only if the second read is charged as a delivery. The card charges nothing for
   it (an out-of-place `mma.sync` costs what an in-place one does), so the count with free forks is open: rank alone
-  allows a fork's shared prefix to serve several blocks. H200's `wgmma` accumulates in place (no `C` operand) and is
-  in it.
+  allows a fork's shared prefix to serve several blocks. The restriction is on programs, not cards: H200's `wgmma`
+  accumulates in place (no `C` operand), but both cards have `mma.sync`, whose `D ≠ C` fork MODEL-SPEC prices as
+  free, so neither card's machine is inside the fragment until K1 closes. Until K1, K2 and the map from a run of
+  MODEL-SPEC's machine to an `SlpG` exist, `RingKCount` says nothing about that machine's programs, and it is never
+  a hypothesis of the headline (R-ACCEL-4).
 * **Non-ring instructions** (O-BITS): `IMAD.HI`, `IMAD.WIDE`'s high word, shifts, `LOP3`, `PRMT`, compares, selects
   and the float formats.
 * **Operands are free.** A product's bit-affine operands are given, not computed by slots, so the loads and adds that
@@ -65,23 +70,34 @@ product, and `c` when that is a delivery); `IADD3` at least `d` per input that i
 `d ≤ price(IADD3)/2`, or `/3` when no input is in place); a copy of an accumulator word, and a shared-memory round
 trip, at least `d` a word. The commitment's read of a word is outside the program and is no delivery.
 
-**Open conjuncts** (the coordinator's red team, 26 Oct). Two of `RingKCount`'s hypotheses are scope this module
-can't keep, since R-ACCEL-4 allows no premise about algorithms:
+**Open conjuncts** (the coordinator's red team, 26 Oct). Two of `RingKCount`'s hypotheses are scope, not
+premises: they bound which programs the theorem speaks of, and lifting each is a theorem still to prove.
 
-* **K1, forks.** MODEL-SPEC models an out-of-place MMA as physical and free, so `Flow.WF`'s one-free-reader rule
-  must go. With forks the accumulators form a forest, and the count becomes a Steiner bound in the rank metric.
-  Strassen is no forest, since its output sets aren't suffix-closed along any tree, but the general bound is open.
-* **K2, degree.** `AffOps` is to be replaced by certifying at the live uniform coin. One word's cone needs `L`
-  products at any degree when it is right with probability above `3/4` (mod 2, fix one input of each product). The
-  count across words with products of products is open.
+* **K1, forks (open).** The statement to prove: `RingKCount` with `Flow.WF`'s second conjunct dropped (a word may
+  have any number of free readers, as an out-of-place MMA gives, which MODEL-SPEC prices as free). With forks the
+  accumulators form a forest, and the count becomes a Steiner bound in the rank metric. O-REDTEAM's findings
+  (`note:20261026T0219Z-draft-accel-o-redteam-pass2`): since `U` repeats across blocks, every word of one row (all its
+  columns and prefixes) reduces to `u ∧ c^(x)` over independent coin blocks, so sharing across a row's blocks and
+  across its cells is one Steiner problem, and a column is the same with the roles swapped; exhaustive mod-2
+  searches find chains optimal in every case tried (one row at `L = 1` with 2 or 3 words and the full tree, at
+  `L = 2` with the best single fork point; a 2×2 cell block at `L = 1` and `L = 2`); and in general any tree costs at
+  least half the spanning tree, so forks save at most `2×` over chains (`L/2` a certified block). Larger trees and
+  `L ≥ 3` are open. Strassen is no forest, since its output sets aren't suffix-closed along any tree.
+* **K2, degree (open).** The statement to prove: `RingKCount` with `AffOps` dropped (products of products) and
+  `Certified` read at the live uniform coin rather than on the weight-2 cube. One word's cone needs `L` products at
+  any degree when it is right with probability above `3/4` (mod 2, fix one input of each product). The count across
+  words with products of products is open; Mathlib has no bias bound for `F₂` quadratic forms, which the cross-word
+  step would use.
 
-**The proof plan.** Distinct certified cell-blocks have distinct word slots (`word_injOn`: `theoremK` at no products
-against `PrefixDiffRank`). For a certified `e`, walk back from its word slot along the in-place chain to the
-nearest certified word slot `s'` (scale `c`, the chain's coefficients' product; `c = 0` if the chain starts first). If
-no delivery lands on the walk, the word is `c` times `s'`'s plus the products attached to the walk plus a bit-affine
-word, so `theoremK` with target `dPrefix e − c · dPrefix e'` and `PrefixDiffRank` give the walk at least `L` products.
-Walks of distinct certified blocks are disjoint (the chains are paths), so their products and their deliveries are
-too.
+**The proof.** Distinct certified cell-blocks have distinct word slots (`word_injOn`: `theoremK` at no products
+against `PrefixDiffRank`). Each slot's `owner` is the first certified word slot on its forward free path, so a block
+owns the products and deliveries whose slot it owns, and blocks own disjoint sets. Walking back from a certified
+block's word slot along its in-place chain (`walk`), either a delivery lands on a slot it owns, or its word is `c`
+times an earlier certified block's word (`c = 0` at a chain start) plus its own products plus a bit-affine word, and
+`theoremK` with target `dPrefix e − c · dPrefix e'` and `PrefixDiffRank` give it `L` products (`ringKCount_of_rank`).
+`PrefixDiffRank` (`rank_prefixDiff`): the difference's projection has the identity on the rows `β_p₀(i, j)`,
+`b(s, j, l)` against the columns `b(s, j, l)`, `β_p₀(i, j)`, scaled by `κ(s) = [s ≤ t] − φ(c) [same cell, s ≤ t']`,
+and `κ(s) = 1` at `s = t`, or at `s = max(t, t')` when the cells agree and `φ(c) = 1`.
 -/
 
 namespace Pouw.RingFragment
@@ -551,8 +567,7 @@ theorem prefixDiffRank : PrefixDiffRank := by
       rcases lt_or_gt_of_ne ht with h | h
       · have h' : ¬t'.val ≤ t.val := Nat.not_le.mpr (Fin.lt_def.mp h)
         refine rank_prefixDiff φ w p₀ hw pc vq i i l l t.val t'.val c t' ?_
-        simp only [h', hc1, le_refl, and_self, ite_true, ite_false, one_mul]
-        decide
+        simp [h', hc1] <;> decide
       · have h' : ¬t.val ≤ t'.val := Nat.not_le.mpr (Fin.lt_def.mp h)
         refine rank_prefixDiff φ w p₀ hw pc vq i i l l t.val t'.val c t ?_
         simp [h']
@@ -561,7 +576,8 @@ theorem prefixDiffRank : PrefixDiffRank := by
       · have hc0 : φ c = 0 := h01 _ fun h1 => hc ⟨hil.1, hil.2, h1⟩
         simp [hc0]
       · have hn : ¬(i = i' ∧ l = l' ∧ t.val ≤ t'.val) := fun h => hil ⟨h.1, h.2.1⟩
-        simp [hn]
+        rw [ite_eq_right hn]
+        simp
 
 end Rank
 
@@ -1024,6 +1040,12 @@ theorem ringKCount_of_rank (hR : PrefixDiffRank) : RingKCount := by
   · intro e he e' he' h
     exact hinj (Finset.mem_sdiff.mp (Finset.mem_coe.mp he)).1 (Finset.mem_sdiff.mp (Finset.mem_coe.mp he')).1
       (Option.some_injective _ h)
+
+/-- **Theorem K's count for the degree-2, fork-free ring fragment, proved.** -/
+theorem ringKCount : RingKCount := ringKCount_of_rank prefixDiffRank
+
+/-- **Its cost form, proved.** -/
+theorem ringKCost : RingKCost := ringKCost_of_count ringKCount
 
 end Count
 
