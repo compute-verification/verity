@@ -21,10 +21,11 @@ union bound, at `ln(G/δ)` a replica.
   guess their own as the sum of the others' each pass with probability 1/2 at every value of the others', the form
   `SAKMatmul` gives, yet all pass together with probability 1/2, and two of them have a product averaging 2. The
   pointwise premise refuses them (`parity_pointwise`).
-* **Pooling replicas by convexity** (`prob_convex_pool`, RT-POOL's RP1): without a new premise, each replica's own
-  moment (`WorkSound`'s, average at most 1 under `SAKMatmul`) bounds the fleet's total shortfall at `ln(1/δ)` rather
-  than `ln(G/δ)`: the weights `1/η` put the total's exponential below the replicas' mixture, which needs no
-  independence between them. The bound is on the total; its rate is a replica's, not the fleet's.
+* **Pooling replicas by convexity** (`prob_convex_pool`, `fleet_convex_luck`; RT-POOL's RP1): without a new premise,
+  each replica's own moment (`WorkSound`'s rounds, average at most 1 under `SAKMatmul`, against advice that reads
+  every other replica's coins) bounds the fleet's total shortfall at `ln(1/δ)` rather than `ln(G/δ)`: the weights
+  `1/η` put the total's exponential below the replicas' mixture, which needs no independence between them. The bound
+  is on the total, and its rate is a replica's: the total's share stays `ln(1/δ)/(η q)`, not `ln(1/δ)/(η G q)`.
 -/
 
 namespace Pouw.SecurityProofs.Pool
@@ -471,5 +472,32 @@ theorem prob_convex_pool {Ω ι : Type*} [Fintype Ω] [Fintype ι] [Nonempty ι]
           convexOn_exp.map_sum_le hw0 hw1 fun _ _ => Set.mem_univ _
       _ ≤ ∑ u, w u * M u ω := Finset.sum_le_sum fun u hu => by
           rw [smul_eq_mul]; exact mul_le_mul_of_nonneg_left (hZ u ω hA) (hw0 u hu)
+
+/-- **The fleet's luck by convexity**, at `FleetSound`'s quantifier: replica `u`'s round `w` has a nonnegative factor
+of its advice and its own coin, averaging at most 1 over that coin at every advice (`WorkSound`'s round), and its
+advice reads its own coins before `w` and every other replica's coins. Where `A` holds and each replica's rated
+shortfall has its exponential below its rounds' product, the replicas' total shortfall exceeds `t · ∑ u, 1 / η u` with
+probability at most `e^{-t}`. -/
+theorem fleet_convex_luck {Ω Adv : Type} [Fintype Ω] {N k : ℕ} [NeZero N]
+    (adv : Fin N → (Fin N → Fin k → Ω) → Fin k → Adv)
+    (hadv : ∀ u x x' w, (∀ v : Fin k, v < w → x u v = x' u v) → (∀ u', u' ≠ u → x u' = x' u') →
+      adv u x w = adv u x' w)
+    (F : Fin N → Fin k → Adv → Ω → ℝ) (h0 : ∀ u w s ω, 0 ≤ F u w s ω) (h1 : ∀ u w s, expect (F u w s) ≤ 1)
+    (η : Fin N → ℝ) (hη : ∀ u, 0 < η u) (D : Fin N → (Fin N → Fin k → Ω) → ℝ) (A : (Fin N → Fin k → Ω) → Prop)
+    (hZ : ∀ u x, A x → Real.exp (η u * D u x) ≤ ∏ w, F u w (adv u x w) (x u w)) (t : ℝ) :
+    prob (fun x => A x ∧ t * ∑ u, 1 / η u ≤ ∑ u, D u x) ≤ Real.exp (-t) := by
+  refine prob_convex_pool (fun u x => ∏ w, F u w (adv u x w) (x u w)) D η hη
+    (fun u x => Finset.prod_nonneg fun w _ => h0 _ _ _ _) (fun u => ?_) A hZ t
+  let e := Equiv.funSplitAt u (Fin k → Ω)
+  have hu : ∀ a y, e.symm (a, y) u = a := fun a y => by simp [e, Equiv.funSplitAt, Equiv.piSplitAt]
+  have hne : ∀ a a' y u', u' ≠ u → e.symm (a, y) u' = e.symm (a', y) u' := fun a a' y u' h => by
+    simp [e, Equiv.funSplitAt, Equiv.piSplitAt, h]
+  rw [← Pouw.SecurityProofs.Dither.expect_equiv e.symm, Pouw.RelativeSecurity.expect_prod_swap]
+  refine Pouw.RelativeSecurity.expect_le_of_le zero_le_one fun y => ?_
+  have hr := expect_prod_rounds (fun a w => adv u (e.symm (a, y)) w)
+    (fun a a' w h => hadv u _ _ w (fun v hv => by rw [hu, hu]; exact h v hv) fun u' h' => hne a a' y u' h')
+    (F u) (h0 u) (h1 u)
+  simp only [hu] at hr ⊢
+  exact hr
 
 end Pouw.SecurityProofs.Pool
