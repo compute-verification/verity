@@ -42,7 +42,8 @@
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Composition",
   "Properties.Verity.Soundness",
-  "Properties.Verity.Game"
+  "Properties.Verity.Game",
+  "Properties.Verity.Wipe"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -477,9 +478,9 @@
    "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, never over a proof"
   },
   "Properties.Verity": {
-   "imports": ["CoreOnsite", "Properties.Composition", "Definitions.Accounting.JointPeriod"],
+   "imports": ["CoreOnsite", "Properties.Composition", "Definitions.Accounting.JointPeriod", "Definitions.Accounting.JointBlocks", "MemoryChallenger.WipeProtocol"],
    "except": [],
-   "why": "soundness at the verifier of record is stated over onsite's compiled code, the composition's properties and the period model it instantiates, never over a proof"
+   "why": "soundness at the verifier of record is stated over onsite's compiled code and the wipe's component, the composition's properties, and the period and block models it instantiates, never over a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],

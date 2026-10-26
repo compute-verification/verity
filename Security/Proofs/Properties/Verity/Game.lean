@@ -1,13 +1,16 @@
-import Properties.Verity.Game
+import Properties.Verity.Wipe
 import Proofs.Properties.Verity.Soundness
+import Proofs.Accounting.PouwWork
+import Proofs.Core.UnionBound
 
 /-!
-# Soundness as a commit-then-coin game, from its legs
+# Soundness over the six subprotocols, from their targets
 
-`Verity.Vocab.soundness` proves `Vocab.Soundness` from the sampled component's leg (`IntegrityLeg`, whose transcript
-the commitment fixes) and every other audit's (`Leg`). An accepted play outside `Break` has every component accepting
-(`accepts_components`) on the coins the device logged for it, so the event lies inside `JointPeriod`'s for the run at
-the committed transcript, as in `soundness_of_legs`.
+`Verity.Vocab.soundness` proves `Vocab.SoundnessWithWipe` from the six subprotocols' targets. The composition layer,
+`Verity.soundness_of_subprotocols`, bounds the five claims onsite composes today by their errors summed, at a
+transcript fixed by the commitment. Outside the wipe's break, an accepted wipe case whose survivor bound fails is the
+wipe's own event on the device's logged coins, which `WipeSound` bounds over the wipe's coordinate at every value of the
+others, so over every coin (`Pouw.pr_le_of_update`). A union bound adds the two.
 -/
 
 namespace Verity.Vocab
@@ -15,24 +18,22 @@ namespace Verity.Vocab
 open Accounting Core
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {I : Type} [Fintype I] [DecidableEq I]
-  {Ω : I → Type} [∀ i, Fintype (Ω i)] [∀ i, Nonempty (Ω i)] (V : Vocab d α Ω)
+  {Ω : I → Type} [∀ i, Fintype (Ω i)] [∀ i, Nonempty (Ω i)] (V : Vocab d α Ω) (W : WipeVocab d Ω)
 
-theorem soundness (hI : V.IntegrityLeg) (hL : ∀ a, a ≠ .sampled → V.Leg a) : V.Soundness := by
+theorem soundness (hS : V.SampledProofsSound) (hW : V.PouwSound) (hP : V.PousSound) (hB : V.BandwidthAuditSound)
+    (hN : V.NetworkCertifierSound) (hWipe : W.WipeSound) : V.SoundnessWithWipe W := by
   intro τ
-  obtain ⟨X, hX⟩ := hI τ
+  obtain ⟨X, hX⟩ := soundness_of_subprotocols ι α I Ω d V hS hW hP hB hN τ
   refine ⟨X, le_trans (Accounting.SecurityProofs.PouwWork.pr_mono ?_)
-    (Accounting.SecurityProofs.JointPeriod ι α I Ω d (V.circuitOf τ.params) (V.run τ (X τ.commitment))
-      (V.certOf τ.params) (V.priceOf τ.params) (V.delta τ.params) ?_)⟩
-  · rintro ξ ⟨hacc, ⟨a, hfail⟩, hbrk⟩
-    refine ⟨a, ?_, hfail⟩
-    show ComponentAccepts a (τ.sent ξ) ∧ V.coinsRead a (τ.sent ξ) = some (ξ (V.own a))
-    refine ⟨accepts_components hacc a, ?_⟩
+    (le_trans (Accounting.SecurityProofs.PouwWork.pr_or_le _ _)
+      (add_le_add hX (Pouw.pr_le_of_update W.own
+        (fun ξ => (W.run τ).accepts ξ ∧ ¬ (W.run τ).Survives (W.fraction τ.params) ξ) (hWipe τ))))⟩
+  rintro ξ ⟨hacc, hfail | ⟨hwa, hsurv⟩, hVb, hWb⟩
+  · exact Or.inl ⟨hacc, hfail, hVb⟩
+  · refine Or.inr ⟨?_, hsurv⟩
+    show WipeAccepts (τ.sent ξ) ∧ W.coinsRead (τ.sent ξ) = some (ξ W.own)
+    refine ⟨hwa, ?_⟩
     by_contra hne
-    exact hbrk ⟨a, accepts_components hacc a, hne⟩
-  · intro a
-    by_cases ha : a = .sampled
-    · subst ha
-      exact hX
-    · exact hL a ha τ (X τ.commitment)
+    exact hWb ⟨hwa, hne⟩
 
 end Verity.Vocab
