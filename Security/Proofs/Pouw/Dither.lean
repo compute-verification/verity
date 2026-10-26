@@ -497,7 +497,8 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
     have hextk : ∑ w, (G.ext (Mw w) (adv o x w, (x w).1) +
         G.ext (Mh w) (o, (adv o x w, (x w).1), G.Mc.eval (Mw w) (adv o x w, (x w).1))) ≤ K :=
       calc _ ≤ ∑ w, G.ext (A.work w) (A.workIn o x w) := Finset.sum_le_sum fun w _ => hext o x w
-        _ = A.ext o x := rfl
+        _ ≤ A.ext o x := Finset.sum_le_sum fun w _ =>
+            le_add_of_nonneg_right (hG2.2 (A.answer w) (A.answerIn o x w)).1
         _ ≤ K := himp A o x hv
     exact floor_of_rounds (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w)) (fun w => pubmm (reg w))
       (fun w => pubsha (reg w))

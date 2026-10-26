@@ -116,7 +116,8 @@ A node that forwards a call's `b` (`m K` bits) and gets back only the root has t
 `m K N` MACs, so `β = n_max · H/macs` with `n_max = N` for a static call and `d_v` for PV, `H = H_mm + H_sha + H_o`
 (the outside machine returns the root, so it saves the round's hashing too: RT-PROTO-2 P18's addition). `SAKMatmul` and
 `ShaSpeed` are stated over programs that exchange nothing, and this premise carries their bound to every program at
-`β` a bit (WORKSOUND-INST-2's form, on every program type). -/
+`β` a bit (WORKSOUND-INST-2's form, on every program type). It is per program: an answer that sends a later block's
+coins out is a different program from that block's work, which is in `WorkSound`'s Open (RT-POOL RP21). -/
 def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ {I O : Type} (f : G.Mc.Alg I O), ∃ f' : G.Mc.Alg I O, ∀ i,
     G.Mc.eval f' i = G.Mc.eval f i ∧ G.ext f' i = 0 ∧ G.cost μ f' i ≤ G.cost μ f i + β * G.ext f i

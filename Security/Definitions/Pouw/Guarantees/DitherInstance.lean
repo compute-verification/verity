@@ -49,16 +49,19 @@ its dual price `μ` at the registration's honest use: with `WorkSound`'s hypothe
 * the deadlines from the auditor's clocks (`Timed`, RT-PROTO P5, RT-PROTO-2 P13 and P25):
   - the challenger issues each sampling block's coins at `t b`, at least `Δ` before the period's end, and the next
     block's only after every root of this one is in;
-  - only selected sampling blocks (`sel` of the check coin) are answered, each check coin issued at `tc b`, at least
+  - every block's check coin, which carries whether it is selected, is issued at `tc b`, after every root of the
+    block is in (RT-POOL RP22);
+  - only selected sampling blocks (`sel` of the check coin) are answered, each selected block's check coin at least
     `τ_ans` before the end;
   - the period is refused if the network certifier saw a root arrive later than `Δ` after its block's coins, or a
     selected block's answer later than `τ_ans` after its check coin. An answer may arrive after later blocks' coins;
   - a root arrives no sooner than its work (`RootAfterCoin`), and the period's length `T` is at least 0.
 
   No count of sampling blocks or of selected ones is a hypothesis: the blocks' work runs one block at a time, so it
-  fits in `T` at any `nsb`. The answers run beside later blocks, and no answer's use is counted (`Prover`). So a
-  served period of about 1e8–1e9 sampling blocks a week is covered. `q (Δ + τ_ans) ≤ T` over the `q` selected blocks
-  is the honest replica's schedule (its answers through the firewall one at a time), not a premise of this bound,
+  fits in `T` at any `nsb`. The answers run beside later blocks, and no answer's use is counted, only its exchanged
+  bits (`Prover`). So a served period of about 1e8–1e9 sampling blocks a week is covered. `q (Δ + τ_ans) ≤ T` over
+  the `q` selected blocks is the honest replica's schedule (its answers through the firewall one at a time), not a
+  premise of this bound,
 
 for every prover `A`, the probability over the oracle and the verifier's coins that the verdict accepts its period and
 other work `z` fits on the devices beside its sampling blocks' timed work with

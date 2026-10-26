@@ -521,7 +521,7 @@ theorem twService : ServiceSound tw twRound 2 twReg twVerdict twDev 0 := fun _ =
   prob_le_zero fun _ h => h.2 h.1
 
 theorem twImport : ImportWithinCertifier tw twRound 2 twVerdict twDev 0 := fun _ _ _ _ => by
-  show ∑ _b : Fin 2, (0 : ℝ) ≤ 0
+  show ∑ _b : Fin 2, ((0 : ℝ) + 0) ≤ 0
   simp
 
 /-- The extractor's advice at round `w`: the coins of the rounds before `w`, which is all the round's state reads

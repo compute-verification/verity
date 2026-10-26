@@ -322,9 +322,13 @@ times, as the verdict reads them from the devices' readings `ob`.
   block `b + 1`'s only after every root of block `b` is in, so the blocks' work runs one block at a time.
 * The network certifier watches the replica's boundary. The period is refused if it saw a root of block `b` arrive
   (`arrive ob b`) more than `Δ` after the block's dither coins.
-* Only selected sampling blocks are answered (`sel`, read from the block's check coin). The challenger issues a
-  selected block's check coin at `tc ob b`, at least `τans` before the period's end, and the period is refused if
-  its answer arrived (`ansAt ob b`) more than `τans` after it. An answer may arrive after later blocks' coins.
+* The challenger issues every sampling block's check coin, which carries whether the block is selected, at `tc ob b`,
+  and the period is refused if that was before every root of the block was in (RT-POOL RP22): a prover told early
+  that its block isn't selected could skip the block. The coin's message carries the digest of the certifier's
+  signed receipt of the roots, so the two times are on one clock.
+* Only selected sampling blocks are answered (`sel`, read from the block's check coin). A selected block's check coin
+  is issued at least `τans` before the period's end, and the period is refused if its answer arrived (`ansAt ob b`)
+  more than `τans` after it. An answer may arrive after later blocks' coins.
 
 The number of sampling blocks and of selected ones is bounded by nothing here. The clocks are the auditor's devices,
 and nothing here reads a time the prover reports. -/
@@ -332,7 +336,7 @@ def Timed {G : Accel} {P : RoundProto} {nsb : ℕ} {Obs : Type} (verdict : Verdi
     (t arrive : Obs → Fin nsb → ℝ) (sel : P.Chk → Prop) (τans : ℝ) (tc ansAt : Obs → Fin nsb → ℝ) :
     Verdict P nsb Obs :=
   fun o x tr ob => verdict o x tr ob ∧ (∀ b, 0 ≤ t ob b ∧ t ob b + Δ ≤ Pd.T ∧ arrive ob b ≤ t ob b + Δ) ∧
-    (∀ b b' : Fin nsb, (b : ℕ) + 1 = b' → arrive ob b ≤ t ob b') ∧
+    (∀ b b' : Fin nsb, (b : ℕ) + 1 = b' → arrive ob b ≤ t ob b') ∧ (∀ b, arrive ob b ≤ tc ob b) ∧
     ∀ b, sel (x b).2 → 0 ≤ tc ob b ∧ tc ob b + τans ≤ Pd.T ∧ ansAt ob b ≤ tc ob b + τans
 
 /-- **An accepted period's sampling blocks' work fits the period**: for every prover whose period the verdict accepts,

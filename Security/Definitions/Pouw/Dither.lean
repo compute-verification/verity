@@ -279,8 +279,9 @@ state, so nothing before block `b`'s commitment depends on its check coin or on 
 **The challenger times the work** (`timedUse`, `calls`): each block's work runs from its dither coins to its
 commitment, inside the period on its devices, one block at a time. Only selected blocks are answered, beside later
 blocks. No later program reads an answer, and an honest answer's cost is in the honest cost's `W_ans` (`WorkSound`'s
-`H_o`), which the headline's `ε` charges at full weight, so no answer's use, calls or exchanged bits are credited or counted against the
-period.
+`H_o`), which the headline's `ε` charges at full weight, so no answer's use or calls are credited or counted against
+the period. Its exchanged bits are (`ext`): an answer that runs beside later blocks holds their coins, and what it
+sends out crosses the boundary the network certifier watches (RT-POOL RP21).
 
 The sampling blocks of a period are one sequence in the order their coins went out: a fleet whose replicas' coins
 aren't serialized is one prover per replica (RT-PROTO-2 P16; the fleet's bound is
@@ -346,10 +347,13 @@ capacity over a call's use of it. -/
 noncomputable def calls (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
   ∑ b, G.calls (A.work b) (A.workIn o x b)
 
-/-- **The sampling blocks' exchanged bits** (`Accel.ext`): every block's `work` at its input (CMP-154). An answer's
-aren't read: an unselected block's answer never runs, and no answer reaches a root. -/
+/-- **The sampling blocks' exchanged bits** (`Accel.ext`): every block's `work` and `answer` at their inputs (CMP-154,
+RT-POOL RP21). An answer reads every coin of the period, so it could send a later block's coins out, and an outside
+machine could return that block's root to its work; the bits are counted here whichever program sends them. An
+unselected block's answer never runs, and the prover that stands for a node answers it with a constant program, which
+exchanges nothing. -/
 noncomputable def ext (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
-  ∑ b, G.ext (A.work b) (A.workIn o x b)
+  ∑ b, (G.ext (A.work b) (A.workIn o x b) + G.ext (A.answer b) (A.answerIn o x b))
 
 end Prover
 

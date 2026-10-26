@@ -75,15 +75,20 @@ Open:
   is `k + 1` times the calls'. Charging only the logged calls and evaluations (a count of entries beside `q`), or
   letting each root come at a stopping time of the log instead of a fixed position (`QueryLog.root_dep`, with
   `extract_of_ro_roots` over it), would remove the factor.
-* **The answers' calls** (CMP-154). Answers are off the state path and untimed, so the cap `Q` bounds only the work's
-  calls. An answer whose opening reads oracle answers it got by its own calls (a search for a point that hashes to a
-  committed node) needs those calls in the log, or the verifier's evaluations don't read only earlier logged answers
-  (`QueryLog.qry_dep`). At each prover's own `q A` such a prover has a larger budget, so `WorkSound`, at each prover's
-  own `κ_x(A)`, and the card headline over it hold. At one budget for every prover, `(k + 1)(⌈Q⌉ + V)` doesn't count
-  them, so `ShaRealize` at it is false on a machine that has such a prover, and `WorkSoundNoFold` is vacuous there.
-  Timing each selected block's answer from its check coin (a deadline premise for selected answers) bounds its calls
-  by `ρ_r τ_ans / callUse_r` (G2, G3). A sampling block has at most one answer, so adding `k ⌈ρ_r τ_ans / callUse_r⌉`
-  to the budget would close it with no count of selected blocks.
+* **The answers' calls** (CMP-154, RT-POOL RP20). Answers are off the state path and untimed, so the cap `Q` bounds
+  only the work's calls. An answer whose opening reads oracle answers it got by its own calls (a search for a point
+  that hashes to a committed node) needs those calls in the log, or the verifier's evaluations don't read only earlier
+  logged answers (`QueryLog.qry_dep`). At each prover's own `q A` such a prover has a larger budget, so `WorkSound`, at
+  each prover's own `κ_x(A)`, and the card headline over it hold. At one budget for every prover, `(k + 1)(⌈Q⌉ + V)`
+  doesn't count them, so `ShaRealize` at it is false on every machine whose programs can call the oracle, and
+  `WorkSoundNoFold` is vacuous there, as it already is by the walk's oracle reach. Three changes would close it:
+  - a causality premise beside `RootAfterCoin`: an answer arrives no sooner than its block's root plus the answer's
+    wall time. On an accepted period it then runs within `T`, so it makes at most `Q` calls (G2, G3,
+    `cap_r ≤ Q callUse_r`). A deadline from the check coin wouldn't bound it, since an answer can start at its root;
+  - `ExtractAdvAt`'s and `Realization`'s runs within the cap reading the answers' calls beside the work's;
+  - the budget. No root reads an answer, so every answer's calls, and the evaluations after them, can be logged
+    after the last root, and only the last segment needs `k ⌈Q⌉` more: `q = (k + 1)(⌈Q⌉ + V) + k ⌈Q⌉`, `τ` unchanged.
+    RT-POOL prices the larger `(k + 1)(⌈Q⌉ + V + k ⌈Q⌉)` at `κ_x ≈ 2^-250` at a week's `k = 10^9` blocks.
 -/
 
 namespace Pouw.Assumptions
@@ -116,8 +121,9 @@ make at most `Q` oracle calls while some round's check fails on `Mw w`'s words, 
 * **The cost clause is the period's** (ξ, ABSORB-THM's B4), on runs within the cap `Q`. Over the period, the words
   and commitment programs use at most what the prover's sampling blocks use in their timed work
   (`Prover.timedUse`, CMP-154), plus `ξ r` of resource `r`: the extractor's walk and the upkeep of the query log,
-  which aren't the prover's. A query is logged once in the period, so a per-round clause would count its upkeep `k` times. Past
-  the cap the log isn't the prover's calls, and `WorkSound` reads the clause only on runs that fit the devices.
+  which aren't the prover's. A query is logged once in the period, so a per-round clause would count its upkeep `k`
+  times. Past the cap the log isn't the prover's calls, and `WorkSound` reads the clause only on runs that fit the
+  devices.
 * The exchanged bits stay per round, with no `ξ`: the walk exchanges nothing.
 * **The event** reads `RoundProto.ok` on the words and `RoundProto.opens` of the checked cells under `A`'s root
   (condition 2: the verifier's opening check, never prover-supplied), on runs within the cap `Q` (L39). -/

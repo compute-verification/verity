@@ -70,11 +70,10 @@ the exchanged bits, and the walk and log the extraction adds.
 The cap (L39, CMP-154): the challenger times each sampling block's work, from its dither coins to its commitment, so
 on the event bounded the blocks' work fits the devices, and by (G3) it makes at most `Q` oracle calls
 (`calls_le_of_fits` in the proof); `ExtractAdv` is needed only there. Answers are off the state path, so no answer's
-use, calls or exchanged bits are read: the honest answers' cost is in `H_o`, at full weight. `WorkSoundNoFold` reads
-it at one query budget and schedule for every prover, `k + 1` segments of `⌈Q⌉ + V` queries, so `ε` and `κ` are one
-bound. The rounds of a
-period are one sequence; a fleet whose units' coins aren't serialized is one prover per unit (`FleetSound`,
-RT-PROTO-2 P16).
+use or calls are read: the honest answers' cost is in `H_o`, at full weight. Their exchanged bits are counted with the
+work's (`Prover.ext`, RT-POOL RP21). `WorkSoundNoFold` reads it at one query budget and schedule for every prover,
+`k + 1` segments of `⌈Q⌉ + V` queries, so `ε` and `κ` are one bound. The sampling blocks of a period are one sequence;
+a fleet whose replicas' coins aren't serialized is one prover per replica (`FleetSound`, RT-PROTO-2 P16).
 
 Open (stated so the red team can aim at them):
 * the split of a program's use into a words part and a commitment part is `ExtractAdv`'s cost clause (the
@@ -85,6 +84,16 @@ Open (stated so the red team can aim at them):
   period's sampling blocks' work fits is what the challenger's order and the deadlines buy: each block's root within
   `Δ` of its coins, and the next block's coins only after it, at any number of blocks (RT-PROTO P5, CMP-154): the
   card instance's `Timed` and `TimedWorkFits`;
+* `OutsourceWithinEgress` is per program: a program's outside machines see only what that program exchanges. An
+  answer reads every coin of the period, so on a node whose outside machines keep state across programs, an answer
+  could send out a later block's coins and that block's work import only its root. The bits are counted
+  (`Prover.ext`), so the number holds, but the premise at that node would be false. Stating it over the period's
+  programs together (exchange-free programs with the same outputs whose total cost is at most the total plus `β` a
+  bit exchanged by any of them) would cover it (RT-POOL RP21);
+* between a block's root and the next block's coins no program runs: `absorb` uses nothing and `work (b + 1)` starts
+  at `t (b + 1)` (`RootAfterCoin`). A protocol that commits a block's operands in that gap (ACCEL's coin order) has an
+  honest prover outside the model. A phase before each block's coins, timed from the previous root to the operand
+  roots' arrival, would close it, and the windows would still telescope to `T` (RT-POOL RP23);
 * `G` is any accelerator here. The card instance reads it as MODEL-SPEC's machine at a card's θ with its floors
   (RT-LEAN L4, L9; RT-MODEL M12), prices an exchanged bit at `β = n_max H_mac` with the certifier streaming the
   dither bits and counting `K = E_in + E_out` (RT-PROTO P2, which holds only while the dither bits stay streamed), and
@@ -132,7 +141,7 @@ machine with such a prover the premise is false and this statement is vacuous (t
 `Definitions.Pouw.Assumptions.ShaRealize`'s Open), and `WorkSound`, at each prover's own bounds, is the one to cite.
 The same holds on a machine with a prover whose openings read oracle answers it got by calls in its answer phase:
 answers are untimed, so the cap doesn't bound those calls and this budget doesn't count them (the answers' calls, the
-same Open, CMP-154).
+same Open, CMP-154, RT-POOL RP20).
 With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every prover, every prover gets the same bound:
 `ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
 `κ = δ + κ_S + (q² + k q (q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`; the

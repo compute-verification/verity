@@ -22,10 +22,10 @@ open Pouw.Dither
 
 /-- `pouw-certifier-sees-imports` (proposed; class L, the auditor's devices, trust base item 3; RT-PROTO P2, RT-LEAN
 L32, CMP-154). **The network certifier counts every exchanged bit**: it watches the replica's boundary, every link of
-the period's devices, on a machine the prover doesn't control, so the bits a prover's sampling blocks' work exchanges
-with outside machines (`Prover.ext`, in either direction, other than the challenger's signed coin stream) are at most
-the bits it signs as entering (`cin`) and leaving (`cout`) the devices, as the verdict reads them from its readings
-`dev`. -/
+the period's devices, on a machine the prover doesn't control, so the bits a prover's sampling blocks' work and
+answers exchange with outside machines (`Prover.ext`, in either direction, other than the challenger's signed coin
+stream) are at most the bits it signs as entering (`cin`) and leaving (`cout`) the devices, as the verdict reads them
+from its readings `dev`. -/
 def CertifierSeesImports (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (dev : Readings G P k Obs)
     (cin cout : Obs → ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.ext o x ≤ cin (dev A o x) + cout (dev A o x)
