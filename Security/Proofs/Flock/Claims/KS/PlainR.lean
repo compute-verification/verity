@@ -47,7 +47,7 @@ namespace RecDeploy
 
 /-- **The element-level record at the deployed reader is the trimmed plain record there.** -/
 theorem deE_R_trim (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (rd : Msg → Option FlockDeploy.FinalP) :
+    (rd : Claims.Msg → Option FlockDeploy.FinalP) :
     deE rel (FlockDeploy.nextR rd) (FlockDeploy.deployPlainTrimR rel rd).cols
         (FlockDeploy.deployPlainTrimR rel rd).weight = FlockDeploy.deployPlainTrimR rel rd :=
   rfl
@@ -195,19 +195,21 @@ theorem accR_cols {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Pr
     at hu
   dsimp only at hu
   rw [hx] at hu
-  split at hu
-  · rename_i d hd
-    obtain ⟨⟨s, spec, sts⟩, -, -, -, -, -, -, hv, -, -, -, -, -, rfl⟩ := decR_some hd
-    unfold colsOf at hu
-    split at hu
-    · rename_i rr hrr
+  cases hd : decR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
+      (((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.snd).map outCoin) with
+  | none => simp [hd, Claims.Flock.lookCol] at hu
+  | some d =>
+    simp only [hd] at hu
+    cases hrr : runOfDecR d 0 with
+    | none => simp [hrr, colsOf, Claims.Flock.lookCol] at hu
+    | some rr =>
+      simp only [hrr, colsOf] at hu
       obtain ⟨st, hst, hm⟩ := runOfDecR_m hrr
+      obtain ⟨⟨s, spec, sts⟩, -, -, -, -, -, -, hv, -, -, -, -, -, rfl⟩ := decR_some hd
       refine ⟨spec, st, tables_head hv hst, ?_⟩
       obtain ⟨p, hp, rfl⟩ := exists_of_lookCol hu
       simp only [Bool.false_eq_true, ↓reduceIte]
       rw [plainRunCols_width hp, hm]
-    · simp [Claims.Flock.lookCol] at hu
-  · simp [Claims.Flock.lookCol] at hu
 
 /-- **`ColsOk` at the plain record at `VR rd`**: an accepted run opens only columns of the zero column's width. -/
 theorem plainR_colsOk (rel : Readable.Parsed → Readable.Relation) (rd : Claims.Msg → Option FinalP) :
