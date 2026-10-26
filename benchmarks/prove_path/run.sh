@@ -12,8 +12,9 @@
 #   PP_LLAMA=art:ID: a single-GPU (TP1) Commit's row dir in the store, fetched once per node into PP_CACHE (default
 #     ~/.cache/verity-prove-path): Llama-3.2-1B's Commit r20261024-055630-5377 (art:f7428299…, $LROW, the sealed bundle
 #     commit/replay_bundle_p0 and the Build's build_request_LP*). Its compiler is I2's compile_steps; its advice the declared
-#     run's. The bundle's context records the Commit's absolute node paths, and none is read: the Programs are read from --row-dir,
-#     and the Build manifest falls back to <row dir>/manifest.json (sha256-checked against the record). The honest partition is
+#     run's. The bundle's context records the Commit's absolute node paths, and none is read: the prover's Programs are read from
+#     --row-dir, the verifier's from its own trace of each (PP_VLLM_PYTHON), and the Build manifest falls back to
+#     <row dir>/manifest.json (sha256-checked against the record). The honest partition is
 #     PP_PARTITION (default layer 0's SiluMul_v2{I=8192} at step 1, 4 units, subset:2); the forged one layer 0's at step 24, the
 #     one unit only r0 decodes there, drawn (subset:1), forged at PP_FORGE (default 0:0). With PP_SERVE_STANDIN=1, the same
 #     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
@@ -26,6 +27,10 @@
 #     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
 #     audited from its records alone (records_audit.py: circuit.json, the registration and the values, the advice's opening),
 #     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
+#   PP_VLLM_PYTHON=PY: the interpreter holding the pinned vLLM (CPU, on meta, as tools/advice_compile.py runs it) that a TP1 or
+#     served window's verifier traces its own Build of each Program I2 compiles with (prove_path.py audit's and circuit's
+#     --vllm-python): the rows' names, the parameters' names and types, supplied, the correspondence and prefix_cache.json are
+#     no Program digest's, so the verifier never reads them from the row dir. Default the tree's venv, which holds no vLLM.
 #   PP_TORCH_LOOP=1: a window of an integration that is not vLLM (integrations/torch_loop: a W8A8 MLP in PyTorch, its one
 #     template ScaledMmS8Coordinate_v1{K=128}), honest and tampered (every output's bit 0 flipped), each audited from its records
 #     alone under PP_LAW (default subset:2), in members of PP_TORCH_LOOP_CAP units (default 8), each arm a run of its own
@@ -124,7 +129,8 @@ PP="$PY benchmarks/prove_path/prove_path.py"
 
 keep() {  # NAME: $W/NAME's records into $O/NAME
   mkdir -p $O/$1
-  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' -print0 \
+  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
+    ! -path './builds/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
 }
 run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, then the verifier's audit; RUN is the committed
@@ -152,7 +158,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
     ${ranks:+--ranks $ranks} --jobs ${PP_JOBS:-1} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
-    --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    ${PP_VLLM_PYTHON:+--vllm-python $PP_VLLM_PYTHON} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
   local rc=$?
   grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
   keep $name
@@ -164,7 +170,7 @@ records() {  # NAME PARTITION [--forged]: records_audit.py on the served window 
   $PY -c 'import json, sys
 c = json.load(open(sys.argv[1]))
 print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[2:]}}))' $O/$REC_NAME-records/compiler.json \
-    $PY $REPO/benchmarks/prove_path/prove_path.py circuit --serve-run $REC_RUN --window $REC_K --row-dir $D \
+    $PY $REPO/benchmarks/prove_path/prove_path.py circuit --serve-run $REC_RUN --window $REC_K --vllm-python ${PP_VLLM_PYTHON:-$PY} \
     ${PP_TARGET:+--target $PP_TARGET} --partition $(realpath $part) "${TG[@]}" > $O/$name/compilers.json || return 1
   local root law
   root=$($PY -c 'import json, sys

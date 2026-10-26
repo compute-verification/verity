@@ -138,17 +138,53 @@ def test_an_aborted_request_is_a_commit_windows_finish_and_a_whole_sessions_refu
         ADV.from_trace(recs, io, carry=())
 
 
-@pytest.mark.parametrize("abort_at,gone", [({1: "e0"}, "e0"), ({1: "e1"}, "e1")], ids=["mid-prefill", "never-scheduled"])
-def test_an_abort_before_the_first_output_is_refused_by_name(tmp_path, abort_at, gone):
+def _behind_a_long_prompt(tmp_path, abort_at: dict[int, str]) -> tuple[list[dict], dict]:
     """e0's 40-token prompt takes the 16-token budget for three steps: aborted after the first, it is mid-prefill; e1, waiting
     behind it, has never run."""
     _run(tmp_path, {0: [FakeRequest("e0", [5] * 40, [6] * 3, 3), FakeRequest("e1", [5] * 4, [6] * 3, 3)]}, abort_at=abort_at)
-    recs, io = ST.load(tmp_path / "step_trace.jsonl"), ADV.io_record(tmp_path / "requests.jsonl")
-    assert len(io[gone]["output_ids"]) == 0
+    return ST.load(tmp_path / "step_trace.jsonl"), ADV.io_record(tmp_path / "requests.jsonl")
+
+
+def test_an_abort_mid_prefill_before_the_first_output_is_refused_by_name(tmp_path):
+    recs, io = _behind_a_long_prompt(tmp_path, {1: "e0"})
+    assert len(io["e0"]["output_ids"]) == 0 and any(row[0] == "e0" for r in recs if r["kind"] == "step" for row in r["rows"])
     with pytest.raises(ValueError) as e:
         ADV.from_trace(recs, io, carry=())
-    assert str(e.value) == (f"request {gone} was aborted before its first output, which the advice refuses: an aborted request's "
+    assert str(e.value) == ("request e0 was aborted before its first output, which the advice refuses: an aborted request's "
                             "Program ends at its last kept output, and it kept none")
+
+
+def test_a_request_aborted_before_it_is_ever_scheduled_is_dropped_from_the_advice_and_kept_in_the_commit_record(tmp_path):
+    """e1 has no row and no output, so the advice is e0's alone, a Commit window's and a whole session's alike, and the Commit
+    record keeps e1; a Commit record or a trace that gives e1 an output is refused."""
+    recs, io = _behind_a_long_prompt(tmp_path, {1: "e1"})
+    assert [r["reason"] for r in recs if r["kind"] == "finish" and r["request"] == "e1"] == ["abort"] and io["e1"]["output_ids"] == []
+    assert not any(row[0] == "e1" for r in recs if r["kind"] == "step" for row in r["rows"])
+    for carry in ((), None):
+        b = ADV.from_trace(recs, io, carry=carry)
+        assert [(q.id, q.output_len, q.finish) for q in b.advice.requests] == [("user-e0", 3, "length")] and b.dropped == ("e1",)
+        assert len(b.advice.release) == 3 and b.advice.version == 0
+    rep = ADV.write(tmp_path, compiler=C)
+    assert rep["roundtrip"] and rep["counts"]["requests"] == 1 and rep["counts"]["aborted_unscheduled"] == 1
+    assert [(q.id, q.output_len) for q in _advice(tmp_path).requests] == [("user-e0", 3)]
+    gone = "request e1 was aborted before it was ever scheduled, which the advice drops, and the trace emitted"
+    for e1, why in [({"output_ids": [6]}, "0 tokens for it, the Commit record 1, finished by abort"),
+                    ({"finish": {"reason": "abort", "stop_reason": None, "k": 2}}, "0 tokens for it, the Commit record 0, finished by abort after 2 ids"),
+                    ({"finish": {"reason": "length", "stop_reason": None}}, "0 tokens for it, the Commit record 0, finished by length")]:
+        with pytest.raises(ValueError) as e:
+            ADV.from_trace(recs, {**io, "e1": {**io["e1"], **e1}}, carry=())
+        assert str(e.value) == f"{gone} {why}"
+    next(r for r in recs if r["kind"] == "step" and r["step"] == 0)["emitted"]["e1"] = 1
+    with pytest.raises(ValueError) as e:
+        ADV.from_trace(recs, io, carry=())
+    assert str(e.value) == f"{gone} 1 tokens for it, the Commit record 0, finished by abort"
+
+
+def test_a_request_that_arrived_and_never_ran_unaborted_is_refused(tmp_path):
+    recs, io = _behind_a_long_prompt(tmp_path, {1: "e1"})
+    recs = [r for r in recs if not (r["kind"] == "finish" and r["request"] == "e1")]
+    with pytest.raises(ValueError, match=r"^1 requests arrived and never ran: \['e1'\]$"):
+        ADV.from_trace(recs, io, carry=())
 
 
 def test_an_abort_of_a_request_waiting_after_a_preemption_is_refused_by_name(tmp_path):

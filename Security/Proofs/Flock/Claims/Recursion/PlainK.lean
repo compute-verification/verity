@@ -136,92 +136,9 @@ theorem plainK_opening_raw (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover
         link.1.toArray[0]! (Claims.run sha512 P (VK keep) x ω r).vLog q row ∧
       u = row.toList.map FlockLevel3.GF128.of := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hs, hf, hlink, hc, hv⟩ := accK_within keep h
-  generalize hL : (Claims.run sha512 P (VK keep) x ω r).vLog = L at hv ⊢
-  obtain ⟨hx, lv, hlv, hcu⟩ := Claims.Bridge.Custody.checks_ok hc
-  obtain ⟨hroot, -⟩ := Claims.Bridge.Custody.custody_ok hcu
-  unfold plainRawCols at hu
-  split at hu
-  swap
-  · simp at hu
-  rename_i rr hrr
-  obtain ⟨st, extras, hst, hext, rfl⟩ := runOf_eq hf hx hs hlv hrr
-  obtain ⟨ρ, hρ, hp⟩ := List.mem_flatMap.1 hu
-  obtain ⟨k, hk, rfl⟩ : ∃ k < 2, ρ = (lv.streams.getD k #[], f.proofs.getD k ByteArray.empty) := by
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hρ
-    rcases hρ with rfl | rfl
-    · exact ⟨0, by omega, rfl⟩
-    · exact ⟨1, by omega, rfl⟩
-  have hsts0 : 0 < sts.size := by
-    rcases Array.getElem?_eq_some_iff.1 hst with ⟨h0, -⟩
-    exact h0
-  have hst0 : sts[0] = st := by
-    rcases Array.getElem?_eq_some_iff.1 hst with ⟨h0, e⟩
-    exact e
-  have h0 : 0 < (tabsOf sts).size := by simpa [tabsOf] using hsts0
-  have ht0 : (tabsOf sts)[0] = Setup.ofCircuit st := by rw [tabsOf_getElem h0]; simp only [hst0]
-  obtain ⟨sess, hdec, hsz, hreps⟩ := plainQueryRound_verifyWithMK keep (hashesIn (L.map Prod.fst)) spec
-    (tabsOf sts) f.record f.proofs (tabsOf_fold sts) hv
-  obtain ⟨sch, hsch, hrep⟩ := hreps 0 h0
-  obtain ⟨stream, extras', p, hstream, hext', hp', hlt, hcols, hmc, hcap⟩ := hrep k hk
-  simp only [ht0] at hsch hext' hp' hlt hcols hmc
-  have hrB := decodeWithK_rootB_live keep (hashesIn (L.map Prod.fst)) hdec hlv
-  obtain ⟨hpts, -, hlsz, hstreams⟩ := liveOf_decodeWithK keep (hashesIn (L.map Prod.fst)) hlv hdec
-  rw [← hpts, hext] at hext'
-  cases hext'
-  have htab : 0 < spec.tables.size := by rw [← hsz]; exact h0
-  obtain ⟨hk', hrs⟩ := Claims.Bridge.Custody.repStreams_getElem spec htab hk
-  have hk2 : 2 * 0 + k < lv.streams.size := by rw [hlsz]; exact hk'
-  obtain ⟨y, hy, hfa⟩ := hstreams (2 * 0 + k) hk' hk2
-  rw [hrs] at hy
-  have hys : y = stream := Option.some.inj (hy.symm.trans hstream)
-  subst hys
-  have hcoins := forall₂_coins (fun _ _ hab => hab.2) hfa
-  have hcolsEq : Claims.Flock.plainRepColsOf
-      (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
-        (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
-      (lv.streams.getD k #[]) (f.proofs.getD k ByteArray.empty) =
-      Claims.Flock.zkRepCols (sch.levels.getD 0 default)
-        (y.rounds[Claims.Flock.plainQueryRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0
-          (2 + extras.size)]!).coins p.ligerito.initialProof.rows := by
-    rw [← hcols]
-    have e1 : lv.streams.getD k #[] = lv.streams[2 * 0 + k]! := by
-      rw [show (#[] : Array Flock.Round) = default from rfl, getD_eq_getElem!]; simp
-    have e2 : f.proofs.getD k ByteArray.empty = f.proofs[2 * 0 + k]! := by
-      rw [show ByteArray.empty = default from rfl, getD_eq_getElem!]; simp
-    rw [e1, e2]
-    refine plainRepColsOf_congr _ _ fun j => ?_
-    rw [getElem!_pos lv.streams (2 * 0 + k) hk2, ← Array.getElem?_toList, ← Array.getElem?_toList]
-    exact hcoins j
-  have hp2 : (q, u) ∈ Claims.Flock.zkRepCols (sch.levels.getD 0 default)
-      (y.rounds[Claims.Flock.plainQueryRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0
-        (2 + extras.size)]!).coins p.ligerito.initialProof.rows := by
-    rw [← hcolsEq]
-    exact hp
-  obtain ⟨j, hj, -, hjq, hju⟩ := mem_zkRepCols hp2
-  have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 ∨
-      (Setup.ofCircuit st).merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
-    rcases checks_leaf hc (setupOf_some hs).2 0 hsts0 with h | ⟨-, h⟩
-    · rw [hst0] at h
-      exact Or.inl h
-    · rw [hst0] at h
-      exact Or.inr h
-  have hdl : (Setup.ofCircuit st).merkle.digestLen = 64 := by
-    rcases hms with e | e <;> rw [e] <;> rfl
-  have hruns := With.merkleCheckWith_sim (back (L.map Prod.fst))
-    (With.opsWith_sim (back (L.map Prod.fst)) (back_hashes (L.map Prod.fst)) (Setup.ofCircuit st).merkle)
-    (Setup.ofCircuit st).merkle _ _ _ _ _ _ _ _ () hmc
-  obtain ⟨hpure, hlog⟩ := merkleCheck_logsOf hms hruns
-  obtain ⟨hcs, hcw⟩ := FlockSoundness.Refine.merkleCheck_cap hpure
-  refine ⟨s, spec, sts, st, sch, link, p.ligerito.initialProof.rows[j]!, hs, hst, hsch, hlink,
-    ⟨hms, p.cap, p.ligerito.initialProof.salts.getD j ByteArray.empty,
-      sibsOf p.ligerito.initialProof.siblings ((sch.levels.getD 0 default).d - (sch.levels.getD 0 default).cap) j,
-      hcs, fun b hb => (hcw b hb).trans hdl, ?_, ?_,
-      fun b hb => (merkleCheck_sibs _ _ _ _ _ _ _ _ _ hpure j b hb).trans hdl, ?_⟩, hju⟩
-  · rw [hcap, hrB, ← hroot, Array.toArray_toList]
-  · rw [← hjq]
-    exact merkleCheck_opens _ _ _ _ _ _ _ _ _ hpure j hj
-  · rw [← hjq]
-    exact hlog j hj
+  obtain ⟨st, sch, row, hst, hsch, hop, hu⟩ :=
+    plain_opening_raw_of_verdictK keep (L := (Claims.run sha512 P (VK keep) x ω r).vLog) hs hf hc hv hu
+  exact ⟨s, spec, sts, st, sch, link, row, hs, hst, hsch, hlink, hop, hu⟩
 
 /-- **A self-clash among an accepted run's columns collides in its own log**, at `VK keep` (`plain_selfClash_tied`'s
 proof, at `plainK_opening_raw`). -/
