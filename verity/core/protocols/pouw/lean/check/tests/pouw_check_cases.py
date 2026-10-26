@@ -122,6 +122,8 @@ MUTATIONS = [
     ("record-partition", "record", "partition", _DROP), ("record-population-type", "record", "population", "8"),
     ("record-law-missing", "record", "law", _DROP), ("record-roots", "record", "roots", [{"port": "W"}]),
     ("record-window-keys", "record", "window.extra", 1), ("record-window-public", "record", "window.public", []),
+    ("record-window-activations", "record", "window.activations", {"program": "p", "values": {}}),
+    ("record-window-activations-type", "record", "window.activations", [1]),
     ("record-kind", "record", "window.kind", "stand-in"), ("record-context", "record", "window.context", "elsewhere"),
     ("record-extra-item", "record", "window.public.verdict", True), ("record-missing-item", "record", "window.public.root_W", _DROP),
     ("record-level-missing", "record", "window.public.work.level", _DROP),

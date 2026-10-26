@@ -66,6 +66,7 @@ EXPECT = {
     "record-partition": "commitment: partition", "record-population-type": "commitment: population",
     "record-law-missing": "commitment: law is missing", "record-roots": "commitment: roots",
     "record-window-keys": "commitment: window", "record-window-public": "commitment: window", "record-kind": "window:",
+    "record-window-activations": None, "record-window-activations-type": "commitment: window",
     "record-context": "window:", "record-extra-item": "public-items:", "record-missing-item": "public-items:",
     "params-length-stop": "params: length is not", "params-length-empty": "params: length is not",
     "params-length-zero": "params: length is not", "params-length-keys": "params: length is not",

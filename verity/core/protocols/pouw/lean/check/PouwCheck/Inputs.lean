@@ -164,11 +164,13 @@ def registrationOf (b : ByteArray) : V Registration := do
   let some roots := roots | throw "roots is not a list of {domain, leaves, port, root}"
   let w := get rec_ "window"
   let window : Option Window := do
-    guard (keys w == some ["context", "kind", "public"])
+    guard (keys w == some ["context", "kind", "public"] || keys w == some ["activations", "context", "kind", "public"])
+    guard (keys w != some ["activations", "context", "kind", "public"] || (keys (get w "activations")).isSome)
     let items := get w "public"
     guard (keys items).isSome
     pure ⟨← str? (get w "kind"), ← str? (get w "context"), items⟩
-  let some window := window | throw "window is not {context, kind, public} with strings and an object"
+  let some window := window
+    | throw "window is not {context, kind, public} with strings and an object, and optionally activations, an object"
   pure { bytes := b, format, program, query, partition, scheme, population, law, roots, window }
 
 /-- `registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record). -/

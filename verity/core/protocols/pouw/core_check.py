@@ -300,9 +300,10 @@ def commitment(b: bytes) -> dict:
     if not isinstance(roots, list) or any(_root(r) is None for r in roots):
         raise Refused("roots is not a list of {domain, leaves, port, root}")
     w = rec.get("window")
-    if not (isinstance(w, dict) and sorted(w) == ["context", "kind", "public"] and _str(w["context"]) and _str(w["kind"])
-            and isinstance(w["public"], dict)):
-        raise Refused("window is not {context, kind, public} with strings and an object")
+    if not (isinstance(w, dict) and sorted(set(w) - {"activations"}) == ["context", "kind", "public"] and _str(w["context"])
+            and _str(w["kind"]) and isinstance(w["public"], dict) and isinstance(w.get("activations", {}), dict)):
+        raise Refused("window is not {context, kind, public} with strings and an object, and optionally activations, "
+                      "an object")
     return {"bytes": b, "format": rec["format"], "record": rec}
 
 
