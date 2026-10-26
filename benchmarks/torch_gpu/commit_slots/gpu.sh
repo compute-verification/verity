@@ -6,8 +6,8 @@
 #
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --cwd source --env GPU_LEASE_WHO=kernels-kcommit \
 #     -- bash benchmarks/torch_gpu/commit_slots/gpu.sh
-# STEPS (default "tests check bench"; a failing tests step ends the lease; "step" runs step.py's time on STEP_ARGS, a layout
-# file and its options), CHECK_ARGS, BENCH_ARGS, STEP_ARGS, LEASE_MIN (default 25), PY,
+# STEPS (default "tests check bench"; a failing tests step ends the lease; "step" runs step.py's time on STEP_ARGS, layout
+# files and options), CHECK_ARGS, BENCH_ARGS, STEP_ARGS, LEASE_MIN (default 25), PY,
 # LEASE_END (a UTC time, e.g. 2026-10-26T02:40Z, on a card lent until then: a lease that starts too late to end by it runs
 # nothing).
 set -uo pipefail
