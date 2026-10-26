@@ -264,7 +264,7 @@ struct LeafArgs {
   u64 ms_leaf[8];        // after its leaf prefix (the key's)
   u32 G, S;
   u32 minb;              // the device kernel's blocks an SM (its register cap): 1 or 2, 0 for the default
-  u32 pad_;
+  u32 sms;               // the SMs its grid fills (a green context's), 0 for the device's
   const LeafRow* frames; // null, or each unit's slot-tree leaf (frame_setup)
   const u32* dest;       // with frames, row g's unit d < units when that unit is the row alone: its leaf is the unit's
                          // root, whose slot-tree leaf goes to units_out[s][d]; else units + i, its leaf going to out[i][s]

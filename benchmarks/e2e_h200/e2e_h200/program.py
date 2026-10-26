@@ -6,7 +6,7 @@ the model's weights), each typed as the tensor whole (an s8 linear ``Array<N, Ar
 bits>``, a gain ``Array<H, bf16 bits>``, ``tok`` ``Array<H, Array<V, bf16 bits>>``), then the run inputs:
 
 * ``token``: the slot's input token, a u16 word;
-* ``n``: the slot's key count, position + 1, a u16 word of kind position (`QkSoftmaxRowPad_v1`'s ``n``, and the padded PV's);
+* ``n``: the slot's key count, position + 1, a u16 word of kind position (`QkSoftmaxRowPad_v1`'s ``n`` and `PvRowPad_v2`'s);
 * ``p``: the slot's position, n - 1, an i32 word of kind position: the index each coordinate's ``MoeSelectBf16x{context}_v2``
   takes into its ``pos`` rows (a root constant is data, so the Program can't compute it from ``n``);
 * ``keys``, ``values``: each layer's 32 K and V rows of the slot (head_dim bf16 words each), the rows committed at its
@@ -25,7 +25,7 @@ view; the Program calls the Boolean Definition whose `word` that is):
 | ``QuantChunkS8_v1{N, RELU}`` | ``QuantChunkS8_v2`` (chunk 0's scale is the linear's ``sx``) |
 | ``ScaledMmS8CoordinateRows_v1{K, R, BlackwellS8ImmaDot32_v1}`` | ``ScaledMmS8CoordinateRows_v2{K, R, BlackwellS8ImmaDot32_v2}`` |
 | ``QkSoftmaxRowPad_v1{T, D}`` | ``QkSoftmaxRowPad_v1{T, D, HopperBF16WgmmaDot16_v2}`` |
-| ``PvRow_v1{T, K, D, HopperBF16WgmmaDot16_v1}`` | ``PvRow_v2`` (or ``PvRowPad_v2``, with ``n``: `PV`) |
+| ``PvRow_v1{T, K, D, HopperBF16WgmmaDot16_v1}`` | ``PvRowPad_v2{T, K, D, HopperBF16WgmmaDot16_v2}``: keys at n and past read as 0 |
 | ``Bf16AddRow_v2{N}``, ``Argmax_v2{V}`` | the same |
 | ``AllGather_v1{WORLD, N}`` | none: a gather is the references its parts' outputs are (`GATHER`) |
 
@@ -61,7 +61,6 @@ BF16_DOT = BG.GEMM_HOPPER["DOT"]
 NAME = "E2eH200Step"
 #: gathers as references (no unit): no Boolean gather Definition is on main
 GATHER = "references"
-PV = ("PvRow", "PvRowPad")
 
 
 def _weight_type(t: SW.Tensor) -> Array:
@@ -69,23 +68,11 @@ def _weight_type(t: SW.Tensor) -> Array:
     return Array(t.cols, elem) if t.rows == 1 else Array(t.rows, Array(t.cols, elem))
 
 
-def _pv(pv: str):
-    if pv == "PvRow":
-        return BG.PvRow
-    if pv == "PvRowPad":
-        pad = getattr(BG, "PvRowPad", None)
-        if pad is None:
-            raise ValueError("PvRowPad_v2 is not on this tree (circuits' #4623)")
-        return pad
-    raise ValueError(f"pv is one of {PV}, not {pv!r}")
-
-
-def program(shape: Shape, pv: str = "PvRow") -> Program:
+def program(shape: Shape) -> Program:
     """The served step's Program at ``shape`` (module docstring)."""
     sh, f = check(shape), forms(shape)
     w, d, h, c, L = sh.width, sh.head_dim, sh.heads, f.chunk, sh.layers
     ts = SW.tensors(sh)
-    pv_def, padded = _pv(pv), pv == "PvRowPad"
     kv = Array(L, Array(PV_K, Array(d, BF16)))
     params = tuple((t.name, _weight_type(t)) for t in ts) + (
         ("token", U16), ("n", U16), ("p", I32), ("keys", kv), ("values", kv))
@@ -146,8 +133,8 @@ def program(shape: Shape, pv: str = "PvRow") -> Program:
             keys, values = a["keys"][i], a["values"][i]
             probs = B.batch(bind(SR.QkSoftmaxRowPad, T=PV_K, D=d, DOT=BF16_DOT), qh, keys, n, axes=(0, None, None),
                             name=p + "softmax")
-            vrows = [values[t] for t in range(PV_K)] + ([n] if padded else [])
-            att = B.batch(bind(pv_def, T=PV_K, K=PV_K, D=d, DOT=BF16_DOT), probs, *vrows, axes=(0,) + (None,) * len(vrows),
+            vrows = [values[t] for t in range(PV_K)] + [n]
+            att = B.batch(bind(BG.PvRowPad, T=PV_K, K=PV_K, D=d, DOT=BF16_DOT), probs, *vrows, axes=(0,) + (None,) * len(vrows),
                           name=p + "pv")
             o = linear(p + "wo", quant(p + "o", att.reshape(Array(h * d, BF16)), False))
             x = residual(p + "attn_residual", x, o)

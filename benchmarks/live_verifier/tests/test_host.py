@@ -621,7 +621,7 @@ def test_a_party_runs_its_module_from_the_pinned_tree_as_auditor_with_its_own_de
     assert [(r["verb"], r["by"], r.get("rc")) for r in reqs] == [("wipe_party", LANE, None), ("wipe_party", LANE, 0)]
     assert (svc.parties / "wipe" / "log" / reqs[0]["log"]).read_bytes() == out
     (rc, _), ran = party(svc, ["challenger_party", "--minutes", "5"])
-    assert rc == 0 and ran[0][-7:] == ["-m", "verity.core.protocols.pous.challenger_party", "--device",
+    assert rc == 0 and ran[0][-7:] == ["-m", H.PARTIES["challenger_party"][1], "--device",
                                        str(svc.parties / "pous"), "--listen", "0.0.0.0:47610", "minutes=5"]
 
 
