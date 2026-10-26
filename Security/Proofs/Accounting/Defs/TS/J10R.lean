@@ -1,7 +1,7 @@
 import Definitions.Pouw.PearlC.Sha512
 
 /-!
-# J10-R: H1's noise from one seed a call, at call scale (trusted; definitions only)
+# J10-R: H1's noise from one seed a call, at call scale (definitions only)
 
 RT-ALGO round 3's J10-R (note:compute-accounting/20261019T0845Z-draft-rt-algo-r3, RT-ALGO-11 and -16): one SHA-512 stream
 per call row (its dither bits b and digit coins z) and one per call column (its coin bits c and `U`), seeded once a call;

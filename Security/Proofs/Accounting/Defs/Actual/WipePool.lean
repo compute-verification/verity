@@ -2,7 +2,7 @@ import Mathlib.Basic.ENNReal.BigOperators
 import Mathlib.Data.Fintype.Pi
 
 /-!
-# The run tree of a prover's wipes (trusted)
+# The run tree of a prover's wipes
 
 The abstract run tree the memory cap's lifetime pool (the memory-cap restatement's step 7, "One delta") is a lemma
 over: over a prover's whole life, every wipe is `k` timed rounds, each challenging a block drawn uniformly from the

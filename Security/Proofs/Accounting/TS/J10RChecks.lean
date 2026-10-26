@@ -1,4 +1,4 @@
-import Definitions.Accounting.TS.J10R
+import Proofs.Accounting.Defs.TS.J10R
 
 /-!
 # Checks of J10-R's noise against the Python

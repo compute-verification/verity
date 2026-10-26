@@ -2,7 +2,7 @@ import Definitions.Accounting.Actual
 import Mathlib.Logic.Relation
 
 /-!
-# Reach (trusted)
+# Reach
 
 The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1), section 6, on one actual circuit. A gate is
 *downstream* of a set `C` of gates (`downstream C`) when a path of wires runs to it from a gate of `C`. A challenge `C`
