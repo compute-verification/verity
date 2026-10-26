@@ -56,9 +56,9 @@ from verity.core.protocols.pouw.protocol import DomainError
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.check.replay.delegate import Place, delegated
 from verity_vllm.program.kernels.kernel_registry import Declined
-from verity_vllm.protocol_options import pouw
-from verity_vllm.protocol_options import pouw_circuit as PC
-from verity_vllm.protocol_options import pouw_native as PN
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import circuit as PC
+from verity_vllm.protocols.pouw import native as PN
 
 M32 = 0xFFFFFFFF
 #: the row's bias when the linear has none: −0, the identity of the bf16 add (`program.registry.pouw_rows`)

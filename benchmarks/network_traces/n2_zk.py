@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import gc
 import hashlib
 import json
@@ -222,8 +223,10 @@ def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
 
 
 #: The scan's one cutter (`leak_scan.public_pieces`: each row cut whole, less the pieces the staged circuit holds, such
-#: as a head's empty buckets, sixteen zero bytes), under the name the drivers that import this module call.
-public_pieces = LS.public_pieces
+#: as a head's empty buckets, sixteen zero bytes), under the name the drivers that import this module call. The held
+#: blobs are fields of the ``wit`` row (``fields``): an advised head, 157 + L + 4T bytes, ends off a 16-byte boundary,
+#: and the instance holds its salt after it, never its zero-padded last chunk.
+public_pieces = functools.partial(LS.public_pieces, fields=True)
 
 
 # --- a run on an injected clock ---------------------------------------------------------------------------------------
