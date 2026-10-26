@@ -32,8 +32,7 @@ import os
 import secrets
 import subprocess
 import time
-from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -202,24 +201,18 @@ def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 
-@contextmanager
-def _device(d: Path) -> Iterator[None]:
-    """`d`'s lock (`device.lock`), held exclusively, waiting on it while another window holds it."""
-    with open(d / "device.lock", "a") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
-        yield
-
-
 def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> mc.LmsSigner:
     """The memory challenger's key at S1's deployed parameters in `directory`, made there once (its seed from the OS, its
-    tree computed in `workers` processes, all of them by default) and its leaf state kept beside it, so each session
-    signs at a fresh leaf. Windows that run at once share the key: the first makes it under the directory's lock while
-    the others wait, and their signer takes the leaf state only to sign (`memory_challenger.LmsSigner`)."""
+    tree computed in `workers` processes, all of them by default) with its leaf state beside it, so each session signs at
+    a fresh leaf, and its session log (`sessions`). Windows that run at once share them: the first makes them under the
+    directory's lock (`device.lock`) while the others wait on it, and each window's signer takes the leaf state only to
+    sign (`memory_challenger.LmsSigner`)."""
     d = Path(directory)
     d.mkdir(parents=True, exist_ok=True)
     p, top = lms.DEPLOYED, 2 ** (lms.DEPLOYED.H + 1)
     seed_file, tree_file, state = d / "seed", d / "tree.bin", d / "leaf-state.json"
-    with _device(d):
+    with open(d / "device.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
         if not seed_file.exists():
             seed = secrets.token_bytes(p.N)
             key = lms.keygen(p, seed, (os.cpu_count() or 1) if workers is None else workers)
@@ -232,6 +225,8 @@ def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> m
             seed, data = seed_file.read_bytes(), tree_file.read_bytes()
             tree = (b"", *(data[p.N * r:p.N * (r + 1)] for r in range(top - 1)))
             key = lms.PrivateKey(p, hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16], seed, tree)
+        if not (d / "sessions").exists():
+            mc.SessionLog.create(d / "sessions")
     return mc.LmsSigner(key, state)
 
 
@@ -254,9 +249,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     tools = json.loads((Path(period_dir) / "period.json").read_text()).get("tools") or {}
     device = Path(period_dir).parent / "pous-challenger"
     signer = challenger(device)
-    with _device(device):
-        if not (device / "sessions").exists():
-            mc.SessionLog.create(device / "sessions")
+    if not (device / "sessions").exists():
+        mc.SessionLog.create(device / "sessions")
     store = records(period_dir)
     t = time.monotonic()
     period = run(node, store, secrets.token_bytes(64), signer=signer, log=mc.SessionLog(device / "sessions"))
