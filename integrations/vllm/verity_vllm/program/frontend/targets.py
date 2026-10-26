@@ -32,18 +32,18 @@ from typing import Any
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
                                           HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32)
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import fa2_check_inf as F2
-from verity_vllm.program.registry import attention_vocab
-from verity_vllm.program.registry import cuda_rmsnorm as CR
-from verity_vllm.program.registry import value_inputs as VI
-from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import fp8, nvfp4
-from verity_vllm.program.registry import fp8_vocab
-from verity_vllm.program.registry import gemm_bias as GB
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import fa2_check_inf as F2
+from verity.ml.definitions.registry import attention_vocab
+from verity.ml.definitions.registry import cuda_rmsnorm as CR
+from verity.ml.definitions.registry import value_inputs as VI
+from verity.ml.definitions.registry import fa3_check_inf as F3
+from verity.ml.definitions.registry import fp8, nvfp4
+from verity.ml.definitions.registry import fp8_vocab
+from verity.ml.definitions.registry import gemm_bias as GB
+from verity.ml.definitions.registry import prims as P
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
-from verity_vllm.program.registry.hopper import Fa3InvSum
+from verity.ml.definitions.registry.hopper import Fa3InvSum
 
 
 class UnregisteredTarget(ValueError):
@@ -168,7 +168,7 @@ def gemm_bias_spec(profile, K: int, N: int):
 def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
     """The registered Definition of one (token, slot) pair of a `fused_moe_kernel` launch on the declared target: the w13 launch
     (`routed` False) or the w2 launch with the routed weight."""
-    from verity_vllm.program.registry import moe as M
+    from verity.ml.definitions.registry import moe as M
     dot = moe_expert_dot(profile)
     if dot is None:
         return bind(M.MoeExpertGemmW if routed else M.MoeExpertGemm, E=int(E), K=int(K), N=int(N))
@@ -208,7 +208,7 @@ def moe_expert_fp8_launch_dot(profile, bm: int, bn: int, warps: int, swap: bool)
     target_dot = moe_expert_fp8_dot(profile)
     if profile.batch_invariant or tuple(profile.compute_capability) != (9, 0):
         return target_dot
-    from verity_vllm.program.registry import fp8_moe
+    from verity.ml.definitions.registry import fp8_moe
     dot = fp8_moe.sm90_dot(int(bm), int(bn), int(warps), bool(swap))
     if dot not in FP8_DOTS.values():
         raise UnregisteredTarget(f"block-FP8 fused-MoE tile {bm}x{bn}, {warps} warps, SWAP_AB={swap}: "
@@ -250,7 +250,7 @@ def moe_expert_fp8_gemm_spec(profile, E: int, K: int, N: int, G: int, KB: int, S
                              routed: bool):
     """The registered Definition of one (token, slot) pair of a block-FP8 `fused_moe_kernel` launch on the declared target:
     `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,SWAP,DOT}`, the w13 launch (`routed` False) or the w2 launch with the routed weight."""
-    from verity_vllm.program.registry import fp8_moe_experts as X
+    from verity.ml.definitions.registry import fp8_moe_experts as X
     return bind(X.MoeExpertFp8GemmW if routed else X.MoeExpertFp8Gemm, E=int(E), K=int(K), N=int(N), G=int(G), KB=int(KB),
                 SWAP=bool(SWAP), DOT=moe_expert_fp8_launch_dot(profile, BM, BN, WARPS, SWAP))
 
@@ -623,7 +623,7 @@ def softcapped(spec, cap: float):
     """The softcapped chain of a plain attention row's Definition `spec`, with the same statics and `CAP = cap`: `AttentionSoftcap_v1`
     for `Attention_v3` (the accepted target), `AttentionSoftcap_v2` for `Attention_v5` (FA2's per-iteration `Check_inf`).  No other
     chain has a registered softcapped form (UnregisteredTarget)."""
-    from verity_vllm.program.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
+    from verity.ml.definitions.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
     body = {"Attention_v3": DN.AttentionSoftcap, "Attention_v5": F2S.AttentionSoftcapV2}.get(spec.base_id)
     if body is None:
         raise UnregisteredTarget(f"{spec.base_id} has no registered softcapped chain: a softcapped row is registered on the accepted target "
