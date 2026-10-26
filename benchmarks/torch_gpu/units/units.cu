@@ -1,6 +1,7 @@
 // The frozen decoder's non-matmul units on sm_90a, each word its twin's (words.py and the unit modules' OPS docstrings):
-// RMSNorm, the per-row s8 quantizer, softmax over a QK^T row, argmax over the head, ReLU, and units_sweep, which runs the
-// helpers below on every operand word so check.py can hold them to the twins' instructions exhaustively.
+// RMSNorm, the per-row s8 quantizer, softmax over a QK^T row, argmax over the head, ReLU, the residual add, and
+// units_sweep, which runs the helpers below on every operand word so check.py can hold them to the twins' instructions
+// exhaustively.
 //
 // Every f32 operation is a named IEEE round-to-nearest-even instruction (__fadd_rn, __fsub_rn, __fmul_rn, __fdiv_rn,
 // __fsqrt_rn), built with -fmad=false and no FTZ flag, so nothing is contracted or flushed; the one approximate operation
@@ -233,6 +234,25 @@ extern "C" __global__ void units_relu(const u16* __restrict__ x, u16* __restrict
   for (u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x; i < n; i += (u64)gridDim.x * blockDim.x) y[i] = (u16)relu16(x[i]);
 }
 
+// ---- the residual add, Bf16AddF2fp_v1 per element: bf16(RN(widen(a) + widen(b))) -----------------------------------------
+D u32 add_pair(u32 a2, u32 b2) {
+  return bf16(fadd(widen(a2), widen(b2))) | ((u32)bf16(fadd(widen(a2 >> 16), widen(b2 >> 16))) << 16);
+}
+
+// n8 = n / 8 uint4s, the n % 8 words past them one at a time
+extern "C" __global__ void units_add(const u16* __restrict__ a, const u16* __restrict__ b, u16* __restrict__ y, u64 n) {
+  const uint4* ap = reinterpret_cast<const uint4*>(a);
+  const uint4* bp = reinterpret_cast<const uint4*>(b);
+  uint4* yp = reinterpret_cast<uint4*>(y);
+  const u64 stride = (u64)gridDim.x * blockDim.x, n8 = n >> 3;
+  for (u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x; i < n8; i += stride) {
+    const uint4 u = ap[i], v = bp[i];
+    yp[i] = make_uint4(add_pair(u.x, v.x), add_pair(u.y, v.y), add_pair(u.z, v.z), add_pair(u.w, v.w));
+  }
+  for (u64 i = (n8 << 3) + (u64)blockIdx.x * blockDim.x + threadIdx.x; i < n; i += stride)
+    y[i] = bf16(fadd(widen(a[i]), widen(b[i])));
+}
+
 // ---- the sweep: block b of 1024 threads covers operands i in [b 2^24, (b + 1) 2^24) below n, and writes
 // sum_i splitmix64((i << 32) | op(i)) mod 2^64 (sweep.py) --------------------------------------------------------------
 D u64 splitmix64(u64 z) {
@@ -252,6 +272,7 @@ D u32 sweep_op(int op, u32 i, u32 arg) {
     case 5: return __float_as_uint(fdiv(widen(i), f32(quant_scale(i >> 16, arg))));
     case 6: return bf16(f32(i));
     case 7: return quant_scale(i, arg);
+    case 8: return bf16(fadd(widen(i >> 16), widen(i)));
     default: return 0xFFFFFFFFu;
   }
 }

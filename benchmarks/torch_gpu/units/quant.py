@@ -69,6 +69,7 @@ def gpu(x, relu: bool, *, codes=None, scale_out=None, tree=None, units: bool = F
     x = L.words(x, torch.bfloat16, (R, N), "quant x")
     codes = L.out_or_new(codes, torch.int8, (R, N), x, "quant codes")
     sc = L.out_or_new(scale_out, torch.int32, (R,), x, "quant scale")
+    L.aligned("quant", x, codes)
     units = units or tree is not None
     tree = L.out_or_new(tree, torch.int16, (R, sum(lv)), x, "quant tree") if units else None
     if R:

@@ -7,16 +7,21 @@ CHECK/quant.npz     per (N, RELU) in QUANT_CASES ((16384, false) and (65536, tru
 CHECK/softmax.npz   x (P, 32) and, at every length n = 1..32, p (P, 32, 32) [row, n-1, j], m (P, 32) and r (P, 32)
 CHECK/argmax.npz    per V in ARGMAX_V (256 the frozen one): x (P, V), token, best, idx
 CHECK/relu.npz      every bf16 word and its ReLU
+CHECK/add.npz       a, b (P, 16384) and y, the residual add, kind (P,)
 CHECK/sweep.json    every op's block digests (sweep.OPS)
-CHECK/fixture.json  the seeds, kinds and counts, the replay cross-check and each file's sha256
+CHECK/fixture.json  the seeds, kinds and counts, the cross-checks and each file's sha256
 Each pool's rows come from KINDS of generators (normal values, wide exponents, subnormals, overflow, ties, signed zeros,
 NaN and infinities, uniform random words, ...), each row from its own seed.
 
-With --replay PATH (the CMP-96 CPU replay, benchmarks/e2e_h200/replay.py of #4460), every pool word is also computed by
-that file's references of circuits' templates (RmsSumSqPart_v1 ... ArgmaxCombine_v1, unit by unit as the replay reads
-them) and must agree with the twins'.  Any disagreement exits 1 before anything is written.
+Two cross-checks, each of whose disagreements exits 1 before anything is written:
+- with --replay PATH (the CMP-96 CPU replay, benchmarks/e2e_h200/replay.py of #4460), every pool word is also computed by
+  that file's references of circuits' templates (RmsSumSqPart_v1 ... ArgmaxCombine_v1, unit by unit as the replay reads
+  them);
+- with `verity.ml.circuits.ops.rows` (CIR-104) installed, or its file given as --rows PATH, every argmax pool's tokens by
+  `rows.argmax` (Argmax_v1{V}) and the add pool by `rows.add_row` (Bf16AddRow_v1{N}).
 
-  uv run python benchmarks/torch_gpu/units/fixture.py CHECK [--replay PATH] [--no-sweep]   (env PROCS, default 8)
+  uv run python benchmarks/torch_gpu/units/fixture.py CHECK [--replay PATH] [--rows PATH] [--no-sweep]   (env PROCS,
+  default 8)
 """
 from __future__ import annotations
 
@@ -33,6 +38,7 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import add as AD  # noqa: E402
 import argmax as AM  # noqa: E402
 import quant as Q  # noqa: E402
 import relu as RL  # noqa: E402
@@ -53,6 +59,8 @@ QUANT_KINDS = ("normal", "scaled", "tiny", "zero", "negative", "ties", "inf", "n
 SM_KINDS = ("scores", "wide", "ftz", "equal", "zeros", "neg_inf", "big", "specials", "uniform")
 ARGMAX_V = (256, 200, 100)
 AM_KINDS = ("logits", "ties", "zeros", "nan0", "nans", "neg_inf", "inf", "chunk_tie", "uniform")
+ADD_N = 16384
+ADD_KINDS = ("normal", "cancel", "scaled", "tiny", "huge", "specials", "uniform")
 
 
 def bf16(v) -> np.ndarray:
@@ -257,6 +265,38 @@ def relu_pool() -> dict:
     return {"x": x, "y": RL.twin(x)}
 
 
+def add_rows(N: int, kind: str, rng) -> tuple[np.ndarray, np.ndarray]:
+    a, b = rng.standard_normal(N).astype(np.float32), rng.standard_normal(N).astype(np.float32)
+    if kind == "normal":
+        return bf16(a), bf16(b * np.float32(rng.choice([1 / 64, 1, 64])))
+    if kind == "cancel":
+        # b = -a give or take a few ulps: exact zeros (+0 at RN) and differences far below either word
+        x = bf16(a)
+        y = (x ^ 0x8000).astype(np.int64) + np.where(rng.random(N) < 0.5, rng.integers(-2, 3, N), 0)
+        return x, (y & 0xFFFF).astype(np.uint16)
+    if kind == "scaled":
+        return (bf16(a * np.float32(2.0) ** rng.integers(-126, 128, N).astype(np.float32)),
+                bf16(b * np.float32(2.0) ** rng.integers(-126, 128, N).astype(np.float32)))
+    if kind == "tiny":
+        return words_with(rng, N, np.arange(0, 3)), words_with(rng, N, np.arange(0, 3))
+    if kind == "huge":
+        return words_with(rng, N, np.arange(250, 255)), words_with(rng, N, np.arange(250, 255))
+    if kind == "specials":
+        return sprinkle(rng, bf16(a), 0.05), sprinkle(rng, bf16(b), 0.05)
+    return uniform(rng, N), uniform(rng, N)
+
+
+def add_pool(N: int = ADD_N) -> dict:
+    per = 8
+    rows, kinds = [], []
+    for i in range(per * len(ADD_KINDS)):
+        kind = ADD_KINDS[i % len(ADD_KINDS)]
+        rows.append(add_rows(N, kind, np.random.default_rng([SEED, 6, N, i])))
+        kinds.append(kind)
+    a, b = np.stack([r[0] for r in rows]), np.stack([r[1] for r in rows])
+    return {"a": a, "b": b, "y": AD.twin(a, b), "kind": np.array(kinds)}
+
+
 # ---- the replay cross-check -----------------------------------------------------------------------------------------------
 
 def load_replay(path: str):
@@ -335,6 +375,33 @@ def replay_argmax(R, d: dict) -> dict:
     return {"best": _cmp(best, d["best"]), "idx": _cmp(idx, d["idx"]), "token": _cmp(token, d["token"])}
 
 
+ROWS = "verity.ml.circuits.ops.rows"
+
+
+def load_rows(path: str | None):
+    """`ops.rows` (CIR-104) and where it came from: the installed module, else the file at ``path`` loaded in its place in
+    `verity.ml.circuits.ops` (its relative imports read main's fp32, prims and scalar), else (None, None)."""
+    try:
+        return importlib.import_module(ROWS), "installed"
+    except ModuleNotFoundError as e:
+        if e.name != ROWS:
+            raise
+    if not path:
+        return None, None
+    importlib.import_module("verity.ml.circuits.ops")
+    spec = importlib.util.spec_from_file_location(ROWS, path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[ROWS] = mod
+    spec.loader.exec_module(mod)
+    return mod, path
+
+
+def rows_check(Rw, am: dict, ad: dict) -> dict:
+    res = {f"argmax {V}": {"token": _cmp([Rw.argmax(row.tolist()) for row in d["x"]], d["token"])} for V, d in am.items()}
+    res["add"] = {"y": _cmp(np.stack([Rw.add_row(a.tolist(), b.tolist()) for a, b in zip(ad["a"], ad["b"])]), ad["y"])}
+    return res
+
+
 # ---- main -----------------------------------------------------------------------------------------------------------------
 
 def sha256(path: str) -> str:
@@ -354,6 +421,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out", nargs="?", default="/tmp/units-check")
     ap.add_argument("--replay", default=os.environ.get("UNITS_REPLAY"))
+    ap.add_argument("--rows", default=os.environ.get("UNITS_ROWS"))
     ap.add_argument("--no-sweep", action="store_true")
     a = ap.parse_args(argv[1:])
     out, replay_path = a.out, a.replay
@@ -364,13 +432,21 @@ def main(argv: list[str]) -> int:
     sm = sm_pool()
     am = {V: am_pool(V) for V in ARGMAX_V}
     rl = relu_pool()
+    ad = add_pool()
     doc: dict = {"seed": SEED, "twins": "words.py's instructions, the modules' OPS", "pools": {
         "rmsnorm": {str(N): {"rows": len(d["x"]), "kinds": list(RMS_KINDS)} for N, d in rms.items()},
         "quant": {f"{N},{str(r).lower()}": {"rows": len(d["x"]), "kinds": list(QUANT_KINDS)} for (N, r), d in qnt.items()},
         "softmax": {"rows": len(sm["x"]), "L": SM.LMAX, "kinds": list(SM_KINDS)},
         "argmax": {str(V): {"rows": len(d["x"]), "kinds": list(AM_KINDS)} for V, d in am.items()},
-        "relu": {"words": len(rl["x"])}}, "pool_seconds": round(time.time() - t0, 1)}
+        "relu": {"words": len(rl["x"])}, "add": {str(ADD_N): {"rows": len(ad["a"]), "kinds": list(ADD_KINDS)}}},
+        "pool_seconds": round(time.time() - t0, 1)}
     bad = []
+    Rw, rows_from = load_rows(a.rows)
+    if Rw is not None:
+        rc = {"module": rows_from, "sha256": sha256(Rw.__file__), **rows_check(Rw, am, ad)}
+        doc["rows"] = rc
+        bad += [f"rows {u} {k}" for u, part in rc.items() if isinstance(part, dict) for k, v in part.items() if v[1]]
+        print(json.dumps(rc), file=sys.stderr)
     if replay_path:
         R = load_replay(replay_path)
         rep = {"file": replay_path, "sha256": sha256(replay_path)}
@@ -383,15 +459,16 @@ def main(argv: list[str]) -> int:
         bad += [f"{u} {k}" for u, part in rep.items() if isinstance(part, dict) for k, v in part.items() if v[1]]
         print(json.dumps(rep), file=sys.stderr)
     if bad:
-        print("REFUSED: the twins and the replay's references disagree: " + ", ".join(bad), file=sys.stderr)
+        print("REFUSED: the twins and circuits' references disagree: " + ", ".join(bad), file=sys.stderr)
         return 1
     np.savez(os.path.join(out, "rmsnorm.npz"), **{f"{N}.{k}": v for N, d in rms.items() for k, v in d.items()})
     np.savez(os.path.join(out, "quant.npz"), **{f"{N},{int(r)}.{k}": v for (N, r), d in qnt.items() for k, v in d.items()})
     np.savez(os.path.join(out, "softmax.npz"), **sm)
     np.savez(os.path.join(out, "argmax.npz"), **{f"{V}.{k}": v for V, d in am.items() for k, v in d.items()})
     np.savez(os.path.join(out, "relu.npz"), **rl)
-    files = ["rmsnorm.npz", "quant.npz", "softmax.npz", "argmax.npz", "relu.npz"]
-    if "--no-sweep" not in argv:
+    np.savez(os.path.join(out, "add.npz"), **ad)
+    files = ["rmsnorm.npz", "quant.npz", "softmax.npz", "argmax.npz", "relu.npz", "add.npz"]
+    if not a.no_sweep:
         t1 = time.time()
         tasks = [(op, b) for op in SW.OPS for b in range(SW.blocks(op))]
         with mp.get_context("spawn").Pool(int(os.environ.get("PROCS", "8"))) as pool:
@@ -406,7 +483,7 @@ def main(argv: list[str]) -> int:
     with open(os.path.join(out, "fixture.json"), "w") as f:
         json.dump(doc, f, indent=1)
     print(f"fixture: pools {doc['pool_seconds']} s, sweep {doc.get('sweep_seconds', 'skipped')} s, replay "
-          f"{'agrees' if replay_path else 'not run'}", file=sys.stderr)
+          f"{'agrees' if replay_path else 'not run'}, ops.rows {'agrees' if Rw is not None else 'not run'}", file=sys.stderr)
     return 0
 
 

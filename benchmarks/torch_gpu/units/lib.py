@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-KERNELS = ("units_rmsnorm", "units_quant", "units_softmax", "units_argmax", "units_relu", "units_sweep")
+KERNELS = ("units_rmsnorm", "units_quant", "units_softmax", "units_argmax", "units_relu", "units_add", "units_sweep")
 
 u, i32, u64, vp, P = C.c_uint, C.c_int, C.c_uint64, C.c_void_p, C.POINTER
 CUDA = {
@@ -90,6 +90,14 @@ def words(t, dtype, shape: tuple, name: str):
     if t.dtype != dtype or tuple(t.shape) != tuple(shape) or not t.is_cuda:
         raise ValueError(f"{name}: want {dtype} {tuple(shape)} on CUDA, got {t.dtype} {tuple(t.shape)} on {t.device}")
     return t.contiguous()
+
+
+def aligned(name: str, *ts) -> None:
+    """Refuses a tensor whose data isn't 16-byte aligned: the kernels move rows as uint4s, and a misaligned one is a sticky
+    CUDA error that ends the context."""
+    for t in ts:
+        if t is not None and t.data_ptr() % 16:
+            raise ValueError(f"{name}: a tensor at {t.data_ptr():#x} is not 16-byte aligned")
 
 
 def out_or_new(out, dtype, shape: tuple, like, name: str):

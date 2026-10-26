@@ -8,7 +8,8 @@
 #                         never refusing: it has no sm_90a pin yet, and MUFU.EX2 has no exemption
 #   check/                fixture.py's pools, words and sweep digests from the twins (needs verity: run under uv); REPLAY
 #                         names the CMP-96 replay (e2e_h200's replay.py, #4460) for fixture.py's cross-check, default a
-#                         replay.py the run was sent
+#                         replay.py the run was sent; ROWS names ops/rows.py (CIR-104) while main hasn't it, default a
+#                         rows.py the run was sent
 #   the unit modules, lib.py, check.py, toolchain.txt (nvcc --version and the command line), source.txt (the commit),
 #   MANIFEST.sha256
 # Usage: bash benchmarks/torch_gpu/units/build.sh [OUT]   (default /tmp/units-ship; CUDA names the toolkit, default the first
@@ -36,14 +37,17 @@ echo "harness sass_gate.py rc $?" >> "$OUT/harness-gate.txt"
 set -e
 tail -3 "$OUT/harness-gate.txt"
 { "$CUDA/bin/nvcc" --version; echo "nvcc ${FLAGS[*]} -o units.sm_90a.cubin units.cu"; } > "$OUT/toolchain.txt"
-cp "$HERE"/{words,lib,rmsnorm,quant,softmax,argmax,relu,sweep,check}.py "$OUT/"
+cp "$HERE"/{words,lib,rmsnorm,quant,softmax,argmax,relu,add,sweep,check}.py "$OUT/"
 { git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}"
   git -C "$ROOT" status --porcelain -- benchmarks/torch_gpu/units verity 2>/dev/null || true; } > "$OUT/source.txt"
 if [ -z "${REPLAY:-}" ] && [ -f "${RESEARCH_RUN_DIR:-/nonexistent}/inputs/replay.py" ]; then
   REPLAY=$RESEARCH_RUN_DIR/inputs/replay.py
 fi
+if [ -z "${ROWS:-}" ] && [ -f "${RESEARCH_RUN_DIR:-/nonexistent}/inputs/rows.py" ]; then
+  ROWS=$RESEARCH_RUN_DIR/inputs/rows.py
+fi
 if [ -z "${CUBIN_ONLY:-}" ]; then
-  (cd "$ROOT" && uv run python "$HERE/fixture.py" "$OUT/check" ${REPLAY:+--replay "$REPLAY"})
+  (cd "$ROOT" && uv run python "$HERE/fixture.py" "$OUT/check" ${REPLAY:+--replay "$REPLAY"} ${ROWS:+--rows "$ROWS"})
 fi
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "ship:"

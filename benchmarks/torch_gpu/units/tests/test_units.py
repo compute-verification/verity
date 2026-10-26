@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import add as AD  # noqa: E402
 import argmax as AM  # noqa: E402
 import build_check  # noqa: E402
 import fixture as F  # noqa: E402
@@ -228,6 +229,38 @@ def test_argmax_ties():
     assert AM.twin(y)["token"][0] == 0
 
 
+def test_add_twin_is_Bf16AddF2fp():
+    d = F.add_pool(64)
+    assert set(d["kind"]) == set(F.ADD_KINDS)
+    for r in range(len(d["a"])):
+        assert d["y"][r].tolist() == [fp32.Bf16AddF2fp.evaluate(int(p), int(q)) for p, q in zip(d["a"][r], d["b"][r])]
+    sp = F.SPECIALS.astype(np.uint32)
+    a, b = np.repeat(sp, len(sp)), np.tile(sp, len(sp))
+    assert AD.twin(a, b).tolist() == [fp32.Bf16AddF2fp.evaluate(int(p), int(q)) for p, q in zip(a, b)]
+
+
+class Rows:
+    """CIR-104's references as `ops.rows` states them: Argmax_v1's scan and Bf16AddRow_v1's Bf16AddF2fp per element."""
+    argmax = staticmethod(lambda x: scan(x))
+    add_row = staticmethod(lambda a, b: [fp32.Bf16AddF2fp.evaluate(p, q) for p, q in zip(a, b)])
+
+
+def test_rows_check_counts_every_word():
+    am, ad = {100: F.am_pool(100)}, F.add_pool(64)
+    assert F.rows_check(Rows, am, ad) == {"argmax 100": {"token": [len(am[100]["x"]), 0]}, "add": {"y": [ad["y"].size, 0]}}
+    ad["y"][3, 5] ^= 1
+    assert F.rows_check(Rows, am, ad)["add"] == {"y": [ad["y"].size, 1]}
+
+
+def test_load_rows_without_the_module_or_a_path():
+    try:
+        import verity.ml.circuits.ops.rows  # noqa: F401
+    except ModuleNotFoundError:
+        assert F.load_rows(None) == (None, None)
+    else:
+        assert F.load_rows(None)[1] == "installed"
+
+
 # ---- the sweep ------------------------------------------------------------------------------------------------------------
 
 def splitmix64(z: int) -> int:
@@ -241,6 +274,7 @@ def test_sweep_digest_is_its_formula():
     assert splitmix64(0) == 0xE220A8397B1DCDAF == int(SW.splitmix64(np.array([0], np.uint64))[0])
     want = sum(splitmix64((i << 32) | int(Q.scale(np.array([i], np.uint16))[0])) for i in range(1 << 16)) % 2 ** 64
     assert SW.digest(7, 0) == want and SW.blocks(7) == 1 and SW.blocks(0) == 256 and SW.blocks(5) == 128
+    assert SW.blocks(8) == 256
 
 
 def test_sweep_models_are_the_units_ops():
@@ -251,6 +285,10 @@ def test_sweep_models_are_the_units_ops():
     for amax in (0x0000, 0x0001, 0x3F80, 0x7F80, 0x7FC0):
         got = SW.model(5, (np.uint32(amax) << np.uint32(16)) | x)
         assert (got == W.fdiv(W.widen(x), Q.scale(np.array([amax], np.uint16))[0])).all()
+    sp = F.SPECIALS.astype(np.uint32)
+    i = np.concatenate([np.random.default_rng(7).integers(0, 1 << 32, 4000, dtype=np.uint64).astype(np.uint32),
+                        (np.repeat(sp, len(sp)) << np.uint32(16)) | np.tile(sp, len(sp))])
+    assert SW.model(8, i).tolist() == [fp32.Bf16AddF2fp.evaluate(int(v) >> 16, int(v) & 0xFFFF) for v in i]
 
 
 # ---- the build check ------------------------------------------------------------------------------------------------------
@@ -268,6 +306,7 @@ BODIES = {
     "units_softmax": ["FADD R1, R2, -R3", "FMUL R1, R1, 1.4426950216293334961", "MUFU.EX2 R2, R1", "F2FP.BF16.F32.PACK_AB R3, RZ, R2"],
     "units_argmax": ["ISETP.GT.AND P0, PT, R1, R2, PT", "HFMA2.MMA R5, -RZ, RZ, 0, 0", "SEL R3, R1, R2, P0"],
     "units_relu": ["LOP3.LUT R1, R2, 0x7fff, RZ, 0xc0, !PT"],
+    "units_add": ["FADD R1, R2, R3", "F2FP.BF16.F32.PACK_AB R3, RZ, R1"],
     "units_sweep": ["MUFU.EX2 R2, R1", "MUFU.RSQ R4, R3", "F2I.S8.NTZ R2, R6", "IMAD.WIDE.U32 R4, R2, R3, RZ"],
 }
 

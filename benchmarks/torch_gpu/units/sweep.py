@@ -14,6 +14,7 @@ blocks agree iff (up to a 2^-64 collision) every output word does, and a block t
   5   quant_div   2^31   div.rn.f32(f32(i & 0xFFFF), scale(i >> 16))      quant's codes, every bf16 word by every amax
   6   bf16        2^32   cvt.rn.bf16.f32(i)                               rmsnorm, softmax
   7   scale       2^16   quant's scale(i)                                 quant
+  8   add         2^32   bf16(add.rn.f32(widen(i >> 16), widen(i)))       add: every pair of bf16 words
 The constants (1, 16384, 127) come in as the kernel's argument, as they do into the units.
 """
 from __future__ import annotations
@@ -26,7 +27,7 @@ BLOCK = 1 << 24
 SUB = 1 << 22
 OPS = {0: ("ex2", 1 << 32, 0), 1: ("s8", 1 << 32, 0), 2: ("sqrt", 1 << 32, 0), 3: ("rcp", 1 << 32, W.ONE),
        4: ("div_n", 1 << 32, W.f32word(16384)), 5: ("quant_div", 1 << 31, W.F127), 6: ("bf16", 1 << 32, 0),
-       7: ("scale", 1 << 16, W.F127)}
+       7: ("scale", 1 << 16, W.F127), 8: ("add", 1 << 32, 0)}
 
 
 def blocks(op: int) -> int:
@@ -62,6 +63,8 @@ def model(op: int, i: np.ndarray) -> np.ndarray:
         return W.bf16(i).astype(np.uint32)
     if op == 7:
         return quant.scale(i.astype(np.uint16))
+    if op == 8:
+        return W.bf16(W.fadd(W.widen(i >> np.uint32(16)), W.widen(i & np.uint32(0xFFFF)))).astype(np.uint32)
     raise ValueError(f"no sweep op {op}")
 
 

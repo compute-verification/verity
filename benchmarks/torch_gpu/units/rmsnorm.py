@@ -60,6 +60,7 @@ def gpu(x, w, *, eps: int = W.EPS, out=None, units: bool = False, parts: dict | 
     x = L.words(x, torch.bfloat16, (R, N), "rmsnorm x")
     w = L.words(w, torch.bfloat16, (N,), "rmsnorm w")
     out = L.out_or_new(out, torch.bfloat16, (R, N), x, "rmsnorm")
+    L.aligned("rmsnorm", x, w, out)
     units = units or parts is not None
     if units:
         parts = L.unit_outputs(parts, {"chunks": (torch.int32, (R, nc)), "groups": (torch.int32, (R, ng)),
