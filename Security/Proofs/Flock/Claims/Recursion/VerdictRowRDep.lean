@@ -178,7 +178,7 @@ open FlockSoundness.Discharge.Recursion (HClass)
 open RecDeploy.Rows (DecAt)
 
 variable {resP : Msg → List ResPiece} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ}
-  {elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
+  {elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
   {vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
   {side : Msg → List Msg → OpenPiece → OpenSide} {posAt : Msg → List Coin → OpenPiece → ℕ}
 
@@ -202,7 +202,7 @@ theorem targetRDep_of_cover (rd : Msg → Option FinalP)
         ∀ (r : Fin 2) p (hp : p < gs.size), ∃ q ∈ resP x,
           (∃ ns nv, RecResiduals.part (D.sh cls i) p = .ok (q.S, ns, nv)) ∧
           (∀ k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
-            elemAt x ms q.key k =
+            elemAt x ms cs q.key k =
               el (D.rep cls (acc x ms cs) i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k]) ∧
           ∀ v info kappa, verifierRows (D.sh cls i) (D.rep cls (acc x ms cs) i r).rounds
               (D.rep cls (acc x ms cs) i r).extras (D.rep cls (acc x ms cs) i r).comb =
@@ -248,7 +248,7 @@ each rep `r` and group `p` of S has a piece of `resP x` of the verifier's part `
 `acc`. -/
 def ElemCover (rd : Msg → Option FinalP) (resP : Msg → List ResPiece)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (acc : Msg → List Msg → List Coin → ℕ → Array _root_.Flock.F128) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin),
@@ -260,7 +260,7 @@ def ElemCover (rd : Msg → Option FinalP) (resP : Msg → List ResPiece)
         (∃ ns nv, RecResiduals.part (D.sh cls i) p = .ok (q.S, ns, nv)) ∧
         q.key.1 = p ∧ q.key.2.1 + q.key.2.2.1 = r.val ∧
         ∀ k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
-          elemAt x ms q.key k =
+          elemAt x ms cs q.key k =
             el (D.rep cls (acc x ms cs) i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k]
 
 /-- **Row R's leaf at the coins' verifier values**: `TargetRDep` at `vvAt := resVRead`, from `ElemCover`. -/

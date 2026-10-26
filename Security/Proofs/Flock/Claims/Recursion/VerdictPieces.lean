@@ -185,12 +185,12 @@ def ResZero (S : _root_.Flock.RecOpen.GfS) (E vv : ℕ → _root_.Flock.F128) : 
     FlockVBridge.resVal (FlockVBridge.gfsOf S) (FlockVBridge.termVal E vv) (FlockVBridge.resOf S.res[q]) = 0
 
 /-- **What a `rec-residuals` piece says** at the inner statement `x`, the opened messages `ms` and the coins `cs`: its
-group's residuals vanish at the elements `elemAt` reads off the messages at its copy and the verifier's values `vvAt`
-at the coins there. -/
-def resHolds (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+group's residuals vanish at the elements `elemAt` reads off the messages and the coins at its copy (the accumulators'
+ports are a chain the coins step) and the verifier's values `vvAt` at the coins there. -/
+def resHolds (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128) (q : ResPiece) (x : Msg) (ms : List Msg)
     (cs : List Coin) : Prop :=
-  ResZero q.S (elemAt x ms q.key) (vvAt x cs q.key)
+  ResZero q.S (elemAt x ms cs q.key) (vvAt x cs q.key)
 
 /-- **The `rec-residuals` pieces' share at an `.inner` part**: `partAccepts_resZero` at the verifier's values the coins
 give (`vvAt`), where check 5's tie holds there (`htie`) and the layout places each piece `ownQ` gives the part at one
@@ -203,7 +203,7 @@ theorem resPieces_computes {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} 
     {j : ℕ} {nm : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm pt))
     (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
     (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
-    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (htie : ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
       _root_.Flock.Readable.parseBytes readOfO xO = some p → L.Agrees cmt x s w xO ms →
@@ -232,7 +232,8 @@ theorem resPieces_computes {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} 
               os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) →
               _root_.Flock.Readable.rowsRead ns nv
                   (_root_.Flock.Readable.copyOf p q.key.1 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) =
-                elemAt (Claims.Recursion.xI D x) (Bd.opened os last) q.key) :
+                elemAt (Claims.Recursion.xI D x) (Bd.opened os last)
+                  ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :
     PiecesComputes Bd D pieces (resHolds elemAt vvAt) ownQ s x c ms := by
   obtain ⟨xO, w, p, hx, hRR, hall⟩ := partAccepts_resZero h hr hss hsv
     (fun t o g u => vvAt (Claims.Recursion.xI D x)

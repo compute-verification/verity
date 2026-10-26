@@ -24,8 +24,10 @@ and whose simulator's live outcome is that decision's view (`PlainSimRunR`).
 
 namespace FlockDeploy.KS
 
-open Flock FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge FlockSoundness.Discharge.Exec
-open Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
+  FlockSoundness.Discharge.Exec FlockSoundness.Discharge.Tables
+open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
+open Claims.Bridge.Live
 open RecDeploy (outCoin)
 open Lean (Json)
 
@@ -109,7 +111,7 @@ theorem plainRawLevelColsRV_plain {rd : Claims.Msg → Option FinalP} {x : Claim
                  (lv.streams.getD 1 #[], (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps).getD 1
                     ByteArray.empty)] } := by
     unfold runOfR
-    simp [ha, hlv, hex, Except.toOption]
+    simp [ha, hlv, hst, hex, Except.toOption]
   unfold plainRawLevelColsRV
   rw [hrv, hrun]
   rcases k with _ | _ | k
@@ -339,14 +341,21 @@ theorem plainR_levelOpening {rd : Claims.Msg → Option FinalP} {Ω : Type} {P :
   rw [hconv] at ha
   have hshs : (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog (2 + extras.size)
       (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st))).sched = sch := by
-    simp only [Claims.Flock.plainProofShape, Claims.Flock.plainSched, hsch]
+    have hsch' : fast100 (Setup.ofCircuit st).m = some sch := hsch
+    simp only [Claims.Flock.plainProofShape, Claims.Flock.plainSched, hsch']
     rfl
   have hℓ : 1 ≤ ℓ ∧ ℓ < sch.levels.size := by
     by_contra hn
     rw [plainLevelColsOf, ite_eq_right (by rw [hshs]; exact hn)] at ha
     simp at ha
   obtain ⟨hent, hmc⟩ := hlev ℓ hℓ.1 hℓ.2
-  rw [hent] at ha
+  have hent' : plainLevelColsOf (Claims.Flock.plainProofShape (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog
+      (2 + extras.size) (Setup.ofCircuit st).merkle.digestLen (saltLenOf false (Setup.ofCircuit st)))
+      y.rounds (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps)[2 * 0 + k]! ℓ =
+      Claims.Flock.zkRepCols (sch.levels.getD ℓ default)
+        (y.rounds[plainLevelRound (Setup.ofCircuit st).m (Setup.ofCircuit st).kLog sch.k0 (2 + extras.size)
+          (sch.levels.size - 1) ℓ]!).coins (openAt p.ligerito (sch.levels.size - 1) ℓ).1 := hent
+  rw [hent'] at ha
   obtain ⟨j, hj, -, hjq, hja⟩ := mem_zkRepCols ha
   have hms : (Setup.ofCircuit st).merkle = MerkleScheme.hm96Sha512 ∨
       (Setup.ofCircuit st).merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
@@ -424,13 +433,13 @@ theorem plainClashRunR_of (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {
         EntriesClashJK id ins.read.I d (wrPDJK id ins.read.I d o) ∨
           LaterEntriesClashJK id ins.read.I d (wrPDJK id ins.read.I d o))
     {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (P' : Claims.Prover (Ω × plainTape x))
-    (hsim : PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) P'
+    (hsim : PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1) P'
       (plainΦ x spec st))
     (hnil : ∀ u r', (Claims.run sha512 P (VR rd) x ω (plainΦ x spec st (u, r'))).out ≠ .acc →
-      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1)
+      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1)
         sha512 P' x (ω, u) r').proofs = #[])
     (C : Fin (wordLen false x) → List 𝔽) :
-    PlainClashRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) P'
+    PlainClashRunR rd P x ω spec.mPts plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1) P'
       (plainΦ x spec st)
       (LiveSelfClash H512 enc512 Lf sch (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn (plainDec T)
         (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
@@ -520,17 +529,17 @@ theorem plainRel_ofR (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {s : C
         ∀ r < 2, LaterEntriesAtJK id sch ins.read.I d (wrPDJK id ins.read.I d o)
           (tableOutL H512 enc512 Lf (capOfRoot o.rootB[0]!) pend' (opn o.proofs 0)) r)
     {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (P' : Claims.Prover (Ω × plainTape x))
-    (hsim : PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) P'
+    (hsim : PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1) P'
       (plainΦ x spec st))
     (hnil : ∀ u r', (Claims.run sha512 P (VR rd) x ω (plainΦ x spec st (u, r'))).out ≠ .acc →
-      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1)
+      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1)
         sha512 P' x (ω, u) r').proofs = #[])
     (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x) (rr : Fin (plainN x + 2) → LCoin 65536)
     (a : List (Model.OutCL 𝔽 Dig (List UInt8)))
     (ha : Claims.Bridge.RetOK (fun _ cap pend os => tableOutL H512 enc512 Lf cap pend os)
       (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn (plainDec T) (fun _ _ => true) (fun _ _ _ => [])
       (fun rs _ => capOfRoot rs[0]!) (fun j => repsOf (D := Dig) execArith ([T].get j))
-      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1)
+      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1)
         sha512 P' x (ω, u) rr) a)
     (r : Fin 2) (ℓ : ℕ) (q : Fin (2 ^ (lvOf sch (ℓ + 1)).logLen)) (v : Fin (2 ^ (lvOf sch (ℓ + 1)).lanes) → 𝔽)
     (hv : opCapL H512 enc512 Lf sch r.val ℓ a q = some v) :
@@ -567,7 +576,7 @@ theorem plainRel_ofR (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {s : C
   have hcols := plainRawLevelColsRV_plain (congrFun (runOfRV_run hacc) 0) hact hlv hvd (by simp) hf' hp2 r.isLt (ℓ + 1)
   rw [hcols, ← hpr]
   have hmem := List.mem_map_of_mem (f := fun x => (x.1, x.2.1)) hy
-  rw [hent (ℓ + 1) (by omega), plainLevelColsOf_congr _ _ _ (hco spec #[st'] sess hsu hdec r.val r.isLt y₀ hy₀),
+  rw [hview, hent (ℓ + 1) (by omega), plainLevelColsOf_congr _ _ _ (hco spec #[st'] sess hsu hdec r.val r.isLt y₀ hy₀),
     ← getD_empty] at hmem
   exact hmem
 
