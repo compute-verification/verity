@@ -5,6 +5,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
 import Proofs.Flock.Soundness.Discharge.HiddenExec.CopiesP
+import Proofs.Flock.Soundness.Discharge.HiddenExec.PlacedP
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
@@ -36,6 +37,7 @@ Since #757 main's prover writes the hidden-output statement (`verity/flock-circu
 * `Flat`, `Copies`, `Placed`, `Sites`: the copy, constant and zero facts at `keyProg`'s places in the hidden tables
   (`ppH`, `hConstH`, `hZeroH`, `sitesAtH`).
 * `CopiesP`: `Copies` at public inputs: kept rows read the flat twin's, a public leaf's bits its instance's public word.
+* `PlacedP`: `Placed` at public inputs: `AcceptedHP`, `SitesHP` and `ProgPlaces` for `Placed.keyProgP`.
 * `Ret`, `SiteH`: where the circuit computes each output word (the unit copy and port `HmOut.outCol` reads), and the
   site of a drawn unit (`BcSiteH`, every row's registered `b ‖ c` through `Hidden.bc_drawnW`).
 * `KeyH`: `lay` and `rs` at `keyProg`'s places (`keyLayoutH`, `keyRowsH`, `keyRowsH_computes`): every row a commit
