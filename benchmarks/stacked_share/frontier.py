@@ -25,7 +25,8 @@ phases' unit rates, and
     f = (128 R_cap L / E + R_in L) / M_dyn
 
 with f again for the decode rate alone, for the softmax's work a key at property/v1's floor (`softmax_floor`), and for that
-with every requantization and linear epilogue at one rounding an element too (`exact_floor`).
+with every requantization and linear epilogue at one rounding an element too (`exact_floor`). `sweep` gives f again as the
+pool's context takes the workload's ``sweep`` values.
 
     python frontier.py --atoms-needed > atoms-needed.json            # the atoms atoms.py counts
     python frontier.py --atoms atoms.json --out frontier.json          # the table (and frontier.md beside it)
@@ -758,6 +759,30 @@ def table(spec: Mapping[str, Any], atoms: Mapping[str, Any]) -> dict:
                 row[kv][f] = {"units": {p: fl[f][p]["units"]["total"] for p in PHASES},
                               **{k: sf[k] for k in ("R_decode", "R_prefill", "R_cap", "R_cap_phase", "f", "f_decode")}}
         out["models"][name] = row
+    out["sweep"] = sweep(spec, atoms, floors)
+    return out
+
+
+def sweep(spec: Mapping[str, Any], atoms: Mapping[str, Any], floors: Mapping[str, Any]) -> dict:
+    """f with the KV at write as the pool's context S takes each of the workload's ``sweep`` values, with prefills of
+    min(P, S), at full cost and at each floor; a model past its ``max_context`` is left out."""
+    node, P0 = spec["node"], spec["workload"]["prompt"]
+    costs = {"full": atoms, **floors}
+    out: dict[str, Any] = {}
+    for name, m in spec["models"].items():
+        out[name] = {}
+        for S in spec["workload"]["sweep"]:
+            if S > m["max_context"]:
+                continue
+            P = min(P0, S)
+            out[name][S] = {}
+            for cost, at in costs.items():
+                ph = {}
+                for phase in PHASES:
+                    c = compose(m, phase, "at write", S, P)
+                    ph[phase] = {"units": evaluate(c["terms"], at, primitives=False), "macs": c["macs"], "dd": c["dd"], "dyn": c["dyn"]}
+                sv = serve(m, node, ph["decode"], ph["prefill"], "at write", S, P)
+                out[name][S][cost] = {k: sv[k] for k in ("B", "M_dyn", "R_decode", "R_prefill", "R_cap_phase", "f", "f_decode")}
     return out
 
 
@@ -854,6 +879,20 @@ def markdown(t: Mapping[str, Any]) -> str:
             cb = d["cut_bits"]
             lines.append(f"| {name} | {d['kind']} | {d['layers']} | {d['write_path']} | {cb['residual']:,} | "
                          f"{cb['write inputs']:,} | {cb['stored, at write']:,} | {min(cb.values()):,} |")
+    sw = t["sweep"]
+    ctx = t["workload"]["sweep"]
+    lines += ["", f"**f as the pool's context S varies** (KV at write, L = 10 min, E conjectured, prefills of min(P, S); a model "
+              "past its max_context left out). Each cell is f with R_cap / with the decode rate alone, at full cost, the softmax "
+              "floor and the exactness floor.", "", "| model | " + " | ".join(f"S = {s}" for s in ctx) + " |",
+              "|---|" + "---|" * len(ctx)]
+    for name, r in sw.items():
+        cells = []
+        for s in ctx:
+            x = r.get(s)
+            cells.append("-" if x is None else " / ".join(pct(x[c][f]["10 min"]["conjectured"]) for c, f in
+                                                          (("full", "f"), ("full", "f_decode"), ("softmax_floor", "f_decode"),
+                                                           ("exact_floor", "f_decode"))))
+        lines.append(f"| {name} | " + " | ".join(cells) + " |")
     return "\n".join(lines)
 
 

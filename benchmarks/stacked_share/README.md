@@ -72,7 +72,8 @@ serve it:
   - the dynamic memory's kind, bytes, write path and cut widths;
   - the roofline serving model's R_cap, M_dyn and turnover;
   - f at each E and L, and again with the softmax's work a key at property/v1's floor (`softmax_floor`) and with every
-    requantization and linear epilogue at one rounding an element as well (`exact_floor`).
+    requantization and linear epilogue at one rounding an element as well (`exact_floor`);
+  - f with R_cap and with the decode rate alone as the pool's context varies (`sweep`, up to each model's max_context).
 
   It also writes the tables as `frontier.md`.
 - `frontier_job.sh` runs both on a CPU node.

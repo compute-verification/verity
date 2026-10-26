@@ -150,8 +150,15 @@ def test_the_table_on_synthetic_atoms():
     qn = t["models"]["Qwen3-Next-80B-A3B"]["at write"]["serving"]["request_bytes"]
     assert qn["state"] == 36 * (32 * 128 * 128 * 4 + 3 * 8192 * 2) and qn["per_token"] == 12 * 2 * 2 * 256
     assert t["models"]["Llama-3.1-8B"]["as built"]["serving"]["request_bytes"]["per_token"] == 32 * 2 * 8 * 128 * 2
+    for name, r in t["models"].items():
+        sw = t["sweep"][name]
+        assert set(sw) == {s for s in SPEC["workload"]["sweep"] if s <= SPEC["models"][name]["max_context"]}
+        assert sw[S]["full"]["f"] == r["at write"]["serving"]["f"]
+        assert sw[S]["exact_floor"]["f_decode"] == r["at write"]["exact_floor"]["f_decode"]
+    assert 131072 not in t["sweep"]["Qwen3-8B"] and 131072 in t["sweep"]["Llama-3.1-8B"]
     md = F.markdown(t)
     assert "| DeepSeek-V3/R1/V3.1 |" in md and "**KV at write.**" in md and "**Where the units go, KV at write**" in md
+    assert "**f as the pool's context S varies**" in md
     json.dumps(F.jsonable(t))
 
 
