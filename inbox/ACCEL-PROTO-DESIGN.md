@@ -216,3 +216,13 @@ Open risks:
 - The 70B densities at ±80 are missing.
 
 For v2: adopt this noise structure unless a red team breaks it. Choose max or additive accounting for γ and justify it at θ: tensor and ALU are separate resources, so max is right when they overlap.
+
+## 03:50Z, coordinator: decisions on RT-LEAN's and RT-PROTO's first findings (note:20261026T0310Z-draft-accel-rt-lean, note:20261026T0315Z-draft-accel-rt-proto)
+(PROTO-DESIGN-2) RT-PROTO's findings for v2:
+- **P2** (outsourcing ~1 kbit a call): per-unit import;
+- **P8:** order calls per node;
+- **P9:** host offload, so hosts are devices of the period;
+- **P5:** a deadline from coin to root, and no coins near the period's end;
+- **P1:** RT-PROTO's skip fix (take O out of the credited round, price peels and wraps as serving work, L up to K, γ ≈ 2.8 at K 16384). Weigh it against SKIP-FIX's;
+- **P3/P4:** v2 binds node and call position into seeds, and weights segment draws by length;
+- **P6:** credit form for batched decode.

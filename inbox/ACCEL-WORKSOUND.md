@@ -40,3 +40,12 @@ Open risks:
 - The 70B densities at ±80 are missing.
 
 HY2: wrap corrections and peels are serving work outside the words. Under R-ACCEL-1 they're other work, not credit, so skipping them isn't a soundness issue. Say so explicitly in the statement's docstring, or answer BET-HYBRID-2's smell that they may enter ε through the skip bound when tensor time binds.
+
+## 03:50Z, coordinator: decisions on RT-LEAN's and RT-PROTO's first findings (note:20261026T0310Z-draft-accel-rt-lean, note:20261026T0315Z-draft-accel-rt-proto)
+- **You own the adversary type** (L18). Make it per round: round w's dither coins, then the prover's work, then round w's commitment, then round w's check coins (RT-LEAN L1; RT-PROTO P8 on overlapping calls: order rounds per node, or state the cut per group of overlapping rounds). Push the type first, before 05:00Z, so ABSORB-THM writes `Extract` against it.
+- **L2:** take `Extract` out of `SAKMatmul`'s `DirectSum` half. `SAKMatmul` speaks only of matrix products; extraction is its own named premise.
+- **L3 and L5/L19:** tie c to the public best's priced cost (`pub/H`), read `ShaSpeed`, and add the share of honest work that is neither matmul nor SHA-512.
+- **L4:** read MODEL-SPEC's `Accel` (branch `cursor/compute-research-accel-model-spec-ea24`), not a placeholder.
+- **P2 (outsourcing) and P9 (host offload):** state import per unit, and make the period's devices include host CPUs and DPUs (P9's fix), priced in the model. Whether outsourcing is attribution only (the global-compute framing) or a break (the per-fleet framing) goes to Daniel. Keep both readings expressible.
+- **P5:** a deadline from coin to root, and no coins near the period's end.
+- **P6:** the credit form for batched decode (credit the product's MACs, not cost as served).

@@ -133,3 +133,10 @@ O-IO's results:
 - **The coordinator decided OPT_honest:** it's the best public algorithm (OPT*), as the agreed end state has it. The deployed kernel's gap from it is reported as its own term, ε_alg (0.53–1.76% for the reference kernel per O-IO).
 
 (MODEL-SPEC-2) O-IO's smell: DS-90's sheet prices LDS/STS at issue only, so lookup routes read cheaper than the hardware allows. Add the shared-memory port, 128 B a SM-clock on the H200 (check sm_120), as a resource row with a rate.
+
+## 03:50Z, coordinator: decisions on RT-LEAN's and RT-PROTO's first findings (note:20261026T0310Z-draft-accel-rt-lean, note:20261026T0315Z-draft-accel-rt-proto)
+(MODEL-SPEC-2) RT-LEAN's findings for you:
+- **L12:** "the card can do no more than this machine" must be a named Prop, the refinement direction. The README lists missing units that do exact arithmetic (DMMA, the 2:4 sparse MMAs). Each goes into `Accel` with a rate, or into the Prop's documented exclusions.
+- **L11:** `P1Open` and `Open.sync` read as a second device premise: fold them into θ's named parameters, or into `AccelProductForm`'s record.
+- **L10:** list `AccelProductForm` in the lock. Its decided-by-lane card is https://app.notion.com/p/405399515d9e8107a614f5bf9b7d7d54.
+- **RT-PROTO P9:** host CPUs and DPUs are devices of the period, priced; coordinate with RT-UNITS.
