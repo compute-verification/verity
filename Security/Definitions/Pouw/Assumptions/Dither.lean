@@ -125,14 +125,14 @@ def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
 service's verdict accepts only periods whose rounds' checks pass** on the registered instances `reg`, but with
 probability `κ_S` over the oracle and the verifier's coins, for every prover: the rounds' checks run inside C-Flock's
 zero-knowledge proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each round's
-commitment (`trusted-nebius-host`). The verdict reads the transcript and the devices' readings, never the prover's
+commitment (`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
 code (RT-LEAN-2 L29). It assumes nothing of the prover's algorithms. -/
 def ServiceSound (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst) {Obs : Type}
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (κS : ℝ) : Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
     A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted reg ox.1 ox.2) ≤ κS
 
-/-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-nebius-host`). **An accepted
+/-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-host`). **An accepted
 period exchanged at most `K` bits**: the network certifier sits on the period's devices' links, on a machine the
 prover doesn't control, and signs the bits that cross them in either direction (its readings `dev`); the period's
 verdict reads its signed count and refuses a period past `K`. The certifier's own coin stream isn't counted
