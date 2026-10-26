@@ -173,12 +173,13 @@ def test_a_table_freed_once_added_goes_at_its_read_with_no_later_add(graphs: boo
     with torch.cuda.stream(plan.stream):
         torch.cuda._sleep(50_000_000)
     done = sc.add(first)
-    reaper = plan._held.thread
     del first
     done.synchronize()
-    if reaper is not None:
-        reaper.join()
-    assert [a() for a in alive] == [None] * len(alive) and not plan._held.entries
+    held = plan._held
+    with held.lock:
+        assert held.thread is not None and held.thread.is_alive()
+        held.drained.wait_for(lambda: not held.entries)
+    assert [a() for a in alive] == [None] * len(alive)
     for tensors in rest:
         sc.add(tensors)
     assert sc.finish().result() == S.commit(CTX, layout, 4, KEY, out, 3)

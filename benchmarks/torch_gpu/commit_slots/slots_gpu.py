@@ -221,22 +221,26 @@ class SmPartition:
 
 class _Held:
     """A plan's added tensors not yet dropped, oldest first, each with its read (an event on the side stream) and the stream
-    that made them. On a CUDA plan (``torch``), a thread waits on the oldest read while there are any and drops each add's
-    tensors as soon as its read has passed, so a producer that has freed them finds their memory back at its next
-    allocation, the next add or not."""
+    that made them. On a CUDA plan (``torch``), a thread of its own, started at its first add and then waiting for the
+    next when none are held, waits on the oldest read and drops each add's tensors as soon as its read has passed, so a
+    producer that has freed them finds their memory back at its next allocation, the next add or not."""
 
     def __init__(self, torch: Any = None, device: Any = None) -> None:
         self.entries: collections.deque[tuple[Any, Any, tuple[Any, ...]]] = collections.deque()
         self.lock = threading.Lock()
+        self.added, self.drained = threading.Condition(self.lock), threading.Condition(self.lock)
         self.torch, self.device = torch, device
         self.thread: threading.Thread | None = None
 
     def hold(self, read: Any, producer: Any, tensors: Sequence[Any]) -> None:
         with self.lock:
             self.entries.append((read, producer, tuple(tensors)))
-            if self.torch is not None and self.thread is None:
+            if self.torch is None:
+                return
+            if self.thread is None:
                 self.thread = threading.Thread(target=self._reap, name="slots_gpu-release", daemon=True)
                 self.thread.start()
+            self.added.notify()
 
     def release(self, keep: int | None = None) -> None:
         with self.lock:
@@ -247,6 +251,8 @@ class _Held:
                         break
                     producer.wait_event(read)
                 self.entries.popleft()
+            if not self.entries:
+                self.drained.notify_all()
 
     def _reap(self) -> None:
         # Waiting on and querying events while another thread captures a CUDA graph is refused unless that capture is
@@ -255,9 +261,7 @@ class _Held:
             self.torch.cuda.set_device(self.device)
             while True:
                 with self.lock:
-                    if not self.entries:
-                        self.thread = None
-                        return
+                    self.added.wait_for(lambda: self.entries)
                     read = self.entries[0][0]
                 read.synchronize()
                 self.release()
