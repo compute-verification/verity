@@ -366,6 +366,46 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
                     "peer": "vy-nebius-1", "key_record": "key.json"}
 
 
+def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):
+    """A session listens on one port a member with a proved unit (closure included), so 20 proved members need 20 ports:
+    the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a draw needing more than ``--ports`` is
+    refused before any session listens, since the next one could reach another audit's verifier."""
+    import a5 as A5
+
+    got = _write(tmp_path / "w", n=20, cap=1)
+    mine, _doc, _sets = RA.verifier_window(got.dir, D.parse_law(LAW), None)
+    assert len(mine.members) == 20 > A5.RANK_PORTS
+    every = {"law": "work", "units": [18, 19], "closure": list(range(18))}
+    assert A5.port_refusal(mine, every, 10000, A5.RANK_PORTS) == {
+        "sessions-past-the-reserved-ports": {"sessions": 20, "ports": 16, "from": 10000}}
+    assert A5.port_refusal(mine, every, 10000, 20) is None and A5.port_refusal(mine, every, 10000, None) is None
+    assert A5.port_refusal(mine, {"law": "subset", "units": [3, 7]}, 10000, 2) is None
+
+    class Opened(Exception):
+        pass
+
+    seen = {}
+
+    def free_ports(span):
+        seen["span"] = span
+        return 20000
+
+    def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
+        seen.update(port=port, ports=kw["ports"])
+        raise Opened
+
+    monkeypatch.setattr(RA, "free_ports", free_ports)
+    monkeypatch.setattr(A5, "audit", audit)
+    args = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", got.rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out")]
+    for extra, want in (([], {"span": 20, "port": 20000, "ports": 20}), (["--port", "10000", "--ports", "16"],
+                                                                         {"port": 10000, "ports": 16})):
+        seen.clear()
+        with pytest.raises(Opened):
+            RA.main([*args, *extra])
+        assert seen == want
+
+
 def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):
     """The verifier's window, the compile check, `source`, the negatives and the draw-order check, in a fresh process: no
     `verity_vllm` module is loaded."""
@@ -425,6 +465,20 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     (tmp_path / "bad.bin").write_bytes(b"\xff" * 7)
     assert PP.main([*base, "--advice", str(tmp_path / "bad.bin")]) == RA.REFUSED
     assert "prove_path.py circuit:" in capsys.readouterr().err
+
+
+def test_the_output_class_is_the_given_ranges_and_every_uncut_registered_read_of_an_output_port():
+    """`output_class`: the verifier's own ranges, with each uncut registered read of an ``o<j>`` port adding its reader's
+    units at the template's base in the population; a read of an input port, or a cut one, adds none."""
+    circuit = {"templates": [["a", 8], ["b", 16]], "registered": {"reads": [
+        {"reader": "b", "port": "o0", "at": 4, "radix": [2, 2], "cut": [0, 1]},
+        {"reader": "a", "port": "o1", "at": 0, "radix": [2]},
+        {"reader": "b", "port": "w", "at": 0, "radix": [16], "cut": [0, 1]},
+        {"reader": "b", "port": "o0", "at": 12, "radix": [4], "cut": [1, 2]}]}}
+    assert RA.output_class(circuit) == [[0, 2], [12, 16]]
+    assert RA.output_class(circuit, [[2, 4], [20, 24]]) == [[0, 4], [12, 16], [20, 24]]
+    assert RA.output_class({"templates": [["a", 8]]}, [[4, 8]]) == [[4, 8]]
+    assert RA.output_class({"templates": [["a", 8]]}) == []
 
 
 def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_ignored_by_the_compile_check(tmp_path, monkeypatch):

@@ -231,7 +231,7 @@ def test_onsite_components_are_read_as_written():
         C.onsite_components("def other := []")
 
 
-def test_windows_audited_at_once_each_report_and_the_monitoring_period_leads(tmp_path, monkeypatch, capsys):
+def test_windows_audited_one_after_another_each_report_and_the_monitoring_period_leads(tmp_path, monkeypatch, capsys):
     def loop(index, run, a, scratch, out):
         d = scratch / f"w{index}"
         d.mkdir(parents=True)
@@ -240,15 +240,24 @@ def test_windows_audited_at_once_each_report_and_the_monitoring_period_leads(tmp
         return d, {"population": 4}
 
     monkeypatch.setattr(RN, "loop_window", loop)
-    decide_ = RN.decide
-    monkeypatch.setattr(RN, "decide", lambda d, node, out, exe=None: decide_(d, node, out,
-                                                                             legs={"sampled-proofs": fake("accept")}.get))
+    decide_, auditing, overlapped = RN.decide, [], []
+
+    def decide(d, node, out, exe=None):
+        overlapped.append(bool(auditing))
+        auditing.append(d)
+        try:
+            return decide_(d, node, out, legs={"sampled-proofs": fake("accept")}.get)
+        finally:
+            auditing.remove(d)
+
+    monkeypatch.setattr(RN, "decide", decide)
     tools = tmp_path / "tools.json"
     tools.write_text("{}")
-    rc = RN.main(["--out", str(tmp_path / "out"), "--tools", str(tools), "--windows", "3", "--start", "5", "--jobs", "2"])
+    rc = RN.main(["--out", str(tmp_path / "out"), "--tools", str(tools), "--windows", "3", "--start", "5"])
     assert rc == 0
+    assert overlapped == [False, False, False]
     reports = [json.loads(x) for x in (tmp_path / "out" / "reports.jsonl").read_text().splitlines()]
-    assert sorted(r["window"] for r in reports) == [5, 6, 7]
+    assert [r["window"] for r in reports] == [5, 6, 7]
     assert all((tmp_path / "out" / f"w{w}" / "report.json").exists() for w in (5, 6, 7))
     m = json.loads((tmp_path / "out" / "monitoring-period.json").read_text())
     assert m["integrity"]["observed"]["windows"] == 3 and m["integrity"]["observed"]["verdict"] == "accept"
@@ -287,6 +296,15 @@ def test_pouw_h1_audits_before_the_legs(tmp_path, monkeypatch):
     assert r["pouw_audit"] == {"rc": 0, "line": {"verdict": "accept", "W": 262144}}
     kept = sorted(f.name for f in (tmp_path / "out").rglob("*") if f.is_file())
     assert "pouw.json" in kept and "rows.bin" not in kept
+
+
+@pytest.mark.parametrize("flag", ["--jobs", "--session-jobs"])
+def test_jobs_and_session_jobs_take_only_one_naming_the_rule(flag, tmp_path, capsys):
+    assert RN.one_window("1") == RN.one_session("1") == 1
+    with pytest.raises(SystemExit):
+        RN.main(["--out", str(tmp_path), "--tools", str(tmp_path / "tools.json"), flag, "2"])
+    err = capsys.readouterr().err
+    assert flag in err and "through the firewall one at a time" in err and "whichever window" in err
 
 
 def _period(units: int, drawn: int, K: int = 24, schedules: int = 4, cells: int = 3, free: int = 1,
@@ -337,7 +355,7 @@ def test_the_network_certifiers_k_is_pooled_once_per_span_with_the_per_window_fi
 @pytest.mark.slow
 def test_the_loop_window_keeps_only_public_files(tmp_path):
     a = Namespace(law="subset:2", cap=8, requests="3", steps=1, tamper={0}, node="test-node", tools={"x": "y"},
-                  pouw=None, delta="1/100", start=0, windows=1, weights=None, session_jobs=4)
+                  pouw=None, delta="1/100", start=0, windows=1, weights=None)
     d, loop = RN.loop_window(0, "test", a, tmp_path / "scratch", tmp_path / "out")
     kept = sorted(f.name for f in (tmp_path / "out" / "window").iterdir())
     assert "registration.json" in kept and "circuit.json" in kept and "period.json" in kept
