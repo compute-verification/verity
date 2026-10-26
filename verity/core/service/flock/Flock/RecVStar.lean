@@ -795,11 +795,43 @@ private def showRead : Option (Option Nat) → String
   | some none => "null"
   | none => "nothing"
 
+/-- **The rows of `rec-acc` a part reads as `acc0` and `acc1`**: each rep's running sums before its first opening and
+after its last (`rec_outer.Chain.rep_ends`, `accReads`' layout). A part of the table's algebra (`.inner`) holds both
+reps, rep `r` at instance `r`: `acc0` reads rows `0` and `n`, `acc1` rows `n` and `2 · n` (`n` openings a rep,
+`rec_vstage.py`'s `reads["acc0"], reads["acc1"]`). A part of R's opening (`.opening`) holds R's one run, after both
+reps': `acc0` reads row `2 · n`, `acc1` row `2 · n + n'` (`n'` R's openings, `rec_residuals.stage_opening`). None at a
+statement that is neither. -/
+def endReads (i : Inner) : VStar.Stmt → V (Option (Array (Option Nat) × Array (Option Nat)))
+  | .inner .. => do
+    let some sch := fast100 i.m | throw s!"the inner session's m {i.m} has no fast100 schedule"
+    let n := opensBelow sch sch.levels.size
+    pure (some (#[some 0, some n], #[some n, some (2 * n)]))
+  | .opening .. => do
+    let some sch := fast100 i.m | throw s!"the inner session's m {i.m} has no fast100 schedule"
+    let some r := i.stacked
+      | throw s!"R's opening: the inner shape names no R (rec-inner: the inner circuit's META's {STACKED_SHAPE_KEY})"
+    let some sr := fast100 r.m | throw s!"R's m {r.m} has no fast100 schedule"
+    let n := opensBelow sch sch.levels.size
+    pure (some (#[some (2 * n)], #[some (2 * n + opensBelow sr sr.levels.size)]))
+  | _ => pure none
+
+/-- **A part's `acc0` and `acc1` read `rec-acc` at its runs' ends** (`endReads`), which neither `checkAcc` (one
+registration, reads aside) nor `checkRows` (the verifier's shared rows, which the prover stages) fixes. -/
+def checkEndReads (i : Inner) (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := do
+  if (accPorts s).isEmpty then return
+  let some (w0, w1) ← endReads i s | return
+  for nm in accPorts s do
+    let some p := registered.find? (·.name == nm)
+      | throw s!"{s.name}: its port {nm} is not a port of the registered reads ({registered.toList.map (·.name)})"
+    let w := if nm == "acc0" then w0 else w1
+    if p.reads != w then
+      throw s!"{s.name}: its port {nm} reads {ACC_VALUE} at {showReads p.reads}, not at its runs' ends {showReads w}"
+
 /-- **A level's `acc` and `acc_out` read `rec-acc` at its openings' rows of the chain** (`accReads`; `OpenKeysS`'
 positions, which `checkAcc`'s one registration leaves open): unit `u`'s `acc` reads its opening's row, its `acc_out` the
-next. -/
+next. At a statement that is no level, its `acc0` and `acc1` read its runs' ends (`checkEndReads`). -/
 def checkAccReads (i : Inner) (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := do
-  let some want ← accReads i s | return
+  let some want ← accReads i s | checkEndReads i s registered
   for (nm, d) in [("acc", 0), ("acc_out", 1)] do
     let some p := registered.find? (·.name == nm)
       | throw s!"{s.name}: its port {nm} is not a port of the registered reads ({registered.toList.map (·.name)})"
