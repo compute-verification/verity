@@ -2,9 +2,9 @@ import Proofs.Flock.Claims.Recursion.RestVerdictDraw
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
 /-!
-# `hrest`'s base checks, at every reader, under the JSON library's specification
+# `hrest`'s base checks, at every reader
 
-`basesHold_spec`: `BasesHold rd` at every reader `rd`, under `Claims.JsonSpec` (which the assembly already takes). It
+`basesHold_spec`: `BasesHold rd` at every reader `rd`, with no JSON premise. It
 reads no witness and no prover: every fact is about `decR` and the statement's setup, so it holds at every decision of
 `nextR`, adversarial files included.
 
@@ -13,8 +13,8 @@ reads no witness and no prover: every fact is about `decR` and the statement's s
 * **Custody** at the reader's record is `custodyRecJ`.
 * **The draw** (`drawTiedS`): at a statement that carries a draw (`parse_innerOk` gives one), the session's `unitDraw`
   is the statement's draw, which is not `null`. At several tables the setup sets it (`setupTables_spec`). At one table
-  it is the public file's parsed header's `unit_draw`, which the setup put the draw into (`HmRow.drawn`), read back
-  where the parsed header is a well-formed object (`JsonSpec.parse_wf`, at `unitDraw_of`); the header's draw decodes
+  it is the public file's parsed header's `unit_draw`, which the setup put the draw into (`HmRow.drawn`), which the
+  loaded header keeps as an object (`loadPublic_header`, at `unitDraw_of`); the header's draw decodes
   (`setupOne_stmt`), so it is not `null`.
 
 `DrawTied` asks the tie at statements without a draw too, where at one table the header may carry any `unit_draw`;
@@ -30,7 +30,7 @@ open FlockDeploy (setupOf drawEq)
 open private setupOne_stmt unitDraw_of from Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
 /-- **At a statement that carries a draw, the session's draw is it**, not `null`, at any number of tables. -/
-theorem unitDraw_of_setup (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {x : Claims.Msg} {s : FlockDeploy.Ins}
+theorem unitDraw_of_setup {x : Claims.Msg} {s : FlockDeploy.Ins}
     {spec : SessionSpec} {sts : Array Flock.Stmt} (hx : setupOf false x = some (s, spec, sts))
     (hq : s.read.check = .ok ()) {d : Json} (hdr : s.read.draw = some d) :
     spec.unitDraw = some d ∧ d ≠ Json.null := by
@@ -47,7 +47,7 @@ theorem unitDraw_of_setup (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
   · have h1 : sts.size = 1 := by omega
     rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny h with ⟨-, st, hst, hspec, hsts⟩ | ⟨hc, hsz', -⟩
     · obtain ⟨⟨c, pop, hl, hd⟩, hinst, -, -⟩ := setupOne_stmt hst
-      have hu := unitDraw_of S hl (hd d hdr)
+      have hu := unitDraw_of hl (hd d hdr)
       obtain ⟨u, hu', -⟩ := hinst d hu
       refine ⟨?_, ofJson_obj hu'⟩
       rw [hspec]
@@ -72,11 +72,11 @@ def DrawTiedS : Prop :=
   ∀ (x : Msg) (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt), setupOf false x = some (s, spec, sts) →
     s.read.check = .ok () → s.read.draw.isSome = true → drawEq (drawOfU spec.unitDraw) s.read.draw = true
 
-/-- **`DrawTiedS` holds** under the JSON library's specification. -/
-theorem drawTiedS (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) : DrawTiedS := by
+/-- **`DrawTiedS` holds.** -/
+theorem drawTiedS : DrawTiedS := by
   intro x s spec sts hx hq hn
   obtain ⟨d, hdr⟩ := Option.isSome_iff_exists.1 hn
-  obtain ⟨hU, hnull⟩ := FlockComplete.ZkTables.unitDraw_of_setup S hx hq hdr
+  obtain ⟨hU, hnull⟩ := FlockComplete.ZkTables.unitDraw_of_setup hx hq hdr
   have hnn := (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some hx).1 hdr).1
   have e : drawOfU (some d) = some d := by
     cases d with
@@ -119,10 +119,10 @@ theorem decStmt (rd : Msg → Option FinalP) : DecStmt rd := fun _ _ _ _ h => Fl
 /-- **The reading refuses proofs not shaped for their files** (`decR_shaped`). -/
 theorem decShaped (rd : Msg → Option FinalP) : DecShaped rd := fun _ _ _ _ h => FlockDeploy.decR_shaped h
 
-/-- **`hrest`'s base checks hold at every reader**, under the JSON library's specification: at the inner statement of
+/-- **`hrest`'s base checks hold at every reader**: at the inner statement of
 every compiled statement the outer reader parses, on as many coins as messages, each of the verdict's other checks
 holds, whatever the messages. -/
-theorem basesHold_spec (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (rd : Msg → Option FinalP) :
+theorem basesHold_spec (rd : Msg → Option FinalP) :
     BasesHold rd := by
   intro x st hx b hb as cs hlen
   have hck : ∀ s spec sts, setupOf false (xIOf x) = some (s, spec, sts) →
@@ -137,7 +137,7 @@ theorem basesHold_spec (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (r
   · exact holdsR_setup rd _ as cs
   · exact holdsR_shaped rd _ as cs (decShaped rd _ as cs)
   · exact holdsR_names rd _ as cs fun s spec sts h => (hck s spec sts h).1
-  · exact holdsR_afterS rd _ as cs hlen hck (drawTiedS S) (custodyRecJ rd)
+  · exact holdsR_afterS rd _ as cs hlen hck drawTiedS (custodyRecJ rd)
 
 end
 
