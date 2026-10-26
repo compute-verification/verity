@@ -6,8 +6,8 @@ import RemoteAudit.Plan
 # Receipts, seeds and the receipt tree: `receipts.py`, and `audit.py`'s chain over appends
 
 ~~~text
-seed_(t,i)    SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ chained(root_(t,i−1), head))
-chained       root itself without appends (head none), else SHA512(CHAINED_DOMAIN ‖ root ‖ head)
+seed_n        the session's pass coin n, 64 bytes, the challenger's live coin released after root n − 1 (R before
+              any): receipt format seed/v1 (`SEED_FORMAT`); seed/v0's Fiat–Shamir seeds are refused by name
 head          SHA512(APPENDS_DOMAIN ‖ head_before (64 zero bytes for none) ‖ u64be first ‖ u64be count ‖ root)
 y_(i,p)       sketch-sha512: SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed)) ‖ u64be j ‖ σ_(i,j));
               block-sha512: SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed)) ‖ u64be j ‖ E_j)
@@ -25,26 +25,29 @@ receipt is computed (`Registration.make?`).
 
 namespace RemoteAudit
 
-def SEED_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/seed/v0"
 def RECEIPT_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/receipt/v0"
 def SKETCH_RECEIPT_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/sketch-receipt/v0"
 def SIGN_DOMAIN : String := "verity/remote-bandwidth/sketch-signs/v0"
 def TREE_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/receipt-tree/v0"
 def APPENDS_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/appends/v0"
-def CHAINED_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/chained/v0"
 def SCHEMA : String := "hm96-sha512/row/v2"
 def PER_LEAF : Nat := 16
 def SALT_BYTES : Nat := 192
 def DIGEST_BYTES : Nat := 64
+/-- `coins.SEED_BYTES`: a pass's seed, its pass coin whole. -/
+def SEED_BYTES : Nat := 64
 
-/-- `receipts.seed(challenge, i, previous)`. -/
-def seed (challenge : ByteArray) (i : Nat) (previous : ByteArray) : ByteArray :=
-  sha512 (SEED_DOMAIN ++ challenge ++ be 4 i ++ previous)
+/-- `receipts.SEED`: the receipt format whose pass seeds are live coins. -/
+def SEED_FORMAT : String := "verity/remote-bandwidth/seed/v1"
+/-- `receipts.SEED_V0`: the format whose pass seeds were Fiat–Shamir, derived from the prover's previous root. -/
+def SEED_V0 : String := "verity/remote-bandwidth/seed/v0"
 
-/-- `audit.chained(previous, head)`. -/
-def chained (previous : ByteArray) : Option ByteArray → ByteArray
-  | none => previous
-  | some head => sha512 (CHAINED_DOMAIN ++ previous ++ head)
+/-- `receipts.seed_format(name)`: `SEED_FORMAT`, or why not, `seed/v0` refused by name. -/
+def seedFormat (name : String) : Except String Unit :=
+  if name == SEED_V0 then
+    .error s!"{SEED_V0} is refused: its pass seeds are Fiat–Shamir, SHA-512 of the prover's previous root, which the prover can grind; {SEED_FORMAT} takes each pass's seed as a live coin"
+  else if name == SEED_FORMAT then .ok ()
+  else .error s!"the receipt format is {SEED_FORMAT}, not {name}"
 
 /-- `audit.append_head(head, first, count, root)`. -/
 def appendHead (head : Option ByteArray) (first count : Nat) (root : ByteArray) : ByteArray :=

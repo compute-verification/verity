@@ -23,18 +23,20 @@ difftest's `session` reads one, `Difftest.eventOf`):
 * `{"op": "register", "node", "blocks", "payload_root", "codec", "receipt", "bind", "rows", "layout", "nonce"}`:
   `Registry.register`'s draw, `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node with none live
   whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
-* `{"op": "session", "node", "params", "coins", "append_coins", "not_before_ns", "index"}`: the next session over the
-  node's live registration drawn here (`Registry.session`), `{"session": k}`, or `{"refused": true}`, its windows in
-  flight and the windows a draw's openings coin covers (`groups_per_coin` g, `Shared`) its parameters', and an error
-  at one window in flight with g above 1, which no property covers (`Flight`); `coins` `null` takes its W + ⌈W/g⌉
-  live, each with the event that releases it (`event`'s `coin`);
+* `{"op": "session", "node", "params", "coins", "append_coins", "pass_coins", "not_before_ns", "index"}`: the next
+  session over the node's live registration drawn here (`Registry.session`), `{"session": k}`, or `{"refused": true}`,
+  its windows in flight and the windows a draw's openings coin covers (`groups_per_coin` g, `Shared`) its
+  parameters', and an error at one window in flight with g above 1, which no property covers (`Flight`); `coins`
+  `null` takes its W + ⌈W/g⌉ live, and `pass_coins` `null` its pass coins, each with the event that releases it
+  (`event`'s `coin`);
 * `{"op": "event", "node", "session", "event", "coin"}`: one event through session k at its windows in flight and its
   g (`eventOn`, refused as `Registry.step` refuses a session it isn't running), its result as the difftest writes it
   (`Difftest.resultJ`); `coin` (or `null`) is the coin the challenger released for the event,
   set first (`withCoin`): a start's or a boundary's the challenge of the window it releases, a close's window t's
   draw's openings coin, `W + t / g`, which only the draw's last window's close releases, an append's pushed onto the
-  session's append coins. A coin set is never replaced by another, and an event that releases a challenge or draws a
-  window's openings from a coin never set is an error (`unset`);
+  session's append coins, and a seed's the next pass's coin, 64 bytes, its seed. A coin set is never replaced by
+  another, and an event that releases a challenge or draws a window's openings from a coin never set is an error
+  (`unset`); a seed with no coin set is rejected `coin`, as the session rejects one past its pass coins;
 * `{"op": "openings", "node", "session", "t", "bytes": n}` and then n bytes: one frame of window t's openings as the
   wire carries them (`Wire.decodeOpenings`), kept until the window is verified;
 * `{"op": "verify", "node", "session", "t", "id"}`: window t's openings, every frame in the order it came, checked on
@@ -126,8 +128,16 @@ private def runOf (r : Registry) (node : ByteArray) (k : Nat) : Option Registry.
   (r.live.find? (·.node == node)).bind (·.sessions[k]?)
 
 /-- Session `s`, drawn `g` windows a coin, with the coin `c` the challenger released for event `e` (module docstring),
-or why not: a close's is its draw's openings coin, `W + t / g`, and only the draw's last window's close releases it. -/
+or why not: a close's is its draw's openings coin, `W + t / g`, and only the draw's last window's close releases it; a
+seed's is the next pass's, at the pass coins released so far. -/
 def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) : Except String Session.State := do
+  if let .seed := e then
+    if c.size ≠ SEED_BYTES then throw "a pass's coin is 64 bytes"
+    match s.passCoins[s.passDrawn]? with
+    | none => return { s with passCoins := s.passCoins.push c }
+    | some x =>
+      if x == c then return s
+      throw s!"pass coin {s.passDrawn} is released once: the challenger sent another"
   if c.size ≠ Codec.COIN_BYTES then throw "a coin is 32 bytes"
   let set (i : Nat) : Except String Session.State :=
     match s.coins[i]? with
@@ -145,7 +155,7 @@ def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) :
       throw s!"window {t} is not its draw's last: only that window's close releases the draw's openings coin"
     else set (s.params.windows + t.toNat / g)
   | .append .. => pure { s with appendCoins := s.appendCoins.push c }
-  | _ => throw "only a start, a boundary, a close or an append releases a coin"
+  | _ => throw "only a start, a boundary, a close, an append or a seed releases a coin"
 
 /-- Why event `e`'s result `res` read a coin of `s`, the session after it, drawn `g` windows a coin, that the
 challenger never sent; none when it read none. -/
@@ -224,26 +234,33 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     pure (out, { srv with registry := r })
   | "session" =>
     let node ← ofV (bytesOf req "node")
-    let live := match (← ofV (J.get req "coins" "request")) with
-      | .null => true
-      | _ => false
+    let isNull (k : String) : ExceptT String IO Bool := do
+      match ← ofV (J.get req k "request") with
+      | .null => pure true
+      | _ => pure false
+    let live ← isNull "coins"
+    let livePasses ← isNull "pass_coins"
     let zero := Json.str (hexOf (ByteArray.mk (Array.replicate Codec.COIN_BYTES 0)))
     let g ← ofV (Difftest.perCoinOf req)
     let req ← if live then do
         let w ← ofV (J.nat (← ofV (J.get req "params" "request")) "windows" "params")
         pure (req.setObjVal! "coins" (.arr (Array.replicate (w + (w + g - 1) / g) zero)))
       else pure req
-    let (params, coins, appendCoins, notBeforeNs) ← ofV (Difftest.sessionOf req)
+    let req := if livePasses then
+        req.setObjVal! "pass_coins" (.arr #[.str (hexOf (ByteArray.mk (Array.replicate SEED_BYTES 0)))])
+      else req
+    let (params, coins, appendCoins, passCoins, notBeforeNs) ← ofV (Difftest.sessionOf req)
     let f ← ofV (Difftest.flightOf req)
     if f == 1 && g != 1 then
       throwThe String ("at one window in flight the verifier draws a window an openings coin: groups_per_coin is 1 "
         ++ "(no property covers one in flight at more)")
     let coins := if live then Array.replicate coins.size ByteArray.empty else coins
+    let passCoins := if livePasses then #[] else passCoins
     let index ← match ← ofV (J.get req "index" "request") with
       | .null => pure none
       | v => some <$> ofV (J.asInt v "index")
     let some reg := (srv.registry.live.find? (·.node == node)).bind (·.drawn) | pure (refusedJ, srv)
-    match srv.registry.session reg params coins appendCoins notBeforeNs index f g with
+    match srv.registry.session reg params coins appendCoins passCoins notBeforeNs index f g with
     | some (k, r) => pure (Json.mkObj [("session", toJson k)], { srv with registry := r })
     | none => pure (refusedJ, srv)
   | "event" =>

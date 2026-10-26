@@ -91,14 +91,14 @@ def register (r : Registry) (source node : ByteArray) (blocks : Nat) (payloadRoo
 /-- The next session over the node's live registration, `Session.State.init` on its parameters and coins, as its k-th
 (`index`, if given, must be k), at `inFlight` windows in flight (`Flight`) and `perCoin` windows a draw's openings coin
 (`Shared`); refused for a registration that isn't its node's live one, drawn here. -/
-def session (r : Registry) (reg : Registration) (params : Session.Params) (coins appendCoins : Array ByteArray)
+def session (r : Registry) (reg : Registration) (params : Session.Params) (coins appendCoins passCoins : Array ByteArray)
     (notBeforeNs : Nat) (index : Option Int) (inFlight : Nat := 2) (perCoin : Nat := 1) : Option (Nat × Registry) := do
   let x ← r.live.find? (·.node == reg.node)
   let drawn ← x.drawn
   guard (drawn.digest == reg.digest)
   let k := x.sessions.size
   if let some i := index then guard (i = k)
-  let s := Session.State.init params reg coins appendCoins notBeforeNs
+  let s := Session.State.init params reg coins appendCoins passCoins notBeforeNs
   pure (k, r.withLive reg.node ({ · with sessions := x.sessions.push (.running s inFlight perCoin) }))
 
 /-- One event through session `k` of the node's live registration (`Flight.step` at its windows in flight and its

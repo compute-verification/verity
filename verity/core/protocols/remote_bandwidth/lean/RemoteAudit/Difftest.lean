@@ -111,6 +111,7 @@ def eventOf (j : Json) : V Session.Event := do
   | "verify" =>
     if J.has j "frames" then pure (.verify (← int j "t") (Wire.openingsOf (← hexes j "frames")))
     else pure (.verify (← int j "t") (← (← J.arr j "openings" "event").mapM openingOf))
+  | "seed" => pure .seed
   | k => throw s!"no event kind {k}"
 
 def resultJ : Session.Result → Json
@@ -122,6 +123,7 @@ def resultJ : Session.Result → Json
   | .ok => Json.mkObj [("ok", .bool true)]
   | .drew ds => Json.mkObj [("draws", .arr (ds.map pairJ))]
   | .accepted t => Json.mkObj [("accepted", toJson t)]
+  | .seeded coin => Json.mkObj [("seed", hexJ coin)]
 
 /-- The record `Session.record` makes; its pace names `in_flight` only at one window in flight (`Flight`). -/
 def summaryJ (registration : ByteArray) (x : Session.Summary) (inFlight : Nat := 2) : Json :=
@@ -157,14 +159,19 @@ def flightOf (j : Json) : V Nat := do
       let f ← J.nat q "in_flight" "pace"
       if f == 1 || f == 2 then pure f else throw "a pace's in_flight is 1 or 2"
 
-/-- A session's `{"params", "coins", "append_coins", "not_before_ns"}`. The parameters name whether the prover defers
+/-- A session's `{"params", "coins", "append_coins", "pass_coins", "not_before_ns"}`. The parameters name the receipt
+format (`seed`, `seedFormat`: `seed/v1`, whose pass seeds are live coins; `seed/v0`, or parameters that name none,
+which were written before the format was named, refused by name); whether the prover defers
 an appended block's residency to its encode (`deferred`), which `audit.Params` refuses at a lifetime of one window: a
 block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1; its pace (`null`, or
 `{"k", "window_ns"}`, with `"in_flight"` if it names it, `flightOf`), which `audit.Params` takes only with at least
 two windows; and, if they name it, the windows a draw's openings coin covers (`groups_per_coin`, `perCoinOf`,
-`Shared.run`). The coins are W challenges and ⌈W/g⌉ openings coins. -/
-def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArray × Nat) := do
+`Shared.run`). The coins are W challenges and ⌈W/g⌉ openings coins; the pass coins, 64 bytes each, are those the
+challenger released, in order, one or more (`coins.families` reserves at least one), and the session releases no more
+(`Session.seed`'s `coin`). -/
+def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArray × Array ByteArray × Nat) := do
   let p ← J.get j "params" "input"
+  seedFormat (← if J.has p "seed" then J.str p "seed" "params" else pure SEED_V0)
   let pace ← match ← J.get p "pace" "params" with
     | .null => pure none
     | q => do pure (some ({ k := ← positive q "k", windowNs := ← positive q "window_ns" } : Session.Pace))
@@ -187,7 +194,9 @@ def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArr
     throw "W + ⌈W/g⌉ coins of 32 bytes"
   let appendCoins ← hexes j "append_coins"
   if appendCoins.any (·.size ≠ Codec.COIN_BYTES) then throw "append coins are 32 bytes"
-  pure (params, coins, appendCoins, ← nat j "not_before_ns")
+  let passCoins ← hexes j "pass_coins"
+  if passCoins.isEmpty || passCoins.any (·.size ≠ SEED_BYTES) then throw "one or more pass coins of 64 bytes"
+  pure (params, coins, appendCoins, passCoins, ← nat j "not_before_ns")
 
 /-- The record of a session at `inFlight` windows in flight and `perCoin` windows a coin: `summaryJ`'s, naming
 `groups_per_coin` when it isn't 1. -/
@@ -196,15 +205,16 @@ def recordJ (registration : ByteArray) (x : Session.Summary) (inFlight perCoin :
   else (summaryJ registration x inFlight).setObjVal! "groups_per_coin" (toJson perCoin)
 
 /-- A session's events through the verifier: `{"registration", "params", "not_before_ns", "coins", "append_coins",
-"events"}` to every event's result, the outcome and the record (`recordJ`), which names `groups_per_coin` when it isn't
-1 and its pace `in_flight` at 1 (`Flight.run f g`: `Shared.run g` at f = 2, which is `Session.run` at g = 1). -/
+"pass_coins", "events"}` to every event's result, the outcome and the record (`recordJ`), which names
+`groups_per_coin` when it isn't 1 and its pace `in_flight` at 1 (`Flight.run f g`: `Shared.run g` at f = 2, which is
+`Session.run` at g = 1). -/
 def sessionFn (j : Json) : V Json := do
   let reg ← registrationOf (← J.get j "registration" "input")
-  let (params, coins, appendCoins, notBeforeNs) ← sessionOf j
+  let (params, coins, appendCoins, passCoins, notBeforeNs) ← sessionOf j
   let g ← perCoinOf j
   let f ← flightOf j
   let events ← (← J.arr j "events" "input").mapM eventOf
-  let (results, s) ← Flight.run f g (Session.State.init params reg coins appendCoins notBeforeNs) events
+  let (results, s) ← Flight.run f g (Session.State.init params reg coins appendCoins passCoins notBeforeNs) events
   let record := match s.summary with
     | some x => recordJ s.digest x f g
     | none => .null
@@ -226,8 +236,8 @@ those drawn, or as one given in full. -/
 inductive Op
   | register (node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec) (receipt : Kind)
       (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray)
-  | session (registration : Nat ⊕ Registration) (params : Session.Params) (coins appendCoins : Array ByteArray)
-      (notBeforeNs : Nat) (index : Option Int) (inFlight perCoin : Nat)
+  | session (registration : Nat ⊕ Registration) (params : Session.Params)
+      (coins appendCoins passCoins : Array ByteArray) (notBeforeNs : Nat) (index : Option Int) (inFlight perCoin : Nat)
   | event (node : ByteArray) (k : Nat) (e : Session.Event)
   | close (node : ByteArray)
   | live (node : ByteArray)
@@ -244,11 +254,11 @@ def opOf (j : Json) : V Op := do
     let which ← match ← J.get j "registration" "op" with
       | .num n => .inl <$> J.asNat (.num n) "registration"
       | v => .inr <$> registrationOf v
-    let (params, coins, appendCoins, notBeforeNs) ← sessionOf j
+    let (params, coins, appendCoins, passCoins, notBeforeNs) ← sessionOf j
     let index ← match ← J.get j "index" "op" with
       | .null => pure none
       | v => some <$> J.asInt v "index"
-    pure (.session which params coins appendCoins notBeforeNs index (← flightOf j) (← perCoinOf j))
+    pure (.session which params coins appendCoins passCoins notBeforeNs index (← flightOf j) (← perCoinOf j))
   | "event" => pure (.event (← hex j "node") (← nat j "session") (← eventOf (← J.get j "event" "op")))
   | "close" => pure (.close (← hex j "node"))
   | "live" => pure (.live (← hex j "node"))
@@ -278,13 +288,13 @@ def registryFn (j : Json) : V Json := do
         drawn := drawn.push reg
         out := out.push (Json.mkObj [("codec_seed", hexJ reg.codecSeed), ("digest", hexJ reg.digest)])
       | none => out := out.push refusedJ
-    | .session which params coins appendCoins notBeforeNs index f g =>
+    | .session which params coins appendCoins passCoins notBeforeNs index f g =>
       let reg ← match which with
         | .inl i => match drawn[i]? with
           | some reg => pure reg
           | none => throw s!"no registration drawn at {i}"
         | .inr reg => pure reg
-      match r.session reg params coins appendCoins notBeforeNs index f g with
+      match r.session reg params coins appendCoins passCoins notBeforeNs index f g with
       | some (k, r') =>
         r := r'
         out := out.push (Json.mkObj [("session", toJson k)])
@@ -624,7 +634,7 @@ def lineRecordFn (j : Json) : V Json := do
   let x ← J.get j "session" "input"
   let g ← perCoinOf x
   let reg ← registrationOf (← J.get x "registration" "session")
-  let (params, coins, appendCoins, notBeforeNs) ← sessionOf x
+  let (params, coins, appendCoins, passCoins, notBeforeNs) ← sessionOf x
   match ← J.get (← J.get x "params" "session") "pace" "params" with
   | .null => pure ()
   | q =>
@@ -632,7 +642,7 @@ def lineRecordFn (j : Json) : V Json := do
       if (← J.nat q "in_flight" "pace") != 2 then throw "a line's session has two windows in flight (in_flight 2)"
   if samples ≠ params.samples then throw s!"samples: the session's {params.samples}, not {samples}"
   let events ← (← J.arr x "events" "session").mapM eventOf
-  let ran := Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events
+  let ran := Shared.run g (Session.State.init params reg coins appendCoins passCoins notBeforeNs) events
   if J.has j "record" then
     let given ← J.get j "record" "input"
     let made := match ran with

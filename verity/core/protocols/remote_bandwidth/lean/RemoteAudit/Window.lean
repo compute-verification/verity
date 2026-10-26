@@ -5,7 +5,7 @@ import RemoteAudit.Receipts
 # A window's receipt checks: `audit.py`'s `Session.close` draw and `Session.verify`
 
 `verifyWindow` takes what the verifier holds of window t once its roots are final (its challenge, each pass's root,
-plan and the appends' head received before it, the root before its first pass, the session's appends with their coins)
+plan and seed, the live pass coin released before the root, and the session's appends with their coins)
 and its openings coin, draws `s` distinct receipts uniformly from the window's `U_t = Σ_i L_i`, and checks the prover's
 openings of them, in the order drawn. Each opening, in `_check`'s order, fails with the first of:
 
@@ -108,28 +108,22 @@ deriving Inhabited
 def appendDomain (registration : ByteArray) (first count : Nat) : FrameV3.Domain :=
   FrameV3.Domain.make (sha512 (APPEND_DOMAIN ++ registration)) 0 first count
 
-/-- A pass of a window as the verifier received it: its root, its plan, and the chain over the appends received before
-it (`none` without one). -/
+/-- A pass of a window as the verifier received it: its root, its plan, and its seed, the pass coin the challenger
+released for it before its root arrived (`Session.seed`). -/
 structure PassRecord where
   root : ByteArray
   plan : Plan
-  head : Option ByteArray
+  seed : ByteArray
 deriving Inhabited
 
 /-- Window t as the verifier holds it once its roots are final. -/
 structure WindowRecord where
   index : Nat
   challenge : ByteArray
-  /-- The root before the window's first pass: the previous window's last, or the registration's digest. -/
-  previous : ByteArray
   passes : Array PassRecord
 
-/-- `Session._previous(t, i)`: the root before pass i, chained to the appends received before pass i's root. -/
-def WindowRecord.previousOf (w : WindowRecord) (i : Nat) : ByteArray :=
-  chained (if i = 0 then w.previous else w.passes[i - 1]!.root) w.passes[i]!.head
-
-/-- Pass i's seed. -/
-def WindowRecord.seedOf (w : WindowRecord) (i : Nat) : ByteArray := seed w.challenge i (w.previousOf i)
+/-- Pass i's seed: its live pass coin (`_Window.seeds[i]`). -/
+def WindowRecord.seedOf (w : WindowRecord) (i : Nat) : ByteArray := w.passes[i]!.seed
 
 /-- Receipt (i, p) of a window opened (`audit.Opening`). Indices arrive as integers. -/
 structure Opening where

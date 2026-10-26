@@ -5,16 +5,21 @@ import RemoteAudit.Window
 
 The verifier's side of one session as a state machine over the events it sees, on its own clock (each event carries the
 clock's reading where `Session` reads it) and with its own coins (the 2W committed coins, window t's challenge at t and
-its openings coin at W + t, and the append coins in the order drawn). Each event gives what the Python call returns:
+its openings coin at W + t, the append coins in the order drawn, and the pass coins in the order released). Each event
+gives what the Python call returns:
 
 * `start`, `boundary`: the coin released (`none` at the close after the last window);
+* `seed`: the next pass's coin, its seed, released after the last root received: refused while a coin is out or once
+  the last window's roots are final; rejected `coin` once the pass coins are all released;
 * `append(root, count)`: the first index and its coin `c_a`; rejected `append` if malformed or past the codec's
-  `max_blocks`, `coin` if its root was sent before or the last window's roots are final;
+  `max_blocks`, `order` while a pass's coin is out (no block appended after a pass's seed left is in its plan), `coin`
+  if its root was sent before or the last window's roots are final;
 * `release(runs, withdrawn)`: rejected `release` unless the runs are a canonical plan of the store with none released
   before, and `withdrawn` is empty or a canonical plan of appended blocks inside the runs that no plan received before
   held (memory-map/v1's withdrawn blocks, released before their encode landed);
-* `receive(t, i, root, plan, step)`: rejected `malformed` (a root not 64 bytes), `order` (not the next root, a window
-  already final, or past a paced window's k roots), `late` (past `D_t = b_t + A`), `step` (missing, not above the previous pass's, or 2^64 or more), `plan`
+* `receive(t, i, root, plan, step)`: the pass under the coin out; rejected `malformed` (a root not 64 bytes), `order`
+  (no coin out, a window whose challenge left after the coin, not the next root, a window already final, or past a
+  paced window's k roots), `late` (past `D_t = b_t + A`), `step` (missing, not above the previous pass's, or 2^64 or more), `plan`
   (not a canonical plan of the store so far, whole, as runs or as a change of the previous pass's, one holding a
   released block, or one that would take its window's receipts to `RECEIPT_LIMIT`, 2^64), `lifetime` (an appended block that joined a window L or more before);
 * `close(t)`: the window's draws, once its roots are final (the next window's first root, `D_t` passed, or a paced
@@ -53,6 +58,7 @@ structure Win where
   challenge : ByteArray
   releasedNs : Nat
   roots : Array ByteArray := #[]
+  seeds : Array ByteArray := #[]
   plans : Array Plan := #[]
   post : Array Nat := #[]
   steps : Array Nat := #[]
@@ -94,6 +100,10 @@ structure State where
   planned : Array (Nat × Nat) := #[]
   plan : Plan
   step : Int := -1
+  passCoins : Array ByteArray
+  passDrawn : Nat := 0
+  /-- The pass coin out, `_seeded`: the window open at its release and the seed, until its root arrives. -/
+  seeded : Option (Nat × ByteArray) := none
 
 inductive Event
   | start (now : Nat)
@@ -104,6 +114,7 @@ inductive Event
       (change : Option (Array (Int × Int) × Array (Int × Int))) (step : Option Int) (now : Nat)
   | close (t : Int) (now : Nat)
   | verify (t : Int) (openings : Array Opening)
+  | seed
 
 inductive Result
   | refused (why : String)
@@ -113,11 +124,13 @@ inductive Result
   | ok
   | drew (draws : Array (Nat × Nat))
   | accepted (window : Nat)
+  | seeded (coin : ByteArray)
 
-/-- A session before its first event: `Session.__init__` on parameters and coins already checked. -/
-def State.init (params : Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat) :
-    State :=
-  { params, reg, digest := reg.digest, coins, appendCoins, notBeforeNs, extent := reg.blocks,
+/-- A session before its first event: `Session.__init__` on parameters and coins already checked, the pass coins
+`passCoins` among them. -/
+def State.init (params : Params) (reg : Registration) (coins appendCoins passCoins : Array ByteArray)
+    (notBeforeNs : Nat) : State :=
+  { params, reg, digest := reg.digest, coins, appendCoins, passCoins, notBeforeNs, extent := reg.blocks,
     plan := Plan.whole reg.blocks }
 
 def State.fail (s : State) (t : Nat) (f : Failure) (at? : Option (Nat × Nat) := none) : Result × State :=
@@ -142,8 +155,7 @@ def State.staleBelow (s : State) (t : Nat) : Nat :=
 def State.record (s : State) (t : Nat) : WindowRecord :=
   let w := s.windows[t]!
   { index := t, challenge := w.challenge,
-    previous := if t > 0 then s.windows[t - 1]!.roots.back?.getD ByteArray.empty else s.digest,
-    passes := (Array.range w.roots.size).map fun i => ⟨w.roots[i]!, w.plans[i]!, w.heads[i]!⟩ }
+    passes := (Array.range w.roots.size).map fun i => ⟨w.roots[i]!, w.plans[i]!, w.seeds[i]!⟩ }
 
 private def live (s : State) : Option Result :=
   s.failed.map fun f => .refused s!"the session ended: window {f.window} was rejected ({f.failure.name})"
@@ -162,10 +174,21 @@ def boundary (s : State) (now : Nat) : Result × State := Id.run do
   if t + 1 < s.params.windows then return (.released (some (t + 1)), s.releaseCoin (t + 1) now)
   return (.released none, s)
 
+/-- `Session.seed`: the next pass coin, released after the last root received, of the window open now. -/
+def seed (s : State) : Result × State := Id.run do
+  if let some r := live s then return (r, s)
+  if s.windows.isEmpty then return (.refused "the session has not started", s)
+  if s.seeded.isSome then return (.refused "a pass's coin is out: its root comes before the next coin", s)
+  if s.windows.size == s.params.windows && (s.windows.back?.map (·.final)).getD false then
+    return (.refused "the last window's roots are final", s)
+  let some coin := s.passCoins[s.passDrawn]? | return s.fail s.filling .coin
+  return (.seeded coin, { s with passDrawn := s.passDrawn + 1, seeded := some (s.windows.size - 1, coin) })
+
 def append (s : State) (root : ByteArray) (count : Int) : Except String (Result × State) := do
   if let some r := live s then return (r, s)
   if root.size ≠ DIGEST_BYTES || count < 1 || s.extent + count.toNat > s.reg.codec.maxBlocks then
     return s.fail s.filling .append
+  if s.seeded.isSome then return s.fail s.filling .order
   if s.appends.any (·.root == root) || (s.windows.size == s.params.windows && (s.windows.back?.map (·.final)).getD false)
   then return s.fail s.filling .coin
   let some coin := s.appendCoins[s.appendDrawn]? | throw "the append coins ran out"
@@ -218,6 +241,8 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
   if let some r := live s then return (r, s)
   if s.windows.isEmpty then return (.refused "the session has not started", s)
   if root.size ≠ DIGEST_BYTES then return s.fail s.filling .malformed
+  let some (u, sd) := s.seeded | return s.fail s.filling .order
+  if t > (u : Int) then return s.fail s.filling .order
   let mut s := s
   if t == s.filling + 1 && i == 0 && t < s.windows.size then
     s := { s with windows := s.windows.modify s.filling ({· with final := true}), filling := t.toNat }
@@ -247,13 +272,14 @@ def receive (s : State) (t i : Int) (root : ByteArray) (runs : Option (Array (In
   let add := fun (w : Win) =>
     { w with
       roots := w.roots.push root
+      seeds := w.seeds.push sd
       plans := w.plans.push plan
       post := w.post.push post
       steps := w.steps.push st.toNat
       heads := w.heads.push head
       stale := w.stale.push below
       arrived := w.arrived.push now }
-  s := { s with windows := s.windows.modify t add, plan, step := st,
+  s := { s with windows := s.windows.modify t add, plan, step := st, seeded := none,
                 planned := cover (s.planned ++ plan.runs.filterMap fun (f, c) =>
                   if f + c > N then some (max f N, f + c) else none) }
   return (.ok, s)
@@ -322,6 +348,7 @@ def step (s : State) : Event → Except String (Result × State)
   | .receive t i root runs change st now => pure (receive s t i root runs change st now)
   | .close t now => close s t now
   | .verify t openings => pure (verify s t openings)
+  | .seed => pure (seed s)
 
 /-- Every event's result, in order, and the session after them. -/
 def run (s : State) (events : Array Event) : Except String (Array Result × State) :=
