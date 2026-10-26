@@ -96,4 +96,6 @@ def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     kept, held_kept, out = n2.public_pieces(scan, blobs, held, b"g 1 2\n" + bytes(16).hex().encode() + b"\n" + head)
     assert out == sorted(x.hex() for x in every & {bytes(16), head})
     assert set(kept.values()) == every - {bytes(16), head} and len(kept) == len(set(kept.values()))
-    assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} and held_kept
+    tails = {f"{k} @{len(blobs[k]) - len(blobs[k]) % 16}" for k in held if len(blobs[k]) % 16}
+    assert tails and tails <= set(kept)  # a zero-padded tail is scanned for, but no instance file holds it as it is
+    assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} - tails and held_kept
