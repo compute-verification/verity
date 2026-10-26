@@ -73,7 +73,7 @@ that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check 
 | the same, full traffic (`--requests 100 --tokens 16`) | c20261026T034045Z-6cd9 | r20261026-034055-bbee (:18100) | accepted |
 | N2 on 2982 | r20261025-231253-ebf6, r20261025-231301-6b61, r20261025-231310-20da | | accepted |
 | the scan on d951 | r20261026-011909-f489 | | accepted: honest 64 of 64, forged refused |
-| the scan on 6cd9 | r20261026-035637-a739 | | running |
+| the scan on 6cd9 | r20261026-035637-a739 | | accepted: honest 64 of 64, forged refused |
 
 - The network certifier leg ran `certifier-rehearse`: 100 varied requests of up to 64 tokens, 49 windows, the advice
   profile and an LMS key of H = 20. It is stored as art:fc8d4f61ebb0a45ecd47456d818bebcfeb0723ab1a8f00dd98f7983064eed76b.
@@ -140,8 +140,24 @@ and is labelled `do-not-cite`.
 - `chain_record.py report` over the certificates, the endpoint, N2 on 2982 and this scan: accepted. Every negative is
   refused, or escaped N2's draw within its bound.
 - d951 is light traffic: 40 requests of at most 16 tokens over 43 link-windows. Full traffic is run 6cd9 on vllm's
-  endpoint with `finalize` off the engine loop, r20261026-034055-bbee (:18100, 1a3ffe4a88), accepted; its scan,
-  r20261026-035637-a739, is running. bbee replaced r20261026-021253-83ee, which stopped with n1's 03:30Z restart.
+  endpoint with `finalize` off the engine loop, r20261026-034055-bbee (:18100, 1a3ffe4a88). bbee replaced
+  r20261026-021253-83ee, which stopped with n1's 03:30Z restart.
+
+**The scan on 6cd9** (r20261026-035637-a739, one 8-core n1 slot, the gate's coins in challenger session
+s20261026T040447Z-ffd7) is the record's scan at full traffic. Its run record has no gate run's witness, and is stored
+as art:832cc424a984fc015958d5758350f03978d7e0c792d2b8462cceddaec9a988ff.
+- Its sampling block is link-window 0, with the same 64 units of the same two subcircuits as on d951.
+- Honest: 64 of 64 units drawn on the gate's coins, every proof held by Lean, accepted. An accepting draw of all 64
+  hides no wrong unit except with probability 2⁻²⁰.
+- Forged (the 32 egress units, one of them forged): refused by Lean at the registration ("table row 22 does not open
+  warden/egress/0's registered root at position 22").
+- The cost a unit:
+  - ingress: 10.6 s of proving (a 12.1 s share of the session), 2,036,356 proof bytes, a Lean verify of 1.14 s;
+  - egress: 1.91 s of proving (2.39 s), 1,556,020 proof bytes, a Lean verify of 0.70 s.
+- `chain_record.py report` over the certificates, the endpoint, N2 on 2982 and this scan: accepted, with every
+  negative refused or escaped N2's draw within its bound. The report and `leak` on 6cd9 are stored as
+  art:9f4adc70e0fb01ad3fbbee273269b4b0cb3392e5979360aed72893fe827059a6.
+- The job's own rc is 1: its report runs without N2, which this part of the record doesn't run.
 
 **Why the active-warden legs are void.** The gate's traffic is seeded, so all three legs sent the same schedule. On
 every leg the network certifier itself kept time, and the endpoint served every request, to its end or to the client's
