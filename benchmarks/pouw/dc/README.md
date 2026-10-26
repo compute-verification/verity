@@ -207,7 +207,7 @@ a saturated wgmma, and `emp.py` prices each timed loop's whole SASS on DS-90's f
   the event clock (`emp.py`'s evMHz: the longest block's cycles over the event time a call) is 1518–1797 MHz on every
   loop at tensor ≥ 0.99 (r20261019-053910-d2c9). A second, the H200 does at most 1942.7 dense s8 TOPS (1.8% under its
   sheet's 1979), 899.7 f16 TFLOPS and 473.8 tf32. Light loops (scalar, shared memory) read the same on both clocks.
-- **b1**: BGMMA.64x256x256 runs at s8 n256's instruction rate (0.03125 a SM-clock, 4× its MACs) and BMMA.168256 at
+- **b1**: BGMMA.64x256x256 runs at s8 n256's instruction rate (0.03125 a SM-clock, 8× its MACs: k 256 against 32) and BMMA.168256 at
   0.656, as IMMA.16832; DS-90 prices b1 on issue alone.
 
 ## B300 (sm_103a)
