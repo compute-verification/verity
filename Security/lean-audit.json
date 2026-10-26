@@ -10513,6 +10513,9 @@
    "signature": ["Verity.SecurityProofs.SoundMono : Verity.Guarantees.SoundMono"],
    "assumptions": [],
    "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
+  },
+  "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock": {
+   "owner": "@lean"
   }
  },
  "shape": {
@@ -11582,7 +11585,8 @@
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": "frozen (no-function): It carries C-Flock's integrity audit of one server-time block (Flock.Guarantees.IntegrityBlock) to block b's sampled audit's per-period guarantee (PeriodRun.Sound) in a horizon of blocks of the device model whose verdicts are fields of the run, not Lean functions, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityBlock, Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock": "frozen (no-function): It is JointHorizonBlocks with each block's integrity leg from IntegrityOfIntegrityBlock, over an abstract horizon of blocks of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointBlocks.lean), through each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksLegs": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks on one coin space, for a set of the audits: each block's per-period guarantees for the audits of the set are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list."
+   "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock": "frozen (no-function): It is Demo A's JointHorizonBlocksA (sampled proofs, PoUW and the network certifier) with each server-time block's integrity leg from IntegrityOfIntegrityBlock, over abstract periods of the device model whose verdicts are fields of the run, not Lean functions (Security/Definitions/Accounting/JointPeriod.lean), through each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock), and it bounds a Pouw.pr event, which shape.events does not list."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
