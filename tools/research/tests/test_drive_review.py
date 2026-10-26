@@ -1074,3 +1074,28 @@ def test_detach_returns_before_train_sh_prints_its_run_ids_and_launched_reads_th
     gone.wait()
     (Path(job["dir"]) / "rc").unlink()
     assert launched({**job, "pid": gone.pid})[0] == []
+
+
+def test_a_detached_train_launch_runs_its_own_copy_of_train_sh(tmp_path, monkeypatch):
+    """infra, 26 Oct 09:54Z (#4657): bash reads a script as it runs, and a later tick resets and checks out the queue's clone, so
+    a train.sh that `main` changed meanwhile would change under a running launch.  It runs a copy in its launch directory, from
+    the clone, and a rewrite of the clone's train.sh doesn't reach it."""
+    from research.drive import LAUNCHES, launched, train_launch
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    repo, gate, rid = tmp_path / "clone", tmp_path / "gate", "r20261026-093000-abcd"
+    script = repo / "tools" / "verity" / "check" / "train.sh"
+    script.parent.mkdir(parents=True)
+    script.write_text(f'echo "train: $0 in $PWD"\ncat {gate} > /dev/null\necho "RUN {rid}"\n')
+    os.mkfifo(gate)
+    job = train_launch(repo, "c0ffee", "m1", False, deferred=LEAN_STEP, detached=True)
+    copy = Path(job["dir"]) / "train.sh"
+    assert job["dir"].startswith(str(tmp_path / LAUNCHES)) and copy.read_text() == script.read_text()
+    with open(script, "w") as f:                                           # in place, as a checkout of a changed train.sh
+        f.write('echo "RUN r20261026-093000-ffff"\n' * 8)
+    with open(gate, "w"):
+        pass
+    with contextlib.suppress(ChildProcessError):                         # its end, not a clock
+        os.waitpid(job["pid"], 0)
+    ids, tail = launched(job)
+    assert ids == [rid] and f"train: {copy} in {repo}" in tail, tail

@@ -1509,10 +1509,33 @@ def test_train_sh_runs_drives_shadow_as_an_ordinary_quiet_job_and_a_train_with_p
     assert p.returncode == 0 and "--priority" not in args and {"--record", "--keep-going", "--agreement"} <= set(args), args
 
     (tmp_path / "origin.git").rename(tmp_path / "gone.git")
+    (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
     p = train("HEAD", "vy-x", TRAIN_ORDINARY="1", TRAIN_QUIET="1")
     assert p.returncode == 1 and "git fetch origin failed" in p.stderr and not (tmp_path / "posted").exists(), p.stderr
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
+
+
+def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
+    """infra, 26 Oct 09:54Z (#4657): drive launches train.sh detached, so its fetch in the queue's clone can meet a tick's, which
+    fails one of them with `cannot lock ref`.  It tries twice more, 5 s and then 15 s later, and only then registers no run."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    origin, gone, sleeps = tmp_path / "origin.git", tmp_path / "gone.git", tmp_path / "sleeps"
+    origin.rename(gone)
+    # the first backoff gives origin back; a poll for the launch waits on it, not on a clock
+    (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\nif [ -e {gone} ]; then mv {gone} {origin}; '
+                                            f'else while [ ! -e {tmp_path / "launched"} ]; do :; done; fi\n')
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    assert sleeps.read_text().split()[0] == "5"
+    sleeps.unlink()
+    origin.rename(gone)
+    (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\n')
+    p = train("HEAD", "vy-x", TRAIN_QUIET="1")
+    assert p.returncode == 1 and "git fetch origin failed" in p.stderr and sleeps.read_text().split() == ["5", "15"], p.stderr
 
 
 def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):

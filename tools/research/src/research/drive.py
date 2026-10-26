@@ -283,14 +283,15 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
                  detached: bool = False) -> tuple[list[str], str] | dict:
     """`train.sh COMMIT MACHINE [--agreement]` from the queue's clone: (the run ids it printed, its output's tail); ``detached``,
-    started in the background (`detach`) and returned at once as the record `launched` reads.  Git never prompts (12 Oct:
-    train.sh's fetch in the queue's clone, which has no credential helper, waited on a password at the tty)."""
+    started in the background (`detach`) from a copy of train.sh, which reads nothing by its own path (``$0`` only for its
+    usage) and finds the tree from its working directory, and returned at once as the record `launched` reads.  Git never
+    prompts (12 Oct: train.sh's fetch in the queue's clone, which has no credential helper, waited on a password at the tty)."""
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else []),
             *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
             *(["--no-regenerate"] if no_regenerate else [])]
     env = {**launch_vars(), **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"}
     if detached:
-        return detach(repo, argv, env)
+        return detach(repo, argv, env, script=argv[1])
     r = subprocess.run(argv, cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL, env=env)
     m = RUN_RE.search(r.stdout)
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
@@ -305,13 +306,17 @@ LAUNCH_LOST_S = 3600
 DETACH_JOB = 'd=$1; shift; "$@" > "$d/log" 2>&1; echo "$?" > "$d/rc.tmp" && mv "$d/rc.tmp" "$d/rc"'
 
 
-def detach(repo: Path, argv: list[str], env: dict[str, str]) -> dict:
+def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None = None) -> dict:
     """``argv`` in ``repo``, in a session of its own, so no tick waits on it (26 Oct: train.sh took 9-12 min to print a Lean
     check's run ids, and a tick that launched two took 15-26 min): its output and exit go to a directory of their own under
-    `LAUNCHES`.  Returns the record `launched` reads."""
+    `LAUNCHES`.  ``script``, a path of ``repo`` in ``argv``, runs from a copy there: bash reads a script as it runs, and a later
+    tick resets and checks out ``repo`` (infra, 26 Oct 09:54Z).  Returns the record `launched` reads."""
     root = Path(tempfile.gettempdir()) / LAUNCHES
     root.mkdir(parents=True, exist_ok=True)
     d = tempfile.mkdtemp(prefix="train-", dir=root)
+    if script:
+        copy = shutil.copy(repo / script, Path(d) / Path(script).name)
+        argv = [str(copy) if a == script else a for a in argv]
     p = subprocess.Popen(["sh", "-c", DETACH_JOB, "sh", d, *argv], cwd=repo, env=env, stdin=subprocess.DEVNULL,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     return {"dir": d, "pid": p.pid}
