@@ -1,4 +1,4 @@
-import Definitions.Population.LongValue
+import Proofs.Population.Defs.LongValue
 import Proofs.Population.Leakage
 
 /-!

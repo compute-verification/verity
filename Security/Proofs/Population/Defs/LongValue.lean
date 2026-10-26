@@ -1,4 +1,4 @@
-import Definitions.Population.Dataflow
+import Proofs.Population.Defs.Dataflow
 import Mathlib.Data.Fintype.Option
 
 /-!

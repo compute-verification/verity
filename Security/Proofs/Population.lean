@@ -1,3 +1,4 @@
+import Proofs.Population.Defs
 import Proofs.Population.Determinacy
 import Proofs.Population.Necessity
 import Proofs.Population.Egress

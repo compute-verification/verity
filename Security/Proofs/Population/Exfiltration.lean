@@ -1,9 +1,9 @@
-import Definitions.Population.Exfiltration
+import Proofs.Population.Defs.Exfiltration
 
 /-!
 # Exfiltration before detection: the stopping-time bounds
 
-The game is `Definitions.Population.Exfiltration`'s: an adaptive prover, windows audited with live coins, each window
+The game is `Proofs.Population.Defs.Exfiltration`'s: an adaptive prover, windows audited with live coins, each window
 leaking what its wrong units' cones carry, and the deployment halting at the first failure.
 
 * `tail_cum`, **leakage through the first detection**: under detection pressure `κ`, with every window leaking at most

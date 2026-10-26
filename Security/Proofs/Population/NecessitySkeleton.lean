@@ -1,4 +1,4 @@
-import Definitions.Population.Necessity
+import Proofs.Population.Defs.Necessity
 import Proofs.Population.Leakage
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Tactic.Linarith

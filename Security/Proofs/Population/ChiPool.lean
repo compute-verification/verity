@@ -1,10 +1,10 @@
-import Definitions.Population.ChiPool
+import Proofs.Population.Defs.ChiPool
 import Proofs.Population.DrawPressure
 
 /-!
 # The cheating pool with the verdict lag: harm through the halt
 
-The game is `Definitions.Population.ChiPool`'s. The deployment halts `Δ` windows after the first caught window's
+The game is `Proofs.Population.Defs.ChiPool`'s. The deployment halts `Δ` windows after the first caught window's
 commitment, so a cheater does harm in those `Δ` windows as well. `tail_cum` alone stops at the caught window.
 
 * `cumLag_le`, **the lag costs at most `Δ ℓ`**: what leaves through the halt is at most `cum + Δ ℓ`, path by path, when

@@ -1,5 +1,5 @@
 import Definitions.Core.Partition
-import Definitions.Population.Dataflow
+import Proofs.Population.Defs.Dataflow
 
 /-!
 # A partition as a population

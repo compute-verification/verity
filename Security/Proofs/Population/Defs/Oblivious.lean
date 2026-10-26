@@ -1,4 +1,4 @@
-import Definitions.Population.Dataflow
+import Proofs.Population.Defs.Dataflow
 
 /-!
 # Obliviousness: when a program's trace is a population

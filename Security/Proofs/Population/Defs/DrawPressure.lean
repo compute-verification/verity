@@ -1,9 +1,9 @@
-import Definitions.Population.Exfiltration
+import Proofs.Population.Defs.Exfiltration
 
 /-!
 # The deployed draw: `k` of the `n` units, uniformly and without replacement
 
-`Definitions.Population.Exfiltration`'s game over the draw the audit makes: each window's coin is a `k`-subset of the
+`Proofs.Population.Defs.Exfiltration`'s game over the draw the audit makes: each window's coin is a `k`-subset of the
 `n` units, every one of the `C(n, k)` subsets equally likely, and a window escapes when its coin misses every one of the
 window's wrong units.
 

@@ -1,11 +1,11 @@
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Definitions.Population.DrawPressure
+import Proofs.Population.Defs.DrawPressure
 import Proofs.Population.Exfiltration
 
 /-!
 # Detection pressure of the deployed draw
 
-The audit draws `k` of the `n` units uniformly without replacement (`Definitions.Population.DrawPressure`), so a window
+The audit draws `k` of the `n` units uniformly without replacement (`Proofs.Population.Defs.DrawPressure`), so a window
 whose wrong set has `K` units escapes with probability `C(n - K, k) / C(n, k)`.
 
 * `choose_ratio_le_pow`, `choose_ratio_le_exp`: for `K ≤ n` and `k ≤ n`,

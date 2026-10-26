@@ -2040,7 +2040,6 @@
   "Definitions.Accounting.Guarantees.Bandwidth",
   "Definitions.Hash",
   "Definitions.Hash.Guarantees",
-  "Definitions.Population",
   "Proofs.Accounting.TS.Session",
   "SampledProofs"
  ],
@@ -2581,11 +2580,6 @@
    "except": [],
    "why": "a guarantee is stated over the hash area's definitions, never over a proof",
    "sealed": true
-  },
-  "Definitions.Population": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
-   "except": [],
-   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
   },
   "Definitions.Nci.Guarantees.FitRate": {
    "imports": [

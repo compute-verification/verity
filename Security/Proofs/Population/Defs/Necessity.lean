@@ -1,4 +1,4 @@
-import Definitions.Population.Dataflow
+import Proofs.Population.Defs.Dataflow
 import Mathlib.Basic.Real.Basic
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Data.Fintype.BigOperators

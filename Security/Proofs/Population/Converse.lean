@@ -1,5 +1,5 @@
 import Proofs.Population.Transfer
-import Definitions.Population.AddressMap
+import Proofs.Population.Defs.AddressMap
 
 /-!
 # The converse: a corruptible address needs the padding's cones

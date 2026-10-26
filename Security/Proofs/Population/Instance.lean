@@ -1,6 +1,6 @@
 import Proofs.Population.Determinacy
 import Proofs.Core.Circuit
-import Definitions.Population.Partition
+import Proofs.Population.Defs.Partition
 
 /-!
 # Sampled proofs' partitions as populations

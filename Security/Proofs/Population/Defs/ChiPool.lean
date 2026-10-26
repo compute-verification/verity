@@ -1,9 +1,9 @@
-import Definitions.Population.Exfiltration
+import Proofs.Population.Defs.Exfiltration
 
 /-!
 # The cheating pool with the verdict lag
 
-`Definitions.Population.Exfiltration`'s game, with the halt `Δ` windows after the first caught window's commitment
+`Proofs.Population.Defs.Exfiltration`'s game, with the halt `Δ` windows after the first caught window's commitment
 instead of at it. A window's leak is the harm it does: what its egress carries beyond the honest run, or, in the
 cheating pool, the declared work it skips. A caught window's verdict arrives only after the next `Δ` windows have run,
 so a cheater keeps skipping work in each of them until the halt. `Strategy.cum` stops at the caught window, so it omits
