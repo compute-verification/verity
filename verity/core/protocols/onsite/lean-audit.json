@@ -9,6 +9,7 @@
     "CoreComposition.Cases",
     "NetworkCheck.Period",
     "PousCheck.RunProtocol",
+    "PouwCheck.Period",
     "PouwCheck.Protocol",
     "RemoteAudit.Protocol",
     "SampledProofs.OneStage"
