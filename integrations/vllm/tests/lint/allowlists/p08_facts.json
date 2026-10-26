@@ -29,6 +29,9 @@
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "layer-class", "symbol": "<module>", "detail": "RowParallelLinear"},
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "layer-class", "symbol": "<module>", "detail": "SharedFusedMoE"},
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "layer-class", "symbol": "<module>", "detail": "VocabParallelEmbedding"},
+    {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "FusedMoE"},
+    {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "MoERunner"},
+    {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "SharedFusedMoE"},
     {"file": "verity_vllm/commit/binding.py", "kind": "layer-class", "symbol": "<module>", "detail": "GeluAndMul"},
     {"file": "verity_vllm/commit/binding.py", "kind": "layer-class", "symbol": "<module>", "detail": "GemmaRMSNorm"},
     {"file": "verity_vllm/commit/binding.py", "kind": "layer-class", "symbol": "<module>", "detail": "LayerNorm"},
@@ -224,9 +227,6 @@
     {"file": "verity_vllm/properties/protected.py", "kind": "model", "symbol": "<module>", "detail": "qwen"},
     {"file": "verity_vllm/properties/protected.py", "kind": "model", "symbol": "new_patterns", "detail": "qwen"},
     {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_89", "count": 2},
-    {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "new_patterns", "detail": "sm_89", "count": 2},
-    {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "FusedMoE"},
-    {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "MoERunner"},
-    {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "SharedFusedMoE"}
+    {"file": "verity_vllm/properties/protected.py", "kind": "sm-arch", "symbol": "new_patterns", "detail": "sm_89", "count": 2}
   ]
 }
