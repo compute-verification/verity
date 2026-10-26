@@ -9126,11 +9126,29 @@
    "assumptions": [],
    "type_hash": "b6d3047a8903fca2ea78d5e2de43809c771ce17677637ac8a8233af19922cf1f"
   },
+  "Pous.SecurityProofs.StreamedWipeMeets141GB": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeets141GB : Pous.Guarantees.StreamedWipeMeets141GB"],
+   "assumptions": [],
+   "type_hash": "b6ab57abe9ed0a1a43be839204bb683d6642ecbde4190d898b4a3ccc1d7b6003"
+  },
   "Pous.SecurityProofs.StreamedWipeMeets2600GB": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.StreamedWipeMeets2600GB : Pous.Guarantees.StreamedWipeMeets2600GB"],
    "assumptions": [],
    "type_hash": "a3671a8a99f4c7b653b5751bd24cb714a5764f731e9563fa3b20b1072228a5e2"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeets96GiB": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeets96GiB : Pous.Guarantees.StreamedWipeMeets96GiB"],
+   "assumptions": [],
+   "type_hash": "610f906d2a73a8612b035d1cfe33141715f61fda55f081c36162e0dc9afda003"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsFamily": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsFamily : Pous.Guarantees.StreamedWipeMeetsFamily"],
+   "assumptions": [],
+   "type_hash": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255"
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tGamma": {
    "owner": "@compute-accounting",
@@ -11942,7 +11960,10 @@
    "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": "frozen (verdict): as WorkSoundH200, at the open parameters card-within-accel(H200) gives (CMP-136, RT-LEAN L10, L31).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120": "frozen (verdict): as WorkSoundOnCardH200, on the RTX PRO 6000 (CMP-136).",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
-   "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": "frozen (verdict): as WorkSoundH200, on the RTX PRO 6000 (CMP-136)."
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": "frozen (verdict): as WorkSoundH200, on the RTX PRO 6000 (CMP-136).",
+   "Pous.SecurityProofs.StreamedWipeMeetsFamily": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeets96GiB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeets141GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -23139,7 +23160,10 @@
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14",
     "Pous.SecurityProofs.StreamedWipe",
-    "Pous.SecurityProofs.StreamedWipeMeets2600GB"
+    "Pous.SecurityProofs.StreamedWipeMeets141GB",
+    "Pous.SecurityProofs.StreamedWipeMeets2600GB",
+    "Pous.SecurityProofs.StreamedWipeMeets96GiB",
+    "Pous.SecurityProofs.StreamedWipeMeetsFamily"
    ]
   },
   "Definitions.Pous.Guarantees": {
@@ -23255,6 +23279,19 @@
     "Pous.Guarantees.StreamedWipeMeets2600GB": "2fe28ace401346f9cfd93b710cc10c4c9e7ac627f1ac2fe3fb98e51a313dc57b"
    },
    "guarantees": ["Pous.SecurityProofs.StreamedWipe", "Pous.SecurityProofs.StreamedWipeMeets2600GB"]
+  },
+  "Definitions.Pous.Guarantees.StreamedWipeFamily": {
+   "digest": "79bb928a4f65347dcff796f9092b4e582881d0d656b0cdf0fa559ee23d117e5a",
+   "definitions": {
+    "Pous.Guarantees.StreamedWipeMeets141GB": "c719407a3c4404da87e21dabbe812e2da713b8649792d179e5b6c26eeab47719",
+    "Pous.Guarantees.StreamedWipeMeets96GiB": "00694a90938395dd8b99ecfd0995a7ab9ad07e56bfc8a49d22f530418f32005d",
+    "Pous.Guarantees.StreamedWipeMeetsFamily": "3bc7f2fc49dd3c6d47f43fcaedeee627155cb4ef0d0a04701d14e943688d1eef"
+   },
+   "guarantees": [
+    "Pous.SecurityProofs.StreamedWipeMeets141GB",
+    "Pous.SecurityProofs.StreamedWipeMeets96GiB",
+    "Pous.SecurityProofs.StreamedWipeMeetsFamily"
+   ]
   },
   "Definitions.Pous.Model.Audit": {
    "digest": "ae9ed577afee6873bd59d0b44e3a7daa4019bdf0958b65f2ec852459c09a026e",
@@ -23891,7 +23928,10 @@
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Pous.SecurityProofs.StreamedWipe",
-    "Pous.SecurityProofs.StreamedWipeMeets2600GB"
+    "Pous.SecurityProofs.StreamedWipeMeets141GB",
+    "Pous.SecurityProofs.StreamedWipeMeets2600GB",
+    "Pous.SecurityProofs.StreamedWipeMeets96GiB",
+    "Pous.SecurityProofs.StreamedWipeMeetsFamily"
    ]
   },
   "Definitions.Pous.P2.Cost": {

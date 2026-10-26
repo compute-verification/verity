@@ -10,6 +10,7 @@ import Definitions.Nci.Dark
 import Definitions.Nci.Packed
 import Definitions.Nci.Covering
 import Definitions.Pous
+import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Definitions.Pouw
 import Definitions.NetworkCertifier
 import Definitions.NetworkCertifier.Guarantees.SampledAudit
