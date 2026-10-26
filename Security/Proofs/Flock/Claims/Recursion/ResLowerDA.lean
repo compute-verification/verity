@@ -10,7 +10,7 @@ import Proofs.Flock.C3.Reps.AtList
 
 `ResLowerDD`'s `resLowered_D` (`ResLoweredPD` at the deployed constants: the dense form, `recRead`, `cmtTr recRead`,
 the concrete pieces and owners `resPD`/`ownRD`, `elemAt := Rows.elemReadC (Top.accRC rd key)`, `vvAt :=
-Rows.resVRead`) is `resPieces_computesP`'s share at each piece, from P2 (`FramePorts`), P3 (`AccPorts`), the site
+Rows.resVRead`) is `resPieces_computesV`'s share at each piece, from P2 (`FramePorts`), P3 (`AccPorts`), the site
 facts at part `s`'s decision (`resSite_of_dec`), `ReadsAt` and the base checks (`BasesHold`). This file has its steps:
 
 * **Which part.** The piece's owner `s` is V\*'s statement `.inner q.key.1 nm _` (`ownRD_some`), named for its group
@@ -145,8 +145,9 @@ theorem part_partS {sh : _root_.Flock.Shape} {j : ℕ} {S : _root_.Flock.RecOpen
 /-- **A decision of the opened messages**: at a dense compiled statement whose last message reads (`ReadOkR`, which
 `ReadsAt` gives at a joint acceptance), where the base checks hold, the record decodes (`decode_at`), so a `DecAt`
 exists. -/
-theorem decAt_of {rd : Msg → Option FinalP} (hBs : BasesHold rd) {xo : Msg} {sto : Claims.Recursion.Stmt}
-    (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) {ms : List Msg} {cs : List Coin}
+theorem decAt_of {rd : Msg → Option FinalP}
+    (hBs : BasesHold rd) {xo : Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+    (hf : Claims.Recursion.Form.Dense sto.form) {ms : List Msg} {cs : List Coin}
     (hr : FlockDeploy.ReadOkR rd (xIOf xo) ms cs) (hlen : ms.length = cs.length) :
     Nonempty (Rows.DecAt rd (xIOf xo) ms cs) := by
   have hr' := hr

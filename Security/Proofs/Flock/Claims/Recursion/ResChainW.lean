@@ -61,10 +61,46 @@ def StepsW (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → �
         ((List.range ((_root_.RecDeploy.bdR rd wE final w).DE.V.k
           (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c) (chainW x ws)
 
+/-- **The steps half with the parts' staged statements** (`PortsAtV`'s `xs`, `hxs`, `hcol` after the joint acceptance):
+`StepsW` where the commit ties may read every part's acceptance at its own statement and no collision with their
+setups. -/
+def StepsWX (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
+  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+    ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
+    RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
+      (AccP rd wE final w b elem shape untr cmt) x c ws →
+    ∀ (xs : List Msg), (∀ s' (hs' : s' < ws.length),
+        AccV rd wE final w b elem shape untr cmt s' x c (xs.getD s' []) ws[s'] ((DeployedR.layR elem).msgs x ws)) →
+      (Claims.findColl ((DeployedR.layR elem).allCalls x ws ++
+        Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false →
+    ∀ os last, (_root_.RecDeploy.bdR rd wE final w).final
+        (((DeployedR.layR elem).msgs x ws).getD
+          ((_root_.RecDeploy.bdR rd wE final w).DE.V.k (Claims.Recursion.xI (DRL rd wE final w b elem) x) - 1)
+          []) = some (os, last) →
+      os.length + 1 = (_root_.RecDeploy.bdR rd wE final w).DE.V.k (Claims.Recursion.xI (DRL rd wE final w b elem) x) →
+      Nonempty (Rows.DecAt rd (Claims.Recursion.xI (DRL rd wE final w b elem) x)
+        ((_root_.RecDeploy.bdR rd wE final w).opened os last)
+        ((List.range ((_root_.RecDeploy.bdR rd wE final w).DE.V.k
+          (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c)) →
+      Top.ChainHolds rd key (Claims.Recursion.xI (DRL rd wE final w b elem) x)
+        ((_root_.RecDeploy.bdR rd wE final w).opened os last)
+        ((List.range ((_root_.RecDeploy.bdR rd wE final w).DE.V.k
+          (Claims.Recursion.xI (DRL rd wE final w b elem) x))).map c) (chainW x ws)
+
+theorem stepsWX_of_stepsW {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {wE : Msg → ℝ}
+    {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ} {b : Brings}
+    {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
+    {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
+    (h : StepsW rd key wE final w b elem shape untr cmt) : StepsWX rd key wE final w b elem shape untr cmt :=
+  fun x st hx hf c ws hJ _ _ _ => h x st hx hf c ws hJ
+
 open Flock.RecAlgebra (el) in
 /-- **The ends half**: in a piece's port context (`PortsAt`'s binders), at a decision of the opened messages, the
 copy's accumulator ports are `w`'s last four, and at every decision `D` the copy reads `chainW` at its rep's ends
-(`D.accE`: `acc0` the run's first row, `acc1` its last). -/
+(`D.accE`: `acc0` the run's first row, `acc1` its last). Its binders are `PortsAtV`'s. -/
 def EndsW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
@@ -72,10 +108,14 @@ def EndsW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Optio
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →
+    ∀ (xs : List Msg), (∀ s' (hs' : s' < ws.length),
+        AccV rd wE final w b elem shape untr cmt s' x c (xs.getD s' []) ws[s'] ((DeployedR.layR elem).msgs x ws)) →
+      (Claims.findColl ((DeployedR.layR elem).allCalls x ws ++
+        Claims.Recursion.setupCalls FlockDeploy.sha512 (DRL rd wE final w b elem) xs)).isSome = false →
     ∀ s (wt : Claims.Flock.Wit), ws[s]? = some wt →
     ∀ (r : XR), readX x = some r → ∀ (ss : Array VStar.Stmt), RecVStar.statements r.shape = .ok ss →
     ∀ (j : ℕ) (nm : String) (pt : VStar.Part), ss[s]? = some (.inner j nm pt) →
-    ∀ (xO : Msg) (p : _root_.Flock.Readable.Parsed),
+    ∀ (xO : Msg) (p : _root_.Flock.Readable.Parsed), xs.getD s [] = xO →
       _root_.Flock.Readable.parseBytes readOfO xO = some p →
       Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO wt = true →
       showsPart untr b s x xO c → (DeployedR.layR elem).Agrees cmt x s wt xO ((DeployedR.layR elem).msgs x ws) →
@@ -103,26 +143,36 @@ def EndsW (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Optio
         el (D.accE (fun _ _ => chainW x ws) (q.key.2.1 + q.key.2.2.1))
           (j' - accBase (Claims.Recursion.xI (DRL rd wE final w b elem) x))
 
-/-- **P3 from the outer witnesses' chain**: at the dense form, `AccPorts` from the steps half (`chainW` carries row D's
-running sums) and the ends half (the copy reads `chainW` at its rep's ends), by `accPorts_of_chain`. A `resPD` piece's
-rep is below two (`mem_resPD'`). -/
+/-- **P3 from the outer witnesses' chain, the steps half at the parts' statements**: at the dense form, `AccPorts`
+from `StepsWX` and the ends half (the copy reads `chainW` at its rep's ends), by `accPorts_of_chain`. A `resPD`
+piece's rep is below two (`mem_resPD'`). -/
+theorem accPorts_of_WX (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
+    (hS : StepsWX rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt)
+    (hE : EndsW rd wE final w b elem Claims.Recursion.Form.Dense untr cmt) :
+    AccPorts rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
+  intro x st hx hf c ws hJ xs hxs hcol s wt hw r hr ss hss j nm pt hsv xO p hxs0 hxO hck hsh hAg hT hc q hq ho ht m
+    k cl jj sh holo S ns nv hpar hshp hholo hpart os last hfin hos hD
+  obtain ⟨D⟩ := hD
+  have hW := hS x st hx hf c ws hJ xs hxs hcol os last hfin hos ⟨D⟩
+  have hEn := hE x st hx hf c ws hJ xs hxs hcol s wt hw r hr ss hss j nm pt hsv xO p hxs0 hxO hck hsh hAg hT hc q hq
+    ho ht m k cl jj sh holo S ns nv hpar hshp hholo hpart os last hfin hos D
+  obtain ⟨v, -, p0, r0, S0, ns0, nv0, hr0, -, hk, -⟩ := DecompBR.mem_resPD' hq
+  have hn : q.key.2.1 + q.key.2.2.1 < 2 := by simp only [hk]; omega
+  exact accPorts_of_chain (xo := x) (sto := st) D Top.cls₀ hx hf rfl hW q.key hn
+    (fun e => _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht wt q.key) e)
+    (fun e j' he hj => (hEn e j' he hj).1) (fun e j' he hj => (hEn e j' he hj).2)
+
+/-- **P3 from the outer witnesses' chain**: `accPorts_of_WX` at a steps half that reads no part statements. -/
 theorem accPorts_of_W (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (hS : StepsW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt)
     (hE : EndsW rd wE final w b elem Claims.Recursion.Form.Dense untr cmt) :
-    AccPorts rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
-  intro x st hx hf c ws hJ s wt hw r hr ss hss j nm pt hsv xO p hxO hck hsh hAg hT hc q hq ho ht m k cl jj sh holo
-    S ns nv hpar hshp hholo hpart os last hfin hos hD
-  obtain ⟨D⟩ := hD
-  have hW := hS x st hx hf c ws hJ os last hfin hos ⟨D⟩
-  have hEn := hE x st hx hf c ws hJ s wt hw r hr ss hss j nm pt hsv xO p hxO hck hsh hAg hT hc q hq ho ht m k cl jj
-    sh holo S ns nv hpar hshp hholo hpart os last hfin hos D
-  obtain ⟨v, -, p0, r0, S0, ns0, nv0, hr0, -, hk, -⟩ := DecompBR.mem_resPD' hq
-  have hn : q.key.2.1 + q.key.2.2.1 < 2 := by simp only [hk]; omega
-  exact accPorts_of_chain (xo := x) (sto := st) D Top.cls₀ hx hf rfl hW q.key hn
-    (fun e => _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht wt q.key) e)
-    (fun e j' he hj => (hEn e j' he hj).1) (fun e j' he hj => (hEn e j' he hj).2)
+    AccPorts rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt :=
+  accPorts_of_WX rd key wE final w b elem untr cmt (stepsWX_of_stepsW hS) hE
 
 end RecDeploy.ResLower
