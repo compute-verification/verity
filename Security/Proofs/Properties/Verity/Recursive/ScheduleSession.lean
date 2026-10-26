@@ -217,11 +217,11 @@ theorem round_mid {s : ℕ} (hs : s < nS x) {xs : List Msg} {off : ℕ} {xO : Ms
     | msg m' =>
       rw [ho] at hans
       have hmm : m' = m := by simpa [sessOut] using hans
-      obtain ⟨c, hc, rfl⟩ := nextO_msg H ho
+      obtain ⟨c, hc, hmc⟩ := nextO_msg H ho
       have hlast := actO_coin_last hc
       rw [coins_getLast] at hlast
-      obtain rfl := Option.some.inj hlast
-      rw [← hmm]
+      have hceq : coinSeq r (off + j) = c := Option.some.inj hlast
+      rw [← hmm, hmc, hceq]
     | acc =>
       rw [ho] at hans
       simp [sessOut] at hans
@@ -245,8 +245,8 @@ theorem session_facts (hO : OuterAtEnd H) {s : ℕ} (hs : s < nS x) {xs : List M
     rfl
   rw [hsm] at hacc
   set seg := ((run H P (V IV st) x ω r).msgs.drop off).take (VO.k xO) with hseg
-  set sv := fixLast (s + 1 == nS x) (VO.k xO) seg with hsv
   obtain ⟨hsvf, hsvd⟩ := fixLast_spec (s + 1 == nS x) (VO.k xO) seg
+  set sv := fixLast (s + 1 == nS x) (VO.k xO) seg with hsv
   have hkpos := VO_k_pos xO
   have hlenSv : sv.length = VO.k xO := by
     have := hO xO (sv.map Prod.fst) (sv.map fun m => outCoin m.2) (by simp) hacc

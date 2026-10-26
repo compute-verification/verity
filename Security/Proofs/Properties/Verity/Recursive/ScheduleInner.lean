@@ -170,7 +170,7 @@ theorem readX_of_nS (hn : 0 < nS x) : ∃ xr, readX x = some xr := by
   unfold nS at hn
   cases h : readX x with
   | none => simp [h] at hn
-  | some xr => exact ⟨xr, by simp [h]⟩
+  | some xr => exact ⟨xr, rfl⟩
 
 /-- **The compiled verifier's rounds**: the inner and staging rounds, then each V* session's, at any inner rounds. -/
 theorem k_eq (ms : List (Msg × Out)) :
