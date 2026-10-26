@@ -320,7 +320,7 @@ theorem sessionRun_decides {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs))
     (hfc : FilesFinalC spec sts c₁ cs.tail.dropLast pfs)
-    (hfit0 : RowsFit (capRows (fileCaps spec sts c₁ pfs)))
+    (hfit0 : RowsFit ((capRows (fileCaps spec sts c₁ pfs)).map nodeRow))
     (hfit : ∀ k < (filePs spec sts c₁ pfs).size,
       ∀ rs ∈ repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k)
         (filePs spec sts c₁ pfs)[k]! (Ts k), RowsFit rs)

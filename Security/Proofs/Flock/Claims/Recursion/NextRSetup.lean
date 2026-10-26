@@ -85,7 +85,7 @@ theorem honestRun_decides {rd : Claims.Msg → Option FinalP} {x last : Claims.M
     (hx : setupOf false x = some (s, spec, sts)) (hc : cs.head? = some c₁)
     (htab : ∀ (i : ℕ) (hi : i < sts.size),
       (fast100 sts[i].m).isSome ∧ ∃ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e)
-    (hfit0 : RowsFit (capRows (honestCaps spec sts c₁)))
+    (hfit0 : RowsFit ((capRows (honestCaps spec sts c₁)).map nodeRow))
     (hfit : ∀ k < (honestPs spec sts c₁ cs.tail.dropLast).size,
       ∀ rs ∈ repRows (repCtx spec sts c₁ (capRows (honestCaps spec sts c₁)) cs.tail.dropLast k)
         (honestPs spec sts c₁ cs.tail.dropLast)[k]! (Ts k), RowsFit rs)
