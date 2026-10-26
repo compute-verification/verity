@@ -42,8 +42,8 @@ periods),
 the observations' jitter bound `Dj ≥ 1`, the network certifier's LMS public key and parameters and the certifier session
 (32 bytes) every certificate binds, the link (at most 65,535 UTF-8 bytes), the auditor's one-stage v2 parameters for the
 link-windows (`OneStageZk.paramsOfJson`'s, whose partition object names N2's registered Program for the link,
-`LinkWindows.partition`) without `ports`, which are each link-window's own, and with `log` the stream's records before the
-period, N2's run (`LinkWindows.run`), Σ_sync, and the period's `m ≥ 1` link-windows.
+`LinkWindows.partition`) without `ports`, which are each link-window's own, and with `log` the stream's records before
+the period, N2's run (`LinkWindows.run`), Σ_sync, and the period's `m ≥ 1` link-windows.
 The rows form has, in place of `egress`, `ingress`, `one_stage`, `run` and `sync_set`, the SHA-512 of the scan's
 registered Program, its layout terms and the schedule,
 
@@ -608,7 +608,8 @@ def opening (p : Params) (l : Link) (w : Nat) (reg : Registration) (certs : Arra
   let c := linkCase p l w (rootOf reg) certs e.base.provedUnits (some file) s
   match LinkWindow.pubRow c with
   | .error err => refuse s!"{what}: the verifier's public row: {err}"
-  | .ok none => refuse s!"{what}: the verifier's public row has no instance at window {w} (an end's profile ends before)"
+  | .ok none =>
+    refuse s!"{what}: the verifier's public row has no instance at window {w} (an end's profile ends before)"
   | .ok (some row) =>
     unless LinkWindow.opened c (some row) == some 3 do
       refuse (s!"{what}: the proof's public row doesn't open to the verifier's own under the delivered salt, or its " ++
@@ -905,7 +906,8 @@ def openings (params commitment evidence : ByteArray) (bs : Core.Blobs) : V (Arr
 -- a clock-form link-window that carries an answer is refused by name, whatever else it carries
 #guard match windowOf (Json.mkObj [("answer", Json.mkObj [("verdict", Json.str "accept")]),
     ("certificates", Json.arr #[])]) "a link-window" with
-  | .error r => r == "a link-window: answer: the check runs one-stage v2 on the link-window's proof itself and takes no " ++
+  | .error r =>
+    r == "a link-window: answer: the check runs one-stage v2 on the link-window's proof itself and takes no " ++
       "answer for it"
   | .ok _ => false
 -- the auditor's one-stage v2 parameters carry no ports: each link-window's is its served domain
