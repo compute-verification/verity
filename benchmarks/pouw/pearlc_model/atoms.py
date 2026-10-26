@@ -10,7 +10,9 @@ For each device (the H100's HOPPER_E4M3_K32, sm_120's BLACKWELL_SM120_E4M3_M16N8
 - per 16 x 32 A fragment and 8 x 32 B fragment, how many 4-binade INT8 exponent classes hold the codes exactly, and the
   class pairs an exact INT8 emulation multiplies (all, and on the H100 only those with a product the atom keeps), and
   the pairs with per-row (A) and per-column (B) windows, a row's scale pulled out of its outputs (`rowwise`);
-- the exponent span of each row's 32 codes per atom.
+- the exponent span of each row's 32 codes per atom;
+- NVFP4 (sm_120): the distinct exponents per 16-code block, and the cost in FP8 MACs per product of the hi/lo split
+  construction that takes one exponent per block per pass (2·P_A·P_B per m16n8k64 fragment).
 
 Usage: python atoms.py [--m 16] [--n 16] [--k 1024] [--seed 1] [--out FILE.json]
 """
@@ -226,6 +228,20 @@ def run(m: int, n: int, k: int, seed: int) -> dict:
                         es = [e for e in es if e is not None]
                         if es:
                             spans.append(max(es) - min(es))
+            # NVFP4 (sm_120's OMMA m16n8k64, one scale per 16 codes of a row or column): a code at exponent E splits
+            # into hi = (8 or 12)·2^E and lo = (0..3)·2^E, both E2M1 under the scale 2^(E+1), so a pass takes one
+            # exponent per block, and the four hi/lo products of a pass cost 4 × 0.5 FP8 MACs.
+            blk_exps = [len({code_exponent(c) for c in row[s:s + 16]} - {None}) for side in (A, B) for row in side.codes
+                        for s in range(0, k, 16)]
+            fp4_cost = []
+            for i0 in range(0, m, 16):
+                for j0 in range(0, n, 8):
+                    for s in range(0, k, 64):
+                        pa = max(len({code_exponent(c) for c in A.codes[i][q:q + 16]} - {None})
+                                 for i in range(i0, min(i0 + 16, m)) for q in range(s, s + 64, 16))
+                        pb = max(len({code_exponent(c) for c in B.codes[j][q:q + 16]} - {None})
+                                 for j in range(j0, min(j0 + 8, n)) for q in range(s, s + 64, 16))
+                        fp4_cost.append(2 * max(pa, 1) * max(pb, 1))
             nz = sum(v for kk, v in kinds.items() if kk != "zero")
             outs = m * n
             report["families"][fam][dname] = {
@@ -245,6 +261,9 @@ def run(m: int, n: int, k: int, seed: int) -> dict:
                 "int8_pairs_rowwise_max": max(f[4] for f in frag_stats),
                 "row_span_binades": {"median": statistics.median(spans), "p10": float(np.percentile(spans, 10)),
                                      "p90": float(np.percentile(spans, 90)), "max": max(spans)},
+                "nvfp4_block_exponents_mean": round(statistics.mean(blk_exps), 3),
+                "nvfp4_one_exponent_cost_mean": round(statistics.mean(fp4_cost), 3),
+                "nvfp4_one_exponent_cost_max": max(fp4_cost),
             }
             print(fam, dname, json.dumps(report["families"][fam][dname]), flush=True)
     return report
