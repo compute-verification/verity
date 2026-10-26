@@ -994,8 +994,8 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     table reads and openings of a pinned parameter (``registered``) and its ingress (``ingress``); ``free`` the rest, which
     only the prover chose. ``pins`` are the verifier's own, never the record's: the registered parameters, by the names the
     record gives them, whose roots it fixed before the run. A read of any other parameter, or a table read or opening of a
-    table over one, is free, since a root the prover commits after serving constrains nothing; with no pins every
-    registered read is free. Refused unless the declarations are well-formed for the record's templates (`check_wires`,
+    table over one, is free, since a root the prover commits after serving constrains nothing; with no pins (a bare string
+    is none) every registered read is free. Refused unless the declarations are well-formed for the record's templates (`check_wires`,
     `check_inputs`), so no row counts twice."""
     if "wires" not in doc:
         raise ValueError("a circuit record whose members are listed is counted from its members, not its description")
@@ -1010,7 +1010,7 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
 
     inputs = sum(16 * sum(w for _, w in lay.rows) * n for lay, n in lays.values())
     wired = sum(w.units * row_bits(w.reader, w.port) for w in wires)
-    reg, pins = reg or Registered({}), frozenset(pins)
+    reg, pins = reg or Registered({}), frozenset(() if isinstance(pins, str) else pins)
     pinned = {t.name for t in reg.tables if t.param in pins}
     registered = (sum(r.units * row_bits(r.reader, r.port) for r in reg.reads
                       if r.param in pins and r.port in dict(lays[r.reader][0].rows))

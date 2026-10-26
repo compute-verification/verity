@@ -1,17 +1,20 @@
 """The per-step commit call: every unit's outputs at one step, committed as the step's groups (the embedding, each layer,
 the head) come out of the forward pass.
 
-A table is one op's output at one step, one row a sequence slot (`TABLES` names them, in the order the step writes them); a
-quantizer's table also has the f32 scale as each row's word. Backends:
+A table is one op's output at one step, one row a sequence slot (`tables`, from circuits' FAMILIES map, `plan.Map`, in the
+order the step writes them); a quantizer's table also has the f32 scale as each row's word. Backends:
 
     slots       kernels' commit call (CMP-95 item 3, #4469, ``benchmarks/torch_gpu/commit_slots``): ``hm96-sha512/row/v2``
                 rows under hiding leaves in ``frame-v3-sha512`` trees, step -> slot -> unit -> rows, so a drawn unit opens
-                by replaying its own request. `layout` lays a slot's tables out as its units: one group a step group, each
-                table cut into one-row units of at most 32 KiB, a quantizer's codes and scale one two-part row when they
-                fit (else the codes cut and the scale a unit of its own). Streamed: each group goes to
+                by replaying its own request. `layout` lays a slot's tables out as the map's units: one group a step group,
+                one commit unit a proof unit, its rows that unit's output rows (`plan.Units`: a coordinate's 16-bit row, a
+                chunk row, a quantizer chunk's codes row and the scale), so a gather's rows are its parts' bytes again.
+                The commit unit of a family's unit i is ``bases[family] + i`` (`Committer.unit_of`). Streamed: each group goes to
                 `slots_gpu.StepCommitter.add` (a side stream on CUDA, the engine's host twin on the CPU) as it is written,
-                so a group's tables can be dropped once added. The salt key is fresh each step (`slots.fresh_salt_key`)
-                unless the committer is given a ``salt`` function (tests and fixture runs, which say so).
+                so a group's tables can be dropped once added; the forward runs at most `LAG` groups ahead of the side
+                stream's reads, and `Roots.seconds` is the side stream's time a step. The salt key is fresh each step
+                (`slots.fresh_salt_key`) unless the committer is given a ``salt`` function (tests and fixture runs, which
+                say so).
     reference   the by-table step tree (`verity_vllm.commit.row_tables.step_roots`, Python), the one the small tests and
     host        the replay of a whole step's tables read: ``host`` is its C++ twin (`row_tables_device.host_step`) and
     device      ``device`` its CUDA kernel (`row_table.cu`); each commits the step's tables at its end.
@@ -28,33 +31,19 @@ from typing import Any
 import numpy as np
 import torch
 
+from .plan import Entry, Map, Table
 from .shape import Shape
 
 COMMIT_SLOTS = Path(__file__).resolve().parents[2] / "torch_gpu" / "commit_slots"
 BACKENDS = ("slots", "reference", "host", "device")
-LAYER_OPS = ("attn_norm", "attn_quant", "wq", "wk", "wv", "scores", "softmax", "pv", "o_quant", "wo", "attn_residual",
-             "mlp_norm", "up_quant", "wup", "down_quant", "wdown", "mlp_residual")
-
-
-@dataclass(frozen=True)
-class Table:
-    op: str
-    nbytes: int      # a slot's bytes of the op's output
-    quant: bool      # the row's word (the f32 scale) is committed after the codes
+#: groups the forward may run ahead of the side stream's row reads: an added group's tables stay allocated until the side
+#: stream has read them, so without a bound a commit slower than the forward holds the whole step's values
+LAG = 2
 
 
 def tables(shape: Shape) -> list[list[Table]]:
     """The step's groups of tables in the order the step writes them: the embedding, each layer's ops, the head's."""
-    w, hd, c, f, v = shape.width, shape.heads * shape.head_dim, shape.context, shape.mlp, shape.vocab
-    kv = shape.kv_heads * shape.head_dim
-    sizes = {"attn_norm": 2 * w, "attn_quant": w, "wq": 2 * hd, "wk": 2 * kv, "wv": 2 * kv, "scores": 2 * shape.heads * c,
-             "softmax": 2 * shape.heads * c, "pv": 2 * hd, "o_quant": hd, "wo": 2 * w, "attn_residual": 2 * w,
-             "mlp_norm": 2 * w, "up_quant": w, "wup": 2 * f, "down_quant": f, "wdown": 2 * w, "mlp_residual": 2 * w}
-    groups = [[Table("embed", 2 * w, False)]]
-    groups += [[Table(f"l{i}.{op}", sizes[op], op.endswith("_quant")) for op in LAYER_OPS] for i in range(shape.layers)]
-    groups.append([Table("final_norm", 2 * w, False), Table("head_quant", w, True), Table("head", 2 * v, False),
-                   Table("argmax", 2, False)])
-    return groups
+    return [[t for t, _ in g] for g in Map(shape).groups()]
 
 
 def _slots() -> tuple[Any, Any]:
@@ -66,38 +55,48 @@ def _slots() -> tuple[Any, Any]:
 
 
 def layout(shape: Shape) -> Any:
-    """The step's `slots.Layout`: each group of `tables`, its tensors the tables' codes (and a quantizer's scale after its
-    codes), each cut into units of at most ``slots.UNIT_MAX_BITS``."""
+    """The step's `slots.Layout`: each group of the map, its tensors the tables' codes (and a quantizer's scale after its
+    codes), one commit unit each unit of the map, its rows that unit's output rows."""
     return _layout(shape)[0]
 
 
-def _layout(shape: Shape) -> tuple[Any, dict[str, tuple[int, int, bool]]]:
-    """The layout, and each table's (first unit, code units, whether its scale is a unit of its own after them)."""
+def _group(S: Any, entries: list[Entry]) -> tuple[Any, list[tuple[str, int]]]:
+    """A group of the map as a `slots.Group`, and each family's (name, first unit in the group)."""
+    sources: list[int] = []
+    units: list[tuple[Any, ...]] = []
+    firsts = []
+    for t, us in entries:
+        src = len(sources)
+        sources += [t.nbytes, 4] if t.quant else [t.nbytes]
+        scale = (S.Row((S.Part(src + 1, 0, 4),)),)
+        for u in us:
+            firsts.append((u.name, len(units)))
+            units += [(S.Row((S.Part(src, u.offset + i * u.stride, u.nbytes),)),) + (scale if u.scale else ())
+                      for i in range(u.count)]
+    return S.Group(tuple(sources), tuple(units)), firsts
+
+
+def _layout(shape: Shape) -> tuple[Any, dict[str, int]]:
+    """The layout, and each family's first commit unit. Every layer's group is one `slots.Group` (their rows are alike)."""
     S, _ = _slots()
-    cap = S.UNIT_MAX_BITS // 8
-    groups, spans, u0 = [], {}, 0
-    for group in tables(shape):
-        sources: list[int] = []
-        units: list[tuple[Any, ...]] = []
-        for t in group:
-            src, first = len(sources), u0 + len(units)
-            sources.append(t.nbytes)
-            if t.quant:
-                sources.append(4)
-                if t.nbytes + 4 <= cap:
-                    units.append((S.Row((S.Part(src, 0, t.nbytes), S.Part(src + 1, 0, 4))),))
-                    spans[t.op] = (first, 1, False)
-                    continue
-                cut = S._cut(src, 0, t.nbytes, cap)
-                units += cut + [(S.Row((S.Part(src + 1, 0, 4),)),)]
-                spans[t.op] = (first, len(cut), True)
-            else:
-                cut = S._cut(src, 0, t.nbytes, cap)
-                units += cut
-                spans[t.op] = (first, len(cut), False)
-        groups.append(S.Group(tuple(sources), tuple(units)))
-        u0 += len(units)
-    return S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/every-op/v1", tuple(groups)), spans
+    m = Map(shape)
+    layer = _group(S, m.layer(0))[0]
+    groups, bases, u0 = [], {}, 0
+    for i, entries in enumerate(m.groups()):
+        g, firsts = _group(S, entries) if not 1 <= i <= shape.layers else (layer, _firsts(entries))
+        groups.append(g)
+        bases.update({name: u0 + k for name, k in firsts})
+        u0 += len(g.units)
+    return S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families/v1", tuple(groups)), bases
+
+
+def _firsts(entries: list[Entry]) -> list[tuple[str, int]]:
+    out, k = [], 0
+    for _, us in entries:
+        for u in us:
+            out.append((u.name, k))
+            k += u.count
+    return out
 
 
 def row_bytes(t: Any) -> Any:
@@ -178,6 +177,8 @@ class Roots:
     root: bytes
     tables: tuple[tuple[str, bytes], ...] = ()
     slot_roots: tuple[bytes, ...] = ()
+    #: the side stream's time from group 0's tables being written to the step root (CUDA slots only)
+    seconds: float | None = None
 
 
 class Committer:
@@ -197,8 +198,7 @@ class Committer:
             S, G = _slots()
             self.S, self.G, self.E = S, G, G.E
             self.groups = tables(shape)
-            self.layout, self.spans = _layout(shape)
-            self.cap = S.UNIT_MAX_BITS // 8
+            self.layout, self.bases = _layout(shape)
             dev = torch.device(device)
             self.plan = G.Plan(context, self.layout, device=dev if dev.type == "cuda" else "host")
 
@@ -217,7 +217,9 @@ class Committer:
         if not self.streams:
             return
         st.salt_key = salt_key or (self.salt(st.step) if self.salt else self.S.fresh_salt_key())
-        st.pending = self.G.StepCommitter(self.plan, st.step, st.batch, st.salt_key)
+        self._marks: list[tuple[str, Any]] | None = None if self.plan.host else []
+        self._start, self._read = None, []
+        st.pending = self.G.StepCommitter(self.plan, st.step, st.batch, st.salt_key, marks=self._marks)
         st.pending.salts = self.E.SaltKey(st.salt_key, nonce0)
 
     def group(self, st: StepTables, i: int) -> None:
@@ -229,13 +231,27 @@ class Committer:
             tensors += [codes, word] if t.quant else [codes]
         if self.plan.host:
             tensors = [x if isinstance(x, np.ndarray) else x.contiguous().numpy() for x in tensors]
-        st.pending.add(tensors)
+        elif i == 0:
+            self.plan.stream.wait_stream(torch.cuda.current_stream(self.plan.device))
+            self._start = torch.cuda.Event(enable_timing=True)
+            self._start.record(self.plan.stream)
+        done = st.pending.add(tensors)
+        if done is not None:
+            self._read.append(done)
+            if len(self._read) > LAG:
+                self._wait(self._read.pop(0))
+
+    def _wait(self, read: Any) -> None:
+        """The forward's stream waits until the side stream has read a group's tables."""
+        torch.cuda.current_stream(self.plan.device).wait_event(read)
 
     def finish(self, st: StepTables) -> Roots:
         if self.streams:
             res = st.pending.finish().result()
             st.pending = None
-            return Roots(res.root, (), res.slot_roots)
+            sec = self._start.elapsed_time(self._marks[-1][1]) / 1000 if self._marks and self._start else None
+            self._read = []
+            return Roots(res.root, (), res.slot_roots, sec)
         return self.commit(st)
 
     def commit(self, st: StepTables) -> Roots:
@@ -258,10 +274,9 @@ class Committer:
                 r = RTB.step_roots(self.context, st.step, outs, self.key)
         return Roots(r.root, tuple(r.tables))
 
-    def units_of(self, op: str, lo: int, hi: int, scale: bool = False) -> list[int]:
-        """The commit units holding bytes ``lo .. hi - 1`` of table ``op``'s row (and its scale, with ``scale``)."""
-        first, n, own = self.spans[op]
-        return list(range(first + lo // self.cap, first + (hi - 1) // self.cap + 1)) + ([first + n] if scale and own else [])
+    def unit_of(self, family: str, index: int) -> int:
+        """The commit unit holding unit ``index`` of ``family``'s outputs."""
+        return self.bases[family] + index
 
     def slot_rows(self, st: StepTables, b: int) -> list[bytes]:
         """Slot b's committed rows from a kept step's tables (`slots.slot_rows`), for the reference's `commit_slot`."""

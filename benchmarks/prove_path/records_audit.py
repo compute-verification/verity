@@ -33,7 +33,7 @@ member's ``--registered`` file comes from the record and those entries alone (`i
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
 (a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row). The reads
 of a pinned parameter leave the free inputs: `declared_count` counts them registered, the ``--registered`` file's
-parameters and the window's ties (below) its pins.
+parameters its pins.
 
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, the torch
 loop's activation rows, `TorchLoop.commit_activations`) has them fixed before the draw with the rest of the registration;
@@ -91,6 +91,7 @@ import json
 import math
 import os
 import random
+import shutil
 import socket
 import subprocess
 import sys
@@ -278,10 +279,10 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
     alone): its input rows less those its wires, registered reads of the verifier's ``pins`` and ingress fill leave
     ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile unit's one input, a statement of its own.
     So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. An ``untied`` value (`window_pins`:
-    a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin: its reads are free,
-    and the count names it."""
+    a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin here, though the audit
+    opens its reads against its committed root: its input rows are free, and the count names it."""
     untied = set(untied)
-    n = IF.input_count(doc, resolve, set(pins) - untied)
+    n = IF.input_count(doc, resolve, () if isinstance(pins, str) else set(pins) - untied)
     if untied:
         n = {**n, "untied": sorted(untied)}
     other = n["free"] + bits
@@ -505,6 +506,45 @@ def _code(fn: Any) -> str | None:
     return getattr(getattr(d, "body", None) or getattr(d, "evaluate", None), "__module__", None)
 
 
+def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> dict:
+    """At most ``most`` of `zk_mutants.py`'s one-bit edits of the first drawn session's proof (a prover that sent the edited
+    proof, the round messages that carried it rebuilt and the coins kept), each verified by Lean `verify --zk` on the honest
+    member's circuit and public file: what the verifier of record refuses, not the prover. Then that public file with one
+    bit flipped (``public-bit-*``) under the honest proof."""
+    import a0
+    sys.path.insert(0, str(HERE.parents[1] / "verity" / "ml" / "flock" / "verifier"))
+    import zk_mutants as ZM
+
+    k, honest = next(((k, s.parent) for k in range(len(members))
+                      for s in sorted((wdir / f"session-m{k}" / "sessions").glob("*/session.json"))), (None, None))
+    if honest is None:
+        return {"edits": 0, "refused": 0, "why": "no drawn session"}
+    st = {"dir": wdir / f"m{k}", "partition_file": wdir / "partition.json", "program_file": wdir / "program.json"}
+    ZM.main(honest, out / "mutants")
+    cases = {}
+    for c in [c for c in json.loads((out / "mutants" / "zk_mutants.json").read_text()) if c.get("rep") is not None][:most]:
+        sd = out / c["name"] / "sessions" / honest.name
+        shutil.copytree(honest, sd, copy_function=os.link, dirs_exist_ok=True)
+        for f in (out / "mutants" / c["name"]).iterdir():
+            (sd / f.name).unlink(missing_ok=True)
+            shutil.copyfile(f, sd / f.name)
+        v = a0.lean_verify(lean, st, members[k].n, out / c["name"], zk=True)
+        cases[c["name"]] = {"refused": a0.lean_refused(v), "why": v.get("why"), "expected": c["expect"]["why"]}
+    n = members[k].n
+    pub = (st["dir"] / f"pub-{n}.bin").read_bytes()
+    for name, off in (("public-bit-mid", len(pub) // 2), ("public-bit-last", len(pub) - 1)):
+        d = out / name / "member"
+        shutil.copytree(st["dir"], d, copy_function=os.link, dirs_exist_ok=True)
+        (d / f"pub-{n}.bin").unlink()
+        (d / f"pub-{n}.bin").write_bytes(pub[:off] + bytes([pub[off] ^ 1]) + pub[off + 1:])
+        shutil.copytree(honest, out / name / "sessions" / honest.name, copy_function=os.link, dirs_exist_ok=True)
+        v = a0.lean_verify(lean, {**st, "dir": d}, n, out / name, zk=True)
+        cases[name] = {"refused": v["accepted"] is False and v.get("digest") is not None, "why": v.get("why"),
+                       "expected": f"the public file's byte {off} of {len(pub)}, bit 0 flipped, under the honest proof"}
+    return {"member": k, "session": honest.name, "edits": len(cases), "refused": sum(v["refused"] for v in cases.values()),
+            "cases": cases}
+
+
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
@@ -602,6 +642,10 @@ def audit(a: argparse.Namespace) -> int:
         row["ok"] = row["forged"]["ok"] and ordered
     else:
         row["ok"] = ok and ordered and (compiled is None or compiled["ok"])
+        if a.flip_proofs and (s.get("audit") or {}).get("accepted"):
+            pe = row["proof_edits"] = proof_edits(a.lean, out / "window", mine.members, out / "proof-edits", a.flip_proofs)
+            row["ok"] = row["ok"] and pe["edits"] > 0 and pe["refused"] == pe["edits"]
+            print("PROOF-EDITS " + json.dumps({x: pe.get(x) for x in ("edits", "refused", "member", "session")}))
     if a.challenger:
         row["ok"] = row["ok"] and not row["coins_session"]["error"]
     row["ok"] = row["ok"] and (acts is None or acts["ok"])
@@ -649,6 +693,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
     p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
+    p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
+                   help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
+                   "Lean verify must refuse (`proof_edits`)")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, or "
                    "gate:USER@HOST (vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
