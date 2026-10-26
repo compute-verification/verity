@@ -27,6 +27,10 @@ Each hypothesis is to come from its protocol's own statement:
 * the wipe: `Pous.Guarantees.SecureErasureMeetsFamily`, at `f = 1/19` and `ε_wipe = 2^-128` for the band of the
   fill's size, through DEVICE-WIPE's `Verity.Wipe.SurvivorBound` (neither bridge is stated yet);
 * the memory term: weights-only PoUS at a share of `0.07` (ASK-132), at `δ_PoUS`.
+Demo A (Daniel's ruling of 25 Oct) is PoUW, sampled proofs and network accounting only: `JointHorizonBlocksA` is its
+composed theorem, the blocks' per-period guarantees for those three audits with no wipe or memory term, the instance of
+`JointHorizonBlocksLegs` (any set of the audits). Memory accounting (PoUS, PoUB, the wipe and the memory and wipe terms)
+joins at M4 through `JointHorizonBlocks`.
 -/
 
 namespace Accounting.Guarantees
@@ -64,5 +68,39 @@ def JointHorizonBlocks : Prop :=
         (∃ b, (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ∨
         (∃ b, (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ)) ≤
       ∑ b, ∑ a, δ b a + ∑ b, εWipe b + ∑ b, δPous b
+
+/-- **The joint guarantee over a horizon of `B` server-time blocks, for a set of the audits.** On any device and any
+`B` blocks of a node's run over a circuit on one coin space (each block a period decided on its own coordinates, and a
+function of every coin, so a block may adapt to the earlier blocks' coins), if each audit `a ∈ A` of block `b` has its
+per-period guarantee at certificates `c b`, price `p` and error `δ b a`, the probability that some audit of `A` in some
+block accepts while its claim fails is at most `∑_b ∑_{a ∈ A} δ b a`. The audits outside `A` take no hypothesis and
+are bounded by nothing. -/
+def JointHorizonBlocksLegs : Prop :=
+  ∀ (ι α I : Type) [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
+    [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (r : Fin B → PeriodRun d α C Ω)
+    (c : Fin B → Certificates) (p : Price) (A : Finset Audit) (δ : Fin B → Audit → ℝ),
+    (∀ b, ∀ a ∈ A, (r b).Sound (c b) p a (δ b a)) →
+    Pouw.pr (fun ξ => ∃ b, ∃ a ∈ A, (r b).accepts a ξ ∧ ¬ (r b).Holds (c b) p a ξ) ≤ ∑ b, ∑ a ∈ A, δ b a
+
+/-- **Demo A's composed theorem: sampled proofs, PoUW and the network certifier over a horizon of `B` server-time
+blocks.** On any device and any `B` blocks of a node's run over a circuit on one coin space (each block a period
+decided on its own coordinates, and a function of every coin, so a block may adapt to the earlier blocks' coins), if
+block `b`'s sampled proofs, PoUW and network certifier have their per-period guarantees at certificates `c b`, price
+`p` and errors `δ b a`, the probability that one of those three audits in some block accepts while its claim fails
+(more than an `ε` share of the circuit's units wrong, less than `W` of work, or more than `K` bits through the network
+certifiers) is at most `∑_b (δ b sampled + δ b pouw + δ b network)`.
+
+The weights are pinned at their transfer in, like any ingress (ASK-130 A), not by PoUS. The memory and wipe terms
+join at M4 through `JointHorizonBlocks`. As there, the integrity leg is `PeriodRun.Sound` for `.sampled` in each
+block, not proofs' `Flock.Guarantees.IntegrityBlock`, which is stated over C-Flock's game rather than this coin space;
+and the state a block carries across a wipe is outside the integrity bound (PRF-167). -/
+def JointHorizonBlocksA : Prop :=
+  ∀ (ι α I : Type) [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
+    [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (r : Fin B → PeriodRun d α C Ω)
+    (c : Fin B → Certificates) (p : Price) (δ : Fin B → Audit → ℝ),
+    (∀ b, ∀ a ∈ ({.sampled, .pouw, .network} : Finset Audit), (r b).Sound (c b) p a (δ b a)) →
+    Pouw.pr (fun ξ => ∃ b, ∃ a ∈ ({.sampled, .pouw, .network} : Finset Audit),
+        (r b).accepts a ξ ∧ ¬ (r b).Holds (c b) p a ξ) ≤
+      ∑ b, ∑ a ∈ ({.sampled, .pouw, .network} : Finset Audit), δ b a
 
 end Accounting.Guarantees
