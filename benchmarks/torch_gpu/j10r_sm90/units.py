@@ -18,7 +18,10 @@ import torch
 from verity.core.protocols.pouw.circuit import seeds as SD
 
 T = 32
-POISON = -1515870811  # 0xA5A5A5A5 as s32
+#: 0xA5A5A5A5 and 0x5A5A5A5A as s32: a receipt word equals either with probability 2^-32, so over a call of 10^9 words
+#: one poison alone flags real words; a word is unwritten only where it holds each poison after the run under it
+POISONS = (-1515870811, 1515870810)
+POISON = POISONS[0]
 #: h1u.cu's UCallR, field for field
 UCALLR = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), ("rws", "<u8"), ("N", "<u4"),
                    ("K", "<u4"), ("u0", "<u4"), ("md", "<u4")])
@@ -41,6 +44,25 @@ def digest(words) -> bytes:
 
 def _stream() -> int:
     return torch.cuda.current_stream().cuda_stream
+
+
+def twice(call, run=None) -> dict:
+    """``run`` (default ``call.run``) under each of `POISONS` in turn: the receipt words left unwritten (each poison where
+    it was), the words that differ between the two runs otherwise, and the words equal to the first poison after its run
+    (written words among them: the single-poison test's false alarms). ``call.out`` holds the second run's."""
+    run = run or call.run
+    call.poison(POISONS[0])
+    run()
+    torch.cuda.synchronize()
+    first = call.out.clone()
+    call.poison(POISONS[1])
+    run()
+    torch.cuda.synchronize()
+    unwritten = (first == POISONS[0]) & (call.out == POISONS[1])
+    unstable = int(((first != call.out) & ~unwritten).sum())
+    left, hits = int(unwritten.sum()), int((first == POISONS[0]).sum())
+    del first, unwritten
+    return {"unwritten": left, "unstable": unstable, "words_equal_to_the_first_poison": hits}
 
 
 class H1u:
@@ -92,10 +114,10 @@ class H1uCall:
         t[1]["u0"] = self.units
         self.tab = torch.from_numpy(t.view(np.uint8).copy()).to("cuda")
 
-    def poison(self) -> None:
-        self.out.fill_(POISON)
-        self.rws.fill_(0xA5)
-        self.seeds.fill_(0x5A5A5A5A5A5A5A5)
+    def poison(self, p: int = POISON) -> None:
+        self.out.fill_(p)
+        self.rws.fill_(p & 0xFF)
+        self.seeds.fill_(p)
 
     def run(self) -> None:
         h, st, m = self.lib.h, _stream(), self.a.shape[0]
@@ -144,12 +166,12 @@ class RefCall:
         self.out = torch.empty((self.n, lib.words(k)), dtype=torch.int32, device="cuda")
         self.z = torch.empty((self.n, T, T), dtype=torch.int32, device="cuda") if z else None
 
-    def poison(self) -> None:
-        self.out.fill_(POISON)
-        self.seedc.fill_(0x5A5A5A5A5A5A5A5)
-        self.sigma.fill_(0x5A5A5A5A5A5A5A5)
+    def poison(self, p: int = POISON) -> None:
+        self.out.fill_(p)
+        self.seedc.fill_(p)
+        self.sigma.fill_(p)
         if self.z is not None:
-            self.z.fill_(POISON)
+            self.z.fill_(p)
 
     def run(self, z: bool = True) -> None:
         h, st = self.lib.h, _stream()

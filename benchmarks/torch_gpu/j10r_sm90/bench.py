@@ -15,8 +15,9 @@ rotates each rep:
 * `plain+NAME`: plain, then NAME's units, in one timed region (what serving them one after the other costs);
 * `ref` (--ref, --ref-reps reps): the fallback's seeds and receipts over every unit of the call (jr_seeds, jr_units).
 
-After the reps, every arm's last run is held to the fixtures: the units' sampled receipts (and seed words) and plain's
-s32 sums at the sampled tiles, so every number comes from a run that was exact. overhead = units / plain and gamma =
+After the reps, every units arm runs once more under each poison (`units.twice`: no word unwritten or unstable) and is
+held to the fixtures: its sampled receipts and seed words, and plain's s32 sums at the sampled tiles, so every number
+comes from a build that was exact. overhead = units / plain and gamma =
 (plain + units) / plain, per call, per layer (q, kv, o, up and down) and per step (52 layers and the head). check.json
 (--check), when given, is copied into the report's `check` verdicts.
 """
@@ -111,15 +112,14 @@ def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain, args, scratch
             e1.synchronize()
             ms[k].append(e0.elapsed_time(e1))
     exact: dict = {}
+    gates: dict = {}
     if picks:
         want = arrays[f"{key}/receipts"]
         want_sc, want_sig = arrays[f"{key}/seed_c"].tobytes(), [r.tobytes() for r in arrays[f"{key}/sigma"]]
         pk = torch.tensor(picks, device="cuda")
         exact["plain_s32"] = int((tiles(torch._int_mm(a, bt), n, picks) != arrays[f"{key}/z"]).sum()) == 0
         for nm, cl in calls.items():
-            cl.poison()
-            arms[nm]()
-            torch.cuda.synchronize()
+            g = UN.twice(cl, arms[nm])
             got = cl.out[pk].cpu().numpy().view(np.uint32)
             if isinstance(cl, UN.RefCall):
                 sc = [UN.digest(cl.seedc.cpu().numpy())] * len(picks)
@@ -127,8 +127,9 @@ def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain, args, scratch
             else:
                 sd = cl.seeds[pk].cpu().numpy()
                 sc, sig = [UN.digest(r[:8]) for r in sd], [UN.digest(r[8:]) for r in sd]
-            exact[nm] = (bool((got == want).all()) and int((cl.out == UN.POISON).sum()) == 0
-                         and sc == [want_sc] * len(picks) and sig == want_sig)
+            g.update(bad_words=int((got != want).sum()), seeds_equal=sc == [want_sc] * len(picks) and sig == want_sig)
+            gates[nm] = g
+            exact[nm] = g["bad_words"] == 0 and g["unwritten"] == 0 and g["unstable"] == 0 and g["seeds_equal"]
     med = {k: statistics.median(v) for k, v in ms.items() if v}
     units_of = [nm for nm in libs if nm in med]
     rec = {"call": key, "linear": lin, "m": m, "n": n, "k": c["k"], "units": c["units"],
@@ -136,7 +137,7 @@ def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain, args, scratch
            "overhead": {nm: round(med[nm] / med["plain"], 4) for nm in units_of},
            "gamma": {nm: round((med["plain"] + med[nm]) / med["plain"], 4) for nm in units_of},
            "gamma_serial": {nm: round(med[f"plain+{nm}"] / med["plain"], 4) for nm in units_of if f"plain+{nm}" in med},
-           "exact": exact}
+           "exact": exact, "gates": gates}
     return rec
 
 

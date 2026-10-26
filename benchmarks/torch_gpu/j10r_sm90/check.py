@@ -12,8 +12,9 @@ same way, none against another:
   max-magnitude rows of `shape.SPECIAL`;
 * **each fixture call** (linear, M): A and B regenerated whole (`shape.whole`, in S, over --jobs processes) and each
   sampled unit's 32 rows of each held to the digests fixtures.json pins; the served z, `torch._int_mm(A, B^T)`, on every
-  sampled unit's 32 x 32 cells; then each h1u build over the whole call under 0xA5 (receipts, row workspace, seeds): no
-  poison left in any unit, every sampled unit's receipt word for word and its seed_c and sigma_R; with --sm the same call
+  sampled unit's 32 x 32 cells; then each h1u build over the whole call, run under 0xA5 and then 0x5A (receipts, row
+  workspace, seeds): no word left unwritten (holding each poison after its run) or differing between the two runs in any
+  unit, every sampled unit's receipt word for word and its seed_c and sigma_R; with --sm the same call
   by kh_units_multi_j10r_sm, every word equal to kh_units_multi_j10r's; and the fallback (--ref) on the sampled units:
   receipts, z and seeds.
 
@@ -59,27 +60,23 @@ def libs_of(h1u: list[str], ref: str | None, sm: bool) -> dict:
 
 
 def run_build(lib, a, b, salt, roots, base, picks) -> dict:
-    """One build on one call, poisoned first: {receipts of picks (uint32), seed_c and sigma of picks (bytes),
-    z of picks (the fallback's), poison words left (in every unit the build computed)}."""
+    """One build on one call, run under each poison (`units.twice`): {receipts of picks (uint32), seed_c and sigma of
+    picks (bytes), z of picks (the fallback's), words left unwritten and words unstable between the runs (in every unit
+    the build computed)}."""
     if isinstance(lib, UN.Ref):
         c = UN.RefCall(lib, a, b, salt, roots, base, units=picks)
-        c.poison()
-        c.run()
-        torch.cuda.synchronize()
+        tw = UN.twice(c)
         sig = c.sigma.cpu().numpy()
         return {"receipts": c.out.cpu().numpy().view(np.uint32), "z": c.z.cpu().numpy().view(np.uint32),
                 "seed_c": [UN.digest(c.seedc.cpu().numpy())] * len(picks), "sigma": [UN.digest(r) for r in sig],
-                "poison_left": int((c.out == UN.POISON).sum()), "units_run": c.n}
+                "poison_left": tw["unwritten"], "unstable": tw["unstable"], "units_run": c.n}
     c = UN.H1uCall(lib, a, b, salt, roots, base)
-    c.poison()
-    c.run()
-    torch.cuda.synchronize()
+    tw = UN.twice(c)
     pk = torch.tensor(picks, device="cuda")
     sd = c.seeds[pk].cpu().numpy()
-    out = {"receipts": c.out[pk].cpu().numpy().view(np.uint32), "seed_c": [UN.digest(r[:8]) for r in sd],
-           "sigma": [UN.digest(r[8:]) for r in sd], "poison_left": int((c.out == UN.POISON).sum()),
-           "units_run": c.units, "_all": c.out}
-    return out
+    return {"receipts": c.out[pk].cpu().numpy().view(np.uint32), "seed_c": [UN.digest(r[:8]) for r in sd],
+            "sigma": [UN.digest(r[8:]) for r in sd], "poison_left": tw["unwritten"], "unstable": tw["unstable"],
+            "units_run": c.units, "_all": c.out}
 
 
 def compare(got: dict, want_rec: np.ndarray, want_seedc: bytes, want_sigma: list[bytes], want_z: np.ndarray | None) -> dict:
@@ -88,11 +85,11 @@ def compare(got: dict, want_rec: np.ndarray, want_seedc: bytes, want_sigma: list
          "bad_units": [int(i) for i in np.nonzero(bad.any(axis=1))[0][:8]],
          "seed_c_bad": sum(s != want_seedc for s in got["seed_c"]),
          "sigma_bad": sum(s != w for s, w in zip(got["sigma"], want_sigma)), "poison_left": got["poison_left"],
-         "units_run": got["units_run"]}
+         "unstable": got["unstable"], "units_run": got["units_run"]}
     if want_z is not None and "z" in got:
         r["z_bad_words"] = int((got["z"] != want_z).sum())
     r["ok"] = (r["bad_words"] == 0 and r["seed_c_bad"] == 0 and r["sigma_bad"] == 0 and r["poison_left"] == 0
-               and r.get("z_bad_words", 0) == 0)
+               and r["unstable"] == 0 and r.get("z_bad_words", 0) == 0)
     return r
 
 
