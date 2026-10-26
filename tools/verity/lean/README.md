@@ -39,6 +39,7 @@ python tools/verity/lean/merge.py --install              once per clone: git mer
 python tools/verity/lean/conventions.py [--json F] [PKG...]  the Lean's form counted from the text, no build: namespaces against
                                                   module paths, casing, name forms, retired words, file sizes, heartbeat
                                                   overrides, docstrings, where guarantees and assumptions live; no audit reads it
+python tools/verity/lean/map.py [--moves MAP.toml]       packages, areas by tree, the area graph, module sizes; no build
 ~~~
 
 A lane's edit loop is `verity lean try FILE [--on NODE]`: through `research run` (default vy-nebius-cpu-1's `research` pool) it runs
