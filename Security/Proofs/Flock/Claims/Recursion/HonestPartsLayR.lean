@@ -19,7 +19,7 @@ one `refP` hands its masked session (`RefParts.wit`, at the inner rounds as the 
 `honest_partAccepts_layR` is `partAccepts_run_deployRec` there, with these of its premises proved:
 
 * `ReadsBackB` (`hrb`): `readsBack_recTr`, the coin server's record read back by `recRead`;
-* `HeldB` (`hHeld`): `heldB_layoutBTops` at `finOpen (restR elem)` (`heldB_layR`: `layR` changes only the calls);
+* `HeldB` (`hHeld`): `heldB_layoutBTops` at `finOpen (restR elem)` (`heldB_layRH`: `layR` changes only the calls);
 * the run's messages (`hms`): `ms` is the run's;
 * `Flock.check` at the part's V\* statement (`hck`): the honest outer witness is in the V\* relation there
   (`vstar_complete_run_setup`, `check_of_R`);
@@ -73,7 +73,7 @@ theorem layoutBTops_calls_true {Col T : Type} (fin : Msg → List (ℕ × List (
 
 /-- **`HeldB` at the layout of record**: `heldB_layoutBTops` at `finOpen (restR elem)`, `layR` changing only the calls
 it records. -/
-theorem heldB_layR {W : Type} (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+theorem heldB_layRH {W : Type} (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (IV : Claims.Verifier Coin) (ivScope : Msg → Bool) (b : Brings) (I : Claims.Recursion.Inner Coin W)
     (hk : ∀ x, I.V.k x = (FlockDeploy.V false).k x) :
     Claims.Recursion.VStarB.HeldB (deployRec IV ivScope b) I (DeployedR.layR elem) Claims.Recursion.Form.Dense :=
@@ -137,7 +137,7 @@ theorem honest_partAccepts_layR (elem : (r : XR) → List (Fin r.w.parts.length 
     readsBack_recTr _ _ bL _ aux nOf hd recRest rfl
   have hHeld : Claims.Recursion.VStarB.HeldB (deployRec I.V (FlockDeploy.deployPlain
       _root_.Flock.Readable.relation).scopeCheck bL) I L Claims.Recursion.Form.Dense :=
-    heldB_layR elem I.V _ bL I fun _ => rfl
+    heldB_layRH elem I.V _ bL I fun _ => rfl
   obtain ⟨-, -, -, -, hrel, -⟩ := vstar_complete_run_setup FlockDeploy.sha512 I
     (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck bL hN hS hW hR ω r hI hs
   have hck := check_of_R hrel
