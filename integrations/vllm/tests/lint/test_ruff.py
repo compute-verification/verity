@@ -6,8 +6,9 @@ A finding is keyed ``(file, kind, symbol, detail)`` like the rule lints' violati
 ``from line N`` dropped, so edits elsewhere in a file don't churn the list.  ``ruff check --fix`` fixes some (F401, F541,
 RUF100's stale ``# noqa``); delete the entry each fix makes stale.
 
-The allowlist is a ratchet the ratchet gate holds to no growth, but this module has no ``NAME``, so the gate doesn't rerun it
-with the base's code: drive's Python has no ruff.
+The allowlist is a ratchet the ratchet gate holds to no growth, and the gate judges a change to this module, to ``ruff.toml``
+or to the ruff pin like one to a rule lint's code: it reruns this lint as the change's base has it, the base's config and pin
+included, on the change's tree.
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ from pathlib import Path
 
 from . import _ratchet as R
 
-BASELINE = "ruff"
+NAME = "ruff"
 RULE = "ruff (integrations/vllm/ruff.toml)"
 CONFIG = R.ROOT / "ruff.toml"
 LINE_REF = re.compile(r" from line \d+")
@@ -69,13 +70,13 @@ def scan() -> tuple[R.Violation, ...]:
 
 
 def test_no_new_findings() -> None:
-    R.assert_no_new(BASELINE, scan(), RULE,
+    R.assert_no_new(NAME, scan(), RULE,
                     "Fix the code (`ruff check --fix integrations/vllm` fixes some), or, where the rule is wrong for that "
                     "line, say why in a `# noqa: CODE` on it.")
 
 
 def test_allowlist_has_no_stale_entries() -> None:
-    R.assert_no_stale(BASELINE, scan(), RULE)
+    R.assert_no_stale(NAME, scan(), RULE)
 
 
 def test_findings_are_keyed_by_their_enclosing_definition() -> None:
