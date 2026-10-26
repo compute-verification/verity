@@ -295,9 +295,10 @@ def partInFn (j : Json) : Except String Json := do
       let q ← jObj st ["kind", "level", "N"] "stmt"
       In.capIn src (← jNatAt q "level" "stmt") (← jNatAt q "N" "stmt")
     | k => throw s!"stmt.kind: level, inner or cap, not {k}"
-  pure (Json.mkObj [("ports", Json.arr (p.map fun (nm, pi) => Json.arr #[(nm : Json), Json.mkObj [
-    ("rows", Json.arr (pi.rows.map (short <| u16le ·.words))), ("salts", Json.arr (pi.rows.map (short ·.salt))),
-    ("refs", Json.arr (pi.refs.map fun r => (r : Json)))]]))])
+  let port : String × In.PortIn → Json := fun (nm, q) => Json.arr #[(nm : Json), Json.mkObj [
+    ("rows", Json.arr (q.rows.map fun (r : In.Row) => short (u16le r.words))),
+    ("salts", Json.arr (q.rows.map fun (r : In.Row) => short r.salt)), ("refs", natsJson q.refs.toList)]]
+  pure (Json.mkObj [("ports", Json.arr (p.map port))])
 
 end VStar.DT
 
