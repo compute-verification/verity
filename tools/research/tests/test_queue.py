@@ -588,6 +588,56 @@ def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world
     assert [m.pr for m in members] == [5, 4]
 
 
+def _resolved_main(world: World, head: str) -> str:
+    """``head`` with `main` merged into it, each conflict taken from `main`: it contains ``head`` but no longer conflicts."""
+    _git(world.dev, "fetch", "-q", "origin")
+    _git(world.dev, "checkout", "-q", "--detach", head)
+    _git(world.dev, "merge", "-q", "--no-edit", "-X", "theirs", "origin/main")
+    sha = _git(world.dev, "rev-parse", "HEAD")
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/dev/{sha}")
+    return sha
+
+
+def test_a_ready_pr_containing_one_that_conflicts_with_main_shows_waiting_naming_it_and_the_sync_records_why(world):
+    """26 Oct: status called S1's #4373 and #4436 'admitted' for six hours while the sync left them out, waiting on their
+    contained #4326 and #4349, which conflicted with `main`; the sync recorded no reason and status didn't recompute one."""
+    a = world.change({"a.txt": "pr\n"})
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'a.txt': 'main moved\n'})}:refs/heads/main")
+    b = _resolved_main(world, world.change({"b.txt": "b2\n"}, base=a))
+    world.gh.put(1, a)
+    world.gh.put(2, b)
+    q = world.queue()
+    got = q.status()
+    assert got[1].state == "refused" and got[1].why.startswith("conflicts with `main` in a.txt")
+    assert got[2].state == "waiting" and got[2].why == f"contains #1, which is refused: {got[1].why}"
+    members, entries = q.sync()
+    assert members == [] and entries[2].state == "waiting" and entries[2].why == "contains #1, which didn't merge"
+    assert {n: (w["head"], w["why"]) for n, w in q.load_state()["waiting"].items()} == {"2": (b, entries[2].why)}
+    assert sum("#2 at" in line and "waits off `next`" in line for line in world.logs) == 1
+    q.sync()
+    assert sum("#2 at" in line and "waits off `next`" in line for line in world.logs) == 1      # once per head
+    assert q.status()[2].why.startswith("contains #1, which is refused: ") and q.status()[2].why.endswith("(at the last sync)")
+
+
+def test_status_judges_a_chain_of_contained_prs_each_after_what_it_contains(world):
+    """C contains B contains A, and A conflicts with `main`: B waits naming A, and C waits too, numbered below both so a judgment
+    in number order would have called it admitted."""
+    a = world.change({"a.txt": "pr\n"})
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'a.txt': 'main moved\n'})}:refs/heads/main")
+    b = _resolved_main(world, world.change({"b.txt": "b2\n"}, base=a))
+    c = world.change({"c.txt": "c3\n"}, base=b)
+    world.gh.put(9, a)
+    world.gh.put(5, b)
+    world.gh.put(1, c)
+    got = world.queue().status()
+    assert got[9].state == "refused"
+    assert got[5].state == "waiting" and got[5].why.startswith("contains #9, which is refused: conflicts with `main` in a.txt")
+    assert got[1].state == "waiting" and got[1].why.startswith("contains #5, which is waiting: contains #9, which is refused")
+    members, entries = world.queue().sync()
+    assert members == [] and entries[1].why == "contains #5, which didn't merge"
+    assert set(world.queue().load_state()["waiting"]) == {"1", "5"}
+
+
 def _based_on(world: World, n: int, base: str, branch: str = "") -> None:
     import dataclasses
 
