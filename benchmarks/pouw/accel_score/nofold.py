@@ -211,10 +211,11 @@ SHA_BUILT = {"H200": 4.79e9, "RTX PRO 6000": 7.13e9}
 U_W, U_X = 80, 96              # BET-HYBRID-2 K (±80 both) and NAIVE-STRASSEN (V ±96 to depth 13): the larger of each
 P_W, P_X = 0.0119, 0.0042      # wrap densities at those widths, Llama-3.1-8B (BET-HYBRID-2 H; 70B p_X 0.64%)
 P_X_AT = {80: 0.0016, 96: 0.0042}   # p_X by V's width, Llama-3.1-8B (BET-HYBRID-2 table (c))
-# v2 as frozen (coordinator, 04:13Z and 04:20Z): U ±80; V ±80 on the H200; on the RTX PRO 6000 the cheaper of V ±96
-# (A10 (b)) or V ±80 with an honest kernel that runs depth-1 Strassen or HK itself (A10 (a), A14). Noise tiles t = 2
-# (H200) and t = 4 (RTX PRO 6000).
-V_WIDTH = {"H200": 80, "RTX PRO 6000": 96}
+# v2 as frozen (coordinator, 04:13Z and 04:20Z): U ±80 and V ±80 on both cards. At ε_alg budget 0 every static shape's
+# lane load (ALU without wraps over tensor) is at least 1.00 on both cards, which meets ALGO-COST A10's first fix (0.75
+# at ±80), so neither V ±96 nor an honest Strassen kernel is needed; V ±96 on the RTX PRO 6000 is the margin. Noise
+# tiles t = 2 (H200) and t = 4 (RTX PRO 6000).
+V_WIDTH = {"H200": 80, "RTX PRO 6000": 80}
 TILES = {"H200": 2, "RTX PRO 6000": 4}
 # The tiles' cross-term route Σ_j (b + V)π_jᵀ Uᵀ + V(Σ_j c_j)ᵀ: one INT8 digit plus a sparse high part, so c_t = 2 + the
 # best form (ALGO-COST A12, A13; floor 2). Unlisted tile counts take the least listed, the prover's cheapest.
@@ -493,9 +494,7 @@ def v2_world_print(budget: float = 0.01) -> None:
 
 
 def v2_frozen_print(budget: float = 0.0) -> list[dict]:
-    """v2 as frozen: the card's tile count, A12/A13's c_t, V ±80 on the H200, and both A10 options on the RTX PRO 6000
-    (V ±96; V ±80 with the honest kernel running Strassen or HK, whose overlapped γ is v2's at ±80 wherever the period
-    is ALU-bound). Then ε_alg at every registrable static shape on its own, the prover's cheapest instance (A = B = 0,
+    """v2 as frozen: the card's tile count, A12/A13's c_t, V ±80, and V ±96 on the RTX PRO 6000 beside it (A10's margin). Then ε_alg at every registrable static shape on its own, the prover's cheapest instance (A = B = 0,
     its own model of one shape), not only the world mix. v2's budget is 0: at 1% a lone K 65536 shape leaks 0.50% (H200)
     and 0.76% (RTX PRO 6000); at 0 the world γ is unchanged and that shape alone costs 1.53 (from 1.46) and 1.09 (1.02)."""
     print(f"\nv2 as frozen at the world model (tiles H200 t={TILES['H200']}, RTX PRO 6000 t={TILES['RTX PRO 6000']}; "
@@ -503,8 +502,7 @@ def v2_frozen_print(budget: float = 0.0) -> list[dict]:
     print(f"  {'card':30} {'model':16} {'g_ovl':>6} {'g_add':>6} {'T':>5} {'A':>5} {'util':>5} {'eps_alg':>7} "
           f"{'wraps':>6} {'copy':>5} {'uncr':>5}  static worst shape")
     rows = (v2_world(budget, frozen=True) + v2_world(budget, built=True, frozen=True)
-            + v2_world(budget, cards=["RTX PRO 6000"], frozen=True, u_x=80)
-            + v2_world(budget, built=True, cards=["RTX PRO 6000"], frozen=True, u_x=80))
+            + v2_world(budget, cards=["RTX PRO 6000"], frozen=True, u_x=96))
     for r in rows:
         g, (K, N, L, t) = r["worst"]
         print(f"  {r['card']:30} {r['model']:16} {r['gamma']:6.2f} {r['gamma_add']:6.2f} {r['T']:5.2f} {r['A']:5.2f} "
@@ -512,15 +510,17 @@ def v2_frozen_print(budget: float = 0.0) -> list[dict]:
               f"{r['uncredited']:5.2%}  K {K} N {N} L {L}: {g:.2f}")
     print("  each registrable static shape alone (prover's own model of that shape, A = B = 0): worst eps_alg, its L")
     for card in V2_CARDS:
-        for u_x in sorted({V_WIDTH[card], 80}):
-            worst = (0.0, None, None)
+        for u_x in sorted({V_WIDTH[card], 96}):
+            worst, load = (0.0, None, None), math.inf
             for model, shapes in SHAPES.items():
                 for K, N, _ in shapes:
                     r = v2_pick(card, K, N, 16, budget, tile_set=(TILES[card],), overlap=True, u_x=u_x)
                     if r["eps_ovl"] >= worst[0]:
                         worst = (r["eps_ovl"], (K, N, r["L"]), r["gamma_max"])
+                    load = min(load, r["A_nw"] / r["T"])
             e, (K, N, L), g = worst
-            print(f"  {card:13} V±{u_x}: worst eps_alg {e:.2%} at K {K} N {N} L {L} (gamma {g:.2f})")
+            print(f"  {card:13} V±{u_x}: worst eps_alg {e:.2%} at K {K} N {N} L {L} (gamma {g:.2f}); least lane load "
+                  f"(A10: Strassen gains below 0.71 at ±80, 0.49 at ±96) {load:.2f}")
     return rows
 
 
