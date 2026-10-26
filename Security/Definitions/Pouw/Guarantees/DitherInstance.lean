@@ -61,7 +61,7 @@ def WorkSoundAt (c : Verity.Accel.Card) (pb : PubBest c) : Prop :=
     SAKMatmul G P μ (pubCost e μ pb.mm / Hmm) η (nmax * Hmm / macs) Hmm →
     ShaSpeed G P μ (pubCost e μ pb.sha / Hsha) η (nmax * Hmm / macs) Hsha →
     ServiceSound G P k verdict κS → CertifierSeesImports G P k cin → RootAfterCoin G P k t arrive →
-    Extract G P k κx →
+    ExtractAdv G P k κx →
     FreedSound G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) Pd k
       (epsWorkSound (pubCost e μ pb.mm / Hmm) (pubCost e μ pb.sha / Hsha) Hmm Hsha Ho η δ (nmax * Hmm / macs)
         (Ein + Eout) k)

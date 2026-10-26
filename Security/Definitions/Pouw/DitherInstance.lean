@@ -38,7 +38,7 @@ open Pouw.RelativeSecurity
 
 section Cards
 
-instance : Fintype Verity.Accel.Res where
+instance instFintypeAccelRes : Fintype Verity.Accel.Res where
   elems := {.tensor, .tensorLong, .issue, .alu, .imad, .shfl, .f64, .smem, .dram}
   complete r := by cases r <;> simp
 
@@ -71,7 +71,8 @@ structure Others where
 attribute [instance] Others.instRes
 
 /-- **The period's devices**: `n` cards of the table `c`, a tick `1/f` seconds (the clock the table's per-tick rates
-are at, its data sheet's maximum: 1980 MHz on the H200, 2430 MHz on the RTX PRO 6000), and the other devices. -/
+are at; the fleet's transfer reads CALIB's θ, #4513 `clocks.fmax`: 1980 MHz on the H200, 2430 MHz on the RTX PRO
+6000), and the other devices. The headline holds at every clock. -/
 structure Devices (c : Verity.Accel.Card) where
   n : ℕ
   n_pos : 0 < n
