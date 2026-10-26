@@ -303,6 +303,7 @@ import Proofs.Flock.Claims.Recursion.ResLowerD
 import Proofs.Flock.Claims.Recursion.LabelsFull
 import Proofs.Flock.Claims.Recursion.ResSiteD
 import Proofs.Flock.Claims.Recursion.ResLowerDD
+import Proofs.Flock.Claims.Recursion.KSDec
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
