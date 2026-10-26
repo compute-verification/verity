@@ -26,6 +26,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegPort
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFitP
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SharedP
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 
 /-!
@@ -88,6 +89,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
 * `Wide.Shared`: a shared-row population's `b ‖ c` at a drawn unit (`bc_drawnW`), and the Wide statements
   (`outputs_committed_wide'`, `outputs_binding_wide_of`);
+* `Wide.SharedP`: that `b ‖ c` at public inputs, the public file read under the public input words (`inRows`,
+  `loadPublic_inRows`, `bc_drawnWP`);
 * `Wide.Upv`: a unit per template instance from acceptance (`check_upv_pos`, `setupHidden_upv_pos`), since `HmRow.check`
   refuses `units_per_vu = 0`;
 * `Wide.Block`: a template instance per block from acceptance (`check_g_pos`, `setupH_g_pos`), since `HmRow.check`
