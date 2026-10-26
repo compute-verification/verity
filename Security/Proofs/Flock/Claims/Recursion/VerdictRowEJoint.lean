@@ -15,7 +15,7 @@ and the targets read the accumulators `accRC` at that chain.
 * **The pieces' share** (`piecesComputes_accPiece`): `RowEJoint` gives every part's share of `accPiece`
   (`PiecesComputes`), whatever owner `ownQ` names.
 * **Row E's target** (`targetE_accRC`): wherever `P` gives each piece its `accPiece`, `TargetE` at `accRC`. `chainC`
-  reads the coins, so `targetE_rowD` is taken at the coins' own chain.
+  reads the coins, so row E's target at a fixed chain (`targetE_rowD`) is taken at the coins' own chain.
 -/
 
 namespace RecDeploy.Top
@@ -55,13 +55,18 @@ theorem accPiece_of_chain {x : Msg} {ms : List Msg} {cs : List Coin} {ch : ℕ �
   rw [hc]
   exact hs
 
-/-- **Row E's target at `accRC`**, wherever `P` gives each row D piece its `accPiece`. -/
-theorem targetE_accRC (P : Msg → List Msg → List Coin → Prop)
+/-- **Row E's target at `accRC`**, wherever `P` gives each row D piece its `accPiece`: row E's target at a fixed
+chain (`hE`, which `targetE_rowD` gives), taken at the coins' own chain and `P ∧ cs' = cs`. -/
+theorem targetE_accRC
+    (hE : ∀ (P' : Msg → List Msg → List Coin → Prop) (chainAt : Msg → List Msg → ℕ → ℕ → Array F128),
+      (∀ x ms cs, P' x ms cs → ∀ q ∈ rowDPieces key x, accHolds (sideAt rd) coefRead chainAt q x ms cs) →
+        TargetE rd P' (accR rd chainAt))
+    (P : Msg → List Msg → List Coin → Prop)
     (hP : ∀ x ms cs, P x ms cs → ∀ q ∈ rowDPieces key x, accPiece rd key q x ms cs) :
     TargetE rd P (accRC rd key) := by
   intro x ms cs hA D cls i hi
   obtain ⟨h1, h2, h3, h4⟩ := hA
-  exact targetE_rowD rd (fun x' ms' cs' => P x' ms' cs' ∧ cs' = cs) (fun x' ms' => chainC rd key x' ms' cs) key
+  exact hE (fun x' ms' cs' => P x' ms' cs' ∧ cs' = cs) (fun x' ms' => chainC rd key x' ms' cs)
     (fun x' ms' cs' h q hq => by
       obtain ⟨h, rfl⟩ := h
       exact hP x' ms' cs' h q hq)
