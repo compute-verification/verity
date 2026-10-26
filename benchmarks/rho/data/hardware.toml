@@ -1,9 +1,12 @@
 # Layer 1, the prior: the conversion to gates, locations, fleets (the inventory), horizons (rho/hardware.py).
 
 # The one conversion from the FLOP model's inputs to Boolean gates (hardware.Units). rho and the time to the target
-# don't depend on it (tests/test_hardware.py); what it sets is the gate counts printed beside them.
+# don't depend on it (tests/test_hardware.py); what it sets is the gate counts printed beside them. basis says where it
+# comes from: "flop-model" (an assumed conversion) or "boolean:<design>" (counted on one Boolean design); a structure's
+# s_times must come from the same one (data/exclusion.toml, classes.Structure.check).
 [units]
 gates_per_flop = { value = 250, unit = "gate/FLOP", low = 50, high = 1000, source = "an FP8 E4M3 multiply-add (2 FLOPs) as two-input Boolean gates: a 4 x 4 mantissa product, a 5-bit exponent sum and an FP32 accumulate's align, add and normalize, about 500 gates; low: the mantissa product alone; high: a BF16 product into an FP32 accumulator", status = "assumed" }
+basis = "flop-model"
 
 # A location is the largest set of devices joined by links no certifier sees. flops is the datasheet's dense FLOP/s at
 # the training precision (FP8), which Units turns into Φ in gates per second; hosts are servers or compute trays, each

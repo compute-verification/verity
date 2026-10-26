@@ -19,7 +19,8 @@ conversions are exact over a whole cover, and per block they assume each block d
 **Units.** The statements, and the attacks' constructions, are in the FLOP model: a block's compute in FLOPs
 (`FlopBudget`), its count in counted products. `per_block` turns one into the exclusion layer's per-block cap
 `q_T(c, k)` on gates through `hardware.Units`; `weight_per_gate` is the reference's weight per gate `w`, which ρ is
-normalized by, and `Structure` the most a gate holds under a bound, `u = ω_max / s_×` (`data/exclusion.toml`).
+normalized by, and `Structure` the most a gate holds under a bound, `u = ω_max / s_×` (`data/exclusion.toml`), with
+`s_×` and `Units.gates_per_flop` from one source (`Structure.check`).
 """
 
 from __future__ import annotations
@@ -77,10 +78,26 @@ class Structure:
     s_times: float | str
     #: `ω_max`: the most counted weight one operation carries
     omega_max: float = 1.0
+    #: where `s_×`'s gates come from, as `Units.basis` says it for `gates_per_flop` (`REFERENCE` is the FLOP model's);
+    #: none needed at `s_× ≤ 1`, which holds in every design
+    basis: str = ""
 
     #: `U / s_×` counts the operations inside the uncertified gates only if none has gates on both sides; at `s_× = 1`
     #: each operation is charged to one gate, its output, and none can straddle
     STRADDLE = ("draft:no-straddle",)
+
+    def check(self, units: Units) -> None:
+        """Refuse an `s_×` and a `gates_per_flop` from different sources. The bound holds a gate at `u/w = ω_max 2G /
+        (κ s_×)` of the reference's weight, so `G` cancels only when both count the same gates: a Boolean design's
+        measured `s_×` beside the FLOP model's `G` moves every term counted at `u` (the dark leaves' first) with
+        nothing to say so."""
+        if (self.s_times != REFERENCE and float(self.s_times) <= 1) or self.basis == units.basis:
+            return
+        raise ValueError(
+            f"structure.{self.name}: s_times ({self.s_times}) comes from {self.basis or 'no stated basis'!r} but "
+            f"units.gates_per_flop ({units.gates_per_flop:g}) from {units.basis!r}; take both from one source: "
+            f"units.gates_per_flop and units.basis from the design s_times was counted on (basis = "
+            f"\"boolean:<design>\" on both), or structure = \"reference\" (2G / kappa, the FLOP model's)")
 
     def gates(self, w: float) -> float:
         """`s_×` in gates, given the reference's weight per gate `w` (`1 / w` at `REFERENCE`)."""

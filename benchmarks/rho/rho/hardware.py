@@ -2,8 +2,9 @@
 
 `Units` is the one place a FLOP-model input becomes gates: `units.gates_per_flop` (`data/hardware.toml`), with its source
 and range. The datasheets' FLOP/s, the policy's `Γ`, the run's target, a sampled step's FLOPs and the classes' and
-attacks' FLOP-model statements all pass through it, so ρ and the time to the target don't depend on its value
-(`tests/test_hardware.py`).
+attacks' FLOP-model statements all pass through it, so under `structure.reference` (whose `s_×` moves with it) ρ and the
+time to the target don't depend on its value (`tests/test_hardware.py`). Its `basis` says where the value comes from (`FLOP_MODEL`, or `boolean:<design>` when
+measured on one Boolean design); a structure's `s_×` must come from the same one (`classes.Structure.check`).
 
 A **location** is the largest set of devices joined by links no certifier sees (an 8-GPU server's NVLink domain, an NVL72
 rack, or a rack of servers whose certifiers sit only on its uplinks). Its `phi` is `Φ_X`, its capacity in gates per
@@ -28,6 +29,9 @@ from dataclasses import dataclass
 
 from rho.params import Registry
 
+#: `gates_per_flop` as an assumed conversion of the FLOP model's inputs, not measured on a Boolean design
+FLOP_MODEL = "flop-model"
+
 
 @dataclass(frozen=True)
 class Units:
@@ -35,6 +39,8 @@ class Units:
 
     #: Boolean gates per FLOP at the training precision
     gates_per_flop: float
+    #: where `gates_per_flop` comes from: `FLOP_MODEL`, or `boolean:<design>` for a count on one Boolean design
+    basis: str = FLOP_MODEL
 
     def gates(self, flops: float) -> float:
         return flops * self.gates_per_flop
