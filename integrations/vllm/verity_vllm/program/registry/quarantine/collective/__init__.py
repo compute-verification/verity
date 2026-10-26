@@ -17,7 +17,7 @@ pattern would turn into an instance of this definition whose output is a journal
 """
 from __future__ import annotations
 
-from verity_vllm.program.registry.quarantine.collective import allreduce  # noqa: F401
+from verity_vllm.program.registry.quarantine.collective import allreduce
 
 ALL_DEFINITIONS = [allreduce.AllReduceSumBf16Elem, allreduce.AllReduceSumBf16]
 ALL_PRIMITIVES: list = []
