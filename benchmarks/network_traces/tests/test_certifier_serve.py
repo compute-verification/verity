@@ -338,10 +338,10 @@ def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_
 
 
 def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_major(tmp_path):
-    """The plan sends the endpoint's shape (its one model, a prompt of exactly 128 of its tokens, `min_tokens` =
-    `max_tokens`, `ignore_eos`, streamed, the given temperature and top_p on every request, the probes' and the run's
-    alike, so that an endpoint's own generation config never applies) four at a time, the ingress releasing them two a
-    bucket, and the
+    """The plan sends the endpoint's shape (its one model, a prompt of exactly 128 of its tokens, `max_tokens` and
+    `ignore_eos` with no `min_tokens`, streamed, the given temperature and top_p on every request, the probes' and the
+    run's alike, so that an endpoint's own generation config never applies) four at a time, the ingress releasing them
+    two a bucket, and the
     endpoint interleaves the responses of each two released together chunk by chunk; the shim still writes each
     response whole, in the order their requests reached it, so the egress counts are the planned profile's and honest
     traffic is accepted on every link-window."""
@@ -370,8 +370,7 @@ def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_
 
     probed, plan, out = asyncio.run(go())
     assert probed["body"] == {"model": "stub-model", "prompt": list(range(128)), "max_tokens": TOKENS,
-                              "min_tokens": TOKENS, "stream": True, "ignore_eos": True, "temperature": 0.6,
-                              "top_p": 0.9}
+                              "stream": True, "ignore_eos": True, "temperature": 0.6, "top_p": 0.9}
     assert all(b == probed["body"] for b in endpoint.bodies) and len(endpoint.bodies) == 4 + 4 + REQUESTS
     assert plan["served"]["in_flight"] == 4 and plan["request_major"]
     sends = [q["send_ms"] for q in plan["requests"]]
@@ -559,7 +558,8 @@ def test_a_shim_that_writes_one_event_more_is_refused_on_n2s_counts_alone(served
 
 def test_the_served_plan_takes_f_from_the_bodys_tokens_and_refuses_a_response_longer():
     """F is the body's token count, so probed responses of F − 1 and F events plan F frames each; a response of more
-    than F events, or of none, or a body that doesn't ask for exactly its tokens, has no plan."""
+    than F events, or of none, or a body that doesn't ask for exactly its tokens (`ignore_eos`, a `max_tokens` of at
+    least 1) or asks for `min_tokens`, which vllm's advice refuses, has no plan."""
     body = cs.request_body("stub", TOKENS)
 
     def probed(*lengths):
@@ -573,8 +573,13 @@ def test_the_served_plan_takes_f_from_the_bodys_tokens_and_refuses_a_response_lo
     for lengths in ((TOKENS + 1,), (0, TOKENS)):
         with pytest.raises(ValueError, match="events long"):
             cs.served_plan(probed(*lengths), 4, delta_buckets=20)
+    assert "min_tokens" not in body and body["ignore_eos"] is True
+    for bad in ({"min_tokens": TOKENS}, {"min_tokens": 1}, {"ignore_eos": False}, {"max_tokens": 0}):
+        with pytest.raises(ValueError, match="exactly its tokens"):
+            cs.served_plan(probed(TOKENS) | {"body": body | bad}, 4, delta_buckets=20)
+    no_eos = {k: v for k, v in body.items() if k != "ignore_eos"}
     with pytest.raises(ValueError, match="exactly its tokens"):
-        cs.served_plan(probed(TOKENS) | {"body": body | {"min_tokens": 1}}, 4, delta_buckets=20)
+        cs.served_plan(probed(TOKENS) | {"body": no_eos}, 4, delta_buckets=20)
     _, plan = cs.served_plan(probed(TOKENS, TOKENS + 1), 4, delta_buckets=20, frames=TOKENS + 1)
     assert plan["pad_to"] == plan["served"]["response_frames"] == TOKENS + 1 and plan["served"]["tokens"] == TOKENS
     assert sum(map(sum, plan["occupancy"]["egress"])) == 4 * (TOKENS + 1)
