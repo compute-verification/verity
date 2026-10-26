@@ -23,7 +23,8 @@ doesn't take and emits the class's circuit at its Program count.
 - An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit, and its product `ScaledMmS8_v1{K, N}`,
   ⌈N / n⌉ slices `ScaledMmS8_v1{K, n}` at the same weight words a slice (n = ``grain.gemm_words`` // (K / 2): an s8 weight row
   is K / 2 words), each reading its s8 weight rows and their f32 row scales from the weights record and the quantizer's codes
-  ``x`` and scale ``sx`` whole.
+  ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
+  aren't one byte width filling whole u16 words, and a read that starts inside a word, are refused.
 - `RoPE_v1{NHEADS, D}` and `Attention_v18{T, NH, KVH, D}` are their heads (`RoPEHead_v1{D}`, `AttentionHead_v18{T}`).
   A head's keys and values are one row of an `AllGather_v1{T, D}` over every key position's row (T at most `KEYS`), each
   position's row gathered first when it spans several writers (the K and V slices).
@@ -42,8 +43,7 @@ a use's rows gathered ``m / d`` at a time by `AllGather_v1` units (whose ``parts
 Refused by name (`Unexpressible`): a window past its class (more requests than slots, a prompt past the cap, more outputs
 than the cap), a request whose Program would read more than its prompt and the weights (a stochastic request's seed, a
 prefix-cache hit's prefix, a TP rank's peers), a request a Commit window carries in or out, byte ingress, a family this
-lowering doesn't know, a weight or node output whose leaves aren't one byte width filling whole u16 words, a read that starts
-inside a word, a row form the cut rule can't state and a unit of more
+lowering doesn't know, a weight whose leaves aren't whole u16 words, a row form the cut rule can't state and a unit of more
 than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran is held by the units' proofs on
 their committed rows, never by this lowering.
 """
