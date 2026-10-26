@@ -15,9 +15,8 @@ open Properties.RemoteAudit.Line
 
 theorem lineHeldAtComponent : LineHeldAtComponent := by
   intro node κ X Cm _ prf rest recs correct com T R δs a b e r F O hL hS hD hC hR hP hCv hSk hN hLive hRef hCnt
-    hReg
   exact le_trans (Pouw.pr_mono fun ω h => ⟨plays_verified h.1, h.2⟩)
     (Properties.RemoteAudit.Line.SecurityProofs.lineHeld node κ X Cm prf rest recs correct com T R δs O hL hS hD hC hR hP hCv hSk hN hLive
-      hRef hCnt hReg)
+      hRef hCnt)
 
 end Properties.RemoteAudit.Component.SecurityProofs
