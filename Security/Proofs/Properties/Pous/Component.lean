@@ -511,6 +511,7 @@ theorem runAccepts_complete : ∀ (p : RunProtocol.Params) (pub : SetupProtocol.
   show RunProtocol.check SCHEMES p pub e = _
   unfold RunProtocol.check
   rw [ha]
+  rfl
 
 private theorem forIn'_keep {α σ : Type} (l : List α) (f : (a : α) → a ∈ l → σ → Id (ForInStep σ))
     (hf : ∀ a h b, f a h b = pure (.yield b)) (init : σ) : forIn' l init f = pure init := by
@@ -531,7 +532,7 @@ private theorem wtail_keep (s : StreamedWipe.Signed) (c : StreamedWipe.Commitmen
   · intro b hb r
     have hb' : b < s.batches.size := by simp at hb; omega
     obtain ⟨g1, g2, g3, g4⟩ := hg b hb' hb'
-    simp only [g1, g2, g3, g4, Bool.false_eq_true, ↓reduceIte] <;> rfl
+    simp only [g1, g2, g3, g4, Bool.false_eq_true, ↓reduceIte]
 
 private theorem wgood_of (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (b : Nat)
     (h : ∀ hb : b < s.batches.size,
@@ -557,10 +558,10 @@ private theorem wpre_nil (schemes : Schemes) (trusted : List ByteArray) (s : Str
   have hok : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) = .ok true := by
     rw [hm]
     exact hv
-  have hc : trusted.contains s.publicKey = true := List.elem_eq_true_of_mem ht
   subst hcm
   unfold wpre
-  simp [Id.run, hp, hok, hc, StreamedWipe.Params.covered, hcov, hend, hsize]
+  simp [Id.run, hp, hok, StreamedWipe.Params.covered, hcov, hend, hsize]
+  exact ite_eq_left ht
 
 /-- **The wipe's compiled check accepts every signed session `WipeChecked` describes** (the honest lemma of
 `WipeAccepts`, with `wipeAccepts_meets` its instance), on the period's server and session, publishing `certify` of
@@ -580,6 +581,7 @@ theorem wipeAccepts_complete : ∀ (p : WipeProtocol.Params) (c : StreamedWipe.C
   show WipeProtocol.check SCHEMES p c e = _
   unfold WipeProtocol.check
   simp [hsv, hss, hse, hv]
+  rfl
 
 /-- The honest wipe's commitment: one 64-byte label, `k = 1` read revealed one index a batch, a 1 ns deadline, and one
 tier the fill covers exactly (valid: `StreamedWipe.Params.check`). -/
@@ -619,6 +621,7 @@ theorem wipeAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.k
   obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I honestCommitment.session m = .ok M := by
     unfold memoryChallengerMessage
     simp [hIs]
+    exact ⟨_, rfl⟩
   obtain ⟨sig, hsig⟩ :=
     Properties.CertifierDevice.Proofs.Lms.lmsSigns 64 1 20 false Lms.deployed k.I seed k 0 M rfl hk (by decide)
   obtain ⟨hver, hdec⟩ :=
