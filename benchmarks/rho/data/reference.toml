@@ -10,8 +10,8 @@ n_active = { value = 4.9e10, unit = "param", source = "ruling: Daniel 25 Oct ref
 d_model = { value = 7168, source = "integrations/vllm/tests/check/fixtures/deepseek_v4/config.json hidden_size", status = "datasheet" }
 layers = { value = 61, source = "integrations/vllm/tests/check/fixtures/deepseek_v4/config.json num_hidden_layers", status = "datasheet" }
 vocab = { value = 129280, source = "integrations/vllm/tests/check/fixtures/deepseek_v4/config.json vocab_size", status = "datasheet" }
-legs = { value = 512, low = 256, high = 1024, source = "Kimi K2's Keyed d (FanOutIntensity docstring), not derived for V4-Pro's mHC streams", status = "assumed" }
-fanout = { value = 43392, low = 43392, high = 49536, source = "(6 routed + 1 shared experts) x 2 (gate, up) x 3072 + 384 router columns, Kimi K2's 37,248 pattern; config.json; high: + a 6144-wide attention input", status = "derived" }
+legs = { value = 1536, source = "the least d_in of a layer's matrices, wq_b's (and the indexer's) 1536-wide query latent (models.toml model.deepseek-v4-pro.matrices, instances.derived_legs)", status = "derived" }
+fanout = { value = 65536, source = "the widest layer matrix's output, wq_b's 128 query heads x 512 (models.toml model.deepseek-v4-pro.matrices, instances.derived_fanout), above the MoE input's 384 + 2 x 3072 x (6 routed + 1 shared) = 43,392, which understates aOut", status = "derived" }
 
 [run.v4-pretrain]
 model = "deepseek-v4-pro"

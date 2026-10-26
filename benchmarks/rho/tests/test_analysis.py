@@ -119,7 +119,13 @@ def test_threshold_on_a_scenario_lands_where_the_scenario_crosses(name):
             continue
         target = math.sqrt(s.at_low * s.at_high)
         x = analysis.threshold(REG, name, s.key, target, s.low, s.high, rtol=1e-6)
-        assert x is not None and analysis.at(REG, name, {s.key: x}) == pytest.approx(target, rel=1e-3)
+        assert x is not None
+        if analysis.at(REG, name, {s.key: x}) != pytest.approx(target, rel=1e-3):
+            # ρ jumps over the target at x (a premise share reaching its end, as `classes.expensive_share` at the last
+            # layer): the crossing is the jump
+            d = 1e-5 * (x if s.low > 0 else max(abs(s.low), abs(s.high)))
+            near = [analysis.at(REG, name, {s.key: v}) for v in (x - d, x + d)]
+            assert min(near) <= target <= max(near), (s.key, x, near)
 
 
 @pytest.mark.parametrize("name", NAMES)
