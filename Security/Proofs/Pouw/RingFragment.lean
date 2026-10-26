@@ -250,7 +250,7 @@ theorem honestProg_val_prod (pc : Fin n → Fin B → Fin L → R) (vq : Fin B �
   have hp : (honestProg pc vq w).isProd (slotIdx (c, j.castSucc)) = true := by
     rw [honestProg_isProd]
     simp
-  rw [SlpG.val, if_pos hp]
+  rw [SlpG.val, ite_eq_left hp]
   simp [honestProg]
 
 theorem honestFlow_prod (c : DCells n n' B) (a : Fin (L + 1)) (h : a.val < L) :
@@ -292,26 +292,27 @@ theorem honest_wf (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L �
       subst ha'
       rw [honestFlow_acc] at h
       by_cases ht : t.val + 1 < B
-      · rw [dif_pos ht] at h
+      · rw [dite_eq_left ht] at h
         obtain rfl := Option.some_injective _ h
         refine ⟨?_, by rw [honestProg_isProd]; simp⟩
         simp only [Fin.lt_def, slotIdx_val, cellIdx_val, Fin.val_last]
         have e : (L + 1) * (t.val + 1 + B * l.val + n' * B * i.val) =
             (L + 1) * (t.val + B * l.val + n' * B * i.val) + (L + 1) := by ring
         omega
-      · rw [dif_neg ht] at h
+      · rw [dite_eq_right ht] at h
         exact absurd h (by simp)
   · obtain ⟨⟨⟨i, l, t⟩, a⟩, rfl⟩ := slotIdx.surjective k
     obtain ⟨⟨⟨i', l', t'⟩, a'⟩, rfl⟩ := slotIdx.surjective k'
     rw [honestProg_isProd, decide_eq_false_iff_not] at hk hk'
+    dsimp only at hk hk'
     have ha : a = Fin.last L := Fin.ext (by have := a.isLt; simp only [Fin.val_last]; omega)
     have ha' : a' = Fin.last L := Fin.ext (by have := a'.isLt; simp only [Fin.val_last]; omega)
     subst ha ha'
     rw [honestFlow_acc] at h h'
     by_cases ht : t.val + 1 < B
     · by_cases ht' : t'.val + 1 < B
-      · rw [dif_pos ht] at h
-        rw [dif_pos ht'] at h'
+      · rw [dite_eq_left ht] at h
+        rw [dite_eq_left ht'] at h'
         have e := slotIdx.injective (Option.some_injective _ (h.trans h'.symm))
         have hi : i = i' := congrArg (fun x : DCells n n' B × Fin (L + 1) => x.1.1) e
         have hl : l = l' := congrArg (fun x : DCells n n' B × Fin (L + 1) => x.1.2.1) e
@@ -321,9 +322,9 @@ theorem honest_wf (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L �
           omega)
         subst hi hl htt
         rfl
-      · rw [dif_neg ht'] at h'
+      · rw [dite_eq_right ht'] at h'
         exact absurd h' (by simp)
-    · rw [dif_neg ht] at h
+    · rw [dite_eq_right ht] at h
       exact absurd h (by simp)
 
 theorem honest_affOps (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) :
@@ -331,7 +332,7 @@ theorem honest_affOps (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin
   intro j hj
   have hj' : (slotIdx.symm j).2.val < L := of_decide_eq_true hj
   exact ⟨dP pc w (slotIdx.symm j).1.1 (slotIdx.symm j).1.2.2 ⟨_, hj'⟩,
-    dX vq (slotIdx.symm j).1.2.2 ⟨_, hj'⟩ (slotIdx.symm j).1.2.1, fun z => dif_pos hj'⟩
+    dX vq (slotIdx.symm j).1.2.2 ⟨_, hj'⟩ (slotIdx.symm j).1.2.1, fun z => dite_eq_left hj'⟩
 
 theorem honest_deliveries (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) :
     deliveries (honestProg pc vq w) (honestFlow (n := n) (L := L) (B := B) (n' := n')) = 0 := by
@@ -342,7 +343,7 @@ theorem honest_deliveries (pc : Fin n → Fin B → Fin L → R) (vq : Fin B →
   apply hfree
   have hl : honestReads (slotIdx.symm s) (slotIdx.symm ⟨k.val, k.isLt.trans s.isLt⟩) = true := by
     by_contra hc
-    exact hlin (if_neg hc)
+    exact hlin (ite_eq_right hc)
   generalize (⟨k.val, k.isLt.trans s.isLt⟩ : Fin (honestN n L B n')) = k' at hl ⊢
   obtain ⟨⟨⟨i, l, t⟩, a⟩, rfl⟩ := slotIdx.surjective s
   obtain ⟨⟨⟨i', l', t'⟩, b⟩, rfl⟩ := slotIdx.surjective k'
@@ -351,7 +352,7 @@ theorem honest_deliveries (pc : Fin n → Fin B → Fin L → R) (vq : Fin B →
   rcases h with ⟨⟨rfl, rfl, rfl⟩, hb⟩ | ⟨rfl, rfl, rfl, ht⟩
   · exact honestFlow_prod _ _ hb
   · have hlt : t'.val + 1 < B := ht ▸ t.isLt
-    rw [honestFlow_acc, dif_pos hlt, show (⟨t'.val + 1, hlt⟩ : Fin B) = t from Fin.ext ht]
+    rw [honestFlow_acc, dite_eq_left hlt, show (⟨t'.val + 1, hlt⟩ : Fin B) = t from Fin.ext ht]
 
 theorem honest_products (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) :
     products (honestProg pc vq w) = n * n' * B * L := by
@@ -384,7 +385,7 @@ theorem honest_lin_sum (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fi
     have hks : ¬k < s := fun hks => hk (Finset.mem_map.mpr ⟨⟨k.val, hks⟩, Finset.mem_univ _, rfl⟩)
     have hr : honestReads (slotIdx.symm s) (slotIdx.symm k) ≠ true := fun h =>
       hks (by simpa using honestReads_lt _ _ h)
-    simp only [G, if_neg hr, zero_mul]
+    simp only [G, ite_eq_right hr, zero_mul]
   rw [e1, e2, ← Equiv.sum_comp slotIdx]
   simp only [G, Equiv.symm_apply_apply]
 
@@ -405,7 +406,7 @@ theorem honest_val_acc (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fi
         if c = (i, l, t) then v else 0 := by
     intro c j v
     by_cases hc : c = (i, l, t) <;> simp [honestReads, hc, Fin.castSucc_ne_last]
-  rw [SlpG.val, if_neg hnp, hoff, add_zero, honest_lin_sum, Equiv.symm_apply_apply, Fintype.sum_prod_type]
+  rw [SlpG.val, ite_eq_right hnp, hoff, add_zero, honest_lin_sum, Equiv.symm_apply_apply, Fintype.sum_prod_type]
   simp only [Fin.sum_univ_castSucc]
   rw [Finset.sum_add_distrib]
   congr 1
@@ -414,12 +415,12 @@ theorem honest_val_acc (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fi
     simp only [Finset.sum_ite_eq', Finset.mem_univ, ↓reduceIte, honestProg_val_prod]
     rfl
   · by_cases ht : 0 < t.val
-    · rw [dif_pos ht, Finset.sum_eq_single (i, l, ⟨t.val - 1, by have := t.isLt; omega⟩)]
-      · rw [if_pos, one_mul]
+    · rw [dite_eq_left ht, Finset.sum_eq_single (i, l, ⟨t.val - 1, by have := t.isLt; omega⟩)]
+      · rw [ite_eq_left, one_mul]
         simp [honestReads]
         omega
       · intro c _ hc
-        rw [if_neg, zero_mul]
+        rw [ite_eq_right, zero_mul]
         intro hr
         apply hc
         obtain ⟨i', l', t'⟩ := c
@@ -428,9 +429,9 @@ theorem honest_val_acc (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fi
         rw [hi, hl, show t' = ⟨t.val - 1, by have := t.isLt; omega⟩ from Fin.ext (by show t'.val = t.val - 1; omega)]
       · intro h
         exact absurd (Finset.mem_univ _) h
-    · rw [dif_neg ht]
+    · rw [dite_eq_right ht]
       refine Finset.sum_eq_zero fun c _ => ?_
-      rw [if_neg, zero_mul]
+      rw [ite_eq_right, zero_mul]
       intro hr
       obtain ⟨i', l', t'⟩ := c
       simp [honestReads] at hr
@@ -451,12 +452,12 @@ theorem honest_val (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L 
     have h0 : ¬0 < t.val := by omega
     have hB : 0 < B := by have := t.isLt; omega
     obtain rfl : t = ⟨0, hB⟩ := Fin.ext ht
-    rw [honest_val_acc, dif_neg h0, add_zero, dPrefix_zero pc vq w i l hB]
+    rw [honest_val_acc, dite_eq_right h0, add_zero, dPrefix_zero pc vq w i l hB]
   | succ m ih =>
     intro t ht
     have hlt : m + 1 < B := ht ▸ t.isLt
     obtain rfl : t = ⟨m + 1, hlt⟩ := Fin.ext ht
-    rw [honest_val_acc, dif_pos (Nat.succ_pos m)]
+    rw [honest_val_acc, dite_eq_left (Nat.succ_pos m)]
     show dIncr pc vq w i l ⟨m + 1, hlt⟩ z +
         (honestProg pc vq w).val z (slotIdx ((i, l, ⟨m, by omega⟩), Fin.last L)) = dPrefix pc vq w i l (m + 1) z
     rw [ih ⟨m, by omega⟩ rfl, ← dPrefix_succ pc vq w i l hlt z]
