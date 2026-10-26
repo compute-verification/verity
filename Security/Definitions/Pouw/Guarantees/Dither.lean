@@ -132,9 +132,10 @@ With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every prove
 `ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
 `κ = δ + κ_S + (q² + k q (q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`; the
 extraction's term is `ExtractOfRealize`'s `(q² + Σ_w q (2 τ_w + 1)) / |D|` at this schedule.
-The log's term `μ · q ξl / C` is `(k + 1) M` log entries' upkeep against the credited cost, the padding included: at
-`Q = cap_r / callUse_r` it is about `(k + 1) (μ · ξl / shaPub_μ) (μ · cap / C)` when `r` binds, small only where a log
-entry's upkeep is small next to a call (`Accel.shaPub`); `WorkSound` keeps each prover's own `q_A`. -/
+The log's term `μ · q ξl / C` is `(k + 1) M` log entries' upkeep against the credited cost, the padding included
+(the padding's upkeep, `Definitions.Pouw.Assumptions.ShaRealize`'s Open): at `Q = cap_r / callUse_r` it is about
+`(k + 1) (μ · ξl / shaPub_μ) (μ · cap / C)` when `r` binds, small only where a log entry's upkeep is small next to a
+call (`Accel.shaPub`); `WorkSound` keeps each prover's own `q_A`. -/
 def WorkSoundNoFold : Prop :=
   ∀ (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Set (noFoldRound nf).Inst) (reg : Fin k → (noFoldRound nf).Inst)
     (Obs : Type) (verdict : Verdict (noFoldRound nf) k Obs) (dev : Readings G (noFoldRound nf) k Obs) (Pd : Period G)
