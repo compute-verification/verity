@@ -689,7 +689,6 @@ theorem vCols_of_base {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   have hrh := rowHidden_eq n hl hqv hqs hN
   have hbits : ptv.bits = 16 * ptv.words := hpq ▸ (hv1 _ (Array.getElem_mem_toList hqs)).2.1
   rw [hpq] at hN hrh
-  have hcp := leaves_le_constPos P hl (by omega)
   have hdiv : n / p.sts[0].c.g = o := by
     subst hn
     rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt hg, Nat.zero_add]
@@ -697,6 +696,7 @@ theorem vCols_of_base {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
     subst hn
     rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hg]
   intro i hi
+  have hcp := leaves_le_constPos P hl (by omega)
   have hlen : (rowForms p.sts[0].c "v" qv n).length = ptv.bits := by simp [rowForms, hvin, hrh]
   refine ⟨by omega, ?_⟩
   have hel : (rowForms p.sts[0].c "v" qv n)[i]'(by omega) = HmNets.Lin.var (n / p.sts[0].c.g * 2 ^ p.sts[0].c.kLog +
