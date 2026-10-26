@@ -5,8 +5,8 @@ proofs themselves (`SampledProofs.OneStageZk.protocol`, `verity/sampled-proofs/o
 each session's files, which the caller hands in as blobs), work by proof of useful work (`PouwCheck.protocol`), space by
 PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth by the remote bandwidth audit's session
 (`RemoteAudit.Protocol.protocol`), communication by the network certifier over the period
-(`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-windows certified and proved, and the bound `K`
-on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
+(`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-windows certified, and proved under one-stage
+v2 on the same blobs, and the bound `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
 (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.productB` composes them on the caller's
 blobs: every component accepts or onsite doesn't, and any component's rejection rejects onsite whatever the others
 answer.

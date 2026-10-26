@@ -93,7 +93,8 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), and
 each component's own Python (PoUW's `core_check.case`; for integrity, v2's framing over sampled proofs' one-stage
 difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2 decides without a session's proof; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
-certificates and one-stage's answers, on small signed periods from its `build`; the wipe's mirror,
+certificates, one-stage's answers on the compute audits and v2 on each link-window's proof, on small signed periods
+from its `build`; the wipe's mirror,
 `wipe_protocol_case.answer`, on signed wipes from its `case`), which that component's own difftest holds its Lean to;
 for space and bandwidth, their Python verifiers' answers on small periods of their hooks
 (`tests/periods.py`: `pous.period.run` signed at S1's deployed parameters, honest and cheating, and

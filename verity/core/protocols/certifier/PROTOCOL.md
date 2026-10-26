@@ -294,7 +294,7 @@ with the served computation is left to N3.
 
 ## A period, as onsite's communication component (`verity/certifier/v0`)
 
-Onsite composes the network certifier as one `Core.Protocol`, `NetworkCheck.Period` (`network/lean`, the
+Onsite composes the network certifier as one `Core.BlobProtocol`, `NetworkCheck.Period` (`network/lean`, the
 `network-period` executable), which publishes the bound `K` on what left the site with its terms:
 [protocol/period.md](protocol/period.md).
 
