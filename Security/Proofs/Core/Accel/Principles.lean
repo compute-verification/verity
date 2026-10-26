@@ -83,7 +83,11 @@ theorem intProductForm (fa fb : Fmt) (sat : Bool) (k : ℕ) (h : intPair fa fb =
       else ((mulOut fa fb x y).2.2.2.1 : ℤ)) = fa.intVal x * fb.intVal y := by
     intro x y
     simp only [mulOut, h, ite_true]
-    split <;> simp_all <;> omega
+    by_cases hn : fa.intVal x * fb.intVal y < 0
+    · simp only [hn, decide_true, ite_true]
+      rw [Int.ofNat_natAbs_of_nonpos hn.le, neg_neg]
+    · simp only [hn, decide_false, Bool.false_eq_true, ite_false]
+      exact Int.natAbs_of_nonneg (not_lt.mp hn)
   simp only [List.map_zipWith, hp, intDot]
 
 end Verity.Accel
