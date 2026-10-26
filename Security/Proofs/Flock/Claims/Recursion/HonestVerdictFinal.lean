@@ -142,11 +142,12 @@ open Flock FlockComplete
 /-- **SHA-512's outputs are 64 bytes.** -/
 theorem out64_sha512 : Claims.Out64 sha512 := fun m => by
   show (Claims.toMsg (Sha512.hash (Claims.ofMsg m))).length = 64
+  have h := Sha512.hash_size (Claims.ofMsg m)
+  generalize Sha512.hash (Claims.ofMsg m) = b at h ⊢
+  cases b
   unfold Claims.toMsg
   rw [Array.length_toList]
-  first
-  | exact Sha512.hash_size _
-  | simpa [ByteArray.size] using Sha512.hash_size (Claims.ofMsg m)
+  exact h
 
 /-- **The verdict passes on the honest proofs at the reader's record**, at the record's JSON (`JsonSpec`): at every plain
 completeness run and the deployed verifier's coins, `verifyJPWith` at `jAt` of `recJ` accepts. -/
