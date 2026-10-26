@@ -237,8 +237,11 @@ theorem SitesH.aliased_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u
     (Const.Prog.instC (Placed.keyProg c hU n) outs u) x).symm.trans hw).trans
     (Placed.wire_cast (SitesH.rowsOf_keyProg hU hparse S R u h) (Const.Prog.instC (Placed.keyProg c hU n) outs u) x')
   have hk := Placed.keyProg_wire_key hU outs u _ _ (lt_of_lt_of_eq hx e.symm) (lt_of_lt_of_eq hx' e.symm) hw'
-  rw [← hparse S R u h] at hk
-  exact Hidden.srcKey_eq_commit (si.acc S R u h).ht (si.acc S R u h).committed (si.acc S R u h).unitFacts.check hk
+  have key : ∀ a b : ℕ, Aliased.srcKey c a = Aliased.srcKey c b →
+      Aliased.srcKey (HmOut.unrolled (si.acc S R u h).st.c) a = Aliased.srcKey (HmOut.unrolled (si.acc S R u h).st.c) b :=
+    fun a b hab => by rw [hparse S R u h]; exact hab
+  exact Hidden.srcKey_eq_commit (si.acc S R u h).ht (si.acc S R u h).committed (si.acc S R u h).unitFacts.check
+    (key _ _ hk)
 
 /-- **`ProgPlaces` for the circuit's program on Δ's source keys at hidden-output sites**, from the sites and the parse
 alone: each drawn unit placed at its template instance in its table's accepted statement (W6 from the parse), its
