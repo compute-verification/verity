@@ -86,8 +86,9 @@ theorem get_what {bs : Core.Blobs} {d w w' : String} {b : ByteArray} (h : bs.get
       rw [hf] at h
       first | cases h | simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
     | some e =>
-      rw [hf] at h ⊢
-      exact h
+      rw [hf] at h
+      obtain ⟨e1, e2⟩ := e
+      first | exact h | (simp only at h ⊢; exact h)
 
 private theorem mapM_ok_of_getElem {α β ε : Type} (g : α → Except ε β) :
     ∀ (l : List α) (l' : List β), l.length = l'.length →
@@ -179,20 +180,21 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
   obtain ⟨pubB, hp, hpart⟩ := bind_ok hpart
   rcases hpr : p.registered with _ | rj <;> simp only [hpr] at hpart
   all_goals obtain ⟨⟨registered, complete, known, regParams⟩, hr, hpart⟩ := bind_ok hpart
-  all_goals have hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = registered := by
-    first
-      | (rw [hpr]
-         have hr := Except.ok.inj hr
-         simp only [Prod.mk.injEq] at hr
-         exact hr.1)
-      | (obtain ⟨⟨own, c, k, ps⟩, hro, hr⟩ := map_ok hr
-         simp only [Prod.mk.injEq] at hr
-         rw [hpr, ← hr.1]
-         change (registeredOf rj).toOption.map (·.1) = some own
-         rw [hro]
-         all_goals rfl)
-  all_goals rw [hpr] at hreg
-  all_goals clear hr
+  all_goals
+    have hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = registered := by
+      first
+        | (rw [hpr]
+           have hr := Except.ok.inj hr
+           simp only [Prod.mk.injEq] at hr
+           exact hr.1)
+        | (obtain ⟨⟨own, c, k, ps⟩, hro, hr⟩ := map_ok hr
+           simp only [Prod.mk.injEq] at hr
+           rw [hpr, ← hr.1]
+           change (registeredOf rj).toOption.map (·.1) = some own
+           rw [hro]
+           all_goals rfl)
+    rw [hpr] at hreg
+    clear hr
   all_goals
     try dsimp only at hpart
     obtain ⟨rows, -, hpart⟩ := bind_ok hpart
@@ -232,25 +234,24 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
       · rfl
     rw [if_pos hm] at hD
     have hds : (Flock.Witness.recordDraw record).isSome = true := by
-      rw [hD]
-      rfl
+      simp [hD]
     split at hst
     rotate_left
     · cases hst
     rename_i spec' sts' hsu
-    obtain ⟨⟨⟩, -, hpair⟩ := map_ok hst
-    simp only [Prod.mk.injEq] at hpair
-    obtain ⟨rfl, rfl⟩ := hpair
-    obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu
-    obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu
+    obtain ⟨_, -, hsu⟩ := bind_ok hsu
+    obtain ⟨_, -, hsu⟩ := bind_ok hsu
     obtain ⟨r, hbs, hsu⟩ := bind_ok hsu
     have hr' : r = (spec', sts') := by
       try dsimp only at hsu
-      split at hsu <;> (repeat (obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu)) <;> exact Except.ok.inj hsu
+      split at hsu <;> (repeat (obtain ⟨_, -, hsu⟩ := bind_ok hsu)) <;> exact Except.ok.inj hsu
     subst hr'
+    obtain ⟨_, -, hpair⟩ := map_ok hst
+    simp only [Prod.mk.injEq] at hpair
+    obtain ⟨rfl, rfl⟩ := hpair
     rw [← hD] at hbs hfd
     subst hT'
-    exact ⟨tags0, circuitB, pubB, registered, rB, record, spec', sts', proofs, hT, hc, hp, hreg, hrB, hu, hds, hbs,
+    exact ⟨tags0, circuitB, pubB, registered, rB, record, _, _, proofs, hT, hc, hp, hreg, hrB, hu, hds, hbs,
       hf, hzv, hsc, hfd, hid, hrt⟩
 
 /-- **Piece E: a V\* part's compiled verdict is the model's decision at its session.** Where part `j`'s compiled
