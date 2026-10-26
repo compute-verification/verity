@@ -62,14 +62,17 @@ def _file_digest(path: str) -> str:
 
 
 def _source(build: Callable) -> str | None:
-    """The builder's source file when it is outside `verity.ml.circuits`, "" inside it, None when it has no code to name one."""
+    """The builder's source file when `code_digest` doesn't cover it (outside `verity.ml.circuits`, or in its tests), "" when it
+    does, None when the builder has no code to name one."""
     while isinstance(build, functools.partial):
         build = build.func
     code = getattr(build, "__code__", None)
     if code is None or not os.path.isfile(code.co_filename):
         return None
-    root = Path(_circuits.__file__).parent.resolve()
-    return "" if Path(code.co_filename).resolve().is_relative_to(root) else code.co_filename
+    root, path = Path(_circuits.__file__).parent.resolve(), Path(code.co_filename).resolve()
+    if path.is_relative_to(root) and not {"tests", "__pycache__"} & set(path.relative_to(root).parts[:-1]):
+        return ""
+    return code.co_filename
 
 
 class TraceCache:

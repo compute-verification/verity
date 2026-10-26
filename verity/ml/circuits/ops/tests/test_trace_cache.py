@@ -100,5 +100,12 @@ def test_a_bad_entry_is_traced_again_and_rewritten(tmp_path: Path, monkeypatch) 
     assert again.gates == T.gates and trace_cache.load(path, cache.key(key, _pair, [W8, W8], W8, True)) is not None
 
 
+def test_a_builder_the_code_digest_skips_is_keyed_by_its_file() -> None:
+    """`code_digest` leaves out tests, so a builder in one (as here) names its own file in the key."""
+    from verity.ml.circuits.ops.boolean import elementwise as EW
+    assert trace_cache._source(_pair) == _pair.__code__.co_filename
+    assert trace_cache._source(EW._split) == ""
+
+
 if __name__ == "__main__":
     print(json.dumps(build(sys.argv[1])))
