@@ -1,3 +1,192 @@
 {
- "definitions": {}
+ "definitions": {
+  "SharedRowCheck_v1{W=1,ROW=2,OFF=0,G=1}": {
+   "and": 31,
+   "type": "205beab6cc254f3e5eadd23ad914cd94d0c78d8ec99dcc994d03b0cbedc5b6c9620034fb458dc27a51d8a393e418870ce4d2d93658d9860c12377ffa57c811af"
+  },
+  "SharedRowCheck_v1{W=1,ROW=2,OFF=1,G=1}": {
+   "and": 31,
+   "type": "f0c1df032cb3cf10bf517a8c83dd6b927c4777a91a32112a4af050daf0ef980b990dc05cec4b21840b3f3919a4c551434930fbf0edc82b6b6f4631137de23dd5"
+  },
+  "SharedRowCheck_v1{W=1,ROW=256,OFF=0,G=256}": {
+   "and": 4103,
+   "type": "e2dd904ab24ead29dc4aaf35f1cdb848a38680770dcdf66bc6dd8c873e6d5850b66d7763bbfa98f0350204ecf46046a6b4c1457c1e8aa0c9bc568561f2d80886"
+  },
+  "SharedRowCheck_v1{W=1,ROW=5,OFF=0,G=1}": {
+   "and": 31,
+   "type": "396d6f433b4518d4b1ef0591964426b9b60a3fceb2cff1bd48c755e61ff4d24d418c0cdfd80d13683d62670af4611dae0ba872ff6d839b5d5fe0f0aeb7a85de6"
+  },
+  "SharedRowCheck_v1{W=1,ROW=5,OFF=1,G=3}": {
+   "and": 79,
+   "type": "e2f8bdd13032f44211571a679d5b62616416837e8dff733e4723f58946a9790ba9793c6f3a9014fb3f8e1737f1fc0a2efc365fcecc91fba74fa539131e35ab9b"
+  },
+  "SharedRowCheck_v1{W=1,ROW=5,OFF=4,G=1}": {
+   "and": 31,
+   "type": "597f8706b851b1ebbf268efa6787f0135a6b06782e1923bd300375f2c021109c6c6c658fcf403e22117799b3dd3ce0983fc8b93a0e4b0820d4695d8b19b15e0a"
+  },
+  "SharedRowCheck_v1{W=1,ROW=512,OFF=0,G=512}": {
+   "and": 8198,
+   "type": "3dc0fb1a3a56091d331cc3145a7750427b7917f81bb37ba85bef79c4e553372b5b852da8fa254e0854d0d4152c300c4a4904c24668b9239a19d62120f28eebb8"
+  },
+  "SharedRowCheck_v1{W=1,ROW=64,OFF=0,G=64}": {
+   "and": 1033,
+   "type": "62076418387e47d5bcbec1990789b9515fb2718772c149e5a4122bf553316ad6c8589ee8c1d43de03741ba45c514bc6eb849b7738587b5590687a621fb0744c4"
+  },
+  "SharedRowCheck_v1{W=128,ROW=512,OFF=0,G=4}": {
+   "and": 8205,
+   "type": "da2e4de074498bb140f3e486837ef51d978f164269ba64c7c4d16cd73cb6778462417be27970504e9813f764815c8e0ce852f68144860e1074b5d5fb32d264a0"
+  },
+  "SharedRowCheck_v1{W=16,ROW=512,OFF=0,G=4}": {
+   "and": 1037,
+   "type": "0274df9b28f93b8c602fe97fa503b0a769eac020bac7972fe22ef4a231dd8236fa45b94daa3fd30ca2a35ef6b9f9ad12eb896af577d0e8b73741c6d9582ec6f5"
+  },
+  "SharedRowCheck_v1{W=2,ROW=512,OFF=0,G=16}": {
+   "and": 523,
+   "type": "ece5d19664f2254c3fae9a53ccc771bf52f07837084b4b2252986c990b8da75131e20a4e7dd6816316fdbea4acf77516ab00bf15dd504dd267d50fd6ffdea5cf"
+  },
+  "SharedRowCheck_v1{W=32,ROW=512,OFF=0,G=16}": {
+   "and": 8203,
+   "type": "e85768708493d5487572f3662f13237667773edcd3f59fb9f54fdfa2ac69d12ad49fe1e69d40e5441aed0e4ed9cb9743c44c59c06c43646a36212cedfc52e9fe"
+  },
+  "SharedRowCheck_v1{W=4,ROW=512,OFF=0,G=8}": {
+   "and": 524,
+   "type": "6aa085e1ccfc80c779202853bcb2ced35f6acd64723314c8a79120277c9163cca7ab3c3de7b8ccb8a67259273c6544708a8bcda60669095c6b646a48c3162212"
+  },
+  "SharedRowCheck_v1{W=4,ROW=512,OFF=256,G=4}": {
+   "and": 269,
+   "type": "460d41fa05eb9ccc277177021bf3ca9f7e23e48e032ddc8d38ad4072b8a62158a6e4069dad99c1c31794cfa63fac8e5094f7ddbdd0e8a5ed4989271c3f50355f"
+  },
+  "SharedRowCheck_v1{W=64,ROW=256,OFF=0,G=4}": {
+   "and": 4109,
+   "type": "418e57b6fcf9811dee50ed016dbe83c3850dc6a5793ba42471fc13e43d049f4f35cd85a27dbc7e045b4af6894f6e243850f9a3f1dc710489b316767b47c8ba67"
+  },
+  "SharedRowCheck_v1{W=64,ROW=512,OFF=0,G=4}": {
+   "and": 4109,
+   "type": "1948f0438d65bc601f4f12596f5084b2af048cccd3af0c1b4a5ac8bfa44de3dfd7037b49ea1dff48f7f9905ffb6abc6c0a174221ca48282a8bc8fe92251550b4"
+  },
+  "SharedRowCheck_v1{W=64,ROW=512,OFF=0,G=8}": {
+   "and": 8204,
+   "type": "a37c6a19533d30b3fbd38a247dfa7da58b88a208f5ecdcd699b098d08e37e95dda76fa6cc89c24cdb13c012f2710713bed37bea65637257764d88896a608454f"
+  },
+  "SharedRowCheck_v1{W=64,ROW=512,OFF=256,G=4}": {
+   "and": 4109,
+   "type": "8de0592b193736aa9ca38e4a97979dfb496ab589fefbbdfb422fd55e8cc4cf692e3d8eeb1d52504a04236f34ec7089471a3d624adc827afec6b38fcd005b9d27"
+  },
+  "SharedRowCheck_v1{W=8,ROW=512,OFF=0,G=4}": {
+   "and": 525,
+   "type": "4d8ec9a1b4979f8c36b4f24b716aadad5902778ced5f5dd433917e87d27463755cf29e35ff27306e94807d653e52ac3cbe61d92996104fc83e02c386b98cb363"
+  },
+  "SharedRowRead_v1{FN=Bf16AddRow_v2{N=16},PORT='a',ROW=512,OFF=0,G=4}": {
+   "and": 12509,
+   "type": "884ac5a06230d2e9845b74798c89a0f96a227f491860658739d1347c96eade0fe2ff929866db5507048ccc8840393006d6162b6ff642d3a2e2f952bd0dfdc85e"
+  },
+  "SharedRowRead_v1{FN=PvRow_v2{T=2,K=16,D=4,DOT=HopperBF16WgmmaDot16_v2},PORT='p',ROW=512,OFF=0,G=16}": {
+   "and": 6131,
+   "type": "295c2a43892df833a574d0453e9074b3eab32c28ee150da4243e4925360b6fa656dd3340cc71cb6bfdbdcb9cc5deedd55451d3fd3658a7a4b0329e652021d380"
+  },
+  "SharedRowRead_v1{FN=QkSoftmaxRowPad_v1{T=2,D=16,DOT=HopperBF16WgmmaDot16_v2},PORT='q',ROW=512,OFF=0,G=8}": {
+   "and": 32585,
+   "type": "4c89abd84989c58ae6586186edf16eda7af0d56fc3ea4fcde5461d807d20407ed032c53186f2a38def2980ed3f7906f109559d781381a2870f245c7d95903dba"
+  },
+  "SharedRowRead_v1{FN=QuantChunkS8_v2{N=8,RELU=False},PORT='amax',ROW=2,OFF=1,G=1}": {
+   "and": 20789,
+   "type": "509c0d4754ee644281aa58b204ea4fc3262ec6d7d34c6b180ff5dc0a68e88b7d6e3a9aede70c26a5a58385aee35ff276a259935019508c40553fbcc5c71d7a0c"
+  },
+  "SharedRowRead_v1{FN=QuantChunkS8_v2{N=8,RELU=False},PORT='amax',ROW=5,OFF=4,G=1}": {
+   "and": 20789,
+   "type": "9e3e1e807b48f8dc0bbd4c90ed1f3da1ef1e1372a5101dc91d6545378f906e1e7e859979c0ab9dada581d9e049801c3d5c4990a8f8767dd55883e1c49ffe327d"
+  },
+  "SharedRowRead_v1{FN=RmsNormOutSums_v1{C=8,S=8,G=2,N=64,EPS=1e-05},PORT='s',ROW=512,OFF=0,G=1}": {
+   "and": 28436,
+   "type": "54fe6ded2b14f597559ca92c905161a6c11870c6cfafed56e1deb9e3cd7bcda31a2ba1f4e570707de48d15e9115abaa45271cd050e2a476182c76c6dd14c07b7"
+  },
+  "SharedRowRead_v1{FN=RmsNormOutSums_v1{C=8,S=8,G=2,N=64,EPS=1e-05},PORT='s',ROW=512,OFF=256,G=1}": {
+   "and": 28436,
+   "type": "92d9dc88184ddc1973c228842545b1fb2206a69d7a92c3e805854cf0324783a8c15dd8e6168f0056e89feee2cbacf8cb543588bb8d148f90354a1578cc9b6cda"
+  },
+  "SharedRowRead_v1{FN=SharedRowRead_v1{FN=Bf16AddRow_v2{N=16},PORT='a',ROW=512,OFF=0,G=4},PORT='b',ROW=512,OFF=0,G=4}": {
+   "and": 13546,
+   "type": "d5a1cf1f094c87f36959deaa9e925ac47702b7a9f7aebfdfd831f10865e8ee2fd82f1a5712a9694fee4eb09b5e758bc8c56ecba15dcfb24e17f554b7e59c012c"
+  },
+  "SharedRowRead_v1{FN=SharedRowRead_v1{FN=RmsNormOutSums_v1{C=8,S=8,G=2,N=64,EPS=1e-05},PORT='s',ROW=512,OFF=0,G=1},PORT='x',ROW=512,OFF=0,G=4}": {
+   "and": 28961,
+   "type": "d760b7074faf79cb08a5a7f2513ee85d3f6f18ba98a3f97f774d6808f0bbaf66dd2d2913cdbabad03478421d0d3e3d07edd65e57fd7fbef5df1814478f95d6d3"
+  },
+  "SharedRowRead_v1{FN=SharedRowRead_v1{FN=RmsNormOutSums_v1{C=8,S=8,G=2,N=64,EPS=1e-05},PORT='s',ROW=512,OFF=256,G=1},PORT='x',ROW=512,OFF=0,G=4}": {
+   "and": 28961,
+   "type": "5365da814dd5f59d6d471cdb06a3b626a3acb29384f8c68b1b7c20e688a2e13417c101c7986b60f77615f95a51b9a15cefd27141ebe9fbb10e0723d8f65d9b1c"
+  },
+  "SharedRowSelect_v1{W=128,ROW=512,OFF=0,G=4}": {
+   "and": 8205,
+   "type": "663ed881eb576a069cc3c77e7fbacc6af9c620ef7c3b726d48853b99990b0b684181c1e1d9200cc899d0e61d6a574c68bbb3b435a92c5be82838150c05c342b7"
+  },
+  "SharedRowSelect_v1{W=16,ROW=512,OFF=0,G=4}": {
+   "and": 1037,
+   "type": "13ad55ced15841f7c16dea981bf9473f388d5b0f364a3cf44abfbbd48825c490e05adc3f9d25e80433378c40be65f7f3a44793160507a18e6fcb3a5c17736230"
+  },
+  "SharedRowSelect_v1{W=16,ROW=512,OFF=0,G=8}": {
+   "and": 2060,
+   "type": "9e24484cd6b01f87d72bbf6aa3b23096e907400a2fe78659e3f0871569c4ed0db5122e86fe3e09c91a77209401eb6abe3faf5d81d21f517861058ca88373ae39"
+  },
+  "SharedRowSelect_v1{W=2,ROW=512,OFF=0,G=16}": {
+   "and": 523,
+   "type": "21c6d8892ad60b0142bbb1da3b79a37b47022a3d56cbd05c552924a3caeebc75d8f56ee69466b067b93ada02434191c775950b374710cbefffca4a2c0ef9149b"
+  },
+  "SharedRowSelect_v1{W=32,ROW=512,OFF=0,G=16}": {
+   "and": 8203,
+   "type": "4daaaeed6532d41e122d5415c1497386b737b61dbc6d671b6ab568e241d648ff4486147d1fe54148ba0d54dbba67d577d4d19837364c6c7725267cab446f593a"
+  },
+  "SharedRowSelect_v1{W=64,ROW=512,OFF=0,G=8}": {
+   "and": 8204,
+   "type": "582389410729a3f2bacc8a52d2154c15bde02789fdb01311fbdd9e5fc5442dc41903926f7e8a7986a5866ce24363c2ce207588f29747ff584bcdce8f805da1f8"
+  },
+  "SharedRowSelect_v1{W=8,ROW=512,OFF=0,G=4}": {
+   "and": 525,
+   "type": "cf2baa7f1721a3ca044ff7beab17f53b496fed8511e2d9a4ae90ffed6e215f4d3ade7bc476db016aadd4107e2b1086c03288b5822507c84c76064733206c33b0"
+  },
+  "SharedRowWindow_v1{FN=Argmax_v2{V=256},ROW=2,OFF=1,G=1}": {
+   "and": 15588,
+   "type": "d46209e56898f097a484d4c2bc419850314fbe7194868ec7b73dfd6b9c1a4ee5df644f26e7941e71ea3dc9ba74c833af049e084639b16ff48563d9cc2ef19882"
+  },
+  "SharedRowWindow_v1{FN=EmbeddingCoordinate_v1{V=256},ROW=512,OFF=0,G=512}": {
+   "and": 13018,
+   "type": "b5af9f4b7e4f529355c6e2d6cc74fa19e345dca4f564f7dd8efd522e0fd14b3bba26a7322ef2530ebbfc49c3e4422a912dc1bf01c7cd55543432266f930b7ff0"
+  },
+  "SharedRowWindow_v1{FN=RowAbsMax_v2{N=8,RELU=True},ROW=5,OFF=1,G=3}": {
+   "and": 569,
+   "type": "0ed5b4ef4c9f6ffe0da6aa37805dfb96263f4aaffb0d5e5273d5d2db44af32f8dccf0dda1ac12e2e73b9c20588c8820efa3dcc61b24a9a17471fa37060ab63c0"
+  },
+  "SharedRowWindow_v1{FN=ScaledMmS8CoordinateRows_v2{K=64,R=2,DOT=BlackwellS8ImmaDot32_v2},ROW=256,OFF=0,G=256}": {
+   "and": 17659,
+   "type": "1aa30e57544b491891cb27dcc48bfb481927043b6ed248e05831a2d777961aa28aaa526705c824cf0048ac5c6cb5a23afc53ea92f86c5ce02f0686ce24968dd9"
+  },
+  "SharedRowWindow_v1{FN=ScaledMmS8CoordinateRows_v2{K=64,R=2,DOT=BlackwellS8ImmaDot32_v2},ROW=512,OFF=0,G=512}": {
+   "and": 21754,
+   "type": "4eb98f2621b3473c650a6e803689b500749aaae3fc1430f4ae2a4b6dae00702574c7427f9493b1b2ee02197917a7248e310d20bfb3f9d9edf34a5a0a699f32ed"
+  },
+  "SharedRowWindow_v1{FN=ScaledMmS8CoordinateRows_v2{K=64,R=2,DOT=BlackwellS8ImmaDot32_v2},ROW=64,OFF=0,G=64}": {
+   "and": 14589,
+   "type": "0b7586a1c57d8d0452cb99c2ebd08bcd6147a5119978875fa580cfffb2fee4cf5838b0a6a4d5d509eac0eba8bb7c94714ab7ce27717e0dcc5374e866cbbe3513"
+  },
+  "SharedRowWindow_v1{FN=SharedRowRead_v1{FN=PvRow_v2{T=2,K=16,D=4,DOT=HopperBF16WgmmaDot16_v2},PORT='p',ROW=512,OFF=0,G=16},ROW=512,OFF=0,G=8}": {
+   "and": 6655,
+   "type": "ae7a52fa4fc5d8929c8960063b0eff5f2396de2a9f9c4d51a0ee556b6af4679f744fa1a052e4340c973c0a01dcf1712e15f27c1403738555f553c8b32fa1e8a0"
+  },
+  "SharedRowWindow_v1{FN=SharedRowRead_v1{FN=QkSoftmaxRowPad_v1{T=2,D=16,DOT=HopperBF16WgmmaDot16_v2},PORT='q',ROW=512,OFF=0,G=8},ROW=512,OFF=0,G=16}": {
+   "and": 33108,
+   "type": "ac891db49473d2033dacc8e8e86c49c4d1acb4629617407ba21b7e5dc707bd53dce2a13eeeb5333124fab09b2a7ea1d84d2e03ffa5601430c55119d0c3524dab"
+  },
+  "SharedRowWindow_v1{FN=SharedRowRead_v1{FN=SharedRowRead_v1{FN=Bf16AddRow_v2{N=16},PORT='a',ROW=512,OFF=0,G=4},PORT='b',ROW=512,OFF=0,G=4},ROW=512,OFF=0,G=4}": {
+   "and": 14583,
+   "type": "6fef3f920d56a0b8cf85c1393ab1aa59230a5fd2b304afcb939141163c96fbffcd16a0b814810b42828b3aeb710225de322b5f35afce70fc802622ae757d55ca"
+  },
+  "SharedRowWindow_v1{FN=SharedRowRead_v1{FN=SharedRowRead_v1{FN=RmsNormOutSums_v1{C=8,S=8,G=2,N=64,EPS=1e-05},PORT='s',ROW=512,OFF=0,G=1},PORT='x',ROW=512,OFF=0,G=4},ROW=512,OFF=0,G=4}": {
+   "and": 29486,
+   "type": "f4702f7fb4d15ba5c82058941e5cc66e5ec9ddd383fc6f010427c88a0b2fe27d6b1353dea4bda17c5a5e00808d5647a42350f4e22fc450a3fb2f2c86886e4ca1"
+  },
+  "SharedRowWindow_v1{FN=SharedRowRead_v1{FN=SharedRowRead_v1{FN=RmsNormOutSums_v1{C=8,S=8,G=2,N=64,EPS=1e-05},PORT='s',ROW=512,OFF=256,G=1},PORT='x',ROW=512,OFF=0,G=4},ROW=512,OFF=0,G=4}": {
+   "and": 29486,
+   "type": "9a479689a0b8c355d4dcf74288aee3c80dd6acb9d40715397a7f434cd34c062d2478b03058fb9810a5bcd05a85f0d7037a3664558a77038400c8ac2b6cc0562b"
+  }
+ }
 }
