@@ -50,7 +50,7 @@ def exfil(scenario: Scenario, bits: float) -> dict[str, float]:
 class Faulty:
     """The faulty-outputs channel: `identities` identities, each ended by its first drawn faulty step."""
 
-    #: the sampled proofs' draw rate per step
+    #: the sampled proofs' draw rate per step (1 where every unit is proved)
     q: float
     delta: float
     #: the output bits a faulty step chooses
@@ -76,16 +76,26 @@ class Row:
     capacity: float
     #: the chance of detection, by exfiltration reference
     detect: Mapping[str, float]
+    #: the draw rate per step and the reporting confidence it was taken at
+    q: float = 0.0
+    delta: float = math.nan
 
 
 def faulty(registry: Registry, scenario: Scenario) -> Row:
-    """The faulty-outputs row at the regime's identities; with no sampled proofs (unmonitored) nothing detects it."""
+    """The faulty-outputs row at the regime's identities, at the reporting confidence `faulty.delta`. A sampled regime
+    draws at its own rate (`Remote.q`, with its step bits and floor); an unsampled one proves every unit (`q = 1`);
+    unmonitored, nothing detects it."""
     refs = {n: registry[f"exfil.{n}.bits"] for n in registry.names("exfil")}
-    identities = getattr(scenario.regime, "identities", None)
+    regime = scenario.regime
+    identities = getattr(regime, "identities", None)
+    delta = registry["faulty.delta"]
     if identities is None:
-        return Row("faulty outputs", math.inf, dict.fromkeys(refs, 0.0))
-    f = registry.fields(Faulty, "faulty", identities=identities)
-    return Row("faulty outputs", f.capacity, {n: f.detect(b) for n, b in refs.items()})
+        return Row("faulty outputs", math.inf, dict.fromkeys(refs, 0.0), 0.0, delta)
+    if getattr(regime, "sampled", False):
+        f = Faulty(regime.q(), delta, regime.step_bits, regime.floor_steps, identities)
+    else:
+        f = Faulty(1.0, delta, registry["faulty.step_bits"], registry["faulty.floor_steps"], identities)
+    return Row("faulty outputs", f.capacity, {n: f.detect(b) for n, b in refs.items()}, f.q, delta)
 
 
 def points(registry: Registry, result: Result) -> list[Point]:

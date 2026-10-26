@@ -101,6 +101,14 @@ fleet computes, and the regimes map it onto blocks:
 A location is the largest set of devices joined by links no certifier sees (an HGX server's NVLink domain, an NVL72
 rack). Remotely nothing bounds what enters a location, so free FLOPs are free; onsite the window's input caps them too.
 
+### Conventions
+
+Bounds count monitored capacity at peak, as Lean's dampener and `benchmarks/nci/tiers.py` do: a region's declared work
+and free capacity are shares of `Φ`, against an unencumbered trainer at `MFU₀`. So a bound must cut a block's products
+by more than `1/MFU₀` before it binds at all, and an uncertified share above `MFU₀` alone leaves `g = 1`. Attacks run on
+the layout at the fleet's own MFU, which is what a strategy achieves. The gap between the two conventions is part of
+every bracket: remote's `[1, 2.35]` at today's audited residual is mostly that.
+
 ### Status
 
 Every estimate carries the weakest status among its citations, read from the locks (`lean.py`): `proved`,

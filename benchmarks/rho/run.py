@@ -65,8 +65,9 @@ def operating_md(points: list[operating.Point]) -> list[str]:
 def faulty_md(reg: Registry, fo: operating.Row) -> list[str]:
     if math.isinf(fo.capacity):
         return ["Faulty outputs: no sampled proofs, so nothing detects them.", ""]
-    head = (f"Faulty outputs (steps the sampled proofs let go unchecked, drawn at q = {fmt(reg['faulty.q'])} a step): "
-            f"{fmt(fo.capacity)} bits before the first detection, except with chance δ = {fmt(reg['faulty.delta'])}.")
+    drawn = "every unit proved" if fo.q >= 1 else f"steps the sampled proofs draw at q = {fmt(fo.q)} a step"
+    head = (f"Faulty outputs ({drawn}): {fmt(fo.capacity)} bits before the first detection, except with chance "
+            f"δ = {fmt(fo.delta)}.")
     out = [head, "", "| reference | bits | chance of detection |", "|---|---|---|"]
     out += [f"| {n} | {fmt(reg[f'exfil.{n}.bits'])} | {fmt(p)} |" for n, p in fo.detect.items()]
     return out + [""]

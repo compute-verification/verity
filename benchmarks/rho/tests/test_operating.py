@@ -45,7 +45,8 @@ def test_faulty_outputs_carry_every_reference_before_their_first_detection():
     # the training lane's reference-DC model (art:dee8d74e…) from tiers' sampled-proof defaults at delta = 1e-6: the
     # channel carries 1.06e17 bits before its first detection, and catches the weights with chance 8.33e-4, one
     # SparseLoCo sync 1.77e-5 and 1,000 syncs 1.76%
-    row = operating.faulty(REG, build(REG, "reference-onsite-h200"))
+    row = operating.faulty(REG, build(REG, "reference-remote-h200-sampled"))
+    assert math.isclose(row.q, 2.0833e-15, rel_tol=1e-4)
     assert math.isclose(row.capacity, 1.0610e17, rel_tol=1e-3)
     assert set(row.detect) == set(REG.names("exfil"))
     assert all(REG[f"exfil.{n}.bits"] < row.capacity for n in row.detect)
@@ -55,7 +56,7 @@ def test_faulty_outputs_carry_every_reference_before_their_first_detection():
 
 def test_faulty_outputs_capacity_is_where_detection_reaches_one_minus_delta():
     for identities in (1, 3):
-        f = REG.fields(operating.Faulty, "faulty", identities=identities)
+        f = operating.Faulty(2.0833e-15, 1e-6, 16, 1, identities)
         assert math.isclose(1 - f.detect(f.capacity / identities), f.delta, rel_tol=1e-6)
         assert f.detect(1e8) < f.detect(1e12) < f.detect(1e16) < 1
 
@@ -63,6 +64,8 @@ def test_faulty_outputs_capacity_is_where_detection_reaches_one_minus_delta():
 def test_faulty_outputs_are_the_same_in_either_regime_and_undetected_unmonitored():
     onsite = operating.faulty(REG, build(REG, "reference-onsite-nvl72"))
     assert operating.faulty(REG, build(REG, "reference-remote-h200")) == onsite
+    # every unit proved: the first faulty step is drawn, so the channel carries J ln(1/δ) (1 + floor) steps' bits
+    assert onsite.q == 1 and math.isclose(onsite.capacity, math.log(1e6) * 2 * 16)
     unmonitored = operating.faulty(REG, build(REG, "unmonitored-h200-kimi"))
     assert unmonitored.capacity == math.inf and set(unmonitored.detect.values()) == {0.0}
 
