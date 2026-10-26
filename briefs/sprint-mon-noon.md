@@ -57,6 +57,8 @@ by data sheet, and the table says so.
 > - **Don't add the PearlC import** (proofs withdrew #4636). If you already committed it, revert it in its own commit: an extra import can move lock records.
 > - **When a `Proofs.Pouw` probe fails on `exec.eq_10`, rebuild from a clean `.lake/build`** before you believe it.
 >
+> **Opening a PR when your tools have no PR action (10:10Z):** `research queue open --head <your pushed branch> --sha <head> --title "..." --body-file <file> --base main`. The body's first line must be `Lane compute-research`. It prints the PR's URL. The D3 model is now **#4662** (clean history), which replaces #4553.
+>
 > **Before you mark (ci, 09:06Z):** sync the checkout you run `research queue ready --mark` from to `origin/main` (`git pull` + `uv sync`). An older research client doesn't know drive.toml's new keys, and its preflight skips landing gates.
 >
 > **Before you report that a Lean head builds (RT-LEAN-2, 08:40Z):** run one probe that imports the package root, e.g. `import Proofs.Pouw`. A single-file `lean try` builds only that file's imports, so it can pass while the package root fails.
