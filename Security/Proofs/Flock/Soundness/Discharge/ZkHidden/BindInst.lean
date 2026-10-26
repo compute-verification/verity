@@ -50,7 +50,8 @@ noncomputable def sitesShHI : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y
 theorem sitesShHI_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
       ((sitesShHI dj y₀ ht hc hrf).acc S R u h).st.c = c :=
-  fun S _ _ _ => (tableShH dj y₀ S).c_eq hc
+  fun S R u h => ((sitesShHI dj y₀ ht hc hrf).acc S R u h).c_eq (HmOut.parse_isTmpl hc)
+    (parse_untyped (zkTyped ht) hc).1
 
 variable {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
@@ -195,7 +196,9 @@ noncomputable def sitesShHJI : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ d
 theorem sitesShHJI_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
       ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).st.c = c :=
-  fun S _ u _ => (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.c_eq (tableShHJ_parse dj y₀ ht hc S _)
+  fun S R u h => ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).c_eq
+    (HmOut.parse_isTmpl (tableShHJ_parse dj y₀ ht hc S (partOf I (dj S) u.val)))
+    (parse_untyped (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)).1
 
 variable {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
