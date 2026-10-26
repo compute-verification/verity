@@ -226,6 +226,7 @@ import Proofs.Flock.Claims.Recursion.RowDMerkle
 import Proofs.Flock.Claims.Recursion.RowDAccept
 import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
 import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+import Proofs.Flock.Claims.Recursion.ResPortNames
 import Proofs.Flock.Claims.Recursion.RestReadsAt
 import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.KS.PlainRCapPrefix
