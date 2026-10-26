@@ -48,6 +48,7 @@ structure Version where
   coin : Option ByteArray := none
   tagSalt : ByteArray := .empty
   root : Option ByteArray := none
+  deriving Inhabited
 
 structure State where
   vers : Array (Array Version)
