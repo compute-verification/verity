@@ -87,9 +87,9 @@ def instanceOf (p : Params) (e : Evidence) : Json :=
 def trustedOf (p : Params) (c : Commitment) : Json :=
   Json.mkObj [("log", .arr (p.log.push c.record)), ("params", p.parameters), ("run", .str c.hex)]
 
-/-- A refusal's code, with the fix its `message` gives where there is one. -/
-def reasonOf (code : String) : String :=
-  let r := Baseline.refusal code
+/-- A refusal's code for the instance `j`, with the fix its `message` gives where there is one. -/
+def reasonOf (j : Json) (code : String) : String :=
+  let r := Baseline.refusal j code
   match r.getObjVal? "error", r.getObjVal? "message" with
   | .ok (.str e), .ok (.str m) => s!"{e}: {m}"
   | .ok (.str e), _ => e
@@ -107,7 +107,7 @@ def reportOf (out : Json) : Json :=
 
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Unit Json :=
   match Baseline.evaluate (instanceOf p e) (trustedOf p c) with
-  | .error code => .reject (reasonOf code)
+  | .error code => .reject (reasonOf (instanceOf p e) code)
   | .ok out =>
     match out.getObjVal? "complies" with
     | .ok (.bool true) => .accept () (reportOf out)
