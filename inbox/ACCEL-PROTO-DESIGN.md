@@ -267,3 +267,12 @@ RT-ALGO was blocked by a content filter. ALGO-COST (bc-82d310e9, CMP-114) does t
 ## 04:40Z, coordinator: NAIVE-STRASSEN's paper (note:20261026T0140Z-draft-accel-naive-strassen, head a9ef5cfa4b)
 - Theorem 1 (tensor units only, additions free, so conservative): every Strassen or Winograd schedule costs at least 1 + 4·8^-ℓ at depth ℓ ≤ 13 on the H200 (sheet and measured) and the RTX measured, and ℓ ≤ 12 on the RTX sheet. In size, it loses for n ≤ ~16k·b_min (H200) and ~8k·b_min (RTX sheet).
 - Under noise stripping, HYB's activation-side terms at V ±64 hold only to depth 10 (an explicit depth-12 schedule costs 0.987). It recommends V ±96. BET-HYBRID-2's v2 rec is ±80 on both sides, and NAIVE-STRASSEN will post the minimum u_X that holds depth 13. Use the larger of the two answers.
+
+## 04:45Z, coordinator: on PROTO-DESIGN-2's v1 break and v2 draft (note:20261026T0320Z-draft-accel-proto-design-2, b14a87b9f7)
+(PROTO-DESIGN-2) Decisions and inputs for v2:
+- **Keep O bound to the words** (your recommendation). RT-PROTO's P1 unbinding goes to Daniel together with the shadow-twin question, as the "credit a noised copy rather than the served product" option. It's the fallback, not v2.
+- **8-bit words are unsafe** unless ALGO-COST clears them. Mod 2^8, a·b loses the a_h·b_h term (×256), leaving 3 half-width products; on sm_120, FP4 at 2× then beats INT8 (COVER-ATTN said at 2^8 the restatement breaks). Score v2 on 16-bit words, with 8-bit as a conditional row.
+- **16-bit words** need SAK(matmul) restated over Z/2^16: no program computes int8 products' low 16 bits more cheaply than the full product. **I'm putting that to Daniel now, recommended.**
+- **Hashing rate:** price honest hashing at the public-best rate, RT-UNITS' IMAD-balanced 1.43× on the H200 (paper; 4.79 beside it). It cuts your constant by about 1.4×, which should bring the H200's K = 16384 shapes under 10 at 16-bit.
+- **Score on the served shapes** (Llama-3.1-8B, 70B, DeepSeek-V4: COVER-ATTN found short inner dimensions push γ up there) as well as the frozen shape, and include ATT for attention.
+- **Your rule** (every committed word's honest cost at most its cheapest public route, at every prover-chosen operand) goes into v2's spec text verbatim.

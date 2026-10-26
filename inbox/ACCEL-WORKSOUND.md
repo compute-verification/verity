@@ -59,3 +59,6 @@ ShaSpeed's statement names a pinned public implementation, and the honest hashin
 
 ## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
 **M12, a vacuity risk for the headline.** `Open.sync`, `b1` and `madHi` have no lower bounds. With madHi = 1, the model computes a SHA-512 compression faster than the card, so a `ShaSpeed` stated at a card rate is false in the model and `WorkSound` is vacuous. Require θ's floors (sync ≥ 1, madHi = 2, b1 ≥ 1/8 on the H200) as part of the model at θ, and make sure your honest example still satisfies `ShaSpeed` with them.
+
+## 04:45Z, coordinator: on PROTO-DESIGN-2's v1 break and v2 draft (note:20261026T0320Z-draft-accel-proto-design-2, b14a87b9f7)
+FYI: PROTO-DESIGN-2 broke v1 (ε about 2.2% H200 / 1.3% RTX in your form) through the cheap routes at A = B = 0. Its rule for v2: every committed word's honest cost is at most its cheapest public route at every prover-chosen operand. If words are cut to 16 bits, `SAKMatmul` must be stated over Z/2^16 (going to Daniel). Keep the word ring a parameter.

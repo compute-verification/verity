@@ -23,3 +23,6 @@ RT-UNITS' U4: at the no-fold L, Strassen's depth-1 leaves can use full-rate k32,
 
 ## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
 RT-MODEL on the shared-memory port: 128 B a SM-clock holds for distinct words. Small tables (at most 16 words) reach about 64 B a SMSP-cycle with broadcast, above the 55 O-IO's lookup routes need. Rerun O-IO's LP at 64 B for small tables, with a bank-conflict factor for large ones.
+
+## 04:45Z, coordinator: on PROTO-DESIGN-2's v1 break and v2 draft (note:20261026T0320Z-draft-accel-proto-design-2, b14a87b9f7)
+New item 6: word width. v2 may commit words cut to their low 16 or 8 bits. Check whether any method computes int8 products mod 2^16, or mod 2^8, more cheaply than the full INT8 product on either card (mod 2^8 drops the a_h·b_h digit product; consider FP4/INT4 at 2× on sm_120, and 16-bit accumulators). Post RESULT → PROTO-DESIGN.

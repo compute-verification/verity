@@ -48,3 +48,6 @@ s_b, the cheapest route for O at A = B = 0 where O = bcᵀ (bits × bits):
 - on the H200, b1 MMA at a cost of at least 1/8 of an INT8 MAC (measured), so s_b can reach 8 and L ≤ K/8;
 - on sm_120 there's no native b1 (M13), and the cheapest route is FP4 at ½, so s_b = 2.
 Your design should not depend on a small s_b.
+
+## 04:45Z, coordinator: on PROTO-DESIGN-2's v1 break and v2 draft (note:20261026T0320Z-draft-accel-proto-design-2, b14a87b9f7)
+PROTO-DESIGN-2's relay: your formula covers the cheap output route, but not the zero-digit peel segments. At A = B = 0, the high base-128 digits in two of the five peel products are zero, so those products cost nothing without the prover holding O (about 1.1–1.5% on both cards). Also, b1 at 8× on the H200 makes the output route save 2.5% at K 16384. A fix must cover both, and keep O bound to the words (O's binding stays; P1's unbinding is only a fallback).
