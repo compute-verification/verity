@@ -40,10 +40,15 @@ The pieces not yet on `main` change only the commands the job runs. N2's sampled
 A step on a stand-in (the scan on its own synthetic run, or N2 on `CR_N2_STANDIN=simulated`) never makes the report
 accepted, and a step that fails or doesn't run says why.
 
-One gap is in the binding on `main`: `chain.served_advice` reads each Commit window's advice as I1 v0. A window that
-carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema `verity-vllm/window-advice/v1`)
-is therefore refused, and with it the whole run's advice. #4384's carry binding takes those windows, and the run of
-record ran on it.
+A Commit window that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
+`verity-vllm/window-advice/v1`) is bound with the window before it: `chain.served_advice` joins them into one I1 v0
+advice (`window_chain.join`), and `n2_advised_zk --e2e` joins the run's windows the same way. A carried request's
+record and state are the earlier window's, as its registered advice closed them (`window_advice.follows`), never the
+later window's own string's, so the advice's bits, and N2's K, charge the carry once. A window that carries a request
+in from a window the run doesn't hold, or that leaves a request with outputs still to keep and no next window, is
+refused. On the :18097 endpoint, 8 of the 56 Commit windows of c20261025T062158Z-9ff3 carry a request (114–115,
+143–144, 147–148 and 152–153), and all 56 bind and rebuild from the certified I/O. N2 proves the joined advice at
+that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check pins (`advised.circuit-check.py`).
 
 ### The run of record (25–26 Oct 2026)
 
@@ -247,4 +252,3 @@ What it doesn't cover:
 - B_reg: the trace's values at reg are the registration's (proofs' #4253). No probability covers it yet.
 - #(freeInputs \ reg) is not bounded by the advice bits until V3's padding, so b_w is vacuous (NET-68).
 - No carry across windows: each window's terms stand alone, and a request that spans two windows is charged in each.
-  The endpoint's Commit windows that carry a request don't bind to the run yet (above).
