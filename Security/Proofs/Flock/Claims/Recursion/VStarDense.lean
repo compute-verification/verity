@@ -13,6 +13,13 @@ refused), and V\*'s list is its levels (`.recOpen`), its algebra parts (`.inner`
 
 `hok_dense` is `hok_of_fits` with its premise split by those three kinds: a level's checks (`LevelInFits`), an algebra
 part's (`AlgInFits`) and a cap's (`capIn` accepting).
+
+`IrShaped Ir x w ρ hist` is what the stager reads of the inner prover's `rest` at one run: both reps have an opening, and
+at each level part `.recOpen l L H n` the level's openings number `n`, each of `L` lanes and `H` siblings, and each one's
+top node is among the level's tops wherever they are read. No Lean `InnerRec` is the deployed inner prover (its `rest` is
+`rec_vstage`'s, `rec_vstar`'s and `verifier_rows`' output), so this is witnessed outside Lean, at the deployed builder's
+run, as `HonestRunAccepted` is. `hok_shaped` is the stager accepting every part of a dense statement from it, given the
+level tops being read (`topsAt`), each algebra port being `acc0`, `acc1` or a schedule's `m<i>`, and each cap's `capIn`.
 -/
 
 namespace RecDeploy.VStarBuild
@@ -56,7 +63,7 @@ theorem hok_dense {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} 
     {st : Claims.Recursion.Stmt} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
     (hL : ∀ l L H n c src, partAt x s = some (.recOpen l L H n, c) → srcOf I x w ρ hist = some src →
       LevelInFits src l L H n)
-    (hA : ∀ j nm p c src, partAt x s = some (.inner j nm p, c) → srcOf I x w ρ hist = some src →
+    (hA : ∀ (j : ℕ) (nm : String) (p : _root_.VStar.Part) c src, partAt x s = some (.inner j nm p, c) → srcOf I x w ρ hist = some src →
       AlgInFits src p.S.ports)
     (hC : ∀ l N c src, partAt x s = some (.cap l N, c) → srcOf I x w ρ hist = some src →
       ∃ pin, _root_.VStar.In.capIn src l N = .ok pin) :
@@ -67,5 +74,80 @@ theorem hok_dense {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} 
   · exact hL l L H n c src hp hs
   · exact hA j nm p c src hp hs
   · exact hC l N c src hp hs
+
+/-! ## The inner prover's openings at a run (`IrShaped`) -/
+
+/-- **The inner prover's openings fit V\*'s levels at a run**: in `rest` at the inner witness `w`, its tape `ρ` and the
+inner rounds `hist`, both reps have an opening, and at each level part `.recOpen l L H n` of `x`, level `l`'s openings
+number `n`, each of `L` lanes and `H` siblings, and where the level's tops are read at the stager's inputs (`srcOf`,
+`topsAt`), each opening's top node is among them. `(Ir.fit x).rest` is `Ir.rest`. Witnessed outside Lean, at the
+deployed builder's run. -/
+def IrShaped (Ir : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : (Ir.fit x).Tape) (hist : List (Msg × Msg)) :
+    Prop :=
+  (∃ o ∈ ((Ir.fit x).rest w ρ.1 hist).openings, o.rep = 0) ∧
+  (∃ o ∈ ((Ir.fit x).rest w ρ.1 hist).openings, o.rep = 1) ∧
+  ∀ s l L H n c, partAt x s = some (.recOpen l L H n, c) →
+    (((Ir.fit x).rest w ρ.1 hist).openings.filter (·.level == l)).size = n ∧
+    (∀ q ∈ ((Ir.fit x).rest w ρ.1 hist).openings, q.level = l → q.row.size = L ∧ q.sibs.size = H) ∧
+    ∀ src, srcOf (Ir.fit x) x w ρ hist = some src → ∀ T, _root_.VStar.In.topsAt src l = .ok T →
+      ∀ q ∈ ((Ir.fit x).rest w ρ.1 hist).openings, q.level = l → T.first[q.rep]! + q.pos / 2 ^ H < T.rows.size
+
+/-- The stager's openings are the inner prover's `rest`'s. -/
+theorem srcOf_openings {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)}
+    {src : _root_.VStar.In.Src} (hs : srcOf I x w ρ hist = some src) :
+    src.openings = (I.rest w ρ.1 hist).openings := by
+  cases hr : readX x with
+  | none => simp [srcOf, hr] at hs
+  | some r =>
+    cases hrs : repSched r.shape with
+    | none => simp [srcOf, hr, hrs] at hs
+    | some rs => rw [srcOf_eq hr hrs hs]
+
+/-- **A level part fits** at the stager's inputs where the inner prover's openings fit (`IrShaped`) and the level's tops
+are read. -/
+theorem levelFits_of_shaped {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape}
+    {hist : List (Msg × Msg)} (hI : IrShaped Ir x w ρ hist) {s l L H n : ℕ} {c : Circuit} {src : _root_.VStar.In.Src}
+    (hp : partAt x s = some (.recOpen l L H n, c)) (hs : srcOf (Ir.fit x) x w ρ hist = some src)
+    (hT : ∃ T, _root_.VStar.In.topsAt src l = .ok T) : LevelInFits src l L H n := by
+  obtain ⟨hn, hsz, hpos⟩ := hI.2.2 s l L H n c hp
+  have ho := srcOf_openings hs
+  obtain ⟨T, hT⟩ := hT
+  refine ⟨?_, fun q hq => ?_, T, hT, fun q hq => ?_⟩
+  · rw [ho]; exact hn
+  · rw [ho] at hq; exact hsz q hq
+  · rw [ho] at hq; exact hpos src hs T hT q hq
+
+/-- **An algebra part fits** at the stager's inputs where both reps have an opening (`IrShaped`) and each port is
+`acc0`, `acc1` or an `m<i>` at one of the schedule's message rounds. -/
+theorem algFits_of_shaped {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape}
+    {hist : List (Msg × Msg)} (hI : IrShaped Ir x w ρ hist) {src : _root_.VStar.In.Src}
+    (hs : srcOf (Ir.fit x) x w ρ hist = some src) {ports : List (String × ℕ)}
+    (hN : ∀ xr rs, readX x = some xr → repSched xr.shape = some rs → ∀ nm ∈ ports.map Prod.fst,
+      nm = "acc0" ∨ nm = "acc1" ∨ ∃ i, RecVStar.mIndex nm = some i ∧ i < (RecVStar.commitRounds rs).length) :
+    AlgInFits src ports := by
+  cases hr : readX x with
+  | none => simp [srcOf, hr] at hs
+  | some r =>
+    cases hrs : repSched r.shape with
+    | none => simp [srcOf, hr, hrs] at hs
+    | some rs => exact algFits_srcOf hr hrs hs hI.1 hI.2.1 (hN r rs hr hrs)
+
+/-- **The stager accepts every part of a dense statement** at a run where the inner prover's openings fit
+(`IrShaped`), each level's tops are read (`topsAt`), each algebra part's port is `acc0`, `acc1` or a schedule's `m<i>`,
+and each cap's `capIn` accepts. -/
+theorem hok_shaped {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.fit x).Tape} {hist : List (Msg × Msg)}
+    {st : Claims.Recursion.Stmt} {s : ℕ} (hx : parse x = some st) (hf : Claims.Recursion.Form.Dense st.form)
+    (hI : IrShaped Ir x w ρ hist)
+    (hT : ∀ l L H n c src, partAt x s = some (.recOpen l L H n, c) → srcOf (Ir.fit x) x w ρ hist = some src →
+      ∃ T, _root_.VStar.In.topsAt src l = .ok T)
+    (hN : ∀ (j : ℕ) (nm : String) (p : _root_.VStar.Part) c, partAt x s = some (.inner j nm p, c) → ∀ xr rs, readX x = some xr →
+      repSched xr.shape = some rs → ∀ pn ∈ p.S.ports.map Prod.fst,
+        pn = "acc0" ∨ pn = "acc1" ∨ ∃ i, RecVStar.mIndex pn = some i ∧ i < (RecVStar.commitRounds rs).length)
+    (hC : ∀ l N c src, partAt x s = some (.cap l N, c) → srcOf (Ir.fit x) x w ρ hist = some src →
+      ∃ pin, _root_.VStar.In.capIn src l N = .ok pin) :
+    ∀ sv c src, partAt x s = some (sv, c) → srcOf (Ir.fit x) x w ρ hist = some src →
+      ∃ pin, _root_.VStar.In.partIn src (progOf c) sv = .ok pin :=
+  hok_dense hx hf (fun l L H n c src hp hs => levelFits_of_shaped hI hp hs (hT l L H n c src hp hs))
+    (fun j nm p c _ hp hs => algFits_of_shaped hI hs (hN j nm p c hp)) hC
 
 end RecDeploy.VStarBuild
