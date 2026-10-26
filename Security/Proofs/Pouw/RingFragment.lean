@@ -171,6 +171,29 @@ variable {Vl Vr R : Type} [Fintype Vl] [Fintype Vr] [DecidableEq Vl] [DecidableE
 /-- **Degree 2**: every product multiplies two bit-affine operands (`AffProd`, mixed included). -/
 def AffOps (P : SlpG (Vl ⊕ Vr) R N) : Prop := ∀ j, P.isProd j = true → AffProd (P.prod j)
 
+/-- **An accumulator's product reads in `theoremK`'s form**: with degree-2 products, what linear slot `j` reads from
+products is a combination of products of bit-affine operands. -/
+theorem prodPart_eq (P : SlpG (Vl ⊕ Vr) R N) (hP : AffOps P) (j : Fin N) :
+    ∃ A Bo : Fin j.val → BitAff (Vl ⊕ Vr) R, ∀ z, prodPart P j z =
+      ∑ k ∈ univ.filter (fun k : Fin j.val => P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = true),
+        P.lin j k * ((A k).eval z * (Bo k).eval z) := by
+  classical
+  have h : ∀ k : Fin j.val, ∃ AB : BitAff (Vl ⊕ Vr) R × BitAff (Vl ⊕ Vr) R,
+      P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = true →
+        ∀ z, P.val z ⟨k.val, k.isLt.trans j.isLt⟩ = AB.1.eval z * AB.2.eval z := by
+    intro k
+    by_cases hk : P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = true
+    · obtain ⟨A, Bo, hAB⟩ := hP _ hk
+      exact ⟨(A, Bo), fun _ z => by rw [SlpG.val, ite_eq_left hk]; exact hAB z⟩
+    · exact ⟨(⟨0, 0⟩, ⟨0, 0⟩), fun h => absurd h hk⟩
+  choose AB hAB using h
+  refine ⟨fun k => (AB k).1, fun k => (AB k).2, fun z => ?_⟩
+  rw [prodPart, Finset.sum_filter]
+  refine Finset.sum_congr rfl fun k _ => ?_
+  split_ifs with hk
+  · rw [hAB k hk z]
+  · rfl
+
 end Ops
 
 section Design
