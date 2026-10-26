@@ -2,11 +2,13 @@
 Python mirror, through the difftest harness's `ProtocolPort`.
 
 The mirror and the generator are `period_case.py`'s: `reference` (its `answer`) checks a period in the core interface's
-answer format, `build` makes a period with one change (`EXPECT`, each aimed at one path of the check, or malformed
-parameters, commitments, evidence and cases) in the clock form or, for a change named `rows-…`, the rows form, and
-`case` a small period of either form aimed at a verdict or at a decoding failure (`KINDS`). This module re-exports
-what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it draws onsite's certifier cases from
-`build` and answers them with `reference` (`verity/core/protocols/composition/tests/reference.py`)."""
+answer format, running one-stage v2 on each link-window's proof as the check does, `build` makes a period with one
+change (`EXPECT`, each aimed at one path of the check, or malformed parameters, commitments, evidence and cases) in the
+clock form or, for a change named `rows-…`, the rows form, and `case` a small period of either form aimed at a verdict
+or at a decoding failure (`KINDS`). No case carries a proof v2 accepts, so the best verdict here is undecided
+(`UndecidedPort`). This module re-exports what the composition's difftest reads of it (`reference`, `build`, `EXPECT`):
+it draws onsite's certifier cases from `build` and answers them with `reference`
+(`verity/core/protocols/composition/tests/reference.py`)."""
 
 from __future__ import annotations
 
@@ -22,8 +24,8 @@ from hypothesis import strategies as st
 
 import period_case as PC
 import verity_difftest as D
-from period_case import (ACCEPT, EXPECT, FORMS, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most,
-                         build, clog2, public, reference, verdict_of)
+from period_case import (ACCEPT, EXPECT, FORMS, INGRESS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most, build,
+                         clog2, public, reference, verdict_of)
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.certificate import Certificate
 from verity.core.protocols.certifier.schedule import SyncSet
@@ -52,7 +54,13 @@ def counted(case) -> dict:
     return out
 
 
-PORT = D.ProtocolPort("network-period", counted, cases(), package=LEAN)
+class UndecidedPort(D.ProtocolPort):
+    """The period's port, whose best verdict here is undecided: one-stage v2 accepts a link-window only on a session's
+    proof, which no case carries, so a run's non-vacuity bar is an undecided period."""
+    accepted = UNDECIDED
+
+
+PORT = UndecidedPort("network-period", counted, cases(), package=LEAN)
 server = D.server_fixture(PORT)
 
 
@@ -65,52 +73,63 @@ def test_the_period_check_agrees_with_its_mirror(server):
     print("\n".join(f"{tag:22} {verdict:10} {k}" for (tag, verdict), k in sorted(SEEN.items())))
     missed = [tag for tag, verdict in EXPECT.items() if not SEEN[(tag, verdict)]]
     assert not missed, (missed, SEEN)
-    assert min(stats.counts.get(v, 0) for v in (ACCEPT, REJECT, UNDECIDED)) > examples // 50, stats
+    assert min(stats.counts.get(v, 0) for v in (REJECT, UNDECIDED)) > examples // 50, stats
+    assert not stats.counts.get(ACCEPT), stats
 
 
 def test_each_verdict_is_the_mirrors(server):
-    """A short run over an honest period, an undecided link-window and a forged certificate, in each form: all three
-    verdicts."""
-    port = dataclasses.replace(PORT, inputs=cases(("honest", "answer-undecided", "cert-forged", "rows-honest",
-                                                   "rows-answer-undecided", "rows-cert-forged")))
+    """A short run over an honest period and a forged certificate in each form: the clock form's honest period is
+    undecided (v2 on a link-window with no session's proof), the rows form's rejected at its scan's answer."""
+    port = dataclasses.replace(PORT, inputs=cases(("honest", "audit-undecided", "cert-forged", "rows-honest",
+                                                   "rows-cert-forged")))
     stats = D.run(port, examples=40, server=server)
-    assert all(stats.counts.get(v) for v in (ACCEPT, REJECT, UNDECIDED)), stats
+    assert all(stats.counts.get(v) for v in (REJECT, UNDECIDED)), stats
 
 
 def test_a_mirror_that_skips_the_ingress_certificate_is_caught(server, monkeypatch):
-    """A mirror that reads only the egress certificate accepts a period whose ingress certificate names another link,
-    and Lean rejects it."""
+    """A mirror that reads only the egress certificate leaves a period whose ingress certificate names another link to
+    one-stage v2 (undecided), and Lean rejects it."""
     real = PC._certifies
     monkeypatch.setattr(PC, "_certifies", lambda p, d, w, c: d is INGRESS or real(p, d, w, c))
     with pytest.raises(D.Mismatch) as x:
         D.run(dataclasses.replace(PORT, inputs=cases(("cert-link",))), examples=20, server=server)
-    assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
+    assert (x.value.lean[0], x.value.python[0]) == (REJECT, UNDECIDED)
 
 
-def test_a_mirror_that_skips_the_rows_check_is_caught(server, monkeypatch):
-    """A mirror that doesn't read the row registrations accepts a rows-form period whose rows a key other than the
-    deployment key signed, and Lean rejects it."""
-    monkeypatch.setattr(PC, "_rows_check", lambda p, w, d, doc: None)
+def test_a_mirror_that_skips_one_stage_v2_is_caught(server, monkeypatch):
+    """A mirror that checks each link-window's fields but doesn't run one-stage v2 on its proof accepts an honest
+    period, and Lean, which runs v2 and finds no session's proof, leaves it undecided."""
+    monkeypatch.setattr(PC, "_proved", lambda *a: None)
     for n in range(2):
         with pytest.raises(D.Mismatch) as x:
-            D.replay(PORT, build("rows-reg-key", n, small=True), server)
-        assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
+            D.replay(PORT, build("honest", n, small=True), server)
+        assert (x.value.lean[0], x.value.python[0]) == (UNDECIDED, ACCEPT)
 
 
-#: The rows form's refusals the period must make, each with what Lean's reason and the mirror's say.
-ROWS_REFUSALS = {
+#: The refusals the period must make by name, each with what Lean's reason and the mirror's say: a link-window shown
+#: with an answer of its own (the made-up `{"verdict": "accept", …}` the check once read), one whose proof v2 refuses
+#: (a public file or a session record in no blob, units no session proved, a circuit file in no blob), one whose
+#: sessions opened a root other than the registered one, and in the rows form a link-window missing one of its
+#: records' certificates, a registration not under the deployment key, the scan's answer for another window's rows,
+#: rows under a schedule whose digest isn't the bound one, and the scan's answer of an honest period, which the check
+#: takes from no one.
+REFUSALS = {
+    "answer-made-up": ("answer: the check runs one-stage v2 on the link-window's proof itself and takes no answer",
+                       "answer: the check runs one-stage v2 on the link-window's proof itself"),
+    "v2-refused": ("one-stage v2: ", "one-stage v2: "),
+    "v2-session": ("one-stage v2: the audit's checks failed: roots", "one-stage v2: "),
     "rows-cert-missing": ("certificates: the requests', responses' and fails' records'", "certificates"),
     "rows-reg-key": ("not under the deployment key in the session", "doesn't verify under"),
     "rows-answer-window": ("another window's answer", "another window's answer"),
     "rows-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
+    "rows-honest": ("the scan's answer: the check takes no answer for a link-window, and one-stage v2 can't run",
+                    "the scan's answer: the check takes no answer for a link-window"),
 }
 
 
-def test_the_rows_form_refuses_what_it_must(server):
-    """A link-window missing one of its records' certificates, a registration not under the deployment key, the scan's
-    answer for another window's rows, and rows under a schedule whose digest isn't the bound one: Lean and the mirror
-    each refuse every one at that check."""
-    for m, (lean, mirror) in ROWS_REFUSALS.items():
+def test_the_period_refuses_what_it_must_by_name(server):
+    """Each of `REFUSALS`: Lean and the mirror each refuse it at that check, by its name."""
+    for m, (lean, mirror) in REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
             assert mirror in reference(case)["reason"], (m, n, reference(case))
@@ -143,35 +162,32 @@ def test_a_small_period_reaches_its_verdict(server):
 
 @pytest.mark.parametrize("form", FORMS)
 def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
-    """`case(kind, seed, form)` reaches its kind's verdict for each kind, the ones that fail to decode refused where
-    they fail (a digest only once the commitment decodes); an accepted period's eps is its audits' and scans' deltas
-    summed,
-    and its profile names no sync; in the clock form its evidence holds each clock certificate alone, and in the rows
-    form each link-window's three records' certificates and two row registrations, with one scan a link-window and no
-    schedules term; `cases(seed, form)` is one of each with its answer; and Lean gives every one of them the mirror's
-    answer."""
-    drawn = {(k, s): PC.case(k, s, form) for k in KINDS for s in range(6)}
+    """`case(kind, seed, form)` reaches its kind's verdict for each kind the form reaches (`AIMS`: no case is
+    accepted, and the rows form, whose scan's answer the check refuses, has no undecided one), the ones that fail to
+    decode refused where they fail (a digest only once the commitment decodes); an honest period's link-windows show in
+    the clock form two certificates, the clock certificate, one-stage v2's evidence and the two delivered salts, its
+    case carrying v2's blobs, and in the rows form three records' certificates, two row registrations and the scan's
+    answer; `cases(seed, form)` is one of each with its answer; and Lean gives every one of them the mirror's answer."""
+    kinds = list(PC.AIMS[form])
+    assert kinds == [k for k in PC.KINDS if form == "clock" or k != UNDECIDED]
+    drawn = {(k, s): PC.case(k, s, form) for k in kinds for s in range(6)}
     answers = {ks: PC.answer(c) for ks, c in drawn.items()}
     assert {ks: a["verdict"] for ks, a in answers.items()} == {(k, s): verdict_of(k) for k, s in drawn}
     assert all(a["reason"].startswith(k.removeprefix("broken-") + ":")
                and (a["commitment"] is None) == (k != "broken-evidence")
                for (k, _), a in answers.items() if k.startswith("broken-"))
-    accepted = [a["public"] for (k, _), a in answers.items() if k == ACCEPT]
-    assert all(isinstance(x["K"], int) and x["eps"] == str(sum(
-        (Fraction(t["delta"]) for t in x["audits"] + x.get("scans", [])), Fraction(0))) for x in accepted)
-    assert all(sorted(a["profile"]) == ["link", "windows"] for (k, _), a in answers.items() if k == ACCEPT)
-    shown = [w for (k, _), c in drawn.items() if k == ACCEPT
-             for w in json.loads(bytes.fromhex(c["evidence"]))["windows"]]
+    honest = [build("honest" if form == "clock" else "rows-honest", s, small=True) for s in range(6)]
+    shown = [w for c in honest for w in json.loads(bytes.fromhex(c["evidence"]))["windows"]]
     if form == "clock":
-        assert all(sorted(w["clock"]) == PC.CERTIFICATE_KEYS for w in shown)
-        assert all("scans" not in x for x in accepted)
+        assert all(sorted(w) == PC.CLOCK_WINDOW_KEYS and len(w["certificates"]) == 2
+                   and sorted(w["salts"]) == ["o0", "pub"] and sorted(w["clock"]) == PC.CERTIFICATE_KEYS for w in shown)
+        assert all(c["blobs"] == [PC.ZK.CIRCUIT.hex(), PC.ZK.PUBLIC.hex()] for c in honest)
     else:
         assert all(sorted(w) == PC.ROWS_WINDOW_KEYS and len(w["certificates"]) == 3 and len(w["registrations"]) == 2
                    for w in shown)
-        assert all(x["schedules"] == 0 and len(x["scans"]) == x["windows"] for x in accepted)
-    assert PC.cases(3, form) == {k: (drawn[k, 3], answers[k, 3]) for k in KINDS}
-    D.run(dataclasses.replace(PORT, inputs=st.sampled_from(list(drawn.values()))), examples=2 * len(drawn),
-          server=server)
+    assert PC.cases(3, form) == {k: (drawn[k, 3], answers[k, 3]) for k in kinds}
+    for c in drawn.values():
+        D.replay(PORT, c, server)
 
 
 def test_the_bound_counts_what_it_says():
