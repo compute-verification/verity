@@ -386,18 +386,19 @@ def refusing_commit(*args, **kwargs):
 
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
          process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
-         id_payload: int | None = None) -> Warden:
+         id_payload: int | None = None, load_heads: Path | None = None) -> Warden:
     """A run of the warden at `params` for `windows` windows on a `VirtualClock`, published as `serve` and `client` publish one:
-    its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when `process`), each window
-    committed by `commit`, `deployment.json`, and `client.json` with every cell's arrival 1 ms into the bucket it was
-    sent in, each response read id-form at P = `id_payload` when given; `servers` gets the server's side of each
-    connection, in connect order. Returns the warden."""
+    its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when `process`, which first
+    signs the load's heads `load_heads` when given), each window committed by `commit`, `deployment.json`, and
+    `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at P =
+    `id_payload` when given; `servers` gets the server's side of each connection, in connect order. Returns the
+    warden."""
     tau = params.bucket_ms / 1000
     if process:
         import warden_serve  # by name, so that the spawned process finds its functions
 
-        ws.cs.load_key(key, 4)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit)
+        ws.cs.load_key(key, 5 if load_heads else 4)
+        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
         hooks, public = {"publish": publisher, "release": publisher.release}, publisher.key
     else:
         signer = ws.cs.signer(key, 4)
@@ -582,6 +583,60 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
 
     with pytest.raises(RuntimeError, match="a refusing commit"):
         _run(runs["refusing"], tmp_path / "refusing-key", requests, responses, commit=refusing_commit, process=True)
+
+
+def test_the_load_is_signed_by_the_serving_publisher_in_the_runs_session_before_its_windows(tmp_path):
+    """The gate's load end to end at the tiny shape: the store relayed over four streams to the prover's sink on
+    loopback (`load_relay.py sink`, a process), then a run whose `PublisherProcess`, the warden's one signer, signs
+    the relay's heads first: `load.json` is under the deployment's key and session, on the key's first leaves, and
+    `check` reads every value's registration at the relay's roots; another session's, values swapped, heads that
+    aren't the relay's and an unsigned load are refused."""
+    import hashlib
+    import subprocess
+
+    store, out = tmp_path / "store", tmp_path / "run"
+    store.mkdir()
+    out.mkdir()
+    lr, program = ws.lr, hashlib.sha512(b"the reading program").hexdigest()
+    lr.write_store(store, lr.TINY)
+    sink = subprocess.Popen([sys.executable, str(HERE / "load_relay.py"), "sink", "--listen", "127.0.0.1:0",
+                             "--weights", str(tmp_path / "weights.bin"), "--witness", str(tmp_path / "witness.bin")],
+                            stdout=subprocess.PIPE, text=True)
+    port = json.loads(sink.stdout.readline())["listening"][1]
+    lr.relay_load(store, lr.TINY, [("127.0.0.1", port)] * 4, program, out, workers=2)
+    assert json.loads(sink.communicate()[0].splitlines()[-1])["accepted"] and sink.returncode == 0
+    requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 30)]
+    _run(out, tmp_path / "key", requests, [_response([" a", " b"]), _response([])], process=True,
+         load_heads=out / "load-heads.json")
+    result = ws.check(out)
+    assert result["accepted"], result["problems"]
+    n = len(lr.manifest(lr.TINY))
+    assert result["summary"]["load"] == {"values": n, "registered": n, "relayed": True}
+    assert ws.table(result).startswith(f"ACCEPTED: load {n}/{n} values registered; 2/2 ended")
+    doc, dep = (json.loads((out / f).read_text()) for f in ("load.json", "deployment.json"))
+    assert (doc["key"], doc["session"]) == (dep["key"], dep["session"]) and doc["session"] == SESSION.hex()
+    leaf = lambda c: int(c["signature"][:8], 16)  # noqa: E731
+    windows = [leaf(json.loads(x)["certificate"]) for x in (out / "certified.jsonl").read_text().splitlines()]
+    assert sorted(leaf(r["certificate"]) for r in doc["values"]) == list(range(n)) and min(windows) >= n
+
+    def problems(name: str, edit) -> list[str]:
+        saved = (out / name).read_text()
+        edit(out / name)
+        try:
+            return ws.check(out)["problems"]
+        finally:
+            (out / name).write_text(saved)
+
+    def rewrite(change):
+        return lambda p: p.write_text(json.dumps(change(json.loads(p.read_text()))))
+
+    assert "load: not signed under the deployment's key and session" in \
+        problems("load.json", rewrite(lambda d: d | {"session": "00" * 32}))
+    swapped = problems("load.json", rewrite(lambda d: d | {"values": [d["values"][1], d["values"][0], *d["values"][2:]]}))
+    assert sum(p.startswith("load tok: ") or p.startswith("load pos: ") for p in swapped) == 2
+    assert "load: its registrations aren't the relay's heads (load-heads.json)" in \
+        problems("load-heads.json", rewrite(lambda d: d | {"roots": {**d["roots"], "tok": "00" * 64}}))
+    assert problems("load.json", lambda p: p.unlink()) == ["load: the relay's heads aren't signed (no load.json)"]
 
 
 def test_reserve_fds_grows_the_descriptor_table_and_leaves_every_descriptor_as_it_was():
