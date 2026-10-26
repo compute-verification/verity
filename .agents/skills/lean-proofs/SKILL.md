@@ -118,9 +118,7 @@ python tools/verity/lean/check.py PKG  the full check, which the train's check r
   (`verity.core.claims`) and gives its rationale; a ledger points to the docstring. Never an `axiom`, a `sorry` on
   `main`, `native_decide` or a kernel bypass. Every premise a guarantee takes whose head is defined in a package of this
   repository is listed, wherever it is defined, and so is every assumption a premise mentions (`A ∧ B`, `¬ A`, `∃ x, A x`,
-  a field of a structure a binder ranges over); `--update` adds it with its guarantees' owner. A definition that only
-  packs listed assumptions (`def P := A ∧ ∀ x, B x`) is no new one; the failure for one that isn't names what it unfolds
-  to and the entry to write, so it takes one edit, not another records run.
+  a field of a structure a binder ranges over); `--update` adds it with its guarantees' owner.
 - **Statement first, then red team, then a card to Daniel for each new premise, then the proof.** State the guarantee
   on a `sorry` stub in your lane branch, list it, and run `--update`, so the record holds the statement and shows if it
   moves. Never make a guarantee easier: no stronger input relation, weaker output relation, smaller challenge space,
