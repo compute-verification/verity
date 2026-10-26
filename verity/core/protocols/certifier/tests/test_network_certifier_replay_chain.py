@@ -10,7 +10,7 @@ import random
 
 import pytest
 
-from verity.core.protocols.certifier import replay_chain as RC
+from verity.ml.definitions.certifier import replay_chain as RC
 from verity.core.protocols.certifier.head_check import ands
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.boolean.forms import Circuit
@@ -96,7 +96,7 @@ def test_the_state_is_replay_steps(S):
     """The state row's state is ReplayStep_v1's state input and next-state output, field for field (with AS and EW,
     the async group and the walk entries), and the front is its arrivals input; a state's bits and an arrival's are
     `ReplayStep_v1.arguments`', and its circuit's next-state bits are the row's state of the next state it decodes."""
-    RS = pytest.importorskip("verity.core.protocols.certifier.replay_step")
+    RS = pytest.importorskip("verity.ml.definitions.certifier.replay_step")
     st = _step_statics(RS, S)
     n, ins = len(RC.state_fields(S)), RS._in_fields(st)
     assert RS._state_fields(st) == RC.state_fields(S) == ins[:n] == RS._out_fields(st)[-n:]

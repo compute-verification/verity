@@ -42,7 +42,7 @@ import numpy as np
 import torch
 
 from verity.core.protocols.pouw import core_check as CC, window as Wd
-from verity.core.protocols.pouw.circuit import h1tile as Ht, seeds as SD
+from verity.ml.definitions.pouw.circuit import h1tile as Ht, seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
 from verity.ml.circuits.codec import canonical_json, descriptor_id
 from verity.ml.circuits.defs import bind

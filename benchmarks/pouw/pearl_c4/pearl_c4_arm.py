@@ -69,7 +69,7 @@ LINE_IN = 37                           # seed ‖ role ‖ index u32
 def _ref():
     import twin as T
     from verity.core.protocols.pouw import audit
-    from verity.core.protocols.pouw.schemes import pearl_c4 as F
+    from verity.ml.definitions.pouw.schemes import pearl_c4 as F
     return T, F, audit
 
 

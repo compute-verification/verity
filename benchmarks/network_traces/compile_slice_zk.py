@@ -82,9 +82,9 @@ sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
 import n2_zk as N2  # noqa: E402
-from verity.core.protocols.certifier import arith_encode as AE  # noqa: E402
-from verity.core.protocols.certifier import charge_chain as CC  # noqa: E402
-from verity.core.protocols.certifier import compile_slice as CS  # noqa: E402
+from verity.ml.definitions.certifier import arith_encode as AE  # noqa: E402
+from verity.ml.definitions.certifier import charge_chain as CC  # noqa: E402
+from verity.ml.definitions.certifier import compile_slice as CS  # noqa: E402
 from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402

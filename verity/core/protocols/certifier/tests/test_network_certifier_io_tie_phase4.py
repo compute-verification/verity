@@ -20,7 +20,7 @@ from __future__ import annotations
 import itertools
 from dataclasses import replace
 
-from verity.core.protocols.certifier import io_tie as IT
+from verity.ml.definitions.certifier import io_tie as IT
 
 from test_network_certifier_io_tie import BIG, _cell_tampers, busiest, busy, commit, serve, wardens, with_cells
 

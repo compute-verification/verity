@@ -33,8 +33,8 @@ sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
 sys.path.insert(0, str(HERE.parents[2]))
 import receipts as RC
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.definitions.pouw.circuit import h1tile as HT
+from verity.ml.definitions.pouw.circuit import seeds as SD
 
 CALL_SEED_TAG = b"verity/pouw/call-seed/v1".ljust(24, b"\0")
 TILE = (RC.R, RC.C_)

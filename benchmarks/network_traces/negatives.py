@@ -115,9 +115,9 @@ from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
 
 FORMAT = "verity-network-negatives/v1"
 ADVICE_MODULE = "verity.core.protocols.certifier.advice"
-ADVISED_MODULE = "verity.core.protocols.certifier.advised"
-IO_TIE_MODULE = "verity.core.protocols.certifier.io_tie"
-IO_REQUEST_MODULE = "verity.core.protocols.certifier.io_request"
+ADVISED_MODULE = "verity.ml.definitions.certifier.advised"
+IO_TIE_MODULE = "verity.ml.definitions.certifier.io_tie"
+IO_REQUEST_MODULE = "verity.ml.definitions.certifier.io_request"
 WARDEN_ROWS_MODULE = "verity.core.protocols.certifier.warden_rows"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"

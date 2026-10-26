@@ -21,7 +21,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from verity.core.protocols.certifier import arith_encode, window_charge as WC
+from verity.ml.definitions.certifier import arith_encode, window_charge as WC
 
 LEAN = Path(__file__).resolve().parents[1] / "lean"
 SCRIPT = LEAN / "scripts" / "window_vectors.py"

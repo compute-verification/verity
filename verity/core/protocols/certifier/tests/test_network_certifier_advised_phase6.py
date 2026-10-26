@@ -15,7 +15,8 @@ from fractions import Fraction
 
 import pytest
 
-from verity.core.protocols.certifier import advice as I1, advised as AD
+from verity.core.protocols.certifier import advice as I1
+from verity.ml.definitions.certifier import advised as AD
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.service import LinkWindows

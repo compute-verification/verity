@@ -24,7 +24,8 @@ from verity.ml.commitments import advice as ADV
 from verity.ml.commitments.gates.frame_v3 import _part, opens
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import row_leaf
-from verity.core.protocols.certifier import head_check as HC, io_tie as IT, warden as W, warden_rows as WR
+from verity.core.protocols.certifier import head_check as HC, warden as W, warden_rows as WR
+from verity.ml.definitions.certifier import io_tie as IT
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD
 from verity.core.protocols.certifier.certificate import Direction
 from verity.core.protocols.certifier.grid import Certifier

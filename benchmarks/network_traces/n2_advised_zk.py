@@ -109,7 +109,8 @@ import certifier_serve as cs  # noqa: E402
 import n2_zk as Z  # noqa: E402
 import window_chain as WC  # noqa: E402
 from n2_zk import ENDS  # noqa: E402
-from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
+from verity.core.protocols.certifier import advice as ADV, head_check as HC
+from verity.ml.definitions.certifier import advised as AD  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.active import id_request_frames  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, parameters_digest  # noqa: E402
