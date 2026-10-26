@@ -58,17 +58,20 @@ LIVE_PARAM = getattr(CC, "LIVE_PARAM", None)
 
 
 def served(period_dir: Path) -> dict:
-    """What the period's loop served, from its records: the template, its units, K, MACs, and each request's max_tokens
-    (its decode steps, requests in order of their labels)."""
+    """What the period's loop served, from its records: its linear template (``K=``; the wired circuit's quantize
+    templates do no MACs), the circuit's units, K, MACs (K a per-coordinate unit, K·N a wired one), and each request's
+    max_tokens (its decode steps, requests in order of their labels: a wired record's ``requests``)."""
     circuit = json.loads((period_dir / "circuit.json").read_text())
-    [(template, units)] = circuit["templates"]
-    k = int(re.search(r"\{K=([0-9]+)", template).group(1))
+    shapes = [(t, n, re.search(r"\{K=([0-9]+)(?:,N=([0-9]+))?", t)) for t, n in circuit["templates"]]
+    [(template, k)] = {(t, int(m.group(1))) for t, _n, m in shapes if m}
+    macs = sum(n * int(m.group(1)) * int(m.group(2) or 1) for _t, n, m in shapes if m)
     steps: dict[str, set[int]] = defaultdict(set)
     for member in json.loads((period_dir / "index.json").read_text())["members"]:
         for _, _, label in member["labels"]:
-            steps[label["request"]].add(label["step"])
+            for r in label.get("requests") or [label["request"]]:
+                steps[r].add(label["step"])
     order = sorted(steps, key=lambda r: (len(r), r))
-    return {"template": template, "units": units, "k": k, "macs": units * k,
+    return {"template": template, "units": sum(n for _t, n, _m in shapes), "k": k, "macs": macs,
             "max_tokens": [len(steps[r]) for r in order]}
 
 

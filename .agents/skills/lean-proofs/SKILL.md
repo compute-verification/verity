@@ -18,11 +18,8 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 
 ## Where the work goes
 
-- **Code or analysis** (AGENTS.md "Lean" says which tree and package). Code the verifier, the V[B] generator or a
-  reference prover runs stays with its component; everything else is under `Security/`. No new package: an area is a
-  directory in each tree.
-- **Lean is the definition and the verifier of record.** A verifier is Lean code and imports nothing from `verity.ml`;
-  the Python that mirrors it is held to it by difftest (`verity/core/difftest/`).
+- **Code or analysis**: AGENTS.md "Lean" says which tree and package. No new package: an area is a directory in each
+  tree.
 - **Own a subdirectory and namespace** with one aggregator module; the area's root imports the aggregator once, so
   parallel lanes don't edit the same root file.
 - **Code the verifier runs costs O(description)**: summarize per Definition and multiply through batch members and scan
@@ -56,10 +53,8 @@ python tools/verity/lean/check.py PKG  the full check, which the train's check r
   build rebuilds the edited file.
 
 - **Where it runs.** Build on a CPU machine. Never `lake update`, and never change a `require`, a revision or
-  `lean-toolchain` in a feature PR. `check.py` refuses an ArkLib package below 24 GiB (memory and swap, within its
-  cgroup; `VERITY_LEAN_MEM_FLOOR_GIB` overrides, 0 for none) and a whole-Security audit (`Security` with Security/Proofs
-  beside it) below 160 GiB, whose replay's resident base is about 120 GiB whatever its threads. The refusal prints where
-  to run it instead; a queued Security audit takes `--kind lean-audit`.
+  `lean-toolchain` in a feature PR. `check.py` refuses an ArkLib package below 24 GiB and a whole-Security
+  audit below 160 GiB, and prints where to run it instead; a queued Security audit takes `--kind lean-audit`.
 - **The fast path is for the lock and the mark, not the edit loop**: it gives your records, and the `--update` printout
   Daniel's DM carries, without a build of your own, once `verity lean try` passes on your files:
 
@@ -124,9 +119,7 @@ python tools/verity/lean/check.py PKG  the full check, which the train's check r
   VCVio, CompPoly) could prove gets an `upstream.watch` entry listing the dependency's constants it is about (none for
   one over our own definitions, or about a single number). When the check fails on a new upstream theorem, read it, say
   in the PR whether it discharges the assumption, and run `tools/verity/lean/upstream.py PKG --ack`. At a dependency
-  bump also run `upstream.py PKG --lean`; at a toolchain bump re-read `lean_io_get_random_bytes` in its
-  `src/runtime/io.cpp` (A3 in `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`; `tests/test_lean_packages.py` checks
-  the version it names).
+  bump also run `upstream.py PKG --lean`; at a toolchain bump `tests/test_lean_packages.py` says what to re-read.
 - **A changed record is a changed claim.** If `--update` changes a record you didn't mean to, your edit changed what that
   guarantee says: undo it, or say so in the PR. Paste the printout into the PR; when it lands, Daniel's DM shows it, and
   that DM is the check. Nothing waits on a reviewer.
@@ -164,11 +157,19 @@ The dated text is note:lean/20261020T1000Z-report-lean-proofs-rulings-archive.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
-  bounded by what the run carries. No advantage bounds, except PoUW's named random-oracle premises for SHA-512
+  bounded by what the run carries. No assumed advantage bounds, except PoUW's named random-oracle premises for SHA-512
   (`StraightLineExtraction`, `SeedExtractedAt`; ASK-16), each a named `Prop` the lock lists. An input
   condition is a verifier refusal, not a hypothesis.
-- For a commit-then-coin step the break is the fork form (two runs of the prover's strategy sharing a commitment), and
-  the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
+- One adversary class (26 Oct): every prover strategy τ, no budget class.
+  `Pr[accept ∧ the claim fails on E^τ's values] ≤ δ + f(Pr[B^τ exhibits a SHA-512 collision])` (+ LMS forgery), with
+  `E` a fixed named extractor and `B` a finder built from τ in about τ's time (`XplurZC`, `outCZC`). Collision
+  resistance is applied to `B` alone, outside the theorem.
+- A claim reads `E`'s transcript, never a witness the prover picks, and a break counts only collisions the run or `E`
+  exhibits (R4′). For a commit-then-coin step the break is the fork form (two runs of the prover's strategy sharing a
+  commitment), and the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
+- Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial
+  one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails`
+  are. Failing either, it says nothing (LEAN-66 enforces it).
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not claims:
   they live in `Proofs/` with one concrete instance where the honest case holds.
@@ -176,8 +177,6 @@ The dated text is note:lean/20261020T1000Z-report-lean-proofs-rulings-archive.
   the two is split. A conjecture about finite objects is decided by computation. Incompressibility of fixed data is
   false in Lean, so it is stated over random inputs or as a reduction. A claim resting on a falsified premise says
   nothing.
-- A changed guarantee needs no reviewer and no approval: the landing DM is the check. A guarantee that only moved
-  (`--moved`) isn't listed in it.
 - Probability and games are our own minimal definitions over Mathlib's `PMF`; soundness bridges to VCVio where needed.
 - What a physical region reads is not a premise: it follows from the actual circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per

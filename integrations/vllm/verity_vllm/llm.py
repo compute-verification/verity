@@ -277,6 +277,6 @@ class LLM:
 
     @property
     def model(self) -> Any:
-        """The served model in this process (the in-process model runner's, `engine_profile.get_model_runner`): the object
+        """The served model in this process (the in-process model runner's, `engine.handle.model_runner`): the object
         protocol options install on."""
         return self._engine.model

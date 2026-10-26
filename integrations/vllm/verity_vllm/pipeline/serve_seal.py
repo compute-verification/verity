@@ -173,10 +173,10 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     if why := scheme_refusal(opts):
         raise UsageError(why)
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine.handle import model_runner
 
     run_id = f"{label}:{opts.run_id}"
-    eng = SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model,
+    eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
     manifest, hidden_m1 = None, False
     if opts.scheme == ROWS:
