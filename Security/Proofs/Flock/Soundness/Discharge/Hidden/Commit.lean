@@ -1,3 +1,4 @@
+import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 import Proofs.Flock.Soundness.Discharge.Hidden.Layout
 import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
@@ -187,6 +188,56 @@ theorem hidden_layoutC (ht : tags.typed = false) (s : SpecOf (HmOut.parseCommit 
     have hc : HmOut.checkRows st.c = .ok () := by rw [he]; exact hck
     exact hidden_layout_of (layout_of_tmpl hT s.pin rfl rfl s.m s.kLog) hty s.da s.db
       (outPairs_inBit_of (fun n => (hok n).1.2.2) hun hsh hhm C hc)
+
+/-! ## The flat twin -/
+
+/-- **What the copy positions read, of a templated circuit** whose Δ is `HmRow.delta`'s: the unit is the template's
+committed net, first and named `unit`, whose rows end at its useful rows, the constant's the last (`tmpl_net_rows`). -/
+theorem unitFacts_tmpl (hT : HmOut.parseTmpl tags cf tables = .ok st.c) (hda : st.da = (HmRow.delta st.c st.pin).1) :
+    Aliased.UnitFacts tags st := by
+  obtain ⟨tu, c₀, hp, -, -, he⟩ := TmplValue.parseTmpl_cases hT
+  obtain ⟨P, -, -, hsn, hhn⟩ := parse_factsPre_nets hp
+  obtain ⟨hu0, h0, hun⟩ := unit_of_parsePre hp
+  obtain ⟨ls, hcheck⟩ := P.check
+  have hty : st.c.typed = none := by rw [he]; exact P.typed
+  have C : CheckFacts st.c := check_facts (tags := tags) (ls := ls) hty (by rw [he]; exact hcheck)
+  have htu : st.c.tmpl = some tu := by rw [he]
+  have hu : st.c.unit = tu.net := by rw [he]; exact hun
+  have hname : (c₀.nets.getD c₀.unitNet default).1 = "unit" := by rw [hu0, h0]
+  have R := tmpl_net_rows tu
+  refine ⟨(by rw [unitPre_tmpl htu, he]; exact P.toU.retmpl (some tu)), parseTmpl_nets_ok hT,
+    fun i hi => (parseTmpl_net_width hT hi).2.2.2, C, (by rw [hda]; exact delta_flat st.c st.pin hty),
+    fun e => ?_, fun e => ?_, (by rw [hu]; exact R.1.le), (by rw [hu]; exact R.2.1.le), (by rw [hu]; exact R.2.2)⟩
+  · have e' : c₀.unitNet = c₀.shaNet := by rw [he] at e; exact e
+    rw [← e', hname] at hsn
+    exact absurd hsn (by unfold HmRow.SHA_NET; decide)
+  · have e' : c₀.unitNet = c₀.hmNet := by rw [he] at e; exact e
+    rw [← e', hname] at hhn
+    exact absurd hhn (by unfold HmRow.HM_NET; decide)
+
+/-- **The flat twin of an untyped session on the committed circuit has the layout the placement reads**: `layout_of`'s
+for a flat file, `layout_of_tmpl`'s for a templated one. -/
+theorem flat_layoutC (ht : tags.typed = false) (s : SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st) :
+    Layout (flatTwin st) := by
+  cases hi : tags.isTmpl
+  · have hP := s.parse
+    rw [parseCommit_flat hi] at hP
+    exact layout_of (st := flatTwin st) (parse_facts (parse_untyped ht hP).1) s.pin rfl rfl s.m s.kLog
+  · have hT := s.parse
+    rw [parseCommit_tmpl hi] at hT
+    exact layout_of_tmpl (st := flatTwin st) hT s.pin rfl rfl s.m s.kLog
+
+/-- **The flat twin's unit facts**, of an untyped session on the committed circuit (`unitFacts_of_parse`,
+`unitFacts_tmpl`). -/
+theorem flat_unitFactsC (ht : tags.typed = false)
+    (s : SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st) : Aliased.UnitFacts tags (flatTwin st) := by
+  cases hi : tags.isTmpl
+  · have hP := s.parse
+    rw [parseCommit_flat hi] at hP
+    exact unitFacts_of_parse (st := flatTwin st) (parse_untyped ht hP).1 rfl
+  · have hT := s.parse
+    rw [parseCommit_tmpl hi] at hT
+    exact unitFacts_tmpl (st := flatTwin st) hT rfl
 
 /-- **`hidden_layout'` on a flat session, through `hidden_layoutC`.** -/
 theorem hidden_layout_flat (ht : tags.typed = false) (hi : tags.isTmpl = false)
