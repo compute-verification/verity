@@ -54,9 +54,9 @@ theorem sampledKSLivePub_honest :
   rw [div_le_iff₀ (mul_pos he hk0)]
   linarith
 
+set_option exponentiation.threshold 1024 in
 /-- **`deltaPub` is below `1` as deployed**: at `k = ⌈2^24/e⌉`, `q_F = 2^81`, `q_S = 2^80`, `t' = 2^80`,
 `M = R_w = 2^192` and `ρ = 1/2`, for a draw whose miss is at most `1/4` and at most `2^40` commit strings. -/
-set_option exponentiation.threshold 1024 in
 theorem _root_.Flock.Bridge.deltaPub_deployed_lt_one {n kd K₀ W : ℕ}
     (hmiss : ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) ≤ 1 / 4) (hW : (W : ℝ) ≤ 2 ^ 40) :
     Bridge.deltaPub n kd K₀ Bridge.kDep (2 ^ 81) (2 ^ 80) (2 ^ 80) (2 ^ 192) (2 ^ 192) W (1 / 2) < 1 := by
