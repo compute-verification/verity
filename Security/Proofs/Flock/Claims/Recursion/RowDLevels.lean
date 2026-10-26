@@ -40,11 +40,7 @@ theorem range_cfOf {w : Array (Array F128)} {j q : ℕ} (h : (w[j]!).size = q) :
   apply Array.ext
   · simp [h]
   · intro t h1 h2
-    first
-      | (simp [cfOf, Array.getD_eq_getD_getElem?, h2]; done)
-      | (simp [cfOf, Array.getD, h2]; done)
-      | (simp only [Array.getElem_map, Array.getElem_range, cfOf]
-         rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem h2, Option.getD_some])
+    simp [cfOf, Array.getD_eq_getD_getElem?, h2]
 
 theorem range_map_cons {α : Type} (f : ℕ → α) {n : ℕ} (hn : 0 < n) :
     (List.range n).map f = f 0 :: (List.range' 1 (n - 1)).map f := by
@@ -95,7 +91,7 @@ theorem levelsLoop_pos {sch : Flock.Schedule} {k₀ : ℕ}
       obtain ⟨ih, ihs⟩ := levelsLoop_pos (k₀ := k₀) hq fuel (i + 1) _ _ _ st₄ k₄ out st' k' (by omega) (by omega) h
       have hr : k₃ = k₀ + qOff sch (i + 1) := by
         unfold qOff
-        rw [if_pos hi']
+        rw [ite_eq_left hi']
         omega
       rw [hr] at hc₄ hz
       refine ⟨?_, fun l h1 h2 => ?_⟩
@@ -118,7 +114,7 @@ theorem levelsLoop_pos {sch : Flock.Schedule} {k₀ : ℕ}
       have hR : sch.levels.size - 1 = i + 1 := by omega
       have hr : k₁ = k₀ + qOff sch (i + 1) := by
         unfold qOff
-        rw [if_neg (by omega)]
+        rw [ite_eq_right (by omega)]
         omega
       rw [hr, hR] at e₃
       rw [hr, hR] at hz
@@ -168,7 +164,7 @@ theorem ligeritoRun_pos {sch : Flock.Schedule} {st₀ : LSt F128} {k₀ k' : ℕ
     exact h0
   have hr : k₃ = k₀ + qOff sch 0 := by
     unfold qOff
-    rw [if_pos (by omega)]
+    rw [ite_eq_left (by omega)]
     omega
   rw [hr] at hc₄ hz
   obtain ⟨hL, hLs⟩ := levelsLoop_pos (k₀ := k₀) hq _ _ _ _ _ st₄ _ _ _ _ (by omega) (by omega) h₅
@@ -216,7 +212,7 @@ theorem ligerito_run_conss {sch : Flock.Schedule} {M : Messages F128} {tIn : F12
     cases h0
   rw [ite_eq_right (fun hn => hn cy)] at h
   cases Flock.RecAlgebra.cm_pure h
-  exact ⟨_, _, st, k₁, rfl, h1, rfl⟩
+  refine ⟨_, _, _, _, ?_, h1, ?_⟩ <;> rfl
 
 /-- **The verifier rows query level `ℓ` at the positions of the rounds' own coins at `lgStart + qOff sch ℓ`**: at any
 run of `verifierRows` on rounds with no empty round, at `m ≥ 14` and a schedule of the seams, context `ℓ`'s positions
@@ -234,7 +230,7 @@ theorem rows_pos {sh : Shape} {rounds : Array (Array F128)} {extras : Array Clai
   obtain ⟨-, -, -, -, -, -, -, -, -, hk1, -⟩ := Flock.RecAlgebra.zerocheck_coins hm h0
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, hk2, -⟩ := Flock.RecAlgebra.lincheck_coins h1
   have hcs : (Flock.RecAlgebra.claimsOf sh.m sh.kLog info.zc info.lc extras).size = 2 + extras.size := by
-    simp [Flock.RecAlgebra.claimsOf] <;> omega
+    simp [Flock.RecAlgebra.claimsOf]
   obtain ⟨_, -, -, -, hk3, -, -, -⟩ := Flock.RecAlgebra.ringSwitch_spec (by omega) h2
   have hzc : (Flock.RecAlgebra.symbolic sh).zc.size = sh.m - 6 := by simp [Flock.RecAlgebra.symbolic]
   have hlc : (Flock.RecAlgebra.symbolic sh).lc.size = sh.kLog - 6 := by simp [Flock.RecAlgebra.symbolic]
@@ -305,7 +301,7 @@ theorem merkleOk_of_repP (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
   rw [hcap]
   convert hM using 1
   simp only [Rs.tEnd_k, Lc.tEnd_k, Zc.tEnd_k, ht, Array.size_append]
-  simp [abcClaims] <;> omega
+  simp [abcClaims]
 
 end FlockComplete.Replay
 
