@@ -86,8 +86,8 @@ theorem ofJson_partDraw {pop count j : ℕ} {units : Array ℕ} {D : Draw.UnitDr
 dividing `q`: `DrawOkZKJ` at `mPtsOf c.g (q / nTab I)` link points at `S`. Part `j` of the draw (`partDraw`) decodes
 to its `q / nTab I` units, which are the units `partOf` sends to table `j`. -/
 theorem drawOkZKJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (q : ℕ) (hdiv : q % nTab I = 0)
-    {law : Draw.Law} {pop : ℕ} (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj law pop) (S : Finset (Fin n))
+    (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (q pop : ℕ) (hdiv : q % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj law pop) (S : Finset (Fin n))
     (hsize : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = q) :
     DrawOkZKJ I dj (mPtsOf c.g (q / nTab I)) S := by
   intro j
@@ -187,7 +187,7 @@ theorem drawOkZKJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Ci
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
     DrawOkZKJ I dj (mPtsOf c.g (kd / nTab I)) S :=
-  drawOkZKJ_of_size I ht hc kd hdiv dj hdj S fun D hD => (ofJson_shape hD).2.2 kd (by rw [hdj S D hD]; rfl)
+  drawOkZKJ_of_size I ht hc (.subset kd) kd pop hdiv dj hdj S fun D hD => (ofJson_shape hD).2.2 kd (by rw [hdj S D hD]; rfl)
 
 /-- **One `--zk` sampled session of `J` tables is sound, at the coin server's custody.** `zk_session_soundJ` with
 `RecordCustodyZKJ` (`live-verifier`: the record is the live session's, and its draw file the verifier's draw under the

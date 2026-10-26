@@ -9,11 +9,11 @@ import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 every draw of the live subset law (`hDraw`); the record and its draw file are custody, and the rest of `DrawOkZKHJ` is
 flock-verify's own arithmetic:
 
-* `drawOkZKHJ_of_size`: `drawOkZKJ_of_size` at setupHidden, at any law whose decoded draw file has `q` units, `nTab I`
-  dividing `q` (the stratified law, `ZkReg/Guarded.lean`).
-* `drawOkZKHJ_of_file`: `drawOkZKJ_of_file` at setupHidden. From `DrawFileZK dj (subset kd) pop`, with `nTab I`
-  dividing `kd`, `DrawOkZKHJ` holds at `mPtsOf c.g (kd / nTab I)` link points at every draw `S`, `c` the circuit file's
-  `HmOut.parse` (setupHidden's `m_pts`, `setupHidden_mPts_drawn` and `setupHidden_mPts_of_proved`).
+* `drawOkZKHJ_of_size`: from `DrawFileZK` under any law, at a draw whose file decodes only to `kd` units, with `nTab I`
+  dividing `kd`, `DrawOkZKHJ` holds at `mPtsOf c.g (kd / nTab I)` link points, `c` the circuit file's `HmOut.parse`
+  (setupHidden's `m_pts`, `setupHidden_mPts_drawn` and `setupHidden_mPts_of_proved`).
+* `drawOkZKHJ_of_file`: `drawOkZKJ_of_file` at setupHidden, `drawOkZKHJ_of_size` at `DrawFileZK dj (subset kd) pop`,
+  at every draw `S`.
 * `zk_session_soundHJ_custody`: `zk_session_soundHJ` with `RecordCustodyZKJ` (`live-verifier`) for `hRec` and `hDraw`,
   at `mPtsOf c.g (kd / nTab I)` link points and `nTab I ∣ kd`.
 -/
@@ -28,13 +28,16 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **`DrawOkZKHJ` from custody under any law, at a draw whose decoded file has `q` units**, the session's tables
-dividing `q`: `drawOkZKJ_of_size` at setupHidden, at `mPtsOf c.g (q / nTab I)` link points. -/
+/-- **The coin server's draw is `DrawOkZKHJ` at a draw of `kd` units, under any law.** On untyped `--statement` tags
+whose circuit file `HmOut.parse` accepts under the `--zk` tags as `c`: when the record's draw file is the verifier's draw
+under `law` over `[0, pop)` (`DrawFileZK`), the draw file at `S` decodes only to a draw of `kd` units, and the session's
+tables divide `kd`, `S` is `DrawOkZKHJ` at `mPtsOf c.g (kd / nTab I)` link points: each table proves its `kd / nTab I`
+consecutive units, whatever the law. -/
 theorem drawOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
-    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (q : ℕ) (hdiv : q % nTab I = 0)
-    {law : Draw.Law} {pop : ℕ} (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj law pop) (S : Finset (Fin n))
-    (hsize : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = q) :
-    DrawOkZKHJ I dj (mPtsOf c.g (q / nTab I)) S := by
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (law : Draw.Law) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj law pop) (S : Finset (Fin n))
+    (hsz : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = kd) :
+    DrawOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S := by
   intro j
   have hc' : ∀ j : ℕ, HmOut.parse (tagsAt (zkTags I) I.count j) I.circuitFile I.tables = .ok c := fun j =>
     (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
@@ -55,7 +58,7 @@ theorem drawOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.C
     exact (hj ud hud).elim
   obtain ⟨D, hDj⟩ := hD
   have hDe := hdj S D hDj
-  have hsz : D.units.size = q := hsize D hDj
+  have hsz : D.units.size = kd := hsz D hDj
   have hS : D.units = ((S.image Fin.val).sort (· ≤ ·)).toArray := by rw [hDe]; rfl
   by_cases h1 : I.count ≤ 1
   · have hn : nTab I = 1 := by simp [nTab, h1]
@@ -75,16 +78,16 @@ theorem drawOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.C
   · have hn : nTab I = I.count := by simp [nTab, h1]
     have hdr : drawJ I (dj S) j = Tables.partDraw D.population D.units I.count j := by
       simp only [drawJ, h1, ite_false, partJson, hDj]
-    have hq : q = I.count * (q / I.count) := by
+    have hq : kd = I.count * (kd / I.count) := by
       rw [hn] at hdiv
       exact (Nat.mul_div_cancel' (Nat.dvd_of_mod_eq_zero hdiv)).symm
-    have hjq : j.val * (q / I.count) + q / I.count ≤ q := by
+    have hjq : j.val * (kd / I.count) + kd / I.count ≤ kd := by
       have hj : j.val < I.count := by have := j.isLt; omega
-      have := Nat.mul_le_mul_right (q / I.count) (Nat.succ_le_of_lt hj)
+      have := Nat.mul_le_mul_right (kd / I.count) (Nat.succ_le_of_lt hj)
       rw [Nat.succ_mul] at this
       omega
     have hpd : ∀ D', Draw.UnitDraw.ofJson (drawJ I (dj S) j) = .ok D' →
-        D'.proved = D.units.extract (j.val * (q / I.count)) (j.val * (q / I.count) + q / I.count) := by
+        D'.proved = D.units.extract (j.val * (kd / I.count)) (j.val * (kd / I.count) + kd / I.count) := by
       intro D' h'
       rw [hdr] at h'
       rw [ofJson_partDraw h', hsz]
@@ -100,17 +103,17 @@ theorem drawOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.C
       simp only [partOf, hDj, hsz] at hpo
       generalize D.units.toList.idxOf u.val = i at hi hget hpo
       rw [Array.length_toList, hsz] at hi
-      have hq0 : 0 < q / I.count := by
-        rcases Nat.eq_zero_or_pos (q / I.count) with h0 | h0
+      have hq0 : 0 < kd / I.count := by
+        rcases Nat.eq_zero_or_pos (kd / I.count) with h0 | h0
         · rw [h0, Nat.mul_zero] at hq; omega
         · exact h0
-      have hlt : i / (q / I.count) < I.count := (Nat.div_lt_iff_lt_mul hq0).2 (by rw [← hq]; exact hi)
-      have hji : i / (q / I.count) = j.val := by omega
-      have h1 := Nat.div_add_mod i (q / I.count)
+      have hlt : i / (kd / I.count) < I.count := (Nat.div_lt_iff_lt_mul hq0).2 (by rw [← hq]; exact hi)
+      have hji : i / (kd / I.count) = j.val := by omega
+      have h1 := Nat.div_add_mod i (kd / I.count)
       have h2 := Nat.mod_lt i hq0
       rw [hji] at h1
       rw [Array.mem_def, Array.toList_extract, List.extract_eq_take_drop]
-      refine List.mem_iff_getElem.2 ⟨i - j.val * (q / I.count), ?_, ?_⟩
+      refine List.mem_iff_getElem.2 ⟨i - j.val * (kd / I.count), ?_, ?_⟩
       · simp only [List.length_drop, List.length_take, Array.length_toList, hsz]
         rw [Nat.mul_comm] at h1
         omega
@@ -124,12 +127,13 @@ theorem drawOkZKHJ_of_size (I : Inputs) (ht : I.tags.typed = false) {c : Flock.C
 /-- **The coin server's draws are `DrawOkZKHJ`.** On untyped `--statement` tags whose circuit file `HmOut.parse`
 accepts under the `--zk` tags as `c`: when the record's draw file is the verifier's draw under the subset law
 `subset kd` over `[0, pop)` (`DrawFileZK`) and the session's tables divide `kd`, every draw `S` is `DrawOkZKHJ` at
-`mPtsOf c.g (kd / nTab I)` link points. -/
+`mPtsOf c.g (kd / nTab I)` link points (`drawOkZKHJ_of_size`: a subset draw has `kd` units, `ofJson_shape`). -/
 theorem drawOkZKHJ_of_file (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (kd pop : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset kd) pop) (S : Finset (Fin n)) :
     DrawOkZKHJ I dj (mPtsOf c.g (kd / nTab I)) S :=
-  drawOkZKHJ_of_size I ht hc kd hdiv dj hdj S fun D hD => (ofJson_shape hD).2.2 kd (by rw [hdj S D hD]; rfl)
+  drawOkZKHJ_of_size I ht hc (.subset kd) kd pop hdiv dj hdj S fun D hD =>
+    (ofJson_shape hD).2.2 kd (by rw [hdj S D hD]; rfl)
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound, at the coin server's custody.**
 `zk_session_soundHJ` with `RecordCustodyZKJ` (`live-verifier`: the record is the live session's, and its draw file the
