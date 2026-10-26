@@ -10,7 +10,7 @@ runtime capture and Match/Commit machinery (`verity_vllm`), and the qualificatio
 One distribution (`verity-vllm`), one package (`verity_vllm`), one subpackage per job; `tests/` mirrors the package.  Naming
 (Draft 3.1): core Verity nouns get the shortest names (`program`, `query`, `commit`), integration concepts carry their
 qualifier (`runtime` correspondence, `weights_of_record`), implementation artefacts have descriptive compound names
-(`native_collect`).  Build / Match / Commit are the stage drivers in `pipeline/`, not layers.
+(`native_collect`, `poc_*` for v1 leftovers).  Build / Match / Commit are the stage drivers in `pipeline/`, not layers.
 Imports point down the layer order `pipeline` > `check` | `properties` > `acquire` | `protocol_options` > `observe` | `commit` >
 `engine` > `query` | `correspondence` > `program` > `collectives` > `config` (lint P9).
 
@@ -75,7 +75,7 @@ shared across processes and runs through `manifest build --unit-rule-cache DIR`,
 (Q_module_body_v1, for A/B), `cross_call.py` (the opt-in cross-Call recompute check, `manifest build --cross-call-check`),
 `program_view.py`, `manifest/` (the
 required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebuild-and-compare check of record),
-`query_artifact.py` (query artifact identities), `required.py` (v1
+`query_artifact.py` (query artifact identities), `compare.py` (a v2 manifest against a v1 one), `required.py` (v1
 `IDENTITY_KEY` rows).  Boundary values, proof-unit partitions and dead gates are core's `verity.ml.circuits.boundary`, `verity.ml.circuits.partition`
 and `verity.ml.circuits.liveness`.  Never: execution data, hooks, model names, anything read from a run.
 
