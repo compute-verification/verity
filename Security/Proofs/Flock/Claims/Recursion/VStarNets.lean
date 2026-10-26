@@ -63,8 +63,8 @@ def fileLs (name d : String) (l ls lh : Laid) : List String :=
 
 theorem idRun {α : Type} (x : α) : Id.run x = x := rfl
 
-theorem run_put {E : StateM String PUnit} (X s : String) :
-    ((do (fun x => (modify (· ++ x) : StateM String PUnit)) X; E : StateM String PUnit).run s) = E.run (s ++ X) := by
+theorem run_put {E : StateM String PUnit} (xs s : String) :
+    ((do (fun x => (modify (· ++ x) : StateM String PUnit)) xs; E : StateM String PUnit).run s) = E.run (s ++ xs) := by
   rw [StateT.run_bind]
   first | rfl | simp [StateT.run_modify]
 
