@@ -1,9 +1,9 @@
 """`verity-vllm serve-openai`: an OpenAI-compatible HTTP server whose engine is the in-process committing vLLM engine.
 
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
-        [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--no-gpu-tree] [--window-steps 64]
+        [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64]
         [--force-include-usage | --no-force-include-usage]
-        [--scheme vllm-v1|rows-sha512 --required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
+        [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
         [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
 
@@ -39,8 +39,8 @@ release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`;
 ``serve.json``'s ``step_rows``).
 
-With the Commit on (the default), `NativeHostCommitter` commits every engine step exactly as it does a declared workload,
-values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
+With the Commit on (the default), the server's committer (`serve_seal.committer`) commits every engine step exactly as it does
+a declared workload, values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
 Commit window (`verity_vllm.pipeline.serve_commit.CommitWindows`) opens at the first engine step after the engine was idle
 and closes when the engine is idle again (once it holds ``--idle-close-steps``), or after ``--window-steps`` steps (it
 reopens before the next step): each window is one Commit, with its own run root. At each close the server reads the
@@ -56,9 +56,11 @@ record of the step rows it ran, committed at its close under its run root for th
 whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl``
 (one line a request: the HTTP id, the engine id, the body's ``user``, its release and its place among the engine's adds,
 the runner's ids, the prompt ids, the streamed ids, its ingress, its finish, its committed rows and seeds, and its check)
-and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512`` commits as the bench row's declared Commit does, with its
-committer parts built from the row's ``--required-manifest`` and taps (the acquisition plan under ``acquisition/``), and
-``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. Each
+and `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512
+trees, 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's
+``--required-manifest`` and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots)
+only serves again the recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
+window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. Each
 window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
 order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
@@ -146,14 +148,22 @@ class Options:
                                   help="at most this many distinct requests in a Commit window, the class's slots (0: no bound): the "
                                        "engine holds at most this many unfinished requests, the rest wait in admission order, and a "
                                        "window closes before a step that would bring in one more (the running ones carry on)")
-    chunk: int = option("--chunk", type=int, default=65536, help="the committer's leaf, in bytes of the packed step stream (as `commit`'s)")
-    hash_threads: int = option("--hash-threads", type=int, default=2, help="the committer's hashlib threads")
+    chunk: int = option("--chunk", type=int, default=65536,
+                        help="vllm-v1: the committer's leaf, in bytes of the packed step stream (as `commit`'s); a rows-sha512 row "
+                             "is step_rows.ROW_BYTES")
+    hash_threads: int = option("--hash-threads", type=int, default=2, help="vllm-v1: the committer's hashlib threads")
     gpu_tree: bool = option("--gpu-tree", action="boolean_optional", default=True,
-                            help="the committer's GPU-resident chunk tree, no D2H and no hashlib (default on; its kernel is JIT-built "
-                                 "with ninja, which must be on PATH)")
-    cudart_copy: bool = option("--cudart-copy", action="store_true", default=False, help="the committer's snapshots by cudaMemcpyAsync")
-    scheme: str = option("--scheme", choices=SS.SCHEMES, default="vllm-v1",
-                         help="the Commit's scheme: vllm-v1 (NativeHostCommitter, 32-byte roots) or rows-sha512 (the declared Commit's)")
+                            help="the committer's GPU-resident chunk tree, no D2H and no hashlib (default on, and rows-sha512 needs it; "
+                                 "its kernel is JIT-built with ninja, which must be on PATH)")
+    cudart_copy: bool = option("--cudart-copy", action="store_true", default=False,
+                               help="vllm-v1: the committer's snapshots by cudaMemcpyAsync")
+    scheme: str = option("--scheme", choices=SS.SCHEMES, default=SS.ROWS,
+                         help="the Commit's scheme: rows-sha512 (default: the declared Commit's committer, hm96-sha512 rows, 64-byte "
+                              "roots; needs --required-manifest) or vllm-v1 (NativeHostCommitter, SHA-256, 32-byte roots), only with "
+                              "--of-record")
+    of_record: str | None = option("--of-record", default=None,
+                                   help="--scheme vllm-v1 only: the recorded serve-openai run (its dir, with serve.json) this one serves "
+                                        "again, which committed under vllm-v1 and served this --model and --revision")
     seal: bool = option("--seal", action="boolean_optional", default=False,
                         help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
     seal_off_loop: bool = option("--seal-off-loop", action="boolean_optional", default=True,
@@ -619,16 +629,13 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
     if (floor := disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
         raise UsageError(f"--seal: {why}")
-    if opts.scheme == "rows-sha512" and not opts.gpu_tree:
-        raise UsageError("--scheme rows-sha512 is the windowed collector's, which hashes its rows on the GPU: drop --no-gpu-tree")
-    if opts.commit and opts.scheme == "rows-sha512" and not opts.required_manifest:
-        raise UsageError("--scheme rows-sha512 commits with the Commit of record's parts, which its bench row's manifest names: pass "
-                         "--required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so)")
+    if why := SS.scheme_refusal(opts):
+        raise UsageError(why)
     if opts.required_manifest and not Path(opts.required_manifest).is_file():
         raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if opts.commit and opts.gpu_tree and which("ninja") is None:
         raise UsageError("--gpu-tree JIT-builds its kernel with ninja, which is not on PATH: put the environment's bin (where its "
-                         "ninja is) on PATH, or pass --no-gpu-tree")
+                         f"ninja is) on PATH{', or pass --no-gpu-tree' if opts.scheme == SS.V1 else ''}")
 
 
 def build(opts: Options) -> tuple[Any, Any]:
@@ -710,7 +717,8 @@ def main(opts: Options) -> int:
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)", "committer": getattr(com, "name", None),
               "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
               "step_rows": "scheduler" if rows is not None else "runner",
-              "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
+              "commit": opts.commit, "scheme": getattr(com, "commit_scheme", SS.V1) if com is not None else None,
+              "of_record": opts.of_record,
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "served_rows_statics": windows.served if windows is not None else None,
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
