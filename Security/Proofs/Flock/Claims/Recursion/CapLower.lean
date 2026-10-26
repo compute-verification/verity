@@ -112,11 +112,9 @@ theorem slot_rows_eq {c c' : Circuit} {nm nm' : String} {q q' n n' : ℕ} {w w' 
     (hin' : ∀ p ∈ hmCalls c' nm' q' n', (p.1 ++ readForms w' p.2.1, readForms w' p.2.2) ∈ l) :
     readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var) =
       readForms w' (((rowHidden c' nm' n').getD []).map HmNets.Lin.var) := by
-  have hr : rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var) ∈ l.map Prod.fst :=
-    List.mem_map_of_mem (f := Prod.fst) (hin ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [],
+  have hr := List.mem_map_of_mem (f := Prod.fst) (hin ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [],
     ((rowHidden c nm n).getD []).map HmNets.Lin.var, hmDigest c q n) (by simp [hmCalls]))
-  have hr' : rowPfx c' q' ++ readForms w' (((rowHidden c' nm' n').getD []).map HmNets.Lin.var) ∈ l.map Prod.fst :=
-    List.mem_map_of_mem (f := Prod.fst) (hin' ((c'.ports[q']?.map fun p =>
+  have hr' := List.mem_map_of_mem (f := Prod.fst) (hin' ((c'.ports[q']?.map fun p =>
     (HmRow.rowPrefix p.words).data.toList).getD [], ((rowHidden c' nm' n').getD []).map HmNets.Lin.var,
     hmDigest c' q' n') (by simp [hmCalls]))
   have hsp : FlockSoundness.Refine.K512.saltPrefix = Hm96.Default512.saltPrefix.data.toList := by
