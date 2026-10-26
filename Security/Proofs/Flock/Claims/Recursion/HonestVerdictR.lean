@@ -130,11 +130,11 @@ theorem honest_decR (h64 : Claims.Out64 H) (o : Run H rel) {cs : List Coin} (hcs
   have hx := o.setup
   have htab := o.recTabsOk
   have hS := o.ran
-  have hresp : ∀ i < cs.length, (fun j => (Claims.coinSeq o.r j).bytes) i = (cs.getD i default).bytes := by
+  have hresp : ∀ i < cs.length, o.resp i = (cs.getD i default).bytes := by
     intro i hi
-    simp only [hcs.1 i hi]
-  have hc : (fun j => (Claims.coinSeq o.r j).bytes) 0 = o.recC₁.bytes := rfl
-  have hfc := filesFinalC h64 hc (setup_tables hx).2.symm htab hS hresp hcs.2
+    simp only [Case.resp, hcs.1 i hi]
+  have hc : o.resp 0 = o.recC₁.bytes := rfl
+  have hfc := filesFinalC (resp := o.resp) h64 hc (setup_tables hx).2.symm htab hS hresp hcs.2
   obtain ⟨h64t, hts⟩ := setup_tables hx
   obtain ⟨hsz, hall⟩ := sessionS_reps h64 hc hts.symm htab hS (capRows o.recCaps) cs.tail.dropLast
   have hcaps : ∀ i < o.recCaps.size, o.recCaps[i]!.size = RecDeploy.level0Nodes o.sts[i]! := by
@@ -216,6 +216,7 @@ theorem honestSetup : HonestSetup H := fun o _ _ => ⟨_, o.recSetup⟩
 
 theorem honestNames : HonestNames H := by
   intro o cs _ spec' sts' hs
+  change setupWith (Claims.hOf H) o.s.read = _ at hs
   rw [o.recSetup] at hs
   cases hs
   exact namesDistinct_of_setup (setupOf_some o.setup).2 o.recPublicInputs
@@ -256,6 +257,7 @@ theorem sessionS_shaped (h64 : Claims.Out64 H) {resp : ℕ → Claims.Msg} {spec
 
 theorem honestShaped (h64 : Claims.Out64 H) : HonestShaped H := by
   intro o cs _ spec' sts' hs k hk
+  change setupWith (Claims.hOf H) o.s.read = _ at hs
   rw [o.recSetup] at hs
   cases hs
   have hx := o.setup
@@ -272,21 +274,44 @@ theorem honestShaped (h64 : Claims.Out64 H) : HonestShaped H := by
 
 /-! ## Acceptance -/
 
+/-- The deployed plain verifier answers a coin only to a last message of tag `0`. -/
+theorem act_ne_coin {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {a : Claims.Msg}
+    (hl : as.getLast? = some a) (h0 : a.head? ≠ some 0) (c : Coin) : act zk x as cs ≠ .coin c := by
+  intro h
+  unfold act at h
+  split at h
+  · cases h
+  · split at h
+    · rename_i heq _
+      rw [hl] at heq
+      cases heq
+      exact h0 rfl
+    · repeat' split at h
+      all_goals cases h
+    · cases h
+
 theorem honest_actR (h64 : Claims.Out64 H) (o : Run H rel) {cs : List Coin} (hcs : o.CoinsAt cs)
     {rd : Claims.Msg → Option FinalP} {last : Claims.Msg} {fl : FinalP} (hrd : rd last = some fl)
-    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
+    (h0 : last.head? ≠ some 0) (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
     actR rd o.x (o.recMsgs cs last) cs = .decide (o.recDec cs).s (o.recDec cs).spec (o.recDec cs).sts
-      (o.recDec cs).link (o.recDec cs).c₁ (o.recDec cs).mids (o.recDec cs).f :=
-  actR_decide (honest_decR h64 o hcs hrd hst hps)
+      (o.recDec cs).link (o.recDec cs).c₁ (o.recDec cs).mids (o.recDec cs).f := by
+  have hd := honest_decR h64 o hcs hrd hst hps
+  have hl : (o.recMsgs cs last).getLast? = some last := by simp [Run.recMsgs, honestMsgs]
+  unfold actR
+  cases ha : act false o.x (o.recMsgs cs last) cs with
+  | coin c => exact absurd ha (act_ne_coin hl h0 c)
+  | rej => simp only [hd]
+  | decide => simp only [hd]
 
 /-- **The checks at `Run.recDec` are `holdsR` at the honest messages.** -/
 theorem honest_holdsR_of (h64 : Claims.Out64 H) (hV : HonestVerdict H) (hA : HonestAfter H)
     (o : Run H Readable.relation) {cs : List Coin} (hcs : o.CoinsAt cs) {rd : Claims.Msg → Option FinalP}
-    {last : Claims.Msg} {fl : FinalP} (hrd : rd last = some fl) (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
+    {last : Claims.Msg} {fl : FinalP} (hrd : rd last = some fl) (h0 : last.head? ≠ some 0)
+    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
     ∀ q : VerdictR, holdsR H rd q o.x (o.recMsgs cs last) cs := by
   intro q
   unfold holdsR
-  rw [honest_actR h64 o hcs hrd hst hps]
+  rw [honest_actR h64 o hcs hrd h0 hst hps]
   cases q
   · exact honestSetup o cs hcs
   · exact honestShaped h64 o cs hcs
@@ -297,20 +322,22 @@ theorem honest_holdsR_of (h64 : Claims.Out64 H) (hV : HonestVerdict H) (hA : Hon
 /-- **Custody's read at `Run.recDec` is `ReadOkR` at the honest messages.** -/
 theorem honest_readOkR_of (h64 : Claims.Out64 H) (hR : HonestReads H) (o : Run H Readable.relation)
     {cs : List Coin} (hcs : o.CoinsAt cs) {rd : Claims.Msg → Option FinalP} {last : Claims.Msg} {fl : FinalP}
-    (hrd : rd last = some fl) (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
+    (hrd : rd last = some fl) (h0 : last.head? ≠ some 0)
+    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
     ReadOkR rd o.x (o.recMsgs cs last) cs := by
   unfold ReadOkR
-  rw [honest_actR h64 o hcs hrd hst hps]
+  rw [honest_actR h64 o hcs hrd h0 hst hps]
   exact hR o cs hcs
 
 /-- **The honest run makes `nextR` accept**, given the verdict, the checks after it and custody's read at
 `Run.recDec`. -/
 theorem honest_nextR_of (h64 : Claims.Out64 H) (hV : HonestVerdict H) (hA : HonestAfter H) (hR : HonestReads H)
     (o : Run H Readable.relation) {cs : List Coin} (hcs : o.CoinsAt cs) {rd : Claims.Msg → Option FinalP}
-    {last : Claims.Msg} {fl : FinalP} (hrd : rd last = some fl) (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
+    {last : Claims.Msg} {fl : FinalP} (hrd : rd last = some fl) (h0 : last.head? ≠ some 0)
+    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
     ((nextR rd o.x (o.recMsgs cs last) cs).eval H).1 = .acc :=
-  nextR_sound H rd o.x _ cs (honest_readOkR_of h64 hR o hcs hrd hst hps)
-    (honest_holdsR_of h64 hV hA o hcs hrd hst hps)
+  nextR_sound H rd o.x _ cs (honest_readOkR_of h64 hR o hcs hrd h0 hst hps)
+    (honest_holdsR_of h64 hV hA o hcs hrd h0 hst hps)
 
 end
 
