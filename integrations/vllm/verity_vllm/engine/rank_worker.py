@@ -35,8 +35,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
-from verity_vllm.collectives import fused_norm as FN
+from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 
@@ -440,7 +440,7 @@ class TP2CaptureWorkerExtension:
         # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
         # above -- R17 row #70 recorded 34 collectives per step against the Build's 66 links (structure FAIL).  The one census shared
         # with the committer's TPPartialSource names the modules (hooked below) and the python modules to patch, a ruled-out call's too.
-        from verity_vllm.collectives.collective_sites import mid_module_site_census, patch_targets
+        from verity_vllm.engine.collectives.collective_sites import mid_module_site_census, patch_targets
         census = mid_module_site_census(model, world)
         st["mid_sites"] = {s["name"]: s for s in census["sites"]}
         sites += patch_targets(census["sites"] + census["ruled_out"])
