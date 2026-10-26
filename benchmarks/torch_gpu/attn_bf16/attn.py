@@ -23,8 +23,11 @@ import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAD_K = 32
 ARCH = {(9, 0): "sm_90a", (12, 0): "sm_120a"}
-#: the _h8 kernels' launch by op: (warps a block, head groups a warp); run.py's timing sweeps the alternatives
-H8_LAUNCH = {"qk": (8, 1), "pv": (8, 1)}
+#: the head-group tilings' group sizes; a tiling serves where its size divides the query heads a KV head serves
+GROUP = {"h16": 16, "h8": 8}
+#: each op's launch: (tiling, warps a block, head groups a warp), falling back to h8 and then q8 where the tiling can't
+#: serve; run.py's timing sweeps the alternatives
+LAUNCH = {"qk": ("h16", 8, 1), "pv": ("h16", 8, 1)}
 
 u64 = C.c_uint64
 
@@ -37,9 +40,16 @@ class Args(C.Structure):
 
 
 def grid(tiling: str, B: int, H: int, Mq: int, Y: int = 0) -> tuple[int, int, int]:
-    """q8: a block per (8 query rows, head, sequence); h8: per (query row, sequence) and Y blocks of head groups (default
-    H/8: one group a block), each block's warps running every Y-th group."""
-    return (-(-Mq // 8), H, B) if tiling == "q8" else (Mq, Y or H // 8, B)
+    """q8: a block per (8 query rows, head, sequence); h8, h16: per (query row, sequence) and Y blocks of head groups
+    (default one group a block), each block's warps running every Y-th group."""
+    return (-(-Mq // 8), H, B) if tiling == "q8" else (Mq, Y or H // GROUP[tiling], B)
+
+
+def kernel(op: str, D: int, tiling: str) -> str:
+    return f"attn_{op}_d{D}" + ("" if tiling == "q8" else f"_{tiling}")
+
+
+KERNELS = [kernel(op, d, t) for op in ("qk", "pv") for d in (64, 128) for t in ("q8", *GROUP)]
 
 
 _DRIVER = {"cuGetErrorString": [C.c_int, C.POINTER(C.c_char_p)], "cuDeviceGet": [C.POINTER(C.c_int), C.c_int],
@@ -83,12 +93,10 @@ def _module(index: int) -> tuple:
         _ok(lib, "cuCtxSetCurrent", ctx)
         _ok(lib, "cuModuleLoadData", C.byref(mod), cubin)
         funcs = {}
-        for op in ("qk", "pv"):
-            for d in (64, 128):
-                for tile in ("", "_h8"):
-                    fn, name = C.c_void_p(), f"attn_{op}_d{d}{tile}"
-                    _ok(lib, "cuModuleGetFunction", C.byref(fn), mod, name.encode())
-                    funcs[name] = fn
+        for name in KERNELS:
+            fn = C.c_void_p()
+            _ok(lib, "cuModuleGetFunction", C.byref(fn), mod, name.encode())
+            funcs[name] = fn
         _MODULES[index] = (lib, ctx, funcs)
     return _MODULES[index]
 
@@ -131,22 +139,23 @@ def _launch(op: str, x, kv, out, lens, kpv: int) -> None:
         if lens.shape != (B,):
             raise ValueError(f"attn_bf16: lens {tuple(lens.shape)}, want ({B},)")
     nq = torch.ones((B,), dtype=torch.int32, device=dev)
-    tiling = "h8" if G % 8 == 0 else "q8"
+    tiling, warps, per = LAUNCH[op]
+    if G % GROUP[tiling]:
+        tiling = "h8" if G % 8 == 0 else "q8"
     lib, ctx, funcs = _module(dev.index if dev.index is not None else torch.cuda.current_device())
     args = Args(x.data_ptr(), kv.data_ptr(), out.data_ptr(), lens.data_ptr(), nq.data_ptr(),
                 (C.c_int64 * 3)(x.stride(0), x.stride(1), 0), (C.c_int64 * 3)(kv.stride(0), kv.stride(1), kv.stride(2)),
                 (C.c_int64 * 3)(out.stride(0), out.stride(1), 0), B, H, 1, T, G.bit_length() - 1, kpv)
-    if tiling == "h8":
-        warps, per = H8_LAUNCH[op]
-        Y = max(1, -(-(H // 8) // (warps * per)))
+    if tiling in GROUP:
+        Y = max(1, -(-(H // GROUP[tiling]) // (warps * per)))
     else:
         warps, Y = (min(8, -(-T // 16)) if op == "qk" else D // 16), 0
     params = (C.c_void_p * 1)(C.cast(C.pointer(args), C.c_void_p))
     stream = C.c_void_p(torch.cuda.current_stream(dev).cuda_stream)
     with torch.cuda.device(dev):
         _ok(lib, "cuCtxSetCurrent", ctx)
-        _ok(lib, "cuLaunchKernel", funcs[f"attn_{op}_d{D}" + ("_h8" if tiling == "h8" else "")], *grid(tiling, B, H, 1, Y),
-            32 * warps, 1, 1, 0, stream, params, None)
+        _ok(lib, "cuLaunchKernel", funcs[kernel(op, D, tiling)], *grid(tiling, B, H, 1, Y), 32 * warps, 1, 1, 0, stream, params,
+            None)
 
 
 def qk(q, k, lens=None):

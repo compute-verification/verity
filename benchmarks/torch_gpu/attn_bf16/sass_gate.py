@@ -19,7 +19,8 @@ MMA = re.compile(r"\b([QHOIU]MMA|[QH]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 FLOAT = re.compile(r"\b(FADD|FMUL|FFMA|FMNMX|FSETP|FSET|FCHK|MUFU|FRND|F2F|F2I|I2F|DADD|DMUL|DFMA|DSETP|HADD2|HMUL2|HFMA2|HMNMX2|HSETP2|F2FP)(\.[\w.]+)?\b")
 CONSTANT = re.compile(r"\bHFMA2\.MMA R\d+, -RZ, RZ\b")
 #: kernel: (exact HMMA count, or None for at least one)
-WANT = {f"attn_{op}_d{d}{tile}": (d // 16 if op == "qk" else None) for tile in ("", "_h8") for op in ("qk", "pv") for d in (64, 128)}
+WANT = {f"attn_{op}_d{d}{tile}": (d // 16 if op == "qk" else None) for tile in ("", "_h8", "_h16") for op in ("qk", "pv")
+        for d in (64, 128)}
 
 
 def gate(arch: str, ptxas: str, sass: str) -> tuple[dict, list[str]]:

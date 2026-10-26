@@ -7,19 +7,21 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
 1. The check, on every case in CHECK (fixture.py's): S and O are filled with 0xA5 and QK^T and PV run on the case's
    inputs; each buffer must equal the fixture's byte for byte (every word the Definition defines, and 0xA5A5 everywhere
    else).  The tilings are q8 (a block per 8 query rows, head and sequence), at 4, 1 and 8 warps a block, and, where 8
-   divides the query heads a KV head serves, h8 (8 heads a tile, a block per query row and sequence and Y blocks of head
-   groups), with one group a block of 1 warp, every 8th group a block of 8 warps, and all of them in one block of 4 warps:
-   each gives the tiles to other warps, for the same bytes.  A control arm fills the buffers and launches nothing, and must be
+   or 16 divides the query heads a KV head serves, h8 and h16 (8 or 16 heads a tile, a block per query row and sequence
+   and Y blocks of head groups), each with one group a block of 1 warp, every 8th group a block of 8 warps, and all of
+   them in one block of 4 warps: each gives the tiles to other warps, for the same bytes.  A control arm fills the buffers
+   and launches nothing, and must be
    rejected.  The inputs must come back unchanged.  A FULL case (<case>.full.npz) makes its inputs with gen.py, checks
    them against the fixture's digests (exit 5 if the generator disagrees), and compares each sequence's S and O digests.
 2. The torch functions (attn.py's qk and pv, the skeleton's interface), on every decode case (one query a sequence): once
    over the whole batch with its lens, and once per KV length T over the sequences of that length with k and v sliced to
-   their first T keys and no lens, as the skeleton calls them.  Every word must equal the fixture's (S past a length
+   their first T keys, p a contiguous (B, H, T) (an odd T's rows are not 32-bit aligned) and no lens, as the skeleton
+   calls them.  Every word must equal the fixture's (S past a length
    is not compared); for FULL, each sequence's digests.
    Exit 4 if any check fails, before anything is timed.
 3. Diagnostic timing (information only, not a panel row), at the H200 model's decode step (TIME_B sequences, TIME_H query
-   heads of head dim 64 on TIME_HKV KV heads, every KV length TIME_L, PV's K = 32): QK^T and PV here at every h8 launch
-   shape (Y and warps; q8 where h8 doesn't apply) and through attn.py, each the median of REPS after a warm-up,
+   heads of head dim 64 on TIME_HKV KV heads, every KV length TIME_L, PV's K = 32): QK^T and PV here at every h8 and h16
+   launch shape (Y and warps; q8 where neither applies) and through attn.py, each the median of REPS after a warm-up,
    interleaved rep by rep with torch's SDPA (its default choice of backend, and FlashAttention's alone; both include the
    softmax these two leave out) and with torch's two bf16 batched matmuls (cuBLAS), on the card.
 
@@ -142,7 +144,7 @@ class Attn:
         G = self.H // self.Hkv
         assert self.H % self.Hkv == 0 and G & (G - 1) == 0, (self.H, self.Hkv)
         self.gshift = G.bit_length() - 1
-        self.tilings = ("q8", "h8") if G % 8 == 0 else ("q8",)
+        self.tilings = ("q8", *(t for t, n in attn.GROUP.items() if G % n == 0))
         self.s_shape, self.o_shape = (self.B, self.H, self.Mq, self.Lcap), (self.B, self.H, self.Mq, self.D)
         self.dev = {k: cu.put(z[k]) for k in ("Q", "K", "V", "P", "lens", "nq")}
         self.S = cu.alloc(int(np.prod(self.s_shape)) * 2)
@@ -156,22 +158,22 @@ class Attn:
                     self.gshift, self.kpv)
 
     def kernel(self, op: str, tiling: str):
-        return self.funcs[f"attn_{op}_d{self.D}" + ("_h8" if tiling == "h8" else "")]
+        return self.funcs[attn.kernel(op, self.D, tiling)]
 
     def launch(self, op: str, tiling: str, warps: int, Y: int = 0) -> None:
-        """attn.grid's blocks for ``tiling`` (h8: Y blocks of head groups), of ``warps`` warps."""
+        """attn.grid's blocks for ``tiling`` (h8, h16: Y blocks of head groups), of ``warps`` warps."""
         args = self.qk_args if op == "qk" else self.pv_args
         params = (vp * 1)(C.cast(C.pointer(args), vp))
         self.cu("cuLaunchKernel", self.kernel(op, tiling), *grid(tiling, self.B, self.H, self.Mq, Y), 32 * warps, 1, 1, 0,
                 None, params, None)
 
     def shapes(self) -> list[tuple[str, int, int]]:
-        """The check's launches, (tiling, warps, Y): q8 at 4, 1 and 8 warps; h8 one group a block of 1 warp, every 8th group
-        a block of 8 warps, and every group in one block of 4 warps."""
+        """The check's launches, (tiling, warps, Y): q8 at 4, 1 and 8 warps; each head-group tiling one group a block of
+        1 warp, every 8th group a block of 8 warps, and every group in one block of 4 warps."""
         out = [("q8", w, 0) for w in WARPS]
-        if "h8" in self.tilings:
-            g = self.H // 8
-            out += [("h8", 1, g), ("h8", 8, max(1, g // 8)), ("h8", 4, 1)]
+        for t in self.tilings[1:]:
+            g = self.H // attn.GROUP[t]
+            out += [(t, 1, g), (t, 8, max(1, g // 8)), (t, 4, 1)]
         return out
 
     def poison(self) -> None:
@@ -289,7 +291,8 @@ def full_case(cu: Cuda, funcs: dict, path: str) -> dict:
 
 def api_case(path: str) -> dict | None:
     """attn.qk and attn.pv through torch on a decode case: the whole batch with its lens, then each KV length T's sequences
-    with k and v sliced to their first T keys and no lens (the skeleton's call).  None for a case with prefill rows."""
+    with k and v sliced to their first T keys, p a contiguous (B, H, T) and no lens (the skeleton's call).  None for a case
+    with prefill rows."""
     import torch
 
     full = path.endswith(".full.npz")
@@ -322,7 +325,7 @@ def api_case(path: str) -> dict | None:
         sel = np.flatnonzero(lens == T)
         st = torch.from_numpy(sel).cuda()
         S2[sel, :, :T] = host(attn.qk(q[st], k[st][..., :T, :]))
-        O2[sel] = host(attn.pv(p[st][..., :T], v[st][..., :T, :], kpv=kpv))
+        O2[sel] = host(attn.pv(p[st][..., :T].contiguous(), v[st][..., :T, :], kpv=kpv))
     row = {"part": "api", "case": name, "B": B, "H": H, "Hkv": Hkv, "D": D, "Lcap": Lcap, "kpv": kpv,
            "k_form": "(B, T, D)" if Hkv == 1 else "(B, Hkv, T, D)", "S_zero_past_lens": zeros_past, "arms": {}}
     for arm, (s, o) in (("lens", (S, O)), ("per_length", (S2, O2))):
@@ -359,17 +362,17 @@ def timing(cu: Cuda, funcs: dict, reps: int) -> dict:
         return ms.value
 
     arms = {}
-    if "h8" in a.tilings:  # every launch shape of the head-group kernels: Y blocks of head groups, of 1 to 8 warps
-        g = H // 8
+    for t in a.tilings[1:]:  # every launch shape of the head-group kernels: Y blocks of head groups, of 1 to 8 warps
+        g = H // attn.GROUP[t]
         for Y in sorted({max(1, g >> s) for s in range(0, 8)}, reverse=True):
             for w in (1, 2, 4, 8):
                 for op in ("qk", "pv"):
-                    arms[f"{op}_h8@{w}w/y{Y}"] = lambda op=op, w=w, Y=Y: ours(op, "h8", w, Y)
-    else:  # a warp per key tile of QK^T and per d tile of PV
+                    arms[f"{op}_{t}@{w}w/y{Y}"] = lambda op=op, t=t, w=w, Y=Y: ours(op, t, w, Y)
+    if len(a.tilings) == 1:  # a warp per key tile of QK^T and per d tile of PV
         arms["qk_q8"] = lambda: ours("qk", "q8", min(8, -(-L // 16)))
         arms["pv_q8"] = lambda: ours("pv", "q8", D // 16)
     out = {"part": "timing", "shape": {"B": B, "H": H, "Hkv": Hkv, "D": D, "L": L, "queries_per_sequence": 1, "kpv": attn.PAD_K},
-           "reps": reps, "attn_py_launch": attn.H8_LAUNCH, "note": "diagnostic only; SDPA includes the softmax qk and pv leave out"}
+           "reps": reps, "attn_py_launch": attn.LAUNCH, "note": "diagnostic only; SDPA includes the softmax qk and pv leave out"}
     try:
         import torch
         import torch.nn.functional as F
@@ -428,7 +431,7 @@ def timing(cu: Cuda, funcs: dict, reps: int) -> dict:
         for arm, fn in arms.items():
             got[arm].append(fn())
     med = out["median_ms"] = {arm: round(statistics.median(ts), 4) for arm, ts in got.items()}
-    out["best_ms"] = {op: min(((t, arm) for arm, t in med.items() if arm.startswith(f"{op}_h8@") or arm == f"{op}_q8"), default=None)
+    out["best_ms"] = {op: min(((t, arm) for arm, t in med.items() if arm.startswith(f"{op}_h") or arm == f"{op}_q8"), default=None)
                       for op in ("qk", "pv")}
     if all(out["best_ms"].values()):
         out["best_qk_plus_pv_ms"] = round(out["best_ms"]["qk"][0] + out["best_ms"]["pv"][0], 4)
@@ -459,12 +462,10 @@ def main(argv: list[str]) -> int:
     mod = vp()
     cu("cuModuleLoadData", C.byref(mod), cubin)
     funcs = {}
-    for op in ("qk", "pv"):
-        for d in (64, 128):
-            for tile in ("", "_h8"):
-                f, name = vp(), f"attn_{op}_d{d}{tile}"
-                cu("cuModuleGetFunction", C.byref(f), mod, name.encode())
-                funcs[name] = f
+    for name in attn.KERNELS:
+        f = vp()
+        cu("cuModuleGetFunction", C.byref(f), mod, name.encode())
+        funcs[name] = f
     paths = [os.path.join(check, f"{n}.npz") for n in names] or sorted(glob.glob(os.path.join(check, "*.npz")))
     rows = []
     for p in paths:

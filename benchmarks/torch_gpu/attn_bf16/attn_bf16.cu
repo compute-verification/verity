@@ -20,9 +20,14 @@
 // heads that share a KV head (8 divides 2^gshift; grid: Mq, any Y, B): block y runs the head groups y, y + Y, ..., its
 // warps take every warps-th of them, and a warp runs every tile of its group (QK^T: each key tile, with the group's Q loaded
 // once; PV: each d tile, with P loaded once a key block), so a decode step reads each key and value once for 8 heads.  The
+// _h16 kernels run head groups of 16 (16 divides 2^gshift) the same way, with the heads as the tile's 16 rows instead.  The
 // launch decides which warp runs a tile, never a word's steps.
-// QK^T's tile is 16 keys (A, K's rows) x 8 columns (B, Q's rows) over k = D.  PV's is 16 d (A, V^T) x 8 columns (B, P^T)
-// over k = keys.  A word's products depend only on its row of A and column of B, so keys past a column's length are zero
+// QK^T's tile is 16 keys (A, K's rows) x 8 columns (B, Q's rows) over k = D, and in _h16 16 heads (A, Q's rows) x 8 keys
+// (B, K^T).  PV's is 16 d (A, V^T) x 8 columns (B, P^T) over k = keys, and in _h16 16 heads (A, P's rows) x 8 d (B, V).  The
+// step's products are exact and its total semantics symmetric in its operands (a NaN product is the one canonical NaN), so
+// which operand holds the heads doesn't change a word.  _h16 loads A's rows and stores S's and O's word pairs 32 bits at a
+// time where the buffer's strides and base allow.
+// A word's products depend only on its row of A and column of B, so keys past a column's length are zero
 // codes in both operands, as the Definition pads them: P is loaded as zero there, and V too.  V is shared by the tile's
 // columns, and in the query-tiled kernels they can stop at different keys, so in a 16-key block each distinct stopping
 // point gets its own mma with V zeroed past it, and each column takes its word from the mma of its own; a column whose keys
@@ -183,22 +188,44 @@ __device__ __forceinline__ void pv(const AttnArgs& a) {
     }
 }
 
-// The _h8 kernels' head groups: query q = blockIdx.x of sequence b = blockIdx.z, and this warp's first group's head h0
-// and the stride between its groups' heads.
+// The _h8 and _h16 kernels' head groups of N heads: query q = blockIdx.x of sequence b = blockIdx.z, and this warp's first
+// group's head h0 and the stride between its groups' heads.
 struct Groups {
     int b, q, L, seen, h0, hstep;
 };
 
+template <int N>
 __device__ __forceinline__ Groups groups_of(const AttnArgs& a) {
     const int b = blockIdx.z, q = blockIdx.x, L = a.lens[b], M = a.nq[b];
     const int Y = gridDim.y, warp = threadIdx.x >> 5, warps = blockDim.x >> 5;
-    return {b, q, L, q < M ? L - M + q + 1 : 0, 8 * ((int)blockIdx.y + Y * warp), 8 * Y * warps};
+    return {b, q, L, q < M ? L - M + q + 1 : 0, N * ((int)blockIdx.y + Y * warp), N * Y * warps};
+}
+
+// Whether a [B][H][rows][cols] buffer's word pairs at even columns are 32-bit aligned: its base and every stride even.
+__device__ __forceinline__ bool pairs_ok(const void* base, const int64_t (&st)[3]) {
+    return ((st[0] | st[1] | st[2]) & 1) == 0 && (reinterpret_cast<uintptr_t>(base) & 3) == 0;
+}
+
+// Words k and k + 1 of a row as A's 32-bit pair (k even), the zero code for each at or past n.
+__device__ __forceinline__ uint32_t ld2(const uint16_t* p, int k, int n, bool pairs) {
+    if (k + 1 < n) return pairs ? ld_pair(p) : pack(p[0], p[1]);
+    return k < n ? (uint32_t)p[0] : 0u;
+}
+
+// cvt of x and y to words k and k + 1 (k even), each only if below n.
+__device__ __forceinline__ void st2(uint16_t* p, float x, float y, int k, int n, bool pairs) {
+    if (k + 1 < n && pairs) {
+        *reinterpret_cast<uint32_t*>(p) = pack(cvt_bf16(x), cvt_bf16(y));
+        return;
+    }
+    if (k < n) p[0] = cvt_bf16(x);
+    if (k + 1 < n) p[1] = cvt_bf16(y);
 }
 
 template <int D>
 __device__ __forceinline__ void qk8(const AttnArgs& a) {
     const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
-    const Groups w = groups_of(a);
+    const Groups w = groups_of<8>(a);
     if (!w.seen) return;
     uint16_t* S = a.out + w.b * a.os[0] + w.q * a.os[2];
 #pragma unroll 1
@@ -233,7 +260,7 @@ __device__ __forceinline__ void qk8(const AttnArgs& a) {
 template <int D>
 __device__ __forceinline__ void pv8(const AttnArgs& a) {
     const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
-    const Groups w = groups_of(a);
+    const Groups w = groups_of<8>(a);
     if (!w.seen) return;
     const int steps = max(a.kpv >> 4, (w.seen + 15) >> 4);
     const int64_t vr = a.kvs[2];
@@ -279,6 +306,83 @@ __device__ __forceinline__ void pv8(const AttnArgs& a) {
     }
 }
 
+template <int D>
+__device__ __forceinline__ void qk16(const AttnArgs& a) {
+    const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
+    const Groups w = groups_of<16>(a);
+    if (!w.seen) return;
+    const bool pairs = pairs_ok(a.out, a.os);
+#pragma unroll 1
+    for (int h0 = w.h0; h0 < a.H; h0 += w.hstep) {
+        const uint16_t* K = a.kv + w.b * a.kvs[0] + (h0 >> a.gshift) * a.kvs[1];
+        const uint16_t* qa = a.x + w.b * a.xs[0] + (h0 + g) * a.xs[1] + w.q * a.xs[2];
+        const uint16_t* qb = qa + 8 * a.xs[1];
+        uint32_t Aq[D / 16][4];  // heads h0 + g and h0 + g + 8, k = 16s + 2t ...
+#pragma unroll
+        for (int s = 0; s < D / 16; ++s) {
+            const int c = 16 * s + 2 * t;
+            Aq[s][0] = ld_pair(qa + c), Aq[s][1] = ld_pair(qb + c), Aq[s][2] = ld_pair(qa + c + 8), Aq[s][3] = ld_pair(qb + c + 8);
+        }
+        uint16_t* Sa = a.out + w.b * a.os[0] + (h0 + g) * a.os[1] + w.q * a.os[2];
+        uint16_t* Sb = Sa + 8 * a.os[1];
+#pragma unroll 1
+        for (int j0 = 0; j0 < w.seen; j0 += 8) {
+            const int j = j0 + g;  // B's column: key j
+            const bool jok = j < w.L;
+            const uint16_t* krow = K + (jok ? j : 0) * a.kvs[2];
+            float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+#pragma unroll
+            for (int s = 0; s < D / 16; ++s) {
+                const int c = 16 * s + 2 * t;
+                const uint32_t Bk[2] = {jok ? ld_pair(krow + c) : 0u, jok ? ld_pair(krow + c + 8) : 0u};
+                mma_bf16(acc, Aq[s], Bk, acc);
+            }
+            const int jc = j0 + 2 * t;  // this lane's words: keys jc, jc + 1 of heads h0 + g (acc 0, 1) and h0 + g + 8 (2, 3)
+            st2(Sa + jc, acc[0], acc[1], jc, w.seen, pairs);
+            st2(Sb + jc, acc[2], acc[3], jc, w.seen, pairs);
+        }
+    }
+}
+
+template <int D>
+__device__ __forceinline__ void pv16(const AttnArgs& a) {
+    const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
+    const Groups w = groups_of<16>(a);
+    if (!w.seen) return;
+    const int steps = max(a.kpv >> 4, (w.seen + 15) >> 4);
+    const bool pin = pairs_ok(a.x, a.xs), pout = pairs_ok(a.out, a.os);
+    const int64_t vr = a.kvs[2];
+#pragma unroll 1
+    for (int h0 = w.h0; h0 < a.H; h0 += w.hstep) {
+        const uint16_t* pa = a.x + w.b * a.xs[0] + (h0 + g) * a.xs[1] + w.q * a.xs[2];
+        const uint16_t* pb = pa + 8 * a.xs[1];
+        const uint16_t* V = a.kv + w.b * a.kvs[0] + (h0 >> a.gshift) * a.kvs[1] + g;  // B's column: d = 8 dt + g
+        float acc[D / 8][4];
+#pragma unroll
+        for (int dt = 0; dt < D / 8; ++dt) acc[dt][0] = acc[dt][1] = acc[dt][2] = acc[dt][3] = 0.0f;
+        for (int s = 0; s < steps; ++s) {
+            const int ka = 16 * s + 2 * t, kb = ka + 8;  // A's keys ka, ka + 1 and kb, kb + 1; B's rows the same
+            const uint32_t A[4] = {ld2(pa + ka, ka, w.seen, pin), ld2(pb + ka, ka, w.seen, pin), ld2(pa + kb, kb, w.seen, pin),
+                                   ld2(pb + kb, kb, w.seen, pin)};
+            const bool l0 = ka < w.seen, l1 = ka + 1 < w.seen, l2 = kb < w.seen, l3 = kb + 1 < w.seen;
+#pragma unroll
+            for (int dt = 0; dt < D / 8; ++dt) {
+                const uint16_t* v = V + 8 * dt;
+                const uint32_t Bv[2] = {pack(l0 ? v[ka * vr] : 0u, l1 ? v[(ka + 1) * vr] : 0u),
+                                        pack(l2 ? v[kb * vr] : 0u, l3 ? v[(kb + 1) * vr] : 0u)};
+                mma_bf16(acc[dt], A, Bv, acc[dt]);
+            }
+        }
+        uint16_t* Oa = a.out + w.b * a.os[0] + (h0 + g) * a.os[1] + w.q * a.os[2] + 2 * t;
+        uint16_t* Ob = Oa + 8 * a.os[1];
+#pragma unroll
+        for (int dt = 0; dt < D / 8; ++dt) {  // d = 8 dt + 2t, + 1 of heads h0 + g (acc 0, 1) and h0 + g + 8 (2, 3)
+            st2(Oa + 8 * dt, acc[dt][0], acc[dt][1], 0, 2, pout);
+            st2(Ob + 8 * dt, acc[dt][2], acc[dt][3], 0, 2, pout);
+        }
+    }
+}
+
 }  // namespace
 
 extern "C" __global__ void __launch_bounds__(256) attn_qk_d64(const AttnArgs a) { qk<64>(a); }
@@ -289,3 +393,7 @@ extern "C" __global__ void __launch_bounds__(256) attn_qk_d64_h8(const AttnArgs 
 extern "C" __global__ void __launch_bounds__(256) attn_qk_d128_h8(const AttnArgs a) { qk8<128>(a); }
 extern "C" __global__ void __launch_bounds__(256) attn_pv_d64_h8(const AttnArgs a) { pv8<64>(a); }
 extern "C" __global__ void __launch_bounds__(256) attn_pv_d128_h8(const AttnArgs a) { pv8<128>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_qk_d64_h16(const AttnArgs a) { qk16<64>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_qk_d128_h16(const AttnArgs a) { qk16<128>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_pv_d64_h16(const AttnArgs a) { pv16<64>(a); }
+extern "C" __global__ void __launch_bounds__(256) attn_pv_d128_h16(const AttnArgs a) { pv16<128>(a); }
