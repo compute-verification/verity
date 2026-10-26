@@ -68,7 +68,7 @@ theorem UnitAt.tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) (hu : 
   have hle : ∀ x ≤ K, pos.getD x 0 ≤ pos.getD K 0 := fun x hx => Nat.lt_succ_iff.1 (h1 x (by omega)).1
   have hrow : tu.net.unitLog ≤ 32 → ∀ (ra : Array (Array ℕ)) (m m' : Sparse), Sparse.ofRows ra (2 ^ n₀.unitLog) = .ok m →
       Sparse.ofRows (Net.placed pos (Net.invOf pos (pos.getD K 0 + 1)) ra) (2 ^ tu.net.unitLog) = .ok m' →
-      ∀ x < U, ∀ j, sparseEntry m' (pos.getD x 0) j =
+      ∀ x < U, ∀ j, FlockLevel3.sparseEntry m' (pos.getD x 0) j =
         ((((m.row x).toList.map fun y => pos.getD y 0).count j : ℕ) : ZMod 2) := by
     intro hlog ra m m' hm hm' x hx j
     have w32 : 2 ^ n₀.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by decide) (by omega)
