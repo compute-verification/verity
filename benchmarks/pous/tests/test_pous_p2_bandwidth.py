@@ -141,6 +141,25 @@ def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_pat
     assert mine[1]["verdict"] == "reject" and mine[1]["failure"] == "receipt"
 
 
+def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(tmp_path) -> None:
+    """The auditor gate's party shape (`--party CMD`): CMD's stdout says the port and then the verifier's record of the
+    answer, which the verdict line holds to the session's."""
+    reg = B.toy(tmp_path / "toy")
+    party = (f"{sys.executable} -m verity.core.protocols.remote_bandwidth.p2_party "
+             f"--registration {tmp_path / 'toy' / 'registration.json'} --listen 127.0.0.1:0")
+    base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
+            "--node", reg.node.decode(), "--party", party, "--party-host", "127.0.0.1", "--device", "cpu",
+            "--ref-decode", "--samples", "8", "--windows", "1", "--passes", "1", "--window-s", "0.001",
+            "--deadline-s", "0.001", "--workers", "1"]
+    for name, more, expect in (("honest", [], "accept"), ("cheat", ["--skip-layer", "1"], "reject")):
+        assert B.main(base + more + ["--out", str(tmp_path / name), "--expect", expect]) == 0
+        doc = json.loads((tmp_path / name / "session.json").read_text())
+        assert doc["verifier_record"] == doc["answer"] and doc["answer"]["verdict"] == expect
+        assert "verifier_record_agrees=True" in doc["verdict_line"]
+    record = {"verdict": "accept"}
+    assert B.verdict_line(doc["answer"], "reject", record).endswith("verifier_record_agrees=False FAIL")
+
+
 def test_the_cli_runs_as_a_script(tmp_path) -> None:
     p = subprocess.run([sys.executable, str(HERE / "p2_v1" / "bandwidth.py"), "toy", str(tmp_path)], check=False,
                        capture_output=True, text=True, cwd=ROOT)

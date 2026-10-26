@@ -3,7 +3,8 @@
 
     bandwidth.py toy OUT                                  # the toy's C* as an encoded store, and its registration
     bandwidth.py registration --store ENC --node NODE --out FILE
-    bandwidth.py session --store ENC --layout F --lib DIR --node NODE (--verifier CMD | --connect HOST:PORT) --out DIR
+    bandwidth.py session --store ENC --layout F --lib DIR --node NODE --out DIR
+                 (--verifier CMD | --connect HOST:PORT | --party CMD --party-host HOST)
                  [--windows 2] [--passes 2] [--samples 1024] [--window-s 1] [--deadline-s 1]
                  [--skip-layer L] [--expect accept|reject] [--device cuda] [--ref-decode]
 
@@ -19,8 +20,10 @@ the pass's receipt tree (`ReceiptTree`, `receipts.tree`'s, in worker processes).
 the chunk's rows, not fused into the decode kernel, so each byte is read from HBM twice.
 
 **The session.** `session` starts the verifier with `--verifier CMD` (the ssh command that runs `p2_party --stdio` on
-the auditor's host; on one host, the module itself, which certifies nothing) or reaches `p2_party --listen` at
-`--connect HOST:PORT` (the auditor's gate port through `ssh -L`), sends the request and answers each pass,
+the auditor's host; on one host, the module itself, which certifies nothing), reaches `p2_party --listen` at
+`--connect HOST:PORT`, or starts it as a party of the auditor's gate (`--party CMD`, the ssh command to the gate's verb,
+whose stdout says the port, reached at `--party-host`, and then the verifier's own record of the answer, which must be
+the one the session ended with), sends the request and answers each pass,
 each window's openings (each unit's four blocks from the segment files with their PoUS vk paths, `VkPaths`, from the
 store's row digests) and returns the verifier's answer, written to `OUT/session.json` with each step's timings, and
 the line `BW VERDICT ...`. `--skip-layer L` is the cheat: it neither reads nor decodes layer L's tensors, and the
@@ -619,9 +622,11 @@ def toy(out: Path) -> p2.Registration:
 
 # --- the session -------------------------------------------------------------------------------------------------------
 
-def verdict_line(answer: dict, expect: str | None) -> str:
+def verdict_line(answer: dict, expect: str | None, record: dict | None = None) -> str:
+    """The session's verdict line; with the verifier's own `record` of its answer (a party's stdout), whether the two
+    agree, and the session passes only if they do."""
     v = answer.get("verdict")
-    ok = expect is None or {"accept": "accept", "reject": "reject"}[expect] == v
+    ok = (expect is None or {"accept": "accept", "reject": "reject"}[expect] == v) and record in (None, answer)
     parts = [f"BW VERDICT {v}"]
     if v == "accept":
         rate = answer.get("credited_bytes_per_s")
@@ -631,8 +636,38 @@ def verdict_line(answer: dict, expect: str | None) -> str:
     else:
         parts += [f"failure={answer.get('failure')}", f"window={answer.get('window')}", f"at={answer.get('at')}",
                   f"reason={answer.get('reason')!r}"]
-    parts += [f"verifier_host={answer.get('host')}", f"expect={expect}", "PASS" if ok else "FAIL"]
-    return " ".join(parts)
+    parts += [f"verifier_host={answer.get('host')}", f"expect={expect}"]
+    if record is not None:
+        parts.append(f"verifier_record_agrees={record == answer}")
+    return " ".join([*parts, "PASS" if ok else "FAIL"])
+
+
+def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> tuple[dict, dict | None, int]:
+    """A session with a party the auditor's gate starts (`--party CMD`, `p2_party --listen` on the gate's host): its
+    `{"listening": port}` read from CMD's stdout, the session over TCP to `--party-host` at that port, and then its own
+    record of the answer from the rest of CMD's stdout."""
+    with open(out / "verifier.err", "ab") as err:
+        proc = subprocess.Popen(a.party, shell=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=err)
+        record = None
+        try:
+            port = None
+            for line in proc.stdout:
+                doc = json.loads(line)
+                if isinstance(doc, dict) and "listening" in doc:
+                    port = int(doc["listening"])
+                    break
+            if port is None:
+                raise ConnectionError("the party ended without listening")
+            with (socket.create_connection((a.party_host, port)) as conn, conn.makefile("rb") as r,
+                  conn.makefile("wb") as w):
+                answer = p2_party.prove(r, w, prover, request)
+            for line in proc.stdout:
+                doc = json.loads(line)
+                if isinstance(doc, dict) and "answer" in doc:
+                    record = doc["answer"]
+        finally:
+            rc = proc.wait()
+    return answer, record, rc
 
 
 def session(a: argparse.Namespace) -> int:
@@ -662,10 +697,12 @@ def session(a: argparse.Namespace) -> int:
         log(json.dumps({"start": {"node": a.node, "units": reg.blocks, "registration": reg.digest.hex(),
                                   "request": request, "setup_s": round(setup_s, 3), "host": socket.gethostname(),
                                   "skip_layer": a.skip_layer}}))
-        rc = None
+        rc = record = None
         t1 = time.perf_counter()
         try:
-            if a.connect is not None:
+            if a.party is not None:
+                answer, record, rc = _party(a, out, prover, request)
+            elif a.connect is not None:
                 host, _, port = a.connect.rpartition(":")
                 with (socket.create_connection((host, int(port))) as conn, conn.makefile("rb") as r,
                       conn.makefile("wb") as w):
@@ -685,10 +722,13 @@ def session(a: argparse.Namespace) -> int:
         wall = time.perf_counter() - t1
     if pool is not None:
         pool.shutdown()
-    line = verdict_line(answer, a.expect)
+    if a.party is not None and record is None and answer.get("verdict") != "prover-error":
+        record = {"verdict": "missing", "reason": "the party's stdout held no answer"}
+    line = verdict_line(answer, a.expect, record)
+    verifier = (f"party {a.party} at {a.party_host}" if a.party else a.verifier or f"tcp {a.connect}")
     doc = {"answer": answer, "request": request, "registration": p2_party.registration_json(reg), "steps": prover.steps,
            "opened": prover.opened, "setup_s": round(setup_s, 3), "session_wall_s": round(wall, 3),
-           "verifier_rc": rc, "verifier": a.verifier or f"tcp {a.connect}", "prover_host": socket.gethostname(),
+           "verifier_rc": rc, "verifier": verifier, "verifier_record": record, "prover_host": socket.gethostname(),
            "skip_layer": a.skip_layer, "store": str(a.store), "device": a.device, "verdict_line": line}
     (out / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     print(line, flush=True)
@@ -713,6 +753,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     to = s.add_mutually_exclusive_group(required=True)
     to.add_argument("--verifier", help="the shell command that starts p2_party --stdio")
     to.add_argument("--connect", help="HOST:PORT where p2_party --listen waits (the gate's port, through ssh -L)")
+    to.add_argument("--party", help="the shell command (ssh to the auditor's gate) that starts p2_party --listen there")
+    s.add_argument("--party-host", help="with --party: the address its port is reached at from here")
     s.add_argument("--out", type=Path, required=True)
     s.add_argument("--windows", type=int, default=2)
     s.add_argument("--passes", type=int, default=2)
@@ -736,6 +778,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         registration_file(reg, a.out)
         print(json.dumps({"registration": reg.digest.hex(), "units": reg.blocks, "root": reg.root.hex()}))
         return 0
+    if (a.party is None) != (a.party_host is None):
+        ap.error("--party and --party-host go together")
     return session(a)
 
 

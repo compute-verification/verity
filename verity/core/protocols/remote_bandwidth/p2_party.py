@@ -20,7 +20,9 @@ record of PoUS's setup, `registration_json`), never the prover's word for it, an
   8,224 bytes each, over the session's span.
 
 `python -m verity.core.protocols.remote_bandwidth.p2_party --registration FILE (--stdio | --listen HOST:PORT
-[--sessions N]) [--answer FILE]` is the verifier's side (`main`), each session with fresh coins. `prove(reader, writer, prover)` is the prover's: it answers each message with `prover`'s
+[--sessions N]) [--answer FILE]` is the verifier's side (`main`), each session with fresh coins. Listening, it prints
+`{"listening": port}` and then each session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts
+over ssh (`benchmarks/live_verifier/host.py`'s party verbs). `prove(reader, writer, prover)` is the prover's: it answers each message with `prover`'s
 `hold`, `run` and `open` until the answer, which it returns.
 
 No Lean replays a P2 session yet (`RemoteAudit.P2` checks one opening); the verdict here is the Python session's.
@@ -296,7 +298,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         for _ in range(a.sessions):
             conn, _ = srv.accept()
             with conn, conn.makefile("rb") as r, conn.makefile("wb") as w:
-                done(session(r, w, reg, coins=secrets.token_bytes(64), log=log))
+                out = session(r, w, reg, coins=secrets.token_bytes(64), log=log)
+            done(out)
+            print(json.dumps({"answer": out}, sort_keys=True), flush=True)
     return 0
 
 
