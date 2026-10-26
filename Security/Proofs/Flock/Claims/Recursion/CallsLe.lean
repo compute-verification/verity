@@ -367,13 +367,14 @@ theorem keepL_throw {α : Type} (e : String) : KeepL (throw e : LM α) := fun s 
 
 /-- Walks an `LM` or `TM` program that hashes nothing to `KeepL`/`KeepT`. -/
 macro "keep_walk" : tactic => `(tactic| repeat' (first
-  | refine keepL_bind ?_ fun _ => ?_
-  | refine keepT_bind ?_ fun _ => ?_
-  | exact keepL_pure _ | exact keepT_pure _ | exact keepL_get | exact keepL_set _ | exact keepL_modify _
-  | exact keepL_throw _
-  | apply keepL_lift
-  | exact keepT_absorbK _ | exact keepT_absorbF _ | exact keepT_absorbSlice _ | exact keepT_absorbBytes _
-  | exact keepT_pow _ | exact keepT_label _
+  | with_reducible refine keepL_bind ?_ fun _ => ?_
+  | with_reducible refine keepT_bind ?_ fun _ => ?_
+  | with_reducible exact keepL_pure _ | with_reducible exact keepT_pure _ | with_reducible exact keepL_get
+  | with_reducible exact keepL_set _ | with_reducible exact keepL_modify _ | with_reducible exact keepL_throw _
+  | with_reducible apply keepL_lift
+  | with_reducible exact keepT_absorbK _ | with_reducible exact keepT_absorbF _
+  | with_reducible exact keepT_absorbSlice _ | with_reducible exact keepT_absorbBytes _
+  | with_reducible exact keepT_pow _ | with_reducible exact keepT_label _
   | split))
 
 theorem keepL_nextMsg (p : LigeritoProof) : KeepL (nextMsg p) := by unfold nextMsg; keep_walk
