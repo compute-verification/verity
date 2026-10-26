@@ -30,7 +30,7 @@ one `refP` hands its masked session (`RefParts.wit`, at the inner rounds as the 
 
 What it still takes is about the honest run itself: the builder's facts (`NumsFixed`, and `HonestWitSatisfies` at the
 run, as in `vstar_complete_run_setup_at`; the staging setting up follows from the run accepting), the statement (in
-the relation, dense), the run (accepted, its inner proof accepted by the inner verifier), the calls `layR` records beyond `layoutBTops`' (`moreCalls`: the output rows' and
+the relation, dense), the run (accepted), the calls `layR` records beyond `layoutBTops`' (`moreCalls`: the output rows' and
 check 5's) being true at the honest witness, no collision among the honest run's calls, and the honest witness holding
 the run's messages where the layout places them (held rounds, pieces, shared rows).
 -/
@@ -98,10 +98,10 @@ theorem runVstar_getD_staged {W : Type} (H : Msg → Msg) (I : Claims.Recursion.
 /-- **Part `s`'s circuit accepts on the honest outer run, at the layout of record** (non-vacuity of `RecursiveKSAt`'s
 `DecompB` premise, the parts' half). At the deployed recursive record over `DeployedR.layR elem` with the coin server's
 record (`recTr`), on the record's reference prover's run (`refP`) at a statement `x` in the recursion's relation read
-at the dense form, where that run accepts and the inner verifier accepts its inner proof, `PartAccepts` holds at the
+at the dense form, where that run accepts, `PartAccepts` holds at the
 run's messages and coins, its outer witness the one the reference prover hands part `s`'s session. It takes what is
 about the honest run and its witness: the builder's facts (`hN`, and `hW` at the run), the statement (`hR`, `hx`,
-`hf`), the run (`hacc`, `hI`), the calls `layR` records beyond `layoutBTops`' (`hTm`), no collision among the run's calls
+`hf`), the run (`hacc`), the calls `layR` records beyond `layoutBTops`' (`hTm`), no collision among the run's calls
 (`hnc`), and the witness holding the run's messages where the layout places them (`hh`, `hp`, `hr`). -/
 theorem honest_partAccepts_layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
@@ -117,9 +117,6 @@ theorem honest_partAccepts_layR (elem : (r : XR) → List (Fin r.w.parts.length 
       D.parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
       (Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).out = .acc →
-      InnerAccepts FlockDeploy.sha512 I.V x (runCs (I.V.k (xIOf x) + kS x) r)
-        (((Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).msgs.take (I.V.k (xIOf x) + kS x)).map
-          histOf) →
       HonestWitSatisfies FlockDeploy.sha512 I.V bL x w ω r →
     ∀ s < nS x,
       let wO := bL.ref.wit w ω.1
@@ -134,7 +131,7 @@ theorem honest_partAccepts_layR (elem : (r : XR) → List (Fin r.w.parts.length 
       L.RowsRead x s wO ms →
       Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
         Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s x (Claims.coinSeq r) ms := by
-  intro bR L bL I D hN x w st hR hx hf ω r hacc _hI hW s hs wO ms hTm hnc hh hp hr
+  intro bR L bL I D hN x w st hR hx hf ω r hacc hW s hs wO ms hTm hnc hh hp hr
   have hrb : ReadsBackB FlockDeploy.sha512 I.V bL Claims.Recursion.Form.Dense recRead :=
     readsBack_recTr _ _ bL _ aux nOf hd recRest rfl
   have hHeld : Claims.Recursion.VStarB.HeldB (deployRec I.V (FlockDeploy.deployPlain
