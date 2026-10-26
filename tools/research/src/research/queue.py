@@ -467,7 +467,8 @@ def flags_at(repo: Path, ref: str) -> DriveFlags:
 
 def gates_at(repo: Path, ref: str) -> tuple[str, ...]:
     """drive.toml's `landing_gates` at ``ref``; none when ``ref`` has no drive.toml (QueueError when it can't be parsed)."""
-    return flags_at(repo, ref).landing_gates
+    r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
+    return DriveFlags.parse(r.stdout, f"{DRIVE_FLAGS} at {ref}").landing_gates if r.returncode == 0 else ()
 
 
 def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, str]:
