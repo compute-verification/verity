@@ -24,7 +24,7 @@ VERIFIER = HERE.parent / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 HIDDEN = HERE / "fixtures" / "hidden-outputs" / "flat"
 FLAT = "verity/flock-circuit@f5df3bbc+seed-injection"
-SERVED = "art:eeb1ed6ad88c683f6dfd3b0ffd2e9941c47f2fcb6f39c097e8f2f20720c6ce4a"
+SERVED = "art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b"
 SCOPE = f"refused: {PF.SCOPE_WHY}: a statement form the soundness proof does not cover"
 TABLES = f"refused: {PF.TABLES_WHY}: a statement form the soundness proof does not cover"
 

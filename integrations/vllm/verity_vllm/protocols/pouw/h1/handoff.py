@@ -161,7 +161,7 @@ def _declare(served: SV.Served, run: PH.H1Run) -> None:
     served.program = None
     if served.program_digest is not None:
         served.program = SV.declared(run.shapes_, run.modules, run.rows, run.steps, served.tile, served.blocks,
-                                     served.prefix, served.unit)
+                                     served.prefix, served.unit, served.arch)
         if P.program_digest(served.program) != served.program_digest:
             raise ValueError(f"{run.entry}: the window Program declared again is not the one its tables were registered under")
 

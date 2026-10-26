@@ -26,7 +26,8 @@ from dataclasses import dataclass
 from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.pipeline import launch_context as LC
-from verity_vllm.program.boolean import derived, write_word
+from verity.ml.definitions.boolean import write_word
+from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)
@@ -65,13 +66,13 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py", "verity_vllm/program/frontend/target_profile.py",
                          "verity_vllm/program/frontend/targets.py",
                          # [R13 tp] the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
-                         "verity_vllm/program/frontend/export_ops.py", "verity_vllm/program/registry/b1_tp2.py",
+                         "verity_vllm/program/frontend/export_ops.py", "verity/ml/definitions/registry/b1_tp2.py",
                          # [R15 stoch] the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
                          "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
                          "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "verity_vllm/program/frontend/rules/vllm_moe_router.py",
                          "verity_vllm/program/frontend/rules/vllm_dsa.py", "verity_vllm/program/frontend/rules/vllm_dsa_dense.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
-                         "verity_vllm/program/boolean.py",
+                         "verity/ml/definitions/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
                          "verity_vllm/engine/env.py",
                          # the derive's report and its relabel per TP rank (`--emit-ranks`), and the tp_links.json writer
@@ -79,18 +80,26 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/pipeline/tp/emit_ranks.py", "verity_vllm/pipeline/tp/links.py")
 
 
+def _source_root(rel: str) -> str:
+    """The directory a `_CONSTRUCTION_SOURCES` path is relative to: the one holding its top-level package (`verity_vllm`, or
+    `verity` for the Definitions), which in a checkout are different directories."""
+    from importlib import resources
+    from pathlib import Path
+    return str(Path(str(resources.files(rel.split("/", 1)[0]))).resolve().parent)
+
+
 def construction_version(rules, root: str | None = None) -> dict:
     """Identity of the CONSTRUCTION (not of the target, not of the host): schema, the binding rules (id + version), and the sha256 of
-    the builder's source files, read from the integration root `root` (default: the one `verity_vllm` is imported from). Two hosts
-    running the same tree get the same value; an edited rule/shim gets another. A listed source that is not there raises."""
-    from verity_vllm.config import ROOT
-    root = root or str(ROOT)
+    the builder's source files, each read from beside the package it belongs to (`_source_root`), or all from `root` when given.
+    Two hosts running the same tree get the same value; an edited rule/shim gets another. A listed source that is not there
+    raises."""
     h = hashlib.sha256()
     files = []
     for rel in _CONSTRUCTION_SOURCES:
-        p = os.path.join(root, rel)
+        base = root or _source_root(rel)
+        p = os.path.join(base, rel)
         if not os.path.isfile(p):
-            raise FileNotFoundError(f"construction_version: source {rel} is not under the integration root {root}")
+            raise FileNotFoundError(f"construction_version: source {rel} is not under {base}")
         with open(p, "rb") as f:
             b = f.read()
         files.append({"file": rel, "sha256": hashlib.sha256(b).hexdigest()})
@@ -149,7 +158,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     (`topp_geometry.registered_splits` = SplitsFor_v1(1, num_SMs), from the target's SM count, never hard-coded; `engine.topp_pin`),
     so the Program takes S as a per-event constant (`Const32[S]`, the select's 6th operand) and reads no live row count; the Match
     holds every launch's S to it."""
-    from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits
+    from verity.ml.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits
     kind = sampling.get("kind")
     if kind != "stochastic":
         return None
@@ -361,7 +370,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                   "hint": (f"the row's sampling policy is {sampling} (source: {sampling.get('source')}); this builder binds the token-select "
                                            f"kinds {sorted(SAMPLERS_BOUND)} only ({'; '.join(f'{k}: {v}' for k, v in SAMPLERS_BOUND.items())}). A stochastic "
                                            f"row needs a token-select Definition for the pinned BI sampler and a rule that emits it — not the greedy argmax. "
-                                           f"[X-06] `GumbelTokenSelect_v1{{V}}(logits, seed, pos, temp)` (verity_vllm.program.registry.sampling; seed/pos/temperature as "
+                                           f"[X-06] `GumbelTokenSelect_v1{{V}}(logits, seed, pos, temp)` (verity.ml.definitions.registry.sampling; seed/pos/temperature as "
                                            f"bound inputs) is exact to `_temperature_kernel` -> `_gumbel_sample_kernel` for top_p == 1 / no top_k; the top-p "
                                            f"mask (`topk_topp_triton._topp_sb_{{stats,step,mask}}_kernel`) has no exact Definition (F-dense-02) and no "
                                            f"wrapper authors the stochastic select yet."),
@@ -428,7 +437,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             if tp > 1:
                 # [R13 tp] rank `rank` of `tp`: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation, export and derive
                 from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
-                from verity_vllm.program.registry.tp_allreduce import settings_of
+                from verity.ml.definitions.registry.tp_allreduce import settings_of
                 env_now = engine_env.snapshot()
                 allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
                 observe_allreduce_settings(allreduce_settings)
