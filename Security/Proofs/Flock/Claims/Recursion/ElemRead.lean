@@ -153,7 +153,7 @@ theorem framesRead_eq {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : par
   have hrows : D.rows (2 * 0 + r.val) = (cutLens (repLens v.2.1 v.2.2) rss).getD (2 * 0 + r.val) [] := by
     unfold DecAt.rows
     rw [hds, hdt, e2]
-  have hn' := repCtx_n hk2 c₁ default r₀ r₀ cs.tail.dropLast []
+  have hn' := repCtx_n (spec := v.2.1) hk2 c₁ default r₀ r₀ cs.tail.dropLast []
   have hfit' : FitsRep (repCtx v.2.1 v.2.2 default r₀ [] (2 * 0 + r.val))
       ((cutLens (repLens v.2.1 v.2.2) rss).getD (2 * 0 + r.val) []) D.d.f.ps[2 * 0 + r.val]!
       (D.T (2 * 0 + r.val)) := by
