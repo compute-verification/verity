@@ -21,6 +21,8 @@ phases' unit rates, and
 
     f = (128 R_cap L / E + R_in L) / M_dyn
 
+with f again for the decode rate alone and for the softmax's work a key at property/v1's floor (`softmax_floor`).
+
     python frontier.py --atoms-needed > atoms-needed.json            # the atoms atoms.py counts
     python frontier.py --atoms atoms.json --out frontier.json          # the table (and frontier.md beside it)
 """
@@ -626,23 +628,35 @@ def per_key_units(m: Mapping[str, Any], atoms: Mapping[str, Any], kv: str, S: in
     return {"units_per_key": b - a, "bytes_per_key": tok, "units_per_byte": (b - a) / tok if tok else None}
 
 
+def softmax_floor(atoms: Mapping[str, Any]) -> dict:
+    """The atoms with the softmax's work a key (the attention row's slope in S: its max, the exp table's index bits, the LUT
+    index, the low byte) at property/v1's floor, one rounding a query head a key: the exp a softmax can't do without."""
+    one = {"roundings": 1}
+    return {k: ({**a, "slope": {"units": one, "primitives": {"(floor)|roundings": 1}}} if k.startswith("Int8LutAttentionRow_v1")
+                else a) for k, a in atoms.items()}
+
+
 def table(spec: Mapping[str, Any], atoms: Mapping[str, Any]) -> dict:
     node, wl = spec["node"], spec["workload"]
     S, P = wl["context"], wl["prompt"]
     out: dict[str, Any] = {"schema": "verity-stacked-share/frontier/v1", "node": node, "workload": wl, "E_word": E_WORD,
                            "lifetimes_s": LIFETIMES, "R_in": R_IN, "anchor": check_anchor(spec["models"], atoms, spec["anchor"], S, P),
                            "models": {}}
+    floor = softmax_floor(atoms)
     for name, m in spec["models"].items():
         row: dict[str, Any] = {"hf": m.get("hf"), "revision": m.get("revision"), "source": m.get("source"),
                                "weights_as_published": m.get("weights"), "arch": m["arch"], "layers": layer_kinds(m)}
         for kv in KV_MODES:
-            ph = {}
+            ph, fl = {}, {}
             for phase in PHASES:
                 c = compose(m, phase, kv, S, P)
                 u = evaluate(c["terms"], atoms)
                 ph[phase] = {"units": u, "kinds": kinds(u["by_role_primitive"]), "macs": c["macs"], "dd": c["dd"], "dyn": c["dyn"]}
-            sv = serve(m, node, {**ph["decode"], "units": ph["decode"]["units"]}, ph["prefill"], kv, S, P)
-            row[kv] = {"decode": ph["decode"], "prefill": ph["prefill"], "serving": sv, "per_key": per_key_units(m, atoms, kv, S, P)}
+                fl[phase] = {**ph[phase], "units": evaluate(c["terms"], floor, primitives=False)}
+            sv = serve(m, node, ph["decode"], ph["prefill"], kv, S, P)
+            sf = serve(m, node, fl["decode"], fl["prefill"], kv, S, P)
+            row[kv] = {"decode": ph["decode"], "prefill": ph["prefill"], "serving": sv, "per_key": per_key_units(m, atoms, kv, S, P),
+                       "softmax_floor": {k: sf[k] for k in ("R_decode", "R_prefill", "R_cap", "R_cap_phase", "f", "f_decode")}}
         out["models"][name] = row
     return out
 
@@ -688,8 +702,8 @@ def markdown(t: Mapping[str, Any]) -> str:
         lines += [f"**KV {kv}.**", "",
                   "| model | dynamic memory | B/token | state/request | M_dyn | batch | step | R_cap (phase) | units/B/step (decode) "
                   "| units/key-byte | T_turn | W_byte | " + " | ".join(f"f {lt}, E {e}" for lt in LIFETIMES for e in E_WORD)
-                  + " | f 1 h, E conjectured, R of decode alone |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|" + "---|" * (len(LIFETIMES) * len(E_WORD))]
+                  + " | f 1 h, E conjectured, R of decode alone | f 10 min / 1 h, E conjectured, softmax at 1 unit a head-key |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|" + "---|" * (len(LIFETIMES) * len(E_WORD))]
         for name, r in t["models"].items():
             x = r[kv]
             sv, dyn = x["serving"], x["decode"]["dyn"]
@@ -701,7 +715,8 @@ def markdown(t: Mapping[str, Any]) -> str:
                 f"{g(sv['R_cap'])} ({sv['R_cap_phase']}) | {g(sv['u_B_decode'])} | {g(pk) if pk is not None else '-'} | "
                 f"{g(sv['T_turn_s'])} s | {g(sv['W_byte'])} | "
                 + " | ".join(pct(sv["f"][lt][e]) for lt in LIFETIMES for e in E_WORD)
-                + f" | {pct(sv['f_decode']['1 h']['conjectured'])} |")
+                + f" | {pct(sv['f_decode']['1 h']['conjectured'])} | {pct(x['softmax_floor']['f']['10 min']['conjectured'])} / "
+                f"{pct(x['softmax_floor']['f']['1 h']['conjectured'])} |")
         lines.append("")
     lines += ["**Where the units go, KV at write** (share of a token's units by role).", "",
               "| model | phase | " + " | ".join(name for name, _ in SHARES) + " |", "|---|---|" + "---|" * len(SHARES)]

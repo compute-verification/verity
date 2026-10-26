@@ -110,6 +110,12 @@ def test_the_table_on_synthetic_atoms():
             assert sv["R_cap"] == max(sv["R_decode"], sv["R_prefill"])
             E, L = F.E_WORD["proved"], F.LIFETIMES["1 h"]
             assert sv["f"]["1 h"]["proved"] == pytest.approx((128 * sv["R_cap"] * L / E + F.R_IN * L) / sv["M_dyn"])
+            fl = r[kv]["softmax_floor"]
+            assert fl["R_decode"] < sv["R_decode"] and fl["R_prefill"] < sv["R_prefill"]
+    m = SPEC["models"]["Llama-3.1-8B"]
+    floor = F.softmax_floor(atoms)
+    gap = [F.evaluate(F.compose(m, "decode", "at write", S, P)["terms"], a, primitives=False)["total"] for a in (atoms, floor)]
+    assert gap[0] - gap[1] == (13 - 1) * 32 * 32 * S
     ds = t["models"]["DeepSeek-V3/R1/V3.1"]["at write"]
     assert [d["kind"] for d in ds["decode"]["dyn"]] == ["MLA latent c_KV and the RoPE key"]
     assert ds["serving"]["request_bytes"]["per_token"] == 61 * 576
