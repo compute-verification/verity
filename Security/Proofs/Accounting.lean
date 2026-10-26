@@ -89,5 +89,6 @@ import Proofs.Accounting.Compose
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest
 import Proofs.Accounting.Served
+import Proofs.Accounting.ServingBlocks
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/
