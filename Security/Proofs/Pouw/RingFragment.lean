@@ -430,6 +430,141 @@ def PrefixDiffRank : Prop :=
         2 * L ≤ (projF2 φ fun z =>
           dPrefix pc vq w e.1 e.2.1 e.2.2.val z - c * dPrefix pc vq w e'.1 e'.2.1 e'.2.2.val z).rank
 
+section Rank
+
+variable {R : Type} [CommRing R] {n L np B n' : ℕ}
+
+omit [CommRing R] in
+theorem projF2_of_ne [CommRing R] {V : Type} [DecidableEq V] (φ : R →+* ZMod 2) (f : (V → R) → R) {u v : V}
+    (h : u ≠ v) : projF2 φ f u v = φ (pairDiff f u v) :=
+  ite_eq_right h
+
+omit [CommRing R] in
+theorem projF2_self [CommRing R] {V : Type} [DecidableEq V] (φ : R →+* ZMod 2) (f : (V → R) → R) (u : V) :
+    projF2 φ f u u = 0 :=
+  ite_eq_left rfl
+
+omit [CommRing R] in
+theorem pairDiff_sub_mul [CommRing R] {V : Type} [DecidableEq V] (f g : (V → R) → R) (c : R) (u v : V) :
+    pairDiff (fun z => f z - c * g z) u v = pairDiff f u v - c * pairDiff g u v := by
+  simp only [pairDiff]
+  ring
+
+/-- A committed prefix word has no `U`–`U` terms. -/
+theorem pairDiff_dPrefix_inl_inl (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
+    (w : Fin np → R) (i : Fin n) (l : Fin n') (t : ℕ) {a a' : Fin n × Fin L × Fin np} (h : a ≠ a') :
+    pairDiff (dPrefix pc vq w i l t) (.inl a) (.inl a' : DBits n L np B n') = 0 := by
+  have hd : dPrefix pc vq w i l t =
+      fun z => ∑ t' : Fin B, (if t'.val ≤ t then 1 else 0) * dIncr pc vq w i l t' z := by
+    funext z
+    simp only [dPrefix, ite_mul, one_mul, zero_mul]
+  rw [hd, pairDiff_sum univ (fun t' z => (if t'.val ≤ t then 1 else 0) * dIncr pc vq w i l t' z)]
+  refine Finset.sum_eq_zero fun t' _ => ?_
+  rw [pairDiff_mul_left, pairDiff_dIncr_inl_inl pc vq w i l t' h, mul_zero]
+
+/-- The difference's coefficient on the pair `(β_p₀(i, j), b(s, j', l))`: `[j = j']` times
+`κ(s) = [s ≤ t] − φ(c) [i = i', l = l', s ≤ t']`. -/
+theorem projF2_prefixDiff (φ : R →+* ZMod 2) (w : Fin np → R) (p₀ : Fin np) (hw : φ (w p₀) = 1)
+    (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (i i' : Fin n) (l l' : Fin n') (t t' : ℕ)
+    (c : R) (s : Fin B) (j j' : Fin L) :
+    projF2 φ (fun z => dPrefix pc vq w i l t z - c * dPrefix pc vq w i' l' t' z) (.inl (i, j, p₀))
+        (.inr (s, j', l)) =
+      if j = j' then (if s.val ≤ t then 1 else 0) - φ c * (if i = i' ∧ l = l' ∧ s.val ≤ t' then 1 else 0)
+      else 0 := by
+  rw [projF2_of_ne φ _ Sum.inl_ne_inr, pairDiff_sub_mul, pairDiff_dPrefix_inl_inr, pairDiff_dPrefix_inl_inr]
+  by_cases hj : j = j' <;> by_cases hi : i = i' <;> by_cases hl : l = l' <;> by_cases h1 : s.val ≤ t <;>
+    by_cases h2 : s.val ≤ t' <;> simp [hj, hi, hl, h1, h2, hw, Ne.symm hj]
+
+/-- **The difference's rank**: if `κ(s) = 1` for some block `s`, the difference of cell-block `(i, l, t)`'s
+prefix word and `c` times `(i', l', t')`'s has `F₂` rank at least `2L`: its projection has the identity on the rows
+`β_p₀(i, j)`, `b(s, j, l)` against the columns `b(s, j, l)`, `β_p₀(i, j)`. -/
+theorem rank_prefixDiff (φ : R →+* ZMod 2) (w : Fin np → R) (p₀ : Fin np) (hw : φ (w p₀) = 1)
+    (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (i i' : Fin n) (l l' : Fin n') (t t' : ℕ)
+    (c : R) (s : Fin B)
+    (hs : (if s.val ≤ t then (1 : ZMod 2) else 0) - φ c * (if i = i' ∧ l = l' ∧ s.val ≤ t' then 1 else 0) = 1) :
+    2 * L ≤ (projF2 φ fun z => dPrefix pc vq w i l t z - c * dPrefix pc vq w i' l' t' z).rank := by
+  classical
+  have hent := projF2_prefixDiff φ w p₀ hw pc vq i i' l l' t t' c s
+  have hsymm : ∀ u v : DBits n L np B n',
+      projF2 φ (fun z => dPrefix pc vq w i l t z - c * dPrefix pc vq w i' l' t' z) u v =
+        projF2 φ (fun z => dPrefix pc vq w i l t z - c * dPrefix pc vq w i' l' t' z) v u := by
+    intro u v
+    by_cases h : u = v
+    · rw [h]
+    · rw [projF2_of_ne φ _ h, projF2_of_ne φ _ (Ne.symm h), pairDiff_comm]
+  let f : Fin L ⊕ Fin L → DBits n L np B n' := Sum.elim (fun j => .inl (i, j, p₀)) fun j => .inr (s, j, l)
+  let g : Fin L ⊕ Fin L → DBits n L np B n' := Sum.elim (fun j => .inr (s, j, l)) fun j => .inl (i, j, p₀)
+  have hsub : (projF2 φ fun z => dPrefix pc vq w i l t z - c * dPrefix pc vq w i' l' t' z).submatrix f g = 1 := by
+    ext a a'
+    rw [Matrix.submatrix_apply, Matrix.one_apply]
+    rcases a with j | j <;> rcases a' with j' | j'
+    · simp only [f, g, Sum.elim_inl, hent, hs, Sum.inl.injEq]
+    · simp only [f, g, Sum.elim_inl, Sum.elim_inr]
+      rw [ite_eq_right Sum.inl_ne_inr]
+      by_cases hj : j = j'
+      · rw [hj, projF2_self]
+      · have ha : (i, j, p₀) ≠ (i, j', p₀) := fun h' => hj (by simpa using h')
+        rw [projF2_of_ne φ _ (fun h' => ha (Sum.inl_injective h')), pairDiff_sub_mul,
+          pairDiff_dPrefix_inl_inl pc vq w i l t ha, pairDiff_dPrefix_inl_inl pc vq w i' l' t' ha, mul_zero,
+          sub_zero, map_zero]
+    · simp only [f, g, Sum.elim_inl, Sum.elim_inr]
+      rw [ite_eq_right Sum.inr_ne_inl]
+      by_cases hj : j = j'
+      · rw [hj, projF2_self]
+      · have hb : (s, j, l) ≠ (s, j', l) := fun h' => hj (by simpa using h')
+        rw [projF2_of_ne φ _ (fun h' => hb (Sum.inr_injective h')), pairDiff_sub_mul,
+          pairDiff_dPrefix_inr_inr pc vq w i l t hb, pairDiff_dPrefix_inr_inr pc vq w i' l' t' hb, mul_zero,
+          sub_zero, map_zero]
+    · simp only [f, g, Sum.elim_inr]
+      rw [hsymm, hent, hs]
+      by_cases hj : j = j'
+      · subst hj
+        simp
+      · simp [hj, Ne.symm hj]
+  calc 2 * L = (1 : Matrix (Fin L ⊕ Fin L) (Fin L ⊕ Fin L) (ZMod 2)).rank := by
+        rw [Matrix.rank_one, Fintype.card_sum, Fintype.card_fin, two_mul]
+    _ ≤ _ := by
+        rw [← hsub]
+        exact Matrix.rank_submatrix_le _ f g
+
+/-- **`PrefixDiffRank`, proved.** For one block take `c = 0` and `s = t`. For two, `s = t` unless the cells agree
+and `φ(c) = 1`, where the blocks differ and `s = max(t, t')` lies under exactly one of them. -/
+theorem prefixDiffRank : PrefixDiffRank := by
+  intro R _ φ n L np B n' w p₀ hw pc vq
+  have h01 : ∀ x : ZMod 2, x ≠ 1 → x = 0 := by
+    intro x hx
+    fin_cases x
+    · rfl
+    · exact absurd rfl hx
+  refine ⟨fun e => ?_, fun e e' hne c => ?_⟩
+  · have h := rank_prefixDiff φ w p₀ hw pc vq e.1 e.1 e.2.1 e.2.1 e.2.2.val e.2.2.val 0 e.2.2 (by simp)
+    have hf : (fun z => dPrefix pc vq w e.1 e.2.1 e.2.2.val z - 0 * dPrefix pc vq w e.1 e.2.1 e.2.2.val z) =
+        dPrefix pc vq w e.1 e.2.1 e.2.2.val := by
+      funext z
+      ring
+    rwa [hf] at h
+  · obtain ⟨i, l, t⟩ := e
+    obtain ⟨i', l', t'⟩ := e'
+    by_cases hc : i = i' ∧ l = l' ∧ φ c = 1
+    · obtain ⟨rfl, rfl, hc1⟩ := hc
+      have ht : t ≠ t' := fun h => hne (by rw [h])
+      rcases lt_or_gt_of_ne ht with h | h
+      · have h' : ¬t'.val ≤ t.val := Nat.not_le.mpr (Fin.lt_def.mp h)
+        refine rank_prefixDiff φ w p₀ hw pc vq i i l l t.val t'.val c t' ?_
+        simp only [h', hc1, le_refl, and_self, ite_true, ite_false, one_mul]
+        decide
+      · have h' : ¬t.val ≤ t'.val := Nat.not_le.mpr (Fin.lt_def.mp h)
+        refine rank_prefixDiff φ w p₀ hw pc vq i i l l t.val t'.val c t ?_
+        simp [h']
+    · refine rank_prefixDiff φ w p₀ hw pc vq i i' l l' t.val t'.val c t ?_
+      by_cases hil : i = i' ∧ l = l'
+      · have hc0 : φ c = 0 := h01 _ fun h1 => hc ⟨hil.1, hil.2, h1⟩
+        simp [hc0]
+      · have hn : ¬(i = i' ∧ l = l' ∧ t.val ≤ t'.val) := fun h => hil ⟨h.1, h.2.1⟩
+        simp [hn]
+
+end Rank
+
 /-! ## The honest naive kernel (rule I) -/
 
 section Honest
