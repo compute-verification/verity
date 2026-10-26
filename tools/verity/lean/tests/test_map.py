@@ -63,6 +63,8 @@ def test_a_move_map_maps_the_tree_it_would_leave(tmp_path):
     assert "Definitions.B.C.Z" in mods and "Definitions.B.C.Z" in mods["Definitions"].imports
     weight, _ = M.graph(mods, info, 1)
     assert not M.sccs(["A", "B"], {a: {b for x, b in weight if x == a} for a in "AB"})
+    _, mods, *_ = M.load(tree(tmp_path), {"Definitions.A": "Definitions.Core.A", "A": "Core.A"})
+    assert "Proofs.Core.A" in mods and "Definitions.Core.A" in mods["Proofs.Core.A"].imports, "a word renames inside a name"
 
 
 def test_every_section_prints(tmp_path, capsys):
