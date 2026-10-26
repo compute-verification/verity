@@ -1450,6 +1450,10 @@
    "owner": "@memory-accounting",
    "digest": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
   },
+  "Pous.P2.Assumptions.P2RingRoundSecureWide": {
+   "owner": "@memory-accounting",
+   "digest": "4a1d6a842a5a90a31cd8edb101f4323728eae66616fd84ee93952ebe4cb6a921"
+  },
   "Pous.Prog.Bounded": {
    "owner": "@memory-accounting",
    "digest": "4eaccdb39e04a3ffda69506389dd61a81c05aa0e86791800a88890739da925ec"
@@ -9006,6 +9010,42 @@
    "assumptions": [],
    "type_hash": "560ed1990f5de6f57790315c444cee8b3cfc454b0ef9520275c93c4b19262b16"
   },
+  "Pous.SecurityProofs.ObligationDemo": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.ObligationDemo : Pous.Guarantees.ObligationDemo"],
+   "assumptions": [],
+   "type_hash": "4ff832a2438b54a23ef8b25a32acbeb860528562b88d4cbd24a68db49c065627"
+  },
+  "Pous.SecurityProofs.ObligationDemoWide": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.ObligationDemoWide : Pous.Guarantees.ObligationDemoWide"],
+   "assumptions": [],
+   "type_hash": "7e482e25fb79acb925832059c83b7a4ea2872bdfaaeb6cac16355bbc5e209eda"
+  },
+  "Pous.SecurityProofs.ObligationOfRoundSecure": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.ObligationOfRoundSecure : Pous.Guarantees.ObligationOfRoundSecure"],
+   "assumptions": [],
+   "type_hash": "9a650409c05617bb5c6c7fe77cce181a101ca6dec515c598247cefbd657922ef"
+  },
+  "Pous.SecurityProofs.ObligationOfRoundSecureWide": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.ObligationOfRoundSecureWide : Pous.Guarantees.ObligationOfRoundSecureWide"],
+   "assumptions": [],
+   "type_hash": "bd593cbf09d469949111b8752b1a3507b3dac70207a09f34aefb610fff113f58"
+  },
+  "Pous.SecurityProofs.ObligationOfStatic": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.ObligationOfStatic : Pous.Guarantees.ObligationOfStatic"],
+   "assumptions": [],
+   "type_hash": "647a7a6cc6ccaf23b16ce02bee9af028ed4c839b98ee0b4dd4cb54638a5eb181"
+  },
+  "Pous.SecurityProofs.P2ContentAbsorbs": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.P2ContentAbsorbs : Pous.Guarantees.P2ContentAbsorbs"],
+   "assumptions": [],
+   "type_hash": "71e018996c96ef41dcc6076ce305af4355a005b7a5e01a8924ccce21baf22750"
+  },
   "Pous.SecurityProofs.P2ErrorSplitB19Uncond": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.P2ErrorSplitB19Uncond : Pous.Guarantees.P2ErrorSplitB19Uncond"],
@@ -9119,6 +9159,12 @@
    "signature": ["Pous.SecurityProofs.SegTagMeets14 : Pous.Guarantees.SegTagMeets14"],
    "assumptions": [],
    "type_hash": "2e77fb239fa74898926e096ad501674a523e7a90980fa8146860d259070978ad"
+  },
+  "Pous.SecurityProofs.SnapshotFresh": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.SnapshotFresh : Pous.Guarantees.SnapshotFresh"],
+   "assumptions": [],
+   "type_hash": "87d257b44d582fbed8e5f67a752da0f74dc5370a63267a9b5ea9e6bc4fbbd42f"
   },
   "Pous.SecurityProofs.StreamedWipe": {
    "owner": "@memory-accounting",
@@ -11963,7 +12009,14 @@
    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": "frozen (verdict): as WorkSoundH200, on the RTX PRO 6000 (CMP-136).",
    "Pous.SecurityProofs.StreamedWipeMeetsFamily": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeets96GiB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Pous.SecurityProofs.StreamedWipeMeets141GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
+   "Pous.SecurityProofs.StreamedWipeMeets141GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.SnapshotFresh": "frozen (no-function): tag freshness, a counting fact about uniform functions (Security/Definitions/Pous/Guarantees/Obligation.lean): an injective snapshot's values and the values off it are a uniform pair; it is about no function of the code.",
+   "Pous.SecurityProofs.P2ContentAbsorbs": "frozen (no-function): an identity of P2's abstract encoder in the ring model (encBlock, Security/Definitions/Pous/P2/Cost.lean): a block's offset absorbs its content, so over a uniform offset a block's code has one distribution for every content fixed before it; it is about no function of the code.",
+   "Pous.SecurityProofs.ObligationOfRoundSecure": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean), with a payload and responder fixed by the other tags' keys, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure.",
+   "Pous.SecurityProofs.ObligationOfStatic": "frozen (no-function): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean) by any bound on P2's audit at the same block count, with a payload and responder fixed by the other tags' keys; it is about no function of the PoUS code and rests on no named assumption.",
+   "Pous.SecurityProofs.ObligationOfRoundSecureWide": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean) to 2^27 blocks, with a payload and responder fixed by the other tags' keys, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
+   "Pous.SecurityProofs.ObligationDemoWide": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the demo's store (1038*2^16 blocks, 105 reads, the state at most S0 at each) by 1% + 2^-129 + 2^-130, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
+   "Pous.SecurityProofs.ObligationDemo": "frozen (no-function): Arithmetic at the demo's numbers (1038·2^16 blocks of 16,448 bits, U = 139.64 GiB: S₀ = ⌊ρ·|C|⌋ and U − S₀ ≤ 0.1163·U) and ObligationOfStatic at that block count; it is about no function of the PoUS code and rests on no named assumption."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -12040,6 +12093,11 @@
     "status": "open",
     "test": "verity/core/protocols/remote_bandwidth/tests/test_encode_chain.py::test_chain_sum_known_chains",
     "why": "In the circuit model's nonlinear units, if one squaring mod p costs e nonlinear units (SquaringFloor), the masked k-round codec's words cost k·S·e nonlinear units each (S = Field.squarings, 1,021 at p1024), less a word per n − 1 run-input bits (Gates.EncodeBound at E = k·S·e), at ε ≥ 2^−64, k ≥ 1, p ≥ 2^66 and p ≡ 3 mod 4: Sloth's sequentiality (Lenstra–Wesolowski) in the model, the roots' squarings in sequence and no work shared across words; open. Its test chains the known squarings at p1024 and checks the chain costs their sum, and the bitwise codec's data products are measured in benchmarks/property_redteam/tests/test_bitwise_codec.py."
+   },
+   "Pous.P2.Assumptions.P2RingRoundSecureWide": {
+    "status": "open",
+    "test": "verity/core/protocols/pous/tests/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
+    "why": "P2RingRoundSecure's statement at every block count from 2^19 to 2^27, so that it reaches the demo's 1038*2^16 blocks; open and unchecked in N above 2^25 (the eps0 a proof would give against N is pending the memory-accounting lane's pous-chain analysis); it implies P2RingRoundSecure (Pous.SecurityProofs.roundSecure_of_wide), so every refutation of that one (PousP2Rounds.round_tight and round_trunc, Security/Proofs/Pous/P2/RoundTests.lean) refutes it, and its falsification test is that one's, whose scaled point doesn't depend on N."
    }
   },
   "events": ["FlockSoundness.Game.prob"]
@@ -22846,6 +22904,10 @@
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationDemo",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -22891,11 +22953,12 @@
    "guarantees": ["Pous.SecurityProofs.BackgroundRebuildExcluded"]
   },
   "Definitions.Pous.Assumptions.P2": {
-   "digest": "542e07ff4ed489d0453cf4f99a4a99500079d0d88443c89db22847bbbf50c0cc",
+   "digest": "053d94346e44c5502d44d2eabef70672acede035519d291ac582fc1cf58fe476",
    "definitions": {
     "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3",
     "Pous.P2.Assumptions.P2RingReducesToM1p": "2a7a779e445e21285f86ff124f2f287f23fe422789bf25ba1bf6e2a248b77d53",
-    "Pous.P2.Assumptions.P2RingRoundSecure": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
+    "Pous.P2.Assumptions.P2RingRoundSecure": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a",
+    "Pous.P2.Assumptions.P2RingRoundSecureWide": "4a1d6a842a5a90a31cd8edb101f4323728eae66616fd84ee93952ebe4cb6a921"
    },
    "guarantees": [
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -22904,6 +22967,9 @@
     "Accounting.SecurityProofs.Memory.AddsAdviceP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
     "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
@@ -22976,6 +23042,11 @@
     "Pous.SecurityProofs.ContinuousAudit",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationDemo",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationOfStatic",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -23140,6 +23211,12 @@
     "Pous.SecurityProofs.ContinuousAudit",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationDemo",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -23159,6 +23236,7 @@
     "Pous.SecurityProofs.SecureErasureMeetsFamily",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14",
+    "Pous.SecurityProofs.SnapshotFresh",
     "Pous.SecurityProofs.StreamedWipe",
     "Pous.SecurityProofs.StreamedWipeMeets141GB",
     "Pous.SecurityProofs.StreamedWipeMeets2600GB",
@@ -23231,6 +23309,27 @@
     "Pous.SecurityProofs.P3ConcreteMeets64D12",
     "Pous.SecurityProofs.SegMeets14",
     "Pous.SecurityProofs.SegTagMeets14"
+   ]
+  },
+  "Definitions.Pous.Guarantees.Obligation": {
+   "digest": "8c218e72686bc926354833199623006a71bb76d4cdd3bbbae90bb5ddfed509fb",
+   "definitions": {
+    "Pous.Guarantees.ObligationDemo": "53ce5286079dd7a00fb94a861436c9d742fae447f31ae13ef5400dfcdb127a4f",
+    "Pous.Guarantees.ObligationDemoWide": "4ebd5674e613985970282526622c8bd0ef357db147361b13e8567e938a8def4b",
+    "Pous.Guarantees.ObligationOfRoundSecure": "94292f511eadaa13ece6940b67cc38584dc4e5668e07a68f9d48afec1d9f4b5b",
+    "Pous.Guarantees.ObligationOfRoundSecureWide": "08ecc5527c191b57b8cb6515ba8e94f7d363be64f0746801d9910b3f8b41a3ae",
+    "Pous.Guarantees.ObligationOfStatic": "28decba2f563aedd1f194ee15864496827f2f5602334bee6a4ac142095949212",
+    "Pous.Guarantees.P2ContentAbsorbs": "d8c36c9972b654a211b48bd6ec829a7b3a6d4015092dee2658e7dd5faf2738f1",
+    "Pous.Guarantees.SnapshotFresh": "c106431b1609a11713c846d06df14838be4982fb3536019917533a3b5a0bf335"
+   },
+   "guarantees": [
+    "Pous.SecurityProofs.ObligationDemo",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.P2ContentAbsorbs",
+    "Pous.SecurityProofs.SnapshotFresh"
    ]
   },
   "Definitions.Pous.Guarantees.P2": {
@@ -23353,6 +23452,11 @@
     "Pous.SecurityProofs.ContinuousAudit",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationDemo",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationOfStatic",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -23632,6 +23736,11 @@
     "Pous.SecurityProofs.ChainDenseMeets64",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationDemo",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationOfStatic",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -23688,6 +23797,12 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Pous.SecurityProofs.ObligationDemo",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -23869,6 +23984,11 @@
     "Pous.SecurityProofs.ContinuousAudit",
     "Pous.SecurityProofs.DenseMeets",
     "Pous.SecurityProofs.DenseMeets64",
+    "Pous.SecurityProofs.ObligationDemo",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationOfStatic",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -23997,9 +24117,32 @@
     "Accounting.SecurityProofs.Memory.AddsOnIsolated",
     "Accounting.SecurityProofs.Memory.AddsP2Ring",
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
+    "Pous.SecurityProofs.ObligationDemo",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.P2ContentAbsorbs",
     "Pous.SecurityProofs.P2RingAuditSecureOfReduces",
     "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
     "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
+   ]
+  },
+  "Definitions.Pous.P2.Mutable": {
+   "digest": "ffd3597559e55fe73bda60076023f704f758c93e045a588fa5f3c5409974d162",
+   "definitions": {
+    "Pous.Mutable.Oracle": "69d20918cd32af8b5b555241d091dd80ab77485c46800c30f386d27f1296f1b3",
+    "Pous.Mutable.Rest": "03a2b01b68655f2a02bc80ded2b321df1781823ee578844a78ef4aaa875ed807",
+    "Pous.Mutable.RestKeys": "74272f69f57823ba75dba586096b7c29fc5b02c188dfd1fe68bfafdd4d2bf9df",
+    "Pous.Mutable.rest": "43c53f646327ce1b8b23ef6c18c677b4d494d75244036bc42a51257d1010d551",
+    "Pous.Mutable.snap": "2b04a49908528f2689ff3a2781d3552a94e34e804f86dcd749831e62b125df70"
+   },
+   "guarantees": [
+    "Pous.SecurityProofs.ObligationDemo",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationOfStatic"
    ]
   },
   "Definitions.Pous.P2.Rounds": {
@@ -24011,7 +24154,15 @@
     "Pous.varAnswers": "f46e52cc7f22f537498e84dc6d1ae75aef6958d23e60c3df6cb2d0e9fbc0ee5d",
     "Pous.varPassesOn": "0dc8f405a0c20d1994fa6ddc97d5660fc93c51660f1b89e40982ffb969d4d81e"
    },
-   "guarantees": ["Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure", "Pous.SecurityProofs.P2RingGradedOfRoundSecure"]
+   "guarantees": [
+    "Pous.SecurityProofs.ObligationDemo",
+    "Pous.SecurityProofs.ObligationDemoWide",
+    "Pous.SecurityProofs.ObligationOfRoundSecure",
+    "Pous.SecurityProofs.ObligationOfRoundSecureWide",
+    "Pous.SecurityProofs.ObligationOfStatic",
+    "Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure",
+    "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
+   ]
   },
   "Definitions.Pouw.Assumptions.Deadline": {
    "digest": "efde32e6e0055ddbe420d8f4b410840f185cbf92a03b58e3e2e3c54dcbf0cd03",
