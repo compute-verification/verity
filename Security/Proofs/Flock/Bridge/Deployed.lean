@@ -179,12 +179,16 @@ theorem rowDep_places (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Opt
     (hseg : c.ports.all (fun p => !p.segs.isSome) = true) (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool) :
     RowPlaces (rowDep C rows c place bits) := by
   rintro ⟨i, v, d⟩ ⟨i', v', d'⟩ hi hv h
-  simp only at hi
+  simp only at hi hv
   subst hi
   unfold rowDep at h
   dsimp only at h
-  split at h
-  · rename_i p hp
+  cases hp : portOfPos C rows c i with
+  | none =>
+    simp only [hp] at h
+    exact SamplingDeploy.row_places place bits ⟨i, v, d⟩ ⟨i, v', d'⟩ rfl hv h
+  | some p =>
+    simp only [hp] at h
     have hps : p.segs.isSome = false := by
       obtain ⟨r, -, hr⟩ := Option.bind_eq_some_iff.mp hp
       obtain ⟨hq, rfl⟩ := Array.getElem?_eq_some_iff.mp hr
@@ -192,7 +196,6 @@ theorem rowDep_places (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Opt
     have hb := rowMsg_inj hps (by simp [SamplingDeploy.rowBits]) h
     simp only [SamplingDeploy.rowBits] at hb
     exact hv (by simpa using congrFun (List.ofFn_inj.1 hb) (place i).2)
-  · exact SamplingDeploy.row_places place bits ⟨i, v, d⟩ ⟨i, v', d'⟩ rfl hv h
 
 /-- **`commitDep` binds, at every `H`**, at a circuit file with no segmented port: the hm96 leaf of a placing row binds
 the value, and the registered path check the leaf. -/
