@@ -167,11 +167,11 @@ messages at its flat index, is element `o` of the values `vs` chunk `t` absorbs,
 round of the rep's schedule `rs`, and the rep's round-`t` rows hold `vs` (`RowsAt`). -/
 theorem frame_elem {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (h0 : 0 < D.sts.size) (r : Fin 2)
-    {X : Shape} (hX : D.sh cls 0 = X) {rs : Array RecVStar.SchedRound}
-    (hrs : (D.ctx (2 * 0 + (r : ℕ))).sched = rs.toList) {kk o : ℕ} (hkk : kk < (rounds X).size)
-    (ho : o < (rounds X)[kk].size) :
+    {Xs : Shape} (hX : D.sh cls 0 = Xs) {rs : Array RecVStar.SchedRound}
+    (hrs : (D.ctx (2 * 0 + (r : ℕ))).sched = rs.toList) {kk o : ℕ} (hkk : kk < (rounds Xs).size)
+    (ho : o < (rounds Xs)[kk].size) :
     ∃ t vs, (RecVStar.commitRounds rs)[kk]? = some t ∧ t < rs.size ∧ o < vs.length ∧
-      (framesRead x ms (2 * 0 + (r : ℕ)))[(((rounds X).toList.map Array.size).take kk).sum + o]? = vs[o]? ∧
+      (framesRead x ms (2 * 0 + (r : ℕ)))[(((rounds Xs).toList.map Array.size).take kk).sum + o]? = vs[o]? ∧
       FlockDeploy.RowsAt (rs.toList.getD t default) ((D.rows (2 * 0 + (r : ℕ))).getD t []) vs := by
   subst hX
   have hG := D.rowG cls (fun _ => #[]) hst hf hx h0
@@ -292,9 +292,7 @@ theorem mem_heldRows_of {r : XR} {s : ℕ} {ss : Array VStar.Stmt} (hss : RecVSt
       exact hfind
     have hci : RecVStar.cIndex (s!"m{k}", s!"rec-c{k}", (#[some 0, some 1] : Array (Option ℕ))).2.1 = some k :=
       FlockC3.Reps.cIndex_c k
-    first
-      | rw [hci]
-      | simp only [FlockC3.Reps.cIndex_c]
+    rw [hci]
     refine List.mem_filterMap.2 ⟨some (rf : ℕ), ?_, ?_⟩
     · rcases (show (rf : ℕ) = 0 ∨ (rf : ℕ) = 1 by omega) with h | h <;> rw [h] <;> simp
     · show ((msgRound rs (rf : ℕ) k).bind fun j =>
