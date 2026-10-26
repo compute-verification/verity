@@ -26,15 +26,28 @@ Parts:
 - `pv`: P19 (RT-PROTO-2): v3's PV caps per attended length n, whether L′(n) ≤ n/32 (no O-route saving at any
   price), the served-period saving at v3's picks, and coverage with PV credited only where L′ ≤ n/32.
 
-    python3 benchmarks/pouw/theory/v3_reconcile.py --v3 DIR --a25 DIR [--part reconcile,caps,picks,pv] [--json OUT]
+With --d5 DIR (a public_best.py whose `tile_job` takes comps and model_sha, a6cb33fefe on), the same questions
+against BET-ALGO-LAB's own hull, and D5 v2's check:
+- `d5`: v3's picks (comps) under D5's `tile_job`, model_sha off and on, against PD3-4's `d5_routes.job`;
+- `u13`: the H200 with in-model SHA-512 at RT-UNITS' 35.4 SM-clocks (U13) and CALIB's 38.29: v3's pick, and the
+  largest and least-γ zero-leak L′;
+- `perlp`: per shape and L′: γ, job-only leak, and what the makespan hull frees against the public best's loads as a
+  share of best.c (RT-PROTO-2's unit), with 07:04Z's rule under its two readings (machine time; the honest program
+  at the same prices) at a tensor-only price;
+- `pvtable`: PV per n, v3's pick against L′ = n/32;
+- `issue`: whether the hull's lower issue load is a route or degeneracy: each menu's least issue at makespan best.c.
+
+    python3 benchmarks/pouw/theory/v3_reconcile.py --v3 DIR --a25 DIR [--d5 DIR] [--part reconcile,...] [--json OUT]
 
 DIR --v3 holds nofold.py, d5_routes.py (bbe690dfe5) and public_best.py (D5); DIR --a25 holds nofold.py
-(9a21fbecd6). Staging, from a checkout with both branches fetched:
+(9a21fbecd6); DIR --d5 holds D5's public_best.py at the head to check. Staging, from a checkout with the branches
+fetched:
 
     P=benchmarks/pouw/accel_score
     for f in nofold d5_routes; do git show bbe690dfe5:$P/$f.py > /tmp/in-v3/$f.py; done
     git show 9a21fbecd6:$P/nofold.py > /tmp/in-a25/nofold.py
     git show 126ba960ca:benchmarks/pouw/theory/public_best.py > /tmp/in-v3/public_best.py
+    git show a6cb33fefe:benchmarks/pouw/theory/public_best.py > /tmp/in-d5/public_best.py
 """
 
 from __future__ import annotations
@@ -44,6 +57,7 @@ import contextlib
 import importlib.util
 import json
 import sys
+from dataclasses import replace
 
 V3_LPS = (64, 128, 192, 256, 320, 384, 448, 512, 640, 768, 896, 1024, 1280, 1536, 1792, 2048)
 V3_CARDS = {"H200": (2, None, 1e-4), "RTX PRO 6000": (3, 256, 0.01)}
@@ -59,13 +73,24 @@ def load(name: str, path: str):
 
 
 class Codes:
-    def __init__(self, v3: str, a25: str):
+    def __init__(self, v3: str, a25: str, d5: str | None = None):
         sys.path.insert(0, v3)
         import public_best as pb
         self.pb = pb
         self.dr = load("d5_routes_v3", f"{v3}/d5_routes.py")
         self.nf = {"v3": load("nofold_v3", f"{v3}/nofold.py"), "a25": load("nofold_a25", f"{a25}/nofold.py")}
         self._menu = pb.sha_menu
+        self.d5 = load("public_best_d5", f"{d5}/public_best.py") if d5 else None
+
+    def d5_job(self, name: str, K: int, N: int, t: int, Lp: int, model_sha: bool = True, scale: float = 1.0,
+               weight_coins: bool = True, card=None) -> dict:
+        """D5's own `tile_job` at nofold's digits and compressions (comps times scale), on card (default: D5's)."""
+        d5, nf = self.d5, self.nf["v3"]
+        c = card or (d5.SM120 if name == "RTX PRO 6000" else d5.H200)
+        _, bit, depth = d5.BIT_COST[c.family][0]
+        r = nf.v2_round(name, K, N, t * Lp, 16, tiles=t, weight_coins=weight_coins)
+        return d5.tile_job(c, t, Lp, K, N, bit, depth, nf.V_WIDTH[name], digits=r["digits"], comps=r["comps"] * scale,
+                           model_sha=model_sha)
 
     def card(self, name: str):
         return self.pb.SM120 if name == "RTX PRO 6000" else self.pb.H200
@@ -293,17 +318,154 @@ def pv(co: Codes, out: dict) -> None:
                       f"{min(ok10, default=None)}): γ_lp {g10:5.2f}, coverage {cov10:5.1%}")
 
 
+def d5(co: Codes, out: dict) -> None:
+    nf = co.nf["v3"]
+    print("\n== v3's picks (comps) under D5's tile_job, model_sha off / on, against PD3-4's d5_routes.job: job-only "
+          "leak and γ_LP")
+    for name in V3_CARDS:
+        for model, shapes in nf.SHAPES.items():
+            W = Lo = Lm = Lp_ = Gm = Gp = 0.0
+            for K, N, reps in shapes:
+                p = co.cap(name, K, N, "comps")
+                j0, j1 = (co.d5_job(name, K, N, p["t"], p["Lp"], model_sha=ms) for ms in (False, True))
+                l0, l1 = 1 - j0["c_opt"], 1 - j1["c_opt"]
+                w = K * N * reps
+                W, Lo, Lm, Lp_ = W + w, Lo + w * p["leak"], Lm + w * l0, Lp_ + w * l1
+                Gm, Gp = Gm + w * j0["honest"].c, Gp + w * j1["honest"].c
+                out["d5"].append(dict(card=name, model=model, K=K, N=N, t=p["t"], Lp=p["Lp"], pd34=p["leak"], d5=l0,
+                                      d5_model=l1, g_pd34=p["gamma_lp"], g_d5=j0["honest"].c, g_d5_model=j1["honest"].c))
+                print(f"  {name:12} {model:16} {K:5}x{N:<6} t{p['t']} L′{p['Lp']:4} | PD3-4 {p['leak']:6.3%} D5 "
+                      f"{l0:6.3%} model_sha {l1:6.3%} | γ {p['gamma_lp']:.3f} / {j0['honest'].c:.3f} / "
+                      f"{j1['honest'].c:.3f}")
+            print(f"  {name:12} {model:16} MAC-weighted leak PD3-4 {Lo / W:6.3%} D5 {Lm / W:6.3%} model_sha "
+                  f"{Lp_ / W:6.3%}; γ D5 {Gm / W:.2f} model_sha {Gp / W:.2f}")
+
+
+def u13(co: Codes, out: dict) -> None:
+    nf, d5_ = co.nf["v3"], co.d5
+    s = d5_.sha_clocks(d5_.H200, d5_.PUB_SHA["sm_90"][0])[0]
+    for target in (35.4, 38.29):
+        f = target / s
+        print(f"\n== H200, in-model SHA-512 at {target} SM-clocks (×{f:.4f} of D5's {s:.2f}): v3's pick | largest | "
+              "least-γ zero-leak L′")
+        for model, shapes in nf.SHAPES.items():
+            W = G1 = G2 = 0.0
+            for K, N, reps in shapes:
+                v3 = co.cap("H200", K, N, "comps")
+                res = {}
+                for Lp in (x for x in V3_LPS if 2 * x <= K):
+                    j = co.d5_job("H200", K, N, 2, Lp, scale=f)
+                    res[Lp] = (1 - j["c_opt"], j["honest"].c)
+                clean = [lp for lp, (lk, _) in res.items() if lk < 1e-4]
+                big, least = max(clean), min(clean, key=lambda lp: res[lp][1])
+                w = K * N * reps
+                W, G1, G2 = W + w, G1 + w * res[big][1], G2 + w * res[least][1]
+                out["u13"].append(dict(sha=target, model=model, K=K, N=N, v3=v3["Lp"], v3_leak=res[v3["Lp"]][0],
+                                       largest=big, least=least, by_lp=res))
+                print(f"  {model:16} {K:5}x{N:<6} v3 L′ {v3['Lp']:4}: leak {res[v3['Lp']][0]:6.3%} γ "
+                      f"{res[v3['Lp']][1]:.2f} | L′ {big:4} γ {res[big][1]:.2f} | L′ {least:4} γ {res[least][1]:.2f}")
+            print(f"  {model:16} MAC-weighted γ: largest zero-leak {G1 / W:.2f}, least-γ zero-leak {G2 / W:.2f}")
+
+
+def perlp(co: Codes, out: dict) -> None:
+    """Freed loads are best's minus the makespan hull's, a share of best.c: exact for tensor where the hull sits on
+    the O-route, an arbitrary vertex on rows that don't bind (`issue`)."""
+    nf = co.nf["v3"]
+    for name, t, lmax in (("H200", 2, 2048), ("RTX PRO 6000", 3, 256)):
+        print(f"\n== {name}, t = {t}, model_sha: L′: γ / job-only leak / tensor freed / issue freed (of best.c)")
+        for model, shapes in nf.SHAPES.items():
+            for K, N, reps in shapes:
+                rows = []
+                for Lp in (x for x in V3_LPS if t * x <= K and x <= lmax):
+                    j = co.d5_job(name, K, N, t, Lp)
+                    b, h = j["best"], j["route"]
+                    fr = {k: (b.loads.get(k, 0) - h.loads.get(k, 0)) / b.c for k in ("tensor", "issue", "smem")}
+                    bt = b.loads["tensor"] / b.c
+                    rows.append(dict(card=name, model=model, K=K, N=N, reps=reps, t=t, Lp=Lp, gamma=j["honest"].c,
+                                     leak=1 - j["c_opt"], freed=fr, best_tensor=bt,
+                                     machine=bt - fr["tensor"], priced=1 - fr["tensor"] / bt))
+                out["perlp"].extend(rows)
+                print(f"  {model:16} {K:5}x{N:<6} " + "; ".join(
+                    f"{r['Lp']}: {r['gamma']:.2f}/{r['leak']:.2%}/{r['freed']['tensor']:.1%}/{r['freed']['issue']:.2%}"
+                    for r in rows))
+    print("\n== 07:04Z's rule, max pub(L′)/T_honest(L′) with γ ≤ 10, at a tensor-only price (H200): T_honest as "
+          "machine time (hull tensor / γ), as the honest program at the same price (1 - saving), and machine time "
+          "with zero job-only leak")
+    shapes = {}
+    for r in out["perlp"]:
+        if r["card"] == "H200":
+            shapes.setdefault((r["model"], r["K"], r["N"], r["reps"]), []).append(r)
+    agg = {}
+    for (model, K, N, reps), rs in shapes.items():
+        ok = [r for r in rs if r["gamma"] <= 10]
+        pick = {"machine": max(ok, key=lambda r: r["machine"]), "priced": max(ok, key=lambda r: r["priced"]),
+                "machine, zero leak": max((r for r in ok if r["leak"] < 1e-4), key=lambda r: r["machine"])}
+        w = K * N * reps
+        a = agg.setdefault(model, {k: [0.0, 0.0, 0.0] for k in pick})
+        for k, p in pick.items():
+            a[k][0], a[k][1], a[k][2] = a[k][0] + w, a[k][1] + w * p["gamma"], a[k][2] + w * p["leak"]
+        print(f"  {model:16} {K:5}x{N:<6} " + " | ".join(
+            f"{k}: L′ {p['Lp']} γ {p['gamma']:.2f} leak {p['leak']:.2%} saved {1 - p['priced']:.1%}"
+            for k, p in pick.items()))
+    for model, a in agg.items():
+        print(f"  {model:16} MAC-weighted γ: " + "; ".join(f"{k} {v[1] / v[0]:.2f} (job-only leak {v[2] / v[0]:.2%})"
+                                                         for k, v in a.items()))
+
+
+def pvtable(co: Codes, out: dict) -> None:
+    print("\n== PV per n (N = d_v 128, no weight coins): v3's pick t, L′: γ / job-only leak / served-period saving | "
+          "L′ = n/32")
+    for name, how in (("H200", "comps"), ("RTX PRO 6000", "pub")):
+        t, lmax, _ = V3_CARDS[name]
+        print(f"  {name} ({how})")
+        for n in (128, 256, 512, 1024, 1152, 2048, 3072, 4096, 8192, 16384):
+            p = co.cap(name, n, 128, how, weight_coins=False)
+            lp = min(n // 32, lmax or n)
+            q = co.point(name, n, 128, t, lp, how=how, weight_coins=False) if lp in V3_LPS else None
+            out["pvtable"].append(dict(card=name, n=n, v3=p, n32=q))
+            qs = f"L′ {lp}: {q['gamma_lp']:.2f} / {q['leak']:.2%} / {q['any']:.1%}" if q else "—"
+            print(f"    n {n:5} | t{p['t']} L′ {p['Lp']:4}: {p['gamma_lp']:.2f} / {p['leak']:.2%} / {p['any']:.1%} | {qs}")
+
+
+def issue(co: Codes, out: dict) -> None:
+    nf, d5_ = co.nf["v3"], co.d5
+    print("\n== H200 issue rows: the least issue capacity each menu needs at makespan best.c (bisection on the card's "
+          "issue rate), best's (honest menu) against the hull's (every route)")
+    for K, N, Lp in ((16384, 16384, 512), (16384, 65536, 512), (4096, 6144, 640), (8192, 8192, 512),
+                     (2048, 128, 64), (4096, 128, 128)):
+        wc = N > 128
+        j0 = co.d5_job("H200", K, N, 2, Lp, weight_coins=wc)
+        c0, res = j0["best"].c, {}
+        for key in ("best", "route"):
+            lo, hi = 0.0, 0.6
+            for _ in range(30):
+                mid = (lo + hi) / 2
+                card = replace(d5_.H200, issue=d5_.H200.issue * (1 - mid))
+                j = co.d5_job("H200", K, N, 2, Lp, weight_coins=wc, card=card)
+                lo, hi = (mid, hi) if j[key].c <= c0 * (1 + 1e-7) else (lo, mid)
+            res[key] = 1 - lo
+        vertex = (j0["best"].loads["issue"] - j0["route"].loads["issue"]) / c0
+        out["issue"].append(dict(K=K, N=N, Lp=Lp, best=res["best"], hull=res["route"], vertex=vertex))
+        print(f"  {K}x{N} L′{Lp}: makespan vertex 'frees' {vertex:+.2%} of best.c; least issue at best.c: best "
+              f"{res['best']:.4f}, hull {res['route']:.4f} of capacity (saving {1 - res['route'] / res['best']:+.2%})")
+
+
+PARTS = dict(reconcile=reconcile, caps=caps, picks=picks, pv=pv, d5=d5, u13=u13, perlp=perlp, pvtable=pvtable,
+             issue=issue)
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--v3", default="/tmp/in-v3")
     ap.add_argument("--a25", default="/tmp/in-a25")
+    ap.add_argument("--d5")
     ap.add_argument("--part", default="reconcile,caps,picks,pv")
     ap.add_argument("--json")
     a = ap.parse_args(argv)
-    co = Codes(a.v3, a.a25)
-    out = {"reconcile": [], "caps": [], "picks": [], "pv": []}
+    co = Codes(a.v3, a.a25, a.d5)
+    out = {k: [] for k in PARTS}
     for part in a.part.split(","):
-        {"reconcile": reconcile, "caps": caps, "picks": picks, "pv": pv}[part](co, out)
+        PARTS[part](co, out)
     if a.json:
         with open(a.json, "w") as f:
             json.dump(out, f, indent=1, default=str)
