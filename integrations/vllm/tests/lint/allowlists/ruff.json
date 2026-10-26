@@ -22,6 +22,7 @@
     {"file": "tests/check/test_executed_prefix.py", "kind": "F401", "symbol": "<module>", "detail": "`pytest` imported but unused"},
     {"file": "tests/check/test_gates_fixtures.py", "kind": "F401", "symbol": "<module>", "detail": "`pytest` imported but unused"},
     {"file": "tests/check/test_gen_adversarial.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.observe.fold.resolver.Compute` imported but unused"},
+    {"file": "tests/check/test_match_unreadable_sources.py", "kind": "RUF100", "symbol": "test_g1_fails_by_name_on_an_unreadable_versions_json", "detail": "Unused `noqa` directive (non-enabled: `F811`)"},
     {"file": "tests/check/test_param_digests.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 2},
     {"file": "tests/check/test_replay_synthetic.py", "kind": "E731", "symbol": "test_tier_a_covers_every_spec", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "tests/check/test_replay_synthetic.py", "kind": "F401", "symbol": "<module>", "detail": "`numpy` imported but unused"},
@@ -46,6 +47,7 @@
     {"file": "tests/check/test_sampled_replay_query_population.py", "kind": "RUF100", "symbol": "test_without_a_manifest_the_record_says_the_population_is_not_reconciled", "detail": "Unused `noqa` directive (non-enabled: `F811`)"},
     {"file": "tests/check/test_sampled_replay_stored_rows.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.program.compact.expanded_file_args` imported but unused"},
     {"file": "tests/check/test_tp2_d90_fixture.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.observe.fold.fold.FoldError` imported but unused"},
+    {"file": "tests/check/test_value_check_groups.py", "kind": "RUF100", "symbol": "<module>", "detail": "Unused `noqa` directive (unused: `E402`)", "count": 2},
     {"file": "tests/check/test_weights_of_record_dsv4_loaded.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 3},
     {"file": "tests/commit/fa2_prototype/derived.py", "kind": "RUF100", "symbol": "DerivedOpening.replace", "detail": "Unused `noqa` directive (non-enabled: `ANN001`, `ANN201`)"},
     {"file": "tests/commit/fa2_prototype/derived.py", "kind": "RUF100", "symbol": "open_derived", "detail": "Unused `noqa` directive (non-enabled: `ANN001`)"},
@@ -125,6 +127,7 @@
     {"file": "tests/pipeline/test_serve_advice.py", "kind": "S310", "symbol": "Server.post", "detail": "Audit URL open for permitted schemes. Allowing use of `file:` or custom schemes is often unexpected.", "count": 2},
     {"file": "tests/pipeline/test_serve_openai.py", "kind": "S310", "symbol": "Serving.post", "detail": "Audit URL open for permitted schemes. Allowing use of `file:` or custom schemes is often unexpected.", "count": 2},
     {"file": "tests/pipeline/test_serve_openai.py", "kind": "S310", "symbol": "test_stream_is_the_certifiers", "detail": "Audit URL open for permitted schemes. Allowing use of `file:` or custom schemes is often unexpected."},
+    {"file": "tests/pipeline/test_serve_openai.py", "kind": "S310", "symbol": "test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json", "detail": "Audit URL open for permitted schemes. Allowing use of `file:` or custom schemes is often unexpected."},
     {"file": "tests/pipeline/test_tp2_serve_shard_from.py", "kind": "E731", "symbol": "test_ranged_swap_keeps_the_prefill_rows_and_exchanges_only_decode_labels", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "tests/pipeline/test_tp_build_relabel.py", "kind": "F841", "symbol": "test_a_relabel_that_raises_leaves_its_rank_to_a_full_derive", "detail": "Local variable `t` is assigned to but never used"},
     {"file": "tests/pipeline/test_tp_post_load_tensors.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 4},
@@ -590,10 +593,6 @@
     {"file": "verity_vllm/query/query_artifact.py", "kind": "UP017", "symbol": "utc_now", "detail": "Use `datetime.UTC` alias"},
     {"file": "verity_vllm/query/required.py", "kind": "F401", "symbol": "<module>", "detail": "`typing.Iterable` imported but unused"},
     {"file": "verity_vllm/query/required.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.query.units.required_values` imported but unused"},
-    {"file": "verity_vllm/query/required.py", "kind": "F541", "symbol": "query_header", "detail": "f-string without any placeholders"},
-    {"file": "tests/check/test_match_unreadable_sources.py", "kind": "RUF100", "symbol": "test_g1_fails_by_name_on_an_unreadable_versions_json", "detail": "Unused `noqa` directive (non-enabled: `F811`)"},
-    {"file": "tests/check/test_value_check_groups.py", "kind": "RUF100", "symbol": "<module>", "detail": "Unused `noqa` directive (unused: `E402`)", "count": 2},
-    {"file": "tests/pipeline/test_serve_openai.py", "kind": "S310", "symbol": "test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json", "detail": "Audit URL open for permitted schemes. Allowing use of `file:` or custom schemes is often unexpected."},
-    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "RUF100", "symbol": "_MemoProjection.__init__", "detail": "Unused `noqa` directive (non-enabled: `D107`)"}
+    {"file": "verity_vllm/query/required.py", "kind": "F541", "symbol": "query_header", "detail": "f-string without any placeholders"}
   ]
 }
