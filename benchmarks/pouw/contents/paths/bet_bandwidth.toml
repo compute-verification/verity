@@ -1,0 +1,4 @@
+order = 367
+path = "`theory/bet_bandwidth.py`"
+runs_on = "CPU"
+what = "BET-BANDWIDTH (CMP-122): the ACCEL brief's 4(g) output-bandwidth bound on the H200, exactly: B_RF as an LP over CALIB's register writers (sheet and measured), and per protocol setting (shape, prefix stride L, fold, fold states committed or not) the honest gamma, the time-form c, the best single price vector's c and c under R-ACCEL-1's sum LP with exact INT8 work on any unit as the other work; the SHA-512 cap when every committed bit is hashed, the committed bits a MAC that c ≥ 0.99 needs and their gamma, and rule L's week, month and year over 1,000 H200s"
