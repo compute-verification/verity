@@ -377,46 +377,69 @@ def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_t
     assert entries[1].state == "refused" and entries[1].why == _gate_says(main, "touches a.txt", merged=True)
 
 
-#: a landing gate like `tools/verity/check/gates/markdown_caps.py`: refuses a change that leaves a `.md` file over the cap
-#: `gates/cap.txt` at `main` names, judged at its size in the top commit
-CAP_GATE = """\
-import json, subprocess, sys
-main, top = sys.argv[1:3]
-git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True, check=True).stdout
-cap = int(git("show", f"{main}:gates/cap.txt"))
-files = [f for f in git("diff", "--name-only", "--diff-filter=d", f"{main}...{top}").split() if f.endswith(".md")]
-over = [(f, n) for f in files if (n := int(git("cat-file", "-s", f"{top}:{f}"))) > cap]
-failures = [{"why": f"{f} is {n} bytes, over its {cap}-byte cap", "fix": [f"trim {f} to {cap} bytes or fewer"]} for f, n in over]
-print(json.dumps({"failures": failures}))
-sys.exit(1 if failures else 0)
-"""
+#: the Markdown caps' landing gate and the caps it reads at `main`, committed into the origin as they are in this checkout
+CAP_GATE = "tools/verity/check/gates/markdown_caps.py"
+CAP_FILES = {DRIVE_FLAGS: f'landing_gates = ["{CAP_GATE}"]\n', **{f: (Path(__file__).resolve().parents[3] / f).read_text()
+                                                                   for f in (CAP_GATE, "tests/test_repository.py")}}
+#: `doc.md` as `main` holds it (70 bytes), and with line ``at`` replaced by ``text``
+LINES = [f"line {i}\n" for i in range(10)]
+
+
+def _doc(at: int | None = None, text: str = "") -> str:
+    return "".join(text if i == at else line for i, line in enumerate(LINES))
 
 
 def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_cap_is_left_out_and_the_members_below_stay(world):
     """26 Oct (TOP-90): #4238 merged onto `next` at 20 and took AGENTS.md to 49,358 B with #4603 and #4604 below it, over its
     48 KiB cap, though its head alone was under; every Lean check above it failed `preflight-lints` until #4629 trimmed it by
     hand.  The sync gives the landing gates each PR's merge onto `next`, so the bytes the members below add count."""
-    lines = [f"line {i}\n" for i in range(10)]
-    doc = lambda at, text: "".join(text if i == at else line for i, line in enumerate(lines))
-    main = _move_main(world, {DRIVE_FLAGS: 'landing_gates = ["gates/cap.py"]\n', "gates/cap.py": CAP_GATE,
-                              "gates/cap.txt": "120\n", "doc.md": "".join(lines)})           # 70 bytes
-    world.gh.put(1, h1 := world.change({"doc.md": doc(1, "x" * 50 + "\n")}))                  # 114 bytes: under
-    world.gh.put(2, h2 := world.change({"doc.md": doc(8, "y" * 50 + "\n")}))                  # 114 alone, 158 merged onto #1
-    world.gh.put(3, h3 := world.change({"doc.md": doc(5, "short\n")}))                        # 113 merged onto #1: under
-    for h in (h1, h2, h3):                                                                    # each head alone passes
-        assert subprocess.run([sys.executable, "-c", CAP_GATE, main, h], cwd=world.dev, capture_output=True).returncode == 0
+    main = _move_main(world, {**CAP_FILES, "doc.md": _doc()})
+    world.gh.put(1, h1 := world.change({"doc.md": _doc(1, "x" * 30000 + "\n")}))            # 30,064 bytes: under 49,152
+    world.gh.put(2, h2 := world.change({"doc.md": _doc(8, "y" * 30000 + "\n")}))            # as much alone, 60,058 onto #1
+    world.gh.put(3, h3 := world.change({"doc.md": _doc(5, "short\n")}))                     # 30,063 merged onto #1: under
+    for h in (h1, h2, h3):                                                                  # each head alone passes
+        assert subprocess.run([sys.executable, CAP_GATE, main, h], cwd=world.dev, capture_output=True).returncode == 0
     q = world.queue()
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 3] == world.on_next(q)
-    assert entries[2].state == "refused" and entries[2].why == (
-        f"the landing gate gates/cap.py at `main` {main[:12]} on its merge onto `next`: doc.md is 158 bytes, over its 120-byte "
-        "cap; trim doc.md to 120 bytes or fewer (`python3 gates/cap.py origin/main HEAD` on the branch merged with "
-        "`origin/next` runs it)")
-    assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why
-    assert int(_git(world.origin, "cat-file", "-s", "refs/heads/next:doc.md")) == 113
+    assert entries[2].state == "refused"
+    said = entries[2].why
+    assert said.startswith(f"the landing gate {CAP_GATE} at `main` {main[:12]} on its merge onto `next`: doc.md is 60058 bytes "
+                           "at "), said
+    assert (f"over its 49152-byte cap (tests/test_repository.py), and was 30064 bytes at {members[0].commit[:12]} below; trim "
+            "doc.md to 49152 bytes or fewer (10906 over): move detail to the notes store (cite it by note:<id>) (`python3 "
+            f"{CAP_GATE} origin/main HEAD` on the branch merged with `origin/next` runs it)") in said, said
+    assert q.load_state()["conflicts"]["2"]["why"] == said
+    assert int(_git(world.origin, "cat-file", "-s", "refs/heads/next:doc.md")) == 30063
 
     again, entries = q.sync()                                    # the members below stay; #2 is judged again, and refused
     assert [m.commit for m in again] == [m.commit for m in members] and entries[2].state == "refused"
+
+
+def test_a_file_already_over_its_cap_below_refuses_only_a_pr_whose_merge_grows_it(world, monkeypatch):
+    """ci, 26 Oct: the gate judges only what a merge adds, against the tip it merged onto.  A member kept on `next` that is
+    already over a cap (merged before the gate was listed) mustn't make the gate refuse every PR above it: one that doesn't touch
+    the file merges, one that shrinks it merges (the gate notes it), and one that grows it is refused."""
+    from research import queue as Q
+
+    _move_main(world, {**CAP_FILES, "doc.md": _doc(), "other.md": "other\n"})
+    world.gh.put(1, world.change({"doc.md": _doc(1, "x" * 60000 + "\n")}))                  # 60,064 bytes: over 49,152
+    q = world.queue()
+    with monkeypatch.context() as m:
+        m.setattr(Q, "gate_refusal", lambda *a, **k: ([], []))                              # no gate listed yet
+        [kept], _ = q.sync()
+    world.gh.put(2, world.change({"a.txt": "2\n", "other.md": "other, longer\n"}))
+    world.gh.put(3, world.change({"doc.md": _doc(8, "y" * 10 + "\n")}))                     # grows it
+    world.gh.put(4, world.change({"doc.md": _doc(5, "l\n")}))                                # shrinks it, still over
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 2, 4] == world.on_next(q) and members[0].commit == kept.commit
+    assert entries[3].state == "refused" and "doc.md is 60068 bytes at " in entries[3].why
+    assert f"and was 60064 bytes at {members[1].commit[:12]} below" in entries[3].why
+    merge = members[2].commit
+    doc = json.loads(subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / CAP_GATE), "origin/main", merge, "--json"], cwd=q.workdir,
+                                    capture_output=True, text=True).stdout)
+    assert doc["below"] == members[1].commit and doc["failures"] == [] and doc["notes"] == [
+        f"doc.md is 60059 bytes, over its 49152-byte cap, but was 60064 bytes at {members[1].commit[:12]} below: not this change's"]
 
 
 def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(world):
