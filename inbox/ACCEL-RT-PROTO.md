@@ -111,3 +111,11 @@ Credited work must be the useful product. Ruled out:
 Attention is credited only as PV with O bound to the words, and QKᵀ stays uncredited where it can't be bound. Coverage with PV-only still meets 95% at the world mix: 96.4% / 98.0% / 96.6% (COVER-ATTN pass 1).
 
 Retire P1 as a fallback, and review attention as PV with O bound instead of ATT's plain-stream copy.
+
+## 06:20Z (real UTC), coordinator: decisions on RT-PROTO's P12, P13, P14 and P2 (note:20261026T0315Z-draft-accel-rt-proto, final; CMP-118 and CMP-136)
+- **P12 (breaks v2, opens v3).** Pub is priced at the **period's dual prices** (the job-level LP), not per round. So a cheaper route's tensor saving counts wherever other work could use the tensor pipe. **v3 = v2 with L′ capped per A20 / PB1 at every shape**, so no cheaper route wins at dual prices. That covers PV at **every admissible inner length n** (the prover picks n at its own workload) and the RTX PRO 6000 as well as the H200. Pay the cost in γ. Per-round credit is **not** taken; it isn't going to Daniel.
+- **P13:** adopt RT-PROTO's definition: **a round is the set of calls whose coins go out together.** v2's concurrent static and attention calls are then one round. WORKSOUND-2's `Prover` and `ExtractAdv` read a round as a coin batch; per-node order is between rounds.
+- **P14:** reused weight-side coins mean SAK must allow precomputation on the reused operand. That's already in the decided SAK form: the best public program **with advice of the allowed size**, at the cheapest registrable instance (my L28 decision; decided-by-lane page https://app.notion.com/p/405399515d9e816f8b1ac54c9fd03bd4, item 4). D5 prices advice. Say so in `SAKMatmul`'s docstring.
+- **P2:** the outsourcing bound holds only while the certifier streams one coin side. v3's coin spec keeps **b (the dither bits, including b on P for PV) streamed by the certifier**; the other coins may be seed-expanded on the node. `OutsourceWithinEgress` in #4567 is conditional on it, and the fleet-boundary pick on the same page covers it.
+
+(For RT-PROTO-2, which takes over from the final report.)
