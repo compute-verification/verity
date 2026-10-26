@@ -7,9 +7,10 @@ from __future__ import annotations
 import json
 from collections import Counter
 
+import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, OTHER, WINDOW, _label, _source
+from tests.program.predict.test_window_circuit import CLASS, GRAIN, OTHER, WINDOW, _blocks, _label, _labels, _source
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
@@ -31,7 +32,8 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     s8 weight row is K / 2 words: 16 columns at K = 64, 8 at K = 128), each slice's ``x`` and ``sx`` one quantizer unit's codes
     and scale and its ``w`` and ``sw`` registered reads of the linear's s8 rows and f32 row scales (layer 0's q/k/v, o and
     gate/up at their record offsets, a slice 16 rows on: 512 words of codes, 32 of scales); the LM head stays bf16 `Gemm_v2`.
-    Two windows of the class are still one circuit, and with the weights pinned no input row is free."""
+    Two windows of the class are still one circuit, blocks included, with the weights pinned no input row is free, and every
+    wire reads its own slot at its step or before."""
     reg = _registered()
     circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
     other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN)
@@ -55,6 +57,13 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
             ("sw", 31104, 32)} <= reads
     assert circuit.registered.params == {"weights": 56656}
     assert IF.input_count(json.loads(json.dumps(circuit.description())), pins={WC.WEIGHTS})["free"] == 0
+    assert _blocks(circuit) == _blocks(other)
+    labels = _labels(circuit)
+    assert all((lab >= 0).all() for lab in labels.values())
+    for w in circuit.wires:
+        i = np.arange(w.units, dtype=np.int64)
+        reader, writer = labels[w.reader][w.at + i // w.cut[1]], labels[w.writer][w.source(i)]
+        assert (reader[:, 0] == writer[:, 0]).all() and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
 
 
 def test_a_word_is_whole_leaves_of_one_byte_width():
