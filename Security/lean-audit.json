@@ -1962,6 +1962,7 @@
   "PouwCheck.Json",
   "PouwCheck.Tile",
   "PouwCheck.Check",
+  "PouwCheck.WindowSalt",
   "PouwCheck.Protocol",
   "PouwCheck.Pass",
   "PouwCheck.Credit",
