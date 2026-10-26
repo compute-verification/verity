@@ -15,14 +15,14 @@ The compiled component (`VStar.Recursive.checkBlobs`) reads parameters, evidence
 
 * `x` decodes (`RecDeploy.decodeX`) to `w`, and `w`'s inner statement to Flock's plain statement `ri`
   (`FlockDeploy.decode`);
-* `InnerNames`: `ri` is the inner session `innerHeld` reads: the inner circuit and public file are the blobs it reads,
-  its partition and program the verifier's own, its draw the draw blob, its statement `INNER_STATEMENT` on Flock's os
-  coins at one table with no lookup table and none of `verify`'s other inputs; `w`'s inner shape is `innerHeld`'s; and
-  `w`'s registration the registration blobs;
+* `InnerNames`: `ri` is the inner session `innerHeld` reads: the inner circuit, public file and draw are the blobs the
+  verifier's own digests name (`Own`), its partition and program the verifier's own, its statement `INNER_STATEMENT` on
+  Flock's os coins at one table with no lookup table and none of `verify`'s other inputs; `w`'s inner shape is
+  `innerHeld`'s; and `w`'s registration the registration blob `Own` names;
 * `PartNames`: one part per part of the verifier's, part `j`'s raw statement the one `partVerdict` runs: its circuit
-  the part's circuit blob, statement `STATEMENT` under `--zk` at one table, the part's partition, program, registered
-  reads and rows, and `w`'s one bindings file the part's bindings. The part's public file and draw are the staged
-  ones, which piece C relates to the run.
+  the part's circuit blob, its form `PartForm` (statement `STATEMENT` under `--zk` at one table), the part's partition,
+  program, registered reads and rows, `w`'s one bindings file the part's bindings, and its draw the one compiled part
+  `j` reads off the part's record blob. The part's public file is the staged one, which piece C relates to the run.
 
 `readX_of_names`: where the component's inner session is held (`innerHeld`), V*'s list at its shape has one statement
 per part, Flock's own checks pass on the inner statement (`InnerOkAt`, which the compiled `innerHeld` does not run,
@@ -43,15 +43,15 @@ are the component's. -/
 structure InnerNames (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) (bs : Core.Blobs) (w : RecX)
     (ri : FlockDeploy.Raw) : Prop where
   circuit : bs.get o.circuit "the inner circuit" = .ok ri.circuit
-  pub : bs.get pr.pub "the inner public file" = .ok ri.publicFile
+  pub : bs.get o.pub "the inner public file" = .ok ri.publicFile
   statement : ri.statement = VStar.Recursive.INNER_STATEMENT
   plain : ri.zk = false
   os : ri.osCoins = true
   count : ri.count = 1
   tables : ri.tables = []
-  partition : ri.partition.mapM (jsonOf "partition") = .ok (some o.partition)
+  partition : ri.partition.map (jsonOf "partition") = some (.ok o.partition)
   program : ri.program = some o.program
-  draw : ri.draw = (bs.get pr.draw "the inner statement's draw").toOption
+  draw : ri.draw = (bs.get o.draw "the inner statement's draw").toOption
   work : ri.work = none
   workTable : ri.workTable = none
   stratified : ri.stratified = none
@@ -60,32 +60,41 @@ structure InnerNames (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) (bs
   publicInputs : ri.publicInputs = none
   shape : ∀ h, VStar.Recursive.innerHeld o pr bs = .ok h →
     (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" w.recInner)) = .ok h.shape
-  registration : (pr.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some w.registration
+  registration : (o.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some w.registration
 
-/-- **Part `j`'s raw statement is the one the component's part `j` runs**, but for its staged public file and draw. -/
-structure PartNames (po : VStar.Recursive.PartOwn) (bs : Core.Blobs) (w : RecX) (j : ℕ) (q : PartX) : Prop where
+/-- **The form compiled part `j` sets up**: the statement `verity/flock-circuit` (`VStar.Recursive.STATEMENT`) under
+`--zk`, its coins the keyed coin tree, one table and no lookup tables, and no `--work`, `--work-table`, `--stratified`,
+`--closure` or `--public-inputs`. -/
+def PartForm (b : FlockDeploy.Raw) : Prop :=
+  b.statement = VStar.Recursive.STATEMENT ∧ b.zk = true ∧ b.osCoins = false ∧ b.count = 1 ∧ b.tables = [] ∧
+    b.work = none ∧ b.workTable = none ∧ b.stratified = none ∧ b.closure = none ∧ b.publicInputs = none
+
+/-- **Part `j`'s raw statement is the one the component's part `j` runs**, but for its staged public file: its circuit,
+form, partition, program, registered reads and rows `po`'s, `w`'s one bindings file `po`'s bindings, and its draw the one
+compiled part `j` reads off its record `pp.record` (`if tags.hm96Rows then Witness.recordDraw record else none`, at the
+part's tags), as the model's `Raw.ins` reads a draw. -/
+structure PartNames (po : VStar.Recursive.PartOwn) (pp : VStar.Recursive.PartProof) (bs : Core.Blobs) (w : RecX)
+    (j : ℕ) (q : PartX) : Prop where
   bindings : jsonOf "rec-bindings" w.bindings = .ok po.bindings
   circuit : bs.get po.circuit s!"part {j}'s circuit" = .ok q.base.circuit
-  statement : q.base.statement = VStar.Recursive.STATEMENT
-  zk : q.base.zk = true
-  os : q.base.osCoins = false
-  count : q.base.count = 1
-  tables : q.base.tables = []
-  partition : q.base.partition.mapM (jsonOf "partition") = .ok (some po.partition)
+  form : PartForm q.base
+  partition : q.base.partition.map (jsonOf "partition") = some (.ok po.partition)
   program : q.base.program = some po.program
-  registered : q.base.registered.mapM (jsonOf "registered reads") = .ok po.registered
-  rows : q.rows.mapM (jsonOf "rec rows") = .ok po.rows
-  work : q.base.work = none
-  workTable : q.base.workTable = none
-  stratified : q.base.stratified = none
-  closure : q.base.closure = none
-  publicInputs : q.base.publicInputs = none
+  registered : q.base.registered.map (jsonOf "registered") = po.registered.map Except.ok
+  rows : q.rows.map (jsonOf "rec-rows") = po.rows.map Except.ok
+  draw : ∀ tags0 recordB record, Flock.Tags.find? VStar.Recursive.STATEMENT = some tags0 →
+    bs.get pp.record s!"part {j}'s record" = .ok recordB → String.fromUTF8? recordB = some record →
+    (q.base.draw.mapM (jsonOf "draw")).map (Option.map Flock.norm) =
+      .ok (if (Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
+          (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows then Flock.Witness.recordDraw record else none)
 
-/-- **`x` is the statement the component's inputs name** (`InnerNames`, `PartNames`). -/
+/-- **`x` is the statement the component's inputs name** (`InnerNames`, `PartNames`): one part per part of the
+verifier's, part `j` named by the verifier's part `j` and the evidence's part session `j`. -/
 def Names (p : VStar.Recursive.Params) (e : VStar.Recursive.Evidence) (bs : Core.Blobs) (x : Msg) : Prop :=
   ∃ w ri, decodeX x = some w ∧ FlockDeploy.decode w.inner = some ri ∧ InnerNames p.own e.proofs bs w ri ∧
     w.parts.length = p.own.parts.size ∧
-    ∀ j (hj : j < p.own.parts.size) q, w.parts[j]? = some q → PartNames p.own.parts[j] bs w j q
+    ∀ j q po pp, w.parts[j]? = some q → p.own.parts[j]? = some po → e.proofs.parts[j]? = some pp →
+      PartNames po pp bs w j q
 
 /-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`: Flock's plain setup with the draw, partition
 and program, its scope check, a draw, the header's draw at one table). The compiled `innerHeld` runs none of them;
@@ -109,6 +118,14 @@ private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except 
   cases x with
   | error => cases h
   | ok a => exact ⟨a, rfl, h⟩
+
+theorem mapM_of_map {α β ε : Type} {f : α → Except ε β} {o : Option α} {b : β} (h : o.map f = some (.ok b)) :
+    o.mapM f = .ok (some b) := by
+  cases o with
+  | none => cases h
+  | some a =>
+    simp only [Option.map_some, Option.some.injEq] at h
+    simp [Option.mapM_some, h, Functor.map, Except.map]
 
 /-! ## The component's inner shape -/
 
@@ -147,7 +164,7 @@ theorem innerOf_dense {cB pB : ByteArray} {pa : Option Json} {pr : Option ByteAr
 /-- **What `innerHeld` read**: the inner circuit and public file blobs, and its shape `shapeOf`'s at them. -/
 theorem innerHeld_shape {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs : Core.Blobs}
     {h : VStar.Recursive.InnerHeld} (hh : VStar.Recursive.innerHeld o pr bs = .ok h) :
-    ∃ cB pB, bs.get o.circuit "the inner circuit" = .ok cB ∧ bs.get pr.pub "the inner public file" = .ok pB ∧
+    ∃ cB pB, bs.get o.circuit "the inner circuit" = .ok cB ∧ bs.get o.pub "the inner public file" = .ok pB ∧
       VStar.Recursive.shapeOf cB pB o.partition o.program = .ok h.shape := by
   unfold VStar.Recursive.innerHeld at hh
   obtain ⟨cB, hc, hh⟩ := bind_ok hh
@@ -319,13 +336,16 @@ theorem capPorted_of {parts : List PartX} {vs : Array VStar.Stmt} {sh : RecVStar
     (hp : ∀ s (hs : s < vs.size), ∃ c, parts[s]?.bind partCircuit = some c ∧ RecVStar.checkParsed vs[s] c = .ok ()) :
     capPorted parts = true := by
   obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, -, -, hss⟩ := FlockC3.Reps.list_ok hvs
-  have hpos : 0 < vs.size := by rw [hss]; simp
+  have hpush : vs = (A ++ C ++ K).push (VStar.Stmt.cap 0 N) := by
+    rw [hss, Array.push_eq_append]
+    simp only [Array.append_assoc]
+  have hlt : vs.size - 1 < vs.size := by rw [hpush, Array.size_push]; omega
   have hlast : vs[vs.size - 1] = VStar.Stmt.cap 0 N := by
-    subst hss
-    first
-      | simp
-      | simp [Array.getElem_append_right]
-  obtain ⟨c, hc, hparsed⟩ := hp (vs.size - 1) (by omega)
+    have h? : vs[vs.size - 1]? = some (VStar.Stmt.cap 0 N) := by
+      rw [hpush, Array.size_push, Nat.add_sub_cancel, Array.getElem?_push_size]
+    rw [Array.getElem?_eq_getElem hlt, Option.some.injEq] at h?
+    exact h?
+  obtain ⟨c, hc, hparsed⟩ := hp (vs.size - 1) hlt
   rw [hlast] at hparsed
   obtain ⟨u, hu, -, -, -, hr⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok hparsed
   obtain ⟨q, hq, -⟩ := RecDeploy.CapLower.top_port_cap hu hr
@@ -399,7 +419,7 @@ theorem readX_of_names {p : VStar.Recursive.Params} {e : VStar.Recursive.Evidenc
   have hsess := hset w ri hx hi
   obtain ⟨hpn, hcp⟩ := ported_of_sessions (r := xrOf p.own h w ri) hshr hss hl' hsess
   have hpre : readXPre x = some (xrOf p.own h w ri) :=
-    readXPre_mk hx hi hj hsj hI.partition hdims (hok w hx) hss hl' hpn hcp
+    readXPre_mk hx hi hj hsj (mapM_of_map hI.partition) hdims (hok w hx) hss hl' hpn hcp
   have hrx := readX_of_sessions hpre hsess
   exact ⟨w, ri, hx, hi, hpre, hrx, denseAt_of_readX hrx hho hsp⟩
 
