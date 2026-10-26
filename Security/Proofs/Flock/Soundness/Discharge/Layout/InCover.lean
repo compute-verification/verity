@@ -409,6 +409,11 @@ theorem inRegions_eq (c : Circuit) (pi : HmIn.Ports) : HmIn.inRegions c pi =
       let s := min e (PT_LOCAL - (7 + log2ceil c.unitRange.count))
       (Array.range (2 ^ (e - s))).foldl (fun acc r => acc.push (w + r * 2 ^ s, s)) acc) #[] := rfl
 
+theorem getElem!_of_eq {α : Type} [Inhabited α] {xs : Array α} {i : ℕ} {a : α} (h : i < xs.size) (he : xs[i] = a) :
+    xs[i]! = a := by
+  rw [getElem!_pos xs i h]
+  exact he
+
 /-- Every word of `HmIn.words` is in an in region `(w, s)` from a word of the leaf group. -/
 theorem inRegions_cover (c : Circuit) (pi : HmIn.Ports) {y : ℕ} (hy : y ∈ HmIn.words c pi) :
     ∃ x w s, x < (HmIn.inRegions c pi).size ∧ (HmIn.inRegions c pi)[x]! = (w, s) ∧ inCol c ≤ w ∧ w ≤ y ∧
@@ -425,8 +430,8 @@ theorem inRegions_cover (c : Circuit) (pi : HmIn.Ports) {y : ℕ} (hy : y ∈ Hm
   have hmem := regFold_mem _ T hi' hgi hr
   rw [← hT, ← inRegions_eq] at hmem
   obtain ⟨x, hx, hgx⟩ := Array.mem_iff_getElem.1 hmem
-  refine ⟨x, w0 + (y - w0) / 2 ^ min e T * 2 ^ min e T, min e T, hx, ?_, by omega, hlo, hhi⟩
-  rw [getElem!_pos (HmIn.inRegions c pi) x hx, hgx, hT]
+  rw [hT] at hgx
+  exact ⟨x, _, _, hx, getElem!_of_eq hx hgx, by omega, hlo, hhi⟩
 
 /-- Every public leaf `jj` of a unit's public leaf map is in an in region `x`, `(w, s)`, from a word of the leaf group:
 `in_pinned`'s hypotheses on `x`. -/
