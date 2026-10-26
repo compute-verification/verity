@@ -36,8 +36,27 @@ def function(name):
 def checkout(repo, verb):
     """`checkout` with the clone already on the fast disk (`fast_clones` finds it and copies nothing)."""
     tmp = Path(repo).parent
-    env = {**os.environ, "REPO": str(repo), "FAST": str(tmp / "fast"), "QUEUE": str(tmp / "queue"), "DIR": str(tmp / "volume")}
-    subprocess.run(["sh", "-c", f'{function("fast_clones")}{function("checkout")}checkout "$1"', "sh", verb], env=env, check=True)
+    env = {**os.environ, "REPO": str(repo), "FAST": str(tmp / "fast"), "QUEUE": str(tmp / "queue"), "DIR": str(tmp / "volume"),
+           "RESEARCH_STORE": str(tmp / "store")}
+    fns = "".join(function(f) for f in ("fast_clones", "store_links", "checkout"))
+    subprocess.run(["sh", "-c", f'{fns}checkout "$1"', "sh", verb], env=env, check=True)
+
+
+def test_store_links_puts_the_stores_bulk_on_the_volume_and_keeps_what_it_held(tmp_path):
+    """objects/ and attempts/ become links into the volume's copy (they took the pod's root to 94%, 26 Oct); a real directory
+    already there is merged in first, so nothing it held is lost, and the catalog stays where it is."""
+    store, vol = tmp_path / "store", tmp_path / "volume"
+    (store / "objects" / "sha256" / "ab").mkdir(parents=True)
+    (store / "objects" / "sha256" / "ab" / "abcd").write_text("blob")
+    (store / "catalog.sqlite").write_text("catalog")
+    env = {**os.environ, "DIR": str(vol), "RESEARCH_STORE": str(store)}
+    for _ in range(2):
+        subprocess.run(["sh", "-c", f'{function("store_links")}store_links'], env=env, check=True)
+    for d in ("objects", "attempts"):
+        assert (store / d).is_symlink() and (store / d).resolve() == (vol / "store" / d).resolve()
+        assert not (store / f"{d}.old").exists()
+    assert (store / "objects" / "sha256" / "ab" / "abcd").read_text() == "blob"
+    assert (store / "catalog.sqlite").read_text() == "catalog" and not (store / "catalog.sqlite").is_symlink()
 
 
 def test_fast_clones_seeds_the_container_disk_from_the_volume_once(tmp_path):
