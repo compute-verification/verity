@@ -7377,6 +7377,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -7519,6 +7520,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -7789,6 +7791,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -7934,6 +7937,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8195,6 +8199,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -9680,7 +9685,7 @@
    "guarantees": ["PousCheck.Properties.SecurityProofs.timedAuditAccepts"]
   },
   "PouwCheck.Check": {
-   "digest": "a4dd0474684d8e0bf4c4d3fcdd007746d5b262c495611bba7db5fb5f1878ef2c",
+   "digest": "5ee41d3249ebeb1c925e21538618805431c9d23350dad366eeeacb8538adf8cd",
    "definitions": {
     "PouwCheck.Ascending": "5b24f399fc5f235318482805b82195fcd9be209ce00f792764266c5d6b990d75",
     "PouwCheck.Ascending._sparseCasesOn_1": "0c39ffd45af4e037eade16be68e5fa6788d2bbe70b8d526e16bcd2e57c0da613",
@@ -9706,7 +9711,7 @@
     "PouwCheck.legacySorted": "dd39a8d6851b7e632dc504efc3273e1149feb50fe2c25ef5df9d71fbbb6090a3",
     "PouwCheck.levelOf": "48f5e3917b350202b7eac92f3d54572ce99d84524251aeb9ae909a94f33bfa4c",
     "PouwCheck.oneStage": "7c719a8a358542840a7addee323c893bd08649baf8394bc21abdc81c1da2b026",
-    "PouwCheck.outcome": "ecff93e72753e009835bd61b64c7023847c522250080f197f455d5db77a3dfc9",
+    "PouwCheck.outcome": "c0e1db9f48191685d37423553bba7e45af715d664dfb0c28f4da9bbbc605fae2",
     "PouwCheck.registered": "84ff25d82e0157258f9d596e30c085f7327d53fe9cabb1a6326167fe2529f94a",
     "PouwCheck.registeredSorted": "f3f3a15aa0a16dd4cffc22b3339539e97103a4defb099402d8529770c8ee58f4",
     "PouwCheck.rootWJson": "59a1924b50d1366c4da946502953c90fb8130f0ef9a79bb0e1d93705c7787fb6",
@@ -9963,7 +9968,7 @@
    ]
   },
   "PouwCheck.Inputs": {
-   "digest": "e962bd39bbf88cd689a849aaeef8d70b5583e678ebf0e8354f5cee5d49501f5d",
+   "digest": "b76658db7ef26d0cd917e763a9ed446a01c0ccd67f457b1245fa00f943059946",
    "definitions": {
     "PouwCheck.CheckItem": "a8c3b6782e136e39d6ba8abc4ad388ca594f2ae5ed7f0e9a20bf108367f859ce",
     "PouwCheck.CheckItem.coins": "967fa4f2acda567918b67eb4dbe81db67c0ef1a754b208dc248f40874af1f926",
@@ -10025,10 +10030,13 @@
     "PouwCheck.UnitDraw.law": "708efa178ad65ce74f7bdf44243a43da8c973895774259368d454d60f699f69e",
     "PouwCheck.UnitDraw.population": "f3b22b25224bfc48cd6f2eb7e008ec3288c2706504aece879b5435f60acf0c2c",
     "PouwCheck.UnitDraw.units": "dd5b3c0a797ec4a857cd085222ca31331c71c9bb25a75b7a433208f40df9f5c2",
-    "PouwCheck.Window": "aa38af5927a3f3ddcabbdb5df42db3217117303f5e0c1b42822e389eacd7606e",
+    "PouwCheck.WINDOW_VALUES": "6a6f11b8b9079b22a2eaf67c2381f1f42108513970bbacec322a8ac3c1d09daa",
+    "PouwCheck.Window": "ad7c988c8fc786075f01ba91b7d7e818abbaffb96dd5c88842c7d55a5bb333cd",
+    "PouwCheck.Window.activations": "bfd88ea7eca0ca9a5835c282026309b1b9fc560f26e59f9c76095abfcaee3601",
     "PouwCheck.Window.context": "7072687b5f02d7607afc41e56630f028850fe6999da38a69773cff22d15b0a19",
     "PouwCheck.Window.items": "7595f9995e585f0f0c852d4874c50fe44f1da5eaf31c27bb3696f926e39cb7e1",
     "PouwCheck.Window.kind": "b49fc25453ad2dd2f07e72d57454ad3b7cca051bca6a9cc882a37f859f3b77a4",
+    "PouwCheck.Window.registered": "9a91140da89bbecccfdb5eac6e7db63c73c8210d53413f32bb5edf19ecd87e3f",
     "PouwCheck.checkKeys": "5e738912d6d9936bdc435a505ba74131bf4efbaab51c20f5ebd93fa970be10fa",
     "PouwCheck.coinModes": "1d55e299f02b11f9d0473813fe0d5d4f1eab2ff2e169b98316195d809e468fe6",
     "PouwCheck.coinsKey": "8791ff5da2ff07436bc1464b64060149f24d4c0fa2f8dd77021023e6de94f57a",
@@ -10053,7 +10061,7 @@
     "PouwCheck.rangeOf": "9d7c2f9b2d0c19ea4ade7014c7e80a84bba91983cf3d01c0d56bdbb54d0867a2",
     "PouwCheck.ratioField": "fbe08744ccfadc8920d70bae2d203c1892927538c395ea279081c209ec005acc",
     "PouwCheck.ratioField._sparseCasesOn_1": "6b14fb22bf6a44b230e8ca60b8a77910dcba107a7e80cad48f643b1fb18c2e86",
-    "PouwCheck.registrationOf": "cd98dfcf14188c540e7b49b9184e31976b3c1f6fbc7137f95432cfa02503bc74",
+    "PouwCheck.registrationOf": "10b35b28a1506dbfe557a11970bc6f4c6e39122ebf3999682c15e77b6ba2f8dc",
     "PouwCheck.rootOf?": "7b0cddacb4a5f93ab1971d436fe5e52b097baeb015a1be59b5ef1fa782fb8c2a",
     "PouwCheck.saltOf": "d3d4c74f405ef49530eafbc48adc2d5ec2c433506357b7d708cc388e7c8b2de1",
     "PouwCheck.saltOf._sparseCasesOn_1": "17628a3d90cb620c8ebd5affd4efbfabcdc2eff4ccb4c48eb796a9ac33e1e5f0",
@@ -10184,6 +10192,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -10254,24 +10263,33 @@
    ]
   },
   "PouwCheck.WindowSalt": {
-   "digest": "5f624a2f46bf85d1b28a07ecc3f128243c9f8b3e05e7eb541879fac99bf0165f",
+   "digest": "ca07babca389d57a778fee427bf9e7b6467fecbd6a132f6a57d793b2c9f79a06",
    "definitions": {
+    "PouwCheck.ANCHORED_EPOCH_TAG": "d284656dd4ec78550b5e6974d6b676ebe17b38910fb1e3343c976bbe23c78bf7",
     "PouwCheck.NO_WINDOW_SALT": "e78d5c0b6cc504082889c682abec1b03378ee36bb3ae0b940f86922494e2353d",
     "PouwCheck.SEEDED_SALT": "23f62375b088d32fbe3f733482370e45a1d8a390eb8ca05a8bbde4ae438c712a",
+    "PouwCheck.VALUES_TAG": "c457c698c769dc1995461464df0b630873e1ed15a53603d1a2474b7f2555644d",
     "PouwCheck.WINDOW_EPOCH": "5e29bf4567ec14ee08364d8b84ea6df4888c90258a2cefc87dea038d3e0b4126",
     "PouwCheck.WINDOW_NOT_SIGNED": "4b106c66afdae07ffc3943be698760f4ee8b37ebf0f64433c57fb0734e8865b1",
-    "PouwCheck.WINDOW_NO_W": "860138cde41e78770fa75ed71fa567a0ffedf13bce24e566bf072d15c1ffe36d",
+    "PouwCheck.WINDOW_NO_W": "c11d0269ed56492f0227fadcaffadefb7ce57bb78e375e301efb9a25c2c6717f",
+    "PouwCheck.WINDOW_NO_X": "30cfa2262edf04e46c06ea562af878ecaa734dd3927cbdfadff0e0a677dae101",
     "PouwCheck.WINDOW_SALT": "f96427a2aa29a1e0834f4a91512d558e4a399eb0b3c7b30923d18d7f1d694070",
     "PouwCheck.WINDOW_SALT_FORM": "0b218380a2831cefb37d1293a6a51ad7c495bf61f30b10bfc1646ed90bde7a8e",
     "PouwCheck.WINDOW_SALT_KEYS": "9fc2bb084edb49625f3222e2b0eec1d08a4bde170c7970aa3cbb660e1b67a085",
     "PouwCheck.WINDOW_SESSION": "9832bf0fa08dba1eb9226c5593037be384f91ed1ecc7dc349c377ff38958051d",
-    "PouwCheck.saltEpoch": "5ff0df4ccf26787d01583d06b3dcb93e84e049574469f9fd6eacfed8d9d8eeae",
-    "PouwCheck.saltEpoch._sparseCasesOn_1": "c1e7ef76067d14d4470d009a5a75d5e15ce9c0ced4ab290e4e86234de3fbb79a",
-    "PouwCheck.windowSaltCheck": "346c6d119d8b316498cbb3ff00dc6f2869ec58c369cd7a9f58cbccabe1596c9d",
-    "PouwCheck.windowSaltReason": "8f833268c49da86b208a647ea45fefd68a1798b0f786ad6f650d8274906d99aa"
+    "PouwCheck.anchoredEpochRoot": "47e9d7034a8c982ac896430b73f5a5f197c6dd135d667cfe137c1dd9d466da7d",
+    "PouwCheck.digest?": "000ecc0e12c2550b26ce10a7e0c452559d09d142e20ca515648c1d00ba21de54",
+    "PouwCheck.saltEpoch": "8c2f5127e3d139858cd6ca66d434e76b7bab47a73c37e6e758f0c5b39f937f21",
+    "PouwCheck.sized": "cf51414cfe401ce1826273308131fc7376a08b4b57c0c6a6998840b5d4772fb3",
+    "PouwCheck.valuesRoot?": "fb4f979eb350604963953802f6f1bff911d131ce34895b4c7a7479bde54afe94",
+    "PouwCheck.windowAnchors": "99cb3ee8237e95a96eb9c69adb906e10ce9a29195e6a57e59fc2fdb941149673",
+    "PouwCheck.windowAnchors._sparseCasesOn_3": "ec9d29ce8576d1febd20064a07d6d17ac74d857f798795a90d528ff741d17497",
+    "PouwCheck.windowSaltCheck": "ec8286c7ccb41cdea57ca6d8f88da84135cc89d87166a6b2f5e98735db2ace82",
+    "PouwCheck.windowSaltReason": "28302c3d6e3a786cf602d7cf4efc287e4c0d33ca2d197d6c5248eb5fe3ca3c46"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -10406,6 +10424,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -11647,9 +11666,9 @@
    ]
   },
   "Properties.Pouw.Check": {
-   "digest": "2f57cc618676140c4eda0567511f709b47733eb0278dc8cf41dcd3871a1bdb35",
+   "digest": "70f4cd568c72b0c0e23c29c252767c1843ed3888d6eef8a3b23fdad5d95c4d7c",
    "definitions": {
-    "Properties.Pouw.Check.AcceptMeans": "2e3bd035a50a352a6566288809844f8ce4a6c009eece3e8a4559b04dca90ad3d",
+    "Properties.Pouw.Check.AcceptMeans": "d3502065227015a3515176d1c7c9fd3e0ca99528928d9478477bb19fe4c23c0c",
     "Properties.Pouw.Check.AcceptedDraw": "5ac2c07d99f9cb69d7ce9d3bf887ed7b7b6411d527d6939f295d5f6b4fe0abeb",
     "Properties.Pouw.Check.AcceptedInRange": "7c0fe3df638d7fa751a681e5cb263374fc562e36f879c2a6a57a8c5274a7ceef",
     "Properties.Pouw.Check.AcceptedIsTheService's": "90aa467aab795767f7cab61befd96d2a43597456da505c27759d8c41f216d8c8",
@@ -11658,7 +11677,7 @@
     "Properties.Pouw.Check.NeverNull": "5b5530557f2e1764808d796fc9d377cd785dccbf9f897f03c18696ca5ea9a217",
     "Properties.Pouw.Check.PublishesPublic": "6107e69cb7a5f60b2a42765dea6a9132389076fefd46c8be72b078077fd601a3",
     "Properties.Pouw.Check.RegistrationKeeps": "51627c61b76092da0c276964f5f3521910cf38027cb590d2e07fd56fcfbad5e1",
-    "Properties.Pouw.Check.SaltKept": "0b8e3fc50b0a9cb2641ce611c8ae0da62078ec9b8f7b4544daf8509bc2c81223",
+    "Properties.Pouw.Check.SaltKept": "fe44f25be5b87b38ef19756e7cbd051427139234b29c59775e9f5bb75985309c",
     "Properties.Pouw.Check.ServiceAccepted": "ee2036b4cc1d90ede5484bc1ddac66259b92d768dcf270f332fbaf4cbd081aa7",
     "Properties.Pouw.Check.UndecidedOnlyFromService": "e047bfde57ad6a81c306573894df65fb73e1453ca4e6558868be2f27b089c050"
    },
@@ -12988,6 +13007,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -13035,6 +13055,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -13197,6 +13218,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -13311,6 +13333,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -13448,6 +13471,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
