@@ -353,6 +353,14 @@ where
 inner record drew (`unit_draw.units`), ascending (`OneStageZk.provedUnits`). -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := OneStageZk.provedUnits pubB record
 
+/-- The units an accepted recursive session proved (`provedUnits` at the inner public file and record), and none for a
+refused one. -/
+def unitsOf (ok : Bool) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V (Array Nat) :=
+  if ok then do
+    provedUnits (← bs.get o.pub "the inner public file")
+      ((String.fromUTF8? (← bs.get pr.record "the inner session's record")).getD "")
+  else pure #[]
+
 /-- A part's verdict as the audit's verdict reports it. -/
 def partJson (x : String × V Unit) : Json :=
   Json.mkObj [("statement", Json.str x.1), ("accepted", Json.bool x.2.toBool),
@@ -386,10 +394,7 @@ def verdicts (o : Own) (session : String) (pr : Proofs) (provedUnits? : Option (
   let want := getD o.partition "program"
   need (!(ok && (programSha.map Json.str) != some want))
     s!"session {session}'s inner program is {programSha.getD "none"}, not the partition object's {want.compress}"
-  let units ← if ok then
-      provedUnits (← bs.get o.pub "the inner public file")
-        ((String.fromUTF8? (← bs.get pr.record "the inner session's record")).getD "")
-    else pure #[]
+  let units ← unitsOf ok o pr bs
   need (!(ok && provedUnits?.any (units.qsort (· < ·) != ·)))
     "the units the recursive session proved are not the evidence's proved_units"
   pure #[(s!"flock-verify/{session}", verdictJson ok session why units (parts.map partJson) programSha)]
