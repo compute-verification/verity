@@ -300,7 +300,7 @@ theorem kernel_dram (n : ℕ) :
       (((chunk (n * n / 4) 151 u).length * 4 : ℕ) : ℚ≥0)) =
     ((List.range ((n * n / 4 + 150) / 151)).map fun u => (chunk (n * n / 4) 151 u).length * 4).map (Nat.cast)
     by rw [List.map_map]; rfl, ← Nat.cast_list_sum, h]
-  simp only [List.map_const', List.sum_replicate, List.length_range, nsmul_eq_mul, nsmul_zero, add_zero]
+  simp only [List.map_const', List.sum_replicate, List.length_range, nsmul_eq_mul]
   push_cast
   ring
 
@@ -341,5 +341,23 @@ theorem kernel_codeFetch (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048)
       (Machine.run (prog (kernel n)) σ (sched (kernel n))).2 t Res.dram + 4 * _ ≤ ρ .dram * _
   rw [hsum]
   exact key
+
+/-! ## Fits -/
+
+/-- **G1's code**: the kernel's texts fit in the H200's code capacity. -/
+theorem kernel_progFits (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) :
+    (prog (x := x) (cap := cap) (oracle := oracle) (kernel n)).Fits (sched (kernel n)) := by
+  refine (code_le (kernel n)).trans ?_
+  rw [kernel_instrs]
+  show _ ≤ 141 * 2 ^ 30 / 16
+  obtain ⟨q, rfl⟩ := h256
+  have hq : q ≤ 8 := by omega
+  interval_cases q <;> norm_num [blocks]
+
+/-- The kernel meets the model: G1's code, G2's rates and G2's code fetch. -/
+theorem kernel_fits (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048)
+    (σ : (machine x cap oracle).State (ℕ × ℕ)) (hpc : ∀ θ, σ.pc θ = 0) :
+    Machine.Fits (prog (kernel n)) σ (sched (kernel n)) :=
+  ⟨kernel_progFits n h256 hn, kernel_rate n hn σ hpc, kernel_codeFetch n h256 hn σ hpc⟩
 
 end Verity.Accel.H200.Resident
