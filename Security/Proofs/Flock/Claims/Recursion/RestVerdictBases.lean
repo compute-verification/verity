@@ -60,11 +60,11 @@ def drawOfU : Option Json → Option Json
   | some d => some d
   | none => none
 
-/-- **The session's draw is the statement's**: at every statement that sets up, the draw a record carrying the session's
-`unitDraw` has is the statement's draw up to `JsonEquiv`. -/
+/-- **The session's draw is the statement's**: at every statement that sets up and passes its scope check, the draw a
+record carrying the session's `unitDraw` has is the statement's draw up to `JsonEquiv`. -/
 def DrawTied : Prop :=
   ∀ (x : Msg) (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt), setupOf false x = some (s, spec, sts) →
-    drawEq (drawOfU spec.unitDraw) s.read.draw = true
+    s.read.check = .ok () → drawEq (drawOfU spec.unitDraw) s.read.draw = true
 
 /-- **Custody passes at the reader's record**: at every decision of `decR` on as many coins as messages, at a
 statement whose scope check passes, what `liveOfJ` reads of the substituted record (`jAt` at SHA-512) passes custody
@@ -180,7 +180,7 @@ theorem holdsR_after (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs 
       rw [hf]
       dsimp only
       rw [FlockDeploy.recJ, drawOfJ_recordObj, ← hspec]
-      exact hud _ _ _ _ hx
+      exact hud _ _ _ _ hx hq
     exact checksAtJ_ok_of (f := ⟨f.stmt, f.j, #[]⟩) (hstmt x as cs _ hd) hD hL hC hq hn
   · trivial
 

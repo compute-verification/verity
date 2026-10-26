@@ -217,6 +217,7 @@ theorem roundJ_fill (spec : SessionSpec) (h : ByteArray → ByteArray) (k : ℕ)
 
 /-! ## The record's reads at the substituted value -/
 
+set_option maxHeartbeats 1000000 in
 /-- **`liveOfJ` at the substituted value of a record with the honest link and streams**: its `root_B`, no public
 words, and each rep stream's rounds retaining their bytes, where the tables are named apart, there is one `root_B` per
 table and one stream per rep stream, and there are as many live coins as recorded rounds. -/
@@ -267,7 +268,7 @@ theorem liveOfJ_sub (spec : SessionSpec) (c₁ : Coin) (mids : List (Msg × Coin
     rw [fld_mapKey_eq, fld_mapKey_eq, hp0] <;> rfl
   -- the offsets at which each rep stream's rounds take their coins
   have hrounds : ∀ (j : ℕ) (hj : j < spec.repStreams.size),
-      roundsOf (eraseCoins J) spec.repStreams[j].2.2 = (streams[j]'(hss ▸ hj)).size := by
+      FlockDeploy.roundsOf (eraseCoins J) spec.repStreams[j].2.2 = (streams[j]'(hss ▸ hj)).size := by
     intro j hj
     have hf : (((spec.repStreams.zip streams).map (streamObj spec h rb)).map (mapStream eraseG)).find?
         (fun s => (s.getObjValAs? String "stream").toOption == some spec.repStreams[j].2.2) =
@@ -287,13 +288,14 @@ theorem liveOfJ_sub (spec : SessionSpec) (c₁ : Coin) (mids : List (Msg × Coin
     intro i hi
     unfold streamOffset
     have hni : spec.repStreams[i].2.2 = (spec.repStreams.toList.map (·.2.2))[i]'(by simpa using hi) := by simp
-    rw [hni, takeWhile_ne_nodup _ hnd i (by simpa using hi), List.map_take, List.map_take]
-    congr 2
-    apply List.ext_getElem (by simp [hss])
-    intro j h₁ h₂
-    have hj : j < spec.repStreams.size := by simpa using h₁
-    simp only [List.getElem_map, Array.getElem_toList]
-    exact hrounds j hj
+    have e : (spec.repStreams.toList.map (·.2.2)).map (FlockDeploy.roundsOf (eraseCoins J)) =
+        streams.toList.map Array.size := by
+      apply List.ext_getElem (by simp [hss])
+      intro j h₁ h₂
+      have hj : j < spec.repStreams.size := by simpa using h₁
+      simp only [List.getElem_map, Array.getElem_toList]
+      exact hrounds j hj
+    rw [hni, takeWhile_ne_nodup _ hnd i (by simpa using hi), List.map_take, List.map_take, e]
   have htot : ∀ (i : ℕ) (hi : i < streams.size) (k : ℕ), k < streams[i].size →
       ((streams.toList.take i).map Array.size).sum + k < mids.length := by
     intro i hi k hk
@@ -448,7 +450,7 @@ theorem readPs_len {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ :
     have hg := hget k (by rw [List.length_range]; omega) hk
     rw [List.getElem_range] at hg
     obtain ⟨T, hT, hms⟩ := FlockDeploy.readRep_fits hg
-    rw [hms]
+    rw [show rs[k].2 = _ from hms]
     simp only [FlockDeploy.framesOf, List.length_map]
     rw [hT.rounds, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h₂, Option.getD_some]
   · rw [if_neg hc] at h
@@ -460,7 +462,7 @@ theorem readPs_len {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ :
 theorem custodyRecJ (rd : Msg → Option FinalP) : CustodyRecJ rd := by
   intro x as cs d hlen hd hq
   obtain ⟨⟨s, spec, sts⟩, c₁, r₀, rss, fl, link, pf, hx, -, -, hrss, hlink, hpf, rfl⟩ := FlockDeploy.decR_some hd
-  dsimp only at hq ⊢
+  dsimp only at hq hlink hpf ⊢
   have hs := (FlockDeploy.setupOf_some hx).2
   have hpi := Claims.Bridge.Custody.publicInputs_none_of_check hq
   have htn := FlockDeploy.KS.tables_nodup hs hpi
@@ -482,7 +484,7 @@ theorem custodyRecJ (rd : Msg → Option FinalP) : CustodyRecJ rd := by
     simp [FlockDeploy.level0Lens]
   have hss : (recStreams spec sts pf.2 cs.tail.dropLast).size = spec.repStreams.size := by
     simp [recStreams, FlockDeploy.repStreams_size, hts]
-  have hbytes := recStreams_bytes spec sts pf.2 cs.tail.dropLast (by omega)
+  have hbytes := recStreams_bytes spec sts pf.2 cs.tail.dropLast (hpf2.trans hsum.symm).le
   have hfl : ((recStreams spec sts pf.2 cs.tail.dropLast).toList.flatMap fun s : Array Round => s.toList).length =
       pf.2.length := by
     have := congrArg List.length hbytes
@@ -528,8 +530,8 @@ theorem custodyRecJ (rd : Msg → Option FinalP) : CustodyRecJ rd := by
       simp only [List.length_zip] at ht
       omega
     have ht₃ : t < pf.2.length := by
-      simp only [List.length_zip] at ht₂
-      omega
+      rw [List.length_zip] at ht₂
+      exact lt_of_lt_of_le ht₂ (Nat.min_le_left _ _)
     have e1 : (lv.streams.toList.flatMap fun s : Array Round => s.toList)[t].bytes = some ⟨pf.2[t].toArray⟩ := by
       have := congrArg (·[t]?) hFL
       simp only [List.getElem?_map, List.getElem?_eq_getElem ht₁, List.getElem?_eq_getElem ht₃, Option.map_some]
