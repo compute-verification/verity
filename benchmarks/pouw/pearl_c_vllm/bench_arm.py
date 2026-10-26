@@ -276,24 +276,40 @@ class PearlCWholeArm(PearlCArm):
     ``PEARLC_WHOLE_FORK_STATS=0`` each call's A scales (`whole_fork_stats`: by default they run beside its A commitment),
     ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, ``PEARLC_LAG_ENDS=0`` reads each pass's
     commitment back at its own end, and ``PEARLC_ASIDE_ENDS=0`` runs a lagged end's tile tree on the step's stream (by
-    default, `aside_ends`, on a stream of its own, so the next step doesn't wait for it).
+    default, `aside_ends`, on a stream of its own, so the next step doesn't wait for it).  On pearl_c_sm120 (`RTX_ONLY`)
+    the stats stream also prefetches each call's B̃ into L2 (`whole_prefetch_b`, run.py's ``prefetch_b`` in its
+    ``PEARLC_PREFETCH_FORM``, default form 2; ``PEARLC_WHOLE_PREFETCH_B=0`` turns it off): served b8's ITL p50 went from
+    21.85 ms to 20.61 ms, 2.77x compiled stock's 7.43 (r20261024-193651-3ef1, bound to the GPU's NUMA node).  There a step
+    that runs eagerly (a prefill or mixed step) takes ``deferred-a`` in place of the serial schedule (`whole_eager`,
+    `PearlCDeviceRun.eager_forward`: its calls' tile hashing and A trees on side lanes; served b8 TPOT 3.05x compiled stock
+    against 3.43x, TTFT 157.7 ms against 253.1, ITL p50 unchanged, r20261024-191449-82e7); ``PEARLC_WHOLE_EAGER`` names
+    another schedule, on any kernel, or 0 none.
     A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
     run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True, "lag_ends": True,
-                   "whole_tree_sm": True, "aside_ends": True}
+                   "whole_tree_sm": True, "aside_ends": True, "whole_prefetch_b": True, "whole_eager": "deferred-a"}
+    #: the options measured on pearl_c_sm120 alone (B̃'s prefetch is its pipeline's), which another kernel's arm leaves out
+    RTX_ONLY = ("whole_prefetch_b", "whole_eager")
 
     def __init__(self) -> None:
         super().__init__()
+        if self.kernel_dir.name != "pearl_c_sm120":
+            self.run_options = {k: v for k, v in self.run_options.items() if k not in self.RTX_ONLY}
         for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS"),
                             ("lag_ends", "PEARLC_LAG_ENDS"), ("whole_tree_sm", "PEARLC_WHOLE_TREE_SM"),
-                            ("aside_ends", "PEARLC_ASIDE_ENDS")):
+                            ("aside_ends", "PEARLC_ASIDE_ENDS"), ("whole_prefetch_b", "PEARLC_WHOLE_PREFETCH_B")):
             if os.environ.get(env) == "0":
                 self.run_options = {k: v for k, v in self.run_options.items() if k != option}
         if "whole_defer_a" not in self.run_options:
             self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_tree_sm"}
         if "lag_ends" not in self.run_options:
             self.run_options = {k: v for k, v in self.run_options.items() if k != "aside_ends"}
+        eager = os.environ.get("PEARLC_WHOLE_EAGER")
+        if eager == "0":
+            self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_eager"}
+        elif eager:
+            self.run_options = {**self.run_options, "whole_eager": eager}
         self.schedule = "serial"
         self.vllm_execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
         # Not ``execution``: the harness reads that as "build at vLLM's serving defaults", and this engine is FULL
