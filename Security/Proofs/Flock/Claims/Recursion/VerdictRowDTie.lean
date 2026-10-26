@@ -190,7 +190,7 @@ theorem openRows_dirs {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Arr
           simp only [reduceCtorEq] at h
         rename_i r0 r1
         simp only [Option.some.injEq, Prod.mk.injEq] at h
-        exact ⟨sh, extras, l, r0, r1, ha, hl, h0, h1, h.2.symm⟩
+        exact ⟨sh, extras, l, r0, r1, rfl, hl, h0, h1, h.2.symm⟩
 
 /-- **`dirs` row `r q + j` is rep `r`'s query `j`**: at level `l` of `q` queries, instance `r q + j` (`r < 2`,
 `j < q`) holds the low `H` bits of rep `r`'s `j`-th position there. -/
@@ -212,7 +212,7 @@ theorem openDirs_get (sh : Shape) (l H : ℕ) (r0 r1 : RecCoins.Rep) {r j : ℕ}
     have h1 : ¬ (sh.sched.levels[l]!).q + j < (sh.sched.levels[l]!).q := by omega
     have h2 : ((sh.sched.levels[l]!).q + j) % (sh.sched.levels[l]!).q = j := by
       rw [Nat.add_mod_left, Nat.mod_eq_of_lt hj]
-    simp [h1, h2, Nat.mod_eq_of_lt hj]
+    simp [h1, h2]
 
 /-- **The one level of `LANES` lanes and `H` siblings is any level of them.** -/
 theorem innerLevels_unique {sh : Shape} {LANES H l l' : ℕ} (h : innerLevels sh LANES H = [l])
@@ -237,8 +237,7 @@ theorem algebra_ok {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim}
     | some s =>
       simp [he, hs, bind, Except.bind, pure, Except.pure] at h
       obtain ⟨rfl, rfl⟩ := h
-      refine ⟨rfl, ?_⟩
-      first | exact hs | rfl
+      exact ⟨rfl, hs⟩
 
 theorem shape?_ok {m k c : ℕ} {sh : Shape} (h : RecResiduals.shape? m k c = some sh) :
     ∃ sch, fast100 m = some sch ∧ sh.m = m ∧ sh.kLog = k ∧ sh.claims = c ∧ sh.sched = sch ∧ sh.holo = false := by
