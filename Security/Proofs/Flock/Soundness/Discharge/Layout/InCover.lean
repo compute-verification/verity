@@ -137,7 +137,8 @@ theorem words_mem (c : Circuit) (pi : HmIn.Ports) {u jj : ℕ} (hq : (pi.leaves.
         · exact hy)
       (by simpa using hj) (by
         intro acc'
-        rw [Array.getElem_range, ite_cond_eq_true _ _ (eq_true hv)]
+        rw [Array.getElem_range]
+        simp only [hv, ↓reduceIte]
         exact Array.mem_push_self))
   obtain ⟨i, hi, hgi⟩ := Array.mem_iff_getElem.1 ((in_mem_qsort _ _ _).2 h1)
   refine foldl_adds _ _ #[] (fun acc w y hy => by
@@ -376,8 +377,8 @@ theorem blocks_cover (ws : Array ℕ) (L : ℕ) (hL : ∀ w ∈ ws, L ≤ w) :
   rw [← Array.forIn_toList]
   exact cut_loop L ws _ (fun y hy => hcov y hy) _ (fun x hx out hout =>
     ⟨_, rfl, cut_run (hok x hx).1 out hout _ (fun i s =>
-      ⟨fun h => ⟨_, by rw [ite_cond_eq_true _ _ (eq_true h)]; rfl⟩,
-        fun h => by rw [ite_cond_eq_false _ _ (eq_false h)]; rfl⟩)⟩)
+      ⟨fun h => ⟨_, by simp only [h, ↓reduceIte]; rfl⟩,
+        fun h => by simp only [h, ↓reduceIte]; rfl⟩)⟩)
 
 /-! ### `HmIn.inRegions` -/
 
@@ -425,7 +426,7 @@ theorem inRegions_cover (c : Circuit) (pi : HmIn.Ports) {y : ℕ} (hy : y ∈ Hm
   rw [← hT, ← inRegions_eq] at hmem
   obtain ⟨x, hx, hgx⟩ := Array.mem_iff_getElem.1 hmem
   refine ⟨x, w0 + (y - w0) / 2 ^ min e T * 2 ^ min e T, min e T, hx, ?_, by omega, hlo, hhi⟩
-  rw [getElem!_pos _ x hx, hgx, hT]
+  rw [getElem!_pos (HmIn.inRegions c pi) x hx, hgx, hT]
 
 /-- Every public leaf `jj` of a unit's public leaf map is in an in region `x`, `(w, s)`, from a word of the leaf group:
 `in_pinned`'s hypotheses on `x`. -/
