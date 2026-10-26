@@ -232,20 +232,28 @@ def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part
 
 def test_the_draws_terms_are_charged_by_name(store) -> None:
     """`ledger.draw` is `PooledDraw`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
-    record's `samples`, the hiding terms, and the receipts' binding term under `cr/sha-512`, Σ_t √(U_t·s'_t)·q_t/2^256.5
-    at q_t = 2·F·C + 2·s'_t·69 for the fork finder that runs the prover twice, s'_t the receipts window t opened; the
-    PRF advantages are named with their claim and in no total.  γ's errors carry the three; the line's δ carries the
-    binding term beside its own."""
+    record's `samples`, the hiding terms, and the receipts' binding term under `cr/sha-512`, Σ_t √(|L_t|·s)·q_t/2^256.5
+    at the session's bounds, not the record's U_t and s'_t: |L_t| the most receipts a window can have (unpaced, fewer
+    than 2^64 passes of the codec's `max_blocks`, since the session reserved append coins), s the draw cap, and
+    q_t = 2·F·C + 2·s·69 for the fork finder that runs the prover twice; the PRF advantages are named with their claim
+    and in no total.  γ's errors carry the three; the line's δ carries the binding term beside its own."""
     s, prover, passes, clock = drive(store, params(samples=7), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
     drawn = [w.profile.drawn["receipt"] for w in r.windows]
-    assert len(drawn) > 1 and max(drawn) == 7
+    assert len(drawn) > 1 and max(drawn) == 7 and r.samples == 7 and r.append_coins > 0 and r.pace is None
     d = ledger.draw(r, n)
     assert d.rejection == len(r.windows) * r.samples / 2.0 ** 64 and d.hiding == ledger.hiding(r)
     fc = n.sketch_outside * ledger.compressions(r, n)
-    want = sum(math.sqrt(w.receipts * s) * (2 * fc + 2 * s * (64 + 5)) for w, s in zip(r.windows, drawn)) / 2 ** 256.5
-    assert d.binding == ledger.binding(r, n) == pytest.approx(want, rel=1e-12) and 0 < d.binding < 2.0 ** -150
+    L = (2 ** 64 - 1) * r.codec.max_blocks
+    want = len(r.windows) * math.sqrt(L * 7) * (2 * fc + 2 * 7 * (64 + 5)) / 2 ** 256.5
+    realized = sum(math.sqrt(w.receipts * s) * (2 * fc + 2 * s * (64 + 5)) for w, s in zip(r.windows, drawn)) / 2 ** 256.5
+    assert d.binding == ledger.binding(r, n) == pytest.approx(want, rel=1e-12) and realized < d.binding < 2.0 ** -100
+    paced = dataclasses.replace(r, pace=audit.Pace(1), append_coins=0)
+    assert ledger.binding(paced, n) == pytest.approx(
+        len(r.windows) * math.sqrt(r.blocks * 7) * (2 * fc + 2 * 7 * (64 + 5)) / 2 ** 256.5, rel=1e-12)
+    with pytest.raises(ValueError, match="session's bounds"):
+        ledger.binding(dataclasses.replace(r, samples=None), n)
     assert d.total == d.rejection + d.hiding + d.binding
     assert d.to_json() == {"binding": d.binding, "hiding": d.hiding, "rejection": d.rejection,
                            "named": {"prf_advantage": {"claim": "prf/sha-512", "term": "Σ_t Adv(prf t)",
@@ -279,7 +287,7 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
     assert D - Fraction(sum(k) - sum(drawn), 2 ** ledger.REJECTION_LOG2) < held, "the draws made fall short of E"
     with pytest.raises(ValueError, match=r"window 0 drew 70 of its 80 receipts, not min\(60, 80\)"):
         dataclasses.replace(r, samples=60)
-    with pytest.raises(ValueError, match="states no samples"):
+    with pytest.raises(ValueError, match="states no samples|a record no session made doesn't state"):
         ledger.memory(dataclasses.replace(r, samples=None), n)
 
 

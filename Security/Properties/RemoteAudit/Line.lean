@@ -31,7 +31,7 @@ over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights bl
   advantage on `prf t` of window `t`'s distinguisher at that `δ` (`Session.distinguisher`) with openings coin `t`'s
   commitment leaf committing zeros (`Committed.junk`), `hide_t` window `t`'s hiding term (`Committed.hide`, hm96's, at
   most `n·2^-191` over the session's `n` windows in all), and `bind` the receipts' binding term (`Receipts.binding`:
-  some opened receipt moved, its held and presented openings hashing a SHA-512 collision). The rates are the node's in
+  some opened receipt presented with an accepted row other than the one its root holds). The rates are the node's in
   the model's units, a tick a nanosecond (`Node.squarings` … `Node.chipBlocks`), and the openings are the deployed
   draw's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf t` gives window `t`'s coin, at most
   `receiptMax = 2^64 − 1 < 2^448` receipts a window, the verifier's `RECEIPT_LIMIT` less one, the sampler's fallbacks

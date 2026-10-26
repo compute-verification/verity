@@ -39,10 +39,9 @@ draw is `Key.subset` on the first blocks `prf t` gives a uniform coin.
   falling below `P·bound t`, and `coinWeight δ (P·bound t)·(s'_t·(2^-64 − 2^-512) + bound t)` is at most
   `coinWeight δ P + s_t/2^64` (`Draw.window_step_le`: rounding costs at most `2^-512`, which the sharper rejection
   bound pays when `s'_t ≥ 1`; a window of no draws has bound `1`).
-* **On the coin** (`Draw.pooledDraw`). Off the binding event, where no opened receipt moved with its held and
-  presented openings hashing a collision, a receipt `Refused` lets through is correct: a moved one hashed such a
-  collision (`Hash.SecurityProofs.RowBinding`), so it is in the event (`Draw.opened_sub`); the binding event costs its
-  probability, `Receipts.binding`. An accepted draw ignores the fallbacks (`Draw.openings_congr`), so on an accepting outcome past
+* **On the coin** (`Draw.pooledDraw`). Off the binding event, where no opened receipt was presented with an accepted
+  row other than the one its root holds, a receipt `Refused` lets through is correct (`Draw.opened_sub`); the binding
+  event costs its probability, `Receipts.binding`. An accepted draw ignores the fallbacks (`Draw.openings_congr`), so on an accepting outcome past
   the pooled bound and off the binding event every window lands on `prf t` while `∏_t bound t ≤ δ`, where `u` always
   falls below: the potential after `n` windows (`Draw.pr_landed_le`). `PooledDraw` is that bound, `δ` plus each
   window's `s_t/2^64`, its distinguisher's advantage at the junk commitment and its hiding term, plus the binding term
@@ -1139,17 +1138,13 @@ theorem error_toReal {n : ℕ} (s : Fin n → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) (
           ENNReal.toReal_ofReal hpos]
 
 /-- An opened receipt that `Refused` lets through on an accepting outcome off the binding event is correct: a moved one
-also collides (`Hash.SecurityProofs.RowBinding`), so it is in the event. -/
-theorem opened_sub {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} {D : Session n m s κ X}
+is in the event. -/
+theorem opened_sub {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] {D : Session n m s κ X}
     {prf : Fin n → Pous.Bits κ → Blocks m} {rest : Coins n κ X → Fin n → ℕ → ℕ} {T : Trace (Coins n κ X)}
     {R : Receipts n κ X} (hR : Refused D prf rest T R) {ω : Coins n κ X} (ha : T.accepts ω)
-    (hb : ¬ ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved t ω p ∧ R.Collides t ω p) (t : Fin n) :
-    D.opened prf rest t ω ⊆ D.correct t ω := by
-  intro p hp
-  refine (hR ω ha t p hp).resolve_right fun hmv => hb ⟨t, p, hp, hmv, ?_⟩
-  obtain ⟨h1, h2, hne⟩ := hmv
-  exact (Hash.SecurityProofs.RowBinding R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p)
-    (R.held t ω p) (R.opened t ω p) h1 h2).resolve_left hne
+    (hb : ¬ ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) (t : Fin n) :
+    D.opened prf rest t ω ⊆ D.correct t ω :=
+  fun p hp => (hR ω ha t p hp).resolve_right fun hmv => hb ⟨t, p, hp, hmv⟩
 
 /-- `PooledDraw` at one committed session. -/
 theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X]
@@ -1162,7 +1157,7 @@ theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
       (fun ω => (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) := by
   classical
   have hreal : ∀ ω, (T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
-      ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved t ω p ∧ R.Collides t ω p) →
+      ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p) →
       (∀ t, (F.play com).lands t ω (prf t (ω.2 t))) ∧ ∏ t, (F.play com).bound t ω ≤ δ := by
     intro ω ⟨⟨hacc, hw⟩, hb⟩
     refine ⟨fun t ha => ?_, ?_⟩
@@ -1180,15 +1175,15 @@ theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
             rw [Session.wrong, Nat.cast_sum]
   have hall := pr_landed_le F hL com prf hδ hm
     (fun ω => (T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
-      ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved t ω p ∧ R.Collides t ω p)) hreal
+      ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)) hreal
   have hsplit : pr (fun ω => T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) ≤
       pr (fun ω => (T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
-        ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved t ω p ∧ R.Collides t ω p)) +
+        ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)) +
       R.binding (F.play com) prf rest :=
     (Bandwidth.pr_mono (Q := fun ω => ((T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
-        ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved t ω p ∧ R.Collides t ω p)) ∨
-        (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved t ω p ∧ R.Collides t ω p))
-      fun ω h => (em (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved t ω p ∧ R.Collides t ω p)).elim Or.inr
+        ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)) ∨
+        (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p))
+      fun ω h => (em (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)).elim Or.inr
         fun hb => Or.inl ⟨h, hb⟩).trans (Bandwidth.pr_or_le _ _)
   unfold Trace.Holds
   rw [Accounting.pr_eq_toReal]

@@ -5,16 +5,9 @@ import Definitions.Accounting.TS.Drawn
 # The receipts' fork game (trusted)
 
 What the receipts' binding term (`Receipts.binding`) is bounded by: two runs of the session from window `t`'s cut on
-independent openings coins, and what each break of them costs.
+independent openings coins (`cont t`, `Remote.Draw`), and what each break of them costs. `Receipts.held` is the
+plurality of the rows a receipt shows (`Receipts.Shows`) over those continuations, so a move squared is at most a fork.
 
-* `cont t ω ζ`: **window `t`'s continuation** of coins `ω` on `ζ`, the run that shares `ω`'s cut (its other coins,
-  the prover's, the world's and every salt, and its openings coins before window `t`'s) and continues on `ζ`'s openings
-  coins from window `t`'s on. It has `Accounting.TS.spliceAt`'s two laws, so the sampled window's forking lemma reads
-  it.
-* `Receipts.Shows D prf rest t p ω v`: at coins `ω` window `t` opens receipt `p`, and the verifier accepts the opening
-  the prover presents, of row `v`, at the receipt's root and rank as that run has them. `Accounting.TS.tally` at
-  `cont t` counts a row's continuations: how likely the cut makes it. `Receipts.held` is the likeliest
-  (`Assumptions.HeldLikeliest`).
 * `Receipts.Broken D prf rest t ω ζ`: **the fork's break**. Some receipt window `t` opens in both runs, `ω` and
   `cont t ω ζ`, has two different messages of one SHA-512 digest among what the two openings' checks hashed: under the
   leaf and path checks, or under the row digests (`Hash.RowLeaf.outerHashed`, `innerHashed`).
@@ -23,7 +16,7 @@ independent openings coins, and what each break of them costs.
   so a fork whose roots split breaks nothing. A window whose receipts' roots, ranks and verifiers are fixed by its cut
   never splits. The deployed prover holds the challenger's commitment to every coin (`Committed`), and a root it
   computes from that commitment reads window `t`'s coin, which the two runs draw independently: there the roots may
-  split.
+  split, and nothing bounds it yet (the gap `binding-split`).
 * `Receipts.fork` and `Receipts.split`: their probabilities over a uniform pair `(ω, ζ)`.
 * `Receipts.finder D prf rest t q`: **window `t`'s fork finder**, a SHA-512 collision finder (`Claims.Finder`) on the
   coins `(ω, ζ)`. It runs the session on `ω` and on `cont t ω ζ`, and for a receipt both runs open it outputs two
@@ -38,22 +31,9 @@ open scoped ENNReal
 
 variable {n κ : ℕ} {X : Type}
 
-/-- **Window `t`'s continuation** of coins `ω` on `ζ`: `ω`'s other coins and its openings coins before window `t`'s,
-then `ζ`'s openings coins from window `t`'s on. -/
-def cont (t : Fin n) (ω ζ : Coins n κ X) : Coins n κ X :=
-  (ω.1, fun j => if j < t then ω.2 j else ζ.2 j)
-
 namespace Receipts
 
 variable (R : Receipts n κ X) {m : ℕ} {s : Fin n → ℕ}
-
-/-- **Receipt `p` of window `t` shows row `v` at coins `ω`**: the window opens it, the verifier accepts the opening the
-prover presents at the receipt's root and rank, and its row is `v`. -/
-def Shows (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ)
-    (t : Fin n) (p : ℕ) (ω : Coins n κ X) (v : Hash.Row) : Prop :=
-  p ∈ D.opened prf rest t ω ∧
-    Hash.RowLeaf.accepts R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p) (R.opened t ω p) ∧
-    (R.opened t ω p).row = v
 
 /-- **The fork's break at window `t`**: some receipt the window opens in both `ω` and its continuation on `ζ` has two
 different messages of one digest among what the two openings' checks hashed. -/
