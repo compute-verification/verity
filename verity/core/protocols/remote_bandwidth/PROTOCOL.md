@@ -1551,8 +1551,9 @@ y_g        SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ σ_
 The host commits the \(y_g\) in plan order as §4's tree (`p2.Prover.commit`). The partial is a function of the bytes
 the decode read, so the receipt binds the read the decode made; computing it from the decoded `W`, or from a second
 read, is another protocol. Per block it is \(16 \times 2056\) sign-and-add steps beside the decode's two 16,448-bit
-squarings. The fixture kernels build against is the serving loop's `receipts.json`, beside #4455's toy `C*` (its
-`store-toy` directory): a pinned seed, the sign rows, every block's \(\pi\), every unit's \(\sigma\) and \(y\).
+squarings. The fixture kernels build against comes from the serving loop over #4455's toy `C*` (`serve.py fixture`,
+pinned there by its SHA-512 and published as `art:23a1667b4d4515f46fabea029492a1ca3788eef0771b115642f21e18f58f3da2`):
+a pinned seed, the sign rows, every block's \(\pi\), every unit's \(\sigma\) and \(y\).
 
 **Openings** (`p2.Opening`, `p2.Session.verify`). An opening of unit \(g\) is its four blocks, each with its path to
 `vk`'s root, and the receipt leaf with its salt and path. The verifier checks the leaf on the pass's root, each block on
@@ -1567,8 +1568,11 @@ nothing (`append`).
   `audit.Rebuild` refuses a P2 codec, so `audit.ledger` refuses a P2 record: \(\mu_{\text{rebuild}}\) at P2's encode
   waits on `WorkHardnessP2` and `SquaringCeilingP2`, drafted (not decided) in Accounting's assumptions, which need the
   H200's squaring rate at 16,448 bits measured. Claims are Daniel's.
-- The sketch bound at units is `SketchBoundSession` at \(m = 257\) sectors, drafted as `SketchBoundP2`, with
-  `SketchRank 16 257 12 ε` to evaluate.
+- The sketch bound at units is `SketchBoundSession` at \(m = 257\) sectors, drafted as `SketchBoundP2`:
+  \(\delta_s = Q/2^{96} + (Q + P)(\varepsilon + N/2^{512}) + (Q + P)^2/2^{257}\) at `SketchRank 16 257 12 ε`, with
+  \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
+  blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
+  \(m\).
 - Not yet built: the Lean session over a P2 store (the Lean ports here are the registration digest, the partials,
   the unit receipt and the opening check, `lean/RemoteAudit/P2.lean`), the registry's one live registration a node for
   P2, and the zero-knowledge opening unit of a P2 unit (§8).
