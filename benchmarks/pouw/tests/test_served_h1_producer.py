@@ -177,8 +177,8 @@ def _window(producer, shapes, modules, blocks, rows: list[int], steps: int, seed
     ``producer(served)``: the run, each call's served codes by index, each linear's weight codes, each call's receipts as
     the producer returned them, by index (the native commit keeps no rows), and the producer. ``unit``: the window
     Program's tile unit (`Served.unit`), v1's by default."""
-    from verity_vllm.protocol_options import pouw_h1 as PH
-    from verity_vllm.protocol_options import pouw_h1_served as SV
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import served as SV
     served = SV.Served(blocks=blocks, window=hashlib.sha512(b"window").digest(), unit=unit)
     made, made_by = producer(served), {}
 
@@ -208,8 +208,8 @@ def _registered_receipts(run, made_by, c) -> np.ndarray:
     """Call c's receipt table's words: `receipt_words` of the receipts the producer returned for it, which the registered
     ``receipt@<c>`` is the native commit of (its root, under its nonce and the window's open root)."""
     from verity.core.protocols.pouw.circuit import h1window as HW
-    from verity_vllm.protocol_options import pouw_h1_registered as NR
-    from verity_vllm.protocol_options import pouw_h1_served as SV
+    from verity_vllm.protocols.pouw.h1 import registered as NR
+    from verity_vllm.protocols.pouw.h1 import served as SV
     served, rc = run.served, run.served.receipt_table(c.index)
     words, n = SV.receipt_words(made_by[c.index]), HW.call_units(served.program)[c.index][1]
     assert words.shape == served.receipt_shape(c.index) == (n, 2 * HT.Layout(32, 32, c.k).sets * 2)
@@ -225,7 +225,7 @@ def _held_to_reference(run, codes, weights, made_by, units_of):
     checked, live and dead."""
     from verity.core.protocols.pouw import credit as CR
     from verity.core.protocols.pouw.circuit import h1window as HW
-    from verity_vllm.protocol_options import pouw_h1_served as SV
+    from verity_vllm.protocols.pouw.h1 import served as SV
     served, pre, seen = run.served, run.served.program.fn.bindings["PREFIX"], {"live": 0, "dead": 0}
     assert not served.refused, served.refused
     j10r = HW.is_j10r(served.program)
@@ -285,8 +285,8 @@ def test_the_units_kernel_is_h1tile_reference_at_llama_8b_shapes_through_served(
     units = _kernel()
     from verity.core.protocols.pouw.circuit import h1window as HW
     from verity_vllm.engine import int8_exact as E
-    from verity_vllm.protocol_options import pouw_h1 as PH
-    from verity_vllm.protocol_options import pouw_h1_served as SV
+    from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import served as SV
     RC = PR.RC
 
     def zeros(x, s_a, wt, sw):

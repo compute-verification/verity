@@ -1,4 +1,4 @@
-import Models.Pouw.Guarantees.Eps1
+import Definitions.Pouw.Guarantees.Eps1
 
 /-!
 # M3's basic lemmas for Dither's lower bounds

@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.RateAuditHorizon
+import Definitions.Accounting.Guarantees.RateAuditHorizon
 import Proofs.Accounting.RateAudit.Chain
 
 /-!

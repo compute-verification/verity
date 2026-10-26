@@ -201,7 +201,7 @@ export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so V
 [ -n "${SBENCH_PICK:-}" ] && export TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
 # CA's credit gate (#2684) at its pinned head, for the dither-1s-credit arm
 CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
-git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocol_options/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
+git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
   && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
 # CA's H1V3 (with the wrap correction and the peel, z = A B^T): dither_one's gate runs its h1tile.reference.  By default
 # this source's own (PouwH1Tile_v4, ungated); H1V3_SHA names another commit, from this repository, else (the node's lacks

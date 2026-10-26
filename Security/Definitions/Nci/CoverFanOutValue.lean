@@ -5,7 +5,7 @@ import Mathlib.Data.Finset.Union
 # The cover theorem's fan-out tightening: values read whole, from wiring
 
 `FanOutReadIntensity` prices each value a block spends at `f` bits through the named premise `ValueReadHardness`. These
-are the wiring properties that let the circuit set the price instead (`Models.Nci.Guarantees.CoverFanOutValue`):
+are the wiring properties that let the circuit set the price instead (`Definitions.Nci.Guarantees.CoverFanOutValue`):
 
 * `Keyed.pathGates`: the gates of a value's key path, its first stop included.
 * `Keyed.KeyDisjoint`: distinct activations of one token have disjoint key paths. `Keyed`'s (I) and (F) imply it

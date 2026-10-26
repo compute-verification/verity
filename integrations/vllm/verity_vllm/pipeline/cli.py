@@ -5,7 +5,8 @@
 A command is a library module with an options dataclass -- `Options`, or `COMMANDS = {name: <options class>}` for a
 command with subcommands -- whose fields are `config.option`s, and `main(options)`.  This module is the only place that
 parses a command line: it builds the parser from the dataclass fields, takes the environment defaults the fields name
-(`option(env=...)`), and reports a `config.UsageError` as a usage error (exit 2).  `python -m verity_vllm.pipeline.cli`
+(`option(env=...)`), and reports a `config.UsageError` as a usage error (exit 2).  A process it starts refuses a `VERITY_*`
+variable nothing in the tree reads (`settings.validate_environ`), naming it, also exit 2.  `python -m verity_vllm.pipeline.cli`
 is the same program, for interpreters without the `verity-vllm` launcher.
 """
 
@@ -19,6 +20,7 @@ import sys
 from collections.abc import Mapping, MutableMapping
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import UsageError
 
 PROG = "verity-vllm"
@@ -68,7 +70,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "libdevice-sampling": ("verity_vllm.program.kernels.libdevice_sampling", "libdevice sampler transcription check"),
     "m1-capture": ("verity_vllm.pipeline.m1_capture", "capture the observation log under the observer"),
     "manifest": ("verity_vllm.pipeline.manifest", "the required-value manifest (build, build-global, compare)"),
-    "manifest-verify": ("verity_vllm.query.manifest.verify", "is manifest.json the manifest of record"),
+    "manifest-verify": ("verity_vllm.pipeline.manifest_verify", "is manifest.json the manifest of record"),
     "match": ("verity_vllm.pipeline.match", "Match stage driver of one configuration"),
     "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),
     "mla-capture": ("verity_vllm.program.registry.mla_capture", "MLA kernel captures (produce), against their numpy models (check) and Booleans (check-bits)"),
@@ -77,7 +79,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "operand-provenance": ("verity_vllm.check.operand_provenance", "exhaustive operand provenance check"),
     "pouw-serve": ("verity_vllm.pipeline.pouw_serve", "a workload served under pouw:ncp-v2, its calls replayed honest and tampered"),
-    "predict": ("verity_vllm.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
+    "predict": ("verity_vllm.program.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
     "prefix-cache": ("verity_vllm.observe.prefix_cache", "prefix-cache linkage tools"),
     "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
     "served": ("verity_vllm.acquire.served", "the served-compiled Program and required-value manifest (build), the GEMM routes it needs (routes)"),
@@ -258,6 +260,12 @@ def main(argv: list[str] | None = None) -> Any:
     if argv[0] not in COMMANDS:
         print(f"{PROG}: unknown command {argv[0]!r}\n\n{usage()}", file=sys.stderr)
         return 2
+    if process:
+        try:
+            settings.validate_environ()
+        except settings.UnknownSetting as e:
+            print(f"{PROG}: {e}", file=sys.stderr)
+            return 2
     parser, opts, mod = _parse(argv[0], argv[1:], os.environ)
     process_settings(os.environ)
     if process:

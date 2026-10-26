@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees
+import Definitions.Nci.Guarantees
 import Proofs.Nci.Inequalities
 import Proofs.Nci.LoomisWhitney
 import Proofs.Core

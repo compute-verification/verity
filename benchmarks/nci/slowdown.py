@@ -4,7 +4,7 @@ A policy is a calibration: blocks of at most ``Gamma`` gates, each reading at mo
 parameters, so ``alpha = K / Gamma`` bits per gate. A row (one training method in one configuration) gives the inputs
 in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
 
-* ``lower``: the thread theorem, ``Nci.SecurityProofs.ThreadedTraining`` (``Security/Models/Nci/Guarantees/Threads.lean``):
+* ``lower``: the thread theorem, ``Nci.SecurityProofs.ThreadedTraining`` (``Security/Definitions/Nci/Guarantees/Threads.lean``):
   ``rho >= kappa * b_a / (2 alpha Lambda)`` with ``Lambda = max(e, c K / (4 d b_w))``, and ``rho >= 1`` since a
   containing circuit is no smaller. The weight rate is capped at ``U_bits / n_updated``: a block that uses ``p`` updated
   weights can always read the whole update instead, so no larger rate is a valid charge. A seed-described update
@@ -18,7 +18,7 @@ in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
 * ``theta_cap``: a calibration without a cap on the committed parameters' size lets a row decode from a committed table
   (its ``decode_flops_table``) instead of regenerating it, as a seed-based method's noise.
 * ``chain``: the partial-sum law, ``Nci.SecurityProofs.ContainedTraining``
-  (``Security/Models/Nci/Guarantees/Contained.lean``): ``rho >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
+  (``Security/Definitions/Nci/Guarantees/Contained.lean``): ``rho >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
   factor of ``b_w``, ``b_a`` and the chain's smallest inner dimension. Its assumptions are the support-form
   incompressibility of one chain of the reference circuit at ``b_w`` and ``b_a``, and nothing structural. A chain charges
   each weight once per layer of it, so it is one forward path: ``kappa_chain`` (a row's optional ``chain``) is that

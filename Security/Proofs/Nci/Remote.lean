@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.Remote
+import Definitions.Nci.Guarantees.Remote
 import Proofs.Nci.Dampener
 import Proofs.Nci.Escape
 
