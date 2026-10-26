@@ -212,12 +212,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedNebiusHost` (Security/Definitions/Core/Assumptions.lean) states its part about one run; no
+    # `Verity.Assumptions.TrustedHost` (Security/Definitions/Core/Assumptions.lean) states its part about one run; no
     # attestation hardware backs it
-    Entry("trusted-nebius-host", "assumption",
-          "An auditor-trusted device (a network certifier, the memory challenger) is the auditor's hardware on a machine "
-          "its host provider runs and the prover doesn't control; it runs its stated code on its Nebius host, and its host "
-          "never restores an earlier copy of the state the device keeps there", "Trusted Nebius host", "standard"),
+    Entry("trusted-host", "assumption",
+          "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
+          "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
+          "standard"),
     # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
     # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
     Entry("certifier-coverage", "assumption",
@@ -236,13 +236,13 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one
-    # session per audit cites trusted-nebius-host as network-accounting widens it
+    # session per audit cites trusted-host as network-accounting widens it
     # (pending network-accounting's widening, Daniel decision 2)
     Entry("pous-ring-device", "model",
           "PoUS ring model of the server: the deployed server is a ring-model server whose state is bounded between "
           "setup, the session and its rounds, with one session per audit (the memory challenger refuses a used session "
           "id from its session log, and its host never restores an earlier copy of the state the device keeps there: "
-          "trusted-nebius-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
+          "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
     # the timing red team's modelled floor, note:20261004T2102Z-report-relay-p2-redteam-timing
@@ -438,7 +438,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "is no coin the setting reads (not σ_w, nothing derived from σ_w or from a prover's salt, not another "
           "session's draw); the path carries the draw (a later round's coin, or a draw beside σ_w in each round's "
           "coin, which the last round needs); and the session's audit coins (C-Flock's --zk coin tree) come from the "
-          "auditor's verifier, on a machine the prover doesn't control, fresh for each session (trusted-nebius-host). "
+          "auditor's verifier, on a machine the prover doesn't control, fresh for each session (trusted-host). "
           "Under full checking the draw is every unit, but the law still holds the audit coins fresh and uniform given "
           "the prover. served_zk's per-tile sessions today draw their coin tree from a serve --zk --operator loopback "
           "beside the prover, which doesn't meet the fifth fact", "TS window law", "standard"),
@@ -499,7 +499,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
           "for each table's level 0, the witness's packed table at the tape's mask words and the tape's extra lanes, lane "
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
-          "The loop runs on the auditor-trusted host (trusted-nebius-host), whose operating system's random bytes are the "
+          "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
           "uniform draws the tape models", "Firewall OS source", "standard"),
 )}
 

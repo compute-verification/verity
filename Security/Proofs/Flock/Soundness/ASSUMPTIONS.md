@@ -152,7 +152,7 @@ coins.
     the key is fresh for each session.
   - *N* counts every leaf committed under the session's key, opened or not: `|streams| · 2^rounds_log`
     (`CoinTree::build`; the `SHA-512(PAD)` padding is no leaf). flock-circuit's schedule (`coin_spec_of`) has the
-    session's stream plus two reps per table at `rounds_log = 8`: `N = (1 + 2J)·256`, so `N·2^-256 < 2^-246` at J = 1.
+    session's stream plus two reps per table at `rounds_log = 9`: `N = (1 + 2J)·512`, so `N·2^-256 < 2^-245` at J = 1.
   - *What the bound needs.* The salts are uniform and independent, one per leaf, never reused. The key is independent
     of the salts, drawn after the prover's nonce, and never reused across sessions. Both come from `/dev/urandom`, which
     is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the draw at `Hello`. The

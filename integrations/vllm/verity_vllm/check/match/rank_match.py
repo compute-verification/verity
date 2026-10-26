@@ -157,7 +157,7 @@ def _recorded_as_folded(x: dict) -> tuple[str, list[int]]:
     """A recorder row's (kind, partial shape) as the fold states that collective.  A `fused_norm.KIND` row's partial is
     ``stack([partial, residual])``: on its fused path the fold's `fused_allreduce_rms_norm` collective, on its unfused path the
     communicator `all_reduce` the call made, each over the [M, N] partial."""
-    from verity_vllm.collectives import fused_norm as FN
+    from verity_vllm.engine.collectives import fused_norm as FN
 
     shape = [int(v) for v in x.get("shape") or []]
     if x.get("kind") != FN.KIND:

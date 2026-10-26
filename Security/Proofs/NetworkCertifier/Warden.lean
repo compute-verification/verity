@@ -8,7 +8,7 @@ import Mathlib.Data.Fintype.BigOperators
 
 `Guarantees.Warden`. The warden's code on a lane emits, cell by cell, what the client view gives for the lane's first
 late cell (`wardenLane_eq`): its data cells and padding before it, the fail cell, padding after. So the device's output
-is the client view of the schedule, the data and the fail cells (`trusted-nebius-host`). A lane of `n` cells has its
+is the client view of the schedule, the data and the fail cells (`trusted-host`). A lane of `n` cells has its
 fail cell among `none, 0, …, n − 1`, so the views are an image of the schedules, the fail choices and the data; with
 the data from the advice strings within the caps and the content, their count is #3533's advice count times `2^k`.
 -/
@@ -66,7 +66,7 @@ theorem wardenCode_eq {κ Cell : Type} (s : WardenSchedule κ) (arr : κ → Arr
 
 theorem wardenView_eq_clientView {κ Cell Srv Dev : Type} (arr : Srv → κ → Arrivals Cell) (w : Dev)
     (run : Dev → WardenSchedule κ × Srv → κ → List (ℕ × CellView Cell))
-    (htrust : Verity.Assumptions.TrustedNebiusHost w run fun p => wardenCode p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedHost w run fun p => wardenCode p.1 (arr p.2))
     (s : WardenSchedule κ) (σ : Srv) :
     run w (s, σ) = clientView s (fun c => (arr σ c).stream) (failCell s (arr σ)) := by
   rw [htrust (s, σ)]
@@ -83,7 +83,7 @@ theorem failCell_mem {κ Cell : Type} (s : WardenSchedule κ) (arr : κ → Arri
 
 theorem encard_wardenViews_le {κ Cell Srv Dev : Type} [Fintype κ] (arr : Srv → κ → Arrivals Cell) (w : Dev)
     (run : Dev → WardenSchedule κ × Srv → κ → List (ℕ × CellView Cell))
-    (htrust : Verity.Assumptions.TrustedNebiusHost w run fun p => wardenCode p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedHost w run fun p => wardenCode p.1 (arr p.2))
     (cap : κ → ℕ) (Ss : Set (WardenSchedule κ)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
     (Srvs : Set Srv) (Ds : Set (κ → List Cell)) (hD : ∀ σ ∈ Srvs, (fun c => (arr σ c).stream) ∈ Ds) :
     {v | ∃ s ∈ Ss, ∃ σ ∈ Srvs, run w (s, σ) = v}.encard ≤
@@ -109,7 +109,7 @@ theorem encard_wardenViews_le {κ Cell Srv Dev : Type} [Fintype κ] (arr : Srv �
 
 theorem encard_wardenDecodable_le {κ Cell Srv Dev Z Adv U : Type} {W : ℕ} [Fintype κ]
     (arr : Srv → κ → Arrivals Cell) (w : Dev) (run : Dev → WardenSchedule κ × Srv → κ → List (ℕ × CellView Cell))
-    (htrust : Verity.Assumptions.TrustedNebiusHost w run fun p => wardenCode p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedHost w run fun p => wardenCode p.1 (arr p.2))
     (cap : κ → ℕ) (Ss : Set (WardenSchedule κ)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
     (bits : Adv → Fin W → ℕ) (hbits : BitsCount bits) (b : Fin W → ℕ)
     (dataOf : Adv → U → κ → List Cell) (Us : Set U) (k : ℕ) (hUs : Us.encard ≤ ((2 ^ k : ℕ) : ℕ∞))

@@ -2,6 +2,8 @@
 
     DotBf16_v2{K, DOT}          f32 accumulator after K/16 `DOT` steps in ascending k from a zero accumulator
     GemmCoordinate_v2{K, DOT}   bf16 word: cvt.rn.bf16.f32(DotBf16)   (Triton `acc.to(bf16)`; the same on sm_80/sm_90)
+    GemmCoordinatePad_v1{T, K, DOT}  (x, wrow: bf16[T]) -> bf16: `GemmCoordinate_v2{K, DOT}` on x and wrow each padded with
+                                K - T bf16 +0 words (a masked k loop's loads), for T <= K: attention's PV at T keys
     Gemm_v2{K, N, DOT}          x[K] @ W[N,K]^T -> [N], no epilogue
 
 `DOT` is a static naming the step: `GEMM_AMPERE` binds `AmpereBF16TcDot16_v2`, `GEMM_HOPPER` binds
@@ -24,6 +26,10 @@ over it names no architecture (`prims`), and a refusal for any other step:
     ScaledMmS8Coordinate_v1{K, DOT}   (x: s8[K], sx: f32, wrow: s8[K], sw: f32) -> bf16: the accumulator scaled as
                                       `benchmarks/ppl/steps.py`'s `int8_linear` (sx per token, sw per channel):
                                       cvt.rn.bf16.f32((cvt.rn.f32.s32(acc) * sx) * sw)
+    ScaledMmS8CoordinateRows_v1{K, R, DOT}  (x0..x{R-1}: s8[K/R], sx: f32, wrow0..wrow{R-1}: s8[K/R], sw: f32) -> bf16:
+                                      `ScaledMmS8Coordinate_v1{K, DOT}` on the concatenations of x's and wrow's R parts, so
+                                      that each operand is R rows of at most 262,144 bits (`UNIT_CLASS_MAX`) when K is
+                                      past 32,768
     ScaledMmS8_v1{K, N, DOT}          (x: s8[K], sx: f32, w: s8[N][K], sw: f32[N]) -> bf16[N]: the linear on one token row,
                                       `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` unit)
 
@@ -45,6 +51,7 @@ from collections.abc import Callable
 
 from verity.ml.circuits.census import FAMILY_COUNTS, serves_none
 from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.refs import Coll, broadcast, concat
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, IntegerMma, exact_k_limit
 from verity.ml.circuits.types import Array, Value
 
@@ -54,7 +61,8 @@ from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 
 __all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8",
            "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4",
-           "GemmCoordinateNvf4", "S8_K_LIMIT", "ScaledMmS8", "ScaledMmS8Coordinate", "s8_gemm"]
+           "GemmCoordinateNvf4", "GemmCoordinatePad", "S8_K_LIMIT", "ScaledMmS8", "ScaledMmS8Coordinate",
+           "ScaledMmS8CoordinateRows", "s8_gemm"]
 
 _SCALE = Value(8)
 
@@ -84,6 +92,30 @@ def _refuse_k(k: int, limit: int | None = None) -> Callable[[dict], str | None]:
 _K16, _K32, _K64, _S8 = _refuse_k(16), _refuse_k(32), _refuse_k(64), _refuse_k(32, S8_K_LIMIT)
 
 
+def _refuse_t(base: Callable[[dict], str | None]) -> Callable[[dict], str | None]:
+    """`base`'s refusal for K, and a T outside 1..K (a coordinate on T of its K words)."""
+
+    def refuse(b: dict) -> str | None:
+        T, K = b.get("T"), b.get("K")
+        if isinstance(T, int) and isinstance(K, int) and not 1 <= T <= K:
+            return f"T={T} is not in 1..K={K}: the coordinate reads T words of each operand and pads them to K with +0"
+        return base(b)
+
+    return refuse
+
+
+def _refuse_r(base: Callable[[dict], str | None]) -> Callable[[dict], str | None]:
+    """`base`'s refusal for K, and an R that is not a positive divisor of K (K/R codes a part)."""
+
+    def refuse(b: dict) -> str | None:
+        R, K = b.get("R"), b.get("K")
+        if isinstance(R, int) and isinstance(K, int) and (R < 1 or K % R):
+            return f"R={R} does not divide K={K} into R parts of K/R codes each"
+        return base(b)
+
+    return refuse
+
+
 @composite("DotBf16", 2, ["K", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.K, BF16))), F32),
            conformance="exact-model-tested", refuse=_K16)
 def DotBf16(B, S, x, w):
@@ -100,6 +132,20 @@ def DotBf16(B, S, x, w):
 def GemmCoordinate(B, S, x, wrow):
     """One output word of `x @ W^T`: bf16_rne(DotBf16{K, DOT}(x, W[j, :])) (`cvt.rn.bf16.f32`)."""
     return B.call(P.F2fpBf16, B.call(bind(DotBf16, K=S.K, DOT=S.DOT), x, wrow))
+
+
+@composite("GemmCoordinatePad", 1, ["T", "K", "DOT"],
+           lambda S: ((("x", Array(S.T, BF16)), ("wrow", Array(S.T, BF16))), BF16),
+           conformance="exact-model-tested", refuse=_refuse_t(_K16))
+def GemmCoordinatePad(B, S, x, wrow):
+    """`GemmCoordinate_v2{K, DOT}` on T words of x and of W's row, each padded with K - T bf16 +0 words: what a k loop that
+    masks its loads past T to 0.0 multiplies (attention's PV at T <= K keys)."""
+    if S.T == S.K:
+        return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), x, wrow)
+    space, idx, leaf = B.call(P.const(16, 0)).refs[0]
+    zeros = broadcast(space, idx, leaf, S.K - S.T)
+    pad = lambda a: Coll(Array(S.K, BF16), concat([a.refs, zeros]))
+    return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), pad(x), pad(wrow))
 
 
 @composite("Gemm", 2, ["K", "N", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
@@ -171,6 +217,20 @@ def ScaledMmS8Coordinate(B, S, x, sx, wrow, sw):
     first, or `sw` first (CUTLASS c2x's `ScaledEpilogue`), rounds differently."""
     acc = B.call(P.S32ToF32Rn, B.call(bind(GemmAccumulatorS8, K=S.K, DOT=S.DOT), x, wrow))
     return B.call(P.F2fpBf16, B.call(F.F32MulV2, B.call(F.F32MulV2, acc, sx), sw))
+
+
+@composite("ScaledMmS8CoordinateRows", 1, ["K", "R", "DOT"],
+           lambda S: ((*((f"x{r}", Array(S.K // S.R, S8)) for r in range(S.R)), ("sx", F32),
+                       *((f"wrow{r}", Array(S.K // S.R, S8)) for r in range(S.R)), ("sw", F32)), BF16),
+           conformance=ScaledMmS8Coordinate.conformance, refuse=_refuse_r(_S8))
+def ScaledMmS8CoordinateRows(B, S, *ports):
+    """`ScaledMmS8Coordinate_v1{K, DOT}` on x and W's row each given as R consecutive parts of K/R codes, called on their
+    concatenations: the same word for every input. Past K = 32,768 an s8 operand is wider than `partition_v2.UNIT_CLASS_MAX`
+    (262,144 bits), so a unit reads it as R rows."""
+    R = S.R
+    cat = lambda parts: Coll(Array(S.K, S8), concat([p.refs for p in parts]))
+    x, sx, wrow, sw = cat(ports[:R]), ports[R], cat(ports[R + 1:2 * R + 1]), ports[2 * R + 1]
+    return B.call(bind(ScaledMmS8Coordinate, K=S.K, DOT=S.DOT), x, sx, wrow, sw)
 
 
 @composite("ScaledMmS8", 1, ["K", "N", "DOT"],

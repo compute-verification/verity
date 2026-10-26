@@ -27,7 +27,7 @@ certified request's prompt ids at those positions, and the egress tie each decod
 sample.
 
 **Positions.** The tie reads the Program's positions, not the Commit's: on vllm's eager path no Program reads a committed
-position. The compiled path's RoPE reads ``c00.input/positions``, a committed value (`verity_vllm.predict.compiled`); there
+position. The compiled path's RoPE reads ``c00.input/positions``, a committed value (`verity_vllm.program.predict.compiled`); there
 the committed positions are what the compute read, and `served_tie`'s routed form holds the served rows to them.
 
 **Selection: every unit, always proved**, the idle blocks too (`Selection` All, as a transfer-gate unit is). The tie is a
