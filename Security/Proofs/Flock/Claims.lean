@@ -197,6 +197,7 @@ import Proofs.Flock.Claims.Recursion.HonestPartsR
 import Proofs.Flock.Claims.Recursion.HonestRepR
 import Proofs.Flock.Claims.Recursion.HonestAccR
 import Proofs.Flock.Claims.Recursion.HonestPartsLayR
+import Proofs.Flock.Claims.Recursion.VStarWit
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.KSFlockLinR
