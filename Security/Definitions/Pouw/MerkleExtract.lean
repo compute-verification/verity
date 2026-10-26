@@ -16,6 +16,11 @@ leaf), and of its discharge from SHA-512 as a random oracle (R-ACCEL-3; ABSORB-T
   commitment, and returns the leaf word it reaches, or `none`.
 * `kids E L`: the child digests named by `L`'s node points. With the root, they are the targets a later query must hit
   to open something `L` doesn't determine.
+* `Prover X D q τ`: an adaptive prover against the random oracle in lazy-sampling form, `q` fresh queries answered by a
+  uniform stream, the first `τ` before its root. `Prover.oracle` is the oracle it sees and `Prover.pre` its
+  pre-commitment log.
+* `ExtractFails E A u`: on the stream `u`, some opening the prover can verify from its queries disagrees with the
+  extractor run on its pre-commitment log.
 -/
 
 namespace Pouw.MerkleExtract
@@ -54,5 +59,45 @@ noncomputable def ext (h : X → D) (E : Enc X D W) (L : Set X) : D → List Boo
       if hn : ∃ lr : D × D, E.node lr.1 lr.2 ∈ L ∧ h (E.node lr.1 lr.2) = d then
         ext h E L (if b then (Classical.choose hn).2 else (Classical.choose hn).1) bs
       else none
+
+/-! ### The random-oracle model (lazy sampling) -/
+
+/-- **An adaptive oracle prover** in the lazy-sampling form of the random oracle: its `q` fresh queries, answered by
+the stream `u` (the oracle's values at fresh points, uniform), the first `τ` of them before its commitment.
+* Query `i` reads only the answers before it (`qry_dep`) and is fresh (`fresh`). A prover that repeats a point has its
+  answer already, so it needs no query.
+* Its root reads only the answers before the commitment (`root_dep`). -/
+structure Prover (X D : Type) (q τ : ℕ) where
+  qry : Fin q → (Fin q → D) → X
+  qry_dep : ∀ i u u', (∀ j : Fin q, j < i → u j = u' j) → qry i u = qry i u'
+  fresh : ∀ u (i j : Fin q), j < i → qry i u ≠ qry j u
+  root : (Fin q → D) → D
+  root_dep : ∀ u u', (∀ j : Fin q, (j : ℕ) < τ → u j = u' j) → root u = root u'
+
+namespace Prover
+
+variable {q τ : ℕ} (A : Prover X D q τ)
+
+open Classical in
+/-- The oracle on the stream `u`: `u i` at the prover's `i`-th query, `default` off them. -/
+noncomputable def oracle [Inhabited D] (u : Fin q → D) (x : X) : D :=
+  if hx : ∃ i, A.qry i u = x then u (Classical.choose hx) else default
+
+/-- The points queried before the commitment. -/
+def pre (u : Fin q → D) : Set X := {x | ∃ i : Fin q, (i : ℕ) < τ ∧ A.qry i u = x}
+
+end Prover
+
+open Classical in
+/-- **The extraction fails on the stream `u`**: some opening of some word verifies against the prover's root under the
+oracle, hashes only queried points, and isn't the word the extractor reads off the pre-commitment queries. -/
+def ExtractFails [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) (u : Fin q → D) : Prop :=
+  ∃ (p : List (Bool × D × D)) (w : W), Opens (A.oracle u) E (A.root u) p w ∧
+    (∀ y ∈ pts E p w, ∃ i, A.qry i u = y) ∧ ext (A.oracle u) E (A.pre u) (A.root u) (p.map Prod.fst) ≠ some w
+
+open Classical in
+/-- The child digests of a point, if it is a node. -/
+noncomputable def children (E : Enc X D W) [DecidableEq D] (x : X) : Finset D :=
+  if hx : ∃ lr : D × D, E.node lr.1 lr.2 = x then {(Classical.choose hx).1, (Classical.choose hx).2} else ∅
 
 end Pouw.MerkleExtract

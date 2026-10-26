@@ -8,6 +8,10 @@ import Definitions.Pouw.MerkleExtract
   target (`d` or a child digest `L` names).
 * `card_hit_le`: a uniformly random answer stream puts coordinate `t` in a set of at most `m` values that doesn't
   read `t` on at most a `m / |D|` share of streams. Both random-oracle bad events of `extract_of_ro` are of this form.
+* `extract_of_ro` (Lemma 2): against a `q`-query prover that commits after `τ` queries, extraction from the
+  pre-commitment log fails on at most a `(q² + q (2τ + 1)) / |D|` share of the oracle's answer streams: a collision
+  among the answers (`q²`), or a post-commitment answer hitting the root or a child digest the log names
+  (`q (2τ + 1)`).
 -/
 
 namespace Pouw.MerkleExtract
@@ -107,5 +111,146 @@ theorem card_hit_le {q : ℕ} {D : Type} [Fintype D] [DecidableEq D] (t : Fin q)
         gcongr with r; exact hm _
     _ = m * (Fintype.card D * Fintype.card ({j // j ≠ t} → D)) := by
         rw [Finset.sum_const, Finset.card_univ, smul_eq_mul]; ring
+
+/-! ### `extract_of_ro` -/
+
+namespace Prover
+
+variable {q τ : ℕ} (A : Prover X D q τ)
+
+/-- A prover's queries are distinct. -/
+theorem qry_inj (u : Fin q → D) {i j : Fin q} (h : A.qry i u = A.qry j u) : i = j := by
+  rcases lt_trichotomy i j with hij | hij | hij
+  · exact absurd h.symm (A.fresh u j i hij)
+  · exact hij
+  · exact absurd h (A.fresh u i j hij)
+
+/-- The oracle answers the prover's `i`-th query with `u i`. -/
+theorem oracle_qry [Inhabited D] (u : Fin q → D) (i : Fin q) : A.oracle u (A.qry i u) = u i := by
+  have hx : ∃ j, A.qry j u = A.qry i u := ⟨i, rfl⟩
+  simp only [oracle, dif_pos hx]
+  rw [A.qry_inj u (Classical.choose_spec hx)]
+
+end Prover
+
+open Classical in
+/-- **`extract_of_ro`**: over the uniform answer streams, extraction fails on at most a `(q² + q (2τ + 1)) / |D|`
+share. -/
+theorem extract_of_ro [Fintype D] [DecidableEq D] [Inhabited D] {q τ : ℕ} (E : Enc X D W) (A : Prover X D q τ) :
+    (Finset.univ.filter fun u => ExtractFails E A u).card * Fintype.card D ≤
+      (q * q + q * (2 * τ + 1)) * Fintype.card (Fin q → D) := by
+  classical
+  -- the collision sets and the target sets
+  let S : Fin q → (Fin q → D) → Finset D := fun t u => (Finset.univ.filter fun j : Fin q => j < t).image u
+  let T : (Fin q → D) → Finset D := fun u =>
+    insert (A.root u) ((Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).biUnion fun i => children E (A.qry i u))
+  let S' : Fin q → (Fin q → D) → Finset D := fun b u => if τ ≤ (b : ℕ) then T u else ∅
+  have hsub : (Finset.univ.filter fun u => ExtractFails E A u) ⊆
+      (Finset.univ.biUnion fun t => Finset.univ.filter fun u => u t ∈ S t u) ∪
+        (Finset.univ.biUnion fun b => Finset.univ.filter fun u => u b ∈ S' b u) := by
+    intro u hu
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hu
+    obtain ⟨p, w, hO, hcov, hne⟩ := hu
+    rcases extract_sound (A.oracle u) E (A.pre u) p (A.root u) w hO with
+      h1 | ⟨x, hx, y, hy, hxy, hh⟩ | ⟨y, hy, hyL, hyT⟩
+    · exact absurd h1 hne
+    · obtain ⟨a, -, rfl⟩ := hx
+      obtain ⟨b, rfl⟩ := hcov y hy
+      rw [A.oracle_qry, A.oracle_qry] at hh
+      have hab : a ≠ b := fun e => hxy (by rw [e])
+      apply Finset.mem_union_left
+      rw [Finset.mem_biUnion]
+      rcases lt_or_gt_of_ne hab with hlt | hlt
+      · refine ⟨b, Finset.mem_univ _, ?_⟩
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and, S, Finset.mem_image]
+        exact ⟨a, hlt, hh⟩
+      · refine ⟨a, Finset.mem_univ _, ?_⟩
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and, S, Finset.mem_image]
+        exact ⟨b, hlt, hh.symm⟩
+    · obtain ⟨b, rfl⟩ := hcov y hy
+      have hb : τ ≤ (b : ℕ) := by
+        by_contra hlt; exact hyL ⟨b, by omega, rfl⟩
+      rw [A.oracle_qry] at hyT
+      apply Finset.mem_union_right
+      rw [Finset.mem_biUnion]
+      refine ⟨b, Finset.mem_univ _, ?_⟩
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and, S', if_pos hb, T, Finset.mem_insert,
+        Finset.mem_biUnion]
+      rcases hyT with h | ⟨l, r, ⟨i, hi, hq⟩, hc⟩
+      · exact Or.inl h
+      · right
+        refine ⟨i, by simpa using hi, ?_⟩
+        have hx : ∃ lr : D × D, E.node lr.1 lr.2 = A.qry i u := ⟨(l, r), hq.symm⟩
+        have hlr := E.node_inj ((Classical.choose_spec hx).trans hq)
+        unfold children
+        rw [dif_pos hx]
+        rcases hc with hc | hc
+        · simp [hc, hlr.1]
+        · simp [hc, hlr.2]
+  have hS : ∀ t u a, S t (Function.update u t a) = S t u := by
+    intro t u a
+    refine Finset.image_congr fun j hj => ?_
+    have : j ≠ t := ne_of_lt (by simpa using hj)
+    simp [Function.update_of_ne this]
+  have hSc : ∀ t u, (S t u).card ≤ q := fun t u =>
+    (Finset.card_image_le).trans ((Finset.card_filter_le _ _).trans (by simp))
+  have hT : ∀ (b : Fin q) u a, τ ≤ (b : ℕ) → T (Function.update u b a) = T u := by
+    intro b u a hb
+    have hagree : ∀ j : Fin q, (j : ℕ) < τ → Function.update u b a j = u j := fun j hj =>
+      Function.update_of_ne (fun e => by subst e; omega) _ _
+    simp only [T]
+    rw [A.root_dep _ _ hagree]
+    congr 1
+    refine Finset.biUnion_congr rfl fun i hi => ?_
+    have hi' : (i : ℕ) < τ := by simpa using hi
+    rw [A.qry_dep i _ u fun j hj => hagree j (lt_trans (Fin.lt_def.mp hj) hi')]
+  have hS' : ∀ b u a, S' b (Function.update u b a) = S' b u := by
+    intro b u a
+    by_cases hb : τ ≤ (b : ℕ)
+    · simp only [S', if_pos hb]; exact hT b u a hb
+    · simp only [S', if_neg hb]
+  have hTc : ∀ u, (T u).card ≤ 2 * τ + 1 := by
+    intro u
+    have hF : (Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).card ≤ τ := by
+      calc (Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).card ≤ (Finset.range τ).card :=
+            Finset.card_le_card_of_injOn (fun i => (i : ℕ))
+              (fun i hi => by simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq] at hi
+                              simpa using hi) (fun i _ j _ h => Fin.ext h)
+        _ = τ := Finset.card_range τ
+    have hch : ∀ x, (children E x).card ≤ 2 := by
+      intro x; unfold children; split_ifs
+      · exact Finset.card_le_two
+      · simp
+    calc (T u).card
+        ≤ ((Finset.univ.filter fun i : Fin q => (i : ℕ) < τ).biUnion fun i => children E (A.qry i u)).card + 1 :=
+          Finset.card_insert_le _ _
+      _ ≤ (∑ i ∈ Finset.univ.filter fun i : Fin q => (i : ℕ) < τ, (children E (A.qry i u)).card) + 1 := by
+          gcongr; exact Finset.card_biUnion_le
+      _ ≤ (∑ _i ∈ Finset.univ.filter fun i : Fin q => (i : ℕ) < τ, 2) + 1 := by
+          gcongr with i _; exact hch _
+      _ ≤ 2 * τ + 1 := by rw [Finset.sum_const, smul_eq_mul]; omega
+  have hS'c : ∀ b u, (S' b u).card ≤ 2 * τ + 1 := by
+    intro b u
+    by_cases hb : τ ≤ (b : ℕ)
+    · simp only [S', if_pos hb]; exact hTc u
+    · simp only [S', if_neg hb]; simp
+  calc (Finset.univ.filter fun u => ExtractFails E A u).card * Fintype.card D
+      ≤ ((Finset.univ.biUnion fun t => Finset.univ.filter fun u => u t ∈ S t u) ∪
+          (Finset.univ.biUnion fun b => Finset.univ.filter fun u => u b ∈ S' b u)).card * Fintype.card D :=
+        Nat.mul_le_mul_right _ (Finset.card_le_card hsub)
+    _ ≤ (∑ t : Fin q, (Finset.univ.filter fun u => u t ∈ S t u).card +
+          ∑ b : Fin q, (Finset.univ.filter fun u => u b ∈ S' b u).card) * Fintype.card D := by
+        refine Nat.mul_le_mul_right _ ((Finset.card_union_le _ _).trans (Nat.add_le_add ?_ ?_))
+        · exact Finset.card_biUnion_le
+        · exact Finset.card_biUnion_le
+    _ = ∑ t : Fin q, (Finset.univ.filter fun u => u t ∈ S t u).card * Fintype.card D +
+          ∑ b : Fin q, (Finset.univ.filter fun u => u b ∈ S' b u).card * Fintype.card D := by
+        rw [add_mul, Finset.sum_mul, Finset.sum_mul]
+    _ ≤ ∑ _t : Fin q, q * Fintype.card (Fin q → D) +
+          ∑ _b : Fin q, (2 * τ + 1) * Fintype.card (Fin q → D) := by
+        exact add_le_add (Finset.sum_le_sum fun t _ => card_hit_le t (S t) q (hS t) (hSc t))
+          (Finset.sum_le_sum fun b _ => card_hit_le b (S' b) (2 * τ + 1) (hS' b) (hS'c b))
+    _ = (q * q + q * (2 * τ + 1)) * Fintype.card (Fin q → D) := by
+        simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]; ring
 
 end Pouw.MerkleExtract
