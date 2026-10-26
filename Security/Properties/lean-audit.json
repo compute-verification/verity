@@ -485,11 +485,10 @@
     "Definitions.Core.Game",
     "Definitions.Hash.RowLeaf",
     "Flock.Hash",
-    "Definitions.Accounting.JointBlocks",
     "MemoryChallenger.WipeProtocol"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the period model's vocabulary, the shared game and the row-leaf opening it reads the commitment through, never over a proof; soundness at the verifier of record is stated over onsite's compiled code and the wipe's component, the composition's properties, and the period and block models it instantiates, never over a proof"
+   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the wipe's compiled component, the composition's properties, the period model's vocabulary, the shared game and the row-leaf opening it reads the commitment through, never over a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
