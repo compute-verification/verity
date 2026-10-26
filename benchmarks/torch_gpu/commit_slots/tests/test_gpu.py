@@ -33,3 +33,14 @@ def test_two_h200_layers() -> None:
     layout = S.h200_layout(layers=2)
     out = S.random_outputs(layout, 3, np.random.default_rng(3))
     assert G.commit(G.Plan(CTX, layout), 2, KEY, _cuda(out), 3) == S.commit(CTX, layout, 2, KEY, out, 3)
+
+
+@pytest.mark.parametrize("temp_bytes", [1, 4 * 64 * 25 * 2], ids=["1-slot-passes", "2-slot-passes"])
+def test_passes_on_the_device_give_the_reference_s_roots(temp_bytes: int) -> None:
+    """Passes over a few slots at a time (each pass's row table moved on its first slot, its salts' nonces from there) and the
+    frontier folded and closed on the device: three H200 layers (75 units in groups of 25 rows) at 5 slots."""
+    layout = S.h200_layout(layers=3)
+    out = S.random_outputs(layout, 5, np.random.default_rng(4))
+    plan = G.Plan(CTX, layout, temp_bytes=temp_bytes)
+    assert plan.per_pass(plan.groups[0].shape, 5) == (1 if temp_bytes == 1 else 2)
+    assert G.commit(plan, 6, KEY, _cuda(out), 5) == S.commit(CTX, layout, 6, KEY, out, 5)
