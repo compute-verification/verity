@@ -11,6 +11,9 @@ import Proofs.Flock.VBridge.Family.Opened
 import Proofs.Flock.VBridge.Family.Structure
 import Proofs.Flock.Soundness.Refine.LigeritoRun
 import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.Claims.Recursion.DeployedBrings
+import Proofs.Flock.Claims.Recursion.DecompBDeployed
+import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 
 /-!
 # Check 5's `coef` tie at the deployed run
@@ -19,15 +22,9 @@ A `rec-open` piece's copy reads its opening's coefficients at its `coef` columns
 (`RecCoins.checkOpen`) holds each instance's public commit string of port `coef` to `commitRow` of the verifier's own
 row `openCoef` under `verifierSalt`: the words of `RecCoins.coefAt` at its rep's `κ` and `eq(α)` at the query. So, as
 for `dirs` (`OpenDirs.dirsTie_staged`), `port_tie` gives the copy's `coef` bits as the verifier's row, and the coin side
-reads that row off the coins as `Rows.coefRead` (`coefTieR_of`).
-
-The `dirs` tie gets its two record facts from the deployed record. The `coef` tie takes them as premises, because the
-record lists neither yet:
-
-* `CoefCallsR`: `DeployedR.layR` records the part's hm96 calls at `coef`. `DeployedR.openPorts` is `["dirs"]`; with
-  `"coef"` added there it is `portCalls_sub_layR_open elem hr hss hsv hc (by simp [openPorts]) hq hi`.
-* `hsetC`: the deployed setup lists check 5's evaluations of the `coef` rows (`coefSetup`), which `resSetup` (its
-  `openSetupSt`) doesn't.
+reads that row off the coins as `Rows.coefRead` (`coefTieR_of`). The record facts are the deployed record's, as for
+`dirs`: `DeployedR.layR` records the part's hm96 calls at `coef` (`openPorts`, `portCalls_sub_layR_open`), and check 5's
+evaluations of the `coef` rows are `openSetupSt`'s, which the deployed setup lists (`hset`, `resSetup_deployedB`).
 
 * `openCoefs_of_words`: a copy whose `coef` columns hold the bits of `RecCoins.words xs` reads `xs`.
 * `coefCols_staged`, `slotCoef_staged`: port `coef` is row 3 of the unit, from column `coefCol LANES HH 0` of each copy,
@@ -36,7 +33,8 @@ record lists neither yet:
 * `CoefTieR`, `coefTieR_of`: check 5's `coef` row at a piece's instance is the words of `coefRead` at the coins, from
   `InnerCoinsR`.
 * `CopyCoefTieR`, `copyCoefTieR_of`, `copyCoefTieR_dense`: the tie at every piece a level part owns, at any accepted
-  run (`AtPieces`); `CopyCoefTieRP`, `copyCoefTieRP_dense` at each part's own witness (`AtPiecesP`, `JointP`).
+  run (`AtPieces`); `CopyCoefTieRP`, `copyCoefTieRP_dense` at each part's own witness (`AtPiecesP`, `JointP`), and
+  `copyCoefTieRP_deployed` at the deployed brings, the deployed bound and row D's pieces, with no premise.
 -/
 
 namespace RecDeploy.OpenCoef
@@ -267,36 +265,6 @@ theorem slotCoef_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
 
 /-! ## Check 5's `coef` rows -/
 
-/-- **Check 5's evaluations of the `coef` rows at one statement `st`** of a `rec-open` unit, at its source `src`:
-`checkOpen`'s at `coef` (the verifier's `coef` rows, `openRows`, under `verifierSalt` of META's `program_sha512`). None
-at any other unit. -/
-def coefSetupSt (src : Option RecCoins.Source) (st : Stmt) : List Msg :=
-  match RecOpen.params st.c.unit.name, src with
-  | some (L, H), some f =>
-    match (f.load st.c.unit.name).toOption, (st.c.metaJ.getObjValAs? String "program_sha512").toOption with
-    | some inn, some prog => match openRows inn L H with
-      | some (cr, _) => commitIns cr (RecCoins.verifierSalt prog RecCoins.COEF_VALUE)
-      | none => []
-    | _, _ => []
-  | _, _ => []
-
-/-- **Check 5's evaluations of the `coef` rows at a V\* statement `xO`**: `coefSetupSt` at each statement its recursive
-setup sets up, at check 5's source. The deployed `Brings.setup` is to list them (`hsetC`) as it lists `resSetup`. -/
-def coefSetup (xO : Msg) : List Msg :=
-  match setupO xO with
-  | some (i, _, sts) => sts.toList.flatMap fun st => coefSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits) st
-  | none => []
-
-/-- **The record holds a level part's hm96 calls at `coef`**: at a `rec-open` part of `n` instances, each instance's
-`portCalls` at port `coef` are among `layR`'s calls of the part. This is `portCalls_sub_layR_open` once
-`DeployedR.openPorts` lists `"coef"`. -/
-def CoefCallsR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) : Prop :=
-  ∀ (x : Msg) (r : XR) (ss : Array VStar.Stmt) (s lv LANES HH n : ℕ), readX x = some r →
-    RecVStar.statements r.shape = .ok ss → ss[s]? = some (.recOpen lv LANES HH n) →
-    ∀ (c : Circuit) (qc : ℕ), r.w.parts[s]?.bind partCircuit = some c →
-      c.ports.findIdx? (·.name == "coef") = some qc →
-      ∀ i < n, ∀ e ∈ portCalls c "coef" qc i, e ∈ (DeployedR.layR elem).shaAt x s
-
 /-- **Check 5's `rec-open` rows, opened**: where `openRows` gives rows, the inner session's algebra, the one level of
 `LANES` lanes and `H` siblings, both reps, and the `coef` and `dirs` rows built of them. -/
 theorem openRows_coef {inn : RecCoins.Inner} {LANES H : ℕ} {cr dr : Array (Array ℕ)}
@@ -364,11 +332,11 @@ theorem openCoef_get (sh : Shape) (l LANES : ℕ) (r0 r1 : RecCoins.Rep) {r j : 
 /-! ## The tie at a copy -/
 
 /-- **Check 5's `coef` tie at a level part's instance, at `layR`**: at a staged `rec-open` part whose calls at `layR`
-are true and collision-free with the verifier's evaluations, whose calls at `coef` the record holds (`hmem`), and whose
-check 5 runs `checkOpen`, the inner session check 5 loads gives `coef` rows `cr`, and at each instance `i < n` of them
+are true and collision-free with the verifier's evaluations, and whose check 5 runs `checkOpen`, the inner session check 5 loads gives `coef` rows `cr`, and at each instance `i < n` of them
 the copy `(i / g, i % g, 0)` holds `cr[i]`'s bits at its `coef` columns: `port_tie` at the `coef` slot
-(`slotCoef_staged`) and check 5's public row (`check5_bytes_lt`), with the verifier's evaluations of it in
-`coefSetupSt` (`hsetC`), and the slot's forms the copy's `coef` columns (`coefCols_staged`). -/
+(`slotCoef_staged`, whose calls `layR` records, `portCalls_sub_layR_open`) and check 5's public row
+(`check5_bytes_lt`), with the verifier's evaluations of it in `openSetupSt` (`hset`), and the slot's forms the copy's
+`coef` columns (`coefCols_staged`). -/
 theorem coefTie_staged {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit}
@@ -386,9 +354,7 @@ theorem coefTie_staged {b : Brings} {IV : Claims.Verifier Coin}
     (hso : RecCoins.stackedParams sts[0].c.unit.name = none) (hop : RecOpening.params sts[0].c.unit.name = none)
     (hsp : RecSparse.params sts[0].c.unit.name = none)
     {f : RecCoins.Source} (hf : RecCoins.Source.atC3 i0.src i0.inner i0.commits = some f)
-    (hsetC : ∀ u ∈ coefSetup xO, u ∈ b.setup xO) {i : ℕ}
-    (hmem : ∀ e ∈ portCalls c "coef" 3 i, e ∈ (DeployedR.layR elem).shaAt x s)
-    (hdin : 3 < HmOut.nIn c) (hi : i < n) (hnp : i < sts[0].pub.n) :
+    (hset : ∀ u ∈ resSetup xO, u ∈ b.setup xO) {i : ℕ} (hdin : 3 < HmOut.nIn c) (hi : i < n) (hnp : i < sts[0].pub.n) :
     ∃ (inn : RecCoins.Inner) (cr dr : Array (Array ℕ)), f.load sts[0].c.unit.name = .ok inn ∧
       openRows inn LANES HH = some (cr, dr) ∧
       (i < cr.size → ∀ h < 256 * LANES, Flock.Readable.copyOf p 0 ht w (i / c.g) (i % c.g) 0 (coefCol LANES HH h) =
@@ -427,14 +393,15 @@ theorem coefTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   refine ⟨inn, cr, dr, hinn, hrows, fun hnr => ?_⟩
   obtain ⟨hqc, ptc, hptc, hwords, hL8, hcols⟩ := coefCols_staged (w := w) hS hr hss hsv hpc hx ht hdin i
   obtain ⟨prog, hprog, hpv⟩ := OpenDirs.check5_bytes_lt hS hck hr hpc hsu h0 hidx hown hcv hqc hnN hnr hnp
-  have hst : coefSetupSt (RecCoins.Source.atC3 i0.src i0.inner i0.commits) sts[0] =
-      commitIns cr (RecCoins.verifierSalt prog RecCoins.COEF_VALUE) := by
-    unfold coefSetupSt
+  have hst : openSetupSt (RecCoins.Source.atC3 i0.src i0.inner i0.commits) sts[0] =
+      commitIns cr (RecCoins.verifierSalt prog RecCoins.COEF_VALUE) ++
+        commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE) := by
+    unfold openSetupSt
     simp only [hpar, hf, hinn, hprog, Except.toOption, hrows]
-  have hmemS : ∀ u ∈ coefSetupSt (RecCoins.Source.atC3 i0.src i0.inner i0.commits) sts[0], u ∈ b.setup xO :=
-    fun u hu => hsetC u (by
-      unfold coefSetup; rw [hsu]; exact List.mem_flatMap.2 ⟨sts[0], by simp, hu⟩)
-  rw [hst] at hmemS
+  have hmemS : ∀ u ∈ commitIns cr (RecCoins.verifierSalt prog RecCoins.COEF_VALUE), u ∈ b.setup xO :=
+    fun u hu => hset u (by
+      unfold resSetup; rw [hsu]
+      exact List.mem_flatMap.2 ⟨sts[0], by simp, List.mem_append_right _ (by rw [hst]; exact List.mem_append_left _ hu)⟩)
   have hci : rowInput (RecCoins.padTo cr[i]! (Registered.rowWords cr[i]!.size 16)) ∈
         commitIns cr (RecCoins.verifierSalt prog RecCoins.COEF_VALUE) ∧
       (Hm96.Default512.saltPrefix ++ RecCoins.verifierSalt prog RecCoins.COEF_VALUE i).data.toList ∈
@@ -445,7 +412,8 @@ theorem coefTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   have hfd : rowForms c "coef" 3 i = ((rowHidden c "coef" i).getD []).map HmNets.Lin.var := by
     unfold rowForms
     rw [ite_eq_left hdin]
-  have htie := port_tie rfl hT hnc hmem
+  have htie := port_tie rfl hT hnc
+    (portCalls_sub_layR_open elem hr hss hsv hpc (by simp [DeployedR.openPorts]) hqc hi)
     (by rw [hfd]; exact slotCoef_staged hS hck hr hss hsv hpc hqc hi) hpv.symm
     (hmemS _ hci.1) (hmemS _ hci.2)
   have hsz := crRow_size hrows hnr
@@ -626,8 +594,7 @@ def CopyCoefTieRP (pieces : Msg → List OpenPiece) : Prop :=
 end Deployed
 
 /-- **`CopyCoefTieR` at the layout of record `layR`**, at the deployed reader's statements at the dense form and pieces
-in range, from the record holding the `coef` calls (`CoefCallsR`), the deployed setup listing check 5's `coef`
-evaluations (`hsetC`) and the coin side (`InnerCoinsR`): the part's circuit is the staged table's, with `coef` among its
+in range, from the deployed setup listing check 5's evaluations (`hset`) and the coin side (`InnerCoinsR`): the part's circuit is the staged table's, with `coef` among its
 inputs (`four_lt_nIn`); check 5's site holds the registered reads, the inner session and its unit no other recursive unit
 (`copySite_staged`); the piece's instance is below the statement's `n`, which is check 5's `coef` rows (`drSize_staged`,
 `cr_size_eq`) and at most the table's public file's, so the labels are `0, …, n − 1` (`CopySite.idx_staged`); then
@@ -638,8 +605,7 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
     {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
     (pieces : Msg → List OpenPiece)
     (hP : ∀ x, (DR b elem IV).parse x = parse x) (hSh : ∀ f, shape f → Claims.Recursion.Form.Dense f)
-    (hR : OpenLower.PiecesInRangeR pieces) (hsetC : ∀ xO, ∀ u ∈ coefSetup xO, u ∈ b.setup xO)
-    (hcalls : CoefCallsR elem)
+    (hR : OpenLower.PiecesInRangeR pieces) (hset : ∀ xO, ∀ u ∈ resSetup xO, u ∈ b.setup xO)
     (hI : ∀ s x c st0, parse x = some st0 → Claims.Recursion.Form.Dense st0.form →
       OpenLower.InnerCoinsR untr b Bd.DE.V.k s x c) :
     CopyCoefTieR FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (DeployedR.layR elem) Bd pieces := by
@@ -737,7 +703,7 @@ theorem copyCoefTieR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.le
   have hidx := CopySite.idx_staged hsu h0 hown hcv (by omega) (CopySite.labels_staged hS hsu h0)
   -- the copy's `coef` columns are check 5's row
   obtain ⟨inn', cr', dr', hinn', hor', htie⟩ := coefTie_staged hT hnc hS hck hr hss hsv hpc hxp ht hsu h0 hidx hown
-    hso hop hsp hf' (hsetC xO) (hcalls x r ss s lv LANES HH n hr hss hsv cc 3 hpc (findIdx_coef hrk) _ hinst)
+    hso hop hsp hf' (hset xO)
     hdin hinst (by omega)
   rw [hinn] at hinn'
   cases hinn'
@@ -773,11 +739,10 @@ theorem copyCoefTieR_dense {b : Brings}
     {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
     (pieces : Msg → List OpenPiece)
     (hP : ∀ x, (DR b elem IV).parse x = parse x) (hR : OpenLower.PiecesInRangeR pieces)
-    (hsetC : ∀ xO, ∀ u ∈ coefSetup xO, u ∈ b.setup xO) (hcalls : CoefCallsR elem)
-    (hB : ∀ x, RestRead.kI x ≤ Bd.DE.V.k (xIOf x)) :
+    (hset : ∀ xO, ∀ u ∈ resSetup xO, u ∈ b.setup xO) (hB : ∀ x, RestRead.kI x ≤ Bd.DE.V.k (xIOf x)) :
     CopyCoefTieR FlockDeploy.sha512 (DR b elem IV) Claims.Recursion.Form.Dense recRead b cmt (DeployedR.layR elem) Bd
       pieces :=
-  copyCoefTieR_of pieces hP (fun _ h => h) hR hsetC hcalls
+  copyCoefTieR_of pieces hP (fun _ h => h) hR hset
     fun _ x _ _ hst hd => OpenLower.innerCoinsR_staged hst hd (hB x)
 
 /-- **`CopyCoefTieRP` at the deployed reader**, at the dense form: `copyCoefTieR_dense` at each part's own witness
@@ -788,11 +753,26 @@ theorem copyCoefTieRP_dense {b : Brings}
     {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
     (pieces : Msg → List OpenPiece)
     (hP : ∀ x, (DR b elem IV).parse x = parse x) (hR : OpenLower.PiecesInRangeR pieces)
-    (hsetC : ∀ xO, ∀ u ∈ coefSetup xO, u ∈ b.setup xO) (hcalls : CoefCallsR elem)
-    (hB : ∀ x, RestRead.kI x ≤ Bd.DE.V.k (xIOf x)) :
+    (hset : ∀ xO, ∀ u ∈ resSetup xO, u ∈ b.setup xO) (hB : ∀ x, RestRead.kI x ≤ Bd.DE.V.k (xIOf x)) :
     CopyCoefTieRP FlockDeploy.sha512 (DR b elem IV) Claims.Recursion.Form.Dense recRead b cmt (DeployedR.layR elem) Bd
       pieces :=
-  OpenLower.atPiecesP_of _ _ _ _ _ _ _ (copyCoefTieR_dense pieces hP hR hsetC hcalls hB)
+  OpenLower.atPiecesP_of _ _ _ _ _ _ _ (copyCoefTieR_dense pieces hP hR hset hB)
+
+/-- **`CopyCoefTieRP` at the deployed brings, with no premise**: `copyCoefTieRP_dense` at `bB (deployedB b) …`, whose
+setup lists check 5's evaluations (`resSetup_deployedB`), the deployed bound `bdR` (whose `k` is `kI`) and row D's
+pieces (`piecesInRangeR_rowDPieces`). Its record is `DR … (bdR …).IVStar`, which is `DRL`. -/
+theorem copyCoefTieRP_deployed (rd : Msg → Option FlockDeploy.FinalP) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
+    (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
+    (rest : Msg → List (Msg × Claims.Out) → List UInt8)
+    (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (cmt : Msg → ℕ → Msg → Msg)
+    (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) :
+    CopyCoefTieRP FlockDeploy.sha512
+      (DR (DecompBR.bB (deployedB b) aux nOf hd rest) elem (bdR rd wE final w).IVStar) Claims.Recursion.Form.Dense
+      recRead (DecompBR.bB (deployedB b) aux nOf hd rest) cmt (DeployedR.layR elem) (bdR rd wE final w)
+      (Rows.rowDPieces key) :=
+  copyCoefTieRP_dense (Rows.rowDPieces key) (fun _ => rfl) (OpenLower.piecesInRangeR_rowDPieces key)
+    (resSetup_deployedB b) (fun _ => le_rfl)
 
 end
 
