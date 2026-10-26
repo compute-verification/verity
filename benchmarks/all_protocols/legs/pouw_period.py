@@ -58,19 +58,19 @@ from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity_torch_loop import checkpoint as CK
 from verity_torch_loop import loop as L
-from verity_vllm import protocol_options as PO
+from verity_vllm import protocols as PO
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops
-from verity_vllm.protocol_options import pouw
-from verity_vllm.protocol_options import pouw_h1 as PH
-from verity_vllm.protocol_options import pouw_h1_challenger as PHC
-from verity_vllm.protocol_options import pouw_h1_commit as CT
-from verity_vllm.protocol_options import pouw_h1_served as SV
-from verity_vllm.protocol_options import pouw_h1_window as PHW
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import served as SV
+from verity_vllm.protocols.pouw.h1 import window as PHW
 
-from tests.protocol_options import pouw_h1_credit as PCR
-from tests.protocol_options import pouw_h1_gpu as GPU
-from tests.protocol_options import pouw_h1_rehearsal as RH
+from tests.protocols import pouw_h1_credit as PCR
+from tests.protocols import pouw_h1_gpu as GPU
+from tests.protocols import pouw_h1_rehearsal as RH
 
 ENTRY = f"pouw:{PH.SCHEME}"
 STAND_IN = "stand-in verifier of record (pouw_h1_credit.StandIn; live@<s> accepted unseen)"
