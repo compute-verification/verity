@@ -34,6 +34,22 @@ def test_v1_permutation_breaks_the_packing_pattern():
     assert without > 0.9 and with_perm < 0.3
 
 
+@pytest.mark.parametrize("L,C", [(512, 128), (2048, 512)])
+def test_without_v_the_complement_split_and_the_packed_correction_are_exact(L, C):
+    r = PB.check_no_v(L=L, m=8, n=32, C=C)
+    assert r["m7_exact"] and r["y_2to4"] and r["g_planes_int8"] and r["packed_exact"] and r["e2_int8"]
+    assert (r["unpacked_chunks"] > 0.5) == (C == 512)
+
+
+def test_v_blocks_m7_on_sm120():
+    eX, eW, _ = PB.operand_cases()["A=B=0, no V (U ±80; is V needed?)"]
+    p = PB.price(PB.SM120, PB.leaves_of(None, 0, eX, eW), 640, 16512, PB.TOKENS, beside=False)
+    assert p.c == pytest.approx(0.75, abs=0.01) and p.routes == {"2:4 bin A": pytest.approx(1.0)}
+    eX, eW, _ = PB.operand_cases()["A=B=0, v1 (V ±64, U ±80)"]
+    v1 = PB.price(PB.SM120, PB.leaves_of(None, 0, eX, eW), 640, 16512, PB.TOKENS, beside=False)
+    assert v1.c == pytest.approx(1.0)
+
+
 @pytest.mark.parametrize("card", PB.CARDS, ids=lambda c: c.name)
 def test_the_honest_kernel_prices_at_one(card):
     eX, eW, _ = PB.operand_cases()["A=B=0, v1 (V ±64, U ±80)"]

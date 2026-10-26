@@ -172,12 +172,13 @@ def form_pmf(entry: np.ndarray, coefs) -> tuple[np.ndarray, int]:
     return pmf, -off
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class FormStats:
     terms: int
     q: float           # P(form leaves int8): the density of its excess e
     left24: float      # density of e's nonzeros beyond two in a group of four (2:4's leftover)
     max_abs: int
+    binary: float = 0.0  # P(entry = 1) when every entry is 0 or 1 (A = 0 without V: X = b), else 0
 
 
 def form_stats(entry: np.ndarray, coefs) -> FormStats:
@@ -186,7 +187,9 @@ def form_stats(entry: np.ndarray, coefs) -> FormStats:
     v = np.arange(len(pmf)) - off
     q = float(pmf[(v < -128) | (v > 127)].sum())
     left = sum(math.comb(4, j) * q ** j * (1 - q) ** (4 - j) * (j - 2) for j in (3, 4)) / 4
-    return FormStats(len(coefs), q, left, int(np.abs(v[pmf > 0]).max()))
+    support = v[pmf > 0]
+    binary = float(pmf[v == 1].sum()) if set(support.tolist()) <= {0, 1} else 0.0
+    return FormStats(len(coefs), q, left, int(np.abs(support).max()), binary)
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -389,6 +392,54 @@ SCATTER = ("s16-alu", "s16-fma", "s8-alu", "s8-fma")
 BESIDE_TILE = 8                     # DP4A/FFMA register tile (t x t outputs a lane)
 
 
+PACK_MAX = 4                          # the narrow side's |form entry| bound for BET-HYBRID-2 §I's packing
+PACK_CHUNKS = (64, 128, 256, 512)     # inner positions between decodes, the LP's choice
+
+
+def _left24(q: float) -> float:
+    return sum(math.comb(4, j) * q ** j * (1 - q) ** (4 - j) * (j - 2) for j in (3, 4)) / 4
+
+
+def lanes_alu(x: float) -> dict:
+    return dict(alu=x, issue=x, vec=x, rf=2 * x)
+
+
+def packed_loads(sp: dict, sc0: dict, q: float, narrow: int, amort: int) -> dict:
+    """BET-HYBRID-2 §I's packing, loads a leaf MAC for each chunk length C: with the other side's form narrow (|entry|
+    <= `narrow`; A = 0 without V), two columns' excesses share one int8 operand E2 = e1 + 64 e2 on the 2:4 MMA (half
+    the correction MACs) and E2's leftover beyond two a group of four is scattered. Each chunk of C inner positions
+    accumulates afresh and each output pair is decoded (5 lane-ops: zero T; S1 = ((T + 32) & 63) - 32 into its
+    output, T - S1 into the other's running sum, shifted by 6 once at the end). The decode needs |S1| <= 31, which
+    holds when e1 has at most 31 // narrow nonzeros in the chunk; e is formed first, so the prover knows each chunk's
+    counts, puts the sparser column first, and does a chunk where both columns exceed it unpacked. E2 is formed
+    (one IMAD) and compressed to 2:4 (two lane-ops an entry) once for the `amort` rows of the other side."""
+    cap_nz = 31 // narrow
+    q2 = 1 - (1 - q) ** 2
+    out = {}
+    for C in PACK_CHUNKS:
+        over = 1 - sum(math.comb(C, j) * q ** j * (1 - q) ** (C - j) for j in range(cap_nz + 1))
+        bad = over ** 2
+        packed = {r: 0.5 * sp.get(r, 0.0) + _left24(q2) * sc0.get(r, 0.0) for r in RES}
+        unpacked = {r: sp.get(r, 0.0) + _left24(q) * sc0.get(r, 0.0) for r in RES}
+        extra = lanes_alu((1 - bad) * 5 / (2 * C) + 3 / (2 * amort))
+        out[C] = {r: (1 - bad) * packed[r] + bad * unpacked[r] + extra.get(r, 0.0) for r in RES}
+    return out
+
+
+def binary_loads(sp: dict, sc0: dict, p: float, amort_bin: int, amort_dense: int) -> dict:
+    """RT-MODEL's M7, loads a leaf MAC, for a form whose entries are 0 or 1 with P(1) = p (A = 0 without V): in each
+    group of four inner positions with three or four ones the bits are complemented, x = 1 - x', so X = Y + Z with Y
+    2:4-conformant (at most two nonzeros, entries in {-1, 0, 1}) and Z the indicator of complemented groups. Y W^T is
+    one 2:4 MMA pass; Z W^T = Zg G^T with G the dense side's group sums (|G| <= 512: two int8 digit planes) on 2:4 over
+    a quarter of the inner positions, Zg's leftover beyond two a group of four scattered. Y and Zg are formed for the
+    `amort_dense` columns (two lane-ops an entry), G for the `amort_bin` rows (five an entry of G)."""
+    pz = math.comb(4, 3) * p ** 3 * (1 - p) + p ** 4
+    out = {r: 1.5 * sp.get(r, 0.0) + _left24(pz) / 4 * sc0.get(r, 0.0) for r in RES}
+    for r, x in lanes_alu(2 / amort_dense + 5 / 4 / amort_bin).items():
+        out[r] += x
+    return out
+
+
 def lookup_routes(L: int, n: int, m: int, kappa: float = 1.0) -> dict:
     """O-IO's lookup routes (art:092f373e…, `io_lp.py` and `merkle_lp.py`), loads a naive MAC, at A = B = 0 only.
 
@@ -460,7 +511,7 @@ class Priced:
 
 def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, beside: bool = True,
           wgmma_smem: bool = True, facets: bool = True, items: tuple = (), extra_fixed: dict | None = None,
-          lookups: bool = False) -> Priced:
+          lookups: bool = False, rest: Leaf | None = None) -> Priced:
     """LP: minimize T (SM-clocks a naive MAC) with every resource's load at most T times its rate, and θ's joint
     facets a·tensor + b·other ≤ 4T. c = T over the honest kernel's 1/s8.
 
@@ -470,7 +521,8 @@ def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, be
     port; False charges only the LDS that brings A to registers (sm_90 only; θ doesn't measure it).
     items: more work a naive MAC, each (name, weight, {route: loads a unit}), one convex mix of routes an item.
     extra_fixed: loads a naive MAC with no choice of route.
-    lookups: O-IO's lookup routes for naive leaves (`lookup_routes`; valid at B = 0 only)."""
+    lookups: O-IO's lookup routes for naive leaves (`lookup_routes`; valid at B = 0 only).
+    rest: the operands' naive leaf, for the part the scheme's blocks don't cover (default: generic int8 entries)."""
     tile = leaf_tile(card, g)
     if tile is None:
         return Priced(math.inf, ["no tile"], {}, {}, False)
@@ -481,7 +533,8 @@ def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, be
         if f <= 0:
             return Priced(math.inf, ["no block"], {}, {}, False)
         one = FormStats(1, 0.0, 0.0, 128)
-        leaves = [replace(lf, weight=lf.weight * f) for lf in leaves] + ([Leaf(1 - f, one, one, 0)] if f < 1 else [])
+        rest = replace(rest, weight=1 - f) if rest is not None else Leaf(1 - f, one, one, 0)
+        leaves = [replace(lf, weight=lf.weight * f) for lf in leaves] + ([rest] if f < 1 else [])
     smem_mma = (1 / ml + 1 / nl) if (wgmma_smem or card.family != "sm_90") else 1 / nl
     tens = 1 / (card.s8 * rate)
     names, cols, eqs = [], [], []
@@ -505,6 +558,7 @@ def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, be
         route_loads.update(lk)
     sc0 = scatter_loads("s16-alu")
     sp = dict(mma, tensor=1 / (card.sp * rate))
+    rows_of = {"A": m, "B": n}
     for k, lf in enumerate(leaves):
         mrow = {}
         naive_leaf = lf.A.terms == 1 and lf.B.terms == 1
@@ -517,9 +571,14 @@ def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, be
                     ld[res_] = ld.get(res_, 0.0) + lf.A.q * lf.B.q * x
             var(f"{k}:{r}", ld)
             mrow[f"{k}:{r}"] = 1.0
+        bins = [(s, o) for s, fs, o in (("A", lf.A, "B"), ("B", lf.B, "A")) if fs.binary > 0]
+        for s, o in bins:
+            var(f"{k}:2:4 bin {s}", binary_loads(sp, sc0, (lf.A if s == "A" else lf.B).binary, rows_of[s],
+                                                  rows_of[o]))
+            mrow[f"{k}:2:4 bin {s}"] = 1.0
         eqs.append((mrow, lf.weight))
-        needs = [f"{k}:s8"] + ([f"{k}:dp4a"] if beside else [])
-        for side, fs in (("A", lf.A), ("B", lf.B)):
+        needs = [f"{k}:s8"] + ([f"{k}:dp4a"] if beside else []) + [f"{k}:2:4 bin {s}" for s, _ in bins]
+        for side, fs, other_side in (("A", lf.A, lf.B), ("B", lf.B, lf.A)):
             if fs.q <= 0:
                 continue
             row = {nm: -1.0 for nm in needs}
@@ -527,7 +586,13 @@ def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, be
             var(f"{k}:{side}:2:4x2", {r: 2 * sp.get(r, 0) for r in RES})
             for v in SCATTER:
                 var(f"{k}:{side}:{v}", {r: fs.q * x for r, x in scatter_loads(v).items()})
-            for nm in ("2:4", "2:4x2") + SCATTER:
+            names_c = ["2:4", "2:4x2"] + list(SCATTER)
+            if other_side.max_abs <= PACK_MAX:
+                other_rows = rows_of["B" if side == "A" else "A"]
+                for C, ld in packed_loads(sp, sc0, fs.q, other_side.max_abs, other_rows).items():
+                    var(f"{k}:{side}:2:4 packed C{C}", ld)
+                    names_c.append(f"2:4 packed C{C}")
+            for nm in names_c:
                 row[f"{k}:{side}:{nm}"] = 1.0
             eqs.append((row, 0.0))
     for name, w, routes_ in items:
@@ -613,7 +678,8 @@ def profile(scheme) -> str:
 
 
 def price_scheme(card: Card, scheme, d: int, eX, eW, L: int, n: int, m: int, **kw) -> Priced:
-    return price(card, leaves_of(scheme, d, eX, eW), L, n, m, grid(powered(scheme, d)), **kw)
+    return price(card, leaves_of(scheme, d, eX, eW), L, n, m, grid(powered(scheme, d)),
+                 rest=leaves_of(None, 0, eX, eW)[0], **kw)
 
 
 def best_scheme(card: Card, d: int, eX, eW, L: int, n: int, m: int, schemes, **kw):
@@ -621,11 +687,11 @@ def best_scheme(card: Card, d: int, eX, eW, L: int, n: int, m: int, schemes, **k
     best, seen = None, set()
     for s in schemes:
         lv = leaves_of(s, d, eX, eW)
-        key = (grid(powered(s, d)), tuple(sorted((lf.A.terms, lf.A.q, lf.B.terms, lf.B.q, lf.nnz_c) for lf in lv)))
+        key = (grid(powered(s, d)), tuple(sorted((lf.A, lf.B, lf.nnz_c) for lf in lv)))
         if key in seen:
             continue
         seen.add(key)
-        p = price(card, lv, L, n, m, grid(powered(s, d)), **kw)
+        p = price(card, lv, L, n, m, grid(powered(s, d)), rest=leaves_of(None, 0, eX, eW)[0], **kw)
         if best is None or p.c < best[0].c:
             best = (p, s)
     return best
@@ -754,6 +820,62 @@ def check_packing_invariance(L: int = 256, S: int = 4, n: int = 64, seed: int = 
     return tuple(out)
 
 
+def check_no_v(L: int = 512, m: int = 32, n: int = 32, C: int = 128, seed: int = 3) -> dict:
+    """Without V at A = B = 0 (X = b, W' = c + U[:, pi], U ±80), the two tricks `price` gives the adversary, exactly:
+    M7's complement split of the binary X (`binary_loads`) and §I's packed correction (`packed_loads`) on a depth-1
+    product of two-term forms on both sides, (X_a + X_b)(W'_a + W'_b)^T, chunks of C positions. Returns whether each
+    product is exact, the operand
+    constraints (Y 2:4 with entries in {-1, 0, 1}, Zg binary, G's digit planes and E2 in int8), Zg's 2:4 leftover
+    density, and the share of chunks done unpacked."""
+    rng = np.random.default_rng(seed)
+    X, W = v1_operands(np.zeros((m, L), np.int64), np.zeros((n, L), np.int64), L, rng, uX=0)
+    assert set(np.unique(X).tolist()) <= {0, 1}
+    g = X.reshape(m, L // 4, 4)
+    comp = g.sum(axis=2) >= 3
+    Y = np.where(comp[:, :, None], g - 1, g).reshape(m, L)
+    G = W.reshape(n, L // 4, 4).sum(axis=2)
+    G_lo = wrap8(G)
+    G_hi = (G - G_lo) // 256
+    Zg = comp.astype(np.int64)
+    m7 = Y @ W.T + Zg @ (256 * G_hi + G_lo).T
+    y_ok = bool(((Y.reshape(m, L // 4, 4) != 0).sum(axis=2) <= 2).all() and np.abs(Y).max() <= 1)
+    planes_ok = bool(np.abs(G_lo).max() <= 128 and np.abs(G_hi).max() <= 127)
+    _, zg_rest = _split24(Zg[:, : (L // 16) * 4])
+    h = L // 2
+    Xc = X[:, :h] + X[:, h:]
+    Wc = W[:, :h] + W[:, h:]
+    Ww = wrap8(Wc)
+    e = (Wc - Ww) // 256
+    cap_nz = 31 // int(np.abs(Xc).max())
+    corr = np.zeros((m, n), np.int64)
+    bad = chunks = 0
+    e2_ok = True
+    for j in range(0, n, 2):
+        for c0 in range(0, h, C):
+            e1, e2 = e[j, c0:c0 + C], e[j + 1, c0:c0 + C]
+            x = Xc[:, c0:c0 + C]
+            chunks += 1
+            if (e1 != 0).sum() > (e2 != 0).sum():
+                e1, e2, cols = e2, e1, (j + 1, j)
+            else:
+                cols = (j, j + 1)
+            if (e1 != 0).sum() > cap_nz:
+                bad += 1
+                corr[:, cols[0]] += x @ e1
+                corr[:, cols[1]] += x @ e2
+                continue
+            E2 = e1 + 64 * e2
+            e2_ok &= bool(np.abs(E2).max() <= 127)
+            T = x @ E2
+            S1 = ((T + 32) & 63) - 32
+            corr[:, cols[0]] += S1
+            corr[:, cols[1]] += (T - S1) >> 6
+    packed = Xc @ Ww.T + 256 * corr
+    return dict(m7_exact=bool(np.array_equal(m7, X @ W.T)), y_2to4=y_ok, g_planes_int8=planes_ok,
+                zg_left=float((zg_rest != 0).mean()), packed_exact=bool(np.array_equal(packed, Xc @ Wc.T)),
+                e2_int8=e2_ok, e_density=float((e != 0).mean()), unpacked_chunks=bad / chunks)
+
+
 # --------------------------------------------------------------------------------------------------------------------
 # Report.
 
@@ -764,6 +886,7 @@ def operand_cases():
     return {
         "A=B=0, v1 (V ±64, U ±80)": (entry_pmf(zero, U_X), entry_pmf(zero, U_W), True),
         "A=B=0, ±80 both (v2's likely)": (entry_pmf(zero, 80), entry_pmf(zero, 80), True),
+        "A=B=0, no V (U ±80; is V needed?)": (entry_pmf(zero, 0), entry_pmf(zero, 80), True),
         "real, v1 (A σ20, B σ30.7)": (entry_pmf(data_pmf("gauss", 20.0), U_X),
                                       entry_pmf(data_pmf("gauss", 30.7), U_W), False),
     }
@@ -967,11 +1090,36 @@ def job_report(menu: dict, case: str = "A=B=0, v1 (V ±64, U ±80)") -> dict:
     return out
 
 
+def sweep_report(menu: dict, Ls=(1280, 2688, 4096, 8192, 16384)) -> dict:
+    """The job's c_mm (OPT* over the dense kernel at its best) as L grows towards K: the hash's share falls, and
+    the matmul's public best shows once the tensor pipe binds. qkv (K 16384) and down (K 65536), both operand cases
+    at A = B = 0."""
+    out = {}
+    print("\n== c_mm of the whole job (OPT* / the dense kernel at its best, both hashing at the best schedule) as L "
+          "grows")
+    for case in ("A=B=0, v1 (V ±64, U ±80)", "A=B=0, ±80 both (v2's likely)"):
+        eX, eW, lk = operand_cases()[case]
+        print(f"  operands {case}")
+        for card in CARDS:
+            for nm, K, N in (STATIC[0], STATIC[3]):
+                cells = []
+                for L in Ls:
+                    if L > K:
+                        continue
+                    j = job(card, L, K, N, eX, eW, menu, lk)
+                    lab, b = j["best"]
+                    out[case, card.name, nm, L] = j
+                    cells.append(f"L {L}: {b.c / j['dense'].c:.3f} {lab[:12]} ({','.join(b.binding)[:12]})")
+                print(f"    {card.name:12} {nm:5} " + "; ".join(cells))
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="exact CPU checks of the words at small sizes")
     ap.add_argument("--job-only", action="store_true")
     ap.add_argument("--sha-only", action="store_true")
+    ap.add_argument("--sweep", action="store_true", help="only the job's c_mm as L grows")
     args = ap.parse_args()
     cat = catalogue()
     if args.check:
@@ -985,6 +1133,7 @@ def main() -> None:
                         print(f"{nm} {grid(sch)} depth {d} {data} uX {uX}: words exact {ok}; s8 MACs {cnt.s8}, "
                               f"2:4 MACs {cnt.sp}, leftover contributions {cnt.left}")
         print("packing invariance (no permutation, v1's permutation):", check_packing_invariance())
+        print("without V (M7's complement split, §I's packed correction):", check_no_v())
         return
     print("catalogue: " + ", ".join(f"{k} rank {len(v[0])}, {len(v)} orientations" for k, v in cat.items())
           + "; not integral (left out): " + ", ".join(n for n in CATALOGUE if n not in cat))
@@ -994,9 +1143,13 @@ def main() -> None:
     orb = orbit()
     print(f"orbit: {len(orb)} valid <2,2,2> schemes (Strassen, Winograd, GL2(Z) images mod monomials, transposes)")
     menu = methods(orb, cat)
+    if args.sweep:
+        sweep_report(menu)
+        return
     if not args.job_only:
         report(menu)
     job_report(menu)
+    sweep_report(menu)
 
 
 if __name__ == "__main__":
