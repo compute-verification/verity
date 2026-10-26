@@ -20,7 +20,8 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
   census, note:20261017T1818Z-draft-axioms; the whitepaper's 1,007.6 dense FP8 TFLOPS over 2 · 188 SMs at its
   2617 MHz boost is the same 1024), so 192,512; a MAC of `e4m3`, `e5m2` or `e2m1` (`kind::f8f6f4`, `QMMA.16832`) uses
   1 unit, of `nvf4` or `mxf4` (`OMMA.SF.16864`, 8192 MACs in 16 cycles; whitepaper FP4 2,015.2 dense) 1/2, of `f16` or
-  `bf16` 2 (503.8), of `tf32` 4 (251.9); sm_120 has no native `b1` MMA (below);
+  `bf16` 2 (503.8), of `tf32` 4 (251.9); sm_120 has no native `b1` MMA (below); `tensorLong` is `tensor`, since the
+  card has one clock for its tensor and lane figures (RT-MODEL M1);
 * the `k16` integer `mma.sync` (`IMMA.16816`) runs at half the `k32` rate on the card (CALIB: 512 against 1024 MACs an
   SM clock); the instance prices it at the `k32` rate, which lets a program do more, and a per-shape θ row would
   tighten it (RT-MODEL M11);
@@ -75,6 +76,7 @@ def size : Store → ℕ
 /-- Each resource's units a tick. -/
 def ρ : Res → ℚ≥0
   | .tensor => 188 * 1024
+  | .tensorLong => 188 * 1024
   | .issue => 188 * 4
   | .alu => 188 * 64
   | .imad => 188 * 64

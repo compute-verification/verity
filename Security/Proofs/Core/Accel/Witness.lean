@@ -1,4 +1,5 @@
 import Definitions.Core.Accel.Witness
+import Mathlib.Algebra.BigOperators.Intervals
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Ring.NNRat
@@ -10,8 +11,10 @@ import Mathlib.Tactic.Ring
 # The non-vacuity witness, proved (in progress)
 
 The run of a plan issues exactly the plan's instructions, tick by tick (`run_plan`), since each thread's text is one
-instruction and each thread steps once. The kernel's length is within the bound (`kernel_length_le`), and every tick
-is within every resource's rate, so the run meets G2's rates (`kernel_rate`).
+instruction and each thread steps once. The kernel's length is within the bound (`kernel_length_le`). Every tick is
+within every resource's rate but `tensorLong`'s; for `tensorLong`, 21 consecutive ticks hold an idle one
+(`block_long`), so a window of `L` ticks uses at most `524,288 (L - ⌊L/21⌋)` units, within `499,712 (L + 1)`
+(`window_long`): the run meets G2's rates at a backlog of a tick (`kernel_rate`).
 -/
 
 open scoped NNRat
@@ -186,22 +189,24 @@ theorem run_plan (plan : List (List Ins)) (σ : (machine x cap oracle).State (�
 
 /-! ## Length -/
 
-theorem blocks_mul (n : ℕ) (h : 256 ∣ n) : n / 32 * blocks n * 524288 = n ^ 3 := by
+theorem blocks_mul (n : ℕ) (h : 256 ∣ n) : mmas n * 524288 = n ^ 3 := by
   obtain ⟨q, rfl⟩ := h
-  simp only [blocks]
+  simp only [mmas, blocks]
   rw [show 256 * q / 32 = 8 * q by omega, show 256 * q / 64 = 4 * q by omega, show 256 * q / 256 = q by omega]
   ring
 
 theorem kernel_length (n : ℕ) :
-    (kernel n).length = 2 * n + n / 32 * blocks n + (n * n / 4 + 150) / 151 := by
+    (kernel n).length = 2 * n + (mmas n + mmas n / 20) + (n * n / 4 + 150) / 151 := by
   simp [kernel, Nat.add_assoc]
 
 theorem kernel_length_le (n : ℕ) (h : 256 ∣ n) :
     ((sched (kernel n)).length : ℚ≥0) ≤
-      2 * (n : ℚ≥0) + (n : ℚ≥0) ^ 3 / 524288 + (n : ℚ≥0) ^ 2 / 604 + 1 := by
-  have h3 : ((n / 32 * blocks n : ℕ) : ℚ≥0) = (n : ℚ≥0) ^ 3 / 524288 := by
-    rw [eq_div_iff (by norm_num)]
-    exact_mod_cast blocks_mul n h
+      2 * (n : ℚ≥0) + 21 * (n : ℚ≥0) ^ 3 / 10485760 + (n : ℚ≥0) ^ 2 / 604 + 1 := by
+  have h3 : (((mmas n + mmas n / 20 : ℕ)) : ℚ≥0) ≤ 21 * (n : ℚ≥0) ^ 3 / 10485760 := by
+    rw [le_div_iff₀ (by norm_num)]
+    have hb := blocks_mul n h
+    have : (mmas n + mmas n / 20) * 10485760 ≤ 21 * n ^ 3 := by rw [← hb]; omega
+    exact_mod_cast this
   have hs : (n * n / 4 + 150) / 151 * 604 ≤ n * n + 604 := by
     generalize n * n = N
     omega
@@ -214,12 +219,12 @@ theorem kernel_length_le (n : ℕ) (h : 256 ∣ n) :
     rw [div_add_one (by norm_num), le_div_iff₀ (by positivity)]
     exact this
   have hl : ((sched (kernel n)).length : ℚ≥0) =
-      2 * (n : ℚ≥0) + ((n / 32 * blocks n : ℕ) : ℚ≥0) + (((n * n / 4 + 150) / 151 : ℕ) : ℚ≥0) := by
+      2 * (n : ℚ≥0) + ((mmas n + mmas n / 20 : ℕ) : ℚ≥0) + (((n * n / 4 + 150) / 151 : ℕ) : ℚ≥0) := by
     rw [sched, List.length_mapIdx, kernel_length]
     push_cast
     ring
-  have := add_le_add (le_refl (2 * (n : ℚ≥0) + (n : ℚ≥0) ^ 3 / 524288)) hs'
-  rw [hl, h3]
+  rw [hl]
+  have := add_le_add (add_le_add (le_refl (2 * (n : ℚ≥0))) h3) hs'
   simpa only [add_assoc] using this
 
 /-! ## Rate -/
@@ -255,11 +260,28 @@ theorem load_use (n c : ℕ) (hn : n ≤ 2048) (r : Res) : tickUse x [load n c] 
     | exact h4.trans ((by norm_num : (512 : ℚ≥0) ≤ 604).trans dram_ge)
     | exact h4.trans smem_ge
 
-theorem mma_use (n p : ℕ) (r : Res) : tickUse x [mma n p] r ≤ ρ r := by
+theorem mma_use (n p : ℕ) (r : Res) (hr : r ≠ .tensorLong) : tickUse x [mma n p] r ≤ ρ r := by
   have ha : packedWords 64 (Fmt.s8.rowLen 32) Fmt.s8.bits = 512 := by decide
   have hb : packedWords 256 (Fmt.s8.rowLen 32) Fmt.s8.bits = 2048 := by decide
-  cases r <;> simp [tickUse, mma, mmaOp, opUse, port, ρ, Card.weightOf, card, weight, Shape.wa, Shape.wb, ha, hb] <;>
+  cases r <;> simp [tickUse, mma, mmaOp, opUse, port, ρ, Card.weightOf, card, weight, Shape.wa, Shape.wb, ha, hb] at hr ⊢ <;>
     norm_num
+
+theorem mma_long (n p : ℕ) : tickUse x [mma n p] .tensorLong = 524288 := by
+  simp [tickUse, mma, mmaOp, opUse, port, Card.weightOf, card, weight]
+  norm_num
+
+theorem mmaTick_use (n j : ℕ) (r : Res) (hr : r ≠ .tensorLong) : tickUse x (mmaTick n j) r ≤ ρ r := by
+  unfold mmaTick
+  split
+  · simp [tickUse]
+  · exact mma_use n _ r hr
+
+theorem mmaTick_long (n j : ℕ) :
+    tickUse x (mmaTick n j) .tensorLong = if j % 21 = 20 then 0 else 524288 := by
+  unfold mmaTick
+  split
+  · simp [tickUse]
+  · exact mma_long n _
 
 theorem store_tick (n u : ℕ) (r : Res) : tickUse x ((chunk (n * n / 4) 151 u).map (store n)) r =
     (chunk (n * n / 4) 151 u).length * opUse (card.weightOf x) (card.scale x) x.madHi (.copy .reg .dram 4) r := by
@@ -278,29 +300,99 @@ theorem store_use (n u : ℕ) (r : Res) : tickUse x ((chunk (n * n / 4) 151 u).m
     exact hc.trans (by norm_num [ρ])
   · exact (mul_le_mul_of_nonneg_right hc (by norm_num)).trans ((by norm_num : (151 * 4 : ℚ≥0) ≤ 604).trans dram_ge)
 
-theorem kernel_tick_use (n : ℕ) (hn : n ≤ 2048) (t : ℕ) (r : Res) :
+theorem kernel_tick_use (n : ℕ) (hn : n ≤ 2048) (t : ℕ) (r : Res) (hr : r ≠ .tensorLong) :
     tickUse x ((kernel n).getD t []) r ≤ ρ r := by
   rcases h : (kernel n)[t]? with _ | is
   · simp [List.getD_eq_getElem?_getD, h, tickUse]
   · rw [List.getD_eq_getElem?_getD, h, Option.getD_some]
     have hm := List.mem_of_getElem? h
     simp only [kernel, List.mem_append, List.mem_map, List.mem_range] at hm
-    rcases hm with (⟨c, _, rfl⟩ | ⟨p, _, rfl⟩) | ⟨u, _, rfl⟩
+    rcases hm with (⟨c, _, rfl⟩ | ⟨j, _, rfl⟩) | ⟨u, _, rfl⟩
     · exact load_use n c hn r
-    · exact mma_use n p r
+    · exact mmaTick_use n j r hr
     · exact store_use n u r
 
-/-- **G2's rates**: every tick of the kernel is within every resource's rate, so every window is. -/
-theorem kernel_rate (n : ℕ) (hn : n ≤ 2048) (σ : (machine x cap oracle).State (ℕ × ℕ)) (hpc : ∀ θ, σ.pc θ = 0) :
+theorem load_long (n c : ℕ) : tickUse x [load n c] .tensorLong = 0 := by
+  unfold load; split <;> simp [tickUse, copyN, opUse, port]
+
+theorem store_long (n u : ℕ) : tickUse x ((chunk (n * n / 4) 151 u).map (store n)) .tensorLong = 0 := by
+  rw [store_tick]; simp [opUse, port]
+
+/-- The kernel's `tensorLong` units at tick `t`: none at the MMAs' idle ticks (`t + 19n ≡ 20` mod 21, as
+`t - 2n ≡ 20` there), at most a `wgmma`'s elsewhere. -/
+theorem kernel_long (n t : ℕ) :
+    tickUse x ((kernel n).getD t []) .tensorLong ≤ if (t + 19 * n) % 21 = 20 then 0 else 524288 := by
+  simp only [kernel, List.getD_eq_getElem?_getD]
+  by_cases h1 : t < 2 * n
+  · rw [List.getElem?_append_left (by simp; omega), List.getElem?_append_left (by simp; omega)]
+    simp [h1, load_long]
+  · by_cases h2 : t < 2 * n + (mmas n + mmas n / 20)
+    · rw [List.getElem?_append_left (by simp; omega), List.getElem?_append_right (by simp; omega)]
+      simp only [List.length_map, List.length_range, List.getElem?_map, List.getElem?_range (by omega : t - 2 * n < mmas n + mmas n / 20),
+        Option.map_some, Option.getD_some, mmaTick_long]
+      have : (t - 2 * n) % 21 = 20 ↔ (t + 19 * n) % 21 = 20 := by omega
+      simp only [this, le_refl]
+    · rw [List.getElem?_append_right (by simp; omega)]
+      simp only [List.length_append, List.length_map, List.length_range, List.getElem?_map]
+      rcases (List.range ((n * n / 4 + 150) / 151))[t - (2 * n + (mmas n + mmas n / 20))]? with _ | u
+      · simp [tickUse]
+      · simp [store_long]
+
+/-- Any 21 consecutive ticks hold one where `(t + b) % 21 = 20`. -/
+theorem block_long (a b : ℕ) :
+    ∑ t ∈ Finset.Ico a (a + 21), (if (t + b) % 21 = 20 then (0 : ℚ≥0) else 524288) ≤ 20 * 524288 := by
+  set i₀ := a + (41 - (a + b) % 21) % 21
+  have hi : i₀ ∈ Finset.Ico a (a + 21) := by simp only [Finset.mem_Ico]; omega
+  have h0 : (i₀ + b) % 21 = 20 := by omega
+  rw [← Finset.add_sum_erase _ _ hi, ite_eq_left_iff.mpr (fun h => absurd h0 h), zero_add]
+  calc ∑ t ∈ (Finset.Ico a (a + 21)).erase i₀, (if (t + b) % 21 = 20 then (0 : ℚ≥0) else 524288)
+      ≤ ((Finset.Ico a (a + 21)).erase i₀).card • (524288 : ℚ≥0) :=
+        Finset.sum_le_card_nsmul _ _ _ fun t _ => by split <;> norm_num
+    _ = 20 * 524288 := by rw [Finset.card_erase_of_mem hi]; simp
+
+/-- A window of `L` ticks holds at most `L - L/21` ticks off the residue. -/
+theorem window_long (b : ℕ) : ∀ L a : ℕ,
+    ∑ t ∈ Finset.Ico a (a + L), (if (t + b) % 21 = 20 then (0 : ℚ≥0) else 524288) ≤
+      524288 * ((L - L / 21 : ℕ) : ℚ≥0)
+  | L, a => by
+    by_cases hL : L < 21
+    · calc _ ≤ (Finset.Ico a (a + L)).card • (524288 : ℚ≥0) :=
+            Finset.sum_le_card_nsmul _ _ _ fun t _ => by split <;> norm_num
+        _ = 524288 * ((L - L / 21 : ℕ) : ℚ≥0) := by
+            rw [Nat.card_Ico, show a + L - a = L by omega, show L - L / 21 = L by omega, nsmul_eq_mul, mul_comm]
+    · have ih := window_long b (L - 21) (a + 21)
+      rw [← Finset.sum_Ico_consecutive _ (by omega : a ≤ a + 21) (by omega : a + 21 ≤ a + L),
+        show a + L = a + 21 + (L - 21) by omega]
+      calc _ ≤ 20 * 524288 + 524288 * ((L - 21 - (L - 21) / 21 : ℕ) : ℚ≥0) := add_le_add (block_long a b) ih
+        _ = 524288 * ((L - L / 21 : ℕ) : ℚ≥0) := by
+            rw [show L - L / 21 = 20 + (L - 21 - (L - 21) / 21) by omega]
+            push_cast
+            ring
+termination_by L => L
+
+/-- **G2's rates**: every tick of the kernel is within every resource's rate but `tensorLong`'s, and every window
+is within `tensorLong`'s with a tick of backlog. -/
+theorem kernel_rate (n : ℕ) (hn : n ≤ 2048) (hs : 1 ≤ x.slack) (σ : (machine x cap oracle).State (ℕ × ℕ))
+    (hpc : ∀ θ, σ.pc θ = 0) :
     Machine.Rate (Machine.run (prog (kernel n)) σ (sched (kernel n))).2 := by
   intro w (r : Res)
   rw [run_plan _ σ hpc]
-  calc ∑ t ∈ w.ticks, Machine.usage (m := machine x cap oracle) ((kernel n).map (List.map Ins.instr)) t r
-      ≤ ∑ _t ∈ w.ticks, ρ r :=
-        Finset.sum_le_sum fun t _ => by rw [usage_plan]; exact kernel_tick_use n hn t r
-    _ = ρ r * (w.len : ℚ≥0) := by simp [Window.ticks, mul_comm]
-    _ ≤ ρ r * ((w.len + x.slack : ℕ) : ℚ≥0) :=
-        mul_le_mul_of_nonneg_left (by exact_mod_cast Nat.le_add_right _ _) zero_le
+  by_cases hr : r = .tensorLong
+  · subst hr
+    calc ∑ t ∈ w.ticks, Machine.usage (m := machine x cap oracle) ((kernel n).map (List.map Ins.instr)) t .tensorLong
+        ≤ ∑ t ∈ w.ticks, (if (t + 19 * n) % 21 = 20 then (0 : ℚ≥0) else 524288) :=
+          Finset.sum_le_sum fun t _ => by rw [usage_plan]; exact kernel_long n t
+      _ ≤ 524288 * ((w.len - w.len / 21 : ℕ) : ℚ≥0) := window_long (19 * n) w.len w.start
+      _ ≤ ρ .tensorLong * ((w.len + x.slack : ℕ) : ℚ≥0) := by
+          have h : 524288 * (w.len - w.len / 21) ≤ 499712 * (w.len + x.slack) := by omega
+          rw [show ρ .tensorLong = 499712 by norm_num [ρ]]
+          exact_mod_cast h
+  · calc ∑ t ∈ w.ticks, Machine.usage (m := machine x cap oracle) ((kernel n).map (List.map Ins.instr)) t r
+        ≤ ∑ _t ∈ w.ticks, ρ r :=
+          Finset.sum_le_sum fun t _ => by rw [usage_plan]; exact kernel_tick_use n hn t r hr
+      _ = ρ r * (w.len : ℚ≥0) := by simp [Window.ticks, mul_comm]
+      _ ≤ ρ r * ((w.len + x.slack : ℕ) : ℚ≥0) :=
+          mul_le_mul_of_nonneg_left (by exact_mod_cast Nat.le_add_right _ _) zero_le
 
 /-! ## Code -/
 
@@ -338,13 +430,20 @@ theorem chunk_sum (len : ℕ) : ∀ m : ℕ,
     simp [chunk]
     omega
 
+theorem mmaTick_len (n : ℕ) : ∀ m : ℕ, ((List.range m).map fun j => (mmaTick n j).length).sum = m - m / 21
+  | 0 => by simp
+  | m + 1 => by
+    rw [List.range_succ, List.map_append, List.sum_append, mmaTick_len n m]
+    by_cases h : m % 21 = 20 <;> simp [mmaTick, h] <;> omega
+
 theorem kernel_instrs (n : ℕ) :
-    ((kernel n).map List.length).sum = 2 * n + n / 32 * blocks n + n * n / 4 := by
+    ((kernel n).map List.length).sum = 2 * n + mmas n + n * n / 4 := by
   have h := chunk_sum (n * n / 4) ((n * n / 4 + 150) / 151)
   rw [min_eq_left (by omega)] at h
   simp only [kernel, List.map_append, List.sum_append, List.map_map, Function.comp_def, List.length_map,
-    List.length_cons, List.length_nil, h]
+    List.length_cons, List.length_nil, h, mmaTick_len]
   simp
+  omega
 
 /-! ## Code fetch -/
 
@@ -362,8 +461,8 @@ theorem kernel_dram (n : ℕ) :
   rw [min_eq_left (by omega)] at h
   have hl : ∀ c, tickUse x [load n c] .dram = ((n / 4 : ℕ) : ℚ≥0) := by
     intro c; unfold load; split <;> simp [tickUse, copyN, opUse, port]
-  have hm : ∀ p, tickUse x [mma n p] .dram = 0 := by
-    intro p; simp [tickUse, mma, mmaOp, opUse, port]
+  have hm : ∀ j, tickUse x (mmaTick n j) .dram = 0 := by
+    intro j; unfold mmaTick; split <;> simp [tickUse, mma, mmaOp, opUse, port]
   have hs : ∀ u, tickUse x ((chunk (n * n / 4) 151 u).map (store n)) .dram =
       (((chunk (n * n / 4) 151 u).length * 4 : ℕ) : ℚ≥0) := by
     intro u; rw [store_tick]; simp [opUse, port]
@@ -377,11 +476,11 @@ theorem kernel_dram (n : ℕ) :
   ring
 
 theorem fetch_nat (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) :
-    (2 * n * (n / 4) + n * n / 4 * 4 + 4 * (2 * n + n / 32 * blocks n + n * n / 4)) * 33 ≤
-      20000 * (2 * n + n / 32 * blocks n + (n * n / 4 + 150) / 151) := by
+    (2 * n * (n / 4) + n * n / 4 * 4 + 4 * (2 * n + mmas n + n * n / 4)) * 33 ≤
+      20000 * (2 * n + (mmas n + mmas n / 20) + (n * n / 4 + 150) / 151) := by
   obtain ⟨q, rfl⟩ := h256
   have hq : q ≤ 8 := by omega
-  interval_cases q <;> norm_num [blocks]
+  interval_cases q <;> norm_num [mmas, blocks]
 
 /-- **G2's code fetch**: the stores' HBM words and the code's, fetched once, fit in HBM's port over the run. -/
 theorem kernel_codeFetch (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048)
@@ -398,12 +497,12 @@ theorem kernel_codeFetch (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048)
   have hc := code_le (x := x) (cap := cap) (oracle := oracle) (kernel n)
   rw [kernel_instrs] at hc
   have hc' : ((Machine.code (prog (x := x) (cap := cap) (oracle := oracle) (kernel n)) (sched (kernel n)) : ℕ) :
-      ℚ≥0) ≤ ((2 * n + n / 32 * blocks n + n * n / 4 : ℕ) : ℚ≥0) := by exact_mod_cast hc
+      ℚ≥0) ≤ ((2 * n + mmas n + n * n / 4 : ℕ) : ℚ≥0) := by exact_mod_cast hc
   have hnat := fetch_nat n h256 hn
   have key : ((2 * n * (n / 4) + n * n / 4 * 4 : ℕ) : ℚ≥0) +
       4 * ((Machine.code (prog (x := x) (cap := cap) (oracle := oracle) (kernel n)) (sched (kernel n)) : ℕ) : ℚ≥0) ≤
       ρ .dram * (((sched (kernel n)).length + x.slack : ℕ) : ℚ≥0) := by
-    calc _ ≤ ((2 * n * (n / 4) + n * n / 4 * 4 : ℕ) : ℚ≥0) + 4 * ((2 * n + n / 32 * blocks n + n * n / 4 : ℕ) : ℚ≥0) :=
+    calc _ ≤ ((2 * n * (n / 4) + n * n / 4 * 4 : ℕ) : ℚ≥0) + 4 * ((2 * n + mmas n + n * n / 4 : ℕ) : ℚ≥0) :=
           add_le_add le_rfl (mul_le_mul_of_nonneg_left hc' zero_le)
       _ ≤ ρ .dram * ((sched (kernel n)).length : ℚ≥0) := by
           rw [hlen, kernel_length, ρ, div_mul_eq_mul_div, le_div_iff₀ (by norm_num)]
@@ -424,13 +523,13 @@ theorem kernel_progFits (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) :
   show _ ≤ 141 * 2 ^ 30 / 16
   obtain ⟨q, rfl⟩ := h256
   have hq : q ≤ 8 := by omega
-  interval_cases q <;> norm_num [blocks]
+  interval_cases q <;> norm_num [mmas, blocks]
 
 /-- The kernel meets the model: G1's code, G2's rates and G2's code fetch. -/
-theorem kernel_fits (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048)
+theorem kernel_fits (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) (hs : 1 ≤ x.slack)
     (σ : (machine x cap oracle).State (ℕ × ℕ)) (hpc : ∀ θ, σ.pc θ = 0) :
     Machine.Fits (prog (kernel n)) σ (sched (kernel n)) :=
-  ⟨kernel_progFits n h256 hn, kernel_rate n hn σ hpc, kernel_codeFetch n h256 hn σ hpc⟩
+  ⟨kernel_progFits n h256 hn, kernel_rate n hn hs σ hpc, kernel_codeFetch n h256 hn σ hpc⟩
 
 /-! ## Writes -/
 

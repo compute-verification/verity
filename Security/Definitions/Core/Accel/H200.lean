@@ -19,7 +19,11 @@ reports.
 
 **Rates** (units a tick):
 * tensor: 4096 s8 MACs an SM clock (`Accounting.TS.Sheets.H200` A3: the data sheet's 1,979 dense INT8 TOPS over
-  2 · 132 SMs at the 1830 MHz tensor boost clock), so 540,672; a MAC of `e4m3` or `e5m2` uses 1 unit (the same
+  2 · 132 SMs at the 1830 MHz tensor boost clock), so 540,672 a tick at the tick's clock (`tensor`, the per-clock
+  peak); the sheet's 1,979 TOPS is at 1830 MHz, so over long windows an MMA's units are capped at
+  132 · 4096 · 1830/1980 = 499,712 a tick (`tensorLong`, RT-MODEL M1: whitepaper V1.04 Table 3's 1830 MHz boost clock
+  for the FP8, FP16, BF16, TF32 and INT8 tensor figures, against 1980 MHz for FP64 tensor, FP32 and FP64; measured
+  1,942.7 TOPS at about 1797 MHz under saturated `wgmma`, r20261019-053910-d2c9). DMMA uses `tensor` only; a MAC of `e4m3` or `e5m2` uses 1 unit (the same
   1,979 TFLOPS), of `f16` or `bf16` 2 (989.5), of `tf32` 4 (494.5); `b1` has no peak in any document (`Open.b1`);
 * `mma.sync`: its tensor rate apart from `wgmma`'s, which is the data sheet's (no document gives `mma.sync`'s on
   Hopper, where it runs below `wgmma`), is `Open.sync` (`scale`) until CALIB measures it;
@@ -91,6 +95,7 @@ def size : Store → ℕ
 /-- Each resource's units a tick. -/
 def ρ : Res → ℚ≥0
   | .tensor => 132 * 4096
+  | .tensorLong => 132 * 4096 * 1830 / 1980
   | .issue => 132 * 4
   | .alu => 132 * 64
   | .imad => 132 * 64
@@ -168,8 +173,10 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
 rates are the tensor core's s8 MACs, the 132 · 128 FP32 lanes, and HBM's bits a tick rounded up
 (4.8 · 10¹² · 8 / 1.98 · 10⁹ = 19,393.9). θ's floors: `sync ≥ 1` (the tensor pipe's peak is the data sheet's, which
 `wgmma` reaches, so no MMA form beats it), `b1 ≥ 1/8` (CALIB, CMP-115; the A100's binary peak is 8 × its INT8 peak)
-and `madHi ≥ 2` (`IMAD.HI` at 32 lanes a SM-clock against `IMAD`'s 64, CUDA C++ Programming Guide §6.4.1 Table 7,
-CC 9.0, footnote 6; CALIB measured 30.6, r20261017-095350-02ff). -/
+`madHi ≥ 2` (`IMAD.HI` at 32 lanes a SM-clock against `IMAD`'s 64, CUDA C++ Programming Guide §6.4.1 Table 7,
+CC 9.0, footnote 6; CALIB measured 30.6, r20261017-095350-02ff), and `slack ≥ 1` (a backlog of at least a tick: an
+MMA completes after the tick that issues it, and `Rate` and `CodeFetch` only get weaker as `slack` grows, so this floor
+adds nothing to `Assumptions.CardWithinAccel`). -/
 def card : Card where
   size := size
   size_pos := by intro s; cases s <;> decide
@@ -183,7 +190,7 @@ def card : Card where
   tc := 132 * 4096
   cuda := 132 * 128
   bw := 19394
-  floors x := 1 ≤ x.sync ∧ 1 / 8 ≤ x.b1 ∧ 2 ≤ x.madHi
+  floors x := 1 ≤ x.sync ∧ 1 / 8 ≤ x.b1 ∧ 2 ≤ x.madHi ∧ 1 ≤ x.slack
 
 /-- **The H200 SXM** as an accelerator, its open parameters `x`. -/
 def machine {ι : Type} (x : Open) (cap : ι → ℕ) (oracle : ℕ) : Machine ι := card.machine x cap oracle
