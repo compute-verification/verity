@@ -196,7 +196,7 @@ noncomputable def creditLive {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι
 when `Credit.window` credits window `w` (it gives no partial credit: `Credit.proved` holds every drawn unit to one
 accepted outcome); the `i`-th drawn tile's opening is the service's opening `opened x w u` at its window unit
 `u = unitOf (tileAt σ s_T (drawOf …))`; the tiles' relations and rightness are the instance's. -/
-def tileRun {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
+noncomputable def tileRun {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ)
     (ws : CreditWindows (Coin C Ξ m σ sT) n) (opened : Paths (Coin C Ξ m σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ m σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop) :
@@ -207,7 +207,7 @@ def tileRun {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin 
   right := right
 
 /-- **The period's proofs as the IR defines them, under `Credit.window`**: `Declared.periodLayer` at `tileRun`. -/
-def tileLayer {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ} (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB)
+noncomputable def tileLayer {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ} (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB)
     (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ)
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
