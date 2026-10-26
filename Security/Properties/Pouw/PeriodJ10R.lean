@@ -60,7 +60,10 @@ description, which main's one-description rule (25 Oct) forbids. The rate is sym
 *The lucks at J10-R's noise* are one claim, `SharedNoiseLucks`: `OperandHMu`, `ReceiptLuckAt` and `GuessLuckAt` in their
 per-tile form (`PerLiveTile`), claimed of J10-R's tile games, where the units of a call row read that row's noise and
 the units of a call column the column's. Each luck is a claim of one tile's game and `CircuitCreditPeriod`'s rate reads
-them per tile, so the sharing changes the games the claims are of, not the claims' form.
+them per tile, so the sharing changes the games the claims are of, not the claims' form. They are computational, not
+luck: every coin that enters the honest receipt (the noise, the salt, the fold's keys) is read by the prover before it
+commits, so each says how cheaply a program computes the receipt, and they belong to Theorem O's one computational
+slot. `SharedNoiseLucks` holds their place until FOLD-LUCK (CMP-134) states them through that slot.
 
 *ρ.* `ρ` is a public bound on the live share: every tile's detected weight (`shareCone`, its late cone's share of the
 committed words) at most `1/(ρ·N_p)`. The population is the tile stratum as registered, of a fixed public size padded
@@ -79,8 +82,8 @@ and 65,536 (down); such a unit is past C-Flock's `2^27` until `h1zy` has J10-R l
 * `TileDrawIsCoin`, a code fact once its code exists. The code change (CMP-126): the verifier draws the tiles inside
   the sampling block's stratified draw, the tiles joining the integrity registration as one subcircuit, and reads
   `k s_T` from it; today `Credit.window` draws by its own work law (`Credit.law`, one stratum a `K` template, the
-  period's committed `k`). `creditDrawn` is held to the Python `credit._drawn` and `windowLayout` by the PouwCheck
-  difftest. Its reading of the model's uniform permutation as the draw is exact only when the draw's stream is the
+  period's committed `k`). `creditDrawn` is to be held to the Python `credit._drawn` and `windowLayout` by a PouwCheck
+  difftest entry on fixed coins (not yet written). Its reading of the model's uniform permutation as the draw is exact only when the draw's stream is the
   live coin's own bits; a stream expanded from the coin by SHA-512 is read as uniform under SHA-512 as a random oracle
   (R-ACCEL-3), a named assumption Daniel confirms, which this statement then uses.
 * `RegisteredBeforeDraw`, `SaltIsLiveCoin`: as in `H1CheckedCreditPeriod`.
@@ -337,7 +340,8 @@ game: J10-R derives a call's noise from one seed (`J10R.callSeed`), so the units
 and the units of a call column that column's (`J10R.j10rNoise` from the unit's bases), and only the fold keys are a
 unit's own (`J10R.unitKeys`). The per-tile lucks were argued (#2482's H-μ at `μ = 3/4`, B′ at `r_B = ½`, the guess
 bound at `½`) of a tile whose noise is its own; here each tile's game shares its coins with the other tiles of its row
-and its column, whose work the cheater also does or skips. -/
+and its column, whose work the cheater also does or skips. Every coin these games read reaches the prover before it
+commits, so the claim is computational, an instance of Theorem O's one slot; FOLD-LUCK states its form there. -/
 def SharedNoiseLucks {ι K C Ω : Type} [Fintype C] (Sc : Scheme K) (Cd : Declared ι) {Np M n : ℕ}
     (Wp : Period C Ω (Fin Np) M n) : Prop :=
   Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) ∧
