@@ -281,6 +281,7 @@ import Proofs.Flock.Claims.Recursion.VStarDense
 import Proofs.Flock.Claims.Recursion.VStarTopsOk
 import Proofs.Flock.Claims.Recursion.VStarRowsFit
 import Proofs.Flock.Claims.Recursion.HonestHalf
+import Proofs.Flock.Claims.Recursion.HonestHalfTops
 import Proofs.Flock.Claims.Recursion.NumsFixedR
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
