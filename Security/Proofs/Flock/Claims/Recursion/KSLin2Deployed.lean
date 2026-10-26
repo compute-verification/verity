@@ -56,6 +56,6 @@ theorem ksLin2_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     (FlockDeploy.deployPlainTrim rel).cols wE join rowInDeployed final w hKS
     (binds_deployed rel _ _ wE join final w) (lastBindsEC_deployed_sha512 rel wE join final w hC hK)
     (lastCoinFree_deployed rel _ wE join rowInDeployed final w FlockDeploy.sha512) FlockDeploy.KS.zk_KS_outer
-    hst hT (stepsLogFree_deployed rel _ wE join rowInDeployed final w FlockDeploy.sha512) hRRP
+    hst hT hRRP
 
 end RecDeploy

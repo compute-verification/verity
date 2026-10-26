@@ -17,8 +17,8 @@ plain record's numbers).
 whose `nS x ≤ 2^16` V* parts sets up, at the inner rounds `nums` reads it at, within the masked verifier's served shapes
 (`PartIn`, `ZkIn`'s fields at the recursive setup `setupO`), at inner caps of at most `2^64` positions and at most
 `2^56` calls in the inner statement's plain setup (`|S(x_I)|`, `innerSetupIns`; 390 at the honest rec-coins
-statement), at a count `n ≤ 2^55` of the inner verifier's calls on one draw's inner messages (`Deploy.innerCalls`,
-which `BitsLin2` bounds `n` by) and a count `v ≤ 2^55` of the compiled verifier's own evaluations at a draw's V\*
+statement), at a count `n ≤ 2^55` of the inner verifier's calls on one draw's inner messages at its coins
+(`Deploy.innerCalls`, which `BitsLin2` bounds `n` by) and a count `v ≤ 2^55` of the compiled verifier's own evaluations at a draw's V\*
 statements (`setupCalls`, which `BitsLin2` bounds `v` by: at the deployed shapes at most 15,829 a table, check 5's row
 commitments among them); the deployed caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep`
 states it at them with no width premise. Each of `λ₂`'s six terms is at least `103 > 100 + log₂ 6`, from bounds that

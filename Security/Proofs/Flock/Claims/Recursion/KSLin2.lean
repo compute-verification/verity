@@ -7,9 +7,9 @@ import Proofs.Flock.Claims.Recursion.VCalls
 Here the inner stage reads `KSFlockLin` at `DE` instead, against `P_O`'s aborting runs, and each of its terms is carried
 to the composite with no root:
 
-* `B` at `P_O`'s aborting runs is at most `B_I` (`Bound.PrBAbort_le_merged`), as before, so `4k_I·Pr[B]` is at most
-  `4k_I·Pr[B_I]`, and a rejecting judged draw one more `Pr[B_I]` over the draws' evaluations
-  (`Pr_innerRejects_le_PrBinnerV_at`, `PrBI_le_PrBinnerV`).
+* `B` at `P_O`'s aborting runs is at most `B_I` over the draws' evaluations (`Bound.PrBAbort_le_PrBinnerV`), so
+  `4k_I·Pr[B]` is at most `4k_I·Pr[B_I]`, and a rejecting judged draw one more `Pr[B_I]`
+  (`Pr_innerRejects_le_PrBinnerV_at`).
 * The caps' link `FC` at `P_O`'s aborting runs is the composite's `FCI` over `E_O`'s draws, but where the loop meets a
   draw `P_O`'s runs don't show (`BadO`) (`Bound.PrFC_le_FCI`). A run that opens is kept, so its draw isn't bad; off the
   bad draws a run opens exactly where its draw's inner view accepts and its inner coins query the position
@@ -296,20 +296,20 @@ theorem Bound.opensAt_iff (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
   exact and_congr (Bound.accAt_iff decC hdec hV hn ω t hb) Iff.rfl
 
 omit [DecidableEq Col'] in
-/-- **A collision among `P_O`'s aborting runs' calls is one among the draws' witnesses' calls**, where every run's call
-is among some draw's recorded calls that the list holds: each run's calls are its draw's witnesses' or those collide
-(`innerFO_vLog_sub`). -/
+/-- **A collision among `P_O`'s aborting runs' calls is one among the calls searched at the draws**, where every run's
+call is among some draw's searched calls (`Deploy.callsAt`) that the list holds: each run's calls are among its draw's
+or those collide (`innerFO_vLog_subBy`, `CallsLogCollAt`). -/
 theorem Bound.findColl_cover (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
-    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (ω : Ω) {L L' : List (Msg × Msg)} (ht : ∀ p ∈ L', H p.1 = p.2)
     (hc : ∀ e ∈ L, ∃ d, e ∈ (Bd.innerFO decI H D DO decO P x decC ω d).vLog ∧
-      ∀ p ∈ D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).getD []), p ∈ L')
+      ∀ p ∈ D.callsAt H x d.1 ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).getD []), p ∈ L')
     (h : (findColl L).isSome) : ∃ u v, findColl L' = some (u, v) ∧ Collision H u v := by
   have hs : (findColl L').isSome := by
     by_contra hn
     refine hn (findColl_isSome_of_sub H ht (fun e he => ?_) h)
     obtain ⟨d, hed, hsub⟩ := hc e he
-    rcases Bound.innerFO_vLog_sub decC hdec hV hL ω d with h1 | ⟨u, v, huv, -⟩
+    rcases Bound.innerFO_vLog_subBy decC hdec hV hL ω d with h1 | ⟨u, v, huv, -⟩
     · exact hsub e (h1 e hed)
     · exact absurd (findColl_isSome_of_sub H ht hsub (Option.isSome_iff_exists.2 ⟨_, huv⟩)) hn
   obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hs
@@ -347,7 +347,7 @@ is kept, so its draw isn't bad; off the bad draws the loop opens where the draws
 (`opensAt_iff`, `firstPick_map_of_loopCost_zero`), and the runs' collision is the draws' (`findColl_cover`). The loop
 meets a bad draw at most as often as one draw is bad (`Pr_gate_loop_fork_le`). -/
 theorem Bound.PrFC_le_FCI (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
-    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hN0 : CallsNil H D)
     (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI)) [Fintype Ω] [Nonempty Ω] (Cp : Caps Coin) (M : ℕ) :
     PrFC H Bd.DE.V Cp (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x) M ≤
@@ -419,9 +419,10 @@ theorem Bound.PrFC_le_FCI (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
     rw [Bound.abortRun_eqO decC hn, Bound.abortRun_eqO decC hn] at hout
     simp only [FCI, hopI, ↓reduceIte, hpick']
     rw [← Bound.extendDraw_capFork]
-    have ht : ∀ d₁ d₂, ∀ p ∈ D.calls x (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.2.1 d₁) ++
-        D.calls x (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.2.1 d₂), H p.1 = p.2 :=
-      fun d₁ d₂ p hp => (List.mem_append.1 hp).elim (calls_true hT hN0 s.2.1 d₁ p) (calls_true hT hN0 s.2.1 d₂ p)
+    have ht : ∀ d₁ d₂ : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x,
+        ∀ p ∈ D.callsAt H x d₁.1 (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.2.1 d₁) ++
+          D.callsAt H x d₂.1 (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.2.1 d₂), H p.1 = p.2 :=
+      fun d₁ d₂ p hp => (List.mem_append.1 hp).elim (callsAt_true hT hN0 s.2.1 d₁ p) (callsAt_true hT hN0 s.2.1 d₂ p)
     refine Bound.findColl_cover (x := x) (P := P) (decO := decO) decC hdec hV hL s.2.1 (ht _ _) (fun e he => ?_)
       (Option.isSome_iff_exists.2 ⟨_, hout⟩)
     rcases List.mem_append.1 he with he | he
@@ -462,7 +463,7 @@ accepting, is kept; off the bad draws each wait accepts where the draws do and p
 (`accAt_iff`, `firstPick_map_of_loopCost_zero`), and the runs' collision is the draws' (`findColl_cover`). Each of the
 `k_I` waits meets a bad draw at most as often as one draw is bad (`Pr_gate_loop_le`). -/
 theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
-    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hN0 : CallsNil H D)
     (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI)) [Fintype Ω] [Nonempty Ω] (R : ℕ) :
     PrF0 H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x)
@@ -521,14 +522,14 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
       (fun e he => ?_)
       (Option.isSome_iff_exists.2 ⟨_, hout⟩)
     · rcases List.mem_append.1 hp with hp | hp
-      · exact calls_true hT hN0 s.1 (extendDraw s.2.1) p hp
+      · exact callsAt_true hT hN0 s.1 (extendDraw s.2.1) p hp
       · obtain ⟨i, -, hpi⟩ := List.mem_flatMap.1 hp
         rcases hfp : firstPick (accAtI H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1) R
             (fun j => extendDraw (s.2.2 i j)) with _ | d
         · simp [hfp] at hpi
-        · have hpi' : p ∈ D.calls x (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1 d) := by
+        · have hpi' : p ∈ D.callsAt H x d.1 (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1 d) := by
             simpa [hfp] using hpi
-          exact calls_true hT hN0 s.1 d p hpi'
+          exact callsAt_true hT hN0 s.1 d p hpi'
     · rcases List.mem_append.1 he with he | he
       · exact ⟨_, he, fun p hp => List.mem_append_left _ hp⟩
       · obtain ⟨i, -, hei⟩ := List.mem_flatMap.1 he
@@ -543,7 +544,8 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
             rw [← hpick i, hfp]
             try rfl
           refine ⟨_, hei', fun p hp => List.mem_append_right _ (List.mem_flatMap.2 ⟨i, List.mem_finRange i, ?_⟩)⟩
-          have hp' : p ∈ D.calls x (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1 (extendDraw t)) := hp
+          have hp' : p ∈ D.callsAt H x (extendDraw t).1
+              (drawWits H D (Inner.ofFlock Bd.deploy decI) DO decO P x s.1 (extendDraw t)) := hp
           simpa [hm] using hp'
   have hbad : Pr (fun s : ConflictCoins Bd.DE.V Ω
       ((Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) (xI D x)
@@ -604,15 +606,14 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
 /-- **The inner stage at the bound record from `KSFlockLin` at `DE`, with no root**: at most
 `κ_I + (4k_I + 1)·Pr[B_I] + 4·W_I·(Pr[FCI] + 1/(M+1)) + 4·(Pr[F0I] + (k_I + 1)/(R+1)) + β₂·(Pr[Fdev] + 1/(M+1))`.
 `E^rep` at `DE` against `P_O`'s aborting runs is `KSFlockLin`'s bound (`PrBadGood_le_merged`), its `B` at most `B_I`
-(`PrBAbort_le_merged`), its `FC` and `F0` at most `FCI` and `F0I` but for bad draws (`PrFC_le_FCI`, `PrF0_le_F0I`); a
-rejecting judged draw is at most `Pr[B_I]` over the draws' evaluations (`Pr_innerRejects_le_PrBinnerV_at`), as is
-`Pr[B_I]` (`PrBI_le_PrBinnerV`); and the bad draws, `N_I + 4·W_I + 4·k_I` draws' worth, are each at most
+(`PrBAbort_le_PrBinnerV`), its `FC` and `F0` at most `FCI` and `F0I` but for bad draws (`PrFC_le_FCI`, `PrF0_le_F0I`); a
+rejecting judged draw is at most `Pr[B_I]` over the draws' evaluations (`Pr_innerRejects_le_PrBinnerV_at`); and the bad draws, `N_I + 4·W_I + 4·k_I` draws' worth, are each at most
 `k_I·(Pr[FdevV] + 1/(M+1))` (`Pr_badO_le_PrFdevV`), within `β₂`. -/
 theorem Bound.innerLin2_of_flockLin_binds [Zero Col] [Zero Col'] (decC : Msg → Msg → Coin) (Cp : Caps Coin)
     (hKS : KSFlockLin H Bd.DE Cp) (hdI : decOK Bd.deploy decI) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hB : Bd.Binds) (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI))
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (hFk : ForksBindAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (hA : InnerAcceptsCollAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (hM : RoundsMargin H D (Inner.ofFlock Bd.deploy decI)) (hN0 : CallsNil H D) [Fintype Ω] [Nonempty Ω] (M R : ℕ) :
@@ -644,11 +645,10 @@ theorem Bound.innerLin2_of_flockLin_binds [Zero Col] [Zero Col'] (decC : Msg →
     hKS decI hdI (xI D x) Ω (Bd.innerPO decI H D DO decO P x decC)
       ((Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) (Bd.keepAO decI H D DO decO P x)
       M R
-  have h3 := Bound.PrBAbort_le_merged (decO := decO) (P := P) (x := x) decC hdec hV hL hT hN0 hR
+  have h3 := Bound.PrBAbort_le_PrBinnerV (decO := decO) (P := P) (x := x) decC hdec hV hL hT hN0 hR
   have h4 := Bound.PrFC_le_FCI (decO := decO) (P := P) (x := x) decC hdec hV hL hT hN0 hR Cp M
   have h5 := Bound.PrF0_le_F0I (decO := decO) (P := P) (x := x) decC hdec hV hL hT hN0 hR R
   have h6 := Pr_innerRejects_le_PrBinnerV_at hA hT hN0 hM decO P
-  have h3' := PrBI_le_PrBinnerV hT hN0 decO P x
   have h7 := Bound.Pr_badO_le_PrFdevV (decO := decO) (P := P) (x := x) hB hV hT hL hN0 hFk hA M
   have hK0 : (0 : ℝ) ≤ (Inner.ofFlock Bd.deploy decI).V.k (xI D x) := Nat.cast_nonneg _
   have hW0 : (0 : ℝ) ≤ Cp.width (xI D x) := Nat.cast_nonneg _
@@ -660,7 +660,7 @@ theorem Bound.innerLin2_of_flockLin_binds [Zero Col] [Zero Col'] (decC : Msg →
       (PrFdevV H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)) :=
     mul_nonneg hK0 (by linarith)
   have hWKF0 := mul_nonneg hW0 hKF0
-  have hKB := mul_le_mul_of_nonneg_left (h3.trans h3') hK0
+  have hKB := mul_le_mul_of_nonneg_left h3 hK0
   have hWF := mul_le_mul_of_nonneg_left h4 hW0
   have hNB := mul_le_mul_of_nonneg_left h7 hN0'
   have hWB := mul_le_mul_of_nonneg_left h7 hW0
@@ -687,7 +687,7 @@ theorem Bound.ksLin2_of_flockLin_binds [Zero Col] [Zero Col'] (decC : Msg → Ms
     (hRounds : InnerRounds D (Inner.ofFlock Bd.deploy decI)) (hN : SessionNums D DO) (hε : TableErrNonneg D)
     (hRd : SessionRounds D (Inner.ofFlock Bd.deploy decI) DO) (hS : SessionAccepts D)
     (hRs : SessionRuns H D (Inner.ofFlock Bd.deploy decI) DO) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (hFk : ForksBindAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (hA : InnerAcceptsCollAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (hM : RoundsMargin H D (Inner.ofFlock Bd.deploy decI)) (hN0 : CallsNil H D) [Fintype Ω] [Nonempty Ω] (M R : ℕ) :
@@ -725,14 +725,14 @@ def KSLin2On [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bou
       κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x +
         Real.sqrt (γ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x * PrB H (D.record Bd.IVStar).V P x) +
         (4 * (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x) + 1) *
-          PrBinnerV H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x +
+          PrBinnerV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x +
         4 * Cp.width (xI (D.record Bd.IVStar) x) *
-          (PrFCI H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M +
+          (PrFCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M +
             1 / ((M : ℝ) + 1)) +
-        4 * (PrF0I H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
+        4 * (PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
           (((Inner.ofFlock Bd.deploy decI).k (xI (D.record Bd.IVStar) x) : ℝ) + 1) / ((R : ℝ) + 1)) +
         βdev2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x *
-          (PrFdevV H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x M +
+          (PrFdevV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M +
             1 / ((M : ℝ) + 1))
 
 end Scoped
