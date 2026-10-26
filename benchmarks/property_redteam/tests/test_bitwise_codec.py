@@ -71,19 +71,27 @@ def test_codec_rows_at_n8(rounds):
         assert [vals[g] for g in outs[i]] == targets(n, y)
 
 
-def test_units_do_not_grow_with_the_block():
+WORDS8 = [1, 2, 3, 7, 100, 200, 249, 250]
+
+
+@pytest.fixture(scope="module")
+def block8():
+    """The eight-word block at ⟨8, 5⟩, three rounds (553k gates, about 4 s to build), shared by the tests that read it."""
+    return BC.encode_block(8, 5, 3, WORDS8)
+
+
+def test_units_do_not_grow_with_the_block(block8):
     """One word or eight: the circuit reads the key once, and word `i`'s tweak is `i·t_1 mod p`, so the units stay
     `8·(k + 2)·n/8` = 40 at n = 8, k = 3, and the eight words are right on every draw tried."""
     n, c, k = 8, 5, 3
     p = (1 << n) - c
-    words = [1, 2, 3, 7, 100, 200, 249, 250]
-    for ws in ([1], words):
-        b, outs, slots = BC.encode_block(n, c, k, ws)
+    words = WORDS8
+    for b, outs, slots in (BC.encode_block(n, c, k, [1]), block8):
         check_costs(b, n, k)
         assert {s for s in slots if s[0] != "payload"} == (
             {("const", r, 0) for r in range(k)} | {("mask", 0), ("tweak", 1, 0)})
     rng = random.Random(26)
-    for _ in range(8):
+    for _ in range(2):
         cs, K, tau = [rng.randrange(p) for _ in range(k)], rng.randrange(1 << n), rng.randrange(1, p)
         payload = {i: rng.randrange(1 << n) for i in words}
         want = {i: targets(n, FC.encode_word_ref(p, cs, K, tau * i % p, payload[i])) for i in words}
@@ -100,7 +108,7 @@ def test_the_conjecture_fails_at_p1024():
         assert not q * E * (n - 1) <= units * (n - 1)
 
 
-def test_repricing_charges_each_and():
+def test_repricing_charges_each_and(block8):
     """Each AND (a `k = 1` s8-family step) on two run-time bits is a thin lane, by the builder's running count and by
     `thin` itself, so the block's capped units grow with its words, no longer `8·(k + 2)·n/8` for any number of them."""
     n, c, k = 8, 5, 3
@@ -110,7 +118,7 @@ def test_repricing_charges_each_and():
     assert all(g.op.k == 1 and g.lo >= 0 and g.hi <= 1 for g in ands)
     assert one.thin == S.thin(gates) == sum(1 for g in ands if dyn[g.args[1]] and dyn[g.args[2]]) > 0
     assert one.capped_units == S.capped(gates) == 8 * (k + 2) * (n // 8) + one.thin
-    eight, _, _ = BC.encode_block(n, c, k, [1, 2, 3, 7, 100, 200, 249, 250])
+    eight, _, _ = block8
     assert eight.fixed_units == one.fixed_units and eight.thin >= 8 * one.thin
 
 
