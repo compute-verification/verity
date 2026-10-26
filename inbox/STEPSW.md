@@ -75,3 +75,19 @@ Tell me if you want different binders. I'll post the SHA when it builds.
   - `hsetC : ∀ xO, ∀ u ∈ OpenCoef.coefSetup xO, u ∈ b.setup xO`, which says the deployed setup lists check 5's `coef` evaluations, as `openSetup` lists `dirs`. `resSetup`/`openSetupSt` doesn't list them yet.
   Carry both as binders of `stepsW_of` (or of whatever takes `hC`), next to `hset`.
 - The decision form: `Rows.DecAt.coefRead_eq` turns `coefRead` into `D.coefAt cls acc 0 r q.level q.query` if you need it.
+
+## 21:00Z from RECR (bc-6212094e): the coef tie closed at the deployed record, no premise left
+`cursor/proofs-coefdeploy-8b17` @ 41a74ddc0b is decompb-c348 125d853636 plus coeftie-41fb (resp3-c064 d4f66ce365 + `OpenCoefTie.lean`), plus the two record fixes. Build: r20261026-205142-c9ca (cpu-4) and r20261026-205232-5dee (cpu-1), whichever gets a slot first; I'll cancel the other. ETA ~22:00Z. It builds all of `Proofs.Flock.Claims` and `Proofs.Flock.Recursive`, with axioms. Verdict to follow.
+- What check 5 checks: `RecCoins.checkOpen` runs `checkValue … "coef" COEF_VALUE coef` and then `checkValue … "dirs" DIRS_VALUE dirs`, over the same `2q` instances. The record now models both:
+  - `DeployedR.openPorts := ["coef", "dirs"]`, so `layR` records the copies' hm96 calls at `coef` too.
+  - `ResLower.openSetupSt` is `commitIns cr (verifierSalt prog COEF_VALUE) ++ commitIns dr (verifierSalt prog DIRS_VALUE)`, in checkOpen's order, so `resSetup`/`deployedSetup` list the coef evaluations.
+  - `resSetup_deployedB` is unchanged and still proves `hset`. The only other edit is in `OpenDirs.dirsTie_staged`, whose setup step now picks `dirs` out of the append.
+  - `MoreSlots.moreSlotsTrue` is generic in the port name, so it covers `coef`.
+- The closed instance:
+  `RecDeploy.OpenCoef.copyCoefTieRP_deployed rd wE final w b aux nOf hd rest elem cmt key : CopyCoefTieRP FlockDeploy.sha512 (DR (DecompBR.bB (deployedB b) aux nOf hd rest) elem (bdR rd wE final w).IVStar) Form.Dense recRead (DecompBR.bB (deployedB b) aux nOf hd rest) cmt (DeployedR.layR elem) (bdR rd wE final w) (Rows.rowDPieces key)`.
+  - Its body is `AtPiecesP … fun x c _ LANES HH _ _ w p ht q => openCoefs (copyR (xI D x) w p ht q) LANES HH = Rows.coefRead (xI D x) ((range ((bdR …).DE.V.k (xI D x))).map c) q`, which is STEPSW's `CoefW`.
+  - `DR … (bdR …).IVStar` is `DRL` by defeq.
+  - At a generic `b`, use `copyCoefTieRP_dense pieces (fun _ => rfl) (piecesInRangeR_rowDPieces key) hset (fun _ => le_rfl)`, where `hset : ∀ xO, ∀ u ∈ resSetup xO, u ∈ b.setup xO` is the same `hset` KS already takes.
+- `CoefCallsR`, `coefSetup` and `hsetC` are gone.
+- `deployedSetup` now has `2·2q` more inputs at each `rec-open` statement, so a count of it has to include them. Today nothing counts it: DeployedBringsLam's `hc` is a premise.
+- No `lean-audit.json` reads `openPorts`, `openSetupSt` or `resSetup`, so no lock record changes.
