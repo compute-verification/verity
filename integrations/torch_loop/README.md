@@ -98,3 +98,14 @@ What it doesn't cover:
   knowledge is `Flock.Guarantees.ZeroKnowledgeHidden`, honest-verifier at each fixed coin vector. What keeps it from a
   claim: the hiding gap at hm96-sha512's pinned key is not proved small, and `avoidsMask` is a hypothesis that no check
   implies yet.
+
+## The decoder (CMP-92)
+
+`verity_torch_loop/transformer.py` is the demo's standard workload: a 2-layer decoder-only transformer (width 128, 2 heads
+of 64, MLP 512, byte vocabulary, context 32, greedy decoding). Its static matmuls are `ScaledMmS8Coordinate_v1{K=128|512}`
+units. Attention's QKᵀ and PV are `GemmCoordinate_v2{K=64, DOT=HopperBF16WgmmaDot16_v1}` units over the KV cache
+(`--bf16-dot ampere`: `AmpereBF16TcDot16_v2`), computed through the Definition's kernel. PV's 32 positions are padded with
++0 to 64, since C-Flock pins a unit through a row of more than one SHA-512 block. RMSNorm, softmax, ReLU, the quantizer,
+the adds and argmax run in torch, and are not units until their Definitions land (CIR-100). `serve_transformer.py` writes
+its window as `serve.py` writes the MLP's, `tests/test_transformer.py` covers both, and `benchmarks/prove_path/run.sh`
+with `PP_TORCH_DECODER=1` audits it. The plan, counts and wiring: `note:compute-accounting/20261025T2154Z-report-allp-xfmr`.
