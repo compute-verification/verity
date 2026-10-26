@@ -26,8 +26,9 @@ fails is at most `∑_w ε w + ∑_b ∑_a δ b a`.
 
 In the demo each `F w` is one of:
 
-* a wipe's survivor bound failing: the prover keeps more than the wipe's guarantee allows through its spot reads,
-  `Pous.Guarantees.SecureErasureMeetsFamily` at the `N` the wipe's fill reaches, at `2^-128`;
+* a wipe's survivor bound failing: the prover keeps more than the wipe's guarantee allows through its timed reads, the
+  streamed wipe's `foreign_bits = ⌈fill/19⌉ + E` at `2^-128` plus the labels' PRF advantage
+  (`Pous.Guarantees.StreamedWipeMeetsFamily`, #4490, an instance of `Pous.Guarantees.StreamedWipe`);
 * a block's memory term failing: at one of the block's challenge times the undeclared memory exceeds
   `0.07·U + S_chip + c`, except with `δ_PoUS` (Daniel's ASK-132).
 

@@ -19,7 +19,7 @@ theorem pr_exists_univ_le {β J : Type} [Fintype β] [Fintype J] (E : J → β �
 
 /-- **The joint guarantee over a horizon of server-time blocks** (`Accounting.Guarantees.JointHorizonBlocks`). -/
 theorem JointHorizonBlocks : Accounting.Guarantees.JointHorizonBlocks := by
-  intro ι α I _ _ _ _ Ω _ _ d C B s c p f δ εWipe δPous hS hW hM
+  intro ι α I _ _ _ _ Ω _ _ d C B s c p δ εWipe δPous hS hW hM
   have hF := (Pouw.pr_or_le _ _).trans (add_le_add (pr_exists_univ_le _ εWipe hW) (pr_exists_univ_le _ δPous hM))
   refine (Pouw.pr_mono fun ξ h => ?_).trans
     ((Pouw.union_bound_horizon_with _ hF (fun b a => (s.block b).own a)

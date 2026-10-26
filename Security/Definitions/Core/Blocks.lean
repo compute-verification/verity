@@ -164,7 +164,7 @@ store the fill doesn't reach), every way `hold` that the device's state at the b
 `S_φ` bits, and every way `keep` of reading it back from the device's state when the fill ends, the egress and the spot
 reads, the probability over a uniform `z`, a uniform seed and uniform spot reads that the memory challenger accepts and
 `keep` gives back `z` is at most `ε S_φ hold keep`. The probability is the value of a draw with no prover move
-(`Game.value` on `Game.draw`). At `foreignBits = f · fill + 2λ` the threshold is `Accounting.BlockWipe.Survives`'s.
+(`Game.value` on `Game.draw`). The threshold is `Accounting.BlockWipe.Survives`'s at the same published `foreignBits`.
 
 `z` is foreign content as in PoUS's games: uniform, and independent of the wipe's coins. `keep` reads all that the state
 block `b` starts from is a function of, besides the carried value, which, once bound to the committed transcript, is
@@ -175,9 +175,11 @@ fixed before `z` is drawn. The on-chip state is counted, not assumed wiped: chip
 definition. `ε` is a function of the adversary's moves (`S_φ`, `hold`, `keep`), so it can cover the wipe's own error,
 the labels' PRF advantage against the distinguisher those moves make (the standard-model term, as
 `Pous.Guarantees.StreamedWipe` adds `Pous.StreamedWipe.prfAdvantage`), and `δ_net` once the network certifier's count of
-the egress enters (NET-78). A constant `ε` reads the labels as ideal. `Pous.Guarantees.SecureErasureMeetsFamily` is the
-proved family bound underneath, and `Pous.Guarantees.StreamedWipe` the streamed game's proved bound. The bridge from an
-accepted verdict to this bound is memory-accounting's, in a package that sees both. -/
+the egress enters (NET-78). A constant `ε` reads the labels as ideal. `Pous.Guarantees.StreamedWipe` is the streamed
+game's proved bound, and `StreamedWipeMeetsFamily` (#4490) and `StreamedWipeMeetsReads` (#4707) its instances at what
+`verity/wipe/v0` publishes. `Pous.Guarantees.SecureErasureMeetsFamily` is no bound on a wipe at the reference `Π₂`,
+where its ideal-permutation model is refuted (`feistel-indifferentiability`). The bridge from an accepted verdict to
+this bound is memory-accounting's, in a package that sees both. -/
 def SurvivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (foreignBits : ℕ)
     (ε : (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
       (Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool) → ℝ≥0∞) : Prop :=

@@ -22,10 +22,14 @@ Each hypothesis is to come from its protocol's own statement:
 * the five audits: as in `Accounting.Guarantees.JointPeriod`. For integrity, proofs' per-block bound is
   `Flock.Guarantees.IntegrityBlock` (and `IntegrityBlocks` over the horizon): block `b` accepted with at least
   `ln(1/δ)/q` wrong units with probability at most `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`. It is stated in C-Flock's
-  analysis (the proofs tree) over its game of sessions played by one prover, not over this coin space, so the integrity
-  leg here is `PeriodRun.Sound` for `.sampled` in each block until a bridge carries it over;
-* the wipe: `Pous.Guarantees.SecureErasureMeetsFamily`, at `f = 1/19` and `ε_wipe = 2^-128` for the band of the
-  fill's size, through DEVICE-WIPE's `Verity.Wipe.SurvivorBound` (neither bridge is stated yet);
+  analysis (the proofs tree) over its game of sessions played by one prover, not over this coin space, so sampled
+  proofs' term here is `PeriodRun.Sound` for `.sampled` in each block until a bridge carries it over;
+* the wipe: the streamed wipe, `Pous.Guarantees.StreamedWipe`, at what `verity/wipe/v0` publishes with an accepted
+  verdict: `foreign_bits = ⌈fill/19⌉ + E` with 2152 reads (`StreamedWipeMeetsFamily`, #4490), or the fill's share at
+  `k` reads plus `E` (`StreamedWipeMeetsReads`, #4707), at `ε_wipe = 2^-128 + Adv_PRF`, through DEVICE-WIPE's
+  `Verity.Wipe.SurvivorBound` (that bridge is not stated yet). `Adv_PRF` is the labels' PRF advantage against the
+  distinguisher the streamed wipe's game builds from the prover (`Pous.StreamedWipe.wipeDistinguisher`), and `δ_net`
+  joins `ε_wipe` once the network certifier's count of the egress `E` enters (NET-78);
 * the memory term: weights-only PoUS at a share of `0.07` (ASK-132), at `δ_PoUS`.
 Demo A (Daniel's ruling of 25 Oct) is PoUW, sampled proofs and network accounting only: `JointHorizonBlocksA` is its
 composed theorem, the blocks' per-period guarantees for those three audits with no wipe or memory term, the instance of
@@ -43,8 +47,8 @@ proofs, PoUW, PoUS, PoUB and the network certifier on its own coordinates, and a
 adapt to the earlier blocks' coins), suppose:
 
 * each audit `a` of block `b` has its per-period guarantee at certificates `c b`, price `p` and error `δ b a`;
-* the wipe that opens block `b` is accepted while more than `f · fill + 2λ` bits of foreign content plus the unfilled
-  state survive beyond the committed carried state with probability at most `ε_wipe b`;
+* the wipe that opens block `b` is accepted while more than the foreign bits it publishes plus the unfilled state
+  survive beyond the committed carried state with probability at most `ε_wipe b`;
 * block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory exceeds `0.07 · U + S_chip + c`
   (`c` the side channels' bits over the read deadline) with probability at most `δ_PoUS b`.
 
@@ -52,7 +56,7 @@ Then the probability that some block's accepted audit's claim fails, some accept
 some block's memory term fails while its PoUS accepted is at most
 $$\sum_b \sum_a \delta_{b,a} + \sum_b \varepsilon_{\mathrm{wipe},b} + \sum_b \delta_{\mathrm{PoUS},b}.$$
 
-The integrity leg is `PeriodRun.Sound` for `.sampled` in each block, not proofs' `Flock.Guarantees.IntegrityBlock`,
+Sampled proofs' term is `PeriodRun.Sound` for `.sampled` in each block, not proofs' `Flock.Guarantees.IntegrityBlock`,
 which is stated over C-Flock's game rather than this coin space. The memory term holds at PoUS's challenge times only,
 until the continuous audit is tied in. **Gap (PRF-167):** the state a block carries across a wipe (the KV cache,
 committed before the wipe and re-read after it) is outside the integrity bound: nothing here says the value a block
@@ -60,12 +64,12 @@ re-reads is the one the block before committed. -/
 def JointHorizonBlocks : Prop :=
   ∀ (ι α I : Type) [Fintype ι] [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (s : BlocksRun d α C Ω B)
-    (c : Fin B → Certificates) (p : Price) (f : ℝ) (δ : Fin B → Audit → ℝ) (εWipe δPous : Fin B → ℝ),
+    (c : Fin B → Certificates) (p : Price) (δ : Fin B → Audit → ℝ) (εWipe δPous : Fin B → ℝ),
     (∀ b a, (s.block b).Sound (c b) p a (δ b a)) →
-    (∀ b, Pouw.pr (fun ξ => (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ≤ εWipe b) →
+    (∀ b, Pouw.pr (fun ξ => (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives ξ) ≤ εWipe b) →
     (∀ b, Pouw.pr (fun ξ => (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ) ≤ δPous b) →
     Pouw.pr (fun ξ => (∃ b a, (s.block b).accepts a ξ ∧ ¬ (s.block b).Holds (c b) p a ξ) ∨
-        (∃ b, (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ∨
+        (∃ b, (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives ξ) ∨
         (∃ b, (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ)) ≤
       ∑ b, ∑ a, δ b a + ∑ b, εWipe b + ∑ b, δPous b
 

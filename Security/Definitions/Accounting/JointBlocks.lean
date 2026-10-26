@@ -10,12 +10,15 @@ A server's life is cut into server-time blocks, each opened by a certified wipe 
   PoUS, PoUB and the network certifier, each on its own coordinate of the coins. Every block's schedule and committed
   transcript are functions of all the coins, so a block may adapt to the coins of the blocks before it.
 * **The wipe that opens block `b`** (`BlockWipe`): the memory challenger fills `fill` bits of the device memory with
-  labels derived from a fresh seed and runs timed spot reads. Its verdict, and `kept`, the bits of foreign content
-  block `b` can read back from what the wipe leaves beyond the committed carried state, are functions of the coins. Its
-  survivor bound at a fraction `f` (`BlockWipe.Survives`) is PoUS's secure-erasure requirement's
-  (`Pous.EraseMeets`, which `Pous.Guarantees.SecureErasureMeetsFamily` proves at `f = 1/19`, `ε = 2^-128`): at most
-  `f · fill + 2λ` bits (`λ = 128`) survive, plus the state the fill leaves out (`BlockWipe.unfilled`, the on-chip
-  state and the device memory the fill doesn't reach).
+  streamed labels derived from a fresh seed and runs timed sequential reads. Its verdict, the foreign bits it publishes
+  with it (`foreignBits`), and `kept`, the bits of foreign content block `b` can read back from what the wipe leaves
+  beyond the committed carried state, are functions of the coins. Its survivor bound (`BlockWipe.Survives`) is the
+  streamed wipe's: at most the published foreign bits survive, plus the state the fill leaves out
+  (`BlockWipe.unfilled`, the on-chip state and the device memory the fill doesn't reach). `verity/wipe/v0` publishes
+  `foreign_bits = ⌈fill/19⌉ + E` at `2^-128` with 2152 reads, `E` the egress the network certifier counted
+  (`Pous.Guarantees.StreamedWipeMeetsFamily`, #4490), and at `k` reads the fill's share
+  `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` of `n` labels plus `E` (`StreamedWipeMeetsReads`, #4707), each an instance
+  of `Pous.Guarantees.StreamedWipe`.
 * **The memory term of block `b`** (`BlocksRun.MemoryTerm`), PoUS over the weights alone at a share of `0.07` (Daniel's
   ruling, ASK-132): at each of the block's PoUS challenge times, the block's undeclared memory, the bits of its `U`
   bits of weights that the capacity account doesn't hold (`BlocksRun.undeclared`), is at most `0.07 · U + S_chip + c`,
@@ -24,21 +27,26 @@ A server's life is cut into server-time blocks, each opened by a certified wipe 
 
 There is one wipe per block, the one that opens it (so block 0 has one too, which bounds what survives from before the
 horizon), as in DEVICE-WIPE's `Verity.Blocks` and `Verity.Wipe`. Blocks and wipes are fields here until that core
-vocabulary lands; the wipe's verdict and `kept` are fields as the audits' verdicts are (`PeriodRun.accepts`), and a
-bridge from `Verity.Wipe.SurvivorBound` to the wipe's event is to give `kept` its meaning.
+vocabulary lands; the wipe's verdict, its published foreign bits and `kept` are fields as the audits' verdicts are
+(`PeriodRun.accepts`). `Survives`'s threshold, `foreignBits + unfilled`, is `Verity.Wipe.SurvivorBound`'s at the same
+published `foreignBits`, and a bridge from `SurvivorBound` to the wipe's event is to give `kept` its meaning.
 -/
 
 namespace Accounting
 
 /-- The wipe that opens a server-time block on device `d`, on the coins `(i : I) → Ω i`: the bits of device memory its
-fill covers, the memory challenger's verdict, and `kept`, the bits of foreign content (beyond the committed value of
-the carried state) that the block can read back from what the wipe leaves, at each value of the coins. -/
+fill covers, the memory challenger's verdict, the foreign bits it publishes with the verdict, and `kept`, the bits of
+foreign content (beyond the committed value of the carried state) that the block can read back from what the wipe
+leaves, at each value of the coins. -/
 structure BlockWipe {ι : Type} (d : Device ι) {I : Type} (Ω : I → Type) where
   /-- the bits of device memory the fill covers -/
   fill : ℕ
   fill_le : fill ≤ d.mem
   /-- the memory challenger's verdict on the wipe, at the coins -/
   accepts : ((i : I) → Ω i) → Prop
+  /-- the foreign bits the wipe's verdict publishes, at the coins: the streamed wipe's `foreign_bits`, the fill's share
+  plus the egress the network certifier counted -/
+  foreignBits : ((i : I) → Ω i) → ℕ
   /-- the bits of foreign content beyond the committed carried state that survive the wipe into the block, at the
   coins -/
   kept : ((i : I) → Ω i) → ℕ
@@ -50,10 +58,10 @@ variable {ι : Type} {d : Device ι} {I : Type} {Ω : I → Type} (w : BlockWipe
 /-- The bits of the device's state the fill leaves out: its on-chip state and the device memory the fill doesn't reach. -/
 def unfilled : ℕ := d.chip + (d.mem - w.fill)
 
-/-- **The wipe's survivor bound** at fraction `f`, at the coins `ξ`: at most `f · fill + 2λ` bits of foreign content
-(`λ = 128`), plus the unfilled state, survive beyond the committed carried state. -/
-def Survives (f : ℝ) (ξ : (i : I) → Ω i) : Prop :=
-  (w.kept ξ : ℝ) ≤ f * w.fill + 2 * 128 + w.unfilled
+/-- **The wipe's survivor bound**, at the coins `ξ`: at most the foreign bits the wipe publishes, plus the unfilled
+state, survive beyond the committed carried state. -/
+def Survives (ξ : (i : I) → Ω i) : Prop :=
+  w.kept ξ ≤ w.foreignBits ξ + w.unfilled
 
 end BlockWipe
 
