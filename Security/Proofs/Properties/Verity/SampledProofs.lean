@@ -32,7 +32,8 @@ open scoped ENNReal
 /-- **Sampled proofs' session**: the registered circuit file at each parameters `θ`; each file's game circuit, its
 partition into units and its constants; at `θ`, the sampling statement's descriptor, query, draw size `kd`, and `K₀`;
 at `θ` and the commitment `c`, the roots, the commitment the openings pass under, and C-Flock's live session (`G`, with
-its acceptance `Acc` and the witness `wit` its extractor reads at each strategy and outcome), whose error is `δ θ`. -/
+its outcomes `Out`, its acceptance `Acc` and the witness `wit` its extractor reads at each strategy and outcome), whose
+error is `δ θ c`. -/
 structure SampledSession where
   file : ByteArray → ByteArray
   C : ByteArray → FlockSoundness.Audit.Circuit
@@ -46,11 +47,11 @@ structure SampledSession where
   roots : ByteArray → ByteArray → List Claims.Msg
   H : Claims.Msg → Claims.Msg
   Cm : ByteArray → ByteArray → Commitment Bool
-  Out : Type
-  G : ByteArray → ByteArray → FlockSoundness.Game Out
-  Acc : ByteArray → ByteArray → Out → Prop
-  wit : (θ c : ByteArray) → FlockSoundness.Game.Strategy (G θ c) → Out → Wit
-  δ : ByteArray → ℝ
+  Out : ByteArray → ByteArray → Type
+  G : (θ c : ByteArray) → FlockSoundness.Game (Out θ c)
+  Acc : (θ c : ByteArray) → Out θ c → Prop
+  wit : (θ c : ByteArray) → FlockSoundness.Game.Strategy (G θ c) → Out θ c → Wit
+  δ : ByteArray → ByteArray → ℝ
 
 namespace SampledSession
 
@@ -65,12 +66,12 @@ noncomputable abbrev δS (θ : ByteArray) : ℝ :=
   ((S.n (S.file θ) - S.K₀ θ).choose (S.kd θ) : ℝ) / ((S.n (S.file θ)).choose (S.kd θ) : ℝ)
 
 /-- **C-Flock's guarantee on the session** (`SampledKSLivePub`'s conclusion): at every strategy, the session accepts
-with its witness outside the sampling relation with probability at most `δ θ`. -/
+with its witness outside the sampling relation with probability at most `δ θ c`. -/
 def KS : Prop :=
   ∀ (θ c : ByteArray) (τ : FlockSoundness.Game.Strategy (S.G θ c)),
     FlockSoundness.Game.prob
       (fun x => S.Acc θ c x ∧ ¬ RelS S.H (S.Cm θ c) (S.δS θ) (S.stmt θ c) (partOf (S.P (S.file θ))) (S.wit θ c τ x))
-      (S.G θ c) τ ≤ ENNReal.ofReal (S.δ θ)
+      (S.G θ c) τ ≤ ENNReal.ofReal (S.δ θ c)
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α]
 
@@ -133,7 +134,7 @@ theorem sampledProofsSound (S : SampledSession) (place : (θ F c : ByteArray) �
         OpensAt (S.C (S.file θ)) (S.κ (S.file θ)) S.H (S.Cm θ c) (S.roots θ c) g (v.getLsbD 0))
     (hCouple : S.Couples (S.vocab place programDigest rounds coinsRead world certOf priceOf delta)) (hKS : S.KS)
     (hε : ∀ θ, (S.K₀ θ : ℝ) - 1 ≤ (certOf θ).ε * S.n (S.file θ))
-    (hδ : ∀ θ, ENNReal.ofReal (S.δ θ) ≤ delta θ .sampled) :
+    (hδ : ∀ θ c, ENNReal.ofReal (S.δ θ c) ≤ delta θ .sampled) :
     (S.vocab place programDigest rounds coinsRead world certOf priceOf delta).SampledProofsSound := by
   classical
   intro θ F c σ
@@ -199,8 +200,8 @@ theorem sampledProofsSound (S : SampledSession) (place : (θ F c : ByteArray) �
             ¬ RelS S.H (S.Cm θ c) (S.δS θ) (S.stmt θ c) (partOf (S.P (S.file θ))) (S.wit θ c τ x))
           (S.G θ c) τ :=
         FlockSoundness.Game.prob_mono (fun x hx => ⟨hx, hnR _⟩) _ _
-    _ ≤ ENNReal.ofReal (S.δ θ) := hKS θ c τ
-    _ ≤ delta θ .sampled := hδ θ
+    _ ≤ ENNReal.ofReal (S.δ θ c) := hKS θ c τ
+    _ ≤ delta θ .sampled := hδ θ c
 
 end Vocab
 
