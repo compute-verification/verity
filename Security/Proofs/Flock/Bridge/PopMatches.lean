@@ -51,12 +51,14 @@ theorem popMatches_iff {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} :
       SampledProofs.Slots.layout p q = .ok l ∧ (popOf l).map (·.unit) = (List.range n).map some := by
   unfold PopMatches popCheck
   constructor
-  · cases hp : SampledProofs.Program.parse ⟨desc.toArray⟩ with
-    | error e => intro h; cases h
-    | ok p =>
-      cases hl : SampledProofs.Slots.layout p q with
-      | error e => intro h; cases h
-      | ok l => intro h; exact ⟨p, l, rfl, rfl, of_decide_eq_true h⟩
+  · intro h
+    split at h
+    · exact absurd h Bool.false_ne_true
+    · rename_i p hp
+      split at h
+      · exact absurd h Bool.false_ne_true
+      · rename_i l hl
+        exact ⟨p, l, hp, hl, of_decide_eq_true h⟩
   · rintro ⟨p, l, hp, hl, h⟩
     rw [hp]
     show (match SampledProofs.Slots.layout p q with
