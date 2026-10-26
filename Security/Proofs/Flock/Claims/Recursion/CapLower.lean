@@ -1,5 +1,7 @@
 import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
 import Proofs.Flock.Claims.Recursion.CapOpens
+import Proofs.Flock.Claims.Recursion.SlotsCommit
+import Proofs.Flock.Soundness.Binding.Leaf
 
 /-!
 # The cap's lowering at the deployed layout (U14b)
@@ -88,6 +90,60 @@ def capFirst (xI : Msg) (q : OpenPiece) : ℕ :=
 def copyR (p : _root_.Flock.Readable.Parsed) (ht : 0 < p.sts.size) (w : Claims.Flock.Wit) (xI : Msg)
     (q : OpenPiece) : ℕ → Bool :=
   _root_.Flock.Readable.copyOf p 0 ht w (copyAtR p xI q).1 (copyAtR p xI q).2.1 (copyAtR p xI q).2.2
+
+/-! ## A commit string fixes its row, up to a collision among recorded calls -/
+
+/-- **Equal commit strings have equal rows**, up to a collision among true SHA-512 evaluations `l` that hold both
+rows' and both salts' hashes: equal `c` halves give equal salts, so equal masks, so equal row digests
+(`hm96Pair_spec`'s argument, at recorded calls). -/
+theorem commit_bind {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2)
+    (hnc : (Claims.findColl l).isSome = false) {r y r' y' : Msg}
+    (hr : r ∈ l.map Prod.fst) (hr' : r' ∈ l.map Prod.fst)
+    (hy : FlockSoundness.Refine.K512.saltPrefix ++ y ∈ l.map Prod.fst)
+    (hy' : FlockSoundness.Refine.K512.saltPrefix ++ y' ∈ l.map Prod.fst)
+    (h : FlockSoundness.Binding.commitString r y = FlockSoundness.Binding.commitString r' y') : r = r' := by
+  have hcol : ∀ u v, u ∈ l.map Prod.fst → v ∈ l.map Prod.fst → u ≠ v →
+      FlockDeploy.sha512 u ≠ FlockDeploy.sha512 v := fun u v hu hv hne he => by
+    rw [Claims.findColl_isSome_mem FlockDeploy.sha512 l hT u v hu hv ⟨hne, he⟩] at hnc
+    exact absurd hnc (by decide)
+  obtain ⟨hb, hc⟩ := FlockSoundness.Binding.commitString_split h
+  have hyy : y = y' := by
+    by_contra hne
+    exact hcol _ _ hy hy' (fun e => hne (List.append_cancel_left e)) (by rw [sha512_eq, sha512_eq]; exact hc)
+  subst hyy
+  by_contra hne
+  refine hcol r r' hr hr' hne ?_
+  rw [sha512_eq, sha512_eq]
+  exact FlockSoundness.Merkle.xorBytes_inj
+    (by rw [FlockSoundness.Refine.hL512, FlockSoundness.Refine.K512.mask_len])
+    (by rw [FlockSoundness.Refine.hL512, FlockSoundness.Refine.K512.mask_len]) hb
+
+/-- **Two hm96 slots with one commit string hold one row**, wherever both output their commit strings
+(`SlotCommits`), their rows are hashed under one prefix (`rowPfx`: ports of one word count), and both slots' calls
+(`hmCalls`) are among true evaluations `l` with no collision. -/
+theorem slot_rows_eq {c c' : Circuit} {nm nm' : String} {q q' n n' : ℕ} {w w' : Claims.Flock.Wit}
+    (h : SlotCommits c nm q n w) (h' : SlotCommits c' nm' q' n' w') (hpfx : rowPfx c q = rowPfx c' q')
+    (hcm : readForms w (hmCommit c q n) = readForms w' (hmCommit c' q' n'))
+    {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.sha512 e.1 = e.2) (hnc : (Claims.findColl l).isSome = false)
+    (hin : ∀ p ∈ hmCalls c nm q n, (p.1 ++ readForms w p.2.1, readForms w p.2.2) ∈ l)
+    (hin' : ∀ p ∈ hmCalls c' nm' q' n', (p.1 ++ readForms w' p.2.1, readForms w' p.2.2) ∈ l) :
+    readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var) =
+      readForms w' (((rowHidden c' nm' n').getD []).map HmNets.Lin.var) := by
+  have hr := List.mem_map_of_mem (f := Prod.fst) (hin ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [],
+    ((rowHidden c nm n).getD []).map HmNets.Lin.var, hmDigest c q n) (by simp [hmCalls]))
+  have hr' := List.mem_map_of_mem (f := Prod.fst) (hin' ((c'.ports[q']?.map fun p =>
+    (HmRow.rowPrefix p.words).data.toList).getD [], ((rowHidden c' nm' n').getD []).map HmNets.Lin.var,
+    hmDigest c' q' n') (by simp [hmCalls]))
+  have hy := List.mem_map_of_mem (f := Prod.fst)
+    (hin (Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512) (by simp [hmCalls]))
+  have hy' := List.mem_map_of_mem (f := Prod.fst)
+    (hin' (Hm96.Default512.saltPrefix.data.toList, hmSalt c' q' n', (hmCommit c' q' n').drop 512) (by simp [hmCalls]))
+  have e := commit_bind (r := rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var))
+    (r' := rowPfx c' q' ++ readForms w' (((rowHidden c' nm' n').getD []).map HmNets.Lin.var))
+    (y := readForms w (hmSalt c q n)) (y' := readForms w' (hmSalt c' q' n')) hT hnc hr hr' hy hy'
+    (h.symm.trans (hcm.trans h'))
+  rw [hpfx] at e
+  exact List.append_cancel_left e
 
 /-! ## `OpenTie`'s two halves -/
 
