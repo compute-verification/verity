@@ -3,7 +3,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 /-!
 # The public leaves `HmIn.parse` accepted, and the rows `HmIn.delta` keeps
 
-* `parse_leaves`: with public input ports, one public leaf map per unit, each as long as the unit's `leaves_in`.
+* `parse_ports`, `parse_leaves`, `parse_noPorts`: with public input ports, one public leaf map per unit, each as long as
+  the unit's `leaves_in`; without, no public leaf map.
 * `publicCol_at`: a column `HmIn.publicCol` names is bit `t` of public leaf `jj` of a unit slot `k`, at column
   `g0.col · WORD + 16 jj + t` of the slot, inside the unit's input rows (16-bit leaves, `CheckFacts.unit_groups`).
 * `keepCol`, `inDelta_toList`, `deltaEntry_inDelta`: `HmIn.delta` is `HmOut.delta` without the pairs into the columns it
@@ -17,39 +18,92 @@ namespace FlockSoundness.Discharge.Hidden
 
 open Refine
 
+/-- `List.mapM` in `Except` keeps the length. -/
+theorem list_mapM_length {α β ε : Type} {f : α → Except ε β} :
+    ∀ {l : List α} {l' : List β}, l.mapM f = .ok l' → l'.length = l.length
+  | [], l', h => by
+      simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      rfl
+  | a :: l, l', h => by
+      rw [List.mapM_cons] at h
+      obtain ⟨b, -, h⟩ := ebind_ok h
+      obtain ⟨bs, hbs, h⟩ := ebind_ok h
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      simp [list_mapM_length hbs]
+
+/-- `Array.mapM` in `Except` keeps the size. -/
+theorem mapM_size {α β ε : Type} {f : α → Except ε β} {xs : Array α} {ys : Array β} (h : xs.mapM f = .ok ys) :
+    ys.size = xs.size := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  cases hl : xs.toList.mapM f with
+  | error e => rw [hl] at h; cases h
+  | ok l =>
+      rw [hl] at h
+      simp only [Functor.map, Except.map, Except.ok.injEq] at h
+      subst h
+      rw [List.size_toArray, list_mapM_length hl, Array.length_toList]
+
 set_option maxHeartbeats 4000000 in
-/-- **With public input ports, one public leaf map per unit, each as long as its `leaves_in`**. -/
-theorem parse_leaves {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) (hne : pi.ports.isEmpty = false) :
-    pi.leaves.size = c.upv ∧ ∀ u < c.upv, (pi.leaves[u]!).size = (c.leavesIn.getD u #[]).size := by
+/-- **What `HmIn.parse` accepted**: no public input port and no public leaf map, or public input ports with one public
+leaf map per unit, each as long as its `leaves_in`. -/
+theorem parse_ports {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) :
+    (pi.ports.isEmpty = true ∧ pi.leaves = #[]) ∨
+      (pi.ports.isEmpty = false ∧ pi.leaves.size = c.upv ∧
+        ∀ u < c.upv, (pi.leaves[u]!).size = (c.leavesIn.getD u #[]).size) := by
   unfold HmIn.parse at h
   dsimp only at h
   cases hj : c.metaJ.getObjVal? "public_inputs" with
   | error e =>
     rw [hj] at h
     try dsimp only at h
-    try simp only [throw_bind', pure_bind] at h
+    try simp only [throw_bind'] at h
     repeat' walk_step
     all_goals
       simp only [pure, Except.pure, Except.ok.injEq] at h
       subst h
-      first | simp at hne | exact absurd hne (by decide)
+      exact Or.inl ⟨rfl, rfl⟩
   | ok pj =>
     rw [hj] at h
     try dsimp only at h
-    try simp only [throw_bind', pure_bind] at h
+    try simp only [throw_bind'] at h
     repeat' walk_step
     all_goals
       simp only [pure, Except.pure, Except.ok.injEq] at h
       subst h
       have hc := ‹¬ (_ || _) = true›
+      have hps := ‹¬ (Array.isEmpty (α := Lean.Json) _) = true›
+      have hm := mapM_size ‹Array.mapM _ _ = Except.ok _›
       try dsimp only
-      refine ⟨?_, fun u hu => ?_⟩
+      refine Or.inr ⟨?_, ?_, fun u hu => ?_⟩
+      · rw [Bool.eq_false_iff]
+        intro hpe
+        apply hps
+        rw [Array.isEmpty_iff_size_eq_zero] at hpe ⊢
+        omega
       · by_contra hn
         exact hc (by simp [hn])
       · by_contra hn
         refine hc ?_
-        simp only [Bool.or_eq_true, List.any_eq_true, List.mem_range]
-        exact Or.inr ⟨u, hu, by simp [hn]⟩
+        rw [Bool.or_eq_true, List.any_eq_true]
+        refine Or.inr ⟨u, List.mem_range.2 hu, ?_⟩
+        rw [Bool.or_eq_true, bne_iff_ne]
+        exact Or.inl hn
+
+/-- **With public input ports, one public leaf map per unit, each as long as its `leaves_in`**. -/
+theorem parse_leaves {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) (hne : pi.ports.isEmpty = false) :
+    pi.leaves.size = c.upv ∧ ∀ u < c.upv, (pi.leaves[u]!).size = (c.leavesIn.getD u #[]).size := by
+  rcases parse_ports h with ⟨he, -⟩ | ⟨-, h1, h2⟩
+  · rw [he] at hne; cases hne
+  · exact ⟨h1, h2⟩
+
+/-- **Without public input ports, no public leaf map.** -/
+theorem parse_noPorts {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) (he : pi.ports.isEmpty = true) :
+    pi.leaves = #[] := by
+  rcases parse_ports h with ⟨-, h1⟩ | ⟨hne, -⟩
+  · exact h1
+  · rw [he] at hne; cases hne
 
 /-- A list of 16s sums to 16 per entry. -/
 theorem sum_16 {l : List ℕ} (h : ∀ b ∈ l, b = 16) : l.sum = 16 * l.length := by
@@ -116,7 +170,7 @@ theorem inDelta_toList (c : Circuit) (pi : HmIn.Ports) (pin : ℕ) :
   generalize HmOut.delta c pin = d
   obtain ⟨da, db⟩ := d
   dsimp only
-  cases he : pi.ports.isEmpty <;> simp [Array.toList_filter]
+  cases he : pi.ports.isEmpty <;> simp
 
 /-- Pairs into the rows a filter keeps: a row's count is the list's, or zero where the filter drops it. -/
 theorem count_filter_fst (l : List (ℕ × ℕ)) (P : ℕ → Bool) (r j : ℕ) :
