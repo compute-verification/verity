@@ -159,7 +159,7 @@ theorem round_chunk {c : FlockDeploy.RepCtx} {rows : List (List ByteArray)} {p :
     ((rounds (FlockSoundness.Refine.shapeOf c.st c.sch (c.n - 2))).toList.map fun a => a.toList.map (keyVal p T))[kk]? =
       some (FlockDeploy.vals ((FlockDeploy.chunksOf c p T).getD t [])) := by
   obtain ⟨hs, hkl, rs', hrr, hsc'⟩ := hsc
-  obtain rfl : rs' = rs := Array.toList_inj.1 (hsc'.symm.trans hrs)
+  rw [Array.toList_inj.1 (hsc'.symm.trans hrs)] at hrr
   obtain ⟨e, hne, hps⟩ := hF.sizes
   obtain ⟨h22, -, hn7, hk0, -⟩ := RecDeploy.fast100_sizes hs
   have hk : 0 < c.sch.k0 := by rw [hk0]; split_ifs <;> omega
