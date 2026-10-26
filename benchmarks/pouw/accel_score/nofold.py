@@ -208,7 +208,8 @@ V2_CARDS = {
 }
 U_W, U_X = 80, 96              # BET-HYBRID-2 K (±80 both) and NAIVE-STRASSEN (V ±96 to depth 13): the larger of each
 P_W, P_X = 0.0119, 0.0042      # wrap densities at those widths, Llama-3.1-8B (BET-HYBRID-2 H; 70B p_X 0.64%)
-RHO_V2 = 6                     # Y_X Uᵀ, V Y_Wᵀ, (VΠ)Uᵀ with Π = Σ_s π_sᵀ: two base-128 digits each
+RHO_V2 = 4                     # Z_X Uᵀ and V Y_Wᵀ, two base-128 digits each; Z_X = Σ_s X_s π_sᵀ absorbs (VΠ)Uᵀ
+ZERO_DIGITS = 1                # only Y_W = Σ_s c can be narrow at A = B = 0; Z_X's high digit carries VΠ
 M_PREFILL = 8192               # tokens a prefill call
 EPS_ALG_V2 = 0.005             # budget on the deployed kernel's gap at A = B = 0, per credited shape
 SHAPES = {                     # (K, N, layers): the frozen model, and COVER-ATTN's served static shapes
@@ -223,7 +224,7 @@ SHAPES = {                     # (K, N, layers): the frozen model, and COVER-ATT
 def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFILL, commit_a: bool = False) -> dict:
     """One prefill call of protocol v2, per MAC in plain INT8 tensor time at η.
 
-    Tensor: the product (1) and the six peels. ALU: hashing (S segment words of `word_bits` and O at 32 bits a cell,
+    Tensor: the product (1) and the four peels, O = T_last − Z_X Uᵀ − V Y_Wᵀ + 256(w_X Eᵀ + X w_Wᵀ). ALU: hashing (S segment words of `word_bits` and O at 32 bits a cell,
     NF3's leaf and tree), coin expansion (SHA-512 counter mode, 512 bits a compression: the dither (m+N)K bits, the
     noise 8 bits a value of V and U, the S permutations), and the wraps. A is the previous call's committed output under
     a public elementwise map plus committed per-row scalars, so it adds no leaves (`commit_a` prices committing it
@@ -241,7 +242,7 @@ def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFI
     g_wrap = c_op * (P_W + P_X) / 2
     tensor, alu = 1 + g_rm, g_hash + g_a + g_coin + g_wrap
     g = tensor + alu
-    saved = max(2 * L, g_rm * K - K / s_b)          # at A = B = 0 nothing wraps (|b + V| ≤ 97), so wraps cost 0 there
+    saved = max(ZERO_DIGITS * L, g_rm * K - K / s_b)   # at A = B = 0 nothing wraps (|b + V| ≤ 97): wraps cost 0 there
     return {"L": L, "S": S, "gamma": g, "gamma_max": max(tensor, alu), "hash": g_hash, "A": g_a, "coin": g_coin,
             "rm": g_rm, "wrap": g_wrap, "h": (g_hash + g_a + g_coin) / g, "eps_alg": saved / (g * K)}
 
