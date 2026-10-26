@@ -21,7 +21,10 @@ inputs = [
     "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/row_table.cuh",
     "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/row_table_host.cpp",
     "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/row_table.cu",
-    # the SHA-512 engine the commit call's host twin builds
+    # kernels' per-slot commit call (CMP-95 item 3) and the SHA-512 engine its host twin builds
+    "benchmarks/torch_gpu/commit_slots/slots.py",
+    "benchmarks/torch_gpu/commit_slots/slots_gpu.py",
+    "benchmarks/torch_gpu/sha512_rows",
     "benchmarks/pouw/commit_gpu/sha512.cuh",
     # the P2 v4 reference encode and decode the store runs
     "benchmarks/pous/p2_v1/__init__.py",
