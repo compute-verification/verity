@@ -319,14 +319,14 @@ structure Draws where
   after : ByteArray
 
 /-- `L` reads its coins through the challenger's reader wherever the parameters and commitment name a challenger
-(`source`, read from them alone, never from the evidence): from the record its evidence carries (`record`), decoded to
-its coins (`decode`). -/
+(`source`, read from them alone, never from the evidence): the coins it reads are what `drawCoins` reads from the record
+its evidence carries (`record`), decoded (`decode`). -/
 structure ReadsChallenger (P : Core.Protocol) (L : Core.Live P) where
   source : P.Params → P.Commitment → Option Draws
   record : P.Evidence → Json
-  decode : ByteArray → Flock.V L.Coins
-  reads : ∀ p c d, source p c = some d → ∀ e,
-    L.coins p c e = (drawCoins d.key d.window d.label d.after (record e) >>= decode)
+  decode : ByteArray → L.Coins
+  reads : ∀ p c d, source p c = some d → ∀ e ξ, L.coins p c e = .ok ξ →
+    ∃ raw, drawCoins d.key d.window d.label d.after (record e) = .ok raw ∧ decode raw = ξ
 
 /-- **ONE-4: what a component accepts, it accepts at the coins its challenger device drew, or the run carries a
 break.** For every protocol whose check reads its coins through the challenger's reader (`ReadsChallenger`) and every
@@ -341,7 +341,7 @@ def CoinsFromLog : Prop :=
         (P.answerAt L a b ξ e).verdict = .accept ∧
         ∀ d, R.source p c = some d →
           (∃ s ∈ dev.sessions d.key.pub, OpensOn dev d.key.pub d.window s.id ∧
-            R.decode (s.released d.label d.after) = .ok ξ) ∨
+            R.decode (s.released d.label d.after) = ξ) ∨
           Break dev d.key d.label (R.record ev)
 
 end Properties.Challenger

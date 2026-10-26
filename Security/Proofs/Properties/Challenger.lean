@@ -54,13 +54,9 @@ theorem coinsFromLog (hd : DrawnByDevice) : CoinsFromLog := by
   intro P L R dev a b e h
   obtain ⟨p, c, ev, ξ, hp, hc, hev, hξ, hacc⟩ := liveAnswer P L a b e h
   refine ⟨p, c, ev, ξ, hp, hc, hev, hacc, fun d hd' => ?_⟩
-  rw [R.reads p c d hd'] at hξ
-  cases hraw : SampledProofs.Challenger.drawCoins d.key d.window d.label d.after (R.record ev) with
-  | error r => rw [hraw] at hξ; cases hξ
-  | ok raw =>
-    rw [hraw] at hξ
-    rcases hd dev d.key d.window d.label d.after (R.record ev) raw hraw with ⟨s, hs, hopen, hrel⟩ | hb
-    · exact .inl ⟨s, hs, hopen, by rw [← hrel]; exact hξ⟩
-    · exact .inr hb
+  obtain ⟨raw, hraw, hdec⟩ := R.reads p c d hd' ev ξ hξ
+  rcases hd dev d.key d.window d.label d.after (R.record ev) raw hraw with ⟨s, hs, hopen, hrel⟩ | hb
+  · exact .inl ⟨s, hs, hopen, by rw [← hrel]; exact hdec⟩
+  · exact .inr hb
 
 end Properties.Challenger
