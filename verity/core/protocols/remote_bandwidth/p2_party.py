@@ -5,11 +5,13 @@ The channel is a pair of byte streams carrying one JSON object of one key a line
 (`--stdio`, as a gate's verb starts it) or a TCP connection (`--listen`). The session has no round-trip floor, so ssh's
 latency changes nothing in its verdict. The verifier holds its own registration (`--registration FILE`, the auditor's
 record of PoUS's setup, `registration_json`), never the prover's word for it, and draws its coins from its own host's OS.
+The record's `plan` is the units every pass reads (`plan_of`): the units holding a tensor's block, so not the store's
+padding past the last tensor, which is PoUS's and which the decode never reads (MEM-72); without one, every unit.
 
 - The prover opens with the request `{"request": {"deadline_ns", "node", "passes", "samples", "window_ns",
   "windows"}}`, whose node must be the registration's.
-- The verifier answers `{"hold": {"commitment", "registration"}}`: the session's coin commitment and the registration,
-  which the prover checks against its store.
+- The verifier answers `{"hold": {"commitment", "registration"}}`: the session's coin commitment and the registration
+  with its plan, which the prover checks against its store and reads each pass in.
 - It then drives the session on its clock (`session`): `{"run": {"challenge", "i", "previous", "t"}}` asks for pass i
   of window t under the window's challenge after the root `previous`, answered `{"root": hex}` when the step that read
   it is done. Once a window's roots are final (the next window's first root, or its deadline for the last) it sends
@@ -47,6 +49,7 @@ from verity.core.protocols.pous.schemes.p2 import P2Params
 from . import audit, p2, pooled
 from . import coins as C
 from . import period as P
+from .receipts import Plan
 
 MODULE = "verity.core.protocols.remote_bandwidth.p2_party"
 PROTOCOL = "verity/remote-bandwidth/p2/v0"
@@ -73,11 +76,23 @@ def recv(f: BinaryIO, key: str | None = None) -> Any:
     return doc[key]
 
 
-def registration_json(r: p2.Registration) -> dict[str, Any]:
+def registration_json(r: p2.Registration, plan: Plan | None = None) -> dict[str, Any]:
     c = r.codec
-    return {"blocks_per_segment": c.blocks_per_segment, "c0": c.c0, "commitment": r.commitment.hex(),
-            "digest": r.digest.hex(), "expander": c.expander, "node": r.node.hex(), "root": r.root.hex(),
-            "rows": r.rows, "salt": r.salt.hex(), "segments": c.segments, "w": c.w}
+    out = {"blocks_per_segment": c.blocks_per_segment, "c0": c.c0, "commitment": r.commitment.hex(),
+           "digest": r.digest.hex(), "expander": c.expander, "node": r.node.hex(), "root": r.root.hex(),
+           "rows": r.rows, "salt": r.salt.hex(), "segments": c.segments, "w": c.w}
+    return out if plan is None else out | {"plan": [list(run) for run in plan.runs]}
+
+
+def plan_of(doc: Mapping[str, Any], reg: p2.Registration) -> Plan:
+    """The plan of `registration_json`'s record `doc`, its `plan` runs `[first, count]` over `reg`'s units, or every
+    unit without one; refused (ValueError) unless it is a plan of them."""
+    runs = doc.get("plan")
+    if runs is None:
+        return Plan.whole(reg.blocks)
+    if not isinstance(runs, list) or not all(isinstance(r, list) for r in runs):
+        raise ValueError("a registration's plan is a list of runs [first, count]")
+    return Plan(tuple(tuple(r) for r in runs), reg.blocks)
 
 
 def registration_of(doc: Mapping[str, Any]) -> p2.Registration:
@@ -124,12 +139,13 @@ def params_of(reg: p2.Registration, request: Mapping[str, Any]) -> audit.Params:
                         codec=reg.codec, receipt=reg.receipt, layout=reg.layout, rows=reg.rows)
 
 
-def answer(s: p2.Session, reason: str | None = None) -> dict[str, Any]:
+def answer(s: p2.Session, reason: str | None = None, plan: Plan | None = None) -> dict[str, Any]:
     """The session's answer: `accept` with the credited reads, `reject` with the failure and the draw it failed at, or
-    `undecided`."""
+    `undecided`; `units` are the store's and `plan_units` those each pass reads."""
     reg = s.registration
     out: dict[str, Any] = {"protocol": PROTOCOL, "registration": reg.digest.hex(), "unit_bytes": p2.UNIT_BYTES,
-                           "units": reg.blocks, "windows": [], "reason": reason}
+                           "units": reg.blocks, "plan_units": (plan or Plan.whole(reg.blocks)).length, "windows": [],
+                           "reason": reason}
     for w in s.windows:
         out["windows"].append({"passes": len(w.roots), "draws": None if w.draws is None else len(w.draws),
                                "verdict": None if w.verdict is None else
@@ -157,14 +173,15 @@ def answer(s: p2.Session, reason: str | None = None) -> dict[str, Any]:
 
 
 def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, coins: bytes,
-            clock: Callable[[], int] = time.monotonic_ns,
+            plan: Plan | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until,
             log: Callable[[str], None] = lambda _m: None, host: str | None = None) -> dict[str, Any]:
     """The verifier's side of one session over the channel (`f_in`, `f_out`): the prover's request, the coin commitment,
-    each pass asked for in order, each window's openings drawn once its roots are final and verified, and the answer,
-    sent last and returned, naming the verifier's `host` (this one's name by default). A message out of form or a
-    closed channel rejects the session (its answer says why)."""
+    each pass asked for in order under `plan` (every unit by default), each window's openings drawn once its roots are
+    final and verified, and the answer, sent last and returned, naming the verifier's `host` (this one's name by
+    default). A message out of form or a closed channel rejects the session (its answer says why)."""
     host = host or socket.gethostname()
+    plan = Plan.whole(registration.blocks) if plan is None else plan
     try:
         params = params_of(registration, recv(f_in, "request"))
     except (ConnectionError, ValueError, KeyError, TypeError) as e:
@@ -174,7 +191,7 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
     W, passes = params.windows, params.min_passes
     s = p2.Session(params, registration, C.local(registration.digest, 0, W, P._Stream(coins, registration.node)),
                    not_before_ns=clock(), clock=clock)
-    send(f_out, {"hold": {"commitment": s.commitment.to_json(), "registration": registration_json(registration)}})
+    send(f_out, {"hold": {"commitment": s.commitment.to_json(), "registration": registration_json(registration, plan)}})
 
     def opened(t: int) -> audit.Verdict:
         draws = s.close(t)
@@ -198,7 +215,7 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
                 send(f_out, {"run": {"challenge": challenge.to_json(), "i": i, "previous": previous.hex(), "t": t}})
                 got = recv(f_in, "root")
                 root = bytes.fromhex(got) if isinstance(got, str) else b""
-                v = s.receive(t, i, root, step=step)
+                v = s.receive(t, i, root, plan.runs, step=step)
                 log(f"window {t} pass {i}: root {root.hex()[:16]}")
                 if v is not None:
                     raise _Ended
@@ -216,7 +233,7 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
         reason = f"the prover's side failed: {type(e).__name__}: {e}"
         if s.outcome is None:
             s._fail(s.filling, "malformed")
-    return _last(f_out, answer(s, reason) | {"host": host})
+    return _last(f_out, answer(s, reason, plan) | {"host": host})
 
 
 def _last(f_out: BinaryIO, out: dict[str, Any]) -> dict[str, Any]:
@@ -269,7 +286,7 @@ def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Prover, request: Mapping[str,
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
-    ap.add_argument("--registration", type=Path, required=True, help="the auditor's registration (registration_json)")
+    ap.add_argument("--registration", type=Path, required=True, help="the auditor's registration with its plan (registration_json)")
     where = ap.add_mutually_exclusive_group(required=True)
     where.add_argument("--stdio", action="store_true", help="the channel is this process's stdin and stdout")
     where.add_argument("--listen", help="HOST:PORT to accept provers on (port 0: any, printed as {\"listening\"})")
@@ -280,7 +297,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     record.add_argument("--device", type=Path, help="the party's directory, as the auditor's gate gives it: --answer "
                                                     "is its answers.jsonl")
     a = ap.parse_args(argv)
-    reg = registration_of(json.loads(a.registration.read_text()))
+    doc = json.loads(a.registration.read_text())
+    reg = registration_of(doc)
+    plan = plan_of(doc, reg)
     if a.device is not None:
         a.device.mkdir(parents=True, exist_ok=True)
         a.answer = a.device / "answers.jsonl"
@@ -295,9 +314,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         log(f"answer {out['verdict']} {out.get('failure') or ''} q_bytes={out.get('q_bytes')} "
             f"host={socket.gethostname()}")
 
-    log(f"registration {reg.digest.hex()[:16]} ({reg.blocks} units) on {socket.gethostname()}")
+    log(f"registration {reg.digest.hex()[:16]} ({reg.blocks} units, {plan.length} a pass) on {socket.gethostname()}")
     if a.stdio:
-        done(session(sys.stdin.buffer, sys.stdout.buffer, reg, coins=secrets.token_bytes(64), log=log))
+        done(session(sys.stdin.buffer, sys.stdout.buffer, reg, coins=secrets.token_bytes(64), plan=plan, log=log))
         return 0
     host, _, port = a.listen.rpartition(":")
     with socket.create_server((host, int(port))) as srv:
@@ -305,13 +324,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         for _ in range(a.sessions):
             conn, _ = srv.accept()
             with conn, conn.makefile("rb") as r, conn.makefile("wb") as w:
-                out = session(r, w, reg, coins=secrets.token_bytes(64), log=log)
+                out = session(r, w, reg, coins=secrets.token_bytes(64), plan=plan, log=log)
             done(out)
             print(json.dumps({"answer": out}, sort_keys=True), flush=True)
     return 0
 
 
-__all__ = ["PROTOCOL", "Prover", "answer", "main", "opening_json", "opening_of", "params_of", "prove",
+__all__ = ["PROTOCOL", "Prover", "answer", "main", "opening_json", "opening_of", "params_of", "plan_of", "prove",
            "registration_json", "registration_of", "request_of", "session"]
 
 if __name__ == "__main__":
