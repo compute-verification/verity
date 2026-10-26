@@ -17,20 +17,24 @@ plain record's numbers).
 whose `nS x ≤ 2^16` V* parts sets up, at the inner rounds `nums` reads it at, within the masked verifier's served shapes
 (`PartIn`, `ZkIn`'s fields at the recursive setup `setupO`), at inner caps of at most `2^64` positions and at most
 `2^56` calls in the inner statement's plain setup (`|S(x_I)|`, `innerSetupIns`; 390 at the honest rec-coins
-statement), and at a count `n ≤ 2^55` of the inner verifier's calls on one draw's inner messages (`Deploy.innerCalls`,
-which `BitsLin2` bounds `n` by); the deployed caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep`
+statement), at a count `n ≤ 2^55` of the inner verifier's calls on one draw's inner messages (`Deploy.innerCalls`,
+which `BitsLin2` bounds `n` by) and a count `v ≤ 2^55` of the compiled verifier's own evaluations at a draw's V\*
+statements (`setupCalls`, which `BitsLin2` bounds `v` by: at the deployed shapes at most 15,829 a table, check 5's row
+commitments among them); the deployed caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep`
 states it at them with no width premise. Each of `λ₂`'s six terms is at least `103 > 100 + log₂ 6`, from bounds that
 are exact rational and real inequalities:
 
 * the inner Flock: `κ_I ≤ 200·2^{−202.98}` (`FlockDeploy.κ_plain_le`), `k_I ≤ 2^32`, `m′ = 210`, rounds `≤ 2^20`;
 * each part: `κ_O ≤ 200·2^{−202.98}` (`numsOf_κ_le`, `Flock.Numbers.κ_le_mul` at `Nums`), `k_O ≤ 2^32`, rounds
   `≤ 880002` and `γ_O ≤ 2^68` (`numsOf_γ_le`);
-* so `N_I ≤ 2^40`, `c_Be ≤ 2^57`, `c_S = c_Be + |S(x_I)| + 2n ≤ 2^58`,
+* so `N_I ≤ 2^40`, `c_Be ≤ 2^57`, `c_S = c_Be + |S(x_I)| + 2(n + v) ≤ 2^59`,
   `k(x) ≤ 2^37`, `κ ≤ 2^{−137}`, `γ ≤ 2^218` and `β₂ ≤ 2^88` (`lamLin2_core`).
 
-The bound is crude (`λ₂` there is about 165.8, `κ` binding); it is what the parameters give at every such statement.
+The bound is crude (`λ₂` there is about 165.8, `κ` binding: the compiled verifier's evaluations lower each collision
+term by `log₂(1 + 2v/c_S)`, at most about 0.006 bits at the deployed shapes, and the nearest, `Fdev`'s, sits near 178.9);
+it is what the parameters give at every such statement.
 It bounds a number and establishes no security level: `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`DenseAt`) only follows from premises still open (`PartChecksB`, `PartOpensB` and `DecompB` at the
+`DenseAt`) only follows from premises still open (`PartChecksBV`, `PartOpensB` and `DecompB` at the
 coin server's record, which reads back; `ksLin2_deployed_full`), Holo statements being
 candidate 3's own model, and `BitsLin2` there, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from it
 (`bitsLin2On_of_ksLin2On`). The proved level at the deployment is still `Claims.Recursion.lam`'s, about 65 bits, below
@@ -84,7 +88,7 @@ theorem two_rpow_neg_le : (2 : ℝ) ^ (-(202.98 : ℝ)) ≤ ((2 : ℝ) ^ 202)⁻
 rounds `VI`, the inner `E^rep`'s accepted reruns `kI` per wait and its waits `wI`, the inner caps' positions `W`, the
 compiled verifier's rounds `kx`, each part's `κ`, `γ`, waits and reruns), each at least `103`. -/
 theorem lamLin2_core {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI : ℝ} {κs γs : Fin nS → ℝ} {ws ks : Fin nS → ℕ}
-    (hNI : NI = 1 + wI * kI) (hcBe : cBe = 4 + 2 * ∑ s, ws s * ks s) (hSet : nSet + 2 * nU ≤ 2 ^ 57)
+    (hNI : NI = 1 + wI * kI) (hcBe : cBe = 4 + 2 * ∑ s, ws s * ks s) (hSet : nSet + 2 * nU ≤ 2 ^ 58)
     (hVI : VI ≤ 2 ^ 20) (hkI : kI ≤ 2 ^ 32) (hwI : wI = 210) (hW : W ≤ 2 ^ 64) (hnS : nS ≤ 2 ^ 16)
     (hkx : kx ≤ 2 ^ 37) (hκI0 : 0 < κI) (hκI : κI ≤ 200 * 2 ^ (-(202.98 : ℝ)))
     (hκs0 : ∀ s, 0 ≤ κs s) (hκs : ∀ s, κs s ≤ 200 * 2 ^ (-(202.98 : ℝ))) (hγs : ∀ s, γs s ≤ 2 ^ 68)
@@ -107,7 +111,7 @@ theorem lamLin2_core {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI : ℝ}
           gcongr
           exact hsum.trans (Nat.mul_le_mul_right _ hnS)
       _ ≤ 2 ^ 57 := by norm_num
-  have hcS : cBe + nSet + 2 * nU ≤ 2 ^ 58 := by omega
+  have hcS : cBe + nSet + 2 * nU ≤ 2 ^ 59 := by omega
   have hNIR : (NI : ℝ) ≤ 2 ^ 40 := by exact_mod_cast hNI'
   have hnR : (nS : ℝ) ≤ 2 ^ 16 := by exact_mod_cast hnS
   have hkxR : (kx : ℝ) ≤ 2 ^ 37 := by exact_mod_cast hkx
@@ -149,33 +153,33 @@ theorem lamLin2_core {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI : ℝ}
     linarith
   · refine sub_logb_ge (n := 153) (by positivity) ?_ (by norm_num)
     have : (4 * VI + 1) * (cBe + nSet + 2 * nU) ≤ 2 ^ 153 :=
-      calc (4 * VI + 1) * (cBe + nSet + 2 * nU) ≤ (4 * 2 ^ 20 + 1) * 2 ^ 58 := by gcongr
+      calc (4 * VI + 1) * (cBe + nSet + 2 * nU) ≤ (4 * 2 ^ 20 + 1) * 2 ^ 59 := by gcongr
         _ ≤ 2 ^ 153 := by norm_num
     exact_mod_cast this
   · refine sub_logb_ge (n := 152) (by positivity) ?_ (by norm_num)
     have : 4 * W * (cBe + nSet + 2 * nU) ≤ 2 ^ 152 :=
-      calc 4 * W * (cBe + nSet + 2 * nU) ≤ 4 * 2 ^ 64 * 2 ^ 58 := by gcongr
+      calc 4 * W * (cBe + nSet + 2 * nU) ≤ 4 * 2 ^ 64 * 2 ^ 59 := by gcongr
         _ ≤ 2 ^ 152 := by norm_num
     exact_mod_cast this
   · refine sub_logb_ge (n := 153) (by positivity) ?_ (by norm_num)
     have : 4 * (kI + 1) * (cBe + nSet + 2 * nU) ≤ 2 ^ 153 :=
-      calc 4 * (kI + 1) * (cBe + nSet + 2 * nU) ≤ 4 * (2 ^ 32 + 1) * 2 ^ 58 := by gcongr
+      calc 4 * (kI + 1) * (cBe + nSet + 2 * nU) ≤ 4 * (2 ^ 32 + 1) * 2 ^ 59 := by gcongr
         _ ≤ 2 ^ 153 := by norm_num
     exact_mod_cast this
   · refine sub_logb_ge (n := 152) (by positivity) ?_ (by norm_num)
     have : (NI + 8 * W + 4 * (kI + 1)) * VI * (cBe + nSet + 2 * nU) ≤ 2 ^ 152 :=
       calc (NI + 8 * W + 4 * (kI + 1)) * VI * (cBe + nSet + 2 * nU) ≤
-          (2 ^ 40 + 8 * 2 ^ 64 + 4 * (2 ^ 32 + 1)) * 2 ^ 20 * 2 ^ 58 := by
+          (2 ^ 40 + 8 * 2 ^ 64 + 4 * (2 ^ 32 + 1)) * 2 ^ 20 * 2 ^ 59 := by
             gcongr
         _ ≤ 2 ^ 152 := by norm_num
     exact_mod_cast this
 
 /-- **`λ₂ ≥ 100` at a compiled record and an inner protocol**, from bounds on the numbers `lamLin2` reads. -/
 theorem lamLin2_ge_of {C W' : Type} [Fintype C] [Nonempty C] [Inhabited C] (D : Claims.Recursion.Deploy C)
-    (I : Claims.Recursion.Inner C W') (Cp : Claims.Recursion.Caps C) (x : Msg) (n : ℕ)
+    (I : Claims.Recursion.Inner C W') (Cp : Claims.Recursion.Caps C) (x : Msg) (n v : ℕ)
     (hVI : I.V.k (Claims.Recursion.xI D x) ≤ 2 ^ 20) (hkI : I.k (Claims.Recursion.xI D x) ≤ 2 ^ 32)
     (hwI : I.waits (Claims.Recursion.xI D x) = 210) (hW : Cp.width (Claims.Recursion.xI D x) ≤ 2 ^ 64)
-    (hnS : D.nS x ≤ 2 ^ 16) (hSet : Claims.Recursion.setupLen D x ≤ 2 ^ 56) (hU : n ≤ 2 ^ 55)
+    (hnS : D.nS x ≤ 2 ^ 16) (hSet : Claims.Recursion.setupLen D x ≤ 2 ^ 56) (hU : n ≤ 2 ^ 55) (hV : v ≤ 2 ^ 55)
     (hkx : D.V.k x ≤ 2 ^ 37)
     (hκI0 : 0 < I.κ (Claims.Recursion.xI D x))
     (hκI : I.κ (Claims.Recursion.xI D x) ≤ 200 * 2 ^ (-(202.98 : ℝ)))
@@ -183,11 +187,11 @@ theorem lamLin2_ge_of {C W' : Type} [Fintype C] [Nonempty C] [Inhabited C] (D : 
     (hκs : ∀ s : Fin (D.nS x), (D.nums x s).κ ≤ 200 * 2 ^ (-(202.98 : ℝ)))
     (hγs : ∀ s : Fin (D.nS x), (D.nums x s).γ ≤ 2 ^ 68) (hws : ∀ s : Fin (D.nS x), (D.nums x s).waits = 210)
     (hks : ∀ s : Fin (D.nS x), (D.nums x s).k ≤ 2 ^ 32) :
-    100 ≤ Claims.Recursion.lamLin2 D I Cp x n :=
+    100 ≤ Claims.Recursion.lamLin2 D I Cp x n v :=
   lamLin2_core (nS := D.nS x) (VI := I.V.k (Claims.Recursion.xI D x)) (kI := I.k (Claims.Recursion.xI D x))
     (wI := I.waits (Claims.Recursion.xI D x)) (W := Cp.width (Claims.Recursion.xI D x)) (kx := D.V.k x)
     (NI := Claims.Recursion.NI D I x) (cBe := Claims.Recursion.cBe D x) (nSet := Claims.Recursion.setupLen D x)
-    (nU := n) (κI := I.κ (Claims.Recursion.xI D x)) (κs := fun s => (D.nums x s).κ)
+    (nU := n + v) (κI := I.κ (Claims.Recursion.xI D x)) (κs := fun s => (D.nums x s).κ)
     (γs := fun s => (D.nums x s).γ) (ws := fun s => (D.nums x s).waits) (ks := fun s => (D.nums x s).k) rfl rfl
     (by omega) hVI hkI hwI hW hnS hkx hκI0 hκI hκs0 hκs hγs hws hks
 
@@ -362,11 +366,11 @@ theorem lamLin2_deployed_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock
     {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hin : FlockDeploy.PlainIn (xIOf x) s spec sts)
     (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts')
-    (hn : nS x ≤ 2 ^ 16) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) {n : ℕ} (hU : n ≤ 2 ^ 55)
-    (hW : Cp.width (xIOf x) ≤ 2 ^ 64) :
+    (hn : nS x ≤ 2 ^ 16) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) {n : ℕ} (hU : n ≤ 2 ^ 55) {v : ℕ}
+    (hV : v ≤ 2 ^ 55) (hW : Cp.width (xIOf x) ≤ 2 ^ 64) :
     100 ≤ Claims.Recursion.lamLin2
       ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
-      (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) Cp x n := by
+      (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) Cp x n v := by
   have hsz : (sts.size : ℝ) ≤ 200 := by exact_mod_cast hin.size_le
   have hVI : (FlockDeploy.deployPlain rel).V.k (xIOf x) ≤ 2 ^ 20 :=
     (FlockDeploy.Vk_plain_le rel hin).trans <|
@@ -394,8 +398,8 @@ theorem lamLin2_deployed_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock
   have hκI : Claims.Flock.κ (FlockDeploy.deployPlain rel) (xIOf x) ≤ 200 * 2 ^ (-(202.98 : ℝ)) :=
     (FlockDeploy.κ_plain_le rel hin).trans (mul_le_mul_of_nonneg_right hsz (by positivity))
   refine lamLin2_ge_of ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
-    (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) Cp x n
-    hVI hkI rfl hW hn hS hU hkx hκI0 hκI
+    (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) Cp x n v
+    hVI hkI rfl hW hn hS hU hV hkx hκI0 hκI
     (fun j => numsκ_nonneg _ (εtableO_nonneg (staged b.st x (pick b.st x j) j))) (fun j => ?_) (fun j => ?_)
     (fun _ => rfl) (fun j => ?_)
   · obtain ⟨i, spec', sts', hp⟩ := hO j j.isLt
@@ -478,12 +482,13 @@ theorem lamLin2_deployed_ge_dep (rel : _root_.Flock.Readable.Parsed → _root_.F
     {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hin : FlockDeploy.PlainIn (xIOf x) s spec sts)
     (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts')
-    (hn : nS x ≤ 2 ^ 16) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) {n : ℕ} (hU : n ≤ 2 ^ 55) :
+    (hn : nS x ≤ 2 ^ 16) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) {n : ℕ} (hU : n ≤ 2 ^ 55) {v : ℕ}
+    (hV : v ≤ 2 ^ 55) :
     100 ≤ Claims.Recursion.lamLin2
       ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
       (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)
-      FlockDeploy.KS.CpDep x n :=
-  lamLin2_deployed_ge rel b L nextE colsE wE join rowIn final w decI FlockDeploy.KS.CpDep hin hO hn hS hU
+      FlockDeploy.KS.CpDep x n v :=
+  lamLin2_deployed_ge rel b L nextE colsE wE join rowIn final w decI FlockDeploy.KS.CpDep hin hO hn hS hU hV
     (CpDep_width_le (xIOf x))
 
 end RecDeploy
