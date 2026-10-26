@@ -28,7 +28,9 @@ theorem parse_cases {c : Circuit} (h : HmOut.parse tags cf tables = .ok c) :
         (∃ k b tm c₀, HmRow.parse tags cf tables (tmpl := some tm) = .ok c₀ ∧
           c = { c₀ with typed := some b, cls := some k }) ∨
         ∃ k unit c₀, HmRow.parse tags cf tables (pre := #[("unit", unit)]) = .ok c₀ ∧ c = { c₀ with cls := some k }) := by
+  have hi := HmOut.parse_isTmpl h
   unfold HmOut.parse at h
+  rw [if_neg (by simp [hi])] at h
   dsimp only at h
   cases ht : tags.typed
   · simp only [ht, Bool.not_false, ↓reduceIte] at h
@@ -59,7 +61,9 @@ theorem parse_cases {c : Circuit} (h : HmOut.parse tags cf tables = .ok c) :
 /-- **`parse_untyped`**: an untyped `HmOut.parse` is `HmRow.parse`'s circuit, then `HmOut.checkRows`. -/
 theorem parse_untyped {c : Circuit} (ht : tags.typed = false) (h : HmOut.parse tags cf tables = .ok c) :
     HmRow.parse tags cf tables = .ok c ∧ HmOut.checkRows c = .ok () := by
+  have hi := HmOut.parse_isTmpl h
   unfold HmOut.parse at h
+  rw [if_neg (by simp [hi])] at h
   simp only [ht, Bool.not_false, ↓reduceIte] at h
   obtain ⟨c₀, hc₀, h⟩ := ebind_ok h
   obtain ⟨u, hu, h⟩ := ebind_ok h

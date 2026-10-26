@@ -69,7 +69,9 @@ theorem slotOk_of_hidden {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tabl
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     ∀ r ∈ st.c.ranges.toList, FlockComplete.JsonRT.SlotOk st.c r := by
   have hp := (FlockSoundness.Discharge.Hidden.setupHidden_spec' h).parse
+  have hi := HmOut.parse_isTmpl hp
   unfold HmOut.parse at hp
+  rw [if_neg (by simp [hi])] at hp
   simp only [ht, Bool.not_false, ↓reduceIte] at hp
   obtain ⟨c', hc', hp⟩ := FlockSoundness.Refine.ebind_ok hp
   obtain ⟨_, -, hp⟩ := FlockSoundness.Refine.ebind_ok hp

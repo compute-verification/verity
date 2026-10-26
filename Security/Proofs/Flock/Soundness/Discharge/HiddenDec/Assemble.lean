@@ -1,6 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
 # The decoder is right at the hidden-output headline's draws
@@ -13,7 +14,8 @@ outcome flock-verify accepts under hidden outputs:
   `accepts_rep_roundsAny`, `setupTables_okAny`, `setupTables_pointsAny`, `Discharge/HiddenExec`), the verdict at the
   model's leaf of the tags' leaf scheme (`leafOfId`: `leaf512` under `hm96-sha512/v1`, `leafPlain` under plain SHA-512
   leaves).
-* `tableAtH_of_accepts` puts `stmtOf st` at the hidden table, `tableAtH_ptLocal` its link layout at `PT_LOCAL`, and
+* `tableAtH_of_acceptsU` puts `stmtOf st` at the hidden table, from the session alone (so `decodesOn_execHSt` holds at
+  the statement circuit, `HmOut.parseStmt`), `tableAtH_ptLocal` its link layout at `PT_LOCAL`, and
   `fast100_schedOf` its schedule at `fast100`'s.
 * DecodeZL's `repRun_at`, at its wires' chunk lemmas `op_carries` and `lig_carries` (and `zl_carries`, which `repRun_at`
   reads), makes each rep's run a `RepRun` for `decAt`; `RecordsLive` says the outcome's rounds, link points, root and
@@ -97,10 +99,9 @@ theorem tableAtH_ptLocal {n mPts : ℕ} {I : Inputs} (dj : Finset (Fin n) → Le
     (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (S : Finset (Fin n)) : (tableAtH dj x₀ S).T.ptLocal = PT_LOCAL := by
   rcases tableAtH_cases dj x₀ S with ⟨x, e⟩ | e <;> rw [e] <;> rfl
 
-/-- **The decoder is right at the hidden-output headline's draws**, wherever the outputs are returned
-(`DecodesOnExecH` without `c.outNet = c.unitNet`). -/
-theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
-    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
+/-- **The decoder is right at the hidden-output headline's draws**, from the session alone (`DecodesOnExecH` with no
+hypothesis on the circuit: `tableAtH_of_acceptsU`). -/
+theorem decodesOn_execHU {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
     (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (hT : TagsOkHL I) (hwr : RecordsLive I dj wr) (hdraw : ∀ ω, DrawOkH I dj mPts (L.draw ω)) :
@@ -114,7 +115,7 @@ theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags
   intro ω R o hacc
   obtain ⟨hd, hprf, hrec⟩ := hwr _ R o hacc
   obtain ⟨hSD, hmPts⟩ := hdraw ω
-  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsI ht hc hh hc1 dj x₀ hacc hd hSD hmPts
+  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsU ht hh hc1 dj x₀ hacc hd hSD hmPts
   obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsH hh hrr hl hc1 hacc
   rw [hd] at hst
   obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
@@ -163,8 +164,37 @@ theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags
   rw [hopn, ← hroot]
   exact hv
 
+set_option linter.unusedVariables false in
+/-- **The decoder is right at the hidden-output headline's draws**, wherever the outputs are returned
+(`DecodesOnExecH` without `c.outNet = c.unitNet`). -/
+theorem decodesOn_execHI {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
+    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
+    (hT : TagsOkHL I) (hwr : RecordsLive I dj wr) (hdraw : ∀ ω, DrawOkH I dj mPts (L.draw ω)) :
+    DecodesOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH (Reg := Reg) dj x₀) I wr
+      (opnAtH (tablesAtH dj x₀) I dj)
+      (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L :=
+  decodesOn_execHU ht dj x₀ L wr hT hwr hdraw
+
+set_option linter.unusedVariables false in
+/-- `decodesOn_execHI` at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled). -/
+theorem decodesOn_execHISt {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
+    (hc : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
+    (hT : TagsOkHL I) (hwr : RecordsLive I dj wr) (hdraw : ∀ ω, DrawOkH I dj mPts (L.draw ω)) :
+    DecodesOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH (Reg := Reg) dj x₀) I wr
+      (opnAtH (tablesAtH dj x₀) I dj)
+      (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L :=
+  decodesOn_execHU ht dj x₀ L wr hT hwr hdraw
+
 theorem decodesOn_execH : DecodesOnExecH := by
-  intro c n I ht hc _ mPts dj S₀ x₀ Reg L wr hT hwr hdraw
-  exact decodesOn_execHI ht hc dj x₀ L wr hT hwr hdraw
+  intro c n I ht _ _ mPts dj S₀ x₀ Reg L wr hT hwr hdraw
+  exact decodesOn_execHU ht dj x₀ L wr hT hwr hdraw
+
+theorem decodesOn_execHSt : DecodesOnExecHSt := by
+  intro c n I ht _ _ mPts dj S₀ x₀ Reg L wr hT hwr hdraw
+  exact decodesOn_execHU ht dj x₀ L wr hT hwr hdraw
 
 end FlockSoundness.Discharge.HiddenDec
