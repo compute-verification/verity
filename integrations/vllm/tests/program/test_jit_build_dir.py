@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.program.kernels import _jit
+from verity.ml.definitions.numerics import _jit
 
 REPO = Path(__file__).resolve().parents[4]
 TWINS = (("libtc_model.so", "tc_model.cpp"), ("librms_triton_model.so", "rms_triton_model.cpp"), ("libfa2_model.so", "fa2_model.cpp"))
@@ -50,7 +50,7 @@ def test_build_dir_is_a_user_cache_keyed_by_the_sources_and_the_compiler_flags(t
 
 
 def test_no_twin_library_resolves_under_the_checkout():
-    from verity_vllm.program.kernels import cpu_model, fa2_model, rms_triton_model
+    from verity.ml.definitions.numerics import cpu_model, fa2_model, rms_triton_model
     for lib in (cpu_model.LIB, fa2_model.LIB, rms_triton_model.LIB):
         assert not Path(lib).resolve().is_relative_to(REPO.resolve()), f"{lib} is inside the checkout {REPO}"
 

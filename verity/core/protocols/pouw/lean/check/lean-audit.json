@@ -39,7 +39,8 @@
     "PouwWindow.Draw",
     "PouwWindow.Public",
     "PouwWindow.Length",
-    "PouwCheck.Inputs"
+    "PouwCheck.Inputs",
+    "PouwCheck.WindowSalt"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
@@ -63,6 +64,11 @@
     "SampledProofs.ChallengerRecord",
     "SampledProofs.ChallengerSession"
    ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwCheck.WindowSalt": {
+   "imports": ["PouwCheck.Pass"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },

@@ -60,7 +60,7 @@ STATEMENTS = {
     "pooled": {"name": "Flock.Guarantees.IntegrityHorizon", "pr": 4358,
                "file": "Security/Proofs/Flock/EndToEnd/Period/Statement.lean",
                "sampling_core": {"name": "FlockSoundness.Audit.Law.horizon_escape_log", "pr": 4350,
-                                 "file": "Security/Proofs/Flock/Soundness/Audit/Horizon.lean"}},
+                                 "file": "Security/Proofs/Flock/Claims/Sampling/HorizonPr.lean"}},
     "per_window": {"name": "Flock.Guarantees.IntegrityPeriod", "pr": 4358,
                    "file": "Security/Proofs/Flock/EndToEnd/Period/Statement.lean"},
 }

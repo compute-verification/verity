@@ -133,6 +133,20 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
         sz.host(tmp_path / "h3", other)
 
 
+def test_a_run_whose_warden_failed_a_connection_closed_is_refused_as_void_by_name(tmp_path):
+    run = published(tmp_path / "run")
+    rec = WS.ar.unpack_record(WS.ar.read_blobs(run / "responses.records")[0], sz.PARAMS.cell_bytes)
+    t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)
+    grid = tuple(tuple(f if (u, k) == (t, j) else None for k, f in enumerate(row)) for u, row in enumerate(rec.grid))
+    _rewrite(run / "fails.records", [WS.ar.pack_record(replace(rec, grid=grid, window=3))])
+    (run / "check.json").write_text(json.dumps({"problems": ["audit: connection 7 failed closed (late) at egress cell 2",
+                                                             "connection 7: fail, HTTP None, complete False"]}))
+    with pytest.raises(SystemExit, match=re.escape("void run: the warden failed connections closed, 1 fail cells in "
+                                                   "link-windows [3] (connection 7 failed closed (late) at egress "
+                                                   "cell 2)")):
+        sz.host(tmp_path / "h", run)
+
+
 @pytest.mark.parametrize("flags,why", [
     (["--challenger", "local", "--main", "m.txt"], "give --draw"),
     (["--challenger", "remote", "--draw", "16", "--main", "m.txt"], "local or gate:USER@HOST, not 'remote'"),

@@ -16,10 +16,10 @@ import pytest
 import torch
 
 from tests.properties import dsv4_flashmla_capture_gpu as X
-from verity_vllm.program.kernels import flashmla_prefill_twin as PT
-from verity_vllm.program.kernels import flashmla_twin as T
-from verity_vllm.program.registry import flashmla as F
-from verity_vllm.program.registry import flashmla_prefill as P
+from verity.ml.definitions.numerics import flashmla_prefill_twin as PT
+from verity.ml.definitions.numerics import flashmla_twin as T
+from verity.ml.definitions.registry import flashmla as F
+from verity.ml.definitions.registry import flashmla_prefill as P
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 

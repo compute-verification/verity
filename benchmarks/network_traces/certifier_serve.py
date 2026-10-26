@@ -29,7 +29,7 @@ namespace has no other interface. On real hosts it is only the route of the meas
 **The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
 straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
 prompt of exactly `--prompt-tokens` tokens (`PROMPT` padded with `FILLER` in the endpoint's own tokenizer, `/tokenize`,
-and cut there), exactly `--tokens` tokens out (`min_tokens` and `max_tokens`, `ignore_eos`), at `--temperature` (0)
+and cut there), exactly `--tokens` tokens out (`max_tokens` and `ignore_eos`), at `--temperature` (0)
 and `--top-p` (1), both always sent, since an endpoint applies its own generation config to a request that omits
 them. F, the
 frames of a response, is that token count, not the endpoint's events: vLLM v1 merges a request's tokens that its API
@@ -603,10 +603,11 @@ class CertifierProcess:
 
 def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT, temperature: float = 0.0,
                  top_p: float = 1.0) -> dict:
-    """The request every session of a served plan sends: exactly `tokens` tokens (`min_tokens` and `max_tokens`, never
-    stopped early), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
-    applies its own generation config to a request that omits them."""
-    return {"model": model, "prompt": prompt, "max_tokens": tokens, "min_tokens": tokens, "stream": True,
+    """The request every session of a served plan sends: exactly `tokens` tokens (`max_tokens`, never stopped early:
+    `ignore_eos`), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
+    applies its own generation config to a request that omits them. No `min_tokens`: it masks the EOS logit, which the
+    served Program's sampling doesn't model, so vllm's advice refuses it."""
+    return {"model": model, "prompt": prompt, "max_tokens": tokens, "stream": True,
             "ignore_eos": True, "temperature": temperature, "top_p": top_p}
 
 
@@ -692,9 +693,9 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
     body = probed["body"]
     tokens = body["max_tokens"]
     F = frames or tokens
-    if body.get("min_tokens") != tokens or not body.get("ignore_eos"):
-        raise ValueError("a served plan's body asks for exactly its tokens (min_tokens = max_tokens, ignore_eos), "
-                         f"not {body}")
+    if body.get("ignore_eos") is not True or not isinstance(tokens, int) or tokens < 1 or "min_tokens" in body:
+        raise ValueError("a served plan's body asks for exactly its tokens (max_tokens, ignore_eos) and no min_tokens, "
+                         f"which vllm's advice refuses: not {body}")
     if F < tokens:
         raise ValueError(f"F, a response's frames, is at least the body's {tokens} tokens, not {F}")
     lengths = sorted({r["events"] for r in probed["responses"]})
@@ -1621,7 +1622,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--requests", type=int, default=400)
         q.add_argument("--in-flight", type=int, default=4, help="requests sent together, served side by side")
         q.add_argument("--tokens", type=int, default=64,
-                       help="fixed: min_tokens and max_tokens of every request (ignore_eos); varied: max_tokens' cap")
+                       help="fixed: max_tokens of every request (ignore_eos, no min_tokens); varied: max_tokens' cap")
         q.add_argument("--response-frames", type=int,
                        help="fixed: F, a response's canonical events, padded to (default: --tokens); a token of more "
                             "than 64 bytes is one event per 64")

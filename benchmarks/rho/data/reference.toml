@@ -1,0 +1,114 @@
+# The reference datacenter Daniel named (25 Oct 10:05 PM PDT, relayed by top in thread 1792987543.379119): the world's
+# committed inference, about 2e16 requests a year of DeepSeek-V4-Pro in FP8 at about 4,500 input tokens each, on two
+# fleets (8-GPU H200 servers; NVL72 racks, a rack one location), dark share 0.1% and 1%, side channels 1 kb/s per
+# server, horizons a week, a month and a year; and the work and exfiltration references that make rho interpretable.
+# Its regimes are data/regimes.toml's onsite (a wipe every 24 h, 10 GB a device today) and remote.
+
+[model.deepseek-v4-pro]
+n_total = { value = 1.6e12, unit = "param", source = "ruling: Daniel 25 Oct reference datacenter (1.6T total)", status = "ruled" }
+n_active = { value = 4.9e10, unit = "param", source = "ruling: Daniel 25 Oct reference datacenter (49B active)", status = "ruled" }
+d_model = { value = 7168, source = "integrations/vllm/tests/check/fixtures/deepseek_v4/config.json hidden_size", status = "datasheet" }
+layers = { value = 61, source = "integrations/vllm/tests/check/fixtures/deepseek_v4/config.json num_hidden_layers", status = "datasheet" }
+vocab = { value = 129280, source = "integrations/vllm/tests/check/fixtures/deepseek_v4/config.json vocab_size", status = "datasheet" }
+legs = { value = 1536, source = "the least d_in of a layer's matrices, wq_b's (and the indexer's) 1536-wide query latent (models.toml model.deepseek-v4-pro.matrices, instances.derived_legs)", status = "derived" }
+fanout = { value = 65536, source = "the widest layer matrix's output, wq_b's 128 query heads x 512 (models.toml model.deepseek-v4-pro.matrices, instances.derived_fanout), above the MoE input's 384 + 2 x 3072 x (6 routed + 1 shared) = 43,392, which understates aOut", status = "derived" }
+
+[run.v4-pretrain]
+model = "deepseek-v4-pro"
+kind = "pretrain"
+tokens = { value = 3.3e13, unit = "token", source = "ruling: Daniel 25 Oct work reference (33T tokens)", status = "ruled" }
+compute = { value = 9.7e24, unit = "FLOP", source = "ruling: Daniel 25 Oct, 6 x 49e9 x 33e12", status = "ruled" }
+
+[run.v4-step]
+model = "deepseek-v4-pro"
+kind = "pretrain"
+tokens = { value = 9.44e7, unit = "token", source = "ruling: Daniel 25 Oct work reference (one optimizer step, a 94.4M-token batch)", status = "ruled" }
+compute = { value = 2.84e19, unit = "FLOP", source = "ruling: Daniel 25 Oct, about 4 H100-hours at 7.1e18 FLOP each", status = "ruled" }
+
+[policy.v4-pro-session]
+gamma = { value = 9.8e16, unit = "FLOP", source = "a 1M-token session: 1e6 x 2 x 49e9", status = "derived" }
+k = { value = 2e7, unit = "bit", low = 2.2e6, high = 8.8e7, source = "ruling: Daniel 25 Oct, a session returns at most 2.5 MB (1M tokens at 20 bits)", status = "ruled" }
+
+# Each fleet is the whole world's compute: sized to serve the committed computation, 2e16 requests x 4,500 tokens x
+# 2 x 49e9 = 8.82e30 FLOP a year (prefill only), at the fleet's serving MFU: count = 8.82e30 / (phi x year x mfu_serve).
+[fleet.world-h200]
+location = "h200-hgx"
+count = { value = 4.42e7, unit = "location", source = "8.82e30 / (1.583e16 x 3.1536e7 x 0.4); top's 1.8e7 is at 100% use", status = "derived" }
+dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, operating points 0.1% and 1%", status = "ruled" }
+mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
+mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
+
+[fleet.world-nvl72]
+location = "gb200-nvl72"
+count = { value = 1.94e6, unit = "location", source = "8.82e30 / (3.6e17 x 3.1536e7 x 0.4); top's 7.8e5 is at 100% use", status = "derived" }
+dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, operating points 0.1% and 1%", status = "ruled" }
+mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
+mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
+
+[work.v4-step]
+flops = { value = 2.84e19, unit = "FLOP", source = "ruling: Daniel 25 Oct, one optimizer step (about 4 H100-hours)", status = "ruled" }
+
+[work.v4-pretrain]
+flops = { value = 9.7e24, unit = "FLOP", source = "ruling: Daniel 25 Oct, the pretraining run (33T tokens)", status = "ruled" }
+
+[exfil.sparseloco-sync]
+bits = { value = 1.36e11, unit = "bit", source = "ruling: Daniel 25 Oct, at least 17 GB a SparseLoCo sync", status = "ruled" }
+
+[exfil.sparseloco-1000]
+bits = { value = 1.36e14, unit = "bit", source = "ruling: Daniel 25 Oct, 1,000 SparseLoCo syncs (17 TB)", status = "ruled" }
+
+[exfil.weights-fp4]
+bits = { value = 6.4e12, unit = "bit", source = "ruling: Daniel 25 Oct, the weights at FP4 (0.8 TB)", status = "ruled" }
+
+[exfil.rl-rollouts]
+bits = { value = 1.68e8, unit = "bit", source = "ruling: Daniel 25 Oct, 100M tokens of R1-style rollouts (21 MB at 17 bits a token, about 10x compressed)", status = "ruled" }
+
+# The faulty-outputs channel (operating.faulty): steps the sampled proofs let go unchecked return outputs the adversary
+# chose; the regime's identities each end at their first drawn faulty step.
+# The faulty-outputs row (operating.faulty): delta is the confidence it reports at; step_bits and floor_steps are an
+# unsampled regime's, where every unit is proved (q = 1); a sampled regime gives its own.
+[faulty]
+delta = { value = 1e-6, low = 1e-6, high = 0.01, source = "ruling: Daniel 25 Oct reference datacenter, delta = 1e-6 and 1% wherever a probabilistic term enters", status = "ruled" }
+step_bits = { value = 16, unit = "bit/step", low = 8, high = 16, source = "AGENTS.md: a proof unit's outputs are at most 16 bits, a literal limit (tiers DEFAULTS step_bits); low: exposure.RANGES, a guess", status = "ruled" }
+floor_steps = { value = 1, unit = "step", low = 1, high = 1e12, source = "benchmarks/nci/tiers.py DEFAULTS floor_steps; high: exposure.RANGES, a guess", status = "assumed" }
+
+[scenario.reference-onsite-h200]
+fleet = "world-h200"
+regime = "onsite"
+policy = "v4-pro-session"
+horizon = "year"
+run = "v4-pretrain"
+families = ["full"]
+
+[scenario.reference-onsite-nvl72]
+fleet = "world-nvl72"
+regime = "onsite"
+policy = "v4-pro-session"
+horizon = "year"
+run = "v4-pretrain"
+families = ["full"]
+
+[scenario.reference-remote-h200]
+fleet = "world-h200"
+regime = "remote"
+policy = "v4-pro-session"
+horizon = "year"
+run = "v4-pretrain"
+families = ["full"]
+
+[scenario.reference-remote-nvl72]
+fleet = "world-nvl72"
+regime = "remote"
+policy = "v4-pro-session"
+horizon = "year"
+run = "v4-pretrain"
+families = ["full"]
+
+# The reference remote audit with today's sampled proofs (tiers T5): the faulty-outputs channel at their draw rate.
+[scenario.reference-remote-h200-sampled]
+fleet = "world-h200"
+regime = "remote-sampled"
+policy = "v4-pro-session"
+horizon = "year"
+run = "v4-pretrain"
+families = ["full"]
