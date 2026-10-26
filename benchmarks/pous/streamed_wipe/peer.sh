@@ -38,10 +38,11 @@ tar -c --exclude=./.git --exclude=./.venv --exclude=./out --exclude=.lake . | "$
 LISTEN=0.0.0.0:$PORT TARGET=$ADDR:$PORT LINK=()
 if [ "$TUNNEL" = 1 ]; then
   LPORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
-  # AES-GCM, not ssh's default chacha20-poly1305, which rekeys after each 1 GiB: a rekey inside the reads holds one past
-  # the 20 ms deadline (r20261026-092852-4c4d, r20261026-093246-fcfd: read 1536 of a 1 GiB fill, 41.5 and 41.7 ms).
-  "${SSHO[@]}" -N -c aes128-gcm@openssh.com -o ExitOnForwardFailure=yes -L "127.0.0.1:$LPORT:127.0.0.1:$PORT" \
-    "${TO[@]}" &
+  # A session with a pty, not -N: sshd sets TCP_NODELAY on a connection only for a session, and without it the window
+  # update it sends after each 96 KiB of the prover's answers (1536 reads) holds the next challenge for the client's
+  # delayed ACK (r20261026-092852-4c4d, -093246-fcfd, -093641-0532: read 1536 at 41.5 to 42 ms, past the 20 ms deadline).
+  "${SSHO[@]}" -n -tt -o ExitOnForwardFailure=yes -L "127.0.0.1:$LPORT:127.0.0.1:$PORT" "${TO[@]}" sleep 7200 \
+    >/dev/null &
   TPID=$!
   for _ in $(seq 100); do
     python3 -c 'import socket, sys; socket.create_connection(("127.0.0.1", int(sys.argv[1])), 1).close()' "$LPORT" \
