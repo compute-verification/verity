@@ -9,7 +9,8 @@ unit's public leaf map (`leaves_public`) has one, region `x`, `(w, s)`, from a w
 with the leaf's word `inCol c + jj / 8` among its `2^s`. The leaf's word is one of `HmIn.words` (`words_mem`, through
 `Array.qsort`'s permutation and the dedup), every word lies in one of `HmIn.blocks`' aligned blocks (`blocks_cover`:
 in a run of consecutive words, and each run cut into blocks that cover it), and every block is `2^(e - s)` regions of
-`2^s` words (`inRegions_cover`).
+`2^s` words (`inRegions_cover`). So a public leaf's bits in a satisfying witness are its instance's public word
+(`public_pinned`).
 -/
 
 set_option Elab.async false
@@ -439,5 +440,21 @@ theorem in_cover (c : Circuit) (pi : HmIn.Ports) {u jj : ℕ} (hq : (pi.leaves.g
     ∃ x w s, x < (HmIn.inRegions c pi).size ∧ (HmIn.inRegions c pi)[x]! = (w, s) ∧ inCol c ≤ w ∧
       w ≤ inCol c + jj / 8 ∧ inCol c + jj / 8 < w + 2 ^ s :=
   inRegions_cover c pi (words_mem c pi hq)
+
+/-- **A public leaf's bits are its instance's public word**: in a satisfying witness of the model's statement at the
+executable's regions, unit slot `k`'s public leaf `jj` (public word `q` of the unit's leaf map) at column `16 jj + t`
+of the leaf group holds bit `t` of public word `q` of the slot's instance `i` (`in_cover`, `in_pinned`,
+`inVal_public`). -/
+theorem public_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+    (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
+    {pi : HmIn.Ports} {ri : Array Region} (hR : HmIn.regions st.c pi st.pub = .ok ri)
+    (hri : ∀ r ∈ ri.toList, r ∈ st.regions.toList) (hne : pi.ports.isEmpty = false)
+    {z : Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {k jj t i : ℕ} {q : ℤ} (hq : (pi.leaves.getD (k % st.c.upv) #[]).getD jj (-1) = q) (hq0 : 0 ≤ q)
+    (hk : k < st.c.unitRange.count) (hi : st.c.instOf st.pub.n o.val (k / st.c.upv) = some i) (ht : t < 16) :
+    bit ((L.model regs).block z o (inBlockOr st.c.kLog (inAddr st.c k jj t))) =
+      (st.pub.outputs.getD (i * pi.words + q.toNat) 0).testBit t := by
+  obtain ⟨x, w, s, hx, hws, hcol, hlo, hhi⟩ := in_cover st.c pi (u := k % st.c.upv) (jj := jj) (by rw [hq]; exact hq0)
+  rw [in_pinned L regs hregs hR hri hne hz o hx hws hcol hlo hhi hk ht, inVal_public hk hi hq hq0]
 
 end FlockSoundness.Discharge.Layout
