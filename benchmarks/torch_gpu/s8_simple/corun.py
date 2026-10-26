@@ -14,7 +14,8 @@ with CUDA events, each phase's reps queued back to back (a rep starts when every
 * ``linears`` and ``commit`` again (``*_again``), so a drift in the clock shows.
 
 The overlap won is linears + commit - corun, each the median of its reps. Every co-run's words (each linear's bf16
-output and each leaf) must be the alone run's, or the exit is 1. An NVML thread samples the leased GPU (by its UUID)
+output and each leaf) must be the alone run's, and each linear's fused kernel must pass `check.ptx_audit` (its digest is
+`check.py gpu`'s name for it), or the exit is 1. An NVML thread samples the leased GPU (by its UUID)
 through every phase: the SM clock, power (the driver's average over the last second, and its instant reading where it
 has one), the temperature and the clock's throttle reasons; a phase's statistics skip its first second. The codes are
 uniform s8 and the commit's bytes uniform, so power reads high for served values.
@@ -22,6 +23,7 @@ uniform s8 and the commit's bytes uniform, so power reads high for served values
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import math
@@ -255,9 +257,19 @@ def _equal(a: list[torch.Tensor], b: list[torch.Tensor]) -> bool:
     return len(a) == len(b) and all(x.shape == y.shape and torch.equal(x, y) for x, y in zip(a, b))
 
 
+def ptx(ops: list[tuple[str, tuple]]) -> dict[str, Any]:
+    """Each linear's fused kernel as `check.py gpu` names it (the sha256 of its PTX, 16 hex digits) and `check.ptx_audit`."""
+    out = {}
+    for name, (x, sx, w, sw) in ops:
+        text = S.fused_ptx(S.int_mm(x, w), sx, sw)
+        out[name] = {"digest": hashlib.sha256(text.encode()).hexdigest()[:16], **C.ptx_audit(text)}
+    return out
+
+
 def at(m: int, engine: E.Engine, a: argparse.Namespace, telemetry: Telemetry) -> dict[str, Any]:
     ops = linears(m, a.seed)
     lin = layer_call(ops)
+    fused = ptx(ops)
     com, info = commit(engine, m, a.variant, a.leaf_minb)
     hi = -(1 << 20)  # out of range: CUDA maps it to the highest priority
     plain = {"linears": torch.cuda.Stream(), "commit": torch.cuda.Stream()}
@@ -273,7 +285,8 @@ def at(m: int, engine: E.Engine, a: argparse.Namespace, telemetry: Telemetry) ->
             w = phase(configs[name], 1, telemetry, a.sleep_cycles)
         est[name] = w["ms"]
     res: dict[str, Any] = {"m": m, "commit": info, "linears": {n: list(C.SHAPES[n]) for n in C.LAYER},
-                           "variant": a.variant or engine.default, "leaf_minb": a.leaf_minb, "phases": {}}
+                           "variant": a.variant or engine.default, "leaf_minb": a.leaf_minb, "ptx": fused,
+                           "ptx_ok": all(v["ok"] for v in fused.values()), "phases": {}}
     ref: dict[str, list[torch.Tensor]] = {}
     for name in PHASES:
         reps = max(a.min_reps, min(a.max_reps, math.ceil(a.phase_s * 1e3 / est[name.removesuffix("_again")])))
@@ -319,6 +332,7 @@ def summary(doc: dict[str, Any]) -> str:
         lines.append(f"M = {r['m']}: linears alone {r['alone_ms']['linears']:.3f} ms, commit alone {r['alone_ms']['commit']:.3f} "
                      f"ms ({r['commit']['bytes'] / 1e9:.2f} GB), sum {r['sum_ms']:.3f} ms; drift linears "
                      f"{100 * r['drift']['linears']:+.2f}%, commit {100 * r['drift']['commit']:+.2f}%")
+        lines.append(f"  fused PTX audit ok {r['ptx_ok']}: " + ", ".join(f"{n} {v['digest']}" for n, v in r["ptx"].items()))
         for name in ("linears", "commit"):
             lines.append(f"  {name:20s} {p[name]['ms']:9.3f} ms x{p[name]['reps']:<4d} {_t(p[name]['telemetry'])}")
         for name, c in r["corun"].items():
@@ -367,10 +381,11 @@ def main(argv: list[str] | None = None) -> int:
         doc["seconds"] = round(time.monotonic() - t0, 3)
         doc["telemetry_error"] = telemetry.error
         doc["words_equal"] = bool(doc["runs"]) and all(c["words_equal"] for r in doc["runs"] for c in r["corun"].values())
+        doc["ptx_ok"] = bool(doc["runs"]) and all(r["ptx_ok"] for r in doc["runs"])
         (a.out / "corun.json").write_text(json.dumps(doc, indent=1) + "\n")
         if doc["runs"]:
             (a.out / "summary.txt").write_text(summary(doc))
-    return 0 if doc["words_equal"] else 1
+    return 0 if doc["words_equal"] and doc["ptx_ok"] else 1
 
 
 if __name__ == "__main__":

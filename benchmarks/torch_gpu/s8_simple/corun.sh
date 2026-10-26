@@ -5,12 +5,23 @@
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-ks8simple -- bash benchmarks/torch_gpu/s8_simple/corun.sh [corun.py's options]
 #
-# Exit: 0 every co-run's words are the alone runs', 1 one isn't, 3 the build failed, else the lease's code.
+# Exit: 0 every co-run's words are the alone runs' and every fused kernel passes the PTX audit, 1 not, 3 the venv or the
+# build failed, else the lease's code.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run under research run}; OUT=$D/out; mkdir -p "$OUT"
 HERE=benchmarks/torch_gpu/s8_simple ROWS=benchmarks/torch_gpu/sha512_rows
 for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
 PY=${PY:-python3}
+if ! "$PY" -c 'import torch, triton, pynvml' 2>/dev/null; then
+  # a node without the jobs' venv (vy-dc-h200-3): check.sh's torch and Triton (2.13.0+cu129, 3.7.1) in scratch
+  TMP=/workspace/tmp; [ -w "$TMP" ] || TMP=${TMPDIR:-/tmp}
+  S=$(mktemp -d "$TMP/tmp-s8corun.XXXXXX"); trap 'rm -rf "$S"' EXIT
+  export UV_CACHE_DIR=${UV_CACHE_DIR:-/workspace/cache/uv}
+  { { uv venv -q -p 3.12 "$S/venv" || uv venv -q "$S/venv"; } && uv pip install -q -p "$S/venv/bin/python3" --index-url https://download.pytorch.org/whl/cu129 \
+      --extra-index-url https://pypi.org/simple torch==2.13.0 numpy nvidia-ml-py; } > "$OUT/venv.txt" 2>&1 \
+    || { tail -20 "$OUT/venv.txt"; echo "venv 3" | tee "$OUT/status.txt"; exit 3; }
+  PY=$S/venv/bin/python3
+fi
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
 for c in "/usr/local/cuda-$TV" /usr/local/cuda /usr/local/cuda-13.0; do [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
 export PATH=${CUDA:-/usr/local/cuda}/bin:$PATH PYTHONPATH=$PWD PYTHONDONTWRITEBYTECODE=1
