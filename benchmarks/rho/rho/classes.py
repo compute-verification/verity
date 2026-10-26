@@ -20,9 +20,9 @@ conversions are exact over a whole cover, and per block they assume each block d
 from __future__ import annotations
 
 import math
-from functools import lru_cache
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Literal, Protocol
 
 from rho import lean

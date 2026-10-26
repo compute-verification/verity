@@ -14,9 +14,9 @@ class's is (`classes.counted`), which assumes the rest of the counted products t
 from __future__ import annotations
 
 import math
-from functools import cache, lru_cache
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from functools import cache, lru_cache
 from typing import Literal
 
 from rho.classes import E1, FINDINGS, Argument, Outside, counted, need
