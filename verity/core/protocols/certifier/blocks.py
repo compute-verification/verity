@@ -22,17 +22,23 @@ port's row). An ``in`` transfer's gates are the circuit's registered reads of V 
 and tables over V), its leaves ``registered.params[V]``. Leaves are 16 bits, as the interface's; a value of L leaves read
 in rows of w words is L/w rows, the certifier's commitment. ``t`` is each row's protocol step in the server-time window
 (row r's ``base + Σ d[k]·step[k]``, d: r's digits in ``radix``), null for the load, which crosses once a server session,
-in the link-window ``window`` names; a request's, response's or wire's window is the server-time block's.
+in the link-window ``window`` names; a request's, response's or wire's window is the server-time block's. A wire is one
+value V and two transfers, V's ``out`` on the sending server and V's ``in`` on the receiving one, each certified by its
+own uplink's network certifier; every other value is one transfer.
 
-**The check** (`check`), declaration by declaration, never unit by unit, before any coin:
+**The check** (`check`), declaration by declaration, before any coin; the one count over rows is an out value's (a byte
+a row, the size of the commitment the certifier makes of it row by row), never over units:
 
 - the servers each a new name on a new uplink (one network certifier an uplink), their units together a partition of
   every template's units ("all": the one server's);
-- a transfer a new value, its kind in its direction (`transfer_rows.KINDS`), on a server, in its window, its ``t``
-  within the server-time block's T steps and over its rows;
+- a transfer a new value, but a wire's other one, its kind in its direction (`transfer_rows.KINDS`), on a server, in its
+  window, its ``t`` within the server-time block's T steps and over its rows;
 - an ``in`` transfer's value a registered parameter read by its server's units alone, each read a whole row of it (base
   and steps multiples of the reader row's w words, one w), a table over it the whole value; an ``out`` transfer's writes
-  its server's units' output rows, each a whole row of the value, no output row written twice;
+  its server's units' output rows, each a whole row of the value, every row of the value written by exactly one unit,
+  and no output row written twice;
+- a wire's two transfers paired: one ``out`` and one ``in``, on two servers (so two uplinks, two certifiers), of one
+  shape (rows and words) and one step a row (``t``), since each row crosses both uplinks at once;
 - a server's boundary rows are exactly its transfers' rows: no ``ingress`` declaration (a server's ingress is a
   certified read), no registered read of a parameter no transfer brings in, no wire between two servers' units (a value
   one server sends another is a wire transfer, the sender's ``out`` and the receiver's ``in``), a request's and a
@@ -45,11 +51,15 @@ the check made of the record (`transfer_rows.check_registration`: its uplink, di
 circuit's program digest and the value's shape, its row format the verifier's own: 16-bit leaves in
 ``hm96-sha512/row/v2`` rows unless ``formats`` names another, as a load's f32 scale is one 32-bit leaf a row and its
 token embeddings ``hm96-sha512/row-seg/v1`` rows) under its uplink's certifier's key and session. A transfer without
-one, or a registration naming no transfer, is refused, so a root is pinned only from its certificate.
+one, or a registration naming no transfer, is refused, so a root is pinned only from its certificate. A wire's two heads
+are under one domain (one program, value and shape), and the receiving certifier commits the rows it saw under the
+sending one's salts (`transfer_rows`), so its two roots must be one: they are exactly when the rows that reached the
+receiver's uplink are the rows that left the sender's, and a wire whose roots differ is refused.
 """
 
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -240,6 +250,32 @@ def _disjoint(rects: Sequence[tuple[tuple[str, str], int, int, int, int]], what:
             live.append(x)
 
 
+def _once(writes: Sequence[Pattern], words: int, rows: int, what: str) -> None:
+    """Refuse an out value of ``rows`` rows of ``words`` words a row of which no write fills or two fill: a byte a row,
+    each write's sources marked one strided slice at a time along its widest digit (sources in the value's leaves,
+    `check`'s bounds)."""
+    seen = bytearray(rows)
+    for g in writes:
+        k = max(range(len(g.radix)), key=g.radix.__getitem__)
+        r, s = g.radix[k], g.step[k] // words
+        outer = [(g.radix[i], g.step[i] // words) for i in range(len(g.radix)) if i != k]
+        for d in itertools.product(*(range(n) for n, _s in outer)):
+            a = g.base // words + sum(x * st for x, (_n, st) in zip(d, outer))
+            if s == 0 and r > 1:
+                raise ValueError(f"{what}: write {g.doc()} writes its row {a} from {r} units; an out value's every row is "
+                                 "written by exactly one unit")
+            lo = a + min(0, s * (r - 1))
+            cells = slice(lo, lo + abs(s) * (r - 1) + 1, abs(s) or 1)
+            if 1 in seen[cells]:
+                row = lo + seen[cells].index(1) * (abs(s) or 1)
+                raise ValueError(f"{what}: its row {row} is written twice; an out value's every row is written by exactly "
+                                 "one unit")
+            seen[cells] = b"\x01" * r
+    if 0 in seen:
+        raise ValueError(f"{what}: its row {seen.index(0)} of {rows} is written by no unit; an out value's every row is "
+                         "written by exactly one unit")
+
+
 def _steps(t: Any, rows: int, steps: int, what: str) -> Mapping[str, Any]:
     if not (isinstance(t, Mapping) and set(t) == {"base", "radix", "step"} and type(t["base"]) is int
             and isinstance(t["radix"], list) and isinstance(t["step"], list) and t["radix"] and len(t["radix"]) == len(t["step"])
@@ -309,8 +345,10 @@ def check(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any]) -> Bl
             raise ValueError(f"{what}: a {kind!r} transfer isn't {d['dir']}")
         if d["server"] not in by_name:
             raise ValueError(f"{what}: server {d['server']!r} is no server of the circuit's")
-        if not (isinstance(value, str) and value) or value in {t.value for t in transfers}:
-            raise ValueError(f"{what}: a transfer is of a new value, named")
+        prior = [(t.kind, t.direction) for t in transfers if t.value == value]
+        if not (isinstance(value, str) and value) or (prior and not (kind == "wire" and len(prior) == 1 and prior[0] == (
+                "wire", Direction.EGRESS if direction is Direction.INGRESS else Direction.INGRESS))):
+            raise ValueError(f"{what}: a transfer is of a new value, named, but a wire's other one (its out and its in)")
         if not _nat(d["window"]) or (kind != "load" and d["window"] != st["window"]):
             raise ValueError(f"{what}: a {kind}'s window is the server-time block's, {st['window']}, not {d['window']!r}")
         server = by_name[d["server"]]
@@ -370,11 +408,28 @@ def check(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any]) -> Bl
             raise ValueError(f"{what}: its reads are rows of {sorted(widths)} words, and its {leaves} leaves; a value is "
                              "rows of one width")
         words = next(iter(widths))
+        if direction is Direction.EGRESS:
+            _once(gates, words, leaves // words, what)
         if kind == "load" and d["t"] is not None:
             raise ValueError(f"{what}: a load crosses once a server session, at no step of the window: its t is null")
         t = None if kind == "load" else _steps(d["t"], leaves // words, st["steps"], what)
         transfers.append(Transfer(server.name, server.uplink, direction, kind, value, d["window"], words, leaves // words,
                                   t, tuple(gates)))
+    for v in dict.fromkeys(t.value for t in transfers if t.kind == "wire"):
+        pair = {t.direction: t for t in transfers if t.value == v}
+        if set(pair) != {Direction.EGRESS, Direction.INGRESS}:
+            raise ValueError(f"wire {v!r}: its out and its in, one each; a wire leaves one server's uplink and reaches "
+                             "another's")
+        o, i = pair[Direction.EGRESS], pair[Direction.INGRESS]
+        if o.server == i.server:
+            raise ValueError(f"wire {v!r}: from server {o.server} to itself; a wire crosses from one server to another, and "
+                             "within one server it is a wire of the circuit's")
+        if (o.rows, o.words) != (i.rows, i.words):
+            raise ValueError(f"wire {v!r}: its out is {o.rows} rows of {o.words} words and its in {i.rows} rows of "
+                             f"{i.words}; a wire's in is the rows of its out")
+        if o.t != i.t:
+            raise ValueError(f"wire {v!r}: its out's rows cross at steps {o.t} and its in's at {i.t}; each row of a wire "
+                             "crosses both uplinks at one step")
     brought = {t.value for t in transfers if t.direction is Direction.INGRESS}
     for p in [*read_param, *over.values()]:
         if p not in brought:
@@ -412,30 +467,32 @@ def check(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any]) -> Bl
 
 def certified(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any], registrations: Iterable[Any],
               certifiers: Mapping[str, tuple[PublicKey, bytes]],
-              formats: Mapping[str, tuple[int, str]] | None = None) -> dict[str, TR.TransferHead]:
-    """Each transfer's head, by value, from its registration (`transfer_rows.check_registration`, for the transfer `check`
-    makes of the record, at the record's program digest) under ``certifiers[uplink]``, its uplink's network certifier's
-    key and session. ``formats``: the verifier's own ``(word_bits, schema)`` of a value whose leaves aren't 16 bits or
-    whose rows aren't ``hm96-sha512/row/v2`` (its program's parameter width, `registered.width`, and its port's row
-    format), a row of ``words`` u16 words then ``words · 16 / word_bits`` leaves. Refused (ValueError) when the blocks
-    break `check`, a transfer has no registration or its registration fails, or a registration names no transfer."""
+              formats: Mapping[str, tuple[int, str]] | None = None) -> dict[tuple[str, Direction], TR.TransferHead]:
+    """Each transfer's head, by value and direction, from its registration (`transfer_rows.check_registration`, for the
+    transfer `check` makes of the record, at the record's program digest) under ``certifiers[uplink]``, its uplink's
+    network certifier's key and session. ``formats``: the verifier's own ``(word_bits, schema)`` of a value whose leaves
+    aren't 16 bits or whose rows aren't ``hm96-sha512/row/v2`` (its program's parameter width, `registered.width`, and
+    its port's row format), a row of ``words`` u16 words then ``words · 16 / word_bits`` leaves. Refused (ValueError)
+    when the blocks break `check`, a transfer has no registration or its registration fails, a registration names no
+    transfer, or a wire's in root isn't its out root."""
     b = check(doc, blocks, layouts)
     formats = dict(formats or {})
     if extra := sorted(set(formats) - {t.value for t in b.transfers}):
         raise ValueError(f"formats of {extra}, which no transfer names")
-    regs: dict[str, Any] = {}
+    regs: dict[tuple[str, Direction], Any] = {}
     for r in registrations:
-        v = r.get("value") if isinstance(r, Mapping) else None
-        if not isinstance(v, str) or v in regs:
-            raise ValueError(f"a transfer registration names a value, once: {v!r}")
-        regs[v] = r
-    if extra := sorted(set(regs) - {t.value for t in b.transfers}):
+        v, d = (r.get("value"), r.get("direction")) if isinstance(r, Mapping) else (None, None)
+        named = (v, next((x for x in Direction if x.value == d), None))
+        if not isinstance(v, str) or named[1] is None or named in regs:
+            raise ValueError(f"a transfer registration names a value and a direction, once: {v!r} {d!r}")
+        regs[named] = r
+    if extra := sorted(f"{v} {d.value}" for v, d in set(regs) - {(t.value, t.direction) for t in b.transfers}):
         raise ValueError(f"registrations of {extra}, which no transfer names: a root is pinned only for a transfer the blocks "
                          "declare")
     heads = {}
     for t in b.transfers:
         what = f"transfer {t.value!r} ({t.kind} {t.direction.value} on {t.uplink}, window {t.window})"
-        if t.value not in regs:
+        if (t.value, t.direction) not in regs:
             raise ValueError(f"{what}: no certificate; a transfer's root is pinned from its network certifier's certificate "
                              "alone")
         if t.uplink not in certifiers:
@@ -445,11 +502,19 @@ def certified(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any], r
         try:
             if bits not in TR.WIDTHS or 16 * t.words % bits:
                 raise ValueError(f"its rows of {t.words} u16 words are no whole number of {bits!r}-bit leaves")
-            heads[t.value], _ = TR.check_registration(regs[t.value], key, session, link=t.uplink, direction=t.direction,
-                                                      window=t.window, kind=t.kind, value=t.value, program=doc.get("program"),
-                                                      words=16 * t.words // bits, rows=t.rows, word_bits=bits, schema=schema)
+            heads[t.value, t.direction], _ = TR.check_registration(
+                regs[t.value, t.direction], key, session, link=t.uplink, direction=t.direction, window=t.window,
+                kind=t.kind, value=t.value, program=doc.get("program"), words=16 * t.words // bits, rows=t.rows,
+                word_bits=bits, schema=schema)
         except ValueError as e:
             raise ValueError(f"{what}: {e}") from None
+    for t in b.transfers:
+        if t.kind == "wire" and t.direction is Direction.INGRESS:
+            o, i = heads[t.value, Direction.EGRESS], heads[t.value, Direction.INGRESS]
+            if o.root != i.root:
+                raise ValueError(f"wire {t.value!r}: the root {i.link}'s network certifier signed isn't the one {o.link}'s "
+                                 "signed; the rows that reached the receiver aren't the rows that left the sender, or aren't "
+                                 "under the sender's salts")
     return heads
 
 
@@ -459,5 +524,5 @@ def pins(doc: Mapping[str, Any], blocks: Any, layouts: Mapping[str, Any], regist
     """The verifier's pins, ``{parameter: root}``: every ``in`` transfer's value at its certified root (`certified`), the
     roots ``registration.check`` holds a pinned value to and the parameters the interface's ``input_count`` counts as
     registered."""
-    return {v: h.root.hex() for v, h in certified(doc, blocks, layouts, registrations, certifiers, formats).items()
-            if h.direction is Direction.INGRESS}
+    return {v: h.root.hex() for (v, d), h in certified(doc, blocks, layouts, registrations, certifiers, formats).items()
+            if d is Direction.INGRESS}
