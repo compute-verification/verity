@@ -12,8 +12,9 @@
 #   PP_LLAMA=art:ID: a single-GPU (TP1) Commit's row dir in the store, fetched once per node into PP_CACHE (default
 #     ~/.cache/verity-prove-path): Llama-3.2-1B's Commit r20261024-055630-5377 (art:f7428299…, $LROW, the sealed bundle
 #     commit/replay_bundle_p0 and the Build's build_request_LP*). Its compiler is I2's compile_steps; its advice the declared
-#     run's. The bundle's context records the Commit's absolute node paths, and none is read: the Programs are read from --row-dir,
-#     and the Build manifest falls back to <row dir>/manifest.json (sha256-checked against the record). The honest partition is
+#     run's. The bundle's context records the Commit's absolute node paths, and none is read: the prover's Programs are read from
+#     --row-dir, the verifier's from its own trace of each (PP_VLLM_PYTHON), and the Build manifest falls back to
+#     <row dir>/manifest.json (sha256-checked against the record). The honest partition is
 #     PP_PARTITION (default layer 0's SiluMul_v2{I=8192} at step 1, 4 units, subset:2); the forged one layer 0's at step 24, the
 #     one unit only r0 decodes there, drawn (subset:1), forged at PP_FORGE (default 0:0). With PP_SERVE_STANDIN=1, the same
 #     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
@@ -26,6 +27,10 @@
 #     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
 #     audited from its records alone (records_audit.py: circuit.json, the registration and the values, the advice's opening),
 #     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
+#   PP_VLLM_PYTHON=PY: the interpreter holding the pinned vLLM (CPU, on meta, as tools/advice_compile.py runs it) that a TP1 or
+#     served window's verifier traces its own Build of each Program I2 compiles with (prove_path.py audit's and circuit's
+#     --vllm-python): the rows' names, the parameters' names and types, supplied, the correspondence and prefix_cache.json are
+#     no Program digest's, so the verifier never reads them from the row dir. Default the tree's venv, which holds no vLLM.
 #   PP_TORCH_LOOP=1: a window of an integration that is not vLLM (integrations/torch_loop: a W8A8 MLP in PyTorch, its one
 #     template ScaledMmS8Coordinate_v1{K=128}), honest and tampered (every output's bit 0 flipped), each audited from its records
 #     alone under PP_LAW (default subset:2), in members of PP_TORCH_LOOP_CAP units (default 8), each arm a run of its own
@@ -33,6 +38,15 @@
 #     (records_audit.py --circuit), and once with its schedule committed
 #     as advice under its compiler (verity_torch_loop.compile, run by the audit as a command: --opening, --compilers); each
 #     tampered window must be refused by Lean. PP_TORCH_LOOP_SHAPE: more serve.py flags (--requests, --steps).
+#     PP_TORCH_LOOP_REGISTERED=1: the loop's weights committed once before it runs (serve.py --commit-weights), the circuit
+#     reading them as registered values (--registered) and each audit holding them to the pin (records_audit.py
+#     --registered), plus an arm serving other weights under the registered salts (--tamper-weights), which Lean's
+#     registered reads must refuse.
+#   PP_TORCH_DECODER=1: the same for the torch loop's decoder (verity_torch_loop.serve_transformer, CMP-92's 2-layer
+#     transformer, its four templates' units), honest and tampered, against the circuit registered before it ran, in members
+#     of PP_TORCH_LOOP_CAP units (default 16), committed by PP_TORCH_DECODER_WORKERS processes (default 8);
+#     PP_TORCH_LOOP_SHAPE: more serve_transformer.py flags (--prompt, --generate, --bf16-dot). The public member files
+#     aren't kept. PP_LAW=stratified:3 draws a member of every template.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
@@ -124,7 +138,8 @@ PP="$PY benchmarks/prove_path/prove_path.py"
 
 keep() {  # NAME: $W/NAME's records into $O/NAME
   mkdir -p $O/$1
-  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' -print0 \
+  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
+    ! -path './builds/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
 }
 run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, then the verifier's audit; RUN is the committed
@@ -152,7 +167,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
     ${ranks:+--ranks $ranks} --jobs ${PP_JOBS:-1} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
-    --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    ${PP_VLLM_PYTHON:+--vllm-python $PP_VLLM_PYTHON} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
   local rc=$?
   grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
   keep $name
@@ -164,7 +179,7 @@ records() {  # NAME PARTITION [--forged]: records_audit.py on the served window 
   $PY -c 'import json, sys
 c = json.load(open(sys.argv[1]))
 print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[2:]}}))' $O/$REC_NAME-records/compiler.json \
-    $PY $REPO/benchmarks/prove_path/prove_path.py circuit --serve-run $REC_RUN --window $REC_K --row-dir $D \
+    $PY $REPO/benchmarks/prove_path/prove_path.py circuit --serve-run $REC_RUN --window $REC_K --vllm-python ${PP_VLLM_PYTHON:-$PY} \
     ${PP_TARGET:+--target $PP_TARGET} --partition $(realpath $part) "${TG[@]}" > $O/$name/compilers.json || return 1
   local root law
   root=$($PY -c 'import json, sys
@@ -226,9 +241,15 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
   TLAW=${PP_LAW:-subset:2} TCAP=${PP_TORCH_LOOP_CAP:-8}
   TL="$PY -m verity_torch_loop.serve --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
   export PYTHONPATH=$REPO/integrations/torch_loop
+  REGC= REGA=()
+  if [ -n "${PP_TORCH_LOOP_REGISTERED:-}" ]; then   # the weights committed once, before any run: the opening is the prover's, the pin the verifier's
+    $PY -m verity_torch_loop.serve --commit-weights $W/weights-opening.json --pin $O/torch-loop-weights-pin.json \
+      | tee $O/torch-loop-weights.json || exit 8
+    TL="$TL --registered --weights $W/weights-opening.json" REGC=--registered REGA=(--registered $O/torch-loop-weights-pin.json)
+  fi
   # the verifier's table of the loop's compiler: its name, the digest over its code, the code and import paths the audit
   # recomputes that digest over and runs it with in its checkout of the registered commit, and the command
-  $PY -m verity_torch_loop.compile --table $PY -m verity_torch_loop.compile --law $TLAW --cap $TCAP \
+  $PY -m verity_torch_loop.compile --table $PY -m verity_torch_loop.compile --law $TLAW --cap $TCAP $REGC \
     > $O/torch-loop-compilers.json || exit 8
   loop() {  # NAME [--compiled] [--tamper]: the torch loop's window, audited from its records alone against the circuit
             # registered before it ran, or (--compiled) against its compiler's output on its committed schedule. Each arm is
@@ -237,6 +258,7 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
     for x in "$@"; do
       case $x in
         --tamper) forged=--forged; serve+=(--tamper);;
+        --tamper-weights) forged=--forged; serve+=(--tamper-weights);;
         --compiled) serve+=(--opening $W/$name-opening.json)
                     held=(--opening $W/$name-opening.json --compilers $O/torch-loop-compilers.json);;
       esac
@@ -251,7 +273,7 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
     local run; run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/serve.json) || return 1
     mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
     $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law $TLAW "${held[@]}" \
-      --run $run ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+      --run $run ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" "${REGA[@]}" \
       --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
     local rc=$?
     grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
@@ -260,8 +282,33 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
   }
   loop torch-loop || rc=1
   [ "${PP_ONLY:-}" = honest ] || loop torch-loop-tampered --tamper || rc=1
+  [ "${PP_ONLY:-}" = honest ] || [ -z "${PP_TORCH_LOOP_REGISTERED:-}" ] || loop torch-loop-other-weights --tamper-weights || rc=1
   loop torch-loop-compiled --compiled || rc=1
   [ "${PP_ONLY:-}" = honest ] || loop torch-loop-compiled-tampered --compiled --tamper || rc=1
+elif [ -n "${PP_TORCH_DECODER:-}" ]; then
+  TLAW=${PP_LAW:-subset:2} TCAP=${PP_TORCH_LOOP_CAP:-16}
+  TD="$PY -m verity_torch_loop.serve_transformer --law $TLAW --cap $TCAP --workers ${PP_TORCH_DECODER_WORKERS:-8} ${PP_TORCH_LOOP_SHAPE:-}"
+  export PYTHONPATH=$REPO/integrations/torch_loop
+  decoder() {  # NAME [--tamper]: the decoder's window, audited from its records alone against the circuit registered before it
+               # ran, each arm a run (and a root) of its own
+    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 serve=() c run
+    [ "${2:-}" = --tamper ] && forged=--forged serve=(--tamper)
+    mkdir -p $O/$name
+    c=$($TD --run-id $id --circuit-only | tee $O/$name/circuit-before.json | $PY -c 'import json, sys; print(json.load(sys.stdin)["circuit"])') \
+      || return 1
+    $TD --run-id $id --out $W/$name-window "${serve[@]}" | tee $O/$name/serve.json || return 1
+    run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/serve.json) || return 1
+    mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $O/$name/window/
+    $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law $TLAW --circuit $c --run $run \
+      ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    local rc=$?
+    grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
+    keep $name
+    return $rc
+  }
+  decoder torch-decoder || rc=1
+  [ "${PP_ONLY:-}" = honest ] || decoder torch-decoder-tampered --tamper || rc=1
 else
   S=$W/served
   (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:4 --deferred) \

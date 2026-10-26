@@ -19,8 +19,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # record.py's mixes are workloads of the vLLM integration, which test_consistency loads; the auditor host's gate runs
 # warden_serve.py's rehearsal, which test_warden_serve holds it to. compile_slice_zk's engine class is vLLM 8eb1's trace
 # header, read through the encodings' replay (with the modules `_encodings` loads beside it). leak_scan reads C-Flock's
-# proof format with its verifier's reader.
-inputs = ["integrations/vllm/workloads", "benchmarks/live_challenger/auditor.py",
+# proof format with its verifier's reader. A served run's Commit windows are the vLLM integration's window advice, which
+# window_chain joins for n2_advised_zk. n2_advised_zk's period draws take the challenger's coins through one_stage's
+# a5_coins, whose local session is live_challenger's auditor host and serve.py (under its tests' stub).
+# torch_loop_stub.py serves the torch loop's model.
+inputs = ["integrations/vllm/workloads", "integrations/vllm/verity_vllm/__init__.py",
+          "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/window_advice.py",
+          "benchmarks/live_challenger", "benchmarks/one_stage/a5_coins.py", "integrations/torch_loop/verity_torch_loop",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
           "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz",

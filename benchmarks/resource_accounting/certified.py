@@ -1,6 +1,6 @@
 """What a point's arms certify, and each resource's covert residual.  Pure (stdlib and `verity`), so it runs on a CPU.
 
-* **W_cert, compute.**  `Pouw.Guarantees.EndToEnd` (``Security/Models/Pouw/Guarantees/Game.lean``) bounds the chance that an
+* **W_cert, compute.**  `Pouw.Guarantees.EndToEnd` (``Security/Definitions/Pouw/Guarantees/Game.lean``) bounds the chance that an
   audit of t draws accepts a transcript whose prover spent T < (1 − γ)(1 − ε_s)·ΣW_ref by (1 − ε_s)^t + ε_TT(q, N).  So
   W_cert = (1 − γ)(1 − ε_s)·ΣW_ref, in W1 units (one dense FP8 MAC on the device), with ΣW_ref the drawn statement's
   reference work over the credited cells (`clear_work.ticket_cell`; about 1.09 to 1.11 per MAC at the sweep's shapes).

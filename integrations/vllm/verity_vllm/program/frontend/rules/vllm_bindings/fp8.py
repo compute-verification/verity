@@ -250,7 +250,7 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
     default, ScaledMmFp8Block_v1 per-coordinate; the version 3 forms over the target's step where it is not Hopper's,
     `frontend.targets.fp8_block_dot`); `out` is rebound.  W and Ws are prescribed weight Inputs (the checkpoint's e4m3 words and f32 block scales); `a` / `a_scales` are the
     values `PerTokenGroupFp8Quant[vllm]` computed.  Binds the BLOCK-scaled shapes only: a per-tensor / per-token scaled_mm (scales [M,1] /
-    [1,N] / 0-d) is another kernel (`ScaledMmFp8_v1` of registry.fp8, R14 QZ) and is refused here, named.  A target whose GEMM record
+    [1,N] / 0-d) is another kernel (`ScaledMmFp8_v1` of registry.fp8) and is refused here, named.  A target whose GEMM record
     has no blockwise step is refused: `_C.cutlass_scaled_mm` runs that target's own blockwise kernel under the same op and kernel class."""
     modes = frozenset({"profile"})
     info = RuleInfo("CutlassScaledMmFp8Block[vllm]", 1, "in-place-binding",

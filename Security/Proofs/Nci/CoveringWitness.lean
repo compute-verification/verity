@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.Covering
+import Definitions.Nci.Guarantees.Covering
 import Mathlib.Data.Fin.VecNotation
 import Mathlib.Data.Fintype.Prod
 import Mathlib.Tactic.NormNum

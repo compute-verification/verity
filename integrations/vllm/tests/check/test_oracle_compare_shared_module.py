@@ -130,6 +130,38 @@ def test_the_false_equal_of_int5_int6_int7_is_gone_a_layer_zero_read_for_every_i
     assert res2["mismatch_n"] == 2 and {m["identity"]["invocation"] for m in res2["mismatch"]} == {2}
 
 
+def test_an_invocation_bound_at_its_runtime_row_is_compared_with_the_folds_row(tmp_path):
+    """A dead-free Program's last layer ropes its prompt's last query row only (`runtime_rows` [POS - 1, POS]): the binding map binds that
+    identity at the runtime tensor's last row, and the Match's fold holds every row the runtime computed.  With the manifest's `runtime_rows`
+    the oracle is the fold's row from r0 (equal); without them the sizes differ, by name; an entry bound at another row mismatches."""
+    d = make_match(str(tmp_path))
+    last = N_LAYERS - 1
+
+    def bound_at(row: int):
+        tensors, entries = [], []
+        for k in range(N_LAYERS):
+            for member in ("query", "key"):
+                one = (k, member) == (last, "query")
+                tensors.append((f"{ROT}/{member}", _rows(k, member).tobytes()))
+                entries.append({"identity": {"program_digest": "p" * 64, "request_id": "r0", "step": 0, "invocation": k, "op_path": ROT, "output_member": member,
+                                             "element_range": [0, H if one else POS * H], "rank": 0},
+                                "kind": "leaf", "name": f"{ROT}/{member}", "element_offset": row * H if one else 0, "tensor_ordinal": len(entries),
+                                "stream_offset": len(entries) * POS * H * 2, "encoding": {"dtype": "bfloat16", "shape": [POS, H]}})
+        return OC.OpenedReader(*commit_host_steps({0: tensors})), {"entries": entries}
+
+    rows = OC.runtime_rows_of({"identities": [{"step": 0, "request_id": "r0", "op_path": ROT, "output_member": "query", "invocation": last,
+                                               "runtime_rows": [POS - 1, POS]}, {"step": 0, "request_id": "r0", "op_path": ROT, "output_member": "key"}]})
+    assert rows == {(0, "r0", ROT, "query", last): (POS - 1, 1)}
+    rd, bmap = bound_at(POS - 1)
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd, aliases=ALIASES, runtime_rows=rows)
+    assert res["mismatch_n"] == 0 and res["equal"] == N_LAYERS * 2 and res["result"] is True, res
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd, aliases=ALIASES)
+    assert [m["why"] for m in res["mismatch"]] == [f"size: committed {H * 2} B, oracle {POS * H * 2} B over {POS} instances"]
+    rd0, bmap0 = bound_at(0)
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap0, rd0, aliases=ALIASES, runtime_rows=rows)
+    assert res["mismatch_n"] == 1 and res["mismatch"][0]["why"].startswith("bytes differ (first element 0"), res["mismatch"]
+
+
 def test_a_malformed_alias_table_is_no_table_the_invocations_are_not_compared_by_name(tmp_path):
     """moe's `alias_inverse` shape test, as behaviour on the train: a table that names nothing usable == no table (fail closed, by name)."""
     d = make_match(str(tmp_path))

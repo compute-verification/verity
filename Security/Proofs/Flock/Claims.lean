@@ -1,4 +1,4 @@
-import Models.Flock.Guarantees.Claims
+import Definitions.Flock.Guarantees.Claims
 import Proofs.Flock.Claims.RecursionStated
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Finder
@@ -139,6 +139,8 @@ import Proofs.Flock.Claims.Recursion.NextShaS17
 import Proofs.Flock.Claims.Recursion.NextShaDec
 import Proofs.Flock.Claims.Recursion.NextS
 import Proofs.Flock.Claims.Recursion.NextR
+import Proofs.Flock.Claims.Recursion.VerdictRows
+import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Claims.Recursion.VerdictParts
 import Proofs.Flock.Claims.Recursion.ResAccepts
 import Proofs.Flock.Claims.Recursion.RowSlots
@@ -161,6 +163,7 @@ import Proofs.Flock.Claims.Scope
 import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.DeployInputs
 import Proofs.Flock.Claims.JsonEq
+import Proofs.Flock.Claims.JsonNorm
 import Proofs.Flock.Claims.CanonEq
 import Proofs.Flock.Claims.Deploy
 import Proofs.Flock.Claims.DeployE
@@ -179,6 +182,8 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.DeployEfficient
 import Proofs.Flock.Claims.Assembled
 import Proofs.Flock.Claims.ZK
+import Proofs.Flock.Claims.KS.ZkAcceptsAt
+import Proofs.Flock.Claims.KS.ZkAcceptsRun
 import Proofs.Flock.Claims.CompleteFails
 import Proofs.Flock.Claims.Sampling
 import Proofs.Flock.Claims.Witnesses

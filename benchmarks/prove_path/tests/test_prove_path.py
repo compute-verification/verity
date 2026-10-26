@@ -17,7 +17,10 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   (the forged TP1 case at step 24) is audited through its negatives.
 * A served window's pieces on a small synthetic serve-openai run dir (no Commit): its requests' bodies by I1 id, φ of the served
   engine, the registered compiler, the prover committing under the published binding (no re-commit), `serve_check`'s codes
-  (a compiler without the cap, a root that isn't rows-sha512) and its negatives, and the CLI's served run."""
+  (a compiler without the cap, a root that isn't rows-sha512) and its negatives, and the CLI's served run.
+* What no Program digest covers (a Build's row names, its parameters' names and types): the verifier's I2 reads it only from
+  its own trace of each Program (`own_builds`, with the interpreter ``--vllm-python`` names), whatever the row dir holds under
+  the same digests."""
 from __future__ import annotations
 
 import argparse
@@ -28,9 +31,11 @@ import re
 import socket
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -186,7 +191,7 @@ class Listing:
 def test_the_transfer_gates_are_in_the_compilers_registered_digest(monkeypatch):
     """I2's digest covers the templates it lists as holding transfer gates, and `Capped` passes the list and its digest on, so a
     registration under a compiler proving other units whole names another compiler."""
-    monkeypatch.setattr("verity_vllm.predict.score.code_version", lambda: "c0de")
+    monkeypatch.setattr("verity_vllm.program.predict.score.code_version", lambda: "c0de")
     r = SimpleNamespace(phi=SimpleNamespace(to_json=lambda: {"model": "m"}), default_seed=0, cap_bits=PP.CAP_BITS)
     bare, listing = (PP.I2Compiler(r, {}, "/nonexistent", transfer_gates=tg) for tg in ((), ("RoPEHead_v1{D=64}",)))
     assert bare.digest != listing.digest and len(listing.digest) == 128
@@ -446,8 +451,8 @@ def test_the_charge_terms_are_the_accepted_profiles_location_and_committed_bits_
 
 
 def test_i2s_requests_are_its_compiled_units_once_per_advice_and_its_refusal_is_named(monkeypatch):
-    from verity_vllm.predict import steps as ST
-    from verity_vllm.predict.common import Unexpressible
+    from verity_vllm.program.predict import steps as ST
+    from verity_vllm.program.predict.common import Unexpressible
 
     calls = []
 
@@ -481,7 +486,7 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
         i2.load(0, 1, [{"request_id": "r1", "arrive_step": 0, "digest": "d1" * 64}])
 
 
-#: integrations/vllm's `tests.predict.test_predict.TINY`: a two-layer Llama whose request Programs are I2's in a second
+#: integrations/vllm's `tests.program.predict.test_predict.TINY`: a two-layer Llama whose request Programs are I2's in a second
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
@@ -489,8 +494,8 @@ STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 
 
 
 def _request_program(sampling: dict | None = None, **shape):
-    from verity_vllm.predict.build import build_program
-    from verity_vllm.predict.phi import Phi
+    from verity_vllm.program.predict.build import build_program
+    from verity_vllm.program.predict.phi import Phi
 
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, workload={"requests": []},
               target={"compute_capability": [12, 0], "num_sms": 188})
@@ -505,9 +510,11 @@ def requests_of_tiny():
             "stochastic": _request_program(STOCHASTIC, LP=4, T=2), "cached": _request_program(LP=24, T=2, C=16)}
 
 
-def _build(d: Path, program, *, desc: dict | None = None, digest: str | None = None) -> str:
+def _build(d: Path, program, *, desc: dict | None = None, digest: str | None = None, names: dict | None = None,
+           params: list | None = None) -> str:
     """Build dir ``d`` of ``program`` as the Build writes one (`build_instances.write_instances`): its descriptor (``desc``, the
-    program's by default), and its instances and ``result.json`` under ``digest`` (the descriptor's by default); the digest."""
+    program's by default), and its instances and ``result.json`` under ``digest`` (the descriptor's by default), its rows named
+    ``names`` and its parameters ``params`` (a trace's, which no digest covers; none and the program's by default); the digest."""
     import gzip
 
     from verity.ml.circuits.codec import encode_program, program_digest
@@ -518,7 +525,7 @@ def _build(d: Path, program, *, desc: dict | None = None, digest: str | None = N
     digest = digest or program_digest(desc)
     with gzip.open(d / "descriptor.json.gz", "wt") as f:
         json.dump(desc, f)
-    write_instances(str(d), program, digest, None, {})
+    write_instances(str(d), program, digest, None, {}, names=names, params=params)
     (d / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": digest}}))
     return digest
 
@@ -696,7 +703,7 @@ def _serve_request(i: int, prompt: list[int], cap: int, windows: list[int], user
 
 
 #: the server's registered compiler in these tests (`served_identity`'s, from `verity-vllm advice` on the server's tree)
-SERVER = ("verity_vllm.predict.steps.compile_steps", "5e" * 64)
+SERVER = ("verity_vllm.program.predict.steps.compile_steps", "5e" * 64)
 
 
 def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str = SRT.ROWS_SCHEME, published: str | None = None,
@@ -706,7 +713,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     the inner compiler alone; ``gates``, under the server's listing those instead of the model's of record), and its row dir's
     request Programs as vllm's advice compiler writes them (``manifest.json``);
     the server's compiler identity, I2's compile and the row dir's record stubbed."""
-    from verity_vllm.predict import steps as ST
+    from verity_vllm.program.predict import steps as ST
 
     monkeypatch.setattr(PP, "served_identity", lambda: SERVER)
     run, rows = tmp_path / "serve", tmp_path / "rows"
@@ -750,6 +757,96 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
                            hf_config=None, target=None, cap_bits=PP.CAP_BITS, opening=str(adv / "private" / "opening.json"),
                            tp_commit=None, workload=None)
     return SimpleNamespace(run=run, a=a, data=data, bound=bound, compiler=compiler, root=root)
+
+
+#: the scope a naming test's partition takes: layer 0's MLP, as the Llama partitions do (the ``model.`` wrapper's prefix stripped)
+LAYER0 = {"templates": ["SiluMul_v2{I=128}"], "law": "subset:2", "scope": {"op_path_prefix": "model.layers.0.mlp."}}
+
+
+def _trace_names(program, swap: tuple[tuple[str, int], tuple[str, int]] | None = None) -> dict[int, str]:
+    """TINY's request ``program``'s rows named as a trace names them: its k-th SiluMul row layer k mod 2's ``mlp.act_fn``, its k-th
+    Gemm row layer k mod 2's ``mlp.down_proj``, under the export wrapper's ``model.``, the rest unnamed; ``swap``: two rows, each
+    (family, its ordinal), with each other's names. No Program digest covers them."""
+    from verity.ml.circuits.codec import descriptor_id
+
+    sites = {"SiluMul_v2": ("act_fn", "silu_and_mul"), "Gemm_v2": ("down_proj", "linear")}
+    names, at, seen = {}, {}, {}
+    for i, n in enumerate(program.fn.body.nodes):
+        fam = descriptor_id(n.fn).split("{")[0]
+        if fam in sites:
+            k = seen[fam] = seen.get(fam, -1) + 1
+            names[i], at[(fam, k)] = f"model.model.layers.{k % 2}.mlp.{sites[fam][0]}/{sites[fam][1]}_{k}/out", i
+    if swap:
+        a, b = at[swap[0]], at[swap[1]]
+        names[a], names[b] = names[b], names[a]
+    return names
+
+
+def _trace_params(program, swap: bool = False) -> list[list[str]]:
+    """``program``'s parameters as its trace names them; ``swap``: layers 0 and 1's ``down_proj`` weights exchange names, under the
+    one shape both have. No Program digest covers a weights field's name."""
+    from verity.ml.circuits.types import Record
+
+    out = []
+    for n, t in program.fn.body.params:
+        if swap and isinstance(t, Record):
+            names = [f for f, _ in t.fields]
+            a = names.index(next(f for f in names if ".layers.0." in f and "down_proj" in f))
+            b = names.index(names[a].replace(".layers.0.", ".layers.1."))
+            names[a], names[b] = names[b], names[a]
+            t = Record(*zip(names, (x for _, x in t.fields), strict=True))
+        out.append([n, str(t)])
+    return out
+
+
+def _tiny_served(tmp_path: Path, monkeypatch) -> SimpleNamespace:
+    """`_served`'s window with its two requests running TINY's request Programs as I2 compiles them (r0 at LP 4, T 1; r1 at LP 4,
+    T 2), and the verifier's trace stubbed as the pinned vLLM's (`prove_path.trace_builds`): each command's Build at its ``--out``,
+    of its (LP, T)'s Program, named as `_trace_names` and `_trace_params` name it; the served model lists no transfer gates (TINY
+    has no ``RoPEHead_v1{D=64}``). -> `_served`'s, with the Programs by (LP, T), the units, and each traced command beside the
+    interpreter it ran with."""
+    from verity.ml.circuits.codec import encode_program, program_digest
+    from verity_vllm.program.predict import steps as ST
+
+    monkeypatch.setattr(PP, "GATES_OF_RECORD", {})
+    s = _served(tmp_path, monkeypatch)
+    programs = {(4, 1): _request_program(LP=4, T=1), (4, 2): _request_program(LP=4, T=2)}
+    dg = {k: program_digest(encode_program(p)) for k, p in programs.items()}
+    units = [ST.RequestUnit(0, dg[(4, 1)], 4, 1, {"kind": "greedy"}, None, 0, "r0"),
+             ST.RequestUnit(1, dg[(4, 2)], 4, 2, {"kind": "greedy"}, None, 2, "r1")]
+    monkeypatch.setattr(ST, "compile_steps", lambda registered, data, ingress: SimpleNamespace(requests=units))
+    traced: list = []
+
+    def trace_builds(cmds, python):
+        for cmd in cmds:
+            traced.append((python, list(cmd)))
+            prog = programs[(int(cmd[cmd.index("--LP") + 1]), int(cmd[cmd.index("--T") + 1]))]
+            _build(Path(cmd[cmd.index("--out") + 1]), prog, names=_trace_names(prog), params=_trace_params(prog))
+
+    monkeypatch.setattr(PP, "trace_builds", trace_builds)
+    return SimpleNamespace(**vars(s), programs=programs, digests=dg, units=units, traced=traced)
+
+
+def _row_dir(rows: Path, s: SimpleNamespace, names: Any = None, params: bool = False) -> Path:
+    """The prover's row dir of `_tiny_served`'s Programs, each Build named as `_trace_names` names it under ``names`` (a swap) and
+    its parameters as `_trace_params` does under ``params``, each still I2's Program (`build_of`)."""
+    from verity_vllm.program.predict import steps as ST
+
+    for u in s.units:
+        prog, d = s.programs[(u.LP, u.T)], rows / ST.trace_dir(u)
+        _build(d, prog, names=_trace_names(prog, names), params=_trace_params(prog, params))
+        assert PP.build_of(str(d), u.digest)["instances"]["digest"] == u.digest
+    return rows
+
+
+def _circuit(compiler: Any, data: bytes, partition: Mapping[str, Any]) -> tuple[dict, list]:
+    """What a window over ``compiler``'s Programs for the advice ``data`` is: its circuit record (`serving_rows.circuit_record`, as
+    the prover's commit writes ``circuit.json``) and its rows."""
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    p = compiler.load(0, 1, PP.compile_advice(compiler, data))
+    window, rows = SRW.population(p.progs, dict(partition), "", p.dirs, arrivals=p.arrivals, transfer_gates=compiler.transfer_gates)
+    return SRW.circuit_record(window), rows
 
 
 def test_a_served_windows_bodies_are_its_requests_ingress_by_i1_id(tmp_path, monkeypatch):
@@ -938,3 +1035,61 @@ def test_a_served_run_is_its_window_and_row_dir_with_the_servers_advice_and_open
         with pytest.raises(SystemExit):
             PP.main(["commit", *base, *extra])
     assert PP.single(argparse.Namespace(serve_run="RUN")) and PP.ranks_of(argparse.Namespace(serve_run="RUN", ranks=None)) == (1, [0])
+
+
+def test_the_verifiers_i2_reads_only_builds_it_traced_itself_and_the_provers_its_row_dir(tmp_path, monkeypatch):
+    """No Program digest covers a Build's row names or its parameters' names (nor its ``supplied``, correspondence or
+    ``prefix_cache.json``), so the audit's I2 (``--builds``) reads them only from its own Build of each Program I2 compiled
+    (`own_builds`: `steps.trace_commands`' commands into ``--builds``, each Program once, run with ``--vllm-python``), whatever
+    the row dir holds under the same digests; the prover's I2 reads its row dir. ``--builds`` defaults to OUT/builds and is
+    refused under the row dir, and the compile command takes no row dir."""
+    from verity_vllm.program.predict import steps as ST
+
+    s = _tiny_served(tmp_path, monkeypatch)
+    rows = _row_dir(Path(s.a.row_dir), s, (("SiluMul_v2", 0), ("SiluMul_v2", 1)), params=True)
+    builds, args = tmp_path / "builds", {**vars(s.a), "transfer_gate": []}
+    mine = PP.compiler_of_args(argparse.Namespace(**args, builds=str(builds), vllm_python="pinned-python"))
+    theirs = PP.compiler_of_args(argparse.Namespace(**args))
+    p = mine.load(0, 1, PP.compile_advice(mine, s.data))
+    assert [(py, c[c.index("--out") + 1], c[c.index("--LP") + 1], c[c.index("--T") + 1]) for py, c in s.traced] == \
+        [("pinned-python", str(builds / ST.trace_dir(u)), str(u.LP), str(u.T)) for u in s.units]
+    q = theirs.load(0, 1, PP.compile_advice(theirs, s.data))
+    named = lambda inst: {int(x["i"]): x["name"] for x in inst["rows"] if x.get("name")}  # noqa: E731
+    for u in s.units:
+        prog, r = s.programs[(u.LP, u.T)], u.id
+        assert (p.digs[r], q.digs[r]) == (u.digest, u.digest) and (Path(p.dirs[r]).parent, Path(q.dirs[r]).parent) == (builds, rows)
+        assert named(p.progs[r]) == _trace_names(prog) != named(q.progs[r])
+        assert p.progs[r]["params"] == _trace_params(prog) != q.progs[r]["params"]
+    mine.load(0, 1, PP.compile_advice(mine, s.data))
+    assert len(s.traced) == len(s.units)
+    with pytest.raises(ValueError, match=f"request rx: I2 compiled no Program {'ab' * 8} here"):
+        PP.own_builds(mine.inner, [{"request_id": "rx", "digest": "ab" * 64}])
+
+    got = []
+    monkeypatch.setattr(PP, "audit", lambda a: got.append(a) or 0)
+    run = ["--serve-run", str(s.run), "--window", "0", "--row-dir", str(rows), "--windows", "w", "--partition", "p", "--template-sets",
+           "t", "--m0-pythonpath", "m", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out")]
+    assert PP.main(["audit", *run]) == 0 and (got[0].builds, got[0].vllm_python) == (str(tmp_path / "out" / "builds"), sys.executable)
+    with pytest.raises(SystemExit):
+        PP.main(["audit", *run, "--builds", str(rows / "builds")])
+    with pytest.raises(SystemExit):
+        PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", str(rows), "--partition", "p", "--advice", "a",
+                 "--out", "o"])
+
+
+def test_the_verifiers_traces_run_with_its_interpreter_from_integrations_vllm_and_a_failed_one_is_named(tmp_path):
+    """`trace_builds` runs each ``verity-vllm build`` command as ``tools/advice_compile.py`` does (``-m verity_vllm.pipeline.cli``
+    from ``integrations/vllm``, it and the tree first on the path), with the interpreter it is given (``--vllm-python``: the
+    pinned vLLM's), and a trace that fails is a RuntimeError naming its Build dir."""
+    log, py = tmp_path / "log.jsonl", tmp_path / "python"
+    py.write_text(f"#!{sys.executable}\nimport json, os, sys\n"
+                  f"open({str(log)!r}, 'a').write(json.dumps({{'argv': sys.argv[1:], 'cwd': os.getcwd(), "
+                  f"'path': os.environ['PYTHONPATH'].split(os.pathsep)}}) + '\\n')\nsys.exit(3 if sys.argv[-1] == 'bad' else 0)\n")
+    py.chmod(0o755)
+    cmds = [["verity-vllm", "build", "--out", str(tmp_path / "b1"), "--LP", "4"], ["verity-vllm", "build", "--out", str(tmp_path / "b2"), "bad"]]
+    PP.trace_builds(cmds[:1], str(py))
+    got = json.loads(log.read_text())
+    assert got["argv"] == ["-m", "verity_vllm.pipeline.cli", "build", "--out", str(tmp_path / "b1"), "--LP", "4"]
+    assert (Path(got["cwd"]), got["path"][:2]) == (VLLM.resolve(), [str(VLLM.resolve()), str(VLLM.resolve().parents[1])])
+    with pytest.raises(RuntimeError, match=rf"^the verifier's trace of {re.escape(str(tmp_path / 'b2'))} failed \(rc 3\)"):
+        PP.trace_builds(cmds, str(py))

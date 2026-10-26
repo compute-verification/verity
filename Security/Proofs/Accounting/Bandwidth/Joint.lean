@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.Bandwidth
+import Definitions.Accounting.Guarantees.Bandwidth
 import Proofs.Accounting.Bandwidth.AuditRO
 
 /-!
