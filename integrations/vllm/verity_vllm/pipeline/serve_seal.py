@@ -167,14 +167,15 @@ def seal_of(opts: Any) -> dict[str, Any]:
     return {"label": f"serve-openai:{opts.run_id}", "code": SI.code_identity(SI.TREE)["sha256"], "engine_of_record": engine_facts_of_record()}
 
 
-def committer(opts: Any, llm: Any) -> Any:
-    """The server's committer over ``llm`` under ``opts.scheme`` (module docstring), refused unless the scheme may commit
-    (`scheme_refusal`) and it retains on the host (the served record is read back from there)."""
+def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
+    """The server's committer over ``llm`` under ``opts.scheme`` (module docstring), its run ``label:<run id>``, refused unless the
+    scheme may commit (`scheme_refusal`) and it retains on the host (the served record is read back from there)."""
     if why := scheme_refusal(opts):
         raise UsageError(why)
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
     from verity_vllm.engine.engine_profile import get_model_runner
 
+    run_id = f"{label}:{opts.run_id}"
     eng = SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
     manifest, hidden_m1 = None, False
@@ -183,9 +184,9 @@ def committer(opts: Any, llm: Any) -> Any:
         from verity_vllm.pipeline import commit as C, commit_attach as CA
 
         manifest, args = manifest_of_record(opts), committer_args(opts)
-        com = C.make_committer(DECLARED_COMMITTER, eng, args, f"serve-openai:{opts.run_id}")
+        com = C.make_committer(DECLARED_COMMITTER, eng, args, run_id)
     else:
-        com = NativeHostCommitter(eng, run_id=f"serve-openai:{opts.run_id}", arena_bytes=None, chunk=opts.chunk,
+        com = NativeHostCommitter(eng, run_id=run_id, arena_bytes=None, chunk=opts.chunk,
                                   hash_threads=opts.hash_threads, gpu_tree=opts.gpu_tree, fast_copy=opts.cudart_copy)
     if getattr(com, "commit_scheme", V1) != opts.scheme:
         raise RuntimeError(f"--scheme {opts.scheme}: the committer {com.name} commits {getattr(com, 'commit_scheme', V1)}")
