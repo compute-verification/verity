@@ -990,7 +990,7 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records of the boundary
   links over its span show other ingress. `auditor_line.py --lockdown`, infra's record of the provider's lockdown of
   the gate node, grounds C for a session whose signed span lies inside an applied interval: the line is then
-  conditional on `ProviderLockdown` (`trusted-nebius-host`), which names what the lockdown doesn't close, in C's place.
+  conditional on `ProviderLockdown` (`trusted-host`), which names what the lockdown doesn't close, in C's place.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).

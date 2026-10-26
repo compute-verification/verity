@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tests.predict.test_predict import TINY, _phi
+from tests.program.predict.test_predict import TINY, _phi
 from verity.ml.circuits import Array, Program, Value
 from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
@@ -23,7 +23,7 @@ from verity_vllm.check.replay import definitions as DF
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline.build import _instance_rows
 from verity_vllm.pipeline.tp import rank_replay as RR
-from verity_vllm.predict.build import build_program
+from verity_vllm.program.predict.build import build_program
 
 NORM = "RMSNormTriton_v5{"
 REQ = {"request_id": "q0", "index": 0, "prompt_token_ids": [3, 1, 4, 1], "max_tokens": 2, "arrive_step": 0}

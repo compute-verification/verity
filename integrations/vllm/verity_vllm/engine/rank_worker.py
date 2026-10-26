@@ -35,10 +35,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
-from verity_vllm.collectives import fused_norm as FN
+from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES, MOE_COLLECTIVE_MODULES
+from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
+from verity_vllm import settings
 
 
 def repo_modules_loaded() -> dict[str, Any]:
@@ -147,7 +148,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
         out["tp"]["pp_world_size"] = int(ps.get_pp_group().world_size)
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)
-    out["nccl_env"] = {k: v for k, v in os.environ.items() if k.startswith("NCCL_")}
+    out["nccl_env"] = settings.redact({k: v for k, v in os.environ.items() if k.startswith("NCCL_")})
     pc = worker.vllm_config.parallel_config
     out["parallel_config"] = {k: getattr(pc, k, None) for k in ("tensor_parallel_size", "pipeline_parallel_size", "world_size",
                                                                  "distributed_executor_backend", "disable_custom_all_reduce",
@@ -440,7 +441,7 @@ class TP2CaptureWorkerExtension:
         # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
         # above -- R17 row #70 recorded 34 collectives per step against the Build's 66 links (structure FAIL).  The one census shared
         # with the committer's TPPartialSource names the modules (hooked below) and the python modules to patch, a ruled-out call's too.
-        from verity_vllm.collectives.collective_sites import mid_module_site_census, patch_targets
+        from verity_vllm.engine.collectives.collective_sites import mid_module_site_census, patch_targets
         census = mid_module_site_census(model, world)
         st["mid_sites"] = {s["name"]: s for s in census["sites"]}
         sites += patch_targets(census["sites"] + census["ruled_out"])

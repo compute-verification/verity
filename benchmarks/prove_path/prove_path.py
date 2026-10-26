@@ -134,7 +134,7 @@ I2 = "verity/prove-path/i2-compile-steps/v0"
 #: bits a row)
 CAP_BITS = 1 << 23
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
-LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/predict/fixtures/llama32-1b.config.json"
+LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
@@ -218,8 +218,8 @@ class I2Compiler:
     def requests(self, data: bytes) -> list[dict]:
         """I2's requests for the advice ``data``: each request's id, first step, prompt length, ``max_tokens`` (its kept outputs)
         and the digest of the Program I2 compiled for it; I2's refusal (`Unexpressible`) is a ValueError naming it."""
-        from verity_vllm.predict.build import Unexpressible
-        from verity_vllm.predict.steps import compile_steps
+        from verity_vllm.program.predict.build import Unexpressible
+        from verity_vllm.program.predict.steps import compile_steps
 
         if data not in self.compiled:
             try:
@@ -263,7 +263,7 @@ def own_builds(i2: I2Compiler, requests: Sequence[Mapping[str, Any]]) -> None:
     into ``programs_root``, run with ``i2.trace`` (`trace_builds`). So the rows' names, the parameters' names and types,
     ``supplied``, the correspondence and ``prefix_cache.json`` the window reads are this verifier's trace of I2's Program, and
     no row dir's."""
-    from verity_vllm.predict.steps import trace_commands
+    from verity_vllm.program.predict.steps import trace_commands
 
     Path(i2.programs_root).mkdir(parents=True, exist_ok=True)
     have, units = bodies_by_digest(i2.programs_root), {}
@@ -455,8 +455,8 @@ def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None
     """I2 over a single-GPU Commit: φ from the row's declared inputs (`score.phi_of`: its row id, the workload file the record
     served, refused unless its digest is the record's, and the checkpoint's ``config.json``), the bodies from the record, listing
     ``transfer_gates``; its Programs' Builds under ``programs_root`` (default the row dir; with ``trace``, the verifier's own)."""
-    from verity_vllm.predict.score import phi_of
-    from verity_vllm.predict.steps import Registered
+    from verity_vllm.program.predict.score import phi_of
+    from verity_vllm.program.predict.steps import Registered
 
     r = record1(str(bundle), str(row_dir))
     doc = json.loads(Path(workload).read_text())
@@ -514,7 +514,7 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     the pinned model (``serve.json``'s ``model`` and ``revision``, the checkpoint's ``config.json``, default unsloth/Llama-3.2-1B's),
     the serving device's target profile (``serve.json``'s ``target``, else the file ``target``) and the engine's execution label
     (``execution``, else ``engine.execution``); no workload."""
-    from verity_vllm.predict.phi import Phi
+    from verity_vllm.program.predict.phi import Phi
 
     prof = json.loads(Path(target).read_text()) if target else serve.get("target")
     if not isinstance(prof, Mapping):
@@ -528,7 +528,7 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
 
 
 def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target: str | None, cap_bits: int) -> Any:
-    from verity_vllm.predict.steps import Registered
+    from verity_vllm.program.predict.steps import Registered
 
     return Registered.of(phi_of_serve(serve, hf_config, target), int(serve.get("default_seed") or 0), cap_bits)
 

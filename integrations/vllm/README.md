@@ -337,7 +337,14 @@ bit-identical decode; an executor whose scheme has a circuit in its protocol pac
 PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `coins` (the epoch's challenger,
 `verity.core.protocols.pouw.coins.Challenger`, held in the auditor's process: install opens its salt coin
 after the weights' root and refuses without one; a pipeline that is its run's own auditor supplies one,
-`pouw.challenged`), `retain_steps` and `transcript_dir`. Its weight operands are formed per forward from the weight each call is handed, so
+`pouw.challenged`), `retain_steps` and `transcript_dir`. Under `ncp-v2` and Pearl-C, `challenger` (the auditor host's,
+`HOST:PORT`) and `session` replace `coins`: ncp-v2's session is the gate's open answer, and Pearl-C's the gate's reserve
+answer for a session of its salt coin alone (`window.SALT_FAMILIES`), which install opens through `gate` on its salt
+epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number k) before its salt coin opens after
+that root (`pouw_h1_window.salt_session`), so the session ends complete. Each install is an epoch, committing its weights
+under a fresh hm96 key; a reinstall over a weights' root this process already had an epoch over takes the next k. The
+retained manifest names k (`pass_index`) and that session (`session`: its id, ledger seq, root and commitment, never the hello's secret),
+and `pouw_h1_challenger.session_reason` holds a pass to it, recomputing the root from the weights' root and k. Its weight operands are formed per forward from the weight each call is handed, so
 PoUW keeps no weight-derived copy and POUS composes with it. A call holds the formed operands of the one layer it
 executes (3 B per weight of that layer: 1.41 GB for a 70B gate_up), plus under `FORM_BYTES` (256 MiB) of host work. PoUW executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its
 placeholders are listed in its `info()`.
@@ -411,11 +418,11 @@ sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/input
 (`records.programs(row, ..., bundle=PATH)`, or `records programs ROW --bundle PATH`), each digest checked against the record.
 
 A TP row's Build is the trace unless the row is switched.  `verity-vllm predict compare ROW_DIR` predicts every Program of a traced
-Build from the row's declared inputs (`verity_vllm/predict/`) and compares digests rank by rank; `records switch ROW --comparison
+Build from the row's declared inputs (`verity_vllm/program/predict/`) and compares digests rank by rank; `records switch ROW --comparison
 comparison.json --run RUN --trace art:…` records, where every one is equal, the comparison run and that traced Build as the row's
 `aot` in `manifests/records.json`, and pins the predicted Programs (a row whose file is not done only at its public cap is
 refused).  A switched row's Build (`--build-construction record`, the
-default) derives each Program with `predict emit` (`verity_vllm/predict/aot.py`): the predicted Program, under the trace's annotations (the
+default) derives each Program with `predict emit` (`verity_vllm/program/predict/aot.py`): the predicted Program, under the trace's annotations (the
 runtime correspondence: per Call, the fx occurrence, module, views and slots, which only the trace yields) and with its other
 files, refused unless the predicted Program and descriptor are the trace's, byte for byte.  `records publish` refuses a switched
 row's Build that traced any Program.  Neutrality's rebuild traces every row (`--build-construction trace`), so it checks a switched
