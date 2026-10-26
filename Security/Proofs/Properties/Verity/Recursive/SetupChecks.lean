@@ -226,6 +226,18 @@ theorem readX_of_compiled {x : Claims.Msg} {r : XR} {st : Stage} {ms : List (Cla
   obtain ⟨vs, hvs, hpv⟩ := readX_parts hrx
   exact ⟨hrx, vs, hvs, hpv⟩
 
+private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error e => simp [bind, Except.bind] at h
+  | ok a => exact ⟨a, rfl, h⟩
+
+private theorem map_ok {ε α β : Type} {x : Except ε α} {f : α → β} {b : β} (h : (f <$> x) = .ok b) :
+    ∃ a, x = .ok a ∧ f a = b := by
+  cases x with
+  | error e => simp [Functor.map, Except.map] at h
+  | ok a => exact ⟨a, rfl, Except.ok.inj h⟩
+
 /-- The verifier's registered reads as the compiled part reads them off its `registered` object: none, not complete,
 no known rows and no parameters without one; else `registeredOf`'s, with its ports the verifier's own. -/
 def PartRegistered (pr : Option Lean.Json) (registered : Option (Array Registered.Port)) (complete : Bool)
@@ -267,6 +279,91 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
         (some draw) sts ∧
       ProvedScope.checkOf (ProvedScope.circuitOf (partTags tags0 circuitB) circuitB []) (partTags tags0 circuitB) true
         pubB 1 false registered.isSome = .ok () := by
-  sorry
+  subst hok
+  unfold VStar.Recursive.partVerdict at hv
+  rcases ht : Tags.find? VStar.Recursive.STATEMENT with _ | tags0
+  · rw [ht] at hv
+    first | (simp [throw, throwThe, MonadExceptOf.throw] at hv; done) | cases hv
+  simp only [ht] at hv
+  obtain ⟨circuitB, hcB, hv⟩ := bind_ok hv
+  obtain ⟨pubB, hpB, hv⟩ := bind_ok hv
+  obtain ⟨⟨registered, complete, known, regParams⟩, hreg, hv⟩ := bind_ok hv
+  try dsimp only at hv
+  have hPR : PartRegistered p.registered registered complete known regParams := by
+    cases hpr : p.registered with
+    | none =>
+      simp only [PartRegistered]
+      rw [hpr] at hreg
+      have hreg := Except.ok.inj hreg
+      simp only [Prod.mk.injEq] at hreg
+      obtain ⟨rfl, rfl, rfl, rfl⟩ := hreg
+      exact ⟨rfl, rfl, rfl, rfl⟩
+    | some rj =>
+      simp only [PartRegistered]
+      rw [hpr] at hreg
+      obtain ⟨⟨own, c, k, ps⟩, hro, hreg⟩ := map_ok hreg
+      simp only [Prod.mk.injEq] at hreg
+      obtain ⟨rfl, rfl, rfl, rfl⟩ := hreg
+      exact ⟨own, hro, rfl⟩
+  obtain ⟨rows, hrows, hv⟩ := bind_ok hv
+  obtain ⟨bindings, hbind, hv⟩ := bind_ok hv
+  obtain ⟨recordB, hrecB, hv⟩ := bind_ok hv
+  rcases hrec : String.fromUTF8? recordB with _ | record
+  · simp only [hrec] at hv
+    first | (simp [throw, throwThe, MonadExceptOf.throw] at hv; done) | cases hv
+  simp only [hrec] at hv
+  generalize hT : Zk.tags (tags0.withCoins (Coins.tree (Zk.coinSpec (tags0.tableNames 1)))) (Zk.maskLogOf circuitB) 1
+    = T at hv
+  generalize hD : (if T.hm96Rows = true then Witness.recordDraw record else none) = D at hv
+  have hv := Except.ok.inj hv
+  obtain ⟨proofs, -, hv⟩ := bind_ok hv
+  obtain ⟨⟨spec', tabs⟩, hst, hv⟩ := bind_ok hv
+  try dsimp only at hv
+  obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
+  obtain ⟨⟨⟩, hscope, hv⟩ := bind_ok hv
+  obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
+  rcases D with _ | d
+  · first
+      | (simp [ProvedScope.drawLaw, bind, Except.bind] at hv; done)
+      | cases hv
+  have hdraw : T.hm96Rows = true ∧ Witness.recordDraw record = some d := by
+    cases hh : T.hm96Rows
+    · simp [hh] at hD
+    · simp only [hh, ↓reduceIte] at hD
+      exact ⟨rfl, hD⟩
+  obtain ⟨hhm, hrd⟩ := hdraw
+  try dsimp only at hst
+  split at hst
+  · rename_i spec sts hb
+    have hlaw : ProvedScope.drawLaw true T false (some d) = .ok () := by
+      cases hl : ProvedScope.drawLaw true T false (some d) with
+      | error e => simp [hl, Except.map] at hst
+      | ok u => rfl
+    obtain ⟨⟨⟩, hprog, hb⟩ := bind_ok hb
+    obtain ⟨⟨⟩, hinn, hb⟩ := bind_ok hb
+    obtain ⟨⟨spec0, sts0⟩, hbuild, hb⟩ := bind_ok hb
+    subst hT
+    cases complete <;> simp only [Bool.false_eq_true, eq_self_iff_true, ↓reduceIte] at hb
+    on_goal 2 => obtain ⟨⟨⟩, hcomp, hb⟩ := bind_ok hb
+    all_goals
+      obtain ⟨⟨⟩, hcov, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hkn, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hchk, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hone, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hshape, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hcoins, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hpub, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hlr, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, htop, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hlink, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hlab, hb⟩ := bind_ok hb
+      refine ⟨tags0, circuitB, pubB, registered, _, known, regParams, rows, bindings, recordB, record, d, spec0,
+        sts0, rfl, hcB, hpB, hPR, hrows, hbind, hrecB, hrec, hhm, hrd, hprog, hbuild, ?_, hcov, hkn,
+        ⟨hinn, hchk, hone, hshape, hcoins, hpub, hlr, htop, hlink, hlab, fun _ => hlaw⟩, hscope⟩
+    · intro hc
+      cases hc
+    · intro _
+      exact hcomp
+  · cases hst
 
 end Verity.Recursive
