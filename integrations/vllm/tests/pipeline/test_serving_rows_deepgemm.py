@@ -18,12 +18,12 @@ from verity.ml.circuits.evaluation import evaluate, evaluate_batch
 
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program.kernels import deepgemm_twins as DT
-from verity_vllm.program.registry import boolean_deepgemm as BDG
-from verity_vllm.program.registry import boolean_fp8 as BF8
-from verity_vllm.program.registry import deepgemm as DG
-from verity_vllm.program.registry import fp8 as F8
-from verity_vllm.program.registry.fp8 import FP8_BLOCK
+from verity.ml.definitions.numerics import deepgemm_twins as DT
+from verity.ml.definitions.registry import boolean_deepgemm as BDG
+from verity.ml.definitions.registry import boolean_fp8 as BF8
+from verity.ml.definitions.registry import deepgemm as DG
+from verity.ml.definitions.registry import fp8 as F8
+from verity.ml.definitions.registry.fp8 import FP8_BLOCK
 
 K, N = 256, 200
 NB, KG = -(-N // FP8_BLOCK), K // FP8_BLOCK
