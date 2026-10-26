@@ -99,18 +99,12 @@ DEV uint32_t cta_rank() {
 DEV void cluster_sync() {
   asm volatile("barrier.cluster.arrive.release.aligned;\n barrier.cluster.wait.acquire.aligned;" ::: "memory");
 }
-// the mbarrier at shared offset `bar` in CTA `rank` of the cluster, arrived on with release at cluster scope
+// the mbarrier at shared offset `bar` in CTA `rank` of the cluster, arrived on with arrive's default semantics, as
+// CUTLASS's ClusterBarrier::arrive: the stage's wgmma reads are complete (wgmma.wait_group) before it
 DEV void mbar_arrive_at(uint32_t bar, uint32_t rank) {
   uint32_t r;
   asm volatile("mapa.shared::cluster.u32 %0, %1, %2;" : "=r"(r) : "r"(bar), "r"(rank));
-  asm volatile("mbarrier.arrive.release.cluster.shared::cluster.b64 _, [%0];" ::"r"(r) : "memory");
-}
-// the producer's wait on a stage both CTAs' consumers release
-DEV void mbar_wait_cluster(uint32_t bar, uint32_t parity) {
-  asm volatile(
-      "{\n .reg .pred p;\n WAITC:\n mbarrier.try_wait.parity.acquire.cluster.shared::cta.b64 p, [%0], %1;\n @!p bra WAITC;\n}\n" ::"r"(bar),
-      "r"(parity)
-      : "memory");
+  asm volatile("mbarrier.arrive.shared::cluster.b64 _, [%0];" ::"r"(r) : "memory");
 }
 
 // registers per thread for the rest of the warpgroup's life (all 4 warps of the warpgroup execute it)
@@ -225,10 +219,7 @@ template <int TM, int BN, int CL> DEV void body(const Params& p) {
         const int z = t / units, kb1 = (z + 1) * KB / splits;
         for (int kb = z * KB / splits; kb < kb1; kb++) {
           const uint32_t st = base + s * T::STAGE, full = bars + 8 * s;
-          if constexpr (CL == 1)
-            mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
-          else
-            mbar_wait_cluster(bars + 8 * (STAGES + s), ph ^ 1);
+          mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
           mbar_expect_tx(full, T::STAGE);
           tma_load(st, &p.a, full, kb * BK, tm * TM);
           const uint32_t bdst = st + T::A_BYTES + rank * B_HALF;
@@ -250,7 +241,7 @@ template <int TM, int BN, int CL> DEV void body(const Params& p) {
       // the peer's consumers arrive on this CTA's barriers: it stays until every stage it loaded is released by both
       if constexpr (CL == 2)
         for (int i = 0; i < STAGES; i++) {
-          mbar_wait_cluster(bars + 8 * (STAGES + s), ph ^ 1);
+          mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
           if (++s == STAGES) { s = 0; ph ^= 1; }
         }
     }
