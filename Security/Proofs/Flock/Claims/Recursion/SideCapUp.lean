@@ -95,7 +95,6 @@ theorem cutLens_reps {α : Type} (f : ℕ → α) (R : ℕ) {k : ℕ} (hk : k < 
   rcases (show k = 0 ∨ k = 1 by omega) with rfl | rfl
   · simp [FlockDeploy.cutLens]
   · simp [FlockDeploy.cutLens, Function.comp_def]
-    exact List.take_of_length_le (by simp)
 
 theorem caps_get! {α : Type} [Inhabited α] {L : List (List α)} {g : ℕ} {b : List α} (h : L[g]? = some b) :
     (L.map List.toArray).toArray[g]! = b.toArray := by
@@ -251,6 +250,7 @@ theorem opened_rows (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
   have hn : nS x = r.w.parts.length := by simp [nS, hr]
   have hwl : ws.length = r.w.parts.length := by omega
   have hc0 := RestRead.capAt_level0 hr hm
+  obtain ⟨-, -, hp0⟩ := capAt_readX hr
   obtain ⟨st0, hst0, hd0⟩ := hx
   obtain ⟨c', hc', -⟩ := capPorts Claims.Recursion.Form.Dense x st0 hst0 hd0 r hr
   have hlt : nS x - 1 < ws.length := by omega
@@ -462,7 +462,8 @@ theorem capEntry_up (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
     exact mapM_rowsOf_joinR os'
   have hlastb : ((o0 :: os').map (fun o => FlockDeploy.joinR (o.map Prod.fst)) ++ [last]).getLast?.bind rd =
       some fl := by
-    simp [hfl]
+    rw [List.getLast?_concat]
+    exact hfl
   have hsched : ∀ r0 cs', (FlockDeploy.repCtx spec #[st] default r0 cs' q.rep).sched = rs.toList := by
     intro r0 cs'
     show repSchedAt spec (#[st])[q.rep / 2]! = _
@@ -472,7 +473,9 @@ theorem capEntry_up (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
     show [(repSchedAt spec (#[st])[0 / 2]!).length, (repSchedAt spec (#[st])[1 / 2]!).length] = _
     have e0 : (#[st])[0 / 2]! = st := rfl
     have e1 : (#[st])[1 / 2]! = st := rfl
-    rw [e0, e1, hsc, Array.length_toList]
+    rw [e0]
+    try rw [e1]
+    rw [hsc, Array.length_toList]
   have hrssE : (os'.map fun o => (o.map Prod.fst).map fun m => (⟨m.toArray⟩ : ByteArray)) =
       (List.range (2 * rs.size)).map fun j =>
         ((roundOpen r rs j).flatMap (pieceRows ws)).map fun m => (⟨m.toArray⟩ : ByteArray) := by
@@ -510,7 +513,7 @@ theorem capEntry_up (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
     (fun i => (List.range ((rs.getD i default).2.1).size).map (topNodes r rs ws q.rep i)) hi he
   rw [hbef] at hge hat
   rw [← hge] at hat
-  dsimp only at hat
+  try dsimp only at hat
   rw [List.getElem?_map, List.getElem?_range he', Option.map_some] at hat
   have hT := topSizes_at hi he'
   rw [← hge, hgn] at hT
