@@ -5,7 +5,7 @@ ring's product. `Y^2 + Y + x⁻¹` is irreducible because the trace of `x⁻¹` 
 `y^2 + y`), computed by the kernel with the executable's multiplication. The field is transported onto the synonym `GF256`,
 whose `+` and `*` are the executable's.
 -/
-import Proofs.Flock.Level3.GF128Field
+import Properties.Flock.Level3.GF128Field
 import Mathlib.Algebra.Polynomial.SpecificDegree
 import Mathlib.Algebra.CharP.Lemmas
 

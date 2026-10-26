@@ -1,5 +1,5 @@
 import Proofs.Flock.Level3.ArithFacts
-import Proofs.Flock.Level3.GF256
+import Properties.Flock.Level3.GF256
 import Proofs.Flock.Soundness.Discharge.Composed.Base
 import Proofs.Flock.Claims.Deploy
 

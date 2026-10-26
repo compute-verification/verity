@@ -1872,7 +1872,7 @@
   "Proofs.Flock.Verifier",
   "Flock",
   "VStar",
-  "Proofs.Flock.Level3",
+  "Properties.Flock",
   "Proofs.Flock.Soundness",
   "Randomness",
   "Proofs.Flock.Recursive",
@@ -2466,7 +2466,6 @@
   "proofs": ["Proofs", "Proofs.Properties"],
   "except": {
    "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",

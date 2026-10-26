@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.Complete.Prover.Session
 import Proofs.Flock.Claims.Deploy
-import Proofs.Flock.Level3.Placed
+import Properties.Flock.Level3.Placed
 
 /-!
 # Flock's honest prover at the deployed plain verifier (`honestP`)

@@ -2,7 +2,7 @@
 Level 3, L3-F: the executable's `F128` is the ring GF(2)[X]/(G). `toAdj` sends an element to its residue class; it is a
 bijection that carries `+` and `*` to the quotient ring's (the field structure, once `G` is irreducible: `GF128Field`).
 -/
-import Proofs.Flock.Level3.GF128
+import Properties.Flock.Level3.GF128
 import Mathlib.RingTheory.AdjoinRoot
 import Mathlib.Algebra.Ring.TransferInstance
 import Mathlib.Tactic.FinCases

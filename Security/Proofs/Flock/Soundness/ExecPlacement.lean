@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.ExecDelta
-import Proofs.Flock.Level3.Placed
+import Properties.Flock.Level3.Placed
 
 /-!
 # An instance's rows, placed by the statement the verifier accepted

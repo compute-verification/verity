@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.Hm.Gadget
-import Proofs.Flock.Level3.GF128
+import Properties.Flock.Level3.GF128
 
 /-!
 # V*'s gadgets: Karatsuba multiplication in GF(2^128)

@@ -35,7 +35,8 @@
   "Properties.Accounting.Served",
   "Properties.RemoteAudit.Line",
   "Properties.RemoteAudit.Schedule",
-  "Properties.RemoteAudit.Live"
+  "Properties.RemoteAudit.Live",
+  "Properties.Flock"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -360,6 +361,11 @@
    "imports": ["Definitions.Accounting", "RemoteAudit"],
    "except": [],
    "why": "the schedule check (`RemoteAudit.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
+  },
+  "Properties.Flock": {
+   "imports": ["Mathlib", "Flock", "Definitions.Flock", "Properties.Flock"],
+   "except": [],
+   "why": "C-Flock's definitions that read its compiled verifier (the fields over `Flock.F128`, `execArith`, the level-0 matrices), extracted from Proofs/Flock: they import the code, C-Flock's definitions and Mathlib, never a proof; the Field instances' proof fields come with them"
   }
  },
  "reads_exempt": {

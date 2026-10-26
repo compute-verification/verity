@@ -1,3 +1,4 @@
+import Properties.Flock.Instance
 import Proofs.Flock.Soundness.Soundness
 import Proofs.Flock.Level3
 
@@ -16,20 +17,6 @@ the soundness theorems hold for the executable's arithmetic with no arithmetic h
 namespace FlockSoundness
 
 open Model Accounting
-
-/-- **The executable's arithmetic.** -/
-noncomputable def execArith : Arith FlockLevel3.GF128 FlockLevel3.GF256 where
-  lagS := FlockLevel3.lagS
-  lagΛ := FlockLevel3.lagΛ
-  combW := FlockLevel3.combW
-  pinned := FlockLevel3.pinnedF
-  pack := FlockLevel3.pack
-  unpack := FlockLevel3.unpack
-  embed := FlockLevel3.embed
-  u := FlockLevel3.u
-  omega := FlockLevel3.omega
-  What := FlockLevel3.What
-  lo := FlockLevel3.lo
 
 theorem eqAt_pinned (b : ℕ) : eqAt execArith.pinned b = FlockLevel3.eqAtPinned b := by
   unfold FlockLevel3.eqAtPinned eqAt

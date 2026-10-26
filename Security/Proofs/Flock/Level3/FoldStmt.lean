@@ -3,6 +3,7 @@ Level 3, L3-A: the lincheck fold `Stmt.fold` (PROTOCOL.md §10, §16.1). `fold_g
 the block is the base of the last range whose slots cover `c`, scaled by that slot's `eq(ρ_hi, q)`, plus Δ's entries at
 `c`. `baseOf_get` and `slot_factor` then read a slot's base as `α·Aᵀe + Bᵀe` on the slot's rows.
 -/
+import Properties.Flock.Level3.FoldStmt
 import Proofs.Flock.Level3.LookupFold
 
 open Flock Lookup
@@ -83,11 +84,6 @@ def baseFor (st : Stmt) (alpha : F128) (lw rho : Array F128) (r : Range) : Array
   | .error _ => #[]
 
 def eHiFor (rho : Array F128) (r : Range) : Array F128 := eqTable (rho.extract (r.slotLog - 6) rho.size)
-
-/-- `c` lies in one of `r`'s slots. -/
-def covers (r : Range) (c : ℕ) : Prop := r.pos0 ≤ c / 2 ^ r.slotLog ∧ c / 2 ^ r.slotLog < r.pos0 + r.count
-
-instance instDecidableCovers (r : Range) (c : ℕ) : Decidable (covers r c) := inferInstanceAs (Decidable (_ ∧ _))
 
 /-- What the ranges leave at `c`: the last covering range's scaled base, else `v`. -/
 def rangesVal (st : Stmt) (alpha : F128) (lw rho : Array F128) : List Range → ℕ → F128 → F128

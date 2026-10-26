@@ -3,7 +3,7 @@ Level 3, L3-F: the executable's GF(2^128) arithmetic (`Flock.F128`, PROTOCOL.md 
 modulo the GHASH polynomial `G = X^128 + X^7 + X^2 + X + 1`. An element `⟨lo, hi⟩` is the polynomial of the bits of
 `2^64·hi + lo`.
 -/
-import Proofs.Flock.Level3.Bits
+import Properties.Flock.Level3.Bits
 import Flock.Field
 import Mathlib.Tactic.ComputeDegree
 import Mathlib.Tactic.IntervalCases

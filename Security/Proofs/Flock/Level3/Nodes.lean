@@ -4,6 +4,7 @@
 polynomial of degree below 128 that vanishes on `S` from its values on `Λ`. φ8 is additive, so each node set is a
 subspace or a coset, and the barycentric denominator `Π_{j ≠ i} (x_i − x_j)` is the executable's `den`.
 -/
+import Properties.Flock.Level3.Nodes
 import Proofs.Flock.Level3.ArithFacts
 import Mathlib.LinearAlgebra.Lagrange
 
@@ -231,11 +232,6 @@ theorem lagrange_interp (hinj : ∀ a < n, ∀ b < n, GF128.of (f a) = GF128.of 
 theorem phi8_inj (a b : ℕ) (ha : a < 128) (hb : b < 128) (h : GF128.of (phi8 a) = GF128.of (phi8 b)) : a = b :=
   phi8_injOn a b (by omega) (by omega) h
 
-/-- `L_s(ζ)`, the executable's skip weights. -/
-noncomputable def lagS (ζ : GF128) (s : Fin 64) : GF128 := GF128.of ((skipWeights ζ.val)[s.val]!)
-/-- `L^Λ_i(ζ)`, the executable's output-coset weights (the ones `Pc` uses). -/
-noncomputable def lagΛ (ζ : GF128) (i : Fin 64) : GF128 := GF128.of ((lagrange nodesL den6Inv ζ.val)[i.val]!)
-
 theorem lagS_interp (p : GF128[X]) (hp : p.natDegree < 64) (ζ : GF128) :
     ∑ s, lagS ζ s * p.eval (nodeS s) = p.eval ζ := by
   rw [← lagrange_interp phi8 64 6 (fun a ha b hb h => phi8_inj a b (by omega) (by omega) h)
@@ -252,9 +248,6 @@ theorem lagΛ_interp (p : GF128[X]) (hp : p.natDegree < 64) (ζ : GF128) :
     (den 6).inv ζ.val)[i]!) * p.eval (nv (fun i => phi8 (64 + i)) i)) 64
 
 /-! ### `Pcomb`'s weights -/
-
-/-- The weights of `Pcomb(ζ)`, the executable's `combWeights`. -/
-noncomputable def combW (ζ : GF128) (i : Fin 64) : GF128 := GF128.of ((combWeights ζ.val)[i.val]!)
 
 theorem nodes_all : nodesS ++ nodesL = (Array.range 128).map phi8 := by
   apply Array.toList_inj.mp

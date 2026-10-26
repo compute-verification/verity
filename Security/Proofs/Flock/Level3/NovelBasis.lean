@@ -4,6 +4,7 @@
 `X̂_c`, `c < 2^L`, are linearly independent. The executable's `sIter` and `svTable` compute these values, and the kernel
 checks `s_i(β_i) ≠ 0` for `i < 40` on `svTable 40`.
 -/
+import Properties.Flock.Level3.NovelBasis
 import Proofs.Flock.Level3.Nodes
 import Flock.Ligerito
 import Mathlib.Algebra.Polynomial.Sequence
@@ -21,15 +22,6 @@ open Polynomial Flock
 set_option maxRecDepth 20000
 
 namespace FlockLevel3
-
-noncomputable def beta (j : ℕ) : GF128 := GF128.of (F128.monomial j)
-
-noncomputable def sPoly : ℕ → GF128[X]
-  | 0 => X
-  | j + 1 => sPoly j ^ 2 + C ((sPoly j).eval (beta j)) * sPoly j
-
-/-- `Ŵ_i(ω) = s_i(ω) · s_i(β_i)⁻¹` (the soundness model's `What`). -/
-noncomputable def What (i : ℕ) (ω : GF128) : GF128 := (sPoly i).eval ω * ((sPoly i).eval (beta i))⁻¹
 
 /-- `X̂_c(ω) = Π_{i ∈ bits(c)} Ŵ_i(ω)` (the model's `Arith.Xhat`). -/
 noncomputable def Xhat (c L : ℕ) (ω : GF128) : GF128 := ∏ i : Fin L, if c.testBit i then What i ω else 1

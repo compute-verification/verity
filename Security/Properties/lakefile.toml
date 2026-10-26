@@ -65,6 +65,10 @@ path = "../../verity/core/protocols/remote_bandwidth/lean"
 name = "core_requirement"
 path = "../../verity/core/primitives/requirement"
 
+[[require]]
+name = "flock_verifier"
+path = "../../verity/core/service/flock"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
@@ -77,4 +81,4 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
   "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule", "Properties.RemoteAudit.Shared",
-  "Properties.RemoteAudit.Live"]
+  "Properties.RemoteAudit.Live", "Properties.Flock"]

@@ -1,10 +1,10 @@
-import Proofs.Flock.Level3.Bits
-import Proofs.Flock.Level3.GF128
-import Proofs.Flock.Level3.GF128Ring
-import Proofs.Flock.Level3.GF128Field
-import Proofs.Flock.Level3.GF256
+import Properties.Flock.Level3.Bits
+import Properties.Flock.Level3.GF128
+import Properties.Flock.Level3.GF128Ring
+import Properties.Flock.Level3.GF128Field
+import Properties.Flock.Level3.GF256
 import Proofs.Flock.Level3.Assembly
-import Proofs.Flock.Level3.Seam
+import Properties.Flock.Level3.Seam
 import Proofs.Flock.Level3.ArithFacts
 import Proofs.Flock.Level3.Pinned
 import Proofs.Flock.Level3.Nodes
@@ -14,5 +14,5 @@ import Proofs.Flock.Level3.LookupFold
 import Proofs.Flock.Level3.FoldStmt
 import Proofs.Flock.Level3.Folded
 import Proofs.Flock.Level3.LookupRows
-import Proofs.Flock.Level3.Placed
+import Properties.Flock.Level3.Placed
 import Proofs.Flock.Level3.RowV2

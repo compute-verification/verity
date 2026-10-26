@@ -4,7 +4,8 @@ The soundness lane's `Model.Arith.Correct` facts (Project store
 for the executable's functions: `F = GF128`, `K = GF256`, and the concrete `pack`, `unpack`, `pinned`, `omega` and `lo`
 below. The instance itself lives in the soundness package.
 -/
-import Proofs.Flock.Level3.Seam
+import Properties.Flock.Level3.ArithFacts
+import Properties.Flock.Level3.Seam
 import Flock.Piop
 import Mathlib.Data.Fintype.Card
 import Mathlib.Data.Fintype.Prod
@@ -20,19 +21,6 @@ namespace FlockLevel3
 /-! ### The fields: finite, of order `2^128` and `2^256`, characteristic 2 -/
 
 def u64Fin : UInt64 ≃ Fin (2 ^ 64) := ⟨fun x => x.toFin, UInt64.ofFin, fun _ => rfl, fun _ => rfl⟩
-
-def f128Equiv : GF128 ≃ Fin (2 ^ 64) × Fin (2 ^ 64) :=
-  ⟨fun a => (GF128.val a |>.lo.toFin, GF128.val a |>.hi.toFin), fun p => GF128.of ⟨UInt64.ofFin p.1, UInt64.ofFin p.2⟩,
-    fun _ => rfl, fun _ => rfl⟩
-
-instance instFintypeGF128 : Fintype GF128 := Fintype.ofEquiv _ f128Equiv.symm
-instance instDecidableEqGF128 : DecidableEq GF128 := inferInstanceAs (DecidableEq F128)
-
-def f256Equiv : GF256 ≃ GF128 × GF128 :=
-  ⟨fun a => ((a : F256).c0, (a : F256).c1), fun p => GF256.of ⟨p.1.val, p.2.val⟩, fun _ => rfl, fun _ => rfl⟩
-
-instance instFintypeGF256 : Fintype GF256 := Fintype.ofEquiv _ f256Equiv.symm
-instance instDecidableEqGF256 : DecidableEq GF256 := inferInstanceAs (DecidableEq F256)
 
 theorem card_F : Fintype.card GF128 = 2 ^ 128 := by
   rw [Fintype.card_congr f128Equiv, Fintype.card_prod, Fintype.card_fin]; norm_num
@@ -57,13 +45,6 @@ noncomputable def toA (a : GF128) : AdjoinRoot G := toAdj a.val
 theorem toA_injective : Function.Injective toA := fun _ _ h => toAdj_injective h
 theorem toA_of (a : F128) : toA (GF128.of a) = toAdj a := rfl
 theorem toA_add (a a' : GF128) : toA (a + a') = toA a + toA a' := equivAdj.apply_symm_apply _
-
-/-- The bits of an element in the packing basis `x^v`. -/
-noncomputable def unpack (a : GF128) : Fin 128 → ZMod 2 := fun v => (F128.poly a.val).coeff v
-
-/-- `Σ_v b_v · x^v`. -/
-noncomputable def pack (b : Fin 128 → ZMod 2) : GF128 :=
-  GF128.of (equivAdj.symm (AdjoinRoot.mk G (∑ v : Fin 128, C (b v) * X ^ (v : ℕ))))
 
 theorem sum_degree_lt (b : Fin 128 → ZMod 2) : (∑ v : Fin 128, C (b v) * X ^ (v : ℕ)).degree < 128 := by
   have := degree_sum_fin_lt b; exact_mod_cast this
@@ -115,9 +96,6 @@ theorem ofLimbs_bijective : Function.Bijective fun w : GF128 × GF128 => embed w
 
 /-! ### Query positions: the low bits of `lo` are balanced (§13.5) -/
 
-/-- The low 64-bit word. -/
-def lo (w : GF128) : ℕ := (GF128.val w).lo.toNat
-
 theorem card_residue (b : ℕ) (hb : b ≤ 64) (t : ℕ) (ht : t < 2 ^ b) :
     (Finset.univ.filter fun l : Fin (2 ^ 64) => l.val % 2 ^ b = t).card = 2 ^ (64 - b) := by
   have hpow : 2 ^ 64 = 2 ^ b * 2 ^ (64 - b) := by rw [← pow_add]; congr 1; omega
@@ -163,9 +141,6 @@ theorem lo_balanced : ∀ b ≤ 64, ∀ t < 2 ^ b,
 
 /-! ### The Reed–Solomon domain points (§13.1) -/
 
-/-- `ω_q`: the element whose low word is `q`. -/
-def omega (q : ℕ) : GF128 := GF128.of ⟨q.toUInt64, 0⟩
-
 theorem omega_injective : ∀ d ≤ 64, Set.InjOn omega {q | q < 2 ^ d} := by
   intro d hd q hq q' hq' h
   have hq64 : q < 2 ^ 64 := lt_of_lt_of_le hq (Nat.pow_le_pow_right (by norm_num) hd)
@@ -176,9 +151,6 @@ theorem omega_injective : ∀ d ≤ 64, Set.InjOn omega {q | q < 2 ^ d} := by
   omega
 
 /-! ### The pinned zerocheck coordinates (§9.2) -/
-
-/-- The seven pinned coordinates (the executable's `Flock.pinned`). -/
-def pinnedF (i : Fin 7) : GF128 := GF128.of (Flock.pinned[i.val]!)
 
 /-- `Flock.pinned`'s value, computed once by the executable. Entries 3–6 are `y · (y + 1)⁻¹`, each checked by one
 multiplication (`frac_eq`), so the kernel never evaluates the four inverses. -/
