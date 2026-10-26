@@ -13,9 +13,12 @@ are statements to prove (in `Proofs/Core/Accel`), not assumptions: they follow f
   range (`P1Int`); a float pipeline of adder width `w` is exact on integers whose magnitudes sum below
   `2^min(w, 24)` (`P1Float`), which covers BF16 and the FP8 (E4M3, E5M2) and FP4 (E2M1) K32 atoms on both cards
   (`P1Captured`). A wider operand therefore takes several MMAs: that much is semantics, not an assumption.
-* **(P2) A product lives in one accumulator.** An MMA's output `o` reads row `o / n` of `A`, column `o % n` of `B` and
-  accumulator `o` only (`P2Local`), and distinct outputs read distinct row and column pairs (`P2Distinct`), so each of
-  its `m·n·k` products is formed in one output's dot. An instruction writes only the locations its outputs name
+* **(P2) An MMA's products sum into exactly one destination; C is a register read.** An MMA's output `o` reads row
+  `o / n` of `A`, column `o % n` of `B` and accumulator `o` only (`P2Local`), and distinct outputs read distinct row
+  and column pairs (`P2Distinct`), so each of its `m·n·k` products is formed in one output's dot. The accumulator `C`
+  is an input like `A` and `B`, read from registers its operands name, and `D` is written where its own operands name
+  (`mma.sync` on both cards takes `D ≠ C`): one accumulator value may seed several MMAs, each at its own units and no
+  more. That fork is the card's, and the model keeps it. An instruction writes only the locations its outputs name
   (`P2Frame`), so a product reaches another word only through further instructions, and each of those uses at least
   `1/32` of an issue slot (`P2Priced`), which G2 bounds.
 
@@ -84,6 +87,6 @@ def P2Frame : Prop :=
 
 /-- **P2, priced moves**: every opcode uses at least `1/32` of an issue slot, at any tensor weights, so no instruction
 is free on every resource: not a `b1` MMA (a slot, whatever `Open.b1` is), a uniform instruction (a slot) or a move. -/
-def P2Priced : Prop := ∀ (weight : Fmt → ℚ≥0) (o : Op Store), 1 / 32 ≤ opUse weight o .issue
+def P2Priced : Prop := ∀ (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (o : Op Store), 1 / 32 ≤ opUse weight scale o .issue
 
 end Verity.Accel

@@ -54,13 +54,20 @@ statement of one run can't name; a property that relies on it names it in its do
 def TrustedHost {Device In Out : Type} (device : Device) (run : Device → In → Out) (code : In → Out) : Prop :=
   ∀ x, run device x = code x
 
-/-- **`accel-product-form(card)`**: every tensor-core MMA of the card whose semantics no capture pins (`x.dot`, the
-accelerator model's open dots) reads its operand pairs only through what one multiplier forms from a pair
-(`Accel.mulOut`: the operands' classes, the product's sign, the significands' product and the exponent fields' sum),
-besides its accumulator and its block scales (`Accel.ProductForm`). It is a fact about the tensor core's data flow: a
-multiplier sees one operand pair, and the adder tree sees only the multipliers' outputs and the accumulator. A capture
-checks it by swapping operand pairs whose multiplier outputs agree and comparing the outputs bit for bit; every pinned
-dot has the form (`Accel.CapturedProductForm`, a statement to prove). -/
+/-- **`accel-product-form(card)`**, per product term: in every tensor-core MMA of the card whose semantics no capture
+pins (`x.dot`, the accelerator model's open dots), each multiplier forms one product from one operand pair (an element
+of a row of `A` and the same element of a column of `B`), and its output feeds exactly one adder tree, that row's and
+column's output, as `Accel.mulOut` (the operands' classes, the product's sign, the significands' product and the
+exponent fields' sum) and nothing else of the pair. The tree reads only its multipliers' outputs, its accumulator and
+its block scales. That is P2 at the hardware's level: the routing of pairs to one tree is the MMA's semantics
+(`Accel.mmaEval`, `P2Local`, `P2Distinct`), and this Prop states the rest for the open dots (`Accel.ProductForm`).
+
+Checked per card by a pair-swap capture: swap operand pairs whose `mulOut` agree, within one output and across
+outputs, and compare every output bit for bit. The captured dots have the form by their captures (H200:
+`HOPPER_SM90_S8_K32`, `HOPPER_BF16_M16N8K16`, the E4M3 and E5M2 K32 captures; RTX PRO 6000: the
+`BLACKWELL_SM120_*_M16N8K32` integer and f8f6f4 captures and BF16; `Accel.CapturedProductForm`, to prove). The open
+dots it covers, each still to capture: on the H200 mixed E4M3 × E5M2 `wgmma`, f16, tf32 and b1; on the RTX PRO 6000
+the block-scaled NVF4 and MXF4 (pinned in Python only), mixed f8f6f4 pairings, f16, tf32 and b1. -/
 def AccelProductForm (x : Accel.Open) : Prop :=
   ∀ fa fb sat k, Accel.ProductForm fa fb k (x.dot fa fb sat k)
 
