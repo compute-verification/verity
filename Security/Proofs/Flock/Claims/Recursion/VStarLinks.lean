@@ -369,7 +369,7 @@ theorem levelCalls_of_check {decode : Claims.Msg → Option Read} {x : Claims.Ms
       exact ⟨_, hv.2, hl⟩
   obtain ⟨name, hH, hl⟩ := hnet
   obtain ⟨hr, -, -, -, hss, hrow, haux, -, -, hdir⟩ := openIns_reads (copyOf p t htl w o g u) LANES H
-  have hL := laidRows_of_satisfies L regs hz ho hg hu hl
+  have hL := laidRows_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu hl
   rw [FlockVBridge.inWords_unit hl] at hL
   exact FlockVBridge.laid_unit_calls LANES H hH _ hL _ _ _ (by rw [FlockVBridge.size_rowBytes, hr]) hss hrow haux hdir
 

@@ -196,7 +196,7 @@ theorem setupH_flatRealizes (ht : tags.typed = true)
   have hunit := (setupH_flatLayout ht h hr).2.1
   obtain ⟨hflat, name, hnet, hpast, -⟩ := read_flat' hr
   have hlog : net.unitLog ≤ 32 := hunit ▸ (setupH_flatLayout ht h hr).2.2.unitLog_le hs
-  refine (setupH_flatLayout ht h hr).2.2.realizes regs hs ?_
+  refine (setupH_flatLayout ht h hr).2.2.realizes regs hs (by rw [hunit]; exact netOfD_built hnet) ?_
   rw [hunit]
   exact netRows_flat k.hd hflat hnet hlog hpast
 

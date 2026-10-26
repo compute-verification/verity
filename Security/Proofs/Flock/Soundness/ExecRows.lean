@@ -616,6 +616,36 @@ theorem stackPlaceAt_stackCol {u : ℕ} (hu : u < k) (c : Fin R.w) :
   apply Fin.ext
   simp only [posInAt, hcp, hpc]
 
+/-- **A stacked input, placed**: input `x` of the stack is copy `x / nIn`'s input `x % nIn`. -/
+theorem stackPlaceAt_val_in (x : Fin (R.stackW k)) (hx : x.val < k * R.nIn) :
+    ∃ hu : x.val / R.nIn < k, ∃ hc : x.val % R.nIn < R.w,
+      (stackPlaceAt S R k base pos hb x).val = base (x.val / R.nIn) + pos ⟨x.val % R.nIn, hc⟩ := by
+  have hn : 0 < R.nIn := Nat.pos_of_ne_zero fun h0 => by simp [h0] at hx
+  have hu : x.val / R.nIn < k := (Nat.div_lt_iff_lt_mul hn).2 hx
+  have hc : x.val % R.nIn < R.nIn := Nat.mod_lt _ hn
+  have hcw : x.val % R.nIn < R.w := by simp only [Rows.w]; omega
+  refine ⟨hu, hcw, ?_⟩
+  have e : x = R.stackCol k hu ⟨x.val % R.nIn, hcw⟩ := by
+    apply Fin.ext
+    simp only [Rows.stackCol, hc, ↓reduceDIte]
+    exact (Nat.div_add_mod' x.val R.nIn).symm
+  calc (stackPlaceAt S R k base pos hb x).val
+      = (stackPlaceAt S R k base pos hb (R.stackCol k hu ⟨x.val % R.nIn, hcw⟩)).val := by rw [← e]
+    _ = _ := by rw [stackPlaceAt_stackCol]; rfl
+
+/-- **Copy `u'`'s computed column `c0`, stacked and placed**, is `base u' + pos c0`. -/
+theorem stackPlaceAt_val_comp {u' c0 : ℕ} (hu' : u' < k) (h1 : R.nIn ≤ c0) (h2 : c0 < R.nIn + R.nComp)
+    (x : Fin (R.stackW k)) (hx : x.val = k * R.nIn + (u' * (R.nComp + 1) + (1 + (c0 - R.nIn)))) :
+    ∃ hc : c0 < R.w, (stackPlaceAt S R k base pos hb x).val = base u' + pos ⟨c0, hc⟩ := by
+  have hc0 : c0 < R.w := by simp only [Rows.w]; omega
+  refine ⟨hc0, ?_⟩
+  have e : x = R.stackCol k hu' ⟨c0, hc0⟩ := by
+    apply Fin.ext
+    simp only [Rows.stackCol, show ¬ c0 < R.nIn by omega, h2, ↓reduceDIte]
+    exact hx
+  rw [e, stackPlaceAt_stackCol]
+  rfl
+
 theorem stackPlaceAt_last (h : k * R.nIn + k * (R.nComp + 1) < R.stackW k) :
     stackPlaceAt S R k base pos hb ⟨k * R.nIn + k * (R.nComp + 1), h⟩ = S.pin := by
   unfold stackPlaceAt

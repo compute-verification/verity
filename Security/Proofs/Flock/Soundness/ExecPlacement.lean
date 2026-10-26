@@ -382,6 +382,7 @@ constant, and the committed row at a logical computed row's position reads, in `
 columns through `upos`. A flat unit is its own logical net at `upos = id` (`UnitAt.flat`). -/
 structure UnitAt (c : Circuit) : Prop where
   in_eq : (lunit c).inWords = c.unit.inWords
+  groups : (lunit c).inGroups = c.unit.inGroups
   in_le : (lunit c).inWords * WORD ≤ (lunit c).constPos
   log_le : (lunit c).unitLog ≤ c.unit.unitLog
   const_le : (lunit c).constPos ≤ c.unit.constPos
@@ -400,10 +401,18 @@ theorem UnitAt.flat {c : Circuit} (ht : c.tmpl = none) (hU : Built c.unit)
     (hin : c.unit.inWords * WORD ≤ c.unit.constPos) : UnitAt c := by
   have e1 := lunit_flat ht
   have e2 := upos_flat ht
-  refine { in_eq := by rw [e1], in_le := by rw [e1]; exact hin, log_le := by rw [e1], const_le := by rw [e1],
-    const := by rw [e1, e2], le := fun x hx => by rw [e2]; rw [e1] at hx; exact hx, inputs := fun x _ => e2 x,
-    comp := fun x h1 h2 => by rw [e2]; rw [e1] at h2; exact ⟨h1, h2⟩, row_a := fun x _ _ j => ?_,
-    row_b := fun x _ _ j => ?_ }
+  refine
+    { in_eq := (by rw [e1])
+      groups := (by rw [e1])
+      in_le := (by rw [e1]; exact hin)
+      log_le := (by rw [e1])
+      const_le := (by rw [e1])
+      const := (by rw [e1, e2])
+      le := fun x hx => (by rw [e2]; rw [e1] at hx; exact hx)
+      inputs := fun x _ => e2 x
+      comp := fun x h1 h2 => (by rw [e2]; rw [e1] at h2; exact ⟨h1, h2⟩)
+      row_a := fun x _ _ j => ?_
+      row_b := fun x _ _ j => ?_ }
   · simpa [e1, e2] using sparseEntry_built_a hU x j
   · simpa [e1, e2] using sparseEntry_built_b hU x j
 
@@ -692,12 +701,18 @@ namespace Layout
 variable {st : Stmt} (L : Layout st)
 include L
 
+/-- `hb` at the model statement's `kLog`. -/
+theorem hbM (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
+    ∀ u < st.c.upv, ∀ c : Fin (unitRows st L.unit_built).w,
+      st.c.unitRange.slot (g * st.c.upv + u) + upos st.c c.val < 2 ^ (L.model regs).kLog :=
+  L.hb hg
+
 /-- **Where VU `g`'s stacked unit columns sit in the accepted statement**: copy `u`'s logical column `c` at
 `ur.slot (g·upv + u) + upos c`, the shared constant at the pin (`stackPlaceAt`). -/
 noncomputable def col (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
     Fin ((unitRows st L.unit_built).stackW st.c.upv) → Fin (2 ^ (L.model regs).kLog) :=
   stackPlaceAt (L.model regs) (unitRows st L.unit_built) st.c.upv (fun u => st.c.unitRange.slot (g * st.c.upv + u))
-    (fun c => upos st.c c.val) (L.hb hg)
+    (fun c => upos st.c c.val) (L.hbM regs hg)
 
 /-- Copy `u`'s logical column `c` sits at `ur.slot (g·upv + u) + upos c`. -/
 theorem col_stackCol (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) {u : ℕ}
@@ -708,6 +723,34 @@ theorem col_stackCol (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {
   rw [stackPlaceAt_stackCol]
   rfl
 
+/-- A stacked input `x` sits at input `x % nIn` of unit slot `g·upv + x / nIn`: `upos` fixes the inputs. -/
+theorem col_val_in (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g)
+    (x : Fin ((unitRows st L.unit_built).stackW st.c.upv)) (hx : x.val < st.c.upv * (unitRows st L.unit_built).nIn) :
+    (L.col regs hg x).val =
+      st.c.unitRange.slot (g * st.c.upv + x.val / (unitRows st L.unit_built).nIn) +
+        x.val % (unitRows st L.unit_built).nIn := by
+  unfold col
+  obtain ⟨-, -, e⟩ := stackPlaceAt_val_in (L.model regs) (unitRows st L.unit_built) st.c.upv _ _ (L.hbM regs hg) x hx
+  rw [e]
+  congr 1
+  have hn : 0 < (unitRows st L.unit_built).nIn := Nat.pos_of_ne_zero fun h0 => by simp [h0] at hx
+  exact L.unit_at.inputs _ (by rw [← L.unitRows_nIn]; exact Nat.mod_lt _ hn)
+
+/-- Copy `u'`'s computed column `c0`, stacked, sits at `ur.slot (g·upv + u') + upos c0`. -/
+theorem col_val_comp (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g)
+    {u' c0 : ℕ} (hu' : u' < st.c.upv) (h1 : (unitRows st L.unit_built).nIn ≤ c0)
+    (h2 : c0 < (unitRows st L.unit_built).nIn + (unitRows st L.unit_built).nComp)
+    (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
+    (hx : x.val = st.c.upv * (unitRows st L.unit_built).nIn +
+      (u' * ((unitRows st L.unit_built).nComp + 1) + (1 + (c0 - (unitRows st L.unit_built).nIn)))) :
+    (L.col regs hg x).val = st.c.unitRange.slot (g * st.c.upv + u') + upos st.c c0 := by
+  unfold col
+  obtain ⟨-, e⟩ := stackPlaceAt_val_comp (L.model regs) (unitRows st L.unit_built) st.c.upv _ _ (L.hbM regs hg) hu' h1 h2 x hx
+  exact e
+
+/-- A flat unit (no template) is `Built`. -/
+theorem built_flat (h : st.c.tmpl = none) : Built st.c.unit := lunit_flat h ▸ L.unit_built
+
 /-- **An instance's rows, placed by the accepted statement.** VU `g`'s `upv` unit slots, stacked (`Rows.stack`), sit at
 `ur.slot (g·upv + u)` for copy `u`, each logical column at its committed position `upos`, with the shared constant at the
 pin (`col`), and the verifier's level-0 matrices place them there. -/
@@ -717,7 +760,7 @@ theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g :
   have hA := L.unit_at
   have hshift : ∀ u (hu : u < st.c.upv) c,
       (posInAt (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (fun c => upos st.c c.val) (L.hb hg) hu c).val =
+        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (fun c => upos st.c c.val) (L.hbM regs hg) hu c).val =
         (st.c.unitRange.pos0 + (g * st.c.upv + u)) * 2 ^ st.c.unit.unitLog + upos st.c c.val := by
     intro u hu c
     show st.c.unitRange.slot _ + upos st.c c.val = _
