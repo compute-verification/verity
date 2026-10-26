@@ -24,11 +24,15 @@ targets read them:
 * `Bridge.TransportsLiveC`: `TransportsLive` at canonical openings of the wires that aren't constants only;
 * `Bridge.FaultyRightTargetC`: `FaultyRightTarget` over `RightRegZc`'s second conjunct and canonical transport. Its
   `canon` reads a value, so at `vb` it is taken with `Val := vb.Opening`, `val := id` and `bit := vb.bit ∘ vb.val`;
-* `SampledKSLiveV2`: `SampledKSLive` at circuit files whose ports are all unsegmented row/v2 rows (`Bridge.RowsV2`)
+* `SampledKSLiveV2`: `SampledKSLive` at circuit files whose ports are rows the verifier of record reads, each a
+  `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row (`Bridge.RowsOk`, which C-Flock's scope check implies)
   and at registrations whose ports each have one name (`Registered.dupName`) and whose equal roots have one domain
   (`PortRoots.RootFixesDomain`), which `TransportsLiveC` also takes, and whose descriptor and query evaluate to a
   population of the game's `n` units in order (`Bridge.PopMatches`);
 * `Bridge.AssemblyTargetC`: those, `PartRusTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLiveV2`.
+
+`SampledKSLiveV3` (`Refused`) reads V2's file preconditions off the verifiers' acceptance, which refuses files that fail
+them.
 -/
 
 namespace Flock.Bridge
@@ -181,15 +185,16 @@ open Classical in
 commit string at the prover's registration that is canonical at `g` (`Bridge.canonOpen`: `g` has a row, the value is a
 row of its width, and the salt has `saltLen` bytes), at a wire that isn't a constant (`Bridge.constsOf`), some data
 opens `g`'s claims position to `o`'s bit there, under the registration's roots
-at SHA-512, at a circuit file whose ports are all unsegmented row/v2 rows (`Bridge.RowsV2`) and a registration whose
-equal port roots have one domain (`Registered.dupName`, `PortRoots.RootFixesDomain`). -/
+at SHA-512, at a circuit file whose ports are rows the verifier of record reads (`Bridge.RowsOk`: `sha512/row/v1`,
+`sha512/row/v2` or `sha512/row-seg/v1`) and a registration whose ports each have one name and whose equal port roots
+have one domain (`Registered.dupName`, `PortRoots.RootFixesDomain`). -/
 def _root_.Flock.Bridge.TransportsLiveC : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    (_hv2 : Bridge.RowsV2 D.unroll)
+    (_hrows : Bridge.RowsOk D.unroll)
     (_hdup : Flock.Registered.dupName D.unroll = none) (_hroots : Bridge.PortRoots.RootFixesDomain D.unroll pub n)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
@@ -223,9 +228,10 @@ def _root_.Flock.Bridge.TransportsLiveC : Prop :=
       ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 open Classical in
-/-- **`SampledKSLive` at row/v2 circuit files**: `SampledKSLive`'s statement at a circuit file whose ports are all
-unsegmented row/v2 rows (`Bridge.RowsV2`), the rows the deployed sampling commitment's leaves hash
-(`SamplingDeploy.row`), with the registration's ports and roots distinct (`dupName`, and no colliding pair of ports, `PortRoots.rootsColl`, which
+/-- **`SampledKSLive` at the circuit files the verifier of record reads**: `SampledKSLive`'s statement at a circuit
+file whose ports are rows of `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` (`Bridge.RowsOk`, which
+`scopeOkH` implies: `Bridge.rowsOk_of_scopeOkH`), each row's leaf in the deployed sampling commitment hashing its
+port's row message (`Bridge.rowDep`) framed at its port's schema (`Bridge.schemaOf`), with the registration's ports and roots distinct (`dupName`, and no colliding pair of ports, `PortRoots.rootsColl`, which
 `PortRoots.rootsColl_none_iff` reads as `PortRoots.RootFixesDomain`) and
 its descriptor `desc` and query `qr` evaluating to a population of `n` units in order (`Bridge.PopMatches`).
 `SampledKSLive` implies it (`sampledKSLiveV2_of`). -/
@@ -235,7 +241,7 @@ def SampledKSLiveV2 : Prop :=
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    (_hv2 : Bridge.RowsV2 D.unroll)
+    (_hrows : Bridge.RowsOk D.unroll)
     (_hdup : Flock.Registered.dupName D.unroll = none) (_hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none)
     -- the statement's descriptor, and the registration's query, whose population is the game's n units in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
@@ -302,7 +308,7 @@ theorem sampledKSLiveV2_of (h : SampledKSLive) : SampledKSLiveV2 := by
     hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS desc q
 
 /-- **The assembly, with canonical openings**: canonical transport, M1's core over `RightRegZc`, the slot count and the
-count lemma turn `EndToEndHiddenC` into `SampledKSLive` at row/v2 circuit files (`SampledKSLiveV2`). -/
+count lemma turn `EndToEndHiddenC` into `SampledKSLive` at `RowsOk` circuit files (`SampledKSLiveV2`). -/
 def _root_.Flock.Bridge.AssemblyTargetC : Prop :=
   Bridge.TransportsLiveC → Bridge.FaultyRightTargetC → Bridge.PartRusTarget → Bridge.CountTarget →
     Bridge.EndToEndHiddenC → SampledKSLiveV2
