@@ -35,7 +35,9 @@ ingress certifier's own frames a window (1 with its salt on, else 0), as `served
 - each window's declared sync, one of Σ_sync, which the certified egress head's parameters digest binds, and the sync
   the network certifier ran that window under (`clocks`), which every floor reads and the declared one must be: the
   verifier takes it only from its own clock source (`ClockSource`, `service.LinkWindows.clock_source`: `SignedClocks`,
-  the certifier's clock certificates), never from the prover's declaration.
+  the certifier's salted clock certificates, each read through its opening), never from the prover's declaration.
+  What the certifier signed is witness: the sync and its salt are read only against the salted digest the public
+  certificate signs, never from a public answer.
 
 **The ingress ends** (`ends`) are derived, not advised: advice request j is the link's j-th request, and its prompt
 length is the certified prompt's, both of which the tie holds (`ends` refuses a link without IoTieRequest's accepted
@@ -98,10 +100,13 @@ an unpinned size class is accepted, and the served size isn't pinned, so there e
 certified under loosens the floor (REDTEAM phase 11: δ = 0 declared for a window the certifier ran at δ = 1 accepted
 an output in its request's own bucket), so every floor is under the sync the certifier ran, which the verifier takes
 only from its own clock source (`ClockSource`, `service.LinkWindows.clock_source`), never from the prover:
-`SignedClocks`, the sync the certifier signed for each egress window beside its record
-(`certificate.ClockCertificate`), checked under the verifier's own certifier key and session; without one every
-advised link is refused. `view` refuses a window whose declared sync isn't that one; the sync is public, so the
-verifier holds the declared one to the signed one in the clear. A window's declaration moves no floor, so its refusal
+`SignedClocks`, the sync the certifier signed for each egress window beside its record, salted as a record digest is
+(`certificate.CertifiedClock`), read through its opening against the signed digest under the verifier's own certifier
+key and session; without one every advised link is refused. `view` refuses a window whose declared sync isn't that
+one. The opening is witness, read by the verifier of record on the host until the unit opens it (PROTOCOL.md's named
+gap, "The clock's opening"): on an accepted window the sync it shows is the declared one, a public output already,
+and on a refused one it shows the sync the certifier ran, which the unit's opening would keep hidden. A window's
+declaration moves no floor, so its refusal
 is that window's alone, and the link's verdict, the AND over its windows, refuses the link with it. Neither head signs
 the prompt lengths, so the unit itself doesn't hold them to the record, only the verifier's tie source does:
 PROTOCOL.md's named gap, with its design.
@@ -132,7 +137,7 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
@@ -145,7 +150,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array, Tuple
 from verity.core.protocols.certifier.advice import Advice, MalformedAdvice, encode, outputs
-from verity.core.protocols.certifier.certificate import ClockCertificate, PublicKey
+from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, PublicKey
 from verity.core.protocols.certifier.head_check import (BIT, BYTE, _coll, _Consts, _part, _refs, ands, gate_of,
                                                         pinned_digest)
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
@@ -247,26 +252,58 @@ class ClockSource(Protocol):
     def syncs(self, link: str) -> Sequence[ClockSync]: ...
 
 
+def _named(c: CertifiedClock) -> str:
+    x = c.certificate
+    if type(x) is not Certificate:
+        return f"a clock opening of a {type(x).__name__}"
+    return f"{x.link} window {x.window}'s {x.direction.value} clock (key {x.key_id.hex()[:16]}…)"
+
+
 @dataclass(frozen=True)
 class SignedClocks:
-    """The verifier of record's clock source (`ClockSource`): the syncs the network certifier signed, one clock
-    certificate an egress window (`certificate.ClockCertificate`, `certificate.Issuer.clock`), each held to the
-    verifier's own certifier `key` and `session`. `syncs(link)` is window 0's on, each the sync of the certificates that
-    name `link`, egress and the window and verify (`ClockCertificate.verify`), up to the first window without exactly
-    one such sync: a window unsigned, signed under another key, session, link, window or direction, or whose sync
-    isn't the one its certificate signs, has none, which refuses it and every window after. Whoever delivers the
-    certificates, the prover included, can't forge one."""
+    """The verifier of record's clock source (`ClockSource`): the syncs the network certifier signed, one salted clock
+    certificate an egress window (`certificate.CertifiedClock`, `certificate.Issuer.salted_clock`), each sync read
+    through its opening (the sync and `salt_c`, witness) against the salted digest its certificate signs, under the
+    verifier's own certifier `key` and `session`. The openings are the verifier's own read of the certifier's output
+    (`service.LinkWindows.certified_clocks`), never a public answer, which carries the certificates alone.
+    `syncs(link)` is window 0's on, each the sync of the openings that name `link` and the window and hold
+    (`CertifiedClock.refusal`), up to the first window without exactly one such sync. `refused` says why each
+    opening it took no sync from was refused: not a salted clock's opening (a record's `CertifiedRecord` among them),
+    not an egress certificate, another key's, a sync and salt that don't open the digest signed (an altered
+    digest or sync), a signature that doesn't verify (forged, or another session's, or relabelled to another link or
+    window), a salt another link-window's opening has too, or a window with two signed syncs. Whoever delivers the
+    openings, the prover included, can't forge one."""
 
     key: PublicKey
     session: bytes
-    certificates: Sequence[ClockCertificate]
+    openings: Sequence[CertifiedClock]
+    refused: tuple[str, ...] = field(default=(), init=False)
 
     def __post_init__(self) -> None:
+        held: list[CertifiedClock] = []
+        refused: list[str] = []
+        for c in self.openings:
+            if type(c) is not CertifiedClock:
+                refused.append(f"a {type(c).__name__}: not a salted clock certificate's opening "
+                               "(certificate.CertifiedClock), so it gives no sync")
+            elif (why := c.refusal(self.key, self.session)) is not None:
+                refused.append(f"{_named(c)}: {why}")
+            else:
+                held.append(c)
+        salts: dict[bytes, list[CertifiedClock]] = {}
+        for c in held:
+            salts.setdefault(c.salt, []).append(c)
         signed: dict[str, dict[int, set[ClockSync]]] = {}
-        for c in self.certificates:
-            if type(c) is ClockCertificate and c.verify(self.key, self.session):
+        for c in held:
+            if (other := next((o for o in salts[c.salt] if o != c), None)) is not None:
+                refused.append(f"{_named(c)}: its salt is also {other.link} window {other.window}'s, under which two "
+                               "windows of one sync sign one digest")
+            else:
                 signed.setdefault(c.link, {}).setdefault(c.window, set()).add(c.sync)
+        refused += [f"{link} window {w}: {len(got)} signed syncs, so it has none"
+                    for link, windows in signed.items() for w, got in sorted(windows.items()) if len(got) > 1]
         object.__setattr__(self, "_signed", signed)
+        object.__setattr__(self, "refused", tuple(refused))
 
     def syncs(self, link: str) -> tuple[ClockSync, ...]:
         windows, out = self._signed.get(link, {}), []

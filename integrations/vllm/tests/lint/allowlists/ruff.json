@@ -344,7 +344,6 @@
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "RUF100", "symbol": "draw_accounting", "detail": "Unused `noqa` directive (unused: `BLE001`)"},
     {"file": "verity_vllm/check/root_policy.py", "kind": "F401", "symbol": "evaluate", "detail": "`verity_vllm.check.fold_compare._extent` imported but unused"},
     {"file": "verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py", "kind": "F841", "symbol": "cmd_bench", "detail": "Local variable `e` is assigned to but never used"},
-    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "BLE001", "symbol": "plan_key_of", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "RUF100", "symbol": "NativeCollectCommitter._commit_step", "detail": "Unused `noqa` directive (unused: `BLE001`)"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "F401", "symbol": "NativeHostCommitter._commit_step_gpu", "detail": "`verity_vllm.commit.hidden_stream` imported but unused"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "F401", "symbol": "NativeHostCommitter._gpu_layout", "detail": "`verity_vllm.commit.hidden_stream` imported but unused"},
@@ -448,7 +447,7 @@
     {"file": "verity_vllm/pipeline/build.py", "kind": "F401", "symbol": "_construct", "detail": "`verity_vllm.program.frontend.target_profile.ArtifactIdentity` imported but unused"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "F401", "symbol": "_sharded_param_summary", "detail": "`torch` imported but unused"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "BLE001", "symbol": "main", "detail": "Do not catch blind exception: `Exception`"},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 15},
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 16},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "F541", "symbol": "main", "detail": "f-string without any placeholders"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "F841", "symbol": "binding_record", "detail": "Local variable `max_new` is assigned to but never used"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "RUF100", "symbol": "<module>", "detail": "Unused `noqa` directive (unused: `F401`)"},
@@ -591,6 +590,10 @@
     {"file": "verity_vllm/query/query_artifact.py", "kind": "UP017", "symbol": "utc_now", "detail": "Use `datetime.UTC` alias"},
     {"file": "verity_vllm/query/required.py", "kind": "F401", "symbol": "<module>", "detail": "`typing.Iterable` imported but unused"},
     {"file": "verity_vllm/query/required.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.query.units.required_values` imported but unused"},
-    {"file": "verity_vllm/query/required.py", "kind": "F541", "symbol": "query_header", "detail": "f-string without any placeholders"}
+    {"file": "verity_vllm/query/required.py", "kind": "F541", "symbol": "query_header", "detail": "f-string without any placeholders"},
+    {"file": "tests/check/test_match_unreadable_sources.py", "kind": "RUF100", "symbol": "test_g1_fails_by_name_on_an_unreadable_versions_json", "detail": "Unused `noqa` directive (non-enabled: `F811`)"},
+    {"file": "tests/check/test_value_check_groups.py", "kind": "RUF100", "symbol": "<module>", "detail": "Unused `noqa` directive (unused: `E402`)", "count": 2},
+    {"file": "tests/pipeline/test_serve_openai.py", "kind": "S310", "symbol": "test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json", "detail": "Audit URL open for permitted schemes. Allowing use of `file:` or custom schemes is often unexpected."},
+    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "RUF100", "symbol": "_MemoProjection.__init__", "detail": "Unused `noqa` directive (non-enabled: `D107`)"}
   ]
 }
