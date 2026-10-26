@@ -6,11 +6,15 @@ delegation to the vLLM coordinator, 25 Oct 09:40Z).  Dedicated cleanup lanes pay
 The changes are those on TOP's first-parent chain above its merge base with BASE: each `Queue: #N` merge (the queue's merge of
 one PR, `research.queue._message`) against its first parent, and the other commits there, together, against the commit below
 them (a branch's own commits against its merge base, or against the merge of its merge bases when it has several).  A
-ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` (``**/allowlists/*.json`` or ``**/*allowlist*.json``
-holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json`` and ``size.json`` are
-both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own count and is not
-compared.  A change is judged when it touches a ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` (the lints'
-code) or the ruff lint's: ``integrations/vllm/ruff.toml`` and the ruff the root ``dev`` group pins.  It passes when:
+ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` or ``tests/lint`` (``**/allowlists/*.json`` or
+``**/*allowlist*.json`` holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json``
+and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own
+count and is not compared.  ``tests/lint`` is the repository's: ``test_repo_ruff.py`` holds every tracked file outside the
+integration's ruff lint (and ``archive/``) to ``allowlists/repo_ruff.json`` under the root ``ruff.toml``, which
+``integrations/vllm/ruff.toml`` extends; its slugs stay apart from the integration's.  A change is judged when it touches a
+ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
+``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints') and the ruff the root ``dev`` group pins.  It passes
+when:
 
 * in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per package, P07's)
   holds more in total after it than before.  A key may rise, or a new one appear, when the same kind's other keys fall by
@@ -18,9 +22,10 @@ code) or the ruff lint's: ``integrations/vllm/ruff.toml`` and the ruff the root 
 * among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
   more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``); and
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
-  In a temporary worktree of the change's top, ``tests/lint/`` and ``ruff.toml`` are replaced by the base's, each allowlist
-  there holding the top's entries for its slug (none for a deleted one), and the ``test_no_new*`` tests of each lint whose
-  code or allowlist changed (every lint's, if the shared code did) run without pytest, the ruff lint with the base's pin.
+  In a temporary worktree of the change's top, each lint directory to run and both ``ruff.toml`` files are replaced by the
+  base's, each allowlist there holding the top's entries for its slug (none for a deleted one), and the ``test_no_new*`` tests
+  of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
+  lints with the base's pin.
   So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
   fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
   finds.
@@ -66,6 +71,14 @@ LINT = f"{TESTS}lint"
 RUFF_LINT = "ruff"
 RUFF_CONFIG = f"{INTEGRATION}/ruff.toml"
 PYPROJECT = "pyproject.toml"
+#: the repository's lints (``tests/lint``): its ruff lint (``test_repo_ruff.py``, by its slug) and the root config it reads
+REPO_LINT = "tests/lint"
+REPO_RUFF_LINT = "repo_ruff"
+REPO_RUFF_CONFIG = "ruff.toml"
+#: the lint directories, each run as its base has it
+LINTS = (LINT, REPO_LINT)
+#: each ruff lint's directory and the configs it reads: the integration's extends the root's
+RUFF_LINTS = {RUFF_LINT: (LINT, (RUFF_CONFIG, REPO_RUFF_CONFIG)), REPO_RUFF_LINT: (REPO_LINT, (REPO_RUFF_CONFIG,))}
 MOVE_CHECK = "tools/verity/check/move_check.py"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
@@ -161,11 +174,12 @@ def slug(path: str) -> str:
 
 def is_ratchet(path: str) -> bool:
     p = PurePosixPath(path)
-    return path.startswith(TESTS) and p.suffix == ".json" and (p.parent.name == "allowlists" or "allowlist" in p.name)
+    return (path.startswith((TESTS, f"{REPO_LINT}/")) and p.suffix == ".json"
+            and (p.parent.name == "allowlists" or "allowlist" in p.name))
 
 
 def is_lint_code(path: str) -> bool:
-    return path.startswith(f"{LINT}/") and path.endswith(".py")
+    return path.startswith(tuple(f"{lint}/" for lint in LINTS)) and path.endswith(".py")
 
 
 def key(entry: object) -> str:
@@ -182,7 +196,8 @@ def ratchets(rev: str) -> tuple[dict[str, list], dict[str, str], list[str]]:
     entries: dict[str, list] = {}
     paths: dict[str, str] = {}
     bad: list[str] = []
-    for path in sorted(p for p in git("ls-tree", "-r", "-z", "--name-only", rev, "--", TESTS).split("\0") if is_ratchet(p)):
+    listed = git("ls-tree", "-r", "-z", "--name-only", rev, "--", TESTS, f"{REPO_LINT}/").split("\0")
+    for path in sorted(p for p in listed if is_ratchet(p)):
         try:
             doc = json.loads(git("show", f"{rev}:{path}"))
         except ValueError:
@@ -329,9 +344,9 @@ def ruff_pin(rev: str) -> str | None:
 
 
 def python_for(pin: str | None, slugs: list[str] | None) -> list[str]:
-    """The isolated Python the base's lints run on: this one, unless the ruff lint is to run and this Python's ruff isn't
+    """The isolated Python the base's lints run on: this one, unless a ruff lint is to run and this Python's ruff isn't
     the base's ``pin``, when ``uv run --with`` makes one that has it."""
-    if pin is None or (slugs is not None and RUFF_LINT not in slugs):
+    if pin is None or (slugs is not None and not RUFF_LINTS.keys() & set(slugs)):
         return [sys.executable, "-I"]
     r = subprocess.run([sys.executable, "-m", "ruff", "--version"], capture_output=True, text=True)
     if r.returncode == 0 and pin.startswith("ruff==") and r.stdout.split() == ["ruff", pin.removeprefix("ruff==").strip()]:
@@ -386,39 +401,49 @@ def noqa_change(lo: str, hi: str, diff: list[str]) -> tuple[list[str], int, int]
     return named, sum(added.values()), sum(removed.values())
 
 
-def lint_selection(touched: list[str]) -> list[str] | None:
-    """The slugs of the lints to run, or None for all of them (the shared lint code changed)."""
-    code = [f for f in touched if is_lint_code(f)]
+def lint_selection(touched: list[str], lint: str = LINT) -> list[str] | None:
+    """The slugs of the lints in the directory ``lint`` to run, or None for all of them (its shared lint code changed)."""
+    code = [f for f in touched if is_lint_code(f) and f.startswith(f"{lint}/")]
     if any(not PurePosixPath(f).name.startswith("test_") for f in code):
         return None
-    return sorted({slug(f) for f in code} | {slug(f) for f in touched if f.startswith(f"{LINT}/") and is_ratchet(f)}
-                  | ({RUFF_LINT} if {RUFF_CONFIG, PYPROJECT} & set(touched) else set()))
+    ruff = {s for s, (where, configs) in RUFF_LINTS.items() if where == lint and {*configs, PYPROJECT} & set(touched)}
+    return sorted({slug(f) for f in code} | {slug(f) for f in touched if f.startswith(f"{lint}/") and is_ratchet(f)} | ruff)
 
 
-def base_lints(c: Change, slugs: list[str] | None, after: dict[str, list]) -> tuple[list[str], list[dict]]:
-    """(the lints run, their failures): the base's lint code run on the change's tree against its allowlists."""
-    if not git("ls-tree", "--name-only", c.lo, "--", LINT).strip():
+def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[str, list]) -> tuple[list[str], list[dict]]:
+    """(the lints run, their failures): each lint directory's base code, its lints ``selection`` names (None: all of them),
+    run on the change's tree against its allowlists, with the base's ruff configs."""
+    selection = {lint: s for lint, s in selection.items() if git("ls-tree", "--name-only", c.lo, "--", lint).strip()}
+    if not selection:
         return [], []
-    python = python_for(ruff_pin(c.lo), slugs)
+    python = python_for(ruff_pin(c.lo), None if None in selection.values() else [s for v in selection.values() for s in v])
+    runs = []
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-") as d:
         tree = Path(d) / "tree"
         git("worktree", "add", "-q", "--detach", str(tree), c.hi)
         try:
-            shutil.rmtree(tree / LINT, ignore_errors=True)
-            git("-C", str(tree), "checkout", "-q", c.lo, "--", LINT)
-            if git("ls-tree", "--name-only", c.lo, "--", RUFF_CONFIG).strip():
-                git("-C", str(tree), "checkout", "-q", c.lo, "--", RUFF_CONFIG)
-            for p in (tree / LINT / "allowlists").glob("*.json"):
-                p.write_text(json.dumps({"entries": after.get(slug(p.name), [])}))
-            r = subprocess.run([*python, "-c", RUNNER, str(tree / LINT), json.dumps(slugs)], cwd=d,
-                               capture_output=True, text=True)
+            for lint in selection:
+                shutil.rmtree(tree / lint, ignore_errors=True)
+                git("-C", str(tree), "checkout", "-q", c.lo, "--", lint)
+            for config in (RUFF_CONFIG, REPO_RUFF_CONFIG):
+                if git("ls-tree", "--name-only", c.lo, "--", config).strip():
+                    git("-C", str(tree), "checkout", "-q", c.lo, "--", config)
+            for lint, slugs in selection.items():
+                for p in (tree / lint / "allowlists").glob("*.json"):
+                    p.write_text(json.dumps({"entries": after.get(slug(p.name), [])}))
+                runs.append(subprocess.run([*python, "-c", RUNNER, str(tree / lint), json.dumps(slugs)], cwd=d,
+                                           capture_output=True, text=True))
         finally:
             git("worktree", "remove", "--force", str(tree))
-    try:
-        doc = json.loads(r.stdout)
-        return doc["ran"], doc["failures"]
-    except (ValueError, KeyError, TypeError):
-        raise GitError(f"the base's lints at {c.lo[:12]} didn't run on {c.hi[:12]}: {(r.stderr or r.stdout).strip()[-300:]}")
+    ran, failures = [], []
+    for r in runs:
+        try:
+            doc = json.loads(r.stdout)
+            ran, failures = ran + doc["ran"], failures + doc["failures"]
+        except (ValueError, KeyError, TypeError):
+            raise GitError(f"the base's lints at {c.lo[:12]} didn't run on {c.hi[:12]}: "
+                           f"{(r.stderr or r.stdout).strip()[-300:]}")
+    return ran, failures
 
 
 def violations(failures: list[dict]) -> list[str]:
@@ -437,13 +462,13 @@ def violations(failures: list[dict]) -> list[str]:
 
 def judge(c: Change, base: str) -> None:
     diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
-    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f == RUFF_CONFIG
+    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f in (RUFF_CONFIG, REPO_RUFF_CONFIG)
                                                  or f == PYPROJECT and ruff_pin(c.lo) != ruff_pin(c.hi)))
     new_noqa, c.noqa_added, c.noqa_removed = noqa_change(c.lo, c.hi, diff)
     noqa = [f"{c.noqa_added} `# noqa` line(s) added, {c.noqa_removed} removed"] if c.noqa_added or c.noqa_removed else []
     if not c.touched and not noqa:
-        c.verdict, c.why = "untouched", (f"changes no ratchet, no lint code under {LINT}/, no {RUFF_CONFIG}, no ruff pin and "
-                                         f"no `# noqa`")
+        c.verdict, c.why = "untouched", (f"changes no ratchet, no lint code under {' or '.join(f'{x}/' for x in LINTS)}, no "
+                                         f"{RUFF_CONFIG} or {REPO_RUFF_CONFIG}, no ruff pin and no `# noqa` under {INTEGRATION}/")
         return
     grown, added, bad, found = [], [], [], []
     if c.touched:
@@ -454,9 +479,9 @@ def judge(c: Change, base: str) -> None:
         grown, added, c.pooled = growth(before, after, {**was_at, **now_at})
     noqa_grows = c.noqa_added > c.noqa_removed
     if c.touched and not (grown or bad or noqa_grows):
-        slugs = lint_selection(c.touched)
-        if slugs is None or slugs:
-            c.lints, failures = base_lints(c, slugs, after)
+        selection = {lint: s for lint in LINTS if (s := lint_selection(c.touched, lint)) is None or s}
+        if selection:
+            c.lints, failures = base_lints(c, selection, after)
             found = violations(failures)
     if not (grown or bad or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(

@@ -30,7 +30,7 @@ failure message carries its fix.
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which
- says which rules it selects and why, keyed like the rules' violations. The formatter stays off. A PR that fixes or adds a
+ extends the root `ruff.toml` (the rules every package selects, and why), keyed like the rules' violations. The formatter stays off. A PR that fixes or adds a
  ruff finding in `integrations/vllm` (a stale `noqa` deleted is one) edits `ruff.json` in the same PR.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
  the same change. An entry allowing more than is found fails as stale: delete it or lower its count. So an allowlist
@@ -43,8 +43,10 @@ package, P07's) is held by its total instead: a key may rise, or a new one appea
 at least as much, so a move from one package to another passes, but the kind's total may not grow (the vLLM coordinator,
 26 Oct). P10's count is a size, not a number of findings, so it is never pooled. A change to a lint's own code or thresholds is judged
 like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
-lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml` and the root `dev` group's
-ruff pin, so the gate reruns it with the base's config at the base's pin. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
+lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
+extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds
+the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
+tracked file outside this lint's and `archive/`). Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `tools/verity/check/drive.toml`'s `landing_gates` names
 it, so the merge queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).

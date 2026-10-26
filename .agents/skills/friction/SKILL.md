@@ -144,6 +144,9 @@ Landing:
 - (25 Oct 11:20Z, the vLLM coordinator under that delegation) A `# noqa` is an exception too: in `integrations/vllm`, no
   change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
   retirement. The ratchet gate counts them, with no allowlist.
+- (26 Oct, the vLLM coordinator, rolling out Daniel's 25 Oct ask for vLLM's practices repo-wide) One ruff rule set, the root
+  `ruff.toml`: the rest of the tree (all but the integration's lint and `archive/`) is held to the no-growth list
+  `tests/lint/allowlists/repo_ruff.json` by the same gate; its `noqa` lines aren't counted.
 
 Protocols and claims:
 

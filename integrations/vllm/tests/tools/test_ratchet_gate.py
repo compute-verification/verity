@@ -3,7 +3,9 @@ merge bases, when it has several), each queue merge on its own, no ratchet growi
 between its keys keeps; the other entries by number, per ratchet, or by an entry's count, P10's sizes among them), a new,
 moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
 loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
-ruff lint rerun with the base's config and pin (a loosened config, lint or pin fails), the `noqa` count (no change adds more
+ruff lint rerun with the base's config and pin (a loosened config, lint or pin fails), the repository's ruff lint beside it
+(`tests/lint`: its list held like the integration's, and a change to the root config both ruff lints read reruns both), the
+`noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
 (a revert, a pure move the base's move_check certifies), and its command line."""
 from __future__ import annotations
@@ -26,6 +28,8 @@ _spec.loader.exec_module(G)
 P01 = "integrations/vllm/tests/lint/allowlists/p01_core.json"
 P02 = "integrations/vllm/tests/lint/allowlists/p02_more.json"
 LINT = "integrations/vllm/tests/lint/test_p01_core.py"
+REPO_RUFF_LINT = "tests/lint/test_repo_ruff.py"
+REPO_RUFF_JSON = "tests/lint/allowlists/repo_ruff.json"
 #: a stand-in for move_check: certified when every change is a 100% rename
 MOVE_CHECK = """\
 import subprocess, sys
@@ -340,6 +344,16 @@ def test_what_is_a_ratchet_lint_code_and_a_slug():
     assert G.lint_selection([LINT, "integrations/vllm/tests/lint/_ratchet.py"]) is None
 
 
+def test_the_repositorys_lints_are_a_second_lint_directory():
+    assert G.is_ratchet(REPO_RUFF_JSON) and G.is_lint_code(REPO_RUFF_LINT)
+    assert not any(map(G.is_ratchet, ["tests/fixtures/x.json", "tests/allowlists/x.json"]))
+    assert not any(map(G.is_lint_code, ["tests/test_repository.py", "tests/lint/README.md"]))
+    assert G.lint_selection([REPO_RUFF_JSON, P02], G.REPO_LINT) == ["repo_ruff"] and G.lint_selection([REPO_RUFF_JSON]) == []
+    assert G.lint_selection(["tests/lint/_shared.py"], G.REPO_LINT) is None and G.lint_selection(["tests/lint/_shared.py"]) == []
+    assert (G.lint_selection([G.REPO_RUFF_CONFIG]), G.lint_selection([G.REPO_RUFF_CONFIG], G.REPO_LINT)) == (["ruff"], ["repo_ruff"])
+    assert (G.lint_selection([G.RUFF_CONFIG]), G.lint_selection([G.RUFF_CONFIG], G.REPO_LINT)) == (["ruff"], [])
+
+
 def test_a_revert_and_a_pure_move_are_exempt(linted):
     linted.commit('Revert "Queue: #9 retire B"', {"integrations/vllm/verity_vllm/c.py": "C = 'BAD'\n",
                                                   P01: _allowlist(*(_entry(f"verity_vllm/{f}.py", f) for f in "abc"))})
@@ -492,6 +506,51 @@ def test_the_ruff_lint_runs_on_this_python_when_its_ruff_is_the_pin_else_on_one_
     monkeypatch.setattr(G.shutil, "which", lambda name: None)
     with pytest.raises(G.GitError, match="no `uv` to provide it"):
         G.python_for("ruff==0.0.1", ["ruff"])
+    with pytest.raises(G.GitError, match="no `uv` to provide it"):
+        G.python_for("ruff==0.0.1", ["core", "repo_ruff"])
+
+
+TOOLS_F401 = {"file": "tools/a.py", "kind": "F401", "symbol": "<module>", "detail": "`os` imported but unused"}
+BOTH_FOUND = ["ruff: verity_vllm/a.py:1 [F401] <module>: `os` imported but unused",
+              "repo_ruff: tools/a.py:1 [F401] <module>: `os` imported but unused"]
+
+
+@pytest.fixture
+def both_ruffed(ruffed) -> Repo:
+    """``ruffed`` with the repository's real ruff lint too, the root config selecting pyflakes and the integration's extending
+    it: tools/a.py's unused import is the root lint's one finding, which repo_ruff.json allows."""
+    ruffed.git("checkout", "-q", "main")
+    ruffed.commit("repo ruff", {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text(),
+                                G.REPO_RUFF_CONFIG: RUFF_TOML, G.RUFF_CONFIG: 'extend = "../../ruff.toml"\n',
+                                REPO_RUFF_JSON: _allowlist(TOOLS_F401), "tools/a.py": "import os\nA = 1\n"})
+    ruffed.git("checkout", "-q", "-B", "pr")
+    return ruffed
+
+
+def test_the_repositorys_ruff_list_may_not_grow(both_ruffed):
+    b401 = {**TOOLS_F401, "file": "tools/b.py", "detail": "`sys` imported but unused"}
+    both_ruffed.commit("a new finding, allowed", {"tools/b.py": "import sys\n", REPO_RUFF_JSON: _allowlist(TOOLS_F401, b401)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["touched"]) == ("failed", 4, 5, [REPO_RUFF_JSON]), c["why"]
+    assert c["why"].startswith(f"grows {REPO_RUFF_JSON} 1 -> 2 entries") and c["fix"] == [f"{REPO_RUFF_JSON}: new {G.key(b401)}"]
+
+
+@pytest.mark.parametrize("loosen", [
+    {G.REPO_RUFF_CONFIG: RUFF_TOML + 'ignore = ["F401"]\n'},
+    {G.REPO_RUFF_CONFIG: 'extend-exclude = ["tools", "verity_vllm"]\n' + RUFF_TOML},
+    {G.REPO_RUFF_CONFIG: None},
+    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"archive/")', '"archive/", "tools/")')},
+], ids=["ignore", "exclude", "deleted", "lint-code"])
+def test_loosening_the_root_config_or_lint_fails_naming_what_both_base_ruff_lints_find(both_ruffed, loosen):
+    both_ruffed.commit("loosens ruff and drops both entries", {RUFF_JSON: _allowlist(), REPO_RUFF_JSON: _allowlist(), **loosen})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["fix"]) == ("failed", ["ruff", "repo_ruff"], BOTH_FOUND), c["why"]
+
+
+def test_a_root_config_change_reruns_both_ruff_lints_and_passes_when_they_find_nothing_new(both_ruffed):
+    both_ruffed.commit("a comment", {G.REPO_RUFF_CONFIG: "# the rules\n" + RUFF_TOML})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.REPO_RUFF_CONFIG], ["ruff", "repo_ruff"]), c["why"]
 
 
 A_PY = "integrations/vllm/verity_vllm/a.py"
