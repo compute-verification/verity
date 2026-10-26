@@ -12,8 +12,7 @@ Mon 26 Oct 19:00Z (noon PDT) is `briefs/sprint-mon-noon.md`: who builds what, wh
 
 1. **The accelerator model at θ.** (G1) capacity, (G2) rate on every resource including issue, and the instruction set's
    documented exact semantics, from which P1 and P2 follow; the one named wiring fact is `AccelProductForm` (each
-   tensor-core multiplier feeds one accumulator). θ is at most the data sheet's, cross-checked by microbenchmarks with
-   run ids.
+   tensor-core multiplier feeds one accumulator). θ is on the sound side: never below what the card can reach (data-sheet peaks at boost clock, or measured maxima), cross-checked by microbenchmarks with run ids. A cap below a documented peak needs a measurement (RT-MODEL M14).
 2. **Standard cryptography.** SHA-512 collision resistance, and C-Flock sound and zero-knowledge (its named claims).
    SHA-512 as a random oracle only where a result names it and Daniel confirms that use (R-ACCEL-3).
 3. **Live coins and the auditor's devices.** Uniform coins drawn by the auditor's challenger after the commitments they

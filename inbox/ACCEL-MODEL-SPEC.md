@@ -203,3 +203,10 @@ L30: the over-approximated float units are two's-complement integer ops in the m
 - MODEL-SPEC-3: price IMAD.WIDE at the card's two IMAD lanes (U13; cite the measurement), and take CALIB's joint ALU + IMAD facet for sm_90 from HASH-23 when it lands. Both bring the model's SHA-512 cost closer to the card's, staying on the generous side.
 - **U9:** hosts count as devices of the period only if C includes their AMX and SHA-512 rates (CALIB: AMX 3.15% / 9.51% of a GPU's INT8; CPU 4.90% / 5.07% of its hashing). Count them in C. The inventory premise is on the decided-by-lane page https://app.notion.com/p/405399515d9e816f8b1ac54c9fd03bd4 (A4).
 
+
+## 06:23Z (real UTC), coordinator: RT-MODEL's M14 (note:20261026T0310Z-draft-accel-rt-model, final; CMP-109 3a8f90b2)
+(MODEL-SPEC-3) **M14:** the H200's long-window tensor cap at 1830 MHz (M1's fix, 280b6e9d1a) has no measurement showing the card can't exceed it, and the sheet quotes FP64 tensor work at 1980 MHz on the same cores. A cap below what the card can do makes `CardWithinAccel` false.
+**Decision: θ never caps a rate below what the card might reach. Set `tensorLong` at the 1980 MHz boost clock** (equal to `tensor`, so effectively no cap) until a measurement justifies lower: the H200 check on CMP-115, locked at 1980 MHz with zero, constant and uniform operands, after M3. If no operand class sustains above 1830 MHz, reinstate the cap with that run's id.
+This is ε-neutral: honest and adversary are both priced in the model. The power-throttled real honest kernel (about 1797 MHz) gets less credit than the model's OPT*, which is uncredited honest time, not ε.
+Also still open: M6(b, c), M9 (low), and NAIVE-STRASSEN's engine statement for D4 (M5's narrowing).
+

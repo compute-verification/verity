@@ -206,3 +206,10 @@ The SYM instance (Lemma S) is no longer needed. Keep the statement general, but 
 - **P14:** reused weight-side coins mean SAK must allow precomputation on the reused operand. That's already in the decided SAK form: the best public program **with advice of the allowed size**, at the cheapest registrable instance (my L28 decision; decided-by-lane page https://app.notion.com/p/405399515d9e816f8b1ac54c9fd03bd4, item 4). D5 prices advice. Say so in `SAKMatmul`'s docstring.
 - **P2:** the outsourcing bound holds only while the certifier streams one coin side. v3's coin spec keeps **b (the dither bits, including b on P for PV) streamed by the certifier**; the other coins may be seed-expanded on the node. `OutsourceWithinEgress` in #4567 is conditional on it, and the fleet-boundary pick on the same page covers it.
 
+
+## 06:23Z (real UTC), coordinator: RT-MODEL's M14 (note:20261026T0310Z-draft-accel-rt-model, final; CMP-109 3a8f90b2)
+(WORKSOUND-INST) **M14:** the H200's long-window tensor cap at 1830 MHz (M1's fix, 280b6e9d1a) has no measurement showing the card can't exceed it, and the sheet quotes FP64 tensor work at 1980 MHz on the same cores. A cap below what the card can do makes `CardWithinAccel` false.
+**Decision: θ never caps a rate below what the card might reach. Set `tensorLong` at the 1980 MHz boost clock** (equal to `tensor`, so effectively no cap) until a measurement justifies lower: the H200 check on CMP-115, locked at 1980 MHz with zero, constant and uniform operands, after M3. If no operand class sustains above 1830 MHz, reinstate the cap with that run's id.
+This is ε-neutral: honest and adversary are both priced in the model. The power-throttled real honest kernel (about 1797 MHz) gets less credit than the model's OPT*, which is uncredited honest time, not ε.
+Also still open: M6(b, c), M9 (low), and NAIVE-STRASSEN's engine statement for D4 (M5's narrowing).
+

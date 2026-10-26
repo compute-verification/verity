@@ -197,3 +197,10 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 
 ## 06:18Z (real UTC), coordinator: RT-UNITS U13. The model hashes 1.54× (H200) / 1.55× (RTX PRO 6000) faster than the card's best measured kernel (note:20261026T0320Z-draft-accel-rt-units, final)
 U13: the card takes two IMAD lanes for IMAD.WIDE; confirm it in θ with a run id. The joint ALU + IMAD facet on sm_90 comes from HASH-23 (r20261026-045623-03b9: 58.1 measured against 41.2 predicted at full overlap).
+
+## 06:23Z (real UTC), coordinator: RT-MODEL's M14 (note:20261026T0310Z-draft-accel-rt-model, final; CMP-109 3a8f90b2)
+**M14:** the H200's long-window tensor cap at 1830 MHz (M1's fix, 280b6e9d1a) has no measurement showing the card can't exceed it, and the sheet quotes FP64 tensor work at 1980 MHz on the same cores. A cap below what the card can do makes `CardWithinAccel` false.
+**Decision: θ never caps a rate below what the card might reach. Set `tensorLong` at the 1980 MHz boost clock** (equal to `tensor`, so effectively no cap) until a measurement justifies lower: the H200 check on CMP-115, locked at 1980 MHz with zero, constant and uniform operands, after M3. If no operand class sustains above 1830 MHz, reinstate the cap with that run's id.
+This is ε-neutral: honest and adversary are both priced in the model. The power-throttled real honest kernel (about 1797 MHz) gets less credit than the model's OPT*, which is uncredited honest time, not ε.
+Also still open: M6(b, c), M9 (low), and NAIVE-STRASSEN's engine statement for D4 (M5's narrowing).
+
