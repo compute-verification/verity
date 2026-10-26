@@ -6,7 +6,9 @@
 #
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --cwd source --env GPU_LEASE_WHO=kernels-kcommit \
 #     -- bash benchmarks/torch_gpu/commit_slots/gpu.sh
-# STEPS (default "tests check bench"; a failing tests step ends the lease), CHECK_ARGS, BENCH_ARGS, LEASE_MIN (default 25), PY.
+# STEPS (default "tests check bench"; a failing tests step ends the lease), CHECK_ARGS, BENCH_ARGS, LEASE_MIN (default 25), PY,
+# LEASE_END (a UTC time, e.g. 2026-10-26T02:40Z, on a card lent until then: a lease that starts too late to end by it runs
+# nothing).
 set -uo pipefail
 O=${OUT:?}
 ROOT=$PWD D=benchmarks/torch_gpu/commit_slots
@@ -23,8 +25,13 @@ ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -
 $PY -c "import slots_gpu as G; G.device_lib('$ARCH'); G.host_lib(); print(G.BUILD_DIR)" > "$O/build.txt" 2>&1
 echo "build rc $?" > "$O/rc.txt"
 export O PY D ROOT STEPS=${STEPS:-tests check bench} CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=${BENCH_ARGS:-}
+export LEASE_MIN=${LEASE_MIN:-25} LEASE_END=${LEASE_END:-}
 # shellcheck disable=SC2016
-gpu-lease 1 --wait --max-min "${LEASE_MIN:-25}" -- bash -c '
+gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
+  if [ -n "$LEASE_END" ] && [ $(( $(date -u +%s) + 60 * LEASE_MIN )) -gt "$(date -u -d "$LEASE_END" +%s)" ]; then
+    echo "the lease started at $(date -u +%H:%MZ), too late to end by LEASE_END=$LEASE_END: nothing runs" >> "$O/rc.txt"
+    exit 0
+  fi
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv \
     -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
   for s in $STEPS; do
