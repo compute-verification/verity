@@ -240,7 +240,7 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     its SERVED tokens (draw k serves slot k + 1), its cap C and the scheduler profile A (0 = sync, 1 = async: one lag slot after an EOS):
     r_1 = 1; while no served token is an EOS, every slot up to C executes; the first EOS at slot t_eos (before C) is followed by exactly
     min(A, C - t_eos) executed lag slot(s) and nothing after -- the same rule as pad's `verity_vllm.program.lifting.continuation.recurrence` /
-    `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and moe's executed-prefix rule (`check.executed_prefix`).  Returns
+    `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and moe's executed-prefix rule (`commit.executed_prefix`).  Returns
     None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer draws than the cap, or an EOS before the cap
     with the profile unattested.  When pad's module is importable the two computations are compared and a disagreement is named."""
     from verity_vllm.program.lifting import continuation as CT  # pad's Continuation_v1 recurrence (lane/r17-pad 61fe06dff): THE mechanism, not a twin of it

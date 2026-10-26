@@ -1544,7 +1544,7 @@ def test_served_past_the_first_eos_fails_g6_by_name_f_r17_14(memory, tmp_path):
     assert r1["answer_events"] == 1 and r1["lag_rows"] == 2 and r1["eos_step"] == 0 and r1["eos_verified"] is False and r1["eos_passed_at_event"] == 0
     assert "eos_lag_rows_accepted" not in r1
     # the Commit's executed_prefix_of_record on the same served list: the same refusal, by name, from the same rule
-    from verity_vllm.check import executed_prefix as EP
+    from verity_vllm.commit import executed_prefix as EP
     e = EP.executed_prefix_of_record(["r1"], {"r1": [EOS, 5, EOS]}, caps={"r1": 5}, eos_of_record=[EOS], lag=1)
     assert not e["ok"] and "served past an EOS at index 0" in e["problems"][0] and "F-r17-14" in e["problems"][0]
 

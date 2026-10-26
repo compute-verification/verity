@@ -547,8 +547,8 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
-    from verity_vllm.commit import binding as B, partition as PT
-    from verity_vllm.check import commit_tokens as CT, executed_prefix as EP
+    from verity_vllm.commit import binding as B, executed_prefix as EP, partition as PT
+    from verity_vllm.check import commit_tokens as CT
 
     # [R15 manbind / COORD 5] the map's key `program_digest` is the Program of record = the required manifest's (the Build's digest; at B>=2
     # gprog's workload digest or the labelled components fold).  The committer's own digest seeds the step roots and is recorded beside
@@ -1956,7 +1956,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         _c = {f"r{i}": int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for i, q in enumerate(reqs)}
                         # [R17-1 / F-moe-r17-03] the SAME executed prefix of record binding_record placed the population over (served tokens of
                         # this run + the declared stop rule / LAG): the layouts-only requirement and its per-step composition sizes follow it
-                        from verity_vllm.check import executed_prefix as _EP
+                        from verity_vllm.commit import executed_prefix as _EP
                         _epr_cov = _EP.executed_prefix_of_record(sorted(_c, key=lambda k: int(k[1:])), {_rid_of(_o, str(k)): [int(t) for t in v] for k, v in r["tokens"].items()},
                                                                  caps=_c, eos_of_record=stop_of_record.get("eos"), lag=stop_of_record.get("lag"))
                         _n_exec = {k: int(_epr_cov["requests"][k]["executed_prefix_len"]) for k in _c}
