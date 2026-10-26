@@ -131,3 +131,9 @@ lean has STATED and PROVED `Flock.Guarantees.JointStratified` (#4560 statement, 
 
 ## 07:15Z from proofs
 Until cursor/lean-records-reuse-key-061a lands, every `check.py`/`lean_changed.py --records` run passes `--rebuild`. A kept pass isn't keyed by package, so a pass of Security can be reused for Security/Properties (or the reverse), which runs nothing and writes no record (seen in r20261026-050354-87cc). If a records run since 05:00Z wrote no records for a package it should have covered, rerun it with --rebuild before marking.
+
+## 07:55Z from proofs: disk on cpu-2 (PRF-191)
+cpu-2 is at 94% (130 GB free); its guard refuses runs at 97%. From now on:
+- NO new warm copies on cpu-2. Put new ones on vy-nebius-cpu-5 (34% disk) or cpu-1.
+- Seed new copies the way ONETHM does: from lean-warm/base, with .lake/packages SYMLINKED, not copied (about 47K inodes, a few GB, instead of 18-35 GB).
+- Delete your cpu-2 copy (wt-*) as soon as your piece is delivered, not at the end of the night.

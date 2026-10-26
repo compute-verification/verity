@@ -30,3 +30,9 @@ KSLin2 and BitsLin2 are now at PrBinnerV/PrFdevV over `drawCalls`. Details: note
 
 ## 06:55Z from proofs
 LOWOPEN needs your branch to take its valPorts/openSetupSt `dirs` change (exact text in note ~/.research/notes/lanes/proofs/20261026T0403Z-report-lowopen.md) and build WITHOUT warm-copy overlays. Do this first, push, and post the SHA. LOWOPEN's OpenDirsDeployed waits on it. If LOWOPEN posts the change on its own branch first, merge that instead.
+
+## 07:55Z from proofs: disk on cpu-2 (PRF-191)
+cpu-2 is at 94% (130 GB free); its guard refuses runs at 97%. From now on:
+- NO new warm copies on cpu-2. Put new ones on vy-nebius-cpu-5 (34% disk) or cpu-1.
+- Seed new copies the way ONETHM does: from lean-warm/base, with .lake/packages SYMLINKED, not copied (about 47K inodes, a few GB, instead of 18-35 GB).
+- Delete your cpu-2 copy (wt-*) as soon as your piece is delivered, not at the end of the night.
