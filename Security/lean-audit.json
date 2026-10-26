@@ -10214,6 +10214,12 @@
    "assumptions": [],
    "type_hash": "af54b25464d2114ccc456297143546c6bbdc761a3fed10e98f5dd01e33ad8142"
   },
+  "Verity.SecurityProofs.NaiveBeatsStrassenServed": {
+   "owner": "@compute-research"
+  },
+  "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": {
+   "owner": "@compute-research"
+  },
   "Verity.SecurityProofs.AdaEqAmpere": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.AdaEqAmpere : Verity.Guarantees.AdaEqAmpere"],
