@@ -11,8 +11,9 @@ import Mathlib.Tactic.SplitIfs
   `hold` and the device's fill are the prover's fill, `StreamedReads`'s `answer` its answers and `keep` its keep, so a
   run the challenger accepts with `keep` returning `z` is one the prover wins. `SurvivorBound`'s `S_φ` is at least
   `⌈n · 512/19⌉ + E + unfilled` (`unfilled = chip + (mem − fill)`), the family's `⌈M/19⌉ + E'`.
-* **The ideal game from the family** (`winIdeal_le_of_family`): `StreamedWipeMeetsFamily` at a key that is the whole
-  label table, whose labels are a bijection of the key, so its real game is the ideal one and its PRF's advantage 0.
+* **The ideal game from the family** (`winIdeal_le_of_family`): `StreamedWipeMeetsFamily`, proved
+  (`PousStreamedWipe.streamed_wipe_meets_family`), at a key that is the whole label table, whose labels are a bijection
+  of the key, so its real game is the ideal one and its PRF's advantage 0.
 * **What `check` publishes** (`check_accept`, `certify_certified`): an accepted `check` publishes `certify` of the
   commitment's parameters, and a certified one has `k = 2152`, at least `2^19` labels, `memory_bits = labels · 512`,
   `eps = 1/2^128` and `foreign_bits = ⌈M/19⌉ + egress_mib · 2^23`.
@@ -32,9 +33,10 @@ theorem value_draw {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) [Decidab
   refine Finset.sum_congr rfl fun x _ => ?_
   by_cases hx : p x <;> simp [hx]
 
-/-- **The ideal game from the family.** `StreamedWipeMeetsFamily` at a key that is the whole label table: the labels
-are a bijection of the key, so the real game is the ideal one and the PRF's advantage is 0. -/
-theorem winIdeal_le_of_family (hfam : Pous.Guarantees.StreamedWipeMeetsFamily) {n q E : ℕ} (hn : 2 ^ 19 ≤ n)
+/-- **The ideal game from the family.** `StreamedWipeMeetsFamily` (`PousStreamedWipe.streamed_wipe_meets_family`) at a
+key that is the whole label table: the labels are a bijection of the key, so the real game is the ideal one and the
+PRF's advantage is 0. -/
+theorem winIdeal_le_of_family {n q E : ℕ} (hn : 2 ^ 19 ≤ n)
     (P : Pous.StreamedWipe.Prover n 2152 512 q (n * 512) E) (hq : (n * 512 + 18) / 19 + E ≤ q) :
     Pous.StreamedWipe.winIdeal P ≤ (2⁻¹ : ℝ≥0∞) ^ 128 := by
   classical
@@ -46,7 +48,7 @@ theorem winIdeal_le_of_family (hfam : Pous.Guarantees.StreamedWipeMeetsFamily) {
     congr 2
     · exact Finset.card_equiv ((Equiv.refl _).prodCongr e) fun x => by simp; exact Iff.rfl
     · simp only [Fintype.card_prod, hc]
-  have h := hfam n hn q E (n * 512) e P hq
+  have h := PousStreamedWipe.streamed_wipe_meets_family n hn q E (n * 512) e P hq
   rwa [Pous.StreamedWipe.prfAdvantage, ← Pous.StreamedWipe.winReal, ← Pous.StreamedWipe.winIdeal, hreal,
     tsub_self, add_zero] at h
 
@@ -62,12 +64,12 @@ theorem card_state {ι : Type} (d : Device ι) : Fintype.card d.State = 2 ^ d.ch
   simp
 
 /-- **The streamed wipe's survivor bound on the device.** A wipe of `n ≥ 2^19` labels with 2152 spot reads, a fill of
-at most `n · 512` bits and its reads streamed meets the survivor bound at `⌈n · 512/19⌉ + E` bits and `2^-128`, given
-the streamed wipe's family bound (`StreamedWipeMeetsFamily`). The device's state and the egress are a prover of the
-streamed game whose inside is the `n · 512` bits the fill covers and whose egress is `E` plus the on-chip state plus
-the store the fill leaves out. -/
-theorem survivorBound_of_reads (hfam : Pous.Guarantees.StreamedWipeMeetsFamily) {ι : Type} {d : Device ι}
-    {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {n : ℕ} [NeZero n] (hn : 2 ^ 19 ≤ n)
+at most `n · 512` bits and its reads streamed meets the survivor bound at `⌈n · 512/19⌉ + E` bits and `2^-128`, from
+the streamed wipe's family bound (`PousStreamedWipe.streamed_wipe_meets_family`). The device's state and the egress are
+a prover of the streamed game whose inside is the `n · 512` bits the fill covers and whose egress is `E` plus the
+on-chip state plus the store the fill leaves out. -/
+theorem survivorBound_of_reads {ι : Type} {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {n : ℕ}
+    [NeZero n] (hn : 2 ^ 19 ≤ n)
     (w : Verity.Wipe d s b (Accounting.Wipe.Labels n) (Accounting.Wipe.Reads n 2152)) (hfill : w.fill ≤ n * 512)
     (hreads : Accounting.Assumptions.StreamedReads w) {foreignBits : ℕ}
     (hf : (n * 512 + 18) / 19 + w.egress ≤ foreignBits) :
@@ -86,7 +88,7 @@ theorem survivorBound_of_reads (hfam : Pous.Guarantees.StreamedWipeMeetsFamily) 
     { fill := fun z L => enc (w.filled (hold z) L)
       answer := fun σ ξ h i => ans (Function.invFun enc (σ, ξ)).1 (Function.invFun enc (σ, ξ)).2 h i
       keep := fun σ ξ c => keep (Function.invFun enc (σ, ξ)).1 (Function.invFun enc (σ, ξ)).2 c }
-  have hideal := winIdeal_le_of_family hfam hn P (by unfold Verity.Wipe.unfilled at hS; omega)
+  have hideal := winIdeal_le_of_family hn P (by unfold Verity.Wipe.unfilled at hS; omega)
   set A : (Fin S → Bool) × Accounting.Wipe.Labels n × Accounting.Wipe.Reads n 2152 → Prop := fun x =>
     w.accepts (hold x.1) x.2.1 x.2.2 ∧
       keep (w.filled (hold x.1) x.2.1).1 (w.filled (hold x.1) x.2.1).2 x.2.2 = x.1
@@ -168,6 +170,6 @@ theorem wipeSurvivorBound : WipeSurvivorBound := by
   subst hk
   intro w hfill hegress hreads
   simp only [WipeProtocol.UNIT_BITS] at hegress
-  exact survivorBound_of_reads PousStreamedWipe.streamed_wipe_meets_family hn w (by omega) hreads (by omega)
+  exact survivorBound_of_reads hn w (by omega) hreads (by omega)
 
 end MemoryChallenger.Properties.SecurityProofs
