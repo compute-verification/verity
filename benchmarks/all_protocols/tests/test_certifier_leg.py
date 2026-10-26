@@ -1,7 +1,8 @@
 """The communication leg (`legs/certifier.py`) on what it reads and what it writes, without a certifier session:
 
 * a served plan of the period's prompts, a link-window per group, puts period p's requests in link-window p, each with
-  its own prompt, and has no period past the session's; the stub serves those bodies and refuses any other;
+  its own prompt, and has no period past the session's; the toy's stub serves those bodies (``ignore_eos``, no
+  ``min_tokens``) and refuses any other, a body that still sends ``min_tokens`` among them;
 * N2's outcome of record is one-stage's answer on the link-window's one unit, and its refusal a reject;
 * the integrity leg's accepted audit is re-decided at the leg's δ (one-stage's bound on wrong units), and its refusal
   kept as it is;
@@ -115,10 +116,21 @@ def test_a_period_is_its_own_link_window_with_its_own_prompts_and_the_last_takes
 def test_the_stub_serves_each_fixed_plan_body_of_the_loops_steps():
     _, p = plan(1)
     model = f"torch-loop/mlp-w8a8-h{H}"
+    assert all(q["body"]["ignore_eos"] is True and "min_tokens" not in q["body"] for q in p["requests"])
     assert [S.refusal(q["body"] | {"model": model}, STEPS) for q in p["requests"]] == [None, None]
-    assert S.refusal(cs.request_body(model, STEPS + 1, [3]), STEPS)
-    assert S.refusal(cs.request_body(model, STEPS, [3], temperature=1.0), STEPS)
-    assert S.refusal(cs.request_body(model, STEPS, [3]) | {"min_tokens": 1}, STEPS)
+    assert "steps" in S.refusal(cs.request_body(model, STEPS + 1, [3]), STEPS)
+    assert "greedy" in S.refusal(cs.request_body(model, STEPS, [3], temperature=1.0), STEPS)
+    assert "ignore_eos" in S.refusal(cs.request_body(model, STEPS, [3]) | {"ignore_eos": False,
+                                                                           "return_token_ids": True}, STEPS)
+
+
+def test_the_stub_refuses_a_body_that_still_sends_min_tokens():
+    model = f"torch-loop/mlp-w8a8-h{H}"
+    fixed = cs.request_body(model, STEPS, [3])
+    varied = cs.varied_body(model, {"prompt": [3], "max_tokens": STEPS, "seed": 1}) | {"return_token_ids": True}
+    assert S.refusal(fixed, STEPS) is None and S.refusal(varied, STEPS) is None
+    for body in (fixed | {"min_tokens": STEPS}, fixed | {"min_tokens": 1}, varied | {"min_tokens": 1}):
+        assert "min_tokens" in S.refusal(body, STEPS)
 
 
 def test_n2s_outcome_is_one_stages_answer_on_the_link_windows_one_unit():
