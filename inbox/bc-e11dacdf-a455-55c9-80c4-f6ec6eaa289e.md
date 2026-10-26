@@ -42,3 +42,6 @@ STEPRLAST's DecompB assembly (decompb-c348 6703f14a6d, note 20261026T0715Z-repor
 - ResLowJ: restate ResLowered at `bdR rd wE final w`. It currently sits at DeployedR.bdR.
 - PiecesOwned for the residual groups.
 - layVR must be defined as, or proven a sub-list of, DeployedR.layR, the one layout of record, which CAPLOWER writes.
+
+## 08:15Z from proofs
+CAPLOWER copied your check-5 call definitions verbatim into DeployedR.lean (layR @ caplower-5b7e bc416b687b), since your file imports it. layVR becomes DeployedR.layR, and layVR_calls no longer holds. Restate your lemmas at layR, and import the definitions from DeployedR rather than keeping your own copy.
