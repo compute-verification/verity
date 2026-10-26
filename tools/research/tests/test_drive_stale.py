@@ -127,18 +127,26 @@ def test_drive_rings_a_stale_prs_owner_once_a_day_and_closes_it_at_seven_days_ke
     assert state["stale_closed"] == {"cursor/w-2": 2}, "the branch sweep never archives it (`Driver._sweep`)"
 
     h.posts.clear()
+    gh.put(7, _at(world, monkeypatch, {"g.txt": "7\n"}, T0 - 5 * DAY), ready=False)
+    h.clock = T0 + 60
+    h.tick()
+    assert h.posts == [], "the rule runs at most hourly (`STALE_EVERY_S`)"
     h.clock = T0 + 3600
     h.tick()
-    assert h.posts == [] and h.closed == [(2, close_comment(7))], "once a day"
+    assert h.posts == ["@lane-7 queue: stale, not marked ready at their heads and idle 3+ days: #7 (5 d). Push, mark ready or "
+                       "close each; drive closes one 7 days idle, its branch kept"], "#1 once a day"
+    assert h.closed == [(2, close_comment(7))]
+    h.posts.clear()
     h.clock = T0 + DAY
     h.tick()
-    assert h.posts == ["@lane-1 queue: stale, not marked ready at their heads and idle 3+ days: #1 (5 d). Push, mark ready or "
-                       "close each; drive closes one 7 days idle, its branch kept"]
+    assert sorted(h.posts) == [f"@lane-{n} queue: stale, not marked ready at their heads and idle 3+ days: #{n} ({d} d). Push, "
+                               "mark ready or close each; drive closes one 7 days idle, its branch kept" for n, d in ((1, 5), (7, 6))]
     told = h.q.load_state()["drive"]["told"]
-    assert [k for k in told if k.startswith("idle:")] == [f"idle:1@{_iso(T0 + DAY)[:10]}"], "a past day's ring leaves `told`"
+    assert sorted(k for k in told if k.startswith("idle:")) == [f"idle:{n}@{_iso(T0 + DAY)[:10]}" for n in (1, 7)], \
+        "a past day's rings leave `told`"
     h.clock = T0 + 3 * DAY
     h.tick()
-    assert [n for n, _ in h.closed] == [2, 1] and sorted(gh.prs) == [3, 4, 5, 6]
+    assert [n for n, _ in h.closed] == [2, 1, 7] and sorted(gh.prs) == [3, 4, 5, 6]
 
 
 def test_drive_closes_nothing_with_stale_close_days_off(world, monkeypatch):

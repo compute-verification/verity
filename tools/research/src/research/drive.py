@@ -128,6 +128,8 @@ CIRCUIT_FAIL_RE = re.compile(r"^FAIL (\S+)", re.M)
 CIRCUIT_KILLED = "circuit-check/killed"
 #: how often drive sweeps the repository's branches (`merge.sweep_branches`)
 BRANCH_SWEEP_S = 86400
+#: how often drive applies the stale rule (`Driver._stale`), which reads the labels of every idle PR: its rings are daily
+STALE_EVERY_S = 3600
 #: what `Driver.culprit` says of a failure that names no file and was a kill
 KILLED = "it was killed (a signal or 128+N) and names no file: a machine's fault"
 #: what it says of one whose files, and the declared inputs of what failed, no PR's change touches: a machine's fault too
@@ -3043,12 +3045,12 @@ class Driver:
         """The stale rule (`research.stale`): ring each stale PR's owner once a UTC day (`idle:N@DAY`), one post per owner, and
         close each PR `stale_close_days` idle with `stale.close_comment`, but not one on `next` or a draft that says "keep open"
         (`stale.keep_open`); a closed PR's branch is kept (`stale_closed`, which `_sweep` never archives).  Ring keys of other
-        days, and the stacked-PR keys (`_stacked`) of PRs no longer open, leave `told`."""
-        if not self.stale_days:
+        days, and the stacked-PR keys (`_stacked`) of PRs no longer open, leave `told`.  At most once in `STALE_EVERY_S`."""
+        q, now = self.q, self.now()
+        if not self.stale_days or now - drive.get("stale_judged", 0) < STALE_EVERY_S:
             return
         from .stale import DAY_S, close_comment, keep_open, stale_prs
 
-        q, now = self.q, self.now()
         day = time.strftime("%Y-%m-%d", time.gmtime(now))
         try:
             prs = self._open()
@@ -3058,6 +3060,8 @@ class Driver:
             return
         drive["told"] = [k for k in drive["told"] if not (k.startswith("idle:") and not k.endswith(f"@{day}"))
                          and not (k.startswith("stacked:") and int(k[len("stacked:"):].partition("<")[0]) not in prs)]
+        if not (dry_run or q.shadow):
+            drive["stale_judged"] = now
         on_next = {m.pr for m in q.chain()}
         ring: dict[str | None, list[str]] = {}
         keys: dict[str | None, list[str]] = {}
