@@ -90,6 +90,7 @@ import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import audit as A, registration as R
 from verity.ml.circuits.codec import canonical_json
+from verity.ml.windows.rows import BC_BYTES, SALT_BYTES
 
 PROTOCOL = "verity/certifier/v0"
 ONE_STAGE = R.PROTOCOL
@@ -163,16 +164,41 @@ def _env_int(name: str, default: int) -> int:
 
 # --- the period's records ----------------------------------------------------------------------------------------------
 
+def member_rows(period_dir: Path, m: Mapping[str, Any]) -> np.ndarray:
+    """Every unit's rows of member ``m`` (its ``window.json`` entry), ports in order, u16 words (units x words), off its
+    value files (`rows.Committed`'s bodies): ``m<k>-private.bin`` is every instance's rows then the salts, or for a
+    shared-row member (``shared_rows``, each port's table size: a registered read's table holds the registered rows its
+    units read) each port's table then the salts, each unit's rows its refs into the tables, the u32 per instance and
+    port that end ``m<k>-public.bin``."""
+    widths, n = [w for _, w in m["ports"]], m["n"]
+    priv = (period_dir / f"m{m['k']}-private.bin").read_bytes()
+    if "shared_rows" not in m:
+        if len(priv) != n * (2 * sum(widths) + SALT_BYTES * len(widths)):
+            raise ValueError(f"m{m['k']}-private.bin: {len(priv)} bytes, not {n} instances' rows {widths} and salts")
+        return np.frombuffer(priv[:2 * n * sum(widths)], "<u2").reshape(n, sum(widths))
+    sizes = [int(m["shared_rows"][p]) for p, _ in m["ports"]]
+    pub = (period_dir / f"m{m['k']}-public.bin").read_bytes()
+    if len(priv) != sum(s * (2 * w + SALT_BYTES) for s, w in zip(sizes, widths)) or \
+            len(pub) != BC_BYTES * sum(sizes) + 4 * n * len(widths):
+        raise ValueError(f"m{m['k']}: {len(priv)} private and {len(pub)} public bytes, not a shared-row member's of "
+                         f"tables {dict(zip((p for p, _ in m['ports']), sizes))}, rows {widths} and {n} instances")
+    refs = np.frombuffer(pub[BC_BYTES * sum(sizes):], "<u4").reshape(n, len(widths))
+    if (refs >= np.array(sizes)).any():
+        raise ValueError(f"m{m['k']}: a ref past its port's table")
+    tables = np.split(np.frombuffer(priv, np.uint8), np.cumsum([2 * s * w for s, w in zip(sizes, widths)]))
+    return np.concatenate([t.view("<u2").reshape(s, w)[refs[:, j]]
+                           for j, (t, s, w) in enumerate(zip(tables, sizes, widths))], axis=1)
+
+
 def loop_units(period_dir: Path) -> dict[int, tuple[dict, dict[str, np.ndarray]]]:
     """Every unit of the period's window: its label (`index.json`: request, step, layer) and its rows by port, u16 words,
-    read off the member's value file (``m<k>-private.bin``: every instance's rows, ports in order, then the salts)."""
+    read off the member's value files (`member_rows`)."""
     win = json.loads((period_dir / "window.json").read_text())
     labels = {m["name"]: m["labels"] for m in json.loads((period_dir / "index.json").read_text())["members"]}
     out: dict[int, tuple[dict, dict[str, np.ndarray]]] = {}
     for m in win["members"]:
         names, widths = [p for p, _ in m["ports"]], [w for _, w in m["ports"]]
-        W, n = sum(widths), m["n"]
-        rows = np.frombuffer((period_dir / f"m{m['k']}-private.bin").read_bytes()[:2 * n * W], "<u2").reshape(n, W)
+        rows = member_rows(period_dir, m)
         at = dict(zip(names, np.cumsum([0, *widths[:-1]]).tolist()))
         units = json.loads((period_dir / m["units"]).read_text())["indices"]
         label = {}
@@ -186,9 +212,11 @@ def loop_units(period_dir: Path) -> dict[int, tuple[dict, dict[str, np.ndarray]]
 def free_inputs(circuit: Mapping[str, Any]) -> dict[str, Any]:
     """The period's free inputs, ``#(freeInputs \\ reg)`` of `NetworkCheck.Period`'s count, from the window's
     ``circuit.json``: every unit's input-row bits (each template's units times its statement's ``in_rows`` widths), less
-    each unit's rows whose every port a wire feeds from another unit's output (``wires``) or ``external`` names as the
-    system's I/O. ``bits`` the total, ``per_template`` each template's. A row the registration's ``anchors`` register
-    still counts: anchors name no rows yet, and counting a registered row free only overcounts K."""
+    each unit's rows whose every port a wire feeds from another unit's output (``wires``), a registered read fills from
+    the value the verifier pinned before the run (``registered``'s uncut ``reads``: their reader units' port) or
+    ``external`` names as the system's I/O. ``bits`` the total, ``per_template`` each template's. A row the
+    registration's ``anchors`` register, or a registered table's root, an opening or an ingress fills, still counts: none
+    is committed yet, and counting a registered row free only overcounts K."""
     from verity.ml.windows.interface import Wire
 
     units = {t: n for t, n in circuit["templates"]}
@@ -198,12 +226,15 @@ def free_inputs(circuit: Mapping[str, Any]) -> dict[str, Any]:
         if t not in units:
             raise ValueError(f"external port {e!r} is no template's")
         covered[t, port] = None
-    for w in map(Wire.of, circuit["wires"]):
-        if w.reader not in units:
-            raise ValueError(f"a wire's reader {w.reader!r} is no template")
-        fed = covered.setdefault((w.reader, w.port), set())
+    fills = [(w.reader, w.port, w.at, w.units, "a wire") for w in map(Wire.of, circuit["wires"])]
+    fills += [(r["reader"], r["port"], r["at"], math.prod(r["radix"]), "a registered read")
+              for r in (circuit.get("registered") or {}).get("reads", ()) if r.get("cut", [0, 1]) == [0, 1]]
+    for reader, port, at, n, what in fills:
+        if reader not in units:
+            raise ValueError(f"{what}'s reader {reader!r} is no template")
+        fed = covered.setdefault((reader, port), set())
         if fed is not None:
-            fed.update(range(w.at, w.at + w.units))
+            fed.update(range(at, at + n))
     per = {}
     for t, n in units.items():
         bits = 0

@@ -11,6 +11,11 @@
   names another first window;
 * a loop period's value files give its requests' prompt tokens, steps and width, and its registered outputs are the
   stub's for those tokens (`torch_loop_stub.step_outputs`), so an honest certifier session's egress carries them (slow);
+* the free inputs are every unit's input rows less the wired, the external and an uncut registered read's; a member's
+  units read the same rows off a shared-row member's tables through its refs as off a plain member's bodies (each
+  written by `rows.Committed`), and a body of another size or a ref past its table is refused; where #4426's
+  registered weights are in the tree, a ``--registered`` period's shared-row members read unit for unit as the plain
+  period's, and its free inputs are `interface.input_count`'s (slow);
 * ``CERTIFIER_PATH`` picks the path, the certifier-only one by default, and the warden path's stubbed lines are the
   other's less its records' gap; ``WARDEN_TAMPER`` names the stub's tampers;
 * the warden session's run parses as the gate's scan rehearsal at the scan's own schedule, a period's link-windows are
@@ -40,6 +45,7 @@ from argparse import Namespace
 from fractions import Fraction
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from verity.core.protocols.certifier.certificate import SALT_BYTES, Certificate, Direction, clock_commitment
@@ -242,6 +248,55 @@ def test_free_inputs_are_every_units_input_rows_less_the_wired_and_the_external(
     assert L.free_inputs(circuit(wires=[wire]))["bits"] == FREE - 256 * 1024
     with pytest.raises(ValueError, match="no template"):
         L.free_inputs(circuit(external=["other/x"]))
+    reads = [{"reader": t, "port": p, "param": p, "at": 0, "radix": [4, 2, 128], "base": 0, "step": [0, 128 * w, w]}
+             for p, w in (("w", 64), ("sw", 2))]
+    assert L.free_inputs(circuit() | {"registered": {"params": {}, "reads": reads}})["bits"] == 1024 * (1024 + 32)
+    half = {**reads[0], "at": 256, "radix": [4, 128]}
+    assert L.free_inputs(circuit(wires=[wire]) | {"registered": {"reads": [half]}})["bits"] == FREE - 512 * 1024
+    assert L.free_inputs(circuit() | {"registered": {"reads": [reads[0] | {"cut": [0, 2]}]}})["bits"] == FREE
+    with pytest.raises(ValueError, match="registered read's reader"):
+        L.free_inputs(circuit() | {"registered": {"reads": [reads[0] | {"reader": "other"}]}})
+
+
+def test_a_shared_row_members_units_read_their_rows_through_its_refs(tmp_path):
+    from types import SimpleNamespace
+
+    from verity.ml.windows import rows as CS
+
+    rng = np.random.default_rng(0)
+    n, ports, outs, reads = 6, (("x", 3), ("w", 2)), (("o0", 1),), np.array([0, 1, 1, 0, 1, 0])
+    x, w = rng.integers(0, 1 << 16, (n, 3), dtype=np.uint16), rng.integers(0, 1 << 16, (2, 2), dtype=np.uint16)
+    o0 = np.zeros((n, 64), np.uint16)
+    o0[:, 0] = rng.integers(0, 1 << 16, n, dtype=np.uint16)
+    want = np.concatenate([x, w[reads], o0], axis=1)
+
+    def written(d: Path, m: CS.Member, rows: dict, refs: np.ndarray | None) -> dict:
+        size = {p: len(r) for p, r in rows.items()}
+        c = CS.Committed(SimpleNamespace(members=[m]), {}, {}, {m.port(p): bytes([7]) * CS.BC_BYTES * k for p, k in size.items()},
+                         {m.port(p): bytes([9]) * CS.SALT_BYTES * k for p, k in size.items()},
+                         {m.port(p): r for p, r in rows.items()}, {}, {} if refs is None else {0: refs})
+        d.mkdir()
+        (d / "m0-public.bin").write_bytes(c.public_body(0))
+        (d / "m0-private.bin").write_bytes(c.private_body(0))
+        return {"k": 0, "name": m.key, "n": n, "ports": [list(p) for p in m.all_rows],
+                **({"shared_rows": {**dict(m.tables), **{p: n for p, _ in m.out_rows}}} if m.tables else {})}
+
+    plain = written(tmp_path / "plain", CS.Member("t", ports, outs, n, name="t/c0"), {"x": x, "w": w[reads], "o0": o0},
+                    None)
+    refs = np.stack([np.arange(n), reads, np.arange(n)], axis=1).astype(np.uint32)
+    shared = written(tmp_path / "shared", CS.Member("t", ports, outs, n, 0, (("x", n), ("w", 2)), name="t/c0"),
+                     {"x": x, "w": w, "o0": o0}, refs)
+    assert shared["shared_rows"] == {"x": n, "w": 2, "o0": n}
+    assert np.array_equal(L.member_rows(tmp_path / "plain", plain), want)
+    assert np.array_equal(L.member_rows(tmp_path / "shared", shared), want)
+    with pytest.raises(ValueError, match="shared-row member's"):
+        L.member_rows(tmp_path / "shared", shared | {"shared_rows": {"x": n, "w": 3, "o0": n}})
+    with pytest.raises(ValueError, match="instances' rows"):
+        L.member_rows(tmp_path / "plain", plain | {"n": n - 1})
+    pub = tmp_path / "shared" / "m0-public.bin"
+    pub.write_bytes(pub.read_bytes()[:-4 * n * 3] + np.where(refs == 1, 2, refs).astype("<u4").tobytes())
+    with pytest.raises(ValueError, match="past its port's table"):
+        L.member_rows(tmp_path / "shared", shared)
 
 
 def n2(exit: int = 0, **member) -> dict:
@@ -580,7 +635,7 @@ def test_the_block_leg_fits_the_block_records_schema_its_fixture_and_its_runner_
 @pytest.mark.slow
 def test_a_loop_period_registers_what_the_stub_serves(tmp_path):
     a = Namespace(law="subset:2", cap=8, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={},
-                  periods=1)
+                  periods=1, weights=None)
     d, _ = RN.loop_period(0, "test", a, tmp_path / "scratch", tmp_path / "out")
     units = L.loop_units(d)
     assert L.requests_of(d, units) == ([3, 7], STEPS, H)
@@ -588,3 +643,25 @@ def test_a_loop_period_registers_what_the_stub_serves(tmp_path):
     model = S.L.Model(h=H)
     for i, token in enumerate([3, 7]):
         assert [outputs[f"r{i}", k] for k in range(STEPS)] == S.step_outputs(model, token, STEPS)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not hasattr(S.L, "commit_weights"), reason="registered weights (#4426) are not in this tree yet")
+def test_a_registered_weights_period_reads_unit_for_unit_as_the_plain_one(tmp_path):
+    from verity.ml.windows import interface as IF
+
+    a = Namespace(law="subset:2", cap=8, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={},
+                  periods=1, weights=None)
+    plain, _ = RN.loop_period(0, "test", a, tmp_path / "plain", tmp_path / "plain-out")
+    weights = {"opening": tmp_path / "opening.json", "pin": tmp_path / "pin.json"}
+    RN.serve(["--commit-weights", str(weights["opening"]), "--pin", str(weights["pin"])])
+    d, _ = RN.loop_period(0, "test", Namespace(**{**vars(a), "weights": weights}), tmp_path / "reg", tmp_path / "reg-out")
+    assert json.loads((d / "period.json").read_text())["registered"] == str(weights["pin"])
+    assert all("shared_rows" in m for m in json.loads((d / "window.json").read_text())["members"])
+    got, want = L.loop_units(d), L.loop_units(plain)
+    assert sorted(got) == sorted(want)
+    for u, (lab, rows) in want.items():
+        assert got[u][0] == lab and all(np.array_equal(got[u][1][p], r) for p, r in rows.items())
+    circuit = json.loads((d / "circuit.json").read_text())
+    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit)["free"] == 1024 * (1024 + 32)
+    assert L.free_inputs(json.loads((plain / "circuit.json").read_text()))["bits"] == FREE

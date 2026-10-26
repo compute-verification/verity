@@ -1,7 +1,7 @@
 """`verity bench all-protocols`'s runner: every period, one run of the torch loop audited by every protocol's leg.
 
     python -m verity_all_protocols.runner --out DIR --tools FILE [--periods N] [--period-s S] [--node NAME]
-        [--tamper P,...] [--law L] [--cap N] [--requests 3,7] [--steps 2] [--onsite EXE] [--scratch DIR]
+        [--tamper P,...] [--law L] [--cap N] [--requests 3,7] [--steps 2] [--onsite EXE] [--scratch DIR] [--registered]
 
 Per period P (0-based): the verifier registers the loop's circuit from its shape and run id (``serve --circuit-only``),
 the loop serves once (`integrations/torch_loop`, run id ``RUN/pP``, so each period has a root of its own) and writes its
@@ -20,7 +20,10 @@ profile's), ``epsilon`` (a sampled protocol's bound on wrong units as a share of
 ``--tools FILE``: JSON naming the built executables (``flock-circuit``, ``flock-verify``, ``flock-firewall``,
 ``m0-pythonpath``). ``--tamper P,...``: those periods' loop records outputs that are not its model's (`serve --tamper`)
 and its prover skips its self-check, so a drawn unit's proof is of a false witness. Only the window's public files are
-kept in ``DIR`` (never a prover's file: its rows and salts).
+kept in ``DIR`` (never a prover's file: its rows and salts). ``--registered``: the loop reads its weights as registered
+values (`serve --registered`), committed once before the first period (`serve --commit-weights`), their opening in
+scratch and the verifier's pin in ``DIR/weights-pin.json``, which ``period.json`` names (``registered``) and the
+integrity leg's audit holds every period's reads to; its members are then shared-row.
 """
 from __future__ import annotations
 
@@ -45,6 +48,9 @@ FORMAT = "verity/all-protocols-period/v1"
 ROOT = Path(__file__).resolve().parents[3]
 LOOP = ROOT / "integrations" / "torch_loop"
 PUBLIC = ("registration.json", "window.json", "index.json", "circuit.json", "serve.json", PERIOD)
+#: ``--registered``'s weights, committed once a run: their opening (the prover's salts) in scratch, the verifier's pin
+#: of their roots in ``DIR``
+WEIGHTS_OPENING, WEIGHTS_PIN = "weights-opening.json", "weights-pin.json"
 
 
 def epsilon(a: Mapping[str, Any]) -> str | None:
@@ -123,16 +129,19 @@ def serve(argv: Sequence[str]) -> dict[str, Any]:
 def loop_period(index: int, run: str, a: argparse.Namespace, scratch: Path, out: Path) -> tuple[Path, dict]:
     """The period's loop: the circuit registered before it runs, then its window in scratch with ``period.json``; its
     public files in ``out/window``. -> the period's directory and what the loop printed."""
+    weights = a.weights
     shape = ["--law", a.law, "--cap", str(a.cap), "--requests", a.requests, "--steps", str(a.steps), "--run-id",
-             f"{run}/p{index}"]
+             f"{run}/p{index}", *(["--registered"] if weights else [])]
     circuit = serve([*shape, "--circuit-only"])["circuit"]
     window = scratch / f"p{index}"
     tampered = index in a.tamper
-    got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else [])])
+    got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else []),
+                 *(["--weights", str(weights["opening"])] if weights else [])])
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
     (window / PERIOD).write_text(json.dumps({
         "period": index, "periods": a.periods, "node": a.node, "circuit": circuit, "run_root": got["run"], "law": a.law,
-        "cap": a.cap, "tools": a.tools, "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {}}, sort_keys=True))
+        "cap": a.cap, "tools": a.tools, "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {},
+        **({"registered": str(weights["pin"])} if weights else {})}, sort_keys=True))
     kept = out / "window"
     kept.mkdir(parents=True, exist_ok=True)
     for f in [*PUBLIC, *(p.name for p in window.glob("m*-public.bin"))]:
@@ -156,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--steps", type=int, default=2)
     ap.add_argument("--onsite", help="onsite's executable (`onsite check`), for when its components are ports")
     ap.add_argument("--scratch", help="where the loop's windows go (default a temporary directory, removed after)")
+    ap.add_argument("--registered", action="store_true", help="the loop reads its weights as registered values "
+                    "(`serve --registered`), committed once before the first period")
     a = ap.parse_args(argv)
     a.tamper = {int(x) for x in a.tamper.split(",") if x.strip()}
     a.tools = json.loads(Path(a.tools).read_text())
@@ -165,6 +176,9 @@ def main(argv: list[str] | None = None) -> int:
     reports: list[dict] = []
     rc = 0
     with tempfile.TemporaryDirectory(dir=a.scratch) as scratch:
+        a.weights = {"opening": Path(scratch) / WEIGHTS_OPENING, "pin": out / WEIGHTS_PIN} if a.registered else None
+        if a.weights:
+            serve(["--commit-weights", str(a.weights["opening"]), "--pin", str(a.weights["pin"])])
         t0 = time.monotonic()
         for p in range(a.periods):
             wait = t0 + p * a.period_s - time.monotonic()
