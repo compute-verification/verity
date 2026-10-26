@@ -20,7 +20,7 @@ from verity.ml.commitments.merkle import b3s_level_key
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "pouw"))
-from verity.ml.definitions.pouw.schemes.pearl_c import H1_KEYS  # noqa: E402
+from verity.core.protocols.pouw.schemes.pearl_c import H1_KEYS  # noqa: E402
 
 ROW, TILE, M, N = "verity/pouw/row/v1", "verity/pouw/tile/v1", 32, 8192
 BINDING = bytes(range(32))

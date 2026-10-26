@@ -18,8 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import advice as A
-from verity.ml.definitions.certifier import advised as AD
+from verity.core.protocols.certifier import advice as A, advised as AD
 from verity.core.protocols.certifier.active import request_frame_count
 from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet

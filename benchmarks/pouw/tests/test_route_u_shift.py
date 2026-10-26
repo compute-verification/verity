@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-from verity.ml.definitions.pouw.schemes import ncp
+from verity.core.protocols.pouw.schemes import ncp
 
 spec = importlib.util.spec_from_file_location("pouw_kernels", Path(__file__).parents[1] / "kernels" / "__init__.py")
 K = importlib.util.module_from_spec(spec)

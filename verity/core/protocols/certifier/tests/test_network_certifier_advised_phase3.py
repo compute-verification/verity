@@ -19,8 +19,7 @@ from fractions import Fraction
 
 import pytest
 
-from verity.core.protocols.certifier import advice as A
-from verity.ml.definitions.certifier import advised as AD
+from verity.core.protocols.certifier import advice as A, advised as AD
 from verity.core.protocols.certifier.certificate import Direction, RecordHead
 from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, fill, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet

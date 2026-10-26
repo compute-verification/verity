@@ -13,7 +13,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from verity.core.protocols.pouw.audit import HM96, ROW_SCHEMA, activation_binding, hm96_salt, rows_domain  # noqa: E402
-from verity.ml.definitions.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 
 

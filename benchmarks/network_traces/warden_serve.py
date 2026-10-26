@@ -123,8 +123,7 @@ import active_replay as ar
 import certifier_serve as cs
 import load_relay as lr
 import stall_probe
-from verity.ml.definitions.certifier import io_tie as IT
-from verity.core.protocols.certifier import warden_rows as WR
+from verity.core.protocols.certifier import io_tie as IT, warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, PAD, id_request
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
 from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count

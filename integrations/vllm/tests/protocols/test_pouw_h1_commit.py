@@ -23,7 +23,7 @@ from torch import nn  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.pouw import weights as Wt  # noqa: E402
 from verity.core.protocols.pouw import window as Wd  # noqa: E402
-from verity.ml.definitions.pouw.circuit import h1window as HW  # noqa: E402
+from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_vllm import protocols as PO  # noqa: E402

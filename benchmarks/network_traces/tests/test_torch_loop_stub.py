@@ -9,8 +9,7 @@ import json
 import sys
 from pathlib import Path
 
-from verity.core.protocols.certifier import active as A
-from verity.ml.definitions.certifier import io_tie as IT
+from verity.core.protocols.certifier import active as A, io_tie as IT
 from verity.core.protocols.certifier.release import with_release
 
 HERE = Path(__file__).resolve().parents[1]

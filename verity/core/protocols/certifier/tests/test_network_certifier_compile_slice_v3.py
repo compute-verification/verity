@@ -16,8 +16,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.definitions.certifier import compile_slice as CS, compile_slice_v2 as V2, compile_slice_v3 as V3
-from verity.ml.definitions.certifier import replay_chain as RC
+from verity.core.protocols.certifier import compile_slice as CS, compile_slice_v2 as V2, compile_slice_v3 as V3
+from verity.core.protocols.certifier import replay_chain as RC
 from verity.ml.circuits import boolean as BL
 
 FIXTURES = Path(__file__).parent / "fixtures"

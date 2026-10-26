@@ -22,8 +22,8 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.definitions.pouw.circuit import eps1_reference as EPS
-from verity.ml.definitions.pouw.circuit import segment as SG
+from verity.core.protocols.pouw.circuit import eps1_reference as EPS
+from verity.core.protocols.pouw.circuit import segment as SG
 
 M32 = SG.M32
 SALT = bytes(range(32))

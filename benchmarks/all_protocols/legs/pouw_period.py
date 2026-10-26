@@ -51,9 +51,9 @@ import torch
 
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import window as Wd
-from verity.ml.definitions.pouw.circuit import h1tile as HT
-from verity.ml.definitions.pouw.circuit import h1window as HW
-from verity.ml.definitions.pouw.circuit import live as LV
+from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.core.protocols.pouw.circuit import live as LV
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity_torch_loop import checkpoint as CK

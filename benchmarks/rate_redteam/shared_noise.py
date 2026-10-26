@@ -28,9 +28,9 @@ import json
 import random
 import sys
 
-from verity.ml.definitions.pouw.circuit import h1tile as H
-from verity.ml.definitions.pouw.circuit import seeds as SD
-from verity.ml.definitions.pouw.circuit import segment as SG
+from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.core.protocols.pouw.circuit import segment as SG
 
 R = Cc = 32
 K = 64

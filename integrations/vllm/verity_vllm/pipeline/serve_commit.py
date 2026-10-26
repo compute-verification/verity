@@ -50,7 +50,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity.ml.definitions.certifier import compile_slice as CS
+from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
 from verity_vllm.commit.served_record import Record, base_id, served_rows, window_commit
 from verity_vllm.pipeline.serve_seal import committed_bytes, extras_of, freeze, seal_window, thaw, window_requests

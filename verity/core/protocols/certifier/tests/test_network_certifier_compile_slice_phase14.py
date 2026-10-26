@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.definitions.certifier import arith_encode as AE, charge_chain as CC
-from verity.ml.definitions.certifier import compile_slice as CS
+from verity.core.protocols.certifier import arith_encode as AE, charge_chain as CC
+from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice import BOOK
 from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice_w212 import CARRY, CLASS, FITTED, OWN
 from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice_w212 import _load

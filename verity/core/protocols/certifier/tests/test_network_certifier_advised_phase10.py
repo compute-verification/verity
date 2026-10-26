@@ -16,8 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import advice as ADV, service as SVC
-from verity.ml.definitions.certifier import advised as AD
+from verity.core.protocols.certifier import advice as ADV, advised as AD, service as SVC
 from verity.core.protocols.certifier.service import LinkWindows
 
 import signers

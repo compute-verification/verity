@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-from verity.ml.definitions.pouw.schemes import ncp
+from verity.core.protocols.pouw.schemes import ncp
 
 OUT = Path(__file__).with_name("vectors") / "ncp.json"
 P_KS = (1088, 2048, 4096, 11008)

@@ -35,7 +35,7 @@ import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.ml.definitions.certifier import compile_slice as CS, replay_step as RS
+from verity.core.protocols.certifier import compile_slice as CS, replay_step as RS
 from verity.core.protocols.sampled_proofs.one_stage import produced, registered as REG
 from verity.ml.commitments import advice as ADV
 from verity.ml.commitments.frame_v3 import BitRowLeaf

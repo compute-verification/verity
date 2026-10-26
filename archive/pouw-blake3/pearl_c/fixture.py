@@ -1,6 +1,6 @@
 """Pearl-C's GPU check fixture, built off the pod (needs verity and numpy): inputs at a small shape and every buffer the
 kernels write, for both formings and the plain baseline.  Forming, lines and hashes come from
-`verity.ml.definitions.pouw.schemes.pearl_c` itself; the products over every cell are batched in numpy with
+`verity.core.protocols.pouw.schemes.pearl_c` itself; the products over every cell are batched in numpy with
 `verity.ml.kernels.tc.group_sum_total_batch`, and one whole 64 x 64 tile is recomputed by the scheme (`encode`,
 `checked`, `digest`, `tickets`) and must agree.  The hashing is format -h1, the verifier's: BLAKE3 messages and leaves,
 and A's rows and the tile leaves committed as `verity.core.protocols.pouw.audit` commits them (frame-b3), whose roots must agree too.  Each
@@ -39,8 +39,8 @@ from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.core.protocols.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
                                rows_domain, transcript_domain)
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
-from verity.ml.definitions.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.ml.definitions.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
 
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
 HASHING = "h1"                     # the kernels' hashing format: BLAKE3 messages, leaves and frame-b3 trees

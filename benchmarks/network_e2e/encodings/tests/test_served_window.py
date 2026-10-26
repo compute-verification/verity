@@ -92,7 +92,7 @@ def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
     0) on every window, 5,500 bits: its context ``run`` counts
     decisions only, so a forced admission doesn't reset it as it resets the replay's ``pc``. Charged as a decision (a 1,
     which resets ``run``), each forced admission would change 330 windows' charges."""
-    from verity.ml.definitions.certifier import charge_chain as CC
+    from verity.core.protocols.certifier import charge_chain as CC
 
     book = next(s for s in json.loads(ARITH.read_text())["streams"]
                 if s["source"].startswith("async-light"))["decisions"]["book"]

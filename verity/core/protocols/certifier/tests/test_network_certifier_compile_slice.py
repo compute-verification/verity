@@ -18,8 +18,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.definitions.certifier import arith_encode as AE, charge_chain as CC
-from verity.ml.definitions.certifier import compile_slice as CS
+from verity.core.protocols.certifier import arith_encode as AE, charge_chain as CC
+from verity.core.protocols.certifier import compile_slice as CS
 
 FIXTURES = Path(__file__).parent / "fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"

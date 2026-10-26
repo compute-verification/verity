@@ -8,10 +8,10 @@ import random
 import pytest
 
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.ml.definitions.pouw.circuit import h1tile as H
-from verity.ml.definitions.pouw.circuit import h1zy as Z
-from verity.ml.definitions.pouw.circuit import seeds as SD
-from verity.ml.definitions.pouw.circuit import segment as SG
+from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.core.protocols.pouw.circuit import segment as SG
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 

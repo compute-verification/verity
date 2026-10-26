@@ -1,4 +1,4 @@
-"""`CacheStep_v1` (`verity.ml.definitions.certifier.cache_step`) against ENC-DERIVED's prefix rules (`derived.Prefixes`)
+"""`CacheStep_v1` (`verity.core.protocols.certifier.cache_step`) against ENC-DERIVED's prefix rules (`derived.Prefixes`)
 over a trace's rows, and its difftest vectors.
 
 `drive` runs the cache as the replay's composition calls it. It takes the rows in the advice's order, which must be the
@@ -24,7 +24,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Sequence
 
-from verity.ml.definitions.certifier import cache_step as CS
+from verity.core.protocols.certifier import cache_step as CS
 
 HERE = Path(__file__).parent
 

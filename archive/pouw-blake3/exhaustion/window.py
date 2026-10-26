@@ -75,8 +75,8 @@ from verity.ml.randomness import derive  # noqa: E402
 from verity.core.protocols.pouw.audit import Epoch, Workload, activation_binding, rows_domain, weight_binding  # noqa: E402
 from verity.core.protocols.pouw.protocol import Matmul, tagged  # noqa: E402
 from verity.core.protocols.pouw.protocol import Shape as MShape  # noqa: E402
-from verity.ml.definitions.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.ml.definitions.pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
 
 SCHEMA = "verity-pouw/exhaustion-window/v1"
 SEED_DOMAIN = "verity/pouw/exhaustion-window-seed/v1"

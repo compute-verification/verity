@@ -86,8 +86,8 @@ def expert_rows(m: int, c: dict = CONFIG) -> Fraction:
 
 def scheme(fadd: Fraction | None = None, name: str = SCHEME):
     """The registered record's scheme, with the FP32 add's price at `fadd` when given."""
-    from verity.ml.definitions.pouw.schemes import pearl_c as C
-    from verity.ml.definitions.pouw.schemes.pearl_c_device import DEVICES
+    from verity.core.protocols.pouw.schemes import pearl_c as C
+    from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
     from verity.core.protocols.pouw.serving import SchemeId
 
     sid = SchemeId.parse(name)

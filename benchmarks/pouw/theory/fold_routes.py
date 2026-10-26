@@ -41,7 +41,7 @@ import sys
 
 from exact_kit.checks import Checks
 
-from verity.ml.definitions.pouw.circuit import segment as SG
+from verity.core.protocols.pouw.circuit import segment as SG
 
 M32 = 0xFFFFFFFF
 NV = 24          # random 32-bit test vectors a superoptimizer query (one mismatch refutes a candidate)

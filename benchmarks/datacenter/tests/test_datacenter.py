@@ -136,8 +136,8 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     import sys
     from pathlib import Path
 
-    from verity.ml.definitions.pouw.circuit import compile as pouw
-    from verity.ml.definitions.pouw.circuit import h1tile
+    from verity.core.protocols.pouw.circuit import compile as pouw
+    from verity.core.protocols.pouw.circuit import h1tile
     from datacenter.models import s8_grid
 
     spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")
@@ -175,8 +175,8 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
     import sys
     from pathlib import Path
 
-    from verity.ml.definitions.pouw.circuit import compile as pouw
-    from verity.ml.definitions.pouw.circuit import h1tile
+    from verity.core.protocols.pouw.circuit import compile as pouw
+    from verity.core.protocols.pouw.circuit import h1tile
     from datacenter.models import s8_grid
 
     spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")

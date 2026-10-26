@@ -4,7 +4,7 @@
 
 Writes `DIR/charge/instances.jsonl`, one instance per line as `NetworkCertifier.AdviceV1.ChargeDifftest.rawOfJson` reads
 it, and `DIR/charge/python.jsonl`, the same line's results from the checkout's
-`verity.ml.definitions.certifier.arith_encode`: `reference_charge` window by window from the instance's carry, each
+`verity.core.protocols.certifier.arith_encode`: `reference_charge` window by window from the instance's carry, each
 window's charge and the carry it passes on, up to and including the first it refuses (`steps`), and the windows' charges
 chained from the book's priors and run 0, or none when one refuses (`charges`). The Lean audit runs
 `ChargeDifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256), and
@@ -30,7 +30,7 @@ import random
 from pathlib import Path
 
 import verity.core.protocols.certifier
-from verity.ml.definitions.certifier.arith_encode import RUNS, Carry, ChargeBook, reference_charge
+from verity.core.protocols.certifier.arith_encode import RUNS, Carry, ChargeBook, reference_charge
 
 COUNT = 4_000
 KW = 15

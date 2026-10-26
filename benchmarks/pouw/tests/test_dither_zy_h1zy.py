@@ -32,7 +32,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
-from verity.ml.definitions.pouw.circuit import h1zy as Z
+from verity.core.protocols.pouw.circuit import h1zy as Z
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops as OPS
 
