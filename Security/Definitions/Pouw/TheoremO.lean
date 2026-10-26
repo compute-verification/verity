@@ -14,10 +14,11 @@ per unit, and this module asks it once, about the checkpoints a round commits.
 
 * `Round`: a round on MODEL-SPEC's machine (`Verity.Accel.Machine`): its live coins, how its committed inputs and
   coins are written into the state a program starts from, where the committed checkpoints are read, the honest
-  checkpoints, and the honest kernel's priced cost `H`.
+  checkpoints, the draw and the check on the drawn units (drawn after the commit), and the honest kernel's priced
+  cost `H`.
 * `priced`: a run's cost at prices `λ`, `Σ_t Σ_r λ_r u_r(t) / ρ_r`.
-* `moment`: the average over the round's coins of `e^{η (c − cost/H)₊}` where the run commits the honest checkpoints,
-  `0` elsewhere.
+* `moment`: the average over the round's coins and draw of `e^{η (c − cost/H)₊}` where the committed checkpoints pass
+  the check, `0` elsewhere.
 * **`Slot`**: Theorem O at the checkpoint. Every program and starting state, fixed before the coins, on every schedule
   chosen after them, whose runs meet the model (`Machine.Fits`), has moment at most 1.
 * `Tail`, `TailOfSlot`: the slot's tail form, `Pr[match ∧ cost ≤ (c − δ)H] ≤ e^{−ηδ}`, and that the slot gives it
@@ -49,10 +50,18 @@ structure Round (m : Machine ι) (Θ : Type) where
   out : m.Mem → V
   /-- the honest checkpoints -/
   honest : Ω → V
+  /-- the draw and check coins, uniform, drawn after the run commits -/
+  D : Type
+  [fintypeD : Fintype D]
+  [nonemptyD : Nonempty D]
+  /-- the check at draw `d`: the committed checkpoints pass against the honest ones at the drawn units -/
+  ok : D → V → V → Prop
+  /-- the honest checkpoints pass at every draw -/
+  ok_refl : ∀ d v, ok d v v
   /-- the honest kernel's priced cost of the round -/
   H : ℝ
 
-attribute [instance] Round.fintype Round.nonempty
+attribute [instance] Round.fintype Round.nonempty Round.fintypeD Round.nonemptyD
 
 variable [Fintype m.Res]
 
@@ -68,18 +77,27 @@ def Round.run (R : Round m Θ) (P : m.Prog Θ) (σ₀ : m.State Θ) (sched : R.�
   Machine.run P (R.write ω σ₀) (sched ω)
 
 open Classical in
+/-- The run on coin `ω` passes the check at draw `d`. -/
+def Round.passes (R : Round m Θ) (P : m.Prog Θ) (σ₀ : m.State Θ) (sched : R.Ω → List (List Θ)) (ω : R.Ω)
+    (d : R.D) : Prop :=
+  R.ok d (R.out (R.run P σ₀ sched ω).1.mem) (R.honest ω)
+
+open Classical in
 /-- **A program's moment** on the round at prices `λ`, model constant `c` and rate `η`: the average over the round's
-coins of `e^{η (c − cost/H)₊}` where the run commits the honest checkpoints, and `0` where it doesn't. -/
+coins and its draw of `e^{η (c − cost/H)₊}` where the run's committed checkpoints pass the check, and `0` where they
+don't. -/
 noncomputable def moment (R : Round m Θ) (lam : m.Res → ℝ) (c η : ℝ) (P : m.Prog Θ) (σ₀ : m.State Θ)
     (sched : R.Ω → List (List Θ)) : ℝ :=
-  (∑ ω, if R.out (R.run P σ₀ sched ω).1.mem = R.honest ω then
-      Real.exp (η * max 0 (c - priced lam (R.run P σ₀ sched ω).2 / R.H)) else 0) / Fintype.card R.Ω
+  (∑ ω, ∑ d, if R.passes P σ₀ sched ω d then
+      Real.exp (η * max 0 (c - priced lam (R.run P σ₀ sched ω).2 / R.H)) else 0) /
+    (Fintype.card R.Ω * Fintype.card R.D)
 
 /-- **Theorem O at the committed checkpoint**: in the accelerator model `m`, every program `P` and starting state `σ₀`,
 both fixed before the round's coins, on every schedule chosen after them (`sched ω`), whose runs meet the model on
 every coin (`Machine.Fits`: (G1) and (G2)), has moment at most 1 at prices `λ`, constant `c` and rate `η`:
-`E_ω[1(committed checkpoints = honest) · e^{η (c − cost_λ/H)₊}] ≤ 1`. By Markov (`TailOfSlot`), a program that saves
-`δ·H` below `c·H` commits the honest checkpoints on at most an `e^{−ηδ}` share of the coins.
+`E_{ω,d}[1(the committed checkpoints pass at draw d) · e^{η (c − cost_λ/H)₊}] ≤ 1`. By Markov (`TailOfSlot`), a
+program that saves `δ·H` below `c·H` passes on at most an `e^{−ηδ}` share of the coins and draws. With `ok d x y`
+the equality `x = y` this is the plain form: the program commits every honest checkpoint.
 
 **This is a theorem to be proved in the model, not an assumption.** It is true or false of `m` and the round alone,
 and it is the program's one computational slot: DITHER-THM's statement reads it where it reads Theorem O, and the
@@ -92,15 +110,15 @@ def Slot (R : Round m Θ) (lam : m.Res → ℝ) (c η : ℝ) : Prop :=
     (∀ ω, Machine.Fits P (R.write ω σ₀) (sched ω)) → moment R lam c η P σ₀ sched ≤ 1
 
 open Classical in
-/-- The share of the round's coins on which a run commits the honest checkpoints at priced cost at most `(c − δ)·H`. -/
+/-- The share of the round's coins and draws on which a run passes the check at priced cost at most `(c − δ)·H`. -/
 noncomputable def matchShare (R : Round m Θ) (lam : m.Res → ℝ) (c δ : ℝ) (P : m.Prog Θ) (σ₀ : m.State Θ)
     (sched : R.Ω → List (List Θ)) : ℝ :=
-  ((Finset.univ.filter fun ω => R.out (R.run P σ₀ sched ω).1.mem = R.honest ω ∧
-      priced lam (R.run P σ₀ sched ω).2 ≤ (c - δ) * R.H).card : ℝ) / Fintype.card R.Ω
+  ((Finset.univ.filter fun x : R.Ω × R.D => R.passes P σ₀ sched x.1 x.2 ∧
+      priced lam (R.run P σ₀ sched x.1).2 ≤ (c - δ) * R.H).card : ℝ) / (Fintype.card R.Ω * Fintype.card R.D)
 
 /-- **The slot's tail form**: every program and starting state whose runs meet the model, at every saving `δ ≥ 0`,
-commits the honest checkpoints at priced cost at most `(c − δ)·H` on at most an `e^{−ηδ}` share of the coins. At
-`δ = 0` the bound is 1, which the honest kernel attains (`HonestTight`). -/
+passes the check at priced cost at most `(c − δ)·H` on at most an `e^{−ηδ}` share of the coins and draws. At `δ = 0`
+the bound is 1, which the honest kernel attains (`HonestTight`). -/
 def Tail (R : Round m Θ) (lam : m.Res → ℝ) (c η : ℝ) : Prop :=
   ∀ (P : m.Prog Θ) (σ₀ : m.State Θ) (sched : R.Ω → List (List Θ)),
     (∀ ω, Machine.Fits P (R.write ω σ₀) (sched ω)) →
@@ -121,8 +139,8 @@ def HonestMeets (R : Round m Θ) (lam : m.Res → ℝ) (c : ℝ) : Prop :=
       c * R.H ≤ priced lam (R.run P σ₀ sched ω).2
 
 /-- **Non-vacuity at a saving of 0**: for every round with `H > 0` that the honest kernel meets, some program meeting
-the slot's hypotheses has moment exactly 1. It commits the honest checkpoints with probability 1 and saves nothing,
-so the slot's bound is attained, and `Slot` with a bound below 1 would be false. -/
+the slot's hypotheses has moment exactly 1. It passes every draw on every coin (`ok_refl`) and saves nothing, so the
+slot's bound is attained, and `Slot` with a bound below 1 would be false. -/
 def HonestTight : Prop :=
   ∀ {ι : Type} {m : Machine ι} {Θ : Type} [DecidableEq Θ] [Fintype m.Res] (R : Round m Θ) (lam : m.Res → ℝ)
     (c η : ℝ), 0 < R.H → HonestMeets R lam c →
