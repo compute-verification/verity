@@ -13,7 +13,8 @@ reads the second off the scan's Program (`scanOf`, the generator form); the firs
 `T` buckets, over one egress link: at step `t`, slot `σ`'s presence gate is bit 0 of egress member `t`'s verdict (its
 return's leaf 0), and its frame's bits are the return's leaves `16 + 8σB … 16 + 8(σ + 1)B − 1` (the row after the u16,
 row bit `8k + i` bit `i` of byte `k`); step `t`'s ingress is bucket `t`'s `row` parameter, in bit order: bucket 0's
-first-template member, bucket `t ≥ 1`'s later-template member `t − 1`. Gates are `Flock.Program.resolve`'s (§6), the
+first-template member, bucket `t ≥ 1`'s later-template member `t − 1`, the templates being the root's nodes that call a
+composite (`NetworkCheck.Period.templateNodes`, as `scanOf` reads them). Gates are `Flock.Program.resolve`'s (§6), the
 canonical layout's. A statement's layout is its descriptor's (`layOf`), at horizon `T`.
 
 **The flattening** (`Flattens`): the sampling statement's gates (`Claims.Sampling.Stmt.prog`, "the descriptor
@@ -37,19 +38,11 @@ resolve. -/
 def gateAt (P : Flock.Program.Prog) (sc : Flock.Program.Scope) (r : Flock.Program.Ref) : ℕ :=
   (Flock.Program.resolve P sc r).toOption.getD 0
 
-/-- The root body's template nodes, in order, as `scanOf` reads them: bucket 0's, the later ingress buckets' when
-`T ≥ 2`, and the egress bucket's. -/
-def templateNodes (P : Flock.Program.Prog) : List ℕ :=
-  let nodes := (P.defs[P.root]!).body.nodes
-  (List.range nodes.size).filter fun k => match P.defs[nodes[k]!.fn]? with
-    | some d => !d.prim
-    | none => false
-
 /-- **The scan's layout** in its Program `P` at the schedule `s`, over one egress link: step `t`'s slot `σ` is bit 0 of
 egress member `t`'s verdict and its frame's `8B` bits, and step `t`'s ingress is bucket `t`'s `row` parameter. -/
 def scanLayout (P : Flock.Program.Prog) (s : Schedule) : NetTiming.Layout 1 s.allocation :=
   let nodes := (P.defs[P.root]!).body.nodes
-  let ts := templateNodes P
+  let ts := NetworkCheck.Period.templateNodes P
   let ke := ts.getLast?.getD 0
   let le := (P.defs[nodes[ke]!.fn]!).outLeaves
   let bits := 8 * s.cellBytes
