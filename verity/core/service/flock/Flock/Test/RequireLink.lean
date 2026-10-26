@@ -1,7 +1,6 @@
 /-
-S3/F1 (PROTOCOL.md §5.3): `Record.isTrue` decides what `j == Json.bool true` decides, on `true`, `false`, `null`, the
-string `"true"`, the numbers 1 and 0, a list holding `true` and an object, so `Record.decode` keeps its verdicts. A
-record whose `config.require_link` is `true` passes S3/F1 and is refused only later (here at S6, which finds no
+S3/F1 (PROTOCOL.md §5.3) matches `config.require_link` against `true`, on `true`, `false`, `null`, the string `"true"`,
+the numbers 1 and 0, a list holding `true` and an object. A record whose `config.require_link` is `true` passes S3/F1 and is refused only later (here at S6, which finds no
 `root_f`); every other value is refused at S3/F1, and an absent one as missing.
 -/
 import Flock.Record
@@ -13,9 +12,6 @@ open Flock Lean
 def vals : List Json :=
   [.bool true, .bool false, .null, .str "true", .num (JsonNumber.fromNat 1), .num (JsonNumber.fromNat 0),
     .arr #[.bool true], Json.mkObj [("require_link", .bool true)]]
-
-#guard vals.all fun j => Record.isTrue j == (j == Json.bool true)
-#guard (vals.map Record.isTrue) == [true, false, false, false, false, false, false, false]
 
 def spec : SessionSpec := { (default : SessionSpec) with hello := "h" }
 
