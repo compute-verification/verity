@@ -368,7 +368,8 @@ def test_layer_driver_stages_and_checks_on_a_stand_in_codec(tmp_path, monkeypatc
     out = tmp_path / "out"
     common = ["--layout", str(tmp_path / "layout.json"), "--weights", str(tmp_path / "m.json"), "--w", str(tmp_path / "w.bin"),
               "--store", str(tmp_path / "store"), "--salt", "00" * 24, "--out", str(out), "--layer", "1"]
-    base = common + ["--lib", "unused", "--device", "cpu", "--m", "32", "--reps", "1", "--samples", "4", "--encode-chunk", "3"]
+    base = common + ["--lib", "unused", "--device", "cpu", "--m", "16,32", "--reps", "1", "--samples", "4",
+                     "--encode-chunk", "3"]
     lay = L.store_layout(layout, L.registered_prefix(bytes(24)))
     assert layer.main(base + ["--encode-blocks", str(lay.tensor(1, "qkv").blocks)]) == 0
     recs = [json.loads(x) for x in (out / "layer.json").read_text().splitlines()]
@@ -381,14 +382,142 @@ def test_layer_driver_stages_and_checks_on_a_stand_in_codec(tmp_path, monkeypatc
     whole = [r for r in recs if r.get("matrix") == "layer"]
     assert len(whole) == 1 and whole[0]["matches_matrices"] and whole[0]["nonzero_gap_bytes"] == 0
     gemms = [r for r in recs if r["step"] == "gemm"]
-    assert len(gemms) == 5 and all(r["twin"]["mismatches"] == 0 for r in gemms)
+    assert len(gemms) == 2 + 8 and all(r["twin"]["mismatches"] == 0 for r in gemms)
+    assert [r["m"] for r in gemms[-8:]] == [16] * 4 + [32] * 4
     assert [r["k"] for r in gemms[-4:]] == [64, 64, 64, 256] and [r["n"] for r in gemms[-4:]] == [192, 64, 256, 64]
     ctl = [r for r in recs if r["step"] == "controls"]
     assert all(c["ok"] for c in ctl) and set(ctl[-1]["results"]) == {"other_keys", "corrupt_row", "row_at_p", "honest",
                                                                        "padding"}
     assert ctl[-1]["results"]["padding"]["flags"] == S.PADDING
-    assert any(r["step"] == "summary" for r in recs)
+    assert [r["m"] for r in recs if r["step"] == "summary"] == [16, 32]
     res = check.check_gemm(out)
-    assert set(res) == set(L.MATRICES) and all(v["mismatches"] == 0 and v["samples"] == 4 for v in res.values())
+    assert set(res) == {f"{m}-m{M}" for m in L.MATRICES for M in (16, 32)}
+    assert all(v["mismatches"] == 0 and v["samples"] == 4 for v in res.values())
     with pytest.raises(SystemExit, match="another store"):
         layer.main([a.replace("00" * 24, "01" * 24) for a in base] + ["--steps", "stage"])
+
+
+def encoded_store(root: Path, rows: np.ndarray, per_segment: int, setup: dict) -> None:
+    """An encoded store's directory as `p2_v1/store.py encode` writes it: `setup.json`, and each segment's rows in
+    `seg/<s>.c` with their SHA-512 in `seg/<s>.json`."""
+    (root / "seg").mkdir(parents=True)
+    (root / "setup.json").write_text(json.dumps(setup))
+    for s in range(-(-len(rows) // per_segment)):
+        data = rows[s * per_segment:(s + 1) * per_segment].tobytes()
+        L.segment_path(root, s, "c").write_bytes(data)
+        L.segment_path(root, s, "json").write_text(json.dumps({"segment": s, "sha512": hashlib.sha512(data).hexdigest()}))
+
+
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="CMP-95 item 2's toy (benchmarks/pous/p2_v1/store-toy) isn't here")
+def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path, monkeypatch):
+    """The toy's coin and commitment give its salt; its C* as an encoded store's segment files stages each layer to
+    toy.json's digest under P2's reference; a setup of another commitment, layout, parameters or salt is refused, and so
+    is a segment unfinished or not the SHA-512 its JSON records."""
+    import layer
+
+    doc = json.loads((TOY / "toy.json").read_text())
+    (tmp_path / "layout.json").write_text(json.dumps(doc["layout"]))
+    lsha = hashlib.sha512((tmp_path / "layout.json").read_bytes()).hexdigest()
+    setup = {"commitment": doc["commitment"], "layout_sha512": lsha, "manifest": doc["layout"]["params"]}
+    coin, com = bytes.fromhex(doc["source"]), bytes.fromhex(doc["commitment"])
+    assert L.store_salt(setup, doc["layout"], lsha, coin, com).hex() == doc["salt"]
+    full = {**setup, "source": doc["source"], "salt": doc["salt"]}
+    assert L.store_salt(full, doc["layout"], lsha, coin, com).hex() == doc["salt"]
+    other = coin[:-1] + bytes([coin[-1] ^ 1])
+    for bad, c in (({**setup, "commitment": "00" * 64}, coin), ({**setup, "layout_sha512": "00"}, coin),
+                   ({k: v for k, v in setup.items() if k != "manifest"}, coin), (full, other)):
+        with pytest.raises(ValueError):
+            L.store_salt(bad, doc["layout"], lsha, c, com)
+    c_star = np.frombuffer((TOY / "c-star.bin").read_bytes(), dtype=np.uint8).reshape(-1, L.ROW)
+    bps = doc["layout"]["params"]["blocks_per_segment"]
+    root = tmp_path / "store"
+    encoded_store(root, c_star, bps, setup)
+    lay, got = L.open_store(tmp_path / "layout.json", {}, root, doc["source"], doc["commitment"], None)
+    assert got == setup and lay.prefix.hex() == doc["prefix"]
+    monkeypatch.setattr(S.gpu, "Kernels", RefKernels)
+    monkeypatch.setattr(layer, "DEVICE", torch.device("cpu"))
+    for i, _, _, sha in doc["staging"]:
+        blocks = lay.blocks(i)
+        rows = layer.EncodedStore(root, lay, blocks, setup).rows(blocks)
+        assert bytes(rows.numpy()) == L.segment_rows(root, lay.spec, blocks.start, len(blocks)) \
+            == c_star[blocks.start:blocks.stop].tobytes()
+        buf = torch.full((lay.staging_bytes(i),), 0xA5, dtype=torch.uint8)
+        S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), i, buf)
+        assert hashlib.sha512(buf.numpy().tobytes()).hexdigest() == sha
+    s = (lay.blocks(0).stop - 1) // bps
+    L.segment_path(root, s, "c").write_bytes(bytes(bps * L.ROW))
+    with pytest.raises(SystemExit, match="SHA-512"):
+        layer.EncodedStore(root, lay, lay.blocks(0), setup).rows(lay.blocks(0))
+    L.segment_path(root, s, "json").unlink()
+    with pytest.raises(SystemExit, match="not done"):
+        layer.EncodedStore(root, lay, lay.blocks(0), setup).rows(lay.blocks(0))
+
+
+def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path, monkeypatch):
+    """An encoded store's segment files (rows by the stand-in codec under the prefix of `draw_salt(coin, commitment)`)
+    through the driver with no stream file: each staged tensor held to the weights manifest's SHA-256, the scales and the
+    padding control's last block from the generator. Refused: an encode step, another commitment, a store of other
+    weights, an unfinished segment; a tensor whose digest differs fails the run."""
+    import layer
+    from verity.core.protocols.pous import setup as P
+
+    monkeypatch.setattr(S.gpu, "Kernels", XorKernels)
+    monkeypatch.setattr(layer.gpu, "Kernels", XorKernels)
+    doc = stream_manifest()
+    w = np.random.default_rng(7).integers(0, 256, doc["stream_bytes"], dtype=np.uint8)
+    for t in doc["tensors"]:
+        if t["name"].endswith(".scale"):
+            n = t["nbytes"] // 4
+            w[t["offset"]:t["offset"] + t["nbytes"]] = ((np.arange(n, dtype=np.float32) + 1) * 2.0 ** -14).view(np.uint8)
+        t["sha256"] = hashlib.sha256(w[t["offset"]:t["offset"] + t["nbytes"]]).hexdigest()
+    doc["program"] = "test/program"
+    (tmp_path / "m.json").write_text(json.dumps(doc))
+    (tmp_path / "w.bin").write_bytes(w.tobytes())
+    (tmp_path / "fakegen.py").write_text(
+        "from pathlib import Path\nALIASES = {'tiny': 'tiny'}\nSHAPES = ALIASES\n"
+        f"W = Path({str(tmp_path / 'w.bin')!r})\n\n\n"
+        "def stream(shape, seed, start, stop):\n    assert seed == b'seed'\n    return W.read_bytes()[start:stop]\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    layout = layout_doc(model(64, 2, 1, 256), per_segment=11)
+    (tmp_path / "layout.json").write_text(json.dumps(layout))
+    coin, com = bytes(range(64)), bytes(range(64, 128))
+    lay = L.store_layout(layout, L.registered_prefix(P.draw_salt(coin, com)))
+    used = lay.blocks(1).stop
+    m = np.zeros((lay.params.blocks, L.ROW), dtype=np.uint8)
+    m[:used, L.LEAD:] = np.frombuffer(L.payloads(lay, L.Weights.of(doc), L.reader(tmp_path / "w.bin"), 0, used),
+                                      dtype=np.uint8).reshape(used, L.PAYLOAD)
+    rows = XorKernels(None, None, None, lay.prefix).encode(torch.from_numpy(m), 0).numpy()
+    setup = {"commitment": com.hex(), "layout_sha512": hashlib.sha512((tmp_path / "layout.json").read_bytes()).hexdigest(),
+             "manifest": layout["params"], "program": "test/program"}
+    root = tmp_path / "store"
+    encoded_store(root, rows, 11, setup)
+    out = tmp_path / "out"
+    args = ["--layout", str(tmp_path / "layout.json"), "--weights", str(tmp_path / "m.json"), "--encoded", str(root),
+            "--source", coin.hex(), "--commitment", com.hex(), "--generator", "fakegen", "--shape", "tiny",
+            "--weights-seed", "text:seed", "--lib", "unused", "--device", "cpu", "--m", "16", "--reps", "1",
+            "--samples", "4", "--out", str(out), "--layer", "1", "--steps", "stage,gemm"]
+    assert layer.main(args) == 0
+    recs = [json.loads(x) for x in (out / "layer.json").read_text().splitlines()]
+    assert recs[0]["kind"] == "encoded" and recs[0]["encoded"] == len(lay.blocks(1))
+    staged = [r for r in recs if r["step"] == "stage" and r.get("matrix") in L.MATRICES]
+    assert [r["matrix"] for r in staged] == list(L.MATRICES)
+    assert all(r["weights"] is None and all(r["manifest_sha256"].values()) for r in staged)
+    assert staged[0]["manifest_sha256"] == {"wq": True, "wk": True, "wv": True}
+    ctl = [r for r in recs if r["step"] == "controls"][-1]
+    assert ctl["ok"] and ctl["results"]["padding"]["flags"] == S.PADDING
+    assert [r["m"] for r in recs if r["step"] == "summary"] == [16]
+    with pytest.raises(SystemExit):
+        layer.main(args[:-1] + ["encode,stage"])
+    with pytest.raises(SystemExit, match="commitment"):
+        layer.main([a.replace(com.hex(), "00" * 64) for a in args])
+    (tmp_path / "m.json").write_text(json.dumps({**doc, "program": "other"}))
+    with pytest.raises(SystemExit, match="weights manifest"):
+        layer.main(args)
+    bad = json.loads(json.dumps(doc))
+    next(t for t in bad["tensors"] if t["name"] == "l1.wo")["sha256"] = "00" * 32
+    (tmp_path / "m.json").write_text(json.dumps(bad))
+    assert layer.main(args + ["--steps", "stage"]) == 1
+    (tmp_path / "m.json").write_text(json.dumps(doc))
+    L.segment_path(root, lay.blocks(1).start // 11, "json").unlink()
+    with pytest.raises(SystemExit, match="not done"):
+        layer.main(args)

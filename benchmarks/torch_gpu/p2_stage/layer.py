@@ -1,15 +1,19 @@
 """One layer of the frozen shape through the staging decode on one GPU, and the exact W8A8 GEMMs on what it staged.
 
-    python layer.py --layout LAYOUT --weights M --w W --store DIR --lib LIB --salt HEX --out OUT [--layer 0]
-                    [--steps toy,encode,stage,gemm] [--toy TOY] [--encode-budget S] [--encode-blocks N] [--m 20480]
+    python layer.py --layout LAYOUT --weights M [--w W] (--encoded ENC --source HEX --commitment HEX | --store DIR
+                    --salt HEX) --lib LIB --out OUT [--layer 0] [--steps toy,encode,stage,gemm] [--toy TOY]
+                    [--encode-budget S] [--encode-blocks N] [--m 4096,16384]
 
 - `LAYOUT` is the store's layout, CMP-95 item 2's fixture (`p2_v1/store.py layout`'s JSON), read by
-  `layout.store_layout`. `M` is the weights stream's manifest (`verity_torch_loop.weights manifest`) and `W` a file
-  holding the stream's bytes at their stream offsets (`weights write`), at least the layer's: the plaintext and the scales.
-- `DIR` is the development store: `c.bin`, the encoded rows of the layer's blocks, and `c.json` (the first block, the
-  count, how many are encoded so far, and the digests of the prefix, the layout and the weights manifest). Until
-  memory-accounting's encoded store is on the card, the layer is encoded here, under the registered prefix of the public
-  test salt `HEX`.
+  `layout.store_layout`. `M` is the weights stream's manifest (`verity_torch_loop.weights manifest`; with `--digests`,
+  each tensor's SHA-256, which every staged tensor is held to) and `W` a file holding the stream's bytes at their stream
+  offsets (`weights write`), at least the layer's; without `W`, the few stream bytes a session reads (the scales, a
+  matrix's last block) come from the seeded generator (`--generator`, `--shape`, `--weights-seed`).
+- `ENC` is an encoded store (`p2_v1/store.py encode`'s directory, memory-accounting's, read only): the layer's rows from
+  its `seg/<s>.c` files, each held to its `seg/<s>.json`'s SHA-512, under the salt `setup.draw_salt` of the coin and
+  commitment its `setup.json` is held to (`layout.store_salt`). `DIR` is a development store instead: `c.bin`, the
+  encoded rows of the layer's blocks, and `c.json` (the first block, the count, how many are encoded so far, and the
+  digests of the prefix, the layout and the weights manifest), encoded here under the public test salt `HEX`.
 - **toy**: the fixture's toy store (`TOY`, `store-toy/`) through the same decode: each layer's staging buffer against
   `toy.json`'s digest, each negative block refused with its flag (and the other layer not), another salt refused, and
   the spot vectors (blocks at the real store's indices, `spot.json`) decoded to their payloads' digests.
@@ -18,17 +22,19 @@
   (1,307,915 blocks, two roots a block) can span several leases. QKV and O are its first 262,401 blocks, up the next
   522,757, down the last 522,757.
 - **stage**, for each matrix whose blocks are all encoded: its rows onto the GPU, a buffer poisoned with 0xA5,
-  `stage.decode_matrix`, the staged bytes against the stream's (mismatching bytes and blocks), and `reps` timed decodes;
+  `stage.decode_matrix`, the staged bytes against the stream's (mismatching bytes and blocks) and each of its tensors
+  against the manifest's SHA-256, and `reps` timed decodes;
   once all four are encoded, `stage.decode_layer` into one poisoned staging buffer, timed and held to the four matrices
   at their staging offsets and zero between them; and controls on the last 64 blocks of a matrix: other keys, one
   corrupted row, one row at p and a last block nonzero past the matrix's end, each refused with its flag, and the honest
   blocks passed.
-- **gemm**, for each staged matrix: x [M, K] s8 and sx [M] f32 seeded on the device (rows 0, 1 and 2 all -128, all 127
-  and all 0), the stream's f32 scales sw, `gemm.scaled_mm` timed, every output word against `gemm.twin`, and samples for
-  `check.py`. With all four, the implied step: 52 layers x (the layer's `decode_layer` + its four GEMMs).
+- **gemm**, for each batch M and each staged matrix: x [M, K] s8 and sx [M] f32 seeded on the device (rows 0, 1 and 2
+  all -128, all 127 and all 0), the stream's f32 scales sw (held to the manifest's SHA-256), `gemm.scaled_mm` timed,
+  every output word against `gemm.twin`, and samples for `check.py`. With all four, the implied step at each M: 52 layers
+  x (the layer's `decode_layer` + its four GEMMs).
 
-Writes `OUT/layer.json` (one record per step and matrix) and `OUT/samples-<matrix>.npz`; exits 1 if the toy or a
-control isn't as the fixture says.
+Writes `OUT/layer.json` (one record per step and matrix) and `OUT/samples-<matrix>-m<M>.npz`; exits 1 if a staged byte
+or digest, a GEMM word, the toy or a control isn't as it should be.
 """
 from __future__ import annotations
 
@@ -62,16 +68,6 @@ class Out:
         print(json.dumps(row), flush=True)
         with open(self.path / "layer.json", "a") as f:
             f.write(json.dumps(row) + "\n")
-
-
-def reader(path: Path) -> L.Read:
-    def read(offset: int, size: int) -> bytes:
-        with open(path, "rb") as f:
-            data = os.pread(f.fileno(), size, offset)
-        if len(data) != size:
-            raise ValueError(f"{path} ends before byte {offset + size}")
-        return data
-    return read
 
 
 def digest(doc: dict) -> str:
@@ -128,10 +124,43 @@ class DevStore:
         return torch.from_numpy(a.reshape(n, L.ROW)).to(DEVICE)
 
 
-def encode(args, lay: L.StoreLayout, src: L.Weights, dev: DevStore, out: Out) -> None:
+class EncodedStore:
+    """An encoded store's blocks (`p2_v1/store.py encode`'s directory, memory-accounting's, read only): the layer's rows
+    from its `seg/<s>.c` files, each file held to the SHA-512 its `seg/<s>.json` records."""
+
+    def __init__(self, root: Path, lay: L.StoreLayout, blocks: range, setup: dict) -> None:
+        self.root, self.span, self.spec = root, blocks, lay.spec
+        bps = lay.params.blocks_per_segment
+        self.segments = range(blocks.start // bps, (blocks.stop - 1) // bps + 1)
+        self.meta = {"store": str(root), "segments": [self.segments.start, self.segments.stop], "done": len(blocks),
+                     "commitment": setup["commitment"], "program": setup.get("program"),
+                     "prefix_sha256": hashlib.sha256(lay.prefix).hexdigest(), "layout_sha256": digest(lay.manifest())}
+
+    @property
+    def encoded(self) -> range:
+        return self.span
+
+    def rows(self, blocks: range) -> torch.Tensor:
+        if not (self.span.start <= blocks.start <= blocks.stop <= self.span.stop):
+            raise ValueError(f"blocks {blocks} are not all in the store's {self.span}")
+        bps = self.spec.blocks_per_segment
+        out = torch.empty(len(blocks), L.ROW, dtype=torch.uint8, device=DEVICE)
+        for s in range(blocks.start // bps, (blocks.stop - 1) // bps + 1):
+            meta_path = L.segment_path(self.root, s, "json")
+            if not meta_path.exists():
+                raise SystemExit(f"segment {s} of {self.root} is not done: no {meta_path.name}")
+            data = np.fromfile(L.segment_path(self.root, s, "c"), dtype=np.uint8)
+            if hashlib.sha512(data).hexdigest() != json.loads(meta_path.read_text())["sha512"]:
+                raise SystemExit(f"segment {s}'s rows are not the SHA-512 its {meta_path.name} records")
+            lo, hi = max(blocks.start, s * bps), min(blocks.stop, (s + 1) * bps)
+            part = data[(lo - s * bps) * L.ROW:(hi - s * bps) * L.ROW].reshape(hi - lo, L.ROW)
+            out[lo - blocks.start:hi - blocks.start] = torch.from_numpy(part).to(DEVICE)
+        return out
+
+
+def encode(args, lay: L.StoreLayout, src: L.Weights, read: L.Read, dev: DevStore, out: Out) -> None:
     kern = gpu.Kernels(str(args.lib), "", lay.spec, lay.prefix)
     kern.raised()
-    read = reader(args.w)
     t0, n0 = time.monotonic(), dev.meta["done"]
     stop = len(dev.span) if args.encode_blocks is None else min(len(dev.span), n0 + args.encode_blocks)
     with open(dev.c, "r+b") as fc:
@@ -188,20 +217,35 @@ def against_stream(lay, src: L.Weights, read: L.Read, layer: int, name: str, buf
     return {"bytes": t.size, "mismatched_bytes": k, "mismatched_blocks": len(bad), "first_bad_blocks": bad[:8]}
 
 
+def against_manifest(src: L.Weights, layer: int, name: str, host: np.ndarray, scales: bool = False) -> dict | None:
+    """Whether each of the matrix's tensors (or their scales) in `host`, one after another, has the SHA-256 the weights
+    manifest gives it (`manifest --digests`, the digests memory-accounting held W to); None when it gives none."""
+    rows = [src.rows[f"l{layer}.{p}{'.scale' if scales else ''}"] for p in L.PARTS[name]]
+    if any("sha256" not in r for r in rows):
+        return None
+    out, at = {}, 0
+    for p, r in zip(L.PARTS[name], rows):
+        out[p] = hashlib.sha256(host[at:at + r["nbytes"]]).hexdigest() == r["sha256"]
+        at += r["nbytes"]
+    return out
+
+
 def scales(src: L.Weights, read: L.Read, layer: int, name: str, n: int) -> torch.Tensor:
     parts = src.parts(layer, name, scales=True)
     if sum(size for _, size in parts) != 4 * n:
         raise ValueError(f"{name}'s scales in the stream are not {n} f32 words")
-    return to_device(src.read(parts, 0, 4 * n, read)).view(torch.float32)
+    data = src.read(parts, 0, 4 * n, read)
+    if not all((against_manifest(src, layer, name, np.frombuffer(data, dtype=np.uint8), scales=True) or {}).values()):
+        raise SystemExit(f"{name}'s scales are not the SHA-256 the weights manifest gives them")
+    return to_device(data).view(torch.float32)
 
 
-def stage(args, lay, src, dev: DevStore, out: Out, layer: int) -> tuple[dict, float | None, bool]:
-    staged, whole_s = {}, None
+def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict, float | None, bool]:
+    staged, whole_s, ok = {}, None, True
     names = ready(lay, dev, layer)
     out.record(step="stage", ready=names, encoded=[dev.encoded.start, dev.encoded.stop])
     if not names:
         return staged, whole_s, True
-    read = reader(args.w)
     store = S.Store(lay, dev.rows(dev.encoded), dev.encoded.start, args.lib, chunk=args.chunk)
     for name in names:
         t = lay.tensor(layer, name)
@@ -210,11 +254,18 @@ def stage(args, lay, src, dev: DevStore, out: Out, layer: int) -> tuple[dict, fl
         before = store.blocks_decoded
         S.decode_matrix(store, layer, name, w)
         blocks = store.blocks_decoded - before
-        cw = against_stream(lay, src, read, layer, name, w)
+        host = S.flat(w).cpu().numpy()
+        cw = against_stream(lay, src, read, layer, name, w) if args.w else None
+        dw = against_manifest(src, layer, name, host)
+        if cw is None and dw is None:
+            raise SystemExit("nothing to hold the staged bytes to: give --w or a weights manifest with digests")
+        ok &= (cw is None or cw["mismatched_bytes"] == 0) and (dw is None or all(dw.values()))
         ts = timed(lambda: S.decode_matrix(store, layer, name, w), args.reps)
         out.record(step="stage", matrix=name, tensor=t.name, shape=[t.n, t.k], first_block=t.first_block, blocks=blocks,
-                   weights=cw, decode_s=[round(x, 6) for x in ts], decode_gb_s=round(t.size / min(ts) / 1e9, 2),
-                   rows_gb_s=round(t.blocks * L.ROW / min(ts) / 1e9, 2), sha512=sha512(w))
+                   weights=cw, manifest_sha256=dw, decode_s=[round(x, 6) for x in ts],
+                   decode_gb_s=round(t.size / min(ts) / 1e9, 2), rows_gb_s=round(t.blocks * L.ROW / min(ts) / 1e9, 2),
+                   sha512=hashlib.sha512(host).hexdigest())
+        del host
         staged[name] = (w, scales(src, read, layer, name, t.n))
     if len(names) == len(L.MATRICES):
         buf = torch.full((lay.staging_bytes(layer),), 0xA5, dtype=torch.uint8, device=DEVICE)
@@ -229,9 +280,10 @@ def stage(args, lay, src, dev: DevStore, out: Out, layer: int) -> tuple[dict, fl
         nbytes = sum(t.size for t in lay.layer(layer))
         out.record(step="stage", matrix="layer", call="decode_layer", bytes=nbytes, staging_bytes=buf.numel(),
                    matches_matrices=bool(same), nonzero_gap_bytes=gaps, decode_s=[round(x, 6) for x in ts],
-                   decode_gb_s=round(nbytes / whole_s / 1e9, 2))
+                   decode_gb_s=round(nbytes / whole_s / 1e9, 2), sha512=sha512(buf))
+        ok &= bool(same) and gaps == 0
         del buf
-    ok = controls(args, lay, src, store, out, layer, names[0])
+    ok &= controls(args, lay, src, read, store, out, layer, names[0])
     del store
     return staged, whole_s, ok
 
@@ -246,7 +298,7 @@ def run_window(st: S.Store, offset: int, size: int) -> tuple[int, str | None]:
     return 0, None
 
 
-def controls(args, lay, src, store: S.Store, out: Out, layer: int, name: str) -> bool:
+def controls(args, lay, src, read: L.Read, store: S.Store, out: Out, layer: int, name: str) -> bool:
     """Other keys, a corrupted row, a row at p and a last block nonzero past the matrix's end, each among the last 64
     blocks of `name`: each refused with its flag bit among those it raises (other keys' garbage is nonzero past the end
     too), and the honest blocks passed."""
@@ -263,7 +315,7 @@ def controls(args, lay, src, store: S.Store, out: Out, layer: int, name: str) ->
              "honest": (lay, rows, 0)}
     used = t.offset + t.size - last * L.PAYLOAD
     if used < L.PAYLOAD:
-        payload = bytearray(L.payloads(lay, src, reader(args.w), last, 1))
+        payload = bytearray(L.payloads(lay, src, read, last, 1))
         payload[-1] ^= 1
         padded = rows.clone()
         padded[n - 1] = S.encode_rows(store.kernels, to_device(bytes(payload)).view(1, L.PAYLOAD), last)[0]
@@ -343,27 +395,34 @@ def activations(M: int, K: int, gen: torch.Generator) -> tuple[torch.Tensor, tor
     return x, sx
 
 
-def gemm(args, staged: dict, out: Out) -> float | None:
+def gemm(args, staged: dict, out: Out) -> tuple[dict[int, float], bool]:
+    """Each staged matrix at each batch M: the layer's GEMM seconds per M (all four matrices), and whether every output
+    word equals the twin's."""
     gen = torch.Generator(device=DEVICE).manual_seed(args.seed)
     cpu = torch.Generator().manual_seed(args.seed)
-    total = 0.0
-    for name, (w, sw) in staged.items():
-        N, K = w.shape
-        x, sx = activations(args.m, K, gen)
-        y = G.scaled_mm(x, sx, w, sw)
-        t_int = timed(lambda: torch._int_mm(x, w.t()), args.reps)
-        t_all = timed(lambda: G.scaled_mm(x, sx, w, sw), args.reps)
-        res = G.twin(x, sx, w, sw, y)
-        sm = G.samples(x, sx, w, sw, y, args.samples, cpu)
-        np.savez_compressed(args.out / f"samples-{name}.npz", K=K, **sm)
-        out.record(step="gemm", matrix=name, m=args.m, n=N, k=K, twin=res,
-                   int_mm_s=[round(t, 6) for t in t_int], scaled_mm_s=[round(t, 6) for t in t_all],
-                   tops=round(2 * args.m * N * K / min(t_all) / 1e12, 1))
-        total += min(t_all)
-        del x, sx, y
-        if DEVICE.type == "cuda":
-            torch.cuda.empty_cache()
-    return total if len(staged) == len(L.MATRICES) else None
+    totals, ok = {}, True
+    for M in args.m:
+        total = 0.0
+        for name, (w, sw) in staged.items():
+            N, K = w.shape
+            x, sx = activations(M, K, gen)
+            y = G.scaled_mm(x, sx, w, sw)
+            t_int = timed(lambda: torch._int_mm(x, w.t()), args.reps)
+            t_all = timed(lambda: G.scaled_mm(x, sx, w, sw), args.reps)
+            res = G.twin(x, sx, w, sw, y)
+            ok &= res["mismatches"] == 0
+            sm = G.samples(x, sx, w, sw, y, args.samples, cpu)
+            np.savez_compressed(args.out / f"samples-{name}-m{M}.npz", K=K, **sm)
+            out.record(step="gemm", matrix=name, m=M, n=N, k=K, twin=res,
+                       int_mm_s=[round(t, 6) for t in t_int], scaled_mm_s=[round(t, 6) for t in t_all],
+                       tops=round(2 * M * N * K / min(t_all) / 1e12, 1))
+            total += min(t_all)
+            del x, sx, y
+            if DEVICE.type == "cuda":
+                torch.cuda.empty_cache()
+        if len(staged) == len(L.MATRICES):
+            totals[M] = total
+    return totals, ok
 
 
 def main(argv=None) -> int:
@@ -371,10 +430,17 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (CMP-95 item 2)")
     ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest")
-    ap.add_argument("--w", type=Path, required=True, help="the weights stream's bytes at their stream offsets")
-    ap.add_argument("--store", type=Path, required=True)
+    ap.add_argument("--w", type=Path, help="the weights stream's bytes at their stream offsets (else the generator's)")
+    ap.add_argument("--generator", default="verity_torch_loop.weights", help="the seeded generator, without --w")
+    ap.add_argument("--shape", default="h200", help="its shape")
+    ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1", help="its seed")
+    store = ap.add_mutually_exclusive_group(required=True)
+    store.add_argument("--store", type=Path, help="the development store")
+    store.add_argument("--encoded", type=Path, help="an encoded store's directory (p2_v1/store.py encode's), read only")
+    ap.add_argument("--salt", help="the development store's public test salt, 24 bytes hex")
+    ap.add_argument("--source", help="the encoded store's coin (hex), drawn after its commitment")
+    ap.add_argument("--commitment", help="the encoded store's commitment (hex)")
     ap.add_argument("--lib", type=Path, required=True)
-    ap.add_argument("--salt", required=True, help="the public test salt, 24 bytes hex")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--toy", type=Path, help="the fixture's store-toy/ directory, for the toy step")
     ap.add_argument("--layer", type=int, default=0)
@@ -383,7 +449,8 @@ def main(argv=None) -> int:
     ap.add_argument("--encode-blocks", type=int)
     ap.add_argument("--encode-chunk", type=int, default=8192)
     ap.add_argument("--chunk", type=int, default=1 << 16)
-    ap.add_argument("--m", type=int, default=20480)
+    ap.add_argument("--m", type=lambda s: [int(v) for v in s.split(",")], default=[4096, 16384],
+                    help="the batches, comma-separated")
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--samples", type=int, default=24)
     ap.add_argument("--seed", type=int, default=12)
@@ -400,27 +467,40 @@ def main(argv=None) -> int:
     if not {"encode", "stage", "gemm"} & set(steps):
         return 0 if ok else 1
     manifest = json.loads(args.weights.read_text())
-    lay = L.store_layout(json.loads(args.layout.read_text()), L.registered_prefix(bytes.fromhex(args.salt)))
+    try:
+        lay, setup = L.open_store(args.layout, manifest, args.encoded, args.source, args.commitment, args.salt)
+    except ValueError as e:
+        raise SystemExit(str(e)) from None
     src = L.Weights.of(manifest)
+    read = L.reader(args.w) if args.w else L.generator_reader(args.generator, args.shape, args.weights_seed)
     for t in lay.layer(args.layer):
         if src.shape(args.layer, t.matrix) != (t.n, t.k):
             raise SystemExit(f"{t.name} is [{t.n}, {t.k}] in the store, {list(src.shape(args.layer, t.matrix))} in the stream")
     blocks = lay.blocks(args.layer)
-    dev = DevStore(args.store, lay, blocks, digest(manifest))
+    if args.encoded is not None:
+        if "encode" in steps:
+            ap.error("an encoded store is read only: no encode step")
+        dev = EncodedStore(args.encoded, lay, blocks, setup)
+    else:
+        dev = DevStore(args.store, lay, blocks, digest(manifest))
     out.record(step="start", layer=args.layer, blocks=[blocks.start, blocks.stop], encoded=dev.meta["done"],
-               staging_bytes=lay.staging_bytes(args.layer),
+               staging_bytes=lay.staging_bytes(args.layer), store=str(args.encoded or args.store),
+               kind="encoded" if args.encoded else "development",
                device=torch.cuda.get_device_name() if DEVICE.type == "cuda" else str(DEVICE), torch=torch.__version__,
                prefix_sha256=dev.meta["prefix_sha256"], layout_sha256=dev.meta["layout_sha256"])
     if "encode" in steps:
-        encode(args, lay, src, dev, out)
+        encode(args, lay, src, read, dev, out)
     staged, decode_s = {}, None
     if "stage" in steps or "gemm" in steps:
-        staged, decode_s, controls_ok = stage(args, lay, src, dev, out, args.layer)
-        ok &= controls_ok
-    gemm_s = gemm(args, staged, out) if "gemm" in steps else None
-    if decode_s is not None and gemm_s is not None:
-        out.record(step="summary", m=args.m, layers=LAYERS, decode_layer_s=round(decode_s, 6), gemm_layer_s=round(gemm_s, 6),
-                   step_s=round(LAYERS * (decode_s + gemm_s), 3), gemm_only_step_s=round(LAYERS * gemm_s, 3))
+        staged, decode_s, stage_ok = stage(args, lay, src, read, dev, out, args.layer)
+        ok &= stage_ok
+    gemm_s, gemm_ok = gemm(args, staged, out) if "gemm" in steps else ({}, True)
+    ok &= gemm_ok
+    if decode_s is not None:
+        for M, g in gemm_s.items():
+            out.record(step="summary", m=M, layers=LAYERS, decode_layer_s=round(decode_s, 6), gemm_layer_s=round(g, 6),
+                       step_s=round(LAYERS * (decode_s + g), 3), gemm_only_step_s=round(LAYERS * g, 3),
+                       decode_only_step_s=round(LAYERS * decode_s, 3))
     return 0 if ok else 1
 
 
