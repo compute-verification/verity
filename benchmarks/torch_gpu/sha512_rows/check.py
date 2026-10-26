@@ -1,5 +1,6 @@
 """The engine against the CPU reference (``verity.ml.commitments``), bit for bit: row digests on random rows at edge sizes
-(every variant), hm96 leaves under both salt forms, frame leaves, levels, pads and roots, and on a CUDA device the frozen H200
+(every variant), hm96 leaves under both salt forms and fused with their units' frame leaves, frame leaves, unit frame
+tables, levels (a front child, strided trees), pads and roots, and on a CUDA device the frozen H200
 layout's rows (``bench.h200_rows``) on sampled slots. ``python check.py --out DIR`` runs it on the current CUDA device (or
 ``--device host``) and writes check.json; the tests call the same functions on the host twin.
 """
@@ -102,15 +103,22 @@ def check_rows(engine: E.Engine, slots: int = 3, seed: int = 1, variants: Sequen
     return {"rows": len(rows), "slots": slots, "sizes": sorted({sum(n for _, _, n in p) for p in rows}), "mismatches": out}
 
 
+FUSED_DEST = (0, 5, 1, 6, 7, 2, 3, 8, 9, 10, 11, 4)   # check_leaves' rows: unit d < 5 is row g alone, else the rest's d - 5
+FUSED_RANK0 = (1 << 24) - 2                            # the units' ranks: a slot-tree leaf is one block below 2^24, else two
+
+
 def check_leaves(engine: E.Engine, slots: int = 3, seed: int = 2) -> dict[str, Any]:
-    """hm96 leaves under a salt key and under given salts, ranks of 1 to 3 bytes, two domains."""
+    """hm96 leaves under a salt key and under given salts, two domains, ranks and positions of 1 to 8 bytes (a frame leaf's
+    rest of prefix and value one block up to 6 bytes each, q <= 47, else two); and fused: five rows each a unit alone, whose
+    slot-tree leaves (ranks FUSED_RANK0 + d, from ``frame_table``) the leaf kernel writes, the other seven rows' leaves
+    compacted."""
     rng = np.random.default_rng(seed)
     tensors, rows = random_tensors(rng, slots), random_rows()[:12]
     dev = Dev(engine)
     G = len(rows)
     doms = [domain("unit-a", 1 << 17), domain("unit-b", 1 << 17)]
     did_of_row = [g % 2 for g in range(G)]
-    rank = [(0, 1, 2, 255, 256, 65535, 65536, 70000, 3, 4, 5, 6)[g] for g in range(G)]
+    rank = [(0, 1, 2, 255, 256, 65535, 65536, 70000, 1 << 40, 1 << 48, (1 << 40) - 1, (1 << 64) - 15)[g] for g in range(G)]
     position = [r + 7 * (g % 3) for g, r in enumerate(rank)]
     salt_row = [1000 + 3 * g for g in range(G)]
     table = engine.rows(rows, [dev.put(t) for t in tensors])
@@ -121,10 +129,18 @@ def check_leaves(engine: E.Engine, slots: int = 3, seed: int = 2) -> dict[str, A
     for g in range(G):
         for s in range(slots):
             ys[g, s] = np.frombuffer(rng.bytes(192), dtype=np.uint8)
-    bad_key = bad_given = 0
+    units, n_rest = 5, G - 5
+    slot_dom = domain("slots", 1 << 25)
+    frames = engine.frame_table([slot_dom.domain_id], FUSED_RANK0, units)
+    dest = engine.u32s(np.asarray(FUSED_DEST, dtype=np.uint32))
+    bad_key = bad_given = bad_fused = 0
     for minb in LEAF_MINB[engine.host]:
         got_key = E.digests(engine.leaves(lt, x, E.SaltKey(SALT_KEY, nonce0), minb=minb))
         got_given = E.digests(engine.leaves(lt, x, dev.put(ys), minb=minb))
+        run = engine._words(slots, units)
+        rest = E.digests(engine.leaves(lt, x, E.SaltKey(SALT_KEY, nonce0), engine._words(n_rest, slots), minb, frames, dest,
+                                       run))
+        run_d = E.digests(run)
         for g in range(G):
             for s in range(slots):
                 xr = row_digest(ref_rows(tensors, rows, s)[g])
@@ -134,10 +150,16 @@ def check_leaves(engine: E.Engine, slots: int = 3, seed: int = 2) -> dict[str, A
                     bad = got[g * slots + s] != want
                     if got is got_key:
                         bad_key += bad
+                        d = FUSED_DEST[g]
+                        if d < units:
+                            u = FUSED_RANK0 + d
+                            bad_fused += run_d[s * units + d] != slot_dom.leaf(u, u, E.ROOT_SCHEMA, want)
+                        else:
+                            bad_fused += rest[(d - units) * slots + s] != want
                     else:
                         bad_given += bad
     return {"rows": G, "slots": slots, "leaf_minb": list(LEAF_MINB[engine.host]),
-            "mismatches": {"salt_key": bad_key, "salts": bad_given}}
+            "mismatches": {"salt_key": bad_key, "salts": bad_given, "fused": bad_fused}}
 
 
 def check_trees(engine: E.Engine, seed: int = 3) -> dict[str, Any]:
@@ -165,6 +187,33 @@ def check_trees(engine: E.Engine, seed: int = 3) -> dict[str, Any]:
     up = E.digests(engine.level(Dev(engine).put(kids), [big.domain_id], 9))
     kb = E.digests(kids)
     bad["level9-index-to-299"] = sum(up[i] != big.node(9, i, kb[2 * i], kb[2 * i + 1]) for i in range(300))
+    first = (1 << 40) - 7
+    up = E.digests(engine.level(Dev(engine).put(kids), [big.domain_id], 9, first, engine.node_mids([big.domain_id], 9)))
+    bad["level9-index-from-2^40-7"] = sum(up[i] != big.node(9, first + i, kb[2 * i], kb[2 * i + 1]) for i in range(300))
+    # a front child and each tree's children a slice of a wider array, read in place (the slot trees' fold)
+    first = (1 << 56) + 3
+    wide = np.stack([E.words([rng.bytes(64) for _ in range(9)]) for _ in range(3)])
+    wd = Dev(engine).put(wide)
+    up = E.digests(engine.level(wd[:, 2:7], [big.domain_id], 4, first, None, wd[:, 0]))
+    want = []
+    for t in range(3):
+        c = E.digests(wide[t, [0, 2, 3, 4, 5, 6]])
+        want += [big.node(4, first + i, c[2 * i], c[2 * i + 1]) for i in range(3)]
+    bad["level4-front-child-strided"] = sum(a != b for a, b in zip(up, want, strict=True))
+    # each unit's slot-tree leaf from its frame table, one block below rank 2^24 and two from there, against frame_leaves
+    for rank0 in (0, (1 << 24) - 3, (1 << 56) - 2):
+        n, S = 5, 2
+        ft = engine.frame_table([big.domain_id], rank0, n)
+        vals = np.stack([E.words([rng.bytes(64) for _ in range(S)]) for _ in range(n)])
+        units = Dev(engine).put(np.asarray([3, 0, 4, 1, 2], dtype=np.int64))
+        run = engine.frame_units(ft, units, Dev(engine).put(vals), engine._words(S, n))
+        ref = engine.frame_leaves(Dev(engine).put(np.ascontiguousarray(vals[[1, 3, 4, 0, 2]].transpose(1, 0, 2))),
+                                  [big.domain_id], rank0)
+        rd = E.digests(run)
+        bad[f"frame-units-from-{rank0}"] = sum(a != b for a, b in zip(rd, E.digests(ref), strict=True))
+        bad[f"frame-units-from-{rank0}-reference"] = sum(
+            rd[s * n + d] != big.leaf(rank0 + d, rank0 + d, ROOTS_SCHEMA, E.digests(vals[[1, 3, 4, 0, 2]][d, s])[0])
+            for s in range(S) for d in range(n))
     pads = E.digests(engine.pads([big.domain_id], 1, 65530, 10))
     bad["pads-65530"] = sum(pads[j] != big.pad(65530 + j) for j in range(10))
     return {"mismatches": bad}
