@@ -171,7 +171,8 @@ theorem encF_toBytes (a : F128) : encF a = a.toBytes.data.toList := by
   apply List.ext_getElem (by simp [encF, encNat, hs])
   intro i h1 h2
   have hi : i < 16 := by simpa [encF, encNat] using h1
-  rw [Array.getElem_toList, ← getElem!_pos a.toBytes.data i (by omega), FlockSoundness.Refine.toBytes_get a i hi]
+  rw [show a.toBytes.data.toList[i] = a.toBytes.data[i]'(by omega) by simp,
+    ← getElem!_pos a.toBytes.data i (by omega), FlockSoundness.Refine.toBytes_get a i hi]
   unfold encF
   by_cases h8 : i < 8
   · rw [List.getElem_append_left (by simp [encNat]; omega)]
@@ -354,16 +355,15 @@ def Small (s : Flock.Schedule) : Prop :=
   s.levels.size ≤ 7 ∧ ∀ l ∈ s.levels, l.q < 2 ^ 16 ∧ l.lanes < 16 ∧ l.d < 2 ^ 16
 
 theorem fast100_small {m : ℕ} {s : Flock.Schedule} (h : fast100 m = some s) : Small s := by
-  obtain ⟨h1, h2⟩ := FlockVBridge.Family.fast100_range h
-  have key : ∀ m, 22 ≤ m → m ≤ 35 → ∀ s, fast100 m = some s → (decide (s.levels.size ≤ 7) &&
-      s.levels.all fun l => decide (l.q < 2 ^ 16) && decide (l.lanes < 16) && decide (l.d < 2 ^ 16)) = true := by
-    intro m h1 h2 s hs
-    interval_cases m <;> (simp only [fast100, Option.some.injEq] at hs; subst hs; decide +kernel)
-  have hk := key m h1 h2 s h
-  simp only [Bool.and_eq_true, decide_eq_true_eq, Array.all_eq_true] at hk
+  have hm : m < 40 := by have := (FlockVBridge.Family.fast100_range h).2; omega
+  have key : ∀ m : Fin 40, ∀ s ∈ Flock.fast100 m.val, (decide (s.levels.size ≤ 7) &&
+      s.levels.all fun l => decide (l.q < 2 ^ 16 ∧ l.lanes < 16 ∧ l.d < 2 ^ 16)) = true := by
+    decide +kernel
+  have hk := key ⟨m, hm⟩ s h
+  rw [Bool.and_eq_true, decide_eq_true_iff] at hk
   refine ⟨hk.1, fun l hl => ?_⟩
-  obtain ⟨i, hi, rfl⟩ := Array.getElem_of_mem hl
-  exact ⟨(hk.2 i hi).1.1, (hk.2 i hi).1.2, (hk.2 i hi).2⟩
+  obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hl
+  simpa using Array.all_eq_true.1 hk.2 i hi
 
 theorem small_default : Small default :=
   ⟨by decide, fun l hl => absurd hl (by show l ∉ (#[] : Array _); simp)⟩
@@ -453,6 +453,11 @@ theorem rdR_elemR (r : XR) {ws : List Claims.Flock.Wit} (hl : ws.length = r.w.pa
     exact proofR_fits r ws k
 
 /-! ## The openings a level opens -/
+
+theorem openAt_caps (p : Flock.LigeritoProof) (c : Array (Array ByteArray)) (R ℓ : ℕ) :
+    openAt { p with recursiveCaps := c } R ℓ = openAt p R ℓ := by
+  unfold openAt
+  rfl
 
 theorem openAt_opensOf (p : Flock.Proof) (R ℓ : ℕ) :
     (openAt (opensOf p).ligerito R ℓ).1 = (openAt p.ligerito R ℓ).1 ∧
@@ -754,7 +759,7 @@ theorem copyOpensR_elemR (pieces : Msg → List OpenPiece) (hP : ∀ x, D.parse 
     show openAt (ligR rdR (Claims.Recursion.xI D x) (bdR.opened (o₀ :: ot) last) q) R ℓ = _
     unfold ligR
     rw [hsetI, hgl, hh, ht']
-    rfl
+    exact openAt_caps _ _ R ℓ
   -- the level's openings
   have hq0 : q.table = 0 := h0
   have hsch : (sideAtR rdR (Claims.Recursion.xI D x) (bdR.opened (o₀ :: ot) last) q).sch = schR r := by
