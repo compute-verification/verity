@@ -311,8 +311,7 @@ theorem linkWindowAcceptMeans_honest :
   intro c ⟨hp, ho, hc, hs⟩
   obtain ⟨row, hr, hrow⟩ := opened_of ho
   obtain ⟨d, hd⟩ := verdictDigest_ok c
-  have hout : outputsOf c true 3 = acceptedOutputs c := by
-    first | rfl | (cases hk : c.kind <;> simp [outputsOf, acceptedOutputs, hk])
+  have hout : outputsOf c true 3 = acceptedOutputs c := rfl
   have hv : verdict c = .ok ⟨true, acceptedOutputs c, d, true, some 3, true, true⟩ := by
     unfold verdict
     simp only [hr, proved_of hp, ↓reduceIte, hrow, certified_of hc, synced_of hs, acceptedOf, beq_self_eq_true,
