@@ -56,12 +56,14 @@ theorem nodeRow_nodeOf {row : ByteArray} (h : isNodeRow row = true) : nodeRow (n
 
 /-- A 64-byte node's row is a node row. -/
 theorem isNodeRow_nodeRow {node : ByteArray} (h : node.data.size = capNodeBytes) : isNodeRow (nodeRow node) = true := by
+  have hl : node.data.toList.length = 64 := by rw [Array.length_toList]; exact h
   unfold isNodeRow nodeRow
-  unfold capNodeBytes at h
-  simp only [List.size_toArray, List.length_append, Array.length_toList, List.length_replicate, h,
-    List.toList_toArray, Bool.and_eq_true, beq_iff_eq]
-  refine ⟨rfl, ?_⟩
-  rw [← h, ← Array.length_toList, List.drop_left]
+  simp only [Bool.and_eq_true, beq_iff_eq]
+  refine ⟨?_, ?_⟩
+  · show (node.data.toList ++ List.replicate 64 0).toArray.size = 128
+    rw [List.size_toArray, List.length_append, hl, List.length_replicate]
+  · show (node.data.toList ++ List.replicate 64 0).toArray.toList.drop 64 = List.replicate 64 0
+    rw [List.toList_toArray, ← hl, List.drop_left]
 
 /-- A 64-byte node is its row's node. -/
 theorem nodeOf_nodeRow {node : ByteArray} (h : node.data.size = capNodeBytes) : nodeOf (nodeRow node) = node := by
