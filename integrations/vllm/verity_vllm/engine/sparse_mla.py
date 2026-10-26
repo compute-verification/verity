@@ -20,10 +20,10 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import importlib
-import os
 import sys
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.engine import hooks
 
 ENV = "VERITY_SPARSE_MLA_NUM_SPLITS"
@@ -36,7 +36,7 @@ _PIN: hooks.Patch | None = None
 
 def wanted() -> int | None:
     """The split count `ENV` asks for: `SPLITS` for ``"1"``, None (vLLM's heuristic) when unset or ``"0"``."""
-    v = os.environ.get(ENV, "0").strip()
+    v = settings.get(ENV)
     if v not in ("0", str(SPLITS)):
         raise ValueError(f"{ENV}={v!r}: {SPLITS} pins FA3's sparse MLA to one split, 0 leaves vLLM's heuristic; nothing else is modelled")
     return None if v == "0" else SPLITS

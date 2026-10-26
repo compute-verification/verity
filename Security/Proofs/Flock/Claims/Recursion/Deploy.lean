@@ -19,7 +19,8 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
   `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, Flock's
   plain verifier sets the inner statement up, its statement check passes and it carries a draw, `innerOk`, and there is
   one part per V*
-  statement of the verifier's inner shape, `RecVStar.statements`), as the verifier's inner
+  statement of the verifier's inner shape, `RecVStar.statements`, each part's circuit V*'s statement's of its index,
+  `partsVStar`, as each part's session holds it, `RecVStar.checkCircuit`), as the verifier's inner
   shape and the inner statement's files with no records (`readOf`), where the setup's checks accept that shape
   (`RecScope.accepts`). The V* records are run messages, so the statement carries no draws, and `scopeCheck` reads
   only the inner scope check: the compiled verifier refuses the draw and shape conditions at each session's decision
@@ -178,11 +179,33 @@ def capPorted (parts : List PartX) : Bool :=
   | some c => c.ports.any (·.name == "top")
   | none => false
 
-/-- **The compiled statement's reader**: its bytes decode, the inner statement's decode and set up (`RecVStar.innerOf`)
-and pass Flock's own setup and statement check with a draw (`innerOk`), the verifier's own inner shape reads
-(`RecVStar.Inner.ofJson`), and there is one part per V* statement of that shape, whose circuit names the
-statement's message-round ports (`portsNamed`), the last part's RecCap's port `top` (`capPorted`). -/
-def readX (x : Claims.Msg) : Option XR := do
+/-- The verifier's own bindings (`--rec-bindings`), as each part's session reads them (`RecRaw.ins`). -/
+def ownBindings (b : ByteArray) : Option VStar.Bindings :=
+  (do RecVStar.ownBindingsOfJson (← jsonOf "rec-bindings" b)).toOption
+
+/-- **A part's circuit is V\*'s statement `sv`'s**, as its session's `RecVStar.checkCircuit` holds it: the circuit file
+is V\*'s for `sv` under the verifier's own bindings `f` at the shape's holo flag (`checkFile`, byte for byte), and the
+circuit the setup parses off it (`partCircuit`) carries V\*'s META and row ports (`checkParsed`) and V\*'s part
+(`checkPart`). -/
+def partVStar (shape : RecVStar.Inner) (f : VStar.Bindings) (sv : VStar.Stmt) (p : PartX) : Bool :=
+  match partCircuit p with
+  | some c => (RecVStar.checkFile sv f p.base.circuit shape.holo).isOk && (RecVStar.checkParsed sv c).isOk &&
+      (RecVStar.checkPart sv c).isOk
+  | none => false
+
+/-- **Each part's circuit is V\*'s statement's of its index** (`partVStar`), under the verifier's own bindings. -/
+def partsVStar (shape : RecVStar.Inner) (b : ByteArray) (parts : List PartX) (vs : Array VStar.Stmt) : Bool :=
+  (List.range vs.size).all fun s =>
+    match ownBindings b, parts[s]?, vs[s]? with
+    | some f, some p, some sv => partVStar shape f sv p
+    | _, _, _ => false
+
+/-- The compiled statement's reading before the parts' circuits are held to V\*'s: its bytes decode, the inner
+statement's decode and set up (`RecVStar.innerOf`) and pass Flock's own setup and statement check with a draw
+(`innerOk`), the verifier's own inner shape reads (`RecVStar.Inner.ofJson`), and there is one part per V* statement of
+that shape, whose circuit names the statement's message-round ports (`portsNamed`), the last part's RecCap's port
+`top` (`capPorted`). -/
+def readXPre (x : Claims.Msg) : Option XR := do
   let w ← decodeX x
   let ri ← FlockDeploy.decode w.inner
   let shape ← (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" w.recInner)).toOption
@@ -194,6 +217,51 @@ def readX (x : Claims.Msg) : Option XR := do
   let vs ← (RecVStar.statements shape).toOption
   if w.parts.length ≠ vs.size ∨ portsNamed w.parts vs = false ∨ capPorted w.parts = false then none
   pure ⟨w, ri, partition, shape, dims⟩
+
+/-- **The compiled statement's reader**: `readXPre`, where each part's circuit is V\*'s statement's of its index
+(`partsVStar`). Each part's session refuses a part without (`RecSetup.checks` runs `RecVStar.checkStmt`, which runs
+`checkCircuit`), so a statement every part's session sets up at passes (`readX_of_sessions`). -/
+def readX (x : Claims.Msg) : Option XR := do
+  let r ← readXPre x
+  let vs ← (RecVStar.statements r.shape).toOption
+  if partsVStar r.shape r.w.bindings r.w.parts vs = false then none
+  pure r
+
+theorem readXPre_of_readX {x : Claims.Msg} {r : XR} (h : readX x = some r) : readXPre x = some r := by
+  unfold readX at h
+  cases hr : readXPre x with
+  | none => simp [hr] at h
+  | some r' =>
+    cases hv : (RecVStar.statements r'.shape).toOption with
+    | none => simp [hr, hv] at h
+    | some vs =>
+      by_cases hp : partsVStar r'.shape r'.w.bindings r'.w.parts vs = false
+      · simp [hr, hv, hp] at h
+      · simp [hr, hv, hp] at h
+        rw [h]
+
+theorem readX_parts {x : Claims.Msg} {r : XR} (h : readX x = some r) :
+    ∃ vs, RecVStar.statements r.shape = .ok vs ∧ partsVStar r.shape r.w.bindings r.w.parts vs = true := by
+  unfold readX at h
+  cases hr : readXPre x with
+  | none => simp [hr] at h
+  | some r' =>
+    cases hv : RecVStar.statements r'.shape with
+    | error e => simp [hr, hv, Except.toOption] at h
+    | ok vs =>
+      by_cases hp : partsVStar r'.shape r'.w.bindings r'.w.parts vs = false
+      · simp [hr, hv, hp, Except.toOption] at h
+      · simp [hr, hv, hp, Except.toOption] at h
+        subst h
+        exact ⟨vs, hv, by simpa using hp⟩
+
+/-- **`readX` refuses only what `partsVStar` refuses**: where `readXPre` reads and every part's circuit is V\*'s
+statement's of its index, `readX` reads the same. -/
+theorem readX_of_pre {x : Claims.Msg} {r : XR} (h : readXPre x = some r) {vs : Array VStar.Stmt}
+    (hvs : RecVStar.statements r.shape = .ok vs) (hp : partsVStar r.shape r.w.bindings r.w.parts vs = true) :
+    readX x = some r := by
+  unfold readX
+  simp [h, hvs, hp, Except.toOption]
 
 /-- How Flock's plain verifier is told to set the inner statement `w` up, as each staged V* statement hands it to the
 verifier (`--rec-inner-statement`, `--rec-inner-statement-coins`, `--rec-inner-tables`, `--rec-inner-draw`): its

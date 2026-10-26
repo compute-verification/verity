@@ -20,26 +20,35 @@ id (`release`), which `deployment.json` names (`run_id`).
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the warden's
   host clock (`origin_unix`).
-- The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys), not the deployed H = 20.
+- The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
+  is H = 20 (the auditor gate's default, `benchmarks/live_challenger/auditor.py`).
 
 **Traffic** (`traffic`, `varied_traffic`): varied, as CERT-VARLEN's: Poisson arrivals at `--rate` a second, prompts of
 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
 (log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests. `--temperature` and
 `--top-p` put the same on every request instead (the gate's `warden-rehearse` always gives both): an endpoint applies
-its own generation config to a request that omits them.
+its own generation config to a request that omits them. `rehearse --ids` sends the scan's traffic instead (`id_traffic`,
+at the same sampling when given): warden-form id requests (`active.id_request`, offset 0), each answered by the fake
+endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an output id, then `io_tie.TRAILER`, at most
+`egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends it to
+the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
+(`read_prompts`, `prompt_traffic`: request j's the (j mod n)-th, each with exactly `--max-tokens`), and
+`--window-per-group` sends them in groups of the n, group g's half a bucket into link-window g·G (`group_windows`), so
+that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
+loop's period of requests a group, as the gate's `warden-rehearse --scan --prompts --window-per-group` runs it.
 
 **Subcommands**, from the repository root or with `benchmarks/network_traces` on the path:
 
     python warden_serve.py keys --dir KEYDIR [--height 10]
     python warden_serve.py traffic --out TRAFFIC.json --model NAME [--requests 100] [--rate 0.5] [--seed 0]
         [--temperature T] [--top-p P]
-    python warden_serve.py fake --listen HOST:PORT [--token-ms 20]
+    python warden_serve.py fake --listen HOST:PORT [--token-ms 20] [--id-payload P]
     python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
         --windows N [--start-in 5] [schedule]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
     python warden_serve.py check --run DIR
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
-        [--top-p P] [schedule]
+        [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [schedule]
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
   the origin, the listener), runs the warden for `--windows` windows, and writes `warden.json` (each connection's
@@ -101,8 +110,8 @@ from pathlib import Path
 import active_replay as ar
 import certifier_serve as cs
 import stall_probe
-from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.active import DATA, PAD
+from verity.core.protocols.certifier import io_tie as IT, warden_rows as WR
+from verity.core.protocols.certifier.active import DATA, PAD, id_request
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
 from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count
 from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
@@ -136,6 +145,10 @@ QUESTIONS = ("Explain how a bloom filter works.", "Write a haiku about the sea."
 FILLER = ("Notes: the meeting moved to Thursday, the printer on the third floor is out of toner, the parking lot is "
           "closed for repaving next week, and the quarterly report is due on Friday.").split()
 TEMPERATURES = (0.0, 0.7, 1.0)
+#: a prompt id's bits, the scan's IDB (`scan_zk.CLASS`): the scan reads each prompt id and output id in IDB bits
+PROMPT_ID_BITS = 17
+#: the public file of a `--window-per-group` rehearsal: each group's requests and link-windows (`groups`)
+GROUPS = "groups.json"
 
 
 # Traffic and the bytes on it.
@@ -162,6 +175,119 @@ def varied_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prom
         out.append({"at": round(at, 3), "body": body})
         at += rng.expovariate(rate)
     return out
+
+
+def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_tokens: tuple[int, int] = (16, 1024),
+               max_tokens: tuple[int, int] = (1, 64), start_s: float = 0.0, temperature: float | None = None,
+               top_p: float | None = None) -> list[dict]:
+    """n warden-form id requests (`active.id_request`'s fields), each {"at": seconds after the origin, "ids": its
+    fields}: Poisson arrivals at `rate`, prompts of log-uniform length of ids below 2^17, `max_tokens` log-uniform, and
+    the sampling drawn as `varied_traffic` draws it (top_p 1), or `temperature` and `top_p`, when given, every
+    request's; the arrivals, prompts, lengths and seeds are the seed's either way. The scan (`ingress_scan`) reads
+    exactly these."""
+    rng = random.Random(seed)
+    at, out = start_s, []
+    for i in range(n):
+        length = round(math.exp(rng.uniform(*map(math.log, prompt_tokens))))
+        prompt = [rng.randrange(128_256) for _ in range(length)]
+        most = round(math.exp(rng.uniform(*map(math.log, max_tokens))))
+        drawn = rng.choice(TEMPERATURES)
+        fields = {"model": model, "user": f"user-{i}", "prompt": prompt, "max_tokens": most,
+                  "temperature": drawn if temperature is None else temperature,
+                  "top_p": 1.0 if top_p is None else top_p, "seed": rng.randrange(1 << 31)}
+        out.append({"at": round(at, 3), "ids": fields})
+        at += rng.expovariate(rate)
+    return out
+
+
+def group_windows(params: WardenParams, tokens: int) -> int:
+    """The link-windows a group of at most `lanes` id requests takes when it arrives half a bucket into a window's
+    first bucket (`prompt_traffic`'s ``window_per_group``), each answered by at most `tokens` id events and the trailer:
+    admitted by the bucket after its arrival's (and one more for the client's lag), its last egress cell in bucket
+    s + D + ⌊tokens/r⌋ (the warden's schedule), so a group's cells are all in its own windows."""
+    return -(-(params.delay + tokens // params.slots + 3) // params.window)
+
+
+def read_prompts(data: bytes, params: WardenParams) -> list[list[int]]:
+    """``--prompts``: a JSON array of prompts, each a non-empty array of token ids below 2^`PROMPT_ID_BITS` (the
+    scan's IDB), each prompt's id request (`active.id_request`, offset 0) within the schedule's ingress bound."""
+    try:
+        prompts = json.loads(data)
+    except ValueError as e:
+        raise SystemExit(f"--prompts: not JSON: {e}") from None
+    if not (isinstance(prompts, list) and prompts and all(isinstance(p, list) and p for p in prompts)
+            and all(type(t) is int and 0 <= t < 1 << PROMPT_ID_BITS for p in prompts for t in p)):
+        raise SystemExit(f"--prompts: a JSON array of prompts, each a non-empty array of token ids below "
+                         f"2^{PROMPT_ID_BITS}")
+    for p in prompts:
+        cells_in = -(-len(id_request(model="m" * 62, user="u" * 62, prompt=p, max_tokens=1,
+                                     frame_bytes=params.cell_bytes, offset=0)) // params.payload)
+        if cells_in > params.ingress_cells:
+            raise SystemExit(f"--prompts: a prompt of {len(p)} ids takes {cells_in} ingress cells, past the "
+                             f"schedule's {params.ingress_cells}")
+    return prompts
+
+
+def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: WardenParams, max_tokens: int,
+                   rate: float = 0.5, seed: int = 0, start_s: float = 0.0, temperature: float | None = None,
+                   top_p: float | None = None, window_per_group: bool = False) -> list[dict]:
+    """n warden-form id requests (`id_traffic`'s items) of the given prompts, request j's ``prompts[j mod len]`` with
+    exactly `max_tokens`: at `id_traffic`'s Poisson arrivals, or under `window_per_group` in groups of ``len(prompts)``
+    (at most `lanes`), group g's requests together half a bucket into window g·G (G = `group_windows`), so group g's
+    cells are exactly its windows' (``groups``). The seeds are the seed's either way."""
+    if window_per_group and len(prompts) > params.lanes:
+        raise SystemExit(f"--window-per-group: a group of {len(prompts)} prompts, past the schedule's "
+                         f"{params.lanes} lanes")
+    rng = random.Random(seed)
+    at, out = start_s, []
+    G, window_s = group_windows(params, max_tokens), params.window * params.bucket_ms / 1000
+    for j in range(n):
+        drawn = rng.choice(TEMPERATURES)
+        fields = {"model": model, "user": f"user-{j}", "prompt": list(prompts[j % len(prompts)]),
+                  "max_tokens": max_tokens, "temperature": drawn if temperature is None else temperature,
+                  "top_p": 1.0 if top_p is None else top_p, "seed": rng.randrange(1 << 31)}
+        when = (j // len(prompts)) * G * window_s + params.bucket_ms / 2000 if window_per_group else at
+        out.append({"at": round(when, 3), "ids": fields})
+        at += rng.expovariate(rate)
+    return out
+
+
+def groups(n: int, per: int, params: WardenParams, max_tokens: int) -> list[dict]:
+    """`prompt_traffic`'s groups under ``window_per_group``: each group's requests (indices) and its link-windows."""
+    G = group_windows(params, max_tokens)
+    return [{"group": g, "requests": list(range(g * per, min(n, (g + 1) * per))), "windows": [g * G, (g + 1) * G]}
+            for g in range(-(-n // per))]
+
+
+def fake_ids(body: dict) -> list[int]:
+    """The fake endpoint's output ids for an id request: `fake_tokens` of them, each below 2^17, fixed by the request."""
+    h = int.from_bytes(hashlib.sha256(json.dumps(body, sort_keys=True).encode()).digest()[:4], "big")
+    return [(h + 7919 * k) % 128_256 for k in range(fake_tokens(body))]
+
+
+def id_response(ids: list[int], payload: int) -> bytes:
+    """An id-form response as the scan's egress reads it: one `io_tie.id_event` of P = `payload` bytes an id, each one
+    `DATA` cell, then `io_tie.TRAILER`, which the warden's `END` holds."""
+    return b"".join(IT.id_event(x, payload) for x in ids) + IT.TRAILER
+
+
+def parse_id_response(data: bytes, payload: int) -> dict:
+    """An id-form response's reading (`id_response`), in `parse_response`'s keys: ``ids`` its count of id events,
+    ``complete`` when the bytes are whole id events and then `io_tie.TRAILER`."""
+    k, rest = divmod(len(data) - len(IT.TRAILER), payload)
+    ids = None
+    if k >= 0 and rest == 0:
+        at = len(IT.ID_EVENT_HEAD)
+        digits = [data[i * payload + at:i * payload + at + IT.ID_DIGITS] for i in range(k)]
+        if all(d.lstrip(b" ").isdigit() for d in digits):
+            got = [int(d) for d in digits]
+            try:
+                ids = got if data == id_response(got, payload) else None
+            except ValueError:
+                ids = None
+    n = 0 if ids is None else len(ids)
+    return {"status": None, "ids": None if ids is None else n, "complete": ids is not None, "events": n,
+            "text_bytes": 0, "finish_reason": None, "prompt_tokens": None, "completion_tokens": n}
 
 
 def http_request(body: dict, host: str, path: str = "/v1/completions") -> bytes:
@@ -229,10 +355,12 @@ def fake_tokens(body: dict) -> int:
 
 
 async def fake_endpoint(reader: asyncio.StreamReader, writer, *, sleep=asyncio.sleep, first_s: float = 0.1,
-                        token_s: float = 0.02) -> None:
+                        token_s: float = 0.02, id_payload: int | None = None) -> None:
     """A stand-in for vLLM's streamed `/v1/completions` for a rehearsal: it reads one request, answers its first token
     `first_s` after, then one event every `token_s`, its usage, `[DONE]`, and closes. `GET /v1/models` lists its one
-    model, `fake`, so that a rehearsal that names no model (the gate's `warden-rehearse`) runs against it too."""
+    model, `fake`, so that a rehearsal that names no model (the gate's `warden-rehearse`) runs against it too. With
+    `id_payload` P it answers every request `first_s` after with its `fake_ids` as one id-form response
+    (`id_response`), whole, and no HTTP head: the bytes the scan's egress reads."""
     try:
         head = await reader.readuntil(b"\r\n\r\n")
         if head.startswith(b"GET /v1/models "):
@@ -243,6 +371,11 @@ async def fake_endpoint(reader: asyncio.StreamReader, writer, *, sleep=asyncio.s
             return
         m = re.search(rb"(?im)^content-length:\s*(\d+)", head)
         body = json.loads(await reader.readexactly(int(m.group(1)))) if m else {}
+        if id_payload is not None:
+            await sleep(first_s)
+            writer.write(id_response(fake_ids(body), id_payload))
+            await writer.drain()
+            return
         n, model = fake_tokens(body), body.get("model")
         writer.write(b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream; charset=utf-8\r\nconnection: close\r\n"
                      b"transfer-encoding: chunked\r\n\r\n")
@@ -598,24 +731,31 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shim, origin: float) -> dict:
-    """One connection's entry in `client.json`; times in ms after the origin."""
+def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shim, origin: float,
+                   id_payload: int | None = None) -> dict:
+    """One connection's entry in `client.json`; times in ms after the origin. An id request's response is read as
+    id-form (`parse_id_response`, at P = `id_payload`)."""
+    data = bytes(shim.data)
     return {"index": index, "at": at, "sent_ms": round(sent * 1000, 3), "request_bytes": len(request),
             "request_sha256": _sha(request), "ordinal": shim.ordinal, "outcome": shim.outcome,
             "kinds": "".join(KIND_CHARS[k] for _, k in shim.arrivals),
             "arrivals_ms": [round((t - origin) * 1000, 3) for t, _ in shim.arrivals], "data_bytes": len(shim.data),
-            "data_sha256": _sha(bytes(shim.data)), "response": parse_response(bytes(shim.data))}
+            "data_sha256": _sha(data),
+            "response": parse_response(data) if id_payload is None else parse_id_response(data, id_payload)}
 
 
 async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.time) -> dict:
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
-    shim; returns what `client.json` holds."""
+    shim; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is sent as its warden-form id request
+    (`active.id_request`, offset 0) and its response read as id-form."""
     params = WardenParams(**deployment["params"])
     origin, listen = deployment["origin_unix"], tuple(deployment["listen"])
     host = "%s:%d" % tuple(deployment["upstream"])
 
     async def one(index: int, item: dict) -> dict:
-        request = http_request(item["body"], host)
+        ids = "ids" in item
+        request = (id_request(**item["ids"], frame_bytes=params.cell_bytes, offset=0) if ids
+                   else http_request(item["body"], host))
         await asyncio.sleep(max(0.0, origin + item["at"] - clock()))
         sent = clock()
         reader, writer = await asyncio.open_connection(*listen)
@@ -624,7 +764,8 @@ async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.ti
             shim = await Shim(params.cell_bytes, clock).read(reader)
         finally:
             writer.close()
-        return connection_log(index, item["at"], sent - origin, request, shim, origin)
+        return connection_log(index, item["at"], sent - origin, request, shim, origin,
+                              params.payload if ids else None)
 
     got = await asyncio.gather(*(one(i, item) for i, item in enumerate(traffic)), return_exceptions=True)
     doc = {"connections": [g if isinstance(g, dict) else {"index": i, "error": f"{type(g).__name__}: {g}"}
@@ -763,7 +904,7 @@ def check(run: Path) -> dict:
                 and row["response_certified"]):
             keys = ("same_cells", "in_bucket", "cells", "request_certified", "response_certified")
             problems.append(f"connection {o}: { {k: row[k] for k in keys} }")
-        if conn["outcome"] != "end" or row["status"] != 200 or not row["complete"]:
+        if conn["outcome"] != "end" or not row["complete"] or (row["status"] != 200 and row.get("ids") is None):
             problems.append(f"connection {o}: {conn['outcome']}, HTTP {row['status']}, complete {row['complete']}")
     warden_log = json.loads((run / "warden.json").read_text()) if (run / "warden.json").exists() else {}
     served = [r for r in rows if "ordinal" in r]
@@ -806,6 +947,15 @@ def table(result: dict) -> str:
 # The rehearsal.
 
 def traffic_of(args, model: str) -> list[dict]:
+    if getattr(args, "prompts", None) is not None:
+        params = _params(args)
+        return prompt_traffic(read_prompts(args.prompts.read_bytes(), params), args.requests, model=model, params=params,
+                              max_tokens=min(args.max_tokens, args.egress_cells - 1), rate=args.rate, seed=args.seed,
+                              temperature=args.temperature, top_p=args.top_p, window_per_group=args.window_per_group)
+    if getattr(args, "ids", False):
+        return id_traffic(args.requests, model=model, rate=args.rate, seed=args.seed, prompt_tokens=(16, args.prompt_max),
+                          max_tokens=(1, min(args.max_tokens, args.egress_cells - 1)), temperature=args.temperature,
+                          top_p=args.top_p)
     return varied_traffic(args.requests, model=model, rate=args.rate, seed=args.seed,
                           prompt_tokens=(16, args.prompt_max), max_tokens=(16, args.max_tokens),
                           temperature=args.temperature, top_p=args.top_p)
@@ -821,6 +971,10 @@ def _flags(args) -> list[str]:
 
 
 def rehearse(args) -> int:
+    if args.prompts is not None and not args.ids:
+        raise SystemExit("--prompts: id requests' prompts, with --ids")
+    if args.window_per_group and args.prompts is None:
+        raise SystemExit("--window-per-group: groups of the --prompts")
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     params = _params(args)
@@ -830,7 +984,8 @@ def rehearse(args) -> int:
     try:
         cs.load_key(scratch / "warden", args.height)
         if args.fake:
-            fake = subprocess.Popen(me + ["fake", "--listen", "127.0.0.1:0", "--token-ms", str(args.token_ms)],
+            ids = ["--id-payload", str(params.payload)] if args.ids else []
+            fake = subprocess.Popen(me + ["fake", "--listen", "127.0.0.1:0", "--token-ms", str(args.token_ms), *ids],
                                     stdout=subprocess.PIPE, text=True)
             procs.append(fake)
             upstream = tuple(json.loads(fake.stdout.readline())["listening"])
@@ -842,6 +997,11 @@ def rehearse(args) -> int:
         (out / "traffic.json").write_text(json.dumps(traffic))
         window_s = params.window * params.bucket_ms / 1000
         windows = math.ceil((traffic[-1]["at"] + args.tail) / window_s)
+        if args.window_per_group:
+            grouped = groups(len(traffic), len(read_prompts(args.prompts.read_bytes(), params)), params,
+                             traffic[0]["ids"]["max_tokens"])
+            (out / GROUPS).write_text(json.dumps({"groups": grouped}, indent=1))
+            windows = grouped[-1]["windows"][1]
         with open(out / "serve.log", "w") as log:
             serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0",
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
@@ -916,6 +1076,16 @@ def parser() -> argparse.ArgumentParser:
     pr.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
     pr.add_argument("--in-flight", type=int, default=4)
     r.add_argument("--tail", type=float, default=60.0, help="seconds the run lasts past the last request's time")
+    r.add_argument("--ids", action="store_true",
+                   help="warden-form id requests (id_traffic), answered id-form (the fake's --id-payload): the scan's "
+                        "traffic (scan_zk.py --warden-run)")
+    r.add_argument("--prompts", type=Path,
+                   help="with --ids: the requests' prompts, a JSON array of token-id arrays, request j's the (j mod n)-th "
+                        "of the n, each with exactly --max-tokens (at most --egress-cells - 1)")
+    r.add_argument("--window-per-group", action="store_true",
+                   help="with --prompts: the requests in groups of the n prompts (at most --lanes), group g's half a "
+                        "bucket into window g·G, G = group_windows, the run exactly its groups' windows (groups.json)")
+    f.add_argument("--id-payload", type=int, help="answer every request id-form (id_response) at P bytes an event")
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--traffic", required=True, type=Path)
     x.add_argument("--run", required=True, type=Path)
@@ -940,8 +1110,8 @@ def main(argv=None) -> int:
         return 0
     if args.command == "fake":
         async def fake() -> None:
-            server = await asyncio.start_server(lambda rd, wr: fake_endpoint(rd, wr, token_s=args.token_ms / 1000),
-                                                *args.listen)
+            server = await asyncio.start_server(lambda rd, wr: fake_endpoint(rd, wr, token_s=args.token_ms / 1000,
+                                                                             id_payload=args.id_payload), *args.listen)
             cs._announce({"listening": [args.listen[0], server.sockets[0].getsockname()[1]]})
             await server.serve_forever()
         asyncio.run(fake())
