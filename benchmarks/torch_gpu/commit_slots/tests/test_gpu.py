@@ -3,6 +3,7 @@ at the frozen shape)."""
 from __future__ import annotations
 
 import shutil
+import weakref
 
 import numpy as np
 import pytest
@@ -155,6 +156,32 @@ def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_cap(graphs: 
     assert all(lagged)
     assert {k: after[k] - before[k] for k in ("num_alloc_retries", "num_ooms")} == {"num_alloc_retries": 0, "num_ooms": 0}
     assert got == want
+
+
+@pytest.mark.parametrize("graphs", [False, True], ids=["eager", "graphs"])
+def test_a_table_freed_once_added_goes_at_its_read_with_no_later_add(graphs: bool) -> None:
+    """A CUDA plan drops an add's tensors as soon as the side stream has read them, before any later add or result, so a
+    producer that frees its tables has their memory back for whatever it allocates next. What it catches that the HBM-cap
+    test can't: tables held to the next add, which kept each freed group from the forward's allocations in between (1.76
+    GB more on the device at the frozen shape's 1 KiB rows); the roots are the reference's."""
+    layout = S.h200_layout(layers=2)
+    out = S.random_outputs(layout, 3, np.random.default_rng(9))
+    plan = G.Plan(CTX, layout)
+    sc = G.StepCommitter(plan, 4, 3, KEY, graphs=graphs)
+    first, rest = _cuda(out[:1])[0], _cuda(out[1:])
+    alive = [weakref.ref(t) for t in first]
+    with torch.cuda.stream(plan.stream):
+        torch.cuda._sleep(50_000_000)
+    done = sc.add(first)
+    reaper = plan._held.thread
+    del first
+    done.synchronize()
+    if reaper is not None:
+        reaper.join()
+    assert [a() for a in alive] == [None] * len(alive) and not plan._held.entries
+    for tensors in rest:
+        sc.add(tensors)
+    assert sc.finish().result() == S.commit(CTX, layout, 4, KEY, out, 3)
 
 
 def test_a_plan_has_one_step_on_graphs_open() -> None:

@@ -247,8 +247,8 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   refusals, the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
   matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a
   step's memory (counted: its frontier and one pass), a row-slot's compressions (counted), planning at six million
-  units, the order a plan drops added tables in, and (with a GPU) the device against the host twin, and at a near-full
-  HBM no allocator retry while the side stream lags its reads.
+  units, the order a plan drops added tables in, and (with a GPU) the device against the host twin, at a near-full HBM
+  no allocator retry while the side stream lags its reads, and a freed table's memory back at its read.
 - `overlap.py`: the commit beside `../../e2e_h200/`'s served step on one GPU: serving alone, the commit alone, today's
   loop, and overlapped at low, high and equal priority (from the forward's host thread or one of its own), each with the
   commit on every SM or on a green context of N (`MODE:LAYOUT:STEPS:N`, the forward on every SM, or `:Nr`, on the other

@@ -16,10 +16,10 @@ or at once, ``commit(plan, step, salt_key, outputs, slots)``, the reference's ``
 of the context and layout. ``Plan(..., device="host")`` runs the same calls on the engine's host twin (g++), with numpy arrays
 for tensors: what the CPU tests hold to the reference.
 
-The plan holds each add's tensors until the side stream has read them or, at the next add, until the producer's stream
-waits for that read (``Plan.release``, ``LAG``), so a producer may free its tables once it has added them: their
-memory goes back to its stream in its order, not at the side stream's tail, and at the HBM cap its next tables find it
-there without the allocator's retry (which frees the cache and waits on every stream).
+The plan holds each add's tensors until the side stream has read them (a thread drops them then) or, at the next add,
+until the producer's stream waits for that read (``Plan.release``, ``LAG``), so a producer may free its tables once it
+has added them: their memory goes back to its stream at the read, not at the side stream's tail, and at the HBM cap its
+next allocations find it there without the allocator's retry (which frees the cache and waits on every stream).
 
 With ``graphs=True`` (``StepCommitter``, ``commit``), each add is one CUDA graph launch: the group's passes, captured on its
 first add and replayed with the tensors' addresses and the salt key as data, so the same kernels give the same roots while
@@ -219,6 +219,54 @@ class SmPartition:
             self.ok(self.drv.cuCtxPopCurrent())
 
 
+class _Held:
+    """A plan's added tensors not yet dropped, oldest first, each with its read (an event on the side stream) and the stream
+    that made them. On a CUDA plan (``torch``), a thread waits on the oldest read while there are any and drops each add's
+    tensors as soon as its read has passed, so a producer that has freed them finds their memory back at its next
+    allocation, the next add or not."""
+
+    def __init__(self, torch: Any = None, device: Any = None) -> None:
+        self.entries: collections.deque[tuple[Any, Any, tuple[Any, ...]]] = collections.deque()
+        self.lock = threading.Lock()
+        self.torch, self.device = torch, device
+        self.thread: threading.Thread | None = None
+
+    def hold(self, read: Any, producer: Any, tensors: Sequence[Any]) -> None:
+        with self.lock:
+            self.entries.append((read, producer, tuple(tensors)))
+            if self.torch is not None and self.thread is None:
+                self.thread = threading.Thread(target=self._reap, name="slots_gpu-release", daemon=True)
+                self.thread.start()
+
+    def release(self, keep: int | None = None) -> None:
+        with self.lock:
+            while self.entries:
+                read, producer = self.entries[0][:2]
+                if not read.query():
+                    if keep is None or len(self.entries) <= keep:
+                        break
+                    producer.wait_event(read)
+                self.entries.popleft()
+
+    def _reap(self) -> None:
+        # Waiting on and querying events while another thread captures a CUDA graph is refused unless that capture is
+        # thread-local, as the plan's own are (Plan.graph).
+        try:
+            self.torch.cuda.set_device(self.device)
+            while True:
+                with self.lock:
+                    if not self.entries:
+                        self.thread = None
+                        return
+                    read = self.entries[0][0]
+                read.synchronize()
+                self.release()
+        except BaseException:
+            with self.lock:
+                self.thread = None
+            raise
+
+
 class Plan:
     """What a run's ``context`` and ``layout`` fix, on ``device`` (a CUDA device, or ``"host"`` for the engine's host twin).
     Its work is linear in the layout's units: each unit's domain id is hashed once (``slots.unit_domain_ids``), each group
@@ -249,8 +297,7 @@ class Plan:
         self._pool: Any = None
         self._frontiers: dict[int, Any] = {}
         self._open: StepCommitter | None = None
-        self._held: collections.deque[tuple[Any, Any, tuple[Any, ...]]] = collections.deque()
-        self._held_lock = threading.Lock()
+        self._held = _Held() if self.host else _Held(self.torch, self.device)
         shapes: dict[int, _Shape] = {}
         with self.side():
             self.slot_dw = self.engine._wordsof([self.slot_did])
@@ -274,23 +321,15 @@ class Plan:
 
     def hold(self, read: Any, producer: Any, tensors: Sequence[Any]) -> None:
         """Holds an add's ``tensors`` until the side stream has read them (``read``, an event there); ``producer`` is the
-        stream that made them."""
-        with self._held_lock:
-            self._held.append((read, producer, tuple(tensors)))
+        stream that made them. A CUDA plan drops them as soon as the read has passed."""
+        self._held.hold(read, producer, tensors)
 
     def release(self, keep: int | None = None) -> None:
         """Drops the held tensors whose read has passed, oldest first, and with ``keep`` all but the last ``keep`` adds' too,
         each once its producer's stream waits for its read. A tensor its producer has freed then goes back to that stream's
         pool after its read, in the stream's order, with no event for the allocator to wait on (``record_stream``'s would
         be the side stream's tail when the producer frees it)."""
-        with self._held_lock:
-            while self._held:
-                read, producer = self._held[0][:2]
-                if not read.query():
-                    if keep is None or len(self._held) <= keep:
-                        break
-                    producer.wait_event(read)
-                self._held.popleft()
+        self._held.release(keep)
 
     def put(self, a: np.ndarray) -> Any:
         """An index or word array on the plan's device (int64 there)."""
@@ -549,9 +588,9 @@ class StepCommitter:
     group's outputs in the layout's order, then ``finish``. On a CUDA plan every call goes on the plan's side stream after
     what the current stream has enqueued, and the plan holds each add's tensors until they are read (``Plan.release``),
     those of the add ``lag`` adds back no longer: the stream current when the step was made (``producer``, the tensors'
-    own) waits for their read instead, as `e2e_h200.commit`'s loop waits ``LAG`` (2) groups back. At the default lag of
-    1, a producer that drops each group's tables once it has made the next group's (e2e_h200's driver) finds the
-    previous group's memory free again for the group after: the commit adds no table to its peak. With ``marks`` (a
+    own) waits for their read instead, as `e2e_h200.commit`'s loop waits ``LAG`` (2) groups back. A producer that drops
+    each group's tables once it has made the next group's (e2e_h200's driver) has their memory back as soon as the side
+    stream has read them, and at the default lag of 1 by its next add at the latest. With ``marks`` (a
     list), each phase appends ``(name, event)``, its end on the side stream (timing only). It holds each slot's frontier
     (``frontier``, (slots, depth + 1, 8)) and a pass's temporaries, never a slot's leaves.
 
@@ -643,7 +682,7 @@ class StepCommitter:
             with plan.partition.current() if plan.partition else contextlib.nullcontext():
                 plan.engine.rekey(gr.graph.raw_cuda_graph_exec(), gr.nodes, gr.n, self.salts.key)
             gr.graph.replay()
-            done = torch.cuda.Event()
+            done = torch.cuda.Event(blocking=True)
             done.record(plan.stream)
         self._mark("add")
         return done
@@ -656,7 +695,7 @@ class StepCommitter:
         x = eng.row_digests(table)
         self._mark("rows")
         if last and not plan.host:
-            done = plan.torch.cuda.Event()
+            done = plan.torch.cuda.Event(blocking=True)
             done.record(plan.stream)
         S_ = table.slots
         run, rest = plan.empty(S_, shape.units), plan.empty(shape.rest, S_)

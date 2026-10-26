@@ -120,7 +120,7 @@ def test_a_plan_drops_tables_once_read_and_past_the_lag_after_the_producer_waits
     assert alive[1]() is not None and alive[2]() is not None
     reads[1].passed = True
     plan.release()
-    assert alive[1]() is None and alive[2]() is None and producer.waited == [reads[0]] and not plan._held
+    assert alive[1]() is None and alive[2]() is None and producer.waited == [reads[0]] and not plan._held.entries
     plan.hold(reads[3], producer, [t3])
     del t3
     plan.release(1)
