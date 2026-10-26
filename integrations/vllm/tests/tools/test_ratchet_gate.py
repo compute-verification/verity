@@ -2,8 +2,9 @@
 merge bases, when it has several), each queue merge on its own, no ratchet growing (by entries, per ratchet, or by an entry's
 count), a new, moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
 loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
-`noqa` count (no change adds more than it removes; a moved one is kept; only comments count; a new copy of a line is named
-where it was added), the exemptions (a revert, a pure move the base's move_check certifies), and its command line."""
+ruff lint rerun with the base's config and pin (a loosened config, lint or pin fails), the `noqa` count (no change adds more
+than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
+(a revert, a pure move the base's move_check certifies), and its command line."""
 from __future__ import annotations
 
 import importlib.util
@@ -346,6 +347,77 @@ def test_shared_lint_code_runs_every_lint_and_an_error_is_named(linted):
     assert G.violations([{"lint": "p10_size", "test": "test_no_new_x", "error": True,
                           "message": "Traceback:\n  File x\nFileNotFoundError: gone.py\n"}]) == [
         "p10_size: test_no_new_x raised FileNotFoundError: gone.py"]
+
+
+REAL_LINT = SCRIPT.parents[1] / "tests" / "lint"
+RUFF_LINT = "integrations/vllm/tests/lint/test_ruff.py"
+RUFF_JSON = "integrations/vllm/tests/lint/allowlists/ruff.json"
+RUFF_TOML = '[lint]\nselect = ["F"]\n'
+F401 = {"file": "verity_vllm/a.py", "kind": "F401", "symbol": "<module>", "detail": "`os` imported but unused"}
+
+
+def _pyproject(pin: str, *more: str) -> str:
+    return "[dependency-groups]\ndev = [" + ", ".join(f'"{d}"' for d in (*more, pin)) + "]\n"
+
+
+@pytest.fixture
+def ruffed(repo) -> Repo:
+    """``repo`` with the real ruff lint, its config selecting pyflakes, and this Python's ruff pinned: a.py's unused import
+    is its one finding, which ruff.json allows."""
+    version = subprocess.run([sys.executable, "-m", "ruff", "--version"], capture_output=True, text=True, check=True).stdout
+    repo.pin = f"ruff=={version.split()[1]}"
+    repo.commit("ruff", {RUFF_LINT: (REAL_LINT / "test_ruff.py").read_text(),
+                         "integrations/vllm/tests/lint/_ratchet.py": (REAL_LINT / "_ratchet.py").read_text(),
+                         G.RUFF_CONFIG: RUFF_TOML, G.PYPROJECT: _pyproject(repo.pin), RUFF_JSON: _allowlist(F401),
+                         "integrations/vllm/verity_vllm/a.py": "import os\nA = 1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+@pytest.mark.parametrize("loosen", [
+    {G.RUFF_CONFIG: RUFF_TOML + 'ignore = ["F401"]\n'},
+    {G.RUFF_CONFIG: RUFF_TOML + '[lint.per-file-ignores]\n"verity_vllm/*" = ["F401"]\n'},
+    {G.RUFF_CONFIG: 'extend-exclude = ["verity_vllm"]\n' + RUFF_TOML},
+    {RUFF_LINT: (REAL_LINT / "test_ruff.py").read_text().replace(
+        "for f in json.loads(r.stdout))", "for f in json.loads(r.stdout) if f['code'] != 'F401')")},
+    {G.PYPROJECT: _pyproject("ruff==0.0.1")},
+    {G.RUFF_CONFIG: None, RUFF_LINT: None, RUFF_JSON: None},
+], ids=["ignore", "per-file-ignore", "exclude", "lint-code", "pin", "deleted"])
+def test_loosening_ruff_to_drop_its_findings_fails_naming_what_the_base_ruff_finds(ruffed, loosen):
+    ruffed.commit("loosens ruff and drops its entry", {RUFF_JSON: _allowlist(), **loosen})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["lints"]) == ("failed", 3, 2, ["ruff"]), c["why"]
+    assert c["fix"] == ["ruff: verity_vllm/a.py:1 [F401] <module>: `os` imported but unused"]
+
+
+def test_tightening_ruff_passes_once_its_findings_are_fixed_and_a_kept_pin_is_not_ruffs_change(ruffed):
+    ruffed.git("checkout", "-q", "main")
+    ruffed.commit("c.py", {"integrations/vllm/verity_vllm/c.py": "f = lambda: 0\n"})
+    ruffed.git("checkout", "-q", "-B", "pr")
+    ruffed.commit("selects E731, fixes c.py, and leaves the formatter off", {
+        G.RUFF_CONFIG: RUFF_TOML.replace('["F"]', '["E731", "F"]') + '[format]\nexclude = ["*"]\n',
+        "integrations/vllm/verity_vllm/c.py": "def f():\n    return 0\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.RUFF_CONFIG], ["ruff"]), c["why"]
+    ruffed.git("checkout", "-q", "-b", "deps", "main")
+    ruffed.commit("another dev dependency, the same ruff", {G.PYPROJECT: _pyproject(ruffed.pin, "pytest==9")})
+    assert _verdicts(G.gate("main", "deps"))[0][1] == "untouched"
+    ruffed.commit("a new pin", {G.PYPROJECT: _pyproject("ruff==0.0.1", "pytest==9")})
+    [c] = G.gate("main", "deps")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.PYPROJECT], ["ruff"]), c["why"]
+
+
+def test_the_ruff_lint_runs_on_this_python_when_its_ruff_is_the_pin_else_on_one_uv_makes(ruffed, monkeypatch):
+    here = [sys.executable, "-I"]
+    assert G.ruff_pin("main") == ruffed.pin and G.ruff_pin(ruffed.git("rev-parse", "main~1")) is None
+    assert G.python_for(None, None) == here and G.python_for("ruff==0.0.1", ["core"]) == here
+    assert G.python_for(ruffed.pin, ["ruff"]) == here
+    monkeypatch.setattr(G.shutil, "which", lambda name: f"/opt/{name}")
+    assert G.python_for("ruff==0.0.1", None) == ["/opt/uv", "run", "--no-project", "--quiet", "--python", sys.executable,
+                                                 "--with", "ruff==0.0.1", "--", "python", "-I"]
+    monkeypatch.setattr(G.shutil, "which", lambda name: None)
+    with pytest.raises(G.GitError, match="no `uv` to provide it"):
+        G.python_for("ruff==0.0.1", ["ruff"])
 
 
 A_PY = "integrations/vllm/verity_vllm/a.py"

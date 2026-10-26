@@ -103,7 +103,7 @@ certifier's key and run id from the deployment record and returns the value it v
 process. A refusal is unsigned: forged on the path, it costs the window as dropping the answer would. Given
 `certificates`, the endpoint also serves each certifier window's certificates' public part to any caller, unsigned: each
 signs a salted digest of its record's head, a hiding commitment, and verifies on its own signature. What the keys
-leave on `trusted-nebius-host` is the certifier's own (its signing key and leaf state on its host, and its word on what
+leave on `trusted-host` is the certifier's own (its signing key and leaf state on its host, and its word on what
 it signs) and the deployment record's custody (the keys and the run id it gives each side). Without the keys,
 `reveal(p, registration)` and `committed(p, registration)` are the in-process calls the tests and replays make, and
 hold only on the auditor's side.
@@ -1112,7 +1112,7 @@ class Proxy:
       (`reveal_request_message`) and answer a `Revealed` that `signer`, the network certifier's own key, signed
       (`reveal_response_message`), which `serve_reveals` serves to a `RemoteCertifier`; without them they are the
       in-process calls, which take no request and return the value. `challenger_key` comes from the auditor's
-      deployment record, never from the prover's configuration, and `trusted-nebius-host` covers that record's custody.
+      deployment record, never from the prover's configuration, and `trusted-host` covers that record's custody.
       Both messages bind the signer's `key_id` and `run_id`, 32 bytes (`RUN_ID_BYTES`) the proxy draws from
       `run_nonce` at construction (the certifier's own randomness by default), so a request or an answer of one run,
       or of another proxy on the same link name, is never taken in another;

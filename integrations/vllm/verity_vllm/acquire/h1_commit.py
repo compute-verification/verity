@@ -12,8 +12,8 @@ from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
 
 from verity_vllm.acquire.sources.int8_source import Int8Source
-from verity_vllm.protocol_options.pouw_h1_commit import CommitTap, Sites, _EveryStep, site
-from verity_vllm.protocol_options.pouw_h1_ranks import RankExtension, RankRun, RankTap
+from verity_vllm.protocols.pouw.h1.commit import CommitTap, Sites, _EveryStep, site
+from verity_vllm.protocols.pouw.h1.ranks import RankExtension, RankRun, RankTap
 
 
 class H1Source(Int8Source):
@@ -61,7 +61,7 @@ def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
     """The int8 source (`H1Source`) on committer ``com``, at the Int8RowQuant_v1 site of each of ``layers`` (H1's
     linears, `pouw_h1_hooks.layers`) at every engine step: a linear by its name in ``model``, as `pouw.install` names it,
     and a routed expert by its H1 name (`pouw_h1_hooks.expert_names`)."""
-    from verity_vllm.protocol_options.pouw_h1_hooks import expert_names
+    from verity_vllm.protocols.pouw.h1.hooks import expert_names
     names = expert_names(list(layers))
     experts = {n: layers[w] for w, n in names.items()}
     ids = {id(m) for w, m in enumerate(layers) if w not in names}
@@ -137,7 +137,7 @@ class RankCommit(RankExtension):
         the committer's name and the module whose input ids it acquires. A site the rank's source acquires that the
         window has no name for (a routed expert's included) is refused: under its rank-local name it would meet no call,
         or another rank's site of the same name."""
-        from verity_vllm.protocol_options import pouw
+        from verity_vllm.protocols import pouw
         st = self._h1rank  # type: ignore[attr-defined]
         run: RankRun = st["run"]
         model, layers = self._h1rank_layers()

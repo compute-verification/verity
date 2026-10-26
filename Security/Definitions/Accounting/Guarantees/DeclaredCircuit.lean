@@ -135,7 +135,7 @@ digests, by `remote_bandwidth`'s Replay), that each pass's plan is its step's (#
 ticks (a certifier stamping step records and pass roots on one clock). A credit across circuits needs their credited blocks
 disjoint, and a device tick credited to a pass here and to another window elsewhere is joint accounting's. Which of the
 node's devices held the tiles, and that the bits taken from outside the store are every bit crossing the node's
-boundary, are attribution's (`certifier-coverage`, `trusted-nebius-host` and the tiers' bandwidths at the deadline). A
+boundary, are attribution's (`certifier-coverage`, `trusted-host` and the tiers' bandwidths at the deadline). A
 node that registers `R` times pays `δ_G` once a registration.
 
 `G` credits nothing once `γ ≥ 1 − 0.0015`, because a pass's credit is at most its `N` tiles' bits and the event's
