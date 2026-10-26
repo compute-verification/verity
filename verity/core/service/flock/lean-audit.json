@@ -56,6 +56,7 @@
   "Flock.Test.TmplFold",
   "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
+  "Flock.Test.CoinsTree",
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
