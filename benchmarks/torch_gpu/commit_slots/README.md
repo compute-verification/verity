@@ -116,21 +116,25 @@ quantizer (2 units of codes and one of the scale), down and residual.
 
 ## Measured on the H200
 
-Run `r20261026-082348-7996` (vy-dc-h200, one H200, this directory at 83c0cc7636 in a tree merged with #4612 for
+Run `r20261026-092158-634c` (vy-dc-h200, one H200, this directory at 1a452ff289 in a tree merged with #4612 for
 FAMILIES' layout, `gpu.sh` and one FAMILIES step), on the engine:
 
-- **Bit-exact.** The tests passed (60, the device against the host twin included), and so did every `check.py` check:
+- **Bit-exact.** The tests passed (64, the device against the host twin included), and so did every `check.py` check:
   - the fixture's root;
   - the edge layout at 1 to 300 slots against the reference, and at 4,097 and 20,480 against the host twin;
   - two and three H200 layers, and three layers in two groups;
   - the frozen layout at 4,096, 16,384 and 20,480 slots (141, 566 and 707 GB), each with six sampled slots rebuilt by
     the reference and the step root from the device's slot roots.
 - **FAMILIES at 4,096 slots** (#4612's layout: 6,102,102 units of 6,102,832 rows, 41 MB a slot, 168 GB a step). A step
-  holds 0.76 GiB beyond its plan (2.07 GiB) and inputs, 6 MiB of it frontiers, and takes 108.2 s (104.7 s and 3.0 GiB
-  with `temp_bytes` at 4 GiB). The split: hiding leaves 67.5 s, unit roots and their frame leaves 16.1 s, the fold
-  17.6 s and row digests 7.0 s. Its rows average 6.7 bytes, so the step is the hashing of 25.0G row-slots, not their
-  bytes: about ten SHA-512 compressions, three ChaCha20 blocks and the hm96 mask each. The roots of six slots (0, 1,
-  3,321, 3,322, 4,094 and 4,095) equal the leaf-matrix path's, and the step root equals the reference's step tree.
+  holds 0.54 GiB beyond its plan (2.07 GiB) and inputs, 6 MiB of it frontiers, and takes 83.9 s (80.0 s and 2.05 GiB
+  with `temp_bytes` at 4 GiB), against 108.2 s at ten compressions a row-slot (run r20261026-082348-7996). The split:
+  hiding leaves with their frame leaves and the one-row units' slot-tree leaves 62.9 s (was 67.5 s), the multi-row
+  units' roots and slot-tree leaves 0.35 s (was 16.1 s), the fold 13.6 s (was 17.6 s) and row digests 7.0 s. Its rows
+  average 6.7 bytes, so the step is the hashing of 25.0G row-slots, not their bytes: nine SHA-512 compressions, three
+  ChaCha20 blocks and the hm96 mask each (The call, above). In G compressions/s against the engine's 4.79: leaves 2.39 (the
+  ChaCha20 blocks and the mask not counted), row digests 3.72, the fold 3.67, the step 2.69. The roots of six slots
+  (0, 1, 3,321, 3,322, 4,094 and 4,095) equal the leaf-matrix path's, and the step root equals the reference's step
+  tree.
   Over the same random unit leaves at 35 slots (one pass), the fold and close take 0.153 s and 0.37 GiB, against the
   leaf matrix's `engine.root` at 0.160 s and 26.4 GiB, with equal roots: 6.1M nodes a slot against 8.4M, since the
   matrix padded every slot to 2^23 leaves (run r20261026-083415-a945).
@@ -139,19 +143,20 @@ FAMILIES' layout, `gpu.sh` and one FAMILIES step), on the engine:
 
   | slots | layers a group | s a step | GB/s | rows | leaves | trees | share of the step |
   | --- | --- | --- | --- | --- | --- | --- | --- |
-  | 16,384 | 1 | 1.045 | 541 | 0.963 s | 47 ms | 35 ms | 16% |
-  | 20,480 | 1 | 1.303 | 543 | 1.199 s | 62 ms | 42 ms | 16% |
-  | 12,288 | 1 | 0.792 | 535 | 0.727 s | 36 ms | 30 ms | 17% |
-  | 4,096 | 4 | 0.263 | 538 | 0.242 s | 12 ms | 10 ms | 16% |
-  | 4,096 | 1 | 0.334 | 423 | 0.304 s | 15 ms | 16 ms | 20% |
-  | 1,024 | 1 | 0.132 | 267 | 0.115 s | 6 ms | 11 ms | 28% |
+  | 16,384 | 1 | 1.033 | 548 | 0.968 s | 50 ms | 15 ms | 16% |
+  | 20,480 | 1 | 1.282 | 551 | 1.201 s | 63 ms | 18 ms | 16% |
+  | 12,288 | 1 | 0.784 | 541 | 0.731 s | 39 ms | 14 ms | 16% |
+  | 4,096 | 4 | 0.260 | 544 | 0.243 s | 12 ms | 5 ms | 16% |
+  | 4,096 | 1 | 0.332 | 426 | 0.308 s | 16 ms | 8 ms | 20% |
+  | 1,024 | 1 | 0.132 | 267 | 0.119 s | 6 ms | 7 ms | 28% |
 
-  At 16,384 slots that's 4.25 G SHA-512 compressions/s of row data. Rows are the engine's `rows` and `row_digests`;
-  trees are the unit trees, the slot trees' fold and close, and the step tree. The leaf matrix's trees (run
-  r20261026-014030-c476) took 34 ms at 16,384 slots and 4 ms at 1,024: a fold at a few slots a group is launch-bound.
-- **Beside a layer's four int8 GEMMs** (`torch._int_mm`, M = 16,384, 939 TOPS): the GEMMs take 93.8 ms alone and
-  109.2 ms beside the commit (+16%). Overlapped, a layer takes 109.2 ms, against 114.8 ms run one after the other, so
-  overlap saves little. Over a step, the commit costs 22% of the GEMMs' 4.88 s.
+  At 16,384 slots that's 4.30 G SHA-512 compressions/s of row data. Rows are the engine's `rows` and `row_digests`;
+  leaves include each one-row unit's slot-tree leaf; trees are the multi-row units' trees, the slot trees' fold and
+  close, and the step tree. The leaf matrix's trees (run r20261026-014030-c476) took 34 ms at 16,384 slots and 4 ms at
+  1,024: a fold at a few slots a group is launch-bound.
+- **Beside a layer's four int8 GEMMs** (`torch._int_mm`, M = 16,384, 939 TOPS): the GEMMs take 93.7 ms alone and
+  107.1 ms beside the commit (+14%). Overlapped, a layer takes 107.1 ms, against 114.5 ms run one after the other, so
+  overlap saves little. Over a step, the commit costs 22% of the GEMMs' 4.87 s.
 
 ## Files
 
