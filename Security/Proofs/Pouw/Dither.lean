@@ -470,11 +470,11 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
     show 0 ≤ Hmm (reg w) + Hsha (reg w) + Ho (reg w) - pubmm (reg w) - pubsha (reg w)
     linarith [hreg' w]
   -- The floor, off the luck.
-  have hfloor : ∀ o x, A.Passes verdict dev o x → ∑ w, Dval o x w < Real.log (1 / δ) / η →
+  have hfloor : ∀ o x, A.Passes verdict dev o x → A.calls o x ≤ Q → ∑ w, Dval o x w < Real.log (1 / δ) / η →
       (1 - (epsWorkSound (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w)) (fun w => pubmm (reg w))
         (fun w => pubsha (reg w)) η δ β K + (∑ r, μ r * ξ A r) / ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))) *
         ∑ r, μ r * (1 * Pd.hon r) ≤ ∑ r, μ r * A.timedUse o x r := by
-    intro o x hv hD
+    intro o x hv hq hD
     have hC : ∑ r, μ r * (1 * Pd.hon r) = ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) := by
       rw [hH]
       simp only [one_mul]
@@ -495,7 +495,7 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
       rw [h1, ← Finset.sum_add_distrib]
       exact Finset.sum_le_sum fun r _ => by
         rw [← mul_add]
-        exact mul_le_mul_of_nonneg_left (huse o x r) (hμ r)
+        exact mul_le_mul_of_nonneg_left (huse o x hq r) (hμ r)
     have hextk : ∑ w, (G.ext (Mw w) (adv o x w, (x w).1) +
         G.ext (Mh w) (o, (adv o x w, (x w).1), G.Mc.eval (Mw w) (adv o x w, (x w).1))) ≤ K :=
       calc _ ≤ ∑ w, (G.ext (A.work w) (A.workIn o x w) + G.ext (A.answer w) (A.answerIn o x w)) :=
@@ -588,7 +588,7 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
           · by_cases hD : Real.log (1 / δ) / η ≤ ∑ w, Dval o x w
             · exact Or.inr ⟨fun w => ⟨hg w, fun h => hdg ⟨w, h⟩, hok w⟩, hD⟩
             · exact absurd (FreedOfFloor G Pd 1 _ (A.timedUse o x) μ z z' hμ hneeds hval zero_le_one hε hfit'
-                hslack hfit (hfloor o x hv (not_le.mp hD))) hnot
+                hslack hfit (hfloor o x hv (calls_le_of_fits A Pd hG3 hneeds hcap o x hfit) (not_le.mp hD))) hnot
         · exact Or.inl (Or.inl (Or.inr (not_forall.mp hg)))
       · exact Or.inl (Or.inl (Or.inl (Or.inr
           ⟨hacc, calls_le_of_fits A Pd hG3 hneeds hcap o x hfit, not_forall.mp hok⟩)))
