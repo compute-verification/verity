@@ -73,28 +73,32 @@ theorem range_forIn (C : Calc m P) {β : Type} {body : ℕ → β → m (ForInSt
   have := C.list_forIn hb (List.range' r.start r.size r.step) b
   rwa [List.length_range'] at this
 
-theorem list_mapM (C : Calc m P) {α β : Type} {g : α → m β} {c : α → ℕ} (hg : ∀ a, P (g a) (c a)) :
+theorem list_mapM (C : Calc m P) [LawfulMonad m] {α β : Type} {g : α → m β} {c : α → ℕ} (hg : ∀ a, P (g a) (c a)) :
     ∀ xs : List α, P (xs.mapM g) (xs.map c).sum
   | [] => by rw [List.mapM_nil]; exact C.pure _
   | a :: xs => by
     rw [List.mapM_cons, List.map_cons, List.sum_cons]
     exact C.mono (C.bind (hg a) fun b => C.bind (list_mapM C hg xs) fun bs => C.pure (b :: bs)) (by omega)
 
+theorem sum_map_const {α : Type} (c : ℕ) : ∀ xs : List α, (xs.map fun _ => c).sum = xs.length * c
+  | [] => by simp
+  | _ :: xs => by rw [List.map_cons, List.sum_cons, sum_map_const c xs, List.length_cons, Nat.succ_mul]; omega
+
 theorem mapM (C : Calc m P) [LawfulMonad m] {α β : Type} {g : α → m β} {c : α → ℕ} (hg : ∀ a, P (g a) (c a))
     (xs : Array α) : P (xs.mapM g) (xs.toList.map c).sum := by
-  rw [Array.mapM_eq_mapM_toList, map_eq_bind_pure_comp]
+  rw [Array.mapM_eq_mapM_toList, map_eq_pure_bind]
   exact C.mono (C.bind (C.list_mapM hg xs.toList) fun _ => C.pure _) (by omega)
 
 /-- `mapM` at one bound per element. -/
 theorem mapM_const (C : Calc m P) [LawfulMonad m] {α β : Type} {g : α → m β} {c : ℕ} (hg : ∀ a, P (g a) c)
     (xs : Array α) : P (xs.mapM g) (xs.size * c) := by
   have h := C.mapM (c := fun _ => c) hg xs
-  rwa [List.map_const', List.sum_replicate, smul_eq_mul, Array.length_toList] at h
+  rwa [sum_map_const, Array.length_toList] at h
 
-theorem list_mapM_const (C : Calc m P) {α β : Type} {g : α → m β} {c : ℕ} (hg : ∀ a, P (g a) c) (xs : List α) :
+theorem list_mapM_const (C : Calc m P) [LawfulMonad m] {α β : Type} {g : α → m β} {c : ℕ} (hg : ∀ a, P (g a) c) (xs : List α) :
     P (xs.mapM g) (xs.length * c) := by
   have h := C.list_mapM (c := fun _ => c) hg xs
-  rwa [List.map_const', List.sum_replicate, smul_eq_mul] at h
+  rwa [sum_map_const] at h
 
 theorem mapIdxM_go (C : Calc m P) {α β : Type} {g : ℕ → α → m β} {c : ℕ} (hg : ∀ i a, P (g i a) c) :
     ∀ (xs : List α) (acc : Array β), P (List.mapIdxM.go g xs acc) (xs.length * c)
@@ -124,7 +128,7 @@ def CL {α : Type} (x : LogV α) (n : ℕ) : Prop := ∀ l, (x.go l).2.size ≤ 
 theorem go_throw {α : Type} (e : String) (l : Array ByteArray) : (throw e : LogV α).go l = (.error e, l) := rfl
 
 theorem calcCL : Calc LogV CL where
-  pure a l := by rw [go_pure]; omega
+  pure a l := by rw [go_pure]; exact Nat.le_add_right _ _
   bind {α β x f n k} hx hf l := by
     have h1 := hx l
     rw [go_bind]
@@ -133,11 +137,13 @@ theorem calcCL : Calc LogV CL where
     cases r with
     | error e => dsimp only at h1 ⊢; omega
     | ok a => have h2 := hf a l₁; dsimp only at h1 ⊢; omega
-  mono hx hnk l := (hx l).trans (by omega)
+  mono hx hnk l := Nat.le_trans (hx l) (by omega)
 
-theorem cl_throw {α : Type} (e : String) : CL (throw e : LogV α) 0 := fun l => by rw [go_throw]; omega
+theorem cl_throw {α : Type} (e : String) : CL (throw e : LogV α) 0 := fun l => by
+  rw [go_throw]; exact Nat.le_add_right _ _
 
-theorem cl_liftM {α : Type} (v : Flock.V α) : CL (liftM v : LogV α) 0 := fun l => by rw [go_liftM]; omega
+theorem cl_liftM {α : Type} (v : Flock.V α) : CL (liftM v : LogV α) 0 := fun l => by
+  rw [go_liftM]; exact Nat.le_add_right _ _
 
 theorem cl_sha512 (h : ByteArray → ByteArray) (b : ByteArray) : CL ((Hashes.logged h).sha512 b) 1 := fun l => by
   show (l.push b).size ≤ l.size + 1
@@ -172,7 +178,7 @@ def Bnd {σ α : Type} (pot : σ → ℕ) (s : σ) (l : Array ByteArray) (n : �
 def CS {σ α : Type} (pot : σ → ℕ) (x : StateT σ LogV α) (n : ℕ) : Prop := ∀ s l, Bnd pot s l n ((x.run s).go l)
 
 theorem calcCS {σ : Type} (pot : σ → ℕ) : Calc (StateT σ LogV) (CS pot) where
-  pure a s l := by rw [StateT.run_pure, go_pure, bnd_ok]; omega
+  pure a s l := by rw [StateT.run_pure, go_pure, bnd_ok]; dsimp only; omega
   bind {α β x f n k} hx hf s l := by
     have h1 := hx s l
     rw [StateT.run_bind, go_bind]
@@ -205,7 +211,7 @@ theorem cs_lift {σ α : Type} (pot : σ → ℕ) {x : LogV α} {n : ℕ} (hx : 
   obtain ⟨r, l₁⟩ := q
   cases r with
   | error e => dsimp only at h1 ⊢; rw [bnd_error]; omega
-  | ok a => dsimp only at h1 ⊢; rw [go_pure, bnd_ok]; omega
+  | ok a => dsimp only at h1 ⊢; rw [go_pure, bnd_ok]; dsimp only; omega
 
 theorem cs_throw {σ α : Type} (pot : σ → ℕ) (e : String) : CS pot (throw e : StateT σ LogV α) 0 :=
   cs_lift pot (cl_throw e)
@@ -217,7 +223,7 @@ theorem cl_run {σ α : Type} {pot : σ → ℕ} {x : StateT σ LogV α} {n : �
   generalize (x.run s).go l = q at h1 ⊢
   obtain ⟨r, l₁⟩ := q
   cases r with
-  | error e => rw [bnd_error] at h1; exact h1.trans (by omega)
+  | error e => rw [bnd_error] at h1; exact Nat.le_trans h1 (by omega)
   | ok p => rw [bnd_ok] at h1; dsimp only; omega
 
 /-- **A run over two states, with a potential of the inner one.** -/
@@ -305,13 +311,13 @@ theorem keepT_bind {α β : Type} {x : Transcript.TM α} {f : α → Transcript.
   | error e => rw [hxr] at h; cases h
   | ok p =>
     rw [hxr] at h
-    exact (hf p.1 p.2 b t' h).trans (hx t p.1 p.2 hxr)
+    exact Nat.le_trans (hf p.1 p.2 b t' h) (hx t p.1 p.2 hxr)
 
 theorem keepT_modify (g : Transcript → Transcript) (hg : ∀ t, potT (g t) = potT t) :
     KeepT (modify g : Transcript.TM PUnit) := fun t a t' h => by
   rw [StateT.run_modify] at h
   cases h
-  exact (hg t).le
+  exact Nat.le_of_eq (hg t)
 
 theorem keepT_lift {α : Type} (v : Flock.V α) : KeepT (StateT.lift v : Transcript.TM α) := fun t a t' h => by
   rw [StateT.run_lift] at h
@@ -361,8 +367,8 @@ theorem keepL_throw {α : Type} (e : String) : KeepL (throw e : LM α) := fun s 
 
 /-- Walks an `LM` or `TM` program that hashes nothing to `KeepL`/`KeepT`. -/
 macro "keep_walk" : tactic => `(tactic| repeat' (first
-  | apply keepL_bind <;> try intro _
-  | apply keepT_bind <;> try intro _
+  | refine keepL_bind ?_ fun _ => ?_
+  | refine keepT_bind ?_ fun _ => ?_
   | exact keepL_pure _ | exact keepT_pure _ | exact keepL_get | exact keepL_set _ | exact keepL_modify _
   | exact keepL_throw _
   | apply keepL_lift
