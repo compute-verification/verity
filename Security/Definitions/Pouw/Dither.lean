@@ -88,8 +88,10 @@ section Round
 /-- **A round of a commit-then-check protocol**: an instance the prover committed before the round (`Inst`, the
 workload's operands), the round's first live coin `Draw` (σ₁, the noise), the words the prover computes after it
 `Tr`, their commitment `commit` (in `Root`), the check's live coin `Chk` (σ₂), and whether the check passes on the
-words (`ok`). The prover sends the commitment before σ₂ is drawn and opens the words the check draws; the proof layer
-(C-Flock's proofs of the opened words, the commitment's openings) is the service's, not the round's. -/
+words (`ok`). The prover sends the commitment before σ₂ is drawn and answers the check with `Ans` (the opened words
+and their openings); `accept` is what the verifier checks of the answer against the commitment, and `ok` what the
+analysis reads of the words the commitment binds (`Extract` links them). The proof layer (C-Flock's proofs of the
+opened words) is the service's, not the round's. -/
 structure RoundProto where
   Inst : Type
   Draw : Type
@@ -100,6 +102,8 @@ structure RoundProto where
   Root : Type
   commit : Tr → Root
   ok : Inst → Draw → Chk → Tr → Prop
+  Ans : Type
+  accept : Inst → Draw → Chk → Root → Ans → Prop
 
 attribute [instance] RoundProto.instDraw RoundProto.instChk
 
@@ -108,8 +112,10 @@ abbrev Word : Type := ZMod (2 ^ 32)
 
 /-- **The no-fold protocol's knobs** (PROTO-DESIGN, R-ACCEL-2): `A` is `n × m`, `B` is `m × n'` with `m = nb · L`,
 `L` the segment length; the noise (`Draw`, and `noise`, the noised operands `(Ã, B̃)` from the committed operands and
-the noise: HYB noise in protocol v1, whatever v2 freezes); `s` words checked a round; and `merkle`, the commitment to
-the words: each word a SHA-512 Merkle leaf (hm96 rows in frame-v3-sha512 trees), no fold. -/
+the noise: HYB noise in protocol v1, whatever v2 freezes); the check's coin `Chk` and the `s` words it selects
+(`cells`: the frozen protocol's stratified draw, any width, no power-of-two size); `merkle`, the commitment to the
+words: each word a SHA-512 Merkle leaf (hm96 rows in frame-v3-sha512 trees), no fold; and `opens`, the verifier's
+check that a word with its authentication path `Path` opens a root at a cell. -/
 structure NoFold where
   n : ℕ
   n' : ℕ
@@ -120,10 +126,15 @@ structure NoFold where
   noise : (Fin n → Fin (nb * L) → Word) × (Fin (nb * L) → Fin n' → Word) → Draw →
     (Fin n → Fin (nb * L) → Word) × (Fin (nb * L) → Fin n' → Word)
   s : ℕ
+  Chk : Type
+  [instChk : Fintype Chk]
+  cells : Chk → Fin s → Fin n × Fin n' × Fin nb
   Root : Type
   merkle : (Fin n → Fin n' → Fin nb → Word) → Root
+  Path : Type
+  opens : Root → Fin n × Fin n' × Fin nb → Word → Path → Prop
 
-attribute [instance] NoFold.instDraw
+attribute [instance] NoFold.instDraw NoFold.instChk
 
 /-- **A no-fold word** at cell `(i, j)` and segment `b`: the noised product's prefix sum at the end of segment `b`,
 `Σ_{t < (b+1) L} Ã_it B̃_tj` mod `2^32`. -/
@@ -132,16 +143,21 @@ def noFoldWord (k : NoFold) (ab : (Fin k.n → Fin (k.nb * k.L) → Word) × (Fi
   ∑ t : Fin (k.nb * k.L), if t.val < (b.val + 1) * k.L then ab.1 i t * ab.2 t j else 0
 
 /-- **The no-fold round at its knobs**: the instance is the committed operands `(A, B)`, the first coin the noise, the
-words every segment prefix sum of the noised product (`n n' nb` words), committed by `merkle`, and the check `s` cells
-and segments, passing where every checked word is the noised product's. -/
+words every segment prefix sum of the noised product (`n n' nb` words), committed by `merkle`, and the check the `s`
+cells and segments its coin selects, passing where every checked word is the noised product's. The answer is each
+checked word with its path, accepted where every path opens the root and every word is the noised product's. -/
 def noFoldRound (k : NoFold) : RoundProto where
   Inst := (Fin k.n → Fin (k.nb * k.L) → Word) × (Fin (k.nb * k.L) → Fin k.n' → Word)
   Draw := k.Draw
-  Chk := Fin k.s → Fin k.n × Fin k.n' × Fin k.nb
+  Chk := k.Chk
   Tr := Fin k.n → Fin k.n' → Fin k.nb → Word
   Root := k.Root
   commit := k.merkle
-  ok a d c T := ∀ q, T (c q).1 (c q).2.1 (c q).2.2 = noFoldWord k (k.noise a d) (c q).1 (c q).2.1 (c q).2.2
+  ok a d c T := ∀ q, T (k.cells c q).1 (k.cells c q).2.1 (k.cells c q).2.2 =
+    noFoldWord k (k.noise a d) (k.cells c q).1 (k.cells c q).2.1 (k.cells c q).2.2
+  Ans := Fin k.s → Word × k.Path
+  accept a d c r y := ∀ q, k.opens r (k.cells c q) (y q).1 (y q).2 ∧
+    (y q).1 = noFoldWord k (k.noise a d) (k.cells c q).1 (k.cells c q).2.1 (k.cells c q).2.2
 
 /-- **The honest words**: every segment prefix sum of the noised product. -/
 def noFoldHonest (k : NoFold) (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) : (noFoldRound k).Tr :=
@@ -220,6 +236,68 @@ noncomputable def cost {k : ℕ} (pl : PeriodPlay G P k) (μ : G.Res → ℝ) (x
   ∑ r, μ r * pl.use x r
 
 end PeriodPlay
+
+/-- **The prover of a monitoring period of `k` rounds**, one round at a time (RT-LEAN L1 and L18; RT-PROTO P8 with a
+node's rounds in order). It keeps a state `St` across rounds, starting from `start` run on the oracle `Orc` (a uniform
+`Orc` stands for SHA-512 as a random oracle; `Orc := Unit` for none). Round `w`, in the order of the messages:
+`inst w` commits the round's instance; the verifier draws the round's dither coins `d`; `work w` is everything the
+prover computes between that dither and its commitment, and returns the commitment, sent before the check coins are
+drawn; the verifier draws the check coins `c`; `answer w` answers them. A round's programs see the earlier rounds'
+coins only through the state, so nothing before round `w`'s commitment depends on round `w`'s check coins or on any
+later coin. -/
+structure Prover (G : Accel) (P : RoundProto) (Orc : Type) (k : ℕ) where
+  St : Type
+  start : G.Mc.Alg Orc St
+  inst : Fin k → G.Mc.Alg St (St × P.Inst)
+  work : Fin k → G.Mc.Alg (St × P.Draw) (St × P.Root)
+  answer : Fin k → G.Mc.Alg (St × P.Chk) (St × P.Ans)
+
+namespace Prover
+
+variable {G : Accel} {P : RoundProto} {Orc : Type} {k : ℕ} (A : Prover G P Orc k)
+
+/-- The state at the start of round `w` (it stays put past `k`), at the oracle `o` and the verifier's coins `x`. -/
+def state (o : Orc) (x : Fin k → P.Draw × P.Chk) : ℕ → A.St
+  | 0 => G.Mc.eval A.start o
+  | w + 1 =>
+    if h : w < k then
+      (G.Mc.eval (A.answer ⟨w, h⟩) ((G.Mc.eval (A.work ⟨w, h⟩)
+        ((G.Mc.eval (A.inst ⟨w, h⟩) (state o x w)).1, (x ⟨w, h⟩).1)).1, (x ⟨w, h⟩).2)).1
+    else state o x w
+
+/-- Round `w`'s input to `work`: the state after its instance's commitment, and its dither coins. -/
+def workIn (o : Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : A.St × P.Draw :=
+  ((G.Mc.eval (A.inst w) (A.state o x w)).1, (x w).1)
+
+/-- Round `w`'s input to `answer`: the state after its commitment, and its check coins. -/
+def answerIn (o : Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : A.St × P.Chk :=
+  ((G.Mc.eval (A.work w) (A.workIn o x w)).1, (x w).2)
+
+/-- Round `w`'s instance. -/
+def instAt (o : Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : P.Inst :=
+  (G.Mc.eval (A.inst w) (A.state o x w)).2
+
+/-- Round `w`'s commitment. -/
+def root (o : Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : P.Root := (G.Mc.eval (A.work w) (A.workIn o x w)).2
+
+/-- Round `w`'s answer. -/
+def ans (o : Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : P.Ans := (G.Mc.eval (A.answer w) (A.answerIn o x w)).2
+
+/-- **Accepted**: every round's answer passes the verifier's check against the round's commitment. -/
+def Accepted (o : Orc) (x : Fin k → P.Draw × P.Chk) : Prop :=
+  ∀ w, P.accept (A.instAt o x w) (x w).1 (x w).2 (A.root o x w) (A.ans o x w)
+
+/-- The rounds' use of resource `r`: every round's three programs at their inputs. `start` runs before the period. -/
+noncomputable def use (o : Orc) (x : Fin k → P.Draw × P.Chk) (r : G.Res) : ℝ :=
+  ∑ w, (G.use (A.inst w) (A.state o x w) r + G.use (A.work w) (A.workIn o x w) r +
+    G.use (A.answer w) (A.answerIn o x w) r)
+
+/-- The rounds' imported bits. -/
+noncomputable def ext (o : Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
+  ∑ w, (G.ext (A.inst w) (A.state o x w) + G.ext (A.work w) (A.workIn o x w) +
+    G.ext (A.answer w) (A.answerIn o x w))
+
+end Prover
 
 /-- **An adversary's period as the analysis reads it**: its play, and per round the binding and zero-knowledge break
 events of the proof layer. -/

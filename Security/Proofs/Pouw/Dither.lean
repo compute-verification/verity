@@ -102,8 +102,12 @@ abbrev Kw (h : (Fin 1 → Fin 1 → Fin 1 → Word) → (Fin 512 → Bool)) : No
   Draw := (Fin 1 → Fin (1 * 1) → Fin 2) × (Fin (1 * 1) → Fin 1 → Fin 2)
   noise ab d := (fun i t => ab.1 i t + ((d.1 i t).val : Word), fun t j => ab.2 t j + ((d.2 t j).val : Word))
   s := 1
+  Chk := Unit
+  cells _ _ := (0, 0, 0)
   Root := Fin 512 → Bool
   merkle := h
+  Path := Unit
+  opens _ _ _ _ := True
 
 /-- The no-fold round at `Kw h`. -/
 abbrev Pw (h : (Fin 1 → Fin 1 → Fin 1 → Word) → (Fin 512 → Bool)) : RoundProto := noFoldRound (Kw h)
