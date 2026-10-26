@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VerdictPublicsAfter
+import Proofs.Flock.Claims.Recursion.VerdictTargetL
+import Proofs.Flock.Claims.Recursion.VerdictPublics
+import Proofs.Flock.Claims.Recursion.VerdictFramed
 import Proofs.Flock.Claims.Recursion.RoundSizes
 import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
@@ -18,8 +20,8 @@ shape's sizes from `Top.hsz` (`RoundSizes`):
 * `targetDDep_of_merkle`: `TargetDDep` from `TargetDMerkle`, each rep's `MerkleOk` and the coin tie of its
   positions (`DecAt.levels_of_merkleOk`).
 
-`TargetL` (`Top.targetL_holds`) and `TargetPublics` (`Top.targetPublics`, `VerdictPublicsAfter`) are proved.
-`targets_of_open`: every target from rows B and E, `TargetRDep`, `TargetDMerkle` and `TargetDecode`.
+`TargetB` (`DecAt.framed_dense`), `TargetL` (`Top.targetL_holds`) and `TargetPublics` (`DecAt.publics_empty`) are
+proved. `targets_of_open`: every target from row E, `TargetRDep`, `TargetDMerkle` and `TargetDecode`.
 -/
 
 namespace RecDeploy
@@ -134,13 +136,17 @@ theorem targetDDep_of_merkle (h : TargetDMerkle rd P acc) : TargetDDep rd P acc 
   obtain ⟨cf, k, hM, htie⟩ := h x ms cs hA D cls i hi r
   exact D.levels_of_merkleOk cls (acc x ms cs) r Rows.plain_opsWith_std hG.fast hM htie
 
-/-- **Every target from what stays open**: rows B and E, rows R's and D's deployed forms and the decoded record. -/
+/-- **Every target from what stays open**: row E, rows R's and D's deployed forms and the decoded record. -/
 theorem targets_of_open (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q)
     (holds : Q → Msg → List Msg → List Coin → Prop) (acc : Msg → List Msg → List Coin → ℕ → Array F128)
-    (hB : TargetB rd (RowsHold rows holds) acc) (hR : TargetRDep rd (RowsHold rows holds) acc) (hD : TargetDMerkle rd (RowsHold rows holds) acc)
+    (hR : TargetRDep rd (RowsHold rows holds) acc) (hD : TargetDMerkle rd (RowsHold rows holds) acc)
     (hE : TargetE rd (RowsHold rows holds) acc) (hDec : TargetDecode rd (RowsHold rows holds)) :
     Targets rd rows holds acc :=
-  ⟨hB, targetL_holds acc, targetD_of (targetDDep_of_merkle hD), targetR_of hR, hE, hDec, targetPublics rd _⟩
+  ⟨fun x ms cs hA D cls i hi r =>
+      let ⟨_, _, hst, hf, hx⟩ := hA.1
+      D.framed_dense cls (acc x ms cs) r hst hf hx hi,
+    targetL_holds acc, targetD_of (targetDDep_of_merkle hD), targetR_of hR, hE, hDec,
+    fun _ _ _ _ D => D.publics_empty⟩
 
 end Top
 
