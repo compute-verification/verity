@@ -297,7 +297,7 @@ def _bmap(rank, root):
 
 def _cblock(rank, root, bmap):
     return {"run_root": root, "steps": 2, "leaves": 3, "bytes_bound": 516, "tensors": 2, "openings": {"n": 64, "verified": 64},
-            "classes": {}, "weight_registration": {"root": "ab" * 32}, "binding": {"map_digest": bmap["digest"], "coverage": {"ok": True}}}
+            "classes": {}, "weight_registration": {"root": "ab" * 32}, "binding": {"map_digest": bmap["digest"], "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}}}
 
 
 def _in_process(fins):
