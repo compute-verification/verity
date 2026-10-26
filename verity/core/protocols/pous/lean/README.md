@@ -53,7 +53,9 @@ Definitions/Pous/Guarantees/P2.lean       seven frozen statements about the abst
 Definitions/Pous/Guarantees/SecureErasure.lean
                                     two frozen statements, which grade.sh grades against: secure erasure on the
                                     band at every `N` and at 96 GiB (`SecureErasureMeetsFamily`,
-                                    `SecureErasureMeets96GiB`); no named assumption, no bandwidth-separation premise
+                                    `SecureErasureMeets96GiB`); no named assumption, no bandwidth-separation premise;
+                                    in the ideal-permutation model only, not a bound on a band-fill wipe at the
+                                    reference `Π₂` (art:7617c8017e80)
 Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 42 lemmas, the
                                     completeness theorem `ContinuousComplete` and `InvExPostFactoTwoLayer`, which
                                     `N10Refuted` negates, among them `DigestAU` and `SecureErasureMeets`; it

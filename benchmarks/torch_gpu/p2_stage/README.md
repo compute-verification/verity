@@ -23,10 +23,16 @@ on that buffer.
   each batch M). Every staged tensor is held to the stream's bytes and to the weights manifest's SHA-256 (the digests
   memory-accounting held W to). `check.py` runs on the CPU afterwards: every block of the layer against the reference,
   and the samples against the Definition.
+- `full.py`: the whole store a step (HASH-6, Demo B's M4): every tensor of the 52 layers and the head staged one at a
+  time from the store's segment files (each held to its SHA-512), the last timed decode of each held to the weights
+  manifest's SHA-256, the step's decode summed tensor by tensor with the peak HBM, then one layer's exact GEMM by
+  KS8-SIMPLE (`s8_simple.linear`) against the twin. `check.py --sample N` checks N blocks of every tensor of the store
+  against the reference afterwards.
 - `build.sh` builds `libp2v1.so` for sm_90a on a CPU node by P2's own Makefile. `session.sh` runs one session on
   vy-dc-h200 under an untimed `gpu-lease`, from memory-accounting's store (`ENCODED=1`, the layer's segment files sent
-  with the run) or a development store. Each script's header gives its command line.
+  with the run) or a development store. `full.sh` runs `full.py` on the demo card over memory-accounting's finished
+  store in place, read only. Each script's header gives its command line.
 
 KP2-DEC (#4453, f254735dd2) staged a layer with its own kernel and measured it beside this path: its `decode_p2v1` arm
-is the same libp2v1 decode plus a payload copy. This directory uses that library unchanged and none of KP2-DEC's kernels. The
-GEMM stays `torch._int_mm` plus the epilogue until KS8-SIMPLE (#4472) is on `main`.
+is the same libp2v1 decode plus a payload copy. This directory uses that library unchanged and none of KP2-DEC's kernels.
+`layer.py`'s GEMM is `gemm.scaled_mm`; `full.py`'s is KS8-SIMPLE's `s8_simple.linear` (#4472) with its fused epilogue.
