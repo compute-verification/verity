@@ -282,7 +282,8 @@ def algorithms() -> Mapping[str, dict]:
 @dataclass(frozen=True, kw_only=True)
 class Nci(Premises):
     """An algorithm of the NCI library (`benchmarks/nci/algorithms.json`), from its traits under `library.py`'s attacker
-    convention (state and boundary bits capped at the literature's central rates, `nci.*_cap`):
+    convention (the rate a block pays per weight and per boundary entry capped at the literature's central rates,
+    `nci.rate_cap` and `nci.boundary_bits_cap`), with the carried state capped as `Full`'s (`nci.state_bits_cap`):
 
     * the state is `state_bits_per_param · updated_fraction · n_total`, or `description_bits` when it doesn't split;
     * `κ`, `c` (`uses_per_thread`), legs and threads' `d` (`entry_fee_override`), fan-out and threads' `e`
@@ -296,14 +297,15 @@ class Nci(Premises):
 
     algorithm: str
     state_bits_cap: float = math.inf
+    rate_cap: float = math.inf
     boundary_bits_cap: float = math.inf
 
     def profile(self, model: Model, run: Run) -> Profile:
         a = algorithms()[self.algorithm]
         t = a["traits"]
-        rate = min(t["state_bits_per_param"], self.state_bits_cap)
-        state = rate * t["updated_fraction"] * model.n_total if t["state_splits"] else t["description_bits"]
-        hard = rate if t["state_splits"] else None
+        carried = min(t["state_bits_per_param"], self.state_bits_cap)
+        state = carried * t["updated_fraction"] * model.n_total if t["state_splits"] else t["description_bits"]
+        hard = min(t["state_bits_per_param"], self.rate_cap) if t["state_splits"] else None
         multiplier = (a.get("multiplier") or {}).get("value")
         efficiency = ({"pretrain": 1 / multiplier} if multiplier else {}) | dict(self.efficiency)
         return self.premised(
@@ -366,7 +368,7 @@ def _checked(cls: type, prefix: str, values: Mapping[str, Any]) -> Mapping[str, 
 
 
 def _nci(registry: Registry, name: str, values: Mapping[str, Any]) -> Nci:
-    caps = {k: registry[f"nci.{k}"] for k in ("state_bits_cap", "boundary_bits_cap")}
+    caps = {k: registry[f"nci.{k}"] for k in ("state_bits_cap", "rate_cap", "boundary_bits_cap")}
     values = caps | {"algorithm": name.removeprefix("nci:")} | dict(values)
     if values["algorithm"] not in algorithms():
         raise KeyError(f"{name}: no algorithm {values['algorithm']!r} in {ALGORITHMS}")

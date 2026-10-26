@@ -131,6 +131,11 @@ def test_every_library_algorithm_gives_a_profile():
         p = family(REG, f"nci:{a}").profile(MODELS["kimi-k2"], RUN)
         assert p.kappa > 0 and p.state_bits > 0
     assert math.isclose(family(REG, "nci:diloco").profile(MODELS["kimi-k2"], RUN).efficiency, 1 / 0.94)
+    # weight-sparsity publishes 96 bits a parameter on a quarter of the weights: the state is carried at Full's 16, the
+    # rate a block pays is the library's attacker cap
+    p = family(REG, "nci:weight-sparsity").profile(MODELS["kimi-k2"], RUN)
+    assert math.isclose(p.state_bits, REG["nci.state_bits_cap"] * 0.25 * MODELS["kimi-k2"].n_total)
+    assert p.b == p.b_w == REG["nci.rate_cap"]
     assert isinstance(family(REG, "streaming-diloco"), Nci)
     with pytest.raises(KeyError, match="no algorithm"):
         family(REG, "nci:no-such-algorithm")
