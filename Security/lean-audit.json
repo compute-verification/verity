@@ -1398,6 +1398,10 @@
    "owner": "@memory-accounting",
    "digest": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482"
   },
+  "Pous.P2.Assumptions.CoinCommitHides": {
+   "owner": "@lean",
+   "digest": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb"
+  },
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
@@ -1410,6 +1414,10 @@
    "owner": "@memory-accounting",
    "digest": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
   },
+  "Pous.Period.RingDevice": {
+   "owner": "@lean",
+   "digest": "635c2edca25704b425275a4f2d3944bccd1dfc3878fc051e8b3700d198e7454d"
+  },
   "Pous.Prog.Bounded": {
    "owner": "@memory-accounting",
    "digest": "4eaccdb39e04a3ffda69506389dd61a81c05aa0e86791800a88890739da925ec"
@@ -1417,6 +1425,14 @@
   "Pous.TimedINC": {
    "owner": "@memory-accounting",
    "digest": "0880c3a8f7cc9c2b2af5da033afc3c3a8c096db4fc04620931a57a008181be0d"
+  },
+  "PousCheck.Properties.AcceptsDecodes": {
+   "owner": "@lean",
+   "digest": "f868d8718cc355d0ebe11ee22c08fcdabdfb34118763167a0ba646a7345ec31e"
+  },
+  "PousCheck.Properties.PublishesRoot": {
+   "owner": "@lean",
+   "digest": "680e12cbfc7b08535e30f388ece5bc8eb694ff263ca847a79d27cb403177b59c"
   },
   "Pouw.Adversary.Bounded": {
    "owner": "@compute-accounting",
@@ -1790,6 +1806,26 @@
    "owner": "@compute-accounting",
    "digest": "4c6906588d3bd24bfe0c02960ad2153360f4fb933cf00700cb76cb6c8a58df8e"
   },
+  "Properties.Pouw.Period.DrawIsCoin": {
+   "owner": "@lean",
+   "digest": "f80df2c5f11cf37bad8e1410b455c5c011a86a3f6cf2d332c1a29daf9974be77"
+  },
+  "Properties.Pouw.Period.RegisteredBeforeDraw": {
+   "owner": "@lean",
+   "digest": "937a00c3838b6480bb92b94cb416c67d688aee6bfded503f5023e18bb2d55417"
+  },
+  "Properties.Pouw.Period.SaltIsLiveCoin": {
+   "owner": "@lean",
+   "digest": "62bf1dbd153325c70fa3981569702dee28e3d52af7dd5a58c64d6dd060a87331"
+  },
+  "Properties.Pouw.Period.ServiceSound": {
+   "owner": "@lean",
+   "digest": "7bdb05088c6fdfbe4fbcdf8575aeab93463ba4d5c713fb421ccb61909d386d88"
+  },
+  "Properties.Pouw.Period.StagedPins": {
+   "owner": "@lean",
+   "digest": "601dbebed64f324a3b89f8bfdf394b8eb47cd98003101825382a4c94c1da7dc1"
+  },
   "RecDeploy.PartIn": {
    "owner": "@proofs"
   },
@@ -1856,42 +1892,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Pous.P2.Assumptions.CoinCommitHides": {
-   "owner": "@lean",
-   "digest": "cd2e704557c1d6266ff3cb8dde135be3e5538a7c8748cc0f03d743dc30e958cb"
-  },
-  "Pous.Period.RingDevice": {
-   "owner": "@lean",
-   "digest": "635c2edca25704b425275a4f2d3944bccd1dfc3878fc051e8b3700d198e7454d"
-  },
-  "PousCheck.Properties.AcceptsDecodes": {
-   "owner": "@lean",
-   "digest": "f868d8718cc355d0ebe11ee22c08fcdabdfb34118763167a0ba646a7345ec31e"
-  },
-  "PousCheck.Properties.PublishesRoot": {
-   "owner": "@lean",
-   "digest": "680e12cbfc7b08535e30f388ece5bc8eb694ff263ca847a79d27cb403177b59c"
-  },
-  "Properties.Pouw.Period.DrawIsCoin": {
-   "owner": "@lean",
-   "digest": "f80df2c5f11cf37bad8e1410b455c5c011a86a3f6cf2d332c1a29daf9974be77"
-  },
-  "Properties.Pouw.Period.RegisteredBeforeDraw": {
-   "owner": "@lean",
-   "digest": "937a00c3838b6480bb92b94cb416c67d688aee6bfded503f5023e18bb2d55417"
-  },
-  "Properties.Pouw.Period.SaltIsLiveCoin": {
-   "owner": "@lean",
-   "digest": "62bf1dbd153325c70fa3981569702dee28e3d52af7dd5a58c64d6dd060a87331"
-  },
-  "Properties.Pouw.Period.ServiceSound": {
-   "owner": "@lean",
-   "digest": "7bdb05088c6fdfbe4fbcdf8575aeab93463ba4d5c713fb421ccb61909d386d88"
-  },
-  "Properties.Pouw.Period.StagedPins": {
-   "owner": "@lean",
-   "digest": "601dbebed64f324a3b89f8bfdf394b8eb47cd98003101825382a4c94c1da7dc1"
   }
  },
  "meaning": [

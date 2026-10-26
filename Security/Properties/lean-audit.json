@@ -39,13 +39,18 @@
   "Properties.RemoteAudit.Line",
   "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
-  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod"
+  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
   "Accounting.Assumptions.Compose.GuessLuckAt": {
    "owner": "@compute-accounting",
    "digest": "0793432daba184ac1d9937071bc9342335f5fc5d700b8a6ec6f21e1f51cbf5ae"
+  },
+  "Accounting.Assumptions.HelpWithinCertifier": {
+   "owner": "@compute-research",
+   "digest": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab"
   },
   "Accounting.Assumptions.TS.OperandHMu": {
    "owner": "@compute-accounting",
@@ -58,6 +63,10 @@
   "Accounting.Assumptions.TS.UnitFixed": {
    "owner": "@compute-accounting",
    "digest": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2"
+  },
+  "Accounting.Assumptions.WordCostsMacs": {
+   "owner": "@compute-research",
+   "digest": "e774e9e1282970b24d157ea3971e9e5d69ec6af60e483d34f57d855f9527dda7"
   },
   "Accounting.Remote.Draw.Assumptions.Counted": {
    "owner": "@memory-accounting",
@@ -233,7 +242,10 @@
   "Definitions.Accounting",
   "Definitions.Claims",
   "Definitions.Pouw.Basic",
-  "Definitions.Pouw.Window"
+  "Definitions.Pouw.Window",
+  "Definitions.Pouw.PearlC",
+  "Definitions.Pouw.Fp8Atom",
+  "Definitions.Pouw.Game.Defs"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -349,7 +361,8 @@
     "Properties.Accounting.Compose",
     "Properties.Accounting.Served",
     "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
-    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod"
+    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
+    "Properties.Accounting.JointBridge.WorkOfCreditedWords"
    ],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
@@ -404,6 +417,11 @@
    "except": [],
    "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Accounting.ComposePeriod`, `Definitions.Accounting.Assumptions`), never a proof"
   },
+  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
+   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "Properties.Pouw.Period"],
+   "except": [],
+   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization and the H200's price (`Definitions.Accounting.JointBridge`), its named premises (`Definitions.Accounting.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
+  },
   "Properties.Pous.Period": {
    "imports": [
     "Mathlib",
@@ -419,9 +437,19 @@
    "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, never over a proof"
   },
   "Properties.Accounting.JointBridge": {
-   "imports": ["Definitions.Accounting", "Properties.Pous.Period", "Properties.Pouw.Period"],
+   "imports": [
+    "Definitions.Accounting",
+    "Definitions.Accounting.Assumptions",
+    "Properties.Pous.Period",
+    "Properties.Pouw.Period"
+   ],
    "except": [],
-   "why": "a protocol's per-period guarantee read as `JointPeriod`'s input is stated over the period (`Definitions.Accounting.JointPeriod`), its bridge (`Definitions.Accounting.JointBridge`) and the protocol's own period statement (`Properties.Pous.Period`, `Properties.Pouw.Period`), never a proof"
+   "why": "a protocol's per-period guarantee read as `JointPeriod`'s input is stated over the period (`Definitions.Accounting.JointPeriod`), its bridge (`Definitions.Accounting.JointBridge`), the bridge's named claims (`Definitions.Accounting.Assumptions`) and the protocol's own period statement (`Properties.Pous.Period`, `Properties.Pouw.Period`), never a proof"
+  },
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords": {
+   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions"],
+   "except": [],
+   "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Accounting.JointPeriod`), its realization (`Definitions.Accounting.JointBridge.CreditedWords`) and its named premises (`Definitions.Accounting.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   }
  },
  "reads_exempt": {
@@ -436,6 +464,14 @@
    "assumptions": [],
    "type_hash": "244896e8069c5fc7458985bb6a8bd223c15a40c28381c6930a8edda81523f263"
   },
+  "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": {
+   "owner": "@compute-research",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords : Properties.Accounting.JointBridge.WorkOfCreditedWords"
+   ],
+   "assumptions": [],
+   "type_hash": "b5df1631d6de9f44fb5a1e710b018846b0292957df4809e64c54ceeda837320f"
+  },
   "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": {
    "owner": "@lean",
    "signature": [
@@ -444,6 +480,15 @@
    ],
    "assumptions": [],
    "type_hash": "8e473fef8f065ddce579a5caca0e4e7ce35b129bbd576c43ef682e628f4a1de3"
+  },
+  "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200": {
+   "owner": "@compute-research",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200 :",
+    "  Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200"
+   ],
+   "assumptions": [],
+   "type_hash": "eaf5442abb4e631e913657b8c2d54421f389fe557fed648067ff77e673c620da"
   },
   "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
    "owner": "@memory-accounting",
@@ -3078,7 +3123,7 @@
    }
   },
   "frozen": {
-   "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) for a period realizing H1's checked credit (RealizesWorkOfH1CheckedCreditPeriod), from Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod at the source's instance at each value of the other coins. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's one added gap is RealizesWorkOfH1CheckedCreditPeriod.work_of_fixed (RT4-LOGIC-6): the words fixed right are within the compute account's work at p.",
+   "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) at every price p, per-kind multiply-add count macs, unit count u and unit width b_unit, for a period whose PoUW audit credits H1's checked words (RealizesCreditedWords at m = Compose.minWordMacs Sc Cd macs, u and b_unit), from Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod at the source's instance at each value of the other coins, through WorkOfCreditedWords. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's added premises (RT4-LOGIC-6) are Accounting.Assumptions.WordCostsMacs (each right word of a unit not outsourced cost m multiply-adds of priced work, SAK(matmul) at tile scale) and Accounting.Assumptions.HelpWithinCertifier (at most K / b_unit units outsourced), both on the premises list.",
    "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousCheck.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
@@ -3103,7 +3148,9 @@
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Off the premises list: SaltIsLiveCoin and RegisteredBeforeDraw, deployment gaps (the loop is given its salt before serving and nothing binds it to a live coin, CMP-90's to fix; the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors), StagedPins, DrawIsCoin and ServiceSound, facts to prove. Non-vacuous: Proofs.Pouw.Period.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.Period.Honest builds a live-salt period meeting every premise (h1_meets).",
    "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and takes the setup check's open AcceptsDecodes and PublishesRoot, CoinCommitHides and Pous.Period.RingDevice (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
-   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as JointPeriod's .pous input: under PeriodHeld's premises and RingDevice, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check."
+   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as JointPeriod's .pous input: under PeriodHeld's premises and RingDevice, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check.",
+   "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw) at any price from any source game that credits words, at the source's error: the source's bound is a hypothesis over its own event, so no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field and the source game's acceptance a parameter), and the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list. Its premises are Accounting.Assumptions.WordCostsMacs and Accounting.Assumptions.HelpWithinCertifier, on the premises list; its honest instance is Accounting.SecurityProofs.Bridge.HonestH200.credited_sound.",
+   "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200": "frozen (no-function,world-unlisted): WorkOfH1CheckedCreditPeriod at the H200's INT8 price (Accounting.h200S8Price, W1's prices on W1Device.s8H100: an INT8 tensor-core multiply-add 1, a CUDA-core op 32), a K-deep R x C tile's 16 R C multiply-adds a word (Accounting.receiptWordMacs R C: 512 at PouwH1Tile_v1's 4 x 8, 16384 at _v5's and _v6's 32 x 32), its credited words' 2 (K/32) 16 R C a unit (Accounting.receiptUnitMacs K R C: 2048 at v1, 4194304 at a warp and K = 4096) and b_unit bits a unit, for every SHA-512 and fetch price, tile shape and unit width; as WorkOfH1CheckedCreditPeriod it has no deployed function's outcome as one hypothesis and its event is a Pouw.pr through PeriodRun.Sound. Its honest instance is Accounting.SecurityProofs.Bridge.HonestH200.h200_sound, at K = 64, 4 x 8 and b_unit = 1024."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -3686,6 +3733,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -3755,6 +3803,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -3804,6 +3853,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -3836,9 +3886,22 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
+   ]
+  },
+  "Definitions.Accounting.Assumptions.CreditedWords": {
+   "digest": "a25f4c1c49005044b2dd56f19dab51ba0e411b9c4f3620cd11b1807e52485ecb",
+   "definitions": {
+    "Accounting.Assumptions.HelpWithinCertifier": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab",
+    "Accounting.Assumptions.WordCostsMacs": "e774e9e1282970b24d157ea3971e9e5d69ec6af60e483d34f57d855f9527dda7"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200"
    ]
   },
   "Definitions.Accounting.Assumptions.RemoteDraw": {
@@ -3897,6 +3960,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4007,6 +4071,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4049,6 +4114,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4093,7 +4159,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "Properties.Requirement.held",
@@ -4163,6 +4231,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4181,6 +4250,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4203,10 +4273,36 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
    ]
+  },
+  "Definitions.Accounting.JointBridge.CreditedWords": {
+   "digest": "1a9bb385d606062ade50bfdb2a4c785cedd60adafff45afef00fb22ba6634950",
+   "definitions": {
+    "Accounting.Certificates.helpUnits": "c2978d0581af901f4228bf512b479443221f324b3833cd4bcf44d9e581121165",
+    "Accounting.Compose.minWordMacs": "c1f2018ca09c2aeab805566f47f6aacbce4bee4f86c7f3597489c24bd1ccc183",
+    "Accounting.RealizesCreditedWords": "21940806e2abd9be34beb89fde5ac387bd78ee39e97954c3e8015a97fd5bddf6",
+    "Accounting.RealizesCreditedWords.coin": "212259de447d68b59105491fcb4f1cbacd803c9fa68375e4c5dee28be8110463",
+    "Accounting.receiptUnitMacs": "9f89508d13e14b41233771401a6799f0a70eb4b2f5b192db4488fc4fa4bce71f",
+    "Accounting.receiptWordMacs": "44df6624365f084f5e004a624955b45347baa7b9d7a634b7cf1e547cc6da2f80"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200"
+   ]
+  },
+  "Definitions.Accounting.JointBridge.H200": {
+   "digest": "87d0a0490ebd62848f2e9ef9677b51112dc5e4aa2a4d69d6682d3b94be33225f",
+   "definitions": {
+    "Accounting.h200S8Price": "592cbafc27f2291319e0f402eedd833e87c083f08cb74f918728436133354e89",
+    "Accounting.w1Price": "f10b7828646d886b409a1b8947e160d5899cb982a77801a4e9308aea0e3f018a"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200"]
   },
   "Definitions.Accounting.JointBridge.SpaceOfPeriodHeld": {
    "digest": "b84f3fb3d8ba9016fe0ef5d330d43a2e3ec2fc607e325e9a327a31b5ca4ea856",
@@ -4214,13 +4310,6 @@
     "Accounting.RealizesSpaceOfPeriodHeld": "168d7c814d2dc214206e5591492054724d84a180759a4ce91a693e1df31fe7d0"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld"]
-  },
-  "Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
-   "digest": "6805273d6b6792ae282bef0922788d3d8ae78e64fc91c1b284dfae17cb9a6373",
-   "definitions": {
-    "Accounting.RealizesWorkOfH1CheckedCreditPeriod": "e9e8f8c962219d49450458d19dc5861702987b69a39240c12f28092e5637cf67"
-   },
-   "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod"]
   },
   "Definitions.Accounting.JointPeriod": {
    "digest": "e45bbf940aa1d96d8e362fbb766558aa8d2dc58cf690c9e20936c201d5f021a5",
@@ -4257,7 +4346,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
-    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod"
+    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200"
    ]
   },
   "Definitions.Accounting.PerRun": {
@@ -4482,6 +4573,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4494,6 +4586,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4510,6 +4603,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4522,6 +4616,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4543,6 +4638,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4555,6 +4651,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4574,6 +4671,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -4647,7 +4745,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Throttles",
@@ -4778,7 +4878,9 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Witnesses"
@@ -5352,12 +5454,67 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
    ]
+  },
+  "Definitions.Pouw.Fp8Atom.Atom": {
+   "digest": "13359af1b64028c1735edf53d7f7c3ddea98d34cff543707054914503b868bf0",
+   "definitions": {
+    "Pouw.Fp8Atom.Pipeline": "c75752881f5ce873a09a8de3f9a564ac5a782dcb4f75daebc5962428e7d1aa08",
+    "Pouw.Fp8Atom.hopperE4m3K32": "f3e6e14d9556060100c3afb55692f97984074525bb011f51506f68700d7d8a29"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200"]
+  },
+  "Definitions.Pouw.PearlC.Fp4": {
+   "digest": "617667cbb058464d56490b8d38a425f4e9f7b6196c9de03db3e8c8ebb3a5b6de",
+   "definitions": {
+    "Pouw.PearlC.Fp4.Fp4Atom": "93635dd9e60f2c0736894c086b60c67946221b8cbb550348d006b71f619a5f46",
+    "Pouw.PearlC.Fp4.ScaleFmt": "69ce4289e3394a1e14fb12287e0a1bdea3d40e3fdef57630378f1fea8f8328e9",
+    "Pouw.PearlC.Fp4.ScaleFmt.ue4m3": "17af9ca5630e8deb0dd66fee5b99e1cc9fb2a6b02c2915187213802dda392231",
+    "Pouw.PearlC.Fp4.ScaleFmt.ue8m0": "b8a41918c1c6f89f3f05857819b97d2a6962e50e0059c726f89d6921925e53f3",
+    "Pouw.PearlC.Fp4.sm120Nvf4": "773875f64e14fce8908939999e37f67d93f73e8fcdfc1b8911e63c7105220c39"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200"]
+  },
+  "Definitions.Pouw.PearlC.PeelExact": {
+   "digest": "08240a1c9e9f31f01a51c63fc8c061a03027f9c241e71112036cb49b8fd9fd94",
+   "definitions": {
+    "Pouw.PearlC.PeelExact.hopperBf16K16": "d7d075ddff41ed23854c24e6894b4d0e56123cbd6ec09cbf128d18c6f5bd5a6f"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200"]
+  },
+  "Definitions.Pouw.PearlC.W1": {
+   "digest": "2103ebd0e10fdadc34bfdb52870a92ed82c1cd280321532c7c37806bd27b4397",
+   "definitions": {
+    "Pouw.PearlC.W1.Fmt": "90751949d9ced8d44d438acc9c56111cf5d8277b9b3f630c62928eb0eb3ba01f",
+    "Pouw.PearlC.W1.Fmt.bf16": "ff3b4b7a2f4de3f5f91bc581622e1d32c9358b3de560db3817206489f2d74c90",
+    "Pouw.PearlC.W1.Fmt.casesOn": "114b684184866973208307a1f9b96d7f51b5c31db00ff739dfc23b87850d9c93",
+    "Pouw.PearlC.W1.Fmt.e2m1": "fda96f2369634a5ded3f85966224fe3e2eaab2be7ca73f2a0ffbc816707a8806",
+    "Pouw.PearlC.W1.Fmt.e4m3": "6b86e62df41421e85714b83a62d67ef5c03d6d396cb02a831b475a2099bf52a5",
+    "Pouw.PearlC.W1.Fmt.rec": "01ab82d78c166eac668b2e037a5aa0f05b29769dba424fe7ce62a8f4a1755196",
+    "Pouw.PearlC.W1.Fmt.s8": "e410b96a36fdea94750d0b54527432e5d9c18bd4163ecde10f51a71c345a63d2",
+    "Pouw.PearlC.W1.Frag": "5e8f94470f086fbbb2dc598c988b60d299ebe581d8c1c54dff92a0f859a3e164",
+    "Pouw.PearlC.W1.W1Device": "0cb483f5d20d395fe958b90acff472f0210f750522bf2cedf2920249c9974ea3",
+    "Pouw.PearlC.W1.W1Device.prices": "c1d76fa7b3c71c021b7d908ca28b7ebfa3b47c20f191a06e03083d8e9f78ee7a",
+    "Pouw.PearlC.W1.W1Device.s8H100": "22d639b96490f475d64f92831071a72c5c8fefaf2006a1dd7162efc1cd9e2ec1",
+    "Pouw.PearlC.W1.W1Device.s8H100At": "b8756492bacdeba83527637058a342527429182a4d5ae24a1aadce51bf140e17",
+    "Pouw.PearlC.W1.W1Prices": "3419694a372d74999ebf68a8236af94ee5470cbeed15e84627c63f244790bd52",
+    "Pouw.PearlC.W1.W1Prices.fp32": "cf0cced6538038df65423a289b211163e6c19ae268b12085bb5345d25d456094",
+    "Pouw.PearlC.W1.W1Prices.h100": "02f38db5b6ef7f973e7c41f1979b3323cc384e303e730ee5a97761b686e463e2",
+    "Pouw.PearlC.W1.W1Prices.int32": "9c7f3a6f9decc4fb3791972b1a8499d221a2707abc4057862756c020aece2a96",
+    "Pouw.PearlC.W1.W1Prices.mac": "a2f761e8bfd914c9738487f9e5816cd94be9d08047104b636a3f69bcb8ef60af",
+    "Pouw.PearlC.W1.W1Prices.sha512": "2633f80140bc6878792de4d5dd656ed7362e3beb85a8f06730d0b73e97d63e04",
+    "Pouw.PearlC.W1.h100Frags": "a6a43a2e8add496ea0eb9bba66be067d15b50e82ab62272fe9805bb0ca3dafcf",
+    "Pouw.PearlC.W1.h100S8Frags": "91c907525637a5e7c40e84c0918dd6c00addcc691c7174279c531fa351e4aba8",
+    "Pouw.PearlC.W1.instReprFmt.repr.match_1": "3b1015753b8d38a020a4ebf489fc88e11baee9e091fe4750190b2115ea9c8dd4"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200"]
   },
   "Definitions.Pouw.RelativeSecurity": {
    "digest": "b17e96435f325ff29164bb0bc025491c0af665c3386cdef7f9e833a426b4002c",
@@ -5376,6 +5533,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
@@ -5391,6 +5549,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
@@ -5701,6 +5860,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -5821,6 +5981,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "NciCheck.Properties.SecurityProofs.AcceptsExactly",
     "NciCheck.Properties.SecurityProofs.BaselineProvenance",
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
@@ -5988,6 +6149,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -8027,6 +8189,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8166,6 +8329,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8193,6 +8357,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8279,6 +8444,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8305,6 +8471,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8500,6 +8667,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8551,6 +8719,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8603,6 +8772,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8641,6 +8811,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8668,6 +8839,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8690,12 +8862,24 @@
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld"]
   },
-  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
-   "digest": "7e01bb9dc433589159d1bb3c3990cb8d8a47a723963ef4088cdd2987e675f900",
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords": {
+   "digest": "34070b012213c60e9ba8a171a45719e6e43be804a5a5b513cd8630f3411b3ef5",
    "definitions": {
-    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": "1e652b8f3c34d35a993e6280fd5db965151aa7eaa66b973f618b8255a1b6715d"
+    "Properties.Accounting.JointBridge.WorkOfCreditedWords": "1ac492ee74b4207481893b48f5ce7fd3f30337ee7e15d0a3ac9f583b75c76456"
    },
-   "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod"]
+   "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfCreditedWords"]
+  },
+  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
+   "digest": "713ac3c7c84e73f1fe11d2ac49385b20e6b8d1c0cfcbffa505b2133bfef0e841",
+   "definitions": {
+    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": "7c58cc81b691e9ec820fb94f4210285efb1c39550afbd56296b5477c8580c762",
+    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodAt": "1876b8b90021d76f36861537fa0e6d99f5b23559c7833634fd195fe3c3daa72c",
+    "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200": "a762552b60a5c45f1c73049a7cc13cfea07447cb5b027de1c6edfc29fe0bf90c"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200"
+   ]
   },
   "Properties.Accounting.Requirement": {
    "digest": "124de2d82a8c85eff14745ccc7e53aad55dfafaea9506b8a88df4c6658591210",
@@ -9606,6 +9790,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
