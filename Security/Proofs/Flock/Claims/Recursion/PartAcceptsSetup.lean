@@ -240,10 +240,8 @@ theorem vstarAcceptsV_boundV {W Col T : Type} (H : Msg → Msg) (I : Claims.Recu
       rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
         Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
       exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
-    · intro i hi1 hfx hpe
-      rw [hrd i (by omega)]
-      simp only [Claims.Recursion.VStarB.LayoutB.pick, hfx, Option.getD_none, hpe, List.isEmpty_nil, ↓reduceIte]
-      exact (hshs.2 i hi1).symm
+    · refine Claims.Recursion.VStarB.LayoutB.cmtAgrees_of_pick fun i hi1 _ => ?_
+      rw [hrd i (by omega), hshs.2 i hi1]
     · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
   rcases hDec x st hst hf (Claims.coinSeq r)
       (Claims.Recursion.runVstar H (deployRec I.V ivScope { b with rd := L.readers }) I P x ω r) ws ho.1 htrue

@@ -1,4 +1,5 @@
-import Proofs.Flock.Recursive.KS
+import Proofs.Flock.Recursive.KSStatement
+import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
 import Proofs.Flock.Claims.Recursion.RegSetupOpens
 
 /-!
