@@ -7,8 +7,16 @@
   `ScaledMmS8Coordinate_v1{K=H, DOT=BlackwellS8ImmaDot32_v1}`'s function (`verity.ml.circuits.ops.gemm`, the s8 binding of
   sm_120), the circuit's one template: each output coordinate of each linear at each token row is one unit. The ReLU
   between the linears and each row's quantization are not units: their outputs are committed as the next linear's inputs.
-  `verity.ml.circuits.ops.quant`'s ``QuantRowS8`` computes them from a linear's bf16 row, one unit a row, for the circuit
-  that wires each linear to the next.
+* **The wired circuit** (``wired``): each linear at each token row is one `ScaledMmS8_v1{K=H, N=H}` unit (`linear_template`),
+  its H outputs one row, and each ReLU and quantize one `QuantRowS8_v1{N=H, RELU}` unit (`quant_template`: RELU on the
+  up_proj -> down_proj edge, not on down_proj -> the next step's up_proj), which reads that row whole and writes the codes
+  and the scale the next linear reads (`interface.Wire`, every port one writer). Only the request's own row, the step-0
+  up_proj's ``x`` and ``sx`` (the embedding quantized), is a free input, so a changed activation is a drawn unit's
+  refusal, not a free choice. Linear unit (request r, step s, layer l) is index ``l·R·S + s·R + r`` (R requests, S steps),
+  and quantize unit (r, s) of either edge ``s·R + r``, so each wire is an offset; a member must not straddle the step-0
+  up_proj units and the rest (``cap`` divides R). The run is computed first and recorded in that order.
+  ``tamper_activations``: bit 0 of every quantize unit's first code flipped, the next linear computed on the flipped
+  codes, so every linear's Definition holds and every quantize unit's doesn't.
 * **Serving** (:class:`TorchLoop`, an `interface.Integration`): each request is one token, embedded and run through the MLP
   for ``steps`` decode steps, step s + 1 reading step s's output. Every linear's units are recorded into the window as they
   are computed (`Window.record`), labelled with the request, step, layer and op path they serve, which Verity never reads.
@@ -24,14 +32,17 @@
   input, and the window commits them under the registered salts (`interface.Window`'s ``registered``).
   ``tamper_weights``: a loop that serves another model's weights (bit 0 of every weight code row's first word flipped)
   under the registered value's salts, its outputs its own weights' (so its Definition holds), which Lean's registered
-  reads must refuse: the rows open no pinned root.
+  reads must refuse: the rows open no pinned root. In the wired circuit each value is one row a linear (``w`` the s8
+  [H][H] codes, ``H² / 2`` words, ``sw`` the H scales, ``2H`` words: `commit_weights`' ``wired``), each linear unit reading
+  its layer's row.
 * **Committed activations** (`TorchLoop.commit_activations`, CMP-91): each window's activation rows, ``x`` (every linear's
   s8 input row, ``H / 2`` words) and ``sx`` (its f32 scale, 2 words), one row a (request, step, layer) in unit order (unit
   u's rows are row ``u // H``), committed as core's registered values in ``hm96-sha512/row/v2`` under fresh salts, each
   domain binding the window's run root, so a window's rows open under no other window's domain. Their entries go in the
   registration's window (`activations`), which the draw comes after, so they are fixed before the window's draw coin;
   their salts are the prover's (`activations_opening`). The circuit declares no read of them: they are per-window values
-  the prover chose, so they take no input bit out of the free count (only a pinned value does).
+  the prover chose, so they take no input bit out of the free count (only a pinned value does). In the wired circuit the
+  committed rows are the free ones alone, one a request (the wired rows are their writers' committed outputs).
 """
 from __future__ import annotations
 
@@ -45,7 +56,7 @@ import torch
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import gemm as G
+from verity.ml.circuits.ops import gemm as G, quant as Q
 from verity.ml.windows import interface as IF
 
 LINEARS = ("up_proj", "down_proj")
@@ -60,6 +71,8 @@ PIN = "verity-torch-loop/weights-pin/v1"
 OPENING = "verity-torch-loop/weights-opening/v1"
 #: the registered values, each by the template port that reads it
 WEIGHTS = (("w", "wrow"), ("sw", "sw"))
+#: the same in the wired circuit, by `linear_template`'s port
+WIRED_WEIGHTS = (("w", "w"), ("sw", "sw"))
 #: the committed activations, each the template port whose rows it holds
 ACTIVATIONS = ("x", "sx")
 ACTIVATIONS_OPENING = "verity-torch-loop/activations-opening/v1"
@@ -68,6 +81,16 @@ ACTIVATIONS_OPENING = "verity-torch-loop/activations-opening/v1"
 def template(k: int):
     """The circuit's template: one output coordinate of a W8A8 linear over ``k`` inputs, sm_120's s8 binding."""
     return bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8)
+
+
+def linear_template(h: int):
+    """The wired circuit's linear: a W8A8 linear of width ``h`` on one token row, its ``h`` outputs one row."""
+    return bind(G.ScaledMmS8, K=h, N=h, **G.GEMM_SM120_S8)
+
+
+def quant_template(h: int, relu: bool):
+    """The wired circuit's ReLU (under ``relu``) and per-row quantize of a linear's ``h``-wide bf16 row."""
+    return bind(Q.QuantRowS8, N=h, RELU=relu)
 
 
 def quantize(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -111,20 +134,24 @@ class Model:
         """What the weights' domain binds as their program: the model, by its width and seed."""
         return f"torch-loop/mlp-w8a8-h{self.h}/seed{self.seed}"
 
-    def weights(self, tamper: bool = False) -> dict[str, np.ndarray]:
-        """The registered values' rows, u16 words (`interface.words`): ``w`` every linear's code rows, ``sw`` their scales.
-        ``tamper``: bit 0 of every code row's first word flipped."""
-        w = np.concatenate([IF.words(bits(lin.wq), 8, self.h, self.h // 2) for lin in self.layers])
+    def weights(self, tamper: bool = False, wired: bool = False) -> dict[str, np.ndarray]:
+        """The registered values' rows, u16 words (`interface.words`): ``w`` every linear's code rows, ``sw`` their scales,
+        one row an output channel, or with ``wired`` one row a linear. ``tamper``: bit 0 of every code row's first word
+        flipped."""
+        n = 1 if wired else self.h
+        w = np.concatenate([IF.words(bits(lin.wq).reshape(n, -1), 8, n, self.h * self.h // (2 * n)) for lin in self.layers])
         if tamper:
             w = w.copy()
             w[:, 0] ^= 1
-        return {"w": w, "sw": np.concatenate([IF.words(bits(lin.sw), 32, self.h, 2) for lin in self.layers])}
+        return {"w": w, "sw": np.concatenate([IF.words(bits(lin.sw).reshape(n, -1), 32, n, 2 * self.h // n)
+                                              for lin in self.layers])}
 
 
-def commit_weights(model: Model, salts: dict[str, list[bytes]] | None = None) -> dict[str, REG.Registered]:
-    """The model's weights committed as registered values (module docstring), fresh salts unless ``salts`` (by value)."""
+def commit_weights(model: Model, salts: dict[str, list[bytes]] | None = None, wired: bool = False) -> dict[str, REG.Registered]:
+    """The model's weights committed as registered values (module docstring), fresh salts unless ``salts`` (by value);
+    ``wired``: one row a linear, as the wired circuit reads them."""
     return {v: REG.Registered.commit(model.name, v, rows.tolist(), (salts or {}).get(v), schema=REG.SCHEMA_V2)
-            for v, rows in model.weights().items()}
+            for v, rows in model.weights(wired=wired).items()}
 
 
 def pin(model: Model, values: dict[str, REG.Registered]) -> dict:
@@ -135,15 +162,17 @@ def pin(model: Model, values: dict[str, REG.Registered]) -> dict:
 
 
 def opening(model: Model, values: dict[str, REG.Registered]) -> dict:
-    """The prover's private file of the weights' commitment: each row's salt (the rows are the model's)."""
-    return {"format": OPENING, "program": model.name, "salts": {v: [s.hex() for s in r.salts] for v, r in values.items()}}
+    """The prover's private file of the weights' commitment: each row's salt (the rows are the model's), and ``rows``
+    ``linear`` when they are one row a linear (`commit_weights`' ``wired``)."""
+    return {"format": OPENING, "program": model.name, **({"rows": "linear"} if values["w"].leaves == len(model.layers) else {}),
+            "salts": {v: [s.hex() for s in r.salts] for v, r in values.items()}}
 
 
 def opened(model: Model, doc: dict) -> dict[str, REG.Registered]:
     """The weights committed again under the salts of their `opening`."""
-    if doc.get("format") != OPENING or doc.get("program") != model.name:
+    if doc.get("format") != OPENING or doc.get("program") != model.name or doc.get("rows", "linear") != "linear":
         raise ValueError(f"not an opening of {model.name}'s weights ({OPENING})")
-    return commit_weights(model, {v: [bytes.fromhex(x) for x in ss] for v, ss in doc["salts"].items()})
+    return commit_weights(model, {v: [bytes.fromhex(x) for x in ss] for v, ss in doc["salts"].items()}, "rows" in doc)
 
 
 def held_pin(doc: dict) -> dict[str, dict]:
@@ -183,26 +212,34 @@ class TorchLoop:
     the run, so two runs of one shape have two roots (infra's gate opens a root's coins once, ever)."""
 
     def __init__(self, model: Model, requests: list[int], steps: int = 2, tamper: bool = False, run_id: str = "",
-                 registered: bool = False, tamper_weights: bool = False) -> None:
+                 registered: bool = False, tamper_weights: bool = False, wired: bool = False,
+                 tamper_activations: bool = False) -> None:
+        if tamper_activations and not wired:
+            raise ValueError("tamper_activations tampers the wired circuit's quantize units: give wired")
         self.model, self.requests, self.steps, self.tamper, self.run_id = model, list(requests), steps, tamper, run_id
         self.registered, self.tamper_weights = registered, tamper_weights
+        self.wired, self.tamper_activations = wired, tamper_activations
         self.outputs: dict[tuple[int, int], torch.Tensor] = {}
         self.activations: dict[str, list[np.ndarray]] = {v: [] for v in ACTIVATIONS}
 
     @property
     def units(self) -> int:
-        return len(self.requests) * self.steps * 2 * self.model.h
+        r, s = len(self.requests), self.steps
+        return r * s * 2 + r * s + r * (s - 1) if self.wired else r * s * 2 * self.model.h
 
     @property
     def run_root(self) -> str:
         """The run's root: SHA-512 of what the loop served (its model's seed and width, its requests and steps) and its id."""
         return hashlib.sha512(json.dumps({"loop": "torch-loop/mlp-w8a8", "h": self.model.h, "seed": self.model.seed,
                                           "requests": self.requests, "steps": self.steps,
-                                          "id": self.run_id}).encode()).hexdigest()
+                                          "id": self.run_id, **({"wired": True} if self.wired else {})}).encode()).hexdigest()
 
     def circuit(self) -> IF.Circuit:
         """The loop's circuit: its units, and with ``registered`` each unit's ``wrow`` and ``sw`` read from the registered
-        weights, unit (request, step, layer, n) reading row ``h·layer + n`` (a fan-out over the requests and steps)."""
+        weights, unit (request, step, layer, n) reading row ``h·layer + n`` (a fan-out over the requests and steps); with
+        ``wired``, the wired circuit (`wired_circuit`)."""
+        if self.wired:
+            return self.wired_circuit()
         h, fn = self.model.h, template(self.model.h)
         reg = None
         if self.registered:
@@ -212,13 +249,44 @@ class TorchLoop:
                                 reads=tuple(IF.Read(tid, p, v, 0, (rs, 2, h), 0, (0, h * words[p], words[p])) for v, p in WEIGHTS))
         return IF.Circuit(f"torch-loop/mlp-w8a8-h{h}", ((fn, self.units),), registered=reg)
 
-    def run(self, window: IF.Window) -> None:
-        """Serve every request, recording each linear's units into ``window`` as they are computed."""
-        coord, h = template(self.model.h), self.model.h
-        layers = self.model.layers
+    def wired_circuit(self) -> IF.Circuit:
+        """The wired circuit (module docstring): the linears, the quantize units of the two edges (the second's only past one
+        step), each quantize unit reading its linear's output row and each later linear its quantize unit's codes and
+        scale; with ``registered``, linear unit (l, s, r) reading row ``l`` of ``w`` and ``sw``."""
+        h, r, s = self.model.h, len(self.requests), self.steps
+        mm, relu = linear_template(h), quant_template(h, True)
+        tm, tq = descriptor_id(mm), descriptor_id(relu)
+        templates = [(mm, 2 * r * s), (relu, r * s)]
+        wires = [IF.Wire(tq, "x", tm, "o0", 0, (r * s,), 0, (1,)),
+                 *(IF.Wire(tm, p, tq, o, r * s, (r * s,), 0, (1,)) for p, o in (("x", "o0"), ("sx", "o1")))]
+        if s > 1:
+            plain = quant_template(h, False)
+            tp = descriptor_id(plain)
+            templates.append((plain, r * (s - 1)))
+            wires += [IF.Wire(tp, "x", tm, "o0", 0, (r * (s - 1),), r * s, (1,)),
+                      *(IF.Wire(tm, p, tp, o, r, (r * (s - 1),), 0, (1,)) for p, o in (("x", "o0"), ("sx", "o1")))]
+        reg = None
+        if self.registered:
+            words = dict(IF.layout(mm).rows)
+            reg = IF.Registered({v: 2 * words[p] for v, p in WIRED_WEIGHTS},
+                                reads=tuple(IF.Read(tm, p, v, 0, (2, r * s), 0, (words[p], 0)) for v, p in WIRED_WEIGHTS))
+        return IF.Circuit(f"torch-loop/mlp-w8a8-h{h}/wired", tuple(templates), wires=tuple(wires), registered=reg)
+
+    def _layers(self) -> list[Layer]:
+        """The linears served: the model's, or under ``tamper_weights`` the tampered weights' codes."""
+        h, layers = self.model.h, self.model.layers
         if self.tamper_weights:
-            w = torch.from_numpy(self.model.weights(tamper=True)["w"].view(np.int8).reshape(2, h, h).copy())
+            w = torch.from_numpy(self.model.weights(tamper=True, wired=self.wired)["w"].view(np.int8).reshape(2, h, h).copy())
             layers = [Layer(w[k], lin.sw) for k, lin in enumerate(layers)]
+        return layers
+
+    def run(self, window: IF.Window) -> None:
+        """Serve every request, recording each linear's units into ``window`` as they are computed (with ``wired``,
+        `run_wired`)."""
+        if self.wired:
+            return self.run_wired(window)
+        coord, h = template(self.model.h), self.model.h
+        layers = self._layers()
         self.activations = {v: [] for v in ACTIVATIONS}
         for r, tok in enumerate(self.requests):
             x = self.model.embed[tok][None, :]
@@ -235,6 +303,45 @@ class TorchLoop:
                     self.activations["sx"].append(IF.words(bits(sx), 32, 1, 2)[0])
                     x = torch.relu(y.to(torch.float32)) if layer == 0 else y.to(torch.float32)
                 self.outputs[r, step] = x
+
+    def run_wired(self, window: IF.Window) -> None:
+        """Serve the requests together, step by step, then record each template's units in the wired circuit's order: the
+        linears by (layer, step, request), the quantize units of each edge by (step, request). Each quantize unit reads its
+        linear's recorded row, and the next linear its recorded codes and scale."""
+        h, R, S = self.model.h, len(self.requests), self.steps
+        mm, layers = linear_template(h), self._layers()
+        linears: list[list[tuple[np.ndarray, np.ndarray, np.ndarray]]] = [[], []]
+        quants: dict[bool, list[tuple[np.ndarray, np.ndarray, np.ndarray]]] = {True: [], False: []}
+        xq, sx = quantize(self.model.embed[self.requests])
+        self.activations = {"x": list(IF.words(bits(xq), 8, R, h // 2)), "sx": list(IF.words(bits(sx), 32, R, 2))}
+        for step in range(S):
+            for layer, lin in enumerate(layers):
+                out = bits(linear(xq, sx, lin.wq, lin.sw))
+                if self.tamper:
+                    out = out ^ np.uint16(1)
+                linears[layer].append((bits(xq), bits(sx), out))
+                y = torch.from_numpy(out.view(np.int16).copy()).view(torch.bfloat16).to(torch.float32)
+                x = torch.relu(y) if layer == 0 else y
+                if layer == 1:
+                    for r in range(R):
+                        self.outputs[r, step] = x[r][None, :]
+                if (step, layer) == (S - 1, 1):
+                    break
+                xq, sx = quantize(x)
+                if self.tamper_activations:
+                    xq = xq.clone()
+                    xq[:, 0] ^= 1
+                quants[layer == 0].append((out, bits(xq), bits(sx)))
+        reqs = [f"r{r}" for r in range(R)]
+        for layer, lin in enumerate(layers):
+            w, sw = np.repeat(bits(lin.wq)[None], R, 0), np.repeat(bits(lin.sw)[None], R, 0)
+            for step, (xb, sxb, out) in enumerate(linears[layer]):
+                window.record(mm, [xb, sxb, w, sw], [out],
+                              {"requests": reqs, "step": step, "layer": layer, "op": self.model.op_path(layer)})
+        for relu in (True, False):
+            for step, (y, codes, scale) in enumerate(quants[relu]):
+                window.record(quant_template(h, relu), [y], [codes, scale],
+                              {"requests": reqs, "step": step, "after": self.model.op_path(0 if relu else 1)})
 
     def commit_activations(self, salts: dict[str, list[bytes]] | None = None) -> dict[str, REG.Registered]:
         """The run's activation rows committed as per-window values (module docstring), fresh salts unless ``salts`` (by
