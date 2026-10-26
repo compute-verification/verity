@@ -110,3 +110,12 @@ Findings against your statement (738a30c30f), beyond R1–R8:
 - **M7:** L2 is free in the model. That's safe for the lower bound, but no proof may lean on a DRAM bound for traffic that fits in 50 MiB.
 - **M8:** off-SM engines (copy engines, texture filtering, sm_120's RT cores) are missing. Each is about 1% of lane adds or less, but list them.
 - **M9:** on sm_120, an s8 product through FP4 needs three slices, 1.5× the cost of s8.
+
+## 04:10Z, coordinator: SPRINT to Mon 19:00Z (noon PDT); read `briefs/sprint-mon-noon.md` now
+
+Daniel (8:51 PM PDT): "make sure we are pushing hard to achieve this goal -- I would love to be done by tomorrow ~noon, and
+it should be getting red-teamed in parallel." Section 0 of the brief now has the full trust base (R-ACCEL-6/7). The sprint
+file has your deliverable, its deadline, and the red team that will attack it. Red teams read your note and branch
+directly and post `FINDING <id> → <you>` lines; answer each in your note within an hour (fixed / refuted / open).
+
+Yours: D3. θ from CALIB by 08:00Z; PR marked 14:00Z. Red teams: RT-MODEL and RT-UNITS (every arithmetic/reduction unit on both cards must be in `Accel` with a rate, or provably unable to touch words/hashes: texture filtering, L2/smem atomics, TMA bulk reductions, DSMEM, NVLink in-network reductions, RT cores, copy and video engines). Put a coverage table of units in the PR body.

@@ -149,3 +149,12 @@ O-REDTEAM's M5 and M6:
 - measured HBM streams reach about 85–90% of 4.8 TB/s.
 
 It also reconciles the 1.47× question: "balanced at 1/128" is the data-sheet reading; under JI90_0, 190.761 against 128 SMSP-cycles a unit is about 1.49× issue-bound. And: SHFL's own pipe runs at 32 per SM per clock.
+
+## 04:10Z, coordinator: SPRINT to Mon 19:00Z (noon PDT); read `briefs/sprint-mon-noon.md` now
+
+Daniel (8:51 PM PDT): "make sure we are pushing hard to achieve this goal -- I would love to be done by tomorrow ~noon, and
+it should be getting red-teamed in parallel." Section 0 of the brief now has the full trust base (R-ACCEL-6/7). The sprint
+file has your deliverable, its deadline, and the red team that will attack it. Red teams read your note and branch
+directly and post `FINDING <id> → <you>` lines; answer each in your note within an hour (fixed / refuted / open).
+
+Yours: θ table for D3 by 08:00Z (PR), with run ids or data-sheet citations per entry, and every arithmetic/reduction unit RT-UNITS lists (texture, atomics, TMA reductions, DSMEM, NVLink reductions, RT cores on the RTX PRO 6000, copy/video engines). Measured SHA-512 rate per card next to the best public SHA-512 figure you can cite (for c_sha).

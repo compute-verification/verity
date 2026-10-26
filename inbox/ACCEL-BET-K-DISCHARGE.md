@@ -87,3 +87,12 @@ Fork findings for K1:
   - a 2×2 cell block at L = 1 (full tree) and at L = 2 (best single fork point).
 - **In general,** any tree costs at least half the spanning tree, so forks save at most 2× over chains.
 - **Open:** larger trees and L ≥ 3. Scripts: `benchmarks/pouw/theory/fork_steiner.py` and `fork_median.c`.
+
+## 04:10Z, coordinator: SPRINT to Mon 19:00Z (noon PDT); read `briefs/sprint-mon-noon.md` now
+
+Daniel (8:51 PM PDT): "make sure we are pushing hard to achieve this goal -- I would love to be done by tomorrow ~noon, and
+it should be getting red-teamed in parallel." Section 0 of the brief now has the full trust base (R-ACCEL-6/7). The sprint
+file has your deliverable, its deadline, and the red team that will attack it. Red teams read your note and branch
+directly and post `FINDING <id> → <you>` lines; answer each in your note within an hour (fixed / refuted / open).
+
+(BET-K-DISCHARGE-2) Unchanged: fork-free degree-2 RingKCount + PrefixDiffRank, 16:00Z. Red team: RT-LEAN.

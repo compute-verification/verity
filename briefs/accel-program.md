@@ -3,21 +3,27 @@
 Program brief, compute-research lane (coordinator bc-ebc09a9a, handle @compute-research). Written 26 Oct 00:50Z. Every ACCEL
 worker reads all of it, then does its own section. Rules: `briefs/brief-rules.md` on this branch (cloud overrides first).
 
-## 0. The target end state (agreed with Daniel, 26 Oct 02:15Z)
+## 0. The target end state (agreed with Daniel, 26 Oct 02:15Z; trust base restated 03:50Z with R-ACCEL-6/7, and Daniel's go at 03:51Z: "make sure we are pushing hard to achieve this goal -- I would love to be done by tomorrow ~noon, and it should be getting red-teamed in parallel")
 
-The deliverable is one theorem in Lean, with nothing else in the lock. Every workstream works toward it.
+The deliverable is one theorem in Lean, with nothing else in the lock. Every workstream works toward it. **The sprint to
+Mon 26 Oct 19:00Z (noon PDT) is `briefs/sprint-mon-noon.md`: who builds what, who red-teams it, and when.**
 
-**The trust base (R-ACCEL-4):**
+**The trust base (R-ACCEL-4, -6, -7). These and nothing else:**
 
 1. **The accelerator model at θ.** (G1) capacity, (G2) rate on every resource including issue, and the instruction set's
-   documented exact semantics, from which P1 and P2 follow. θ is at most the data sheet's, cross-checked by
-   microbenchmarks with run ids.
-2. **Standard cryptography.** SHA-512 collision resistance, and C-Flock sound and zero-knowledge. SHA-512 as a random
-   oracle is allowed only where a result names it (R-ACCEL-3).
-3. **Live coins and the auditor's devices.**
+   documented exact semantics, from which P1 and P2 follow; the one named wiring fact is `AccelProductForm` (each
+   tensor-core multiplier feeds one accumulator). θ is at most the data sheet's, cross-checked by microbenchmarks with
+   run ids.
+2. **Standard cryptography.** SHA-512 collision resistance, and C-Flock sound and zero-knowledge (its named claims).
+   SHA-512 as a random oracle only where a result names it and Daniel confirms that use (R-ACCEL-3).
+3. **Live coins and the auditor's devices.** Uniform coins drawn by the auditor's challenger after the commitments they
+   perturb; the network certifier on hardware the prover doesn't control (`trusted-nebius-host`).
+4. **Symmetric algorithmic knowledge, two closely studied algorithms only.** (a) Matrix multiplication (R-ACCEL-6): no
+   program computes exact matrix products more cheaply, per priced unit, than the best public method, including alongside
+   other work. (b) SHA-512 (R-ACCEL-7): no one computes SHA-512 meaningfully faster than the best public implementation.
 
-Nothing else: no circuit class, no "this algorithm is optimal", no empirical premise. ASSUMPTION-AUDIT's defect list is
-empty.
+Nothing else: no circuit class, no "this fold is optimal", no empirical premise. ASSUMPTION-AUDIT's defect list is
+empty. Off-matmul pieces (receipt, fold, lucks) are proved or designed away, never assumed (R-ACCEL-6).
 
 **The guarantee (R-ACCEL-1).** For a fleet over a monitoring period \(T\), with \(C\) the fleet's capacity, and for
 every prover strategy:

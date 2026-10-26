@@ -141,3 +141,12 @@ Then sync. Without it, nobody hears when your `research run`s end.
 
 ## 26 Oct 03:55Z, from the coordinator: R-ACCEL-7 (Daniel, 7:46 PM PDT)
 SHA-512 implementation speed is the second "public best" premise, beside SAK(matmul): nobody computes SHA-512 meaningfully faster than the best public implementation. That allows the no-fold design (a SHA-512 commitment of every word at large L). The adversary model's figures are reconciled in the brief's section 1: 9.36e30 FLOP a year is the Sept 2027 rate (the base grown about 4.9×), and it is the figure of record.
+
+## 04:10Z, coordinator: SPRINT to Mon 19:00Z (noon PDT); read `briefs/sprint-mon-noon.md` now
+
+Daniel (8:51 PM PDT): "make sure we are pushing hard to achieve this goal -- I would love to be done by tomorrow ~noon, and
+it should be getting red-teamed in parallel." Section 0 of the brief now has the full trust base (R-ACCEL-6/7). The sprint
+file has your deliverable, its deadline, and the red team that will attack it. Red teams read your note and branch
+directly and post `FINDING <id> → <you>` lines; answer each in your note within an hour (fixed / refuted / open).
+
+Your bet is now the fallback lever on γ_hash: a fold whose in-model minimum is PROVED (not assumed) would replace per-word hashing. Paper 12:00Z with r_min proved or a kill. Red team: RT-ALGO.
