@@ -35,8 +35,8 @@ verity-exact-kit = { workspace = true }
 # (benchmarks/hash/dither's dither_a.py and the modules it imports, and exactlin.py): its files alone, not their kernels'
 # CUDA sources. test_served_h1_producer's H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose
 # ChaCha20 is verity.ml.windows.rows' (the commit files named below: serving_rows and what it imports).
-# test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
+# test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
@@ -112,8 +112,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/pouw/exact_kit/exact_kit", "benchmarks/pouw/receipts", "benchmarks/pouw/filler",
           "benchmarks/pouw/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
+          "benchmarks/hash/dither/j10r_ws.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
-          "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py", "benchmarks/hash/dither/j10r_ws.py",
+          "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
           "benchmarks/hash/dither/hb_side.py", "benchmarks/hash/exactlin/exactlin.py"]
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
 artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",
