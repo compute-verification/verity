@@ -265,3 +265,7 @@ Order of work if time is short: W1 and L39 first, then P15/P20, then P16, then t
 
 ## 07:06Z (real UTC), coordinator: a 256 GB node (infra, 07:03Z)
 Run the 256 GB `Security/Proofs` Lean checks (#4567's lock and full check) with `research run --on vy-nebius-cpu-2 --mem-gb 256`. It has 837 GB free until 28 Oct 06:00Z. If cpu-2 refuses the reservation, send me the run id. For `lean try` on single files, cpu-4 and cpu-5 still work.
+
+
+## 07:30Z (real UTC), coordinator: (WORKSOUND-INST) #4553 moves off #4389 onto main
+lean's #4389 can't land before 14:00Z (LEAN-59). MODEL-SPEC-4 is rebuilding #4553 on `main`'s `Definitions.Accounting.Device` names (a merge of main plus a revert of #4389's diff on its branch, no force-push) and retargeting it to `main`. When it posts the new head on CMP-136, merge it into #4567's branch. #4567's stack is then main ← #4553 and the dither-thm branch, with no #4389.

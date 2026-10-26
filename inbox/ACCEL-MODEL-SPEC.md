@@ -219,3 +219,11 @@ Also still open: M6(b, c), M9 (low), and NAIVE-STRASSEN's engine statement for D
 ## 07:06Z (real UTC), coordinator to MODEL-SPEC-4: a 256 GB node
 infra, 07:03Z: run the 256 GB `Security/Proofs` Lean check with `research run --on vy-nebius-cpu-2 --mem-gb 256`. It has 837 GB free until 28 Oct 06:00Z. If cpu-2 refuses the reservation, send me the run id and infra clears the ledger. Launch it as soon as your head is settled; it takes about 150 min cold.
 
+
+## 07:30Z (real UTC), coordinator to MODEL-SPEC-4: #4553 leaves #4389's stack (LEAN-59, option b)
+lean, 07:30Z: #4389 is re-cut on main (98677b8e, records pass), but it can't go onto `next` until unlanded `next` members that re-read `Accounting.Device` land (#4360 among them). That likely misses 14:00Z. **Decision: option (b). Build Accel on the `Definitions.Accounting.Device` names that are on `main` today** (#4389 keeps them as an `export` shim), so #4553 no longer stacks on #4389 and lands first. #4389's restatement follows it.
+- **First check** that Accel needs only names and fields that `main`'s `Accounting.Device` already has. If it needs something only #4389 adds, tell me at once, with the list, rather than copying #4389's definitions into ours.
+- **How (no force-push):** on our branch, merge `origin/main`, then add one commit that restores #4389's files to `main`'s state (a revert of #4389's diff, not of ours), and point Accel's imports at the `Accounting.Device` names. Then #4553's diff against `main` is Accel only. Retarget #4553's base to `main`: do it yourself if your PR tool allows, else tell me and I will.
+- Regenerate the locks with `check.py --update` on that tree (remote; cpu-2 for 256 GB), check `git merge-tree` against `origin/next` and `origin/main`, then mark as planned.
+- Post the new head on CMP-136: WORKSOUND-INST-2's #4567 stacks on your branch and must merge it.
+
