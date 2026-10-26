@@ -16,6 +16,9 @@ Sources:
 Marks:
 - **covered**: the same semantics at the same or fewer units;
 - **coarse**: a model opcode that does at least as much, at no more units;
+- **over-approximated**: an exact integer version at the unit's rate and in its register layout. It equals the unit on
+  its format's exact integers once the card's float codes are read as those integers (`Card.decode`, the encoding
+  `Assumptions.CardWithinAccel` refines up to, RT-LEAN-2 L30). Use out of that range is outside the claim;
 - **missing**: not in the model.
 
 Where the two cards differ, a row says which. Otherwise it holds for both.
@@ -35,7 +38,7 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | HMMA.SP, IMMA.SP, QMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | covered | `Op.mmaSp`: the kept pairs (each kept element of A with the element of B its 2-bit selector names) at the dense forms' tensor units a real product, so twice the logical rate; dots `Open.dotSp` under `AccelProductForm` |
 | OMMA.SP (sm_120) | `mma.sp` `kind::mxf4nvf4` | missing | block-scaled sparse FP4 |
 | DMMA (sm_90) | `mma.sync` `.f64` | over-approximated | `Op.dmma`: exact integer MMA on FP64's exact integers, on the tensor cores at 128 MACs an SM clock at 1980 MHz (32 · 1830/1980 units of `tensor` and `tensorLong` a MAC, so it shares the low-precision formats' long-window budget) |
-| DMMA (sm_120) | `mma.sync` `.f64` | over-approximated | `Op.dmma` at a placeholder 32 MACs an SM clock; rate undocumented (θ row) |
+| DMMA (sm_120) | `mma.sync` `.f64` | over-approximated | `Op.dmma` at 32 MACs an SM clock; rate undocumented, CALIB measured 1.75 (r20261017-041103-d35d) |
 
 ## Integer and floating-point lanes
 
@@ -49,9 +52,9 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | FADD, FMUL, FFMA | covered | `Lane.fadd`, `fmul`, `ffma` (round to nearest even), issue-bound |
 | FMNMX, FSEL, FSET, FSETP, FCHK, FSWZADD | missing | float compare, select and min/max |
 | MUFU (rcp, rsq, sqrt, ex2, lg2, sin, cos, tanh) | missing | the SFU pipe and its rate |
-| HADD2, HFMA2, HMUL2 | over-approximated | `Lane.hfma2`: each half exact on f16's exact integers, two words out |
+| HADD2, HFMA2, HMUL2 | over-approximated | `Lane.hfma2`: each half exact on f16's exact integers, both halves in one word |
 | HMNMX2, HSET2, HSETP2 | missing | half2 min, max and compares |
-| DADD, DFMA, DMUL | over-approximated | `Lane.dfma` on the `f64` pipe: exact on FP64's exact integers, 128 bits out |
+| DADD, DFMA, DMUL | over-approximated | `Lane.dfma` on the `f64` pipe: exact on FP64's exact integers, two words out |
 | DSETP | missing | FP64 compares |
 | VABSDIFF, VABSDIFF4, VIMNMX (video, SIMD in a word) | missing | |
 | F2F, F2I, I2F, I2I, FRND, F2FP (the PACK_AB pack), I2FP, F2IP, I2IP | missing | conversions. F2FP is W1's `cvt` |
