@@ -18,13 +18,9 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 
 ## Where the work goes
 
-- **Code or analysis.** Code the verifier runs, or that the V[B] generator or a reference prover runs, stays with its
-  component: `verity/core/service/flock/` (no dependencies), and each protocol's `lean/`. Everything else is under
-  `Security/`: a definition in `Definitions/<Area>/`, an assumption or guarantee statement in
-  `Models/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
-  `security_proofs`, ArkLib allowed), a property of code in `Properties.<Protocol>` with its proof in
-  `Proofs.Properties.<Protocol>` (package `security_properties`, never requiring `security_proofs`). No new package: an
-  area is a directory in each tree.
+- **Code or analysis** (AGENTS.md "Lean" says which tree and package). Code the verifier, the V[B] generator or a
+  reference prover runs stays with its component; everything else is under `Security/`. No new package: an area is a
+  directory in each tree.
 - **Lean is the definition and the verifier of record.** A verifier is Lean code and imports nothing from `verity.ml`;
   the Python that mirrors it is held to it by difftest (`verity/core/difftest/`).
 - **Own a subdirectory and namespace** with one aggregator module; the area's root imports the aggregator once, so
@@ -108,7 +104,6 @@ python tools/verity/lean/check.py PKG  the full check, which the train's check r
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma that Mathlib realized already. Don't unfold a `→+` or `→*` inside `simp`; prove its `_apply` lemma by
   `rfl` and simp with that.
-- **Push after every commit.** Work only in a VM's worktree is lost when the VM is suspended.
 
 ## Assumptions and guarantees
 
@@ -184,8 +179,6 @@ The dated text is note:lean/20261020T1000Z-report-lean-proofs-rulings-archive.
 - A changed guarantee needs no reviewer and no approval: the landing DM is the check. A guarantee that only moved
   (`--moved`) isn't listed in it.
 - Probability and games are our own minimal definitions over Mathlib's `PMF`; soundness bridges to VCVio where needed.
-- What a physical region can read is not a separate premise. It follows from annotating the actual circuit's regions and
-  assuming causality in time and space: `width_into_region_le` (a location reads in a window at most its state at the
-  window's start plus what crossed its boundary), `Links` and `Covered` in `Security/Definitions/Accounting/Physical.lean`.
-  A bound per server and time window is stated on `Accounting.Placed` with `WindowsAt`, as `ThreadedRuntime` and
-  `DampenerWindowsCap` are, with no channel-completeness premise (ASK-141).
+- What a physical region reads is not a premise: it follows from the actual circuit's regions and causality
+  (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
+  server-window is stated on `Accounting.Placed` with `WindowsAt` (ASK-141).
