@@ -1923,6 +1923,7 @@
   "Proofs.Flock.Soundness",
   "Randomness",
   "Proofs.Flock.Recursive",
+  "Proofs.Flock.Claims",
   "Proofs.Flock.VBridge",
   "Proofs.Flock.EndToEnd",
   "Proofs.Flock.EndToEndDrawn",
