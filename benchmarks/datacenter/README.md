@@ -36,7 +36,8 @@ and a side channel of σ a server over each epoch (`DEDICATED_RACKS`, 1 kbit/s, 
 machine shares a block's rack). Weight custody over a monitoring period needs that share well below 1.
 
 A result here is about a monitoring period: the stretch of time it covers, not one epoch, window or run. Present it
-for a week, a month and a year, over all of the datacenter's compute, even though the demo checks two nodes. Lead with
+for a week, a month and a year, over all compute, the adversary resource model (`world-inference-2027` in
+`benchmarks/census/adversary.json`), with the datacenter's figure beside it, even though the demo checks two nodes. Lead with
 the pooled total over the period and its share of the compute it covers, at δ = 1% and 10⁻⁶, with the per-epoch figure
 beside it, never alone. Each epoch draws its own live coins, so the pooled total stays about the same as the period
 grows. The datacenter's size and the epoch's length are stated parameters (from `benchmarks/census`), and a figure
