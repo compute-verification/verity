@@ -4,13 +4,15 @@ The units are circuits' plan's, one unit a row (CMP-92 af6de1f1, revised 23:30Z,
 Each `Family` is one template over one table: its units are the table's rows (a row unit) or the rows' words (a coordinate
 unit), and `Family.replay` gives a unit's opened inputs, its committed output words and the words replay computes:
 
-* coordinate units by `replay`'s templates (the replay lane's `benchmarks/e2e_h200/replay.py`), which evaluate main's
-  Definitions: ``ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`` (Q, K, V, O, up, down, head), ``GemmCoordinate_v2{K=d,
-  GEMM_HOPPER}`` (QK^T) and ``GemmCoordinatePad_v1{T, K=32}`` (PV);
-* row units by the compositions below of `replay`'s word functions (F32AddV2 / MulV2 / DivV2, PouwF32SqrtRn, MufuEx2Ftz,
-  F2fpBf16, Bf16Add_v1, TokenSelect, the quantizer of #4433), the plan's row semantics, until circuits' row Definitions
-  (``RmsNormRow_v1``, ``QuantRowS8_v1``, ``SoftmaxRow_v1``, ``Bf16AddRow_v1``, the embedding and argmax rows) are on main:
-  their status is ``pending-definition``.
+Every unit's words are ``replay.template(key).evaluate`` (`tpl`, the replay lane's `benchmarks/e2e_h200/replay.py`): the one
+reference of each template, main's Definition where it exists.
+
+* coordinate units are one template each: ``ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`` (Q, K, V, O, up, down, head),
+  ``GemmCoordinate_v2{K=d, GEMM_HOPPER}`` (QK^T) and ``GemmCoordinatePad_v1{T, K=32}`` (PV);
+* row units are the plan's compositions of the replay lane's templates (`rms_norm_row`, `quant_row`, `softmax_row`,
+  `argmax_row`, `embedding_row`, `bf16_add_row`), until circuits' row Definitions (``RmsNormRow_v1``, ``QuantRowS8_v1``,
+  ``SoftmaxRow_v1``, ``Bf16AddRow_v1``, the embedding and argmax rows) are on main: their status is
+  ``pending-definition``.
 
 A unit's inputs are read from the committed tables (an earlier op's row, an earlier step's K or V row) and the registered
 weights (`weights.Weights`, from the generator, not the store, so a wrong decode shows as a mismatch).
@@ -44,31 +46,65 @@ from .weights import Weights
 ROW, COORD = "pending-definition", "definition"
 
 
+def tpl(name: str, **statics: Any) -> RP.Template:
+    """The replay lane's template ``name`` at ``statics`` (in its stated order): `replay.template`, so every unit here is
+    evaluated by the one reference of each template (main's Definition where it exists)."""
+    return RP.template(RP.key_of(name, statics))
+
+
+def _ev(t: RP.Template, *arrays: np.ndarray) -> np.ndarray:
+    return t.evaluate(*arrays).reshape(len(arrays[0]), -1)
+
+
+def _word(name: str, *arrays: np.ndarray, **statics: Any) -> np.ndarray:
+    """A 32-bit value two units output as halves (``HALF`` 0 and 1), joined: (n,) words."""
+    return RP.join16(*(_ev(tpl(name, **statics, HALF=h), *arrays)[:, 0] for h in (0, 1)))
+
+
 def rms_norm_row(x: np.ndarray, w: np.ndarray, eps: int = EPS) -> np.ndarray:
-    """``RmsNormRow_v1{N, EPS}``: x, w (n, N) bf16 words -> (n, N)."""
-    xw = RP.widen(x)
-    rs = RP.rms_recip(RP.seq_sum(RP.mul(xw, xw))[:, None], x.shape[1], eps)
-    return RP.rms_out(x, rs[:, None], w)
+    """``RmsNormRow_v1{N, EPS}``: x, w (n, N) bf16 words -> (n, N), as ``RmsSumSqPart_v1{C = N}``,
+    ``RmsNormRecip_v1{N, G = 1, EPS}`` and ``RmsNormOut_v1`` a word."""
+    n, N = x.shape
+    s = _word("RmsSumSqPart_v1", x, C=N)
+    rs = _word("RmsNormRecip_v1", s[:, None], N=N, G=1, EPS=eps)
+    return _ev(tpl("RmsNormOut_v1"), x.reshape(-1), np.repeat(rs, N), w.reshape(-1)).reshape(n, N).astype(np.uint16)
 
 
 def quant_row(x: np.ndarray, relu: bool) -> tuple[np.ndarray, np.ndarray]:
-    """``QuantRowS8_v1{N, RELU}``: x (n, N) bf16 words -> codes (n, N) s8 words, scale (n,) f32 words."""
-    scale = RP.quant_scale(RP.row_abs_max(x, relu))
-    return RP.to_s8_rni_sat(RP.div(RP.widen(RP.relu16(x, relu)), scale[:, None])), scale
+    """``QuantRowS8_v1{N, RELU}``: x (n, N) bf16 words -> codes (n, N) s8 words, scale (n,) f32 words, as
+    ``RowAbsMax_v1{N, RELU}``, ``QuantS8Pair_v1{RELU}`` a pair and ``QuantS8Scale_v1``."""
+    n, N = x.shape
+    amax = _ev(tpl("RowAbsMax_v1", N=N, RELU=relu), x)[:, 0]
+    codes = _ev(tpl("QuantS8Pair_v1", RELU=relu), x.reshape(-1, 2), np.repeat(amax, N // 2)).reshape(n, N)
+    return codes.astype(np.uint8), _word("QuantS8Scale_v1", amax)
 
 
 def softmax_row(x: np.ndarray) -> np.ndarray:
-    """``SoftmaxRow_v1{N}``: scores (n, N) bf16 words -> probabilities (n, N)."""
-    m = RP.softmax_max(x)
-    e = RP.softmax_exp(x, m)
-    r = RP.div(np.uint32(RP.F32_ONE), RP.seq_sum(e))
-    return RP.bf16(RP.mul(e, r[:, None]))
+    """``SoftmaxRow_v1{N}``: scores (n, N) bf16 words -> probabilities (n, N), as ``SoftmaxMax_v1{N}``,
+    ``SoftmaxRecip_v1{N}`` and ``SoftmaxOut_v1`` a word."""
+    n, N = x.shape
+    m = _ev(tpl("SoftmaxMax_v1", N=N), x)[:, 0]
+    r = _word("SoftmaxRecip_v1", x, m, N=N)
+    return _ev(tpl("SoftmaxOut_v1"), x.reshape(-1), np.repeat(m, N), np.repeat(r, N)).reshape(n, N).astype(np.uint16)
 
 
 def argmax_row(x: np.ndarray) -> np.ndarray:
-    """The argmax row unit: logits (n, V) bf16 words -> (n,) the first index of the greatest (`TokenSelect` over one chunk)."""
-    best, idx = RP.chunk_best(x)
-    return RP.argmax_combine(x[:, 0], best[:, None], idx[:, None], x.shape[1])
+    """The argmax row unit: logits (n, V) bf16 words -> (n,), `TokenSelect` over one chunk (``ArgmaxChunkBest_v1{C = V}``,
+    ``ArgmaxChunkIdx_v1{C = V}``, ``ArgmaxCombine_v1{V, C = V}``): the first index of the greatest, a NaN never taken."""
+    V = x.shape[1]
+    best, idx = _ev(tpl("ArgmaxChunkBest_v1", C=V), x), _ev(tpl("ArgmaxChunkIdx_v1", C=V), x)
+    return _ev(tpl("ArgmaxCombine_v1", V=V, C=V), x[:, 0], best, idx)[:, 0].astype(np.uint16)
+
+
+def embedding_row(tok: int, table: np.ndarray, pos: np.ndarray) -> np.ndarray:
+    """The embedding row: token ``tok``'s column of ``table`` (N, V) plus ``pos`` (N,), ``EmbeddingCoordinate_v1{V}`` a word."""
+    N, V = table.shape
+    return _ev(tpl("EmbeddingCoordinate_v1", V=V), np.full(N, tok, np.uint16), table, pos)[:, 0].astype(np.uint16)
+
+
+def bf16_add_row(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """``Bf16AddRow_v1{N}``: ``Bf16Add_v2`` a word."""
+    return _ev(tpl("Bf16Add_v2"), a.reshape(-1), b.reshape(-1))[:, 0].astype(np.uint16).reshape(a.shape)
 
 
 @dataclass
@@ -116,19 +152,16 @@ class Family:
         return range(batch) if self.rows is None else self.rows
 
 
-@lru_cache(maxsize=None)
 def _s8mm(k: int) -> RP.Template:
-    return RP.scaled_mm_s8_coordinate(k)
+    return tpl("ScaledMmS8Coordinate_v1", K=k, DOT=RP.G.GEMM_SM90_S8["DOT"])
 
 
-@lru_cache(maxsize=None)
 def _qk(d: int) -> RP.Template:
-    return RP.gemm_coordinate(d)
+    return tpl("GemmCoordinate_v2", K=d, DOT=RP.G.GEMM_HOPPER["DOT"])
 
 
-@lru_cache(maxsize=None)
 def _pv(t: int) -> RP.Template:
-    return RP.gemm_coordinate_pad(t, PV_K)
+    return tpl("GemmCoordinatePad_v1", T=t, K=PV_K, DOT=RP.G.GEMM_HOPPER["DOT"])
 
 
 class Subcircuit(Protocol):
@@ -232,8 +265,8 @@ class Replayer:
 
         def replay(b: int, _: int):
             tok, t = int(self.tokens[step][b]), int(self.steps[step].positions[b])
-            col, pos = self._gain("tok")[:, tok], self._gain("pos")[:, t]
-            return [np.array([tok], np.uint16), col, pos], self.u16(step, "embed", b), RP.bf16_add(col, pos)
+            table, pos = self._gain("tok"), self._gain("pos")[:, t]
+            return [np.array([tok], np.uint16), table[:, tok], pos], self.u16(step, "embed", b), embedding_row(tok, table, pos)
         return Family("embed", RP.key_of("EmbeddingRow_v1", {"V": sh.vocab}), ROW, 1, replay)
 
     def _rms(self, step: int, op: str, src: str) -> Family:
@@ -312,7 +345,7 @@ class Replayer:
     def _add(self, step: int, op: str, a: str, b_op: str) -> Family:
         def replay(b: int, _: int):
             x, y = self.u16(step, a, b), self.u16(step, b_op, b)
-            return [x, y], self.u16(step, op, b), RP.bf16_add(x, y)
+            return [x, y], self.u16(step, op, b), bf16_add_row(x, y)
         return Family(op, RP.key_of("Bf16AddRow_v1", {"N": self.shape.width}), ROW, 1, replay)
 
     def _argmax(self, step: int) -> Family:
