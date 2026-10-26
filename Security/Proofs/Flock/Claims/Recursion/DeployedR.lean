@@ -18,8 +18,9 @@ V\*'s bound layout `layoutBTops (finOpen (restR elem))`, fixes every choice the 
   other field from the opened rounds. The record value is not in it: `decR` builds it (`recJ`).
 * **V\*'s last message** (`finalR`): every earlier round's openings, row then salt, round by round in commit order;
   then the element-level last message; then a trailer the statement fixes (`trailer`): each opened row's byte length,
-  round by round, then the trailer's own length. `finalR` reads the trailer from the end, then cuts the rest at it
-  (`cutRounds`). Every byte `finalR` reads as a length is a constant of the statement, so it reads every witness.
+  round by round, then the trailer's own length, every number in variable-length bytes (`FlockDeploy.encV`, so no
+  length needs to fit a word). `finalR` reads the trailer from the end, then cuts the rest at it (`cutRounds`). Every
+  byte `finalR` reads as a length is a constant of the statement, so it reads every witness.
 * **The last round's pieces past the openings** (`restR elem`): the element-level last message's pieces (`elem`),
   then the trailer, constant bytes at the last part (`trailerPiece`). `elem` is the one choice still open: the
   pieces at the `rec-open` level parts' hidden rows and siblings. `ElemFramed elem` is the fact it is to meet: its
@@ -30,7 +31,8 @@ namespace RecDeploy.DeployedR
 
 open Flock
 open Claims (Msg)
-open FlockDeploy (Coin FinalP Rd rdTake rdNat rdBytes rdList encNat encBytes encList)
+open FlockDeploy (Coin FinalP Rd rdTake rdNat rdBytes rdList encNat encBytes encList encV rdVL rdV encVL rdVLs rdVL_encV
+  rdVLs_encVL)
 open Claims.Recursion.VStarB (pieceLen readSegs)
 open Lean (Json)
 
@@ -127,23 +129,22 @@ def cutRounds : List (List ℕ) → Msg → Option (List (List (Msg × Salt)) ×
   | [], m => some ([], m)
   | l :: ls, m => (cutRound l m).bind fun p => (cutRounds ls p.2).map fun q => (p.1 :: q.1, q.2)
 
-/-- **The trailer**: each opened row's byte length, round by round, then the trailer's own length. -/
+/-- **The trailer**: each opened row's byte length, round by round, then the trailer's own length, its bytes
+reversed so it reads off the message's end. -/
 def trailer (lens : List (List ℕ)) : Msg :=
-  encList (encList encNat) lens ++ encNat (encList (encList encNat) lens).length
+  encVL (encVL encV) lens ++ (encV (encVL (encVL encV) lens).length).reverse
 
 /-- **The deployed reader of V\*'s last message**: the trailer off its end, then the openings at its lengths, then
 the element-level last message. -/
 def finalR (m : Msg) : Option (List (List (Msg × Salt)) × Msg) :=
-  if m.length < 8 then none
-  else
-    match rdNat.run (m.drop (m.length - 8)) with
-    | some (n, []) =>
-      if n + 8 ≤ m.length then
-        match (rdList (rdList rdNat)).run ((m.take (m.length - 8)).drop (m.length - 8 - n)) with
-        | some (lens, []) => cutRounds lens (m.take (m.length - 8 - n))
-        | _ => none
-      else none
-    | _ => none
+  match rdVL m.reverse with
+  | some (n, rest) =>
+    if n ≤ rest.length then
+      match (rdVLs (rdVLs rdV)).run (rest.take n).reverse with
+      | some (lens, []) => cutRounds lens (rest.drop n).reverse
+      | _ => none
+    else none
+  | none => none
 
 /-! ## The last round's pieces past the openings (`restR`) -/
 
@@ -161,9 +162,7 @@ def openLens (r : XR) : List (List ℕ) :=
 
 /-- **The trailer's piece**: its constant bytes, at the last part. -/
 def trailerPiece (r : XR) : List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)) :=
-  match h : r.w.parts.length with
-  | 0 => []
-  | n + 1 => [(⟨n, by omega⟩, [(trailer (openLens r), [])])]
+  if h : 0 < r.w.parts.length then [(⟨r.w.parts.length - 1, by omega⟩, [(trailer (openLens r), [])])] else []
 
 /-- **The last round's pieces past the openings**: the element-level last message's (`elem`), then the trailer. -/
 def restR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (r : XR) :
@@ -219,9 +218,7 @@ theorem rdLevel_encLevel {rows : Array (Array F128)} {sibs salts : Array ByteArr
       (by simpa using h1) rest
   simp only [rdLevel, encLevel, List.append_assoc, StateT.run_bind, e1,
     rdBytes_list (by simpa using h3) h4, rdBytes_list (by simpa using h5) h6, Option.bind_eq_bind, Option.bind_some]
-  show some (((rows.toList.map Array.toList).map List.toArray).toArray, sibs.toList.toArray, salts.toList.toArray) =
-    some (rows, sibs, salts)
-  simp
+  simp [StateT.run_pure, Option.pure_def, Function.comp_def]
 
 /-- A proof's openings fit their length words. -/
 def OpensFit (p : Flock.Proof) : Prop :=
@@ -241,10 +238,20 @@ theorem rdOpens_encOpens {p : Flock.Proof} (h : OpensFit p) (rest : Msg) :
       (by simpa using hn) rest
   simp only [rdOpens, encOpens, List.append_assoc, StateT.run_bind, rdLevel_encLevel hi, e2, rdLevel_encLevel hf,
     Option.bind_eq_bind, Option.bind_some]
-  show some (opensOnly { rows := p.ligerito.initialProof.rows, siblings := p.ligerito.initialProof.siblings,
-      salts := p.ligerito.initialProof.salts } p.ligerito.recursiveProofs.toList.toArray p.ligerito.finalProof.rows
-      p.ligerito.finalProof.siblings p.ligerito.finalProof.salts, rest) = some (opensOf p, rest)
-  simp [opensOf]
+  simp only [StateT.run_pure, Option.pure_def]
+  rfl
+
+/-- **What a reader takes of the last message's proof is its openings**: `absorbedFrom` keeps of `q` only the fields
+`opensOf` keeps. -/
+theorem absorbedFrom_opensOf (c : FlockDeploy.RepCtx) (a q : Flock.Proof) :
+    FlockDeploy.absorbedFrom c a (opensOf q) = FlockDeploy.absorbedFrom c a q := rfl
+
+/-- **A rep reads the same off a proof's openings as off the proof** (so `ReadsBack` at `fl.ps = ps` carries over
+to `rdR`'s `ps.map opensOf`). -/
+theorem readRep_opensOf (c : FlockDeploy.RepCtx) (rows : List (List ByteArray)) (q : Flock.Proof) :
+    FlockDeploy.readRep c rows (opensOf q) = FlockDeploy.readRep c rows q := by
+  unfold FlockDeploy.readRep
+  simp only [absorbedFrom_opensOf]
 
 /-- **`rdR` reads `encLast`**: the statement, and each proof's openings (`opensOf`), where every length fits its
 word. -/
@@ -276,28 +283,19 @@ theorem rdR_encLast {stmt : Msg} {ps : List Flock.Proof} (hs : stmt.length < 2 ^
   simp only [hb]
 
 /-- **`finalR` reads its trailer**: at any body `B`, the openings at the trailer's lengths and what follows. -/
-theorem finalR_trailer (B : Msg) (lens : List (List ℕ)) (hl : lens.length < 2 ^ 64)
-    (hl' : ∀ l ∈ lens, l.length < 2 ^ 64 ∧ ∀ n ∈ l, n < 2 ^ 64)
-    (hh : (encList (encList encNat) lens).length < 2 ^ 64) :
-    finalR (B ++ trailer lens) = cutRounds lens B := by
-  have hrd : (rdList (rdList rdNat)).run (encList (encList encNat) lens) = some (lens, []) := by
-    simpa using FlockComplete.rdList_encList (r := rdList rdNat) (e := encList encNat) (l := lens)
-      (fun l hm rest => FlockComplete.rdList_encList
-        (fun n hn rest => FlockComplete.rdNat_encNat ((hl' l hm).2 n hn) rest) (hl' l hm).1 rest) hl []
+theorem finalR_trailer (B : Msg) (lens : List (List ℕ)) : finalR (B ++ trailer lens) = cutRounds lens B := by
+  have hrd : (rdVLs (rdVLs rdV)).run (encVL (encVL encV) lens) = some (lens, []) := by
+    simpa using rdVLs_encVL (r := rdVLs rdV) (e := encVL encV) (l := lens)
+      (fun l _ rest => rdVLs_encVL (fun n _ rest => rdVL_encV n rest) rest) []
   unfold trailer
-  generalize encList (encList encNat) lens = h at hh hrd ⊢
-  have hm : B ++ (h ++ encNat h.length) = (B ++ h) ++ encNat h.length := (List.append_assoc ..).symm
-  have hlen : ((B ++ h) ++ encNat h.length).length = (B ++ h).length + 8 := by
-    rw [List.length_append, FlockComplete.encNat_length]
-  have hn : rdNat.run (encNat h.length) = some (h.length, []) := by
-    simpa using FlockComplete.rdNat_encNat hh []
-  have hBh : (B ++ h).length = B.length + h.length := List.length_append
-  rw [hm]
+  generalize encVL (encVL encV) lens = T at hrd ⊢
+  have hrev : (B ++ (T ++ (encV T.length).reverse)).reverse = encV T.length ++ (T.reverse ++ B.reverse) := by
+    simp [List.reverse_append]
   unfold finalR
-  rw [hlen, if_neg (by omega), Nat.add_sub_cancel, List.drop_left, hn]
+  rw [hrev, rdVL_encV]
   simp only
-  rw [if_pos (by omega), List.take_left, List.drop_left' (by omega : B.length = (B ++ h).length - h.length), hrd]
+  rw [if_pos (by simp), List.take_left' (by simp), List.reverse_reverse, hrd]
   simp only
-  rw [List.append_assoc, List.take_left' (by omega : B.length = (B ++ h).length - h.length)]
+  rw [List.drop_left' (by simp), List.reverse_reverse]
 
 end RecDeploy.DeployedR
