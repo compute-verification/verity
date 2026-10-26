@@ -3,8 +3,7 @@
 The Verity x vLLM integration: the Torch/vLLM-derived Programs (`verity.ml.definitions.registry`, `verity_vllm.program.frontend`), the
 runtime capture and Match/Commit machinery (`verity_vllm`), and the qualification sweep (`verity_vllm/ops`,
 `workloads/`).  Promoted from `veritor@0903f60d6` (release `r18-int-3`) as one working closure; see the Notion page
-"Veritor → Verity migration" for the decisions and the evidence index.  It holds only what attaches Verity to vLLM; the
-served example, its workload, its placement and the commands that serve and audit it, is `examples/vllm/`.
+"Veritor → Verity migration" for the decisions and the evidence index.  The served example is `examples/vllm/`.
 
 ## Layout
 
