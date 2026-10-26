@@ -88,10 +88,6 @@
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
    "digest": "5dca0cbd5c9510d395564190eaa9597f5352180152be0e3b481a6ceb301f0435"
   },
-  "Proofs.Flock.Claims.Recursion.SameJAt": {
-   "why": "key_ne, a local tactic (a macro) that closes a record key's inequality: `first` over `decide` and `rcases dk_cases` then `simp [e, toString]`, in the module's in-place map lemmas. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "40a3162f9970a8d15941d29bcf8c47e9c0baa2c0e533ff8514653b6d1a9def48"
-  },
   "Proofs.Flock.Claims.ZK.FinishLigEnd": {
    "why": "end_l and keep_l, local tactics (two macro_rules) that walk a Ligerito step by its head to its last squeeze (EndL) or through steps that only update its state (KeepL), trying the module's endL_*/keepL_* lemmas with refine, exact and split, in ligeritoCut_end's proof. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "0fa506f7f2ca93554004bfd09007f3cd41114b8ae051e53ed783b95b853655e5"
