@@ -32052,7 +32052,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Flock.KnownRead": {
-   "digest": "09268104f1852e17afef315b91fe4feacea07c8e9dbd85532699403f29e21282",
+   "digest": "c664906d615fc1d6bc1b3fc90ada58efafa5d0e63aac75f0fc296affc5f21194",
    "definitions": {
     "Flock.KnownRead.bitOut": "032569a2097fc3e13f59f7cf19016ee8a3f2fd05044aeb53f6841474b674a09a",
     "Flock.KnownRead.bitRead": "9803f78ce07286e8197a07e89e4dd6d351d983ab3df4dee49cb8acd13d8489e3",
@@ -32063,12 +32063,14 @@
     "Flock.KnownRead.outAt": "ccf9e97c15e78f2f9b34465f1de3d2499ac3de7cde7feeab00cef283b4ba4df0",
     "Flock.KnownRead.outCands": "5416b17a3eabaaa0e88219e69335cdeff60e606cfe8a6e4846acf8f93ea8b842",
     "Flock.KnownRead.portOf": "5f1bfb7105c5bf412df017987eb03fd66ab9e1947edbf2cefa8a3275c11a5ba2",
-    "Flock.KnownRead.readsOk": "f424340dc6a9b786bd6c2d34eb030e7a0d02a528cabbab699d3d6d7c39447adf",
+    "Flock.KnownRead.readsOk": "b20a7c382e0200e5acc9a308988dd33d3e492d0dd9a0374b8e42e6818d200eb8",
+    "Flock.KnownRead.readsOkAt": "d063f3aedfc7d4e02611a679aa1ca9801e11785df398004961afcb94954e22e3",
     "Flock.KnownRead.regWords": "d4dca35636a1d4ab160059122b24c94aaa19b56fc09b0a6f195a6d6ce1c4710f",
     "Flock.KnownRead.shapeOk": "f854d9c3ad0c90bce8c1fdcc6c04e0b59d01379044c647cdb34165ef90b5eeac",
     "Flock.KnownRead.srcAtMsg": "5e52fc3200b07e58c8035f20c196bf2a69d707ce96b57545b8ccd9960e400ad3",
     "Flock.KnownRead.srcMsg": "81f230c8cc5db4bebdaf576f262fb768f548ce41f6a28b062c61bea633550285",
-    "Flock.KnownRead.starts": "81b02d78652137cd6daa6b8e04b1ea015a804a917cd46cafd5429e013757e03a"
+    "Flock.KnownRead.starts": "81b02d78652137cd6daa6b8e04b1ea015a804a917cd46cafd5429e013757e03a",
+    "Flock.KnownRead.sureReads": "99315c77e768cf2af7bab9df21cf6bdea92d4bb88e4c82db3452d4e307fd732d"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
@@ -36318,6 +36320,23 @@
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
+  },
+  "Flock.TmplReads": {
+   "digest": "411490d4b859e93681ba1f49bb015294bf3b89d86a4f12f8f9e07212c3f6af9c",
+   "definitions": {
+    "Flock.Tmpl.Call.marks": "2d1f42f0dc54a992c49f3eec214d3adec9ff0d9a36b616257f398c524c833b34",
+    "Flock.Tmpl.Def.sure": "5d5e03f8edcd1b383910523ecd55966c1800fcb424a1cfadf09422719e4e0921",
+    "Flock.Tmpl.Tmpl.readsSure": "3ef628c1229612dd06fa4f498bd571cf30b0698a59779dd8cf6ad66547a7f8ac",
+    "Flock.Tmpl.markIn": "19787fefe8e492029d22eea9ae3b0b22802fb63d9a9b53ad874346000b854af9",
+    "Flock.Tmpl.rowMarks": "80d6f184569ac6cd15e01ae8650f5d85231b875127ac075ba9ec2abed0dd8041",
+    "Flock.Tmpl.segMarks": "82a415c20601162477ebdb3ba4f32f59c3dcc462c46c58feab2ef88dc4a968a0",
+    "Flock.Tmpl.segsMarks": "36d1e72a4550719b39a0e7f057aabd0d882c5cbec6325db0283a5d92871d398f",
+    "Flock.Tmpl.soleIn": "6be17c91d4d75588838defb821ceb53c28202064a93785bc64373c3053c43d16",
+    "Flock.Tmpl.soleIn._sparseCasesOn_1": "473debb5476a0ded30012137df7e3e64c89bdc13952d09e789c5ba75e8e1119b",
+    "Flock.Tmpl.soleIn._sparseCasesOn_2": "c3d872e62175cc2ef6b631e68be843f6d757637a5f0b344e418290459711afbf",
+    "Flock.Tmpl.sures": "0ecfddc2115f5acf3bae3d19328072d2908ed4b883b9e3cdd354f2b67fe9282b"
+   },
+   "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound"]
   },
   "Flock.TmplRows": {
    "digest": "b874c6d18fd54d480b5dd96ddadb68c65a602ca49048162ddb51bb6476efdb4f",
