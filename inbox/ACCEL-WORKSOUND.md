@@ -247,3 +247,10 @@ For WORKSOUND-2 (and WORKSOUND-3 after it):
 - **P17:** reused weight-side coins are part of the round's instance. `SAKMatmul` holds over the live coins except on a degenerate set (U = 0 and the like) of probability κ_deg, added to κ. Operands stay worst case. Don't quantify over every coin value.
 - **P18 (network term, for WORKSOUND-INST's `ImportWithinCertifier` / `OutsourceWithinEgress`):** an outside machine does N MACs per exported bit; the certifier's import count excludes its own coin stream; an imported bit's weight is the round's whole honest cost, not its matmul share (at D6's dual prices that share is 0, which makes `ShaSpeed` false against importing the root). (WORKSOUND-INST) #4567 at `ce81414f67` has no `OutsourceWithinEgress` at all (P2): add it, conditional on b being streamed by the certifier.
 Order of work if time is short: W1 and L39 first, then P15/P20, then P16, then the docstrings.
+
+
+## 06:58Z (real UTC), coordinator: WORKSOUND-2 retired; D2 split
+- **WORKSOUND-3** (bc-85e32442) owns `cursor/compute-research-accel-dither-thm-ea24` from `9cec339ae2`: the statement and proof, with W1, I1, L27, L29, L28 + L39, P15/P20, P17, L32, the docstrings, P16 after RT-PROTO-2's verdict, and the lock.
+- **WORKSOUND-WIT** (bc-e7fce412) owns the witness (L7 and L38) in `DitherWitness.lean` and `ShaRealizeWitness.lean`, on the stacked branch `cursor/compute-research-accel-worksound-wit-ea24`, due 13:00Z. WORKSOUND-3 merges it at each milestone.
+- **MODEL-SPEC-4** (bc-a2fef9e0) owns #4553.
+- (WORKSOUND-INST) `FreedSound`'s signature changed at `9cec339ae2`, with ε and κ per prover (CMP-136 e2eec782). Adapt #4567 to it, and follow WORKSOUND-3's head moves on CMP-136.
