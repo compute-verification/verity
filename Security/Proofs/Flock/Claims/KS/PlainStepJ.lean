@@ -1,12 +1,14 @@
 import Proofs.Flock.Claims.KS.PlainStep
 import Proofs.Flock.Claims.Recursion.LastSharedR
+import Proofs.Flock.Claims.Recursion.NextRFits
 
 /-!
-# The plain simulator's round counts at a parsed record
+# The plain simulator's round counts and rep schedules at a parsed record
 
 `decodeWithK_n` and `liveOf_nK` (`PlainStep`) at the record's parsed value (`Record.decodeJWithK`, `verifyJWithMK`,
 `liveOfJ`): every round the decoder reads, and every round of an accepted record's live streams, has `1` to `65536`
-coins.
+coins. And every rep of an accepted record is set up (`SchedOf (repCtx …)`, `schedOf_repCtx_of_checksAtJ`), from the
+verdict and the link points the checks pin to the first coin.
 -/
 
 namespace FlockDeploy.KS
@@ -66,5 +68,35 @@ theorem liveOfJ_nK (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionS
   obtain ⟨rd', hrd', e⟩ := List.mem_map.1 this
   rw [← e]
   exact decodeJWithK_n keep hs hdec stream hmem rd' hrd'
+
+/-! ## The reps' schedules -/
+
+/-- **An accepted parsed record's reps are set up** (`SchedOf`): where the plain verdict accepts at the tables and
+`liveOfJ` reads link points that are `c₁`'s, every rep `k` has its table's `fast100` schedule and extra claims at
+`c₁`'s points (`rep_plainJK`, `verifyRepWith_readsN`), so `schedOf_repCtx` holds, at any `r₀` and `cs` (`SchedOf`
+reads neither). At any `keep`. -/
+theorem schedOf_repCtx_of_verify (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec}
+    {sts : Array Stmt} {j : Json} {proofs : Array ByteArray} {lv : Live} {c₁ : Coin}
+    (hv : verifyJWithMK keep hs spec (tabsOf sts) j proofs = .ok ()) (hl : FlockDeploy.liveOfJ spec j = .ok lv)
+    (hpts : lv.points = pointsOf spec c₁) (r₀ : List ByteArray) (cs : List Coin) {k : ℕ} (hk : k < 2 * sts.size) :
+    SchedOf (repCtx spec sts c₁ r₀ cs k) := by
+  obtain ⟨hsz, hall⟩ := rep_plainJK keep hs hv hl
+  obtain ⟨sess, sch, -, c, hsp, -, hf, hrep, -, -⟩ := hall k (by rw [hsz]; exact hk)
+  have hk2 : k / 2 < sts.size := by omega
+  rw [getElem!_pos sts (k / 2) hk2] at hf hrep
+  obtain ⟨-, extras, -, he, -⟩ := verifyRepWith_readsN (st := Setup.ofCircuit sts[k / 2]) hs rfl hf hrep
+  rw [hsp, hpts] at he
+  exact schedOf_repCtx hk2 (by rw [hf]; rfl) he
+
+/-- `schedOf_repCtx_of_verify` at a decision's checks: `checksAtJ` reads the value's live session, whose link points
+are the first coin's (`checksAtJ_ok`, `custody_ok`). -/
+theorem schedOf_repCtx_of_checksAtJ (keep : Bool → Bool) (hs : Hashes Flock.V) {s : Ins} {spec : SessionSpec}
+    {sts : Array Stmt} {x : Claims.Msg} {link : List ByteArray × List ByteArray} {c₁ : Coin}
+    {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json} {proofs : Array ByteArray}
+    (hv : verifyJWithMK keep hs spec (tabsOf sts) v proofs = .ok ())
+    (hc : checksAtJ s spec x link c₁ mids f v = .ok ()) (r₀ : List ByteArray) (cs : List Coin) {k : ℕ}
+    (hk : k < 2 * sts.size) : SchedOf (repCtx spec sts c₁ r₀ cs k) := by
+  obtain ⟨-, lv, hl, hcus⟩ := Claims.Bridge.Custody.checksAtJ_ok hc
+  exact schedOf_repCtx_of_verify keep hs hv hl (Claims.Bridge.Custody.custody_ok hcus).2.2.1 r₀ cs hk
 
 end FlockDeploy.KS
