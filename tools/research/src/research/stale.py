@@ -9,7 +9,7 @@ import calendar
 import re
 import subprocess
 import time
-from typing import Callable, Iterable
+from typing import Callable, Collection, Iterable
 
 from .queue import PR, Queue, QueueError, _git
 
@@ -64,14 +64,14 @@ def commit_times(repo, shas: Iterable[str]) -> dict[str, float]:
 
 
 def stale_prs(q: Queue, prs: Iterable[PR], now: float, days: int,
-              reviewed_at: Callable[[int, str], list[str]] | None = None) -> dict[int, float]:
+              reviewed_at: Callable[[int, str], list[str]] | None = None, keep: Collection[int] = ()) -> dict[int, float]:
     """{number: when it went idle} of each of ``prs`` that is stale at ``now`` (the module's rule; ``days`` 0: none), but one
-    carrying the hold label.  ``reviewed_at``: the times of the review labels on a PR's head.  A PR whose labels can't be read
+    carrying the hold label or listed in ``keep`` (drive.toml's `stale_keep`).  ``reviewed_at``: the times of the review labels on a PR's head.  A PR whose labels can't be read
     is left out, and logged."""
     if days <= 0:
         return {}
     hold = q.rules().hold_label
-    prs = [p for p in prs if hold not in p.labels]
+    prs = [p for p in prs if hold not in p.labels and p.number not in keep]
     pull_refs(q, prs)
     born = commit_times(q.workdir, (p.head for p in prs))
     cut = now - days * DAY_S

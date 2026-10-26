@@ -678,10 +678,11 @@ class Driver:
                  regenerate_locks: bool = False, per_pr_shadow: int = 0,
                  slots: Callable[[Path, str], dict[str, int]] = free_slots, land: str = "check",
                  after_landing_no_cache: bool = False, reviews: Callable[[int, str], list] | None = None,
-                 ready_by: Callable[[int, str], str | None] | None = None, stale_days: int = 0, stale_close_days: int = 0):
+                 ready_by: Callable[[int, str], str | None] | None = None, stale_days: int = 0, stale_close_days: int = 0,
+                 stale_keep: tuple[int, ...] = ()):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
         #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
-        self.stale_days, self.stale_close_days = stale_days, stale_close_days
+        self.stale_days, self.stale_close_days, self.stale_keep = stale_days, stale_close_days, stale_keep
         #: `land = "review"` (Daniel, 24 Oct 06:05Z): each member lands on a reviewer's verdict, a Lean change once a Lean check
         #: passed, and the full check runs after landing (`_review`), reusing no pass with ``after_landing_no_cache``
         self.review, self.after_landing_no_cache = land == "review", after_landing_no_cache
@@ -3054,7 +3055,8 @@ class Driver:
         day = time.strftime("%Y-%m-%d", time.gmtime(now))
         try:
             prs = self._open()
-            idle = stale_prs(q, prs.values(), now, self.stale_days, lambda n, h: [lab.ts for lab in self.reviews(n, h)])
+            idle = stale_prs(q, prs.values(), now, self.stale_days, lambda n, h: [lab.ts for lab in self.reviews(n, h)],
+                             keep=self.stale_keep)
         except QueueError as e:
             q.log(f"research queue drive: stale PRs not judged this tick: {e}")
             return

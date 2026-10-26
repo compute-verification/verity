@@ -354,6 +354,8 @@ class DriveFlags:
     #: owner once a day), and before drive closes it; 0 is off
     stale_days: int = 0
     stale_close_days: int = 0
+    #: PRs the stale rule never judges: their owners keep them open with a reason (top, 26 Oct 02:38Z)
+    stale_keep: tuple[int, ...] = ()
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
@@ -425,6 +427,10 @@ class DriveFlags:
                 if type(doc[k]) is not int or doc[k] < 0:
                     raise bad(k, "a whole number of days, 0 for off")
                 got[k] = doc[k]
+        if "stale_keep" in doc:
+            if not (isinstance(doc["stale_keep"], list) and all(type(n) is int and n > 0 for n in doc["stale_keep"])):
+                raise bad("stale_keep", "a list of PR numbers, as [2692, 2693]")
+            got["stale_keep"] = tuple(doc["stale_keep"])
         if got.get("stale_close_days") and not 0 < got.get("stale_days", 0) <= got["stale_close_days"]:
             raise bad("stale_close_days", "0, or at least stale_days, which must be on: drive closes only a stale PR")
         return cls(**got)
@@ -2625,7 +2631,7 @@ def main(argv: list[str]) -> int:
             r = _git(q.workdir, "show", f"refs/remotes/origin/main:{DRIVE_FLAGS}", check=False)
             got = DriveFlags.parse(r.stdout, f"{DRIVE_FLAGS} at main") if r.returncode == 0 else DriveFlags()
             entries = q.status(lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
-                                                     lambda n, h: [lab.ts for lab in labels.reviews(n, h)]),
+                                                     lambda n, h: [lab.ts for lab in labels.reviews(n, h)], keep=got.stale_keep),
                                got.stale_close_days)
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
@@ -2662,7 +2668,7 @@ def main(argv: list[str]) -> int:
                    regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow, land=flags.land,
                    after_landing_no_cache=flags.after_landing_no_cache, reviews=labels.reviews,
                    ready_by=labels.ready_by, stale_days=flags.stale_days,
-                   stale_close_days=flags.stale_close_days).tick(dry_run=a.dry_run)
+                   stale_close_days=flags.stale_close_days, stale_keep=flags.stale_keep).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses

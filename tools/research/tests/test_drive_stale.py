@@ -12,7 +12,7 @@ import time
 import pytest
 
 import research.queue as Q
-from research.queue import DRIVE_FLAGS, PR, Member
+from research.queue import DRIVE_FLAGS, PR, DriveFlags, Member, QueueError
 from research.stale import DAY_S, close_comment, stale_prs
 from test_queue import World, _git
 from test_queue_drive import Harness, _check
@@ -155,6 +155,18 @@ def test_drive_closes_nothing_with_stale_close_days_off(world, monkeypatch):
     h.tick()
     assert h.closed == [] and h.posts == ["@lane-1 queue: stale, not marked ready at their heads and idle 3+ days: #1 (30 d). "
                                           "Push, mark ready or close each"]
+
+
+def test_a_pr_drive_toml_keeps_is_never_stale_rung_or_closed(world, monkeypatch):
+    world.gh.put(1, _at(world, monkeypatch, {"a.txt": "1\n"}, T0 - 30 * DAY), ready=False)
+    world.gh.put(2, _at(world, monkeypatch, {"b.txt": "2\n"}, T0 - 30 * DAY), ready=False)
+    h = _driven(world, monkeypatch)
+    h.d.stale_keep = (2,)
+    h.tick()
+    assert [n for n, _ in h.closed] == [1] and 2 in world.gh.prs and not any("#2" in x for x in h.posts)
+    assert DriveFlags.parse("stale_keep = [2692, 2693]\n").stale_keep == (2692, 2693)
+    with pytest.raises(QueueError, match="stale_keep"):
+        DriveFlags.parse('stale_keep = ["2692"]\n')
 
 
 def test_after_a_landing_the_owner_of_each_unmarked_pr_stacked_on_it_hears_once_to_merge_main(world, monkeypatch):
