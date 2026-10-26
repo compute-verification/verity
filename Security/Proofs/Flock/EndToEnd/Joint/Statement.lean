@@ -32,7 +32,7 @@ registration (`XplurZC`), as `SamplingBlock`'s are.
 
 ANDs and output bits are per-unit weights (`ands u`, the unit's own `Candidate.ands`; `bits u`, its output bits); the
 statements hold at every pair of weights. `ε_ks` is the sampling block's knowledge term at the worst registration
-(`StratifiedBlock.ks`) and `ε_bind` its binding term, `δ_link` (`StratifiedBlock.link`). The named assumptions are
+(`StratifiedBlock.epsKs`) and `ε_bind` its binding term, `δ_link` (`StratifiedBlock.link`). The named assumptions are
 `zk_session_soundH_custody`'s at every sampling block: A3 (`uniform/io-getrandombytes`) for its draw bytes,
 `live-verifier` (`StratifiedBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at the
 strategy each sampling block is played with (in a period, at every strategy it is played with on some run,
@@ -125,8 +125,8 @@ noncomputable def P := (keyProg w.D.unroll w.hU w.n).partition (Discharge.Layout
 
 /-- The public file's commitments. -/
 noncomputable def vb :=
-  (rsZH w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt).bindingZ
-    (rsZH_computes w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt)
+  (rsZH w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt (Reg := w.Reg)).bindingZ
+    (rsZH_computes w.dj w.y₀ w.ht (Flock.Desc.parse_flat w.hD) w.hscope w.hU w.hpub w.hpt (Reg := w.Reg))
 
 /-- The model audit's strategy that a live strategy `τ` refines to (`zk_session_soundH_custody`'s). -/
 noncomputable def sim (τ : Strategy w.game) :=
@@ -145,7 +145,7 @@ noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.n) :=
       w.Rw)
 
 /-- The knowledge term `ε_ks`, `ksAvgStrictZ` at the worst registration. -/
-noncomputable def ks : ℝ≥0∞ := ⨆ R : w.Reg, ksAvgStrictZ (planAtZKH w.dj w.y₀) w.L w.k w.qF w.qS R
+noncomputable def epsKs : ℝ≥0∞ := ⨆ R : w.Reg, ksAvgStrictZ (planAtZKH w.dj w.y₀) w.L w.k w.qF w.qS R
 
 /-- The binding term `ε_bind`, `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, as in `EndToEndHidden`. -/
 noncomputable def link : ℝ≥0∞ :=
@@ -164,8 +164,8 @@ stratified draw misses with probability at least `δ`. Core's `harm_bound` retur
 noncomputable def maxHarm (h : Fin w.n → ℕ) (δ : ℝ) : ℝ :=
   ⨆ B : {B : Finset (Fin w.n) // ENNReal.ofReal δ ≤ w.ideal.escape B}, ((∑ u ∈ B.1, h u : ℕ) : ℝ)
 
-/-- **`B` is within the sampling block's one budget at `δ`**: the stratified draw misses it with probability at least `δ`,
-so it spends at most `ln(1/δ)` of the detection budget across all subcircuits, and its ANDs and its output bits are
+/-- **`B` is within the sampling block's one budget at `δ`**: the stratified draw misses it with probability at least
+`δ`, so it spends at most `ln(1/δ)` of the detection budget across all subcircuits, and its ANDs and its output bits are
 each at most the most any set in the confidence set holds. -/
 def Within (δ : ℝ) (ands bits : Fin w.n → ℕ) (B : Finset (Fin w.n)) : Prop :=
   ENNReal.ofReal δ ≤ w.ideal.escape B ∧ w.spend B ≤ Real.log (1 / δ) ∧
@@ -191,7 +191,7 @@ def JointStratified : Prop :=
     LinkCRZC execArith hs512 w.P (planAtZKH w.dj w.y₀) (tabAtZKH w.dj w.y₀) w.vb (reg (w.sim τ)) (cont (w.sim τ)) w.k
       w.Rw w.M w.t' →
     prob (fun o => LiveAcceptsZK w.I o ∧ ¬ w.Within δ ands bits (w.wrongSet τ)) w.game τ ≤
-      ENNReal.ofReal δ + w.ks + w.link
+      ENNReal.ofReal δ + w.epsKs + w.link
 
 /-- What a period's run records of sampling block `idx`: whether flock-verify accepted it, its wrong units
 (`StratifiedBlock.wrongSet`), and whether a drawn unit is one of them. -/
@@ -263,9 +263,9 @@ def Within (W : ℕ → StratifiedBlock) (δ : ℝ) (ands bits : (t : ℕ) → F
 end Stratified
 
 /-- **The joint stratified bound over a period, pooled.** In a period of `T` sampling blocks `W t` as in
-`StratifiedBlock`, each with a fresh live stratified draw, played by one adaptive prover `s`, for every `δ > 0` and every
-per-unit weights `ands t` (each unit's ANDs) and `bits t` (its output bits), the probability that flock-verify accepts
-every sampling block and their wrong units are not within the period's one budget is at most
+`StratifiedBlock`, each with a fresh live stratified draw, played by one adaptive prover `s`, for every `δ > 0` and
+every per-unit weights `ands t` (each unit's ANDs) and `bits t` (its output bits), the probability that flock-verify
+accepts every sampling block and their wrong units are not within the period's one budget is at most
 $$\delta + \sum_t (\varepsilon_{ks,t} + \varepsilon_{bind,t}):$$
 outside it, when every sampling block is accepted, their draws miss their wrong units together with probability at
 least `δ`, the wrong units spend `Σ_t Σ_s k_{t,s}·x_{t,s}/n_{t,s} ≤ ln(1/δ)` across every subcircuit of every
@@ -284,7 +284,7 @@ def JointStratifiedHorizon : Prop :=
       LinkCRZC execArith hs512 (W t).P (planAtZKH (W t).dj (W t).y₀) (tabAtZKH (W t).dj (W t).y₀) (W t).vb
         (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
     value (fun l => (∀ r ∈ l, r.accepted) ∧ ¬ Stratified.Within W δ ands bits l) (Stratified.run W T s) ≤
-      ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link)
+      ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).epsKs + (W t).link)
 
 /-- **The joint stratified bounds are stated**: the pair of `JointStratified` and `JointStratifiedHorizon`, equal to
 itself, so the lock records their text and every definition they read until each is proved. -/
