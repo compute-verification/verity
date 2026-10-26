@@ -1458,6 +1458,27 @@
     },
     {
       "paths": {
+        "integrations/vllm/verity_vllm/engine/capture.py": "integrations/vllm/verity_vllm/observe/capture.py",
+        "integrations/vllm/verity_vllm/engine/pinned.py": "integrations/vllm/verity_vllm/observe/pinned.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/observe/chunks.py": "integrations/vllm/verity_vllm/engine/chunks.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/engine/rank_worker.py": "integrations/vllm/verity_vllm/pipeline/tp/rank_worker.py"
+      }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/check/kernel_identity.py": "integrations/vllm/verity_vllm/engine/kernel_identity.py"
+      }
+    },
+    {
+      "paths": {
         "integrations/vllm/verity_vllm/engine/profiles/__init__.py": "integrations/vllm/verity_vllm/observe/fold/profiles/__init__.py",
         "integrations/vllm/verity_vllm/engine/profiles/generic.py": "integrations/vllm/verity_vllm/observe/fold/profiles/generic.py",
         "integrations/vllm/verity_vllm/engine/profiles/gen_dense2_patterns.py": "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense2_patterns.py",

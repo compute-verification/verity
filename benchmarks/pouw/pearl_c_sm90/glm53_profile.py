@@ -86,7 +86,7 @@ STAMP_M = (16, 64)
 HOST_SHAPES = ((512, 6144), (4096, 6144))
 HOST_CALLS, HOST_TOP = 200, 25
 #: hash_decode.cuh's stamp slots: a pd_commit CTA's phases (PS_*), and the tail's (PT_*: level l + 1 at PT_LEVEL + l)
-PS = ("start", "segs", "salt", "frame", "sync1", "fold", "sync2", "leaf", "seed")
+PS = ("start", "segs", "salt", "frame", "sync1", "fold", "sync2", "leaf", "seed", "seg1", "seg8", "seed0", "line")
 PT = {0: "start", **{1 + level: f"level{level + 1}" for level in range(8)}, 9: "seed_a", 10: "fillers", 11: "entry"}
 PT_ROW = 15
 #: a stream's lane in ``lanes``: the streams that run each kernel in turn, of those not named yet, numbered in their order

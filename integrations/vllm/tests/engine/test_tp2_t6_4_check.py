@@ -17,7 +17,7 @@ from tests.check.opened import commit_host_steps
 
 
 def _worker():
-    from verity_vllm.engine import rank_worker as W
+    from verity_vllm.pipeline.tp import rank_worker as W
 
     cls = W.__dict__.get("TP2Worker") or next(v for v in W.__dict__.values() if isinstance(v, type) and hasattr(v, "_t6_4_check"))
 

@@ -310,16 +310,17 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
 
 
 def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
-             peer: str = "vy-nebius-1") -> tuple[list[dict], dict, bytes]:
+             peer: str = "vy-nebius-1", groups_per_coin: int = 1) -> tuple[list[dict], dict, bytes]:
     """A gate run of `plan`'s sessions in period p-1, which committed the descriptor of the verifier that ran them, its
-    verifier at the challenger host as `peer`: the sessions, their registration and that descriptor."""
+    verifier at the challenger host as `peer`, each session's windows drawn `groups_per_coin` a coin: the sessions,
+    their registration and that descriptor."""
     desc = al.descriptor("ab" * 20)
     host.period(circuit=hashlib.sha512(desc).hexdigest())
     got = {}
     pace = verifier.pace_of("1:4:160:2", 1.0)
     sessions, _ = run_sessions(plan, paces=[pace] * len(plan.split(",")),
                                challenger=host.gate(out / "challenger", peer=peer), verdict="python",
-                               defer_openings=defer_openings,
+                               defer_openings=defer_openings, groups_per_coin=groups_per_coin,
                                then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     return sessions, got["reg"], desc
 
@@ -423,12 +424,15 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert honest["error"]["delta_rejection"] > 0 and honest["error"]["named_terms"] == al.NAMED_TERMS
         assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
         assert next(x for x in al.table(doc).splitlines() if x.startswith(f"line {t}:")).endswith(
-            "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + δs + Σ_t k_t/2^64) summed over the credited "
+            "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the "
+            "credited "
             "sessions, "
             "beside Σ_t Adv(prf t) (claim prf/sha-512), named and in no total")
-        assert doc["conditional_on"] == al.CONDITIONAL_ON and list(doc["conditional_on"]) == ["NoOutsideCompute"]
+        assert doc["conditional_on"] == al.CONDITIONAL_ON
+        assert list(doc["conditional_on"]) == ["NoOutsideCompute", "binding-split"]
         assert doc["boundary"] == {"checked": False, "reason": "off by default (--boundary)"}
-        assert f"conditional on NoOutsideCompute: {al.CONDITIONAL_ON['NoOutsideCompute']}" in al.table(doc).splitlines()
+        lines = set(al.table(doc).splitlines())
+        assert {f"conditional on {n}: {what}" for n, what in al.CONDITIONAL_ON.items()} <= lines
         by = al.lv.Lean(al.lv.build(), lambda _: None)
         try:
             assert doc["line_by"] == "python" and analysed(out, host, sessions, reg, desc, line_by=by) == {
@@ -472,6 +476,41 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert not unheld["credit"]["credited_sessions"] and unheld["bound"]["reason"] == alone
     with pytest.raises(SystemExit, match="--commit"):
         al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
+
+
+def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
+        host, tmp_path, monkeypatch):
+    """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest
+    session and a prover that skips half its reads, each paced in twelve windows drawn on three openings coins, which
+    the gate reserves and releases (⌈12/4⌉). The period closes complete; the honest session, which the Lean accepts
+    and whose record names g, is credited, its twelve windows' last roots read on the challenger's clock off its
+    three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three draws
+    (`line.draws_of`), and the Lean verifier's line is line.py's; the skipper, rejected at a receipt, earns none."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest,skip:0.5", True, groups_per_coin=4)
+    honest, skipper = sessions
+    assert honest["accepted"] and honest["windows"] == 12 and honest["record"]["public"]["groups_per_coin"] == 4
+    assert not skipper["accepted"] and skipper["failure"]["failure"] == "receipt"
+    reserves = [e["body"]["families"] for e in host.ledger() if e["kind"] == "reserve"]
+    assert reserves == [[[coins.CHALLENGE, 12], [coins.OPENINGS, 3]]] * 2
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
+    doc = analysed(out, host, sessions, reg, desc)
+    h, s = doc["sessions"]
+    assert h["credit"]["ok"] and h["of_record"] and s["credit"]["accepted"]["reason"] == "the Lean refused it (receipt)"
+    assert {k: [why.split(":")[0] for why in v] for k, v in doc["credit"]["zero"].items()} == {1: ["not accepted"]}
+    t, mine = h["T"], h["shares_auditor_clock"][al.line.TIME_HELD]
+    assert doc["line"][t]["credited_sessions"] == [0] and doc["line"][t][al.line.TIME_HELD] == {
+        "k": 0, **{x: mine[x] for x in (*al.SHARES, "exact")}}
+    assert h["groups"] == 12 and sum(h["named"]["last_root_first_named_by"].values()) == 12
+    assert len(verifier.recorded_windows(honest)[0]) == 3
+    by = al.lv.Lean(al.lv.build(), lambda _: None)
+    try:
+        assert doc["line_by"] == "python" and analysed(out, host, sessions, reg, desc, line_by=by) == {
+            **doc, "line_by": "lean"}
+    finally:
+        by.close()
 
 
 @pytest.mark.parametrize("sealed, main", [(PINS[:1], MAIN), (None, MAIN), (PINS, MAIN[2:]), (PINS, None)],
@@ -699,8 +738,9 @@ def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no
     open's started_utc to its end's ended_utc) lies strictly inside an applied interval has its NoOutsideCompute
     grounded by `ProviderLockdown`, and the line is conditional on that in its place. A span that starts or ends on
     an interval's edge at whole seconds, a node that mounts a shared filesystem, or no record leaves it conditional
-    on NoOutsideCompute. It changes no credit, and the line's label names what the file names (`line_label`). A
-    record not of `read_lockdown`'s form is refused."""
+    on NoOutsideCompute. Either way the line stays conditional on the gaps in its charge (`binding-split`). It
+    changes no credit, and the line's label names what the file names (`line_label`). A record not of
+    `read_lockdown`'s form is refused."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run"
     sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True)
@@ -723,13 +763,14 @@ def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no
     start, end = s["no_relay"]["span_utc"]
     assert s["credit"]["ok"] and s["no_relay"]["grounded_by"] is None and doc["conditional_on"] == al.CONDITIONAL_ON
     assert doc["lockdown"] == {"read": False, "reason": "no lockdown record (--lockdown)"}
-    assert al.line_label(doc) == "python conditional on NoOutsideCompute"
+    assert al.line_label(doc) == "python conditional on NoOutsideCompute, binding-split"
     before, after = A.later(start, -1), A.later(end, 1)
     doc = locked("inside", [(A.later(start, -30), A.later(start, -20)), (before, after)])
     (s,) = doc["sessions"]
     assert s["credit"]["ok"] and s["no_relay"]["grounded_by"] == "ProviderLockdown"
     assert s["no_relay"]["interval"] == [before, after] and s["no_relay"]["shared_filesystem"] == "pending (infra)"
-    assert doc["conditional_on"] == al.GROUNDED and al.line_label(doc) == "python conditional on ProviderLockdown"
+    assert doc["conditional_on"] == {**al.GROUNDED, "binding-split": al.CONDITIONAL_ON["binding-split"]}
+    assert al.line_label(doc) == "python conditional on ProviderLockdown, binding-split"
     assert doc["lockdown"]["read"] and doc["lockdown"]["sha512"] == hashlib.sha512(
         (tmp_path / "inside.json").read_bytes()).hexdigest()
     assert f"no relay, session 0: ProviderLockdown, its span inside the lockdown applied {before} to {after}" in \
@@ -805,8 +846,8 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     e = al.session_error(a)
     total = Fraction(a["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"])
     parts = {"delta_profile": Fraction(1, 2 ** 40), "delta_slack": Fraction(700, 2 ** 41),
-             "delta_hiding": Fraction(al.ledger.hiding_over(700)), "delta_sketch": Fraction(1, 2 ** 60),
-             "delta_rejection": Fraction(48 * 700, 2 ** 64)}
+             "delta_hiding": Fraction(al.ledger.hiding_over(700)), "delta_binding": Fraction(0),
+             "delta_sketch": Fraction(1, 2 ** 60), "delta_rejection": Fraction(48 * 700, 2 ** 64)}
     assert e["exact"] == {**{k: str(x) for k, x in parts.items()}, "total": str(total)}
     assert e["total"] == float(total) and e["log2_total"] == al.timing.log2(total)
     assert sum(parts.values()) - total == parts["delta_hiding"] and e["delta_slack"] > 300 * e["delta_profile"]
