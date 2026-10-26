@@ -182,10 +182,10 @@ theorem setupOne_pub {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
     exact ⟨_, pop, FlockSoundness.Discharge.Hidden.loadPublic_nil hl, hn, fun d e => hd d e⟩
   · rw [FlockSoundness.Discharge.HiddenExec.setupOne_public hh] at h
     cases draw with
-    | none => exact ⟨st.c, st.pub, setupH_none h, fun _ => rfl, fun d (e : (none : Option Lean.Json) = some d) => by cases e⟩
+    | none => exact ⟨st.c, st.pub, setupH_none h, fun _ => rfl, fun d (e : (none : Option Lean.Json) = some d) => nomatch e⟩
     | some d =>
       obtain ⟨pop, hl, hd⟩ := FlockSoundness.Discharge.Layout.setupH_drawn h
-      exact ⟨st.c, pop, hl, fun (e : some d = none) => by cases e, fun d' (e : some d = some d') => by cases e; exact hd⟩
+      exact ⟨st.c, pop, hl, fun (e : some d = none) => nomatch e, fun d' (e : some d = some d') => by cases e; exact hd⟩
 
 /-! ## The setup's label check -/
 
