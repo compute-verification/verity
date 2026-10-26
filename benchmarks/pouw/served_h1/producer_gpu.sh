@@ -16,6 +16,7 @@ PY=${PY:-/workspace/jobs/venv312/bin/python}
 NVCC=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
 : "${OUT:?research run gives the run its OUT}"
 ROOT=$(pwd)
+. "$(dirname "$0")/arch.sh"
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 read -r -a builds <<< "${BUILDS:-hbc hbc-3290}"
@@ -23,12 +24,12 @@ declare -A LEVERS=([hbc]="" [hbc-3290]="-DH1U_PF=1 -DH1U_NB2=1 -DH1U_L2PF=1")
 for name in "${builds[@]}"; do
   [ -n "${LEVERS[$name]+x}" ] || { echo "producer_gpu: no build $name (${!LEVERS[*]})"; exit 2; }
   read -r -a kc <<< "${LEVERS[$name]}"
-  nice -n 10 "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xcompiler -fPIC \
+  nice -n 10 "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GENCODE" -Xcompiler -fPIC \
     -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kc[@]}" -o "$S/h1u_$name.so" benchmarks/hash/dither/h1u.cu \
     > "$OUT/build-$name.log" 2>&1 || { echo "producer_gpu: NVCC_FAIL $name"; tail -30 "$OUT/build-$name.log"; exit 11; }
   sha256sum "$S/h1u_$name.so" | tee -a "$OUT/builds.txt"
 done
-nice -n 10 "$NVCC" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -I benchmarks/codec_tensor -cubin \
+nice -n 10 "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -I benchmarks/codec_tensor -cubin \
   -o "$S/noise.cubin" benchmarks/pouw/served_h1/noise.cu > "$OUT/build-noise.log" 2>&1 \
   || { echo "producer_gpu: NVCC_FAIL noise.cu"; tail -30 "$OUT/build-noise.log"; exit 11; }
 sha256sum "$S/noise.cubin" | tee -a "$OUT/builds.txt"

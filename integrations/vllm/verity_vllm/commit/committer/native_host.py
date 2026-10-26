@@ -54,6 +54,7 @@ from verity_vllm import settings
 from verity_vllm.commit import leaf_rule, scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
+from verity_vllm.commit.committer.topp_splits import SPLITS_IDENTITY
 from verity_vllm.commit.committer.window_views import WindowViews, _StepJob
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
@@ -65,7 +66,7 @@ GPU_CHUNK_BYTES = 256
 DEFAULT_CHUNK = 4096
 
 # the construction-time selection: TP1 Commits replace it with the acquisition plan's (apply_plan_to_committer; compiled rows:
-# CompiledGraphSource.wrap_model); TP rank committers (engine/rank_worker.py) have no plan yet and keep it
+# CompiledGraphSource.wrap_model); TP rank committers (pipeline/tp/rank_worker.py) have no plan yet and keep it
 # module classes whose forward OUTPUT is an Instance output (census §3 `HBM-materialized (native)`); matched on the MRO class names
 ACQUIRE_CLASSES = {
     "ColumnParallelLinear", "RowParallelLinear", "QKVParallelLinear", "MergedColumnParallelLinear", "ReplicatedLinear", "LinearBase",
@@ -208,6 +209,9 @@ RETAIN_MODES = ("device", "host", "none", "sample")
 HIDDEN_M1_PREFIXES = ("fa2.m1/", "fa3.m1/")
 TP_PARTIAL_RE = re.compile(r"/(part|shard)_rank\d+$")   # [R14 TP-03] <module path>/part_rank<r>: the rank-local input of that module's collective
 CALL_DEPENDENT_RE = re.compile(r"/(all_reduce|x_q|x_s)$")   # bound only on the calls whose token count takes that path; the manifest requires them
+#: bound only on the sampling steps whose batch takes vLLM's split top-p path (a row with top_p < 1), so traffic that mixes it with greedy
+#: rows binds it on some steps; a derived-S Program's manifest requires it at every sampling event (`sampler_splits`)
+STEP_DEPENDENT_NAMES = frozenset({SPLITS_IDENTITY})
 
 
 def tp_partials_bad(man: dict[str, Any], names: "Counter[str]") -> dict[str, int]:
@@ -2090,7 +2094,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         # per-step names held to the source's own rule, not rule (4): the call-boundary targets; the capture map's names on the step's routes
         rt_src = next((s for s in self.sources if hasattr(s, "step_modules")), None)
         cb_srcs = [s for s in self.sources if hasattr(s, "split_step_names") and s is not rt_src]
-        own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources))   # what a source commits that no module produced (KV slots)
+        own = frozenset().union(*(getattr(s, "own_names", ()) for s in self.sources), STEP_DEPENDENT_NAMES)   # what no module produced (KV slots)
         moe_of = self._moe_layer_of()
 
         def _identity_of_padding(n: str) -> str:                     # "<executed name>/<rid>/bot" -> "<executed name>"

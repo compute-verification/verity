@@ -210,7 +210,8 @@ the standing rulings stated nowhere else.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
-  all compute: every machine of a deployment, a whole datacenter, though a demo checks one. The datacenter's size (from
+  all compute: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks one. The
+  datacenter's size (from
   `benchmarks/census/`) and the window's length are stated parameters, and a figure scaled from one machine says which
   parts are proved and which are scaled. Give each bound as its pooled total over the period and as a share of the
   compute it covers, beside the per-window figure, never the per-window figure alone: a per-window δ that looks weak is
@@ -310,9 +311,9 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
   itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
-  --by ci`). A failure of a step that passed on the last verified `main` reverts the one PR it implicates (`git revert -m
-  1`), bisecting among several, and its owner relands with the fix; anything else reverts nothing and goes to ci. Citations
-  and tables read only commits whose after-landing run passed.
+  --by ci`). A red suite's culprit, the landing since its last pass its failure touches, is rung and reverted (`git
+  revert -m 1`) 60 min later unless a fix is marked; `main` 3 h unverified rings @ci and @top hourly (drive.py).
+  Citations and tables read only commits whose after-landing run passed.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
   of the queue: the lander lands it with `research merge --push` on its own passing check, from the control pod
   (`/data/infra/drive.sh merge ...`), and drive's next sync rebuilds `next` on it. Only drive's App pushes `main` and `next`
