@@ -379,7 +379,7 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0, 
     honest period, and PB4's c_inc, the credited rounds' share of the period's makespan increment over its fixed load
     alone (pub's period over OPT*'s, no duals)."""
     c = vc.CARDS[card][0]
-    hist, _, qk, pvm, ix = nf.world_macs(model)
+    hist, _, qk, _, ix = nf.world_macs(model)
     jobs, rounds = {"dense": [], "hull": []}, {"dense": 0.0, "hull": 0.0}
     items = [(K, N, K * N * reps * nf.WORLD_TOKENS * shape_scale(model), static[card, K, N], True)
              for K, N, reps in nf.SHAPES[model["name"]]]
