@@ -55,6 +55,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -240,7 +241,8 @@ def judge(point: R.Point, published: R.Setup, digests: bytes, got: Mapping[str, 
 def verdict_line(name: str, a: Mapping[str, Any], rec: Mapping[str, Any]) -> str:
     pub = a["public"] or {"certified": False, "eps": "0", "s_bits": 0}
     return (f"VERDICT {name}: {a['verdict']} S_cert={pub['s_bits']} certified={str(pub['certified']).lower()} "
-            f"eps={pub['eps']} rounds={rec['rounds']} late={rec['late']} median_us={rec['median_us']} "
+            f"eps={float(Fraction(pub['eps'])):.10g} ({pub['eps']}) rounds={rec['rounds']} late={rec['late']} "
+            f"median_us={rec['median_us']} "
             f"max_us={rec['max_us']} trusted={rec['trusted']}" + (f" reason={a['reason']!r}" if a["reason"] else ""))
 
 
@@ -351,7 +353,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if a.phase == "smoke":
                     ok = summary["certificate"]["certified"]
                     print(f"SMOKE {'PASS' if ok else 'FAIL'}: certified={str(ok).lower()} "
-                          f"S_cert={summary['certificate']['s_bits']} eps={summary['certificate']['eps']} "
+                          f"S_cert={summary['certificate']['s_bits']} "
+                          f"eps={float(Fraction(summary['certificate']['eps'])):.10g} "
                           f"gaps={summary['profile']['gaps']} load_s={held.load_s} "
                           f"table_read_s={summary['table_read_s']}", flush=True)
                     (out / "summary.json").write_text(json.dumps(summary, sort_keys=True, indent=1))
