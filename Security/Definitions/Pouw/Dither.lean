@@ -349,12 +349,14 @@ end Period
 /-- **Freed compute at most `ε C`, prover by prover** (R-ACCEL-1's probability form): for every prover, the
 probability over the oracle and the verifier's coins that the service accepts its period and some other work `z` fits
 on the period's devices beside its rounds' use with `W rv + W_other(z) > OPT_honest + ε C` (`¬ Period.FreedWithin`)
-is at most `κ`. `W` is the credited rounds. Wrap corrections and peels (BET-HYBRID-2) are serving work outside the
-words: they are other work here, never credit, so skipping them isn't a soundness question. -/
-def FreedSound (G : Accel) (P : RoundProto) (k : ℕ) (verdict : Verdict G P k) (Pd : Period G) (W ε C κ : ℝ) :
-    Prop :=
+is at most `κ`. `W` is the credited rounds. `ε` and `κ` are the prover's own: a prover whose commitment path makes
+more queries has a larger walk-and-log cost and extraction error (`ExtractAdv`). Wrap corrections and peels
+(BET-HYBRID-2) are serving work outside the words: they are other work here, never credit, so skipping them isn't a
+soundness question. -/
+def FreedSound (G : Accel) (P : RoundProto) (k : ℕ) (verdict : Verdict G P k) (Pd : Period G) (W : ℝ)
+    (ε : Prover G P k → ℝ) (C : ℝ) (κ : Prover G P k → ℝ) : Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => verdict A ox.1 ox.2 ∧
-    ∃ z, Pd.Fits (A.use ox.1 ox.2) z ∧ ¬ Pd.FreedWithin W z ε C) ≤ κ
+    ∃ z, Pd.Fits (A.use ox.1 ox.2) z ∧ ¬ Pd.FreedWithin W z (ε A) C) ≤ κ A
 
 end Freed
 

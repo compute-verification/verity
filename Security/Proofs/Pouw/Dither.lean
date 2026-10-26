@@ -11,8 +11,9 @@ import Proofs.Pouw.RelativeSecurity
   combine by the convexity of `exp` at the honest round's shares (`combined_moment_le`). A round's factor reads only the
   coins up to that round, so the rounds' product is a supermartingale over the fresh coins (`expect_prod_adapted`, the
   argument of `RoundGame.expect_weight_le` on `Fin k → Draw × Chk`), and Markov bounds the luck by `δ`. The union bound
-  adds the service's `κ_S` and the extraction's `κ_x`; off those three events the rounds meet the work floor
-  (`floor_of_luck`), and `FreedOfFloor` turns the floor into freed compute.
+  adds the service's `κ_S` and the extraction's `κ_x(A)`; off those three events the rounds meet the work floor
+  (`floor_of_luck`), less the extraction's walk-and-log cost `μ · ξ_A`, which moves into `ε_A` (`floor_add`), and
+  `FreedOfFloor` turns the floor into freed compute.
 -/
 
 namespace Pouw.SecurityProofs.Dither
@@ -219,6 +220,15 @@ theorem floor_of_luck {k : ℕ} {Hmm Hsha Ho pm ps η δ β K S Dsum Cw E : ℝ}
     rw [e]
     linarith
 
+/-- The walk-and-log cost `Ξ` the extraction adds over the period moves into `ε` as `Ξ / T`, at `T = k H`. -/
+theorem floor_add {ε Ξ T S : ℝ} (hS : 0 ≤ S) (h : (1 - ε) * T ≤ S + Ξ) : (1 - (ε + Ξ / T)) * T ≤ S := by
+  by_cases hT : T = 0
+  · rw [hT, mul_zero]
+    exact hS
+  · have e : (1 - (ε + Ξ / T)) * T = (1 - ε) * T - Ξ / T * T := by ring
+    rw [e, div_mul_cancel₀ _ hT]
+    linarith
+
 /-! ## The rounds of a prover -/
 
 section Rounds
@@ -285,11 +295,13 @@ end Rounds
 
 /-- `Definitions.Pouw.Guarantees.Dither.WorkSound`. -/
 theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
-  intro G P k verdict Pd μ pubmm pubsha Hmm Hsha Ho η δ β K κS κx hdual hHmm hHsha hHo hH hpm hps hη hδ hδ1 hβ hK
-    hG1 hG2 hP1 hP2 hsak hsha hserv himp hextr A
+  intro G P k verdict Pd μ pubmm pubsha Hmm Hsha Ho η δ β K κS ξ κx hdual hHmm hHsha hHo hH hpm hps hη hδ hδ1 hβ hK
+    hξ hG1 hG2 hP1 hP2 hsak hsha hserv himp hextr A
+  beta_reduce
   classical
   obtain ⟨Adv, adv, Mw, Mh, hadv, hcomp, huse, hext, hx⟩ := hextr hG1 hG2 hP1 hP2 A
   obtain ⟨hμ, hneeds, hval, z', hfit', hslack⟩ := hdual
+  have hΞ0 : 0 ≤ ∑ r, μ r * ξ A r := Finset.sum_nonneg fun r _ => mul_nonneg (hμ r) (hξ A r)
   have hHpos : 0 < Hmm + Hsha + Ho := by linarith
   have hlog : 0 ≤ Real.log (1 / δ) := Real.log_nonneg (by rw [le_div_iff₀ hδ]; linarith)
   have e1 : Hmm * (1 - pubmm / Hmm) = Hmm - pubmm := by
@@ -302,6 +314,9 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
     exact add_nonneg (add_nonneg (div_nonneg (by linarith) hHpos.le)
       (div_nonneg hlog (mul_nonneg hη.le (Nat.cast_nonneg k))))
       (div_nonneg (mul_nonneg hβ hK) (mul_nonneg (Nat.cast_nonneg k) hHpos.le))
+  have hε : 0 ≤ epsWorkSound (pubmm / Hmm) (pubsha / Hsha) Hmm Hsha Ho η δ β K k +
+      (∑ r, μ r * ξ A r) / (k * (Hmm + Hsha + Ho)) :=
+    add_nonneg hε0 (div_nonneg hΞ0 (mul_nonneg (Nat.cast_nonneg k) hHpos.le))
   -- The luck: the rounds' checks all pass on the extracted words, and their combined shortfall reaches `ln(1/δ)/η`.
   have E3 : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => (∀ w, roundOk A adv Mw ox.1 ox.2 w) ∧
       Real.log (1 / δ) / η ≤
@@ -345,21 +360,32 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
   have key : ∀ o x, verdict A o x → (∀ w, roundOk A adv Mw o x w) →
       ∑ w, roundD adv μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh o x w <
         Real.log (1 / δ) / η →
-      (1 - epsWorkSound (pubmm / Hmm) (pubsha / Hsha) Hmm Hsha Ho η δ β K k) * ∑ r, μ r * ((k : ℝ) * Pd.hon r) ≤
+      (1 - (epsWorkSound (pubmm / Hmm) (pubsha / Hsha) Hmm Hsha Ho η δ β K k +
+        (∑ r, μ r * ξ A r) / (k * (Hmm + Hsha + Ho)))) * ∑ r, μ r * ((k : ℝ) * Pd.hon r) ≤
         ∑ r, μ r * A.use o x r := by
     intro o x hv hok hD
     have hC : ∑ r, μ r * ((k : ℝ) * Pd.hon r) = (k : ℝ) * (Hmm + Hsha + Ho) := by
       rw [hH, Finset.mul_sum]
       exact Finset.sum_congr rfl fun r _ => by ring
     rw [hC]
-    have hcost : ∀ w, G.cost μ (Mw w) ((adv o x w, (x w).1)) + G.cost μ (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1))) ≤
-        G.cost μ (A.work w) (A.workIn o x w) := by
-      intro w
-      unfold Accel.cost
-      rw [← Finset.sum_add_distrib]
-      exact Finset.sum_le_sum fun r _ => by
-        rw [← mul_add]
-        exact mul_le_mul_of_nonneg_left (huse o x w r) (hμ r)
+    have hcost : ∑ w, (G.cost μ (Mw w) ((adv o x w, (x w).1)) +
+          G.cost μ (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1)))) ≤
+        ∑ w, G.cost μ (A.work w) (A.workIn o x w) + ∑ r, μ r * ξ A r := by
+      have h1 : ∑ w, (G.cost μ (Mw w) ((adv o x w, (x w).1)) +
+            G.cost μ (Mh w) (o, G.Mc.eval (Mw w) ((adv o x w, (x w).1)))) =
+          ∑ r, μ r * ∑ w, (G.use (Mw w) (adv o x w, (x w).1) r +
+            G.use (Mh w) (o, G.Mc.eval (Mw w) (adv o x w, (x w).1)) r) := by
+        unfold Accel.cost
+        simp only [Finset.mul_sum, mul_add, Finset.sum_add_distrib]
+        congr 1 <;> exact Finset.sum_comm
+      have h2 : ∑ w, G.cost μ (A.work w) (A.workIn o x w) + ∑ r, μ r * ξ A r =
+          ∑ r, μ r * (∑ w, G.use (A.work w) (A.workIn o x w) r + ξ A r) := by
+        unfold Accel.cost
+        simp only [mul_add, Finset.mul_sum, Finset.sum_add_distrib]
+        congr 1
+        exact Finset.sum_comm
+      rw [h1, h2]
+      exact Finset.sum_le_sum fun r _ => mul_le_mul_of_nonneg_left (huse o x r) (hμ r)
     have hwork : ∑ w, G.cost μ (A.work w) (A.workIn o x w) ≤ ∑ r, μ r * A.use o x r := by
       calc ∑ w, G.cost μ (A.work w) (A.workIn o x w)
           ≤ ∑ w, ∑ r, μ r * (G.use (A.inst w) (o, A.state o x w) r + G.use (A.work w) (A.workIn o x w) r +
@@ -399,8 +425,8 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
         simp only [Finset.sum_sub_distrib, ← Finset.mul_sum, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
           nsmul_eq_mul], Finset.sum_div]
       exact Finset.sum_le_sum fun w _ => roundD_ge hHmm hHsha hHpos
-    exact floor_of_luck hHmm hHsha hHo hη hβ hS0 hD hDlow ((Finset.sum_le_sum fun w _ => hcost w).trans hwork)
-      hextk
+    exact floor_add hS0 (floor_of_luck hHmm hHsha hHo hη hβ (add_nonneg hS0 hΞ0) hD hDlow
+      (hcost.trans (add_le_add hwork le_rfl)) hextk)
   refine (prob_mono (q := fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
       ((verdict A ox.1 ox.2 ∧ ¬ A.Accepted ox.1 ox.2) ∨ (A.Accepted ox.1 ox.2 ∧ ∃ w, ¬ roundOk A adv Mw ox.1 ox.2 w)) ∨
         ((∀ w, roundOk A adv Mw ox.1 ox.2 w) ∧ Real.log (1 / δ) / η ≤
@@ -412,13 +438,13 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
       · by_cases hD : Real.log (1 / δ) / η ≤
             ∑ w, roundD adv μ (pubmm / Hmm) (pubsha / Hsha) β Hmm Hsha (Hmm + Hsha + Ho) Mw Mh ox.1 ox.2 w
         · exact Or.inr ⟨hok, hD⟩
-        · exact absurd (FreedOfFloor G Pd k _ (A.use ox.1 ox.2) μ z z' hμ hneeds hval (Nat.cast_nonneg k) hε0 hfit'
+        · exact absurd (FreedOfFloor G Pd k _ (A.use ox.1 ox.2) μ z z' hμ hneeds hval (Nat.cast_nonneg k) hε hfit'
             hslack hfit (key ox.1 ox.2 hv hok (not_le.mp hD))) hnot
       · simp only [not_forall] at hok
         exact Or.inl (Or.inr ⟨hacc, hok⟩)
     · exact Or.inl (Or.inl ⟨hv, hacc⟩)
   · have hx' : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
-        A.Accepted ox.1 ox.2 ∧ ∃ w, ¬ roundOk A adv Mw ox.1 ox.2 w) ≤ κx := hx
+        A.Accepted ox.1 ox.2 ∧ ∃ w, ¬ roundOk A adv Mw ox.1 ox.2 w) ≤ κx A := hx
     refine ((prob_or_le _ _).trans (add_le_add (prob_or_le _ _) E3)).trans ?_
     linarith [hserv A, hx']
 
