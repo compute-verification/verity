@@ -266,9 +266,19 @@ def attention_deltanet(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: i
     b.add("gate", SIG, Hv)
     b.add("gate", EXP, 2 * Hv)
     b.add("gate", FP, 4 * Hv)
-    b.add("state update", FP, 4 * Hv * dk * dv + 2 * Hv * dv)
-    b.products("state (kS, k err^T, S^T q)", 3 * Hv * dk * dv)
-    b.products("state decay", Hv * dk * dv)
+    if phase == "decode":
+        b.add("state update", FP, 4 * Hv * dk * dv + 2 * Hv * dv)
+        b.products("state (kS, k err^T, S^T q)", 3 * Hv * dk * dv)
+        b.products("state decay", Hv * dk * dv)
+    else:
+        # the chunked form prefill runs (chunks of C): the state is rewritten once a chunk, and a chunk's tokens meet each
+        # other through C x C matrices (beta K K^T and its decay, the WY inverse T, Q K^T)
+        C = lin["chunk"]
+        b.add("gate", EXP, Fraction(Hv * C, 2))
+        b.add("state update", FP, Hv * (Fraction(3 * dk * dv, C) + 3 * C + 2 * dk + 9 * dv))
+        b.products("state (K^T U, q S, W S)", 3 * Hv * dk * dv)
+        b.products("state decay", Fraction(Hv * dk * dv, C))
+        b.products("intra-chunk (A, T, W, U, QK^T, PV)", Hv * (Fraction(3 * C * dk, 2) + C * dv + Fraction(C * C, 6)))
     b.add("norm", NT(dv, eps), Hv)
     b.add("activation", FP, 2 * nz)
     b.products("gating", nz)
@@ -280,7 +290,8 @@ def attention_deltanet(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: i
                 "state_rewritten_bytes_per_step": state + 2 * nqkv,
                 "write_path": (f"residual ({H}) -> RMSNorm -> in_proj ({H} -> {nqkv + nz} + {2 * Hv}) -> conv{conv} + SiLU -> "
                                f"L2 norm of q, k; beta = sigmoid(b), g = -exp(A) softplus(a + dt) -> S <- S (exp(g) - beta k k^T) "
-                               f"+ beta v k^T, {Hv} heads of {dk}x{dv} f32 rewritten every token"),
+                               f"+ beta v k^T, {Hv} heads of {dk}x{dv} f32 rewritten every decode token (once a chunk of "
+                               f"{lin['chunk']} in prefill)"),
                 "cut_bits": {"residual": 16 * H, "write inputs": 16 * write_in, "stored, at write": 8 * (state + cst)}})
 
 
@@ -290,8 +301,16 @@ def attention_lightning(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: 
     b.add("norm", NF(H, eps))
     b.linear(H, 3 * Hh * dk)
     b.add("activation", FP, 3 * Hh * dk)
-    b.add("state update", FP, 3 * Hh * dk * dv)
-    b.products("state (k^T v, q S)", 2 * Hh * dk * dv)
+    if phase == "decode":
+        b.add("state update", FP, 3 * Hh * dk * dv)
+        b.products("state (k^T v, q S)", 2 * Hh * dk * dv)
+    else:
+        # the blocked form prefill runs (blocks of C): the state is rewritten once a block, and a block's tokens meet each
+        # other through their decay-masked Q K^T
+        C = lin["chunk"]
+        b.add("state update", FP, Hh * (Fraction(3 * dk * dv, C) + C + 2 * dk + 3 * dv))
+        b.products("state (k^T v, q S)", 2 * Hh * dk * dv)
+        b.products("intra-block (QK^T, PV)", Hh * Fraction(C * (dk + dv), 2))
     b.add("norm", NT(Hh * dv, eps))
     b.linear(H, Hh * dv, quant=False)
     b.add("gate", SIG, Hh * dv)
@@ -303,7 +322,8 @@ def attention_lightning(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: 
                 "bytes_per_token_layer": {"as built": 0, "at write": 0}, "state_bytes_per_request_layer": state,
                 "state_rewritten_bytes_per_step": state,
                 "write_path": (f"residual ({H}) -> RMSNorm -> qkv ({H} -> {3 * Hh * dk}) -> SiLU -> S <- lambda_h S + k^T v, "
-                               f"{Hh} heads of {dk}x{dv} f32 (lambda_h a constant decay) rewritten every token"),
+                               f"{Hh} heads of {dk}x{dv} f32 (lambda_h a constant decay) rewritten every decode token "
+                               f"(once a block of {lin['chunk']} in prefill)"),
                 "cut_bits": {"residual": 16 * H, "write inputs": 16 * Hh * (dk + dv), "stored, at write": 8 * state}})
 
 
@@ -442,6 +462,19 @@ KINDS = {
     "gathers": (("exp table", r"Exp2Lut|TableRead"), ("index bits", r".")),
     "folds": (("folds", r"."),),
 }
+
+
+#: the roles a token's units are grouped by in the markdown's shares (the last takes every other role)
+SHARES = (("softmax attention", ("attention",)), ("requantization and linear epilogues", ("requantization", "linear epilogue")),
+          ("KV quantization", ("KV requant at read", "KV write")), ("linear-attention state", ("state update", "conv")),
+          ("MoE routing and dispatch", ("MoE routing", "MoE dispatch")), ("other", ()))
+
+
+def shares(by_role: Mapping[str, Fraction]) -> dict[str, Fraction]:
+    out = {name: Fraction(0) for name, _ in SHARES}
+    for role, v in by_role.items():
+        out[next((name for name, roles in SHARES if role in roles), "other")] += v
+    return out
 
 
 def kinds(prim: Mapping[str, Fraction]) -> dict[str, dict[str, Fraction]]:
@@ -648,8 +681,9 @@ def markdown(t: Mapping[str, Any]) -> str:
     for kv in KV_MODES:
         lines += [f"**KV {kv}.**", "",
                   "| model | dynamic memory | B/token | state/request | M_dyn | batch | step | R_cap (phase) | units/B/step (decode) "
-                  "| units/key-byte | T_turn | W_byte | " + " | ".join(f"f {lt}, E {e}" for lt in LIFETIMES for e in E_WORD) + " |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|" + "---|" * (len(LIFETIMES) * len(E_WORD))]
+                  "| units/key-byte | T_turn | W_byte | " + " | ".join(f"f {lt}, E {e}" for lt in LIFETIMES for e in E_WORD)
+                  + " | f 1 h, E conjectured, R of decode alone |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|" + "---|" * (len(LIFETIMES) * len(E_WORD))]
         for name, r in t["models"].items():
             x = r[kv]
             sv, dyn = x["serving"], x["decode"]["dyn"]
@@ -660,8 +694,18 @@ def markdown(t: Mapping[str, Any]) -> str:
                 f"{human(sv['M_dyn'])} | {sv['B']} | {sv['t_step_s'] * 1e3:.3g} ms ({sv['bound']}) | "
                 f"{g(sv['R_cap'])} ({sv['R_cap_phase']}) | {g(sv['u_B_decode'])} | {g(pk) if pk is not None else '-'} | "
                 f"{g(sv['T_turn_s'])} s | {g(sv['W_byte'])} | "
-                + " | ".join(pct(sv["f"][lt][e]) for lt in LIFETIMES for e in E_WORD) + " |")
+                + " | ".join(pct(sv["f"][lt][e]) for lt in LIFETIMES for e in E_WORD)
+                + f" | {pct(sv['f_decode']['1 h']['conjectured'])} |")
         lines.append("")
+    lines += ["**Where the units go, KV at write** (share of a token's units by role).", "",
+              "| model | phase | " + " | ".join(name for name, _ in SHARES) + " |", "|---|---|" + "---|" * len(SHARES)]
+    for name, r in t["models"].items():
+        for phase in PHASES:
+            u = r["at write"][phase]["units"]
+            by = {role: sum(c.values(), Fraction(0)) for role, c in u["by_role"].items()}
+            sh = shares(by)
+            lines.append(f"| {name} | {phase} | " + " | ".join(f"{float(sh[n] / u['total']):.1%}" for n, _ in SHARES) + " |")
+    lines.append("")
     lines += ["**Honest operations a token, KV at write** (decode at S, prefill at P; MACs and units a token).", "",
               "| model | phase | const-weight MACs | data x data MACs | units | roundings (requant) | division | rsqrt | "
               "compare-select | of which top-k routing | of which softmax max | gathers (exp table / index bits) | modeled share |",

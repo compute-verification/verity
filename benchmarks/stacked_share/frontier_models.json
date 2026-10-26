@@ -75,7 +75,8 @@
    "hf": "Qwen/Qwen3-Next-80B-A3B-Instruct", "revision": "9c7f2fbe", "source": "HF config.json",
    "arch": "hybrid-deltanet", "H": 2048, "layers": 48, "full_every": 4,
    "heads": 16, "kv_heads": 2, "head_dim": 256, "rope_dim": 64, "qk_norm": "head", "gate": true,
-   "linear": {"key_heads": 16, "value_heads": 32, "dk": 128, "dv": 128, "conv": 4},
+   "linear": {"key_heads": 16, "value_heads": 32, "dk": 128, "dv": 128, "conv": 4, "chunk": 64,
+              "chunk_source": "fla chunk_gated_delta_rule's chunk size (vLLM's Qwen3-Next prefill)"},
    "mlp": {"experts": 512, "topk": 10, "expert_I": 512, "shared": 1, "shared_I": 512, "shared_gate": true, "router": "softmax"},
    "vocab": 151936, "eps": 1e-06, "tp": 8, "weights": "bf16"
   },
@@ -91,7 +92,8 @@
    "hf": "MiniMaxAI/MiniMax-M1-80k", "revision": "8d1494b1", "source": "HF config.json (attn_type_list: 1 at every 8th layer)",
    "arch": "hybrid-lightning", "H": 6144, "layers": 80, "full_every": 8,
    "heads": 64, "kv_heads": 8, "head_dim": 128, "rope_dim": 64, "postnorm": true,
-   "linear": {"heads": 64, "dk": 128, "dv": 128},
+   "linear": {"heads": 64, "dk": 128, "dv": 128, "chunk": 256,
+              "chunk_source": "vLLM lightning_attention's block size (MiniMax-Text-01 / M1 prefill)"},
    "mlp": {"experts": 32, "topk": 2, "expert_I": 9216, "router": "softmax"},
    "vocab": 200064, "eps": 1e-05, "tp": 8, "weights": "bf16"
   },

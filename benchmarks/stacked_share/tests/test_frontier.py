@@ -117,7 +117,7 @@ def test_the_table_on_synthetic_atoms():
     assert qn["state"] == 36 * (32 * 128 * 128 * 4 + 3 * 8192 * 2) and qn["per_token"] == 12 * 2 * 2 * 256
     assert t["models"]["Llama-3.1-8B"]["as built"]["serving"]["request_bytes"]["per_token"] == 32 * 2 * 8 * 128 * 2
     md = F.markdown(t)
-    assert "| DeepSeek-V3/R1/V3.1 |" in md and "**KV at write.**" in md
+    assert "| DeepSeek-V3/R1/V3.1 |" in md and "**KV at write.**" in md and "**Where the units go, KV at write**" in md
     json.dumps(F.jsonable(t))
 
 
@@ -127,6 +127,16 @@ def test_modeled_terms_and_kinds():
     state = sum(t.n for t in c["terms"] if t.role == "state update")
     assert state == 36 * (4 * 32 * 128 * 128 + 2 * 32 * 128)
     assert c["dd"]["state (kS, k err^T, S^T q)"] == 36 * 3 * 32 * 128 * 128
+    pre = F.compose(m, "prefill", "at write", S, P)
+    chunked = sum(t.n for t in pre["terms"] if t.role == "state update")
+    assert chunked == 36 * 32 * (3 * 128 * 128 // 64 + 3 * 64 + 2 * 128 + 9 * 128) and state > 25 * chunked
+    m1 = SPEC["models"]["MiniMax-M1"]
+    blocked = sum(t.n for t in F.compose(m1, "prefill", "at write", S, P)["terms"] if t.role == "state update")
+    assert blocked == 70 * 64 * (3 * 128 * 128 // 256 + 256 + 2 * 128 + 3 * 128)
     k = F.kinds({"MoE routing|F32GtStrict_v1|compare_select": Fraction(5), "attention|SelectI32_v1|compare_select": Fraction(2),
                  "requantization|F32Fmaxf_v1|compare_select": Fraction(3), "norm|F32Div_v1|roundings": Fraction(1)})
     assert k == {"compare_select": {"MoE routing (top-k)": 5, "softmax max": 2, "max, min, clamp": 3}, "roundings": {"division": 1}}
+    sh = F.shares({"attention": Fraction(5), "linear epilogue": Fraction(2), "requantization": Fraction(1), "norm": Fraction(3),
+                   "MoE dispatch": Fraction(1)})
+    assert sh["softmax attention"] == 5 and sh["requantization and linear epilogues"] == 3 and sh["other"] == 3
+    assert sh["MoE routing and dispatch"] == 1 and sum(sh.values()) == 12
