@@ -1,5 +1,5 @@
 """The drawn-unit replay bundle (CMP-95 interface 5): everything the prover behind the firewall reads to prove the drawn units
-of one window, one JSON document (``verity/drawn-unit-bundle/v1``) and one binary payload of the private bytes.
+of one window, one JSON document (``verity/drawn-unit-bundle/v2``) and one binary payload of the private bytes.
 
 The bundle is the prover's: its payload holds values and salts, so it is written mode 0600, never published and never put in
 the evidence store (a test fixture's salts are a test key's). The JSON names every private byte by its ``[offset, length]``
@@ -11,18 +11,20 @@ in the payload and holds only public structure, hiding commitments and paths bes
   population and leaf layer (``registration.json`` / ``window.json``), and ``roots``: every port root a unit's opening
   reaches, ``{port: {root, leaves, domain, schema}}``, each the registration's root under the window-domain rule
   (`verity.ml.commitments.window`).
-* ``draw``: the drawn units (global indices), the law, and ``source`` (``live``: the proof service's draw of record, with
-  its receipt; ``fixture``: chosen by hand).
+* ``target``: the card's binding of the templates' dot, ``{binding, card, dot}`` (`BINDINGS`: ``GEMM_SM90_S8`` for the
+  H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000). Every unit's template binds that
+  dot, as circuits resolves the binding.
+* ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof service's draw of record, with
+  ``receipt``, the challenger's live-coin receipt, which a live draw must carry) or ``fixture`` (chosen by hand).
 * ``weights``: the registered values the units read (core's ``one_stage.registered``, as CMP-95 interface 1 registers the
   seeded weights: ``registered.domain(program, value, words, leaves, word_bits)``, rows in ``hm96-sha512/row/v2``):
   ``{program, values: [{value, root, leaves, words, word_bits, domain, row_schema}]}``.
-* ``slot_trees``: the per-step commitment, one subtree per sequence slot (CMP-95 interface 3, kernels'). Until kernels posts
-  its tree this is the fixture shape ``verity/slot-tree/fixture-v0`` (`slot_domain`, `step_domain`, `block_domain`): per
-  server-time block, per step, per slot, a ``frame-v3-sha512`` tree over the slot's committed rows at that step (every row
-  of its units in unit order, then port order, registered reads left out, each leaf the row's ``hm96-sha512`` tree leaf
-  under its row schema); a step's tree over its slots' roots and a block's tree over its steps' roots (leaf schema
-  ``frame-v3-sha512/root/v1``). ``blocks: [{block, root, domain, steps: [{step, root, domain, slots: [{slot, root, domain,
-  leaves}]}]}]``.
+* ``commitment``: the serving steps' commitment, CMP-95 interface 3 (kernels' commit call, `commit_slots`: step tree over
+  slot trees over unit trees over rows, only each unit's outputs committed, one row ``hm96-sha512/row/v2`` under the step's
+  salt key, C-Flock's ``hm96_salt`` with the slot as nonce). ``{format, reference, context, layout, layout_digest, slots,
+  blocks: [{block, root, domain, steps: [{step, root, domain}]}]}``: the run's 64-byte context, the step layout (groups of
+  units of rows of byte ranges, `layout_json`), and per server-time block every step's root (what went to the challenger
+  before the step's live coin) under this bundle's block tree over them (`block_domain`).
 * ``members``: per member with a drawn unit, what C-Flock's ``--zk`` session reads today (`benchmarks/one_stage/a5.py`): its
   key, template, base and count, the drawn units' local indices and the session's subset draw over them, its header's
   ``frame_v3`` entry, its public body's SHA-512 and row schemas. The prover's input file is
@@ -32,18 +34,28 @@ in the payload and holds only public structure, hiding commitments and paths bes
   unit}`` (``unit``: the coordinate within its op at that slot and step). ``template`` is ``{id, definition, binding,
   rows, outs}``: the descriptor id, the Definition's name, its binding statics as JSON (`interface._bindings`) and its bit
   rows. ``rows`` is each port's row in the member's port order, inputs then outputs: ``{port, kind: in|out, schema, words,
-  row: [offset, length], salt: [offset, length], string, window: {port, leaf, path}, slot: {block, step, slot, leaf, path,
-  slot_path, step_path} | null, registered: {value, position, path} | null}``. ``string`` is the row's public ``b || c``
-  (hex); every ``path`` is the frame-v3 siblings, leaf level first, hex. A registered read (the weights) is committed under
-  the registered row's salt, so its string is the registered one and it opens against the value's root, and it is in no slot
-  tree. An output row (``kind: out``) is the unit's committed output: a value, in the payload only.
+  row: [offset, length], salt: [offset, length], string, window: {port, leaf, path}, slot | null, registered | null}``.
+  ``string`` is the row's public ``b || c`` (hex) and every row opens against its window port's registered root.
+  Each row opens against exactly one commitment:
+
+  - ``slot``: the step commitment. ``{block, step, slot, unit, rank, path, slot_path, step_path, producer}``: ``path`` the
+    row's frame-v3 siblings in its unit's tree (leaf level first, hex), ``slot_path`` the unit root's opening in the slot
+    tree and ``step_path`` the slot root's in the step tree (`row_table.RootOpening` JSON). An output row opens in the
+    unit's own commitment unit (``producer`` null); an input row opens where its producer committed it as an output, and
+    ``producer`` names that unit's coordinates ``{block, step, slot, layer, op, unit}`` (``unit`` its index in the layout).
+    Every opening is in the unit's own slot and step: one request's replay opens a drawn unit.
+  - ``registered``: a registered read (the weights), committed under the registered row's salt, opening against the
+    value's root: ``{value, position, path}``. It is in no step commitment.
+
+  An output row (``kind: out``) is the unit's committed output: a value, in the payload only.
 
 **The payload** is every drawn unit's rows in bundle order, each row's words (u16 little-endian) then its 192-byte salt.
 
 `check` is the consumer's check of a bundle from its bytes alone: the payload's digest, every string recomputed from its row
 and salt, every path to its root, every root's domain recomputed from public data (the window's from the registration's
-fields, a registered value's from its entry, a slot tree's from the run and its coordinates), and each unit's Definition
-replayed on its input rows against its output rows. `build` writes a bundle from a window ``Window.write`` wrote.
+fields, a registered value's from its entry, the commitment's from its context, layout and coordinates), the draw's receipt
+when live, the target's dot in every template, and each unit's Definition replayed on its input rows against its output rows.
+`build` writes a bundle from a window ``Window.write`` wrote and the prover's step records (`Commitment`).
 """
 from __future__ import annotations
 
@@ -54,6 +66,7 @@ import json
 import os
 import sys
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -61,26 +74,58 @@ import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG
 from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.circuits.ops import gemm as G
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, merkle_depth
-from verity.ml.commitments.row_table import ROOTS_SCHEMA
+from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
 from verity.ml.commitments.window import window_domain
 from verity.ml.windows import interface as IF, rows as CS
+from verity_e2e_demo import commit_slots as S
 
-FORMAT = "verity/drawn-unit-bundle/v1"
-SLOT_TREE = "verity/slot-tree/fixture-v0"
-SUBTREE_TAG = "verity/slot-tree/subtree/fixture-v0"
-STEP_TAG = "verity/slot-tree/step/fixture-v0"
-BLOCK_TAG = "verity/slot-tree/block/fixture-v0"
+FORMAT = "verity/drawn-unit-bundle/v2"
+COMMITMENT = "verity/commit-slots/v1"
+REFERENCE = {"path": "benchmarks/torch_gpu/commit_slots", "commit": "05038d5ab4d481218df7443d3ff9fe661a9f5256", "pr": 4469}
+BLOCK_TAG = "verity/drawn-unit-bundle/block/v1"
 PAYLOAD_LAYOUT = "each drawn unit in bundle order, each row in its member's port order: the row's u16 words little-endian, then its 192-byte salt"
 INST = hm96.SHA512
 SALT = INST.salt_bytes
 COORDS = ("block", "step", "slot", "layer", "op", "unit")
+#: a card's binding of the templates' dot, by name: (card, the binding's statics as circuits resolves them)
+BINDINGS = {"GEMM_SM120_S8": ("sm_120", G.GEMM_SM120_S8), "GEMM_SM90_S8": ("sm_90", G.GEMM_SM90_S8),
+            "GEMM_HOPPER": ("sm_90", G.GEMM_HOPPER)}
 
 Coords = Callable[[Any, int], dict[str, Any]]
 Reads = Callable[[Mapping[str, Any], str, str], "tuple[str, int] | None"]
+#: a unit's port's row in the step commitment: (layout unit, rank, the producer's coordinates or None for the unit's own)
+Locate = Callable[[Mapping[str, Any], str, str], "tuple[int, int, dict[str, Any] | None] | None"]
+
+
+@dataclass(frozen=True)
+class StepRecord:
+    """What the prover keeps of one step's commitment: its salt key and every slot's rows, in layout order."""
+
+    salt_key: bytes
+    rows: tuple[tuple[bytes, ...], ...]
+
+
+@dataclass(frozen=True)
+class Commitment:
+    """The run's step commitments, the prover's side: its context, step layout, slots, and each ``(block, step)``'s record."""
+
+    context: bytes
+    layout: S.Layout
+    slots: int
+    steps: Mapping[tuple[int, int], StepRecord]
+
+
+def target(binding: str) -> dict[str, Any]:
+    """The ``target`` of a bundle whose templates bind the dot of ``binding`` (`BINDINGS`)."""
+    if binding not in BINDINGS:
+        raise ValueError(f"{binding}: not one of {sorted(BINDINGS)}")
+    card, statics = BINDINGS[binding]
+    return {"binding": binding, "card": card, "dot": statics["DOT"].id}
 
 
 def torch_loop_coords(label: Mapping[str, Any], offset: int, block: int = 0) -> dict[str, Any]:
@@ -90,23 +135,24 @@ def torch_loop_coords(label: Mapping[str, Any], offset: int, block: int = 0) -> 
             "layer": int(label["layer"]), "op": str(label["op"]), "unit": int(offset)}
 
 
-def _domain(tag: str, manifest: dict[str, Any], leaves: int) -> CommitmentDomain:
-    return CommitmentDomain(identity_digest_sha512(tag, manifest), -1, RangeIndexedDomain(0, leaves), hash="sha512")
+def block_domain(context: bytes, layout: S.Layout, block: int, steps: Sequence[int]) -> CommitmentDomain:
+    """This bundle's tree over one server-time block's step roots, in ascending step order."""
+    return CommitmentDomain(identity_digest_sha512(BLOCK_TAG, {"context": context.hex(), "layout": S.layout_digest(layout).hex(),
+                                                               "block": block, "steps": list(steps), "schema": ROOTS_SCHEMA}),
+                            -1, RangeIndexedDomain(0, len(steps)), hash="sha512")
 
 
-def slot_domain(run: str, block: int, step: int, slot: int, leaves: int) -> CommitmentDomain:
-    """The fixture shape's subtree of slot ``slot`` at ``step`` of server-time block ``block``, over ``leaves`` rows."""
-    return _domain(SUBTREE_TAG, {"run": run, "block": block, "step": step, "slot": slot, "leaves": leaves}, leaves)
+def layout_json(layout: S.Layout) -> dict[str, Any]:
+    return {"name": layout.name, "groups": [{"sources": list(g.sources),
+                                             "units": [[[[p.source, p.offset, p.nbytes] for p in r.parts] for r in u] for u in g.units]}
+                                            for g in layout.groups]}
 
 
-def step_domain(run: str, block: int, step: int, slots: Sequence[int]) -> CommitmentDomain:
-    """The fixture shape's tree over one step's slot roots, in ascending slot order."""
-    return _domain(STEP_TAG, {"run": run, "block": block, "step": step, "slots": list(slots)}, len(slots))
-
-
-def block_domain(run: str, block: int, steps: Sequence[int]) -> CommitmentDomain:
-    """The fixture shape's tree over one server-time block's step roots, in ascending step order."""
-    return _domain(BLOCK_TAG, {"run": run, "block": block, "steps": list(steps)}, len(steps))
+def layout_of_json(doc: Mapping[str, Any]) -> S.Layout:
+    return S.Layout(str(doc["name"]), tuple(S.Group(tuple(int(n) for n in g["sources"]),
+                                                    tuple(tuple(S.Row(tuple(S.Part(*map(int, p)) for p in r)) for r in u)
+                                                          for u in g["units"]))
+                                            for g in doc["groups"]))
 
 
 def _leaf_value(bc: bytes) -> bytes:
@@ -143,6 +189,20 @@ def _template(tid: str) -> dict[str, Any]:
             "rows": [list(r) for r in lay.rows], "outs": [list(o) for o in lay.outs]}
 
 
+def _dot_of(template: Mapping[str, Any]) -> str | None:
+    dot = template["binding"].get("DOT")
+    return dot.get("fn") if isinstance(dot, Mapping) else dot
+
+
+def _draw(draw: Mapping[str, Any] | None, units: list[int]) -> dict[str, Any]:
+    d = {"source": "fixture", **dict(draw or {}), "units": units}
+    if d["source"] not in ("live", "fixture"):
+        raise ValueError(f"draw source {d['source']!r}: live or fixture")
+    if d["source"] == "live" and not d.get("receipt"):
+        raise ValueError("a live draw carries the challenger's live-coin receipt (draw.receipt)")
+    return d
+
+
 class _Window:
     """A written window's files, read once: members, labels, bodies."""
 
@@ -154,7 +214,7 @@ class _Window:
         self.members = self.win["members"]
         for m in self.members:
             if m.get("shared_rows") or m.get("row_links") or m.get("wired"):
-                raise ValueError(f"{m['name']}: a shared-row, row-table or wired member; bundle v1 reads members of whole rows")
+                raise ValueError(f"{m['name']}: a shared-row, row-table or wired member; the bundle reads members of whole rows")
         self._spans = _run_starts(self.index)
         self._lo = [a for a, _, _, _ in self._spans]
         self._pub: dict[int, bytes] = {}
@@ -215,15 +275,60 @@ def _run_starts(index: Mapping[str, Any]) -> list[tuple[int, int, Any, int]]:
     return [(a, b, x, first[json.dumps(x, sort_keys=True)]) for a, b, x in spans]
 
 
-def build(window_dir: str | Path, drawn: Sequence[int], *, coords: Coords = torch_loop_coords, reads: Reads | None = None,
+class _Steps:
+    """The step commitments a bundle opens, rebuilt from the prover's records: slot subtrees, step trees, block trees."""
+
+    def __init__(self, com: Commitment) -> None:
+        self.com = com
+        self._slots: dict[tuple[int, int], list[S.SlotCommit]] = {}
+        self._steps: dict[tuple[int, int], RootTree] = {}
+
+    def slots(self, b: int, s: int) -> list[S.SlotCommit]:
+        if (b, s) not in self._slots:
+            rec = self.com.steps.get((b, s))
+            if rec is None:
+                raise ValueError(f"block {b} step {s}: no step record")
+            if len(rec.rows) != self.com.slots:
+                raise ValueError(f"block {b} step {s}: {len(rec.rows)} slots' rows for {self.com.slots} slots")
+            self._slots[b, s] = [S.commit_slot(self.com.context, self.com.layout, rec.salt_key, j, rows)
+                                 for j, rows in enumerate(rec.rows)]
+        return self._slots[b, s]
+
+    def step(self, b: int, s: int) -> RootTree:
+        if (b, s) not in self._steps:
+            self._steps[b, s] = S.step_tree(self.com.context, self.com.layout, s, [sc.root for sc in self.slots(b, s)])
+        return self._steps[b, s]
+
+    def blocks(self) -> list[dict[str, Any]]:
+        out = []
+        for b in sorted({b for b, _ in self.com.steps}):
+            steps = sorted(s for bb, s in self.com.steps if bb == b)
+            roots = [self.step(b, s).root for s in steps]
+            dom = block_domain(self.com.context, self.com.layout, b, steps)
+            out.append({"block": b, "root": RootTree(dom, roots).root.hex(), "domain": dom.domain_id.hex(),
+                        "steps": [{"step": s, "root": r.hex(), "domain": self.step(b, s).domain.domain_id.hex()}
+                                  for s, r in zip(steps, roots, strict=True)]})
+        return out
+
+
+def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitment, locate: Locate, binding: str,
+          coords: Coords = torch_loop_coords, reads: Reads | None = None,
           weights: Mapping[str, REG.Registered] | None = None, draw: Mapping[str, Any] | None = None
           ) -> tuple[dict[str, Any], bytes]:
     """The bundle of ``drawn`` (global unit indices) from the window in ``window_dir`` (what ``Window.write`` wrote, prover's
-    files included): ``(document, payload)``. ``coords(label, offset)``: a unit's coordinates from its label and its offset
-    in its labelled run. ``reads(coords, template, port)``: the ``(value, position)`` a unit's port reads of a registered
-    value, or None for a row of its own; ``weights``: those values, the prover's side (rows, salts, tree). ``draw``: the
-    draw's ``law``, ``source`` and receipt (default ``{"source": "fixture"}``). Refused (ValueError) when a registered read's
-    committed string is not the registered row's (a row committed under fresh salts has no path to the value's root)."""
+    files included): ``(document, payload)``.
+
+    ``commitment``: the run's step commitments, the prover's records. ``locate(coords, template, port)``: where a unit's port's
+    row is in the step commitment, ``(layout unit, rank, producer)`` (``producer`` the producing unit's coordinates for an
+    input, None for the unit's own output), or None for a registered read. ``binding``: the card's dot binding (`BINDINGS`),
+    which every template must bind. ``coords(label, offset)``: a unit's coordinates from its label and its offset in its
+    labelled run. ``reads(coords, template, port)``: the ``(value, position)`` a unit's port reads of a registered value;
+    ``weights``: those values, the prover's side. ``draw``: the draw's ``law``, ``source`` and ``receipt`` (default
+    ``{"source": "fixture"}``; a live draw without its receipt is refused).
+
+    Refused (ValueError) when a row is neither in the step commitment nor a registered read, when a window string is not
+    the step commitment's or the registered value's (a row committed under other salts has no path to that root), or when
+    a template binds another dot than ``binding``'s."""
     w = _Window(Path(window_dir))
     run, part = w.win["run"], w.win["partition"]
     reads = reads or (lambda c, t, p: None)
@@ -231,39 +336,9 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, coords: Coords = torc
     drawn = [int(u) for u in drawn]
     if len(set(drawn)) != len(drawn):
         raise ValueError("a unit is drawn once")
-
-    unit_coords: dict[int, dict[str, Any]] = {}
-    groups: dict[tuple[int, int, int], list[tuple[int, int, str, bytes, str]]] = {}
-    for k, m in enumerate(w.members):
-        schemas = m["frame_v3"]["schemas"]
-        strings = {p: w.strings(k, p) for p, _ in m["ports"]}
-        for i in range(m["n"]):
-            u = m["base"] + i
-            c = coords(*w.label(u))
-            unit_coords[u] = c
-            for p, _ in m["ports"]:
-                if reads(c, m["template"], p) is None:
-                    groups.setdefault((c["block"], c["step"], c["slot"]), []).append((u, k, p, strings[p][i], schemas[p]))
-    subtrees: dict[tuple[int, int, int], MerkleTree] = {}
-    where: dict[tuple[int, str], tuple[tuple[int, int, int], int]] = {}
-    for key, leaves in sorted(groups.items()):
-        dom = slot_domain(run, *key, len(leaves))
-        subtrees[key] = MerkleTree(dom, {r: _leaf_value(bc) for r, (_, _, _, bc, _) in enumerate(leaves)},
-                                   lambda r, leaves=leaves: leaves[r][4])
-        for r, (u, _, p, _, _) in enumerate(leaves):
-            where[u, p] = (key, r)
-    step_trees: dict[tuple[int, int], tuple[list[int], MerkleTree]] = {}
-    for b, s in sorted({(b, s) for b, s, _ in subtrees}):
-        slots = sorted(j for bb, ss, j in subtrees if (bb, ss) == (b, s))
-        step_trees[b, s] = (slots, MerkleTree(step_domain(run, b, s, slots),
-                                              {i: subtrees[b, s, j].commitment.root for i, j in enumerate(slots)},
-                                              lambda _i: ROOTS_SCHEMA))
-    block_trees: dict[int, tuple[list[int], MerkleTree]] = {}
-    for b in sorted({b for b, _ in step_trees}):
-        steps = sorted(s for bb, s in step_trees if bb == b)
-        block_trees[b] = (steps, MerkleTree(block_domain(run, b, steps),
-                                            {i: step_trees[b, s][1].commitment.root for i, s in enumerate(steps)},
-                                            lambda _i: ROOTS_SCHEMA))
+    tgt = target(binding)
+    doc_draw = _draw(draw, drawn)
+    com, steps, layout = commitment, _Steps(commitment), commitment.layout
 
     roots = {r["port"]: r for r in w.rec["roots"]}
     port_trees: dict[tuple[int, str], MerkleTree] = {}
@@ -272,7 +347,10 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, coords: Coords = torc
     for u in drawn:
         k = w.member_of(u)
         m, i = w.members[k], u - w.members[k]["base"]
-        c = unit_coords[u]
+        c = coords(*w.label(u))
+        tpl = _template(m["template"])
+        if _dot_of(tpl) not in (None, tgt["dot"]):
+            raise ValueError(f"unit {u}: its template binds {_dot_of(tpl)}, not {binding}'s {tgt['dot']}")
         rows = []
         for j, (p, schema, words, row, salt, bc) in enumerate(w.rows_of(k, i)):
             if string_of(schema, row, salt) != bc:
@@ -292,7 +370,9 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, coords: Coords = torc
                                      "window": {"port": name, "leaf": i, "path": _path(port_trees[k, p], i)},
                                      "slot": None, "registered": None}
             payload += row + salt
-            hit = reads(c, m["template"], p)
+            at, hit = locate(c, m["template"], p), reads(c, m["template"], p)
+            if (at is None) == (hit is None):
+                raise ValueError(f"unit {u} {p}: in the step commitment or a registered read, exactly one")
             if hit is not None:
                 value, pos = hit
                 reg = weights[value]
@@ -301,14 +381,21 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, coords: Coords = torc
                 entry["registered"] = {"value": value, "position": pos, "path": reg.path(pos).hex()}
                 used_values.add(value)
             else:
-                key, r = where[u, p]
-                slots, st = step_trees[key[0], key[1]]
-                steps, bt = block_trees[key[0]]
-                entry["slot"] = {"block": key[0], "step": key[1], "slot": key[2], "leaf": r, "path": _path(subtrees[key], r),
-                                 "slot_path": _path(st, slots.index(key[2])), "step_path": _path(bt, steps.index(key[1]))}
+                lu, rank, producer = at
+                if (producer is None) != (entry["kind"] == "out"):
+                    raise ValueError(f"unit {u} {p}: an output opens in its own unit, an input where its producer committed it")
+                b, s, slot = c["block"], c["step"], c["slot"]
+                sc = steps.slots(b, s)[slot]
+                g = layout.row_base[lu] + rank
+                if len(row) != layout.units[lu][rank].nbytes or sc.strings[g] != bc:
+                    raise ValueError(f"unit {u} {p}: not the step commitment's row {rank} of unit {lu} (other bytes or salts)")
+                entry["slot"] = {"block": b, "step": s, "slot": slot, "unit": lu, "rank": rank,
+                                 "path": _path(sc.units[lu], rank), "slot_path": sc.tree.open([lu]).to_json(),
+                                 "step_path": steps.step(b, s).open([slot]).to_json(),
+                                 "producer": None if producer is None else {**{x: c[x] for x in ("block", "step", "slot")},
+                                                                            **producer}}
             rows.append(entry)
-        units.append({"unit": u, "coords": c, "template": _template(m["template"]),
-                      "member": {"k": k, "local": i}, "rows": rows})
+        units.append({"unit": u, "coords": c, "template": tpl, "member": {"k": k, "local": i}, "rows": rows})
         mm = members.setdefault(k, {"k": k, "name": m["name"], "template": m["template"], "base": m["base"], "n": m["n"],
                                     "local": [], "frame_v3": m["frame_v3"], "public_sha512": m["public_sha512"],
                                     "row_schemas": m.get("row_schemas")})
@@ -326,19 +413,12 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, coords: Coords = torc
            "window": {"run": run, "registration": w.win["registration_digest"], "circuit": w.rec["window"].get("circuit"),
                       "partition": w.win["partition_digest"], "program": part["program"], "scheme": w.win["scheme"],
                       "population": w.win["population"], "leaf_layer": w.win["leaf_layer"], "roots": used_roots},
-           "draw": {"source": "fixture", **dict(draw or {}), "units": drawn},
+           "target": tgt,
+           "draw": doc_draw,
            "weights": {"program": next(iter(progs)) if progs else None,
                        "values": [{**weights[v].entry(), "row_schema": weights[v].schema} for v in sorted(used_values)]},
-           "slot_trees": {"format": SLOT_TREE,
-                          "blocks": [{"block": b, "root": bt.commitment.root.hex(), "domain": bt.domain.domain_id.hex(),
-                                      "steps": [{"step": s, "root": step_trees[b, s][1].commitment.root.hex(),
-                                                 "domain": step_trees[b, s][1].domain.domain_id.hex(),
-                                                 "slots": [{"slot": j, "root": subtrees[b, s, j].commitment.root.hex(),
-                                                            "domain": subtrees[b, s, j].domain.domain_id.hex(),
-                                                            "leaves": subtrees[b, s, j].domain.count}
-                                                           for j in step_trees[b, s][0]]}
-                                                for s in steps]}
-                                     for b, (steps, bt) in block_trees.items()]},
+           "commitment": {"format": COMMITMENT, "reference": REFERENCE, "context": com.context.hex(), "layout": layout_json(layout),
+                          "layout_digest": S.layout_digest(layout).hex(), "slots": com.slots, "blocks": steps.blocks()},
            "members": [members[k] for k in sorted(members)],
            "units": units}
     return doc, pay
@@ -358,7 +438,7 @@ def replay(unit: Mapping[str, Any], payload: bytes) -> bool:
     ins = []
     for (name, ty), width in zip(params, lay.widths):
         if ty.width_set() == {1}:
-            raise ValueError(f"{name}: a Boolean-profile port; bundle v1 replays word ports")
+            raise ValueError(f"{name}: a Boolean-profile port; the bundle replays word ports")
         n = len(ty.leaf_widths())
         ins.append(_elements(rows[name], width, () if n == 1 and not getattr(ty, "shape", None) else (n,)))
     want = np.asarray(evaluate_batch(fn, *ins)).reshape(1, -1).astype(np.uint64)
@@ -370,6 +450,65 @@ def replay(unit: Mapping[str, Any], payload: bytes) -> bool:
     return got_a.shape == want.shape and bool((got_a == want).all())
 
 
+def _check_commitment(doc: Mapping[str, Any], bad: dict[str, str]) -> tuple[Any, ...] | None:
+    """The commitment section's layout, context and block trees recomputed: ``(context, layout, slots, step roots by (block,
+    step))``, or None (with ``bad`` filled) when its layout or context can't be read."""
+    com = doc["commitment"]
+    if com.get("format") != COMMITMENT:
+        bad["commitment"] = f"not {COMMITMENT}"
+        return None
+    try:
+        layout, context = layout_of_json(com["layout"]), bytes.fromhex(com["context"])
+        S.layout_digest(layout)
+        S.slot_domain(context, layout)
+    except (ValueError, KeyError, TypeError) as e:
+        bad["commitment"] = f"its layout or context is not one: {e}"
+        return None
+    if S.layout_digest(layout).hex() != com["layout_digest"]:
+        bad["commitment"] = "its layout digest is not its layout's"
+    step_roots = {}
+    for b in com["blocks"]:
+        steps = [s["step"] for s in b["steps"]]
+        dom = block_domain(context, layout, b["block"], steps)
+        roots = [bytes.fromhex(s["root"]) for s in b["steps"]]
+        if dom.domain_id.hex() != b["domain"] or RootTree(dom, roots).root.hex() != b["root"]:
+            bad[f"block:{b['block']}"] = "its root is not the block tree's over its steps' roots"
+        for s, r in zip(b["steps"], roots, strict=True):
+            if S.step_domain(context, layout, s["step"], com["slots"]).domain_id.hex() != s["domain"]:
+                bad[f"step:{b['block']}/{s['step']}"] = "its domain is not the commit call's"
+            step_roots[b["block"], s["step"]] = r
+    return context, layout, com["slots"], step_roots
+
+
+def _check_slot(r: Mapping[str, Any], unit: Mapping[str, Any], row: bytes, bc: bytes, com: tuple[Any, ...]) -> str | None:
+    """Why a row's step-commitment opening fails, or None."""
+    context, layout, slots, step_roots = com
+    s, c = r["slot"], unit["coords"]
+    if (s["block"], s["step"], s["slot"]) != (c["block"], c["step"], c["slot"]):
+        return "it opens outside its unit's slot and step"
+    if (s["producer"] is None) != (r["kind"] == "out"):
+        return "an output opens in its own unit, an input names its producer"
+    if s["producer"] is not None and ({x: s["producer"].get(x) for x in ("block", "step", "slot", "unit")}
+                                      != {x: s[x] for x in ("block", "step", "slot", "unit")} or not {"layer", "op"} <= set(s["producer"])):
+        return "its producer's coordinates are not where it opens"
+    lu, rank = s["unit"], s["rank"]
+    if not (0 <= lu < layout.unit_count and 0 <= rank < len(layout.units[lu])) or len(row) != layout.units[lu][rank].nbytes:
+        return "not a row of the layout"
+    step_root = step_roots.get((s["block"], s["step"]))
+    if step_root is None or not 0 <= s["slot"] < slots:
+        return "its step is not in the commitment"
+    try:
+        sp, tp = RootOpening.of_json(s["slot_path"]), RootOpening.of_json(s["step_path"])
+    except (ValueError, KeyError, TypeError) as e:
+        return f"its openings are not ones: {e}"
+    unit_root = _fold(S.unit_domain(context, layout, lu), rank, S.ROW_SCHEMA, _leaf_value(bc), s["path"])
+    sd, td = S.slot_domain(context, layout), S.step_domain(context, layout, s["step"], slots)
+    if (unit_root is None or sp.indices != (lu,) or sp.roots[0] != unit_root or tp.indices != (s["slot"],)
+            or not verify_roots(tp.roots[0], sd.domain_id, sd.count, sp) or not verify_roots(step_root, td.domain_id, td.count, tp)):
+        return "its paths do not reach its unit, slot and step roots"
+    return None
+
+
 def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, Any] | None = None,
           replay_units: bool = True) -> dict[str, str]:
     """The consumer's check of a bundle (module docstring): ``{key: why}``, empty when it holds. ``registration``: the
@@ -379,6 +518,16 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
         return {"format": f"not {FORMAT}"}
     if len(payload) != doc["payload"]["bytes"] or hashlib.sha512(payload).hexdigest() != doc["payload"]["sha512"]:
         return {"payload": "its bytes are not the ones the bundle names"}
+    d = doc["draw"]
+    if d.get("source") not in ("live", "fixture") or (d["source"] == "live" and not d.get("receipt")):
+        bad["draw"] = "a live draw carries the challenger's live-coin receipt, and a draw is live or fixture"
+    try:
+        tgt = target(doc["target"]["binding"])
+    except ValueError as e:
+        tgt = None
+        bad["target"] = str(e)
+    if tgt is not None and tgt != doc["target"]:
+        bad["target"] = f"not {doc['target']['binding']}'s card and dot as circuits resolves it ({tgt})"
     win = doc["window"]
     for port, r in win["roots"].items():
         if window_domain(win["program"], win["partition"], port, r["schema"], r["leaves"], win["run"]) != r["domain"]:
@@ -393,24 +542,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
         dom = REG.domain(doc["weights"]["program"], name, v["words"], v["leaves"], v.get("word_bits", REG.WORD_BITS))
         if dom.domain_id.hex() != v["domain"]:
             bad[f"value:{name}"] = "its domain is not the registered-value rule's over its entry"
-    trees = {}
-    for b in doc["slot_trees"]["blocks"]:
-        steps = [s["step"] for s in b["steps"]]
-        bd = block_domain(win["run"], b["block"], steps)
-        if bd.domain_id.hex() != b["domain"]:
-            bad[f"block:{b['block']}"] = "its domain is not the fixture shape's"
-        for s in b["steps"]:
-            slots = [x["slot"] for x in s["slots"]]
-            sd = step_domain(win["run"], b["block"], s["step"], slots)
-            if sd.domain_id.hex() != s["domain"]:
-                bad[f"step:{b['block']}/{s['step']}"] = "its domain is not the fixture shape's"
-            for x in s["slots"]:
-                d = slot_domain(win["run"], b["block"], s["step"], x["slot"], x["leaves"])
-                if d.domain_id.hex() != x["domain"]:
-                    bad[f"slot:{b['block']}/{s['step']}/{x['slot']}"] = "its domain is not the fixture shape's"
-                trees[b["block"], s["step"], x["slot"]] = (d, bytes.fromhex(x["root"]), sd, slots.index(x["slot"]),
-                                                          bytes.fromhex(s["root"]), bd, steps.index(s["step"]),
-                                                          bytes.fromhex(b["root"]))
+    com = _check_commitment(doc, bad)
     members = {m["k"]: m for m in doc["members"]}
     for unit in doc["units"]:
         u = unit["unit"]
@@ -418,6 +550,12 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
         if mm is None or mm["base"] + unit["member"]["local"] != u or unit["member"]["local"] not in mm["local"]:
             bad[f"unit:{u}"] = "its member does not hold it at its local index"
             continue
+        if tgt is not None and _dot_of(unit["template"]) not in (None, tgt["dot"]):
+            bad[f"unit:{u}"] = f"its template binds another dot than the target's {tgt['dot']}"
+            continue
+        outs = {r["slot"]["unit"] for r in unit["rows"] if r["kind"] == "out" and r["slot"] is not None}
+        if len(outs) > 1:
+            bad[f"unit:{u}"] = "its outputs open in more than one commitment unit"
         for r in unit["rows"]:
             key = f"unit:{u}/{r['port']}"
             row = payload[r["row"][0]:r["row"][0] + r["row"][1]]
@@ -435,24 +573,19 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
             if _fold(dom, r["window"]["leaf"], r["schema"], _leaf_value(bc), r["window"]["path"]) != bytes.fromhex(root["root"]):
                 bad[key] = "its window path does not reach its port's registered root"
             if (r["slot"] is None) == (r["registered"] is None):
-                bad[key] = "a row opens against a slot tree or a registered value, exactly one"
+                bad[key] = "a row opens against the step commitment or a registered value, exactly one"
             elif r["registered"] is not None:
                 v = values.get(r["registered"]["value"])
                 d = v and REG.domain(doc["weights"]["program"], v["value"], v["words"], v["leaves"], v.get("word_bits", REG.WORD_BITS))
                 if v is None or not REG.verify_read(d, bytes.fromhex(v["root"]), r["registered"]["position"], bc,
                                                     bytes.fromhex(r["registered"]["path"]), v.get("row_schema", REG.SCHEMA)):
                     bad[key] = "its registered path does not reach the value's root"
-            else:
-                s = r["slot"]
-                t = trees.get((s["block"], s["step"], s["slot"]))
-                if t is None:
-                    bad[key] = "its slot tree is not in the bundle"
-                    continue
-                d, sroot, sd, si, steproot, bd, bi, broot = t
-                if (_fold(d, s["leaf"], r["schema"], _leaf_value(bc), s["path"]) != sroot
-                        or _fold(sd, si, ROOTS_SCHEMA, sroot, s["slot_path"]) != steproot
-                        or _fold(bd, bi, ROOTS_SCHEMA, steproot, s["step_path"]) != broot):
-                    bad[key] = "its slot path does not reach its slot, step and block roots"
+            elif com is None:
+                bad[key] = "the commitment it opens against can't be read"
+            elif r["schema"] != S.ROW_SCHEMA:
+                bad[key] = f"the step commitment's rows are {S.ROW_SCHEMA}"
+            elif (why := _check_slot(r, unit, row, bc, com)) is not None:
+                bad[key] = why
         if replay_units and f"unit:{u}" not in bad and not any(k.startswith(f"unit:{u}/") for k in bad):
             try:
                 if not replay(unit, payload):
@@ -489,6 +622,8 @@ def read(path: str | Path) -> tuple[dict[str, Any], bytes]:
 
 LINEAR_NAMES = ("wup", "wdown")
 FIXTURE_SALT_KEY = hashlib.sha256(b"verity/drawn-unit-bundle/fixture-salt-key (a test key)").digest()
+CONTEXT_TAG = "verity/drawn-unit-bundle/torch-loop/context/v1"
+RUN_ID = "drawn-unit-bundle-fixture"
 
 
 def torch_loop_weights(model: Any, salt_key: bytes, program: str) -> dict[str, REG.Registered]:
@@ -518,39 +653,95 @@ def torch_loop_reads(c: Mapping[str, Any], template: str, port: str) -> tuple[st
     return None
 
 
+def torch_loop_layout(h: int, layers: int) -> S.Layout:
+    """The torch loop's step layout: a group a layer, its tensors the linear's input codes (``h`` bytes), their f32 scale and
+    the linear's bf16 output (``2h`` bytes). Its units: the input quantizer (the codes row, then the scale row), then one unit
+    per output coordinate (its 2-byte row), the proof unit `ScaledMmS8Coordinate_v1` proves."""
+    quant = (S.Row((S.Part(0, 0, h),)), S.Row((S.Part(1, 0, 4),)))
+    group = S.Group((h, 4, 2 * h), (quant, *((S.Row((S.Part(2, 2 * c, 2),)),) for c in range(h))))
+    return S.Layout(f"torch-loop/mlp-w8a8-h{h}/every-linear/v1", (group,) * layers)
+
+
+def torch_loop_locate(h: int) -> Locate:
+    """The torch loop's rows in its step layout: a unit's ``x`` and ``sx`` are its layer's quantizer's rows 0 and 1 (their
+    producer), its ``o0`` its own coordinate's unit; ``wrow`` and ``sw`` are registered reads."""
+    def locate(c: Mapping[str, Any], template: str, port: str) -> tuple[int, int, dict[str, Any] | None] | None:
+        base = c["layer"] * (h + 1)
+        producer = {"layer": c["layer"], "op": f"{c['op']}.input_quant", "unit": base}
+        return {"x": (base, 0, producer), "sx": (base, 1, producer), "o0": (base + 1 + c["unit"], 0, None)}.get(port)
+    return locate
+
+
+def _step_key(salt_key: bytes, block: int, step: int) -> bytes:
+    return hashlib.sha256(salt_key + f"/block/{block}/step/{step}".encode()).digest()
+
+
 def torch_loop_window(out: str | Path, requests: Sequence[int] = (3, 7), steps: int = 1, cap: int = 8, tamper: bool = False,
-                      salt_key: bytes = FIXTURE_SALT_KEY) -> tuple[Any, dict[str, REG.Registered]]:
-    """The torch loop's window written to ``out``, its weight rows committed under their registered salts (so each opens
-    against its value's root), every other row under the window's ChaCha20 salts from ``salt_key``: -> (the loop, its
-    registered weights). Needs torch and `integrations/torch_loop` on the path."""
+                      salt_key: bytes = FIXTURE_SALT_KEY) -> tuple[Any, dict[str, REG.Registered], Commitment]:
+    """The torch loop's window written to ``out`` with its step commitments (a test salt key a step, from ``salt_key``): every
+    row a unit commits or reads in the step commitment carries that commitment's salt, and every weight row its registered
+    value's, so each window string is the one its opening reaches: -> (the loop, its registered weights, its commitment).
+    Needs torch and `integrations/torch_loop` on the path."""
     from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
     from verity_torch_loop import loop as L
 
-    loop = L.TorchLoop(L.Model(), list(requests), steps, tamper, "drawn-unit-bundle-fixture")
+    loop = L.TorchLoop(L.Model(), list(requests), steps, tamper, RUN_ID)
     win = loop.window(D.parse_law("subset:2"), cap)
-    program = f"torch-loop/mlp-w8a8-h{loop.model.h}/seed{loop.model.seed}"
+    h, program = loop.model.h, f"torch-loop/mlp-w8a8-h{loop.model.h}/seed{loop.model.seed}"
     weights = torch_loop_weights(loop.model, salt_key, program)
-    labels = win.labels()
-    spans = _run_starts(labels)
-    base = win._bases()
-    salts_of, data = {}, []
+    layout, locate = torch_loop_layout(h, len(loop.model.layers)), torch_loop_locate(h)
+    context = identity_digest_sha512(CONTEXT_TAG, {"run": loop.run_root, "program": program})
+    spans, base = _run_starts(win.labels()), win._bases()
+    lo_of = [a for a, _, _, _ in spans]
+
+    def coords_of(u: int) -> dict[str, Any]:
+        a, _, lab, start = spans[bisect.bisect_right(lo_of, u) - 1]
+        return torch_loop_coords(lab, u - start)
+
+    data, grids = [], {}
     for m in win.window.members:
         lay = IF.layout(win.circuit.template(m.template))
         got = win._recorded[m.template]
         ports = [np.concatenate([b.words[g] for b in got]) for g in range(len(lay.rows) + len(lay.outs))]
         lo = m.base - base[m.template]
-        data.append({"rows": {p: ports[g][lo:lo + m.n] for g, (p, _) in enumerate(lay.rows)},
-                     "outs": {p: ports[len(lay.rows) + j][lo:lo + m.n] for j, (p, _) in enumerate(lay.outs)}})
-        for p in ("wrow", "sw"):
+        d = {"rows": {p: ports[g][lo:lo + m.n] for g, (p, _) in enumerate(lay.rows)},
+             "outs": {p: ports[len(lay.rows) + j][lo:lo + m.n] for j, (p, _) in enumerate(lay.outs)}}
+        data.append(d)
+        for i in range(m.n):
+            c = coords_of(m.base + i)
+            for p, arr in (*d["rows"].items(), *d["outs"].items()):
+                at = locate(c, m.template, p)
+                if at is None:
+                    continue
+                g = layout.row_base[at[0]] + at[1]
+                grid = grids.setdefault((c["block"], c["step"]), [[None] * layout.row_count for _ in requests])
+                row = np.ascontiguousarray(arr[i]).astype("<u2").tobytes()
+                if grid[c["slot"]][g] not in (None, row):
+                    raise ValueError(f"block {c['block']} step {c['step']} slot {c['slot']} row {g}: read as two values")
+                grid[c["slot"]][g] = row
+    if any(r is None for grid in grids.values() for rows in grid for r in rows):
+        raise ValueError("a row of the step layout has no unit committing or reading it")
+    com = Commitment(context, layout, len(requests),
+                     {k: StepRecord(_step_key(salt_key, *k), tuple(tuple(rows) for rows in grid)) for k, grid in grids.items()})
+
+    salts_of = {}
+    for m in win.window.members:
+        lay = IF.layout(win.circuit.template(m.template))
+        for p, _ in (*lay.rows, *lay.outs):
             ys = b""
             for u in range(m.base, m.base + m.n):
-                lab, off = next((x, u - st) for a, b, x, st in spans if a <= u < b)
-                value, pos = torch_loop_reads(torch_loop_coords(lab, off), m.template, p)
-                ys += weights[value].salts[pos]
+                c = coords_of(u)
+                at, hit = locate(c, m.template, p), torch_loop_reads(c, m.template, p)
+                if at is not None:
+                    rec = com.steps[c["block"], c["step"]]
+                    ys += S.row_salts(rec.salt_key, c["slot"], layout.row_base[at[0]] + at[1], 1)
+                else:
+                    value, pos = hit
+                    ys += weights[value].salts[pos]
             salts_of[m.port(p)] = ys
     committed = CS.commit(win.window, data, salt_key=salt_key, salts_of=salts_of)
     win.write(committed, out, {"loop": "torch-loop"}, registrar=R)
-    return loop, weights
+    return loop, weights, com
 
 
 FIXTURE_DRAW = (5, 200, 300, 511)
@@ -558,10 +749,12 @@ FIXTURE_DRAW = (5, 200, 300, 511)
 
 def fixture_bundle(scratch: str | Path) -> tuple[dict[str, Any], bytes]:
     """The fixture: the torch loop (requests 3 and 7, one step, width 128: 512 units in members of 8) written to ``scratch``,
-    and the bundle of `FIXTURE_DRAW` (slot 0 layer 0, slot 0 layer 1, slot 1 layer 0, slot 1 layer 1). It is built, not
-    tracked; the suite pins its digests (`digests`)."""
-    _, weights = torch_loop_window(scratch)
-    return build(scratch, FIXTURE_DRAW, reads=torch_loop_reads, weights=weights,
+    and the bundle of `FIXTURE_DRAW` (slot 0 layer 0, slot 0 layer 1, slot 1 layer 0, slot 1 layer 1), its templates on the
+    RTX PRO 6000's dot (``GEMM_SM120_S8``) and its draw a fixture's. It is built, not tracked; the suite pins its digests
+    (`digests`)."""
+    _, weights, com = torch_loop_window(scratch)
+    return build(scratch, FIXTURE_DRAW, commitment=com, locate=torch_loop_locate(128), binding="GEMM_SM120_S8",
+                 reads=torch_loop_reads, weights=weights,
                  draw={"source": "fixture", "law": {"law": "subset", "k": len(FIXTURE_DRAW)}})
 
 
