@@ -333,6 +333,23 @@ def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(wo
     assert got[2].state == "ready" and got[2].why.startswith("admitted")
 
 
+def test_status_names_an_admitted_pr_that_conflicts_with_nexts_tip_and_the_members_that_touched_it(world):
+    """TOP-90 row 14: status called a PR `admitted: the next sync merges it onto next` while it conflicted with a PR already on
+    `next`, and the sync then left it out."""
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    world.gh.put(2, world.change({"b.txt": "two\n"}))
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [1, 2]
+    world.gh.put(3, world.change({"a.txt": "three\n"}))
+    world.gh.put(4, world.change({"c.txt": "four\n"}))
+    world.gh.put(2, world.change({"b.txt": "two again\n"}, base=world.gh.prs[2].head))   # on `next` at its old head
+    got = q.status()
+    assert got[3].state == "ready" and got[3].why.startswith(
+        "admitted, but conflicts with `next`'s tip in a.txt (touched by #1): the next sync leaves it out"), got[3].why
+    assert got[4].why.startswith("admitted: the next sync merges it") and got[2].why.startswith("admitted: the next sync")
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 4] and q.status()[3].state == "refused"
+
+
 def test_a_pr_containing_another_goes_in_after_it_and_waits_while_it_waits(world):
     parent = world.change({"x.txt": "x = 1\n"})
     world.gh.put(5, parent, ready=False)

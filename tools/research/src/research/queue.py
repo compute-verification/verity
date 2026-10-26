@@ -1117,17 +1117,27 @@ class Queue:
         prs, waiting = self.fetch_prs(prs)
         entries = self.entries(prs, state)
         entries.update(waiting)
-        for i, m in enumerate(self.chain(), 1):
+        chain = self.chain()
+        for i, m in enumerate(chain, 1):
             if m.pr in entries and entries[m.pr].pr.head == m.head:
                 entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
         conflicts = state.get("conflicts", {})
         main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
+        on_next = {m.pr for m in chain}
         for n, e in entries.items():
             if e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
             elif e.state == "ready" and (files := conflicting_files(self.workdir, main, e.pr.head)):
                 e.state, e.why = "refused", (f"conflicts with `main` in {', '.join(files)}: merge `main` into the branch and "
                                              f"re-mark it")
+            # a PR on `next` at another head is merged again above the prefix the sync keeps, so its old merge isn't judged against
+            elif e.state == "ready" and chain and n not in on_next and (
+                    files := conflicting_files(self.workdir, chain[-1].commit, e.pr.head)):
+                by = touched_by(self.workdir, chain, files)
+                e.why = (f"admitted, but conflicts with `{self.branch}`'s tip in {', '.join(files)}"
+                         + (f" (touched by {', '.join(by)})" if by else "")
+                         + ": the next sync leaves it out unless those leave; merge `main` once they land, or settle it with "
+                           "their owners")
             elif e.state == "ready":
                 e.why = f"admitted: the next sync merges it onto `{self.branch}`, and drive checks and lands it in a train"
         return entries
