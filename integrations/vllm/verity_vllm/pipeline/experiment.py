@@ -78,7 +78,7 @@ def _load(run: Path, rel: str):
         return None
     try:
         return json.loads(p.read_text())
-    except Exception:  # noqa: BLE001 - an unreadable report is reported as absent
+    except (OSError, ValueError):  # an unreadable report is reported as absent
         return None
 
 
@@ -88,17 +88,18 @@ def code_version(repo: Path) -> dict:
     if exp.exists():
         try:
             d = json.loads(exp.read_text())
+        except (OSError, ValueError):
+            d = None
+        if isinstance(d, dict):
             return {"source": "EXPORT.json", "commit": d.get("commit"), "dirty_patch_sha256": d.get("patch_sha256") or d.get("dirty_patch"),
                     "untracked": d.get("untracked"), "fallback": d.get("fallback")}
-        except Exception:  # noqa: BLE001
-            pass
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, timeout=10).stdout.strip()
         code = [f":/{d}" for d in research_tools.CODE_DIRS]
         dirty = subprocess.run(["git", "status", "--porcelain", "--", "verity_vllm", *code], cwd=repo,
                                capture_output=True, text=True, timeout=20).stdout.strip()
         return {"source": "git", "commit": sha or None, "dirty": bool(dirty)}
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError, subprocess.SubprocessError):
         return {"source": "unknown"}
 
 
@@ -162,7 +163,7 @@ def write_spec(run: Path, spec: dict) -> dict:
     if p.exists():
         try:
             old = json.loads(p.read_text())
-        except Exception:  # noqa: BLE001
+        except (OSError, ValueError):
             old = {}
         same = old.get("digest") == spec.get("digest")
         return {"written": False, "existing_digest": old.get("digest"), "would_be_digest": spec.get("digest"), "same": same}

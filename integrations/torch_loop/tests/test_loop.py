@@ -135,7 +135,7 @@ def test_its_unit_composes_into_c_flocks_unit_statement(tmp_path):
 
 
 def test_the_loop_loads_no_vllm():
-    code = ("import sys, verity_torch_loop.compile, verity_torch_loop.loop, verity_torch_loop.serve; "
+    code = ("import sys, verity_torch_loop.checkpoint, verity_torch_loop.compile, verity_torch_loop.loop, verity_torch_loop.serve; "
             "print(sorted(m for m in sys.modules if m.split('.')[0] in ('verity_vllm', 'vllm')))")
     got = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True, cwd=Path(L.__file__).parents[1])
     assert got.stdout.strip() == "[]"

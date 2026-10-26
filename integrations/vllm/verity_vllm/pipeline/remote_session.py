@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity_vllm.store import remote
+from verity_vllm.protocols.remote_bandwidth import remote
 
 
 def session_of(args: Any) -> remote.CommitSession | None:
@@ -15,7 +15,7 @@ def session_of(args: Any) -> remote.CommitSession | None:
         return None
     backend_of = None
     if args.remote_session_lib:
-        from verity_vllm.store.in_place import InPlaceBackend
+        from verity_vllm.protocols.remote_bandwidth.in_place import InPlaceBackend
         backend_of = InPlaceBackend.for_commit(args.remote_session_lib)
     rs = remote.CommitSession(args.remote_verifier, plan=args.remote_plan, kv_pages=args.remote_kv_pages or None,
                               weight_blocks=args.remote_weight_blocks, kv_lib=args.remote_kv_lib, backend_of=backend_of,

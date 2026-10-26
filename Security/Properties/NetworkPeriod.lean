@@ -7,7 +7,7 @@ import Mathlib.Algebra.BigOperators.Fin
 On acceptance in the rows form, `NetworkCheck.Period.check` publishes `rowsTerms`'s `K`, the sum of a ceiling of `log2`
 of each factor of `NetTiming.Guarantees.PeriodLeakAccepted`'s count at the number the check reads for it. A sum of
 ceilings is at least the ceiling of the sum, so `K` is at least `⌈log2⌉` of the count, not equal to it;
-`RowsKBoundsCount` says the count at the check's numbers is at most `2 ^ K`. `Properties.Proofs.NetworkPeriod` proves
+`RowsKBoundsCount` says the count at the check's numbers is at most `2 ^ K`. `Proofs.Properties.NetworkPeriod` proves
 it.
 
 The count is the statement's, factor by factor, over the network certifier's `m` connections and the period's `n`

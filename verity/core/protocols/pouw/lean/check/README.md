@@ -135,7 +135,7 @@ not of record (`no-fixed-length`), an EOS-keyed stop mode is refused (`eos-keyed
 rows ran a request past its public max_tokens or stopped one before it (`length-mismatch`).
 
 The properties are stated in `Security/Properties/Pouw/Check.lean` and proved in
-`Security/Properties/Proofs/Pouw/Check.lean`.
+`Security/Proofs/Properties/Pouw/Check.lean`.
 
 `tests/test_difftest.py`, the suite `verity-pouw-check-difftest`, which `check` runs after the Lean builds, holds
 `core_check.case` to `pouw-check serve` on the shared harness (`verity/core/difftest/`) as a `ProtocolPort` with the Lean
