@@ -280,14 +280,14 @@ theorem msg_last {x : Msg} {ws : List Claims.Flock.Wit}
   have hpc : (layoutBAcc rest).pieceAt x (layoutOf.rounds x - 1) = finAcc rest x := by
     show stepPieces (finAcc rest) x (layoutOf.rounds x - 1) = _
     unfold stepPieces
-    rw [if_pos (by omega)]
+    rw [ite_eq_left (by omega)]
   unfold LayoutB.msgs
   rw [hround, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range (by omega), Option.map_some,
     Option.getD_some]
   unfold LayoutB.msg LayoutB.assembled
   rw [hfx', hpc]
   dsimp only
-  rw [if_neg (by rw [List.isEmpty_iff]; exact hne)]
+  rw [ite_eq_right (by rw [List.isEmpty_iff]; exact hne)]
   rfl
 
 /-- **Slot `σ`'s owner's value**, where the owner is part `o` with circuit `c` and first holding `h`: what `o`'s witness
@@ -308,9 +308,9 @@ theorem rowsLaid_layoutBAcc : (layoutBAcc rest).RowsLaid := by
   unfold accIn at hin
   by_cases hc : (layoutBTops (finAcc rest)).fixedAt x (layoutOf.rounds x - 1) = none ∧ 0 < layoutOf.rounds x
   swap
-  · rw [if_neg hc] at hin
+  · rw [ite_eq_right hc] at hin
     cases hin
-  rw [if_pos hc] at hin
+  rw [ite_eq_left hc] at hin
   obtain ⟨hfx, hpos⟩ := hc
   rw [Option.bind_eq_some_iff] at hin
   obtain ⟨r, hr, hin⟩ := hin
@@ -419,7 +419,7 @@ theorem accIn_isSome {x : Msg} {r : XR} (hr : readX x = some r) {σ : ℕ}
   have hc' : (layoutBTops (finAcc rest)).fixedAt x (layoutOf.rounds x - 1) = none ∧ 0 < layoutOf.rounds x :=
     ⟨hfx, hpos⟩
   unfold accIn accOff
-  rw [if_pos hc', hr, Option.bind_some, hk]
+  rw [ite_eq_left hc', hr, Option.bind_some, hk]
   rfl
 
 /-- **`chainAt` reads row `p`'s owner's value**: at the readers' messages, where slot `Nat.pair p 0` is placed and its
@@ -430,11 +430,13 @@ theorem chainAt_held {x : Msg} {ws : List Claims.Flock.Wit} {p i off o : ℕ} {w
     (t : ℕ) : chainAt rest x ((layoutBAcc rest).msgs x ws) t p = #[elemsOf v 2 0, elemsOf v 2 1] := by
   have hlaid := rowsLaid_layoutBAcc rest x ws (Nat.pair p 0) i off hin
   rw [LayoutB.row_of_owner ho hw hv] at hlaid
-  have e := fun k => elemsOf_drop_of_take (pre := [])
-    (l := (((layoutBAcc rest).msgs x ws).getD i []).drop off) (B := v) (by rw [List.nil_append]; exact hlaid) (n := 2)
-    (by omega) k
-  simp only [List.length_nil, List.drop_zero] at e
-  simp only [chainAt, hin, e]
+  simp only [chainAt, hin]
+  generalize (((layoutBAcc rest).msgs x ws).getD i []).drop off = L at hlaid ⊢
+  have hl' : L.take (([] : Msg) ++ v).length = [] ++ v := by
+    rw [List.nil_append]
+    exact hlaid
+  rw [show elemsOf L 2 0 = elemsOf v 2 0 from elemsOf_drop_of_take hl' (by omega) 0,
+    show elemsOf L 2 1 = elemsOf v 2 1 from elemsOf_drop_of_take hl' (by omega) 1]
 
 end Facts
 
