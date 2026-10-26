@@ -450,6 +450,7 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
     bits = 16 * sum(w for _, w in I.layout(COORD).rows) * 12
     assert I.input_count(doc, BY_ID.__getitem__, {"w"}) == {"units": 12, "inputs": bits, "wired": 0, "registered": 12 * 8 * K,
                                                             "ingress": 0, "free": bits - 12 * 8 * K}
+    assert I.input_count(doc, BY_ID.__getitem__, "weights")["registered"] == 0
     assert "registered" not in json.loads(I.circuit_bytes(window()[0].circuit_record()))
     for bad, why in [({**doc["registered"], "params": {"w": 5 * K // 2}}, "leaves"),
                      ({**doc["registered"], "reads": [{**doc["registered"]["reads"][0], "port": "frames"}]}, "names no parameter"),
