@@ -16,6 +16,7 @@ from collections import Counter
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
+from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit, window_circuit
@@ -444,8 +445,8 @@ def test_no_unit_holds_more_rows_in_and_out_than_the_grain():
     the fused norm's 512 down slices 128 at a time (4, not 2 of 256), its 128 o-proj slices 32 at a time. TINY at 16 rows is
     the same case, 32 gate/up slices and 16 down: 8 at a time, where 16 a gather would make 17 rows. No unit of the circuit
     holds more than the grain's rows, and at the test grain's 9 the largest hold exactly 9."""
-    assert WC._cut(("SiluMul_v2", "gu"), {1024: 16}, 255, 256) == 8
-    assert WC._cut(("RMSNormFusedCuda_v2", "x"), {128: 16, 512: 16}, 252, 256) == 4
+    assert WB._cut(("SiluMul_v2", "gu"), {1024: 16}, 255, 256) == 8
+    assert WB._cut(("RMSNormFusedCuda_v2", "x"), {128: 16, 512: 16}, 252, 256) == 4
     circuit = _circuit(WINDOW, Grain(gemm_words=512, rows=16, select=64))
     label = {IF.descriptor_id(fn): _label(fn) for fn, _ in circuit.templates}
     assert {label[t]: c for t, c in circuit.cuts.items() if not label[t].startswith("AllGather")} == {
