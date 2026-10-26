@@ -648,8 +648,8 @@ theorem slotV_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
 the statement's setup. The setup ran `RecCoins.check` at the part's table, so `checkResiduals` at its inner session
 (`residualsCheck_of_check`, `residualsBoth_of_check`), whose `v` and `out` rows the slots read (`check5_bytes`), and
 the deployed `Brings.setup` lists their evaluations (`hset`). What is left are facts of the code: the table's labels
-(`hidx`), the unit's name being no other V\* unit's, the `out` slot (`v`'s is `slotV_staged`), the ports' word counts and where the copy's columns
-sit. -/
+(`hidx`), the unit's name being no other V\* unit's, the `out` slot (`v`'s is `slotV_staged`), the ports' word counts
+and where the copy's columns sit. -/
 theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit}
