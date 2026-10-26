@@ -44,6 +44,12 @@ committed row longer than one SHA-512 block.
   composes into C-Flock's unit statement (slow); a tampering loop's outputs are not its Definition's; the loop loads no
   vLLM. The checkpoint role's files are the served weights bit for bit, its entry pins them and names the linears in order,
   and the gate's own code reads the loop's rows from them and digests them to the role's checkpoint digest.
+- `verity_torch_loop/frozen.py` and `serve_frozen.py`: one decode step of the frozen H200 shape (CMP-92 Phase 2: width
+  16,384, 256 query heads of 64 with one KV head, MLP 65,536), the first `--layers` of its 52, every matmul coordinate a unit
+  on the H200's bindings (`ScaledMmS8Coordinate_v1{K=16384}` and `{K=65536}` on `GEMM_SM90_S8`, `GemmCoordinate{K=64}` on
+  `GEMM_HOPPER` for QKᵀ and PV), one window per template. The row ops run in torch and are committed as inputs until
+  CIR-100's Definitions land. `frozen_w.py`: W per block (core's `Stratified`) and pooled per week, month and year
+  (`density_bound`), at δ = 1% and 1e-6. `run.sh` with `PP_TORCH_FROZEN=1` audits each window, honest and tampered (PRF-173).
 - End to end: `benchmarks/prove_path/run.sh` with `PP_TORCH_LOOP=1` audits the honest and the tampered window from their
   records alone, against the registered circuit (`records_audit.py audit --circuit SHA512`) and against the compiler's
   output (`--opening`, `--compilers`): live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record,
@@ -54,12 +60,12 @@ committed row longer than one SHA-512 block.
   decoder shape (the H200 demo's frozen shape, Phase 1's CPU model): a SHA-512 counter generator from (seed, tensor, row)
   to every tensor, the weights stream's layout (`manifest`), and each tensor as a registered value of core's for the
   program that reads it (its digest and parameter widths, as `registered.registered_entries` derives the domains; `tok`
-  one token a row, `EmbeddingRead_v1`'s), its root computed in parallel chunks (`root`). No torch.
+  one coordinate a row, (H, V), in `hm96-sha512/row/v2`), its root computed in parallel chunks (`root`). No torch.
   `python -m verity_torch_loop.weights manifest|write|root|fixture`; the fixture is `tests/fixtures/weights-v1.json`.
   The H200 demo's manifest under its seed (`DEMO_SEED`), with each tensor's SHA-256, and its registration digest under
   the test salt key for the placeholder program `TEST_PROGRAM` are
-  art:3683a02687286d9f36801bac54842dceb66595a497c00e621d03294a12ab4664 (run r20261026-002244-d3a7, 48 workers on
-  vy-nebius-cpu-4: 32 s for the digests, 2 min 32 s for the root).
+  art:a6775aeef1f6d11badf5a7a38460cff7d4d59f27e70dbc3bf8dd995fbb4c82da (run r20261026-015727-d475, 48 workers on
+  vy-nebius-cpu-4: 32 s for the digests, 2 min 41 s for the root).
 
 ## The demo of record
 
@@ -71,7 +77,20 @@ and its key record is art:d12f85becc, main's `CHALLENGER_KEY_PIN`.
 
 The window is one request for one decode step. That is N = 256 units: two linears of 128 output coordinates each. The
 256 units form one member, so one C-Flock session (J = 1 table, hidden outputs) is the whole audit, and it draws 64 of
-the 256 units. Each arm is a run of its own, with its own root and its own gate session:
+the 256 units (q = 1/4).
+
+**Over a monitoring period.** Serve windows like this one through any monitoring period, a week, a month or a year,
+each window on its own live coins. If every window is accepted, the wrong units over the whole period total at most 18
+at δ = 1%, and at most 55 at δ = 10⁻⁶. The bound adds Σ (ε_ks + δ_link) over the period's windows to δ.
+- The theorem is `Flock.Guarantees.IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`): the total
+  stays below ln(1/δ)/q.
+- The total is the same for a week, a month and a year, whatever the number of windows. Only the ε_ks + δ_link sum grows
+  with the number of windows, and no number for it is computed here.
+- As a share of compute, the total is divided by all the units of the period's compute over a datacenter. The
+  datacenter's size and the window rate are parameters (`benchmarks/census`). This demo checks one machine, and its one
+  window is 256 units.
+
+The per-window figures follow. Each arm is a run of its own, with its own root and its own gate session:
 
 | arm | session | verdict |
 |---|---|---|
@@ -81,8 +100,9 @@ the 256 units. Each arm is a run of its own, with its own root and its own gate 
 | compiled, tampered | s20261025T173628Z-7c0e | refused, as tampered; 25/25 negatives refused |
 
 The tampered windows flip bit 0 of every output. The firewall's refusal of each tampered arm reads "FIREWALL-REFUSED:
-circuit: the constraints lincheck final fail on a rep's pads". The integrity profile's bound for each accepted arm: an
-accepted transcript has at most 2 wrong units of 256, except with probability δ = 0.5. r20261025-170501-8a09 ran the
+circuit: the constraints lincheck final fail on a rep's pads". Per window, beside the period's total, the integrity
+profile's bound for each accepted arm: an accepted transcript has at most 2 wrong units of 256, except with probability
+δ = 0.5. r20261025-170501-8a09 ran the
 same four arms at subset:2, and they behaved the same way, but its bound is only 74 of 256.
 
 The theorem is `Flock.Guarantees.EndToEndHidden` (`Security/Proofs/Flock/EndToEndHidden/Statement.lean`, proved as
