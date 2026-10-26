@@ -179,10 +179,10 @@ theorem portRow_cap0 {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
     refine ⟨#[0, 0], (topsAt_same ht2 ht0 ht1 ha).trans ?_⟩
     congr 2
     · apply Array.toList_inj.1
-      simp [topRows_fit, flatMap_single]
+      simp [List.flatMap_map, topRows_fit, flatMap_single]
     · apply Array.toList_inj.1
       simp
-  have hpin := capIn_ok hT (by simp)
+  have hpin := capIn_ok (N := N) hT (by simp)
   refine ⟨_, _, hsrc, hpin, by simp [hrr], fun n hn => ?_⟩
   have hpw : portWords c "top" = 64 := by simp [portWords, hp, h0, hw]
   rw [portRow_fitPin, pair_append, portRow_ownRows, Option.map_some, hpw]
