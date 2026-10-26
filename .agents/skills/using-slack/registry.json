@@ -562,6 +562,7 @@
         ".agents/skills/",
         "tests/",
         "fixtures/",
+        "examples/README.md",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -575,7 +576,8 @@
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
-        "integrations/vllm/"
+        "integrations/vllm/",
+        "examples/vllm/"
       ],
       "linear": "VLLM",
       "branch_suffixes": [
