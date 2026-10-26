@@ -595,7 +595,8 @@ def test_nothing_lands_before_the_after_landing_run_of_main_itself_and_a_red_mai
     h.tick()
     assert _main(world) == tip
     (post,) = [p for p in h.posts if "Reverted nothing" in p]
-    assert "lean-suites didn't pass on `main`" in post and "@lane-2" not in post, post
+    assert "suite pkg is red" in post and "It never passed in an after-landing run since" in post, post
+    assert "@lane-2" not in post, post
 
 
 def test_ci_records_a_baseline_only_on_the_control_pod_and_it_clears_an_open_bisection(world, monkeypatch):
