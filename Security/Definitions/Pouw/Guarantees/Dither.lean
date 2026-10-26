@@ -228,9 +228,10 @@ most `δ_coin + Σ_u κmax_u`.
 
 **The fleet is registered before any member's first coin** (RT-POOL RP30): its members, their periods `Pd u` and
 registered costs `C u` (each replica's `W_reg,u`, their total the fleet's `W_F = Σ_u C_u`), and so their rates `η u`,
-are the statement's parameters, fixed before the challenger's randomness `Ω`. A fleet named or grown after any coin is
-outside it: named after the outcomes, the union over fleets returns. `N` counts the claim's replicas, not the fleet's
-GPUs over a replica's size (RP15).
+are the statement's parameters, fixed before the challenger's randomness `Ω`, and `W_F` is published beside `W_S`. A
+replica that starts later joins the next fleet period; a fleet named or grown after any coin is outside the statement,
+and named after the outcomes the union over replicas returns. `N` counts the claim's replicas, not the fleet's GPUs over
+a replica's size (RP15).
 
 So the accepted share is published with its `ε`. A failed replica voids only its own period, and on the accepted set
 `S` the fleet frees at most `Σ_{u ∈ S} ε_u C_u + Λ_S (ln (Λ / Λ_S) + ln (1/δ_coin))`, `Λ_S = Σ_{u ∈ S} 1/η_u`, for every
@@ -242,8 +243,9 @@ each at `δ_coin / 2` (RP31).
 
 The failure is `δ_coin + Σ_u κmax_u` (RP29): pooling takes `ln N` out of the luck, not `Σ_u κ_u` out of the failure.
 Each `κ_u` carries its `k` sampling blocks' degenerate dithers, `k (κ_dmm + κ_dsha)`, beside `κ_S` and `δ_crypto`
-(`WorkMoment`), so at D6's fleet the failure stays near `δ_coin = 1e-6` only if a sampling block's `κ_dmm + κ_dsha` is
-at most about `2^-73` (H200 V4; a replica's `κ` at most `8.7e-14`), a budget no premise yet states.
+(`WorkMoment`), so the failure stays near `δ_coin` only within the budget of a replica's `κ` at most `δ_coin / N` and
+a sampling block's `κ_dmm + κ_dsha` at most `δ_coin / (N k)`: at D6's fleet (`δ_coin = 1e-6`, H200 V4) about `2^-43`
+and `2^-73`. No premise yet gives `κ_dmm` or `κ_dsha` a value.
 
 Its rate stays one replica's: replicas that cheat on one shared coin attain it (`Proofs.Pouw.Pool`'s
 `convex_pool_tight`). A product over replicas would need (a) moments pointwise in the other replicas' dithers, which
