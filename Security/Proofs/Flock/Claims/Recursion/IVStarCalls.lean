@@ -5,6 +5,7 @@ import Proofs.Flock.Claims.Recursion.SchedCount
 import Proofs.Flock.Claims.Recursion.NextRRows
 import Proofs.Flock.Claims.Bridge.Committed
 import Proofs.Flock.Recursive.HoloRepCoins
+import Proofs.Flock.Claims.Recursion.LastCallsR
 
 /-!
 # The inner verifier's own calls at the deployed bound record (`hU`)
@@ -533,5 +534,104 @@ theorem lamLin2_plain_ge_acc (rel : _root_.Flock.Readable.Parsed → _root_.Floc
         2 ^ 55 :=
   ⟨innerCalls_plain_le_acc rel b L colsE wE join rowIn final w H hacc cB cV hB hV,
     lamLin2_deployedB_ge_acc rel b L (FlockDeploy.V false).next colsE wE join rowIn final w decI H hacc hS ps hc⟩
+
+/-! ## At the deployed reader's steps (`nextR`, the element-level steps KS's bound record reads) -/
+
+/-- **A step of `nextR` that answers a coin calls nothing.** -/
+theorem nextR_msg (rd : Msg → Option FlockDeploy.FinalP) (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List Coin)
+    (m : Msg) (h : ((FlockDeploy.nextR rd x as cs).eval H).1 = .msg m) :
+    ((FlockDeploy.nextR rd x as cs).eval H).2 = [] := by
+  cases ha : FlockDeploy.actR rd x as cs with
+  | rej => first | rfl | simp [FlockDeploy.nextR, ha, Claims.OC.eval]
+  | coin c => first | rfl | simp [FlockDeploy.nextR, ha, Claims.OC.eval]
+  | decide s spec sts link c₁ mids f =>
+    exfalso
+    exact Claims.Bridge.outOf_ne_msg H (FlockDeploy.decisionSF s x link c₁ mids f) m
+      (by rw [FlockDeploy.nextR_decide ha] at h; exact h)
+
+/-- **A step of `nextR`'s calls**: a decision's setup calls at `H` (`c_B`), then its verdict's at whatever session the
+setup returns there (`c_V`: the files' digests and the plain verdict at the reader's record). -/
+theorem nextR_calls_le (rd : Msg → Option FlockDeploy.FinalP) (H : Msg → Msg) (x : Msg) (cB cV : ℕ)
+    (hB : ∀ v, FlockDeploy.setupOf false x = some v → FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ cB)
+    (hV : ∀ s spec sts link c₁ mids f,
+      ((FlockDeploy.decisionAtS s spec sts x link c₁ mids f).run.eval H).2.length ≤ cV)
+    (as : List Msg) (cs : List Coin) : ((FlockDeploy.nextR rd x as cs).eval H).2.length ≤ cB + cV := by
+  cases ha : FlockDeploy.actR rd x as cs with
+  | rej => simp [FlockDeploy.nextR, ha, Claims.OC.eval]
+  | coin c => simp [FlockDeploy.nextR, ha, Claims.OC.eval]
+  | decide s spec sts link c₁ mids f =>
+    obtain ⟨v, -, -, -, -, -, -, hset, -, -, -, -, -, hd⟩ := FlockDeploy.decR_some (FlockDeploy.actR_decide ha)
+    have hs : s = v.1 := congrArg FlockDeploy.DecR.s hd
+    have h1 := hB v hset
+    rw [← hs] at h1
+    have hl := (FlockDeploy.setupM_eval H s.read).2
+    have key : ((FlockDeploy.nextR rd x as cs).eval H).2 = ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval H).2 ++
+        (match ((FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval H).1 with
+         | .ok w => ((FlockDeploy.decisionAtS s w.1 w.2 x link c₁ mids f).run.eval H).2
+         | .error _ => []) := by
+      simp only [FlockDeploy.nextR, ha, FlockDeploy.KS.outOf_log, FlockDeploy.decisionSF, ExceptT.run_bind,
+        Claims.OC.bind_eq, Claims.OC.eval_bind]
+      rcases hv : (FlockDeploy.setupM Claims.Hashes.oc s.read).run.eval H with ⟨r, l⟩
+      cases r with
+      | error e => first | rfl | simp [Claims.OC.eval]
+      | ok w =>
+        obtain ⟨a, b⟩ := w
+        first | rfl | simp [Claims.OC.eval]
+    rw [key, List.length_append, hl]
+    split
+    · rename_i w _
+      have h2 := hV s w.1 w.2 link c₁ mids f
+      omega
+    · first | omega | (simp only [List.length_nil, Nat.add_zero]; omega) | (simp; omega)
+
+/-- **`hU` at KS's bound record, at an accepted statement**: `innerCalls_deployedB_le_acc` at the deployed reader's
+steps `nextR rd`, with `c_E` a decision's setup calls (`c_B`) and verdict calls (`c_V`). -/
+theorem innerCalls_R_le_acc (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (rd : Msg → Option FlockDeploy.FinalP)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (H : Msg → Msg)
+    {x : Msg} {IV : Claims.Verifier Coin} {H' : Msg → Msg} {Ω : Type} {P : Prover Ω} {ω : Ω}
+    {r : Fin ((V IV (deployedB b).st).k x) → Coin} (hacc : (run H' P (V IV (deployedB b).st) x ω r).out = .acc)
+    (cB cV : ℕ)
+    (hB : ∀ v, FlockDeploy.setupOf false (xIOf x) = some v → FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ cB)
+    (hV : ∀ s spec sts link c₁ mids f,
+      ((FlockDeploy.decisionAtS s spec sts (xIOf x) link c₁ mids f).run.eval H).2.length ≤ cV) :
+    ∀ cs ws, (((recBoundAt rel (deployedB b) L).record
+      (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar).innerCalls H x cs ws).length ≤
+        2 ^ 28 + (cB + cV) :=
+  innerCalls_deployedB_le_acc rel b L (FlockDeploy.nextR rd) colsE wE join rowIn final w H hacc (cB + cV)
+    (fun as cs => nextR_calls_le rd H (xIOf x) cB cV hB hV as cs)
+    (fun as cs m hm => nextR_msg rd H (xIOf x) as cs m hm)
+
+/-- **Route 2C's `λ₂ ≥ 100` at KS's bound record (the deployed reader's steps), at an accepted statement, with `hU`
+counted**: `lamLin2_deployedB_ge_acc` at `nextE := nextR rd` and `n = 2^28 + c_B + c_V`, wherever that is at most `2^55`.
+What is left is `hS` and the two counts of the verifier's own code, `c_B` and `c_V`. -/
+theorem lamLin2_R_ge_acc (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
+    (L : Claims.Recursion.VStarB.LayoutB) (rd : Msg → Option FlockDeploy.FinalP)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (H : Msg → Msg)
+    {x : Msg} {IV : Claims.Verifier Coin} {H' : Msg → Msg} {Ω : Type} {P : Prover Ω} {ω : Ω}
+    {r : Fin ((V IV (deployedB b).st).k x) → Coin} (hacc : (run H' P (V IV (deployedB b).st) x ω r).out = .acc)
+    (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 56) (ps : List (Msg × Out)) (cB cV : ℕ)
+    (hB : ∀ v, FlockDeploy.setupOf false (xIOf x) = some v → FlockDeploy.setupCallsOf (Claims.hOf H) v.1.read ≤ cB)
+    (hV : ∀ s spec sts link c₁ mids f,
+      ((FlockDeploy.decisionAtS s spec sts (xIOf x) link c₁ mids f).run.eval H).2.length ≤ cV)
+    (hc : 2 ^ 28 + (cB + cV) ≤ 2 ^ 55) :
+    (∀ cs ws, (((recBoundAt rel (deployedB b) L).record
+      (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar).innerCalls H x cs ws).length ≤
+        2 ^ 28 + (cB + cV)) ∧
+    100 ≤ Claims.Recursion.lamLin2
+      ((recBoundAt rel (deployedB b) L).record
+        (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar)
+      (Claims.Recursion.Inner.ofFlock (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).deploy decI)
+      FlockDeploy.KS.CpDep x (2 ^ 28 + (cB + cV)) (2 ^ 55) ∧
+    (Claims.Recursion.setupCalls H
+      (recBound rel (deployedB b) L (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar)
+      ((recBound rel (deployedB b) L
+        (bdDeployed rel (FlockDeploy.nextR rd) colsE wE join rowIn final w).IVStar).vstar x ps)).length ≤
+        2 ^ 55 :=
+  ⟨innerCalls_R_le_acc rel b L rd colsE wE join rowIn final w H hacc cB cV hB hV,
+    lamLin2_deployedB_ge_acc rel b L (FlockDeploy.nextR rd) colsE wE join rowIn final w decI H hacc hS ps hc⟩
 
 end RecDeploy
