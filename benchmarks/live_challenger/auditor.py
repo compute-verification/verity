@@ -56,8 +56,9 @@ first coin.
   Before the first reserve the ledger held one-step v2 opens (`--commit`), which still verify; none follows a reserve.
 - **An `end` entry** follows when `serve.py` exits: its exit code, whether its client closed it, the SHA-512 of each file of
   `out/` (which seals the release log), how many coins each family released (`released`, counted from the release log under
-  the signed record's commitment; `complete` when every family released all its coins, so a period can refuse a short
-  release), the leaf the challenger's record was signed at (`record_leaf`), its commitment root (`commitment`) and how
+  the signed record's commitment; `complete` when every family released all its coins, but a scheme's ceiling family
+  (`CEILINGS`: the remote audit's pass coins, the most passes a session may make) any number, so a period can refuse a
+  short release), the leaf the challenger's record was signed at (`record_leaf`), its commitment root (`commitment`) and how
   many hellos serve.py refused before it accepted one (`refused_hellos`, each in `out/hellos.jsonl`, which `files` seals). A session with an `open` and no `end` never
   ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
 - **A period** is a lane's span of windows between two signed entries, `period-open` and `period-close` (session null),
@@ -247,9 +248,13 @@ from verity.core.protocols.sampled_proofs.challenger import (LEDGER_ROLE as ROLE
                                                              circuit_of as _circuit_of, extends, lane_of, leaf_of,
                                                              ledger_message as entry_message, ledger_text, pin_line,
                                                              pins_reason, pins_seal, root_of, verify_ledger, verify_periods)
+from verity.core.protocols.remote_bandwidth import coins as remote_coins  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 
 ZERO = "0" * 128
+#: each scheme's ceiling families, whose count is the most coins a session may use: the remote audit's pass coins, one
+#: a pass, of which an honest session that ran to its end opens only those its passes took
+CEILINGS = {remote_coins.SCHEME: frozenset({remote_coins.PASS})}
 PORTS = range(7811, 7900)
 MINUTES = (1, 720)
 #: the most a period-open's draw K may be (PoUW's `credit.MAX_K`)
@@ -1744,7 +1749,9 @@ def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], date
     files = {n: hashlib.sha512((out / n).read_bytes()).hexdigest() for n in OUT_FILES if (out / n).is_file()}
     released, record_leaf = released_of(out)
     hellos = (out / "hellos.jsonl").read_text().count("\n") if (out / "hellos.jsonl").is_file() else 0
-    complete = released is not None and all(released.get(label) == n for label, n in body["families"])
+    ceilings = CEILINGS.get(body["scheme"], frozenset())
+    complete = released is not None and all(released.get(label) == n or label in ceilings
+                                            for label, n in body["families"])
     closed = rc == 0 and "ended" in summary and summary["ended"] is None
     end = {"rc": rc, "closed": closed,
            "ended": why or summary.get("ended") or ("closed by the client" if closed else f"serve.py exited {rc}"),

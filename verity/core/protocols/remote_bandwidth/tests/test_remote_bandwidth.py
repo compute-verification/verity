@@ -187,15 +187,15 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
-    assert SCHEDULE.passes == (4, 3, 3) and SCHEDULE.deadlines == (1000 + A, 2000 + A, 3000 + A)
+    assert SCHEDULE.passes == (3, 3, 3) and SCHEDULE.deadlines == (1000 + A, 2000 + A, 3000 + A)
     assert r.public() == {"appended": 0, "appends": None, "bind": False, "block_bytes": 4096, "blocks": N,
                           "codec": "p1024/k2/masked",
                           "codec_params": {"c": 105, "field": "p1024", "masked": True, "n": 1024, "rounds": 2},
-                          "coins": s.commitment.root.hex(), "heads": [[None] * 4, [None] * 3, [None] * 3],
+                          "coins": s.commitment.root.hex(), "heads": [[None] * 3, [None] * 3, [None] * 3],
                           "layout": "store-order/v0", "lifetime": audit.lifetime_windows(1000), "pace": None,
-                          "passes": [4, 3, 3],
+                          "passes": [3, 3, 3],
                           "post_seed": [0, 0, 0], "protocol": audit.PROTOCOL_ID,
-                          "receipt": "sketch-sha512", "receipts": [4 * N, 3 * N, 3 * N],
+                          "receipt": "sketch-sha512", "receipts": [3 * N, 3 * N, 3 * N],
                           "registration": store.registration.digest.hex(), "released": 0, "rows": 16,
                           "samples": 7, "span_ns": 3000 + A}
     assert r.codec == store.registration.codec == codec.FALLBACK
@@ -215,13 +215,13 @@ def partial(t: int, i: int) -> receipts.Plan:
 
 def test_a_session_of_partial_plans_is_accepted_and_certifies_its_receipts(store) -> None:
     s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE, plan=partial)
-    assert passes[0, 1].plan.runs == ((5, 15), (2, 1)) and passes[0, 3].plan.runs == ((5, 15), (2, 1), (1, 1), (0, 1))
+    assert passes[0, 1].plan.runs == ((5, 15), (2, 1)) and passes[0, 2].plan.runs == ((5, 15), (2, 1), (1, 1))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
-    assert [w.lengths for w in r.windows] == [(15, 16, 17, 18), (15, 16, 17), (15, 16, 17)]
-    assert r.public()["receipts"] == [66, 48, 48]
+    assert [w.lengths for w in r.windows] == [(15, 16, 17)] * 3
+    assert r.public()["receipts"] == [48, 48, 48]
     g = audit.ledger(r, capacity_bytes_per_s=N * 4096 / 300e-9, chip_bytes=0, rebuild=no_rebuild(r))
-    assert g.timing == pytest.approx(1 - 162 * 4096 / (N * 4096 / 300e-9 * r.span_ns / 1e9))
+    assert g.timing == pytest.approx(1 - 144 * 4096 / (N * 4096 / 300e-9 * r.span_ns / 1e9))
 
 
 def test_plans_sent_as_arrays_are_received_as_their_runs_are(store) -> None:
@@ -230,7 +230,7 @@ def test_plans_sent_as_arrays_are_received_as_their_runs_are(store) -> None:
     s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE, plan=partial,
                                      sent=lambda ps: np.array(ps.plan.runs, np.int64))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
-    assert [w.lengths for w in s.record().windows] == [(15, 16, 17, 18), (15, 16, 17), (15, 16, 17)]
+    assert [w.lengths for w in s.record().windows] == [(15, 16, 17)] * 3
 
 
 def test_a_plan_maps_positions_to_blocks_and_is_canonical() -> None:
@@ -338,8 +338,8 @@ def test_receipts_committed_under_another_plan_reject(store) -> None:
 
 
 def test_the_ledger_counts_every_gamma_term(store) -> None:
-    """A chained session's span is its passes, a gap g after each, and its two ends: `σ_0`'s trip down before the first
-    pass, and after the last boundary the pass in flight's slack and its root's trip up."""
+    """A session's span is its passes, a gap g and the next coin's round trip after each, and its two ends: `σ_0`'s
+    trip down before the first pass, and after the last boundary the pass in flight's slack and its root's trip up."""
     s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE)
     finish(s, prover, passes, clock)
     r = s.record()
@@ -347,8 +347,8 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     rebuild = audit.Rebuild(r.codec, timing.SQUARINGS_PER_S["p1024"])
     g = audit.ledger(r, capacity_bytes_per_s=capacity, chip_bytes=4096, rebuild=rebuild, host=0.002)
     whole = capacity * r.span_ns / 1e9
-    assert r.span_ns == 3000 + A and r.passes == 10
-    assert g.timing == pytest.approx(1 - 10 * 300 / r.span_ns)
+    assert r.span_ns == 3000 + A and r.passes == 9
+    assert g.timing == pytest.approx(1 - 9 * 300 / r.span_ns)
     assert g.sample == 0                                  # every receipt opened
     assert g.chip == pytest.approx(r.passes * 4096 / whole)
     named = [audit.named_bits(k) + audit.SLACK_LOG2 for w in r.windows for k in w.lengths]
@@ -361,7 +361,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     assert set(g.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "overlap" not in audit.LEDGER_SOURCES
     assert [w.span_ns for w in g.windows] == [w.span_ns for w in r.windows] == [1000 + A] * 3
     assert [w.timing for w in g.windows] == pytest.approx(SCHEDULE.window_timing)
-    assert g.windows[0].timing == pytest.approx(1 - 4 * 300 / (1000 + A))
+    assert g.windows[0].timing == pytest.approx(1 - 3 * 300 / (1000 + A))
     for w, x in zip(g.windows, r.windows):
         whole_t = capacity * x.span_ns / 1e9
         assert w.chip == pytest.approx(x.passes * 4096 / whole_t) and w.sample == w.horizon == w.floor == 0
@@ -369,7 +369,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
         assert w.rebuild == g.rebuild
         assert w.gamma == pytest.approx(w.timing + w.chip + w.counting + w.rebuild + 0.002)
     assert g.worst.gamma == max(w.gamma for w in g.windows) > g.gamma
-    assert g.to_json()["worst"]["window"] == g.worst.window == 1 and g.to_json()["windows"][1] == g.windows[1].to_json()
+    assert g.to_json()["worst"]["window"] == g.worst.window == 0 and g.to_json()["windows"][1] == g.windows[1].to_json()
     with pytest.raises(ValueError, match="understated"):
         audit.ledger(r, capacity_bytes_per_s=capacity / 2, chip_bytes=0, rebuild=no_rebuild(r))
     with pytest.raises(ValueError, match="link term"):                 # an unbound receipt is of the block alone
@@ -707,7 +707,7 @@ def test_an_honest_session_of_either_kind_is_accepted_and_names_it(stores, kind)
     j = ps.plan.block(0)
     assert ps.receipts[0] == receipts.receipter(kind, ps.seed)(j, st.blocks[j])
     if kind == receipts.SKETCH_SHA512:
-        assert len({receipts.sign_bits(ps.seed) for ps in passes.values()}) == len(passes) == 10
+        assert len({receipts.sign_bits(ps.seed) for ps in passes.values()}) == len(passes) == 9
 
 
 def committed_with(receipter):
@@ -755,7 +755,7 @@ def test_each_pass_is_seeded_by_its_own_live_coin_after_the_root_before(store) -
     order = sorted(passes)
     c = challenger(store, params())
     assert [passes[k].seed for k in order] == [s.windows[t].seeds[i] for t, i in order]
-    assert len({passes[k].seed for k in order}) == len(order) == 10
+    assert len({passes[k].seed for k in order}) == len(order) == 9
     assert all(len(passes[k].seed) == coins.SEED_BYTES for k in order)
     assert s.coins.afters(coins.PASS) == (c.window, *(passes[k].root for k in order[:-1]))
     assert [coins.seed(o) for o in s.coins.opened(coins.PASS)] == [passes[k].seed for k in order]
@@ -844,9 +844,9 @@ def test_passes_not_under_their_own_coins_are_rejected(store, run, verdicts) -> 
 
 
 def test_a_root_after_its_deadline_rejects_the_session(store) -> None:
-    late = dataclasses.replace(SCHEDULE, arrivals=tuple((t, i, a + 100 if (t, i) == (0, 3) else a)
+    late = dataclasses.replace(SCHEDULE, arrivals=tuple((t, i, a + 300 if (t, i) == (0, 2) else a)
                                                         for t, i, a in SCHEDULE.arrivals))
-    assert SCHEDULE.arrivals[3] == (0, 3, 1293) and 1293 + 100 > SCHEDULE.deadlines[0]
+    assert SCHEDULE.arrivals[2] == (0, 2, 1090) and 1090 + 300 > SCHEDULE.deadlines[0]
     s, *_ = drive(store, params(), late)
     assert s.failed == audit.Verdict(0, False, "late")
     with pytest.raises(SessionError, match="rejected"):
@@ -854,14 +854,15 @@ def test_a_root_after_its_deadline_rejects_the_session(store) -> None:
 
 
 def test_the_honest_prover_is_never_late_and_the_allowance_is_tight() -> None:
-    """With T − 1 a multiple of p + g, window 0's last pass starts the nanosecond before the boundary message arrives,
-    so its root is one nanosecond short of `A` after the boundary; an allowance a nanosecond less makes it late."""
+    """With T − 1 a multiple of p + g + RTT, window 0's last pass starts the nanosecond before the boundary message
+    arrives, so its root is one nanosecond short of `A` after the boundary; an allowance a nanosecond less makes it
+    late."""
     a = timing.deadline(300, gap_ns=10, down_ns=20, up_ns=30)
-    st = timing.honest(4 * 310 + 1, 3, 300, gap_ns=10, down_ns=20, up_ns=30)
+    st = timing.honest(3 * 360 + 1, 3, 300, gap_ns=10, down_ns=20, up_ns=30)
     assert max(at - st.boundaries[t] for t, _, at in st.arrivals) == a - 1
-    assert timing.honest(4 * 310 + 1, 3, 300, gap_ns=10, down_ns=20, up_ns=30, deadline_ns=a - 1).passes == st.passes
+    assert timing.honest(3 * 360 + 1, 3, 300, gap_ns=10, down_ns=20, up_ns=30, deadline_ns=a - 1).passes == st.passes
     with pytest.raises(ValueError, match="after the deadline"):
-        timing.honest(4 * 310 + 1, 3, 300, gap_ns=10, down_ns=20, up_ns=30, deadline_ns=a - 2)
+        timing.honest(3 * 360 + 1, 3, 300, gap_ns=10, down_ns=20, up_ns=30, deadline_ns=a - 2)
 
 
 def test_roots_out_of_order_reject(store) -> None:
@@ -925,7 +926,8 @@ def test_each_pass_names_a_step_above_the_previous_passs(store, steps, failure) 
 
 
 def test_a_window_of_too_few_passes_is_rejected(store) -> None:
-    s, prover, passes, clock = drive(store, params(min_passes=4), SCHEDULE)
+    short = dataclasses.replace(SCHEDULE, passes=(3, 2, 3), arrivals=tuple(x for x in SCHEDULE.arrivals if x[:2] != (1, 2)))
+    s, prover, passes, clock = drive(store, params(min_passes=3), short)
     assert finish(s, prover, passes, clock) == [audit.Verdict(0, True), audit.Verdict(1, False, "few")]
 
 
@@ -1087,34 +1089,39 @@ def test_opening_size_matches_the_timing_model(store) -> None:
 
 def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_term() -> None:
     """`PROTOCOL.md` §1 and §10's reading through the ledger, on one node whose store spans every tier, 94 GB of each
-    GPU's HBM and host DRAM's share, at the node's R, S_chip and squaring ceiling.  At the stated T = 60 s and 33,273
-    openings a window (555 a second), a 10 min session's worst window has its whole γ_t at 0.896–0.927%; over the
-    horizon the pooled μ_sample is under 0.01% and the whole γ about 0.67%, over 0.15%, which μ_chip exceeds alone and
-    λ (0.116%) with μ_rebuild.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 5.8%: R cancels in what is certified.
-    The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.57–5.60%.  The 20 s option at 11,091
-    openings has μ_sample under 0.25% and a whole γ_t over 1%, and the 1 s option's μ_sample alone is under 1%, at
-    2,773."""
+    GPU's HBM and host DRAM's share, at the node's R, S_chip and squaring ceiling: a pass is 61 ms, and each waits a
+    round trip for its live coin, `chained`'s (g + RTT)/(p + g + RTT), 0.89% at the in-region 0.5 ms and 1.69% at 1 ms.
+    At the stated T = 60 s and 33,273 openings a window (555 a second), a 10 min session's worst window has its whole
+    γ_t at 1.80% and 2.51%; over the horizon the pooled μ_sample is under 0.01% and the whole γ 1.56% and 2.35%, over
+    0.15%, which μ_chip exceeds alone and λ (0.114–0.115%) with μ_rebuild.  At spec every reading is
+    `1 − (1 − γ)·R/R_spec`: R cancels in what is certified.  The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7%
+    of R idle.  The 20 s option at 11,091 openings has μ_sample under 0.25%, and the 1 s option's μ_sample alone is
+    under 1%, at 2,773.  At a 20 ms round trip the coins' wait alone is 24.7%."""
     s, store = audit.SAMPLES, timing.spanning(94 * 10 ** 9)
     assert 789.0e9 < store < 789.1e9
     assert (timing.samples_for(0.0025, audit.DELTA), timing.samples_for(0.01, audit.DELTA)) == (11_091, 2_773)
     assert s == 3 * 11_091 and audit.WINDOW_NS == 60 * timing.S
+    p = round(store / timing.READ_BYTES_PER_S * timing.S)
+    assert 61.0 * timing.MS < p < 61.1 * timing.MS
     idle = timing.HOST_READ_BYTES_PER_S / timing.READ_BYTES_PER_S
-    for rtt in (1, 20):
-        g = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s)
-        assert g.worst.sample < 0.001 and 0.00895 < g.worst.gamma < 0.00928
-        assert 0.00115 < g.counting < 0.00116 and g.counting + g.rebuild > 0.0015 and g.chip > 0.0015
-        assert g.horizon < 1e-4 and 0.0066 < g.gamma_horizon < 0.0068
-        spec = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
+    for rtt, steady, worst, horizon, hbm_at, twenty_at in ((500_000, 0.0089, 0.0180, 0.0156, 0.0644, 0.0217),
+                                                           (timing.MS, 0.0169, 0.0251, 0.0235, 0.0711, 0.0308)):
+        assert timing.chained(p, 50 * timing.US, rtt) == pytest.approx(steady, abs=1e-4)
+        g = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt, samples=s)
+        assert g.worst.sample < 0.001 and g.worst.gamma == pytest.approx(worst, abs=1e-4)
+        assert 0.00113 < g.counting < 0.00116 and g.counting + g.rebuild > 0.0015 and g.chip > 0.0015
+        assert g.horizon < 1e-4 and g.gamma_horizon == pytest.approx(horizon, abs=1e-4)
+        spec = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt, samples=s,
                              capacity_bytes_per_s=timing.SPEC_BYTES_PER_S).worst
         assert spec.gamma == pytest.approx(1 - (1 - g.worst.gamma) * timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
-        assert 0.058 < spec.gamma < 0.0586
-        hbm = timing.stated(timing.GPUS * 94 * 10 ** 9, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
+        hbm = timing.stated(timing.GPUS * 94 * 10 ** 9, audit.WINDOW_NS, 10, rtt_ns=rtt, samples=s,
                             read_bytes_per_s=timing.GPUS * timing.GPU_READ_BYTES_PER_S).worst
-        assert hbm.timing > idle and 0.0557 < hbm.gamma < 0.0561
-        twenty = timing.stated(store, 20 * timing.S, 30, rtt_ns=rtt * timing.MS, samples=11_091).worst
-        assert twenty.sample < 0.0025 and 0.012 < twenty.gamma < 0.0137
-        one = timing.stated(store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=2_773).worst
+        assert hbm.timing > idle and hbm.gamma == pytest.approx(hbm_at, abs=1e-4)
+        twenty = timing.stated(store, 20 * timing.S, 30, rtt_ns=rtt, samples=11_091).worst
+        assert twenty.sample < 0.0025 and twenty.gamma == pytest.approx(twenty_at, abs=1e-4)
+        one = timing.stated(store, timing.S, 600, rtt_ns=rtt, samples=2_773).worst
         assert one.sample < 0.01 < 0.09 < one.gamma
+    assert timing.chained(p, 50 * timing.US, 20 * timing.MS) == pytest.approx(0.247, abs=1e-3)
 
 
 def test_the_node_constants_are_the_sums_over_its_devices() -> None:
@@ -1191,37 +1198,44 @@ def test_auditros_slack_adds_at_most_2_to_the_minus_50_over_an_hour_of_the_faste
 
 def test_below_the_store_floor_no_window_meets_one_percent() -> None:
     """`store_floor`'s closed form against the ledger: a single 20 min window at 555 openings a second, whose μ_sample
-    and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor
-    is μ_chip, λ and μ_rebuild alone, about 380 GB over the node's every tier."""
+    and ends are under 0.01%, is over 1% just below the floor and under it just above, the floor's g all a pass leaves
+    uncovered: 50 µs, the coin's round trip and its jitters' mean, 50 µs, 1.31 TB at the in-region 0.5 ms and 2.09 TB at
+    1 ms, more than the node's HBM and host DRAM's share hold.  At g = 0 the floor is μ_chip, λ and μ_rebuild alone,
+    about 380 GB over the node's every tier."""
     assert 380.4e9 < timing.store_floor() < 380.6e9 and 458.3e9 < timing.store_floor(50 * timing.US) < 458.5e9
-    for scale, over in ((0.98, True), (1.02, False)):
-        g = timing.stated(round(scale * timing.store_floor(50 * timing.US)), 1200 * timing.S, 1, rtt_ns=timing.MS,
-                          samples=555 * 1200)
-        assert (g.worst.gamma > 0.01) is over
+    for rtt, floor in ((500_000, 1.31e12), (timing.MS, 2.09e12)):
+        f = timing.store_floor(50 * timing.US + rtt + 50 * timing.US)
+        assert f == pytest.approx(floor, rel=0.005)
+        for scale, over in ((0.98, True), (1.02, False)):
+            g = timing.stated(round(scale * f), 1200 * timing.S, 1, rtt_ns=rtt, samples=555 * 1200)
+            assert (g.worst.gamma > 0.01) is over
 
 
 @pytest.mark.parametrize("pass_ms, rtt_ms, window_ms", [(20, 1, 300), (20, 50, 1000), (50, 5, 1000), (37, 20, 300)])
-def test_honest_schedules_fill_their_windows_to_the_chained_steady_state(pass_ms, rtt_ms, window_ms) -> None:
-    """Every window certifies at least `⌊(T − p − g)/(p + g)⌋` passes, and the span the passes leave uncovered is `g`
-    after each pass and the session's two ends, which come to at most `A + J`.  A window over its own span `T + A` is
-    charged its ends too, and the rest of the pass in flight at its challenge: at most `A + J + p` more."""
-    ms, gap, jitter = timing.MS, 50_000, 50_000
-    kw = dict(gap_ns=gap, down_ns=rtt_ms * ms // 2, up_ns=rtt_ms * ms - rtt_ms * ms // 2, jitter_ns=jitter)
+def test_honest_schedules_fill_their_windows_to_the_steady_state(pass_ms, rtt_ms, window_ms) -> None:
+    """Passes start at most `q = p + g + RTT + 2J` apart, each waiting on its coin, so every window certifies at least
+    `⌊(T − q)/q⌋` passes.  The span the passes leave uncovered is `g`, the round trip and its jitters after each pass,
+    and the session's two ends, which come to at most `A + 3J`.  A window over its own span `T + A` is charged its ends
+    too, the rest of the pass in flight at its challenge and the coin's trip back: at most `2A + RTT + 3J` more."""
+    ms, gap, jitter, rtt = timing.MS, 50_000, 50_000, rtt_ms * timing.MS
+    kw = dict(gap_ns=gap, down_ns=rtt // 2, up_ns=rtt - rtt // 2, jitter_ns=jitter)
     st = timing.honest(window_ms * ms, 40, pass_ms * ms, **kw)
-    assert min(st.passes) >= (window_ms * ms - pass_ms * ms - gap) // (pass_ms * ms + gap)
+    q = pass_ms * ms + gap + rtt + 2 * jitter
+    assert min(st.passes) >= (window_ms * ms - q) // q
     a = timing.deadline(pass_ms * ms, **kw)
     mu = 1 - st.utilization
-    steady = timing.chained(pass_ms * ms, gap)
-    assert steady <= mu <= steady + (a + jitter) / st.span_ns
-    assert steady <= min(st.window_timing) and max(st.window_timing) <= steady + (a + jitter + pass_ms * ms) / (
+    steady, most = timing.chained(pass_ms * ms, gap, rtt), timing.chained(pass_ms * ms, gap, rtt + 2 * jitter)
+    assert steady <= mu <= most + (a + 3 * jitter) / st.span_ns
+    assert steady <= min(st.window_timing) and max(st.window_timing) <= most + (2 * a + rtt + 3 * jitter) / (
         window_ms * ms + a)
 
 
 @pytest.mark.parametrize("pass_ms, rtt_ms, jitter_ms, floor", [(20, 1, 0.05, 0.5), (20, 0.2, 0, 0), (50, 5, 0.5, 0.9),
                                                                (37, 20, 1, 0.5)])
 def test_the_live_coin_alternative_costs_what_the_appendix_says(pass_ms, rtt_ms, jitter_ms, floor) -> None:
-    """At Δ* consecutive passes' read windows just don't overlap and μ is (g + U)/(p + g + U); at Δ = p the overlap is
-    charged and μ is (g + U)/p; coins faster than passes end are refused."""
+    """At Δ* consecutive passes' read windows just don't overlap and μ is (g + U)/(p + g + U), the protocol's coin
+    after the root (`chained`) at a round trip of U; at Δ = p the overlap is charged and μ is (g + U)/p; coins faster
+    than passes end are refused."""
     ms, gap = timing.MS, 50_000
     kw = dict(gap_ns=gap, rtt_ns=round(rtt_ms * ms), jitter_ns=round(jitter_ms * ms), rtt_floor_ns=round(floor * rtt_ms * ms))
     u = kw["rtt_ns"] + 2 * kw["jitter_ns"] - kw["rtt_floor_ns"]
@@ -1229,6 +1243,6 @@ def test_the_live_coin_alternative_costs_what_the_appendix_says(pass_ms, rtt_ms,
     assert star == pass_ms * ms + gap + u
     assert timing.live_mu(star, pass_ms * ms, **kw) == pytest.approx((gap + u) / (pass_ms * ms + gap + u))
     assert timing.live_mu(pass_ms * ms, pass_ms * ms, **kw) == pytest.approx((gap + u) / (pass_ms * ms))
-    assert timing.live_mu(star, pass_ms * ms, **kw) > timing.chained(pass_ms * ms, gap)
+    assert timing.live_mu(star, pass_ms * ms, **kw) == pytest.approx(timing.chained(pass_ms * ms, gap, u))
     with pytest.raises(ValueError, match="faster"):
         timing.live_mu(pass_ms * ms - 1, pass_ms * ms, **kw)

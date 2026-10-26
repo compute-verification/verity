@@ -7,7 +7,7 @@ the same registration are refused, as is a ledger that opens a second session fo
 an unsealed open, an unlogged pin, a pin off main's first-parent line or no copy of main; a coin opened before its
 window's root is refused; a coin asked for ahead (`Coins.ahead`) goes in one round trip with the coin before it, the
 challenger's log as if each had gone alone; and a session that appends nothing reserves no append family, so its
-challenger releases every coin it committed to."""
+challenger releases every coin it committed to but the pass coins its passes didn't take."""
 from __future__ import annotations
 
 import contextlib
@@ -153,33 +153,42 @@ def test_a_session_through_a_challenger_service_is_accepted_and_holds_to_what_it
 @pytest.mark.parametrize("appends", [0, APPENDS])
 def test_a_session_that_appends_nothing_reserves_no_append_family_so_its_challenger_releases_every_coin(
         store, tmp_path, sign, appends):
-    """A session reserves exactly the coins it will use (`coins.families`): with no append coins the layout is W
-    challenges and W openings coins, every one of which the honest session's challenger released, so the gate's end
-    reads it complete. Append coins reserved and never taken stay unreleased, and an honest session reads incomplete,
-    as every gate run's window did before."""
+    """A session reserves exactly the challenges, openings coins and append coins it will use (`coins.families`), and
+    its pass coins are the most passes it may make: with no append coins the layout is W challenges, W openings coins
+    and M pass coins, and the honest session's challenger released every challenge and openings coin and one pass coin
+    a pass, so the gate's end reads it complete. Append coins reserved and never taken stay unreleased, and an honest
+    session reads incomplete, as every gate run's window did before."""
     service = Service(tmp_path / "s-0", sign, "s-0", 0, params().windows, b"service", appends)
     s, verdicts = served_session(store, service)
     assert all(v.accepted for v in verdicts) and service.close() is None
     signed, received = service.signed()
     assert s.released_reason(signed, received) is None and coins.layout_reason(signed, 0, params().windows) is None
-    assert [label for label, _ in signed.families] == [coins.CHALLENGE, coins.OPENINGS] + [coins.APPEND] * (appends > 0)
-    assert all(len(received.get(label, ())) == n for label, n in signed.families) is (appends == 0)
+    assert [label for label, _ in signed.families] == ([coins.CHALLENGE, coins.OPENINGS, coins.PASS]
+                                                       + [coins.APPEND] * (appends > 0))
+    assert len(received[coins.PASS]) == sum(len(w.roots) for w in s.windows) < coins.PASSES
+    assert all(len(received.get(label, ())) == n for label, n in signed.families
+               if label != coins.PASS) is (appends == 0)
 
 
-def test_a_coin_layout_is_challenge_and_openings_with_an_append_family_only_for_a_session_that_appends():
+def test_a_coin_layout_is_challenge_openings_and_pass_with_an_append_family_only_for_a_session_that_appends():
     w = params().windows
 
     def layout(families) -> C.LiveCommitment:
         return C.LiveCommitment(coins.SCHEME, 0, tuple(families), bytes(64))
 
-    assert coins.families(w, 0) == ((coins.CHALLENGE, w), (coins.OPENINGS, w))
-    assert coins.families(w, 3) == ((coins.CHALLENGE, w), (coins.OPENINGS, w), (coins.APPEND, 3))
+    m = (coins.PASS, coins.PASSES)
+    assert coins.families(w, 0) == ((coins.CHALLENGE, w), (coins.OPENINGS, w), m)
+    assert coins.families(w, 3) == ((coins.CHALLENGE, w), (coins.OPENINGS, w), m, (coins.APPEND, 3))
+    assert coins.families(w, 0, passes=5)[-1] == (coins.PASS, 5)
     assert coins.layout_reason(layout(coins.families(w, 0)), 0, w) is None
     assert coins.layout_reason(layout(coins.families(w, 3)), 0, w) is None
-    for bad in [[(coins.CHALLENGE, w)], [(coins.CHALLENGE, w), (coins.APPEND, 3)],
-                [(coins.OPENINGS, w), (coins.CHALLENGE, w)], [(coins.CHALLENGE, w), (coins.OPENINGS, w + 1)],
-                [(coins.CHALLENGE, w), (coins.OPENINGS, w), ("other", 1)]]:
+    for bad in [[(coins.CHALLENGE, w)], [(coins.CHALLENGE, w), (coins.OPENINGS, w)],
+                [(coins.CHALLENGE, w), (coins.OPENINGS, w), (coins.APPEND, 3)],
+                [(coins.OPENINGS, w), (coins.CHALLENGE, w), m], [(coins.CHALLENGE, w), (coins.OPENINGS, w + 1), m],
+                [(coins.CHALLENGE, w), (coins.OPENINGS, w), m, ("other", 1)]]:
         assert "not challenge" in coins.layout_reason(layout(bad), 0, w)
+    with pytest.raises(ValueError, match="pass coins"):
+        coins.families(w, 0, passes=0)
 
 
 def test_coins_from_a_second_session_for_the_registration_are_refused(store, tmp_path, sign):
@@ -296,11 +305,11 @@ def test_a_session_is_bound_to_the_audits_period(store, tmp_path, sign, held):
 
 
 def test_an_openings_coin_opened_before_its_windows_root_is_refused(store, tmp_path, sign):
-    """Window 0's openings coin asked for after its first root, not its last (it has four): the challenger's signed log
-    shows the root it followed, and the session's coins are refused."""
+    """Window 0's openings coin asked for after its first root, not its last (it has three): the challenger's signed
+    log shows the root it followed, and the session's coins are refused."""
     service = Service(tmp_path / "s-0", sign, "s-0", 0, params().windows, b"service")
     s, _, _, _ = drive(store, params(), SCHEDULE, coins_=service.coins(store, 0, params().windows))
-    assert len(s.windows[0].roots) == 4
+    assert len(s.windows[0].roots) == 3
     s.coins.openings(0, s.windows[0].roots[0])
     assert service.close() is None
     assert s.released_reason(*service.signed()) == "window 0's openings coin was opened before its window's root"

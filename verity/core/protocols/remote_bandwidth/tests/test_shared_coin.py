@@ -153,7 +153,7 @@ def test_the_last_draw_may_hold_fewer_windows(store) -> None:
     assert s.coins.afters(coins.OPENINGS) == (s.windows[1].roots[-1], s.windows[2].roots[-1])
     assert len(s.windows[0].draws) + len(s.windows[1].draws) == len(s.windows[2].draws) == p.samples
     r = s.record()
-    assert audit.pooled_windows(r)[0] == [(7 * N, p.samples), (3 * N, p.samples)]
+    assert audit.pooled_windows(r)[0] == [(6 * N, p.samples), (3 * N, p.samples)]
     assert r.samples == p.samples and ledger.rejection(r) == 2 * p.samples * 2.0 ** -ledger.REJECTION_LOG2
     n = node(squarings=1e9)
     L = ledger.window_receipts(r.pace, r.blocks, r.append_coins, r.codec.max_blocks)
@@ -161,7 +161,7 @@ def test_the_last_draw_may_hold_fewer_windows(store) -> None:
     assert r.append_coins > 0 and L == (audit.STEP_LIMIT - 1) * r.codec.max_blocks
     per_draw, per_window = ledger.binding_over(2, 2 * L, p.samples, q), ledger.binding_over(3, L, p.samples, q)
     assert ledger.binding(r, n) == per_draw != per_window
-    with pytest.raises(ValueError, match=r"the draw of windows 0…1 drew 7 of its 140 receipts, not min\(6, 140\)"):
+    with pytest.raises(ValueError, match=r"the draw of windows 0…1 drew 7 of its 120 receipts, not min\(6, 120\)"):
         dataclasses.replace(r, samples=p.samples - 1)
 
 
@@ -190,10 +190,11 @@ def test_a_prover_that_skips_one_window_of_a_draw_is_refused_there(store) -> Non
 
 
 def test_a_window_of_too_few_passes_fails_in_its_draw(store) -> None:
-    """At four passes a window, windows 1 … 3 hold three: draw 0's close fails `few` at window 1, the first of them."""
-    p, c = shared(store, 4, min_passes=4)
+    """At three passes a window, windows 0 … 2 hold three and window 3 two: draw 0's close fails `few` at window 3."""
+    assert SCHEDULE8.passes[:4] == (3, 3, 3, 2)
+    p, c = shared(store, 4, min_passes=3)
     s, prover, passes, clock = drive(store, p, SCHEDULE8, coins_=c)
-    assert outcomes(finish_draws(s, prover, passes, clock)) == [(1, False, "few")]
+    assert outcomes(finish_draws(s, prover, passes, clock)) == [(3, False, "few")]
 
 
 def test_a_session_drawn_two_windows_a_coin_through_a_challenger_service_holds_to_what_it_signed(

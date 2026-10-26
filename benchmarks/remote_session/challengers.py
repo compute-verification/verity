@@ -21,10 +21,11 @@
 
 `finish` reads back what the challenger signed and holds the session's coins to it (`audit.Session.released_reason`):
 the same commitment, each coin opened after the root the session recorded and in order, σ_0 after the session's window
-root R, each window's openings coin after its last root. Its `reason` is None when they hold. A served or gate
-session's `complete` (the gate's end's, and `Serve`'s read of the same signed log) is whether the challenger released
-every coin it committed to: a session reserves only the families it uses (`coins.families`), so an honest session
-that ran to its end is complete and one cut short is not. A gate session's record names the `peer` it reserved for
+root R, each pass's coin after the root before it, each window's openings coin after its last root. Its `reason` is
+None when they hold. A served or gate session's `complete` (the gate's end's, and `Serve`'s read of the same signed
+log) is whether the challenger released every coin it committed to but its pass coins: a session reserves exactly the
+challenges, openings coins and append coins it uses (`coins.families`), and its pass coins are the most passes it may
+make, so an honest session that ran to its end is complete and one cut short is not. A gate session's record names the `peer` it reserved for
 (`--challenger-peer`), which `auditor_line.py` holds the ledger's reserve and open to."""
 from __future__ import annotations
 
@@ -137,7 +138,7 @@ class Serve:
             return {**doc, "reason": f"the challenger's session is not readable or not signed: {e}"}
         released = {label: len(received.get(label, ())) for label, _ in signed.families}
         return {**doc, "key_sha512": hashlib.sha512(key.public).hexdigest(), "released": released,
-                "complete": all(released[label] == n for label, n in signed.families),
+                "complete": all(released[label] == n or label == coins.PASS for label, n in signed.families),
                 "reason": s.released_reason(signed, received)}
 
 

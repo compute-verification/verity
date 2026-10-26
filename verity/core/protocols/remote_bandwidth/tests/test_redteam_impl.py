@@ -35,7 +35,7 @@ def test_rb1_the_ledger_bounds_every_window_s_shortfall(store) -> None:  # noqa:
     r = s.record()
     led = audit.ledger(r, capacity_bytes_per_s=CAPACITY, chip_bytes=0, rebuild=audit.Rebuild(r.codec, 0.0))
     short = [window_shortfall(w) for w in r.windows]
-    assert short[idle] > 0.96 and max(x for t, x in enumerate(short) if t != idle) < 0.35
+    assert short[idle] > 0.96 and max(x for t, x in enumerate(short) if t != idle) < 0.57
     assert led.floor == 0
     per_window = led.to_json().get("windows")
     assert per_window is not None and per_window[idle]["gamma"] >= short[idle]

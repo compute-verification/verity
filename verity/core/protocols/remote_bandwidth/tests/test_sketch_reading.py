@@ -1,10 +1,9 @@
 """sketch-sha512's rank bound (`timing.sketch_reading`, `PROTOCOL.md` §4) against enumeration: the F2 count on every
 small matrix over F2, the ±1 bound on every small ±1 matrix's rank over Q, its exactness at two rows, the readings and
-thresholds the protocol states, and a grinding try's compressions against the reference's own hashes."""
+thresholds the protocol states."""
 
 from __future__ import annotations
 
-import hashlib
 import itertools
 import math
 import random
@@ -13,8 +12,6 @@ from fractions import Fraction
 import pytest
 
 from verity.core.protocols.remote_bandwidth import receipts, timing
-from verity.ml.commitments import MerkleTree, scheme
-from verity.ml.randomness import derive
 
 PRIME = 1_000_003
 
@@ -173,55 +170,3 @@ def test_the_keys_distance_from_uniform_is_charged() -> None:
                 + (q + p) * (128 * timing.sign_rank_at_most(16, 11) + Fraction(n, 2 ** 512)))
         assert timing.sketch_failure(c, p, blocks=n, outside=f) - rest == Fraction((q + p) ** 2, 2 ** 257)
     assert [lg(Fraction((f * c + p) ** 2, 2 ** 257)) for f in (1, 2 ** 20)] == [-169.94, -129.94]
-
-
-class Counting:
-    """hashlib's SHA-512, counting `⌈(bytes + 17)/128⌉` compressions a digest."""
-
-    count = 0
-    real = hashlib.sha512
-
-    def __init__(self, data: bytes = b"", **_: object) -> None:
-        self.h, self.n = Counting.real(data), len(data)
-
-    def update(self, data: bytes) -> None:
-        self.h.update(data)
-        self.n += len(data)
-
-    def copy(self) -> Counting:
-        c = Counting.__new__(Counting)
-        c.h, c.n = self.h.copy(), self.n
-        return c
-
-    def digest(self) -> bytes:
-        Counting.count += (self.n + 17 + 127) // 128
-        return self.h.digest()
-
-
-def counted(f) -> int:
-    Counting.count = 0
-    f()
-    return Counting.count
-
-
-def test_a_grinding_try_costs_what_the_reference_hashes(monkeypatch: pytest.MonkeyPatch) -> None:
-    seed, x, salt = bytes(range(64)), bytes(64), bytes(range(receipts.SALT_BYTES))
-    domains = {n: receipts.domain(seed, receipts.Plan.whole(receipts.PER_LEAF * n)) for n in (1, 2, 4, 8)}
-    monkeypatch.setattr(hashlib, "sha512", Counting)
-    monkeypatch.setitem(scheme._SHA, "sha512", Counting)
-    hm96, key = receipts.HM96, receipts.KEY
-    hide = counted(lambda: hm96.tree_leaf(key, hm96.commit_string(key, x, salt)))
-    def root(n: int) -> bytes:
-        return MerkleTree(domains[n], {c: bytes(64) for c in range(n)}, lambda _c: receipts.SCHEMA).commitment.root
-
-    tree = {n: counted(lambda: root(n)) for n in domains}
-    leaf, node = tree[1], 3
-    assert all(tree[n] == leaf * n + node * (n - 1) for n in tree)
-    next_seed = counted(lambda: receipts.seed(bytes(receipts.CHALLENGE_BYTES), 1, seed))
-    context = {"tag": receipts.SKETCH_SHA512, "k": receipts.SKETCH_ROWS, "n": timing.BLOCK_BYTES}
-    signs = counted(lambda: derive(seed, receipts.SIGN_DOMAIN, context))
-    assert (hide, leaf, next_seed, signs) == (9, 2, 2, 2)
-    assert counted(lambda: next(derive(seed, receipts.SIGN_DOMAIN, context).blocks(("row", 0)))) == signs + 1
-    for n in (1, 2, 4, 8, 2 ** 17):
-        assert timing.grind_compressions(n) == hide + leaf + node * math.ceil(math.log2(n)) + next_seed + signs
-    assert (timing.grind_compressions(1), timing.grind_compressions(2 ** 21 // receipts.PER_LEAF)) == (15, 66)

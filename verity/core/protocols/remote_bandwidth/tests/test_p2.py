@@ -84,17 +84,15 @@ def drive(store: p2.Store, p: audit.Params, run=None):
     prover = p2.Prover(store, s.commitment, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(SCHEDULE.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in SCHEDULE.arrivals])
-    challenges, passes, previous = {}, {}, store.registration.digest
+    passes = {}
     for step, (at, kind, x) in enumerate(events):
         clock.now = at
         if kind == 0:
-            coin = s.start() if x < 0 else s.boundary()
-            if coin is not None:
-                challenges[x + 1] = coin
+            s.start() if x < 0 else s.boundary()
             continue
         t, i = x
-        ps = (run or (lambda pr, ch, i_, prev: pr.run(ch, i_, prev)))(prover, challenges[t], i, previous)
-        passes[t, i], previous = ps, ps.root
+        ps = (run or (lambda pr, coin, t_, i_: pr.run(coin, t_, i_)))(prover, s.seed(), t, i)
+        passes[t, i] = ps
         assert s.receive(t, i, ps.root, ps.plan.runs, step=step) is None
     clock.now = s.deadline(p.windows - 1) + 1
     return s, prover, passes
@@ -182,13 +180,13 @@ def test_receipts_from_the_decodes_partials_are_the_passes(store) -> None:
     """The serving side: π of each block as it is decoded, in any order, σ per unit, then y; the pass committed from
     them is the reference's, and accepted."""
 
-    def decode_side(prover, challenge, i, previous):
-        seed = receipts.seed(coins.coin(challenge), i, previous)
+    def decode_side(prover, coin, t, i):
+        seed = coins.seed(coin)
         sk, plan = p2.Sketcher(seed), receipts.Plan.whole(2)
         partials = {j: sk.block(j, store.blocks[j]) for j in reversed(range(8))}
         ys = [sk.receipt(g, sk.total([partials[4 * g + b] for b in range(4)])) for g in plan]
-        ps = prover.commit(challenge.index, i, seed, plan, ys)
-        assert ps.receipts == prover.pass_under(challenge.index, i, seed).receipts
+        ps = prover.commit(t, i, seed, plan, ys)
+        assert ps.receipts == prover.pass_under(t, i, seed).receipts
         return ps
 
     s, prover, passes = drive(store, params(store.registration), decode_side)
@@ -200,11 +198,10 @@ def test_receipts_from_the_decodes_partials_are_the_passes(store) -> None:
     ("leaf", "receipt-path"), ("salt", "malformed"),
 ])
 def test_a_bad_opening_is_rejected(store, fault, failure) -> None:
-    def zeros(prover, challenge, i, previous):
-        seed = receipts.seed(coins.coin(challenge), i, previous)
+    def zeros(prover, coin, t, i):
+        seed = coins.seed(coin)
         sk = p2.Sketcher(seed)
-        return prover.commit(challenge.index, i, seed, receipts.Plan.whole(2),
-                             [sk(g, bytes(p2.UNIT_BYTES)) for g in range(2)])
+        return prover.commit(t, i, seed, receipts.Plan.whole(2), [sk(g, bytes(p2.UNIT_BYTES)) for g in range(2)])
 
     s, prover, passes = drive(store, params(store.registration), zeros if fault == "receipts" else None)
 

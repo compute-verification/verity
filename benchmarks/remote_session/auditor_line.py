@@ -55,7 +55,7 @@ the auditor's.
   run's request.json beside OUT records the commit its verifier ran at (`pinned`), and a `--commit` other than it is
   refused;
 - *complete*: its window's end, and its period's close, are complete: the challenger released every coin it committed
-  to, in every window of the period (PRF-132);
+  to but its pass coins, the most passes a session may make, in every window of the period (PRF-132);
 - *accepted*: the Lean's verdict (the record's `verdict` lean or both, no disagreement) accepted it, since a refused
   session can still close complete;
 - *pinned*: its window reads through `challenger.pinned_session` with the challenger host's pins log (`--pins`, its
@@ -827,7 +827,8 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
     if not complete["window"]:
         reserved = (((windows.get(R) or {}).get("reserve") or {}).get("body") or {}).get("families") or []
         got = end.get("released") or {}
-        short = [f"{got.get(label, 0)} of its {n} {label} coins" for label, n in reserved if got.get(label, 0) < n]
+        short = [f"{got.get(label, 0)} of its {n} {label} coins" for label, n in reserved
+                 if got.get(label, 0) < n and label != coins.PASS]
         why.append("its window has no end on the ledger" if not end else "its window closed incomplete: the "
                    f"challenger released {', '.join(short) or 'fewer coins than it reserved'}")
     if close is None:

@@ -1,10 +1,12 @@
 """The honest schedule of a remote session, the passes it certifies, what the live-coin alternative would cost, and the
 verifier's bandwidth for openings.
 
-`honest` plays the honest prover against the verifier's messages in integer nanoseconds.  `σ_0` leaves the verifier at 0
-and window t's boundary message at `(t + 1)·T`; each reaches the prover `down_ns` plus a jitter later.  Passes run back
-to back, `pass_ns + gap_ns` apart: the gap is the root's reduction, the next seed and its broadcast to every GPU, which
-the next pass waits on.  The pass in flight when a boundary message arrives is its window's last, and each root reaches
+`honest` plays the honest prover against the verifier's messages in integer nanoseconds.  `σ_0` and the first pass's
+coin leave the verifier at 0 and window t's boundary message at `(t + 1)·T`; each reaches the prover `down_ns` plus a
+jitter later.  Each pass runs under its own live coin (`Session.seed`), which the verifier releases when the root
+before it arrives, so a pass starts `down_ns` plus a jitter after the previous root reached the verifier: passes start
+`pass_ns + gap_ns + RTT` apart, plus both trips' jitters, where the gap is the root's reduction and the coin's
+broadcast to every GPU.  The pass in flight when a boundary message arrives is its window's last, and each root reaches
 the verifier `up_ns` plus a jitter after its pass and its reduction end.  Each jitter is in [0, `jitter_ns`], a fixed
 pseudorandom pattern.  The tests replay the schedule against `audit.Session` (`tests/test_remote_bandwidth.py`).
 
@@ -12,7 +14,8 @@ pseudorandom pattern.  The tests replay the schedule against `audit.Session` (`t
 in flight, its root's reduction and its trip up, each trip at its longest.
 
 `live_mu` and `live_best_interval` are the steady state of the alternative `PROTOCOL.md`'s appendix weighs: a live coin a
-pass and no chain, so that passes are ordered by the clock alone.
+pass released on the verifier's clock rather than after the root before, so that passes are ordered by the clock
+alone and may overlap.
 
 `stated` is the claim of `PROTOCOL.md` §1 and §10 read through `audit.ledger`: the honest prover's session on one
 node at the node's R and S_chip, under the default codec at the node's stated squaring ceiling, every window's whole
@@ -22,7 +25,7 @@ node at the node's R and S_chip, under the default codec at the node's stated sq
 `sketch_reading` is where sketch-sha512's bound is read (`PROTOCOL.md` §4): the rank r* that minimizes `sketch_rate`,
 the failure each SHA-512 compression of the prover's buys, a guess's 2^-8r beside a fresh key's chance of signs of rank
 below r on one of a block's 128 sectors (`sign_rank_at_most`, exact through F2: `gf2_rank_at_most`).  `sketch_failure`
-is a session's, and `grind_compressions` what one grinding try costs.
+is a session's.
 
 `python -m verity.core.protocols.remote_bandwidth.timing` prints the grid of the report, ending with what would bring
 λ and μ_chip under 0.05% (wider receipts, a larger store, a flush a pass).
@@ -171,9 +174,9 @@ class Schedule:
     @property
     def window_timing(self) -> tuple[float, ...]:
         """Each window's μ_timing over its own span `[b_(t−1), D_t]` (`audit.WindowLedger`): the spans of consecutive
-        windows overlap by A, and a window's passes start when the pass in flight at its challenge ends, so each
-        window is charged A and up to a pass, where the session is charged them once: at most
-        `g/(p + g) + (A + J + p)/(T + A)`."""
+        windows overlap by A, and a window's passes start when the pass in flight at its challenge ends and its root's
+        coin comes back, so each window is charged A and up to a pass and a round trip, where the session is charged
+        them once: at most `chained(p, g, RTT + 2J) + (2A + RTT + 3J)/(T + A)`."""
         starts = (0, *self.boundaries[:-1])
         return tuple(1 - n * self.pass_ns / (d - b) for n, b, d in zip(self.passes, starts, self.deadlines))
 
@@ -197,14 +200,14 @@ def honest(window_ns: int, windows: int, pass_ns: int, *, gap_ns: int = 0, down_
             raise ValueError(f"window {t}'s pass {passes[t]} arrives at {arrival} ns, after the deadline {deadlines[t]}")
         arrivals.append((t, passes[t], arrival))
         passes[t] += 1
-        start = end + gap_ns
+        start = arrival + down_ns + _jitter(len(arrivals), b"coin", jitter_ns)
     return Schedule(tuple(passes), tuple(arrivals), boundaries, deadlines, pass_ns)
 
 
-def chained(pass_ns: int, gap_ns: int) -> float:
-    """The steady state a pass: each pass waits on the root before it, so only the root's reduction and the next seed's
-    broadcast, g, go uncovered."""
-    return gap_ns / (pass_ns + gap_ns)
+def chained(pass_ns: int, gap_ns: int, rtt_ns: int = 0) -> float:
+    """The steady state a pass: each pass waits on its coin, which leaves the verifier when the root before arrives, so
+    the root's reduction and the coin's broadcast, g, and the round trip go uncovered: `(g + RTT)/(p + g + RTT)`."""
+    return (gap_ns + rtt_ns) / (pass_ns + gap_ns + rtt_ns)
 
 
 def live_mu(interval_ns: int, pass_ns: int, *, gap_ns: int = 0, rtt_ns: int, jitter_ns: int = 0,
@@ -291,15 +294,6 @@ def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: i
             + Fraction((q + passes) ** 2, 2 ** 257))
 
 
-def grind_compressions(leaves: int) -> int:
-    """SHA-512 compressions of one grinding try as the reference computes it, over a pass of `leaves` receipt leaves,
-    reading no block: re-salting one leaf (9: its salt's digest, the key's and the tree leaf), that leaf's hash and its
-    path to the root (2, and 3 a level), the next seed (2) and its signs' key (2).  A prover that keeps the constant
-    prefixes' midstates spends fewer, and no fewer than 5: the root's last compression, and the seed's and the key's 2
-    each, whose first blocks hold the root and the seed."""
-    return 9 + 2 + 3 * math.ceil(math.log2(leaves)) + 2 + 2
-
-
 def log2(x: Fraction) -> float:
     return math.log2(x.numerator) - math.log2(x.denominator)
 
@@ -330,8 +324,9 @@ def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, sampl
     openings a window at `delta` bound its wrong receipts (`wrong_bound`), the node's chips hold `CHIP_BYTES`, and
     μ_rebuild is the default codec at `SQUARINGS_PER_S`.  A store that spans every tier (`spanning`) reads at R; one in
     HBM alone reads at `GPUS · GPU_READ_BYTES_PER_S`, and μ_timing charges the idle host DRAM.  μ_chip is about
-    `CHIP_BYTES/store_bytes`, and a window's μ_timing about `(RTT + 2p)/T`, the pass in flight at its challenge and the
-    one its boundary cuts short: a larger store trades the one for the other."""
+    `CHIP_BYTES/store_bytes`, and a window's μ_timing about `chained(p, g, RTT) + (RTT + 2p)/T`, each pass's wait for
+    its coin, and the pass in flight at its challenge and the one its boundary cuts short: a larger store trades the
+    last for μ_chip."""
     blocks = store_bytes // BLOCK_BYTES
     pass_ns = math.ceil(blocks * BLOCK_BYTES / read_bytes_per_s * S)
     st = honest(window_ns, windows, pass_ns, gap_ns=gap_ns, down_ns=rtt_ns // 2, up_ns=rtt_ns - rtt_ns // 2,
@@ -349,10 +344,10 @@ def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, sampl
 def store_floor(gap_ns: int = 0, target: float = 0.01) -> float:
     """The store on one node, in bytes, spanning every tier, below which no T brings `stated`'s worst γ_t under
     `target`.  As T grows, a window's μ_sample and its ends vanish, and γ_t tends to
-    `(g + S_chip/R + λ·p + μ_rebuild·(p + g))/(p + g)` with p the store's read at R: the chain's steady state, μ_chip,
-    λ (`audit.named_bits` of the store's blocks, a
-    block's share of them depending on the store's size, solved for by iteration) and μ_rebuild.  At `gap_ns` = 0 it
-    is μ_chip, λ and μ_rebuild alone."""
+    `(g + S_chip/R + λ·p + μ_rebuild·(p + g))/(p + g)` with p the store's read at R and g = `gap_ns` all a pass leaves
+    uncovered, its reduction and its coin's round trip (`chained`): the steady state, μ_chip, λ (`audit.named_bits` of
+    the store's blocks, a block's share of them depending on the store's size, solved for by iteration) and
+    μ_rebuild.  At `gap_ns` = 0 it is μ_chip, λ and μ_rebuild alone."""
     rebuild = audit.Rebuild(codec.DEFAULT, SQUARINGS_PER_S["p1024"]).fraction(READ_BYTES_PER_S)
     lam, g, blocks = audit.QUERIES_LOG2 / (8 * BLOCK_BYTES), gap_ns / S, 0
     while True:
@@ -456,11 +451,11 @@ def _grid() -> None:
           "comparison.  The schedule and openings below are the same under either kind, with no tile evidence unless "
           "the registration binds z")
     print()
-    print(f"# μ_timing of chained sessions: g = {gap // US} µs, J = {jitter / MS} ms each way, A = RTT + 2J + pass + g; "
-          "one-way delays RTT/2; isolated is a session of one window; worst window is the largest of a W = 100 "
-          "session's windows' own, each over [b_(t−1), D_t]")
-    print("| pass ms | T s | RTT ms | passes a window | isolated | W = 10 | W = 100 | steady state g/(pass + g) "
-          "| worst window |")
+    print(f"# μ_timing of sessions of a live coin a pass, each released when the root before arrives: g = {gap // US} "
+          f"µs, J = {jitter / MS} ms each way, A = RTT + 2J + pass + g; one-way delays RTT/2; isolated is a session of "
+          "one window; worst window is the largest of a W = 100 session's windows' own, each over [b_(t−1), D_t]")
+    print("| pass ms | T s | RTT ms | passes a window | isolated | W = 10 | W = 100 "
+          "| steady state (g + RTT)/(pass + g + RTT) | worst window |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for p in (20, 50):
         for w in (1, 20, 60):
@@ -468,8 +463,8 @@ def _grid() -> None:
                 kw = dict(gap_ns=gap, down_ns=_ns(rtt) // 2, up_ns=_ns(rtt) - _ns(rtt) // 2, jitter_ns=jitter)
                 runs = [honest(round(w * S), n, _ns(p), **kw) for n in (1, 10, 100)]
                 print(f"| {p} | {w} | {rtt} | {runs[0].passes[0]} | "
-                      + " | ".join(f"{1 - r.utilization:.2%}" for r in runs) + f" | {chained(_ns(p), gap):.2%} "
-                      f"| {max(runs[2].window_timing):.2%} |")
+                      + " | ".join(f"{1 - r.utilization:.2%}" for r in runs)
+                      + f" | {chained(_ns(p), gap, _ns(rtt)):.2%} | {max(runs[2].window_timing):.2%} |")
     print()
     t_s, s = audit.WINDOW_NS // S, audit.SAMPLES
     quarter = samples_for(0.0025, audit.DELTA)
@@ -519,15 +514,16 @@ def _grid() -> None:
     print()
     share = GPUS + HOST_READ_BYTES_PER_S / GPU_READ_BYTES_PER_S
     print(f"# the store floor (store_floor): below {store_floor() / 1e9:.1f} GB over every tier "
-          f"({store_floor() / share / 1e9:.1f} GB a GPU) μ_chip, λ and μ_rebuild alone exceed 1% at any T; with the "
-          f"chain's steady state at g = {gap // US} µs, no T meets 1% below {store_floor(gap) / 1e9:.1f} GB "
-          f"({store_floor(gap) / share / 1e9:.1f} GB a GPU)")
+          f"({store_floor() / share / 1e9:.1f} GB a GPU) μ_chip, λ and μ_rebuild alone exceed 1% at any T; with "
+          f"g = {gap // US} µs and RTT = 1 ms uncovered a pass, no T meets 1% below "
+          f"{store_floor(gap + MS) / 1e9:.1f} GB ({store_floor(gap + MS) / share / 1e9:.1f} GB a GPU)")
     print()
     _sizing(gap)
     print()
-    print(f"# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
-          f"deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
-    print("| pass ms | RTT ms | floor | U ms | Δ = pass | Δ* ms | at Δ* | chained |")
+    print(f"# appendix, live coins on the clock: a coin a pass released on the verifier's clock, not after the root "
+          f"before; μ_timing + μ_overlap a pass in steady state at the least deadline; floor = the trusted RTT floor "
+          f"as a fraction of RTT; U = RTT + 2J − floor; after the root, the protocol's coin a pass at RTT + 2J")
+    print("| pass ms | RTT ms | floor | U ms | Δ = pass | Δ* ms | at Δ* | after the root |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for p in (20, 50):
         for rtt in (0.2, 1, 5, 20, 50):
@@ -536,7 +532,7 @@ def _grid() -> None:
                 star = live_best_interval(_ns(p), **kw)
                 u = _ns(rtt) + 2 * jitter - _ns(f * rtt)
                 print(f"| {p} | {rtt} | {f} | {u / MS:.2f} | {_pct(live_mu(_ns(p), _ns(p), **kw))} | {star / MS:.2f} "
-                      f"| {_pct(live_mu(star, _ns(p), **kw))} | {chained(_ns(p), gap):.2%} |")
+                      f"| {_pct(live_mu(star, _ns(p), **kw))} | {chained(_ns(p), gap, _ns(rtt) + 2 * jitter):.2%} |")
     print()
     print("| jitter, at Δ*: pass 20 ms, RTT 1 ms, floor 0.5 | " + " | ".join(f"J = {j} ms" for j in (0, 0.05, 0.2, 0.5, 1))
           + " |")
@@ -565,16 +561,6 @@ def _grid() -> None:
               f"Q = 2^{q40:.2f} compressions, the node's C = 2^{q40 - fl:.2f} at F = 2^{fl} "
               f"({2 ** (q40 - fl) / SHA512_PER_S:.3g} s of {GPUS} GPUs at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s each), "
               f"and below 2^-64 up to Q = 2^{q64:.2f}, C = 2^{q64 - fl:.2f}")
-    print()
-    print("# a grinding try reads no block: compressions to make a key straight (at least 5 with the constant "
-          f"midstates kept), at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s on one GPU; seeing a sector's 16 × 32 signs is 16 "
-          "more")
-    print(f"| pass | leaves | compressions | ns a try | tries a second, {GPUS} GPUs, log2 |")
-    print("| --- | --- | --- | --- | --- |")
-    for name, blocks in (("one leaf", PER_LEAF), ("8 GiB", 2 ** 21), ("94 GB", 94 * 10 ** 9 // BLOCK_BYTES)):
-        n = math.ceil(blocks / PER_LEAF)
-        c = grind_compressions(n)
-        print(f"| {name} | {n} | {c} | {c / GPU_SHA512_PER_S * 1e9:.2f} | {math.log2(SHA512_PER_S / c):.2f} |")
     print()
     f = f"F = 2^{SKETCH_OUTSIDE.bit_length() - 1}"
     print(f"| a session of {GPUS} GPUs, every compression a guess or a key, 50 passes a second | C, log2 | failure at "

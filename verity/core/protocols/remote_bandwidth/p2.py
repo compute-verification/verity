@@ -294,7 +294,7 @@ class Session(audit.Session):
 
     def _check(self, t: int, i: int, p: int, o: Opening, key: VerifierKey, receipters: dict) -> str | None:
         w = self.windows[t]
-        seed = receipts.seed(w.challenge, i, self._previous(t, i))
+        seed = w.seeds[i]
         if i not in receipters:
             receipters[i] = Sketcher(seed, self.registration.rows)
         return check(self.registration, seed, w.plans[i], w.roots[i], i, p, o, receipters[i])

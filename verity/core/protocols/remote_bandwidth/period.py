@@ -8,8 +8,9 @@ prover's passes over its store, and the answer of the bandwidth component of ons
    verifier draws the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
    (`audit.Store`);
 2. the verifier opens a session (`audit.Session`) on coins its challenger commits to before the first one, drawn from
-   `coins` (`coins.local`), and the prover runs `passes` passes a window over the whole store (`audit.Prover`), each root
-   sent before the window's boundary; the verifier waits each window out on its clock (`window_ns`) and each last deadline
+   `coins` (`coins.local`), and the prover runs `passes` passes a window over the whole store (`audit.Prover`), each
+   under the pass coin the verifier releases after the previous root (`Session.seed`) and its root sent before the
+   window's boundary; the verifier waits each window out on its clock (`window_ns`) and each last deadline
    (`deadline_ns`) before it closes the window;
 3. the verifier draws each window's openings, the prover opens them, and the verifier verifies them.
 
@@ -184,15 +185,15 @@ def run(node: str, store: bytes, coins: bytes, *, windows: int = 2, passes: int 
         events.append(event | ({} if event["kind"] == "verify" else {"now": held.now}))
         return fn()
 
-    challenge = call({"kind": "start"}, s.start)
-    previous, step, made = reg.digest, -1, {}
+    call({"kind": "start"}, s.start)
+    step, made = -1, {}
     for t in range(windows):
         for i in range(passes):
-            ps = prover.run(challenge, i, previous)
-            made[t, i], previous, step = ps, ps.root, step + 1
+            ps = prover.run(call({"kind": "seed"}, s.seed), t, i)
+            made[t, i], step = ps, step + 1
             call({"kind": "receive", "t": t, "i": i, "root": ps.root.hex(), "runs": None, "change": None, "step": step},
                  lambda: s.receive(t, i, ps.root, None, change=None, step=step))
-        challenge = call({"kind": "boundary"}, s.boundary, s.next_boundary_ns())
+        call({"kind": "boundary"}, s.boundary, s.next_boundary_ns())
     for t in range(windows if verify is None else verify):
         d = s.deadline(t)
         draws = call({"kind": "close", "t": t}, lambda: s.close(t), None if s.windows[t].final else d + 1)
@@ -207,9 +208,10 @@ def run(node: str, store: bytes, coins: bytes, *, windows: int = 2, passes: int 
         got = {o.index: o for o in challenger.opened(label)}
         committed += [C.coin(got[j] if j in got else challenger.challenger.open(label, j, b"")) for j in range(n)]
     p = {"deadline_ns": params.deadline_ns, "deferred": params.deferred, "lifetime": params.lifetime,
-         "min_passes": params.min_passes, "pace": None, "samples": params.samples, "window_ns": params.window_ns,
-         "windows": params.windows}
-    evidence = {"append_coins": [], "coins": [c.hex() for c in committed], "events": events}
+         "min_passes": params.min_passes, "pace": None, "samples": params.samples, "seed": params.seed,
+         "window_ns": params.window_ns, "windows": params.windows}
+    evidence = {"append_coins": [], "coins": [c.hex() for c in committed], "events": events,
+                "pass_coins": [C.seed(o).hex() for o in challenger.opened(C.PASS)]}
     case = {"commitment": canonical_json_bytes(registration_json(reg)).hex(),
             "evidence": canonical_json_bytes(evidence).hex(), "params": {"not_before_ns": not_before, "params": p}}
     return Period(answer(s), case)
