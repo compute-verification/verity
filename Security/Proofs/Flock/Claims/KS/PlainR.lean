@@ -196,16 +196,16 @@ theorem accR_cols {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Pr
   dsimp only at hu
   rw [hx] at hu
   cases hd : decR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
-      ((Claims.run sha512 P (VR rd) x ω r).msgs.map (RecDeploy.outCoin ∘ Prod.snd)) with
-  | none => simp [hd] at hu
+      (((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.snd).map RecDeploy.outCoin) with
+  | none => rw [hd] at hu; simp [Claims.Flock.lookCol] at hu
   | some d =>
-    simp only [hd] at hu
+    rw [hd] at hu
     cases hrr : runOfDecR d 0 with
-    | none => simp [hrr, colsOf, Claims.Flock.lookCol] at hu
+    | none => simp [colsOf, hrr, Claims.Flock.lookCol] at hu
     | some rr =>
-      simp only [hrr, colsOf] at hu
-      obtain ⟨st, hst, hm⟩ := runOfDecR_m hrr
+      simp only [colsOf, hrr] at hu
       obtain ⟨⟨s, spec, sts⟩, -, -, -, -, -, -, hv, -, -, -, -, -, rfl⟩ := decR_some hd
+      obtain ⟨st, hst, hm⟩ := runOfDecR_m hrr
       refine ⟨spec, st, tables_head hv hst, ?_⟩
       obtain ⟨p, hp, rfl⟩ := exists_of_lookCol hu
       simp only [Bool.false_eq_true, ↓reduceIte]
@@ -251,6 +251,7 @@ theorem readPs_length {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁
       have hg := hget k (by rw [List.length_range]; omega) hk
       rw [List.getElem_range] at hg
       obtain ⟨T, hT, hms⟩ := readRep_fits hg
+      simp only [List.get_eq_getElem] at hT hms
       simp only [List.getElem_map, Function.comp_apply]
       rw [hms, framesOf, List.length_map, hT.rounds, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hk',
         Option.getD_some]
@@ -300,15 +301,17 @@ theorem streams_size_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec :
   rw [hlen, hys, hsize]
   unfold repRounds
   simp only [Bool.false_eq_true, ↓reduceIte]
-  rw [hx, hpts, hpn, Nat.mul_comm]
-  rfl
+  rw [show fast100 sts[k / 2]!.m = some schs[k / 2] from hf, hx, hpts, hpn, Nat.mul_comm]
+  all_goals rfl
 
 /-- **At SHA-512, `VR rd` accepts only at its last round** (`accLast_VE`'s count, at `nextR`'s decision): custody
 holds one recorded round per round message (`custody_length`), the record's rounds are `rounds` (`streams_size_plainJ`),
 and the round messages are the rounds after the link but the last (`readPs_length`), so the messages are
 `2 + rounds`; table 0's rounds make `rounds` positive. -/
-theorem accLast_VR (rd : Claims.Msg → Option FinalP) : AccLast sha512 (VR rd) := fun x as cs hcs h => by
-  change ((nextR rd x as cs).eval sha512).1 = .acc at h
+theorem accR_length (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (hcs : cs.length = as.length) (h : ((nextR rd x as cs).eval sha512).1 = .acc) :
+    ∃ s spec sts, setupOf false x = some (s, spec, sts) ∧ as.length = 2 + rounds false spec sts ∧
+      0 < rounds false spec sts := by
   cases ha : actR rd x as cs with
   | rej => revert h; simp [nextR, ha, Claims.OC.eval]
   | coin c => revert h; simp [nextR, ha, Claims.OC.eval]
@@ -350,10 +353,19 @@ theorem accLast_VR (rd : Claims.Msg → Option FinalP) : AccLast sha512 (VR rd) 
     have hmids : (pf.2.zip cs.tail.dropLast).length = as.length - 2 := by
       rw [List.length_zip, readPs_length h9, hrss, List.length_dropLast, List.length_tail, hcs]
       omega
-    show as.length = (match setupOf false x with | some (_, spec, sts) => 2 + rounds false spec sts | none => 1)
-    rw [hso]
-    dsimp only
+    have key : rounds false spec sts = as.length - 2 := hmr.symm.trans hmids
+    have hrp : 0 < rounds false spec sts := by omega
+    refine ⟨_, _, _, hso, ?_, hrp⟩
+    rw [key] at hrp ⊢
     omega
+
+/-- **At SHA-512, `VR rd` accepts only at its last round** (`accR_length`). -/
+theorem accLast_VR (rd : Claims.Msg → Option FinalP) : AccLast sha512 (VR rd) := fun x as cs hcs h => by
+  obtain ⟨s, spec, sts, hso, hl, -⟩ := accR_length rd hcs h
+  show as.length = (match setupOf false x with | some (_, spec, sts) => 2 + rounds false spec sts | none => 1)
+  rw [hso]
+  dsimp only
+  exact hl
 
 /-- **At SHA-512, `VR rd` decides without the round's coin** (`decideFree_VK`'s proof, at `nextR`): an accepting
 decision is past the link's coin (`accLast_VR`), its last message asks no coin, and `decR` reads only the coins before
@@ -367,14 +379,13 @@ theorem decideFree_VR (rd : Claims.Msg → Option FinalP) : DecideFree sha512 (V
   | coin c₂ => revert hacc'; simp [nextR, hact, Claims.OC.eval]
   | decide s spec sts link c₁ mids f =>
     have hso := actR_setupOf hact
-    have hk := accLast_VR rd x as (cs ++ [c]) (by simp [hl]) hacc'
-    change as.length = (match setupOf false x with
-      | some (_, spec, sts) => 2 + rounds false spec sts | none => 1) at hk
-    rw [hso] at hk
-    dsimp only at hk
+    obtain ⟨s', spec', sts', -, hk, hkp⟩ := accR_length rd (x := x) (as := as) (cs := cs ++ [c]) (by simp [hl]) hacc'
     have hcl : 0 < cs.length := by
-      rw [hk] at hl
-      omega
+      have e := hl.symm.trans hk
+      have h1 : 1 < cs.length + 1 := by
+        rw [e]
+        exact Nat.lt_of_lt_of_le (by decide) (Nat.le_add_right 2 _)
+      exact Nat.lt_of_succ_lt_succ h1
     obtain ⟨c₀, cs', rfl⟩ : ∃ c₀ cs', cs = c₀ :: cs' := by
       rcases cs with _ | ⟨c₀, cs'⟩
       · exact absurd hcl (Nat.lt_irrefl 0)
