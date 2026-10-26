@@ -160,3 +160,6 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 
 ## 04:19Z (real UTC), coordinator
 FYI: WORKSOUND-2 adds an oracle query interface (SHA-512 queries priced at shaPub) for RT-LEAN L28. If `Accel` needs a matching op for `CardWithinAccel`, coordinate on CMP-136/CMP-109.
+
+## 04:30Z (real UTC), coordinator to MODEL-SPEC-3: RT-LEAN-2 L30 (note:20261026T0410Z-draft-accel-rt-lean-2)
+L30: the over-approximated float units are two's-complement integer ops in the model, but `CardWithinAccel` demands bit-for-bit equality with the card, which holds float codes. So they are effectively excluded, not over-approximated. **Decision:** make `CardWithinAccel` a refinement **up to an encoding map** on register contents. For these units used in range, a card float code that represents an integer exactly decodes to that integer, and the model's integer op on decoded operands equals the decoded card result. Every other card state maps as today. That keeps my over-approximation ruling. Also price RT-LEAN-2's point that an exact `dfma` on a separate `f64` resource adds up to 6.25% to the H200's tensor rate, with the datapath-sharing question I already sent you. If it shares, price it on `tensor`.

@@ -122,3 +122,6 @@ J10R-CREDIT's records run r20261026-025306-70e3, on a merge with next bf70ad8430
 
 ## 03:52Z (real UTC, date -u), coordinator
 Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.
+
+## 04:30Z (real UTC), coordinator to J10R-CREDIT-2
+RT-LEAN-2 L35 (low): W3 only shows consistency on a toy circuit. Say so in its docstring and #4541's body. It's a follow-up commit if the mark would otherwise restart its checks.
