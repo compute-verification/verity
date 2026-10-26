@@ -935,6 +935,78 @@ def test_the_served_compiler_is_what_the_registration_must_name(tmp_path, monkey
     assert json.loads(capsys.readouterr().out)["digest"] == doc["digest"]
 
 
+def _tiny_checkpoint(d: Path, model: str, revision: str) -> Path:
+    """TINY's checkpoint under ``d`` (random bf16 weights by their HF names, one safetensors shard, and its config.json) and a
+    manifest pinning the shard at ``model`` and ``revision``: the manifest."""
+    import struct
+
+    import numpy as np
+
+    rng, H, I, D = np.random.default_rng(3), TINY["hidden_size"], TINY["intermediate_size"], 16
+
+    def bf16(*shape):
+        return (rng.random(shape, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    t = {"model.embed_tokens.weight": bf16(TINY["vocab_size"], H), "model.norm.weight": bf16(H)}
+    for i in range(TINY["num_hidden_layers"]):
+        p = f"model.layers.{i}."
+        t |= {p + "self_attn.q_proj.weight": bf16(4 * D, H), p + "self_attn.k_proj.weight": bf16(2 * D, H),
+              p + "self_attn.v_proj.weight": bf16(2 * D, H), p + "self_attn.o_proj.weight": bf16(H, 4 * D),
+              p + "mlp.gate_proj.weight": bf16(I, H), p + "mlp.up_proj.weight": bf16(I, H), p + "mlp.down_proj.weight": bf16(H, I),
+              p + "input_layernorm.weight": bf16(H), p + "post_attention_layernorm.weight": bf16(H)}
+    hdr, off = {"__metadata__": {"format": "pt"}}, 0
+    for name, a in t.items():
+        hdr[name] = {"dtype": "BF16", "shape": list(a.shape), "data_offsets": [off, off + a.nbytes]}
+        off += a.nbytes
+    head = json.dumps(hdr).encode()
+    d.mkdir(parents=True)
+    (d / "model.safetensors").write_bytes(struct.pack("<Q", len(head)) + head + b"".join(a.tobytes() for a in t.values()))
+    (d / "config.json").write_text(json.dumps({**TINY, "rope_theta": 10000.0}))
+    sha = hashlib.sha256((d / "model.safetensors").read_bytes()).hexdigest()
+    man = d.parent / "checkpoints.json"
+    man.write_text(json.dumps({"checkpoints": [{"repo": model, "revision": revision, "local_path": str(d),
+                                                "files": {"model.safetensors": {"sha256": sha}}}]}))
+    return man
+
+
+def test_a_served_runs_weights_of_record_is_the_pin_its_registrations_record(tmp_path, capsys):
+    """``weights-record``: the served run's weights of record (`window_circuit.weights_record` under the φ its window circuit
+    lowers under), composed from the checkpoint's pinned shards, written to ``--out``, with its pin ``weights=ROOT``, the
+    root `verity-vllm advice --weights-of-record` records in each window's registration. A checkpoint the manifest pins as
+    another model than the run served, or a shard other than the one it pins, is refused by name, its record still written."""
+    from verity_vllm.pipeline import advice as ADV
+    from verity_vllm.program.predict import window_circuit as WC
+
+    run, hf = tmp_path / "serve", tmp_path / "tiny.json"
+    run.mkdir()
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": 7,
+             "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188}}
+    (run / "serve.json").write_text(json.dumps(serve))
+    hf.write_text(json.dumps(TINY))
+    man = _tiny_checkpoint(tmp_path / "ck" / "snap", serve["model"], serve["revision"])
+    out = tmp_path / "weights_of_record.json"
+    argv = ["weights-record", "--serve-run", str(run), "--checkpoint-dir", str(tmp_path / "ck" / "snap"), "--checkpoints",
+            str(man), "--hf-config", str(hf), "--out", str(out)]
+    capsys.readouterr()
+    assert PP.main(argv) == 0
+    rec, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
+    assert (rec["of_record"], rec["n_fields"], said["fields"]) == (True, 23, 23)
+    assert said["pin"] == f"{WC.WEIGHTS}={rec['root_of_record']}"
+    assert ADV.registered_weights(rec, serve) == {WC.WEIGHTS: rec["root_of_record"]}
+    registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
+    assert WC.weights_record(registered, str(tmp_path / "ck" / "snap"), str(man))["root_of_record"] == rec["root_of_record"]
+    (run / "serve.json").write_text(json.dumps({**serve, "model": "org/other"}))
+    assert PP.main(argv) == PP.REFUSED
+    assert "and the run served org/other@" in capsys.readouterr().err
+    (run / "serve.json").write_text(json.dumps(serve))
+    shard = tmp_path / "ck" / "snap" / "model.safetensors"
+    body = bytearray(shard.read_bytes())
+    body[-1] ^= 1
+    shard.write_bytes(bytes(body))
+    assert PP.main(argv) == PP.REFUSED
+    assert re.search(r"of record False: .* \(shards pinned: False\); the record is ", capsys.readouterr().err)
+    assert json.loads(out.read_text())["root_of_record"] != rec["root_of_record"]
+
+
 def test_the_transfer_gates_of_a_served_model_are_its_compiler_of_records():
     """`served_gates`: Llama-3.2-1B's compiler of record lists its RoPE heads (the TP1 stand-in), ``--transfer-gate`` may restate
     the list and nothing else (another template, or the record's with one more), and a model with no line lists none."""
