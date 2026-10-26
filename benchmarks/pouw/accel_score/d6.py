@@ -101,7 +101,8 @@ DUAL_TOL = {"H200": 0.01, "RTX PRO 6000": 0.01}    # most a route may free at an
 PV_GAMMA_MAX = 10.0                               # P19: PV is served plain, uncredited, where its round's γ exceeds it
 HEADLINE = "v3.1"
 DESIGNS = ("v3", "v3.1", "v3.1, PV γ ≤ 10", "v3.1, PV L′ ≤ n/32 from n 2048", "v3.1, PV uncredited",
-           "v3.1, RTX PRO 6000 static L′ 64", "dual-safe")
+           "v3.1, RTX PRO 6000 static L′ 64", "v3.1, RTX PRO 6000 PV L′ 64", "dual-safe")
+RTX_ONLY = ("v3.1, RTX PRO 6000 static L′ 64", "v3.1, RTX PRO 6000 PV L′ 64")   # the H200's rows are v3.1's
 
 
 def quiet(f, *a, **kw):
@@ -270,6 +271,9 @@ def picks() -> tuple[dict, dict]:
            "v3.1, PV uncredited": (s31, dict.fromkeys(p31)), "v3.1, PV L′ ≤ n/32 from n 2048": (s31, p19_pv(pv)),
            "v3.1, RTX PRO 6000 static L′ 64": ({k: (next(x for x in grid(*k) if x["Lp"] == 64)
                                                    if k[0] == "RTX PRO 6000" else p) for k, p in s31.items()}, p31),
+           "v3.1, RTX PRO 6000 PV L′ 64": (s31, {k: (next((dict(x) for x in grid(*k, weight_coins=False)
+                                                           if x["Lp"] == 64 and x["gamma"] <= PV_GAMMA_MAX), p)
+                                                     if k[0] == "RTX PRO 6000" else p) for k, p in p31.items()}),
            "dual-safe": (ds_static, ds_pv)}
     for static_, pv_ in out.values():
         for k, p in {**static_, **pv_}.items():
@@ -303,6 +307,18 @@ def serve_loads(card) -> dict:
                 issue=card.mma_issue)
 
 
+def fixed_alone(c, lp: dict, F: dict) -> float:
+    """The makespan of the period's fixed load alone, no credited round (honest-kernel units), on `lp`'s rows."""
+    f = []
+    for r in dr.rows(c):
+        if r.startswith("joint"):
+            a, b = c.facets[int(r[5:])]
+            f.append(a * F.get("tensor", 0.0) + b * F.get(c.facet_other, 0.0) / 32)
+        else:
+            f.append(F.get(r, 0.0))
+    return float(max(np.array(f) / -np.array([row[0] for row in lp["A_ub"]]))) * c.s8
+
+
 def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0) -> dict:
     """Per credited MAC, in honest-kernel units at θ (c = SM-clocks · s8): OPT*'s period (`dense`: the honest words'
     best programs) and pub (`hull`: every route), each over the credited rounds alone and in the served period (plus
@@ -310,7 +326,9 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0) 
     uncredited decode, other jobs; A29). Credit is each one's price at the honest served period's duals μ°
     (`at_served`, P20's C(μ) at the dual where the honest period sits). `freed`: per row, the share of OPT* the routes
     free at that row's single-row dual (`d5_routes.freed`, makespan ≤ OPT*'s), cost-weighted over the credited rounds
-    (P12 re-raised). Also Σ_w q_w (P20's draw multiplier): each round's own makespan share of the honest period."""
+    (P12 re-raised). Also Σ_w q_w (P20's draw multiplier): each round's own makespan share of the honest period, and
+    PB4's c_inc, the credited rounds' share of the period's makespan increment over its fixed load alone (pub's
+    period over OPT*'s, no duals)."""
     c = vc.CARDS[card][0]
     hist, st, qk, pvm, ix = nf.world_macs(model)
     jobs, rounds = {"dense": [], "hull": []}, {"dense": 0.0, "hull": 0.0}
@@ -362,6 +380,8 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0) 
     out["leak_served"] = 1 - out["hull"]["at_served"] / out["dense"]["at_served"]
     out["leak_job"] = 1 - rounds["hull"] / rounds["dense"]
     out["q_sum"] = rounds["dense"] / out["dense"]["served"]
+    out["fixed_alone"] = T_F = fixed_alone(c, jobs["dense"][0][1], F)
+    out["c_inc"] = (out["hull"]["served"] - T_F) / (out["dense"]["served"] - T_F)
     return out
 
 
@@ -537,18 +557,20 @@ def beside_sweep(P: dict, tau_picks: dict) -> dict:
     period's binding rows. The credited share at x is the share at x = 0 with its routes factor moved to x's: beside
     work overlaps the credited rounds, and at the period's duals their OPT* price is at least the period time they
     add, so dividing it by their standalone honest time would count the overlap as a loss. The rule's value test
-    stays at x = 0."""
-    sets = {d: P[d] for d in ("v3", HEADLINE, "dual-safe")}
+    stays at x = 0. Also PB4's c_inc at each x (`period`), and PB5's case, the RTX PRO 6000's PV at L′ 64."""
+    sets = {d: P[d] for d in ("v3", HEADLINE, *RTX_ONLY, "dual-safe")}
     sets.update({f"τ {tau:g}": p for tau, p in tau_picks.items()})
     out = {}
     for name, (static, pv) in sets.items():
         for (card, _, mname), e in evaluate(static, pv, rates=(True,)).items():
+            if name in RTX_ONLY and card != "RTX PRO 6000":
+                continue
             model = model_of(mname)
             for x in BESIDE:
                 per = e["period"] if x == 0 else period(card, model, static, pv, beside=x)
                 out[name, card, mname, x] = dict(leak=per["leak_served"], binding=per["dense"]["served_binding"],
-                                                 gamma=e["world"]["gamma"], share0=e["share"]["share"],
-                                                 leak0=e["period"]["leak_served"])
+                                                 c_inc=per["c_inc"], gamma=e["world"]["gamma"],
+                                                 share0=e["share"]["share"], leak0=e["period"]["leak_served"])
                 out[name, card, mname, x]["share"] = (e["share"]["share"] * (1 - per["leak_served"])
                                                       / (1 - e["period"]["leak_served"]))
     return out
@@ -635,7 +657,7 @@ def report(D: dict) -> str:
     L.append("|---|---|---|---|---|---|---|---|")
     for design in sorted({k[0] for k in rows}, key=DESIGNS.index):
         for card in vc.CARDS:
-            if "RTX PRO 6000 static" in design and card != "RTX PRO 6000":
+            if design in RTX_ONLY and card != "RTX PRO 6000":
                 continue
             for rate in ("measured", "paper"):
                 rr = [rows[design, card, rate, m] for m in models]
@@ -679,16 +701,31 @@ def report(D: dict) -> str:
              "credited MAC (uncredited decode, other jobs) move the duals onto the joint facet and tensor. Cells: "
              "credited share (routes uncredited at those duals), 8B / 70B / V4. The share is x = 0's with its routes "
              "factor moved to x's (beside work overlaps the credited rounds, whose OPT* price at the period's duals "
-             "is at least the period time they add); the value test stays at x = 0.\n")
+             "is at least the period time they add); the value test stays at x = 0. `v3.1, RTX PRO 6000 PV L′ 64` is "
+             "PB5's case: v3.1's static picks and the RTX PRO 6000's PV at L′ 64 wherever its round's γ ≤ 10 (else "
+             "v3.1's pick).\n")
     B = D["beside"]
     names = list(dict.fromkeys(k[0] for k in B))
     L.append("| picks, card | " + " | ".join(f"x = {x:g}" for x in BESIDE) + " |")
     L.append("|---|" + "---|" * len(BESIDE))
     for card in vc.CARDS:
         for name in names:
+            if (name, card, models[0], 0.0) not in B:
+                continue
             L.append(f"| {name}, {card} | " + " | ".join(
                 " / ".join(pct(B[name, card, m, x]["share"], 1) for m in models) + " ("
                 + " / ".join(pct(B[name, card, m, x]["leak"], 1) for m in models) + ")" for x in BESIDE) + " |")
+    L.append("\nPB4: the same periods by makespan, which needs no duals. Cells: 1 − c_inc, the share of the credited "
+             "rounds' honest makespan increment over the period's fixed load alone that pub's period saves, 8B / 70B / "
+             "V4, beside the dual-price figure above. Credit stays at the duals (P12); c_inc shows how much of that "
+             "figure is a marginal price on slack the period still has.\n")
+    L.append("| picks, card | " + " | ".join(f"x = {x:g}" for x in BESIDE) + " |")
+    L.append("|---|" + "---|" * len(BESIDE))
+    for card in vc.CARDS:
+        for name in ("v3", HEADLINE, *RTX_ONLY, "dual-safe"):
+            if (name, card, models[0], 0.0) in B:
+                L.append(f"| {name}, {card} | " + " | ".join(
+                    " / ".join(pct(1 - B[name, card, m, x]["c_inc"], 1) for m in models) for x in BESIDE) + " |")
     for card in vc.CARDS:
         taus = [n for n in names if n.startswith("τ ")]
         best = {}
