@@ -284,27 +284,25 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   in the PR's body names, else the Cursor agent id the body carries. Marks written before `marked_after` in
   `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out. `research queue status` says what each PR
   waits for.
-- Drive stacks admitted PRs on `next`, one merge commit each. What a sync merges goes non-Lean first (`nonlean_first`,
-  drive.toml): a PR whose own change is no Lean change goes below every Lean change, unless it contains one, `--first`'s
-  order and then admission's within each part; members a sync keeps never move for it. Reviewers, agents ci staffs and
-  never the PR's owner, read `next` bottom up: `research queue review` lists the members above `main` with no land
-  verdict at their head (number, head, owner, files, whether it waits for a Lean check), and `research queue review N --land [--ref NOTE] --by LANE` or
+- Drive stacks admitted PRs on `next`, one merge commit each, non-Lean first (`nonlean_first`, drive.toml): a sync puts
+  a PR whose own change is no Lean change below every Lean change it doesn't contain, in `--first`'s order and then
+  admission's, and never moves a member it keeps. Reviewers, agents ci staffs and never the PR's owner, read `next`
+  bottom up: `research queue review` lists the members above `main` with no land verdict at their head (number, head,
+  owner, files, whether it waits for a Lean check), and `research queue review N --land [--ref NOTE] --by LANE` or
   `--hold REASON --by LANE` records one, a `reviewed` label on `pr:N@HEAD`. A verdict by the owner, its handle or its
   ready mark's author doesn't count, and a new head needs a new one. No change waits on any other per-head grant: not
   red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
-- Each tick, drive fast-forwards `main` to the top of the longest prefix of `next` whose every member has a land verdict and
-  no hold. Before it lands, in minutes: the merge onto `next` is clean, and every `.py` file the landing leaves compiles
-  (drive ejects the PR that broke one). A PR that changes a `lean-audit.json` lock, or Lean that runs as code (a `.lean`
-  file outside `Security/`), waits for its Lean check; Lean proofs alone land on the verdict (Daniel, 25 Oct 11:19 PM PDT): a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
-  the reviewed prefix's top (`train.sh TOP MACHINES --deferred lean-audit`), and after a failure there on the PR's own commit;
-  only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too. The top
-  stops below a PR that came onto `next` in the same tick. While a check runs, a Lean change above it, reviewed or not, gets
-  one stacked at `next`'s top (at most `max_lean_checks` running, drive.toml); the lower one runs on. Each check launched or
-  stacked stops at a cut point, after the first ceil(n / f) of the n Lean changes it would hold (f: the checks still free),
-  lowest first, so a failure holds only what's above it. A rebuilt `next` with
-  the same PRs at the same heads keeps a check, and an eject from its prefix rebuilds `next` only once it ends (a stacked
-  check's: at once). A PR containing an unmarked PR of the same owner, or one its owner withdrew, carries that change and
-  doesn't wait for it.
+- Each tick, drive fast-forwards `main` to the top of the longest prefix of `next` whose every member has a land verdict
+  and no hold. Before it lands, in minutes: the merge onto `next` is clean, and every `.py` file the landing leaves
+  compiles (drive ejects the PR that broke one). A PR that changes a `lean-audit.json` lock, or Lean that runs as code
+  (a `.lean` file outside `Security/`), waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or
+  above it, which drive launches on the reviewed prefix's top, and after a failure there on the PR's own commit; only a
+  failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too. Lean proofs
+  alone land on the verdict and are checked after landing (Daniel, 25 Oct). The top stops below a PR that came onto
+  `next` in the same tick. While a check runs, a Lean change above it gets one stacked (at most `max_lean_checks`
+  running, drive.toml); the lower one runs on. Each check stops at a cut point, after the first ceil(n / f) of the n
+  Lean changes it would hold (f: the checks still free), so a failure holds only what's above it. A PR containing an
+  unmarked PR of the same owner, or one its owner withdrew, carries that change and doesn't wait for it.
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
   itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
