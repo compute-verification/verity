@@ -136,6 +136,63 @@ def AccPorts (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ →
       _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht wt q.key) e =
         Rows.elemReadC (Top.accRC rd key) X ms' cs q.key e + δ ((j - accBase X) % 2)
 
+/-- **`resPieces_computesAt` at a pinned witness** (`PartAcceptsP`): the same share, asked only at the part's own
+witness `w`. -/
+theorem resPieces_computesP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
+    {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
+    {x : Msg} {c : ℕ → Coin} {w : Claims.Flock.Wit} {ms : List Msg}
+    (h : PartAcceptsP H D (deployZkRec _root_.Flock.Readable.relation) L shape (showsPart untr b) cmt s x c w ms)
+    {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss)
+    {j : ℕ} {nm : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm pt))
+    (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
+    (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (hpc : ∀ (xO : Msg) (p : _root_.Flock.Readable.Parsed),
+      _root_.Flock.Readable.parseBytes readOfO xO = some p →
+      Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO w = true →
+      showsPart untr b s x xO c → L.Agrees cmt x s w xO ms → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
+      (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false →
+      ∀ q ∈ pieces (Claims.Recursion.xI D x), ownQ x q = some s →
+        ∃ ht : 0 < p.sts.size, 0 < p.sts[0].c.g ∧
+          (q.key.2.1 + q.key.2.2.1) / p.sts[0].c.g < 2 ^ (p.sts[0].m - p.sts[0].c.kLog) ∧
+          q.key.2.2.2 < p.sts[0].c.upv ∧
+          ∀ (m k cl jj : ℕ) (sh : _root_.Flock.Shape) (holo : Bool) (S : _root_.Flock.RecOpen.GfS) (ns : List ℕ)
+            (nv : ℕ), _root_.Flock.RecResiduals.params p.sts[0].c.unit.name = some (m, k, cl, jj) →
+            _root_.Flock.RecResiduals.shape? m k cl = some sh →
+            _root_.Flock.RecResiduals.holoOf p.sts[0].c = .ok holo →
+            _root_.Flock.RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) →
+            S = q.S ∧ q.key.1 = jj ∧
+            ResTie S ns nv
+              (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)
+              (keyCopy p ht w q.key) ∧
+            ∀ os last, Bd.final (ms.getD (Bd.DE.V.k (Claims.Recursion.xI D x) - 1) []) = some (os, last) →
+              os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) →
+              ResZero S (_root_.Flock.Readable.rowsRead ns nv (keyCopy p ht w q.key))
+                  (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) →
+                ResZero S (elemAt (Claims.Recursion.xI D x) (Bd.opened os last)
+                    ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)
+                  (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)) :
+    PiecesComputes Bd D pieces (resHolds elemAt vvAt) ownQ s x c ms := by
+  obtain ⟨-, xO, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
+  obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, -, htab⟩ := stagedReads hs
+  have hck' : Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO w =
+      true := hck
+  have hcp := _root_.Flock.Readable.stmtCopies_of_allOuts htab
+    (_root_.Flock.Readable.allOuts_of_check hck' hx ht hpi)
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hsv'
+  cases hsv'
+  intro q hq ho os last hf hl
+  obtain ⟨ht', hG, ho', hu, hch⟩ := hpc xO p hx hck' hs ⟨hh, hp, hm, hrw⟩ hT hc q hq ho
+  obtain ⟨m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4, hro⟩ :=
+    _root_.Flock.Readable.innerCopies ht' ho' (Nat.mod_lt _ hG) hu hcp
+  obtain ⟨rfl, -, htie, hE⟩ := hch m k cl jj sh holo S ns nv h1 h2 h3 h4
+  exact hE os last hf hl (resVal_zero_of_tie hro htie)
+
 /-- **`ResLowered` at the parts' own witnesses**: at a compiled statement of the shape where every part accepts at its
 own witness and the parts' own messages (`JointP`), each algebra part's `rec-residuals` pieces hold
 (`resHolds elemAt vvAt`). This is the acceptance KS holds where it reads `hres` (`RestLowR`'s `hJ`). -/
