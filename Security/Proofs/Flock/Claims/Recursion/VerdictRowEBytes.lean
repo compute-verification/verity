@@ -78,20 +78,9 @@ open FlockVBridge (ColsHold)
 
 /-! ## Bytes and columns -/
 
-theorem foldl_words : ∀ (l : List Port) (a : ℕ), l.foldl (· + ·.words) a = a + (l.map (·.words)).sum
-  | [], a => by simp
-  | p :: l, a => by
-      simp only [List.foldl_cons, List.map_cons, List.sum_cons, foldl_words l]
-      omega
-
-theorem extract_words (ps : Array Port) (q : ℕ) :
-    (ps.extract 0 q).foldl (· + ·.words) 0 = ((ps.toList.take q).map (·.words)).sum := by
-  rw [← Array.foldl_toList, Array.toList_extract, List.extract_eq_take_drop, List.drop_zero, Nat.sub_zero,
-    foldl_words, Nat.zero_add]
-
 theorem extract_two (ps : Array Port) (h : 2 ≤ ps.size) :
     (ps.extract 0 2).foldl (· + ·.words) 0 = (ps[0]'(by omega)).words + (ps[1]'(by omega)).words := by
-  rw [extract_words]
+  rw [extract_words Port.words]
   rcases ps with ⟨_ | ⟨a, _ | ⟨b, l⟩⟩⟩
   · simp at h
   · simp at h
