@@ -93,6 +93,67 @@ def strassen_overlapped(lane_load: float, pX: float, pW: float, lane_per_add: fl
     return best
 
 
+def scheme_overlapped(terms: list[int], rank: int, mkn: int, R: dict, lane_load: float, lane_per_add: float,
+                      c_op: float = 8, port_per_add: float = 8, staging: float = 0.22) -> tuple[float, dict]:
+    """One level of a scheme under G2's per-resource maximum (time in standard tensor units). terms lists every summed
+    form's term count (both sides); forms of equal count are interchangeable, so the split is chosen per count."""
+    def lo(p: float) -> float:
+        return (4 * p**3 * (1 - p) + 2 * p**4) / 4
+
+    counts = {t: terms.count(t) for t in sorted(set(terms)) if t > 1}
+    ps = {t: R[min(t, 8)][0] for t in counts}
+    best = (float("inf"), {})
+    for js in itertools.product(*[range(c + 1) for c in counts.values()]):
+        split = dict(zip(counts, js, strict=True))
+        tensor = (rank + 0.5 * sum(js)) / mkn
+        adds = sum((counts[t] - j) * ps[t] for t, j in split.items()) / mkn
+        lanes = lane_load + lane_per_add * adds + c_op * sum(j * lo(ps[t]) for t, j in split.items()) / mkn
+        port = port_per_add * adds + staging * tensor
+        best = min(best, (max(tensor, lanes, port), split), key=lambda x: x[0])
+    return best
+
+
+def wrapped_pair_overflow(u: int = U) -> float:
+    """Overflow of a two-term sum of level-1 wrapped forms f = wrap8(x1 + x2), x = b + N at data 0 (depth-2 routes)."""
+    s = np.convolve(dist(0, u), dist(0, u))
+    f = np.zeros(256)
+    for i, w in enumerate(s):
+        f[(i - 256 + 128) % 256] += w
+    return overflow([f, f], (1, 1))
+
+
+def strassen2_overlapped(lane_load: float, lane_per_add: float, c_op: float = 8, port_per_add: float = 8,
+                         staging: float = 0.22, u: int = U) -> dict[str, float]:
+    """Depth-2 Strassen under G2's per-resource maximum (time in standard tensor units), two correction plans.
+
+    direct: every level-2 form corrected once (A and B forms of 1, 2 or 4 terms, 49 leaves of mkn/64).
+    hierarchical: level-1 forms wrapped and corrected at level 1 (10 forms of mkn/8), then level-2 two-term forms of
+    raw blocks or of wrapped bytes. Each summed form goes to one 2:4 pass with lane leftovers or to lane adds.
+    """
+    def lo(p: float) -> float:
+        return (4 * p**3 * (1 - p) + 2 * p**4) / 4
+
+    R = rates(4)
+    p2, p4, pf = R[2][0], R[4][0], wrapped_pair_overflow(u)
+    # (count, weight a form, overflow) per class; weight = the form's product size over mkn
+    plans = {
+        "direct": [(20, 1 / 64, p2), (25, 1 / 64, p4)] * 2,
+        "hierarchical": [(5, 1 / 8, p2), (10, 1 / 64, p2), (25, 1 / 64, pf)] * 2,
+    }
+    out = {}
+    for name, classes in plans.items():
+        best = float("inf")
+        for js in itertools.product(*[range(0, n + 1, max(1, n // 10)) for n, _, _ in classes]):
+            pairs = list(zip(js, classes, strict=True))
+            tensor = 49 / 64 + sum(0.5 * j * w for j, (_, w, _) in pairs)
+            adds = sum((n - j) * w * p for j, (n, w, p) in pairs)
+            lanes = lane_load + lane_per_add * adds + c_op * sum(j * w * lo(p) for j, (_, w, p) in pairs)
+            port = port_per_add * adds + staging * tensor
+            best = min(best, max(tensor, lanes, port))
+        out[name] = best
+    return out
+
+
 STRASSEN_NU = [(2, 2), (2, 1), (1, 2), (1, 2), (2, 1), (2, 2), (2, 2)]
 WINOGRAD_NU = [(1, 1), (1, 1), (4, 1), (1, 4), (2, 2), (3, 3), (2, 2)]
 
@@ -147,10 +208,9 @@ def check(Lm, Rm, Pm, m, k, n) -> str | None:
     B = rng.integers(-9, 10, (k, n))
     La, Ra, Pa = (np.array(x, dtype=object) for x in (Lm, Rm, Pm))
     for ta, tb, tc in itertools.product((0, 1), repeat=3):
-        a = (A.T if ta else A).flatten() if not ta or m == k else None
-        b = (B.T if tb else B).flatten() if not tb or k == n else None
-        if a is None or b is None:
-            continue
+        a, b = (A.T if ta else A).flatten(), (B.T if tb else B).flatten()
+        if La.shape[1] != a.size or Ra.shape[1] != b.size or Pa.shape[0] != m * n:
+            return None
         prod = (La @ a.astype(object)) * (Ra @ b.astype(object))
         C = A @ B
         if np.array_equal(Pa @ prod, (C.T if tc else C).flatten().astype(object)):
