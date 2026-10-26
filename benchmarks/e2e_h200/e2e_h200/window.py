@@ -28,8 +28,10 @@ position p reads key j < n = p + 1 at step s - p + j, in the row that sequence h
 read opens the widest row holding its bytes and an output the narrowest, so the same calls work on today's
 ``families/v1`` layout (`commit.layout`), where a gather's row re-commits its parts' bytes.
 
-Binding a port's words to the segments of rows opened under the step roots is the drawn-block bundle's (CMP-161) and
-C-Flock's statement's: the windows wiring reads a row whole, and a port here is pieces of rows.
+`Window.bundle` gives the same pieces as the drawn-block bundle's ``locate`` returns them (CMP-161: a ``Read``'s
+commit unit and rank, the port word it fills and its bytes in the row; ``n`` a ``Position``; an output that is one whole
+row as ``(unit, rank, None)``). Binding a port's words to the segments of rows opened under the step roots is that bundle's
+and C-Flock's statement's: the windows wiring reads a row whole, and a port here is pieces of rows.
 """
 from __future__ import annotations
 
@@ -389,6 +391,36 @@ class Window:
         lo = u.offset + index * u.stride
         codes = self._segments(step, slot, u.table, lo, lo + u.nbytes, widest=False)
         return (codes, (self._scale(step, slot, u.table, codes[0]),)) if u.scale else (codes,)
+
+    def bundle(self, step: int, slot: int, family: str, index: int, port: str) -> Any:
+        """Port ``port`` of the block as the drawn-block bundle's ``locate`` returns it (CMP-161's stub, KVREADS 20:58Z):
+
+        - an output row (``o0``, a quantizer's scale ``o1``) that is one whole committed row: ``(unit, rank, None)``;
+        - otherwise a list of pieces, each a ``Read``'s fields ``{step, slot, unit, rank, at, start, nbytes}`` or a
+          ``Position``'s ``{offset, at}`` (``n`` = position + 1: offset 1), ``at`` the port row's first word it fills and the
+          words no piece covers zero (`Absent` keys);
+        - ``None`` for a registered read (the weights: `locate`'s `Registered` pieces)."""
+        if port in ("o0", "o1"):
+            segs = self.outputs(step, slot, family, index)[int(port[1])]
+            if len(segs) == 1 and segs[0].offset == 0 and segs[0].nbytes == self.row_bytes(segs[0].row):
+                return self.unit_of(segs[0].row) + (None,)
+            pieces: tuple[Piece, ...] = segs
+        else:
+            pieces = self.locate(step, slot, family, index, port)
+        if all(isinstance(p, Registered) for p in pieces):
+            return None
+        out, at = [], 0
+        for p in pieces:
+            if isinstance(p, Segment):
+                unit, rank = self.unit_of(p.row)
+                out.append({"step": p.step, "slot": p.slot, "unit": unit, "rank": rank, "at": at, "start": p.offset,
+                            "nbytes": p.nbytes})
+            elif isinstance(p, Run) and p.name == "n":
+                out.append({"offset": 1, "at": at})
+            elif not isinstance(p, Absent):
+                raise ValueError(f"{family}'s port {port} reads {p}, which the bundle has no piece for")
+            at += (2 if isinstance(p, Run) else p.nbytes) // 2
+        return out
 
     # -- values
 

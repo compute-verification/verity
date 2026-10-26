@@ -17,7 +17,7 @@ import pytest
 
 import run as RUN
 from e2e_h200 import window as W
-from e2e_h200.commit import Committer, _slots, fixture_salt, fixture_secrets, layout as families_layout
+from e2e_h200.commit import Committer, _layout, _slots, fixture_salt, fixture_secrets, layout as families_layout
 from e2e_h200.driver import Driver
 from e2e_h200.shape import FROZEN, MINI, PV_K
 from e2e_h200.slots import Request, SlotKV, SlotShape
@@ -99,6 +99,32 @@ def test_a_linears_x_is_its_quantizers_r_rows_and_attention_reads_k_and_v_at_the
     assert frozen.locate(7, 1, "l3.pv", 9, "v8") == (W.Absent(128),)
     with pytest.raises(ValueError, match="gather"):
         frozen.locate(7, 1, "l3.pv.gather", 0, "x")
+
+
+def test_the_bundles_pieces_on_families_v1_at_the_frozen_shape_are_cmp_161s() -> None:
+    """KVREADS's stub (CMP-161, 20:58Z) on the layout r20261026-195842-f3ca committed under: K and V are their gathers' rows,
+    a linear's x its quantizer's chunk units, an output its own unit's row."""
+    lay, bases = _layout(FROZEN)
+    assert lay.digest.hex().startswith("1791efa8")
+    win = W.Window(FROZEN, lockstep(FROZEN.context, 2), lay)
+    read = lambda s, unit, rank, at, n, start=0: {"step": s, "slot": 1, "unit": unit, "rank": rank, "at": at,  # noqa: E731
+                                                   "start": start, "nbytes": n}
+    assert win.bundle(7, 1, "l3.softmax", 5, "k") == [read(t, bases["l3.wk.gather"], 0, 64 * t, 128) for t in range(8)]
+    assert win.bundle(7, 1, "l3.softmax", 5, "n") == [{"offset": 1, "at": 0}]
+    assert win.bundle(7, 1, "l3.softmax", 5, "q") == [read(7, bases["l3.wq.gather"] + 5, 0, 0, 128)]
+    assert win.bundle(7, 1, "l3.pv", 5, "v7") == [read(7, bases["l3.wv.gather"], 0, 0, 128)]
+    assert win.bundle(7, 1, "l3.pv", 5, "v8") == []
+    assert win.bundle(7, 1, "l3.wdown", 9, "x5") == [read(7, bases["l3.down_quant"] + 5, 0, 0, 8192)]
+    assert win.bundle(7, 1, "l3.wdown", 9, "sx") == [read(7, bases["l3.down_quant"], 1, 0, 4)]
+    assert win.bundle(7, 1, "l3.wdown", 9, "wrow2") is None
+    assert win.bundle(7, 1, "l3.wq", 5, "o0") == (bases["l3.wq"] + 5, 0, None)
+    assert win.bundle(7, 1, "l3.attn_quant", 1, "o1") == (bases["l3.attn_quant"] + 1, 1, None)
+
+
+def test_under_shared_rows_an_output_is_a_window_of_its_row(frozen) -> None:
+    first = frozen.outputs(7, 1, "l3.wq", 0)[0][0].row
+    assert frozen.bundle(7, 1, "l3.wq", 517, "o0") == [{"step": 7, "slot": 1, "unit": first + 1, "rank": 0, "at": 0,
+                                                        "start": 10, "nbytes": 2}]
 
 
 # -- the round trip at MINI
