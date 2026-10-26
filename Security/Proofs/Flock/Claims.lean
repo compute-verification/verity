@@ -172,6 +172,7 @@ import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 import Proofs.Flock.Claims.Recursion.NonVacuous
 import Proofs.Flock.Claims.Recursion.VerdictRowEAcc
+import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
