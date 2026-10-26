@@ -24,6 +24,7 @@
   "Flock.Test.Part",
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
+  "Flock.Test.RecCompose",
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
   "Flock.Test.RegProgram",
