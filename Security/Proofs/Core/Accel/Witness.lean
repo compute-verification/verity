@@ -1,4 +1,5 @@
 import Definitions.Core.Accel.Witness
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Ring.NNRat
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Ring
@@ -6,8 +7,9 @@ import Mathlib.Tactic.Ring
 /-!
 # The non-vacuity witness, proved (in progress)
 
-The run of a plan issues exactly the plan's instructions, tick by tick (`run_kernel`), since each thread's text is one
-instruction and each thread steps once. The kernel's length is within the bound (`kernel_length_le`).
+The run of a plan issues exactly the plan's instructions, tick by tick (`run_plan`), since each thread's text is one
+instruction and each thread steps once. The kernel's length is within the bound (`kernel_length_le`), and every tick
+is within every resource's rate, so the run meets G2's rates (`kernel_rate`).
 -/
 
 open scoped NNRat
@@ -145,5 +147,83 @@ theorem kernel_length_le (n : ℕ) (h : 256 ∣ n) :
   have := add_le_add (le_refl (2 * (n : ℚ≥0) + (n : ℚ≥0) ^ 3 / 524288)) hs'
   rw [hl, h3]
   simpa only [add_assoc] using this
+
+/-! ## Rate -/
+
+/-- The units of resource `r` a tick's instructions use. -/
+def tickUse (x : Open) (is : List Ins) (r : Res) : ℚ≥0 :=
+  (is.map fun a => opUse (card.weightOf x) (card.scale x) x.madHi a.1.1 r).sum
+
+theorem usage_plan (plan : List (List Ins)) (t : ℕ) (r : Res) :
+    Machine.usage (m := machine x cap oracle) (plan.map (List.map Ins.instr)) t r =
+      tickUse x (plan.getD t []) r := by
+  simp only [Machine.usage, tickUse, List.getD_eq_getElem?_getD, List.getElem?_map]
+  cases plan[t]? <;> simp only [Option.map_none, Option.map_some, Option.getD_none, Option.getD_some,
+    List.map_map] <;> rfl
+
+theorem dram_ge : (604 : ℚ≥0) ≤ ρ .dram := by
+  rw [ρ, le_div_iff₀ (by norm_num)]
+  norm_num
+
+theorem inv32_le : (32 : ℚ≥0)⁻¹ ≤ ρ .issue := by
+  rw [← one_div, div_le_iff₀ (by norm_num)]
+  norm_num [ρ]
+
+theorem smem_ge : (512 : ℚ≥0) ≤ ρ .smem := by
+  norm_num [ρ]
+
+theorem load_use (n c : ℕ) (hn : n ≤ 2048) (r : Res) : tickUse x [load n c] r ≤ ρ r := by
+  have h4 : ((n / 4 : ℕ) : ℚ≥0) ≤ 512 := by exact_mod_cast (by omega : n / 4 ≤ 512)
+  unfold load
+  split <;> cases r <;> simp [tickUse, copyN, opUse, port] <;>
+    first
+    | exact inv32_le
+    | exact h4.trans ((by norm_num : (512 : ℚ≥0) ≤ 604).trans dram_ge)
+    | exact h4.trans smem_ge
+
+theorem mma_use (n p : ℕ) (r : Res) : tickUse x [mma n p] r ≤ ρ r := by
+  have ha : packedWords 64 (Fmt.s8.rowLen 32) Fmt.s8.bits = 512 := by decide
+  have hb : packedWords 256 (Fmt.s8.rowLen 32) Fmt.s8.bits = 2048 := by decide
+  cases r <;> simp [tickUse, mma, mmaOp, opUse, port, ρ, Card.weightOf, card, weight, Shape.wa, Shape.wb, ha, hb] <;>
+    norm_num
+
+theorem store_use (n u : ℕ) (r : Res) : tickUse x ((chunk (n * n / 4) 151 u).map (store n)) r ≤ ρ r := by
+  have hc : ((chunk (n * n / 4) 151 u).length : ℚ≥0) ≤ 151 := by
+    exact_mod_cast (by simp [chunk] : (chunk (n * n / 4) 151 u).length ≤ 151)
+  have h : tickUse x ((chunk (n * n / 4) 151 u).map (store n)) r =
+      (chunk (n * n / 4) 151 u).length * opUse (card.weightOf x) (card.scale x) x.madHi (.copy .reg .dram 4) r := by
+    simp only [tickUse, List.map_map]
+    rw [show ((fun a : Ins => opUse (card.weightOf x) (card.scale x) x.madHi a.1.1 r) ∘ store n) =
+      fun _ => opUse (card.weightOf x) (card.scale x) x.madHi (.copy .reg .dram 4) r from rfl,
+      List.map_const', List.sum_replicate, nsmul_eq_mul]
+  rw [h]
+  cases r <;> simp [opUse, port]
+  · rw [← one_div, ← mul_div_assoc, mul_one, div_le_iff₀ (by norm_num)]
+    exact hc.trans (by norm_num [ρ])
+  · exact (mul_le_mul_of_nonneg_right hc (by norm_num)).trans ((by norm_num : (151 * 4 : ℚ≥0) ≤ 604).trans dram_ge)
+
+theorem kernel_tick_use (n : ℕ) (hn : n ≤ 2048) (t : ℕ) (r : Res) :
+    tickUse x ((kernel n).getD t []) r ≤ ρ r := by
+  rcases h : (kernel n)[t]? with _ | is
+  · simp [List.getD_eq_getElem?_getD, h, tickUse]
+  · rw [List.getD_eq_getElem?_getD, h, Option.getD_some]
+    have hm := List.mem_of_getElem? h
+    simp only [kernel, List.mem_append, List.mem_map, List.mem_range] at hm
+    rcases hm with (⟨c, _, rfl⟩ | ⟨p, _, rfl⟩) | ⟨u, _, rfl⟩
+    · exact load_use n c hn r
+    · exact mma_use n p r
+    · exact store_use n u r
+
+/-- **G2's rates**: every tick of the kernel is within every resource's rate, so every window is. -/
+theorem kernel_rate (n : ℕ) (hn : n ≤ 2048) (σ : (machine x cap oracle).State (ℕ × ℕ)) (hpc : ∀ θ, σ.pc θ = 0) :
+    Machine.Rate (Machine.run (prog (kernel n)) σ (sched (kernel n))).2 := by
+  intro w (r : Res)
+  rw [run_plan _ σ hpc]
+  calc ∑ t ∈ w.ticks, Machine.usage (m := machine x cap oracle) ((kernel n).map (List.map Ins.instr)) t r
+      ≤ ∑ _t ∈ w.ticks, ρ r :=
+        Finset.sum_le_sum fun t _ => by rw [usage_plan]; exact kernel_tick_use n hn t r
+    _ = ρ r * (w.len : ℚ≥0) := by simp [Window.ticks, mul_comm]
+    _ ≤ ρ r * ((w.len + x.slack : ℕ) : ℚ≥0) :=
+        mul_le_mul_of_nonneg_left (by exact_mod_cast Nat.le_add_right _ _) zero_le
 
 end Verity.Accel.H200.Resident
