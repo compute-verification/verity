@@ -52,6 +52,16 @@ but on the H200 every variant that moves rotations there measured slower, as `SH
 default is `0000`, plain funnel shifts, and `pouw` (commit_gpu's `sha::compress`, the loop commit_slots runs) is within 1%
 of it. `rows.cu` builds the row kernel in every variant in `VARIANTS`; `SHA512_ROWS_V` sets the other kernels' variant.
 
+Mode 3 is the balanced schedule (HASH-23). `0033` takes S0 and S1 off the ALU. Its SASS has 2,637 ALU instructions and
+2,328 IMAD slots a compression (IMAD.WIDE counts 2), where the default has 3,405 and 152, so the pipe bound falls from 53.2
+SM-clocks to 41.2 (1.29x). On commit_gpu's ruler (`ruler.sh`, run r20261026-045623-03b9, 1,980 MHz throughout) it runs
+at 4.50 G/s, 0.94x of commit_gpu's default (4.79), which is 58.1 SM-clocks. The default is ALU-bound (ncu: ALU pipe 97.6%
+busy). `0033` is bound by no one pipe (ALU 71%, FMA heavy 63%, issue 59%): its 58.1 clocks lie between the slower pipe's
+41.2 and the two pipes' sum, 77.6, because the scheduler overlaps them only in part. Its ~5.3 warps a scheduler stall on
+pipe throttle and on dispatch, which the default never does. Two of the schedule's forms don't survive ptxas: a mad.wide
+with a 64-bit addend becomes a mul.wide and an IADD3, so an add can't leave the ALU that way, and a mad.hi's addend costs
+two moves. `rotr3` uses neither.
+
 ## Measured
 
 On the H200 at 1,980 MHz (run r20261026-011257-b954, bench.py at 4 layers a call), a whole step at the frozen shape takes
