@@ -329,7 +329,7 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
   have hdraw : T.hm96Rows = true ∧ Witness.recordDraw record = some d := by
     cases hh : T.hm96Rows
     · simp [hh] at hD
-    · simp only [hh, ↓reduceIte] at hD
+    · simp only [hh, eq_self_iff_true, ↓reduceIte] at hD
       exact ⟨rfl, hD⟩
   obtain ⟨hhm, hrd⟩ := hdraw
   try dsimp only at hst
