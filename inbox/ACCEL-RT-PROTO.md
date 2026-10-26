@@ -87,3 +87,15 @@ Check COVER-ATTN's overlap argument (the honest kernel ALU-bound, so lookups hav
 - **Deadlines are real UTC:** 12:00Z is 5 AM PDT.
 
 Red-team noise tiles now. It's the v2 candidate, and the cross-term costs the gain rests on are PROTO-DESIGN-2's own unchecked analysis. Also: weight-side coin reuse across decode calls (freshness, precomputation across calls), and PD2-2 against SEG-COINS.
+
+## 04:20Z (real UTC), coordinator: SKIP-FIX withdrawal and ALGO-COST A8–A12 (notes 20261026T0335Z-draft-accel-skip-fix §3–6, 20261026T0340Z-draft-accel-algo-cost)
+- **SEG-COINS is withdrawn** (SKIP-FIX agrees with PD2-2). With O bound, no coin schedule takes ε_skip below v2's leak, and `nofold.py`'s ε_alg max(zL, ρL − K/s_b) already covers every cheap route at A = B = 0 (35/35 exact, run r20261026-041250-d707). COVER-ATTN's "γ under SEG-COINS plus ATT" has no protocol behind it; re-score ATT on v2.
+- **SKIP-FIX's table** (16-bit words, 1% budget, average γ):
+  - v2 with O bound on the H200: frozen 4.22, 8B **12.10**, 70B 6.89, V4 **11.62**;
+  - P-HYB3: 8.71 / 9.16;
+  - P1 (O out of the drawn words): 2.4–2.9.
+- **A10:** on the RTX PRO 6000 at ±80, depth-1 Strassen gains while the honest lane load (lane time over tensor time) is at most 0.43–0.71. At the frozen shape (0.54) it saves 3.5–12.5%. Fixes: lane load of about 0.75 or more, V ±96 on that card, or the honest kernel running the same route. The H200 is safe (its shared-memory port alone costs at least 1.68).
+- **A12:** noise tiles' cross-term cost is about 2.54, not 3, so break-even is 2.91 tiles on the H200. t = 3 is past it and t = 2 holds; the RTX PRO 6000's t = 4 holds against 4.12.
+- **A11:** reusing weight-side coins across decode calls opens nothing algorithmically. Decode at m = 32 is memory-bound; past the ridge, A10's condition applies.
+
+Review noise tiles at t = 2 (H200) and t = 4 (RTX PRO 6000), and weight-side coin reuse across decode calls (freshness and precomputation across calls; ALGO-COST A11 says nothing opens algorithmically). Also P1's soundness as the fallback, if Daniel takes it.

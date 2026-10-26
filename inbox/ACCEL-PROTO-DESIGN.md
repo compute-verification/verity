@@ -358,3 +358,20 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 - v1 and v2's committed words are full 8-bit, so Theorem 1 applies directly: naive is cheapest to depth 13 on the H200 and 12 on the RTX sheet.
 - Noise stripping costs at least 1.861× the honest word at every depth ≤ 13 (the leftover is a product of inner dimension 2L), so it does not open v1.
 - Per term, the binding term VUᵀ at depth 13 isn't held by any u_X ≤ 127 with U ±80. But served shapes need depth ≤ 10 (n ≤ 65536, b_min ≥ 64), and every u_X from 72 holds to 12. **The coordinator's decision: ±80 on both sides stays v2's noise.** ±96 on both is the margin if anything else breaks it.
+
+## 04:20Z (real UTC), coordinator: SKIP-FIX withdrawal and ALGO-COST A8–A12 (notes 20261026T0335Z-draft-accel-skip-fix §3–6, 20261026T0340Z-draft-accel-algo-cost)
+- **SEG-COINS is withdrawn** (SKIP-FIX agrees with PD2-2). With O bound, no coin schedule takes ε_skip below v2's leak, and `nofold.py`'s ε_alg max(zL, ρL − K/s_b) already covers every cheap route at A = B = 0 (35/35 exact, run r20261026-041250-d707). COVER-ATTN's "γ under SEG-COINS plus ATT" has no protocol behind it; re-score ATT on v2.
+- **SKIP-FIX's table** (16-bit words, 1% budget, average γ):
+  - v2 with O bound on the H200: frozen 4.22, 8B **12.10**, 70B 6.89, V4 **11.62**;
+  - P-HYB3: 8.71 / 9.16;
+  - P1 (O out of the drawn words): 2.4–2.9.
+- **A10:** on the RTX PRO 6000 at ±80, depth-1 Strassen gains while the honest lane load (lane time over tensor time) is at most 0.43–0.71. At the frozen shape (0.54) it saves 3.5–12.5%. Fixes: lane load of about 0.75 or more, V ±96 on that card, or the honest kernel running the same route. The H200 is safe (its shared-memory port alone costs at least 1.68).
+- **A12:** noise tiles' cross-term cost is about 2.54, not 3, so break-even is 2.91 tiles on the H200. t = 3 is past it and t = 2 holds; the RTX PRO 6000's t = 4 holds against 4.12.
+- **A11:** reusing weight-side coins across decode calls opens nothing algorithmically. Decode at m = 32 is memory-bound; past the ridge, A10's condition applies.
+
+(PROTO-DESIGN-2, and PROTO-DESIGN-3 after it) **Decisions:**
+1. **Noise tiles:** t = 2 on the H200 (A12), t = 4 on the RTX PRO 6000, pending RT-PROTO's review. Recompute γ at t = 2.
+2. **A10, per-card:** on the RTX PRO 6000, choose the cheaper of (a) the honest kernel running the depth-1 route, so c_mm = 1 by construction (the honest kernel is the public best, as with COVER-ATTN's PV lookups), or (b) V ±96 on that card only. Per-card noise widths are allowed. Report the γ of each.
+3. **Decode:** weight-side coin reuse across calls is cleared algorithmically (A11). RT-PROTO checks freshness. Report decode γ with reuse at m = 1, 32 and 256.
+4. **O bound stays primary.** P1 (O out of the drawn words) goes to Daniel as the fallback if noise tiles at t = 2 don't bring the H200's 8B and V4 under 10. Put P1's row beside v2 in D6 either way.
+5. ε uses the cheapest registrable instance (A = B = 0), per RT-LEAN's L27 decision.

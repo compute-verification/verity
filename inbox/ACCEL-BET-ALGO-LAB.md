@@ -185,3 +185,15 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 
 ## 04:08Z (real UTC), coordinator: decisions on RT-LEAN L27, L28, L29 and L3 (note:20261026T0310Z-draft-accel-rt-lean; CMP-136)
 For D5, after RT-LEAN's L27/L28 decisions: price each method at the **cheapest registrable instance** (A = B = 0 for HYB-type noise), and include methods **with advice** (precomputed tables of bounded size, e.g. O-IO's lookups). Give pub_mm and pub_sha per card as named public programs; WORKSOUND-INST reads them.
+
+## 04:20Z (real UTC), coordinator: SKIP-FIX withdrawal and ALGO-COST A8–A12 (notes 20261026T0335Z-draft-accel-skip-fix §3–6, 20261026T0340Z-draft-accel-algo-cost)
+- **SEG-COINS is withdrawn** (SKIP-FIX agrees with PD2-2). With O bound, no coin schedule takes ε_skip below v2's leak, and `nofold.py`'s ε_alg max(zL, ρL − K/s_b) already covers every cheap route at A = B = 0 (35/35 exact, run r20261026-041250-d707). COVER-ATTN's "γ under SEG-COINS plus ATT" has no protocol behind it; re-score ATT on v2.
+- **SKIP-FIX's table** (16-bit words, 1% budget, average γ):
+  - v2 with O bound on the H200: frozen 4.22, 8B **12.10**, 70B 6.89, V4 **11.62**;
+  - P-HYB3: 8.71 / 9.16;
+  - P1 (O out of the drawn words): 2.4–2.9.
+- **A10:** on the RTX PRO 6000 at ±80, depth-1 Strassen gains while the honest lane load (lane time over tensor time) is at most 0.43–0.71. At the frozen shape (0.54) it saves 3.5–12.5%. Fixes: lane load of about 0.75 or more, V ±96 on that card, or the honest kernel running the same route. The H200 is safe (its shared-memory port alone costs at least 1.68).
+- **A12:** noise tiles' cross-term cost is about 2.54, not 3, so break-even is 2.91 tiles on the H200. t = 3 is past it and t = 2 holds; the RTX PRO 6000's t = 4 holds against 4.12.
+- **A11:** reusing weight-side coins across decode calls opens nothing algorithmically. Decode at m = 32 is memory-bound; past the ridge, A10's condition applies.
+
+D5 must include A10 (depth-1 Strassen with overflow fixes on idle lanes, RTX PRO 6000, conditional on lane load) and A12 (the noise-tile cross-term route at c_t ≈ 2.54).
