@@ -35548,17 +35548,17 @@
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Flock.Bridge.Defs": {
-   "digest": "2066f60a310d7297fe1855b5683400f0cdf1eb83d9aba363e0a3ee1736777e86",
+   "digest": "bcfc882f3882126038ecc34236a0fe80c070bb9a62d9c05eb3865aae20ac08c4",
    "definitions": {
     "Flock.Bridge.designOf": "e5be7fd7a1765ff0cef10e68d0ff78e2a3617ab8eb687abb78d1106ef2e2ab33",
     "Flock.Bridge.gateSize": "9be2e1033eefebe9f515773ff64c32af3e73f4eb99e1536319af87c6d2638a58",
     "Flock.Bridge.gateSize._sparseCasesOn_1": "92215865fe4995c663dd0f6d73b52a176353e27c9c6fac8febee0660ea3dd959",
-    "Flock.Bridge.lower": "293c1c11dc81fdec12cf0e316515c30cac4a21388d3648b2c782038bfe4d035a",
+    "Flock.Bridge.lower": "9dc601d013059072a332a14596b6c2d29afe212dab230d2f3057691e437c97ab",
     "Flock.Bridge.off": "00f96dc9a4cfaddf84708b194ec88ca6f950c01ba67065979e7ba1a5812d155a",
     "Flock.Bridge.partOf": "bf8dff9f84fde0befaaa9933ac2fa7360467cd837b7c4194017f5d0e44edca36",
     "Flock.Bridge.posOf": "816706274a0ad944c18d9916ab927994421e97ffb8444070f60a4131a61161e7",
-    "Flock.Bridge.progOf": "c80b40dbed5cd6027d7faed357d4c0cbf52fbb84060a3e3403467916e57a0a0f",
-    "Flock.Bridge.stmtOf": "7a06910c61be50f9e106d86904df0fd73849465cead185ba81aa8bf90b7fe1f7",
+    "Flock.Bridge.progOf": "0ba368ef5218ee39bf569a648d22aab627655992ceca0024eaeecb9f4f45f64c",
+    "Flock.Bridge.stmtOf": "17e0120f14f9c053ca5209e9aa98b48e7a6077aa252a2a79fc29698096d483e2",
     "Flock.Bridge.unitGates": "bd8a7b512af60ef14bfca33a08699df1646d2dc6ee5d8cbe739892b1af88de5f"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveStated"]
@@ -35589,9 +35589,10 @@
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveStated"]
   },
   "Proofs.Flock.Bridge.Statement": {
-   "digest": "ade6ecd8ae4b585d4a2937aaeec8198cf0843cbd203bbb7a944fd547204b6cc3",
+   "digest": "63243dd3389122f9e3a8848bb22f2c3eb8a6c882d0bd249aabfade16551e4874",
    "definitions": {
-    "Flock.Guarantees.SampledKSLive": "b63d1bf22b6198c8c65ac4cd14c558df2901687eb340b6b4152b5d93e5cb3780",
+    "Flock.Bridge.constsOf": "be9a0ea1abd126bde12485c1e9fda2c8e68e06155e71d25940c7f7fc78ad25e7",
+    "Flock.Guarantees.SampledKSLive": "1acdc82edfd5461a612bebfac8168486ef5420ba20a243b3034435546cb65b82",
     "Flock.Guarantees.SampledKSLiveStated": "31e4ef3dcdad15cc66cbbeaf9662a6446d28713b0c33995c48a799a43f55ac3d"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveStated"]
