@@ -17,7 +17,7 @@ from verity_vllm.engine import static_schedule
 from verity_vllm.config import RowEngine
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
-from verity_vllm.observe import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
+from verity_vllm.engine import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
 from verity_vllm.engine.build import (CASE, EXECUTION_ENFORCE_EAGER, Engine, build_engine, case_of, compilation_facts,  # noqa: F401
                                       effective_execution_doc, engine_kwargs_for, execution_label_of, observed_flash_attn_version,
                                       parse_engine_args, parse_target_arg, prepare_compiled_process_cache, resolved_async_scheduling,
