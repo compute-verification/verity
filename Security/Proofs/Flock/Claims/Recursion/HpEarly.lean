@@ -148,7 +148,7 @@ theorem hpEarly {mask : ℕ → ℕ → Bool} {I : InnerRec} {x : Msg} {w : Clai
     have hw : (wOs (VStarTrace.A mask) I x w ρ (hist.take (RestRead.kI x - 1)))[P[k].1]? =
         some (vstarWit (VStarTrace.A mask) I x w ρ (hist.take (RestRead.kI x - 1)) P[k].1) := by
       simp [wOs, List.getElem?_range hlt]
-    dsimp only
+    try dsimp only
     rw [hw]
     first
     | rw [Option.map_some', Option.getD_some]
