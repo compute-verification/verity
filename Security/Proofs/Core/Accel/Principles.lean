@@ -45,6 +45,7 @@ theorem p2Priced : P2Priced := by
   | copy s t n => cases s <;> cases t <;> simp [opUse, port]
   | atom s _ => cases s <;> simp [opUse, port]
   | red s t n _ => cases s <;> cases t <;> simp [opUse, port]
+  | dmma sh => simpa [opUse] using h
 
 theorem p2Frame : P2Frame := by
   intro ι m o src dst pred M l hl

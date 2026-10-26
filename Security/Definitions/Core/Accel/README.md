@@ -34,8 +34,8 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | QMMA.SF (sm_120 `kind::mxf8f6f4`) | `mma.sync` `.block_scale` | missing | block-scaled FP8 and FP6 |
 | HMMA.SP, IMMA.SP, QMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | covered | `Op.mmaSp`: the kept pairs (each kept element of A with the element of B its 2-bit selector names) at the dense forms' tensor units a real product, so twice the logical rate; dots `Open.dotSp` under `AccelProductForm` |
 | OMMA.SP (sm_120) | `mma.sp` `kind::mxf4nvf4` | missing | block-scaled sparse FP4 |
-| DMMA (sm_90) | `mma.sync` `.f64` | missing | 128 f64 MACs an SM clock (Sheet); an int8 × int8 product is exact in f64 |
-| DMMA (sm_120) | `mma.sync` `.f64` | missing | to check: whether sm_120 has a tensor DMMA at any rate |
+| DMMA (sm_90) | `mma.sync` `.f64` | over-approximated | `Op.dmma`: exact integer MMA on FP64's exact integers, 128 MACs an SM clock (32 units a MAC) |
+| DMMA (sm_120) | `mma.sync` `.f64` | over-approximated | `Op.dmma` at a placeholder 32 MACs an SM clock; rate undocumented (θ row) |
 
 ## Integer and floating-point lanes
 
@@ -49,8 +49,10 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | FADD, FMUL, FFMA | covered | `Lane.fadd`, `fmul`, `ffma` (round to nearest even), issue-bound |
 | FMNMX, FSEL, FSET, FSETP, FCHK, FSWZADD | missing | float compare, select and min/max |
 | MUFU (rcp, rsq, sqrt, ex2, lg2, sin, cos, tanh) | missing | the SFU pipe and its rate |
-| HADD2, HFMA2, HMUL2, HMNMX2, HSET2, HSETP2 | missing | two f16/bf16 results a lane (SIMD in a word) |
-| DADD, DFMA, DMUL, DSETP | missing | the FP64 pipe |
+| HADD2, HFMA2, HMUL2 | over-approximated | `Lane.hfma2`: each half exact on f16's exact integers, two words out |
+| HMNMX2, HSET2, HSETP2 | missing | half2 min, max and compares |
+| DADD, DFMA, DMUL | over-approximated | `Lane.dfma` on the `f64` pipe: exact on FP64's exact integers, 128 bits out |
+| DSETP | missing | FP64 compares |
 | VABSDIFF, VABSDIFF4, VIMNMX (video, SIMD in a word) | missing | |
 | F2F, F2I, I2F, I2I, FRND, F2FP (the PACK_AB pack), I2FP, F2IP, I2IP | missing | conversions. F2FP is W1's `cvt` |
 
@@ -60,7 +62,8 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 |---|---|---|
 | UIADD3, UIMAD, ULOP3, USHF, UPRMT, UPOPC, UFLO, UBREV, UISETP, USEL, ULEA, UMOV | covered | `uni` at one issue slot (measured: Sheet `[uniform_issue]`) |
 | R2UR, S2UR, UR2UP, UP2UR, ULDC | coarse | uniform registers are pooled with the register file, so a move between them is a register copy |
-| REDUX, VOTEU, UF2FP, UBMSK, USGXT | missing | |
+| REDUX | covered | `Lane.redux` on the uniform datapath, a slot |
+| VOTEU, UF2FP, UBMSK, USGXT | missing | |
 
 ## Moves, memory and atomics
 
@@ -124,17 +127,20 @@ uncovered variants (`.64`, other atomic operations, `f16` accumulators).
 | FENCE, LDGDEPBAR, SYNCS, CCTL, CCTLL, ERRBAR, MEMBAR, CCTLT, UCGABAR_ARV, UCGABAR_WAIT, USETMAXREG, WARPGROUP, WARPGROUPSET, UBLKPF, UTMACCTL, UTMACMDFLUSH, UTMAPF, ACQBULK, BMOV, BPT, BREAK, BSSY, BSYNC, CGAERRBAR, ENDCOLLECTIVE, EXIT, KILL, NANOSLEEP, PREEXIT, WARPSYNC, YIELD, BAR, DEPBAR, NOP, PMTRIG | coarse | no data effect: the schedule is free, so a program may omit it |
 | UCLEA, UIADD3.64, ULEPC | missing | 64-bit uniform and immediate moves, `UCLEA`, `ULEPC` |
 | FCHK, FMNMX, FSET, FSETP, FSWZADD | missing | FP32 compare, min/max, check, swizzle |
-| DADD, DFMA, DMMA, DMUL, DSETP | missing | FP64 |
+| DADD, DFMA, DMMA, DMUL | over-approximated | `Lane.dfma`, `Op.dmma` |
+| DSETP | missing | FP64 compares |
 | MUFU | missing | MUFU (transcendentals) |
 | UBLKRED, UTMAREDG (integer add, min, max, and, or, xor) | covered | `Op.red` from shared memory into L2 or device memory, priced as the bulk copy |
 | UBLKRED, UTMAREDG (64-bit, float, `inc`, `dec`; into another CTA's shared memory) | missing | other functions |
 | LDGMC | missing | multimem loads |
 | F2F, F2I, I2F, I2I, I2IP, I2FP, F2IP, FRND | missing | conversions |
 | QSPC, ELECT, GETLMEMBASE, LEPC, SETCTAID, SETLMEMBASE | missing | elect, address-space query, local-memory base, block id, work id, virtual count |
-| HADD2, HADD2_32I, HFMA2, HFMA2_32I, HMNMX2, HMUL2, HMUL2_32I, HSET2, HSETP2 | missing | half2 and mixed half arithmetic |
+| HADD2, HADD2_32I, HFMA2, HFMA2_32I, HMUL2, HMUL2_32I | over-approximated | `Lane.hfma2` |
+| HMNMX2, HSET2, HSETP2 | missing | half2 min, max and compares |
 | BRX, BRXU, CALL, JMP, JMX, JMXU, RET, RPCMOV | missing | indirect branches, calls, returns, jumps |
 | BMSK, IABS, IDP, SGXT, UBMSK, USGXT | missing | integer abs, sign extend, bit mask, `IDP.2A` |
-| MOVM, MATCH, REDUX, VOTEU, VOTE | missing | matrix move, match, vote, reduce |
+| REDUX | covered | `Lane.redux` |
+| MOVM, MATCH, VOTEU, VOTE | missing | matrix move, match, vote |
 | S2UR, B2R, CS2R, S2R | missing | special registers (thread and block ids, clocks) |
 | SUATOM, SULD, SURED, SUST | missing | surfaces |
 | TEX, TLD, TLD4, TMML, TXD, TXQ | missing | texture path |

@@ -92,11 +92,14 @@ filtering (FP interpolation at 8-bit fractional weights); the copy engines (move
 host link's bandwidth, which the model prices); and compute data compression (U7: the committed words are noised
 and incompressible; a method bound by device memory or L2 on compressible data of its own is outside the claim).
 
-**Gaps**, units the card has that the instances don't have yet, so the claim is open for code that uses them until
-each is added with its rate: DMMA and the FP64 lanes, `HFMA2` and `f16` accumulators, the float, 64-bit and
-`inc`/`dec` reductions (`red`, `cp.reduce.async.bulk`; the integer ones are `Accel.Op.red`), `redux.sync`, sm_120's
-block-scaled sparse MMA, and NVSwitch `multimem` reductions. The node's host CPUs and its host and peer links are
-other devices of the period (RT-PROTO P9, RT-UNITS U9), not units of the card. -/
+**Gaps**, units the card has that the instances don't have yet, so the claim is open for code that uses them until each
+is added with its rate: `f16` accumulators, the 64-bit and `inc`/`dec` reductions, sm_120's block-scaled sparse MMA, and
+NVSwitch `multimem` reductions. **Over-approximated units:** DMMA, the FP64 lanes, `HFMA2`, the float reductions and
+`redux.sync` are in the model as exact integer versions at the unit's rate, each at least as capable as the unit on the
+integers it computes exactly (`Accel.Isa`'s docstring). `can` uses each of them within that exact range: the card's
+results on other operands (non-integers, magnitudes past the range, and its roundings there) are not simulated
+(coordinator's ruling, 26 Oct 04:00Z). The node's host CPUs and its host and peer links are other devices of the period
+(RT-PROTO P9, RT-UNITS U9), not units of the card. -/
 def CardWithinAccel {ι : Type} (c : Accel.Card) (cap : ι → ℕ) (oracle : ℕ) (can : (c.Mem → c.Mem) → ℕ → Prop) :
     Prop :=
   ∃ x : Accel.Open, c.floors x ∧ AccelProductForm x ∧

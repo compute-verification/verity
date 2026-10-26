@@ -25,6 +25,9 @@ reports.
   dispatching one warp instruction a clock), so 528;
 * `alu` and `imad`: 64 lanes an SM clock each (CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer
   add, compare, min, max, logic and shift 64; multiply and multiply-add 64), so 8448 each;
+* `f64`: 64 lanes an SM clock (Programming Guide Table 7, CC 9.0: 64-bit floating-point add, multiply, multiply-add
+  64), so 8448; DMMA (`Op.dmma`) 128 MACs an SM clock, 32 tensor units a MAC (whitepaper: FP64 Tensor Core 67 TFLOPS
+  over 132 SMs at 1980 MHz is 128.2);
 * shared memory: 32 banks of one 32-bit word a clock an SM (Programming Guide, 'Shared Memory', CC 9.0), so 4224;
 * HBM: 4.8 TB/s (H200 data sheet, 'GPU Memory Bandwidth 4.8TB/s'), 4.8 · 10¹² / (4 · 1.98 · 10⁹) = 20000/33 words.
 
@@ -60,10 +63,15 @@ functions charged an issue slot's share only; uniform registers pooled with the 
 shapes and twice their `k`, at the same tensor units a real product (so twice the logical rate: CALIB's
 `IMMA.SP.16864` census row), their dots `Open.dotSp`.
 
-**Not yet in the instance** (each a gap in faithfulness, not a relaxation): DMMA (`f64` MMA, 128 MACs an SM clock,
-32 units each), `f16`
-accumulators, `HFMA2`/`HMUL2`, `DFMA`, conversions (`I2F`, `F2I`, `F2FP`), `MUFU`, `FMNMX`, `mul.hi.s32`, `BMSK`,
-constant-bank operands, `redux`, `vote`, TMA multicast, and floating-point atomics.
+**Over-approximated** (`Accel.Isa`'s docstring: an exact integer version at the unit's rate): DMMA (`Op.dmma`, at
+`m8n8k4` and `m16n8k4`, `k8`, `k16`, PTX ISA 9.0 §9.7.14.5.14), the FP64 lanes (`Lane.dfma` on the `f64` pipe),
+`HFMA2`, `HADD2`, `HMUL2` (`Lane.hfma2`, one lane on the FP32 pipe, an issue slot's share: Table 7, CC 9.0, gives
+16-bit FP multiply-add 256 results, two a lane), the float reductions (`Op.red` by `iadd3` and `add2`, `red.v8`
+included), and `redux.sync` (`Lane.redux`, a uniform instruction's slot).
+
+**Not yet in the instance** (each a gap in faithfulness, not a relaxation): `f16` accumulators, conversions (`I2F`,
+`F2I`, `F2FP`), `MUFU`, `FMNMX`, `mul.hi.s32`, `BMSK`, constant-bank operands, `vote`, TMA multicast, and the 64-bit
+and `inc`/`dec` reductions.
 -/
 
 open scoped NNRat
@@ -84,6 +92,7 @@ def ρ : Res → ℚ≥0
   | .alu => 132 * 64
   | .imad => 132 * 64
   | .shfl => 132 * 32
+  | .f64 => 132 * 64
   | .smem => 132 * 32
   | .dram => 20000 / 33
 
@@ -92,6 +101,7 @@ def weight : Fmt → ℚ≥0
   | .s8 | .u8 | .e4m3 | .e5m2 => 1
   | .f16 | .bf16 => 2
   | .tf32 => 4
+  | .f64 => 32
   | _ => 0
 
 /-- PTX's `k` for each format (`mma.sync` and `wgmma`). -/
@@ -119,11 +129,12 @@ def Avail : Op Store → Prop
     pair fa fb ∧ fa ≠ .b1 ∧ sh.k ∈ (ks fa).map (2 * ·) ∧
       ((sh.m = 16 ∧ sh.n = 8 ∧ !fp8 fa ∧ sa = .reg ∧ sb = .reg) ∨
         (sh.m = 64 ∧ 8 ∣ sh.n ∧ 8 ≤ sh.n ∧ sh.n ≤ 256 ∧ (sa = .reg ∨ sa = .smem) ∧ sb = .smem))
-  | .lane _ => True
-  | .uni g => g.pipe ≠ .fma
+  | .lane g => g.warp = false
+  | .uni g => g.uniform = true
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)
   | .atom s _ => s ≠ .reg
-  | .red s t n g => g.reduces ∧ ((s = .reg ∧ t ≠ .reg ∧ n ≤ 4) ∨ (s = .smem ∧ (t = .l2 ∨ t = .dram)))
+  | .red s t n g => g.reduces ∧ ((s = .reg ∧ t ≠ .reg ∧ n ≤ 8) ∨ (s = .smem ∧ (t = .l2 ∨ t = .dram)))
+  | .dmma sh => (sh.m = 8 ∧ sh.n = 8 ∧ sh.k = 4) ∨ (sh.m = 16 ∧ sh.n = 8 ∧ (sh.k = 4 ∨ sh.k = 8 ∨ sh.k = 16))
 
 /-- Hopper's FP8 pipeline (`models.HOPPER_E4M3_K32`, `HOPPER_E5M2_K32`). -/
 def fp8Pipeline : TC.Pipeline := { groups := [32], width := 14, zeroExponent := -139 }

@@ -22,6 +22,9 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
 * issue: 4 warp instructions an SM clock (four sub-partitions, one warp scheduler each), so 752;
 * `alu` and `imad`: 64 lanes an SM clock each (the DS-120 census: `LOP3` and `IMAD` two cycles a warp instruction on a
   sub-partition; CUDA C++ Programming Guide §6.4.1 Table 7), so 12,032 each;
+* `f64`: 2 lanes an SM clock (Programming Guide Table 7, CC 12.0: 64-bit floating-point multiply-add 2), so 376; DMMA
+  (`Op.dmma`; PTX gives `mma` `.f64` to sm_80 and later) has no documented rate on this card: 32 tensor units a MAC,
+  32 MACs an SM clock, 16 × the FP64 lanes' rate, is a generous placeholder, and CALIB's θ needs a row for it;
 * shared memory: 32 banks of a 32-bit word a clock an SM (Programming Guide, 'Shared Memory'), so 6016;
 * GDDR7: 1597 GB/s (product page, 'Memory Bandwidth 1597 GB/s'), 1597 · 10⁹ / (4 · 2.43 · 10⁹) = 39925/243 words.
 
@@ -48,7 +51,9 @@ every other dot are `Open.dot`.
 dots `Open.dotSp`; the block-scaled sparse forms (`kind::mxf4nvf4` at `k = 128`) are a gap.
 
 **Coarser than the card**, and **not yet in the instance**: as for the H200 (`Accel.H200`), with FP6 (`e3m2`, `e2m3`)
-and the block-scaled FP8 and FP6 forms (`kind::mxf8f6f4`) among the gaps, and no DMMA at all (sm_120 has none at rate).
+and the block-scaled FP8 and FP6 forms (`kind::mxf8f6f4`) among the gaps. DMMA, the FP64 lanes, `HFMA2`, the float
+reductions and `redux.sync` are over-approximated as on the H200 (`HFMA2`'s sm_120 rate is undocumented: an issue
+slot's share is at least the card's, since issue caps every lane instruction; a θ row should confirm it).
 -/
 
 open scoped NNRat
@@ -69,6 +74,7 @@ def ρ : Res → ℚ≥0
   | .alu => 188 * 64
   | .imad => 188 * 64
   | .shfl => 188 * 32
+  | .f64 => 188 * 2
   | .smem => 188 * 32
   | .dram => 39925 / 243
 
@@ -79,6 +85,7 @@ def weight : Fmt → ℚ≥0
   | .f16 | .bf16 => 2
   | .tf32 => 4
   | .b1 => 0
+  | .f64 => 32
 
 /-- PTX's `k` for each format at `m16n8`, none for `b1`: the card has no native `b1` MMA. -/
 def ks : Fmt → List ℕ
@@ -87,7 +94,7 @@ def ks : Fmt → List ℕ
   | .f16 | .bf16 => [8, 16]
   | .tf32 => [4, 8]
   | .nvf4 | .mxf4 => [64]
-  | .b1 => []
+  | .b1 | .f64 => []
 
 /-- Whether a format is one of `kind::f8f6f4`'s. -/
 def f8f6f4 (f : Fmt) : Bool := f = .e4m3 || f = .e5m2 || f = .e2m1
@@ -100,11 +107,12 @@ def Avail : Op Store → Prop
   | .mma fa fb _ sh sa sb => pair fa fb ∧ sh.k ∈ ks fa ∧ sh.m = 16 ∧ sh.n = 8 ∧ sa = .reg ∧ sb = .reg
   | .mmaSp fa fb _ sh sa sb =>
     pair fa fb ∧ fa ≠ .nvf4 ∧ fa ≠ .mxf4 ∧ sh.k ∈ (ks fa).map (2 * ·) ∧ sh.m = 16 ∧ sh.n = 8 ∧ sa = .reg ∧ sb = .reg
-  | .lane _ => True
-  | .uni g => g.pipe ≠ .fma
+  | .lane g => g.warp = false
+  | .uni g => g.uniform = true
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)
   | .atom s _ => s ≠ .reg
-  | .red s t n g => g.reduces ∧ ((s = .reg ∧ t ≠ .reg ∧ n ≤ 4) ∨ (s = .smem ∧ (t = .l2 ∨ t = .dram)))
+  | .red s t n g => g.reduces ∧ ((s = .reg ∧ t ≠ .reg ∧ n ≤ 8) ∨ (s = .smem ∧ (t = .l2 ∨ t = .dram)))
+  | .dmma sh => (sh.m = 8 ∧ sh.n = 8 ∧ sh.k = 4) ∨ (sh.m = 16 ∧ sh.n = 8 ∧ (sh.k = 4 ∨ sh.k = 8 ∨ sh.k = 16))
 
 /-- The candidate for sm_120's FP8 and `kind::f8f6f4` E2M1 atom (`models.BLACKWELL_SM120_E4M3_M16N8K32`, `_E5M2_`,
 `_E2M1_`), not pinned (`captured`). -/
