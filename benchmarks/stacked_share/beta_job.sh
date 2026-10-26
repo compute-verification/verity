@@ -3,10 +3,13 @@
 # input term shared over the 8B row's KV pool (share.py's M_dyn for 8 engines). ART=art:... reads another Build's tree,
 # M_NODE=BYTES another pool, CHUNKS="N ..." the coarse bounds before the fine one, PROBE=1 stops once the Program decodes.
 # Where /workspace/jobs/venv312 isn't (the CPU nodes), it syncs the workspace with CPU torch into scratch. A node with no store
-# remote takes the descriptor sent along (`research data fetch ART --path descriptor.json.gz`, then --send it).
+# remote takes the descriptor sent along (`research data fetch ART --path descriptor.json.gz`, then --send it). A descriptor
+# whose primitives' signatures have since changed under the same id decodes only against its own registry: send that commit's
+# packages, `git archive C verity integrations/vllm/verity_vllm | gzip > tree.tar.gz`, and they go ahead on PYTHONPATH (the
+# 8B Build decodes at a4f5a429c5, the census's commit: LutIndex_v1 has returned 8 bits since, not 32).
 #
 #   research run --on vy-nebius-cpu-5 --timeout 5h --source . --project verity --send DIR/descriptor.json.gz \
-#     --cwd clone/integrations/vllm -- bash ../../benchmarks/stacked_share/beta_job.sh
+#     --send DIR/tree.tar.gz --cwd clone/integrations/vllm -- bash ../../benchmarks/stacked_share/beta_job.sh
 set -euo pipefail
 export HF_HUB_OFFLINE=1
 HERE=../../benchmarks/stacked_share
@@ -19,6 +22,11 @@ if [ -x /workspace/jobs/venv312/bin/python3 ]; then
 else
   UV_PROJECT_ENVIRONMENT="$d/venv" uv sync -q --all-packages --extra torch-cpu > "$OUT/sync.log" 2>&1 || { tail -30 "$OUT/sync.log"; exit 4; }
   PY=$d/venv/bin/python
+fi
+tree=${RESEARCH_RUN_DIR:-/nonexistent}/inputs/${TREE:-tree.tar.gz}
+if [ -f "$tree" ]; then
+  mkdir "$d/tree" && tar -xzf "$tree" -C "$d/tree"
+  export PYTHONPATH=$d/tree:$d/tree/integrations/vllm${PYTHONPATH:+:$PYTHONPATH}
 fi
 desc=${RESEARCH_RUN_DIR:-/nonexistent}/inputs/descriptor.json.gz
 if [ ! -f "$desc" ]; then
