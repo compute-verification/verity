@@ -1752,31 +1752,35 @@ def test_the_lean_step_notes_why_it_built_nothing_and_refuses_nothing(world, mon
 
 
 def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_its_result(tmp_path):
-    """Off a node, `ready --on` builds as `verity lean try` does: a `research run` of the tree in the node's pool, bounded by the
-    step's budget, whose stdout carries the result line."""
-    from research.queue import LEAN_BUILDER, LakeBuild
+    """Off a node, `ready --on` builds as `verity lean try --on vy-nebius-cpu-3` does: a `research run` of the tree on
+    `PREFLIGHT_LEAN_ON`, whose `build` Lean slot is the gate (a pool only when given), bounded by the step's budget, whose stdout
+    carries the result line."""
+    from research.queue import LEAN_BUILDER, PREFLIGHT_LEAN_ON, LakeBuild
 
+    assert (PREFLIGHT_LEAN_ON, LakeBuild().pool) == ("vy-nebius-cpu-3", None), "infra's placement, 26 Oct 14:44Z"
     (tmp_path / "wt" / LEAN_BUILDER).parent.mkdir(parents=True)
     (tmp_path / "wt" / LEAN_BUILDER).write_text("")
-    rid, argvs = "r20261026-120000-abcd", []
+    rid = "r20261026-120000-abcd"
     line = "lean-build: " + json.dumps({"built": {"lean/b": 1}, "failed": {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"},
                                         "skipped": {}})
+    tail = ["--as", "ci", "--project", "verity", "--source", str(tmp_path / "wt"), "--cwd", "clone", "--timeout", "90", "--wait",
+            "--wait-every", "5", "--wait-max", "90", "--", "python3", LEAN_BUILDER, "--build", "lean/b/B/Use.lean"]
+    for pool, flags in ((None, []), ("research", ["--pool", "research", "--pool-wait", "90"])):
+        argvs = []
 
-    def run(argv, cwd, left):
-        argvs.append((argv[3:], left))
-        if argv[3] == "fetch":
-            (tmp_path / "runs" / rid).mkdir(parents=True)
-            (tmp_path / "runs" / rid / "stdout.log").write_text(f"lean-build: lean/b ...\n{line}\n")
-        return 1, f"research: run {rid} launched on vy-x (pod) pid=1 -> /r\n"
+        def run(argv, cwd, left, argvs=argvs):
+            argvs.append((argv[3:], left))
+            if argv[3] == "fetch":
+                (tmp_path / "runs" / rid).mkdir(parents=True, exist_ok=True)
+                (tmp_path / "runs" / rid / "stdout.log").write_text(f"lean-build: lean/b ...\n{line}\n")
+            return 1, f"research: run {rid} launched on {PREFLIGHT_LEAN_ON} (pod) pid=1 -> /r\n"
 
-    got = LakeBuild(on="vy-x", by="ci", slots=tmp_path / "absent", run=run, runs=lambda: tmp_path / "runs")(
-        tmp_path / "wt", ["lean/b/B/Use.lean"], 100)
-    assert got.failed == {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"} and got.notes == []
-    (launch, left), (fetch, _) = argvs
-    assert left == 100 and fetch == ["fetch", rid, "--on", "vy-x", "--all"]
-    assert launch == ["run", "--on", "vy-x", "--pool", "research", "--pool-wait", "90", "--as", "ci", "--project", "verity",
-                      "--source", str(tmp_path / "wt"), "--cwd", "clone", "--timeout", "90", "--wait", "--wait-every", "5",
-                      "--wait-max", "90", "--", "python3", LEAN_BUILDER, "--build", "lean/b/B/Use.lean"]
+        got = LakeBuild(on=PREFLIGHT_LEAN_ON, pool=pool, by="ci", slots=tmp_path / "absent", run=run,
+                        runs=lambda: tmp_path / "runs")(tmp_path / "wt", ["lean/b/B/Use.lean"], 100)
+        assert got.failed == {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"} and got.notes == []
+        (launch, left), (fetch, _) = argvs
+        assert left == 100 and fetch == ["fetch", rid, "--on", PREFLIGHT_LEAN_ON, "--all"]
+        assert launch == ["run", "--on", PREFLIGHT_LEAN_ON, *flags, *tail]
 
 
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
