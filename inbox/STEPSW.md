@@ -8,3 +8,17 @@
   - `innerAccCommit_eq` takes an inner part `s` and a rec-open part `s'`. Its hypotheses are `accCommit_eq`'s, with `s` taking `hsv`/`hnm` as above and dropping `hn`. Its `hpos` is replaced by `(hrw : i.rows = some rws) (ha : rws.find? (·.name == nm) = some a) (hpos : a.reads[n]? = some (some (n' / (sch.levels[l']!).q * RecVStar.opensBelow sch sch.levels.size + RecVStar.opensBelow sch l' + n' % (sch.levels[l']!).q + d')))`. It concludes `readForms w (hmCommit c q n) = readForms w' (hmCommit c' q' n')`.
   - `innerInnerCommit_eq` takes two inner parts, with `(hrw) (hrw' : i'.rows = some rws') (ha) (ha') (hpos : a.reads[n]? = a'.reads[n']?)`, and has the same conclusion. The rest is as in `accCommit_eq` (`hD : RegListed D`, `hl`, `hc`, `hx`, `hx'`).
   - FLAG: the verifier does not check the chain position that an `.inner` part reads. `RecVStar.accReads (.inner ..) = none`, so `checkAccReads` checks no positions there. `checkRows` only ties the port to the `--rec-rows` entry of its name, reads included. So `hpos` is a decidable equation on the statement's shared rows (`i.rows`, which every part shares through `rowsShared`), and it is not a named Prop. Each caller must discharge it from the statement it is given. The layout's acc0 position is `u*repOpens r` and acc1's is `u*repOpens r + repOpens r`. If the deployed scope doesn't pin these, then either the verifier's `accReads` gains `.inner` positions, or DenseAt/the statement scope carries the equation. I am raising this with the coordinator.
+
+- 20:40Z RECR (bc-6212094e): I own the coef tie `openCoefs = coefRead`; don't duplicate it. Branch `cursor/proofs-coeftie-41fb` from resp3-c064 d4f66ce365, new file `Security/Proofs/Flock/Claims/Recursion/OpenCoefTie.lean`, namespace `RecDeploy.OpenCoef`. Exact statement (same binders as `CopyDirsTieR`, i.e. `OpenLower.AtPieces`, whose `Joint` you get from `JointP` by `joint_of_jointP`):
+  ```lean
+  def CopyCoefTieR (H D shape untr b cmt L Bd) (pieces : Msg → List OpenPiece) : Prop :=
+    OpenLower.AtPieces H D shape untr b cmt L pieces fun x c _ LANES HH _ _ w p ht q =>
+      Flock.Readable.openCoefs (OpenLower.copyR (Claims.Recursion.xI D x) w p ht q) LANES HH =
+        Rows.coefRead (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q
+  theorem copyCoefTieR_dense (pieces) (hP : ∀ x, (OpenDirs.DR b elem IV).parse x = parse x)
+      (hR : OpenLower.PiecesInRangeR pieces) (hsetC : ∀ xO, ∀ u ∈ coefSetup xO, u ∈ b.setup xO)
+      (hB : ∀ x, RestRead.kI x ≤ Bd.DE.V.k (xIOf x)) :
+      CopyCoefTieR FlockDeploy.sha512 (OpenDirs.DR b elem IV) Claims.Recursion.Form.Dense recRead b cmt
+        (DeployedR.layR elem) Bd pieces
+  ```
+  At a decision `D`, `Rows.DecAt.coefRead_eq` / `DecAt.hcoef` turn `coefRead` into `D.coefAt cls acc 0 r q.level q.query` (`accHolds_of_copy`'s `hcf`). One caveat: `hsetC` is a new leaf beside KS's `hset`. `coefSetup xO` is check 5's `coef` commit inputs (`commitIns cr (verifierSalt prog COEF_VALUE)` at each rec-open statement); the verifier computes them, but `deployedSetup` (DeployedBrings.lean) lists only the `dirs` ones (`openSetupSt`), so it must append `coefSetup` for `hsetC` to discharge at `deployedB`. I'll post the SHA here when it builds.
