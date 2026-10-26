@@ -93,9 +93,9 @@ host link's bandwidth, which the model prices); and compute data compression (U7
 and incompressible; a method bound by device memory or L2 on compressible data of its own is outside the claim).
 
 **Gaps**, units the card has that the instances don't have yet, so the claim is open for code that uses them until
-each is added with its rate: DMMA, `HFMA2` and `f16` accumulators, vector
-atomics and reductions (`red.v4`, `redux.sync`), TMA bulk reductions (`cp.reduce.async.bulk`), NVSwitch `multimem`
-reductions. The node's host CPUs and its host and peer links are other devices of the period
+each is added with its rate: DMMA and the FP64 lanes, `HFMA2` and `f16`
+accumulators, the float, 64-bit and `inc`/`dec` reductions (`red`, `cp.reduce.async.bulk`; the integer ones are
+`Accel.Op.red`), `redux.sync`, sm_120's block-scaled sparse MMA, and NVSwitch `multimem` reductions. The node's host CPUs and its host and peer links are other devices of the period
 (RT-PROTO P9, RT-UNITS U9), not units of the card. -/
 def CardWithinAccel {ι : Type} (c : Accel.Card) (cap : ι → ℕ) (oracle : ℕ) (can : (c.Mem → c.Mem) → ℕ → Prop) :
     Prop :=

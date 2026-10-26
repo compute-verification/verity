@@ -297,6 +297,14 @@ def nIn : Lane → ℕ
   | .madWide => 4
   | _ => 3
 
+/-- The lane functions a reduction to memory applies (`red`, `cp.reduce.async.bulk`): 32-bit integer add, min and max,
+and the bitwise ones (`LOP3` with its third input zero, any two-input function, a superset of `and`, `or`, `xor`). The
+card's float reductions flush subnormals, unlike `fadd`, and its 64-bit and `inc`/`dec` reductions are other
+functions, so none of those is here. -/
+def reduces : Lane → Bool
+  | .iadd3 | .min _ | .max _ | .lop3 _ => true
+  | _ => false
+
 def nOut : Lane → ℕ
   | .madWide => 2
   | _ => 1
@@ -389,6 +397,10 @@ inductive Op (S : Type) where
   /-- an atomic on a word of store `s`: input 0 and output 0 are that word, input 1 the register operand, and output
   1 the word's old value -/
   | atom (s : S) (g : AtomFn)
+  /-- a reduction of `n` words of store `s` into `n` words of store `t` (`red.v4`, `red.v8`, TMA's
+  `cp.reduce.async.bulk`): output `i` is lane function `g` of input `n + i`, the word of `t` it replaces, and input
+  `i`, the word of `s` -/
+  | red (s t : S) (n : ℕ) (g : Lane)
   deriving DecidableEq
 
 /-- The `i`th of `n` words, zero past the end. -/
@@ -404,11 +416,12 @@ def nIn : Op S → ℕ
   | .lane g | .uni g => g.nIn
   | .copy _ _ n => n
   | .atom _ _ => 2
+  | .red _ _ n _ => 2 * n
 
 def nOut : Op S → ℕ
   | .mma _ _ _ sh _ _ | .mmaSp _ _ _ sh _ _ => sh.m * sh.n
   | .lane g | .uni g => g.nOut
-  | .copy _ _ n => n
+  | .copy _ _ n | .red _ _ n _ => n
   | .atom _ _ => 2
 
 /-- The store input `i` is read from (`reg` is the register store). -/
@@ -420,6 +433,7 @@ def inStore (reg : S) : (o : Op S) → Fin o.nIn → S
   | .lane _, _ | .uni _, _ => reg
   | .copy s _ _, _ => s
   | .atom s _, i => if i.val = 0 then s else reg
+  | .red s t n _, i => if i.val < n then s else t
 
 /-- The store output `i` is written to. -/
 def outStore (reg : S) : (o : Op S) → Fin o.nOut → S
@@ -427,6 +441,7 @@ def outStore (reg : S) : (o : Op S) → Fin o.nOut → S
   | .lane _, _ | .uni _, _ => reg
   | .copy _ t _, _ => t
   | .atom s _, i => if i.val = 0 then s else reg
+  | .red _ t _ _, _ => t
 
 /-- An opcode's semantics, the MMA's dot for formats `fa`, `fb`, saturation and `k` given by `dot`, and a sparse MMA's
 at its logical `k` by `dotSp`. -/
@@ -437,6 +452,7 @@ def eval (dot dotSp : Fmt → Fmt → Bool → ℕ → Dot) : (o : Op S) → (Fi
   | .copy _ _ _, v, o => getD v o.val
   | .atom _ .add, v, o => if o.val = 0 then getD v 0 + getD v 1 else getD v 0
   | .atom _ .exch, v, o => if o.val = 0 then getD v 1 else getD v 0
+  | .red _ _ n g, v, o => g.eval (fun j => if j = 0 then getD v (n + o.val) else if j = 1 then getD v o.val else 0) 0
 
 /-- The products an MMA forms: `m·n·k`, and a sparse MMA's `m·n·k/2`. -/
 def macs : Op S → ℕ

@@ -88,6 +88,7 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) 
     (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + port t r) +
       (if s = .reg ∧ t = .reg ∧ r = .alu then (n : ℚ≥0) else 0)
   | .atom s _, r => (if r = .issue then 1 / 32 else 0) + port s r
+  | .red s t n _, r => (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + port t r)
 
 /-- What no document states and no capture has pinned yet: a parameter of the instance until it is measured. -/
 structure Open where

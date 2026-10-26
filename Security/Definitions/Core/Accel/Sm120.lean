@@ -33,7 +33,7 @@ datapath too (`uni`, a whole issue slot each: CUDA Binary Utilities §4.4 lists 
 share, and no document gives their issue cost; one slot as measured on sm_100, RT-B200-EMP, run r20261019-055605-6cc2,
 and on sm_90, a placeholder until CALIB measures sm_120; whether sm_120's uniform datapath has functions beyond the
 integer ones is a gap); copies of at most 4 words, and bulk copies with shared memory at one end (TMA); atomics on
-shared memory, L2 and GDDR7.
+shared memory, L2 and GDDR7; integer reductions as on the H200.
 
 **Captured dots** (`captured`): the integer path exactly (`models.BLACKWELL_SM120_S8_M16N8K32`, `_WRAP`,
 `_U8S8_M16N8K32`); `bf16` at `k = 16`, `TC.HOPPER_BF16_M16N8K16` (its docstring: `mma.sync.m16n8k16.bf16` on Hopper and
@@ -104,6 +104,7 @@ def Avail : Op Store → Prop
   | .uni g => g.pipe ≠ .fma
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)
   | .atom s _ => s ≠ .reg
+  | .red s t n g => g.reduces ∧ ((s = .reg ∧ t ≠ .reg ∧ n ≤ 4) ∨ (s = .smem ∧ (t = .l2 ∨ t = .dram)))
 
 /-- The candidate for sm_120's FP8 and `kind::f8f6f4` E2M1 atom (`models.BLACKWELL_SM120_E4M3_M16N8K32`, `_E5M2_`,
 `_E2M1_`), not pinned (`captured`). -/

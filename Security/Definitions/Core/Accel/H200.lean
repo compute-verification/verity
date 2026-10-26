@@ -36,7 +36,9 @@ integer ones on the uniform datapath too (`uni`, a whole issue slot each: CUDA B
 uniform opcodes, integer only, and no document gives their issue cost; measured at one slot beside an async `wgmma`,
 1.08–1.19 SMSP cycles, RT-H200-EMP, run r20261019-064443-0ae6, and 0.984 beside a saturated lane stream, the census's
 UNI line, DC-90; `[uniform_issue]` of the sm_90 sheet); copies of at most 4 words (a lane's 128-bit load or store),
-and bulk copies of any length with shared memory at one end (TMA); atomics on shared memory, L2 and HBM.
+and bulk copies of any length with shared memory at one end (TMA); atomics on shared memory, L2 and HBM; integer
+reductions (`Lane.reduces`) of up to 4 registers into memory (`red`), and of any length from shared memory into L2 or
+HBM (`cp.reduce.async.bulk`), priced as the copy.
 
 **Captured dots** (`captured`): the integer path exactly, `silicon.integer.HOPPER_SM90_S8_K32` (the clamp or wrap at
 D; `wgmma` m64n64k32, m64n128k32 and m64n256k32 `.s8`, all eight forms, about 10.3–10.6 M elements each with the
@@ -121,6 +123,7 @@ def Avail : Op Store → Prop
   | .uni g => g.pipe ≠ .fma
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)
   | .atom s _ => s ≠ .reg
+  | .red s t n g => g.reduces ∧ ((s = .reg ∧ t ≠ .reg ∧ n ≤ 4) ∨ (s = .smem ∧ (t = .l2 ∨ t = .dram)))
 
 /-- Hopper's FP8 pipeline (`models.HOPPER_E4M3_K32`, `HOPPER_E5M2_K32`). -/
 def fp8Pipeline : TC.Pipeline := { groups := [32], width := 14, zeroExponent := -139 }

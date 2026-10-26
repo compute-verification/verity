@@ -75,6 +75,8 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | UTMALDG, UTMASTG, UBLKCP (TMA, `cp.async.bulk`) | coarse | a bulk copy of any length with shared memory at one end |
 | UTMAREDG (TMA reduce), TMA multicast | missing | |
 | ATOMS, ATOMG, ATOM, RED (add, exch) | covered | `atom` add and exch on shared memory, L2 and device memory. RED is an `atom` whose old value is discarded |
+| RED vector forms (`red.v2`, `.v4`), integer | coarse | `Op.red` from up to 4 registers, any `Lane.reduces` function (integer forms are scalar on the card) |
+| RED float forms (`.f32`, `.f16x2`, `.bf16x2`, `.v8`) | missing | the card flushes subnormals, unlike `Lane.fadd` |
 | ATOMS, ATOMG (min, max, and, or, xor, inc, dec, cas), float atomics | missing | |
 | LDC (constant bank operands) | missing | constant-bank operands |
 | TEX, TLD, TLD4, TXD, TMML, SULD, SUST, SURED, SUATOM | **missing, important** | the texture path has its own bandwidth and filtering arithmetic (weighted sums of texels) outside every resource here |
@@ -124,7 +126,9 @@ uncovered variants (`.64`, other atomic operations, `f16` accumulators).
 | FCHK, FMNMX, FSET, FSETP, FSWZADD | missing | FP32 compare, min/max, check, swizzle |
 | DADD, DFMA, DMMA, DMUL, DSETP | missing | FP64 |
 | MUFU | missing | MUFU (transcendentals) |
-| LDGMC, UBLKRED, UTMAREDG | missing | bulk and TMA reductions, multimem loads, shared reductions |
+| UBLKRED, UTMAREDG (integer add, min, max, and, or, xor) | covered | `Op.red` from shared memory into L2 or device memory, priced as the bulk copy |
+| UBLKRED, UTMAREDG (64-bit, float, `inc`, `dec`; into another CTA's shared memory) | missing | other functions |
+| LDGMC | missing | multimem loads |
 | F2F, F2I, I2F, I2I, I2IP, I2FP, F2IP, FRND | missing | conversions |
 | QSPC, ELECT, GETLMEMBASE, LEPC, SETCTAID, SETLMEMBASE | missing | elect, address-space query, local-memory base, block id, work id, virtual count |
 | HADD2, HADD2_32I, HFMA2, HFMA2_32I, HMNMX2, HMUL2, HMUL2_32I, HSET2, HSETP2 | missing | half2 and mixed half arithmetic |
@@ -150,7 +154,7 @@ uncovered variants (`.64`, other atomic operations, `f16` accumulators).
 | SYNCSU, USYNCS, UBLKL2CCTL, UTMAL2CCTL, ACQSHMINIT | coarse | no data effect: the schedule is free, so a program may omit it |
 | MOV64IUR, UMOV.64 | missing | 64-bit uniform and immediate moves, `UCLEA`, `ULEPC` |
 | FMNMX3 | missing | FP32 compare, min/max, check, swizzle |
-| REDS, UREDGR | missing | bulk and TMA reductions, multimem loads, shared reductions |
+| REDS, UREDGR | missing | shared and uniform-register reductions (`Op.red`'s forms cover the integer bulk ones on sm_90) |
 | UGETNEXTWORKID, UMEMSETS, UVIRTCOUNT | missing | elect, address-space query, local-memory base, block id, work id, virtual count |
 | FHADD, FHADD2, FHFMA, FHFMA2, FHMUL2 | missing | half2 and mixed half arithmetic |
 | UIABS | missing | integer abs, sign extend, bit mask, `IDP.2A` |
