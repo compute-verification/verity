@@ -53,7 +53,7 @@ theorem toBytes_surj (l : List UInt8) (hl : l.length = 16) : ∃ a : F128, a.toB
 /-- **Any whole 16-byte blocks are some elements' bytes.** -/
 theorem colBytes_surj : ∀ (n : ℕ) (l : List UInt8), l.length = 16 * n →
     ∃ vs : List F128, vs.length = n ∧ colBytes vs = l
-  | 0, l, h => ⟨[], rfl, (List.length_eq_zero_iff.1 (by omega)).symm⟩
+  | 0, l, h => ⟨[], rfl, (List.eq_nil_of_length_eq_zero (by omega)).symm⟩
   | n + 1, l, h => by
     obtain ⟨a, ha⟩ := toBytes_surj (l.take 16) (by rw [List.length_take]; omega)
     obtain ⟨vs, hl, hv⟩ := colBytes_surj n (l.drop 16) (by rw [List.length_drop]; omega)
@@ -134,11 +134,15 @@ theorem vals_levelFr_length (sch : Flock.Schedule) (p : LigeritoProof) (i : ℕ)
       16 + if i + 1 < sch.levels.size - 1 then 14 else p.finalProof.yr.size := by
   unfold levelFr
   rw [vals_append, List.length_append, vals_chFr_length]
-  split
-  · simp only [vals_capFr, vals_append, vals_bytes, vals_sq, vals_nil, vals_queryFr, List.length_append,
+  by_cases hc : i + 1 < sch.levels.size - 1
+  · rw [if_pos hc, if_pos hc]
+    simp only [vals_capFr, vals_append, vals_bytes, vals_sq, vals_nil, vals_queryFr, List.length_append,
       vals_introFr_length, vals_kFr_length, List.length_nil]
-  · simp only [vals_append, vals_bytes, vals_sq, vals_nil, vals_queryFr, vals_map_one, List.length_append,
+    all_goals omega
+  · rw [if_neg hc, if_neg hc]
+    simp only [vals_append, vals_bytes, vals_sq, vals_nil, vals_queryFr, vals_map_one, List.length_append,
       Array.length_toList, List.length_nil]
+    all_goals omega
 
 theorem vals_ligFrames_length (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof)
     (hL : 2 ≤ sch.levels.size) :
@@ -146,43 +150,47 @@ theorem vals_ligFrames_length (sch : Flock.Schedule) (T : F128) (cap : Array Byt
   have hlv : (vals ((List.range' 0 (sch.levels.size - 1)).flatMap (levelFr sch p))).length =
       30 * (sch.levels.size - 2) + 16 + p.finalProof.yr.size := by
     rw [vals_flatMap, show sch.levels.size - 1 = sch.levels.size - 2 + 1 by omega, List.range'_concat,
-      List.flatMap_append, List.length_append, length_flatMap_eq (k := 30) (fun i hi => by
-        rw [vals_levelFr_length, if_pos (by rw [List.mem_range'_1] at hi; omega)]),
-      List.flatMap_singleton, vals_levelFr_length, if_neg (by omega), List.length_range']
-    ring
+      List.flatMap_append, List.length_append, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+      length_flatMap_eq (k := 30) (l := List.range' 0 (sch.levels.size - 2)) (fun i hi => by
+        have hi' : i + 1 < sch.levels.size - 1 := by rw [List.mem_range'_1] at hi; omega
+        show (vals (levelFr sch p i)).length = 30
+        rw [vals_levelFr_length, if_pos hi']), List.length_range', vals_levelFr_length]
+    split <;> omega
   simp only [ligFrames, vals_label, vals_one, vals_capFr, vals_sq, vals_bytes, vals_append, vals_nil, vals_queryFr,
     List.length_cons, List.length_append, vals_kFr_length, vals_chFr_length, vals_introFr_length, List.length_nil,
-    List.nil_append, List.cons_append, List.append_assoc] at hlv ⊢
-  omega
+    hlv]
+  all_goals omega
 
 theorem vals_zcFrames_length (m : ℕ) (digest cap : ByteArray) (z : ZerocheckProof) :
     (vals (zcFrames m digest cap z)).length = z.round1ab.size + z.round1c.size + 2 * (m - 6) + 2 := by
   have h : (vals ((List.range' 0 (m - 6)).flatMap fun i =>
-      [Frame.one (z.rounds[i]!).1, .one (z.rounds[i]!).2, .sq 1 1])).length = 2 * (m - 6) := by
-    rw [vals_flatMap, length_flatMap_eq (k := 2) (fun _ _ => rfl), List.length_range']
-    ring
+      [Frame.one (z.rounds[i]!).1, .one (z.rounds[i]!).2, .sq 1 1])).length = (m - 6) * 2 := by
+    rw [vals_flatMap, length_flatMap_eq (k := 2) ?_, List.length_range']
+    intro _ _
+    rfl
   simp only [zcFrames, vals_label, vals_bytes, vals_sq, vals_vec, vals_one, vals_append, vals_nil,
-    List.length_append, List.length_cons, List.length_nil, Array.length_toList] at h ⊢
-  omega
+    List.length_append, List.length_cons, List.length_nil, Array.length_toList, h]
+  all_goals omega
 
 theorem vals_lcFrames_length (k : ℕ) (l : LincheckProof) :
     (vals (lcFrames k l)).length = 2 * (k - 6) + l.zPartial.size := by
   have h : (vals ((List.range' 0 (k - 6)).flatMap fun j =>
-      [Frame.one (l.rounds[j]!).1, .one (l.rounds[j]!).2, .sq 1 1])).length = 2 * (k - 6) := by
-    rw [vals_flatMap, length_flatMap_eq (k := 2) (fun _ _ => rfl), List.length_range']
-    ring
+      [Frame.one (l.rounds[j]!).1, .one (l.rounds[j]!).2, .sq 1 1])).length = (k - 6) * 2 := by
+    rw [vals_flatMap, length_flatMap_eq (k := 2) ?_, List.length_range']
+    intro _ _
+    rfl
   simp only [lcFrames, vals_label, vals_sq, vals_vec, vals_append, vals_nil, List.length_append,
-    List.length_nil, Array.length_toList] at h ⊢
-  omega
+    List.length_nil, Array.length_toList, h]
+  all_goals omega
 
 theorem vals_rsFrames_length {sh : Shape} {p : Proof} (hp : ProofSizes sh p) :
     (vals (rsFrames sh.claims p.ringSwitches)).length = 128 * sh.claims := by
   simp only [rsFrames, vals_label, vals_append, vals_sq, vals_nil, List.append_nil]
-  rw [vals_flatMap, length_flatMap_eq (k := 128) (fun k hk => by
-    rw [List.mem_range'_1] at hk
-    simp only [vals_label, vals_vec, vals_sq, vals_nil, List.append_nil, Array.length_toList, rs_size hp,
-      if_pos (show k < sh.claims by omega)]), List.length_range']
-  ring
+  rw [vals_flatMap, length_flatMap_eq (k := 128) ?_, List.length_range', Nat.mul_comm]
+  intro k hk
+  rw [List.mem_range'_1] at hk
+  simp only [vals_label, vals_vec, vals_sq, vals_nil, List.append_nil, Array.length_toList, rs_size hp,
+    if_pos (show k < sh.claims by omega)]
 
 /-- **How many values a rep's frames absorb**, at a proof of the rep's shape. -/
 theorem vals_repFrames_length {st : Setup} {sch : Flock.Schedule} {e : ℕ} {p : Proof}
@@ -308,8 +316,12 @@ theorem realize {st : Setup} {sch : Flock.Schedule} {d₀ : ByteArray} {e : ℕ}
 
 /-- A frame with its bytes blanked. -/
 def blank : Frame → Frame
+  | .dom b => .dom b
+  | .label b => .label b
+  | .one v => .one v
+  | .vec vs => .vec vs
   | .bytes _ => .bytes ByteArray.empty
-  | f => f
+  | .sq k n => .sq k n
 
 theorem closes_blank (f : Frame) : closes (blank f) = closes f := by
   cases f <;> rfl
@@ -334,8 +346,12 @@ theorem chunks_blank : ∀ fs : List Frame, (chunks (fs.map blank)).1 = (chunks 
 theorem levelFr_blank (sch : Flock.Schedule) (l : LigeritoProof) (R : Array (Array ByteArray)) (i : ℕ) :
     (levelFr sch { l with recursiveCaps := R } i).map blank = (levelFr sch l i).map blank := by
   unfold levelFr
-  rw [chFr_congr rfl]
-  split <;> simp [blank, capFr, introFr, queryFr]
+  rw [chFr_congr (p := { l with recursiveCaps := R }) (p' := l) rfl]
+  by_cases hc : i + 1 < sch.levels.size - 1
+  · rw [if_pos hc, if_pos hc]
+    simp [blank, capFr, introFr, queryFr]
+  · rw [if_neg hc, if_neg hc]
+    simp [blank, capFr, introFr, queryFr]
 
 theorem ligFrames_blank (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray) (l : LigeritoProof)
     (R : Array (Array ByteArray)) :
@@ -433,9 +449,8 @@ theorem rowsAt_lift {s : RecVStar.SchedRound} {rs rs' : List ByteArray} {vs' : L
   cases hb : s.2.2.2
   · rw [h3 hb]
     refine ⟨[], rfl, by rw [hl, h1], ⟨[], rfl, ?_⟩, fun _ => rfl⟩
-    rw [hb] at h1 ⊢
-    rw [if_neg (by decide)]
-    exact List.drop_of_length_le (by rw [hl, h1]; simp)
+    simp only [hb, Bool.false_eq_true, ↓reduceIte] at h1 ⊢
+    exact List.drop_of_length_le (by rw [hl]; omega)
   · rw [hb, if_pos rfl] at h2
     rw [h2] at hd
     obtain ⟨r, hr⟩ : ∃ r, rs.drop s.2.1.toList.sum = [r] := by
@@ -455,10 +470,10 @@ theorem rowsAt_lift {s : RecVStar.SchedRound} {rs rs' : List ByteArray} {vs' : L
       (by rw [List.length_take]; omega)
     refine ⟨vs, hvl, by rw [hl, h1], ⟨r.data.toList.drop (16 * vs'.length), ?_, ?_⟩, fun h => by
       rw [hb] at h; cases h⟩
-    · rw [List.length_drop, hpad', FlockSoundness.Refine.Frame.colBytes_length,
-        FlockSoundness.Refine.Frame.colBytes_length, hvl]
+    · rw [FlockSoundness.Refine.Frame.colBytes_length] at hpad'
+      rw [List.length_drop, FlockSoundness.Refine.Frame.colBytes_length, hvl]
       omega
-    · rw [if_pos rfl, hr, hv, List.take_append_drop, Array.toArray_toList]
+    · rw [hb, if_pos rfl, hr, hv, List.take_append_drop, Array.toArray_toList]
 
 end FlockDeploy
 
