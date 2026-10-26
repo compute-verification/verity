@@ -22,7 +22,7 @@ that reader and proves the tie.
 namespace RecDeploy.Rows
 
 open Flock
-open FlockDeploy (Coin FinalP DecR decR RepCtx repCtx repLens cutLens rowsOf FitsRep readRep readPs linkR tabsOf
+open FlockDeploy (Coin FinalP DecR decR RepCtx repCtx repLens cutLens rowsOf nodeOf FitsRep readRep readPs linkR tabsOf
   pointsOf setupOf Ins recJ mapM_some_get)
 open FlockSoundness.Discharge.Recursion (HClass)
 
@@ -157,10 +157,10 @@ theorem decR_last {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
     ∃ (v : Ins × SessionSpec × Array Stmt) (c₁ : Coin) (r₀ : List ByteArray) (rss : List (List ByteArray))
       (fl : FinalP) (link : List ByteArray × List ByteArray) (pf : Array Flock.Proof × List Claims.Msg),
       setupOf false x = some v ∧ as.getLast?.bind rd = some fl ∧ cs.head? = some c₁ ∧
-      rowsOf (as.headD []) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧ linkR v.2.2 r₀ = some link ∧
-      readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf ∧
+      (rowsOf (as.headD [])).map (List.map nodeOf) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧
+      linkR v.2.2 r₀ = some link ∧ readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf ∧
       d = ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast,
-        ⟨fl.stmt, recJ v.2.1 v.2.2 link c₁ pf.2 cs.tail.dropLast pf.1, pf.1⟩⟩ := by
+        ⟨x, recJ v.2.1 v.2.2 link c₁ pf.2 cs.tail.dropLast pf.1, pf.1⟩⟩ := by
   simp only [decR, Option.bind_eq_bind, Option.pure_def] at h
   obtain ⟨v, h1, h⟩ := Option.bind_eq_some_iff.1 h
   obtain ⟨a, h2, h⟩ := Option.bind_eq_some_iff.1 h
@@ -175,8 +175,8 @@ theorem decR_last {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
     cases as with
     | nil => cases h3
     | cons b l => exact Option.some.inj h3
-  exact ⟨v, c₁, r₀, rss, fl, link, pf, h1, (by rw [h2]; exact h5), h4, (by rw [ha]; exact h6), h7, h8, h9,
-    (Option.some.inj h).symm⟩
+  exact ⟨v, c₁, r₀, rss, fl, link, pf, h1, (by rw [h2]; exact (Option.filter_eq_some_iff.1 h5).1), h4,
+    (by rw [ha]; exact h6), h7, h8, (Option.filter_eq_some_iff.1 h9).1, (Option.some.inj h).symm⟩
 
 /-! ## The reader -/
 
@@ -189,14 +189,15 @@ def schOf (x : Claims.Msg) (t : ℕ) : Flock.Schedule :=
 /-- The cap and Ligerito proof of a `rec-open` piece's side: its rep's proof as `readRep` reads it (`sideAt`). -/
 def capLigAt (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (ms : List Claims.Msg) (q : OpenPiece) :
     Array ByteArray × Flock.LigeritoProof :=
-  match setupOf false x, ms.getLast?.bind rd, rowsOf (ms.headD []), ms.tail.dropLast.mapM rowsOf with
+  match setupOf false x, ms.getLast?.bind rd, (rowsOf (ms.headD [])).map (List.map nodeOf),
+    ms.tail.dropLast.mapM rowsOf with
   | some v, some fl, some r₀, some rss =>
     (sideOf (repCtx v.2.1 v.2.2 default r₀ [] (2 * q.table + q.rep))
       ((cutLens (repLens v.2.1 v.2.2) rss).getD (2 * q.table + q.rep) []) fl.ps[2 * q.table + q.rep]!).getD default
   | _, _, _, _ => default
 
 /-- **The side a `rec-open` piece reads off the statement and the messages**: at a statement that sets up and
-messages whose last one `rd` reads, with round 0's and the later rounds' rows read back, rep `k = 2 table + rep`'s
+messages whose last one `rd` reads, with round 0's nodes and the later rounds' rows read back, rep `k = 2 table + rep`'s
 proof as `readRep` reads it from the `k`-th block of the later rounds' rows (at the default link coin: what it reads of
 the openings takes no coin, `sideOf_repCtx`), with the last message's `k`-th proof; the side is the table's `fast100`
 schedule (`schOf`, whatever the messages), and that proof's cap and Ligerito proof (`capLigAt`). -/
