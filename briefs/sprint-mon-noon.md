@@ -43,6 +43,16 @@ by data sheet, and the table says so.
 
 > **R-ACCEL-8 (04:41Z):** no shadow GEMMs and no noised copies. Credited work is the useful product with O bound. See brief section 1.
 
+> **Status 06:50Z (real UTC).**
+> - **D1:** protocol v3 is adopted (PROTO-DESIGN-3, CMP-118 e0cd4061): H200 t = 2, L′ 512–640; RTX PRO 6000 t = 3, L′ 256. Its overlapped γ is at most 6.06, so P-HYB3 is only the alternative.
+> - **D6:** PROTO-DESIGN-4 bc-9bcba447, due 17:00Z.
+> - **D2:** WORKSOUND-2 bc-dc15c75c, then WORKSOUND-3. Open items: W1/L37, L38, L39, P13–P17 and P20.
+> - **D3:** MODEL-SPEC-3 bc-378077c8, mark #4553 at 14:00Z.
+> - **D4:** NAIVE-STRASSEN-2 bc-f3e9dd67, #4607 (depth 3 proved), due 16:00Z.
+> - **D5 v2:** BET-ALGO-LAB bc-f53e4d35, posting early.
+> - **Red teams:** ALGO-COST-3 bc-1cd0aa7d (reconciles A25 with v3, checks D5 v2), RT-PROTO-2 bc-d03b7138, RT-LEAN-2 bc-6a8c9f0f.
+> - Decisions on P15–P20 are in `inbox/ACCEL-PROTO-DESIGN.md` 06:45Z.
+
 ## Who builds what, and who red-teams it
 
 | Deliverable | Builder | Red team |
