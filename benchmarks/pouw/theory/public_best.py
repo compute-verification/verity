@@ -786,6 +786,29 @@ def price_hull(card: Card, chosen: dict, eX, eW, L: int, n: int, m: int, **kw) -
     return price_methods(card, [scheme_method(lb, s, d, eX, eW) for lb, (s, d) in chosen.items()], L, n, m, **kw)
 
 
+def distinct_schemes(schemes, d: int, eX, eW) -> list:
+    """The schemes of the list that price differently at depth d (`best_scheme`'s key)."""
+    seen, out = set(), []
+    for s in schemes:
+        lv = leaves_of(s, d, eX, eW)
+        key = (grid(powered(s, d)), tuple(sorted((lf.A, lf.B, lf.nnz_c) for lf in lv)), assembly(s, d))
+        if key not in seen:
+            seen.add(key)
+            out.append(s)
+    return out
+
+
+def rich_menu(orb, cat, eX, eW) -> dict:
+    """Every distinct scheme as its own method: the plain product, the 2x2 orbit at depth 1, Strassen at depth 2 and
+    every orientation of each catalogue scheme at depth 1."""
+    out = {"naive": (None, 0), "Strassen d2": (STRASSEN, 2)}
+    out.update({f"orbit d1 #{i}": (s, 1) for i, s in enumerate(distinct_schemes(orb, 1, eX, eW))})
+    for name, ors in cat.items():
+        out.update({f"<{name.replace('x', ',')};{len(ors[0])}> o{j}": (s, 1)
+                    for j, s in enumerate(distinct_schemes(ors, 1, eX, eW))})
+    return out
+
+
 def shares(p: Priced) -> str:
     return "+".join(f"{k} {v:.2f}" for k, v in sorted(p.mix.items(), key=lambda kv: -kv[1]) if v > 0.005)
 
@@ -1049,6 +1072,25 @@ def report(menu) -> dict:
                     out[(case, card.name, vname, nm)] = (mname, p, h)
                     cells.append(f"{p.c:6.3f} ({h.c:.3f}) {mname[:14]:>14} {','.join(h.binding)[:11]:>11}")
                 print(f"    {nm:10} {K:6} {L:5} | " + " | ".join(f"{c:>41}" for c in cells))
+    return out
+
+
+def hull_report(orb, cat) -> dict:
+    """`report`'s hull takes each method in its best scheme alone; this one takes every distinct scheme (`rich_menu`)
+    at the frozen qkv shape, at v1's and v2's L, on v1's operands and v2's (±80 both)."""
+    out = {}
+    zero = data_pmf("zero")
+    print("\n== the hull over every distinct scheme (qkv, A = B = 0): c, shares, binding")
+    for case, (eX, eW) in (("v1 (V ±64, U ±80)", (entry_pmf(zero, U_X), entry_pmf(zero, U_W))),
+                           ("v2 (±80 both)", (entry_pmf(zero, V2_V), entry_pmf(zero, V2_U)))):
+        menu = rich_menu(orb, cat, eX, eW)
+        for card in CARDS:
+            for L in (v1_L(card, 16384), V2_T[card.family] * V2_PICKS[card.family][0][4]):
+                for vname, kw in variants(card, True):
+                    h = price_hull(card, menu, eX, eW, L, 16512, TOKENS, **kw)
+                    out[case, card.name, L, vname] = h
+                    print(f"  {case:18} {card.name:12} L {L:5} [{vname}] ({len(menu)} schemes): c {h.c:.3f}; "
+                          f"shares {shares(h)}; bound by {','.join(h.binding)}")
     return out
 
 
@@ -1540,6 +1582,7 @@ def main() -> None:
     ap.add_argument("--sweep", action="store_true", help="only the job's c_mm as L grows")
     ap.add_argument("--lanes", action="store_true", help="only the job's c_mm against the honest lane load")
     ap.add_argument("--tiles", action="store_true", help="only v2's tile route (ALGO-COST A12)")
+    ap.add_argument("--hull", action="store_true", help="only the hull over every distinct scheme (ALGO-COST A19)")
     args = ap.parse_args()
     cat = catalogue()
     if args.check:
@@ -1569,6 +1612,9 @@ def main() -> None:
         return
     orb = orbit()
     print(f"orbit: {len(orb)} valid <2,2,2> schemes (Strassen, Winograd, GL2(Z) images mod monomials, transposes)")
+    if args.hull:
+        hull_report(orb, cat)
+        return
     menu = methods(orb, cat)
     if args.sweep:
         sweep_report(menu)
@@ -1578,6 +1624,7 @@ def main() -> None:
         return
     if not args.job_only:
         report(menu)
+        hull_report(orb, cat)
     job_report(menu)
     sweep_report(menu)
     lane_report(menu)

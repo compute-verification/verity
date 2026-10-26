@@ -124,6 +124,16 @@ def test_the_hull_of_methods_beats_each_method_where_they_bind_different_resourc
     assert one.c == pytest.approx(1.0)
 
 
+def test_pub_mm_on_sm120_holds_against_the_hull_over_every_distinct_scheme(cat):
+    """The named program takes each method in its best scheme alone; every distinct scheme as its own method (113 at
+    ±80) mixes no better on the RTX PRO 6000 at v2's L."""
+    zero = PB.data_pmf("zero")
+    eX, eW = PB.entry_pmf(zero, 80), PB.entry_pmf(zero, 80)
+    menu = PB.rich_menu(PB.orbit(), cat, eX, eW)
+    h = PB.price_hull(PB.SM120, menu, eX, eW, 768, 16512, PB.TOKENS, beside=True, lookups=True)
+    assert len(menu) > 100 and h.c == pytest.approx(0.863, abs=0.002)
+
+
 def test_sha_schedules_match_rt_units():
     t0, r0 = PB.sha_clocks(PB.H200, "default build")
     t1, _ = PB.sha_clocks(PB.H200, "A-wide + R-hi")
