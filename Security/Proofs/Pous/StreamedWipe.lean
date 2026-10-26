@@ -4,6 +4,7 @@ import Proofs.Pous.StreamedWipe.Deployed
 import Proofs.Pous.StreamedWipe.Family
 import Proofs.Pous.StreamedWipe.Honest
 import Proofs.Pous.StreamedWipe.Server
+import Proofs.Pous.StreamedWipe.Witnesses
 
 /-!
 # The streamed-label wipe
@@ -28,6 +29,11 @@ import Proofs.Pous.StreamedWipe.Server
   `StreamedWipeMeetsServer8H200HBMRAM`, `StreamedWipeMeetsServer8H200`).
 * `StreamedWipe/Honest.lean`: the honest server, which keeps every label, is accepted on every run
   (`PousStreamedWipe.honest_accepts`).
+* `StreamedWipe/Witnesses.lean`: the honest and nontrivial lemmas of `StreamedWipeMeetsReadsTight`,
+  `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB` and `StreamedWipeMeetsServerH200`: each one's antecedents
+  hold at the deployed H200 as measured (`Pous.Claims.<name>_meets`, at `StreamedWipe.h200`), and each is false at the
+  verdict that accepts everything, where a prover that keeps all its prior content wins with probability 1
+  (`Pous.Claims.<name>_fails`); a prover that keeps nothing stays within the bound (`Pous.Claims.keepNothing_within`).
 
 None of them uses a named assumption.
 -/

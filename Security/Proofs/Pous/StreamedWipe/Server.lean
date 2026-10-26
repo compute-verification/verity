@@ -13,8 +13,10 @@ import Proofs.Pous.StreamedWipe.Family
 - `3n < m · 2^(⌊log₂⌊3n/m⌋⌋ + 1)`, so `(3n)^m ≤ m^m · 2^(m·(⌊log₂⌊3n/m⌋⌋ + 1))`.
 
 `StreamedWipeMeetsServer` is it at `M = M_s`, `StreamedWipeMeetsServer5GB` at the 5 GB point, and the four servers'
-instances are the 5 GB form at their `n`, `R`, `r` and `k`, each `(r − 1)^k · 2^129 ≤ r^k` and each
-`B(n, r, k, R) ≤ 4·10^10` decided by the kernel.
+instances are the 5 GB form at their `n`, `R`, `r` and `k` (the H200's the measured deployment `StreamedWipe.h200`),
+each `(r − 1)^k · 2^129 ≤ r^k` and each `B(n, r, k, R) ≤ 4·10^10` decided by the kernel. Each guarantee is its claim at
+`StreamedWipe.Accepts`, whose `winRealBy` and `wipeDistinguisherBy` are `winReal` and `wipeDistinguisher` by
+definition. The claims' witnesses are `Security/Proofs/Pous/StreamedWipe/Witnesses.lean`.
 -/
 
 namespace PousStreamedWipe
@@ -110,11 +112,11 @@ theorem streamed_wipe_meets_server_5GB : Pous.Guarantees.StreamedWipeMeetsServer
     streamed_wipe_meets_server Ms n R hMs hn r k hr hk q E κ prf P
       (by unfold OperatingPoint at hB; omega)
 
-/-- **`StreamedWipeMeetsServerH200`**: the 5 GB form at `n = 2,203,125,000`, `R = 18,240,000,000`, `r = 53` and
-`k = 4695`. -/
+/-- **`StreamedWipeMeetsServerH200`**: the 5 GB form at the deployed H200 as measured, `StreamedWipe.h200`:
+`n = 2,319,974,400`, `M_s = 1,206,038,560,768`, `r = 62` and `k = 5500`. -/
 theorem streamed_wipe_meets_server_H200 : Pous.Guarantees.StreamedWipeMeetsServerH200 := fun q E κ prf P hq =>
-  streamed_wipe_meets_server_5GB _ 2203125000 18240000000 (by norm_num) (by norm_num) 53 4695 (by norm_num)
-    (by decide +kernel) (by unfold OperatingPoint; decide +kernel) q E κ prf P hq
+  streamed_wipe_meets_server_5GB h200.Ms h200.n h200.R (by decide +kernel) (by decide +kernel) h200.r h200.k
+    (by decide +kernel) (by decide +kernel) (by unfold OperatingPoint; decide +kernel) q E κ prf P hq
 
 /-- **`StreamedWipeMeetsServer8H200HBM`**: the 5 GB form at `n = 17,625,000,000`, `R = 31,200,000,000`, `r = 1050`
 and `k = 93,843`. -/

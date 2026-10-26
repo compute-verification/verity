@@ -1911,7 +1911,7 @@
   "Proofs.Accounting.TS.Session"
  ],
  "claims": {
-  "modules": ["Definitions.Claims"],
+  "modules": ["Definitions.Claims", "Definitions.Pous.Claims"],
   "witnesses": {
    "Claims.Bits": {
     "fails": "Claims.Bits_fails",
@@ -2123,6 +2123,22 @@
    "Claims.Recursion.BitsLin2": {
     "fails": "Claims.Witness.Recursion.BitsLin2_fails",
     "meets": ["Claims.Witness.Recursion.KSBound_meets"]
+   },
+   "Pous.Claims.StreamedWipeMeetsReadsTight": {
+    "fails": "Pous.Claims.StreamedWipeMeetsReadsTight_fails",
+    "meets": ["Pous.Claims.StreamedWipeMeetsReadsTight_meets"]
+   },
+   "Pous.Claims.StreamedWipeMeetsServer": {
+    "fails": "Pous.Claims.StreamedWipeMeetsServer_fails",
+    "meets": ["Pous.Claims.StreamedWipeMeetsServer_meets"]
+   },
+   "Pous.Claims.StreamedWipeMeetsServer5GB": {
+    "fails": "Pous.Claims.StreamedWipeMeetsServer5GB_fails",
+    "meets": ["Pous.Claims.StreamedWipeMeetsServer5GB_meets"]
+   },
+   "Pous.Claims.StreamedWipeMeetsServerH200": {
+    "fails": "Pous.Claims.StreamedWipeMeetsServerH200_fails",
+    "meets": ["Pous.Claims.StreamedWipeMeetsServerH200_meets"]
    }
   },
   "not": {
@@ -8583,6 +8599,30 @@
    "assumptions": [],
    "type_hash": "b6f79294b8555ef604979d0178cb818abc5d0cc785b14c56841ad73ce13321f6"
   },
+  "Pous.Claims.StreamedWipeMeetsReadsTight_fails": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Claims.StreamedWipeMeetsReadsTight_meets": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Claims.StreamedWipeMeetsServer5GB_fails": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Claims.StreamedWipeMeetsServer5GB_meets": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Claims.StreamedWipeMeetsServerH200_fails": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Claims.StreamedWipeMeetsServerH200_meets": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Claims.StreamedWipeMeetsServer_fails": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Claims.StreamedWipeMeetsServer_meets": {
+   "owner": "@memory-accounting"
+  },
   "Pous.SecurityProofs.BackgroundRebuildExcluded": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.BackgroundRebuildExcluded : Pous.Guarantees.BackgroundRebuildExcluded"],
@@ -11383,7 +11423,7 @@
    "Pous.SecurityProofs.StreamedWipeMeetsReadsTight": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, with the count of the missing labels' sets (Security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) on a server of assumed memory capacity M_s = 512 n + R, at its threshold B(n, r, k, R) (Security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer5GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) on a server of assumed memory capacity M_s = 512 n + R at the 5 GB point, B(n, r, k, R) <= 4e10 bits (Security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Pous.SecurityProofs.StreamedWipeMeetsServerH200": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on one H200, a 141 GB fill with 2.28 GB outside it, at r = 53 and k = 4695 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeetsServerH200": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on one H200 as measured on vy-dc-h200-2 (r20261026-003454-bfd2), a 148.48 GB fill with 2.276 GB outside it, at the deployed r = 62 and k = 5500 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBM": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on an 8xH200 server's HBM, a 1,128 GB fill with 3.9 GB outside it, at r = 1050 and k = 93,843 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on an 8xH200 server's HBM and host RAM, a 3,128 GB fill with 3.9 GB outside it, at r = 2922 and k = 261,229 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on a whole 8xH200 server, a 15,128 GB fill of every tier with 3.9 GB outside it, at r = 14,183 and k = 1,268,143 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",

@@ -265,6 +265,10 @@ def reads_exponent(r: int, k: int) -> float:
 FIVE_GB = 5 * 10**9 * 8
 H200, RAM, DISK = 141 * 10**9, 2 * 10**12, 12 * 10**12
 MINIMAL = (8 * 3 * 10**8 + 15 * 10**8) * 8  # 8 × 0.3 GB of minimal contexts and a 1.5 GB host OS
+# vy-dc-h200-2's card as r20261026-003454-bfd2 measured it (`Pous.StreamedWipe.h200`): 143,771 MiB, a fill of 4,425
+# segments of 32 MiB.
+H200_MS, H200_FILL = 143_771 * 2**20 * 8, 4425 * 2**25
+H200_R = H200_MS - sw.LABEL_BITS * (H200_FILL // sw.LABEL_BYTES)
 
 
 def test_count_bits_bounds_the_count() -> None:
@@ -287,13 +291,13 @@ def test_tight_threshold_below_reads_from_r_4() -> None:
 
 
 @pytest.mark.parametrize("fill, reserve, r, k, bound", [
-    (H200, 228 * 10**7 * 8, 53, 4695, 39_855_566_062),
+    (H200_FILL, H200_R, 56, 4963, 39_754_287_390),
     (8 * H200, MINIMAL, 1050, 93_843, 39_995_714_282),
     (8 * H200 + RAM, MINIMAL, 2922, 261_229, 39_998_169_129),
     (8 * H200 + RAM + DISK, MINIMAL, 14_183, 1_268_143, 39_999_689_862),
 ])
 def test_servers_at_5GB(fill: int, reserve: int, r: int, k: int, bound: int) -> None:
-    """`StreamedWipeMeetsServerH200`, `…8H200HBM`, `…8H200HBMRAM` and `…8H200`: `B(n, r, k, R)` at the statement's `r`
+    """The measured H200's least point, `…8H200HBM`, `…8H200HBMRAM` and `…8H200`: `B(n, r, k, R)` at the row's `r`
     and `k` is at most 5 GB, `r` is the least ratio that is, and `k` the least read count for `r` (the kernel decides
     `(r − 1)^k · 2^129 ≤ r^k`; here the exponent, with a margin far above the float's error, and exactly where cheap).
     The exact count needs less than `countBits`."""
@@ -308,6 +312,17 @@ def test_servers_at_5GB(fill: int, reserve: int, r: int, k: int, bound: int) -> 
     m = -(-n // r) - 1
     assert sw._log2_choose(n, m) <= count_bits(n, m)
     assert server_bound(n, r, k, 9_600_000_000 * 8) > FIVE_GB  # R = 8 × 1.2 GB, today's contexts: 9.6 GB alone
+
+
+def test_h200_as_deployed() -> None:
+    """`StreamedWipeMeetsServerH200` and the honest lemmas at `Pous.StreamedWipe.h200`: the measured card is
+    `512·n + R` bits, the deployed `k = 5500` reads at `r = 62`, the largest `r` with `(r − 1)^k · 2^129 ≤ r^k`, and
+    `B = 37,669,517,430` bits (4.709 GB) within the 5 GB point, the fill's share `19,457,849,462`."""
+    n = H200_FILL // sw.LABEL_BYTES
+    assert (n, H200_MS, H200_R) == (2_319_974_400, 1_206_038_560_768, 18_211_667_968)
+    assert 61**5500 * 2**129 <= 62**5500 and 62**5500 * 2**129 > 63**5500
+    assert server_bound(n, 62, 5500, H200_R) == 37_669_517_430 <= FIVE_GB
+    assert server_bound(n, 62, 5500) == 19_457_849_462
 
 
 def test_tight_count_at_the_whole_server() -> None:
