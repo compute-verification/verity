@@ -28,6 +28,7 @@ import numpy as np
 import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
+from verity_flock import rec_algebra as A
 from verity_flock import rec_cap as RC
 from verity_flock import rec_live as RL
 from verity_flock import rec_outer as O
@@ -244,6 +245,40 @@ def test_a_wrong_input_moves_the_fingerprints(server):
     assert [nm for (nm, a), (_, b) in zip(ports(honest), ports(bad), strict=True) if a != b] == ["aux"]
 
 
+def top_sizes(v: dict) -> dict:
+    """A rep's tops' node counts in `VStar.In.Src.tops`' order: level 0's (`root_B`, ``2^cap`` of fast100(m)'s first level),
+    then the later levels' in the order the rep's schedule commits them (`rec_live.rep_rounds`, `holo_rounds`)."""
+    try:
+        cap = A.fast100(v["m"]).levels[0].cap
+        rounds = (RL.holo_rounds if v["holo"] else RL.rep_rounds)(v["m"], v["k_log"], v["claims"])
+    except (ValueError, AssertionError) as e:
+        raise D.Reject(str(e)) from None
+    return {"level0": 1 << cap, "later": [n for _, tops, _, _ in rounds for n in tops]}
+
+
+TOP_SIZES = D.Port("vstar-difftest", "top_sizes", top_sizes,
+                   st.fixed_dictionaries({"m": st.integers(20, 37), "k_log": st.integers(0, 24), "claims": st.integers(0, 12),
+                                          "holo": st.booleans()}), package=LEAN)
+
+
+def test_top_sizes_agree(server):
+    """Lean's order of a rep's tops (`RecVStar.topSizes`, which `VStarBuild.topsOf` lists them in after level 0) is
+    `rec_live`'s schedule's, across fast100's m, k_log and claims, holo or not; m outside 22 to 35 is refused by both."""
+    D.run(TOP_SIZES, examples=200, server=server)
+
+
+def _tops_in_schedule_order(server, sh, ts: dict) -> None:
+    """The stager's tops (`rec_vstar.tops`, `Src.tops`), each rep's: level 0's `root_B` (both reps' one top) at index 0, then
+    the later levels' in `topSizes` order, as Lean's `top_sizes` gives them at the session's shape."""
+    v = {"m": sh.m, "k_log": sh.k_log, "claims": sh.claims, "holo": bool(sh.holo)}
+    kind, out = D.replay(TOP_SIZES, v, server)
+    assert kind == "output", out
+    want = json.loads(out)
+    assert ts[0][0] == ts[1][0], "level 0's top is not both reps' one root_B"
+    for rep, tops in ts.items():
+        assert [len(t.nodes) for t in tops] == [want["level0"], *want["later"]], rep
+
+
 # --- the deployed session ------------------------------------------------------------------------------------------------------
 
 SET = FLOCK_TESTS / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
@@ -309,6 +344,7 @@ def _agrees(server, inner: Path, fold: dict, out: Path, salts: Path, levels: lis
     qs = V.queries(public, private, proofs)
     ts = {rep: V.tops(public, private, f"circuit/rep{rep}", "circuit") for rep in sorted(proofs)}
     mrs = S.message_rounds(public, private, vf.sh)
+    _tops_in_schedule_order(server, vf.sh, ts)
     nlev = len(vf.reps[0].info["kappa"])
     caps = {"cap": (0, res["cap"])} if "cap" in res else {}
     caps |= {RC.dir_name(int(k[1:])): (int(k[1:]), c) for k, c in res.get("caps", {}).items()}
