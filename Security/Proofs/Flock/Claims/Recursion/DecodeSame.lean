@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.Complete.Json.Decode
 `decode_recordObj` reads the printed honest record back through `JsonSpec`'s `parse_print`, which hands it a parsed
 value alike the record (`Same`), and every check after that reads the parsed value only through `Same`. So the same
 checks pass at any value alike the honest record (`decodeJ_same`): S1–S14 at `Record.decodeJWith`, no parse. It takes
-no JSON premise: S3 reads `require_link` by a match on `Json.bool true`, and U1's `canon` is total (`canon_ok`,
+no JSON premise: S3 reads `require_link` by a match, and U1's `canon` is total (`canon_ok`,
 `canon_same`).
 
 * **Alike objects by lookup** (`same_mkObj`): a well-formed object (`WfObj`) is alike an object of distinct keys when
