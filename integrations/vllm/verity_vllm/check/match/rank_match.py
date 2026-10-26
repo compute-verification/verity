@@ -1,4 +1,4 @@
-"""[R17 D90, COORD R17-4] The CROSS-RANK leg of the per-rank Match: the two ranks' folds (and, when given, the collective recorder's rows
+"""[D90] The CROSS-RANK leg of the per-rank Match: the two ranks' folds (and, when given, the collective recorder's rows
 and the rank Programs' `tp_links.json`) must state the SAME collectives -- so that rank r's `peers_<request>` root field (step, k) IS the other
 rank's own partial of collective (step, k), produced in the other rank's log by its own EmbeddingShard / Gemm instance, and never a value
 either rank invented.  Everything here is structural (kind, N, rows per request, site, order, count, producer class, link binding); the
@@ -81,7 +81,7 @@ def _norm_site(s: str | None) -> str:
 
 
 def _same_site(a: str | None, b: str | None) -> bool:
-    """[lane vllm-tp-n] The derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive wrote
+    """The derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive wrote
     by object identity) vs the fold's / recorder's site: equal, or a dotted suffix of one another (a v1 tp_links without a recorded root
     spells the traced wrapper's path).  No vocabulary prefix is spelled here (`derive_step.same_module_path`)."""
     from verity_vllm.pipeline.build import same_module_path
@@ -454,7 +454,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
 
 
 def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[str, dict] | None = None, require: bool = False) -> dict:
-    """[R17 tp D90, rev M-0026 R1 at Commit] The COMMIT-STAGE binder of the peer inputs: the fold Match published, per (rank r, step, k), the
+    """[D90, R1 at Commit] The COMMIT-STAGE binder of the peer inputs: the fold Match published, per (rank r, step, k), the
     digest its `peers_r[s,k]` leaf is bound to (`peer_binding` of tp2_rank_match.json = the recorder's digest of rank 1-r's partial at (s,k));
     the Commit compared every committed rank-local partial against the SAME recorder's stored tensors bit-exact (`match_oracle`, per rank,
     exhaustive over (step, k)).  This closes the chain BY VALUE: fold peer leaf (r, s, k) == recorder part digest (1-r, s, k) == the bytes
