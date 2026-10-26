@@ -380,6 +380,93 @@ def test_a_windows_committed_activations_are_held_to_domains_binding_its_run():
         assert not v["ok"] and code in v["codes"], (bad, v)
 
 
+def _crafted(reads: tuple[IF.Read, ...], params: dict[str, int], n: int = 33) -> dict:
+    """A stated record of ``n`` coordinates declaring ``reads`` of ``params`` (no wires)."""
+    return {"templates": [[TID, n]], "wires": [], "registered": IF.Registered(params, reads=reads).doc()}
+
+
+#: coordinates 0..31 write their one-word ``o0`` as leaves 0..31 of ``y``, which coordinate 32's ``x`` (32 words) reads: a
+#: tie; coordinates 0..31 read their ``x`` from ``e``, which no output port writes
+TIE = (IF.Read(TID, "o0", "y", 0, (32,), 0, (1,)), IF.Read(TID, "x", "y", 32, (1,), 0, (32,)))
+INPUT_ONLY = (IF.Read(TID, "x", "e", 0, (32,), 0, (32,)),)
+PARAMS = {"y": 32, "e": 32 * 32}
+
+
+def test_a_value_is_a_tie_only_when_output_ports_write_every_leaf_its_input_ports_take():
+    """`tied_values`: ``y``, written by the coordinates' outputs and read by another's input, is a tie; ``e``, read only
+    by input ports, isn't; nor is a value whose readers take leaves no output writes; a value nothing reads isn't either."""
+    doc = _crafted(TIE + INPUT_ONLY, PARAMS)
+    assert RA.tied_values(doc, {"y", "e", "z"}) == {"y"}
+    assert RA.tied_values(doc, {"e"}) == set() and RA.tied_values(doc, ()) == set()
+    half = (IF.Read(TID, "o0", "p", 0, (16,), 0, (1,)), IF.Read(TID, "wrow", "p", 32, (1,), 0, (32,)))
+    assert RA.tied_values(_crafted(half, {"p": 32}), {"p"}) == set()
+
+
+def test_an_input_only_window_value_is_free_in_the_count_and_named():
+    """`declared_count` with ``untied``: the input rows read from a value no output port writes leave ``registered`` for
+    ``free``, by exactly those rows, even when the audit's pins name it, and the count names it; a tie's reads stay
+    registered."""
+    doc = _crafted(TIE + INPUT_ONLY, PARAMS)
+    per_unit = 16 * sum(w for _p, w in IF.layout(COORD).rows)
+    before, after = RA.declared_count(doc, 0, pins=PARAMS), RA.declared_count(doc, 0, pins=PARAMS, untied={"e"})
+    assert before["registered"] == 16 * 32 + 32 * 16 * 32 and before["free"] == 33 * per_unit - before["registered"]
+    assert after["registered"] == 16 * 32 and after["free"] - before["free"] == 32 * 16 * 32 and after["untied"] == ["e"]
+    assert "untied" not in before
+
+
+def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_ties():
+    """`window_pins`: the per-window values the circuit reads are the registration's entries, each held to a domain binding
+    the window's run root, split into ties (pinned) and the untied (read only by input ports, counted free); one it
+    doesn't read is neither, and one committed under another run, or naming another value, is refused."""
+    rows = [[1, 2], [3, 4]]
+    mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "y", "e")}
+    w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
+    circuit = _crafted(TIE + INPUT_ONLY, PARAMS)
+    assert RA.window_pins(w, circuit) == ({"y": mine["y"]}, {"e": mine["e"]})
+    assert RA.window_pins(w, {}) == ({}, {}) and RA.window_pins({"run": RUN}, circuit) == ({}, {})
+    elsewhere = REG.Registered.commit("test/model", "y", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
+    for bad in ({**w, "run": "cd" * 64}, {**w, "activations": {"program": "test/model", "values": {"y": elsewhere}}},
+                {**w, "activations": {"program": "test/model", "values": {"y": mine["x"]}}}):
+        with pytest.raises(ValueError, match="another value or a domain"):
+            RA.window_pins(bad, circuit)
+
+
+def test_the_toys_ties_are_pinned_and_its_embedding_fed_rows_are_free(tmp_path):
+    """The toy's wired window (`verity_torch_loop`, registered weights): its six ties, each written by a unit's output port
+    and read by the next unit's input port, are pinned; the first linears' ``(x, sx)`` (the embedding's rows, committed as
+    activations) are no parameter of the circuit, so they are neither pinned nor registered, and are its 2,112 free bits.
+    Naming them as parameters read by those linears' input ports (V3b's crafted window) makes them untied: the count is
+    the same 2,112 free bits, where counting them registered would leave none."""
+    sys.path.insert(0, str(HERE.parents[2] / "integrations" / "torch_loop"))
+    from verity_torch_loop import loop as L
+
+    loop = L.TorchLoop(L.Model(), [3, 7], steps=2, wired=True, registered=True)
+    weights = L.commit_weights(L.Model(), wired=True)
+    win = loop.window(D.parse_law("stratified:3"), cap=1, weights=weights)
+    win.write(win.close(salt_key=bytes(32)), tmp_path, {"loop": "torch-loop",
+                                                         "activations": L.activations(loop.model, loop.commit_activations())},
+              registrar=R)
+    doc = json.loads((tmp_path / "circuit.json").read_text())
+    w = json.loads((tmp_path / "registration.json").read_text())["window"]
+    ties, untied = RA.window_pins(w, doc)
+    assert set(ties) == {"up", "up_codes", "up_scale", "down", "down_codes", "down_scale"} and untied == {}
+    assert {"x", "sx"} <= set(w["activations"]["values"]) and not {"x", "sx"} & set(ties)
+    pins = {v for v, _p in L.WIRED_WEIGHTS} | set(ties)
+    honest = RA.declared_count(doc, 0, pins=pins, untied=untied)
+    h, r = L.H, 2
+    assert honest["free"] == r * 16 * (h // 2 + 2) == 2112
+    tm = descriptor_id(L.linear_template(h))
+    crafted = json.loads(json.dumps(doc))
+    crafted["registered"]["params"] |= {"x": r * h // 2, "sx": r * 2}
+    crafted["registered"]["reads"] += [IF.Read(tm, "x", "x", 0, (r,), 0, (h // 2,)).doc(),
+                                       IF.Read(tm, "sx", "sx", 0, (r,), 0, (2,)).doc()]
+    ties2, untied2 = RA.window_pins(w, crafted)
+    assert set(ties2) == set(ties) and set(untied2) == {"x", "sx"}
+    assert RA.declared_count(crafted, 0, pins=pins | set(untied2))["free"] == 0
+    fixed = RA.declared_count(crafted, 0, pins=pins | set(untied2), untied=untied2)
+    assert (fixed["free"], fixed["registered"], fixed["untied"]) == (2112, honest["registered"], ["sx", "x"])
+
+
 def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
     mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
     assert not mine.row_tables
@@ -554,6 +641,23 @@ def test_the_output_class_is_the_given_ranges_and_every_uncut_registered_read_of
     assert RA.output_class(circuit, [[2, 4], [20, 24]]) == [[0, 4], [12, 16], [20, 24]]
     assert RA.output_class({"templates": [["a", 8]]}, [[4, 8]]) == [[4, 8]]
     assert RA.output_class({"templates": [["a", 8]]}) == []
+    tie = {"templates": [["a", 8], ["b", 8]], "registered": {"reads": [
+        {"reader": "a", "port": "o0", "param": "y", "at": 0, "radix": [8]},
+        {"reader": "b", "port": "x", "param": "y", "at": 0, "radix": [8]},
+        {"reader": "b", "port": "o0", "param": "out", "at": 4, "radix": [4]}]}}
+    assert RA.output_class(tie, own={"y"}) == [[12, 16]]
+    assert RA.output_class(tie) == [[0, 8], [12, 16]]
+
+
+def test_a_served_output_that_the_next_step_reads_keeps_its_units_in_the_output_class():
+    """A decode loop's served ``out``, pinned from outside the window, is read by an output port and by the next step's
+    input port: it isn't one of the window's own values, so its writers stay in the class (keying the exclusion on any
+    value an input port reads would leave the class empty)."""
+    decode = {"templates": [["a", 8], ["b", 8]], "registered": {"reads": [
+        {"reader": "b", "port": "o0", "param": "out", "at": 0, "radix": [8]},
+        {"reader": "a", "port": "x", "param": "out", "at": 0, "radix": [8]}]}}
+    assert RA.output_class(decode) == [[8, 16]]
+    assert RA.output_class(decode, own={"y"}) == [[8, 16]]
 
 
 def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_ignored_by_the_compile_check(tmp_path, monkeypatch):
