@@ -42,13 +42,15 @@ What property/v1 refuses but still tallies is charged as tallied and reported (`
 than B operand bits, and an s8 core step whose window isn't proven. An encode built from such gates may cost less than E
 of them, so a Program with either has no property/v1 verdict, and its β reads E in the basis property/v1 counts.
 
-    python beta.py DESCRIPTOR.json[.gz] --out beta.json [--E 24504 --E 364497] [--L 600 --L 3600]   # a Build's request Program
+    python beta.py DESCRIPTOR.json[.gz] --out beta.json [--E 24504 --E 364497] [--L 600 --L 3600] [--m-dyn-node BYTES] \\
+        [--chunk N]...                      # a Build's request Program: coarse bounds (by step, N Calls at a time), then the fine one
 """
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+import time
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -124,9 +126,10 @@ class Graph:
         return sum(x.bits for x in self.values if x.write)
 
 
-def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int) -> tuple[int, list[bool]]:
+def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int,
+             progress: Callable[[int, int], None] | None = None) -> tuple[int, list[bool]]:
     """The max flow from `s` to `t` over `edges` (u, v, capacity, an int >= 0) on nodes 0..n-1 (Dinic's), and which nodes the
-    residual graph reaches from `s`: the min cut's source side."""
+    residual graph reaches from `s`: the min cut's source side. ``progress(phase, flow)`` is called after each phase."""
     to: list[int] = []
     cap: list[int] = []
     adj: list[list[int]] = [[] for _ in range(n)]
@@ -139,8 +142,11 @@ def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int) -> t
         adj[v].append(len(to))
         to.append(u)
         cap.append(0)
-    flow = 0
+    flow = phase = 0
     while True:
+        if progress is not None and phase:
+            progress(phase, flow)
+        phase += 1
         level = [-1] * n
         level[s] = 0
         q = deque([s])
@@ -198,7 +204,10 @@ def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int) -> t
 @dataclass(frozen=True)
 class Bound:
     """The bound at one (E, |c|, R_in, L): the min cut's cost (``cut``, bits) and its parts at the cut (``crossing`` b(U→D) in
-    bits, ``work`` W(D) in units), the input term (bits), M_dyn, D's nodes and the parameters."""
+    bits, ``work`` W(D) in units), the input term (bits), M_dyn, D's nodes and the parameters.
+
+    ``m_node`` is the dynamic memory, in bits, the input term is shared over (default M_dyn). A graph of one request on a node
+    that holds many: the cut grows with the requests and R_in·L doesn't, so β = cut/M_dyn + R_in·L/M_node."""
 
     cut: Fraction
     crossing: int
@@ -207,34 +216,42 @@ class Bound:
     m_dyn: int
     d: tuple[int, ...]
     params: dict
-
-    @property
-    def s_stack(self) -> Fraction:
-        return self.cut + self.input_bits
+    m_node: int | None = None
 
     @property
     def beta(self) -> Fraction | None:
-        return self.s_stack / self.m_dyn if self.m_dyn else None
+        if not self.m_dyn:
+            return None
+        return Fraction(self.cut, self.m_dyn) + Fraction(self.input_bits, self.m_node or self.m_dyn)
+
+    @property
+    def s_stack(self) -> Fraction | None:
+        """S_stack over the graph's writes, β·M_dyn."""
+        return self.beta * self.m_dyn if self.m_dyn else self.cut + self.input_bits
 
     def to_json(self, names: Sequence[str] | None = None, show: int = 20) -> dict:
         out = {"beta": str(self.beta) if self.beta is not None else None,
                "beta_float": float(self.beta) if self.beta is not None else None,
                "s_stack_bits": str(self.s_stack), "cut_bits": str(self.cut), "crossing_bits": self.crossing,
                "d_work_units": str(self.work), "input_bits": str(self.input_bits), "m_dyn_bits": self.m_dyn,
-               "d_nodes": len(self.d), **{k: str(v) if isinstance(v, Fraction) else v for k, v in self.params.items()}}
+               "m_node_bits": self.m_node or self.m_dyn, "d_nodes": len(self.d),
+               **{k: str(v) if isinstance(v, Fraction) else v for k, v in self.params.items()}}
         if names is not None:
             out["d_names"] = [names[v] for v in self.d[:show]]
         return out
 
 
-def bound(g: Graph, *, E: Any = E_PROVED, c: int = WORD_BITS, R_in: Any = R_IN, L: Any = 0, inputs: str = "rate") -> Bound:
+def bound(g: Graph, *, E: Any = E_PROVED, c: int = WORD_BITS, R_in: Any = R_IN, L: Any = 0, inputs: str = "rate",
+          m_node: int | None = None, progress: Callable[[int, int], None] | None = None) -> Bound:
     """The min-cut bound on `g` at E units an encode of a `c`-bit word, R_in bytes a second over L seconds; ``inputs`` as the
-    module says. E, R_in and L are exact (`exact`)."""
+    module says, ``m_node`` as `Bound` says. E, R_in and L are exact (`exact`)."""
     Eq, R, Lq = exact(E, "E"), exact(R_in, "R_in"), exact(L, "L")
     if Eq <= 0 or isinstance(c, bool) or not isinstance(c, int) or c < 1 or R < 0 or Lq < 0:
         raise ValueError(f"E > 0, an int c >= 1, R_in >= 0 and L >= 0, not E={E!r} c={c!r} R_in={R_in!r} L={L!r}")
     if inputs not in INPUTS:
         raise ValueError(f"inputs is one of {INPUTS}, not {inputs!r}")
+    if m_node is not None and (isinstance(m_node, bool) or not isinstance(m_node, int) or m_node < g.m_dyn):
+        raise ValueError(f"m_node is the bits of a node's dynamic memory, an int >= the graph's M_dyn {g.m_dyn}, not {m_node!r}")
     n = len(g.work)
     held = set(g.fixed) | (set(g.inputs) if inputs == "window" else set())
     S, T = n, n + 1
@@ -278,7 +295,7 @@ def bound(g: Graph, *, E: Any = E_PROVED, c: int = WORD_BITS, R_in: Any = R_IN, 
     for i in infinite:
         u, v, _ = edges[i]
         edges[i] = (u, v, big)
-    flow, source_side = max_flow(nxt, edges, S, T)
+    flow, source_side = max_flow(nxt, edges, S, T, progress)
     if flow >= big:
         raise AssertionError("an infinite path from s to t: a write's producer is unbounded, which no graph built here has")
     d = tuple(v for v in range(n) if not source_side[v])
@@ -291,7 +308,7 @@ def bound(g: Graph, *, E: Any = E_PROVED, c: int = WORD_BITS, R_in: Any = R_IN, 
         raise AssertionError(f"the cut's cost {crossing} + {c}·{work}/{Eq} is not the flow's {cut}")
     input_bits = 8 * R * Lq if inputs == "rate" else Fraction(0)
     params = {"E": Eq, "c": c, "R_in": R, "L": Lq, "inputs": inputs}
-    return Bound(cut, crossing, work, input_bits, g.m_dyn, d, params)
+    return Bound(cut, crossing, work, input_bits, g.m_dyn, d, params, m_node)
 
 
 def coarsen(g: Graph, key: Callable[[int], Hashable]) -> Graph:
@@ -378,16 +395,51 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
 
 
 def table(g: Graph, *, Es: Iterable[Any] = (E_PROVED, E_CONJECTURED), Ls: Iterable[Any] = (0,), R_in: Any = R_IN,
-          c: int = WORD_BITS, inputs: str = "rate") -> list[dict]:
+          c: int = WORD_BITS, inputs: str = "rate", m_node: int | None = None,
+          progress: Callable[[int, int], None] | None = None) -> list[dict]:
     """`bound` at each E and L (one max-flow an E: L moves only the input term)."""
     out = []
     for E in Es:
-        b = bound(g, E=E, c=c, R_in=R_in, L=0, inputs=inputs)
+        b = bound(g, E=E, c=c, R_in=R_in, L=0, inputs=inputs, m_node=m_node, progress=progress)
         for L in Ls:
             extra = 8 * exact(R_in, "R_in") * exact(L, "L") if inputs == "rate" else Fraction(0)
-            bl = Bound(b.cut, b.crossing, b.work, extra, b.m_dyn, b.d, {**b.params, "L": exact(L, "L")})
+            bl = Bound(b.cut, b.crossing, b.work, extra, b.m_dyn, b.d, {**b.params, "L": exact(L, "L")}, m_node)
             out.append(bl.to_json(g.names))
     return out
+
+
+def report(program: Any, ends: Sequence[int], *, chunks: Iterable[int] = (), write: Callable[[dict], None] = lambda _d: None,
+           log: Callable[[str], None] = lambda _m: None, **kw: Any) -> dict:
+    """`program`'s bound over its steps `ends`: by step, by each of `chunks` Calls of a step at a time, then fine (`table`'s
+    keywords in ``kw``). ``write(doc)`` is called after each bound, so a run cut short keeps the coarse ones."""
+    from verity.ml.circuits.census import census
+
+    g, info = from_program(program, doc=census(program, list(ends)))
+    edges = sum(1 + len(x.readers) for x in g.values)
+    log(f"graph: {len(g.work)} nodes, {len(g.values)} values, about {edges} edges, M_dyn {g.m_dyn} bits")
+    doc: dict = {"schema": "verity-stacked-share/beta/v1", "graph": info, "graph_edges": edges,
+                 "m_node_bits": kw.get("m_node"), "coarse": {}}
+    I = info["inputs"]
+
+    def step(v: int) -> str:
+        return g.names[v].rsplit("@", 1)[-1]
+
+    coarse: dict[str, Callable[[int], Hashable]] = {"by_step": lambda v: step(v) if v >= I else g.names[v]}
+    for n in sorted(set(chunks), reverse=True):
+        coarse[f"by_{n}_calls"] = lambda v, n=n: (step(v), (v - I) // n) if v >= I else g.names[v]
+
+    def line(rows: list[dict]) -> str:
+        return ", ".join(f"E={r['E']} L={r['L']} β={r['beta_float']:.4g}" for r in rows)
+
+    for name, key in coarse.items():
+        cg = coarsen(g, key)
+        doc["coarse"][name] = {"nodes": len(cg.work), "values": len(cg.values), "bounds": table(cg, **kw)}
+        write(doc)
+        log(f"{name} ({len(cg.work)} nodes): {line(doc['coarse'][name]['bounds'])}")
+    doc["bounds"] = table(g, **kw, progress=lambda ph, f: log(f"phase {ph}: flow {f}") if ph % 20 == 0 else None)
+    write(doc)
+    log(f"fine: {line(doc['bounds'])}")
+    return doc
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -400,20 +452,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--R-in", default=str(R_IN), help="run-input bytes a second")
     ap.add_argument("-c", type=int, default=WORD_BITS, help="|c|, bits of an encoded word")
     ap.add_argument("--inputs", choices=INPUTS, default="rate")
+    ap.add_argument("--m-dyn-node", help="bytes of the node's dynamic memory the input term is shared over (`Bound`; default "
+                    "the Program's own writes)")
+    ap.add_argument("--chunk", type=int, action="append", default=[],
+                    help="also the coarse bound of each step's Calls taken N at a time, before the fine one")
     a = ap.parse_args(argv)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from units import load  # noqa: E402
 
-    from verity.ml.circuits.census import census, step_ends
+    from verity.ml.circuits.census import step_ends
+
+    t0 = time.monotonic()
+
+    def log(msg: str) -> None:
+        print(f"[beta {time.monotonic() - t0:8.1f}s] {msg}", file=sys.stderr, flush=True)
 
     program = load(a.descriptor)
     ends = step_ends(program, [a.sample])
-    g, info = from_program(program, doc=census(program, ends))
-    rows = table(g, Es=a.E or (E_PROVED, E_CONJECTURED), Ls=a.L or (600, 3600), R_in=a.R_in, c=a.c, inputs=a.inputs)
-    doc = {"schema": "verity-stacked-share/beta/v1", "descriptor": str(a.descriptor), "graph": info, "bounds": rows}
-    a.out.write_text(json.dumps(doc, indent=1, default=str))
-    print(json.dumps({"graph": info, "bounds": [{k: r[k] for k in ("E", "L", "beta_float", "cut_bits", "m_dyn_bits")}
-                                                 for r in rows]}, indent=1, default=str))
+    log(f"loaded: {len(program.root.body.nodes)} root nodes, {len(ends)} steps")
+    m_node = None if a.m_dyn_node is None else int(8 * exact(a.m_dyn_node, "--m-dyn-node"))
+
+    def write(doc: dict) -> None:
+        a.out.write_text(json.dumps({**doc, "descriptor": str(a.descriptor)}, indent=1, default=str))
+
+    doc = report(program, ends, chunks=a.chunk, write=write, log=log, Es=a.E or (E_PROVED, E_CONJECTURED),
+                 Ls=a.L or (600, 3600), R_in=a.R_in, c=a.c, inputs=a.inputs, m_node=m_node)
+    print(json.dumps({"graph": doc["graph"], "bounds": [{k: r[k] for k in ("E", "L", "beta_float", "cut_bits", "m_dyn_bits")}
+                                                        for r in doc["bounds"]]}, indent=1, default=str))
     return 0
 
 

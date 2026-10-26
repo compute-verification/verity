@@ -6,6 +6,7 @@ the bound. Every number is exact: E, R_in and L are rationals and the bound a `F
 from __future__ import annotations
 
 import itertools
+import json
 import random
 import sys
 from fractions import Fraction
@@ -298,8 +299,35 @@ def test_coarse_graining_never_lowers_the_bound():
     assert B.bound(B.coarsen(g, lambda v: v), E=64).cut == fine.cut
 
 
+def test_report_writes_each_bound_and_coarse_ones_are_looser():
+    """The CLI's document on the attention toy: written after each bound, every coarse bound at least the fine one, by step
+    strictly looser, and JSON throughout."""
+    program, ends = attention(5, 8)
+    seen: list[list[str]] = []
+    doc = B.report(program, ends, chunks=(3, 1), write=lambda d: seen.append(sorted(d["coarse"]) + ["fine"] * ("bounds" in d)),
+                   Es=(64, B.E_CONJECTURED), Ls=(0, 600), m_node=1 << 30)
+    assert seen[-1] == ["by_1_calls", "by_3_calls", "by_step", "fine"] and len(seen) == 4
+    fine = [Fraction(r["cut_bits"]) for r in doc["bounds"]]
+    assert fine[0] == 288 * 4
+    for name, c in doc["coarse"].items():
+        assert all(Fraction(r["cut_bits"]) >= f for r, f in zip(c["bounds"], fine)), name
+    assert Fraction(doc["coarse"]["by_step"]["bounds"][0]["cut_bits"]) > fine[0]
+    assert [r["cut_bits"] for r in doc["coarse"]["by_1_calls"]["bounds"]] == [r["cut_bits"] for r in doc["bounds"]]
+    assert json.loads(json.dumps(doc, default=str))["bounds"][1]["m_node_bits"] == 1 << 30
+
+
 def test_table_moves_only_the_input_term():
     g, _ = graph_of(*cheap_writes(4))
     rows = B.table(g, Es=(B.E_PROVED,), Ls=(0, 600, 3600))
     assert [r["input_bits"] for r in rows] == ["0", str(8 * B.R_IN * 600), str(8 * B.R_IN * 3600)]
     assert len({r["cut_bits"] for r in rows}) == 1
+
+
+def test_the_input_term_is_shared_over_the_node():
+    """One request's graph on a node holding M_node bits of dynamic memory: β = cut/M_dyn + R_in·L/M_node."""
+    g, _ = graph_of(*cheap_writes(4))
+    b = B.bound(g, E=B.E_PROVED, R_in=1, L=2, m_node=10 * g.m_dyn)
+    assert b.beta == Fraction(32, B.E_PROVED) + Fraction(16, 10 * g.m_dyn) and b.s_stack == b.beta * g.m_dyn
+    assert B.table(g, Es=(B.E_PROVED,), Ls=(2,), R_in=1, m_node=10 * g.m_dyn)[0]["beta"] == str(b.beta)
+    with pytest.raises(ValueError, match="m_node"):
+        B.bound(g, m_node=g.m_dyn - 1)
