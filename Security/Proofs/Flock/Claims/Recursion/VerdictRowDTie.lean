@@ -205,7 +205,7 @@ theorem openDirs_get (sh : Shape) (l H : ℕ) (r0 r1 : RecCoins.Rep) {r j : ℕ}
     omega
   rw [getElem!_pos (openDirs sh l H r0 r1) _ hlt]
   unfold openDirs
-  simp only [Array.getElem_map, Array.getElem_range]
+  simp only [Array.getElem_map]
   obtain rfl | rfl : r = 0 ∨ r = 1 := by omega
   · simp [hj, Nat.mod_eq_of_lt hj]
   · simp only [Nat.one_mul]
