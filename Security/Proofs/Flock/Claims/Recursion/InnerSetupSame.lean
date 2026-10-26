@@ -187,15 +187,18 @@ theorem drawn_same {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (S
   · rw [s.da, s'.da, hc, hpin]
   · rw [s.db, s'.db, hc, hpin]
 
-/-- **A full draw keeps the statement's extra claims and circuit fold.** -/
+/-- **A full draw keeps the statement's extra claims, circuit fold and link points' length.** -/
 theorem drawn_setup {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (String × ByteArray)}
     {pa pa' : Option Lean.Json} {pr pr' : Option ByteArray} {d : Lean.Json} {D : Draw.UnitDraw} {st st' : Stmt}
     (h' : Stmt.setupHidden T cf pf co tb none pa pr = .ok st')
     (h : Stmt.setupHidden T cf pf co' tb (some d) pa' pr' = .ok st)
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hp : D.proved = Array.range st'.n) :
-    st.m = st'.m ∧ st.c.kLog = st'.c.kLog ∧ st.extraClaims = st'.extraClaims ∧ st.circuitFold = st'.circuitFold := by
+    st.m = st'.m ∧ st.c.kLog = st'.c.kLog ∧ st.extraClaims = st'.extraClaims ∧ st.circuitFold = st'.circuitFold ∧
+      st.mPts = st'.mPts := by
   obtain ⟨hc, hl, hn, hm, hpin, hda, hdb, hr⟩ := drawn_same h' h hD hp
-  exact ⟨hm, by rw [hc], extraClaims_congr (by rw [hc]) hm hn hr, circuitFold_congr hc hl hpin hda hdb⟩
+  refine ⟨hm, by rw [hc], extraClaims_congr (by rw [hc]) hm hn hr, circuitFold_congr hc hl hpin hda hdb, ?_⟩
+  rw [(FlockSoundness.Discharge.Hidden.setupHidden_spec' h).mPts,
+    (FlockSoundness.Discharge.Hidden.setupHidden_spec' h').mPts, hn]
 
 end SetupSame
 
@@ -204,12 +207,13 @@ open SetupSame
 /-- **Flock's plain verifier sets the inner statement up as its files do, as the algebra reads it**: where the
 setup's checks accept what the verifier reads of a compiled statement (`RecScope.accepts`), Flock's plain verifier sets
 the inner statement up as one table whose `m`, `k_log`, extra claims (at any points) and circuit fold are the files'
-statement's (`RecCoins.Files.stmt`). As `innerSetup_files`, with `drawn_setup` for `drawn_full`. -/
+statement's (`RecCoins.Files.stmt`), in a session of two link points of the files' `m_pts`. As `innerSetup_files`,
+with `drawn_setup` for `drawn_full`. -/
 theorem innerSetup_same {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true) :
     ∃ f spec' st' s spec st, filesOf r = some (.files f) ∧ f.stmt "the inner session" = .ok (spec', st') ∧
       FlockDeploy.setupOf false r.w.inner = some (s, spec, #[st]) ∧
       st.m = st'.m ∧ st.c.kLog = st'.c.kLog ∧ st.extraClaims = st'.extraClaims ∧
-      st.circuitFold = st'.circuitFold ∧ spec.points = spec'.points := by
+      st.circuitFold = st'.circuitFold ∧ spec.points = 2 ∧ spec.mPts = st'.mPts := by
   unfold RecScope.accepts at ha
   simp only [Bool.and_eq_true, RecScope.isOk_iff] at ha
   obtain ⟨⟨-, ⟨u, hsh⟩⟩, hheld⟩ := ha
@@ -258,8 +262,8 @@ theorem innerSetup_same {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScop
   rw [z2, z3, z4, z5, z7, hs3, hdraw, hpart, hpi] at hsetup
   have hh : RecCoins.innerTags.hiddenOutputs = true := rfl
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okH hh hsetup with ⟨-, st, hst, rfl, rfl⟩ | ⟨hc, -⟩
-  · obtain ⟨e1, e2, e3, e4⟩ := drawn_setup hst' hst hD hpr
-    exact ⟨_, spec', st', s, _, st, hfs, hstm, hset, e1, e2, e3, e4, by rw [hspec']; rfl⟩
+  · obtain ⟨e1, e2, e3, e4, e5⟩ := drawn_setup hst' hst hD hpr
+    exact ⟨_, spec', st', s, _, st, hfs, hstm, hset, e1, e2, e3, e4, rfl, e5⟩
   · omega
 
 end RecDeploy
