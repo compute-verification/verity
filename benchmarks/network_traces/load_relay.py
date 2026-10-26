@@ -31,8 +31,8 @@ registrations the verifier pins each load value from (`blocks.pins`).
   every hm96 salt is the operating system's (Daniel, 9 Oct, decisions 4(a) and 4(c); A3 in
   ``Security/Proofs/Flock/Soundness/Assumptions.lean``), so nothing rests on a stream generator. ``--witness`` is
   where they go, every value's in manifest order, its rows in order (each value's `Transfer.witness`): the prover's
-  alone, 104.8 GB at H200. `keyed_salts` is interface 1's prover-side derivation (C-Flock's ``hm96_salt``), here only to
-  hold this commit to interface 1's fixture roots.
+  alone, 106.4 GB at H200 (553,917,440 rows). `keyed_salts` is interface 1's prover-side derivation (C-Flock's
+  ``hm96_salt``), here only to hold this commit to interface 1's fixture roots.
 * **The domain** is a parameter, by default the one the verifier derives (`transfer_rows.domain`: the reading program's
   digest ``--program``, the value's leaf width, a value held across windows dropping only the window), interface 1's.
 * **The certifier's key** is ``--key``'s (`certifier_serve.load_key`'s layout), one LMS leaf a value (733 at H200), in
