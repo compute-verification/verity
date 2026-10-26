@@ -23,8 +23,8 @@ A session has four steps:
 
 `verdict` is what the prover will prove about a signed session, here checked in the clear.  It checks the signature
 under a trusted key and an accepted scheme, the header against the commitment, every revealed index against its coin
-opening, every `H(block)` against the expected digest of that block of `C`, and every round on time within `Δ + RTT`.
-Its public output is the verdict alone (`Verdict.public`); the per-round on-time bits and the reasons stay in the
+opening, every `H(block)` against the expected digest of that block of `C`, and every round on time within `Δ + RTT`
+(each batch within its deadline, its records sharing their times).  Its public output is the verdict alone (`Verdict.public`); the per-round on-time bits and the reasons stay in the
 signed record.  The guarantee of the sequential draw is the coin tree's: an index is fixed before the session
 (binding) and unknown to the server until its round reveals it (hiding).
 
@@ -59,6 +59,13 @@ tests, as is an unsigned one.
 
 Times are the challenger's monotonic clock in ns (`time.perf_counter_ns`, Linux's CLOCK_MONOTONIC); the challenger
 refuses a clock coarser than a microsecond (`CLOCK_RESOLUTION_NS`).
+
+**Batched sessions** (`batch` = b > 1, experimental): the `k` coins are revealed b at a time (`challenge_batch`) under
+one send time, and the b answers are read whole before the one receipt time (`receive_batch`), so `limit_ns` is the
+batch's deadline T, not `Δ + RTT`.  Each index keeps its own record, the batch's records sharing their times.  The
+header carries `batch` only when b > 1, so a sequential session's bytes are unchanged and a reader that doesn't know
+`batch` refuses a batched one.  No certificate covers a batch: P2's rests on each round's latency, a batch on the
+prover's recompute throughput inside T (`benchmarks/pous/batch`).
 """
 
 from __future__ import annotations
@@ -211,9 +218,10 @@ def verify_coin(commitment: SessionCommitment, opening: CoinOpening) -> bool:
 @dataclass(frozen=True, slots=True)
 class SessionCommitment:
     """What the memory challenger publishes before the session: the session id, the coin tree (root and hm96 key),
-    the number of blocks and rounds, the limit `Δ + RTT`, the answer's size, and `binding`, the root the setup published
-    for the `C*` the session audits (`verifier.VerifierKey.root`, the setup protocol's `root`).  Every field is in the
-    signed header."""
+    the number of blocks and rounds, the limit `Δ + RTT` (a batch's deadline T when `batch` > 1), the answer's size,
+    `binding`, the root the setup published for the `C*` the session audits (`verifier.VerifierKey.root`, the setup
+    protocol's `root`), and the indices revealed together (`batch`, module docstring).  Every field is in the signed
+    header, `batch` only when it isn't 1."""
 
     session: bytes
     coin_root: bytes
@@ -223,12 +231,13 @@ class SessionCommitment:
     limit_ns: int
     block_bytes: int
     binding: bytes
+    batch: int = 1
 
     def header(self) -> dict[str, Any]:
         return {"protocol": PROTOCOL, "coin_tree": COIN_TREE, "records_tree": RECORDS_TREE, "session": self.session.hex(),
                 "coin_root": self.coin_root.hex(), "coin_key_sha512": _sha512(self.coin_key).hex(), "blocks": self.blocks,
                 "k": self.k, "limit_ns": self.limit_ns, "block_bytes": self.block_bytes, "binding": self.binding.hex(),
-                "clock": "CLOCK_MONOTONIC ns"}
+                "clock": "CLOCK_MONOTONIC ns"} | ({"batch": self.batch} if self.batch != 1 else {})
 
     def to_json(self) -> dict[str, Any]:
         return {**self.header(), "coin_key": self.coin_key.hex()}
@@ -237,7 +246,7 @@ class SessionCommitment:
     def from_json(cls, doc: Mapping[str, Any]) -> SessionCommitment:
         return cls(bytes.fromhex(doc["session"]), bytes.fromhex(doc["coin_root"]), bytes.fromhex(doc["coin_key"]),
                    int(doc["blocks"]), int(doc["k"]), int(doc["limit_ns"]), int(doc["block_bytes"]),
-                   bytes.fromhex(doc["binding"]))
+                   bytes.fromhex(doc["binding"]), int(doc.get("batch", 1)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -458,12 +467,16 @@ class MemoryChallenger:
     `binding`, the setup's root of the `C*` it audits (module docstring).  The session's id, `coins.session`, goes into
     `log` (`SessionLog.claim`) before anything else can happen: a used id is refused.  `challenge()` reveals the next
     index and reads the send time; `receive(block)` reads the receipt time first, then hashes the block.  A late round
-    ends the session; `close()` signs it once."""
+    ends the session; `close()` signs it once.  With `batch` > 1 a round is a batch (`challenge_batch`, `receive_batch`,
+    `run_batch`), `limit_ns` its deadline, and `k` a whole number of batches."""
 
     def __init__(self, coins: CoinTree, signer: Signer, *, log: SessionLog, limit_ns: int, block_bytes: int,
-                 binding: bytes, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None) -> None:
+                 binding: bytes, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None,
+                 batch: int = 1) -> None:
         if limit_ns <= 0 or block_bytes <= 0:
             raise ValueError("a session's limit and answer size are positive")
+        if batch < 1 or coins.k % batch:
+            raise ValueError(f"a batch of {batch} indices doesn't divide the session's {coins.k} coins")
         if len(binding) != DIGEST_BYTES:
             raise ValueError(f"a session's binding is the setup's {DIGEST_BYTES}-byte root of C*, not {len(binding)} bytes")
         if resolution_ns is None:
@@ -473,26 +486,66 @@ class MemoryChallenger:
         log.claim(coins.session)
         self.coins, self.signer, self.clock = coins, signer, clock
         self.commitment = SessionCommitment(coins.session, coins.root, coins.key, coins.blocks, coins.k, limit_ns,
-                                            block_bytes, binding)
+                                            block_bytes, binding, batch)
         self.rounds: list[Round] = []
         self.ended: str | None = None
         self.signed: SignedSession | None = None
         self._open: tuple[int, int, int] | None = None
+        self._open_batch: tuple[int, tuple[int, ...], int] | None = None
 
     @property
     def done(self) -> bool:
         return self.ended is not None
 
-    def challenge(self) -> int:
-        """Reveal round `j`'s index and read its send time; refused with a round open or the session ended."""
+    def _can_reveal(self) -> None:
         if self.ended is not None:
             raise RuntimeError(f"the session has ended ({self.ended}): no round is retried and no index redrawn")
-        if self._open is not None:
+        if self._open is not None or self._open_batch is not None:
             raise RuntimeError("the previous round is unanswered")
+
+    def challenge(self) -> int:
+        """Reveal round `j`'s index and read its send time; refused with a round open or the session ended."""
+        if self.commitment.batch != 1:
+            raise RuntimeError(f"a session in batches of {self.commitment.batch} reveals a batch at a time (challenge_batch)")
+        self._can_reveal()
         j = len(self.rounds)
         i = self.coins.indices[j]
         self._open = (j, i, self.clock())
         return i
+
+    def challenge_batch(self) -> tuple[int, ...]:
+        """Reveal the next batch's indices together and read their one send time (`challenge`'s refusals)."""
+        self._can_reveal()
+        j = len(self.rounds)
+        indices = self.coins.indices[j:j + self.commitment.batch]
+        self._open_batch = (j, indices, self.clock())
+        return indices
+
+    def receive_batch(self, blocks: Sequence[bytes]) -> tuple[Round, ...]:
+        """The open batch's answers, all read before this is called: one receipt time, then `block_digest` of each, every
+        one `block_bytes`.  A late batch ends the session."""
+        receipt = self.clock()
+        if self._open_batch is None:
+            raise RuntimeError("no batch is open")
+        j, indices, send = self._open_batch
+        if len(blocks) != len(indices) or any(len(b) != self.commitment.block_bytes for b in blocks):
+            raise ValueError(f"a batch's answer is {len(indices)} whole {self.commitment.block_bytes}-byte blocks")
+        self._open_batch = None
+        got = tuple(Round(j + t, i, send, receipt, block_digest(b))
+                    for t, (i, b) in enumerate(zip(indices, blocks, strict=True)))
+        self.rounds += got
+        if not 0 <= receipt - send <= self.commitment.limit_ns:
+            self.ended = LATE
+        elif len(self.rounds) == self.coins.k:
+            self.ended = COMPLETE
+        return got
+
+    def run_batch(self, respond: Callable[[Sequence[int]], Sequence[bytes]]) -> SignedSession:
+        """`run` a batch at a time against `respond(indices)`, which returns every answer of the batch."""
+        with collector_paused():
+            while not self.done:
+                self.receive_batch(respond(self.challenge_batch()))
+        return self.close()
 
     def receive(self, block: bytes) -> Round:
         """The open round's answer: its receipt time, then `block_digest` of all of `block`, which must be `block_bytes`."""
@@ -590,6 +643,10 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
         reasons.append(f"the session ended {signed.ended} after {len(signed.rounds)} of {commitment.k} rounds")
     by_j = {o.j: o for o in openings}
     late = wrong = 0
+    b = commitment.batch
+    if b < 1 or commitment.k % b:
+        reasons.append(f"a batch of {b} indices doesn't divide the session's {commitment.k} coins")
+        b = 1
     for j, r in enumerate(signed.rounds):
         o = by_j.get(j)
         if r.j != j or o is None or o.index != r.index or not verify_coin(commitment, o):
@@ -598,10 +655,14 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
             wrong += 1
         if not 0 <= r.elapsed_ns <= commitment.limit_ns:
             late += 1
+        first = signed.rounds[j - j % b]
+        if (r.send_ns, r.receipt_ns) != (first.send_ns, first.receipt_ns):
+            reasons.append(f"round {j}'s times are not its batch's")
     if wrong:
         reasons.append(f"{wrong} answers are not their blocks of C")
     if late:
-        reasons.append(f"{late} answers are past Δ + RTT = {commitment.limit_ns} ns")
+        limit = "Δ + RTT" if b == 1 else f"the deadline of a batch of {b}"
+        reasons.append(f"{late} answers are past {limit} = {commitment.limit_ns} ns")
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 

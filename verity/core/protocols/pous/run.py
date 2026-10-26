@@ -38,11 +38,14 @@ SALT_BYTES = 24
 
 @dataclass(frozen=True, slots=True)
 class Point:
-    """What a run is checked at: the codec's parameters, the rounds `k` and the largest limit `Δ + RTT`, in ns."""
+    """What a run is checked at: the codec's parameters, the rounds `k` and the largest limit `Δ + RTT`, in ns; with
+    `batch` > 1, `k` indices revealed `batch` at a time and `limit_ns` a batch's deadline (`memory_challenger`'s batched
+    sessions, which no certificate covers)."""
 
     params: P2Params
     k: int
     limit_ns: int
+    batch: int = 1
 
 
 DEPLOYED = Point(P2Params(*POINT, segments=CERT_BLOCKS // POINT[2]), CERT_K, DELTA_NS + RTT_ALLOWANCE_CAP_NS)
@@ -108,6 +111,7 @@ def check_at(point: Point, schemes: Mapping[str, mc.Verify], trusted: Collection
           "the table's leaves do not have the root the setup published")
     _need(sc.blocks == q.blocks, f"the session audits {sc.blocks} blocks, not the setup's {q.blocks}")
     _need(sc.k == point.k, f"the session runs {sc.k} rounds, not the point's {point.k}")
+    _need(sc.batch == point.batch, f"the session reveals {sc.batch} indices a round, not the point's {point.batch}")
     _need(sc.limit_ns <= point.limit_ns,
           f"the session's limit of {sc.limit_ns} ns is past the point's Δ + RTT = {point.limit_ns} ns")
     _need(sc.block_bytes == q.block_bytes, f"the session's answers are {sc.block_bytes} bytes, not the point's {q.block_bytes}")

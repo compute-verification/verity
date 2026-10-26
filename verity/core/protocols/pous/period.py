@@ -92,12 +92,15 @@ def certificate(q: P2.P2Params) -> Any:
 
 
 def gaps(point: R.Point) -> tuple[Any, list[str]]:
-    """`PousCheck.RunProtocol.gaps`: the certificate at the point, and why it doesn't cover the run (none when it does)."""
+    """`PousCheck.RunProtocol.gaps`: the certificate at the point, and why it doesn't cover the run (none when it does).
+    A batched point always has a gap: P2's certificates take one index a round."""
     q = point.params
     cert = certificate(q)
+    batch = ([] if point.batch == 1 else
+             [f"the run reveals {point.batch} indices a round under one deadline; P2's certificates cover one a round"])
     if cert is None:
-        return None, [f"P2 has no certificate at (w, c0, blocks) = ({q.w}, {q.c0}, {q.blocks})"]
-    return cert, list(cert.refusals(point.k, point.limit_ns))
+        return None, [f"P2 has no certificate at (w, c0, blocks) = ({q.w}, {q.c0}, {q.blocks})", *batch]
+    return cert, [*cert.refusals(point.k, point.limit_ns), *batch]
 
 
 def certify(point: R.Point) -> dict[str, Any]:
@@ -115,18 +118,24 @@ def profile(point: R.Point) -> dict[str, Any]:
     cert, why = gaps(point)
     q = point.params
     return {"block_bits": q.w, "blocks": q.blocks, "certificate": None if cert is None else cert.to_json(),
-            "experimental": P2.EXPERIMENTAL, "gaps": why, "k": point.k, "limit_ns": point.limit_ns}
+            "experimental": P2.EXPERIMENTAL, "gaps": why, "k": point.k, "limit_ns": point.limit_ns} | _batch(point)
+
+
+def _batch(point: R.Point) -> dict[str, int]:
+    return {"batch": point.batch} if point.batch != 1 else {}
 
 
 def point_json(point: R.Point) -> dict[str, Any]:
     q = point.params
     return {"k": point.k, "limit_ns": point.limit_ns,
-            "params": {"blocks_per_segment": q.blocks_per_segment, "c0": q.c0, "segments": q.segments, "w": q.w}}
+            "params": {"blocks_per_segment": q.blocks_per_segment, "c0": q.c0, "segments": q.segments, "w": q.w}
+            } | _batch(point)
 
 
 def point_of(doc: Mapping[str, Any]) -> R.Point:
     q = doc["params"]
-    return R.Point(P2.P2Params(q["w"], q["c0"], q["blocks_per_segment"], q["segments"]), doc["k"], doc["limit_ns"])
+    return R.Point(P2.P2Params(q["w"], q["c0"], q["blocks_per_segment"], q["segments"]), doc["k"], doc["limit_ns"],
+                   doc.get("batch", 1))
 
 
 def case(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup, digests: bytes,
@@ -211,6 +220,8 @@ def setup_inputs(setup_of: Mapping[str, Any]) -> SetupInputs:
 
 type Prover = Callable[[Sequence[bytes]], Callable[[int], bytes]]
 """The prover's side of the session: from the blocks of `C*` it was sent, its answer to each index."""
+type BatchProver = Callable[[Sequence[bytes]], Callable[[Sequence[int]], Sequence[bytes]]]
+"""The prover's side of a batched session: from the blocks of `C*`, its answers to each batch of indices."""
 
 
 def honest(blocks: Sequence[bytes]) -> Callable[[int], bytes]:
@@ -313,25 +324,34 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
 def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
-          party: challenger_party.Party | None = None) -> Period:
+          party: challenger_party.Party | None = None, batch_prover: BatchProver | None = None) -> Period:
     """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's session
     under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the tie on
     the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of its own
     (`challenger_party`): its side runs where `party` starts it, with its own coins, key and session log, and the prover
     answers it over a socket; `signer`, `log` and `clock` are unused, and the verifier's list is by default the key the
-    side reports."""
+    side reports. At a batched point (`held.point.batch` > 1) `batch_prover` answers each batch, by default `prover`
+    index by index."""
     point, published = held.point, held.published
     q = point.params
+    respond = respond_batch = None
+    if point.batch == 1:
+        respond = prover(held.blocks)
+    elif batch_prover is not None:
+        respond_batch = batch_prover(held.blocks)
+    else:
+        each = prover(held.blocks)
+        respond_batch = lambda indices: [each(i) for i in indices]  # noqa: E731
     if party is None:
         session_id = derive(coins, SESSION_DOMAIN, {"node": node, "setup": published.root}).stream("session", 32)
         tree = mc.CoinTree.draw(coins, session_id, q.blocks, point.k)
         challenger = mc.MemoryChallenger(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
-                                         binding=published.root, clock=clock)
-        signed = challenger.run(prover(held.blocks))
+                                         binding=published.root, clock=clock, batch=point.batch)
+        signed = challenger.run(respond) if respond_batch is None else challenger.run_batch(respond_batch)
         session, key = R.Session(signed, challenger.commitment, challenger.openings()), signer.public_key
     else:
-        got = challenger_party.session(party, challenger_party.request_of(node, point, published.root),
-                                       prover(held.blocks))
+        got = challenger_party.session(party, challenger_party.request_of(node, point, published.root), respond,
+                                       respond_batch=respond_batch)
         session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
         session = R.Session.from_json(got["session"])
     trusted = (key,) if trusted is None else tuple(trusted)
@@ -344,15 +364,15 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
         point: R.Point | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
         clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
-        party: challenger_party.Party | None = None) -> Period:
+        party: challenger_party.Party | None = None, batch_prover: BatchProver | None = None) -> Period:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
     verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
     signature schemes it accepts and `protocol` the id it answers under (a test signer's: `TEST_PREFIX` and
-    `pous_test_signer.SCHEMES`); `party` as for `audit`. A setup the verifier refuses raises `ValueError`, since no run
-    of it exists."""
+    `pous_test_signer.SCHEMES`); `party` and `batch_prover` as for `audit`. A setup the verifier refuses raises
+    `ValueError`, since no run of it exists."""
     return audit(node, setup_store(store, coins, point, workers=workers), coins, signer=signer, log=log, trusted=trusted,
-                 schemes=schemes, protocol=protocol, prover=prover, clock=clock, party=party)
+                 schemes=schemes, protocol=protocol, prover=prover, clock=clock, party=party, batch_prover=batch_prover)
 
 
 def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]:
@@ -458,6 +478,6 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "SetupInputs", "Store", "answer", "audit", "case",
+__all__ = ["PROTOCOL", "SETUP_WORKERS", "BatchProver", "Period", "Prover", "SetupInputs", "Store", "answer", "audit", "case",
            "certificate", "certified_point", "certify", "challenger", "encode", "gaps", "honest", "leg", "point_for",
            "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]

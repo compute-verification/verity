@@ -219,6 +219,68 @@ def test_a_clock_that_runs_backwards_ends_the_session_late_as_the_verdict_judges
     assert not v.accepted and v.late == 1
 
 
+def batched(batch: int, spend=lambda m: 20_000, respond=None):
+    clock, signer = Clock(), ts.TestSigner(b"challenger key", height=2)
+    c = mc.MemoryChallenger(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
+                            clock=clock, batch=batch)
+    seen: list[tuple[int, ...]] = []
+
+    def answer(indices):
+        clock.now += spend(len(seen))
+        seen.append(tuple(indices))
+        return [(respond or block)(i) for i in indices]
+
+    return c, c.run_batch(answer), signer, seen
+
+
+def test_a_batch_reveals_its_indices_together_under_one_deadline():
+    c, signed, signer, seen = batched(4)
+    assert seen == [coins().indices[0:4], coins().indices[4:8], coins().indices[8:12]]
+    assert signed.ended == mc.COMPLETE and [r.j for r in signed.rounds] == list(range(K))
+    assert all(r.digest == expected(r.index) and r.elapsed_ns == 20_000 for r in signed.rounds)
+    assert len({(r.send_ns, r.receipt_ns) for r in signed.rounds}) == 3
+    assert signed.commitment.header()["batch"] == 4 and "batch" not in session()[0].commitment.header()
+    assert mc.SessionCommitment.from_json(signed.commitment.to_json()) == signed.commitment
+    assert judge(c, signed, signer).accepted
+    unbatched = dataclasses.replace(c.commitment, batch=1)
+    assert "the signed header is not the session's commitment" in mc.verdict(
+        signed, unbatched, c.openings(), expected, trusted={signer.public_key}, schemes=ts.SCHEMES).reasons
+    mixed = signed.rounds[:1] + (dataclasses.replace(signed.rounds[1], receipt_ns=signed.rounds[1].receipt_ns + 1),) \
+        + signed.rounds[2:]
+    resigned = dataclasses.replace(signed, rounds=mixed, signature=signer.sign(
+        SESSION, mc.message(signed.commitment, signed.ended, mixed)))
+    assert judge(c, resigned, signer).reasons == ("round 1's times are not its batch's",)
+
+
+def test_a_late_batch_ends_the_session_and_a_dropped_block_is_wrong():
+    c, signed, signer, _ = batched(4, spend=lambda m: LIMIT + 1 if m == 1 else 20_000)
+    assert signed.ended == mc.LATE and len(signed.rounds) == 8
+    with pytest.raises(RuntimeError, match="no round is retried"):
+        c.challenge_batch()
+    assert judge(c, signed, signer).reasons == (f"the session ended late after 8 of {K} rounds",
+                                                f"4 answers are past the deadline of a batch of 4 = {LIMIT} ns")
+    gone = coins().indices[5]
+    c, signed, signer, _ = batched(6, respond=lambda i: bytes(BLOCK_BYTES) if i == gone else block(i))
+    v = judge(c, signed, signer)
+    assert not v.accepted and v.wrong == coins().indices.count(gone)
+
+
+def test_batch_refusals():
+    with pytest.raises(ValueError, match="batch of 5 indices doesn't divide the session's 12 coins"):
+        batched(5)
+    c = mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
+                            block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock(), batch=3)
+    with pytest.raises(RuntimeError, match="reveals a batch at a time"):
+        c.challenge()
+    with pytest.raises(RuntimeError, match="no batch is open"):
+        c.receive_batch([])
+    indices = c.challenge_batch()
+    with pytest.raises(RuntimeError, match="unanswered"):
+        c.challenge_batch()
+    with pytest.raises(ValueError, match="3 whole 64-byte blocks"):
+        c.receive_batch([block(i) for i in indices[:2]])
+
+
 def test_openings_must_match_the_revealed_indices():
     c, signed, signer = session()
     opened = list(c.openings())
