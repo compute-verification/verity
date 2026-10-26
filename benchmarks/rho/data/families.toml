@@ -13,7 +13,7 @@ f = { value = 4, low = 1, high = 8, source = "FanOutReadIntensity docstring (Kim
 width = { value = 390, low = 48, high = 512, source = "PartialSumCoverBound docstring (a = 390)", status = "derived" }
 per_param = { value = 2, low = 1, high = 2, source = "Dgrad on the forward's tokens (FanOutIntensity docstring)", status = "derived" }
 bcol = { value = 1, low = 1, high = 2.5, source = "ColumnsIncompressible at Kimi K2 (FanOutIntensity docstring)", status = "conjecture" }
-beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "note:training-20261024T2336Z-report-tvi-findings: replay-consistent, exact block on Qwen2.5-1.5B (art:ff2237e531a9)", status = "measured" }
+beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "note:training-20261024T2336Z-report-tvi-findings: replay-consistent, exact block on Qwen2.5-1.5B (art:ff2237e531a9); the best coder's rate, so an upper bound on what the premise may assume, carried to other models at fixed F/d", status = "assumed" }
 thread_d = { value = 10, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
 thread_c = { value = 2, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
 thread_k = { value = 2e7, unit = "bit", source = "Nci.Guarantees.ReferenceThreaded: the Threading certificate checked for Kimi K2 at S = 2e7 bits (benchmarks/nci/rows.json pretrain-full)", status = "declared" }
@@ -38,7 +38,7 @@ pretrain = { value = 1.0, source = "the reference algorithm", status = "declared
 # Number formats: precision.<name> sets beta_x, caps b_a and f at its bits, and multiplies the family's efficiency.
 
 [precision.fp8]
-beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "note:training-20261024T2336Z-report-tvi-findings (art:ff2237e531a9): replay-consistent exact blocks on Qwen2.5-1.5B GRPO, 0.39-0.87; high: the cheapest boundary's 0.87-0.94", status = "measured" }
+beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "note:training-20261024T2336Z-report-tvi-findings (art:ff2237e531a9): replay-consistent exact blocks on Qwen2.5-1.5B GRPO, 0.39-0.87; high: the cheapest boundary's 0.87-0.94; coders' rates, so upper bounds on what the premise may assume", status = "assumed" }
 bits = { value = 8, unit = "bit", source = "E4M3: 8 bits an entry", status = "datasheet" }
 
 [precision.fp8.efficiency]
@@ -48,7 +48,7 @@ rl-elicit = { value = 1.67, low = 1.0, high = 1.67, source = "note:training-2026
 rl-agentic = { value = 1.67, low = 1.0, high = 1.67, source = "as rl-elicit (A1's GRPO), untested on agentic RL", status = "conjecture" }
 
 [precision.nvfp4]
-beta_x = { value = 0.26, low = 0.195, high = 0.26, source = "note:training-20261024T2336Z-report-tvi-findings (art:ff2237e531a9): at most 0.26 at NVFP4; low: the cheapest boundary's 0.195", status = "measured" }
+beta_x = { value = 0.26, low = 0.195, high = 0.26, source = "note:training-20261024T2336Z-report-tvi-findings (art:ff2237e531a9): at most 0.26 at NVFP4; low: the cheapest boundary's 0.195; a coder's rate, so an upper bound on what the premise may assume", status = "assumed" }
 bits = { value = 4.5, unit = "bit", source = "NVFP4: a 4-bit entry and an 8-bit scale per 16", status = "datasheet" }
 
 [precision.nvfp4.efficiency]
