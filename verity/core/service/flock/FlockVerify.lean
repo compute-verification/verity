@@ -724,10 +724,11 @@ session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner`
 over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), and a session
 verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
 cannot know what it verifies), then a record not in its canonical text (`RecordText.check`, S0), and last under
-`--zk --ks-form` files outside the form the sampled audit's knowledge soundness covers (`PortRoots.checkOf`: a port that
-is not an unsegmented `sha512/row/v2` row, two ports of one name, or two ports whose registered roots over the public
-file's population are one root under different domains; `Flock.Guarantees.SampledKSLiveV3` is over that acceptance, and
-`row/v1` and `row-seg/v1` rows, which served and PoUW statements use, are outside it), all after every
+`--zk` files outside the form the sampled audit's knowledge soundness covers (`PortRoots.checkOf`: a port that is not a
+`sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, or two
+ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
+different domains; `Flock.Guarantees.SampledKSLiveV3` is over that acceptance; `--ks-form`, which used to turn this on,
+is accepted under `--zk` and changes nothing), all after every
 check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
@@ -867,7 +868,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind ProvedScope.programDigest
-  let ksFiles := if ksForm then
+  let ksFiles := if zk then
       PortRoots.checkOf (if tags.hiddenOutputs && !templated then parsed else HmOut.parse tags circuitB tables) tags pubB
     else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
@@ -912,7 +913,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
       -- short of every unit, then a session's over an inner record without a draw, then a session's without the program,
-      -- then a record not in its canonical text (S0), then under --ks-form files whose rows, names or port roots the
+      -- then a record not in its canonical text (S0), then under --zk files whose rows, names or port roots the
       -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
