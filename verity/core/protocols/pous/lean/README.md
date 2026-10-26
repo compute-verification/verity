@@ -55,9 +55,11 @@ Definitions/Pous/Guarantees/P2.lean       seven frozen statements about the abst
 Definitions/Pous/Guarantees/Obligation.lean
                                     the mutable store's audit window: tag freshness (`SnapshotFresh`), a block's
                                     offset absorbing its content (`P2ContentAbsorbs`), the window's bound from
-                                    P2's static one at every block count (`ObligationOfStatic`) and from
-                                    `P2RingRoundSecure` (`ObligationOfRoundSecure`), and the demo's memory term
-                                    at `1038·2^16` blocks (`ObligationDemo`), proved in `Proofs/Pous/Obligation.lean`
+                                    P2's static one at every block count (`ObligationOfStatic`), from
+                                    `P2RingRoundSecure` (`ObligationOfRoundSecure`) and from its widening to `2^27`
+                                    blocks, `P2RingRoundSecureWide` (`ObligationOfRoundSecureWide`), and the demo's
+                                    memory term at `1038·2^16` blocks (`ObligationDemo`, `ObligationDemoWide`),
+                                    proved in `Proofs/Pous/Obligation.lean`
 Definitions/Pous/Guarantees/SecureErasure.lean
                                     two frozen statements, which grade.sh grades against: secure erasure on the
                                     band at every `N` and at 96 GiB (`SecureErasureMeetsFamily`,

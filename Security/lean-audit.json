@@ -1402,6 +1402,9 @@
    "owner": "@memory-accounting",
    "digest": "98fbba3bae29f20560d86a31473797edc89dc0b1e28c7cde20737d9bf6e4254a"
   },
+  "Pous.P2.Assumptions.P2RingRoundSecureWide": {
+   "owner": "@memory-accounting"
+  },
   "Pous.Prog.Bounded": {
    "owner": "@memory-accounting",
    "digest": "4eaccdb39e04a3ffda69506389dd61a81c05aa0e86791800a88890739da925ec"
@@ -8671,6 +8674,12 @@
    "assumptions": [],
    "type_hash": "9a650409c05617bb5c6c7fe77cce181a101ca6dec515c598247cefbd657922ef"
   },
+  "Pous.SecurityProofs.ObligationDemoWide": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.ObligationOfRoundSecureWide": {
+   "owner": "@memory-accounting"
+  },
   "Pous.SecurityProofs.ObligationOfStatic": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.ObligationOfStatic : Pous.Guarantees.ObligationOfStatic"],
@@ -11046,6 +11055,8 @@
    "Pous.SecurityProofs.P2ContentAbsorbs": "frozen (no-function): an identity of P2's abstract encoder in the ring model (encBlock, Security/Definitions/Pous/P2/Cost.lean): a block's offset absorbs its content, so over a uniform offset a block's code has one distribution for every content fixed before it; it is about no function of the code.",
    "Pous.SecurityProofs.ObligationOfRoundSecure": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean), with a payload and responder fixed by the other tags' keys, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure.",
    "Pous.SecurityProofs.ObligationOfStatic": "frozen (no-function): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean) by any bound on P2's audit at the same block count, with a payload and responder fixed by the other tags' keys; it is about no function of the PoUS code and rests on no named assumption.",
+   "Pous.SecurityProofs.ObligationOfRoundSecureWide": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean) to 2^27 blocks, with a payload and responder fixed by the other tags' keys, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
+   "Pous.SecurityProofs.ObligationDemoWide": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the demo's store (1038*2^16 blocks, 105 reads, the state at most S0 at each) by 1% + 2^-129 + 2^-130, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
    "Pous.SecurityProofs.ObligationDemo": "frozen (no-function): Arithmetic at the demo's numbers (1038·2^16 blocks of 16,448 bits, U = 139.64 GiB: S₀ = ⌊ρ·|C|⌋ and U − S₀ ≤ 0.1163·U) and ObligationOfStatic at that block count; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.P2RingGradedOfRoundSecure": "frozen (no-function,hash): It bounds P2's ring-model audit (Security/Definitions/Pous/P2/Rounds.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecure.",
    "Accounting.SecurityProofs.B2": "frozen (no-function,world-unlisted): It is stated over arbitrary strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick (CausalFrom), and takes the challenge ticks read off the run and increasing in it, the location's state, first tick and help fixed by the setup, what reaches it during each window fixed by the help, that window's challenge and its tick, the next tick a function of those and of what the location does, and each challenge's tick taking at most 2^τ values on the runs on time, as hypotheses that are not on the premises list, rather than a function's acceptance.",
@@ -11531,6 +11542,11 @@
     "status": "open",
     "test": "verity/core/protocols/pouw/tests/test_h1t_conjectures.py::test_distinct_live_h1t",
     "why": "On every legal unit, H-1T's credited words are pairwise distinct functions of the unit's salt and none is free; open, with no counterexample on the legal units its test enumerates or samples."
+   },
+   "Pous.P2.Assumptions.P2RingRoundSecureWide": {
+    "status": "open",
+    "test": "verity/core/protocols/pous/tests/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
+    "why": "P2RingRoundSecure's statement at every block count from 2^19 to 2^27, so that it reaches the demo's 1038*2^16 blocks; open and unchecked in N above 2^25 (the eps0 a proof would give against N is pending the memory-accounting lane's pous-chain analysis); it implies P2RingRoundSecure (Pous.SecurityProofs.roundSecure_of_wide), so every refutation of that one (PousP2Rounds.round_tight and round_trunc, Security/Proofs/Pous/P2/RoundTests.lean) refutes it, and its falsification test is that one's, whose scaled point doesn't depend on N."
    },
    "Pous.P2.Assumptions.P2RingRoundSecure": {
     "status": "open",

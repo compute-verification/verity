@@ -11,8 +11,9 @@ oracle's values at distinct tags, so they are uniform and independent of every o
 is then P2's audit of the snapshot with whatever the prover holds about the other tags as advice: at every block count,
 a payload and a responder fixed by the other tags' keys pass with probability at most any bound on P2's audit at that
 count (`ObligationOfStatic`, no premise), so within P2's graded bound wherever `P2RingRoundSecure` gives it, from `2^19`
-to `2^25` blocks (`ObligationOfRoundSecure`).
-`ObligationDemo` is the demo's memory term at `1038·2^16` blocks, outside that range. Over a uniform offset a block's
+to `2^25` blocks (`ObligationOfRoundSecure`), and to `2^27` under the widened conjecture `P2RingRoundSecureWide`
+(`ObligationOfRoundSecureWide`). `ObligationDemo` is the demo's memory term at `1038·2^16` blocks, outside the first
+range, and `ObligationDemoWide` its 105-read window's bound under the widened one. Over a uniform offset a block's
 code has one distribution for every content fixed before the offset is drawn (`P2ContentAbsorbs`).
 
 The game has one snapshot per window: a store that changes between a window's rounds is outside every statement here.
@@ -101,6 +102,27 @@ def ObligationOfRoundSecure : Prop :=
                 (snap tag y.1, y.2.1, y.2.2)) ≤
             (1 - p) ^ lowBoundaries Sz ((p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) k + k * ε₀
 
+/-- **An audit window of the mutable store to `2^27` blocks, from the widened per-round floor.**
+`ObligationOfRoundSecure`'s bound, `(1 − p)^m + k·ε₀`, for every block count `N` from `2^19` to `2^27`, from
+`P2RingRoundSecureWide p ε₀ D Q L`.
+
+Frozen (no-function, hash): it bounds P2's ring-model audit at a snapshot of a mutable store, not the PoUS code, and
+rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in `N` above `2^25`. -/
+def ObligationOfRoundSecureWide : Prop :=
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ), Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
+    ∀ (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 27 →
+      ∀ (T : Type) [Fintype T] [DecidableEq T] (tag : Fin N → T), Function.Injective tag →
+        ∀ (Sz : ℕ → ℕ) (k : ℕ)
+          (W : RestKeys tag 16448 (2 ^ 16448 - 21065) → Bits (p2ring N 16448 (2 ^ 16448 - 21065) 16432).n)
+          (A₁ : RestKeys tag 16448 (2 ^ 16448 - 21065) →
+            Preprocessor (p2ring N 16448 (2 ^ 16448 - 21065) 16432) (Sz 0))
+          (A₂ : RestKeys tag 16448 (2 ^ 16448 - 21065) →
+            VarResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432) Sz D Q L),
+          pr (fun y : Oracle 16448 (2 ^ 16448 - 21065) T × Unit × (Fin k → Fin N) =>
+              varPassesOn _ k k (W (rest tag y.1)) (A₁ (rest tag y.1)) (A₂ (rest tag y.1))
+                (snap tag y.1, y.2.1, y.2.2)) ≤
+            (1 - p) ^ lowBoundaries Sz ((p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) k + k * ε₀
+
 /-- **The demo's memory term, P2's part** (Demo B, the weights-only obligation). The demo's store is `N = 1038·2^16 =
 68,026,368` blocks of 16,448 bits (`|C| = 139,862,212,608` B, `≈ 2^26.02` blocks), on a device of `U = 139.64` GiB
 (`139.64·2^33` bits). Then:
@@ -114,8 +136,8 @@ def ObligationOfRoundSecure : Prop :=
 So a window that passes with probability above `c` holds more than `S₀` bits at some challenge time, and at that time
 the device memory its capacity account doesn't hold is less than `U − S₀` plus the state it keeps outside device memory
 (on chip, and fetched over the links within the round): `undeclared ≤ 0.1163·U + S_chip + Σ cap·round`. That last step
-is the device model's, not stated here. No `c` at this `N` is proved or conjectured: `P2RingRoundSecure` stops at
-`2^25` blocks.
+is the device model's, not stated here. No `c` at this `N` is proved, and `P2RingRoundSecure` stops at `2^25` blocks:
+`ObligationDemoWide` gives `c = 1% + 2^-129 + 2^-130` at `k = 105` from the widened conjecture.
 
 Frozen (no-function): arithmetic at the demo's numbers and a bound on P2's ring-model audit at a snapshot of the mutable
 store, not the PoUS code. -/
@@ -138,5 +160,32 @@ def ObligationDemo : Prop :=
           pr (fun y : Oracle 16448 (2 ^ 16448 - 21065) T × Unit × (Fin k → Fin N) =>
               varPassesOn _ k k (W (rest tag y.1)) (A₁ (rest tag y.1)) (A₂ (rest tag y.1))
                 (snap tag y.1, y.2.1, y.2.2)) ≤ c
+
+/-- **The demo's window bound, from the widened per-round floor.** If `P2RingRoundSecureWide p ε₀ D Q L` and
+`(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (which `p = 0.043`, `ε₀ = 2^-137` meet, `PousP2Rounds.floor_043_eps`),
+then at the demo's `N = 1038·2^16` blocks, for every injective snapshot, every schedule at most
+`S₀ = 1,060,008,348,186` bits at each of a window's 105 challenge times, and every payload, preprocessor and
+responder chosen from the other tags' key pairs, the window passes with probability at most `1% + 2^-129 + 2^-130`.
+So `ObligationDemo`'s `c` is that, and outside it some challenge time of each window has
+`undeclared ≤ 0.1163·U + S_chip + Σ cap·round`, the last step being the device model's.
+
+Frozen (no-function, hash): it bounds P2's ring-model audit at a snapshot of the demo's store, not the PoUS code, and
+rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in `N` above `2^25`. -/
+def ObligationDemoWide : Prop :=
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ),
+    (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
+    Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
+    ∀ (N : ℕ) [NeZero N], N = 1038 * 2 ^ 16 →
+      ∀ (T : Type) [Fintype T] [DecidableEq T] (tag : Fin N → T), Function.Injective tag →
+        ∀ (Sz : ℕ → ℕ), (∀ j < 105, Sz j ≤ 1060008348186) →
+          ∀ (W : RestKeys tag 16448 (2 ^ 16448 - 21065) → Bits (p2ring N 16448 (2 ^ 16448 - 21065) 16432).n)
+            (A₁ : RestKeys tag 16448 (2 ^ 16448 - 21065) →
+              Preprocessor (p2ring N 16448 (2 ^ 16448 - 21065) 16432) (Sz 0))
+            (A₂ : RestKeys tag 16448 (2 ^ 16448 - 21065) →
+              VarResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432) Sz D Q L),
+            pr (fun y : Oracle 16448 (2 ^ 16448 - 21065) T × Unit × (Fin 105 → Fin N) =>
+                varPassesOn _ 105 105 (W (rest tag y.1)) (A₁ (rest tag y.1)) (A₂ (rest tag y.1))
+                  (snap tag y.1, y.2.1, y.2.2)) ≤
+              ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130)
 
 end Pous.Guarantees

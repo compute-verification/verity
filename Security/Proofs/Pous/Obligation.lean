@@ -149,6 +149,39 @@ theorem ObligationDemo : Pous.Guarantees.ObligationDemo := by
   intro T _ _ tag htag Sz k D Q L c _ h W A₁ A₂
   exact ObligationOfStatic N T tag htag Sz k D Q L c h W A₁ A₂
 
+/-- The widened per-round floor implies `P2RingRoundSecure`: its range contains that one's. -/
+theorem roundSecure_of_wide {p ε₀ : ℝ≥0∞} {D Q L : ℕ} (h : Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L) :
+    Pous.P2.Assumptions.P2RingRoundSecure p ε₀ D Q L :=
+  fun N _ h1 h2 => h N h1 (h2.trans (by norm_num))
+
+theorem lowBoundaries_of_le {Sz : ℕ → ℕ} {S k : ℕ} (h : ∀ j < k, Sz j ≤ S) : lowBoundaries Sz S k = k := by
+  unfold lowBoundaries
+  rw [Finset.filter_true_of_mem fun j hj => h j (Finset.mem_range.mp hj), Finset.card_range]
+
+/-- **An audit window of the mutable store to `2^27` blocks, from the widened per-round floor**
+(`Pous.Guarantees.ObligationOfRoundSecureWide`). -/
+theorem ObligationOfRoundSecureWide : Pous.Guarantees.ObligationOfRoundSecureWide := by
+  intro p ε₀ D Q L h N _ h1 h2 T _ _ tag htag Sz k W A₁ A₂
+  refine ObligationOfStatic N T tag htag Sz k D Q L _ (fun W' A₁' A₂' => ?_) W A₁ A₂
+  obtain ⟨bad, hbad, hstep⟩ := h N h1 h2 Sz k W' A₁' A₂'
+  classical
+  have hc := PousP2Rounds.pr_chain (fun j x => varPassesOn _ k j W' A₁' A₂' x ∧ ¬ bad x)
+    (fun j => Sz j ≤ (p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) (1 - p) k
+    (fun j x hx => ⟨PousP2Rounds.varPassesOn_of_succ _ W' A₁' A₂' x hx.1, hx.2⟩)
+    (fun j hj hlow => hstep j hj hlow) k le_rfl
+  exact (PousP2Rounds.pr_le_and_not_add _ bad).trans (add_le_add hc hbad)
+
+/-- **The demo's window bound, from the widened per-round floor** (`Pous.Guarantees.ObligationDemoWide`). -/
+theorem ObligationDemoWide : Pous.Guarantees.ObligationDemoWide := by
+  intro p ε₀ D Q L hnum h N _ hN T _ _ tag htag Sz hSz W A₁ A₂
+  have hS := stateBound_p2ring_demo N (2 ^ 16448 - 21065) 16432 hN
+  have hb := ObligationOfRoundSecureWide p ε₀ D Q L h N (by rw [hN]; norm_num) (by rw [hN]; norm_num) T tag htag Sz
+    105 W A₁ A₂
+  have hlow : lowBoundaries Sz ((p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) 105 = 105 :=
+    lowBoundaries_of_le fun j hj => by rw [hS]; exact hSz j hj
+  rw [hlow, Nat.cast_ofNat] at hb
+  exact hb.trans hnum
+
 end Pous.SecurityProofs
 
 namespace Pous.Period.SecurityProofs
