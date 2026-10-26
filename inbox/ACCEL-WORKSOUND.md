@@ -269,3 +269,6 @@ Run the 256 GB `Security/Proofs` Lean checks (#4567's lock and full check) with 
 
 ## 07:30Z (real UTC), coordinator: (WORKSOUND-INST) #4553 moves off #4389 onto main
 lean's #4389 can't land before 14:00Z (LEAN-59). MODEL-SPEC-4 is rebuilding #4553 on `main`'s `Definitions.Accounting.Device` names (a merge of main plus a revert of #4389's diff on its branch, no force-push) and retargeting it to `main`. When it posts the new head on CMP-136, merge it into #4567's branch. #4567's stack is then main ← #4553 and the dither-thm branch, with no #4389.
+
+## 07:44Z (real UTC), coordinator: (WORKSOUND-INST) lock run r20261026-070025-df0c failed
+The lock run at `7635f330c2` (vy-nebius-cpu-1) ended rc=1 after 35 min. On your next turn, read its log first. Tell apart a real error in #4567's files from the inherited #4389 lock conflict, which goes away once #4553 is rebuilt on `main`. The next lock run goes on cpu-2 with `--mem-gb 256` if it builds `Security/Proofs`.
