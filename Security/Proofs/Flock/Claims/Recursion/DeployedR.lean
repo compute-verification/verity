@@ -219,7 +219,7 @@ theorem rdLevel_encLevel {rows : Array (Array F128)} {sibs salts : Array ByteArr
       (by simpa using h1) rest
   simp only [rdLevel, encLevel, List.append_assoc, StateT.run_bind, e1,
     rdBytes_list (by simpa using h3) h4, rdBytes_list (by simpa using h5) h6, Option.bind_eq_bind, Option.bind_some]
-  simp [StateT.run_pure, Option.pure_def]
+  simp [StateT.run_pure, Option.pure_def, Function.comp_def]
 
 /-- A proof's openings fit their length words. -/
 def OpensFit (p : Flock.Proof) : Prop :=
