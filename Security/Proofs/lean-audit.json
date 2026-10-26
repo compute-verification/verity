@@ -35,6 +35,7 @@
   "Proofs.Properties.NetworkRecords",
   "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.NetworkScan",
+  "Proofs.Properties.Flock.Circuit.Flatten",
   "Proofs.Properties.SampledProofs",
   "Proofs.Properties.SampledProofs.Halt",
   "Proofs.Properties.Pous.TimedAudit",
