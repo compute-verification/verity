@@ -76,7 +76,7 @@ The named assumptions: `StrictBirthday`, `ExpectedCR`, hm96's hiding, `Hm96Hidin
 which the soundness proofs read), and the JSON library's specification, `JsonSpec` (`Definitions/Claims/Json.lean`,
 which only completeness reads). What the claims rest on and no Lean statement can say is `trustedBase`.
 
-Frozen by `Flock.Guarantees.ClaimsStated` (`Models/Flock/Guarantees/Claims.lean`), whose statement reads every claim
+Frozen by `Flock.Guarantees.ClaimsStated` (`Definitions/Flock/Guarantees/Claims.lean`), whose statement reads every claim
 here but `Flock.ZK`, and by `Flock.Guarantees.MaskedZK`, which states `Flock.ZK` at the deployed masked record: the lock
 records each one's text under `reads`, so a changed claim is a changed record.
 -/
@@ -379,7 +379,8 @@ def trustedBase : List String :=
      "coin that the --zk verifier sends at Hello and opens round by round",
    "the decoder's count: the deployed decoder's step count (Flock.Deploy.dec) is the cost of running it, one step " ++
      "per field operation (arithmetic or a comparison), per position compared and per column entry read",
-   "trusted-nebius-host: the auditor's devices and their host provider"]
+   "trusted-host: the auditor's device runs its stated code, timing included, on a host the prover doesn't control, " ++
+     "with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier state"]
 
 /-! ## The claims -/
 

@@ -30,7 +30,7 @@ the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEM
 """
 from __future__ import annotations
 
-from verity_vllm.program.registry.dense import MeanTriton, size_per_thread, thread_elements, BLOCK_SIZE, NUM_WARPS, THREADS, SIZE_PER_THREAD, TILE, REPS  # noqa: F401
+from verity_vllm.program.registry.dense import MeanTriton, size_per_thread, thread_elements, BLOCK_SIZE, NUM_WARPS, THREADS, SIZE_PER_THREAD, TILE, REPS
 
 SEMANTIC_ID = "dense/MeanTriton@v1"
 

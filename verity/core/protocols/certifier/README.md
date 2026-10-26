@@ -163,12 +163,22 @@ A spec-level reference for network accounting's timing channel:
   read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
   the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
 - the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary``, which names the template
-  whose unit ℓ·T + t holds bucket t of egress link ℓ (its frame and presence output rows, N2's encoder) and of ingress
-  link ℓ (its frame parameter row, the warden's registered row), the same gates whatever the load, so arrival steps and
-  prompt lengths stay private (`NetTiming.Layout`). `refusal` is the verifier's check before it draws that the layout
-  fits the circuit (`NetTiming.Layout.Fits`) at the record's grain, which contains the gate grain's, held to
-  `prog_fits`, `Layout.Fits` itself on a flattened program. No served window fits structurally, so it refuses every one
-  until proofs' semantic causality lands;
+  whose unit ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s checked row: its frame parameter row, the
+  warden's registered row, and its u16 verdict, whose bit 0 is the slots' presence) and of ingress link ℓ (its frame
+  parameter row, the warden's registered row), the same gates whatever the load, so arrival steps and prompt lengths stay
+  private (`NetTiming.Layout`). `checked_refusal` checks that the layout fits the circuit (`NetTiming.Layout.Fits`, its
+  first conjunct taking a frame gate that is an input) at the record's grain, which contains the gate grain's, held to
+  `prog_fits`, `Layout.Fits` itself on a flattened program. `refusal`, the verifier's check before it draws, refuses
+  what passes it by name until Lean's `Layout.Fits` takes the checked row. `Fits` stays structural: a served window fits
+  in the step-indexed scan's form, and a window in any other form is refused;
+- the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
+  warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), computes the
+  next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt ids
+  appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its last
+  egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket, then
+  per slot live, q, admitted, n and the output ids), as a row of its own, and outputs one ok bit; `Class.serves` names
+  the warden parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides at w63's class
+  in one registration: ingress unit t writes the state and view egress unit t reads, chained by registered reads;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
@@ -196,7 +206,8 @@ A spec-level reference for network accounting's timing channel:
   (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
   (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
   each release eligible under the sync the certifier ran its window under (the verifier's own clock source,
-  `LinkWindows.clock_source`: the certifier's clock certificates, `certificate.ClockCertificate`, which each window's
+  `LinkWindows.clock_source`: the certifier's salted clock certificates, `certificate.CertifiedClock`, each sync read
+  through its opening, witness, against the digest the public certificate signs, which each window's
   declared sync must match, one of Σ_sync, or that window is refused), so never before the bucket of its request's
   last frame (the request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the
   link's public framing), and each window's ingress total the advice's. Carry-over between windows is the advice's.
@@ -231,7 +242,7 @@ what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge
 `window_charge.reference_window`.
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
-`Security/Models/NetworkCertifier/Guarantees.lean`'s documentation:
+`Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
 - the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
   scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
   `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;

@@ -10,7 +10,7 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
     research queue eject PR --reason TEXT [--by HANDLE]
                                                    keep the PR's current head out of `next`; a new push or ready mark re-admits it;
                                                    posted as HANDLE to @ci and the owner in the merge thread (exit 1 if it couldn't be)
-    research queue ready PR (--on MACHINE | --local | --mark) [--by LANE] [--no-preflight] [--sha SHA]
+    research queue ready PR (--on MACHINE | --local | --mark) [--by LANE] [--no-preflight] [--sha SHA] [--json]
                                                    the owner's word that the PR is ready at its current head (a new push needs it again;
                                                    --sha: only at SHA, refused when GitHub still has another head after a few reads),
                                                    once the quick tier passes there: as a run on MACHINE in a check slot
@@ -76,7 +76,8 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
-no change waits on a per-head grant (Daniel, 8 Oct).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
+no change waits on a per-head grant (Daniel, 8 Oct).  A PR based on another branch is never admitted: `ready` marks it and says so,
+and `status` lists it, once marked, as waiting to be retargeted to `main` (a PR containing another waits for it there).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
 `research queue ready PR` writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
 as a merge of `main` that changes no file leaves it: `ready` marks that one without a tier), and only after the quick tier passes at that
 head: `suites.py --quick` on the suites the PR changes, from a clean checkout, either as a `research run` on a machine (`--on`,
@@ -100,7 +101,8 @@ gate).  `--no-preflight` skips it, for the lander.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
-order) and merges the rest on top.  So a new push moves its PR to the tip, a dropped PR takes the commits after it along (they're
+order) and merges the rest on top, each by `git merge-tree` and `git commit-tree` (`Queue._merge`: no worktree, so a candidate
+that conflicts costs one call).  So a new push moves its PR to the tip, a dropped PR takes the commits after it along (they're
 merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
 runs doesn't change (`hold`): then every sync, drive's, `eject`'s or a hand one, leaves `next` as it is until that check ends.  A
 PR whose head contains another open PR's head goes in after it and waits while that one waits, unless it carries that one's
@@ -337,6 +339,8 @@ class DriveFlags:
     #: scripts a PR's head passes to be admitted (`gate_refusal`: the ready mark's preflight, and the sync that merges it onto
     #: `next`), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
     landing_gates: tuple[str, ...] = ()
+    #: the most Lean checks of `land = "review"` running at once: a lower one and those stacked above it (`drive.lean_stack`)
+    max_lean_checks: int = 2
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
@@ -365,7 +369,7 @@ class DriveFlags:
             if not (on := names("on")):
                 raise bad("on", "at least one machine (train.sh's: a machine, or `auto`)")
             got["on"] = ",".join(on)
-        for k in ("max_running", "train_size"):
+        for k in ("max_running", "train_size", "max_lean_checks"):
             if k in doc:
                 if type(doc[k]) is not int or doc[k] < 1:
                     raise bad(k, "a whole number, 1 or more")
@@ -502,9 +506,9 @@ def label_target(pr: int, head: str) -> str:
 def lean_running(state: dict, pr: int) -> str | None:
     """The run ids of a running review-landing Lean check (`drive["lean"]`) whose checked prefix holds ``pr``, or None: an
     ejection of ``pr`` waits to rebuild `next` until it ends, as a sync would take its commit off `next` and cancel it (24 Oct:
-    r20261024-165000-3c72 was cancelled mid-audit)."""
+    r20261024-165000-3c72 was cancelled mid-audit).  A stacked one (`Driver._stack_lean`) doesn't hold it."""
     for rec in ((state.get("drive") or {}).get("lean") or {}).values():
-        if rec.get("state") is None and any(n == pr for n, _ in rec.get("members") or ()):
+        if rec.get("state") is None and not rec.get("stacked") and any(n == pr for n, _ in rec.get("members") or ()):
             return " ".join(rec.get("ids") or ())
     return None
 
@@ -535,11 +539,11 @@ LEAN_LOCK = "lean-audit.json"
 LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json")
 
 
-def lean_change(repo: Path, commit: str) -> bool:
-    """Whether ``commit``'s own change (against its first parent) waits for a Lean check before a review landing: it touches a
-    lock, or a Lean source of a Lake package that has one, so neither a guarantee's statement nor a definition it reads reaches
-    `main` without its record (the after-landing lean-audit, `--no-regenerate`, fails on a record difference)."""
-    files = changed(repo, f"{commit}^1", commit)
+def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
+    """Whether ``commit``'s own change (against its first parent, or ``base``) waits for a Lean check before a review landing: it
+    touches a lock, or a Lean source of a Lake package that has one, so neither a guarantee's statement nor a definition it reads
+    reaches `main` without its record (the after-landing lean-audit, `--no-regenerate`, fails on a record difference)."""
+    files = changed(repo, base or f"{commit}^1", commit)
     if any(Path(f).name == LEAN_LOCK for f in files):
         return True
     if not (lean := [f for f in files if f.endswith(LEAN_SOURCES)]):
@@ -665,6 +669,12 @@ class Entry:
     commit: str | None = None
 
 
+def based_on(pr: PR, prs: Iterable[PR]) -> str:
+    """``pr``'s base branch, with the open PR whose head that branch is (`BRANCH (#P's head)`) when one is."""
+    parent = next((p for p in prs if p.branch == pr.base and p.number != pr.number), None)
+    return f"{pr.base} (#{parent.number}'s head)" if parent else pr.base
+
+
 def _message(pr: PR) -> str:
     return f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\nPR: #{pr.number}\nHead: {pr.head}\nOwner: {pr.owner}\n"
 
@@ -696,6 +706,10 @@ class Queue:
         self.now: Callable[[], float] = time.time
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
+        #: whether git takes `--attr-source` (`_merge`), until it refuses it once
+        self._attr_source = True
+        #: the files each merge commit of `next` changed (`touched_by`)
+        self._touched: dict[str, set[str]] = {}
 
     # -- the clone and its state
 
@@ -907,6 +921,29 @@ class Queue:
     # -- building `next`
 
     def _merge(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
+        """(``pr``'s head merged onto ``tip``, "") or (None, why not), as `git merge --no-ff` in a checkout of ``tip`` gives them,
+        without the checkout: `git merge-tree` merges, with ``tip``'s merge drivers (`--attr-source`), and `git commit-tree`
+        makes the merge commit, so a candidate that conflicts costs one call (25-26 Oct: a sync that merged each candidate in
+        the worktree, ~70 of them conflicting, took 40 min).  A git without `--attr-source` (before 2.40) merges in the
+        worktree (`_merge_in_worktree`)."""
+        if not self._attr_source:
+            return self._merge_in_worktree(tip, pr, members)
+        r = _git(self.workdir, f"--attr-source={tip}", "merge-tree", "--write-tree", "--name-only", "--no-messages", tip, pr.head,
+                 check=False)
+        if r.returncode == 129 and "attr-source" in r.stderr:
+            self._attr_source = False
+            return self._merge_in_worktree(tip, pr, members)
+        if r.returncode == 0:
+            if not _git(self.workdir, "merge-base", "--is-ancestor", pr.head, tip, check=False).returncode:
+                return tip, ""                                  # already merged: `merge --no-ff` makes no commit either
+            commit = _git(self.workdir, "commit-tree", r.stdout.split()[0], "-p", tip, "-p", pr.head, "-m", _message(pr),
+                          env=IDENTITY).stdout.strip()
+            return commit, ""
+        files = list(dict.fromkeys(r.stdout.splitlines()[1:])) if r.returncode == 1 else []
+        return None, self._unmerged(r, files, members)
+
+    def _merge_in_worktree(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
+        """`_merge` by `git merge --no-ff` in the clone's worktree, checked out at ``tip``."""
         _git(self.workdir, "checkout", "-q", "--detach", tip)
         r = _git(self.workdir, "merge", "--no-ff", "--no-edit", "-m", _message(pr), pr.head, check=False, env=IDENTITY)
         if r.returncode == 0:
@@ -914,10 +951,13 @@ class Queue:
         files = _out(self.workdir, "diff", "--name-only", "--diff-filter=U").split()
         _git(self.workdir, "merge", "--abort", check=False)
         _git(self.workdir, "reset", "-q", "--hard", tip)
+        return None, self._unmerged(r, files, members)
+
+    def _unmerged(self, r: subprocess.CompletedProcess, files: list[str], members: list[Member]) -> str:
         if not files:
-            return None, f"doesn't merge onto `{self.branch}`: {(r.stderr or r.stdout).strip()[-200:]}"
-        by = touched_by(self.workdir, members, files)
-        return None, f"conflicts with `{self.branch}` in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
+            return f"doesn't merge onto `{self.branch}`: {(r.stderr or r.stdout).strip()[-200:]}"
+        by = touched_by(self.workdir, members, files, self._touched)
+        return f"conflicts with `{self.branch}` in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
 
     def handle(self, pr: PR) -> str | None:
         """The Slack handle of the lane that owns ``pr``, from main's registry (`.agents/skills/using-slack/registry.json`): the
@@ -987,6 +1027,7 @@ class Queue:
         conflicts: dict[str, dict] = {}
         main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
         gates = gates_at(self.workdir, main) if order[k:] else ()
+        merged = False
         for n in order[k:]:
             e = entries[n]
             if blocked := [a for a in e.after if a in dropped]:
@@ -994,7 +1035,10 @@ class Queue:
                 dropped.add(n)
                 continue
             refused, unjudged = gate_refusal(self.workdir, main, e.pr.head, gates)
-            commit, why = (None, " | ".join(refused + unjudged)) if refused or unjudged else self._merge(tip, e.pr, members)
+            if refused or unjudged:
+                commit, why = None, " | ".join(refused + unjudged)
+            else:
+                (commit, why), merged = self._merge(tip, e.pr, members), True
             if commit is None:
                 e.state, e.why = "refused", why
                 dropped.add(n)
@@ -1002,6 +1046,8 @@ class Queue:
                 continue
             tip = commit
             members.append(Member(n, e.pr.head, e.pr.owner or "", commit))
+        if merged:                  # drive runs train.sh and check.py from the worktree: `next`'s tip after a sync
+            _git(self.workdir, "checkout", "-q", "--detach", tip)
         for i, m in enumerate(members, 1):
             entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
         old = _git(self.workdir, "rev-parse", "--verify", "-q", f"refs/remotes/origin/{self.branch}", check=False).stdout.strip()
@@ -1113,10 +1159,11 @@ class Queue:
     def status(self) -> dict[int, Entry]:
         self._clone()
         state = self.load_state()
-        prs = [p for p in self.github.open_prs() if p.base == "main"]
-        prs, waiting = self.fetch_prs(prs)
+        open_prs = self.github.open_prs()
+        prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
         entries = self.entries(prs, state)
         entries.update(waiting)
+        entries.update(self.off_main(open_prs))
         for i, m in enumerate(self.chain(), 1):
             if m.pr in entries and entries[m.pr].pr.head == m.head:
                 entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
@@ -1131,6 +1178,16 @@ class Queue:
             elif e.state == "ready":
                 e.why = f"admitted: the next sync merges it onto `{self.branch}`, and drive checks and lands it in a train"
         return entries
+
+    def off_main(self, prs: list[PR]) -> dict[int, Entry]:
+        """The open PRs among ``prs`` based on a branch other than `main` that are marked ready at their head, each waiting with
+        the fix: drive admits only PRs based on `main`, so without this such a PR's mark went unseen until its parent landed and
+        someone retargeted it (CI-176)."""
+        off = [p for p in prs if p.base != "main"]
+        if off and self.prefetch is not None:
+            self.prefetch([(p.number, p.head) for p in off])
+        return {p.number: Entry(p, state="waiting", why=f"based on {based_on(p, prs)}, not main: retarget it to main")
+                for p in off if self.ready(p.number, p.head)}
 
 
 #: what a change must touch to move many circuit-check targets' cache keys: the circuits package (every Definition imports its
@@ -1245,9 +1302,14 @@ def hold(repo: Path, branch: str, running: Callable[[str, str], bool]) -> str | 
     return None
 
 
-def touched_by(repo: Path, members: list[Member], files: list[str]) -> list[str]:
-    """`#N` for each member whose merge changed one of ``files``."""
-    return [f"#{m.pr}" for m in members if set(files) & set(_out(repo, "diff", "--name-only", f"{m.commit}^1", m.commit).split())]
+def touched_by(repo: Path, members: list[Member], files: list[str], cache: dict[str, set[str]] | None = None) -> list[str]:
+    """`#N` for each member whose merge changed one of ``files``; ``cache`` keeps each merge's files across calls (a sync names
+    the members behind each of its conflicts)."""
+    cache = {} if cache is None else cache
+    for m in members:
+        if m.commit not in cache:
+            cache[m.commit] = set(_out(repo, "diff", "--name-only", f"{m.commit}^1", m.commit).split())
+    return [f"#{m.pr}" for m in members if set(files) & cache[m.commit]]
 
 
 class _Refreshed:
@@ -2049,16 +2111,42 @@ def ejection(store, pr: PR) -> str | None:
 SHA_READS, SHA_WAIT_S = 6, 5.0
 
 
+def off_main_note(pr: PR, prs: list[PR]) -> str | None:
+    """What `ready` tells the owner of ``pr`` when it isn't based on `main` (drive admits only PRs that are), or None."""
+    if pr.base == "main":
+        return None
+    parent = next((p for p in prs if p.branch == pr.base and p.number != pr.number), None)
+    until = f"until #{parent.number} lands, one stack level per landing" if parent else "until it is"
+    return (f"#{pr.number} is based on {based_on(pr, prs)}, not main: drive won't see it {until}. Retarget it to main (drive orders "
+            f"stacked PRs itself: a PR containing another waits for it); retargeting keeps the head, so a ready mark at "
+            f"{pr.head[:12]} counts from then on, and a new push needs a new mark as always")
+
+
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool = False,
           preflight: Callable[[PR, list[PR]], str | None] | None = None, sha: str | None = None,
-          sleep: Callable[[float], None] = time.sleep) -> int:
+          sleep: Callable[[float], None] = time.sleep, as_json: bool = False) -> int:
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
     head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
     unless ``again`` (16 Oct: #2174, re-marked at its ejected head, failed a second train on the same line).  Before any of it,
     ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (20 Oct: `git push && research queue ready 2848 --mark`
-    marked the old head), so it reads again, up to `SHA_READS` times, and refuses when GitHub still has another head."""
+    marked the old head), so it reads again, up to `SHA_READS` times, and refuses when GitHub still has another head.  A PR based
+    on another branch is marked all the same, and told that drive won't see it until it is based on `main` (`off_main_note`).
+    With ``as_json`` (`--json`) the rest goes to stderr, and stdout gets one object: pr, head, base, exit and warning (that note)."""
+    with contextlib.redirect_stdout(sys.stderr) if as_json else contextlib.nullcontext():
+        rc, pr, prs = _ready(github, store, number, by, tier, again, preflight, sha, sleep)
+        note = off_main_note(pr, prs) if pr is not None else None
+        if note:
+            print(f"research queue ready: {note}", file=sys.stderr)
+    if as_json:
+        print(json.dumps({"pr": number, "head": pr and pr.head, "base": pr and pr.base, "exit": rc, "warning": note}))
+    return rc
+
+
+def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool,
+           preflight: Callable[[PR, list[PR]], str | None] | None, sha: str | None,
+           sleep: Callable[[float], None]) -> tuple[int, PR | None, list[PR]]:
     if not sha and number is not None and (p := next((x for x in github.open_prs() if x.number == number), None)) and p.branch \
             and (tip := getattr(github, "branch_tip", lambda _b: None)(p.branch)):
         sha = tip                                           # 24 Oct: a mark seconds after a push preflighted GitHub's old head
@@ -2071,20 +2159,20 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
             sleep(SHA_WAIT_S)
     if pr is None:
         print(f"research queue ready: {'#' + str(number) if number is not None else 'a PR number'} is not an open PR", file=sys.stderr)
-        return 2
+        return 2, pr, prs
     if sha and not pr.head.startswith(sha):
         print(f"research queue ready: #{pr.number} is not marked: GitHub has its head at {pr.head[:12]}, not {sha[:12]}, after "
               f"{SHA_READS} reads {SHA_WAIT_S:g} s apart. Push {sha[:12]} to the PR's branch (or pass the head GitHub shows), then "
               "run this again", file=sys.stderr)
-        return 1
+        return 1, pr, prs
     if not again and (why := ejection(store, pr)):
         print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: that head was ejected: {why}. Push the fix "
               f"and mark the new head; if the ejection was wrong (a machine fault), say so in the merge thread and pass --again",
               file=sys.stderr)
-        return 1
+        return 1, pr, prs
     if preflight is not None and (why := preflight(pr, prs)):
         print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: {why}", file=sys.stderr)
-        return 1
+        return 1, pr, prs
     if (repo := getattr(tier, "repo", None)) is not None:
         try:
             old = same_tree_mark(store, repo, tier.remote, pr)
@@ -2094,12 +2182,12 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
         if old:
             print(f"research queue: #{pr.number}'s head {pr.head[:12]} has the tree of {old[:12]}, marked ready after its quick tier "
                   f"passed: the same files, so the tier isn't run again", flush=True)
-            return _mark(store, pr, by, None, "ready")
+            return _mark(store, pr, by, None, "ready"), pr, prs
     if isinstance(tier, MarkOnly):
         print(f"research queue: #{pr.number} at {pr.head[:12]}: marked on {by}'s word, with no quick tier", flush=True)
-        return _mark(store, pr, by, None, "ready")
+        return _mark(store, pr, by, None, "ready"), pr, prs
     print(f"research queue: the quick tier at #{pr.number}'s head {pr.head[:12]}: `suites.py --quick` on the suites it changes", flush=True)
-    return _mark(store, pr, by, tier(pr), "ready")
+    return _mark(store, pr, by, tier(pr), "ready"), pr, prs
 
 
 def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callable[[Path], dict] | None = None,
@@ -2372,7 +2460,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--repo", default=None, help="OWNER/NAME on GitHub (default: from the remote's URL)")
     ap.add_argument("--rules", type=Path, default=None, help=f"the admission rules (default: {RULES} on `main`)")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
-    ap.add_argument("--json", action="store_true", help="status: as JSON")
+    ap.add_argument("--json", action="store_true", help="status: as JSON; ready: one JSON object on stdout (pr, head, base, exit, "
+                    "warning), the rest on stderr")
     ap.add_argument("--on", metavar="MACHINE", help="ready: run the quick tier as a `research run` there, in a check slot (`auto` or "
                                                     "M1,M2: the one with a free check slot, as `check.py --on` picks), waiting for it "
                                                     f"{waitcap.WAIT_CAP_S} s at most (then exit {waitcap.STILL_GOING}, the run going "
@@ -2512,7 +2601,7 @@ def main(argv: list[str]) -> int:
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
             pre = None if a.no_preflight else Preflight(top, remote, store)
-            return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha)
+            return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json)
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
@@ -2570,7 +2659,7 @@ def main(argv: list[str]) -> int:
             Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
                    regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow, land=flags.land,
                    after_landing_no_cache=flags.after_landing_no_cache, reviews=labels.reviews,
-                   ready_by=labels.ready_by).tick(dry_run=a.dry_run)
+                   ready_by=labels.ready_by, max_lean_checks=flags.max_lean_checks).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses

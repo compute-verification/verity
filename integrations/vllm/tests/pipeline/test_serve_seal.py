@@ -371,7 +371,7 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
 
     from verity.ml.circuits.codec import canonical_json
     from verity_vllm.pipeline import advice_windows as AW
-    from verity_vllm.predict import steps as ST
+    from verity_vllm.program.predict import steps as ST
 
     assert ADV.CAP_BITS == AW.CAP_BITS == ST.CAP_BITS == 1 << 23 and AW.CAPPED == "verity/prove-path/capped-compiler/v0"
     c = ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=4096)
