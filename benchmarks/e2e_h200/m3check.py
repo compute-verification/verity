@@ -1,7 +1,7 @@
 """M3's drawn H200 units checked on CPU from their bytes alone (PRF-172): `m3draw.py open`'s ``drawn.json`` and ``drawn.bin``,
 held to the registration (`m3reg.py`) and the live coin (`m3coin.py`).
 
-    python benchmarks/e2e_h200/m3check.py --drawn DIR --registration REG.json --coin coin.json [--out FILE]
+    python benchmarks/e2e_h200/m3check.py --drawn DIR --registration REG.json --coin coin.json [--payload BIN] [--out FILE]
 
 * **The draw.** The registration's digest is its record's. The coin's units are
   ``derive(coin, DOMAIN, {"registration": digest}).subset(k, population)`` again. They are the opened units, in order.
@@ -87,11 +87,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--drawn", required=True)
     ap.add_argument("--registration", required=True)
     ap.add_argument("--coin", required=True)
+    ap.add_argument("--payload", default="", help="drawn.bin (default: beside drawn.json)")
     ap.add_argument("--out", default="")
     a = ap.parse_args(argv)
     d = Path(a.drawn)
     doc = json.loads((d / "drawn.json").read_text())
-    pay = (d / doc["payload"]["file"]).read_bytes()
+    pay = Path(a.payload or d / doc["payload"]["file"]).read_bytes()
     reg = json.loads(Path(a.registration).read_text())
     coin = json.loads(Path(a.coin).read_text())
     rec, digest = reg["record"], reg["digest"]

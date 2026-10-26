@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # m3draw.py on the H200 (PRF-172): PHASE=commit writes the salt secret (~/.local/state/m3draw-1de3, 0600, never under
-# $OUT) and the roots; PHASE=open re-runs, checks the roots against inputs/roots.json and opens inputs/draw.json's units.
+# $OUT) and the roots; PHASE=open re-runs, checks the roots against inputs/roots.json, opens inputs/draw.json's units (their
+# values and salts, drawn.bin, beside the secret, never under $OUT) and checks them on CPU (m3check.py against
+# inputs/registration.json and inputs/coin.json).
 #   research run --on vy-dc-h200-3 --project verity --source . --cwd source --timeout 5400 --env PHASE=commit \
 #     -- gpu-lease 1 --wait --mem-gb 0 -- bash benchmarks/e2e_h200/m3draw_job.sh
 set -euo pipefail
@@ -21,7 +23,11 @@ if [ "$PHASE" = commit ]; then
   mkdir -p "$SECRET_DIR"; chmod 700 "$SECRET_DIR"
   uv run --no-sync python benchmarks/e2e_h200/m3draw.py commit --out "$OUT/m3" --secret "$SECRET_DIR/salt.secret" --new-secret "${FLAGS[@]}"
 else
+  PRIVATE="$SECRET_DIR/open-$RESEARCH_RUN_ID"
   uv run --no-sync python benchmarks/e2e_h200/m3draw.py open --out "$OUT/m3" --secret "$SECRET_DIR/salt.secret" \
-    --registered "$RESEARCH_RUN_DIR/inputs/roots.json" --draw "$RESEARCH_RUN_DIR/inputs/draw.json" "${FLAGS[@]}"
+    --registered "$RESEARCH_RUN_DIR/inputs/roots.json" --draw "$RESEARCH_RUN_DIR/inputs/draw.json" --private "$PRIVATE" "${FLAGS[@]}"
+  uv run --no-sync python benchmarks/e2e_h200/m3check.py --drawn "$OUT/m3" --payload "$PRIVATE/drawn.bin" \
+    --registration "$RESEARCH_RUN_DIR/inputs/registration.json" --coin "$RESEARCH_RUN_DIR/inputs/coin.json" --out "$OUT/m3/check.json"
+  ls -la "$PRIVATE"
 fi
 ls -la "$OUT/m3"

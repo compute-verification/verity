@@ -107,6 +107,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--new-secret", action="store_true", help="commit: write a fresh secret (refused if the file exists)")
     ap.add_argument("--registered", default="", help="open: the registered roots.json")
     ap.add_argument("--draw", default="", help='open: {"step": S, "units": [global index, ...]}')
+    ap.add_argument("--private", default="", help="open: where drawn.bin goes (default --out); keep it outside the run dir")
     ap.add_argument("--shape", default="small", choices=sorted(SHAPES))
     ap.add_argument("--batch", type=int, default=4)
     ap.add_argument("--steps", type=int, default=4)
@@ -176,7 +177,8 @@ def array_doc(p: Payload, a: np.ndarray) -> dict:
     return {"dtype": str(a.dtype), "shape": list(a.shape), "bytes": p.add(a.tobytes())}
 
 
-def open_drawn(a, shape, weights, params, committer, results, prompts, registered: dict, draw: dict, out: Path) -> tuple[dict, int]:
+def open_drawn(a, shape, weights, params, committer, results, prompts, registered: dict, draw: dict, out: Path,
+               private: Path) -> tuple[dict, int]:
     S, c, lay = committer.S, committer, committer.layout
     step, U, batch = int(draw["step"]), lay.unit_count, a.batch
     fams = families(committer, shape)
@@ -211,7 +213,7 @@ def open_drawn(a, shape, weights, params, committer, results, prompts, registere
             "opening": {**opening.to_json(), "rows": [{"row": pay.add(rows[base + k]), "salt": pay.add(salts[S.SALT_BYTES * k:S.SALT_BYTES * (k + 1)]),
                                                        "bits": 8 * len(rows[base + k])} for k in range(n)]},
         })
-    sha = pay.write(out / "drawn.bin")
+    sha = pay.write(private / "drawn.bin")
     doc = {"format": DRAWN, "run_id": a.run_id, "registered": registered.get("registration"), "step": step,
            "step_root": r.root.hex(), "slots": batch, "units_a_slot": U, "population": batch * U, "context": c.context.hex(),
            "layout": lay.name, "layout_digest": S.layout_digest(lay).hex(), "draw": draw,
@@ -266,7 +268,9 @@ def main(argv: list[str] | None = None) -> int:
         return 5
     draw = json.loads(Path(a.draw).read_text())
     t0 = time.perf_counter()
-    doc, bad = open_drawn(a, shape, weights, params, committer, results, prompts, registered, draw, out)
+    private = Path(a.private) if a.private else out
+    private.mkdir(mode=0o700, parents=True, exist_ok=True)
+    doc, bad = open_drawn(a, shape, weights, params, committer, results, prompts, registered, draw, out, private)
     for d in doc["units"]:
         print("DRAWN " + json.dumps({k: d[k] for k in ("index", "slot", "commit_unit", "family", "unit", "template", "replay_ok",
                                                        "opened", "slot_roots_equal", "reference_slot_root_equal")}), flush=True)
