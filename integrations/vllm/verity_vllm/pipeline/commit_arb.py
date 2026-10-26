@@ -1,12 +1,14 @@
 """`verity-vllm commit-arb`: the served Commit under arbitrary traffic, its records held to the streamed I/O.
 
     VERITY_RETAIN=host verity-vllm commit-arb --out DIR --model REPO --revision SHA [--precision int8_exact|verity_int8|pin]
+        --required-manifest ROW/manifest.json [--hidden-so SO] [--norm-tap-so SO] [--tap-cap-mb N]
         [--requests 32] [--seed 0] [--prompt-range 16:1024] [--tokens 64] [--rate 0.5]
         [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--no-chunked-prefill] [--kv-cache-mb N] [--window-steps 64]
         [--prefix-caching] [--system-prompts N] [--system-tokens 384] [--turns N]
 
-The engine is serve-openai's (`verity_vllm.LLM`, in-process engine core, Model Runner V2, `NativeHostCommitter` committing
-every step, values retained on host), with a `served_record.SamplerInputsSource` attached and the served default seed (`engine.served_seed`). It is
+The engine is serve-openai's (`verity_vllm.LLM`, in-process engine core, Model Runner V2) and so is its Commit: rows-sha512
+(`serve_seal.committer`, built from the bench row's ``--required-manifest`` and taps, with serve-openai's step-input port)
+committing every step, values retained on host, with a `served_record.SamplerInputsSource` attached and the served default seed (`engine.served_seed`). It is
 stepped here, without HTTP, under seeded varied traffic: CERT-VARLEN's (``varied_requests`` in
 `benchmarks/network_traces/certifier_serve.py`: chat-turn prompts cut to a length log-uniform in ``--prompt-range``,
 ``max_tokens`` uniform in 1 … ``--tokens``, the model's own EOS), arriving as a Poisson process of ``--rate`` requests an
@@ -35,13 +37,16 @@ I3 record, `RequestRecord.to_json`) and ``summary.json`` (with each request's ca
 from __future__ import annotations
 
 import json
+import shutil
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.commit.challenge import stream
 from verity_vllm.config import UsageError, option
+from verity_vllm.pipeline import serve_seal as SS
 
 PRECISIONS = ("int8_exact", "verity_int8", "pin")
 CHAT_HEAD = "<|start_header_id|>user<|end_header_id|>\n\n"
@@ -98,6 +103,34 @@ class Options:
     gpu_memory_utilization: float = option("--gpu-memory-utilization", type=float, default=0.55)
     window_steps: int = option("--window-steps", type=int, default=64, help="committed steps a Commit window holds at most")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the committer's run id (default $RESEARCH_RUN_ID)")
+    required_manifest: str | None = option("--required-manifest", default=None,
+                                           help="the bench row's required manifest (its manifest.json), which serve-openai's rows-sha512 "
+                                                "Commit's parts are built from (serve_seal.committer)")
+    programs_root: str | None = option("--programs-root", default=None,
+                                       help="the Build's row dir of the manifest's partition and attention record (default: the manifest's dir)")
+    hidden_so: str | None = option("--hidden-so", default=None, help="the attention hidden tap (as serve-openai's --hidden-so)")
+    hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
+    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB")
+    norm_tap_so: str | None = option("--norm-tap-so", default=None, help="the norm-scale tap (as serve-openai's --norm-tap-so)")
+
+
+def committer_opts(opts: Options) -> SimpleNamespace:
+    """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row: the
+    vllm-v1 committer's own knobs are unset, since commit-arb serves no recorded vllm-v1 run again."""
+    return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, of_record=None, commit=True,
+                           seal=False, gpu_tree=True, chunk=None, hash_threads=None, cudart_copy=False)
+
+
+def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
+    """What the committer would refuse after the model has loaded, refused before it."""
+    if not opts.required_manifest:
+        raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS} with the Commit of record's parts, which its bench "
+                         "row's manifest names: pass --required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so)")
+    if not Path(opts.required_manifest).is_file():
+        raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
+    if which("ninja") is None:
+        raise UsageError("the rows-sha512 committer JIT-builds its kernels with ninja, which is not on PATH: put the environment's "
+                         "bin (where its ninja is) on PATH")
 
 
 def prompt_range(text: str) -> tuple[int, int]:
@@ -208,9 +241,8 @@ def engine_options(opts: Options) -> dict[str, Any]:
 
 
 def build(opts: Options) -> tuple[Any, Any]:
-    """The engine (`verity_vllm.LLM`) and its committer, as serve-openai builds them, with the sampler's inputs bound."""
-    from types import SimpleNamespace
-
+    """The engine (`verity_vllm.LLM`) and its committer, serve-openai's rows-sha512 Commit (`serve_seal.committer`, with the
+    step-input port and the sampler's inputs bound)."""
     from verity_vllm.engine.engine_profile import apply_env
 
     apply_env()
@@ -224,22 +256,7 @@ def build(opts: Options) -> tuple[Any, Any]:
         from verity_vllm.program.frontend.kernel_readback import int8_exact_of
         if (got := int8_exact_of(llm.model)) != "all":
             raise RuntimeError(f"an int8_exact engine whose layers run int8 scope {got!r}, not 'all'")
-    from verity_vllm.commit.committer.native_host import NativeHostCommitter
-    from verity_vllm.engine.engine_profile import get_model_runner
-
-    eng = SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model,
-                          cp={"repo": llm.pin.model, "revision": llm.pin.revision})
-    from verity_vllm.commit.served_record import SamplerInputsSource
-
-    com = NativeHostCommitter(eng, run_id=f"commit-arb:{opts.run_id}", arena_bytes=None)
-    if com.retain != "host":
-        raise UsageError(f"VERITY_RETAIN={com.retain}: the records are read back from the values retained on the host "
-                         "(export VERITY_RETAIN=host)")
-    com.attach_source(SamplerInputsSource(com))
-    tokens = int(opts.max_num_batched_tokens)
-    com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
-                                              "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len})
-    return llm, com
+    return llm, SS.committer(committer_opts(opts), llm, label="commit-arb")
 
 
 class Windows:
@@ -452,6 +469,7 @@ def main(opts: Options) -> int:
     system = opts.system_tokens + 64 if opts.system_prompts else 0
     if hi + system + opts.tokens > opts.max_model_len:
         raise UsageError(f"--max-model-len {opts.max_model_len} holds no prompt of {hi + system} and {opts.tokens} tokens")
+    preflight(opts)
     out = Path(opts.out)
     out.mkdir(parents=True, exist_ok=True)
     llm, com = build(opts)
@@ -462,7 +480,9 @@ def main(opts: Options) -> int:
     cfg = scheduler_config(llm.vllm.llm_engine)
     (out / "run.json").write_text(json.dumps({"options": {k: getattr(opts, k) for k in opts.__dataclass_fields__},
                                               "engine": llm.engine_record, "scheduler": cfg, "arena": com.arena_sizing_record,
-                                              "committer": com.name, "run_id": opts.run_id}, indent=1, default=str))
+                                              "committer": com.name, "scheme": com.commit_scheme,
+                                              "required_manifest_path": com.required_manifest_path, "run_id": opts.run_id},
+                                             indent=1, default=str))
     try:
         summary = run(llm, com, reqs, out, opts.window_steps, max_model_len=opts.max_model_len, prefix_caching=opts.prefix_caching)
     finally:

@@ -279,7 +279,7 @@ theorem readersTrue_layoutBTops {Col T : Type} (fin : Msg → List (ℕ × List 
 
 /-- **`KSLin2` at the model of the coin server's record (`recTr`), with `ReadersTrue` as the slots' commit strings**:
 `ksLin2_deployed_rec`, with `ReadersTrue` from `HmSlotsCommit` (`readersTrue_layoutBTops`). What stays open at the dense
-form is `PartChecksB`, `PartOpensB`, `DecompB` and `HmSlotsCommit` (`ksLin2_deployed_full` proves it). -/
+form is `PartChecksBV`, `PartOpensB`, `DecompB` and `HmSlotsCommit` (`ksLin2_deployed_full` proves it). -/
 theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -292,7 +292,7 @@ theorem ksLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRecor
     let bL : Brings := { bR with rd := L.readers }
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead bR) (cmtTr recRead) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead bR) (cmtTr recRead) s) ∧
@@ -320,7 +320,7 @@ theorem bitsLin2_deployed_slots (b : Brings) (aux : Msg → ℕ → Flock.RecRec
     let bL : Brings := { bR with rd := L.readers }
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead bR) (cmtTr recRead) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead bR) (cmtTr recRead) s) ∧

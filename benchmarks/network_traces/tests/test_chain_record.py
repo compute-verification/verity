@@ -469,6 +469,15 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
     assert cr.free_inputs(circuit) == 4 * 8
     (tmp_path / "circuit.json").write_text(json.dumps(circuit))
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
+    strata = [{"k": 1, "template": "s0", "units": [[0, 1]]}, {"k": 1, "template": "s1", "units": [[1, 4]]}]
+    (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "stratified", "k": 2,
+                                                                                     "strata": strata}}))
+    assert (cr.audit_of(tmp_path)["drawn"], cr.audit_of(tmp_path)["q"]) == (2, "1/3")
+    (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "stratified", "k": 1,
+                                                                                     "strata": [{**strata[0], "k": 0}, strata[1]]}}))
+    with pytest.raises(SystemExit, match="each drawn"):
+        cr.audit_of(tmp_path)
+    (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
     audit = cr.audit_of(tmp_path)
     assert (audit["units"], audit["drawn"], audit["free"], audit["jitter"]) == (4, 2, 32, 0)
     cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)]}
