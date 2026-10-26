@@ -5,16 +5,17 @@ instance opens, what serving commits when the node is a unit (its outputs, now c
 body's children (`parts`) and other decompositions (`ways`), its statics re-bound (a dot's K cut into chunks that carry the
 accumulator) or a shared subcircuit recomputed inside each reader (a covering).
 
-`cuts` is a dynamic program at each density of `optimize`'s sweep: a node is a unit at its statics when it passes the width
-rule (`cut.fits`), or descends by its cheapest way.  A unit is priced as the planner prices a template, serving's commitment
-on every instance plus the touched statements and proved units of its draw, so a finer cut pays for the wires it commits.
+`cuts` is a dynamic program at each density of `optimize`'s sweep: a node is a unit at its statics when its outputs fit a
+public size class (`one_stage.partition.unit_class`, the one-stage partition's), or descends by its cheapest way.  A
+unit is priced as the planner prices a subcircuit, serving's commitment on every instance plus the touched statements and
+proved units of its draw, so a finer cut pays for the wires it commits.
 Each distinct cheapest cut over the grid becomes one alternative of the op (`Candidate.cut`), and the planner chooses among
 them exactly; the program's price is approximate where one Definition appears under several parents (their units merge
-into one template only afterwards).
+into one subcircuit only afterwards).
 
 Two hints come with the cuts (`Pressure`): `boundary`, where a unit between a node and its dominant child's size (interpolated
-log-linearly between the two) would beat both, so a Definition at that size would pay; and `width`, where a node the width
-rule refuses would beat every legal cut, so the rule has a price there.
+log-linearly between the two) would beat both, so a Definition at that size would pay; and `width`, where a node wider than
+the widest class would beat every legal cut, so the cap has a price there.
 """
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ from dataclasses import dataclass, replace
 from itertools import zip_longest
 from math import log
 
-from verity.ml.circuits.cut import fits
+from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX, unit_class
 from verity.core.protocols.sampled_proofs.optimize import Candidate, CostModel, Objective, _k, template_cost
 
 Parts = tuple[tuple["Shape", int], ...]
@@ -56,8 +57,8 @@ class Shape:
 @dataclass(frozen=True)
 class Pressure:
     """A developer hint at density `lam`: `kind` "boundary" when units of 1/`split` of `node` (between it and `child`)
-    would cost `saving` (a fraction) less than the best cut there, or "width" when `node` as a unit, which the width rule
-    refuses, would."""
+    would cost `saving` (a fraction) less than the best cut there, or "width" when `node` as a unit, wider than the widest
+    class, would."""
 
     kind: str
     node: str
@@ -65,6 +66,10 @@ class Pressure:
     lam: float
     split: int
     saving: float
+
+
+def _legal(s: Shape) -> bool:
+    return unit_class(s.out_bits) is not None
 
 
 def _candidate(op: str, s: Shape, n: int, label: str = "", replay: tuple[str, int] | None = None) -> Candidate:
@@ -95,14 +100,14 @@ class _Program:
         if key in self.memo:
             return self.memo[key]
         options = []
-        if fits(s.out_bits, s.out_gates):
+        if _legal(s):
             options.append((self.unit(s, n), ((s, n),)))
         for _, parts in s.decompositions():
             subs = [self.best(child, n * count) for child, count in parts]
             options.append((sum(p for p, _ in subs), tuple(u for _, us in subs for u in us)))
         if not options:
-            raise ValueError(f"{s.id} has no legal cut: it fails the width rule ({s.out_bits} bits over {s.out_gates} "
-                             f"gates) and has no parts or ways to descend into")
+            raise ValueError(f"{s.id} has no legal cut: its {s.out_bits} bits out fit no size class (at most "
+                             f"{UNIT_CLASS_MAX}) and it has no parts or ways to descend into")
         self.memo[key] = min(options, key=lambda o: o[0])
         return self.memo[key]
 
@@ -156,16 +161,16 @@ def _pressure(prog: _Program, s: Shape, n: int, threshold: float, out: list[Pres
         return
     seen.add((s.id, n))
     best = prog.best(s, n)[0]
-    if not fits(s.out_bits, s.out_gates):
+    if not _legal(s):
         free = _price(_unchecked(s, n), prog.costs, prog.objective, prog.lam)
         if free < best * (1 - threshold):
             out.append(Pressure("width", s.id, "", prog.lam, 1, 1 - free / best))
     for _, parts in s.decompositions():
         child, count = max(parts, key=lambda p: p[0].ands * p[1])
-        if count >= 4 and child.ands * count >= 0.9 * sum(c.ands * k for c, k in parts) and fits(s.out_bits, s.out_gates):
+        if count >= 4 and child.ands * count >= 0.9 * sum(c.ands * k for c, k in parts) and _legal(s):
             splits = [1 << i for i in range(1, count.bit_length()) if 1 << i < count]
             priced = [(prog.unit(mid, n * g), g) for g in splits
-                      for mid in [_between(s, child, count, g)] if fits(mid.out_bits, mid.out_gates)]
+                      for mid in [_between(s, child, count, g)] if _legal(mid)]
             if priced and min(priced)[0] < best * (1 - threshold):
                 price, g = min(priced)
                 out.append(Pressure("boundary", s.id, child.id, prog.lam, g, 1 - price / best))
@@ -187,7 +192,7 @@ def cuts(op: str, root: Shape, n: int, costs: CostModel, objective: Objective, *
     """The op's alternatives for `optimize.frontier`: `n` instances of `root`, cut by the dynamic program at each density of
     a `grid`, each distinct cheapest cut one alternative ("c0" the sparsest's, and on), its units merged by Definition.
     Also each alternative's units (Definition id, instances) and the hints that save more than `threshold`.  `replay`
-    (domain, replay units) puts every template in that replay domain, `n` and each part's count splitting evenly."""
+    (domain, replay units) puts every subcircuit in that replay domain, `n` and each part's count splitting evenly."""
     found: dict[tuple, str] = {}
     out: list[Candidate] = []
     hints: list[Pressure] = []
