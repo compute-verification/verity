@@ -581,9 +581,9 @@ def d6(budget: float = 0.0) -> None:
         print(f"  {r['card']:34} " + " | ".join(cells))
 
 
-def v2_decode(budget: float = 0.01) -> None:
+def v2_decode(budget: float = 0.0, frozen: bool = True) -> None:
     """Static rounds at decode batches, overlapped, with weight-side coins (c, U, π) fresh a call or reused across
-    calls (the reuse is unpriced: ALGO-COST and RT-PROTO)."""
+    calls (ALGO-COST A11: reuse opens nothing algorithmically; RT-PROTO checks freshness). v2 as frozen by default."""
     print(f"\nv2 decode, static rounds with tiles (16-bit words, overlapped, eps_alg budget {budget:.0%}): compute gamma "
           f"fresh / reused weight-side coins, then the roofline (int8 weights from HBM, +1/8 B a weight for reused c)")
     for card in V2_CARDS:
@@ -591,8 +591,8 @@ def v2_decode(budget: float = 0.01) -> None:
         for model in ("Llama-3.1-8B", "Llama-3.1-70B", "DeepSeek-V4-Pro"):
             cells = []
             for m in (1, 32, 256):
-                f = static_pipes(card, model, budget, m=m)
-                r = static_pipes(card, model, budget, m=m, weight_coins=False)
+                f = static_pipes(card, model, budget, m=m, frozen=frozen)
+                r = static_pipes(card, model, budget, m=m, weight_coins=False, frozen=frozen)
                 gf, gr = max(f["T"], f["A_nw"] + f["wrap"]), max(r["T"], r["A_nw"] + r["wrap"])
                 plain = max(1.0, mem_mac / m)
                 cells.append(f"m {m}: {gf:.2f} / {gr:.2f}, roofline {max(gf, mem_mac / m) / plain:.2f} / "
