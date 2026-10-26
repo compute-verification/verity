@@ -25,3 +25,7 @@ V3b's worker (bc-90570968) reviewed #4757 while merging its v19 attention work (
 - H1's coins come from vy-challenger-1's gate, not vy-auditor-2. `--challenger-gate "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84" --challenger-peer vy-dc-h200`.
 - The key is on vy-dc-h200. Registering it is Daniel's call, on a default-yes card (#ask-daniel 1793043800.778039, deadline Tue 15:00Z). Until then, H1's coins are in-process, and the harness says so.
 - The bandwidth verifier is on vy-auditor-2 at 10.96.0.36:7952.
+
+# 21:25Z, the network certifier's serve-openai settings (NET-83, VLLM-126)
+
+For Wed's sessions, the harness serves with `--protocol ids --id-payload 503`, `--max-model-len 1088` or more (1,024 prompt ids plus 64 outputs; the default of 512 refuses long prompts), `--admit release-order`, temperature 0 and top_p 1, and `--required-manifest` from the H200 int8 row. Put these in `SERVE_ARGS` or the harness's defaults for the Wed run. NET-83 names vy-dc-h200-2:18782; vllm asked network-accounting to use vy-dc-h200 instead, and the answer is due on VLLM-126.
