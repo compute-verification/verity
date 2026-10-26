@@ -11,9 +11,11 @@ limits (on-chip bits, device-memory bits, op rates, bandwidth, side channels) it
 about the card and nothing about algorithms:
 
 * **(G1) Capacity.** Store `s` is `size s` words (`Loc`): a run holds at most \(M_s\) words in it at every tick because
-  there are no other locations. A thread's text is at most `text` instructions (`Prog.Fits`).
+  there are no other locations. Code is data too: it lives in device memory, so the texts of all the threads a run
+  steps hold at most `text` instructions together (`Prog.Fits`), device memory's bytes at 16 bytes an instruction.
 * **(G2) Rate.** Over every window of a run, the instructions issued use at most \(\rho_r\) units of each resource `r`
-  a tick, plus a backlog of `slack` ticks (`Rate`).
+  a tick, plus a backlog of `slack` ticks (`Rate`). The code reaches the SMs from device memory, so the run's
+  instructions and its code, fetched once (`fetchUse` units of `fetch` an instruction), share that path (`CodeFetch`).
 
 Everything else is the instruction set's semantics: an opcode reads its input words from the stores `inStore` names
 and writes `eval` of them to the stores `outStore` names, and nothing else moves a word. So a product an opcode forms
@@ -22,8 +24,14 @@ reaches another word only through further instructions, each of which pays its u
 **Execution.** A program is a text per thread (`Prog`); a thread has a program counter and runs its text in order
 (`step`), and the threads share the stores. A branch (`Instr.bra`) is the one data-dependent control: it reads a
 register and sets the thread's counter. A run's schedule is the list, per tick, of the threads stepped in it, in order
-(`run`); it is fixed before the run, so it reads no data. A thread past the end of its text does nothing and uses
-nothing. An address operand (`Operand.indirect`) is a register's value plus an offset, as a load, store or atomic
+(`run`). A thread past the end of its text does nothing and uses nothing.
+
+**The schedule costs the adversary nothing.** A run is a function of its initial state and its schedule, and every
+statement over the model takes the schedule after the state (the adversary chooses both). A card's data-dependent
+distribution of work, atomics-based work stealing included, is therefore a schedule the adversary could have computed
+from the state: it is one of the schedules the statement already ranges over, at the same instructions and so the same
+units. Data the run receives later (a verifier's coins) starts a new run from the state it is written into, with a new
+schedule. An address operand (`Operand.indirect`) is a register's value plus an offset, as a load, store or atomic
 takes one, and an operand may be an immediate the text carries.
 
 **Time.** A tick is the device's unit of time (an instance takes the SM clock at its maximum, so a tick is at least one
@@ -76,8 +84,12 @@ structure Machine (ι : Type) extends Device ι where
   use : Op → Res → ℚ≥0
   /-- the units of each resource a branch uses -/
   braUse : Res → ℚ≥0
-  /-- the instructions a thread's text holds at most -/
+  /-- the instructions all the texts of a run hold at most, together -/
   text : ℕ
+  /-- the resource that carries code to the SMs (device memory's port) -/
+  fetch : Res
+  /-- its units an instruction of code uses, fetched once -/
+  fetchUse : ℚ≥0
 
 attribute [instance] Machine.decStore
 
@@ -186,14 +198,23 @@ the backlog. At `slack = 0` and a window of one tick it bounds each tick. -/
 def Rate (iss : List (List m.Instr)) : Prop :=
   ∀ (w : Window) (r : m.Res), ∑ t ∈ w.ticks, usage iss t r ≤ m.ρ r * ((w.len + m.slack : ℕ) : ℚ≥0)
 
-/-- **(G1) Capacity of the text**: every thread's text fits in `text` instructions. (The stores' capacities hold by
-construction: store `s` has exactly `size s` locations.) -/
-def Prog.Fits (P : m.Prog Θ) : Prop := ∀ θ, (P θ).length ≤ m.text
+/-- The instructions of code a run on `sched` holds: the texts of the threads it steps, each once. -/
+def code (P : m.Prog Θ) (sched : List (List Θ)) : ℕ := (sched.flatten.dedup.map fun θ => (P θ).length).sum
 
-/-- A run of `P` on `sched` from `σ` meets the model: its text fits (G1) and its instructions meet the rates (G2). Its
-duration is `sched.length` ticks. -/
+/-- **(G1) Capacity of the code**: the texts of the threads a run steps fit in `text` instructions together. (The
+stores' capacities hold by construction: store `s` has exactly `size s` locations.) -/
+def Prog.Fits (P : m.Prog Θ) (sched : List (List Θ)) : Prop := code P sched ≤ m.text
+
+/-- **(G2) Fetching the code**: the run's use of `fetch` and its code, fetched once, fit in `fetch`'s units over the
+run and its backlog. -/
+def CodeFetch (P : m.Prog Θ) (σ : m.State Θ) (sched : List (List Θ)) : Prop :=
+  ∑ t ∈ Finset.range sched.length, usage (run P σ sched).2 t m.fetch + m.fetchUse * code P sched ≤
+    m.ρ m.fetch * ((sched.length + m.slack : ℕ) : ℚ≥0)
+
+/-- A run of `P` on `sched` from `σ` meets the model: its code fits (G1), its instructions meet the rates and its code
+is fetched (G2). Its duration is `sched.length` ticks. -/
 def Fits (P : m.Prog Θ) (σ : m.State Θ) (sched : List (List Θ)) : Prop :=
-  P.Fits ∧ Rate (run P σ sched).2
+  P.Fits sched ∧ Rate (run P σ sched).2 ∧ CodeFetch P σ sched
 
 end Machine
 

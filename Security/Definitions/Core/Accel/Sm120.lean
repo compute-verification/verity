@@ -108,7 +108,7 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
     else if fa = fb ∧ f8f6f4 fa ∧ k = 32 then some (floatDot fa f8Pipeline)
     else none
 
-/-- **The RTX PRO 6000's table.** A thread's text is at most GDDR7's bytes over 16-byte instructions; the coarse
+/-- **The RTX PRO 6000's table.** A program's code is at most GDDR7's bytes over 16-byte instructions; the coarse
 device's rates are the tensor core's s8 MACs, the 188 · 128 FP32 lanes, and GDDR7's bits a tick rounded up
 (1597 · 10⁹ · 8 / 2.43 · 10⁹ = 5,257.6). -/
 def card : Card where
@@ -117,6 +117,7 @@ def card : Card where
   ρ := ρ
   weight := weight
   Avail := Avail
+  scale _ _ := 1
   captured := captured
   text := 96 * 2 ^ 30 / 16
   tc := 188 * 1024

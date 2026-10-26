@@ -19,6 +19,8 @@ reports.
 * tensor: 4096 s8 MACs an SM clock (`Accounting.TS.Sheets.H200` A3: the data sheet's 1,979 dense INT8 TOPS over
   2 · 132 SMs at the 1830 MHz tensor boost clock), so 540,672; a MAC of `e4m3` or `e5m2` uses 1 unit (the same
   1,979 TFLOPS), of `f16` or `bf16` 2 (989.5), of `tf32` 4 (494.5); `b1` has no peak in any document (`Open.b1`);
+* `mma.sync`: its tensor rate apart from `wgmma`'s, which is the data sheet's (no document gives `mma.sync`'s on
+  Hopper, where it runs below `wgmma`), is `Open.sync` (`scale`) until CALIB measures it;
 * issue: 4 warp instructions an SM clock (whitepaper, 'H100 SM Architecture': four partitions, each a warp scheduler
   dispatching one warp instruction a clock), so 528;
 * `alu` and `imad`: 64 lanes an SM clock each (CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer
@@ -121,7 +123,7 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
     else if fa = .e5m2 ∧ fb = .e5m2 ∧ k = 32 then some (floatDot .e5m2 fp8Pipeline)
     else none
 
-/-- **The H200 SXM's table.** A thread's text is at most HBM's bytes over 16-byte instructions; the coarse device's
+/-- **The H200 SXM's table.** A program's code is at most HBM's bytes over 16-byte instructions; the coarse device's
 rates are the tensor core's s8 MACs, the 132 · 128 FP32 lanes, and HBM's bits a tick rounded up
 (4.8 · 10¹² · 8 / 1.98 · 10⁹ = 19,393.9). -/
 def card : Card where
@@ -130,6 +132,7 @@ def card : Card where
   ρ := ρ
   weight := weight
   Avail := Avail
+  scale x sh := if sh.m = 16 then x.sync else 1
   captured := captured
   text := 141 * 2 ^ 30 / 16
   tc := 132 * 4096
