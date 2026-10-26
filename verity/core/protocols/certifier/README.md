@@ -313,7 +313,8 @@ in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. 
 
 `LinkWindows.verify`'s verdict of record on a plain or served link is the Lean's, `NetworkCheck.LinkWindow`
 (`verity/core/protocols/network/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
-`service.OF_RECORD`; an advised link's stays the Python's. `verify` runs both on every proof, and a link-window where
+`service.OF_RECORD`; an advised link's stays the Python's, and so does a warden link's, a form the Lean doesn't have
+(`service.NO_LEAN_FORM`), which it isn't run on. `verify` runs both on every other proof, and a link-window where
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch went
 to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
 - the gap list is empty for plain and served links. Everything the Python checks, the Lean checks: the findings prove
