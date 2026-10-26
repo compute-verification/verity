@@ -142,7 +142,7 @@ def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devi
 
 /-- A program's units on the card's resources: a naive MAC's for a matmul program, a compression's for a SHA-512
 schedule. -/
-abbrev Units := Verity.Accel.Res → ℚ≥0
+abbrev ResUnits := Verity.Accel.Res → ℚ≥0
 
 /-- **The public best methods on the card table `c`** (RT-LEAN L3, L27, L31; the coordinator's 06:10Z and 06:18Z
 decisions): the named public matmul programs (`mm`, units a naive MAC) and the pinned public SHA-512 schedules (`sha`,
@@ -152,23 +152,23 @@ RT-PROTO P14: forms of the fixed weights and lookup tables, D5's pricing). The h
 dual price (`pubCost`, RT-PROTO P12): the cheapest of the named programs there, times the round's MACs or
 compressions. So `pub_mm` and `pub_sha` are fixed per card, not chosen per reading. -/
 structure PubBest (c : Verity.Accel.Card) where
-  mm : List Units
-  sha : List Units
+  mm : List ResUnits
+  sha : List ResUnits
 
 /-- Units on the card's resources priced at `μ` through the resource match `e`. -/
 noncomputable def unitCost {G : Accel} {c : Verity.Accel.Card} {D : Devices c}
-    (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (μ : G.Res → ℝ) (u : Units) : ℝ :=
+    (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (μ : G.Res → ℝ) (u : ResUnits) : ℝ :=
   ∑ r, μ (e.symm (.inl r)) * (u r : ℝ)
 
 /-- The public best's cost at `μ` for `n` MACs or compressions: the cheapest of the named programs at `μ`, `n` times
 (0 for no program). -/
 noncomputable def pubCost {G : Accel} {c : Verity.Accel.Card} {D : Devices c}
-    (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (μ : G.Res → ℝ) (us : List Units) (n : ℝ) : ℝ :=
+    (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (μ : G.Res → ℝ) (us : List ResUnits) (n : ℝ) : ℝ :=
   n * ((us.map (unitCost e μ)).min?.getD 0)
 
 /-- A matmul program's units a naive MAC: `t` on the tensor core (on `tensor` and `tensorLong` alike: every tensor-core
 instruction uses as many units of each), `i` issue slots, `a` ALU lanes, `m` IMAD lanes and `s` shared-memory words. -/
-def mmUnits (t i a m s : ℚ≥0) : Units
+def mmUnits (t i a m s : ℚ≥0) : Verity.Accel.Res → ℚ≥0
   | .tensor | .tensorLong => t
   | .issue => i
   | .alu => a
@@ -177,7 +177,7 @@ def mmUnits (t i a m s : ℚ≥0) : Units
   | _ => 0
 
 /-- A SHA-512 schedule's units a compression: `a` ALU lanes, `m` IMAD lanes and `i` issue slots. -/
-def shaUnits (a m i : ℚ≥0) : Units
+def shaUnits (a m i : ℚ≥0) : Verity.Accel.Res → ℚ≥0
   | .alu => a
   | .imad => m
   | .issue => i
@@ -189,14 +189,14 @@ K 16384, n 16512). D5's units in the model's: its tensor MAC-times as they are, 
 instruction), its FMA-pipe lanes over 2 (an `IMAD` or `IDP.4A` takes two of θ's 128, one of the model's 64 `imad`
 lanes) and its shared-memory bytes over 4 (words). `pub_mm.H200.v2` standalone (the lanes idle; c 0.961: plain s8
 0.961, DP4A 0.025, swar5 0.015) and with the lanes busy (v2's periods; c 1.000: the honest dense kernel). -/
-def pubMmH200 : List Units :=
+def pubMmH200 : List ResUnits :=
   [mmUnits (9605 / 10000) (156 / 10000 / 32) (7255 / 1000000) (1247 / 100000 / 2) (3001 / 100000 / 4),
    mmUnits 1 (1 / 1024 / 32) 0 0 (2148 / 100000 / 4)]
 
 /-- **D5's named public matmul programs on the RTX PRO 6000** (as on the H200, at L 768): `pub_mm.RTXPRO6000.v2`
 standalone (c 0.863: 70% plain, 30% depth-1 Strassen, fix-ups on the ALU, DP4A beside) and with the lanes busy (c
 1.000). D5's register-file words aren't a resource of the model and are dropped, which only lowers `pub_mm`. -/
-def pubMmSm120 : List Units :=
+def pubMmSm120 : List ResUnits :=
   [mmUnits (789 / 1000) (616 / 10000 / 32) (467 / 100000) (8695 / 100000 / 2) (1076 / 10000 / 4),
    mmUnits 1 (3255 / 1000000 / 32) 0 0 (3646 / 100000 / 4)]
 
@@ -206,13 +206,13 @@ RT-UNITS U13: `ShaSpeed` is in model units, so `c_sha = 1` in the model): the de
 `pub_sha.H200`; IMAD 546, IMAD.WIDE 546, IMAD.HI 394) and A-wide + R-shf (IMAD 850, IMAD.WIDE 850), with RT-UNITS'
 counts a compression (`note:20261026T0320Z-draft-accel-rt-units`). Priced as the model prices a lane (`opUse`): one
 ALU or `imad` lane, `IMAD.WIDE` two `imad` lanes (U13), `IMAD.HI` at its floor `madHi = 2`, `1/32` of an issue slot. -/
-def pubShaH200 : List Units :=
+def pubShaH200 : List ResUnits :=
   [shaUnits 3400 152 (3608 / 32), shaUnits 2460 2426 (4002 / 32), shaUnits 2550 2550 (4306 / 32)]
 
 /-- **The pinned public SHA-512 schedules on the RTX PRO 6000, at the model's prices** (as on the H200): the default
 build (r20261016-110413-c5d1, measured 7.13 G/s; SHF 1,728, LOP3 927, IADD.64 760), R-shf (IMAD 852, IMAD.WIDE 852)
 and R-hi (D5's `pub_sha.RTXPRO6000`; IMAD 487, IMAD.WIDE 487, IMAD.HI 487). -/
-def pubShaSm120 : List Units :=
+def pubShaSm120 : List ResUnits :=
   [shaUnits 3415 0 (3415 / 32), shaUnits 2563 2556 (4267 / 32), shaUnits 2441 2435 (3902 / 32)]
 
 /-- The H200's public best methods: D5 v1's named programs. -/
@@ -233,8 +233,12 @@ instance instFintypeHostRes : Fintype HostRes where
   complete r := by cases r <;> simp
 
 /-- A row's hosts for `n` cards as other devices: AMX and SHA-512 at `n` times the row's rates, and `mem` bits. -/
-noncomputable def HostRow.others (h : HostRow) (n : ℕ) (mem : ℝ) : Others :=
-  ⟨HostRes, fun | .amx => n * h.amx | .sha => n * h.sha, mem⟩
+noncomputable def HostRow.others (h : HostRow) (n : ℕ) (mem : ℝ) : Others where
+  Res := HostRes
+  rate r := match r with
+    | .amx => n * h.amx
+    | .sha => n * h.sha
+  mem := mem
 
 /-- **A card's share of its node's hosts**, in units a second (CALIB, #4513 at `188907341d`, θ's `host.cpu` rows). -/
 structure HostRow where
