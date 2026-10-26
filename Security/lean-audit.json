@@ -814,6 +814,10 @@
    "owner": "@proofs",
    "digest": "2f64540de1ff32e4c08877bea0fad2444549fbd3a27ddd549d720090828e1597"
   },
+  "Claims.Sampling.Commitment.Binds": {
+   "owner": "@proofs",
+   "digest": "3d281bc90d41540bc59fac317c7704f40034ecf5b92268542b66de988a289858"
+  },
   "Claims.Sampling.KS": {
    "owner": "@proofs",
    "digest": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2"
@@ -8582,6 +8586,12 @@
    "assumptions": [],
    "type_hash": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d"
   },
+  "NetTiming.SecurityProofs.SampledLeakRegistered": {
+   "owner": "@proofs",
+   "signature": ["NetTiming.SecurityProofs.SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered"],
+   "assumptions": [],
+   "type_hash": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3"
+  },
   "NetTiming.SecurityProofs.WardenViewEqClientView": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.WardenViewEqClientView : NetTiming.Guarantees.WardenViewEqClientView"],
@@ -11569,7 +11579,8 @@
    "Accounting.SecurityProofs.JointHorizonBlocksAbstract": "frozen (no-function): Like JointHorizon, over a horizon of blocks on one coin space with extra events: each block's five per-period guarantees and each extra event's bound are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.BandwidthOfAuditPerRun": "frozen (no-function,hash): It is BandwidthOfAudit at the coins drawn: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the per-run bandwidth guarantee (BandwidthSoundPerRun) of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract horizon of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the horizon, with A3 and KS at the deployment) is not stated here.",
-   "Flock.SecurityProofs.SampledKSLiveStated": "frozen (no-function): It states no property of the verifier: it reads SampledKSLive (Security/Proofs/Flock/Bridge/Statement.lean), so the lock records its text, and it leaves when a guarantee proves SampledKSLive at the deployed sampled verifier."
+   "Flock.SecurityProofs.SampledKSLiveStated": "frozen (no-function): It states no property of the verifier: it reads SampledKSLive (Security/Proofs/Flock/Bridge/Statement.lean), so the lock records its text, and it leaves when a guarantee proves SampledKSLive at the deployed sampled verifier.",
+   "NetTiming.SecurityProofs.SampledLeakRegistered": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS and Commitment.Binds at each deployment, and the registration's openings RegOpens), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_registered's statement with sampledLeak_reg's count, at the registered inputs' registration values (AsReg at regVal) rather than the trace's, a disagreement being a collision Breg finds."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16625,6 +16636,7 @@
     "NetTiming.SecurityProofs.HorizonWrongUnitsLe",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
+    "NetTiming.SecurityProofs.SampledLeakRegistered",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver",
@@ -17207,7 +17219,8 @@
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
-    "NetTiming.SecurityProofs.SampledLeakAccepted"
+    "NetTiming.SecurityProofs.SampledLeakAccepted",
+    "NetTiming.SecurityProofs.SampledLeakRegistered"
    ]
   },
   "Definitions.Core.Advice": {
@@ -21006,7 +21019,8 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
-    "NetTiming.SecurityProofs.SampledLeakAccepted"
+    "NetTiming.SecurityProofs.SampledLeakAccepted",
+    "NetTiming.SecurityProofs.SampledLeakRegistered"
    ]
   },
   "Definitions.NetworkCertifier.Guarantees": {
@@ -21115,15 +21129,24 @@
    "definitions": {
     "NetTiming.Guarantees.SampledAuditAccepted": "4964fe716db682025fb7993cfc4a758141d8c9f53f380911ce797c32d8858ef0"
    },
-   "guarantees": ["NetTiming.SecurityProofs.SampledAuditAccepted", "NetTiming.SecurityProofs.SampledLeakAccepted"]
+   "guarantees": [
+    "NetTiming.SecurityProofs.SampledAuditAccepted",
+    "NetTiming.SecurityProofs.SampledLeakAccepted",
+    "NetTiming.SecurityProofs.SampledLeakRegistered"
+   ]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledCharge": {
-   "digest": "cb51d195b6adab206af8be23ee0ba1393cf09f2851575c9b07431d90942d815b",
+   "digest": "a50d039fd34b8126f1eea85114c45524a1ca98f2886d7de38c0c72ed51a8310a",
    "definitions": {
     "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6fe6fff3b866eeb9e30182477d22e14ba9679dc097118c4e5181d9cc477079d8",
-    "NetTiming.Guarantees.SampledLeakAccepted": "8911f9f675c1b614dc7db9eac6150ea5dab81ba16a38a3ab4c21d4210ac1b661"
+    "NetTiming.Guarantees.SampledLeakAccepted": "8911f9f675c1b614dc7db9eac6150ea5dab81ba16a38a3ab4c21d4210ac1b661",
+    "NetTiming.Guarantees.SampledLeakRegistered": "ced1cead14bd017608d4c5082ba58c28378606e6ab1b58abd67ee29219400610"
    },
-   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledLeakAccepted"]
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
+    "NetTiming.SecurityProofs.SampledLeakAccepted",
+    "NetTiming.SecurityProofs.SampledLeakRegistered"
+   ]
   },
   "Definitions.NetworkCertifier.Guarantees.Warden": {
    "digest": "a98a2c111c8bac72989806ee802eac94640401d732a66a852eb28586278f1ffe",
@@ -21241,7 +21264,8 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
-    "NetTiming.SecurityProofs.SampledLeakAccepted"
+    "NetTiming.SecurityProofs.SampledLeakAccepted",
+    "NetTiming.SecurityProofs.SampledLeakRegistered"
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
@@ -21272,7 +21296,8 @@
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
-    "NetTiming.SecurityProofs.SampledLeakAccepted"
+    "NetTiming.SecurityProofs.SampledLeakAccepted",
+    "NetTiming.SecurityProofs.SampledLeakRegistered"
    ]
   },
   "Definitions.NetworkCertifier.SampledCharge": {
@@ -21286,7 +21311,21 @@
     "NetTiming.faultySets": "32b6dfd30c42f80810aa5181d9d53975b1587fe9ade5d884d45e1f40240e4276",
     "NetTiming.freeInputs": "71960d7978491121a9408649c5d34ecffa4ac9f8b5067941406386c61c0779a0"
    },
-   "guarantees": ["NetTiming.SecurityProofs.EncardAccSeqsSampledLe", "NetTiming.SecurityProofs.SampledLeakAccepted"]
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
+    "NetTiming.SecurityProofs.SampledLeakAccepted",
+    "NetTiming.SecurityProofs.SampledLeakRegistered"
+   ]
+  },
+  "Definitions.NetworkCertifier.SampledReg": {
+   "digest": "dc2d05970b2e8a814ea2f9d16f97838003f66823af45aa4caa09314833c7b19c",
+   "definitions": {
+    "NetTiming.Breg": "8f92d167d2d456969f045aeae1f0ba02cee57990b30cd40bf8ae6f3bf0fc097a",
+    "NetTiming.RegOpens": "9887836a3a96dbe446374187b6671f01498e199cd2be8c7727020843fafb430a",
+    "NetTiming.regLog": "63155e4d556fe6b5a48d91b77cf8451594fe9c547976b6dc0a0e381f2edc85b9",
+    "NetTiming.regVal": "aa7243eafeed844f556710542e32c50bc76f877e77932e1700755dc310ee4873"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.SampledLeakRegistered"]
   },
   "Definitions.NetworkCertifier.Schedule": {
    "digest": "7a2f8e4d2926bb4eda2b5fa8fff327d0feb7c3d96e804634c51e0925afa72fc2",
