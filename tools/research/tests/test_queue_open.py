@@ -101,3 +101,22 @@ def test_open_with_dry_run_sends_nothing(tmp_path, monkeypatch, capsys):
     assert research_main(["queue", "open", "--dry-run", "--head", "cursor/x", "--title", "T", "--body-file", str(body),
                           "--remote", "https://github.com/o/verity.git"]) == 0
     assert "would open cursor/x onto main in o/verity" in capsys.readouterr().out
+
+
+def test_open_refuses_a_base_other_than_main_before_anything_is_sent(tmp_path, monkeypatch, capsys):
+    """TOP-90 row 15: drive admits only PRs based on `main`, so a PR opened on another branch waits unseen."""
+    import subprocess
+
+    from research import queue as Q
+    from research.cli import main as research_main
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.chdir(tmp_path)
+    body = tmp_path / "body.md"
+    body.write_text("Lane ci\n")
+    monkeypatch.setattr(Q, "open_pr", lambda *a, **k: (_ for _ in ()).throw(AssertionError("opened a PR on another base")))
+    for dry in ([], ["--dry-run"]):
+        assert research_main(["queue", "open", *dry, "--head", "cursor/x", "--title", "T", "--body-file", str(body),
+                              "--base", "cursor/parent", "--remote", "https://github.com/o/verity.git"]) == 1
+        err = capsys.readouterr().err
+        assert "open: --base cursor/parent: drive admits only PRs based on `main`" in err and "Open it on `main`" in err

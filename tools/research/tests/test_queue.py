@@ -963,6 +963,55 @@ def test_ready_refuses_a_head_that_was_ejected_and_says_why_unless_again(world, 
     assert StoreLabels(world.store, log=world.logs.append).ready(4, h) is True
 
 
+def test_ready_refuses_a_pr_not_based_on_main_and_names_its_owners_fix(world, capsys):
+    """TOP-90 row 15: drive reads only PRs based on `main`, so a mark on a stacked PR went unseen until someone retargeted it;
+    agents don't edit PRs, so the fix named is its owner's."""
+    import dataclasses
+
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    h = world.change({"s.txt": "stacked\n"})
+    world.gh.put(6, h, ready=False)
+    world.gh.prs[6] = dataclasses.replace(world.gh.prs[6], base="cursor/parent-1234")
+    assert ready(world.gh, world.store, 6, "lane-6", MarkOnly()) == 1
+    err = capsys.readouterr().err
+    assert f"#6 is not marked ready at {h[:12]}: it is based on `cursor/parent-1234`, not `main`" in err
+    assert "Its owner retargets it to `main`, or opens it on `main`" in err and "gh pr edit" not in err
+    assert StoreLabels(world.store, log=world.logs.append).ready(6, h) is False
+
+
+def test_ready_refuses_a_head_carrying_a_move_windows_commit_without_the_head_of_the_pr_that_lands_it(world, capsys):
+    """TOP-90 row 8a: a branch built on a move window's commit, which never lands as itself, would land half the move or
+    conflict with it.  A head carrying the window passes only with the named PR's current head in it, or once the window is on
+    `main`; an entry that isn't a full SHA and a PR number is refused when the rules are read."""
+    from research.queue import MarkOnly, MoveWindow, StoreLabels, ready
+
+    window = world.change({"moved/a.txt": "a\n"})
+    rules = f'{RULES}window_commits = [{{commit = "{window}", pr = 6}}]\n'
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'ci/queue.toml': rules})}:refs/heads/main")
+    world.gh.put(6, world.change({"moved/b.txt": "b\n"}, base=window), ready=False)     # the move, window and all
+    world.gh.put(7, world.change({"k.txt": "k\n"}, base=window), ready=False)           # built on the window alone
+    world.gh.put(8, world.change({"y.txt": "y\n"}, base=world.gh.prs[6].head), ready=False)
+    world.gh.put(9, world.change({"z.txt": "z\n"}), ready=False)
+    w = MoveWindow(world.dev, str(world.origin))
+    prs = world.gh.open_prs()
+    assert [w(p, prs) for p in prs if p.number != 7] == [None, None, None]
+    assert w(world.gh.prs[7], prs) == (f"this head carries the move window {window[:12]}, which never lands as itself; merge "
+                                       f"#6's head {world.gh.prs[6].head[:12]} instead (it contains the window)")
+    world.with_store_remote()
+    assert ready(world.gh, world.store, 7, "lane-7", MarkOnly(), window=w) == 1
+    assert "carries the move window" in capsys.readouterr().err
+    assert StoreLabels(world.store, log=world.logs.append).ready(7, world.gh.prs[7].head) is False
+    del world.gh.prs[6]
+    assert "#6, which lands it, isn't open" in w(world.gh.prs[7], world.gh.open_prs())
+    _git(world.dev, "push", "-q", "origin", f"+{world.change({'ci/queue.toml': rules}, base=window)}:refs/heads/main")
+    assert w(world.gh.prs[7], world.gh.open_prs()) is None                             # the window is on `main` now
+    for bad in ('[{commit = "abc", pr = 6}]', f'[{{commit = "{window}"}}]', f'[{{commit = "{window}", pr = "6"}}]'):
+        with pytest.raises(QueueError, match="window_commits"):
+            Rules.parse(f"window_commits = {bad}\n")
+
+
 def test_a_head_with_the_tree_of_a_head_marked_ready_is_marked_without_running_the_tier_again(world, monkeypatch, capsys):
     """Merging a `main` that changes none of a PR's files (the repository move's merges did this) gave lanes a new head and a
     35-minute tier over the same files.  Only an identical tree, read with labels pulled from the remote, skips the tier."""

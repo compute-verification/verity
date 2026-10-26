@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[4]
 
 def test_the_rules_parse_and_name_the_hold_label():
     rules = Rules.parse((ROOT / "tools" / "verity" / "check" / "queue.toml").read_text(), "tools/verity/check/queue.toml")
-    assert rules.hold_label == "hold"
+    assert rules.hold_label == "hold" and all(len(c) == 40 for c, _ in rules.window_commits)
 
 
 def test_drives_flags_parse_and_put_no_pr_first_by_default():

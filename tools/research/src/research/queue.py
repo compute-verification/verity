@@ -26,7 +26,10 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
                                                    test_repository.py, tools/research/tests/test_pythonpath.py, or `pytest
                                                    --collect-only` in a suite
-                                                   whose inputs its change touches; --no-preflight skips it (the lander's)
+                                                   whose inputs its change touches; --no-preflight skips it (the lander's).
+                                                   Whatever the flags, it refuses a PR not based on main (`off_main`) and a
+                                                   head carrying a move window's commit without the PR that lands it
+                                                   (`MoveWindow`, the rules' `window_commits`)
     research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--max-running N] [--train-size N] [--marked-after TS]
                          [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--per-pr-shadow N]
                          [--landing review|check] [--[no-]after-landing-no-cache] [--dry-run]
@@ -61,7 +64,8 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
                                                    open a PR for any pushed branch through gh (the repo's broker wrapper when the
                                                    checkout has one), for a lead whose PR tool opens PRs only from its own run
                                                    branch; refuses when BRANCH isn't on the remote, isn't at --sha, or already
-                                                   has an open PR; prints the PR's URL (`open_pr`)
+                                                   has an open PR, and any --base but main (drive admits from main only);
+                                                   prints the PR's URL (`open_pr`)
     research queue stats (--log FILE | --per-pr) [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`); --per-pr,
                                                    the per-PR shadow's would-land times from drive's state file instead
@@ -86,7 +90,8 @@ failure.  `--mark` (`MarkOnly`) writes the mark with no tier, and the train's fu
 merge request (until then `main` moves only by the coordinator's trains, so ask on Slack too).  Draft state is ignored: agents open PRs as drafts, and
 the ready label is what says one is done.  The hold label keeps a PR out whatever else holds.  The owner is the lane its body names
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
-`main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) names the hold label.  Ready marks are read after
+`main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) names the hold label, the marks' cutoff and the
+move windows' commits `ready` refuses (`MoveWindow`).  Ready marks are read after
 pulling the target's labels from the store's remote; when that pull can't happen (no remote here, one
 that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.
 
@@ -298,17 +303,26 @@ class Rules:
     source: str = RULES
     #: ready marks older than this don't count (`--marked-after` overrides it), so every VM's queue admits what drive admits
     marked_after: str | None = None
+    #: (commit, PR): a move window's commit, and the open PR whose head contains it and lands it (`MoveWindow`)
+    window_commits: tuple[tuple[str, int], ...] = ()
 
     @classmethod
     def parse(cls, text: str, source: str = RULES) -> "Rules":
         doc = tomllib.loads(text)
-        unknown = set(doc) - {"hold_label", "marked_after"}
+        unknown = set(doc) - {"hold_label", "marked_after", "window_commits"}
         if unknown:
             raise QueueError(f"{source}: unknown keys {sorted(unknown)}")
         cut = doc.get("marked_after")
         if cut is not None and not (isinstance(cut, str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", cut)):
             raise QueueError(f"{source}: marked_after {cut!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
-        return cls(doc.get("hold_label", "hold"), source, cut)
+        windows = doc.get("window_commits", [])
+        if not isinstance(windows, list) or not all(
+                isinstance(w, dict) and set(w) == {"commit", "pr"} and isinstance(w["commit"], str)
+                and re.fullmatch(r"[0-9a-f]{40}", w["commit"]) and isinstance(w["pr"], int) and not isinstance(w["pr"], bool)
+                for w in windows):
+            raise QueueError(f"{source}: window_commits {windows!r}: a list of {{commit = FULL_SHA, pr = N}}, the open PR N "
+                             f"whose head contains that commit")
+        return cls(doc.get("hold_label", "hold"), source, cut, tuple((w["commit"], w["pr"]) for w in windows))
 
 
 #: drive's ways of landing (`DriveFlags.land`)
@@ -2059,12 +2073,56 @@ def ejection(store, pr: PR) -> str | None:
 SHA_READS, SHA_WAIT_S = 6, 5.0
 
 
+#: why a PR based on another branch isn't marked or opened: drive reads only PRs based on `main` (`Queue.sync`), so its mark
+#: went unseen until someone retargeted it (TOP-90 row 15; agents don't edit PRs, so the fix is its owner's)
+STACKED = ("drive admits only PRs based on `main`, and orders stacked ones itself (a PR containing another open PR's head or "
+           "commits waits for it)")
+
+
+def off_main(base: str) -> str:
+    return f"it is based on `{base}`, not `main`: {STACKED}. Its owner retargets it to `main`, or opens it on `main`"
+
+
+class MoveWindow:
+    """`ready`'s refusal of a head carrying a commit of a move window (`window_commits` in the rules on `main`) without the head
+    of the open PR that lands it: a window's commit never lands as itself, so a branch built on it lands the move unreviewed
+    and half done, or conflicts with it (TOP-90 row 8a).  It fetches `main` and the PR's head into ``repo``; what it can't fetch
+    refuses, with the error, since a mark it can't judge may carry the window."""
+
+    def __init__(self, repo: Path, remote: str):
+        self.repo, self.remote = Path(repo), remote
+
+    def __call__(self, pr: PR, prs: list[PR]) -> str | None:
+        r = _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/window/main",
+                 f"+refs/pull/{pr.number}/head:refs/queue/window/pr", check=False)
+        if r.returncode:
+            return (f"its head can't be checked for a move window's commits (git fetch: {(r.stderr or r.stdout).strip()[-200:]}): "
+                    "run this again")
+        rules = rules_at(self.repo, "refs/queue/window/main") or Rules()
+        heads = {p.number: p.head for p in prs}
+
+        def contains(head: str, commit: str) -> bool:
+            return not _git(self.repo, "merge-base", "--is-ancestor", commit, head, check=False).returncode
+
+        for commit, n in rules.window_commits:
+            if not contains(pr.head, commit) or contains("refs/queue/window/main", commit):
+                continue
+            if n in heads and contains(pr.head, heads[n]):
+                continue
+            fix = (f"merge #{n}'s head {heads[n][:12]} instead (it contains the window)" if n in heads else
+                   f"#{n}, which lands it, isn't open: build on `main` instead, and ask @ci to drop the window from {rules.source}")
+            return f"this head carries the move window {commit[:12]}, which never lands as itself; {fix}"
+        return None
+
+
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool = False,
           preflight: Callable[[PR, list[PR]], str | None] | None = None, sha: str | None = None,
-          sleep: Callable[[float], None] = time.sleep) -> int:
+          sleep: Callable[[float], None] = time.sleep, window: Callable[[PR, list[PR]], str | None] | None = None) -> int:
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
-    head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
+    head marked ready (`same_tree_mark`) is marked without running the tier again.  A PR based on a branch other than `main`,
+    which drive never admits, is refused (`off_main`), and so is a head ``window`` (`MoveWindow`) refuses for carrying a move
+    window's commit.  A head drive or the lander ejected is refused
     unless ``again`` (16 Oct: #2174, re-marked at its ejected head, failed a second train on the same line).  Before any of it,
     ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (20 Oct: `git push && research queue ready 2848 --mark`
@@ -2086,6 +2144,12 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
         print(f"research queue ready: #{pr.number} is not marked: GitHub has its head at {pr.head[:12]}, not {sha[:12]}, after "
               f"{SHA_READS} reads {SHA_WAIT_S:g} s apart. Push {sha[:12]} to the PR's branch (or pass the head GitHub shows), then "
               "run this again", file=sys.stderr)
+        return 1
+    if pr.base != "main":
+        print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: {off_main(pr.base)}", file=sys.stderr)
+        return 1
+    if window is not None and (why := window(pr, prs)):
+        print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: {why}", file=sys.stderr)
         return 1
     if not again and (why := ejection(store, pr)):
         print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: that head was ejected: {why}. Push the fix "
@@ -2437,7 +2501,7 @@ def main(argv: list[str]) -> int:
                                   "head pushed meanwhile")
     ap.add_argument("--title", help="open: the PR's title")
     ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
-    ap.add_argument("--base", default="main", help="open: the base branch (default main)")
+    ap.add_argument("--base", default="main", help="open: the base branch; only main, the one drive admits from")
     ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line (default origin/main)")
     ap.add_argument("--out", type=Path, metavar="FILE", help="checked-heads: write the checked train heads newest first "
                     "to FILE (an optional source for the verifier's --main file) instead of listing them on stdout")
@@ -2467,6 +2531,8 @@ def main(argv: list[str]) -> int:
             repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
             if not repo:
                 raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            if a.base != "main":
+                raise QueueError(f"open: --base {a.base}: {STACKED}. Open it on `main` (leave out --base)")
             if a.dry_run:                                   # 17 Oct (CI-52): --dry-run opened a real PR (#2276)
                 print(f"research queue open: would open {a.head}{'@' + a.sha[:12] if a.sha else ''} onto {a.base} in {repo}"
                       f"{' as a draft' if a.draft else ''}: {a.title!r} ({len(a.body_file.read_text())} bytes of body; dry run)")
@@ -2522,7 +2588,8 @@ def main(argv: list[str]) -> int:
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
             pre = None if a.no_preflight else Preflight(top, remote, store)
-            return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha)
+            return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha,
+                         window=MoveWindow(top, remote))
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
