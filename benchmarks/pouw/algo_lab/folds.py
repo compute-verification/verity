@@ -115,7 +115,8 @@ def checkpoint(k: Kernel, st: np.ndarray, route: str = "redux") -> np.ndarray:
     lanes = st.shape[0]
     out = []
     for j in range(parts):
-        a = _lane_xor8(k, st[:, NCH * j:NCH * j + NCH])
+        if route != "redg2":
+            a = _lane_xor8(k, st[:, NCH * j:NCH * j + NCH])
         if route == "redux":
             w = k.redux_xor(a)
             k.add("IMAD", lanes)          # IMAD.U32 R, RZ, RZ, UR: the uniform result back to a register

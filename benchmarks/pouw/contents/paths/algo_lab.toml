@@ -1,0 +1,4 @@
+order = 367
+path = "`algo_lab/lab.py`"
+runs_on = "CPU"
+what = "CMP-125's algorithm lab: the H200 reference kernel (wgmma s8, then LI or duo with LI-CP-W's checkpoint) and its exact alternatives (Strassen at depth 1 and 2, packed IMAD, bit-sliced LOP3, Four Russians through shared memory, every fold and checkpoint form), each checked against `segment.py` word for word and receipt for receipt and priced on DS-90 a warp-word against the reference: time, issue alone, and the ALU and IMAD pipes pooled"
