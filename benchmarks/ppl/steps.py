@@ -8,7 +8,8 @@ float softmax or fattn.cu's integer LUT softmax, `lut_softmax`) and `peel` (a lo
 E the server adds and peels exactly, on Q or on P, with P served as P - offset + E). Low-bit grids (`GRIDS`): `grid`
 on linears and on attention puts both operands of every matmul on FP4's or FP8's integers, each rounded or dithered.
 FP formats and the int8 compilers: `fp` (a format's own plain quantization), `native` (Dither's coins on a format's
-integer grid) and `emulate` (the int8 product recomputed exactly from limbs a format holds).
+integer grid) and `emulate` (the int8 product recomputed exactly from limbs a format holds). `scale_error` (linears
+and attention) scales the rest of the chain's error by a factor: a proxy's way of giving a model another's error.
 
 A new intervention is one more function here (or in any module `run.py --plugin` imports) under `@linear_step` or
 `@attention_step`; `spec.py` says what it receives."""
@@ -20,7 +21,7 @@ import zlib
 import torch
 
 import gates as G
-from matmul import Softmaxed
+from matmul import Softmaxed, terminal
 from spec import attention_step, linear_step
 
 GROUP = {"self_attn.q_proj": "qkv", "self_attn.k_proj": "qkv", "self_attn.v_proj": "qkv", "self_attn.o_proj": "o",
@@ -186,11 +187,20 @@ def gptq(w: torch.Tensor, h: torch.Tensor, column, block: int = 128, damp: float
 def smooth_factors(mm, alpha: float, kv_shared: bool) -> torch.Tensor:
     """m = amax_x^alpha / amax_W^(1 - alpha) per input channel of the linear's group (amax_x over the calibration
     windows' inputs to the group, amax_W over its linears' raw weights); `kv_shared` (o_proj) one m per (KV head,
-    channel), shared by the group's query heads, so 1 / m folds into v_proj's rows."""
-    g = GROUP[mm.name]
-    ax = mm.run.calib["amax"][g]
+    channel), shared by the group's query heads, so 1 / m folds into v_proj's rows. The groups are the layer's own
+    (`groups`) where it has them (DeepSeek-V2's); a group no calibration row reached (a routed expert no calibration
+    token chose) is not smoothed, m = 1."""
     lay = mm.run.layer
-    aw = torch.stack([lay.weight(n).float().abs().amax(dim=0) for n in GROUP if GROUP[n] == g]).amax(dim=0)
+    groups = getattr(lay, "groups", GROUP)
+    g = groups[mm.name]
+    ax = mm.run.calib["amax"].get(g)
+    if ax is None:
+        return torch.ones(mm.x.shape[1], device=mm.device)
+    key = ("smooth_amax_w", g)
+    if key not in mm.run.cache:
+        mm.run.cache[key] = torch.stack([lay.weight(n).float().abs().amax(dim=0)
+                                         for n in groups if groups[n] == g]).amax(dim=0)
+    aw = mm.run.cache[key]
     if kv_shared and g == "o":
         rep, d = lay.cfg.rep, lay.cfg.head_dim
         ax, aw = (a.view(-1, rep, d).amax(1, keepdim=True).expand(-1, rep, d).reshape(-1) for a in (ax, aw))
@@ -1340,3 +1350,35 @@ def emulate_linear(mm, nxt, *, route: str):
 def emulate_attention(mm, nxt, *, route: str):
     """Both attention matmuls' int8 products by limb splitting, as `linear.emulate`."""
     return emulate(mm, nxt, route)
+
+
+# ================================================================ error scaling
+
+def _scaled(mm, nxt, factor: float) -> torch.Tensor:
+    if factor == 1:
+        return nxt(mm)
+    y0 = terminal(mm)
+    y = nxt(mm)
+    if isinstance(y, Softmaxed):
+        raise ValueError(f"{mm.where}: scale_error scales a product, not an integer softmax")
+    return y0 + factor * (y - y0)
+
+
+def _check_scale(p):
+    if any(v < 0 for v in p.values()):
+        raise ValueError("scale_error: factors are >= 0")
+
+
+@linear_step("scale_error", phase="real", check=_check_scale, source="PPL-V4-PROXY")
+def scale_error_linear(mm, nxt, *, factor: float):
+    """y0 + factor (y - y0): the rest of the chain's product y with its error against y0, the FP32 product of the
+    operands this step receives, times `factor`. A proxy's step: one model's matmuls given another's error, `factor`
+    the ratio of the two models' per-matmul errors on their own shapes. First in the chain, so y0 is the unedited
+    product; factor 1 is the chain itself."""
+    return _scaled(mm, nxt, factor)
+
+
+@attention_step("scale_error", phase="real", check=_check_scale, source="PPL-V4-PROXY")
+def scale_error_attention(mm, nxt, *, qk: float = 1.0, pv: float = 1.0):
+    """`linear.scale_error` on S = Q K^T (its error times `qk`) and on O = P V (times `pv`)."""
+    return _scaled(mm, nxt, qk if mm.kind == "qk" else pv)

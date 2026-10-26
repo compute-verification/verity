@@ -28,7 +28,8 @@ def test_seeds_are_a_prefix():
 
 def submit(**kw) -> list[str]:
     a = argparse.Namespace(**{"model": "llama-3.1-8b", "set": "c4", "ctx": 2048, "gpus": 0, "seeds": "0,1,2",
-                              "plugin": None, "spec": ["adopted"], "max_min": 120, "campaign": "cmp-13", **kw})
+                              "plugin": None, "spec": ["adopted"], "max_min": 120, "campaign": "cmp-13",
+                              "device": "cuda", "threads": 0, "on": run.CPU_NODE, "mem_gb": 96, **kw})
     return run.submit_command(a, run.LOCAL_DATA)
 
 
@@ -40,6 +41,14 @@ def test_submit_is_a_research_run_on_the_node_under_a_lease():
     env = dict(cmd[i + 1].split("=", 1) for i, x in enumerate(cmd) if x == "--env")
     assert env["PPL_GPUS"] == "1" and env["PPL_ARGS"].endswith("--gpus 1 --seeds 0,1,2 adopted")
     assert "--model llama-3.1-8b --set c4 --ctx 2048" in env["PPL_ARGS"]
+
+
+def test_a_cpu_submit_is_a_research_run_on_a_cpu_node_with_no_lease():
+    cmd = submit(device="cpu", threads=32, on="vy-nebius-cpu-4", mem_gb=256)
+    assert cmd[:4] == ["research", "run", "--on", "vy-nebius-cpu-4"] and cmd[-3:] == ["--", "bash", "benchmarks/ppl/cpu_job.sh"]
+    assert cmd[cmd.index("--mem-gb") + 1] == "256" and "--mem-wait" in cmd
+    env = dict(cmd[i + 1].split("=", 1) for i, x in enumerate(cmd) if x == "--env")
+    assert env == {"PPL_ARGS": "--model llama-3.1-8b --set c4 --ctx 2048 --seeds 0,1,2 --device cpu --threads 32 adopted"}
 
 
 def test_70b_leases_two_gpus_and_never_more():

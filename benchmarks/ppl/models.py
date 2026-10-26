@@ -22,6 +22,8 @@ MODELS = {
                       "tokenizer": "llama3", "gpus": 2},
     "glm-5.3": {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42",
                 "tokenizer": "glm5", "gpus": 1, "pin": "glm-5.3.json", "max_ctx": 2048},
+    "deepseek-v2-lite": {"repo": "deepseek-ai/DeepSeek-V2-Lite", "revision": "604d5664dddd88a0433dbae533b7fe9472482de0",
+                         "tokenizer": "deepseek-v2", "gpus": 1},
 }
 
 

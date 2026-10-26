@@ -1,9 +1,11 @@
 """The perplexity bench: `verity bench ppl COMMAND ...` (README.md says what it measures and how).
 
     run.py eval --model M --set c4|wikitext2 --ctx 2048|8192|32768 --out DIR [--gpus N] [--seeds 0,1,2]
-                [--data DIR] [--hf-home DIR] [--plugin FILE.py]... SPEC...     on a GPU node: one results.json
+                [--device cuda|cpu [--threads T]] [--data DIR] [--plugin FILE.py]... SPEC...
+                                                                            on a GPU (or CPU) node: one results.json
     run.py submit (eval's flags but --out) [--max-min M] [--dry-run]        the same as a `research run` on vy-nebius-2
-                                                                            (job.sh), the datasets sent with it
+                                                                            (job.sh), the datasets sent with it; with
+                  [--on NODE] [--mem-gb G]                                  --device cpu on a CPU node (cpu_job.sh)
     run.py report RESULTS.json...                                           the tables
     run.py baseline [RESULTS.json...]                                       the locked baseline (against new results)
     run.py baseline --lock RESULTS.json...                                  lock those points in baseline.json
@@ -43,6 +45,7 @@ DATA = Path(os.environ.get("PPL_DATA", "/workspace/ppl-data"))
 LOCAL_DATA = Path.home() / ".cache" / "verity-ppl"
 HF_HOME = Path(os.environ.get("HF_HOME", "/workspace/hf"))
 NODE = "vy-nebius-2"
+CPU_NODE = "vy-nebius-cpu-2"
 
 
 def load_plugins(paths) -> None:
@@ -132,11 +135,17 @@ def cmd_eval(a) -> int:
     needs_cal = any(x.needs_calib for x in arms)
     ids, cal, wrec = build_windows(a.model, a.set, a.ctx, Path(a.data), needs_cal)
     snap = snapshot(a.model)
-    gpus = a.gpus or models.get(a.model)["gpus"]
-    devs = visible_gpus()
-    if len(devs) < gpus:
-        raise SystemExit(f"{gpus} GPUs asked, {len(devs)} visible")
-    parts = __import__("engine").shards(len(ids), gpus)
+    if a.device == "cpu":
+        parts = __import__("engine").shards(len(ids), len(ids))
+        threads = a.threads or max(1, (os.cpu_count() or 1) // len(parts))
+        devs = [""] * len(parts)
+    else:
+        gpus = a.gpus or models.get(a.model)["gpus"]
+        devs = visible_gpus()
+        if len(devs) < gpus:
+            raise SystemExit(f"{gpus} GPUs asked, {len(devs)} visible")
+        parts = __import__("engine").shards(len(ids), gpus)
+        threads = 0
     t0 = time.time()
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -147,9 +156,11 @@ def cmd_eval(a) -> int:
         for i, part in enumerate(parts):
             task = {"snapshot": str(snap), "ids": str(tmp / "ids.npy"), "cal": str(tmp / "cal.npy") if cal is not None else None,
                     "windows": part, "arms": a.spec, "plugins": a.plugin or [], "seeds": list(seeds),
-                    "out": str(tmp / f"shard{i}"), "device": "cuda"}
+                    "out": str(tmp / f"shard{i}"), "device": a.device, "threads": threads}
             (tmp / f"task{i}.json").write_text(json.dumps(task))
             env = {**os.environ, "CUDA_VISIBLE_DEVICES": devs[i]}
+            if threads:
+                env.update({v: str(threads) for v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS")})
             log = open(out / f"shard{i}.log", "w")
             procs.append((subprocess.Popen([sys.executable, str(HERE / "run.py"), "_shard", str(tmp / f"task{i}.json")],
                                            env=env, stdout=log, stderr=subprocess.STDOUT), log))
@@ -211,6 +222,16 @@ def merge(a, arms, seeds, wrec, shard_out, nll, seconds, n_gpus) -> dict:
     return res
 
 
+def cpu_kernels(device: str):
+    """On the CPU, SDPA's math kernel: its flash kernel is not deterministic there, and the HF reference gate compares
+    two calls bit for bit (oneDNN's bf16 GEMM is, on the AMD nodes; it is not on an AMX VM: tests/conftest.py)."""
+    import contextlib
+    if device != "cpu":
+        return contextlib.nullcontext()
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+    return sdpa_kernel(SDPBackend.MATH)
+
+
 def cmd_shard(task_path: str) -> int:
     import numpy as np
     import engine
@@ -219,8 +240,12 @@ def cmd_shard(task_path: str) -> int:
     arms = arms_for(t["arms"])
     ids = np.load(t["ids"])[t["windows"]]
     cal = np.load(t["cal"]) if t["cal"] else None
-    r = engine.evaluate(Path(t["snapshot"]), ids, t["windows"], arms, tuple(t["seeds"]), cal, device=t["device"],
-                        log=lambda s: print(s, flush=True))
+    if t.get("threads"):
+        import torch
+        torch.set_num_threads(t["threads"])
+    with cpu_kernels(t["device"]):
+        r = engine.evaluate(Path(t["snapshot"]), ids, t["windows"], arms, tuple(t["seeds"]), cal, device=t["device"],
+                            log=lambda s: print(s, flush=True))
     np.savez(t["out"] + ".npz", **{k.replace("/", "|"): v for k, v in r.pop("nll").items()})
     Path(t["out"] + ".json").write_text(json.dumps(r))
     return 0
@@ -230,6 +255,14 @@ def submit_command(a, data: Path) -> list[str]:
     """The `research run` that runs this eval on vy-nebius-2 under a gpu-lease of the model's GPUs, from the
     checkout's pushed commit, with the datasets (staged under `data`) sent along. A plugin or SPEC file must be in
     the commit (paths relative to the repository's root)."""
+    sends = [x for d in windows.DATASETS.values() for x in ("--send", str(Path(data) / d["file"]))]
+    if a.device == "cpu":
+        flags = f"--model {a.model} --set {a.set} --ctx {a.ctx} --seeds {a.seeds} --device cpu --threads {a.threads}"
+        flags += "".join(f" --plugin {shlex.quote(p)}" for p in a.plugin or [])
+        flags += " " + " ".join(shlex.quote(s) for s in a.spec)
+        return ["research", "run", "--on", a.on, "--project", "verity", "--campaign", a.campaign, "--source", str(ROOT),
+                "--cwd", "source", "--custody-ttl", "12h", "--mem-gb", str(a.mem_gb), "--mem-wait", "1800", *sends,
+                "--env", f"PPL_ARGS={flags}", "--", "bash", "benchmarks/ppl/cpu_job.sh"]
     gpus = a.gpus or models.get(a.model)["gpus"]
     if gpus > 2:
         raise SystemExit("a run leases at most 2 GPUs")
@@ -237,7 +270,6 @@ def submit_command(a, data: Path) -> list[str]:
     flags += "".join(f" --plugin {shlex.quote(p)}" for p in a.plugin or [])
     flags += " " + " ".join(shlex.quote(s) for s in a.spec)
     who = os.environ.get("GPU_LEASE_WHO", "ppl-bench")
-    sends = [x for d in windows.DATASETS.values() for x in ("--send", str(Path(data) / d["file"]))]
     return ["research", "run", "--on", NODE, "--project", "verity", "--campaign", a.campaign, "--source", str(ROOT),
             "--cwd", "source", "--custody-ttl", "12h", *sends, "--env", f"GPU_LEASE_WHO={who}",
             "--env", f"PPL_GPUS={gpus}", "--env", f"PPL_MAX_MIN={a.max_min}", "--env", f"PPL_ARGS={flags}",
@@ -364,6 +396,9 @@ def main(argv: list[str]) -> int:
         q.add_argument("--set", required=True, choices=methodology.EVAL_SETS)
         q.add_argument("--ctx", required=True, type=int, choices=sorted(methodology.CONTEXTS))
         q.add_argument("--gpus", type=int, default=0, help="GPUs (default: the model's in models.py)")
+        q.add_argument("--device", choices=("cuda", "cpu"), default="cuda",
+                       help="cpu: a process per group of REF_BATCH windows, --threads each")
+        q.add_argument("--threads", type=int, default=0, help="with --device cpu: threads per shard (default: CPUs / shards)")
         q.add_argument("--seeds", default=",".join(map(str, methodology.SEEDS)))
         q.add_argument("--plugin", action="append", help="a .py file registering more steps")
         q.add_argument("spec", nargs="+")
@@ -376,6 +411,8 @@ def main(argv: list[str]) -> int:
     run_flags(q, False)
     q.add_argument("--data", default=str(LOCAL_DATA), help="where the datasets are staged to be sent")
     q.add_argument("--max-min", type=int, default=120)
+    q.add_argument("--on", default=CPU_NODE, help="with --device cpu: the CPU node")
+    q.add_argument("--mem-gb", type=int, default=96, help="with --device cpu: the memory the run reserves")
     q.add_argument("--campaign", default="cmp-13")
     q.add_argument("--dry-run", action="store_true")
     q = sub.add_parser("report")

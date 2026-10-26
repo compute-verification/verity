@@ -2,8 +2,8 @@
 `LlamaDecoderLayer` / `Qwen2DecoderLayer` compute them with SDPA attention (the engine's check window compares them bit
 for bit on every layer when transformers is importable). The layer's linears and attention dispatch to an arm's chains;
 with no arm they are the bf16 reference: `F.linear`, and `F.scaled_dot_product_attention(is_causal=True,
-enable_gqa=True)`, PyTorch's SDPA, as HF's `sdpa_attention_forward` calls it. GLM-5.3's layers are `glm.py`'s
-(`make_layer`)."""
+enable_gqa=True)`, PyTorch's SDPA, as HF's `sdpa_attention_forward` calls it. GLM-5.3's layers are `glm.py`'s and
+DeepSeek-V2's `dsv2.py`'s (`make_layer`)."""
 from __future__ import annotations
 
 import json
@@ -23,12 +23,17 @@ from matmul import MM, Run, Softmaxed, run_chain
 #: F8_E4M3 is read as its bytes: a block-FP8 layer decodes them with their scales (`glm.dequant`)
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32, "I64": torch.int64, "I32": torch.int32,
           "I8": torch.int8, "U8": torch.uint8, "F8_E4M3": torch.uint8}
-ARCHS = {"LlamaForCausalLM": "llama", "Qwen2ForCausalLM": "qwen2", "GlmMoeDsaForCausalLM": "glm_moe_dsa"}
+ARCHS = {"LlamaForCausalLM": "llama", "Qwen2ForCausalLM": "qwen2", "GlmMoeDsaForCausalLM": "glm_moe_dsa",
+         "DeepseekV2ForCausalLM": "deepseek_v2"}
 #: GLM-5.3's config fields its layers read (`glm.GlmLayer`)
 GLM_KEYS = ("q_lora_rank", "kv_lora_rank", "qk_nope_head_dim", "qk_rope_head_dim", "v_head_dim", "n_routed_experts",
             "num_experts_per_tok", "moe_intermediate_size", "n_group", "topk_group", "norm_topk_prob",
             "routed_scaling_factor", "scoring_func", "topk_method", "n_shared_experts", "mlp_layer_types", "index_topk",
             "hidden_act")
+#: DeepSeek-V2's config fields its layers read (`dsv2.Dsv2Layer`)
+DSV2_KEYS = ("q_lora_rank", "kv_lora_rank", "qk_nope_head_dim", "qk_rope_head_dim", "v_head_dim", "n_routed_experts",
+             "num_experts_per_tok", "moe_intermediate_size", "n_shared_experts", "first_k_dense_replace",
+             "moe_layer_freq", "topk_method", "scoring_func", "routed_scaling_factor", "hidden_act")
 #: a KV group's s x s work runs on all query rows at once while a (rep, s, s) float64 tensor is within ROWS_WHOLE bytes,
 #: else on chunks of ROWS_BYTES (32K), as attention.py
 ROWS_WHOLE, ROWS_BYTES = 2 ** 32, 2 ** 31
@@ -52,6 +57,8 @@ class Config:
     rope: dict
     #: GLM-5.3's own fields (`GLM_KEYS`); its head_dim is the RoPE slice's, qk_rope_head_dim, as HF's config sets it
     glm: dict = field(default_factory=dict)
+    #: DeepSeek-V2's own fields (`DSV2_KEYS`); its head_dim too is qk_rope_head_dim
+    dsv2: dict = field(default_factory=dict)
 
     @property
     def rep(self) -> int:
@@ -70,10 +77,12 @@ class Config:
         rope.setdefault("rope_type", rope.get("type", "default"))
         heads = c["num_attention_heads"]
         glm = {k: c[k] for k in GLM_KEYS} if arch == "glm_moe_dsa" else {}
-        head_dim = glm["qk_rope_head_dim"] if glm else c.get("head_dim") or c["hidden_size"] // heads
+        dsv2 = {k: c.get(k) for k in DSV2_KEYS} if arch == "deepseek_v2" else {}
+        mla = glm or dsv2
+        head_dim = mla["qk_rope_head_dim"] if mla else c.get("head_dim") or c["hidden_size"] // heads
         return Config(arch, c["hidden_size"], c["num_hidden_layers"], heads, c.get("num_key_value_heads", heads),
                       head_dim, c["intermediate_size"], c["rms_norm_eps"], c["vocab_size"],
-                      bool(c.get("tie_word_embeddings", False)), arch == "qwen2", rope, glm)
+                      bool(c.get("tie_word_embeddings", False)), arch == "qwen2", rope, glm, dsv2)
 
 
 # ---------------------------------------------------------------- weights
@@ -196,6 +205,10 @@ def inv_freq(cfg: Config) -> torch.Tensor:
 
 
 def rotary(cfg: Config, T: int, device, dtype=torch.bfloat16) -> tuple[torch.Tensor, torch.Tensor]:
+    """HF's cos and sin tables for T positions (DeepSeek-V2's: its complex table, and None; `dsv2.rotary`)."""
+    if cfg.arch == "deepseek_v2":
+        import dsv2
+        return dsv2.rotary(cfg, T, device)
     inv = inv_freq(cfg).to(device)
     pos = torch.arange(T, device=device)[None]
     inv_e = inv[None, :, None].expand(1, -1, 1).to(dtype=torch.float, device=device)
@@ -268,8 +281,10 @@ class Layer:
     def edited_attention(self, query, key, value, run: Run) -> torch.Tensor:
         """Per KV group, in FP32: S = Q K^T through the arm's attention chain, the causal softmax (or the chain's own,
         when it returns `Softmaxed`), O = P V through it; query rows in chunks past 8K (the rows are independent). On the
-        check window, the attention's relative error against FP32 attention on the same inputs (a diagnostic)."""
+        check window, the attention's relative error against FP32 attention on the same inputs (a diagnostic). V may be
+        narrower than Q and K (MLA's): Q K^T's steps see `d` Q's width, P V's V's."""
         b, H, s, d = query.shape
+        dv = value.shape[-1]
         if b != 1:
             raise ValueError("an arm's attention runs one window at a time")
         G = key.shape[1]
@@ -278,13 +293,13 @@ class Layer:
         qk_steps, pv_steps = run.steps_for("qk", "qk"), run.steps_for("pv", "pv")
         keys = torch.arange(s, device=dev)
         rows = row_chunk(rep, s)
-        out = torch.empty(b, s, H, d, dtype=query.dtype, device=dev)
+        out = torch.empty(b, s, H, dv, dtype=query.dtype, device=dev)
         for g in range(G):
             qg = query[0, g * rep:(g + 1) * rep].float()
             kg, vg = key[0, g].float(), value[0, g].float()
-            ref = torch.empty(rep, s, d, device=dev) if run.checking else None
+            ref = torch.empty(rep, s, dv, device=dev) if run.checking else None
             cache: dict = {}
-            o = torch.empty(rep, s, d, device=dev)
+            o = torch.empty(rep, s, dv, device=dev)
             for r0 in range(0, s, rows):
                 r1 = min(s, r0 + rows)
                 causal = keys[None, :] <= torch.arange(r0, r1, device=dev)[:, None]
@@ -295,9 +310,10 @@ class Layer:
                 extra = {"group": g, "rows": (r0, r1), "causal": causal, "rep": rep, "s": s, "d": d}
                 scores = run_chain(qk_steps, MM("qk", "qk", run, qg[:, r0:r1], kg, cache=cache, extra=extra))
                 if isinstance(scores, Softmaxed):
-                    p, pv_extra = scores.p, {**extra, **scores.extra}
+                    p, pv_extra = scores.p, {**extra, **scores.extra, "d": dv}
                 else:
-                    p, pv_extra = torch.softmax((scores * self.scaling).masked_fill(~causal, float("-inf")), dim=-1), extra
+                    p = torch.softmax((scores * self.scaling).masked_fill(~causal, float("-inf")), dim=-1)
+                    pv_extra = {**extra, "d": dv}
                 del scores
                 o[:, r0:r1] = run_chain(pv_steps, MM("pv", "pv", run, p, vg, cache=cache, extra=pv_extra)).float()
                 del pv_extra
@@ -352,6 +368,9 @@ def make_layer(cfg: Config, li: int, tensors: dict, device):
     if cfg.arch == "glm_moe_dsa":
         import glm
         return glm.GlmLayer(cfg, li, tensors, device)
+    if cfg.arch == "deepseek_v2":
+        import dsv2
+        return dsv2.Dsv2Layer(cfg, li, tensors, device)
     return Layer(cfg, li, tensors, device)
 
 
@@ -360,6 +379,9 @@ def check_reference(gates, cfg: Config, snapshot: Path, layer: Layer, h: torch.T
     if cfg.arch == "glm_moe_dsa":
         import glm
         return glm.check_reference(gates, cfg, snapshot, layer, h, cos, sin, out)
+    if cfg.arch == "deepseek_v2":
+        import dsv2
+        return dsv2.check_reference(gates, cfg, snapshot, layer, h, cos, sin, out)
     hf = hf_layer(cfg, snapshot, layer.li, layer)
     if hf is None:
         gates.skip("hf_reference", "transformers is not importable")

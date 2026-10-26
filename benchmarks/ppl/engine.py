@@ -69,10 +69,12 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
             if use_calib:
                 amax: dict = {}
                 keys: list = []
+                groups = getattr(layer, "groups", GROUP)
+                first = set(getattr(layer, "first", FIRST).values())
 
                 def collect(name, x):
-                    if name in FIRST.values():
-                        g, a = GROUP[name], x.abs().amax(0)
+                    if name in first:
+                        g, a = groups[name], x.abs().amax(0)
                         amax[g] = torch.maximum(amax[g], a) if g in amax else a
                     elif name == "keys":
                         keys.append(x)

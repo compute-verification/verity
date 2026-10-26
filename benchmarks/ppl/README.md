@@ -269,6 +269,15 @@ E4M3 weights, activations per token and group of 128), and `int8-channel127-v3` 
 recipe `verity-int8-channel127/v3` makes them: each weight's row codes from its exact float64 dequant (`int8.exact`),
 the LM head int8 too, and kv_b_proj bf16.
 
+DeepSeek-V2-Lite (`dsv2.py`) is HF's `DeepseekV2DecoderLayer` op for op: MLA with no q LoRA (16 heads of 192-wide
+keys, 128-wide values), YaRN RoPE as complex numbers on interleaved pairs with its mscale² on the softmax scale, layer 0
+dense and the rest 64 routed experts (greedy softmax top-6) plus two shared, eager experts, checked by `hf_reference`.
+Arms reach every linear, each routed expert's on its rows, and attention, with Q and K zero-padded to 256 for
+`rotate`'s Hadamard. SmoothQuant's groups are the layer's: one m per input its linears share (q_proj with
+kv_a_proj_with_mqa, the shared experts' gate and up with every routed expert's gate_up), and a routed expert no
+calibration token chose is not smoothed. It is the V4 proxy's model: `scale_error` scales the error of the chain after
+it by a factor per matmul, so its matmuls carry the per-matmul error another model's shapes would.
+
 The engine (`engine.py`, tonight's layer-wise evaluation) reads one layer's weights at a time from the safetensors with
 its own reader. Every stream of every window, the reference, calibration and each (arm, seed), goes through that layer
 before the next is read. So a model of any size fits one GPU, every arm shares one pass over the weights, and
@@ -282,6 +291,13 @@ reading clocks and never setting them. The run's `out/` holds `results.json` (sc
 the perplexity, mean NLL and per-window NLLs, the gates, divergence from the reference), `nll.npz` (every scored
 token's NLL), `table.md`, the shard logs and `gpu.txt`. The run publishes itself as an Attempt; cite it by run id, and
 put findings about it on labels (`research data label`).
+
+`run.py submit --device cpu [--threads T] [--on NODE] [--mem-gb G]` runs it on a CPU node instead (vy-nebius-cpu-2 by
+default; `cpu_job.sh`, a venv of CPU torch and transformers in scratch, the snapshot read from the node's HF cache
+offline): one process per group of 4 windows, T threads each, SDPA's math kernel (its flash kernel is not deterministic
+on the CPU). oneDNN's bf16 and int8 GEMMs are exact and deterministic on vy-nebius-cpu-2's AMD cores at any thread
+count (r20261026-201043-5405), which `hf_reference` and `product_exact` check on every run; they are not on an AMX
+agent VM.
 
 ## Baseline
 
@@ -309,7 +325,7 @@ point's runs. The floor covers what moves a deterministic arm between harnesses:
 
 ## Tests
 
-`uv run tools/verity/check/suites.py benchmarks/ppl` runs the CPU tests on tiny random Llama, Qwen2 and block-FP8 GLM models: spec
+`uv run tools/verity/check/suites.py benchmarks/ppl` runs the CPU tests on tiny random Llama, Qwen2, block-FP8 GLM and DeepSeek-V2 models: spec
 parsing, the window recipe and lock, the significance rule, the engine's bf16 stream against an independent float64
 forward, every gate on the adopted arms, gates that fail on sabotage reporting nothing, sharding, seeds, and HF parity
 where transformers is importable.
