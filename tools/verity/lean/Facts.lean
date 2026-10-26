@@ -29,9 +29,11 @@ judgement; `check.py` holds the policy.
 - `spec_definitions`: the definitions and inductive types the audited modules under `spec` declare in their source (with a
   declaration range: what Lean generates for them has none), projections and internal names aside, each with whether it
   is a statement (`def G : Prop`) and whether it is a predicate (its type, past its binders, is `Prop`).
-- each pin's `body`: the constant its statement applies past its `∀` and `∃` binders (`head`), and whether a `¬` stands
-  before that application (`negated`), read as written: nothing is unfolded; and its `conclusion`, split at `∧`, with
-  what each conjunct applies (`conclusionOf`).
+- each pin's `body`: the constant its statement applies past its `∀` and `∃` binders (`head`), whether a `¬` stands
+  before that application (`negated`) and the binders on the way (`binders`: `∀`, `→` for a proposition, `∃`), read as
+  written: nothing is unfolded; and its `conclusion`, split at `∧`, with what each conjunct applies (`conclusionOf`). A
+  statement that is a definition under `meaning` applied under binders has the same read of it with that definition
+  unfolded once (`lifted`, `liftOf`), as `shape` reads it.
 - `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
@@ -739,18 +741,22 @@ partial def premisesOf (env : Environment) (meaning premises : Array Name) (modu
       return ps)
   return out
 
-/-- The constant a statement applies past its `∀` and `∃` binders, and whether `¬` stands before it. -/
-partial def bodyHead (t : Expr) : MetaM (Option Name × Bool) :=
-  forallTelescope t fun _ b => do
+/-- The constant a statement applies past its `∀` and `∃` binders, whether `¬` stands before it, and the binders passed on
+the way, in order: `∀` for a binder that isn't a proposition, `→` for one that is, `∃` for an existential. -/
+partial def bodyHead (t : Expr) : MetaM (Option Name × Bool × Array String) :=
+  forallTelescope t fun xs b => do
+    let kinds ← xs.mapM fun x => do return if ← isProp (← inferType x) then "→" else "∀"
     let b := b.consumeMData
     if b.isAppOfArity ``Exists 2 then
       match b.appArg!.consumeMData with
-      | .lam n ty body bi => withLocalDecl n bi ty fun x => bodyHead (body.instantiate1 x)
-      | _ => return (none, false)
+      | .lam n ty body bi => withLocalDecl n bi ty fun x => do
+        let (h, neg, ks) ← bodyHead (body.instantiate1 x)
+        return (h, neg, kinds.push "∃" ++ ks)
+      | _ => return (none, false, kinds)
     else if b.isAppOfArity ``Not 1 then
-      return (b.appArg!.consumeMData.getAppFn.constName?, true)
+      return (b.appArg!.consumeMData.getAppFn.constName?, true, kinds)
     else
-      return (b.getAppFn.constName?, false)
+      return (b.getAppFn.constName?, false, kinds)
 
 /-- A statement's conclusion past its `∀`, `→` and `∃` binders, split at its `∧`s, each conjunct again past its own: for
 each conjunct its head constant (`head`), the definitions declared under `meaning` it applies itself (`defs`, followed no
@@ -816,10 +822,15 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
         let some h := (p.getObjValAs? String "head").toOption | return p
         return p.setObjVal! "unfolds" (← unfoldsOf env meaning premises listed built moduleOf h.toName))) <|> pure Json.null),
     ("body", ← (do
-      let (h, neg) ← bodyHead ci.type
-      let (cs, absurd) ← conclusionOf env meaning ci.type
-      return Json.mkObj [("head", toJson (h.map toString)), ("negated", toJson neg), ("conclusion", toJson cs),
-        ("absurd", toJson absurd)]) <|> pure Json.null),
+      let read (t : Expr) : MetaM (List (String × Json)) := do
+        let (h, neg, ks) ← bodyHead t
+        let (cs, absurd) ← conclusionOf env meaning t
+        return [("head", toJson (h.map toString)), ("negated", toJson neg), ("binders", toJson ks),
+          ("conclusion", toJson cs), ("absurd", toJson absurd)]
+      let lifted ← (do
+        let some (_, t) := liftOf env meaning ci.type | return Json.null
+        return Json.mkObj (← read (← plain t))) <|> pure Json.null
+      return Json.mkObj ((← read ci.type) ++ [("lifted", lifted)])) <|> pure Json.null),
     ("type_hash", toJson (hex ci.type.hash)),
     ("reads", toJson (rs.1.map readJson)),
     ("outside", toJson (rs.2.map fun (c, m) => #[c.toString, m.toString]))]

@@ -55,6 +55,11 @@ environment extension loaded, so none of the package's code runs), and replays t
                  checked as they are until `--update` rewrites them); a record written before guarantees were called
                  that holds them as `pins`, and is read so (`as_guarantees`); or an entry has no `owner`, the handle
                  (`@lane`) of the lane that answers for it
+    witnesses    a guarantee that states what an acceptance means (a property of a function's acceptance, or a statement
+                 reading a claim or the one theorem's vocabulary) names no `honest` lemma (its hypotheses hold at the
+                 honest deployed instance) and `nontrivial` lemma (its conclusion fails at a verifier that accepts
+                 everything) under `witnesses`, or one of them doesn't have that form (`witness_failures`, LEAN-66),
+                 unless `unwitnessed`, which only shrinks, lists it with its statement's hash
     reads        a definition a guarantee's statement reads lies outside the spec (the `layers` prefixes) of its package
                  and of the packages it requires by path, and outside a pinned dependency, unless a `reads_exempt`
                  prefix lists its module with a reason (an entry that exempts nothing fails too); or it lies in a spec
@@ -199,7 +204,8 @@ FIXTURES = HERE / "tests" / "fixtures"
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
-ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "compile_time",
+ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "witnesses",
+         "unwitnessed", "compile_time",
          "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
@@ -1043,6 +1049,18 @@ def renamed(name: str, moved: dict[str, str]) -> str:
     return name
 
 
+def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
+    """The policy's `witnesses` and `unwitnessed` with every guarantee and theorem they name `renamed` by ``moved``."""
+    out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
+    if isinstance(ws, dict):
+        out["witnesses"] = {renamed(g, moved): {k: [renamed(n, moved) if isinstance(n, str) else n for n in v]
+                                                if isinstance(v, list) else renamed(v, moved) if isinstance(v, str) else v
+                                                for k, v in w.items()} if isinstance(w, dict) else w for g, w in ws.items()}
+    if isinstance(allow, dict):
+        out["unwitnessed"] = {renamed(g, moved): h for g, h in allow.items()}
+    return out
+
+
 def move_errors(moved: dict[str, str]) -> list[str]:
     """Why ``moved`` cannot be read back: two old names moved to one new name, a name moved to itself, or a new name under
     another new name whose old names are not nested the same way (the build's names would map back to the wrong ones)."""
@@ -1222,7 +1240,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     for n in sorted(set(listed_escapes) - set(found)):
         fails.append(Failure("escape.stale", n, f"escape: {n} is listed under `escapes` but is not one; remove the entry"))
     fails += verifier_failures(policy.get("verifier"), facts.get("verifier"), update)
-    fails += claim_failures(policy, facts)
+    fails += claim_failures(policy, facts) + witness_failures(policy, facts, own)
+    witnesses = claim_witnesses(policy)
     modules = set(facts["modules"])
     exempt = policy.get("exempt", {})
     for m, rel in sorted(files.items()):
@@ -1309,7 +1328,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                 fails.append(Failure("guarantees.unnamed-hypothesis", name, f"guarantees: {name} assumes ({h['binder']} : "
                                      f"{h['type']}), a closed Prop that is not a named assumption: a Prop constant listed "
                                      f"under `assumptions`"))
-        if name.split(".")[0] in policy.get("four_names", []) and not four_named(name, f):
+        if name.split(".")[0] in policy.get("four_names", []) and name not in witnesses and not four_named(name, f):
             fails.append(Failure("four-names", name, f"four names: {name} is a guarantee of {name.split('.')[0]}, which "
                                  f"`four_names` lists, so it is stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a "
                                  f"definition of a `Guarantees` module (`check.py --lift` writes it), or is not a guarantee"))
@@ -1361,6 +1380,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     out = dict(policy)
     if kept:
         out["guarantees"], out["reads"] = kept, now_reads
+    if update and isinstance(policy.get("unwitnessed"), dict):
+        out["unwitnessed"] = unwitnessed_kept(policy, facts, kept)
     if update and (records or "assumptions" in policy):
         out["assumptions"] = records
     if update and policy.get("verifier") and facts.get("verifier") is not None:
@@ -1426,10 +1447,31 @@ def verifier_failures(rule: dict | None, found: dict | None, update: bool = Fals
 
 
 def claim_witnesses(policy: dict) -> set[str]:
-    """The theorems `claims.witnesses` names, which the claims rule holds to their form instead of `shape`."""
+    """The theorems `claims.witnesses` and `witnesses` name, which the claims rule and the witnesses rule hold to their form
+    instead of `shape` and `four_names`, and which are no guarantee the witnesses rule holds to witnesses of their own."""
     ws = (policy.get("claims") or {}).get("witnesses") or {}
+    gs = policy.get("witnesses") or {}
     return {n for w in ws.values() if isinstance(w, dict)
-            for n in [w.get("fails"), *(w.get("meets") if isinstance(w.get("meets"), list) else [])] if isinstance(n, str)}
+            for n in [w.get("fails"), *(w.get("meets") if isinstance(w.get("meets"), list) else [])] if isinstance(n, str)} | \
+        {n for w in (gs.values() if isinstance(gs, dict) else []) if isinstance(w, dict)
+         for n in [w.get("nontrivial"), *(w.get("honest") if isinstance(w.get("honest"), list) else [])] if isinstance(n, str)}
+
+
+def witness_pin(rule: str, n: str, of: str, role: str, policy: dict, facts: dict) -> tuple[dict | None, list[str]]:
+    """The facts of ``n``, ``of``'s ``role`` witness under ``rule`` (`claims` or `witnesses`), with its `body`, when it is a
+    theorem listed under `guarantees` (so its record shows in the landing DM); else None and why not."""
+    if n not in policy.get("guarantees", {}):
+        return None, [Failure(f"{rule}.unlisted-witness", n, f"{rule}: {n}, {of}'s `{role}` witness, is not under "
+                              f"`guarantees`: list it there, so its record shows in the landing DM")]
+    pin = facts["pins"].get(n, {"kind": "missing"})
+    if (k := pin.get("kind")) != "theorem":
+        what = "not in the build" if k == "missing" else f"a {k}"
+        return None, [Failure(f"{rule}.witness-not-a-theorem", n, f"{rule}: {n}, {of}'s `{role}` witness, is {what}: a "
+                              f"witness is a theorem")]
+    if not isinstance(pin.get("body"), dict):
+        return None, [Failure(f"{rule}.no-body", n, f"{rule}: `Facts.lean` reported no body for {n}; is the audit tool "
+                              f"older than the policy?")]
+    return pin, []
 
 
 def claim_failures(policy: dict, facts: dict) -> list[str]:
@@ -1452,7 +1494,7 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
         return [Failure("claims.form", None, "claims: `claims` is {modules: [module prefix], witnesses: {claim: {fails, meets: "
                         "[...]}}, not: {claim: why}}")]
     fails, ws, nots = [], rule.get("witnesses", {}), rule.get("not", {})
-    assumptions, guarantees = policy.get("assumptions", {}), policy.get("guarantees", {})
+    assumptions = policy.get("assumptions", {})
     preds = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
              if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"])}
     found = {c: m for c, m in preds.items() if c not in assumptions}
@@ -1477,21 +1519,12 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
                                  f"[theorem, one per deployed record]}}"))
             continue
         for role, n in [("fails", w["fails"]), *(("meets", n) for n in w["meets"])]:
-            if n not in guarantees:
-                fails.append(Failure("claims.unlisted-witness", n, f"claims: {n}, {c}'s `{role}` witness, is not under "
-                                     f"`guarantees`: list it there, so its record shows in the landing DM"))
+            pin, why = witness_pin("claims", n, c, role, policy, facts)
+            fails += why
+            if pin is None:
                 continue
-            pin = facts["pins"].get(n, {"kind": "missing"})
-            if (k := pin.get("kind")) != "theorem":
-                what = "not in the build" if k == "missing" else f"a {k}"
-                fails.append(Failure("claims.witness-not-a-theorem", n, f"claims: {n}, {c}'s `{role}` witness, is {what}: a "
-                                     f"witness is a theorem"))
-                continue
-            body = pin.get("body")
-            if not isinstance(body, dict):
-                fails.append(Failure("claims.no-body", n, f"claims: `Facts.lean` reported no body for {n}; is the audit tool "
-                                     f"older than the policy?"))
-            elif role == "fails" and not (body.get("negated") and body.get("head") == c):
+            body = pin["body"]
+            if role == "fails" and not (body.get("negated") and body.get("head") == c):
                 fails.append(Failure("claims.fails-form", n, f"claims: {n} does not state that {c} fails: past its ∀ and ∃ "
                                      f"binders its statement must be `¬ {c} …`, and it is "
                                      f"{'¬ ' if body.get('negated') else ''}{body.get('head') or 'no application'} …"))
@@ -1525,6 +1558,232 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
         if not k.get("defs"):
             return f"has a conjunct ({head} …) that applies no definition under `meaning` (`True`, or a fact of Init or Mathlib alone)"
     return None
+
+
+#: beside a property of a function's acceptance, what puts a guarantee under the witnesses rule (`witness_scope`): its
+#: statement reads a definition of a module with this component, a claim (what an acceptance means), or of a module under
+#: `SCOPE_MODULES`, the one theorem's vocabulary (`Verity.Soundness` and its subprotocols' targets)
+SCOPE_COMPONENT = "Claims"
+SCOPE_MODULES = ("Properties.Verity",)
+
+
+def accepted(policy: dict, name: str) -> list[str]:
+    """The functions whose acceptance the guarantee ``name`` is a property of: its `shape.properties` entry's, or its
+    conjuncts', with the outcome `accept`."""
+    entry = ((policy.get("shape") or {}).get("properties") or {}).get(name)
+    out = []
+    for e in ((entry.get("conjuncts") or [entry]) if isinstance(entry, dict) else []):
+        if isinstance(e, dict) and e.get("function") and e.get("outcome", "accept") == "accept":
+            out += [f for f in ([e["function"]] if isinstance(e["function"], str) else e["function"]) if f not in out]
+    return out
+
+
+def witness_scope(name: str, policy: dict, pin: dict) -> str | None:
+    """Why the guarantee ``name`` (its facts ``pin``) states what an acceptance means, so the witnesses rule holds it
+    (`witness_failures`), or None: it is a property of a function's acceptance (`accepted`), or its statement reads a
+    claim (a definition of a module with a `SCOPE_COMPONENT` component) or the one theorem's vocabulary (`SCOPE_MODULES`).
+    A guarantee with no such read is about something else (a bound on a hash, a count, a device), where a verifier that
+    accepts everything means nothing."""
+    if fns := accepted(policy, name):
+        return f"a property of {' or '.join(fns)} accepting"
+    for r in sorted(pin.get("reads") or [], key=lambda r: r.get("name", "")):
+        m = r.get("module") or ""
+        if SCOPE_COMPONENT in m.split("."):
+            return f"it reads the claim {parent(r['name'])}"
+        if under(SCOPE_MODULES, m):
+            return f"it reads {parent(r['name'])}, the one theorem's vocabulary"
+    return None
+
+
+def statement_read(pin: dict) -> dict:
+    """A statement as the witnesses rule reads it (`Facts.lean`'s `body`): with a lifted definition unfolded once (`lifted`)
+    when it is one, as `shape` reads it."""
+    body = pin.get("body") or {}
+    return body.get("lifted") or body
+
+
+def concluded(pin: dict) -> tuple[list[str], int]:
+    """The constants a guarantee's conclusion is headed by (`Facts.lean`'s `body` as written and `lifted`: the head past
+    its binders, its own definition among them, and each conjunct's), and how many `∃` stand before its conclusion
+    (`binders`, as `statement_read` reads it)."""
+    body, heads = pin.get("body") or {}, []
+    for b in (body, body.get("lifted") or {}):
+        for h in [b.get("head"), *(k.get("head") for k in b.get("conclusion") or [])]:
+            if h and h not in heads:
+                heads.append(h)
+    return heads, list(statement_read(pin).get("binders") or []).count("∃")
+
+
+def trailing_foralls(binders: list[str]) -> int:
+    """How many `∀` binders stand after a statement's last `∃` (`Facts.lean`'s `binders`), its `→` hypotheses aside."""
+    n = 0
+    for k in reversed(binders):
+        if k == "∃":
+            break
+        n += k == "∀"
+    return n
+
+
+def assumed_module(module: str, policy: dict) -> bool:
+    """Whether a premise headed by a constant of ``module`` is a named assumption that a witness may take as it stands: one
+    of an `Assumptions` module, or of a module under `shape.premises` (a device model, the actual circuit)."""
+    return "Assumptions" in module.split(".") or under((policy.get("shape") or {}).get("premises", []), module)
+
+
+def honest_premises(pin: dict, policy: dict, own: set[str]) -> list[str]:
+    """The premises of a guarantee (`Facts.lean`'s `premises`) that its honest lemmas conclude at the deployed instance:
+    each headed by a constant of a module this repository builds (``own``) outside `assumed_module`. A premise that can
+    never hold makes the guarantee say nothing, and only its honest lemma shows that it can."""
+    return sorted({p["head"] for p in pin.get("premises") or []
+                   if p.get("head") and (m := p.get("module") or "") in own and not assumed_module(m, policy)})
+
+
+def assumes(pin: dict, policy: dict, own: set[str]) -> list[str]:
+    """Why a witness assumes more than named assumptions, one line each: a hypothesis over its own inputs (it holds at
+    one instance), or a premise that is no `assumed_module` assumption (it is to be concluded, not taken)."""
+    out = [f"takes ({h['binder']} : {h['type']}), a hypothesis over its own inputs" for h in pin.get("hypotheses") or []
+           if not h.get("closed")]
+    out += [f"rests on {h}, no named assumption of an `Assumptions` or `shape.premises` module"
+            for h in honest_premises(pin, policy, own)]
+    return out
+
+
+def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
+    """The two witnesses the guarantee ``name`` (its facts ``pin``) needs, with the shape of each statement, and the entry
+    that names them: what a failure of the witnesses rule says to do."""
+    need, fns = honest_premises(pin, policy, own), accepted(policy, name)
+    heads, exists = concluded(pin)
+    head = statement_read(pin).get("head")
+    honest = " ∧ ".join([*(f"{p} d …" for p in need), *([f"{' or '.join(fns)} accepts d …"] if fns else [])]) or \
+        "each of its hypotheses at d"
+    nontrivial = f"{'∀ X…, ' if exists else ''}¬ {'(… ∨ …)' if head == 'Or' else head or '(its conclusion)'} at acceptAll …"
+    why = (", the break included, so a break that always holds can't make the bound say nothing" if head == "Or" else "") + (
+        f", each of the {exists} `∃` of its conclusion a `∀` before the `¬`, since a value the prover picks fits anything "
+        f"there" if exists else "")
+    entry = {name: {"honest": [f"{name}_honest"], "nontrivial": f"{name}_nontrivial"}}
+    return (f"prove `{name}_honest : {honest}` (its hypotheses hold at the honest deployed instance d, taking only named "
+            f"assumptions of an `Assumptions` or `shape.premises` module) and `{name}_nontrivial : {nontrivial}` (its "
+            f"conclusion is false for a verifier that accepts everything{why}), list both under `guarantees`, and write "
+            f"{json.dumps(entry, ensure_ascii=False)[1:-1]} under `witnesses` (LEAN-66)")
+
+
+def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
+    """Every guarantee that states what an acceptance means (`witness_scope`) has two witnesses beside it (`witnesses`:
+    {guarantee: {honest: [theorem], nontrivial: theorem}}, LEAN-66), each a guarantee, as a claim has its `fails` and
+    `meets` (`claim_failures`), so a statement that says nothing fails. Read as `statement_read` reads them:
+
+    - `honest`: together their conclusions conclude, at the honest deployed instance, each premise of the guarantee outside
+      a named assumption's module (`honest_premises`) and, for a property, its function's acceptance (`accepted`): a
+      conjunct headed by or applying each. Each says something (`vacuous_meets`) and assumes nothing beyond named
+      assumptions (`assumes`). A premise that can never hold fails here;
+    - `nontrivial`: past its `∀` and `∃` binders, `¬ C …` with `C` a head of the guarantee's conclusion (`concluded`), at
+      the verifier that accepts everything, with a `∀` before the `¬` for each `∃` of the conclusion; it assumes nothing
+      beyond named assumptions either. A conclusion with an `∃` the prover picks, and a bound whose break (`C ∨ Break`)
+      always holds, fail here.
+
+    A guarantee in scope without witnesses fails unless `unwitnessed` ({guarantee: its record's type hash}, the
+    guarantees in scope when the rule came) lists it with the hash of its statement as built: a new guarantee, and one
+    whose statement changed, carry both. `--update` keeps an entry only while its guarantee is in scope without witnesses
+    and says the same (re-keyed when moved or lifted, `unwitnessed_kept`) and adds none, so the list only shrinks
+    (`tests/test_lean_packages.py` holds its size)."""
+    ws, allow = policy.get("witnesses", {}), policy.get("unwitnessed", {})
+    if not isinstance(ws, dict) or not isinstance(allow, dict):
+        return [Failure("witnesses.form", None, "witnesses: `witnesses` is {guarantee: {honest: [theorem], nontrivial: "
+                        "theorem}} and `unwitnessed` {guarantee: its type hash}")]
+    guarantees, wit, fails = policy.get("guarantees", {}), claim_witnesses(policy), []
+    for g in sorted(set(ws) | set(allow)):
+        if g not in guarantees:
+            fails.append(Failure("witnesses.stale", g, f"witnesses: {'`witnesses`' if g in ws else '`unwitnessed`'} lists "
+                                 f"{g}, which is not a guarantee of this package; remove the entry"))
+    for g in sorted(guarantees):
+        pin = facts["pins"].get(g, {})
+        if g in wit or pin.get("kind") != "theorem":
+            continue
+        why = witness_scope(g, policy, pin)
+        if g in allow:
+            if g in ws:
+                fails.append(Failure("witnesses.unwitnessed-both", g, f"witnesses: {g} has its witnesses: remove its "
+                                     f"`unwitnessed` entry (the list only shrinks)"))
+            elif why is None:
+                fails.append(Failure("witnesses.unwitnessed-stale", g, f"witnesses: `unwitnessed` lists {g}, which states "
+                                     f"no acceptance's meaning; remove the entry"))
+            elif allow[g] != pin.get("type_sha256"):
+                fails.append(Failure("witnesses.unwitnessed-changed", g, f"witnesses: {g} changed since `unwitnessed` "
+                                     f"listed it, and states what an acceptance means ({why}), so it carries its witnesses "
+                                     f"now: {witness_shapes(g, pin, policy, own)}, and remove its `unwitnessed` entry"))
+            continue
+        if g not in ws:
+            if why:
+                fails.append(Failure("witnesses.missing", g, f"witnesses: {g} states what an acceptance means ({why}) and "
+                                     f"lists no witnesses that it says something: "
+                                     f"{witness_shapes(g, pin, policy, own)}"))
+            continue
+        w = ws[g]
+        if not (isinstance(w, dict) and isinstance(w.get("nontrivial"), str) and isinstance(w.get("honest"), list)
+                and w["honest"] and all(isinstance(n, str) for n in w["honest"])):
+            fails.append(Failure("witnesses.witness-form", g, f"witnesses: witnesses[{g}] is {{honest: [theorem], "
+                                 f"nontrivial: theorem}}"))
+            continue
+        covered, reached, checked = set(), set(), True
+        for n in w["honest"]:
+            hp, why_not = witness_pin("witnesses", n, g, "honest", policy, facts)
+            fails += why_not
+            if hp is None:
+                checked = False
+                continue
+            read = statement_read(hp)
+            for k in read.get("conclusion") or []:
+                covered |= {k.get("head"), *(k.get("defs") or [])}
+                reached |= set(k.get("defs") or [])
+            for v in [*([x] if (x := vacuous_meets(read, None)) else []), *assumes(hp, policy, own)]:
+                fails.append(Failure("witnesses.honest-form", n, f"witnesses: {n}, {g}'s `honest` witness, {v}: an honest "
+                                     f"lemma concludes, at the deployed instance, what {g} takes, assuming nothing beyond "
+                                     f"named assumptions"))
+        missing = [p for p in honest_premises(pin, policy, own) if p not in covered]
+        fns = accepted(policy, g)
+        if checked and (missing or (fns and not any(reaches(f, reached) for f in fns))):
+            what = [*missing, *([f"{' or '.join(fns)} accepting"] if fns and not any(reaches(f, reached) for f in fns) else [])]
+            fails.append(Failure("witnesses.honest-uncovered", g, f"witnesses: {g}'s `honest` witnesses "
+                                 f"({', '.join(w['honest'])}) conclude nothing of {', '.join(what)} at the deployed instance: "
+                                 f"each premise outside a named assumption's module, and a property's acceptance, is a "
+                                 f"conjunct of one (a premise that can never hold makes {g} say nothing)"))
+        n = w["nontrivial"]
+        np_, why_not = witness_pin("witnesses", n, g, "nontrivial", policy, facts)
+        fails += why_not
+        if np_ is None:
+            continue
+        read, (heads, exists) = statement_read(np_), concluded(pin)
+        got = f"{'¬ ' if read.get('negated') else ''}{read.get('head') or 'no application'} …"
+        if not (read.get("negated") and read.get("head") in heads):
+            fails.append(Failure("witnesses.nontrivial-form", n, f"witnesses: {n} does not state that {g}'s conclusion "
+                                 f"fails at the verifier that accepts everything: past its ∀ and ∃ binders its statement "
+                                 f"must be `¬ C …` with C one of {', '.join(heads) or 'its heads (none reported)'}, and it "
+                                 f"is {got}" + (" (for a bound with a break, `¬ (C … ∨ Break …)`: the break fails too)"
+                                                if "Or" in heads else "")))
+        elif (k := trailing_foralls(list(read.get("binders") or []))) < exists:
+            fails.append(Failure("witnesses.nontrivial-exists", n, f"witnesses: {n} negates {read['head']} under {k} `∀` "
+                                 f"after its last `∃`, and {g}'s conclusion has {exists} `∃`: each is a `∀` before the `¬` "
+                                 f"(`∀ X, ¬ C … X`), since `∃ X, ¬ C … X` holds whenever the prover can pick a bad X"))
+        for v in [*(["takes `False` as a hypothesis, so it proves anything"] if read.get("absurd") else []),
+                  *assumes(np_, policy, own)]:
+            fails.append(Failure("witnesses.nontrivial-assumes", n, f"witnesses: {n}, {g}'s `nontrivial` witness, {v}: it "
+                                 f"assumes nothing beyond named assumptions"))
+    return fails
+
+
+def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
+    """The `unwitnessed` entries an `--update` writes: each of a guarantee still in scope without witnesses (`witness_scope`)
+    whose statement is the one it was listed with, under the hash of its new record (``kept``) when it says the same under
+    another (moved, `--moved`, or lifted, `lifted_into`). Every other entry drops, and none is added."""
+    out, ws = {}, policy.get("witnesses") or {}
+    for g, h in sorted((policy.get("unwitnessed") or {}).items()):
+        pin, rec, new = facts["pins"].get(g, {}), (policy.get("guarantees") or {}).get(g) or {}, kept.get(g) or {}
+        if g in ws or pin.get("kind") != "theorem" or not witness_scope(g, policy, pin):
+            continue
+        built, mv = pin.get("type_sha256"), pin.get("moved") or {}
+        if h == built or (h == rec.get("type_hash") and (h == mv.get("sha256") or lifted_into(rec, new, pin, mv))):
+            out[g] = built
+    return out
 
 
 def unfolding(d: str, unfolds: dict, listed) -> tuple[list[str], list[str]] | None:
@@ -2872,7 +3131,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         for n, r in sorted(policy.get("guarantees", {}).items()):
             if r or renamed(n, moved) not in renames:
                 renames[renamed(n, moved)] = r
-        current = policy | {"guarantees": renames}
+        current = policy | {"guarantees": renames} | renamed_witnesses(policy, moved)
     s, waited = time.monotonic(), []
 
     def built_prover(q: Path):

@@ -96,6 +96,17 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   conclusion is headed by a constant other than `C`, applies a definition under `meaning` itself (the deployed record, a
   predicate or a field of it, so `True` or a fact of Init or Mathlib alone fails), and is neither a reflexivity
   (`a = a`, `a ↔ a`) nor one of its hypotheses, and no hypothesis is `False` (`vacuous_meets`);
+- every guarantee that states what an acceptance means (`witness_scope`: a property of a function's acceptance under
+  `shape.properties`, or a statement reading a definition of a `Claims` module or of `Properties.Verity`, the one
+  theorem's vocabulary) has two witnesses under `witnesses` (`{G: {honest: [theorem], nontrivial: theorem}}`, LEAN-66),
+  each a guarantee held to its form instead of `shape` (`witness_failures`). `honest` lemmas conclude, at the honest
+  deployed instance, each premise of `G` outside an `Assumptions` or `shape.premises` module and a property's acceptance,
+  each saying something (`vacuous_meets`) and assuming nothing beyond such named assumptions: a premise that can never
+  hold fails here. `nontrivial` is `¬ C …` past its binders, `C` a head of `G`'s conclusion as written or lifted, at the
+  verifier that accepts everything, with a `∀` before the `¬` for each `∃` of the conclusion: a prover-chosen `∃ X` and a
+  break that always holds (`¬ (C ∨ Break)`) fail here. The guarantees in scope when the rule came are listed under
+  `unwitnessed` with their statements' hashes; a new guarantee, and one whose statement changed, carry both witnesses,
+  and `--update` drops entries and adds none (`unwitnessed_kept`), so the list only shrinks;
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
