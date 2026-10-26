@@ -6,23 +6,19 @@ import Proofs.Flock.Soundness.Audit.Circuit
 /-!
 # The lowering is correct, unit by unit
 
-`lowers`: for every circuit `C`, constants `κ`, partition `P` and unit `u`, `WrongSet.Lowers (progOf C κ)
-[unitGates P u] φ Xv`, at any `φ` that inverts `posOf` (`wireAt C d` does, `wireAt_posOf`) and any evaluation `Xv` that
-is `κ`'s constant at each constant wire of `P.io u`. So the claims program of a statement is `progOf C κ`, defined from
-the parsed circuit, and its unit `u` computes what `C` computes there; `faulty_card_le_wrongRegZ` reads it at
-`r u := [unitGates P u]`, slot `u` of `partOf P` (`rus_partOf_getElem?`).
+`lowers`: for every circuit `C`, partition `P` and unit `u`, `WrongSet.Lowers (progOf C κ) [unitGates P u] φ Xv`, at any
+`φ` that inverts `posOf` (`wireAt C d` does, `wireAt_posOf`), when every input the constants `κ` fix and the unit reads
+evaluates to its constant. So the claims program of a statement is `progOf C κ`, defined from the parsed circuit, and its unit `u` computes what `C` computes there; `faulty_card_le_wrongRegZ` reads
+it at `r u := [unitGates P u]`, slot `u` of `partOf P` (`rus_partOf_getElem?`).
 
 * Where the lowered gates sit: wire `g`'s `gateSize` gates are at `off C g` onward (`gates_off`), every gate of
-  `progOf C κ` is one of them (`exists_block`), and two wires' blocks don't meet (`block_inj`).
-* An input `κ` fixes to `b` is lowered to `.const b` at its position, and no other gate is a constant (`posOf_const`,
-  `unitGates_ne_const`). A unit reads such an input with no opening, as `b`, which is its value in `C.eval` on any
-  evaluation that agrees with `κ`.
+  `progOf C` is one of them (`exists_block`), and two wires' blocks don't meet (`block_inj`).
 * A row `(⊕ a) ∧ (⊕ b)` is lowered to the XOR of `a`'s positions, the XOR of `b`'s and their AND, at `posOf C g`. The
   two XORs are interior to the unit (`boundary_inner`): no output, input or gate of another unit reads them, so `Correct`
   asks nothing of their committed values, and the AND reads them as the unit computes them.
 * `runIn_posOf`: by induction over the wires, each wire's position computes its value in `C.eval`, reading from outside
-  the unit only positions of wires of `P.io u`: a constant's value is `κ`'s, any other's committed value `Lowers`
-  gives.
+  the unit only positions of wires, whose committed values `Lowers` gives, or constants (`const_pos`), which `Prog.read`
+  reads with no committed value.
 -/
 
 namespace Flock.Bridge
@@ -67,7 +63,8 @@ theorem one_le_gateSize {N : ℕ} (o : Op N) : 1 ≤ gateSize o := by
 
 theorem length_lower (g : Fin C.N) : (lower C κ g).length = gateSize (C.op g) := by
   unfold lower
-  split <;> (try split) <;> simp_all [gateSize]
+  cases C.op g <;> try rfl
+  cases κ g <;> rfl
 
 theorem getElem_finRange_val (g : Fin C.N) :
     (List.finRange C.N)[g.val]'(by simp) = g := by
@@ -92,10 +89,10 @@ theorem off_eq_sum (k : ℕ) :
   ext h
   simp
 
-theorem off_eq_length (k : ℕ) : off C k = (((List.finRange C.N).take k).flatMap (lower C κ)).length := by
+theorem off_eq_length (κ : Fin C.N → Option Bool) (k : ℕ) : off C k = (((List.finRange C.N).take k).flatMap (lower C κ)).length := by
   classical
   rw [List.length_flatMap, off_eq_sum]
-  simp only [length_lower (κ := κ)]
+  simp only [length_lower]
   rw [← List.sum_toFinset _ ((List.nodup_finRange C.N).sublist (List.take_sublist _ _))]
   congr 1
   ext h
@@ -139,7 +136,7 @@ theorem gates_off (g : Fin C.N) {j : ℕ} (hj : j < gateSize (C.op g)) :
   have h := getElem?_flatMap_take (lower C κ) (List.finRange C.N) g.val (by simp) j
     (by rw [getElem_finRange_val, length_lower]; exact hj)
   rw [getElem_finRange_val] at h
-  rw [off_eq_length (κ := κ)]
+  rw [off_eq_length κ]
   exact h
 
 /-- Every gate of the lowered program is some wire's `j`th lowered gate. -/
@@ -150,8 +147,8 @@ theorem exists_block {i : ℕ} {x : BGate} (hx : (progOf C κ).gates[i]? = some 
   have hkN : k < C.N := by simpa using hk
   have hg : (List.finRange C.N)[k] = (⟨k, hkN⟩ : Fin C.N) := by simp
   rw [hg, length_lower] at hj
-  refine ⟨⟨k, hkN⟩, j, hj, by rw [off_eq_length (κ := κ)], ?_⟩
-  rw [← gates_off _ hj, off_eq_length (κ := κ)]
+  refine ⟨⟨k, hkN⟩, j, hj, by rw [off_eq_length κ], ?_⟩
+  rw [← gates_off _ hj, off_eq_length κ]
   exact hx
 
 theorem mem_unitGates {n : ℕ} {P : Partition C n} {u : Fin n} {i : ℕ} :
@@ -180,74 +177,114 @@ theorem posOf_mem_unitGates {n : ℕ} {P : Partition C n} {u : Fin n} {a : Fin C
 
 /-! ## The lowered gates' reads and values -/
 
-/-- A gate other than an input is lowered to no constant. -/
-theorem lower_ne_const {g : Fin C.N} (hg : (C.op g).isInput = false) (b : Bool) :
+theorem lower_ne_const {g : Fin C.N} (hni : (C.op g).isInput = false) (b : Bool) :
     ∀ x ∈ lower C κ g, x ≠ .const b := by
   unfold lower
-  split <;> simp_all [Op.isInput]
+  cases h : C.op g <;> simp_all [Op.isInput]
 
-/-- **The lowered program's constants** are the inputs `κ` fixes, each at its wire's position. -/
-theorem posOf_const {a : Fin C.N} {b : Bool} (h : (progOf C κ).gates[posOf C a]? = some (.const b)) :
-    C.op a = .input ∧ κ a = some b := by
-  have := one_le_gateSize (C.op a)
-  rw [posOf_eq, gates_off a (by omega)] at h
-  cases hop : C.op a with
-  | input =>
-    refine ⟨rfl, ?_⟩
-    simp only [lower, hop, gateSize] at h
-    cases hk : κ a <;> simp_all
-  | _ => simp [lower, hop, gateSize] at h
+theorem isInput_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {g : Fin C.N} (hu : P.unit g = some u) :
+    (C.op g).isInput = false := by
+  cases h : (C.op g).isInput
+  · rfl
+  · exact absurd ((P.input_iff g).2 h) (by simp [hu])
 
-/-- A unit's gates are none of them constants: the input gates are in no unit. -/
-theorem unitGates_ne_const {n : ℕ} {P : Partition C n} {u : Fin n} {p : ℕ} (hp : p ∈ unitGates P u) (b : Bool) :
-    (progOf C κ).gates[p]? ≠ some (.const b) := by
-  intro h
+/-- A unit's own lowered gates are not constants: only an input gate lowers to one, and no unit holds an input. -/
+theorem progOf_ne_const_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {p : ℕ} (hp : p ∈ unitGates P u)
+    (b : Bool) : (progOf C κ).gates[p]? ≠ some (.const b) := by
   obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
-  rw [gates_off g hj] at h
-  have hni : (C.op g).isInput = false := by
-    cases hi : (C.op g).isInput
-    · rfl
-    · exact absurd ((P.input_iff g).2 hi) (by simp [hu])
-  exact lower_ne_const hni b _ (List.mem_of_getElem? h) rfl
+  rw [gates_off g hj]
+  intro h
+  exact lower_ne_const (isInput_of_unit hu) b _ (List.mem_of_getElem? h) rfl
 
-/-- A wire a gate of unit `u` reads from outside `u` is one of `u`'s committed inputs. -/
-theorem mem_io_of_arg {n : ℕ} {P : Partition C n} {u : Fin n} {g a : Fin C.N} (hu : P.unit g = some u)
-    (ha : a ∈ (C.op g).args) (hout : posOf C a ∉ unitGates P u) : a ∈ P.io u := by
-  classical
-  have hne : P.unit g ≠ P.unit a := by
-    rw [hu]
-    exact fun h => hout (posOf_mem_unitGates.2 h.symm)
-  simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter]
-  exact ⟨P.mem_committed_of_read ha hne, Or.inr ⟨g, hu, ha⟩⟩
+/-- **A constant of the lowered program is an input the constants fix**, at its wire's position. -/
+theorem const_pos {i : ℕ} {b : Bool} (h : (progOf C κ).gates[i]? = some (.const b)) :
+    ∃ a : Fin C.N, i = posOf C a ∧ C.op a = .input ∧ κ a = some b := by
+  obtain ⟨g, j, hj, rfl, hx⟩ := exists_block h
+  by_cases hin : C.op g = .input
+  · have hj0 : j = 0 := by rw [hin] at hj; simp [gateSize] at hj; omega
+    subst hj0
+    refine ⟨g, by rw [posOf_eq, hin]; rfl, hin, ?_⟩
+    unfold lower at hx
+    rw [hin] at hx
+    cases hk : κ g <;> simp [hk] at hx ⊢ <;> first | exact hx | exact hx.symm
+  · exfalso
+    have hni : (C.op g).isInput = false := by cases h : C.op g <;> simp_all [Op.isInput]
+    exact lower_ne_const hni b _ (List.mem_of_getElem? hx) rfl
 
-/-- A lowered gate reads the positions of the wires its gate reads, except a row's AND, which reads its own two XORs. -/
+theorem input_of_isInput {g : Fin C.N} (h : (C.op g).isInput = true) : C.op g = .input := by
+  cases hop : C.op g <;> simp_all [Op.isInput]
+
+/-- An input the constants fix lowers to its constant, at its wire's position. -/
+theorem gates_posOf_const {a : Fin C.N} {b : Bool} (hin : C.op a = .input) (hk : κ a = some b) :
+    (progOf C κ).gates[posOf C a]? = some (.const b) := by
+  have h1 : 0 < gateSize (C.op a) := by rw [hin]; simp [gateSize]
+  have hp : posOf C a = off C a.val + 0 := by rw [posOf_eq, hin]; rfl
+  rw [hp, gates_off a h1]
+  simp [lower, hin, hk]
+
+theorem read_const {ref : ℕ → Option Bool} {i : ℕ} {b : Bool} (h : (progOf C κ).gates[i]? = some (.const b)) :
+    (progOf C κ).read ref i = some b := by
+  simp [Prog.read, h]
+
+/-- A lowered gate reads wires' positions, except a row's AND, which reads its own two XORs. -/
 theorem reads_lower {g : Fin C.N} {j : ℕ} {x : BGate} (hx : (lower C κ g)[j]? = some x) {i : ℕ} (hi : i ∈ x.reads) :
+    (∃ a : Fin C.N, i = posOf C a) ∨ (j = 2 ∧ (i = off C g.val ∨ i = off C g.val + 1)) := by
+  unfold lower at hx
+  split at hx
+  · split at hx <;> (rcases j with _ | j <;> simp at hx; subst hx; simp [BGate.reads] at hi)
+  · rcases j with _ | j <;> simp at hx
+    subst hx
+    simp only [BGate.reads, List.mem_cons, List.not_mem_nil, or_false] at hi
+    rcases hi with rfl | rfl <;> exact Or.inl ⟨_, rfl⟩
+  · rcases j with _ | j <;> simp at hx
+    subst hx
+    simp only [BGate.reads, List.mem_cons, List.not_mem_nil, or_false] at hi
+    rcases hi with rfl | rfl <;> exact Or.inl ⟨_, rfl⟩
+  · rcases j with _ | j <;> simp at hx
+    subst hx
+    simp only [BGate.reads, List.mem_cons, List.not_mem_nil, or_false] at hi
+    exact Or.inl ⟨_, hi⟩
+  · rcases j with _ | _ | _ | j <;> simp at hx <;> subst hx <;> simp only [BGate.reads, List.mem_map,
+      List.mem_cons, List.not_mem_nil, or_false] at hi
+    · obtain ⟨a, -, rfl⟩ := hi
+      exact Or.inl ⟨a, rfl⟩
+    · obtain ⟨a, -, rfl⟩ := hi
+      exact Or.inl ⟨a, rfl⟩
+    · exact Or.inr ⟨rfl, hi⟩
+
+/-- A lowered gate reads the positions of its wire's arguments, except a row's AND, which reads its own two XORs. -/
+theorem reads_lower_args {g : Fin C.N} {j : ℕ} {x : BGate} (hx : (lower C κ g)[j]? = some x) {i : ℕ}
+    (hi : i ∈ x.reads) :
     (∃ a ∈ (C.op g).args, i = posOf C a) ∨ (j = 2 ∧ (i = off C g.val ∨ i = off C g.val + 1)) := by
+  unfold lower at hx
   cases hop : C.op g with
   | input =>
-    simp only [lower, hop] at hx
-    cases hk : κ g <;> simp only [hk] at hx <;> rcases j with _ | j <;> simp at hx <;> subst hx <;>
-      simp [BGate.reads] at hi
+    rw [hop] at hx
+    rcases j with _ | j <;> cases hk : κ g <;> simp [hk] at hx <;> subst hx <;> simp [BGate.reads] at hi
   | and a b =>
-    simp only [lower, hop] at hx
+    rw [hop] at hx
     rcases j with _ | j <;> simp at hx
     subst hx
     simp only [BGate.reads, List.mem_cons, List.not_mem_nil, or_false] at hi
-    rcases hi with rfl | rfl <;> exact Or.inl ⟨_, by simp [Op.args], rfl⟩
+    rcases hi with rfl | rfl
+    · exact Or.inl ⟨a, by simp [Op.args], rfl⟩
+    · exact Or.inl ⟨b, by simp [Op.args], rfl⟩
   | xor a b =>
-    simp only [lower, hop] at hx
+    rw [hop] at hx
     rcases j with _ | j <;> simp at hx
     subst hx
     simp only [BGate.reads, List.mem_cons, List.not_mem_nil, or_false] at hi
-    rcases hi with rfl | rfl <;> exact Or.inl ⟨_, by simp [Op.args], rfl⟩
+    rcases hi with rfl | rfl
+    · exact Or.inl ⟨a, by simp [Op.args], rfl⟩
+    · exact Or.inl ⟨b, by simp [Op.args], rfl⟩
   | not a =>
-    simp only [lower, hop] at hx
+    rw [hop] at hx
     rcases j with _ | j <;> simp at hx
     subst hx
     simp only [BGate.reads, List.mem_cons, List.not_mem_nil, or_false] at hi
     exact Or.inl ⟨a, by simp [Op.args], hi⟩
   | row a b =>
-    simp only [lower, hop] at hx
+    rw [hop] at hx
     rcases j with _ | _ | _ | j <;> simp at hx <;> subst hx <;> simp only [BGate.reads, List.mem_map,
       List.mem_cons, List.not_mem_nil, or_false] at hi
     · obtain ⟨a', ha', rfl⟩ := hi
@@ -288,7 +325,7 @@ theorem boundary_inner {n : ℕ} {P : Partition C n} {u : Fin n} {g : Fin C.N} (
     | some x =>
       simp only [hx, Option.map_some, Option.getD_some] at hrd
       obtain ⟨h, k, hk, rfl, hxk⟩ := exists_block hx
-      rcases reads_lower hxk hrd with ⟨a', -, ha'⟩ | ⟨rfl, hi⟩
+      rcases reads_lower hxk hrd with ⟨a', ha'⟩ | ⟨rfl, hi⟩
       · exact off_ne_posOf hj ha'
       · have hh : g = h := by
           rcases hi with hi | hi
@@ -322,10 +359,10 @@ theorem val_xorList {rd : ℕ → Option Bool} {v : Fin C.N → Bool} (ws : List
   simp [BGate.val, mapM_posOf ws h, xorSum, foldl_xor]
 
 /-- **Each wire's lowered gates compute its value** in the unit holding it, on committed values `ref` that carry the
-circuit's evaluation at every position of a committed input the unit reads from outside. -/
-theorem runIn_posOf {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool) (u : Fin n) (Xv : Fin C.N → Bool) (ref : ℕ → Option Bool)
+circuit's evaluation at every position the unit reads from outside. -/
+theorem runIn_posOf {n : ℕ} (P : Partition C n) (u : Fin n) (Xv : Fin C.N → Bool) (ref : ℕ → Option Bool)
     (hread : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ a : Fin C.N, posOf C a ∈ x.reads →
-      posOf C a ∉ unitGates P u → a ∈ P.io u → (progOf C κ).read ref (posOf C a) = some (C.eval Xv a)) :
+      posOf C a ∉ unitGates P u → (progOf C κ).read ref (posOf C a) = some (C.eval Xv a)) :
     ∀ m (g : Fin C.N), g.val = m → P.unit g = some u →
       (progOf C κ).runIn ref (unitGates P u) (posOf C g) = some (C.eval Xv g) := by
   intro m
@@ -343,7 +380,7 @@ theorem runIn_posOf {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool)
     · simp only [hin, hlt, ↓reduceIte]
       exact ih a.val (hgm ▸ hag) a rfl (posOf_mem_unitGates.1 hin)
     · simp only [hin, ↓reduceIte]
-      exact hread p hp x hx a hr hin (mem_io_of_arg hu ha hin)
+      exact hread p hp x hx a hr hin
   have hni : (C.op g).isInput = false := by
     cases h : (C.op g).isInput
     · rfl
@@ -427,49 +464,43 @@ theorem posOf_injective : Function.Injective (posOf C) := by
 
 open FlockSoundness.Discharge.ZkLink in
 /-- **`Lowers` for every circuit**: unit `u`'s replay unit of `partOf P`, the one proof unit `unitGates P u`, is
-correct in `progOf C κ` on every committed values that carry `C`'s evaluation `Xv` at the wires `φ` maps the committed
-positions it reads or computes to, for any `φ` that inverts `posOf` and any `Xv` that is `κ`'s constant at each constant
-wire of `P.io u` (the unit reads a constant with no opening). -/
-theorem lowers {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool) (u : Fin n) (φ : ℕ → Fin C.N)
-    (hφ : ∀ g, φ (posOf C g) = g) (Xv : Fin C.N → Bool)
-    (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → C.eval Xv g = b) :
+correct in `progOf C κ` on every committed values that carry `C`'s evaluation at the wires `φ` maps the positions it reads
+or computes to, for any `φ` that inverts `posOf`, when each input `κ` fixes that the unit reads evaluates to its
+constant. -/
+theorem lowers {n : ℕ} (P : Partition C n) (u : Fin n) (φ : ℕ → Fin C.N) (hφ : ∀ g, φ (posOf C g) = g)
+    (Xv : Fin C.N → Bool)
+    (hκ : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) → C.eval Xv a = b) :
     WrongSet.Lowers (progOf C κ) [unitGates P u] φ Xv := by
   intro ref href pu hpu
   rw [List.mem_singleton] at hpu
   subst hpu
   have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
-  have hneed : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ i ∈ x.reads, i ∉ unitGates P u →
-      ∃ a : Fin C.N, i = posOf C a ∧ (progOf C κ).read ref i = some (C.eval Xv a) := by
-    intro p hp x hx i hi hout
-    obtain ⟨g, hu, j, hj, hpj⟩ := mem_unitGates.1 hp
-    have hx' := hx
-    rw [hpj, gates_off g hj] at hx'
-    rcases reads_lower hx' hi with ⟨a, ha, rfl⟩ | ⟨rfl, hi'⟩
-    · refine ⟨a, rfl, ?_⟩
-      by_cases hc : ∃ b, (progOf C κ).gates[posOf C a]? = some (.const b)
-      · obtain ⟨b, hb⟩ := hc
-        simp only [Prog.read, hb]
-        rw [hκ a (mem_io_of_arg hu ha hout) b (posOf_const hb).2]
-      · have hc' : ∀ b, (progOf C κ).gates[posOf C a]? ≠ some (.const b) := fun b h => hc ⟨b, h⟩
-        rw [Boundary.read_eq _ hc']
-        refine (href _ ?_ hc').trans (by rw [hφ])
-        simp only [WrongSet.need, hgates, List.mem_append, List.mem_flatMap]
-        exact Or.inr ⟨p, hp, by simp [hx, hi]⟩
-    · exfalso
-      apply hout
-      rcases hi' with rfl | rfl
-      · exact mem_unitGates.2 ⟨g, hu, 0, by omega, rfl⟩
-      · exact mem_unitGates.2 ⟨g, hu, 1, by omega, rfl⟩
+  have hneed : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ i ∈ x.reads,
+      (progOf C κ).read ref i = some (C.eval Xv (φ i)) := by
+    intro p hp x hx i hi
+    by_cases hc : ∃ b, (progOf C κ).gates[i]? = some (.const b)
+    · obtain ⟨b, hb⟩ := hc
+      rw [read_const hb]
+      obtain ⟨a, rfl, ha, hka⟩ := const_pos hb
+      obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
+      rw [gates_off g hj] at hx
+      rcases reads_lower_args hx hi with ⟨a', ha', he⟩ | ⟨rfl, hi'⟩
+      · rw [← posOf_injective he] at ha'
+        rw [hφ, hκ a b ha hka ⟨g, hu, ha'⟩]
+      · exfalso
+        rcases hi' with h0 | h1
+        · exact off_ne_posOf (g := g) (a := a) (j := 0) (by omega) (by rw [Nat.add_zero]; exact h0.symm)
+        · exact off_ne_posOf (g := g) (a := a) (j := 1) (by omega) h1.symm
+    have hc' : ∀ b, (progOf C κ).gates[i]? ≠ some (.const b) := fun b hb => hc ⟨b, hb⟩
+    rw [Boundary.read_eq _ hc']
+    refine href i ?_ hc'
+    simp only [WrongSet.need, hgates, List.mem_append, List.mem_flatMap]
+    exact Or.inr ⟨p, hp, by simp [hx, hi]⟩
   have hself : ∀ p ∈ unitGates P u, ref p = some (C.eval Xv (φ p)) := fun p hp =>
-    href p (by simp [WrongSet.need, hgates, hp]) (unitGates_ne_const hp)
-  have hrun := runIn_posOf P κ u Xv ref fun p hp x hx a hr hout _ => by
-    obtain ⟨a', he, h⟩ := hneed p hp x hx _ hr hout
-    rw [h, posOf_injective he]
+    href p (by simp [WrongSet.need, hgates, hp]) (progOf_ne_const_of_unit hp)
+  have hrun := runIn_posOf P u Xv ref fun p hp x hx a hr _ => by rw [hneed p hp x hx _ hr, hφ]
   intro p hp
-  refine ⟨fun x hx i hi hiu => ?_, fun hb => ?_⟩
-  · obtain ⟨a, -, h⟩ := hneed p hp x hx i hi hiu
-    rw [h]
-    simp
+  refine ⟨fun x hx i hi _ => by rw [hneed p hp x hx i hi]; simp, fun hb => ?_⟩
   obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
   by_cases hjl : j + 1 < gateSize (C.op g)
   · rw [boundary_inner hu hjl] at hb
@@ -489,13 +520,18 @@ theorem wireAt_posOf (d g : Fin C.N) : wireAt C d (posOf C g) = g := by
   rw [hg', Option.getD_some]
   exact posOf_injective (by simpa using List.find?_some hg')
 
+theorem inputClassOf_flatten : (inputClassOf C).flatten = (inputsOf C).map fun g => [[posOf C g]] := by
+  unfold inputClassOf
+  split <;> simp_all
+
 theorem rus_partOf {n : ℕ} (P : Partition C n) :
-    (partOf P).rus = (List.finRange n).map fun u => [unitGates P u] := by
-  simp [partOf, Claims.Sampling.Partition.rus]
+    (partOf P).rus = ((List.finRange n).map fun u => [unitGates P u]) ++ (inputsOf C).map fun g => [[posOf C g]] := by
+  simp [partOf, Claims.Sampling.Partition.rus, inputClassOf_flatten]
 
 /-- Slot `u` of `partOf P` is unit `u`'s replay unit. -/
 theorem rus_partOf_getElem? {n : ℕ} (P : Partition C n) (u : Fin n) :
     (partOf P).rus[u.val]? = some [unitGates P u] := by
-  simp [rus_partOf]
+  rw [rus_partOf, List.getElem?_append_left (by simp)]
+  simp
 
 end Flock.Bridge
