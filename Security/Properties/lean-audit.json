@@ -37,7 +37,8 @@
   "Properties.RemoteAudit.Line",
   "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
-  "Properties.Composition"
+  "Properties.Composition",
+  "Properties.Verity.Soundness"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -216,7 +217,9 @@
   "Definitions.Claims",
   "Definitions.Pouw.Basic",
   "Properties.Composition",
-  "CoreComposition"
+  "CoreComposition",
+  "Properties.Verity",
+  "CoreOnsite"
  ],
  "layers": {
   "Properties.Composition": {
@@ -395,6 +398,11 @@
    ],
    "except": [],
    "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, never over a proof"
+  },
+  "Properties.Verity": {
+   "imports": ["CoreOnsite", "Properties.Composition", "Definitions.Accounting.JointPeriod"],
+   "except": [],
+   "why": "soundness at the verifier of record is stated over onsite's compiled code, the composition's properties and the period model it instantiates, never over a proof"
   }
  },
  "reads_exempt": {
@@ -1991,6 +1999,9 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  },
+  "Verity.soundness_of_legs": {
+   "owner": "@proofs"
   }
  },
  "shape": {
@@ -3050,7 +3061,8 @@
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81). The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and takes the setup check's open AcceptsDecodes and PublishesRoot, CoinCommitHides and Pous.Period.RingDevice (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
-   "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function."
+   "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
+   "Verity.soundness_of_legs": "frozen (premise): JointHorizon at onsite's compiled verifier: its event's acceptance is Core.Onsite.protocol.answer's and each audit's verdict is its compiled component's (Verity.compiled), but it takes each audit's per-period guarantee at its compiled component (Accounting.PeriodRun.Sound, no premise module's) as a hypothesis until the legs are proved (ONE-8 and ONE-18 of note:proofs/20261026T0332Z-report-onethm), and the run's partition, network claim and coin coordinates are still fields of the run (ONE-7, ONE-12, ONE-4)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

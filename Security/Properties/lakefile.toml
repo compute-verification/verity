@@ -69,6 +69,10 @@ path = "../../verity/core/primitives/requirement"
 name = "core_composition"
 path = "../../verity/core/protocols/composition"
 
+[[require]]
+name = "core_onsite"
+path = "../../verity/core/protocols/onsite"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
@@ -81,4 +85,4 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
   "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule", "Properties.RemoteAudit.Shared",
-  "Properties.RemoteAudit.Live", "Properties.Composition"]
+  "Properties.RemoteAudit.Live", "Properties.Composition", "Properties.Verity.Soundness"]
