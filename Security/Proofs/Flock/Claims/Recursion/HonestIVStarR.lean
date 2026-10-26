@@ -26,10 +26,12 @@ message is one that `final` reads as those rows with their salts, then the eleme
   the honest run passes `IVStar` wherever `final` reads its last message as the salted honest rows and `nextR rd`
   accepts the honest element-level messages (the honest verdict, HONEST-VERDICT's), in `InnerAccepts`' form too
   (`innerAccepts_honest`), which recursion completeness at `deployRec` takes (`RecDeploy.vstar_complete`).
+* **At the deployed `final := finalR`** (`DeployedR.ivstar_honest_filesR`, `DeployedR.innerAccepts_honestR`): the honest
+  last message `lastOR` lays out each row then its salt, the element-level last message, then the trailer of the row
+  lengths, and `finalR` reads it back as the salted honest rows (`finalR_lastOR`).
 
-What stays a hypothesis here: `final`'s reading of the honest last message (the deployed `final`, DEPLOY-PARAMS's) and
-`nextR rd` accepting the honest messages (HONEST-VERDICT's). Neither is a named assumption: both are equations about
-the code at the honest run.
+What stays a hypothesis here: `nextR rd` accepting the honest messages (HONEST-VERDICT's). It is not a named
+assumption: it is an equation about the code at the honest run.
 -/
 
 namespace Claims.Recursion
@@ -267,7 +269,7 @@ theorem agrees_bdR (H : Claims.Msg → Claims.Msg) (rel : _root_.Flock.Readable.
     rw [e]
     have ha : (bdC rel rd cols wE join rowIn final w).ans (cs.getD j default) = (cs[j]'hjc).bytes := by
       rw [List.getD_eq_getElem _ _ hjc]
-      rfl
+      simp only [bdC, RecDeploy.bdDeployed]
     simp only [Claims.OC.eval, hl, ↓reduceIte, ha, decide_true]
   · have hj1 : j + 1 = ms.length := by omega
     have e : (((bdC rel rd cols wE join rowIn final w).DE.V.next x (ms.take (j + 1)) (cs.take (j + 1))).eval H).1 =
@@ -291,7 +293,8 @@ theorem ivstarR_honest_run (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     (Claims.run sha512 (Claims.replay ((bdC rel rd cols wE joinR rowIn final w).honestAs sha512 os lastO))
       (bdC rel rd cols wE joinR rowIn final w).IVStar x () fun i => cs.getD i.val default).out = .acc := by
   refine (bdC rel rd cols wE joinR rowIn final w).run_honest_acc out64_sha512 hfin hk hn hcs ?_
-  refine agrees_bdR sha512 rel rd cols wE joinR rowIn final w hx
+  refine agrees_bdR sha512 rel rd cols wE joinR rowIn final w
+    (ms := (bdC rel rd cols wE joinR rowIn final w).opened os last) hx
     (by have := (bdC rel rd cols wE joinR rowIn final w).opened_length os last; omega) (fun j hj => ?_) hacc
   have hj' : j < os.length := by
     have := (bdC rel rd cols wE joinR rowIn final w).opened_length os last
@@ -303,7 +306,7 @@ theorem ivstarR_honest_run (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
 /-- **The honest prover's rows at each round before the last**: round 0's (each table's level-0 cap nodes), then each
 rep's rounds' (`repRows`), as messages. `honestMsgs` joins each (`honestMsgs_rounds`). -/
 def honestRounds (caps : Array (Array ByteArray)) (reps : List (List (List ByteArray))) : List (List Claims.Msg) :=
-  (capRows caps).map rowMsg :: reps.flatten.map fun rs => rs.map rowMsg
+  ((capRows caps).map nodeRow).map rowMsg :: reps.flatten.map fun rs => rs.map rowMsg
 
 theorem honestMsgs_rounds (caps : Array (Array ByteArray)) (reps : List (List (List ByteArray))) (last : Claims.Msg) :
     honestMsgs caps reps last = (honestRounds caps reps).map joinR ++ [last] := by
@@ -440,8 +443,8 @@ theorem honestRounds_nAt {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : 
   have hMsum : M.flatten.length = (repLens spec sts).sum := by
     rw [List.length_flatten, hM, repLens, List.map_map]
     rfl
-  have hround0 : ((capRows caps).map rowMsg).length = (sts.toList.map RecDeploy.level0Nodes).sum := by
-    rw [List.length_map, capRows, List.length_flatten, capLens hs hcs]
+  have hround0 : (((capRows caps).map nodeRow).map rowMsg).length = (sts.toList.map RecDeploy.level0Nodes).sum := by
+    rw [List.length_map, List.length_map, capRows, List.length_flatten, capLens hs hcs]
     rfl
   refine ⟨by simp only [honestRounds, List.length_cons, List.length_map, hfl, hMsum]; omega, fun j hj => ?_⟩
   unfold RecDeploy.nAtSched
@@ -460,7 +463,7 @@ theorem honestRounds_nAt {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : 
       rw [List.getD_eq_getElem _ _ (by rw [List.length_map]; exact hj'), List.getD_eq_getElem _ _ hj',
         List.getElem_map]
     rw [e, List.length_map, hfP j hj']
-    simp [List.getD_eq_getElem _ _ hjM]
+    simp [List.getElem?_eq_getElem hjM]
 
 /-- **The honest session passes `IVStar` at `bdR (nextR rd)`**: at a statement that sets up with `TableOk` tables, from
 each table's level-0 cap and each rep's honest proof at its table's cap, the honest prover's commit strings of the
@@ -561,7 +564,7 @@ theorem ivstarR_honest_files (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     rw [filePs_size] at hk
     have hf := hfc k hk
     rw [hsz] at hk
-    obtain ⟨-, h2, h3, h4, -, -⟩ := hall k hk
+    obtain ⟨-, h2, h3, h4, -, -, -⟩ := hall k hk
     refine ⟨h2, h3 hf, ?_⟩
     simp only [fileCaps, JsonRT.range_map_getElem! _ (show k / 2 < sts.size by omega)]
     exact h4
@@ -658,13 +661,10 @@ theorem cutRounds_encRounds (rest : Msg) :
     rw [cutRound_encRound]
     simp [cutRounds_encRounds rest oss]
 
-/-- **`finalR` reads the honest last message** as the openings it lays out and the element-level last message, where
-the trailer's numbers fit its 8-byte fields. -/
-theorem finalR_lastOR (oss : List (List (Msg × Salt))) (last : Msg) (hl : (lensOf oss).length < 2 ^ 64)
-    (hl' : ∀ l ∈ lensOf oss, l.length < 2 ^ 64 ∧ ∀ n ∈ l, n < 2 ^ 64)
-    (hh : (encList (encList encNat) (lensOf oss)).length < 2 ^ 64) :
+/-- **`finalR` reads the honest last message** as the openings it lays out and the element-level last message. -/
+theorem finalR_lastOR (oss : List (List (Msg × Salt))) (last : Msg) :
     finalR (lastOR oss last) = some (oss, last) := by
-  rw [lastOR, finalR_trailer _ _ hl hl' hh, cutRounds_encRounds]
+  rw [lastOR, finalR_trailer, cutRounds_encRounds]
 
 /-- **The honest reps' rows at the pure session's files**: rep `k`'s `repRows` at its proof `filePs[k]`, the caps
 `fileCaps` and the coins between the first and the last (`ivstarR_honest_files`' reps). -/
@@ -681,7 +681,7 @@ noncomputable def filesOs (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) 
 
 /-- **The honest session passes `IVStar` at `final := finalR`**: `ivstarR_honest_files` with its last message
 `lastOR` of the salted honest rows, which `finalR` reads (`finalR_lastOR`), so only the honest verdict (`nextR rd`
-accepting `honestMsgs`) and the trailer's 8-byte bounds stay hypotheses. -/
+accepting `honestMsgs`) stays a hypothesis. -/
 theorem ivstar_honest_filesR (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (rd : Msg → Option FinalP) (cols : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ)
     (rowIn : Msg → Msg) (w : Msg → ℝ) {x : Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
@@ -692,15 +692,12 @@ theorem ivstar_honest_filesR (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     (hc1 : cs.head? = some c₁) (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes)
     (hk : cs.length = (FlockDeploy.V false).k x) {rec : String} {pfs : Array ByteArray} {bs : Array Msg}
     (hS : FlockComplete.sessionS sha512 resp spec sts wI ω = (.ok (rec, pfs), bs))
-    (hl : (lensOf (filesOs spec sts c₁ pfs cs Ts ys)).length < 2 ^ 64)
-    (hl' : ∀ l ∈ lensOf (filesOs spec sts c₁ pfs cs Ts ys), l.length < 2 ^ 64 ∧ ∀ n ∈ l, n < 2 ^ 64)
-    (hh : (encList (encList encNat) (lensOf (filesOs spec sts c₁ pfs cs Ts ys))).length < 2 ^ 64)
     (hacc : ((nextR rd x (honestMsgs (fileCaps spec sts c₁ pfs) (filesReps spec sts c₁ pfs cs Ts) last) cs).eval
       sha512).1 = .acc) :
     (Claims.run sha512 (Claims.replay (honestAsR rel rd cols wE rowIn finalR w (fileCaps spec sts c₁ pfs)
       (filesReps spec sts c₁ pfs cs Ts) ys (lastOR (filesOs spec sts c₁ pfs cs Ts ys) last)))
       (bdC rel rd cols wE joinR rowIn finalR w).IVStar x () fun i => cs.getD i.val default).out = .acc :=
-  ivstarR_honest_files rel rd cols wE rowIn finalR w hx htab hc1 hresp hk hS (finalR_lastOR _ _ hl hl' hh) hacc
+  ivstarR_honest_files rel rd cols wE rowIn finalR w hx htab hc1 hresp hk hS (finalR_lastOR _ _) hacc
 
 /-- **Recursion completeness's inner premise at `final := finalR`** (`InnerAccepts`): `innerAccepts_honest` with the
 honest last message `lastOR`, which `finalR` reads. -/
@@ -715,15 +712,12 @@ theorem innerAccepts_honestR (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hk : cs.length = (FlockDeploy.V false).k (xIOf xC))
     {rec : String} {pfs : Array ByteArray} {bs : Array Msg}
     (hS : FlockComplete.sessionS sha512 resp spec sts wI ω = (.ok (rec, pfs), bs))
-    (hl : (lensOf (filesOs spec sts c₁ pfs cs Ts ys)).length < 2 ^ 64)
-    (hl' : ∀ l ∈ lensOf (filesOs spec sts c₁ pfs cs Ts ys), l.length < 2 ^ 64 ∧ ∀ n ∈ l, n < 2 ^ 64)
-    (hh : (encList (encList encNat) (lensOf (filesOs spec sts c₁ pfs cs Ts ys))).length < 2 ^ 64)
     (hacc : ((nextR rd (xIOf xC) (honestMsgs (fileCaps spec sts c₁ pfs) (filesReps spec sts c₁ pfs cs Ts) last)
       cs).eval sha512).1 = .acc)
     (hv : (v.take ((bdC rel rd cols wE joinR rowIn finalR w).IVStar.k (xIOf xC))).map Prod.fst =
       honestAsR rel rd cols wE rowIn finalR w (fileCaps spec sts c₁ pfs) (filesReps spec sts c₁ pfs cs Ts) ys
         (lastOR (filesOs spec sts c₁ pfs cs Ts ys) last)) :
     InnerAccepts sha512 (bdC rel rd cols wE joinR rowIn finalR w).IVStar xC cs v :=
-  innerAccepts_honest rel rd cols wE rowIn finalR w hx htab hc1 hresp hk hS (finalR_lastOR _ _ hl hl' hh) hacc hv
+  innerAccepts_honest rel rd cols wE rowIn finalR w hx htab hc1 hresp hk hS (finalR_lastOR _ _) hacc hv
 
 end RecDeploy.DeployedR
