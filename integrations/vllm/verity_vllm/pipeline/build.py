@@ -26,7 +26,8 @@ from dataclasses import dataclass
 from verity_vllm.config import RowConfig, option
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.pipeline import launch_context as LC
-from verity_vllm.program.boolean import derived, write_word
+from verity_vllm.program.boolean import write_word
+from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)
@@ -79,18 +80,26 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/pipeline/tp/emit_ranks.py", "verity_vllm/pipeline/tp/links.py")
 
 
+def _source_root(rel: str) -> str:
+    """The directory a `_CONSTRUCTION_SOURCES` path is relative to: the one holding its top-level package (`verity_vllm`, or
+    `verity` for the Definitions), which in a checkout are different directories."""
+    from importlib import resources
+    from pathlib import Path
+    return str(Path(str(resources.files(rel.split("/", 1)[0]))).resolve().parent)
+
+
 def construction_version(rules, root: str | None = None) -> dict:
     """Identity of the CONSTRUCTION (not of the target, not of the host): schema, the binding rules (id + version), and the sha256 of
-    the builder's source files, read from the integration root `root` (default: the one `verity_vllm` is imported from). Two hosts
-    running the same tree get the same value; an edited rule/shim gets another. A listed source that is not there raises."""
-    from verity_vllm.config import ROOT
-    root = root or str(ROOT)
+    the builder's source files, each read from beside the package it belongs to (`_source_root`), or all from `root` when given.
+    Two hosts running the same tree get the same value; an edited rule/shim gets another. A listed source that is not there
+    raises."""
     h = hashlib.sha256()
     files = []
     for rel in _CONSTRUCTION_SOURCES:
-        p = os.path.join(root, rel)
+        base = root or _source_root(rel)
+        p = os.path.join(base, rel)
         if not os.path.isfile(p):
-            raise FileNotFoundError(f"construction_version: source {rel} is not under the integration root {root}")
+            raise FileNotFoundError(f"construction_version: source {rel} is not under {base}")
         with open(p, "rb") as f:
             b = f.read()
         files.append({"file": rel, "sha256": hashlib.sha256(b).hexdigest()})
@@ -121,7 +130,7 @@ SAMPLERS_BOUND = {"greedy": "ArgmaxTokenSelect_v1 (aten.argmax over the bf16 log
 
 
 def declared_live_counts(reqs: list[dict]) -> list[int]:
-    """[R15 stoch, DECISION M-0529 (A)] The DECLARED chronology's live sampler batch per engine step: n_live(e) = #{r : arrive_r <= e <
+    """The DECLARED chronology's live sampler batch per engine step: n_live(e) = #{r : arrive_r <= e <
     arrive_r + cap_r} — every request is sampled once per engine step from its arrival (prefill sample at e = arrive_r) until it has produced
     `cap_r` tokens (the `length` stop; vLLM's sampler sees one logits row per scheduled request, chunked prefills included).  Index e."""
     horizon = max((int(r.get("arrive_step", 0) or 0) + _cap_of(r) for r in reqs), default=0)
@@ -196,7 +205,7 @@ def workload_engine_args(workload: str | None, tp: int) -> dict:
 
 
 def sampling_policy(arg: str | None, workload: str | None) -> dict:
-    """[R13 X-05] The row's sampling policy as a STRUCTURAL INPUT of the construction (BRIEF: prompt length, max_tokens, sampling kind).
+    """[X-05] The row's sampling policy as a STRUCTURAL INPUT of the construction (BRIEF: prompt length, max_tokens, sampling kind).
 
     Sources, in order: `--workload <manifest>` (the row's manifest: `sweep.sampling` + `sweep.sampling_params` from `sweep/workload.py`,
     else the legacy `sampling.variant` -> `variants[...]`, else per-request `variant` / `seed` fields), and/or `--sampling <policy>` with
@@ -616,7 +625,7 @@ def _count(xs) -> dict:
 
 
 def _sharded_param_summary(model) -> dict:
-    """[R13 tp] the rank's parameter shapes AS INSTANTIATED at this rank (the sharded weight inputs the Program commits to), keyed by the
+    """The rank's parameter shapes AS INSTANTIATED at this rank (the sharded weight inputs the Program commits to), keyed by the
     vLLM layer class: `{class: {shape: count}}` — the independent check that the shard shapes match the engine worker's loaded shards."""
     import torch
     by_cls: dict = {}

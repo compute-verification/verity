@@ -1102,15 +1102,19 @@ def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monk
         "round 0's request table is not the one the window's open root is over (its requests_root)")
 
 
-def test_a_reserved_session_opens_on_the_weights_root_and_its_salt_coin_after_it(tmp_path, monkeypatch):
-    """`pouw_h1_window.open_session`, Pearl-C's device run's live coins (VLLM-95): the gate opens the reserved session on
-    the weights' root, its commitment read from ``status`` when the open answers none, the challenger is reached on the
-    answer's port once it accepts connections (`wait` between refusals), and its salt coin opens after that root; the run
-    carries the answer without its secret. An answer naming another root or another session is refused before any coin."""
+def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(tmp_path, monkeypatch):
+    """`pouw_h1_window.open_session`, Pearl-C's device run's live coins (VLLM-95, CMP-81): the gate opens the reserved
+    session on salt epoch k's root R over the weights' root W (`salt.epoch_open_root`), its commitment read from
+    ``status`` when the open answers none, the challenger is reached on the answer's port once it accepts connections
+    (`wait` between refusals), its coins are the salt coin alone (`window.SALT_FAMILIES`), and that coin opens after R,
+    the salt over W; the run carries the answer without its secret. An
+    answer naming another root or another session is refused before any coin, and so is a session of H1's layout (salt,
+    draw and round coins: one a Pearl-C pass would leave incomplete), which is closed before its first coin."""
     from verity.core.protocols.pouw.audit import salt_of
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
-    host = _host(tmp_path, monkeypatch, rounds=1)
+    salt_only = LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, CH.entropy(1))
+    host = _host(tmp_path, monkeypatch, challenger=salt_only)
     sid, root, calls, waits = CH.session_id(1), bytes(range(64)), [], []
 
     def gate(*words):
@@ -1125,18 +1129,27 @@ def test_a_reserved_session_opens_on_the_weights_root_and_its_salt_coin_after_it
             raise ConnectionRefusedError(at)
         return reached(at, secret)
     monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(connect))
-    client, c, opening, _, salt, carried = PHW.open_session("pouw:test", gate, sid, root, at="vy-challenger-1:1",
-                                                            wait=waits.append)
+    client, c, opening, salt, carried = PHW.open_session("pouw:test", gate, sid, root, 2, at="vy-challenger-1:1",
+                                                         wait=waits.append)
     client.close()
-    assert host.ended() is None and c == host.challenger.commitment
-    assert calls == [("open", "--session", sid, "--root", root.hex()), ("status", sid)] and waits == [1.0, 1.0]
-    assert LC.live_reason(c, opening, Wd.SALT, 0, root) is None and salt == salt_of(c, opening.coin, root)
-    assert R.released_roots(host.directory / R.RELEASES, c)[Wd.SALT] == (root,)
-    assert "secret" not in carried and (carried["session"], carried["root"], carried["port"]) == (sid, root.hex(), 7811)
-    for answer in ({"session": sid, "seq": 0, "root": "ee" * 64, "commitment": "c0" * 64},
-                   {"session": CH.session_id(2), "seq": 0, "root": root.hex(), "commitment": "c0" * 64}):
-        with pytest.raises(ValueError, match=f"not session {sid} opened on the weights' root"):
-            PHW.open_session("pouw:test", lambda *w, a=answer: a, sid, root, wait=waits.append)
+    r = PS.epoch_open_root(root, 2)
+    assert host.ended() is None and c == host.challenger.commitment and Wd.salt_epoch_reason(c) is None
+    assert calls == [("open", "--session", sid, "--root", r.hex()), ("status", sid)] and waits == [1.0, 1.0]
+    assert LC.live_reason(c, opening, Wd.SALT, 0, r) is None and salt == salt_of(c, opening.coin, root)
+    assert R.released_roots(host.directory / R.RELEASES, c) == {Wd.SALT: (r,)}
+    assert "secret" not in carried and (carried["session"], carried["root"], carried["port"]) == (sid, r.hex(), 7811)
+    for answer in ({"session": sid, "seq": 0, "root": root.hex(), "commitment": "c0" * 64},
+                   {"session": CH.session_id(2), "seq": 0, "root": r.hex(), "commitment": "c0" * 64}):
+        with pytest.raises(ValueError, match=f"not session {sid} opened on salt epoch 2's root"):
+            PHW.open_session("pouw:test", lambda *w, a=answer: a, sid, root, 2, wait=waits.append)
+
+    h1 = _host(tmp_path, monkeypatch, name="h1-layout", rounds=1)
+    with pytest.raises(ValueError, match="is not a live window's: the coin commitment's coins are not a Pearl-C salt "
+                                         "session's: its salt coin alone"):
+        PHW.open_session("pouw:test", lambda *w: {**h1.open(sid, PS.epoch_open_root(root, 0).hex()), "port": None}, sid,
+                         root, at=AUDITOR, wait=waits.append)
+    assert h1.ended() is None and R.released_roots(h1.directory / R.RELEASES, h1.challenger.commitment) == {
+        Wd.SALT: (), Wd.DRAW: (), Wd.ROUND: ()}
 
 
 def test_a_session_the_ledger_opened_without_a_reserve_salts_no_window(tmp_path, monkeypatch):
@@ -1254,7 +1267,7 @@ def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path,
 
 @pytest.mark.slow
 def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
-    """``challenger`` is HOST:PORT, H1's only, never beside in-process ``coins`` or ``rounds`` and never at capture; a pipeline
+    """``challenger`` is HOST:PORT, the challenged schemes' only, never beside in-process ``coins`` or ``rounds`` and never at capture; a pipeline
     that is its own auditor adds no in-process coins beside it; a challenger whose layout isn't a live window of at least S
     rounds is refused at install, with its session closed."""
     with pytest.raises(ValueError, match="HOST:PORT"):
@@ -1265,7 +1278,7 @@ def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
     assert any("from one source" in r for r in refused(_remote(coins=Challenger(0, CH.entropy(0)))))
     assert any("from one source" in r for r in refused(_remote(rounds=_rounds())))
     assert any("opens no session" in r for r in refused(_remote(), stage="capture"))
-    assert any("'challenger' is eps1-sm120-h1fx1 and ncp-v2's" in r
+    assert any("'challenger' is for eps1-sm120-h1fx1, ncp-v2, pearl-c-sm120-v1-h3" in r
                for r in refused({"pouw": {"challenger": AUDITOR, "session": SESSION}}, entry="pouw:ncp-v1"))
     assert any("needs 'session'" in r for r in refused(_remote(session=None)))
     assert any("'session' is the session of the challenger" in r for r in refused(_settings(session=SESSION)))
@@ -1273,7 +1286,7 @@ def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
     assert any(itself in r for r in refused(_remote(gate=None))) and any(itself in r for r in refused(_remote(session=SESSION)))
     assert any("'session' is the gate's open answer" in r for r in
                refused({"pouw": {"challenger": AUDITOR, "session": RESERVED}}, entry="pouw:ncp-v2"))
-    assert any("'gate' opens an H1 window's session" in r for r in
+    assert any("'gate' opens a reserved session" in r for r in
                refused({"pouw": {"challenger": AUDITOR, "session": SESSION, "gate": _gate}}, entry="pouw:ncp-v2"))
     with pytest.raises(ValueError, match="pouw setting 'gate'"):
         pouw.Settings.of({"gate": "ssh"})

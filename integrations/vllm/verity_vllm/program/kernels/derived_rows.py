@@ -5,14 +5,14 @@ serving semantics that the commit store does not materialise (lane VU-ACQUIRE, G
 may select values that live *inside* the kernel-aligned leaves the adapter commits.  Replay can only serve
 such a plan if the interior value can be produced fast and bit-exactly from committed neighbours.  This
 module provides that production path for four derived classes, as numpy twins of the registered gate
-semantics (`verity_vllm.program.registry.b1` / `prims`) in the `rmsnorm_fused_sweep` pattern:
+semantics (`verity_vllm.program.registry.b1` / `prims`) in the `rmsnorm_fused` pattern:
 
   * ``rmsnorm_triton_rows``   — the batch-invariant Triton `_rms_norm_kernel` reduction tree; emits the
     per-row scalars ``(sum, mean_eps, rms, inv)`` — `inv` is the gate
     ``F32Mul(DivFullScaleA(1, rms), DivFullRcp(rms))`` of `RMSNormTriton_v1` (b1_authored.py line ~81).
   * ``rmsnorm_fused_v2_rows`` — the generic CUDA `fused_add_rms_norm_kernel` under batch-invariance
     (`RMSNormFusedCuda_v2`); emits ``(var, s)`` — `s` is the `RsqrtApprox` gate of the epilogue.
-    (Thin wrapper over the committed twin in `rmsnorm_fused_sweep`.)
+    (Thin wrapper over the committed twin in `rmsnorm_fused`.)
   * ``silu_mul_rows``         — `SiluMul_v1`; emits the per-element bf16 silu intermediate
     ``mid = bf16_rn(silu_f32(gate))`` (the value between the gate_up GEMM row and the act_mul row; interior
     to the `SiluMulBf16_v1` primitive, materialised through the registered `_silu_f32_bits` semantics as a
@@ -754,9 +754,9 @@ def rmsnorm_triton_rows(x: np.ndarray, w: np.ndarray, eps: float):
 def rmsnorm_fused_v2_rows(x: np.ndarray, res: np.ndarray, w: np.ndarray, eps: float):
     """`RMSNormFusedCuda_v2{N, EPS}` over rows (x, res, w: (R, N) bf16 words).  Returns dict with bf16
     ``normed``/``resid`` and the derived f32 words ``var`` (cub BlockReduce output) and ``s``
-    (`RsqrtApprox(var / N + eps)`).  Delegates to `rmsnorm_fused_sweep.fused_rows` (the twin that
+    (`RsqrtApprox(var / N + eps)`).  Delegates to `rmsnorm_fused.fused_rows` (the twin that
     reproduced 2,340/2,340 fused-norm rows of the B0 store) with the v2 variance tree."""
-    from verity_vllm.program.kernels.rmsnorm_fused_sweep import fused_rows, variance_v2
+    from verity_vllm.program.kernels.rmsnorm_fused import fused_rows, variance_v2
     R, N = np.asarray(x).shape
     w2 = np.ascontiguousarray(np.broadcast_to(np.asarray(w, dtype=np.uint16), (R, N)))
     out, rp, var, s = fused_rows(np.ascontiguousarray(x, dtype=np.uint16),
@@ -800,7 +800,7 @@ BN = b1.BN  # `AttnBlock_v1`'s block (64).  [E7 D54] `attn_block` reads the bloc
 
 def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: bool, dot16=None, check: bool = True, rescale_only: bool = False, scale_bits: int | None = None):
     """`AttnBlock_v1{D, NVIS, FIRST}` vectorised over rows (`AttnBlock_v2{..., BN, DOT}` with ``dot16`` = the DOT step's twin,
-    `TC_DOT16_BY_PRIM[DOT]`; default the Ampere `tc_dot16`; `AttnBlock_v4{..., CHECK}` with ``check``: False reads m unguarded; `AttnBlock_v5` also ``rescale_only``; ``scale_bits`` the f32 word of `scale_log2` when the block reads it as an input (`AttnBlock_v10`/`_v11`), else `b1._scale_log2_bits(D)`).
+    `TC_DOT16_BY_PRIM[DOT]`; default the Ampere `tc_dot16`; `AttnBlock_v4{..., CHECK}` with ``check``: False reads m unguarded; `AttnBlock_v5` also ``rescale_only``; ``scale_bits`` the f32 word of `scale_log2` when the block reads it as an input (`AttnBlock_v10`/`_v11`), else `b1.scale_log2_bits(D)`).
 
     q (R, D), kb/vb (R, BN, D) bf16 words (rows past NVIS must be zero — `Clear_OOB_MN` padding);
     m_prev (R,), l_prev (R, 4), o_prev (R, D) f32 words (ignored when FIRST).
@@ -817,7 +817,7 @@ def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: b
         bmax = max_fmnmx(bmax, s[:, c])
     m_new = bmax if FIRST else max_fmnmx(m_prev, bmax)
     m_use = guard_neg_inf_zero(m_new) if check else m_new
-    scale = np.full(R, b1._scale_log2_bits(D) if scale_bits is None else int(scale_bits), dtype=np.uint32)
+    scale = np.full(R, b1.scale_log2_bits(D) if scale_bits is None else int(scale_bits), dtype=np.uint32)
     if not FIRST:
         scores_scale = mufu_ex2_ftz(mul_ftz(sub_ftz(m_prev, m_use), scale))
     max_scaled = mul_ftz(guard_neg_inf_zero(m_new) if rescale_only else m_use, scale)

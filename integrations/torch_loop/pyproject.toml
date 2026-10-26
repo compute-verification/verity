@@ -7,5 +7,7 @@ pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# `verity`: the interface it implements and core's registration and partition, which its tests hold the written window to.
-inputs = ["verity"]
+# `verity`: the interface it implements and core's registration and partition, which its tests hold the written window to;
+# `benchmarks/prove_path`: the records audit its PoUW window's audit drives (`pouw_audit`).
+# `models.py`: the auditor's gate, which the checkpoint role's test holds the role's files to.
+inputs = ["verity", "benchmarks/prove_path", "benchmarks/live_challenger/models.py"]

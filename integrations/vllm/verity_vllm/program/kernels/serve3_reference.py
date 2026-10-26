@@ -4,7 +4,7 @@
 The padded circuit adds one semantic layer over the `Serve_v2` skeleton: the flag chain, the guards, and
 the row muxes.  Everything in that layer is a word computation on the raw samples `y_0..y_{D_MAX}` (the
 `TokenSelect` outputs, pre-mux) and the appended cache rows, so it vectorizes exactly (numpy `uint32`
-words; the pattern of `rmsnorm_fused_sweep.py`: a numpy twin checked bit-for-bit against the gate-by-gate
+words; the pattern of `rmsnorm_fused.py`: a numpy twin checked bit-for-bit against the gate-by-gate
 IR evaluation — `tests/program/test_serve3.py::test_reference_evaluator_matches_the_gates`):
 
 * `pad_chain(y, eos)` — the flag chain and the token slots (spec §4, §14.2).  `live[g] = live_{g+1} =
