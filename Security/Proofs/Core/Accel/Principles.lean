@@ -31,7 +31,7 @@ theorem p2Distinct : P2Distinct := by
 
 theorem p2Priced : P2Priced := by
   have h : (1 / 32 : ℚ≥0) ≤ 1 := by rw [← NNRat.coe_le_coe]; norm_num
-  intro weight scale o
+  intro weight scale hi o
   cases o with
   | mma fa fb _ sh sa sb => simpa [opUse, port] using h
   | lane g => simp [opUse]

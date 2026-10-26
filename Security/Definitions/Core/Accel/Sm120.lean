@@ -36,9 +36,10 @@ atomics on shared memory, L2 and GDDR7.
 
 **Captured dots** (`captured`): the integer path exactly (`models.BLACKWELL_SM120_S8_M16N8K32`, `_WRAP`,
 `_U8S8_M16N8K32`); `bf16` at `k = 16`, `TC.HOPPER_BF16_M16N8K16` (its docstring: `mma.sync.m16n8k16.bf16` on Hopper and
-on sm_120); `e4m3`, `e5m2` and `e2m1` with themselves at `k = 32`, one group of 32 on a 26-bit adder, floor −133
-(`models.BLACKWELL_SM120_E4M3_M16N8K32`, `_E5M2_M16N8K32`, `_E2M1_M16N8K32`, each pinned on this card). The block-scaled
-FP4 dots (`models.BLACKWELL_SM120_NVF4`, `_MXF4`, captured in Python, a block-scaled adder this module doesn't
+on sm_120). `e4m3`, `e5m2` and `e2m1` with themselves at `k = 32` are `Open.dot`: their candidate is one group of 32 on
+a 26-bit adder, floor −133 (`f8Pipeline`; `models.BLACKWELL_SM120_E4M3_M16N8K32`, `_E5M2_M16N8K32`, `_E2M1_M16N8K32`;
+LIT: one group of 32 at width 26), but PEARLC-MODEL found the atom to be the exact sum's FP32 truncation in 99.96–99.997%
+of atoms only, so no capture pins it. The block-scaled FP4 dots (`models.BLACKWELL_SM120_NVF4`, `_MXF4`, captured in Python, a block-scaled adder this module doesn't
 transcribe) and every other dot are `Open.dot`.
 
 **Coarser than the card**, and **not yet in the instance**: as for the H200 (`Accel.H200`), with FP6 (`e3m2`, `e2m3`)
@@ -96,7 +97,8 @@ def Avail : Op Store → Prop
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)
   | .atom s _ => s ≠ .reg
 
-/-- sm_120's FP8 and `kind::f8f6f4` E2M1 pipeline (`models.BLACKWELL_SM120_E4M3_M16N8K32`, `_E5M2_`, `_E2M1_`). -/
+/-- The candidate for sm_120's FP8 and `kind::f8f6f4` E2M1 atom (`models.BLACKWELL_SM120_E4M3_M16N8K32`, `_E5M2_`,
+`_E2M1_`), not pinned (`captured`). -/
 def f8Pipeline : TC.Pipeline := { groups := [32], width := 26, zeroExponent := -133 }
 
 /-- The dots the RTX PRO 6000's captures pin. -/
@@ -104,9 +106,7 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
   match intCaptured fa fb sat with
   | some d => some d
   | none =>
-    if fa = .bf16 ∧ fb = .bf16 ∧ k = 16 then some (floatDot .bf16 TC.HOPPER_BF16_M16N8K16)
-    else if fa = fb ∧ f8f6f4 fa ∧ k = 32 then some (floatDot fa f8Pipeline)
-    else none
+    if fa = .bf16 ∧ fb = .bf16 ∧ k = 16 then some (floatDot .bf16 TC.HOPPER_BF16_M16N8K16) else none
 
 /-- **The RTX PRO 6000's table.** A program's code is at most GDDR7's bytes over 16-byte instructions; the coarse
 device's rates are the tensor core's s8 MACs, the 188 · 128 FP32 lanes, and GDDR7's bits a tick rounded up
@@ -119,6 +119,7 @@ def card : Card where
   Avail := Avail
   scale _ _ := 1
   captured := captured
+  zeroOnly _ _ _ _ := false
   text := 96 * 2 ^ 30 / 16
   tc := 188 * 1024
   cuda := 188 * 128

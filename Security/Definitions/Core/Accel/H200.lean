@@ -44,7 +44,10 @@ extreme and clamp tiles, 0 mismatches, run r20261026-010336-7755, #4512; `mma.sy
 HASH-8); `bf16` at `k = 16`, `TC.HOPPER_BF16_M16N8K16` (`mma.sync`
 and `wgmma`, `models.HOPPER_BF16_M16N8K16`, `HOPPER_BF16_WGMMA_K16`); `e4m3` and `e5m2` at `k = 32`, one group of 32 on
 a 14-bit adder, floor −139 (`total_fp8.HOPPER_E4M3_WGMMA_K32`, lane QZ, H100, 144,543,744 words, 0 mismatches;
-`models.HOPPER_E5M2_K32`, run r20260922-183837-940b, 25,554,432 elements, 0 mismatches). Every other dot is `Open.dot`.
+`models.HOPPER_E5M2_K32`, run r20260922-183837-940b, 25,554,432 elements, 0 mismatches; LIT: one group of 32 at
+width 14), validated at a zero accumulator only (`zeroOnly`: at any other accumulator the FP8 dot is `Open.dot`).
+Every other dot is `Open.dot`. `wgmma` `.s8` at m64n64k32, m64n128k32 and m64n256k32 runs at the data sheet's rate
+(`scale` 1) and computes `intDot`.
 
 **Where the instance is coarser than the card** (each lets a program do more): the pools of `Card`; a `wgmma` charged
 one issue slot (it is a warpgroup's four warp instructions); `IMAD.WIDE` one `imad` lane (it takes two); FP32 lane
@@ -134,6 +137,7 @@ def card : Card where
   Avail := Avail
   scale x sh := if sh.m = 16 then x.sync else 1
   captured := captured
+  zeroOnly fa fb _ k := fp8 fa && fp8 fb && k == 32
   text := 141 * 2 ^ 30 / 16
   tc := 132 * 4096
   cuda := 132 * 128

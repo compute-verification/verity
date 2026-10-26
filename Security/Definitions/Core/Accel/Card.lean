@@ -65,8 +65,9 @@ def port : Store → Res → ℚ≥0
 /-- **The units an opcode uses**, `weight f` tensor units a MAC of format `f` at shape scale `scale sh`. An MMA's
 operand words read from shared memory pay its banks, a word a bank unit, as a copy's do (`wgmma` reads `B`, and
 maybe `A`, there). Every unit is per word or per product, so a price vector over the resources prices an MMA per
-product, a lane function per result, and a copy per word moved. -/
-def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) : Op Store → Res → ℚ≥0
+product, a lane function per result, and a copy per word moved. An `IMAD.HI` uses `hi` lanes of `imad`, its own
+price, not tied to `IMAD`'s. -/
+def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) : Op Store → Res → ℚ≥0
   | .mma fa fb _ sh sa sb, r =>
     (if r = .tensor then (sh.m * sh.n * sh.k : ℕ) * weight fa * scale sh else 0) + (if r = .issue then 1 else 0) +
       ((if sa = .smem then (sh.wa fa : ℚ≥0) else 0) + (if sb = .smem then (sh.wb fb : ℚ≥0) else 0)) * port .smem r
@@ -74,7 +75,7 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) : Op Store → 
     match r, g.pipe with
     | .issue, _ => 1 / 32
     | .alu, .alu => 1
-    | .imad, .imad => 1
+    | .imad, .imad => if g matches .madHi _ then hi else 1
     | _, _ => 0
   | .uni _, r => if r = .issue then 1 else 0
   | .copy s t n, r =>
@@ -86,11 +87,15 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) : Op Store → 
 structure Open where
   /-- the in-flight backlog, in ticks: work issued in a window completes within `slack` ticks after it -/
   slack : ℕ
-  /-- the tensor units a `b1` MAC uses (no data sheet gives a `b1` peak) -/
+  /-- the tensor units a `b1` MAC uses: no data sheet gives a `b1` peak. CALIB (CMP-115) measured 1/8 on the H200;
+  sm_120's is unmeasured. A floor that needs `1/8 ≤ b1` (PEARLC-MODEL's) takes it as a hypothesis on this parameter. -/
   b1 : ℚ≥0
   /-- on a card whose data-sheet tensor rate is another instruction's (the H200's is `wgmma`'s), the factor by which
-  an `mma.sync` MAC uses more tensor units than that instruction's, until CALIB measures it -/
+  an `mma.sync` MAC uses more tensor units than that instruction's; unmeasured until CALIB measures it -/
   sync : ℚ≥0
+  /-- the `imad` lanes an `IMAD.HI` uses. The data sheets charge a plain `IMAD`'s one (DS-90, DS-120); the H200's timed
+  duo runs its `IMAD.HI` mix 21% slower than that (BET-ALGO-LAB), so it is a parameter until CALIB measures it -/
+  madHi : ℚ≥0
   /-- the dot of every format pair and `k` that no capture pins, by formats, saturation and `k` -/
   dot : Fmt → Fmt → Bool → ℕ → Dot
 
@@ -109,6 +114,8 @@ structure Card where
   Avail : Op Store → Prop
   /-- the dots a capture pins: by formats, saturation and `k` -/
   captured : Fmt → Fmt → Bool → ℕ → Option Dot
+  /-- the captured dots whose capture fixed a zero accumulator: the card's dot is the captured one only there -/
+  zeroOnly : Fmt → Fmt → Bool → ℕ → Bool
   /-- the instructions a program's code holds, all threads' texts together: device memory over 16 bytes an instruction -/
   text : ℕ
   /-- the device's coarse limits: s8 tensor MACs, CUDA-core lanes and device-memory bits a tick -/
@@ -123,8 +130,12 @@ variable (c : Card) (x : Open)
 /-- The tensor units a MAC of each format uses, `b1`'s from `x`. -/
 def weightOf (f : Fmt) : ℚ≥0 := if f = .b1 then x.b1 else c.weight f
 
-/-- The dot of each format pair, saturation and `k`: the capture's where one pins it, `x`'s otherwise. -/
-def dot (fa fb : Fmt) (sat : Bool) (k : ℕ) : Dot := (c.captured fa fb sat k).getD (x.dot fa fb sat k)
+/-- The dot of each format pair, saturation and `k`: the capture's where one pins it (at a zero accumulator only, for
+a capture that fixed it there), `x`'s otherwise. -/
+def dot (fa fb : Fmt) (sat : Bool) (k : ℕ) : Dot := fun acc a b =>
+  match c.captured fa fb sat k with
+  | some d => if c.zeroOnly fa fb sat k && acc != 0 then x.dot fa fb sat k acc a b else d acc a b
+  | none => x.dot fa fb sat k acc a b
 
 /-- **The card as an accelerator**, with side channels `cap` and `oracle` oracle queries a tick for its coarse
 `Device` (neither is a fact about the card's data flow). -/
@@ -150,7 +161,7 @@ def machine {ι : Type} (cap : ι → ℕ) (oracle : ℕ) : Machine ι where
   inStore o := o.1.inStore .reg
   outStore o := o.1.outStore .reg
   eval o := o.1.eval (c.dot x)
-  use o := opUse (c.weightOf x) (c.scale x) o.1
+  use o := opUse (c.weightOf x) (c.scale x) x.madHi o.1
   braUse r := if r = .issue then 1 / 32 else 0
   text := c.text
   fetch := .dram

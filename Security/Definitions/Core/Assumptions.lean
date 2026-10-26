@@ -64,10 +64,12 @@ its block scales. That is P2 at the hardware's level: the routing of pairs to on
 
 Checked per card by a pair-swap capture: swap operand pairs whose `mulOut` agree, within one output and across
 outputs, and compare every output bit for bit. The captured dots have the form by their captures (H200:
-`HOPPER_SM90_S8_K32`, `HOPPER_BF16_M16N8K16`, the E4M3 and E5M2 K32 captures; RTX PRO 6000: the
-`BLACKWELL_SM120_*_M16N8K32` integer and f8f6f4 captures and BF16; `Accel.CapturedProductForm`, to prove). The open
-dots it covers, each still to capture: on the H200 mixed E4M3 × E5M2 `wgmma`, f16, tf32 and b1; on the RTX PRO 6000
-the block-scaled NVF4 and MXF4 (pinned in Python only), mixed f8f6f4 pairings, f16, tf32 and b1. -/
+`HOPPER_SM90_S8_K32`, `HOPPER_BF16_M16N8K16`, the E4M3 and E5M2 K32 captures at a zero accumulator; RTX PRO 6000:
+the `BLACKWELL_SM120_*_M16N8K32` integer captures and BF16; `Accel.CapturedProductForm`, to prove). The open dots it
+covers, each still to capture: on the H200 FP8 at a nonzero accumulator, mixed E4M3 × E5M2 `wgmma`, f16, tf32 and b1;
+on the RTX PRO 6000 the E4M3, E5M2 and E2M1 K32 atom (its `BLACKWELL_SM120_*` value captures agree with
+`Sm120.f8Pipeline` in 99.96–99.997% of atoms only, PEARLC-MODEL; their pair swaps are this Prop's check), the
+block-scaled NVF4 and MXF4 (pinned in Python only), mixed f8f6f4 pairings, f16, tf32 and b1. -/
 def AccelProductForm (x : Accel.Open) : Prop :=
   ∀ fa fb sat k, Accel.ProductForm fa fb k (x.dot fa fb sat k)
 
