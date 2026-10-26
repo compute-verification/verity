@@ -121,9 +121,11 @@ def test_only_a_lean_error_in_the_trees_own_files_fails_it(tmp_path, monkeypatch
 
 FAKE_LAKE = r"""#!/usr/bin/env bash
 # `lake build` as Lake reports it: a Lean error on a line `BROKEN`, a failure of its own on `INFRA`, else a build; and
-# `lake env lean --run Facts.lean CONFIG` writing the facts and canonical forms in the file $FACTS, failing without one
+# `lake env lean -c` and `lake env leanc` compiling `Facts.lean` into a file, and `lake env FACTS CONFIG` writing the facts and
+# canonical forms in the file $FACTS, failing without one
 set -u
 echo "$*" >> "$LOG.args"
+case "$*" in "env lean -R "*" -c "*) : > "$6"; exit;; "env leanc "*) : > "${@: -1}"; exit;; esac
 if [ "$1" = env ]; then
   [ -f "${FACTS:-}" ] || { echo "error: unknown module prefix 'C' (a root that was not built?)"; exit 1; }
   PYTHON -c 'import json, sys
@@ -235,7 +237,10 @@ def test_a_guarantee_s_record_a_merge_left_stale_fails_it_and_an_unreadable_buil
     assert "lean-changed: PASS: built 2 of the 3 package(s) whose audit misses; compared the guarantees of 1" in out
     calls = Path(f"{log}.args").read_text().splitlines()
     assert calls[:2] == ["build", "build +C"], "a package with guarantees has its roots built, as the audit builds them"
-    assert calls[2].split()[:4] == ["env", "lean", "--run", str(tree / "c" / ".lake" / "lean-changed-facts" / "Facts.lean")]
+    work = tree / "c" / ".lake" / "lean-changed-facts"
+    assert calls[2].split()[:5] == ["env", "lean", "-R", str(work), "-c"] and calls[2].split()[-1] == str(work / "Facts.lean")
+    assert calls[3].split()[:2] == ["env", "leanc"] and Path(calls[3].split()[-1]).is_relative_to(work)
+    assert calls[4].split()[:2] == ["env", calls[3].split()[-1]], "the program compiled in the sandbox's writable `.lake`"
     assert (tree / "c" / ".lake" / "lean-changed-facts" / "Facts.lean").read_bytes() == (
         LC.AUDIT.TOOL / "Facts.lean").read_bytes(), "the audit's own `Facts.lean`, copied where the sandbox shows it"
     assert not (tree / "p" / ".lake" / "lean-changed-facts").exists(), "a package without guarantees is only built"
@@ -275,8 +280,8 @@ def test_only_the_guarantees_failures_fail_it(tmp_path, monkeypatch):
 
 def test_the_facts_are_read_in_the_sandbox(tmp_path, monkeypatch):
     """`Facts.lean` runs as `lake env` in the package, whose `.lake/packages` are hard links to the dependencies the audit
-    keeps: it reads them there, and cannot write them. It runs from a copy in the package's `.lake`, since the sandbox's
-    private /tmp hides a checkout there."""
+    keeps: it reads them there, and cannot write them. It is compiled from a copy into the package's `.lake`, since the
+    sandbox's private /tmp hides a checkout there and drops what is written there."""
     if not LC.sandboxed():
         pytest.skip("no unprivileged user namespaces here (`unshare`); lean_changed skips its builds where there are none")
     _tree(tmp_path, monkeypatch)
@@ -292,7 +297,8 @@ def test_the_facts_are_read_in_the_sandbox(tmp_path, monkeypatch):
     (tmp_path / "facts.json").write_text(json.dumps(doc))
     lake = tmp_path / "lake"
     lake.write_text(f"#!/usr/bin/env bash\necho tampered > .lake/packages/dep/Dep.olean 2>/dev/null && exit 3\n"
-                    f'[ -r "$4" ] && [[ "$4" == {pkg / ".lake"}/* ]] || exit 4\n'
+                    'case "$*" in "env lean -R "*" -c "*) : > "$6"; exit;; "env leanc "*) : > "${@: -1}"; exit;; esac\n'
+                    f'[ -r "$2" ] && [[ "$2" == {pkg / ".lake"}/* ]] || exit 4\n'
                     f"{sys.executable} -c 'import json, sys\nconfig, facts = (json.load(open(p)) for p in sys.argv[1:])\n"
                     f"json.dump(facts[\"facts\"], open(config[\"out\"], \"w\"))\nopen(config[\"canon\"], \"w\").write("
                     f"\"\".join(json.dumps(r) + \"\\n\" for r in facts[\"canon\"]))' \"${{@: -1}}\" {tmp_path / 'facts.json'}\n")

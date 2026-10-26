@@ -16,7 +16,7 @@
 //               operands, one folds.  Version 4 (`h1s_unit`) splits it six ways: two warps hash a chunk ahead, two
 //               build the segments, and the fold is split in two by the fx1 + duo chains it feeds.
 //               `h1r_launch_j10r` runs version 1 under J10-R's call-scale noise (`h1r_seeds_jr`, `h1r_units_jr_k`;
-//               measured only): the served J10-R units' receipts reference.
+//               RT-ALGO-16's verifier form, #3574): the served J10-R units' receipts reference.
 //
 // A step is a table of calls (`H1Call`): A [T, K] and B [N, K] s8 row-major (16-byte aligned rows), the unit positions
 // base (plus the step's, read from the device) + u, the call's roots and its row blocks' live bits (a unit is live iff its

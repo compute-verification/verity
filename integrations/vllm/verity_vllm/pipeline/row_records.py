@@ -27,6 +27,15 @@ def load_json(path: str) -> Any:
         return None
 
 
+def tail(path: str, n: int = 300) -> str:
+    """The last line of the log at ``path``, at most ``n`` characters ("" when it is absent or empty)."""
+    try:
+        lines = open(path, errors="replace").read().splitlines()
+    except OSError:
+        return ""
+    return (lines[-1] if lines else "")[:n]
+
+
 def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     """The row's batch and envelope, the request wrapper's default shape (LP, T), the Match snapshot steps and the pinned
     checkpoint dir, from the workload manifest.

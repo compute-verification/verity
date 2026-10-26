@@ -4,13 +4,15 @@ registered inputs the primitives still hold, so the guard (`verity.ml.circuits.o
 MUFU.RCP table is the library's, and on bits DeepSeek-V4's MUFU.LG2 table is an operation."""
 from __future__ import annotations
 
+import pytest
+
 from verity.ml.circuits import constants as K
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits import operations as O
-from verity_vllm.program.registry import b1, boolean_dsv4_moe as BD, dense, dsv4_moe as D, hopper
-from verity_vllm.program.registry import int8_exact as X
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import b1, boolean_dsv4_moe as BD, dense, dsv4_moe as D, hopper
+from verity.ml.definitions.registry import int8_exact as X
+from verity.ml.definitions.registry import prims as P
 
 
 def test_the_program_tables_are_declared_and_the_library_table_is_not_data():
@@ -29,6 +31,7 @@ def test_the_guard_lists_a_program_table_the_primitive_still_holds():
     assert O.program_data(Program(X.Int8LutSoftmax.bind(S=2)).root)[X.Exp2Lut127.id] == [(0, "exp2_lut127")]
 
 
+@pytest.mark.slow
 def test_the_hash_routers_boolean_programs_hold_no_data():
     """On bits, `MufuLg2Mantissa_v2` (the library's `lg2` folded into its gates, with its +0 sign bit) is an operation, so the
     hash router's Boolean Programs hold no data."""

@@ -1,58 +1,84 @@
 {
  "pieces": {
   "Bf16GtStrict_v1": {
-   "and": 95
+   "and": 95,
+   "type": "3bc7ba2b48c6b11070dc1e92ec5c4740407b70bf585cb5ce37fdeb758fd3a92f8527270da4dbceebe22b40607d41e23d7bd7cbd28f4a19a721976432222b77dd"
   },
   "BitAnd_v1": {
-   "and": 1
+   "and": 1,
+   "type": "8e47d8cd9768498638703b36a64d7d91075d9e9df6c953535c6d430aeb1583d4e55fedc651d172339e138820d0124162e633ff547b39b7afa3f33fcbbf3ec376"
   },
   "BitNot_v1": {
-   "and": 0
+   "and": 0,
+   "type": "214e21bea584bffb3e036758a28caa85da5a2a2aaba8960fec76fd1a1ffafa8bd2a4cd4e189d9a3c9f32ea87906a7f6e7a61f29bdcd39a208f63ddd051c4a5fd"
   },
   "BitOr_v1": {
-   "and": 1
+   "and": 1,
+   "type": "d51dffa61a74c24be7f8b10c9c28934550204facbd9d50908bb92e1eedb3b0fd8ddb588edc630a91dd14505ab4b87e4eda1bd200e8fc27d692144e3e8d9539b5"
   },
   "F32BitsShl23_v1": {
-   "and": 0
+   "and": 0,
+   "type": "b5b13d3b3357b6126bae3a5ea6d9a3ab23288ae2db7963315def1f67e9efe59b939fe179c0ff4085801a4041cf309e4a3c1b7ad7c33e1ae8aa4440f02f1e8685"
   },
   "F32Eq_v1": {
-   "and": 155
+   "and": 155,
+   "type": "9ff16c5abeca08cb405ddda41aa8be5062447dcdca4c9aa840b377498564e1acae3fece3d1fce29e686453c891df30f72f4e66a6ab5be0f0da8ca61c41192182"
   },
   "F32Fabs_v1": {
-   "and": 0
+   "and": 0,
+   "type": "5bf5bd7e3e3fca14ef6b452f6985fdaa4a45c0c9eb4372b1d7a25dd7b84b95dbeffa864ed54f5e4fd82e7880e69a2508535fbd295d4bba50cf0cbe7c9bb14792"
   },
   "F32Fmaxf_v1": {
-   "and": 474
+   "and": 474,
+   "type": "8d1d19ad9d880d5e8d5248668989e27b926ba372936cf0d5d68b362a3bab16ebeb76138a242ddf5563a015090f5be2f62715bd2257a95b12c6d6e9344fc732df"
   },
   "F32Fminf_v1": {
-   "and": 474
+   "and": 474,
+   "type": "6b7e185d98ebaea38c78e07c5c6fe2aff40db7b909f836682874d3c0abf41a4d061dcf2f5625bcfd14d163b279cd3b42ec00d557c22157fe91b1aed4a398fc36"
   },
   "F32IsFinite_v1": {
-   "and": 7
+   "and": 7,
+   "type": "b674e96f586fd72c9359145106c691ec52ca1489198d1a9f03e7249bf8ee19049765a308fe592cb31d1d292638aa7bb104f93f0032db41c89569c679c880f7cc"
   },
   "F32Neg_v1": {
-   "and": 0
+   "and": 0,
+   "type": "1e4331a3af4476b97213a2da6f124fc95b2a22186d9b61f38a3c33b97ee51bec0829384f9eb032dc6de018fa77b9c9d4b87bfbd669208b302438a01d23b2ad01"
   },
   "F32Sat_v1": {
-   "and": 100
+   "and": 100,
+   "type": "ffc3cdce6611b605a24b9a5c6089049efcaf287e98f19a625f57cd82054926b141d5ca129400f24979df5a1ed6b3cf21d5c5f1b7daef0f87d4864e1e3c89b7ec"
+  },
+  "F32ToS8RniSat_v1": {
+   "and": 337,
+   "type": "b1a9e24ffe5ad5227b30d1e31dad941da475cce740262b01f58e150740f8cb86f0743d4aebb5b5a8924dfa3786b497a633e3adf9e2e2d1f502b0d37c8b755c14"
   },
   "I32Add_v1": {
-   "and": 31
+   "and": 31,
+   "type": "7f76465843798359f452bdcbfb9b92a95167558350b72fd13b8efc5b37a9a89e7c7bcfc823e06cab65c7a6feab136e81ac91a9870955307aa6103d3786af7ad4"
   },
   "I32Eq_v1": {
-   "and": 31
+   "and": 31,
+   "type": "c541dfbd98f97c5dc71726a01af252bb8ad89e89f454c89daddd8fe2d5f578cf3557c84b0a088ef5b74639ca307b7e5adf5254082f862933d38a508aa3060ca6"
   },
   "I32Le_v1": {
-   "and": 32
+   "and": 32,
+   "type": "cbe827db77d7344f15ae5f6038c1973509b0f06db09eb46936795564cf935092cd810125020e7da0adde7d9e88a041dc4557e04aa20724a981403197d1b9b85e"
   },
   "SelectBf16_v1": {
-   "and": 16
+   "and": 16,
+   "type": "6901594d6c1604019301374beca143da48b8a2530e716f8a66c43171b66e985d373896ae6c57ceced6a7a2ddcaed4fb0be1466b4edea1a2417223500f49bd998"
   },
   "SelectF32_v1": {
-   "and": 32
+   "and": 32,
+   "type": "3dff09218443ec46fe5bdb13d09ac2f20de60092c14ee80ccd8602a772474cd0df4e5a3a2989a9eac77042c390736d1fdb555446dec603548f8c42ee738d06ee"
   },
   "SelectI32_v1": {
-   "and": 32
+   "and": 32,
+   "type": "3dff09218443ec46fe5bdb13d09ac2f20de60092c14ee80ccd8602a772474cd0df4e5a3a2989a9eac77042c390736d1fdb555446dec603548f8c42ee738d06ee"
+  },
+  "U32Hi16_v1": {
+   "and": 0,
+   "type": "7df1279f9aa9d84c0096fa159978724f5f0a47f67fb999b2a7093eaf164c1080528c40875999b77d749fe86a20e26944aaa842e1c1e7349fef8350a1b167073b"
   }
  }
 }

@@ -37,16 +37,16 @@ def PooledCovers : Prop :=
 (`Draw.Session.draws`, `min(s_t, U_t)`), its wrong receipts are at least the session's pooled bound at `δ`
 (`Draw.Session.pooled`). -/
 def PooledCoversSession : Prop :=
-  ∀ (n m : ℕ) (s : Fin n → ℕ) (X : Fin n → Type) (D : Accounting.Remote.Draw.Session n m s X)
-    (ω : Accounting.Remote.Draw.Coins n m s X) (δ : ℚ) (b : Pooled.Bound),
+  ∀ (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) (D : Accounting.Remote.Draw.Session n m s κ X)
+    (ω : Accounting.Remote.Draw.Coins n κ X) (δ : ℚ) (b : Pooled.Bound),
     Pooled.pooled (Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω)) δ = .ok b →
       D.pooled δ ω ≤ b.wrong
 
 /-- Whenever the memory line (`RemoteAudit.Line.line`) gives a line for a session's windows at outcome `ω` at `δ`, the
 wrong receipts it reads are at least the session's pooled bound at `δ` (`Draw.Session.pooled`). -/
 def LineCoversSession : Prop :=
-  ∀ (n m : ℕ) (s : Fin n → ℕ) (X : Fin n → Type) (D : Accounting.Remote.Draw.Session n m s X)
-    (ω : Accounting.Remote.Draw.Coins n m s X) (δ : ℚ) (gs : Array Line.Group)
+  ∀ (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) (D : Accounting.Remote.Draw.Session n m s κ X)
+    (ω : Accounting.Remote.Draw.Coins n κ X) (δ : ℚ) (gs : Array Line.Group)
     (per blocks blockBytes chipBytes nodeBytes : ℕ) (rates : Line.Rates) (l : Line.Line),
     Line.line gs per blocks blockBytes chipBytes nodeBytes (Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω)) δ
       rates = .ok l →

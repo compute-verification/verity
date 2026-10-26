@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.boolean_dense_norm`: `registry.dense`'s RMSNorm chain (Gemma-2's) on bits.
+"""`verity.ml.definitions.registry.boolean_dense_norm`: `registry.dense`'s RMSNorm chain (Gemma-2's) on bits.
 
 The chain is `boolean_dense`'s element-wise rows and this module's mean, rsqrt and narrow. The leaves are Boolean and pinned,
 and each is its word primitives on special words and random ones; `F32AddZero_v1` is both orders of `F32Add_v1` with +0, checked
@@ -25,14 +25,14 @@ from verity.ml.circuits import codec
 from verity.ml.circuits.defs import PrimitiveDefinition, bind
 from verity.ml.circuits.ops.boolean import mufu as MU
 from verity.ml.circuits.boolean import trace as TR
-from verity_vllm.program.boolean import boolean_version
-from verity_vllm.program.registry import boolean_dense as BD
-from verity_vllm.program.registry import boolean_dense_norm as DN
-from verity_vllm.program.registry import boolean_norms as BN
-from verity_vllm.program.registry import dense as D
-from verity_vllm.program.registry import prims as P
-from verity_vllm.query import word as QW
-from verity_vllm.query.cross_call import members_check
+from verity.ml.definitions.boolean import boolean_version
+from verity.ml.definitions.registry import boolean_dense as BD
+from verity.ml.definitions.registry import boolean_dense_norm as DN
+from verity.ml.definitions.registry import boolean_norms as BN
+from verity.ml.definitions.registry import dense as D
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions import word as QW
+from verity.ml.definitions.cross_call import members_check
 
 from tests.program.test_boolean_norms import (BF16_SPECIALS, F32_SPECIALS, _ands, _assert_partitions, _bf16_rows, _f32,
                                               _rand_bf16, _rand_f32, _run, _w, _words)
@@ -210,6 +210,7 @@ def test_the_elementwise_families_are_their_word_definitions(N) -> None:
     _elementwise(np.random.default_rng(20 + N), N, 64)
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 def test_the_elementwise_families_are_their_word_definitions_at_gemmas_width() -> None:
     _elementwise(np.random.default_rng(21), H, 8)
@@ -225,6 +226,7 @@ def test_the_mean_is_its_word_definition(N) -> None:
     _agree(bind(DN.MeanTriton, N=N), _f32_inputs(np.random.default_rng(N), 64 if N < 1000 else 8, N))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("N", [256, 1000, 1024, 1280, 2048, H])
 def test_the_mean_is_its_word_definition_at_wide_layouts(N) -> None:
@@ -258,6 +260,7 @@ def test_the_chain_is_gemmas_at_a_small_width(rsqrt) -> None:
     _chain_rows(64, 32, 30, rsqrt)
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("rsqrt", RSQRTS, ids=lambda f: f.id)
 def test_the_chain_is_gemmas_at_its_width(rsqrt) -> None:
@@ -280,6 +283,7 @@ def test_the_chain_is_gemmas_on_80k_rows(group) -> None:
 
 # --- partition, recompute, purity ------------------------------------------------------------------------------------------------
 
+@pytest.mark.slow
 def test_every_part_partitions_without_recompute_at_small_widths() -> None:
     _assert_partitions(_parts(16) + _parts(1030)[2:5] + [bind(DN.RsqrtF32, N=4, RSQRT=RSQRTS[0])])
     r = QW.unit_rule(bind(DN.RsqrtF32, N=4, RSQRT=P.RsqrtApprox), 16, 32)
@@ -299,7 +303,6 @@ def test_nothing_is_recomputed_across_a_definitions_calls(fn) -> None:
     assert r["ok"] and r["recomputed_gates"] == 0, r["recomputes"]
 
 
-@pytest.mark.slow
 def test_the_mean_recomputes_nothing_at_gemmas_width() -> None:
     r = members_check(bind(DN.MeanTriton, N=H))
     assert r["ok"] and r["recomputed_gates"] == 0, r["recomputes"]

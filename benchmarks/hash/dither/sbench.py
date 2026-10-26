@@ -4,11 +4,17 @@ CA's served_h1 row) and served_h1's prompts (`tests.engine.int8_exact_gpu.PROMPT
 
 Measures, per arm and rep:
     tpot_b32_ms      decode at batch 32: 32 requests, greedy, ignore_eos; (t(N2) - t(N1)) / (N2 - N1) over two generate calls
-                     of N1 and N2 output tokens, so prefill and the engine's per-call overhead cancel
+                     of N1 and N2 output tokens, so prefill and the engine's per-call overhead cancel.  $SBENCH_B=B
+                     (B <= --t) decodes B requests instead, every decode step then of m = B: tpot_b<B>_ms, the gate's
+                     B requests and its checked step at m = B, and smq_sweep's and prof's rows at B
     tokens_per_s     at saturation: SAT_REQS requests of SAT_TOKENS output tokens each, max_num_seqs MAX_SEQS (requests wait
                      in the scheduler throughout), output tokens over wall time; under --stock-own-batch the stock arms
                      run at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's (summary's scheduler_by_arm,
-                     with each engine's KV tokens: --arm-mem gives an arm the memory share its batch needs)
+                     with each engine's KV tokens: --arm-mem gives an arm the memory share its batch needs).  With sat
+                     in --ops the warm-up runs one such generate first (its batches' graphs and compiles, a -we arm's
+                     spill pool grown to that window: about 218 MB a step at m 256 under -wea, so $DITHER_SPILL_MAX_GB
+                     and the lease's memory sized for T 256's ~800 steps), and each rep's tokens are held to its
+                     reference arm's (summary's gate_tokens_equal_ref_arm, under ops=sat alone)
 and the gate: each arm's greedy token ids on the 32 requests equal `stock`'s (an arm that changes no served value must).
 
 Arms:
@@ -121,7 +127,13 @@ Arms:
     ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, e.g. hb_served.sh's HB_KC_FLAGS_B), timed beside
                  ARM on $HB_H1U_KC's
     ARM-cgp      a dither-a-so arm serving at priority (DITHER_SO_PRIO=1) with vLLM's graphs captured at it too
-                 (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`)
+                 (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`).  Under SMQ units it keeps every step in the fast
+                 regime while the units' span plus lm_head's 0.7 ms covers the step's cycle: without it, a step whose
+                 units drain before the next dispatch lets them refill their SMs ahead of lm_head, which then runs on
+                 the forward's SMs alone (2.9 ms, not 0.7) and the next steps stay slow.  Under it, h1u's H1U_JXS units
+                 stall on some steps (b32 and b64: their span about 2.3 times the median, the serving stream waiting
+                 about 20 ms on them), which their length doesn't explain: H1U_JPI's units, as long, never do, nor do
+                 H1U_JCS=2's, shorter; DITHER_SO_PREQ=0 makes the stalls rarer without removing them
     ARM-mc32     a dither arm whose worker has 32 hardware queues (CUDA_DEVICE_MAX_CONNECTIONS=32, set before its engine
                  makes the CUDA context)
     ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row blocks are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or
@@ -129,7 +141,17 @@ Arms:
     ARM-lag1, ARM-lag2  a dither-a-so arm with DITHER_SO_ROOT_LAG=1 or 2
     ARM-ug0      a dither-a-so arm whose units are launched each step, not replayed as a CUDA graph (DITHER_SO_GRAPH=0)
     ARM-zs       a dither-a-so arm whose z tables build on a tree stream beside its A tables (DITHER_SO_ZSIDE=1)
+    ARM-tail2    a dither-a-so arm without -ov whose mid and round trees build in one launch after the units' wait, the
+                 round's root read from pinned host memory that launch writes (DITHER_SO_TAIL=2, h1c's `Tail`)
+    ARM-preq     a dither-a-so arm whose units are queued as their graph before the round's root read, behind a wait on a
+                 pinned host word `SoSide.dispatch` sets once the round is sent and its coin is back (DITHER_SO_PREQ=1):
+                 the units start without the host's dispatch between that word and them
     ARM-mmc      a dither-a arm whose GEMMs take $SBENCH_MM_CFG's configs ($DITHER_MM_CFG, dmmsweep.py's best.json)
+    ARM-mmq      a dither-a-so arm whose GEMMs take the configs tuned at its own SMQ (MM_CFGS at $DITHER_SO_UNITS_SMQ's
+                 Q/D, however its suffixes or SBENCH_ARM_ENV set it), refused at an SMQ MM_CFGS has none for.  J10-R
+                 at 47/64: dither-a-hbc-zy-aomn-pt-so8-wea-rd0-smq47o64-mmq with DITHER_SO_UNITS=j10r and HB_KC_FLAGS
+                 ending -DH1U_JCTA=1 -DH1U_WARPS=4 (sbench.sh's dither-a-hbc build); at 45/64 under ARM-cgp:
+                 dither-a-hbc-zy-aomn-pt-so8-wea-rd0-smq45o64-cgp-mmq, the same build
 
 `gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
 checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
@@ -145,7 +167,8 @@ warm or gate is dropped, its error in gate.json, and the rest timed (exit 5 stil
 checked, so N arms need N engines' memory plus one arm's captures.
 
 `prof` (an op, for any arm; under DITHER_NSYS=1 or prof): generates PROF_N[0] and then PROF_N[1] tokens for the 32 requests
-inside one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time
+($SBENCH_PROF_REQS of them if set: T for decode steps of m = T, a saturation step; its step is then step_m<N>_ms) inside
+one CUDA profiler range, each generation in its own NVTX range PROF_RANGE/<arm>/n<N>, so a kernel's launches and time
 a decode step are the two ranges' difference over PROF_N[1] - PROF_N[0] (`exactlin/steps.py`; `stepprof.py` splits a dither
 arm's step by part, its between-step phases by their NVTX ranges).  nsys's capture range ends at the first profiler stop,
 so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a gated run's prof op is the capture.
@@ -177,9 +200,9 @@ timed beside itself with a knob set.  SBENCH_TIME_AT=HH:MM (UTC) holds the reps 
 the engines built and gated before it; sbench.sh's SBENCH_TIMED=1 takes the lease such a window grants (gpu-lease --timed).
 
 --bw-passes GIB runs the remote bandwidth audit's passes beside the arms on their GPU once every arm is built, warm and
-gated (`dbw.py`: an idle session, each rep an off block of every arm's ops and an on block inside a session's passes, and
-a tampered session beside each dither arm; summary.json's "bw", per_arm's TPOT the off blocks' alone).  Not with
---serial, whose arms are never up together.
+gated (`dbw.py`: the prover's calibration beside the dither arms' decode ops, an idle session, each rep an off block of
+every arm's ops and an on block inside a session's passes, and a tampered session beside each dither arm; summary.json's
+"bw", per_arm's TPOT the off blocks' alone).  Not with --serial, whose arms are never up together.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate] [--bw-passes GIB]
     python sbench.py --out OUT --prefill --serial --t 2048 --arms exact,exact-fused,ARM --ops prefill --gate
@@ -199,7 +222,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
-B = 32
+B_ENV = "SBENCH_B"
+B = int(os.environ.get(B_ENV) or 32)
+TPOT = f"tpot_b{B}_ms"
 N1, N2 = 32, 160
 SAT_REQS, SAT_TOKENS, MAX_SEQS, MAX_TOKENS_STEP = 768, 256, 256, 1024
 CT_CONFIG = {
@@ -354,12 +379,39 @@ def mm_cfg() -> None:
     os.environ["DITHER_MM_CFG"] = os.environ["SBENCH_MM_CFG"]
 
 
+# ARM-mmq's $DITHER_MM_CFG by the units' "Q/D" ($DITHER_SO_UNITS_SMQ's): dmmsweep.py --block Q/D's best.json
+# dither_mm_cfg, the m=64 entries the 11/16 sweep's.  The forward's GEMMs run on the SMs the units leave them, so a config
+# holds at the SMQ it was tuned at alone (at 47/64, 11/16's configs cost 1.7 ms a step).  45/64 takes 47/64's: dmmsweep
+# --block 45/64's own best, timed with the units beside it, slowed both the forward and the units (18.25 ms, not 16.8)
+MM_CFGS = {"47/64": "6144,4096,32=32x32x128:w4:s3:k1+4096,4096,32=32x32x256:w4:s3:k1:t1+28672,4096,32=32x64x128:w4:s2:k1"
+                    "+4096,14336,32=32x32x256:w4:s3:k1+4096,4096,64=32x64x256:w8:s4:k3+4096,14336,64=32x64x512:w8:s3:k3"}
+MM_CFGS["45/64"] = MM_CFGS["47/64"]
+MMQ = {"on": False}
+
+
+def mm_smq() -> None:
+    MMQ["on"] = True
+
+
+def smq_mm_cfg() -> None:
+    """An ARM-mmq arm's $DITHER_MM_CFG, MM_CFGS' at its SMQ, once its suffixes and SBENCH_ARM_ENV have set that."""
+    if not MMQ["on"]:
+        return
+    q, _, rest = os.environ.get("DITHER_SO_UNITS_SMQ", "").partition("/")
+    smq = f"{q}/{rest.partition('/')[0] or 8}" if q and q != "0" else "every SM"
+    if smq not in MM_CFGS:
+        raise ValueError(f"an ARM-mmq arm has no MM_CFGS entry at its SMQ ({smq}): tune one with dmmsweep.py --block Q/D "
+                         f"at that SMQ and add its best.json's dither_mm_cfg to sbench.MM_CFGS")
+    os.environ["DITHER_MM_CFG"] = MM_CFGS[smq]
+
+
 SUFFIXES = {"-xl": install_exactlin, "-a2": a_form(2), "-a3": a_form(3), "-j10r": env_of("DITHER_SO_UNITS", "j10r"),
             "-kcb": kc_b, "-zy1": env_of("DITHER_ZY1_KC", "1"), "-cgp": env_of("DITHER_SO_CAPTURE_PRIO", "1"),
             "-mc32": env_of("CUDA_DEVICE_MAX_CONNECTIONS", "32"), "-skip": env_of("DITHER_UNITS_SKIP_DEAD", "1"),
             "-rd0": env_of("DITHER_SO_RDEAD", "0"), "-lag1": env_of("DITHER_SO_ROOT_LAG", "1"),
             "-lag2": env_of("DITHER_SO_ROOT_LAG", "2"), "-ug0": env_of("DITHER_SO_GRAPH", "0"),
-            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-mmc": mm_cfg}
+            "-zs": env_of("DITHER_SO_ZSIDE", "1"), "-tail2": env_of("DITHER_SO_TAIL", "2"), "-mmc": mm_cfg,
+            "-preq": env_of("DITHER_SO_PREQ", "1"), "-mmq": mm_smq}
 # -smqQ / -smqQoD / -smqQoDcC: a dither-a-so arm's units on the SMs whose id % D < Q, at most C CTAs on each
 # ($DITHER_SO_UNITS_SMQ=Q/D/C, D 8 and no cap without them; -smq0 every SM, whatever the run's environment says)
 SMQ_SUFFIX = re.compile(r"-smq(\d+)(?:o(\d+))?(?:c(\d+))?$")
@@ -395,6 +447,7 @@ def build(arm: str, scratch: Path, gpu_mem: float):
     if s:
         suffix_env(s)()
         return build(arm[:-len(s)], scratch, gpu_mem)
+    smq_mm_cfg()
     if arm in DISABLED:
         os.environ["VLLM_DISABLED_KERNELS"] = DISABLED[arm]
     if arm == "stock-cutlass":
@@ -562,7 +615,8 @@ PICK_ENV = "SBENCH_PICK"
 PICK_ARMS_ENV = "SBENCH_PICK_ARMS"
 # SBENCH_SMQ_SWEEP=V[,V]: after the gate, each dither-a-so arm's decode TPOT and phases at each units SM share V (q,
 # q/den or q/den/cap, 0 every SM; `dither_so.SoSide.set_units_smq`), in one engine, then back to its own share for the
-# reps: a screen (smq_sweep.json), never a row
+# reps: a screen (smq_sweep.json), never a row.  With --ops sat alone, its tokens/s at saturation (one sat generate a
+# share) in place of the TPOT
 SMQ_SWEEP_ENV = "SBENCH_SMQ_SWEEP"
 
 
@@ -694,7 +748,9 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             gen(ps, 8)
             gen(prompts(64), 16)
             win = getattr(llm, "dither_win", None)
-            if getattr(win, "spill_mode", None) and getattr(win, "end_each", False):
+            if cmd.get("sat"):
+                gen(prompts(SAT_REQS), SAT_TOKENS)
+            elif getattr(win, "spill_mode", None) and getattr(win, "end_each", False):
                 # a -we arm's spill pool grown here to a timed window's size (N2 steps), not inside rep 0
                 gen(ps, N2)
             conn.send({"warm": True})
@@ -715,7 +771,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             t1, _ = gen(ps, N1)
             m1 = time.monotonic_ns()
             t2, outs = gen(ps, N2)
-            conn.send({"tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4), "t_n1_s": round(t1, 4), "t_n2_s": round(t2, 4),
+            conn.send({TPOT: round(1e3 * (t2 - t1) / (N2 - N1), 4), "t_n1_s": round(t1, 4), "t_n2_s": round(t2, 4),
                        "spans_ns": [m0, m1, time.monotonic_ns()], "tokens": [list(o.outputs[0].token_ids) for o in outs]})
         elif cmd["op"] == "gate":
             win = getattr(llm, "dither_win", None)
@@ -790,11 +846,12 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             if prof:
                 torch.cuda.profiler.start()
             counts = PF if pf else PROF_N
-            res = {"prof_n": list(counts), "profiled": prof, "prefill": pf}
+            reqs = int(os.environ.get("SBENCH_PROF_REQS", B))
+            res = {"prof_n": list(counts), "profiled": prof, "prefill": pf, "prof_requests": reqs}
             for n in counts:
                 if prof:
                     torch.cuda.nvtx.range_push(f"{PROF_RANGE}/{arm}/n{n}")
-                t, outs = gen(pp[:n], 1) if pf else gen(ps, n)
+                t, outs = gen(pp[:n], 1) if pf else gen(ps if reqs == B else prompts(reqs), n)
                 torch.cuda.synchronize()
                 if prof:
                     torch.cuda.nvtx.range_pop()
@@ -802,7 +859,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             if prof:
                 torch.cuda.profiler.stop()
             step = round(1e3 * (res[f"gen_n{counts[1]}_s"] - res[f"gen_n{counts[0]}_s"]) / (counts[1] - counts[0]), 4)
-            res["prefill_step_ms" if pf else "tpot_b32_ms"] = step
+            res["prefill_step_ms" if pf else TPOT if reqs == B else f"step_m{reqs}_ms"] = step
             conn.send(res)
         elif cmd["op"] == "smq_sweep":
             from dither_so import smq_of
@@ -813,17 +870,22 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 sd.set_units_smq(*smq_of(v))
                 gen(ps, 8)
                 llm.dither_stats()
-                t1, _ = gen(ps, N1)
-                t2, _ = gen(ps, N2)
-                rows.append({"smq": v, "tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4),
-                             "phases_by_m": llm.dither_stats().get("phases_by_m")})
+                if cmd.get("sat"):
+                    t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
+                    row = {"tokens_per_s": round(sum(len(o.outputs[0].token_ids) for o in outs) / t, 2)}
+                else:
+                    t1, _ = gen(ps, N1)
+                    t2, _ = gen(ps, N2)
+                    row = {TPOT: round(1e3 * (t2 - t1) / (N2 - N1), 4)}
+                rows.append({"smq": v, **row, "phases_by_m": llm.dither_stats().get("phases_by_m")})
             sd.set_units_smq(q0, d0, c0)
             gen(ps, 8)
             conn.send({"sweep": rows})
         elif cmd["op"] == "sat":
             t, outs = gen(prompts(SAT_REQS), SAT_TOKENS)
             n = sum(len(o.outputs[0].token_ids) for o in outs)
-            conn.send({"tokens_per_s": round(n / t, 2), "sat_s": round(t, 3), "sat_tokens": n})
+            conn.send({"tokens_per_s": round(n / t, 2), "sat_s": round(t, 3), "sat_tokens": n,
+                       "tokens": [list(o.outputs[0].token_ids) for o in outs]})
         conn.send({"stats": llm.dither_stats() if hasattr(llm, "dither_stats") else None, "picks": PK.summary(plog)})
 
     while True:
@@ -896,7 +958,8 @@ def main() -> int:
                          "Dither's window does at --prefill's T = 2048")
     ap.add_argument("--bw-passes", type=float, default=0.0, metavar="GIB",
                     help="the remote bandwidth audit's passes beside the arms on their GPU, over a store of GIB GiB "
-                         "(`dbw.py`: an idle session, each rep an off block and an on block, a tampered session)")
+                         "(`dbw.py`: the prover calibrated beside the dither arms' decode ops, an idle session, each rep "
+                         "an off block and an on block, a tampered session)")
     ap.add_argument("--bw-prover-args", action="append", metavar="ARGS",
                     help="a side of its own a time, its prover's options (leading NAME=VALUE words its environment)")
     ap.add_argument("--bw-cover", type=float, default=4.0,
@@ -910,6 +973,10 @@ def main() -> int:
         ap.error("--bw-passes needs BW_LIB and BW_KV: session.so and kv.so (sbench.sh builds both)")
     if a.bw_passes and a.serial:
         ap.error("--bw-passes runs beside every arm at once, which --serial never brings up")
+    if not 1 <= B <= a.t:
+        ap.error(f"${B_ENV}={B}: a decode step of m = B needs 1 <= B <= --t ({a.t}), its max_num_seqs")
+    if a.bw_passes and B != 32:
+        ap.error(f"--bw-passes calibrates on B32 decode reps (`dbw.report`): unset ${B_ENV}")
     os.environ["SBENCH_T"] = str(a.t)
     if a.prefill:
         os.environ[PREFILL_ENV] = "1"
@@ -934,6 +1001,7 @@ def main() -> int:
     smq_sweep = [v for v in (os.environ.get(SMQ_SWEEP_ENV) or "").split(",") if v]
     if not all(re.fullmatch(r"0|\d+(/\d+(/\d+)?)?", v) for v in smq_sweep):
         ap.error(f"${SMQ_SWEEP_ENV}={os.environ[SMQ_SWEEP_ENV]}: comma-separated q, q/den or q/den/cap")
+    sweep_key = "tokens_per_s" if a.ops == "sat" else TPOT
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
     reps: list[dict] = []
@@ -948,8 +1016,8 @@ def main() -> int:
     bw_tokens: dict = {}
 
     def block(r: int, phase: str | None = None, side: int | None = None, only: list[str] | None = None) -> dict:
-        """Rep r's ops on every arm up (or `only`'s), arm order rotated by r; under --bw-passes its phase (off, on or
-        tamper) and side on each row, an off block's tokens the gate's and the others' kept apart."""
+        """Rep r's ops on every arm up (or `only`'s), arm order rotated by r; under --bw-passes its phase (cal, off, on
+        or tamper) and side on each row, an off block's tokens the gate's and the others' kept apart."""
         these, lo = only or arms, time.monotonic_ns()
         for op in a.ops.split(","):
             for j in range(len(these)):
@@ -992,7 +1060,7 @@ def main() -> int:
             conns[arm], procs[arm], info[arm] = here, p, msg
             print(json.dumps({"arm": arm, **msg}), flush=True)
         for arm in arms:
-            conns[arm].send({"op": "warm"})
+            conns[arm].send({"op": "warm", "sat": "sat" in a.ops.split(",")})
             res = recv(arm, conns[arm], "warm", a.time_passed)
             if "error" not in res:
                 res = recv(arm, conns[arm], "warm", a.time_passed)
@@ -1058,11 +1126,10 @@ def main() -> int:
             continue
         for arm in arms if smq_sweep else ():
             if base_arm(arm) in DITHER_SO:
-                conns[arm].send({"op": "smq_sweep", "values": smq_sweep})
+                conns[arm].send({"op": "smq_sweep", "values": smq_sweep, "sat": sweep_key == "tokens_per_s"})
                 sweep[arm] = recv(arm, conns[arm], "smq_sweep")["sweep"]
                 recv(arm, conns[arm], "smq_sweep")
-                print(json.dumps({"smq_sweep": arm, "tpot_b32_ms": {x["smq"]: x["tpot_b32_ms"] for x in sweep[arm]}}),
-                      flush=True)
+                print(json.dumps({"smq_sweep": arm, sweep_key: {x["smq"]: x[sweep_key] for x in sweep[arm]}}), flush=True)
                 (out / "smq_sweep.json").write_text(json.dumps(sweep, indent=1) + "\n")
         time_at = wait_time_at()
         if time_at:
@@ -1083,10 +1150,12 @@ def main() -> int:
                                 prover_cpus=os.environ.get("BW_PROVER_CPUS") or aff,
                                 verifier_cpus=os.environ.get("BW_VERIFIER_CPUS"),
                                 side_args=shlex.split(os.environ.get("BW_SIDE_ARGS", "")), prover_args=shlex.split(pargs))
+                dither = [x for x in arms if x.startswith("dither")] or arms
                 try:
-                    doc["ready"] = side.expect("ready")
-                    print(json.dumps({"bw": i, "ready": {k: v for k, v in doc["ready"].items() if k != "calibration"}}),
-                          flush=True)
+                    doc["ready"], cal = dbw.registered(side, lambda: block(i * a.reps, "cal", i, only=dither))
+                    doc["calibrated_beside"] = {"arms": dither, "blocks": cal}
+                    print(json.dumps({"bw": i, "ready": {k: v for k, v in doc["ready"].items() if k != "calibration"},
+                                      "calibrated_beside": f"{len(cal)} blocks of {','.join(dither)}"}), flush=True)
                     side.start(0, dbw.paced(a.bw_idle_s, 1.0))
                     doc["sessions"][0] = side.end(0)
                     stretch_s, longest = dbw.window_s(doc["sessions"][0]), 0.0
@@ -1103,7 +1172,7 @@ def main() -> int:
                         stretch_s = dbw.beside_s(doc["sessions"][1 + r], on["lo"], on["hi"]) or stretch_s
                         print(json.dumps({"bw": i, "session": 1 + r, "accepted": doc["sessions"][1 + r]["accepted"],
                                           "failure": doc["sessions"][1 + r]["failure"]}), flush=True)
-                    k, dither = 1 + a.reps, [x for x in arms if x.startswith("dither")] or arms
+                    k = 1 + a.reps
                     est = sum((x["spans_ns"][-1] - x["spans_ns"][0]) / 1e9 for x in reps if x.get("side") == i
                               and x.get("bw") == "on" and x["rep"] == i * a.reps + a.reps - 1 and x["arm"] in dither
                               and "spans_ns" in x)
@@ -1146,9 +1215,9 @@ def main() -> int:
                               "captures": list(PF_CAPTURES), "step": "one request of T prompt tokens, one output token"}
     plain = [x for x in reps if x.get("bw") in (None, "off")]
     for arm in arms:
-        tp = [x["tpot_b32_ms"] for x in plain if x["arm"] == arm and x["op"] == "decode"]
+        tp = [x[TPOT] for x in plain if x["arm"] == arm and x["op"] == "decode"]
         th = [x["tokens_per_s"] for x in plain if x["arm"] == arm and x["op"] == "sat"]
-        summary["per_arm"][arm] = {"tpot_b32_ms": statistics.median(tp) if tp else None, "tpot_all": tp,
+        summary["per_arm"][arm] = {TPOT: statistics.median(tp) if tp else None, "tpot_all": tp,
                                    "tokens_per_s": statistics.median(th) if th else None, "tokens_per_s_all": th}
         if a.prefill:
             pr = [x for x in plain if x["arm"] == arm and x["op"] == "prefill"]
@@ -1161,19 +1230,19 @@ def main() -> int:
     ef = summary["per_arm"].get("exact-fused", {})
     for arm in arms:
         p = summary["per_arm"][arm]
-        for k in ("tpot_b32_ms", "prefill_step_ms", "ttft_ms"):
+        for k in (TPOT, "prefill_step_ms", "ttft_ms"):
             if p.get(k) and ef.get(k):
                 p[f"gamma_{k}_vs_exact_fused"] = round(p[k] / ef[k], 4)
     base = summary["per_arm"][arms[0]]
     for arm in arms[1:]:
         p = summary["per_arm"][arm]
-        if p["tpot_b32_ms"] and base["tpot_b32_ms"]:
-            p["tpot_overhead_pct"] = round(100 * (p["tpot_b32_ms"] / base["tpot_b32_ms"] - 1), 3)
+        if p[TPOT] and base[TPOT]:
+            p["tpot_overhead_pct"] = round(100 * (p[TPOT] / base[TPOT] - 1), 3)
         if p["tokens_per_s"] and base["tokens_per_s"]:
             p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]
     if sweep:
-        summary["smq_sweep"] = {arm: {x["smq"]: x["tpot_b32_ms"] for x in rows} for arm, rows in sweep.items()}
+        summary["smq_sweep"] = {arm: {x["smq"]: x[sweep_key] for x in rows} for arm, rows in sweep.items()}
     summary["stop"] = {arm: {"error": x.get("error"), "close_error": x.get("close_error"), "fill_steps": x.get("fill_steps"),
                              "end_verdict": (x.get("end") or {}).get("verdict")} for arm, x in stops.items()}
     summary["host_mem_peak_gib"] = mem_peak_gib()

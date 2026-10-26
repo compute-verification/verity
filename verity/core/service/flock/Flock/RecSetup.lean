@@ -37,13 +37,22 @@ def notOwnFormat : String :=
     "rec_live.record_bytes, its rounds first, then its kind, tops, Hello in its keys' order and the link's roots " ++
     "and points, at json.dumps' indent=1)"
 
+/-- Each round of the coin server's record as its JSON reads it (`tr`, its parse), in the record's round order: its
+stream, its round number, and its coins hex-parsed (`f128OfHex`, as `Record.decode` parses the inner session record's). -/
+def jsonRounds (tr : Json) : V (List (Option (List UInt8) × Option Nat × List F128)) :=
+  ((tr.getObjValAs? (Array Json) "rounds").toOption.getD #[]).toList.mapM fun x => do
+    let coins ← (RecVStar.coinsOf x).toList.mapM f128OfHex
+    pure ((x.getObjValAs? String "stream").toOption.map (·.toUTF8.toList), (x.getObjValAs? Nat "k").toOption, coins)
+
 /-- **The record read in its own format is the record its JSON readers read**: at the verifier's inner shape `i`, the
 inner transcript's bytes `tt` read in the coin server's format (`RecRecord.readFull`, the reader the recursion's
 transcript model reads back), and they hold what the JSON readers took of them (`tr`, its parse): Hello's one table, the
 table's `root_B` and the link points (`RecVStar.innerLink`), the rounds the schedule's in its order, each with its
-stream, round, coin count and counts (`RecVStar.checkSchedule`'s), and each rep's salted tops and `c_k` with their
-rounds (`innerLink`'s tops and `cs`, `RecVStar.innerCommits`). The JSON readers run first, so a record they refuse is
-refused as before. -/
+stream, round, coin count and counts (`RecVStar.checkSchedule`'s), each rep's salted tops and `c_k` with their
+rounds (`innerLink`'s tops and `cs`, `RecVStar.innerCommits`), and every round, with its stream and round, its coins
+(`jsonRounds`: the values `innerCommits` holds the inner session record's coins to). The JSON readers run first, so a
+record they refuse is refused as before. Bytes that repeat a key read two ways (`Json.parse` keeps the last, `readFull`
+the first), and the coins are refused unless both read the same. -/
 def checkReads (i : RecVStar.Inner) (tt : String) (tr : Json) (record : String) (cs : RecVStar.InnerCommits) :
     V Unit := do
   let lk ← RecVStar.innerLink tr record
@@ -66,6 +75,9 @@ def checkReads (i : RecVStar.Inner) (tt : String) (tr : Json) (record : String) 
       throw s!"{at_}rep {x}'s salted tops other than its JSON's"
     if repCommits r s != (cs.reps.getD x #[]).toList.map fun (k, c) => (k, [c.toList]) then
       throw s!"{at_}rep {x}'s c_k other than its JSON's"
+  let jr ← (jsonRounds tr).mapError (s!"{at_}a round whose coins its JSON doesn't read as coins: " ++ ·)
+  if r.rounds.map (fun x => (some x.stream, some x.k, x.coins)) != jr then
+    throw s!"{at_}rounds other than its JSON's (stream, round and coins)"
 
 /-- META's `registration` (`inner_registered.REGISTRATION_KEY`): the digest of the circuit registration it binds
 (one-stage `registration.digest`), or none when META names none; and META's `stacked` (`RecVStar.stackedShapeOf`), the
@@ -146,7 +158,7 @@ def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
   let some b := fm.draw | throw "rec-inner: the inner statement has no draw (--rec-inner-draw)"
   let some t := String.fromUTF8? b | throw "rec-inner: the inner statement's draw: not UTF-8"
   let d ← (Json.parse t).mapError (s!"rec-inner: the inner statement's draw: not JSON: " ++ ·)
-  let D ← Draw.UnitDraw.ofJson d
+  let D ← Draw.UnitDraw.ofJson (Flock.norm d)
   if D.proved != Array.range st.n then
     throw s!"rec-inner: the inner statement's draw proves {D.proved.size} units, not every one of its files' {st.n} in order"
 
@@ -233,7 +245,7 @@ def noInnerDraw : String :=
     "is drawn (the coin server's full draw, rec_live.full_draw), the only inner session the recursion's proof covers"
 
 /-- **The recursion's inner session is drawn**: where the verifier holds the inner session's record (`src`, check 5's
-source: `--rec-inner-session` with the inner statement's files or with `--rec-inner-coins`), the record holds a draw
+source: `--rec-inner-session` with the inner statement's files), the record holds a draw
 (`RecCoins.recordDraw`: a `unit_draw` neither absent nor null), which check 5 decodes the record at
 (`RecCoins.drawnSpec`); a session over a record without one is refused (`noInnerDraw`). Without the record it passes. -/
 def innerDrawn (src : Option RecCoins.Source) : V Unit := do

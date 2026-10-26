@@ -41,6 +41,10 @@ form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarante
   are live, message `i` reading the commit strings before it, which (ii) of `RecursiveAudit` at the firewall reads
   (`Proofs.Flock.Recursive.Firewall`). `RecursiveZK` and the circuit-privacy forms above are the committed-coin case,
   each message fixed by the auditor's tape before any commitment.
+* `OuterViewZK`, `OuterSessionsZK`: the outer session's zero knowledge that `RecursiveZK` and the circuit-privacy forms
+  take (`_hOuter`), each an obligation on the view and simulator they range over. At V*'s `--zk` sessions run by the
+  honest prover's code, `OuterSessionsZK` follows from V*'s staging (`OuterZK.recursiveZK_of_sessionZK`,
+  `Proofs.Flock.Recursive.OuterSessionZK`).
 
 C-Flock's definitions and the recursion's model are still in the proofs package, so `Models.lean` does not import this
 module: `Proofs.Flock.Recursive` does.
@@ -198,6 +202,31 @@ def firewallCommits {nh : ℕ} (msgs : (i : Fin nh) → (Fin i → ByteArray) �
     (i : Fin nh) : ByteArray :=
   ZkView.leafH (firewallPairs msgs y i)
 
+/-- Obligation (the outer session is zero knowledge, `RecursiveZK`'s `_hOuter`): at every auditor's tape `a`,
+developer's randomness `p` and firewall salts `y`, the auditor's view of the outer session, `view a h p y` at the
+firewall's commitments `h` to the messages `msgs a p` (`firewallLeaf`), and the simulator `sim a h`, which reads the
+auditor's tape and the commitments only, give every event probabilities within `ε_o`, over the session's randomness and
+the simulator's. -/
+def OuterViewZK {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωo] [Fintype Ωs] (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
+    (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
+    (sim : Ωa → (Fin nh → ByteArray) → Ωs → V) (εo : ℝ≥0∞) : Prop :=
+  ∀ a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
+    prCoin (fun r : Ωo => E (view a (fun i => firewallLeaf (msgs a p i) (y i)) p y r))
+      ≤ prCoin (fun s : Ωs => E (sim a (fun i => firewallLeaf (msgs a p i) (y i)) s)) + εo
+
+/-- Obligation (V*'s sessions are zero knowledge, the circuit-privacy forms' `_hOuter`): at every honest witness `w` of
+a private circuit `P` owing `o` and every registration randomness `r`, `OuterViewZK` of the messages `msgs P w r` and
+the view `view P w r`, with a simulator `sim o (reg P r)` that reads the owed outputs, the registration's view, the
+auditor's tape and the commitments, and nothing of the private circuit, the witness, the salts or the developer's
+randomness. At V*'s `--zk` sessions run by the honest prover's code it holds within V*'s sessions' error at the pinned
+key's hiding gap, on V*'s staging (`SessionsPublic`, `SessionsCoined`, `SessionsHonest`:
+`OuterZK.recursiveZK_of_sessionZK`). -/
+def OuterSessionsZK {Out Prog Wit Rr Rv Ωa Ωp Ωo Ωs V : Type} [Fintype Ωo] [Fintype Ωs] (reg : Prog → Rr → Rv)
+    (honest : Out → Prog → Wit → Prop) (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
+    (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
+    (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) (εo : ℝ≥0∞) : Prop :=
+  ∀ o P w, honest o P w → ∀ r, OuterViewZK nh (msgs P w r) (view P w r) (sim o (reg P r)) εo
+
 /-- **The recursive audit is zero knowledge.** The auditor's tape is `Ωa` and the developer's randomness `Ωp`. The
 firewall sends the `nh` commitments `firewallLeaf (msgs a p i) (y i)`, to the inner messages and tree tops `msgs a p`, each
 under its own fresh uniform salt `y i`; the inner coins the messages answer are the auditor's, fixed by its tape before
@@ -205,7 +234,7 @@ the first commitment (Goldreich–Kahan's committed coins, or a beacon's). Then 
 `h` (the commitments), with the inner proof and the salts as its witness: `view a h p y r` is the auditor's view of it on
 the developer's randomness `r`, against the auditor of tape `a`, which may read `h`. When the outer session has a
 simulator `sim a h` (reading the auditor and the public input only) within `ε_o` of `view` at every tape, witness and
-event, the auditor's whole view (its tape, the commitments, the outer view) is within
+event (`OuterViewZK`), the auditor's whole view (its tape, the commitments, the outer view) is within
 $$\varepsilon_o + n_h \cdot \delta_{K^*}$$
 of the simulator that draws `nh` ideal commitments (`idealLeaf`) and runs `sim` on them: it reads the auditor and public
 inputs only, nothing of the inner proof. One-sided at every event, so both ways (an event's complement).
@@ -223,9 +252,7 @@ def RecursiveZK : Prop :=
     [Fintype Ωs] [Nonempty Ωs] (nh : ℕ) (msgs : Ωa → Ωp → Fin nh → ByteArray)
     (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞},
-    (∀ a p y (E : V → Prop),
-      prCoin (fun r : Ωo => E (view a (fun i => firewallLeaf (msgs a p i) (y i)) p y r))
-        ≤ prCoin (fun s : Ωs => E (sim a (fun i => firewallLeaf (msgs a p i) (y i)) s)) + εo) →
+    OuterViewZK nh msgs view sim εo →
     ∀ E : Ωa × (Fin nh → ByteArray) × V → Prop,
       prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
           E (w.1.1.1, (fun i => firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)),
@@ -273,7 +300,8 @@ top (`firewallLeaf`), and V*'s sessions'. Assumed:
   and every event (`RecursiveCircuitPrivateLeaves` discharges it for a registration by hm96 leaves);
 * V*'s sessions are zero knowledge within `ε_o` at every honest witness, registration randomness, tape and salts, with a
   simulator `sim o v a h` that reads the owed outputs, the registration's view, the auditor's tape and the commitments
-  (V*'s public inputs), and nothing of the private circuit, the witness, the salts or the developer's randomness (`_hOuter`).
+  (V*'s public inputs), and nothing of the private circuit, the witness, the salts or the developer's randomness
+  (`_hOuter`, `OuterSessionsZK`).
 
 Then for every honest witness `w` of every private circuit `P` of the class, and every private circuit `p₀` of the class, the real view
 and the simulated one (`recSimPr`: `p₀` registered, ideal commitments, `sim`), which reads only the class (`p₀` and the
@@ -301,9 +329,7 @@ def RecursiveCircuitPrivate : Prop :=
     (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞}
-    (_hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
-      prCoin (fun q : Ωo => E (view P w r a (fun i => firewallLeaf (msgs P w r a p i) (y i)) p y q))
-        ≤ prCoin (fun s : Ωs => E (sim o (reg P r) a (fun i => firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
+    (_hOuter : OuterSessionsZK reg honest nh msgs view sim εo)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit), honest o P w →
     ∀ E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop,
       recRealPr reg nh msgs view P w E ≤ recSimPr reg nh sim o p₀ E +
@@ -329,9 +355,7 @@ def RecursiveCircuitIndist : Prop :=
     (nh : ℕ) (msgs : Prog → Wit → Rr → Ωa → Ωp → Fin nh → ByteArray)
     (view : Prog → Wit → Rr → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞}
-    (_hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
-      prCoin (fun q : Ωo => E (view P w r a (fun i => firewallLeaf (msgs P w r a p i) (y i)) p y q))
-        ≤ prCoin (fun s : Ωs => E (sim o (reg P r) a (fun i => firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
+    (_hOuter : OuterSessionsZK reg honest nh msgs view sim εo)
     (o : Out) (P P' : Prog) (w w' : Wit), honest o P w → honest o P' w' →
     ∀ E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop,
       recRealPr reg nh msgs view P w E ≤ recRealPr reg nh msgs view P' w' E +
@@ -348,7 +372,7 @@ def regLeaves {Prog Rv : Type} {nr : ℕ} (rows : Prog → Fin nr → ByteArray)
 /-- **The recursive audit is circuit private, the private circuit registered by hm96 leaves.** `RecursiveCircuitPrivate` with
 the registration `regLeaves rows pub` (the private circuit's `nr` rows, each under its own salt, the auditor seeing `pub` of the
 leaves): its hiding is hm96's at the pinned key twice per row, `ε = 2·n_r·δ_{K*}`, so the one hypothesis left is V*'s
-sessions' zero knowledge (`_hOuter`). The salts of the registration may be read by the inner messages and V*'s sessions
+sessions' zero knowledge (`_hOuter`, `OuterSessionsZK`). The salts of the registration may be read by the inner messages and V*'s sessions
 (the registered reads open them), never by the simulator. For every honest witness `w` of every private circuit `P` of the
 class and every private circuit `p₀` of it, the real view and the simulated one give every event probabilities within
 $$2 n_r \cdot \delta_{K^*} + \varepsilon_o + n_h \cdot \delta_{K^*}$$
@@ -367,10 +391,7 @@ def RecursiveCircuitPrivateLeaves : Prop :=
     (nh : ℕ) (msgs : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → Ωp → Fin nh → ByteArray)
     (view : Prog → Wit → (Fin nr → ZkView.Salt) → Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Out → Rv → Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞}
-    (_hOuter : ∀ o P w, honest o P w → ∀ r a p (y : Fin nh → ZkView.Salt) (E : V → Prop),
-      prCoin (fun q : Ωo => E (view P w r a (fun i => firewallLeaf (msgs P w r a p i) (y i)) p y q))
-        ≤ prCoin (fun s : Ωs =>
-            E (sim o (regLeaves rows pub P r) a (fun i => firewallLeaf (msgs P w r a p i) (y i)) s)) + εo)
+    (_hOuter : OuterSessionsZK (regLeaves rows pub) honest nh msgs view sim εo)
     (p₀ : Prog) (o : Out) (P : Prog) (w : Wit), honest o P w →
     ∀ E : Rv × Ωa × (Fin nh → ByteArray) × V → Prop,
       recRealPr (regLeaves rows pub) nh msgs view P w E ≤ recSimPr (regLeaves rows pub) nh sim o p₀ E +

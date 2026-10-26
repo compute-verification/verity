@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Sampling.Tables
 import Proofs.Flock.Claims.KS.ZkExtend
+import Proofs.Flock.Claims.KS.PlainLeafKS
 
 /-!
 # The sampling claims at the deployed record, at SHA-512 at the deployed relation
@@ -12,6 +13,11 @@ holds with no premise (`FlockDeploy.KS.zk_KS_untrim`), so there each form reads 
 * `sampling_deployed_models_sha512`: `sampling_deployed_models`;
 * `sampling_deployed_sampled_sha512`: `sampling_deployed_sampled`;
 * `sampling_deployed_tables_sha512`: `sampling_deployed_tables`.
+
+At the deployed plain record, Flock's plain KS at the trimmed instance holds there with no premise
+(`FlockDeploy.KS.plain_KS`):
+
+* `sampling_deployed_plain_sha512`: `sampling_deployed_plain`.
 
 Each is its form at that hash and relation, with `hKS` discharged; none is a guarantee of its own.
 -/
@@ -43,6 +49,22 @@ theorem sampling_deployed_sha512
       ZK shaD ((deploy relD c).mask Nz Ωz tapeOf S) εzk γzk :=
   sampling_deployed relD c shaD FlockDeploy.KS.zk_KS_untrim hfixed hsessions hnum hslots iroots hopens hfix hprog
     hchecks hreveals hComplete tapeOf S εzk γzk hZK
+
+set_option synthInstance.maxSize 1024 in
+/-- **The sampling claims at the deployed plain record, at SHA-512 at the deployed relation**:
+`sampling_deployed_plain` with Flock's plain KS at the trimmed instance discharged (`FlockDeploy.KS.plain_KS`). -/
+theorem sampling_deployed_plain_sha512
+    (hfixed : DrawFixed (deployPlain relD c)) (hsessions : SessionRuns shaD (deployPlain relD c))
+    (hnum : SessionsInPlain c) (hslots : DrawSlots (deployPlain relD c)) (iroots : Msg → Seen → ℕ → List Msg)
+    (hopens : SessionOpens shaD (deployPlain relD c) iroots) (hfix : InteriorFixed shaD (deployPlain relD c) iroots)
+    (hprog : ProgramScope (deployPlain relD c)) (hchecks : ChecksScope shaD (deployPlain relD c))
+    (hreveals : RevealsLe c) (hComplete : Complete shaD (deployPlain relD c)) :
+    ScopeMatches (deployPlain relD c) ∧ Binding (deployPlain relD c) ∧ Universal (deployPlain relD c) ∧
+      FaultyBoundary ∧ KS shaD (deployPlain relD c) ∧ KSCount shaD (deployPlain relD c) ∧
+      Bits shaD (deployPlain relD c) ∧ Efficient shaD (deployPlain relD c) FlockDeploy.plainStepPoly ∧
+      Complete shaD (deployPlain relD c) :=
+  sampling_deployed_plain relD c shaD FlockDeploy.KS.plain_KS hfixed hsessions hnum hslots iroots hopens hfix hprog
+    hchecks hreveals hComplete
 
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record with zero knowledge from the models, at SHA-512 at the deployed

@@ -10,7 +10,7 @@ inputs (the parameters, the published records, the evidence) and never over its 
 unit has exactly one record, complete, and it is the Program's (`ProgramRecords`). `AnswerAcceptMeans` is the same for
 the bytes `Core.Protocol.answer` decodes. The check keeps each payload as its bytes (`Records.ByteEvidence`), and the
 conclusion reads that evidence as `verity/network-certificate/v4` reads the same JSON (`ByteEvidence.toEvidence`, each
-payload its bits, which `RecordsBytes.evidenceOf_toEvidence` proves is `Check.evidenceOf`). `Properties.Proofs.NetworkRecords` proves both, and that the check accepts
+payload its bits, which `RecordsBytes.evidenceOf_toEvidence` proves is `Check.evidenceOf`). `Proofs.Properties.NetworkRecords` proves both, and that the check accepts
 every unit whose records are the Program's (`programRecords_accepted`, completeness).
 
 Without the grid (`Records.evaluateNoGrid`, `check_link(grid=False)`, N2's, whose head check holds each certified

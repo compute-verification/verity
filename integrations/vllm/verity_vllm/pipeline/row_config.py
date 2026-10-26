@@ -5,7 +5,7 @@ A config run (`--config-run 1`) is the Build, the strict word check of its manif
 --only-arm instrumented`: no control arm, no pairs) under bounded staging with a k-unit replay (`--replay-draw`), and
 `config_record.json` (`config_record`), written however the run ends.  No Match, no manifest-verify rebuild, no VU export: the Commit's
 decision is the instrumented run's own verdict (`commit_verdict`: coverage, openings, the replay).  Without a Match the account the
-executed-prefix class (`check.executed_prefix`) links to is the Commit's own token record (`check.commit_tokens`, `commit/tokens_p<pair>.json`):
+executed-prefix class (`commit.executed_prefix`) links to is the Commit's own token record (`check.commit_tokens`, `commit/tokens_p<pair>.json`):
 when every request ran to its cap the class has nothing to classify and the replay's population is the whole manifest; a request stopped
 before its cap is accepted only when every token it served opens from the run root to the committed sampled id.  Every derive of
 a Build goes through the host's Program cache when one is named (`derive_cached`, `pipeline.program_cache`).
@@ -28,14 +28,6 @@ WORD_CHECK_TIMEOUT = 14400
 REPLAY_TIMEOUT = 14400
 
 
-def _tail(path: str, n: int = 240) -> str:
-    try:
-        lines = open(path, errors="replace").read().splitlines()
-    except OSError:
-        return ""
-    return (lines[-1] if lines else "")[:n]
-
-
 def word_check(row: Any) -> None:
     """The strict word check of the Build's manifest (`epoch word-check`, as a row of record's job runs it) before any Commit; a FAIL stops
     the run (exit 20).  A raised VERITY_QWORD_MAX_GATES passes only when VERITY_QWORD_MAX_GATES_ALLOWED names the same value (the GO's
@@ -45,7 +37,7 @@ def word_check(row: Any) -> None:
                     row.cli("epoch", "word-check", row.row, row.d, "--out", f"{row.d}/strict_word.json", "--world", str(getattr(row, "W", 1)),
                             "--build-word-check", env.get("VERITY_WORD_CHECK", ""), "--build-max-gates", env.get("VERITY_QWORD_MAX_GATES", ""),
                             "--allowed-max-gates", env.get("VERITY_QWORD_MAX_GATES_ALLOWED", "")))
-    row.verdict("word-check", "PASS" if rc == 0 else "FAIL", f"rc={rc} {_tail(f'{row.d}/strict_word.log')}")
+    row.verdict("word-check", "PASS" if rc == 0 else "FAIL", f"rc={rc} {R.tail(f'{row.d}/strict_word.log', 240)}")
     if rc != 0:
         row.log("strict word check FAIL -> stop")
         row.tl("row", "end", ("ok", "false"), ("stopped_at", "word_check"))
@@ -103,7 +95,7 @@ def replay(row: Any) -> None:
             "commit-replay", bundle, "--row-dir", row.d, "--checkpoint-dir", row.ck, "--checkpoints-manifest", row.path("manifests/checkpoints.json"),
             "--model", row.repo, "--revision", row.rev))
         wall = int(time.time()) - t0
-        why = None if rc == 0 else _tail(f"{row.d}/replay.log")
+        why = None if rc == 0 else R.tail(f"{row.d}/replay.log", 240)
     ok = "PASS" if rc == 0 else "FAIL"
     row.verdict("replay", ok, f"rc={rc} wall={wall}s C2 replay on CPU from {bundle or 'no bundle'}" + (f": {why}" if why else ""))
     row.tl("stage.replay", "end", ("ok", ok), ("wall_s", wall))

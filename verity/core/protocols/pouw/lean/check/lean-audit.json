@@ -15,6 +15,11 @@
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
+  "PouwCheck.Chunks": {
+   "imports": [],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
   "PouwCheck.Inputs": {
    "imports": [
     "CoreProtocol.Protocol",
@@ -34,7 +39,8 @@
     "PouwWindow.Draw",
     "PouwWindow.Public",
     "PouwWindow.Length",
-    "PouwCheck.Inputs"
+    "PouwCheck.Inputs",
+    "PouwCheck.WindowSalt"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
@@ -55,8 +61,14 @@
     "PouwCommit.Draws",
     "PouwWindow.Rounds",
     "PouwCheck.Inputs",
-    "SampledProofs.ChallengerRecord"
+    "SampledProofs.ChallengerRecord",
+    "SampledProofs.ChallengerSession"
    ],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "PouwCheck.WindowSalt": {
+   "imports": ["PouwCheck.Pass"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
@@ -67,6 +79,7 @@
     "Flock.Program",
     "Flock.RegKnown",
     "PouwCommit.Frame",
+    "PouwCheck.Chunks",
     "PouwCheck.Json",
     "PouwCheck.Opening",
     "PouwCheck.Pass",

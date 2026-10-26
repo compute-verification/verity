@@ -903,7 +903,7 @@ The deployed V* never reads the inner session's framed transcript. It binds what
 * never in the run: the rows, the salts and the proof files, hidden values of V*'s parts.
 
 The firewall drops the rest of a round's framed bytes: the domain and labels (constants), the proof-of-work nonces
-(never checked, R4: with live coins grinding buys nothing) and the statement digest (a function of the statement). So
+(each `0`, the only one the verifier accepts, R4: with live coins grinding buys nothing) and the statement digest (a function of the statement). So
 the inner verifier `E*`'s views run at is one over that representation (`Bound.IVStar`): an element-level inner Flock
 (`Bound.DE`, at plain SHA-512 leaves), each round message before its last committed as rows under hm96 at the pinned
 key, its last message their openings with the element-level last message. `KSBound` is the recursion's KS there, and
@@ -1087,10 +1087,11 @@ collides on the salt hashes and a different row, at one salt, on the row digests
 committed (Flock's Merkle binding at plain leaves). At the deployment those steps are the code side's (`nextE`), so
 (P4) is a premise of the bound record, not a consequence of `Binds`.
 
-**Superseded** by `LastBindsEC` with `LastCoinFree` (card ef47c02e, 19 Oct): `LastBinds` is false at the deployed
-bound record (`RecDeploy.lastBinds_deployed_rejects`). The deployed plain verifier reads the record's text only through
-`Json.parse`, so the same last message with a trailing space in the record is decided alike, with the same calls, while
-`final` reads the two apart. It stays stated because the route as first proved (`RecDeploy.KSBoundRoute`) reads it. -/
+**Superseded** by `LastBindsEC` with `LastCoinFree` (card ef47c02e, 19 Oct): `LastBinds` was false at the deployed
+bound record before S0, as the deployed plain verifier read the record's text only through `Json.parse`, so the same
+last message with a trailing space in the record was decided alike, with the same calls, while `final` reads the two
+apart. S0 refuses that text (`RecDeploy.LastGap.check_space`). It stays stated because the route as first proved
+(`RecDeploy.KSBoundRoute`) reads it. -/
 def Bound.LastBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ (x : Msg) (as as' : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → as'.length = as.length →
     cs.length = as.length → cs'.length = as.length → as.dropLast = as'.dropLast → cs.dropLast = cs'.dropLast →

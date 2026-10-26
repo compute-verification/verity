@@ -1,5 +1,5 @@
 """Reference-mode op rules (GUIDANCE §43.2 (B)): unannotated f32 / bf16 modules -> NUMERIC's reference kinds
-(`verity_vllm/program/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`). Every rule checks dtypes and shapes
+(`verity/ml/definitions/registry/ref_prims.py`, vocabulary `verity-ref-vocab/1`). Every rule checks dtypes and shapes
 structurally; anything else is `Unsupported`. The reference kinds *define* the arithmetic (sequential f32 chains,
 one DT rounding at stated points); torch CPU agreement is measured, not assumed (`docs/data/ref-prims/`).
 """
@@ -14,7 +14,8 @@ import torch
 from verity.ml.circuits.refs import Coll, array_of
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import StaticIndex, refuse
-from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type, shape_of
+from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, rows_of, shape
 

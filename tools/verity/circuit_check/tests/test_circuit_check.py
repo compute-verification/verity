@@ -200,7 +200,7 @@ def test_a_targeted_run_without_the_catalog_reports_what_one_with_it_does(monkey
             "not a candidate" if TG.family(TG.definition(t)) not in short["candidates"] else "?" for t in DECIDED} == DECIDED
 
     def strip(rep):
-        return {**rep, "targets": [{k: v for k, v in t.items() if k != "seconds"} for t in rep["targets"]]}
+        return {**rep, "targets": [{k: v for k, v in t.items() if k not in ("seconds", "seconds_by_check")} for t in rep["targets"]]}
 
     assert strip(fast) == strip(full)
     assert [t["partition"]["applies"] for t in full["targets"]] == [v != "not a candidate" for v in DECIDED.values()]
@@ -223,7 +223,7 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
     """`circuit-check <id>` finds a suite target that the registries hold only once the catalog's roots are traced (the gathers
     `boolean_gather.gather_bf16(n)` builds) or whose id writes a dict static as its digest (`gf2k.GfResiduals`'s schema), and
     an id neither knows still raises."""
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     real = W.specialization
 
@@ -457,7 +457,7 @@ def _f32x2():
 
 def test_a_value_computed_twice_in_one_unit_is_a_redundant_gate():
     from verity.ml.circuits.types import Value
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckRedundant", (_f32x2(), Value(32)),
                     lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])))
@@ -472,7 +472,7 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
     node by node; the whole Definition's cut compares them)."""
     from verity.ml.circuits.refs import array_of
     from verity.ml.circuits.types import Array, Value
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckRecompute", (_f32x2(), Array(2, Value(32))),
                     lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
@@ -517,7 +517,7 @@ def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
 def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
     """Under v2 only `gate-recomputed` is reported instead of refused: a Boolean Call whose cut has any other code fails by name."""
     from verity.ml.circuits.partition import CutVerdict
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     real = W.units
 
@@ -613,7 +613,7 @@ def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding(suite):
 
 def test_a_gate_no_output_reads_is_a_dead_gate():
     from verity.ml.circuits.types import Value
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     def body(B, S, x):
         B.call(P.F32Mul, x[0], x[1])
@@ -765,7 +765,7 @@ def test_a_boolean_constant_is_checked_on_its_one_instance():
 
 def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
     from verity_flock import ir_lower as IL
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     add = IL.PIECES["F32Add_v1"]
     monkeypatch.setitem(IL.PIECES, "F32Mul_v1", lambda C, a, b: add(C, a, b))
@@ -774,11 +774,77 @@ def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
 
 
 def test_a_lowering_count_off_its_pin_is_named():
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     pins = {"pieces": {"F32Mul_v1": {"and": 1}}, "units": {}}
     e = CK.check_definition(P.F32Mul, OPTS, pins=pins)
     assert any(f["name"].startswith("lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: and 1 -> ") for f in e["failures"])
+
+
+def _lowering_pin(e: dict) -> dict:
+    (r,) = [r for r in e["correspondence"]["realizations"] if r["via"] == "c-flock:ir_lower"]
+    return r["pin"]
+
+
+def test_a_lowering_type_is_its_flat_circuit_type():
+    """A pin's ``type`` (`checks.lowering_type`) is `circuit_types.from_gf2`'s digest of the lowering: its named inputs and
+    outputs as ports, its assertions as one more port, its tables by their SHA-512; an assertion and a table read each enter it."""
+    from verity_flock import circuit_types as CT
+    from verity_flock import gf2
+    from verity_flock import tail_pieces as TP
+    from verity_flock import type_trace as TT
+
+    def build(asserted: bool):
+        C = gf2.Circuit()
+        a, b = C.input("a", 2), C.input("b", TP.TABLE_BITS["ex2"])
+        x = C.AND(a[0], a[1])
+        v = C.lookup("ex2", [x ^ b[0], *b[1:]], TP.VALUE_BITS)
+        C.output("o", [x, v[0] ^ a[0]])
+        if asserted:
+            C.assert_zero("z", v[1] ^ b[2])
+        return C
+
+    C = build(True)
+    ins, outs = [*C.inputs["a"], *C.inputs["b"]], [*C.outputs["o"], C.asserts[0][1]]
+    t = CT.from_gf2(C, ins, outs, [(1, 2), (1, len(C.inputs["b"]))], [(1, 2), (1, 1)], "program",
+                    {"ex2": (TT.table_sha512("ex2"), TP.TABLE_BITS["ex2"], TP.VALUE_BITS)})
+    assert [it[0] for it in t.items] == [CT.AND, CT.READ] and CK.lowering_type(C) == t.digest()
+    assert CK.lowering_type(build(False)) != t.digest()
+
+
+def test_a_lowering_with_its_pinned_and_count_but_another_circuit_is_refused_on_its_type(monkeypatch):
+    """The same ANDs computing the same function, but built another way (every AND's operands swapped), match the pin's AND count
+    and every correspondence check: only the pin's ``type`` refuses it."""
+    from verity.ml.circuits.boolean import forms
+    from verity.ml.definitions.registry import prims as P
+
+    pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
+    pins = {"pieces": {"F32Mul_v1": pin["counts"]}, "units": {}}
+    assert not CK.check_definition(P.F32Mul, OPTS, pins=pins)["failures"]
+    AND = forms.Circuit.AND
+    monkeypatch.setattr(forms.Circuit, "AND", lambda self, a, b: AND(self, b, a))
+    e = CK.check_definition(P.F32Mul, OPTS, pins=pins)
+    assert _lowering_pin(e)["counts"]["and"] == pin["counts"]["and"]
+    assert [f["name"].split(" (")[0] for f in e["failures"]] == [
+        f"lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: type {pin['counts']['type'][:16]}... -> {_lowering_pin(e)['counts']['type'][:16]}..."]
+
+
+def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monkeypatch):
+    """A pin with the lowering's AND count and no ``type`` (a branch written before ``type``) passes with an ``untyped``
+    warning, and `--update-pins` writes the lowering's ``type`` into it."""
+    from circuit_check import cli
+    from circuit_check import sidecars as SC
+    from verity.ml.definitions.registry import prims as P
+
+    pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
+    e = CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {"F32Mul_v1": {"and": pin["counts"]["and"]}}, "units": {}})
+    assert not e["failures"] and _lowering_pin(e)["status"] == "untyped"
+    assert [w["name"].split(" (")[0] for w in e["warnings"] if w["code"] == "untyped"] == [
+        "lowering/untyped F32Mul_v1: 1 [F32Mul_v1]: no type"]
+    written = {}
+    monkeypatch.setattr(SC, "write_pins", written.update)
+    cli.update_pins({"targets": [e]})
+    assert written == {("pieces", "F32Mul_v1"): pin["counts"]}
 
 
 def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
@@ -816,8 +882,9 @@ def test_redundant_ands_are_counted():
 def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     from circuit_check import cli
 
-    # Every target here is a Call of a served Program, which `targets.is_call` decides without the catalog.
-    call = ["-q"]
+    # Every target here is a Call of a served Program, which `targets.is_call` decides without the catalog.  Uncached: a cache
+    # would trace this test process for good (`cache.trace`).
+    call = ["-q", "--no-cache"]
     out = tmp_path / "r.json"
     assert cli.main(["RoPEHead_v1{D=8}", BOOL_RECOMPUTE, "--out", str(out), *call]) == 0
     r = json.loads(out.read_text())
@@ -956,11 +1023,11 @@ def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
 def test_parallel_jobs_give_the_serial_report(tmp_path):
     """It checks four real targets serially and in worker processes, so it catches a `--jobs` worker whose report differs from
     the serial one. Opt-in: run it after a change to `cli.run`, `cli.parallel` or the task list's order. Only an isolated
-    result has ``peak_gb`` and ``rss_start_gb`` (`cli.run`), so they are stripped with ``seconds``."""
+    result has ``peak_gb`` and ``rss_start_gb`` (`cli.run`), so they are stripped with ``seconds`` and ``seconds_by_check``."""
     from circuit_check import cli
 
     specs = ["F32Mul_v1", "RMSNormTriton_v1{N=64,EPS=1e-05}", "TokenSelect_v1{V=64}", "rope-head"]
-    measured = {"seconds", "peak_gb", "rss_start_gb"}
+    measured = {"seconds", "seconds_by_check", "peak_gb", "rss_start_gb"}
     strip = lambda rep: [{k: v for k, v in t.items() if k not in measured} for t in rep["targets"]]  # noqa: E731
     assert strip(cli.run(specs, OPTS, log=None, jobs=3)) == strip(cli.run(specs, OPTS, log=None, jobs=1))
 

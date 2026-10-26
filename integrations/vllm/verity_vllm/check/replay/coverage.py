@@ -9,10 +9,15 @@ from typing import Any
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.check.replay.replay_codes import NOT_YET
-from verity_vllm.program.kernels.rows import EVALUATORS
+from verity.ml.definitions.numerics.rows import EVALUATORS
 from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.opening import alias_table, resolve_op_path
 from verity_vllm.check.replay.population import ATTENTION_ROW_FAMILIES, EXECUTED_PREFIX_RULE, NOT_EXECUTED_SCOPE
+from verity_vllm.records.fields import RecordError
+from verity_vllm.records.required_manifest import RequiredManifest
+
+#: what `query_population` names a manifest it was handed (the replay is handed the parsed JSON, not its path)
+HANDED = "the required-value manifest the replay was handed"
 
 
 #: named in population() whenever a Program carries attention rows: what the row relation does not read (a Q_fine_v1 research item, not a
@@ -91,16 +96,22 @@ def _address_family(op: str, member: str, a: dict[str, Any]) -> str:
     return "moe_block_stream" if _MOE_LAYER_RE.match(op) else RM.alias_family(member)
 
 
-def _manifest_engine_name(manifest: dict[str, Any]) -> str:
-    """Which engine built a manifest: the traversal's header carries `engine` (schema + `traversal` = the class path; R16 reqval), the
-    inventory's carries none (byte-for-byte the R15 header) -- the guard header names it too where present (F-r17b-09)."""
-    eng = manifest.get("engine")
-    if isinstance(eng, dict):
-        return "traversal" if "traversal" in eng else str(eng.get("name") or "traversal")
+def _manifest_engine_name(manifest: RequiredManifest) -> str:
+    """Which engine built a manifest: the traversal's header carries `engine` (schema + `traversal` = the class path), the
+    inventory's carries none (byte-for-byte the older header) -- the guard header names it too where present."""
+    eng = manifest.engine
     if isinstance(eng, str):
         return eng
-    g = manifest.get("guard")
-    return str(g.get("engine")) if isinstance(g, dict) and g.get("engine") else "inventory"
+    if eng is not None:
+        return "traversal" if "traversal" in eng else str(eng.get("name") or "traversal")
+    g = manifest.guard
+    return str(g.get("engine")) if g is not None and g.get("engine") else "inventory"
+
+
+def _header(man: RequiredManifest | None, key: str) -> Any:
+    """A field of the manifest's query header; None without a manifest, a header (`acquire.served` writes none) or the field (the
+    compiled manifest's header names its profile only)."""
+    return man.query.get(key) if man is not None and man.query is not None else None
 
 
 def controller_rows_of(programs: dict[str, Any], indices: dict[int, "ProgramIndex"] | None = None) -> dict[str, int]:
@@ -116,9 +127,9 @@ def controller_rows_of(programs: dict[str, Any], indices: dict[int, "ProgramInde
     return out
 
 
-def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dict], evaluated: set[tuple], *, ranks: list[int],
+def query_population(manifest: RequiredManifest | dict[str, Any] | None, addresses: dict[tuple, dict], evaluated: set[tuple], *, ranks: list[int],
                      strata: dict[str, dict] | None = None, first_n: int = 6, executed_prefix: dict[str, dict] | None = None, controller_rows: dict[str, int] | None = None) -> dict[str, Any]:
-    """[R17-3 / reqval] Reconcile the replay's reach against the population of record, Q(P), IDENTITY BY IDENTITY.
+    """Reconcile the replay's reach against the population of record, Q(P), IDENTITY BY IDENTITY.
     `manifest`: the required-value manifest of the row (Q_module(P): the module-boundary population over the Program, families selected by
     the canonical VU query; the traversal adapter's or the inventory's -- the same identities either way); None = no manifest supplied,
     the reconciliation is over the Program rows' own addresses and says so.
@@ -132,17 +143,24 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
       * query_checks    -- the fail-closed reconciliation: a VU whose address is NOT a required identity (the replay enumerating
                            something Q(P) does not require), a required identity NO row produces, a row count that disagrees with the
                            manifest's `rows`, a rank set that disagrees.  Any non-zero count is a finding on the record (`ok` False).
-      * not_executed_by_rule [COORD R17-26] -- `executed_prefix` (request -> `executed_prefix_of_record`): the identities of Q(P) at
+      * not_executed_by_rule -- `executed_prefix` (request -> `executed_prefix_of_record`): the identities of Q(P) at
                            request-relative steps >= n_exec are the third bucket beside reached / uncovered (query_total unchanged;
                            `accounted` = reached + uncovered + not-executed == |Q(P)|); a request whose prefix carries faults is NOT
                            classified and fails the check by name."""
+    # a manifest missing a field its writers always write is refused by name: the reach is then reconciled against nothing, and
+    # `query_checks` fails (`manifest_refused`), never a crash and never the unreconciled None of a replay handed no manifest
+    refused: RecordError | None = None
+    try:
+        man = RequiredManifest.of(manifest, HANDED) if manifest is not None else None
+    except RecordError as e:
+        man, refused = None, e
     by_key: dict[tuple, dict] = {}
     fam_total: Counter = Counter()
     ranks_seen: set[int] = set()
     # shared modules (vLLM's one RotaryEmbedding instance called by every layer): the manifest addresses them at the FIRST layer's path
     # with invocation = layer order and records the per-layer paths in `op_path_aliases` (alias -> [canonical, invocation]) -- resolved
     # through the ONE table `CommittedStore.words` reads through as well (rel M-0367)
-    aliases = alias_table(manifest)
+    aliases = alias_table(man)
 
     def _key(rid: str, st: int, op: str, mem: str) -> tuple:
         canon, inv = resolve_op_path(aliases, op)
@@ -150,8 +168,8 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
 
     non_row_idents: list[dict] = []                                                # [F-moe-r17-05] the no-row families, classified below
     keyed, keyed_not_exec = Counter(), Counter()                                   # row-produced identities of a no-row family (ATen norm scales)
-    if manifest is not None:
-        for ident in manifest.get("identities") or []:
+    if man is not None:
+        for ident in man.identities:
             fam = str(ident.get("family"))
             fam_total[fam] += 1
             ranks_seen.add(int(ident.get("rank", 0) or 0))
@@ -183,9 +201,9 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
     for (rid, st, op, mem), a in sorted(addresses.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2], kv[0][3])):
         k5 = _key(rid, st, op, mem)
         seen_keys.add(k5)
-        ident = by_key.get(k5) if manifest is not None else None
+        ident = by_key.get(k5) if man is not None else None
         fam = str(ident["family"]) if ident is not None else _address_family(op, mem, a)
-        if manifest is not None and ident is None:
+        if man is not None and ident is None:
             n_outside += 1
             if len(outside) < first_n:
                 outside.append({"request_id": rid, "step": st, "op_path": op, "member": mem, "spec": a["spec"], "class": a["class"]})
@@ -213,7 +231,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
         # `st` is the identity's / Program row's OWN step = request-relative already (the traversal annotates `engine_step` = arrive + step
         # beside it); R17-1's n_exec counts the request's own steps, so the comparison is direct -- the arrival enters only for the
         # batch-level planes below, whose one step is the ENGINE's
-        if ep is not None and not ep.get("faults") and int(st) >= int(ep["n_exec"]) and (manifest is None or ident is not None):
+        if ep is not None and not ep.get("faults") and int(st) >= int(ep["n_exec"]) and (man is None or ident is not None):
             not_exec[fam] += 1                                                    # [R17-26] classified, not reached, not uncovered
             not_exec_req[str(rid)] += 1
             not_exec_req_rows[str(rid)] += 1
@@ -222,7 +240,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
                 past_stop.append({"request_id": rid, "step": st, "op_path": op, "member": mem, "n_exec": ep["n_exec"]})
             continue
         if a["class"] == "vu":
-            if manifest is None or ident is not None:
+            if man is None or ident is not None:
                 reached[fam] += 1
                 reached_rows[fam] += int(a["rows"])
                 if (rid, st, op) in evaluated:
@@ -238,7 +256,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
             g["first"].append([rid, st, op, mem])
     # --- required identities no row produces (manifest / replay address disagreement) ----------------------------------------------------
     missing: list[dict] = []
-    if manifest is not None:
+    if man is not None:
         for k, ident in by_key.items():
             if k not in seen_keys:
                 n_missing += 1
@@ -314,7 +332,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
     # mechanism of record (the lifted record's R8 controller replay through the registered evaluators; the executed prefix from r_t, R3)
     # instead of letting them be silently absent.  identities 0 by rule, rows counted; a decision to give the bits identities is a Q change
     # (Q_module_v2: digest moves), recorded in Q-EXPANSION -- not made here.
-    mq = (manifest or {}).get("query") if isinstance(manifest, dict) else None
+    mq = man.query if man is not None else None
     controller = None
     hdr_rows = int(mq.get("guard_rows") or 0) if isinstance(mq, dict) else 0
     own_rows = {str(k): int(v) for k, v in (controller_rows or {}).items()}          # the replay's own count per request Program (c2)
@@ -348,7 +366,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
     # identity at its not-executed steps was CUT before it reached the population (a restricted manifest handed in as Q(P)) -- N_manifest
     # would shrink silently and the class count 0.  Named here, fails the reconciliation: the manifest of record is never restricted.
     manifest_cut: list[dict] = []
-    if manifest is not None:
+    if man is not None:
         for r, e in sorted((executed_prefix or {}).items()):
             if e.get("faults") or int(e["n_exec"]) >= int(e["cap"]):
                 continue
@@ -364,8 +382,8 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
     alias_images = {(str(c), int(k)) for c, k in aliases.values()}
     unreachable: list[dict] = []
     n_unreachable = 0
-    if manifest is not None:
-        for ident in manifest.get("identities") or []:
+    if man is not None:
+        for ident in man.identities:
             inv = int(ident.get("invocation", 0) or 0)
             if inv >= 1 and (str(ident.get("op_path")), inv) not in alias_images:
                 n_unreachable += 1
@@ -381,41 +399,46 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
               "rows_disagree": {"n": n_rows_disagree, "first": rows_disagree},
               "rows_annotation_inconsistent": {"n": n_rows_annot, "first": rows_annot,
                                                "note": "manifest annotation only (`rows` != element_range / width); digest-neutral, not a reach gap"},
-              "ranks": {"replay": [int(r) for r in ranks], "manifest": sorted(ranks_seen) if manifest is not None else None,
-                        "equal": (sorted(ranks_seen) == sorted(int(r) for r in ranks)) if manifest is not None else None},
-              "accounted": (n_reached + n_uncovered + n_not_exec == total) if manifest is not None else None,
+              "ranks": {"replay": [int(r) for r in ranks], "manifest": sorted(ranks_seen) if man is not None else None,
+                        "equal": (sorted(ranks_seen) == sorted(int(r) for r in ranks)) if man is not None else None},
+              "accounted": (n_reached + n_uncovered + n_not_exec == total) if man is not None else None,
               "unstated_families": [u["family"] for u in uncovered if u["class"] == "unstated"],
               "controller_rows_disagree": {"n": len(ctrl_disagree), "first": ctrl_disagree[:first_n]},   # [R4 c2] header vs the replay's own count
               "executed_prefix_rule": {"applied": bool(executed_prefix), "faults": ep_faults, "evaluated_past_stop": {"n": len(past_stop), "first": past_stop[:first_n]},
                                        "manifest_cut_before_classification": {"n": len(manifest_cut), "first": manifest_cut[:first_n]}}}
-    checks["ok"] = (None if manifest is None else                                  # None = not reconciled (no Q(P) supplied), stated
+    if refused is not None:
+        checks["manifest_refused"] = {"field": refused.field, "why": str(refused)}
+    checks["ok"] = (False if refused is not None else None if man is None else     # None = not reconciled (no Q(P) supplied), stated
                     bool(n_outside == 0 and n_missing == 0 and n_unreachable == 0 and n_rows_disagree == 0 and checks["ranks"]["equal"] is not False
                          and checks["accounted"] is not False and not checks["unstated_families"]
                          and not ep_faults and not past_stop and not manifest_cut and not ctrl_disagree))
-    _qid0 = ((manifest or {}).get("query") or {}).get("query_id") or "Q_module_v1"
+    _qid0 = _header(man, "query_id") or "Q_module_v1"
     _noun = {"Q_module_v1": ("the module-boundary query of record", "Program row = module-boundary VU"),
              "Q_module_pad_v1": ("the declared padded-boundary query (revb S-r17b-51 (b))", "Program row = module-boundary VU + every slot unit of a padded MoE row"),
              "Q_fine_v1": ("the fine query (vu_canonical) through the RequiredValues path", "fine VU = relation-level partition unit"),
              "Q_fine_direct_v1": ("the directly-committed fine query (R17-43 s8)", "fine VU ending at a materialised word + the module rows"),
-             }.get(_qid0, ("the query of record", (((manifest or {}).get("query") or {}).get("unit") or "per its header")))
+             }.get(_qid0, ("the query of record", (_header(man, "unit") or "per its header")))
     src = ((f"required manifest: {_qid0}(P) -- {_noun[0]} over the Program (unit: {_noun[1]}; "
-            "Q_fine_v1 selects the families, not the unit; R17-3 authority, R17-9 (ii), R17-10)" if manifest is not None
+            "Q_fine_v1 selects the families, not the unit; R17-3 authority, R17-9 (ii), R17-10)" if man is not None
+            else f"required manifest REFUSED ({refused}): nothing reconciled; the Program rows' own manifest addresses, NOT a Q(P) statement"
+            if refused is not None
             else "NO required manifest supplied: the Program rows' own manifest addresses (the v2 query's population; NOT a Q(P) statement -- "
                  "weights / ids / hidden streams absent)"))
     # [R17 revb F-r17b-09] the guard's state travels with Q(P) onto the record: a manifest whose dataflow guard was not armed says so here
-    guard = (manifest or {}).get("guard") if manifest is not None else None
-    guard_line = (("guard armed" if guard.get("armed") else "guard NOT armed") + f" ({guard.get('engine')})" if isinstance(guard, dict)
-                  else ("guard state not on the manifest (pre-R17 header)" if manifest is not None else "no manifest"))
+    guard = man.guard if man is not None else None
+    guard_line = (("guard armed" if guard.get("armed") else "guard NOT armed") + f" ({guard.get('engine')})" if guard is not None
+                  else ("guard state not on the manifest (pre-R17 header)" if man is not None
+                        else "manifest refused" if refused is not None else "no manifest"))
     # [R17 reqval task 3] the one-release cross-check (traversal of record, inventory beside it) travels onto the record and the scope line
-    cc = (manifest or {}).get("cross_check") if manifest is not None else None
-    if isinstance(cc, dict):
+    cc = man.cross_check if man is not None else None
+    if cc is not None:
         guard_line += ("; cross-check " + ("AGREED" if cc.get("agree") else "DISAGREED") +
                        f" ({cc.get('primary_engine')} vs {cc.get('other_engine')}: {(cc.get('identities') or {}).get(cc.get('primary_engine'))} / "
                        f"{(cc.get('identities') or {}).get(cc.get('other_engine'))} identities)")
-    elif manifest is not None:
-        guard_line += f"; no cross-check on the manifest (one engine asked for by name: {_manifest_engine_name(manifest)})"
+    elif man is not None:
+        guard_line += f"; no cross-check on the manifest (one engine asked for by name: {_manifest_engine_name(man)})"
     # [COORD R17-10] the query of record BY ID on the scope line (a manifest predating the id: named as such, never assumed)
-    qid = (((manifest or {}).get("query") or {}).get("query_id") or "Q_module (pre-R17-10 header, no query_id)") if manifest is not None else "Q"
+    qid = (_header(man, "query_id") or "Q_module (pre-R17-10 header, no query_id)") if man is not None else "Q"
     if total:
         scope = (f"{qid}(P) = {total} identities ({', '.join(f'{k} {v}' for k, v in sorted(fam_total.items()))}; {guard_line}); exact replay reaches {n_reached} "
                  f"({100.0 * n_reached / total:.1f}%), under an evaluated module {n_evald}")
@@ -428,18 +451,19 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
                                                                              for r, e in sorted((executed_prefix or {}).items()) if e.get('steps_not_executed')) + ")"
                   + ("; executed-prefix FAULTS: " + "; ".join(f"{f['request_id']}: {f['faults'][0]}" for f in ep_faults) if ep_faults else ""))
     return {"query_total": {"source": src, "identities": int(total), "by_family": {k: int(v) for k, v in sorted(fam_total.items())},
-                            "manifest_digest": (manifest or {}).get("manifest_digest"), "program_digest": (manifest or {}).get("program_digest"),
-                            "query_digest": ((manifest or {}).get("query") or {}).get("query_digest"),
-                            "query_id": ((manifest or {}).get("query") or {}).get("query_id"),                     # [R17-10] Q_module_v1
-                            "query_id_digest": ((manifest or {}).get("query") or {}).get("query_id_digest"),
-                            "engine": (_manifest_engine_name(manifest) if manifest is not None else None),
-                            "implemented_query": ((manifest or {}).get("query") or {}).get("implemented_query"),
+                            "manifest_digest": man.manifest_digest if man is not None else None,
+                            "program_digest": man.program_digest if man is not None else None,
+                            "query_digest": _header(man, "query_digest"),
+                            "query_id": _header(man, "query_id"),                                                  # [R17-10] Q_module_v1
+                            "query_id_digest": _header(man, "query_id_digest"),
+                            "engine": (_manifest_engine_name(man) if man is not None else None),
+                            "implemented_query": _header(man, "implemented_query"),
                             "unit": "Program row = module-boundary VU under Q_module_v1 (a `vus` count above is a count of those rows)",
-                            "requests": (manifest or {}).get("requests"),
+                            "requests": man.requests if man is not None else None,
                             "guard": ({k: guard.get(k) for k in ("engine", "armed", "available", "fully_wired", "flags", "named_input") if k in guard}
-                                      if isinstance(guard, dict) else None),
+                                      if guard is not None else None),
                             "cross_check": ({k: cc.get(k) for k in ("agree", "primary_engine", "other_engine", "digests", "identities", "complete", "why") if k in cc}
-                                            if isinstance(cc, dict) else None),
+                                            if cc is not None else None),
                             "guard_rule": ("the 'missing family cannot vanish from both sides' guard (unnamed crossing / unnamed input / hidden-BN "
                                            "disagreement) is ARMED only when the traversal engine audited every request Program's operand runs; "
                                            "not armed = the population is the vocabulary's word alone, said here rather than read as clean")},
@@ -469,14 +493,14 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
                                   "scope": NOT_EXECUTED_SCOPE},
             "not_executed_by_rule": {"rule": EXECUTED_PREFIX_RULE, "scope": NOT_EXECUTED_SCOPE, "applied": bool(executed_prefix), "identities": int(n_not_exec),
                                      "by_family": {k: int(v) for k, v in sorted(not_exec.items())},
-                                     "totals": {"N_manifest": int(total) if manifest is not None else None,
-                                                "N_required": (int(total) - int(n_not_exec)) if manifest is not None else None, "N_excluded": int(n_not_exec),
+                                     "totals": {"N_manifest": int(total) if man is not None else None,
+                                                "N_required": (int(total) - int(n_not_exec)) if man is not None else None, "N_excluded": int(n_not_exec),
                                                 # a batch-level family carries its plane-cell statement beside the identity-level counts (the key moe's
                                                 # reconciler reads, M-0468): {identities: planes fully not executed, cells: (plane, request) cells past the stop}
                                                 "by_family": {k: {"N_manifest": int(v), "N_required": int(v) - int(not_exec.get(k, 0)), "N_excluded": int(not_exec.get(k, 0)),
                                                                   **({"plane_cells_not_executed": {"identities": int(batch_level[k]["identities_not_executed"]),
                                                                                                    "cells": int(batch_level[k]["cells_not_executed"])}} if k in batch_level else {})}
-                                                              for k, v in sorted(fam_total.items())} if manifest is not None else None},
+                                                              for k, v in sorted(fam_total.items())} if man is not None else None},
                                      "by_request": {r: dict(e, identities=int(not_exec_req.get(r, 0)), excluded_unexecuted_identities=int(not_exec_req.get(r, 0)),
                                                         excluded_row_identities=int(not_exec_req_rows.get(r, 0)),
                                                         required_row_identities=int(req_ids.get(r, 0)) - int(not_exec_req_rows.get(r, 0)),
@@ -492,7 +516,7 @@ def query_population(manifest: dict[str, Any] | None, addresses: dict[tuple, dic
 
 
 def _uncovered_mechanisms(all_vus: list[dict], not_ev_fam: Counter) -> list[dict]:
-    """[R17 dense, ruling R17-11] The Program's attention rows are evaluated on their committed boundary (the Q_module_v1 unit); the
+    """The Program's attention rows are evaluated on their committed boundary (the Q_module_v1 unit); the
     AttnBlock interiors inside them (Q_fine_v1 units) are not read -- the record names that with the row count, so a PASS bounds its claim."""
     n = sum(1 for v in all_vus if v["family"] in ATTENTION_ROW_FAMILIES) + sum(int(not_ev_fam.get(f, 0)) for f in ATTENTION_ROW_FAMILIES)
     if n == 0:
@@ -506,12 +530,12 @@ def _uncovered_mechanisms(all_vus: list[dict], not_ev_fam: Counter) -> list[dict
                                        "hidden_stream (the record's not_compared_by_family.hidden_stream is the count) -- Stage B (Q_fine_v1)"}]
 
 
-def form_b_families(manifest: dict[str, Any] | None) -> dict[str, int]:
+def form_b_families(manifest: RequiredManifest | dict[str, Any] | None) -> dict[str, int]:
     """Producer family -> the manifest's required `instance_outputs` identities this replay has no registered evaluator for (outside
     NOT_YET, not a token selector).  The Commit value-checks those by form (B) only, which is complete only over a Match that snapshotted
     every step (commit_verdict._form_b_complete_over_values): the Match reads this to pick its snapshot steps."""
     out: Counter = Counter()
-    for r in (manifest or {}).get("identities") or []:
+    for r in RequiredManifest.of(manifest, HANDED).identities if manifest is not None else ():
         if r.get("family") != "instance_outputs" or not r.get("spec"):
             continue
         fam = str(r["spec"]).split("{", 1)[0].strip()

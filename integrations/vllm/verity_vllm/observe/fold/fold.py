@@ -12,7 +12,7 @@ Implemented by lane L4.  Contract:
 
 Root parameters (in order):
     prompt  : one `Array(LP_r, I32)` per request (in `header.workload["requests"]` order) from `Root(role="prompt_token")`;
-    weights : `verity_vllm.program.registry.b1.weights_type(C)` Record, fields populated from `Root(role="weight"|"buffer")`
+    weights : `verity.ml.definitions.registry.b1.weights_type(C)` Record, fields populated from `Root(role="weight"|"buffer")`
               events through `profile.weight_field(name)`; a Root whose field is None is a Note: nothing is written
               under its view, so a later read of it is Unresolved (raised under an accepted profile) — the M1 log's
               120 per-layer fp8 `_k/_v/_q/_prob_scale` fp32 scalars are such roots and nothing reads them;
@@ -39,7 +39,7 @@ Per step (see `tree.step_events`, `resolver.resolve_step`):
        `StepStart.seq_lens[r] >= prompt_len_r + (served samples of r so far)`; a sample taken at a partial-prefill step
        (chunked prefill) or at a partial chunk of a post-preemption recompute is computed — its TokenSelect instance
        stays in the Program — but the engine drops it: it is not returned, not in `result.sampled`, never the target of
-       a StepLink.  Such samples are listed in `result.discarded`.  [R9 ref 2026-09-18] Every SERVED sample is also
+       a StepLink.  Such samples are listed in `result.discarded`.  Every SERVED sample is also
        recorded by the position it produces (`logits_rows[j].position + 1`), which is how a re-fed generated token
        (preemption → recompute) finds its producing TokenSelect output when the observer emitted no StepLink for it.
 
@@ -60,9 +60,7 @@ Implementation notes (L4)
   recent sample) gets the output refs of the SERVED sample that produced its position (`sample_pos[(req, position)]`,
   checked against the input token); such rows are listed in `result.refed`.  When no served sample produced the
   position the fold FAILS LOUDLY (`FoldError`, class `TokenWiring` in development mode) — and the row's `input_ids` slot
-  is left holding whatever the memory model last wrote there, which the error record names (`stale_refs`).  [R9 ref
-  2026-09-18: before this fix the fallback silently kept the stale slot content — C-builder's `qwen8` finding,
-  `out/gen/r8/aot-builder/corpus/last4/divergences.md`.]  The Embedding pattern's
+  is left holding whatever the memory model last wrote there, which the error record names (`stale_refs`).  The Embedding pattern's
   `PerRow(input_ids)` operand is then an ordinary memory read.  Width: token buffers are integer views whose element
   may be wider than the Verity token value (vLLM int64 buffers carry 32-bit ids); the fold's width check therefore
   admits a 32-bit `I32` leaf against an `int64` *integer* view (`_TOKEN_WIDTHS`) for token operands/outputs; every
@@ -95,8 +93,8 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Refs, array_of, concat, runs, tuple_of
 from verity_vllm.program import sampling_event as SE
-from verity_vllm.program.registry import b1
-from verity_vllm.program.replay import replayer
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.replay import replayer
 from verity.ml.circuits.types import Array, Record, Type, Value
 from verity.ml.circuits.types import Tuple as TupleT
 
@@ -220,7 +218,7 @@ class FoldResult:
 
     @property
     def reference_eligible(self) -> bool:
-        """[R9 ref 2026-09-18, rule R1] a fold with ANY recorded error / Unsupported resolution is NOT eligible as an
+        """A fold with ANY recorded error / Unsupported resolution is NOT eligible as an
         accepted reference Program (`gates.fold_integrity` applies the same rule to the persisted `fold_summary.json`)."""
         return not self.errors and int(getattr(self.report, "unsupported", 0) or 0) == 0
 
@@ -808,7 +806,7 @@ class _Fold:
         return Coll(ptype, refs)
 
     def _const(self, op: Const, ptype: Type, c: Compute, pname: str) -> Coll:
-        """[R15 stoch] Emit the constant's primitive instance and return its output (typed `Value<W>`); a `shared` constant once per
+        """Emit the constant's primitive instance and return its output (typed `Value<W>`); a `shared` constant once per
         value in the resolution."""
         if isinstance(op.bits, tuple):
             if ptype != Array(len(op.bits), Value(int(op.width))):
@@ -838,7 +836,7 @@ class _Fold:
         return out
 
     def _param(self, op: Param, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
-        """[R15 stoch] Row i's declared runtime parameter (the request's `seed`): the parameter's leaves, no memory read."""
+        """Row i's declared runtime parameter (the request's `seed`): the parameter's leaves, no memory read."""
         if op.kind != "seed":
             raise FoldError(f"{spec_label(c.spec)}.{pname}: unknown Param kind {op.kind!r}")
         rid = op.keys[i]
@@ -1134,7 +1132,10 @@ class _Fold:
         if len(sample.sampled_token_ids) != len(start.logits_rows):
             raise FoldError(f"step {start.step}: {len(sample.sampled_token_ids)} sampled ids for {len(start.logits_rows)} logits rows")
         for j, (req, pos) in enumerate(start.logits_rows):
-            tok = int(sample.sampled_token_ids[j])
+            try:
+                tok = SE.circuit_token_id(sample.sampled_token_ids[j])
+            except ValueError as e:
+                raise FoldError(f"step {start.step}: sampled row {j} of {req!r}: {e}") from None
             refs: Refs | None = None
             failure: Exception | None = None
             if sample.sampled_view is not None:
@@ -1304,7 +1305,7 @@ class _Fold:
                           descriptor=descriptor, supplied=self.supplied_inputs.layout(self.params, self.requests, program))
 
     def _peers_layout(self) -> list[dict]:
-        """[R17 D90] The `peers_<i>` parameters as the record states them: parameter index, request, and every field (name, step, k, kind,
+        """The `peers_<i>` parameters as the record states them: parameter index, request, and every field (name, step, k, kind,
         site, rows, N, leaf offset) in issue order -- what `program.json` carries so a checker (cb_a.compare, the cross-rank leg, root
         policy) can locate every peer leaf range without the profile's patterns."""
         out = []

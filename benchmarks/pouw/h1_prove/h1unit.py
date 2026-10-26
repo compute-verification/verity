@@ -112,17 +112,44 @@ def tile() -> str:
     return t
 
 
+#: the structural statement's layout mode under ``H1_TMPL=structural`` (#3226's struct_lower costs and #3249's structural
+#: verdicts are at it)
+LAYOUT = "iv/hybrid/4"
+#: ``H1_TMPL``'s values for the flat statement (also unset or empty) and for the structural one at `LAYOUT`
+FLAT, STRUCTURAL = "flat", "structural"
+
+
 def layout() -> str | None:
-    """The statement's form: ``H1_TMPL`` unset or empty, the flat statement (``flock-circuit``, the unit's netlist in the
-    file); else a layout mode (`verity_flock.tmpl.mode_of`, TMPL1's ``iv/hybrid/4``), the templated statement
-    (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as its template, which the Lean verifier refuses
-    until the templated statement's proof lands."""
+    """The statement's form: ``H1_TMPL`` unset, empty or ``flat``, None: the flat statement (``flock-circuit``, the unit's
+    netlist in the file), the one the Lean verifier accepts; ``structural``, the templated statement at `LAYOUT`
+    (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another
+    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier refuses a templated
+    statement, after every other check, until its proof lands (`Tags.templated`, PRF-133), so it stays opt-in."""
     import os
     from verity_flock import tmpl as TM
-    m = os.environ.get("H1_TMPL") or None
-    if m is not None:
-        TM.mode_of(m)
+    m = os.environ.get("H1_TMPL") or FLAT
+    if m == FLAT:
+        return None
+    if m == STRUCTURAL:
+        return LAYOUT
+    TM.mode_of(m)
     return m
+
+
+def stager(definition, name: str, in_rows, out_rows, layout: str | None, **kw):
+    """``definition``'s `UnitStager` (``kw`` its ``circuit``, ``bind`` and ``public_inputs``): with ``layout`` the
+    templated statement of its structural lowering (`struct_lower`, ``structural``), the flat unit never built; with
+    None, or where struct_lower refuses the Definition (its NotImplementedError: assertions or table reads, or a
+    specialization of 2^32 columns), the flat statement. The H1 lane, combine and tile have neither at any K a block holds
+    (K ≤ 4096 served; past K ≈ 5,041 the lane fits no 2^27 block in either form, and compose refuses it)."""
+    import sys
+    from verity_flock import class_statement as CS
+    if layout is not None:
+        try:
+            return CS.UnitStager(definition, name, in_rows, out_rows, layout=layout, structural=True, **kw)
+        except NotImplementedError as e:
+            print(f"{name}: the flat statement: struct_lower refuses {definition.id} ({e})", file=sys.stderr, flush=True)
+    return CS.UnitStager(definition, name, in_rows, out_rows, **kw)
 
 
 def stand_in_reveal(coin: bytes) -> bytes:
@@ -349,15 +376,15 @@ def registered_reads(program, tp, call: int, roots: dict[str, str], window: str,
     doc = HW.table_reads_file(program, tp, call, roots, ports=window_ports(program), prog=prog, window=window_root,
                               steps=steps(program))
     u0, n, T, o1 = *HW.call_units(program)[call], tp.population, OUT_PORTS["ok"]
-    rows = [None] * T
+    rows = [None] * n
     for u in range(u0, u0 + n):
-        value, rows[u] = unit_reads(program, tp, u)[o1]
+        value, rows[u - u0] = unit_reads(program, tp, u)[o1]
         if value != OK_VALUE:
             raise ValueError(f"unit {u}'s ok port reads {value}, not the Program's output {OK_VALUE}")
     doc["ports"][o1] = {"value": OK_VALUE, "root": roots[OK_VALUE], "leaves": T, "words": len(OK), "word_bits": G.WORD_BITS,
                         "domain": registered_domain(prog, OK_VALUE, T, window_root).domain_id.hex(),
                         **G.schema_entry(G.SCHEMA_V2),
-                        "reads": rows, "known": known_ok(window, T)}
+                        **CC.call_reads(u0, rows), "known": known_ok(window, T)}
     return doc
 
 
@@ -467,14 +494,14 @@ class Shape:
                              (self.r, self.c), unit=lambda _k: self.unit())
         return program, HW.query(program)
 
-    def stager(self, name: str, circuit=None, bind: dict | None = None):
+    def stager(self, name: str, circuit=None, bind: dict | None = None, flat: bool = False):
         """The unit's `UnitStager` on K's statement rows (`h1window.statement_rows`, under this harness's ports): its circuit,
-        built once (the long step at K = 4096) and written to ``circuit``, bound to ``bind`` (``{"partition", "program"}``:
-        the window's partition and Program, `Shape.window`), flat or templated as `layout` says."""
-        from verity_flock import class_statement as CS
+        built once and written to ``circuit``, bound to ``bind`` (``{"partition", "program"}``: the window's partition and
+        Program, `Shape.window`), templated from struct_lower or flat as `layout` says (`stager`), or with ``flat`` the
+        flat statement whatever ``H1_TMPL`` says."""
         template = self.definition()
-        return CS.UnitStager(template, name, HW.statement_rows(template, ports(template)), HW.STATEMENT_OUT_ROWS,
-                             circuit=circuit, bind=bind, layout=layout())
+        return stager(template, name, HW.statement_rows(template, ports(template)), HW.STATEMENT_OUT_ROWS,
+                      None if flat else layout(), circuit=circuit, bind=bind)
 
 
 # -- words ------------------------------------------------------------------------------------------------------------------

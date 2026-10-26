@@ -50,7 +50,8 @@ witness, the tape and the history, and whether it stops:
   file the loop serves is the one its `inner` request computed live).
 * **The record** (`Loop.recordOf`): the session loop sends the auditor its proofs and then `Finish`, no record of its own,
   so the record is the one the auditor assembles from what it saw, `recordJson` of each rep stream's rounds as they left
-  the loop (`Loop.seenRounds`: each round's bytes, coin count and the coins the stream answered), the link's roots (the
+  the loop (`Loop.seenRounds`: each round's bytes, coin count and the coins the stream answered; `Loop.streamOf`: round
+  `0`'s bytes after the stream's domain frame, which the loop sends before the frame's release), the link's roots (the
   level 0 the loop drew, `Loop.level0Of`) and points (the `Commit`'s coins), and the proof files. This is a modelling
   choice: the record the analysis's `Final.encode` reads is the auditor's own of the streams it saw.
 * **The stop**: the loop's `Finish` stops where any of this throws (`Loop.filesE`), a rep's proof file above all
@@ -114,13 +115,14 @@ def streamAt (rs : List ℕ) (k : ℕ) : ℕ := (rs.take k).sum
 
 /-- **Rep stream `k`'s rounds as they left the loop** on the history `h` at `x`, at the rep streams' round counts `rs`: its
 round `j`, rep round `streamAt rs k + j`, the history's entry past `Hello` and the link that carries it (`progOf`'s
-placing), as its bytes, its coin count (`loopNr`) and the words of the coins the stream answered it (`wordsAt`). -/
+placing), as its bytes (the frame's release past the round message's tag `0`, `LeanRelease.release`), its coin count
+(`loopNr`) and the words of the coins the stream answered it (`wordsAt`). -/
 noncomputable def seenRounds (x : Msg) (h : List (Msg × Msg)) (rs : List ℕ) (k : ℕ) :
     List (ByteArray × ℕ × Array F128) :=
   let cs := h.tail.map fun p => CoinLayer.rd p.2
   (List.range (rs.getD k 0)).map fun j =>
     let q := streamAt rs k + j + 1
-    (⟨((h.tail.getD q ([], [])).1).toArray⟩, loopNr x q, wordsAt x cs q)
+    (⟨((h.tail.getD q ([], [])).1).tail.toArray⟩, loopNr x q, wordsAt x cs q)
 
 /-- **The masked values a rep's released rounds carry**, in the order its frame absorbed them, at its configuration `c`
 from the frame's state `s`: at each round, the words at the offsets `Frame.roundFree` frees (the algebraic phase's
@@ -193,11 +195,16 @@ noncomputable def pointsOf (x : Msg) (h : List (Msg × Msg)) (spec : SessionSpec
     (wordsAt x (h.tail.map fun e => CoinLayer.rd e.2) 0).getD (p * spec.mPts + j) 0
 
 /-- **Rep stream `k`'s rounds as the auditor records them**: `seenRounds`, each with its coin count, no digest, its
-coins and its bytes (the prover transcript's shape, `squeezeP`). -/
+coins and its bytes (the prover transcript's shape, `squeezeP`), round `0`'s after the stream's domain frame
+(`Frames.domainFrame`, `Transcript.init`'s), which the frame releases it without and the session loop sends before it
+(`Frames.roundStep`). -/
 noncomputable def streamOf (x : Msg) (h : List (Msg × Msg)) (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) :
     Array _root_.Flock.Round :=
-  ((seenRounds x h (roundsOf spec sts) k).map fun (b, n, cs) =>
-    ({ n, sha := .empty, coins := cs, bytes := some b } : _root_.Flock.Round)).toArray
+  ((seenRounds x h (roundsOf spec sts) k).mapIdx fun j (b, n, cs) =>
+    ({ n, sha := .empty, coins := cs,
+       bytes := some (if j = 0 then
+         _root_.Flock.Firewall.Frames.domainFrame (spec.domain spec.tables[k / 2]! (k % 2)) ++ b else b) } :
+      _root_.Flock.Round)).toArray
 
 /-- **The record the auditor assembles** on the history `h` at `x`, the witness `w` and the tape `ρ`, at the level-0 source
 `src` and the proof files `proofs`: `recordJson` at SHA-512 of each rep stream's rounds as they left the loop
@@ -309,7 +316,7 @@ def Loop.RepSrc
 does not check). **Every input the session loop takes from its host and its operating system is the tape's** at `x`, in
 two halves: the level-0 inputs (`Loop.Level0Src`: the packed witness the host hands it and the bytes `Level0.draw`
 reads) and the rep draws (`Loop.RepSrc`: the bytes `Frames.startRep` and `Finish.serve` read for each rep). Why it is
-reasonable: the loop runs on the auditor-trusted host (`trusted-nebius-host`), whose operating system's random bytes are
+reasonable: the loop runs on the auditor-trusted host (`trusted-host`), whose operating system's random bytes are
 the uniform draws the tape models, and which hands the loop the witness `w` the statement is served at. -/
 def Loop.Src
     (L₀ : LeanRelease Flock.Wit

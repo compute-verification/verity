@@ -6,7 +6,7 @@ import Definitions.Pouw.Window
 /-!
 # PoUW as a compile pass over an arbitrary declared circuit (trusted)
 
-The vocabulary of `Models.Accounting.Guarantees.Compose`
+The vocabulary of `Definitions.Accounting.Guarantees.Compose`
 (note:compute-accounting/20261018T1600Z-draft-theorem-compose-r5), restated after RT-COMPOSE r4
 (note:compute-accounting/20261018T1522Z-draft-rt-compose-r4) under decisions 107, 109–114, 117, 119 and 122. The
 compile pass `C → C′` replaces each credited product of a declared circuit by its kind's template, with its noise drawn
@@ -137,7 +137,7 @@ open Accounting.TS Pouw.RelativeSecurity
 
 /-- **A round's coin mode**: `live`, a verifier's coin released after the round's served values are committed (decision
 122's per-round coin, decision 36's per-stage prefill coin), or `seeded`, derived from the window's salt and commitments
-by a hash (Fiat–Shamir, decision 112), as PoUW's code derives every noise today. -/
+by a hash (Fiat–Shamir, decision 112; `fiat-shamir`), as PoUW's code derives every noise today. -/
 inductive CoinMode
   | live
   | seeded

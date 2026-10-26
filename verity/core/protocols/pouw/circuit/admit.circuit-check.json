@@ -1,12 +1,14 @@
 {
  "definitions": {
   "PouwQueueAdmit_v3": {
-   "and": 1296
+   "and": 1296,
+   "type": "629569dc328e424c17372c16175432a13d543052c7eaf2372019299e0a6e6d79906dfff65a853db7e41e45adcc4f2270efa7b3f27d82395cec217175e29aa95c"
   }
  },
  "pieces": {
   "PouwQueueAdmit_v2": {
-   "and": 1296
+   "and": 1296,
+   "type": "50b576410b8c419a599b47b987ff7eef02c89590485d7362ab68dd71542029bf190be3bfc71480dce40fa84e69b12aacfd6e5a69ef2db4851d9e7aba71b15110"
   }
  }
 }

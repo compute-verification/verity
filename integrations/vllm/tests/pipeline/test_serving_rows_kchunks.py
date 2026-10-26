@@ -14,15 +14,15 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
-from verity_vllm.commit import serving_rows as CS
-from verity_vllm.commit import wiring as WI
+from verity.ml.windows import rows as CS
+from verity.ml.windows import wiring as WI
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program.kernels import fp8_moe_rows as FR
-from verity_vllm.program.kernels.derived_rows import f2fp_bf16
-from verity_vllm.program.registry import boolean_fp8_moe as BFM
-from verity_vllm.program.registry import fp8_moe_experts as X
+from verity.ml.definitions.numerics import fp8_moe_rows as FR
+from verity.ml.definitions.numerics.derived_rows import f2fp_bf16
+from verity.ml.definitions.registry import boolean_fp8_moe as BFM
+from verity.ml.definitions.registry import fp8_moe_experts as X
 
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
@@ -145,9 +145,9 @@ def test_each_acc_is_wired_to_the_chunk_before_it_and_the_wires_hold_on_the_publ
     at = {u: key for key, u in unit.items()}
     for m in w.members:
         if m.template == FIRST:
-            assert m.wired is None
+            assert m.wired == ()
             continue
-        port, out, writers = m.wired
+        (port, out, writers), = m.wired
         assert (port, out) == ("in3", "o0") and len(writers) == m.n
         for i, wr in enumerate(writers):
             p, n, c = at[m.base + i]
@@ -157,8 +157,8 @@ def test_each_acc_is_wired_to_the_chunk_before_it_and_the_wires_hold_on_the_publ
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     k = next(k for k, m in enumerate(w.members) if m.wired)
-    p, o, ws = w.members[k].wired
-    other = replace(w, members=tuple(replace(m, wired=(p, o, ws[1:] + ws[:1])) if j == k else m for j, m in enumerate(w.members)))
+    (p, o, ws), = w.members[k].wired
+    other = replace(w, members=tuple(replace(m, wired=((p, o, ws[1:] + ws[:1]),)) if j == k else m for j, m in enumerate(w.members)))
     assert list(WI.check(other.members, publics)) == [w.members[k].key]
     bad = [dict(g, rows={**g["rows"], p: g["rows"][p] ^ np.uint16(1)}) if j == k else g for j, (g, _e) in enumerate(got)]
     with pytest.raises(ValueError, match=f"{w.members[k].key}: a in3 row is not the o0 row"):
@@ -170,4 +170,4 @@ def test_a_partition_without_a_writer_s_template_is_refused(pairs):
     for tmpls, missing in (([MID, LAST], "first"), ([FIRST, LAST], "mid")):
         with pytest.raises(ValueError, match=rf"\['{missing}'\] ones, which the partition does not name"):
             window(rows, tmpls)
-    assert all(m.wired is None for m in window(rows, [FIRST]).members)
+    assert all(m.wired == () for m in window(rows, [FIRST]).members)

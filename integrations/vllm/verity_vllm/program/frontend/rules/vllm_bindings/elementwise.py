@@ -11,7 +11,7 @@ from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInf
 from verity_vllm.program.frontend.rules.common import call_args, dtype_is, from_rows, rows_of, scalar_kind, shape
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, aten
-from verity_vllm.program.registry.dsv4_moe import limit_bits
+from verity.ml.definitions.registry.dsv4_moe import limit_bits
 
 
 # -- generic elementwise / activation bindings (dense2 vocabulary; none names a model) ----------------------------------------
@@ -181,7 +181,7 @@ class Bf16ScalarChainRule(OpRule):
 
 
 def _softcap_member(node, ctx) -> str | None:
-    """[R15 dense / manifest] `aten.mul.Tensor(tanh(x / C), C)` — the last op of a logits soft cap `C * tanh(x / C)` — produces the value
+    """`aten.mul.Tensor(tanh(x / C), C)` — the last op of a logits soft cap `C * tanh(x / C)` — produces the value
     its module returns: the row names carry the member hint `out` (the manifest's `members_for` reads it; the div / tanh rows are the
     chain's interior).  Structural test only: the operand is a `aten.tanh` of a `aten.div.Tensor(_, C)` with the same C, in one module."""
     x = node.args[0]

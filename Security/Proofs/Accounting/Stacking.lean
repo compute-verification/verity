@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.Stacking
+import Definitions.Accounting.Guarantees.Stacking
 import Proofs.Accounting.RateAudit.DeployedSketchSum
 import Proofs.Accounting.RateAudit.DeployedRelay
 import Proofs.Accounting.Requirement
@@ -50,7 +50,8 @@ namespace Accounting
 units**: the encode cost of the `⌈x/(8·bytes)⌉` words those bits fill is at least that many words' `E`
 (`SecurityProofs.Gates.EncodeCost`), and `⊤` where the gate model has no circuit. -/
 theorem encodeBitsCost_ge {F : Gates.Field} {k B E εnum εden : ℕ}
-    (hE : Assumptions.EncodeChainHardness F k B E εnum εden) (hbytes : 0 < F.bytes) (x : ℕ) :
+    (hE : Assumptions.EncodeChainHardness F k B E εnum εden)
+    (hfl : εden ≤ 2 ^ 64 * εnum ∧ 0 < k ∧ 2 ^ 66 ≤ F.p ∧ F.p % 4 = 3) (hbytes : 0 < F.bytes) (x : ℕ) :
     ((x * E : ℕ) : ℕ∞) ≤ (8 * F.bytes : ℕ) * encodeBitsCost F k B εnum εden x := by
   have hn : 2 ≤ F.n := by
     have h := hbytes
@@ -62,7 +63,7 @@ theorem encodeBitsCost_ge {F : Gates.Field} {k B E εnum εden : ℕ}
   rw [← hq, mul_add, mul_one] at hlt
   have hxq : x ≤ 8 * F.bytes * q := by omega
   have hcost : ((q * E : ℕ) : ℕ∞) ≤ encodeBitsCost F k B εnum εden x :=
-    SecurityProofs.Gates.EncodeCost F k B E εnum εden q hE hn
+    SecurityProofs.Gates.EncodeCost F k B E εnum εden q hE hfl.1 hfl.2.1 hfl.2.2.1 hfl.2.2.2 hn
   calc ((x * E : ℕ) : ℕ∞) ≤ ((8 * F.bytes * q * E : ℕ) : ℕ∞) := by
         exact_mod_cast Nat.mul_le_mul_right E hxq
     _ = (8 * F.bytes : ℕ) * ((q * E : ℕ) : ℕ∞) := by push_cast; ring
@@ -145,7 +146,8 @@ theorem card_image_le [DecidableEq α] (c : Provenance N m α) :
 /-- **A gate budget bounds the encoded bits**: under `EncodeChainHardness` at `E` budgeted units a word of `8·bytes`
 bits, the encoded bits times `E` are at most `8·bytes` times the encodes' budgeted units. -/
 theorem encoded_mul_le {F : Gates.Field} {kr B E εnum εden : ℕ}
-    (hE : Assumptions.EncodeChainHardness F kr B E εnum εden) (hbytes : 0 < F.bytes) (c : Provenance N m α)
+    (hE : Assumptions.EncodeChainHardness F kr B E εnum εden)
+    (hfl : εden ≤ 2 ^ 64 * εnum ∧ 0 < kr ∧ 2 ^ 66 ≤ F.p ∧ F.p % 4 = 3) (hbytes : 0 < F.bytes) (c : Provenance N m α)
     (Es : SketchStore N m) :
     ((c.encoded Es * E : ℕ) : ℕ∞) ≤ (8 * F.bytes : ℕ) * c.gates (encodeBitsCost F kr B εnum εden) Es := by
   induction c with
@@ -154,7 +156,7 @@ theorem encoded_mul_le {F : Gates.Field} {kr B E εnum εden : ℕ}
   | encode t x hx g k ih =>
     simp only [encoded, gates]
     rw [add_mul, Nat.cast_add, mul_add]
-    exact add_le_add (ih _) (encodeBitsCost_ge hE hbytes x)
+    exact add_le_add (ih _) (encodeBitsCost_ge hE hfl hbytes x)
 
 end Provenance
 
@@ -182,14 +184,15 @@ theorem card_le (K : Carrier N m) {n : ℕ} (hK : ∀ E, K.provenance.inputs E +
 /-- A carrier whose circuit takes in at most `I` bits and spends at most `R` budgeted units on its encodes carries at
 most `I + 8·bytes·R/E` bits, under `EncodeChainHardness` at `E` budgeted units a word of `8·bytes` bits. -/
 theorem card_le_of_budget (K : Carrier N m) {F : Gates.Field} {kr B E εnum εden I R : ℕ}
-    (hE : Assumptions.EncodeChainHardness F kr B E εnum εden) (hbytes : 0 < F.bytes) (hE0 : 0 < E)
+    (hE : Assumptions.EncodeChainHardness F kr B E εnum εden)
+    (hfl : εden ≤ 2 ^ 64 * εnum ∧ 0 < kr ∧ 2 ^ 66 ≤ F.p ∧ F.p % 4 = 3) (hbytes : 0 < F.bytes) (hE0 : 0 < E)
     (hK : ∀ Es, K.provenance.inputs Es ≤ I ∧
       K.provenance.gates (encodeBitsCost F kr B εnum εden) Es ≤ (R : ℕ)) :
     K.carried.card * 256 ≤ I + 8 * F.bytes * R / E := by
   refine K.card_le fun Es => ?_
   have h2 : K.provenance.encoded Es ≤ 8 * F.bytes * R / E := by
     rw [Nat.le_div_iff_mul_le hE0]
-    have h := (Provenance.encoded_mul_le hE hbytes K.provenance Es).trans (mul_le_mul_right (hK Es).2 _)
+    have h := (Provenance.encoded_mul_le hE hfl hbytes K.provenance Es).trans (mul_le_mul_right (hK Es).2 _)
     exact_mod_cast h
   have h1 := (hK Es).1
   omega
@@ -301,7 +304,8 @@ def transcript (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvena
 /-- **A gate budget bounds the encoded bits**: under `EncodeChainHardness` at `E` budgeted units a word of `8·bytes`
 bits, the encoded bits times `E` are at most `8·bytes` times the encodes' budgeted units. -/
 theorem encoded_mul_le {F : Gates.Field} {kr B E εnum εden : ℕ}
-    (hE : Assumptions.EncodeChainHardness F kr B E εnum εden) (hbytes : 0 < F.bytes)
+    (hE : Assumptions.EncodeChainHardness F kr B E εnum εden)
+    (hfl : εden ≤ 2 ^ 64 * εnum ∧ 0 < kr ∧ 2 ^ 66 ≤ F.p ∧ F.p % 4 = 3) (hbytes : 0 < F.bytes)
     (c : PassProvenance N b h ρ α) (Es : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     ((c.encoded Es R O * E : ℕ) : ℕ∞) ≤
       (8 * F.bytes : ℕ) * c.gates (encodeBitsCost F kr B εnum εden) Es R O := by
@@ -311,7 +315,7 @@ theorem encoded_mul_le {F : Gates.Field} {kr B E εnum εden : ℕ}
   | encode j x hx g k ih =>
     simp only [encoded, gates]
     rw [add_mul, Nat.cast_add, mul_add]
-    exact add_le_add (ih _) (encodeBitsCost_ge hE hbytes x)
+    exact add_le_add (ih _) (encodeBitsCost_ge hE hfl hbytes x)
 
 end PassProvenance
 
@@ -1092,7 +1096,9 @@ theorem CarrierBits : Accounting.Guarantees.CarrierBits := by
 theorem StackedSessionConservationSketchDeployed :
     Accounting.Guarantees.StackedSessionConservationSketchDeployed := by
   intro n P N ρ S L q G X qtot Rin cρ reads life E B εnum εden T M ε δ Ω Ca Ch _ _ enc choose slot A hn hP hN hE0
-    hrank hKB hE hB hK C
+    hrank hKB hE hε hB hK C
+  have hfl : εden ≤ 2 ^ 64 * εnum ∧ 0 < 3 ∧ 2 ^ 66 ≤ Gates.p1024.p ∧ Gates.p1024.p % 4 = 3 :=
+    ⟨hε, by decide, SecurityProofs.Gates.p1024_floor.1, SecurityProofs.Gates.p1024_floor.2⟩
   have hX : ∀ w η j ι c Es σ R O,
       let dv := (A.window w η).device j ι c
       let D := RateSketch.Data.ofParts Es R
@@ -1100,7 +1106,7 @@ theorem StackedSessionConservationSketchDeployed :
     intro w η j ι c Es σ R O
     obtain ⟨K, hS, hKb⟩ := hK w η j ι c σ
     have h1 := hS Es R O
-    have h2 := K.card_le_of_budget hE (by decide) hE0 hKb
+    have h2 := K.card_le_of_budget hE hfl (by decide) hE0 hKb
     dsimp only at h1 ⊢
     calc _ ≤ X + K.carried.card * 256 := h1
       _ ≤ X + C := Nat.add_le_add_left h2 X
@@ -1134,14 +1140,14 @@ theorem StackedSessionConservationSketchDeployed :
 `Accounting.Guarantees.StackedSessionConservationRelay`. -/
 theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionConservationRelay := by
   intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B εnum εden tier δ
-    Ω Ca Ch _ _ enc choose slot A dbar dw hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hE hK C
+    Ω Ca Ch _ _ enc choose slot A dbar dw hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hE hε hk hp hp4 hK C
   choose K hside hL hbud using hK
   have hC : ∀ w η j ι c Es R O, (K w η j ι c).inputs Es R O + (K w η j ι c).encoded Es R O ≤ C := by
     intro w η j ι c Es R O
     have h1 := (hbud w η j ι c Es R O).1
     have h2 : (K w η j ι c).encoded Es R O ≤ 8 * Fc.bytes * (cρ * reads * life) / E := by
       rw [Nat.le_div_iff_mul_le hE0]
-      have h := ((K w η j ι c).encoded_mul_le hE hbytes Es R O).trans
+      have h := ((K w η j ι c).encoded_mul_le hE ⟨hε, hk, hp, hp4⟩ hbytes Es R O).trans
         (mul_le_mul_right (hbud w η j ι c Es R O).2 _)
       exact_mod_cast h
     exact Nat.add_le_add h1 h2
@@ -1167,10 +1173,10 @@ theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionCo
 `Accounting.Guarantees.StackedRequirementSketchDeployed`. -/
 theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed := by
   intro n P N ρ S L q G X qtot Rin cρ reads life E B εnum εden T M ε δ Ω Ca Ch _ _ enc choose slot A V _ W e ℓ mm
-    plan win hn hP hN hE0 hrank hKB hE hB hK hwin hm C γ
+    plan win hn hP hN hE0 hrank hKB hE hε hB hK hwin hm C γ
   have hcap := Requirement.cap_of_matches W e ℓ mm plan 32768 N (n * P) win hwin hm
   have base := StackedSessionConservationSketchDeployed n P N ρ S L q G X qtot Rin cρ reads life E B εnum εden
-    T M ε δ enc choose slot A hn hP hN hE0 hrank hKB hE hB hK
+    T M ε δ enc choose slot A hn hP hN hE0 hrank hKB hE hε hB hK
   dsimp only at base
   refine (Bandwidth.pr_mono fun x hx => ⟨hx.1, Or.inl ?_⟩).trans base
   have h := Requirement.lt_of_cap hcap.1 hcap.2 hx.2
@@ -1181,11 +1187,12 @@ theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirem
 `Accounting.Guarantees.StackedRequirementRelay`. -/
 theorem StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay := by
   intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B εnum εden tier δ
-    Ω Ca Ch _ _ enc choose slot A dbar dw V _ W e ℓ mm plan win hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hE hK hwin hm
-    C γ
+    Ω Ca Ch _ _ enc choose slot A dbar dw V _ W e ℓ mm plan win hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hE hε hk hp
+    hp4 hK hwin hm C γ
   have hcap := Requirement.cap_of_matches W e ℓ mm plan b N (n * P) win hwin hm
   have base := StackedSessionConservationRelay n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life
-    E T M cost Fc k B εnum εden tier δ enc choose slot A dbar dw hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hE hK
+    E T M cost Fc k B εnum εden tier δ enc choose slot A dbar dw hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hE hε hk hp
+    hp4 hK
   dsimp only at base
   refine (Bandwidth.pr_mono fun x hx => ⟨hx.1, Or.inl ?_⟩).trans base
   have h := Requirement.lt_of_cap hcap.1 hcap.2 hx.2

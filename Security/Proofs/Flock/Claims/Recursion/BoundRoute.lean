@@ -479,7 +479,7 @@ recursion's KS is `KS_of_flockKS_binds` at the normalized record (`nfBrings`), c
 facts and `InnerAcceptsColl` (`innerAcceptsColl_bound`, from the staging and V*'s parts at the three shapes); every
 other fact of the compiled record is `deployRec`'s, and `PublicCoin` is `IVStar`'s (`Bound.publicCoin`). -/
 theorem ksBoundRoute_of_bridge (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
+    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512)
     (hB : ∀ (nextE : Msg → List Msg → List Coin → Claims.OC Out)
       (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
       (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ),
@@ -497,7 +497,7 @@ theorem ksBoundRoute_of_bridge (rel relO : _root_.Flock.Readable.Parsed → _roo
     intro shape hs
     obtain ⟨chk, shows, cmt, hHe, hSh, hCk, hOp, hDc⟩ := hshapes shape hs
     exact vstarAccepts_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) shape decC chk shows cmt hplay
-      (hRP decI) (hHe decI) (hSh decI) hCk hOp hDc hRRP
+      (hRP decI) (hHe decI) (hSh decI) hCk hOp hDc hRows hRRP
   have hA := innerAcceptsColl_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) hT
     (hacc _ (by simp)) (hacc _ (by simp)) (hacc _ (by simp))
   have hTc := callsTrue FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT

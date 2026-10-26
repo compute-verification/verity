@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Dither's served standard number on node 2 (sbench.py), on one leased GPU for at most SBENCH_MAX_MIN (40) minutes: libh1c.so, libh1f.so
-# and libh1o.so built for sm_120a first (the dither arms').  Extra arguments go to sbench.py (e.g. --arms exact,dither --gate --ops decode
+# and libh1o.so built for sm_$SBENCH_ARCH first (the dither arms'; 120a, else 100a on the B200 or 90a on the H200, every
+# library below and FlashInfer's JIT built for it).  Extra arguments go to sbench.py (e.g. --arms exact,dither --gate --ops decode
 # --t 64); SBENCH_SCRIPT runs another script with the same libraries and environment (h1ogate.py: the units kernels at
 # kernel level).  DITHER_NSYS=1 runs it under nsys, recording the kernels inside the gate's CUDA profiler range (each graph's
 # kernels as nodes), then the dither worker's kernels inside the gate's NVTX range (kernels.py over the SQLite export).
@@ -15,23 +16,73 @@
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
-mkdir -p /workspace/pouw
-S=$(mktemp -d /workspace/pouw/tmp-dither-sbench.XXXXXX); trap 'rm -rf "$S"' EXIT
+# the run's scratch, under SBENCH_SCRATCH_ROOT (/workspace/pouw, else, where that can't be made, as on the CPU nodes,
+# the system's temporary directory)
+SR=${SBENCH_SCRATCH_ROOT:-/workspace/pouw}
+if ! { mkdir -p "$SR" && S=$(mktemp -d "$SR/tmp-dither-sbench.XXXXXX"); } 2>/dev/null; then
+  [ -n "${SBENCH_SCRATCH_ROOT:-}" ] && { echo "sbench: NO_SCRATCH under $SBENCH_SCRATCH_ROOT"; exit 2; }
+  S=$(mktemp -d -t tmp-dither-sbench.XXXXXX) || { echo "sbench: NO_SCRATCH"; exit 2; }
+fi
+trap 'rm -rf "$S"' EXIT
 ROOT=$PWD
 git rev-parse HEAD | tee "$OUT/commit.txt"
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 export PATH=$CUDA/bin:$PATH
+ARCH=${SBENCH_ARCH:-120a}
+case $ARCH in
+  120a) FI_ARCH=12.0f ;;
+  100a) FI_ARCH=10.0a ;;
+  90a) FI_ARCH=9.0a ;;
+  *) echo "sbench: SBENCH_ARCH $ARCH is not 120a, 100a or 90a"; exit 2 ;;
+esac
+GEN="arch=compute_$ARCH,code=sm_$ARCH"
+echo "sbench: sm_$ARCH" | tee "$OUT/arch.txt"
+# SBENCH_SHIP_OUT=1 builds the libraries below and the coins' Lean verifier, writes them to out/sbench-ship.tar and exits;
+# SBENCH_SHIP=TAR (such a tar, sent with research run --send) takes them in place of building, so a node that may not build
+# (n1, n3) builds nothing.  A ship is refused (exit 17) unless its key is this run's (what the builds read: the CUDA
+# sources here and in codec_tensor and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
+# MANIFEST.sha256 holds and lake build --no-build then finds the coins' verifier built, so one ship serves every commit
+# that leaves those alone.  Neither covers --bw-passes.
+COINS_PKG=verity/core/protocols/pouw/lean/check
+command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
+SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC HB_H1U_KC_B DITHER_H1C_KC"
+# the coins' package and every path package its manifest lists (the inherited ones too), from the tree's root
+COINS_PKGS=$(python3 -c 'import json, os, sys; p = sys.argv[1]; print(p, *(os.path.normpath(os.path.join(p, x["dir"]))
+  for x in json.load(open(os.path.join(p, "lake-manifest.json")))["packages"] if x["type"] == "path"))' "$COINS_PKG")
+ship_key() {
+  git ls-tree -r HEAD -- benchmarks/hash/dither benchmarks/hash/codec_tensor | grep -E '\.(cu|cuh)$'
+  for p in $COINS_PKGS; do echo "lean $p $(git rev-parse "HEAD:$p")"; done
+  echo "arms $(for t in dither-a-kh dither-a-hbk dither-a-hbr dither-a-hbc; do case " $* " in *$t*) printf '%s ' $t ;; esac; done)"
+  echo "CUDA=$CUDA ARCH=$ARCH HB_KC_FLAGS=${HB_KC_FLAGS:-} HB_KC_H1C_FLAGS=${HB_KC_H1C_FLAGS:-}${HB_KC_FLAGS_B:+ HB_KC_FLAGS_B=$HB_KC_FLAGS_B}"
+}
+if [ -n "${SBENCH_SHIP:-}${SBENCH_SHIP_OUT:-}" ]; then
+  case " $* " in *" --bw-passes"*) echo "sbench: SHIP_STALE: a ship doesn't cover --bw-passes"; exit 17 ;; esac
+  ship_key "$@" > "$S/key"
+fi
+if [ -n "${SBENCH_SHIP:-}" ]; then
+  tar -xf "$SBENCH_SHIP" -C "$S" || { echo "sbench: SHIP_STALE: can't unpack $SBENCH_SHIP"; exit 17; }
+  cmp -s "$S/key" "$S/ship/key" \
+    || { echo "sbench: SHIP_STALE: its key isn't this run's (< this run, > the ship):"; diff "$S/key" "$S/ship/key" | head; exit 17; }
+  (cd "$S/ship" && sha256sum -c --quiet MANIFEST.sha256) || { echo "sbench: SHIP_STALE: MANIFEST.sha256 doesn't hold"; exit 17; }
+  cp "$S"/ship/*.so "$S"/ && cp "$S"/ship/*.log "$S"/ship/*.txt "$OUT"/ 2>/dev/null
+  while read -r name f; do export "$name=$S/$f"; done < "$S/ship/libs"
+  (cd "$COINS_PKG" && mkdir -p .lake && flock .lake/build.lock tar -xf "$S/ship/lean.tar" -C "$ROOT" \
+    && lake build --no-build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+    || { echo "sbench: SHIP_STALE: lake build --no-build finds the coins' verifier unbuilt"; tail -5 "$OUT/lean-coins-build.log"
+         exit 17; }
+  echo "sbench: shipped ($(tail -1 "$S/key"))"
+else
 for lib in h1c h1f h1o; do
-  nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+  nvcc -O3 -std=c++17 -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
     -o "$S/lib$lib.so" "benchmarks/hash/dither/$lib.cu" > "$OUT/build-$lib.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL $lib"; grep -v "^ptxas info" "$OUT/build-$lib.log" | tail -30; exit 11; }
 done
 grep -B1 -A2 "h1f_k\|h1r_units" "$OUT/build-h1f.log" | grep -i "registers\|spill" | head -6
 grep -B1 -A2 "h1o_units" "$OUT/build-h1o.log" | grep -i "registers\|spill" | head -8
 grep -B1 -A2 "h1c_a_" "$OUT/build-h1c.log" | grep -i "registers\|spill" | head -6
-# dither-a-kh's side unit: h1u.cu's kh_unit_ws, built here for sm_120a (HB_H1U)
+# dither-a-kh's side unit: h1u.cu's kh_unit_ws, built here (HB_H1U)
 case " $* " in *dither-a-kh*)
-  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
     -o "$S/h1u.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL h1u"; grep -v "^ptxas info" "$OUT/build-h1u.log" | tail -30; exit 11; }
   grep -B1 -A2 "h1u_ws\|h1s_noise" "$OUT/build-h1u.log" | grep -i "registers\|spill" | head -6
@@ -39,7 +90,7 @@ case " $* " in *dither-a-kh*)
 esac
 # dither-a-hbk's: the K split's kh_one (H1U_KSPLIT = 4, H1K_AUTO), as job.sh's ka variant (HB_H1U_KSPLIT)
 case " $* " in *dither-a-hbk*)
-  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
     -DH1U_KSPLIT=4 -DH1K_AUTO=1 -o "$S/h1u_ka.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_ka.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL h1u_ka"; grep -v "^ptxas info" "$OUT/build-h1u_ka.log" | tail -30; exit 11; }
   grep -B1 -A2 "h1k" "$OUT/build-h1u_ka.log" | grep -i "registers\|spill" | head -6
@@ -47,16 +98,18 @@ case " $* " in *dither-a-hbk*)
 esac
 # dither-a-hbr's: the same K split built receipts only (H1K_RONLY), as job.sh's kr variant (HB_H1U_KRONLY)
 case " $* " in *dither-a-hbr*)
-  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
     -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_kr.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_kr.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL h1u_kr"; grep -v "^ptxas info" "$OUT/build-h1u_kr.log" | tail -30; exit 11; }
   grep -B1 -A2 "h1k" "$OUT/build-h1u_kr.log" | grep -i "registers\|spill" | head -6
   export HB_H1U_KRONLY=$S/h1u_kr.so ;;
 esac
-# dither-a-hbc's: that build with HB_KC_FLAGS too (h1u.cu's knobs, space-separated), as a job.sh kr* variant (HB_H1U_KC)
+# dither-a-hbc's: that build with HB_KC_FLAGS too (h1u.cu's knobs, space-separated), as a job.sh kr* variant (HB_H1U_KC);
+# J10-R's units on part of the SMs (sbench.py's ARM-smqQoD) take -DH1U_JCTA=1 -DH1U_WARPS=4 in it, after any other
+# H1U_WARPS (the last -D holds)
 case " $* " in *dither-a-hbc*)
   read -r -a kc <<< "${HB_KC_FLAGS:-}"
-  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+  nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
     -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kc[@]}" -o "$S/h1u_kc.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_kc.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL h1u_kc"; grep -v "^ptxas info" "$OUT/build-h1u_kc.log" | tail -30; exit 11; }
   echo "sbench: h1u_kc.so with ${HB_KC_FLAGS:-no flags}" | tee "$OUT/kc-flags.txt"
@@ -65,7 +118,7 @@ case " $* " in *dither-a-hbc*)
   # and, with HB_KC_FLAGS_B, a second such build for the ARM-kcb arms (HB_H1U_KC_B)
   read -r -a kcb <<< "${HB_KC_FLAGS_B:-}"
   if [ ${#kcb[@]} -gt 0 ]; then
-    nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
+    nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
       -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 "${kcb[@]}" -o "$S/h1u_kcb.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-h1u_kcb.log" 2>&1 \
       || { echo "sbench: NVCC_FAIL h1u_kcb"; grep -v "^ptxas info" "$OUT/build-h1u_kcb.log" | tail -30; exit 11; }
     echo "sbench: h1u_kcb.so with ${HB_KC_FLAGS_B}" | tee -a "$OUT/kc-flags.txt"
@@ -75,7 +128,7 @@ case " $* " in *dither-a-hbc*)
   # and, with HB_KC_H1C_FLAGS (h1c.cu's knobs), its own libh1c.so: its A, z, y and receipt tables (DITHER_H1C_KC)
   read -r -a kh <<< "${HB_KC_H1C_FLAGS:-}"
   if [ ${#kh[@]} -gt 0 ]; then
-    nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared "${kh[@]}" \
+    nvcc -O3 -std=c++17 -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared "${kh[@]}" \
       -o "$S/libh1c_kc.so" benchmarks/hash/dither/h1c.cu > "$OUT/build-h1c_kc.log" 2>&1 \
       || { echo "sbench: NVCC_FAIL h1c_kc"; grep -v "^ptxas info" "$OUT/build-h1c_kc.log" | tail -30; exit 11; }
     echo "sbench: libh1c_kc.so with ${HB_KC_H1C_FLAGS}" | tee -a "$OUT/kc-flags.txt"
@@ -84,14 +137,29 @@ case " $* " in *dither-a-hbc*)
 esac
 # --bw-passes (dbw.py): the remote bandwidth audit's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
 case " $* " in *" --bw-passes"*)
-  nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
+  nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
     -o "$S/session.so" benchmarks/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL session"; grep -v "^ptxas info" "$OUT/build-session.log" | tail -30; exit 11; }
-  nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=1024 \
+  nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=1024 \
     -DKV_MASK=1 -o "$S/kv.so" benchmarks/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL kv"; grep -v "^ptxas info" "$OUT/build-kv.log" | tail -30; exit 11; }
   export BW_LIB=$S/session.so BW_KV=$S/kv.so ;;
 esac
+fi
+if [ "${SBENCH_SHIP_OUT:-}" = 1 ]; then
+  (cd "$COINS_PKG" && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+    || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
+  mkdir -p "$S/ship"
+  for name in $SHIP_LIBS; do [ -n "${!name:-}" ] && echo "$name $(basename "${!name}")"; done > "$S/ship/libs"
+  cp "$S"/*.so "$OUT"/build-*.log "$S/ship/" && { [ ! -f "$OUT/kc-flags.txt" ] || cp "$OUT/kc-flags.txt" "$S/ship/"; }
+  cp "$S/key" "$S/ship/key"
+  tar -cf "$S/ship/lean.tar" $(for p in $COINS_PKGS; do [ ! -d "$p/.lake/build" ] || echo "$p/.lake/build"; done) \
+    || { echo "sbench: SHIP_FAIL lean.tar"; exit 17; }
+  (cd "$S/ship" && sha256sum -- * > "$S/MANIFEST.sha256" && mv "$S/MANIFEST.sha256" .)
+  tar -cf "$OUT/sbench-ship.tar" -C "$S" ship
+  echo "sbench: ship $OUT/sbench-ship.tar ($(du -h "$OUT/sbench-ship.tar" | cut -f1)), key:"; cat "$S/key"
+  exit 0
+fi
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 # the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it,
 # under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
@@ -133,7 +201,7 @@ export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so V
 [ -n "${SBENCH_PICK:-}" ] && export TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
 # CA's credit gate (#2684) at its pinned head, for the dither-1s-credit arm
 CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
-git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocol_options/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
+git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
   && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
 # CA's H1V3 (with the wrap correction and the peel, z = A B^T): dither_one's gate runs its h1tile.reference.  By default
 # this source's own (PouwH1Tile_v4, ungated); H1V3_SHA names another commit, from this repository, else (the node's lacks
@@ -169,7 +237,7 @@ cd integrations/vllm
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
 export PATH=$(dirname "$PY"):$PATH
 export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
-export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=12.0f
+export HF_HOME=${HF_HOME:-/workspace/hf} FLASHINFER_CUDA_ARCH_LIST=$FI_ARCH
 # the wrap correction's pieces against H1V3 on the CPU, before the lease
 "$PY" "$ROOT/benchmarks/hash/dither/wrapcheck.py" | tee "$OUT/wrapcheck.json"
 [ "${PIPESTATUS[0]}" = 0 ] || { echo "sbench: WRAPCHECK_FAIL"; exit 12; }

@@ -9,7 +9,8 @@ file the prover writes for the decoded proof `p`: each `Vec` as its `u64` length
 `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty (`matrix_evals`, the grinding nonces but the query, claim and
 consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`, and level 0's hiding messages
 `Some`. `Shaped sh p` is what the decoder checks of the lengths: every fixed-length vector at its length for the shape, every
-digest `hashLen` bytes, every opened salt `saltLen` bytes, the inner proof's salts 192 bytes and its path entries 64.
+digest `hashLen` bytes, every opened salt `saltLen` bytes, the inner proof's salts 192 bytes and its path entries 64; and
+every query, claim and consistency nonce `0` (`NoncesZero`, R4).
 -/
 
 namespace FlockSoundness.Discharge.ZkView
@@ -47,7 +48,12 @@ def LevelOk (sh : Shape) (l : Level) (w : Nat) (p : LevelProof) : Prop :=
 /-- A cap of level `l`: `2^cap` digests of `hashLen` bytes. -/
 def CapOk (sh : Shape) (l : Level) (c : Array ByteArray) : Prop := c.size = 2 ^ l.cap ∧ ∀ s ∈ c, s.size = sh.hashLen
 
-/-- **The lengths `Zk.decode sh` checks**, and a file short enough for its lengths to fit a `u64`. -/
+/-- Every grinding nonce `decodeProof` and `Zk.decode` read is `0`, the only one they accept (R4). -/
+def NoncesZero (lg : LigeritoProof) : Prop :=
+  (∀ x ∈ lg.queryNonces, x = 0) ∧ (∀ x ∈ lg.claimNonces, x = 0) ∧ (∀ x ∈ lg.consistencyNonces, x = 0)
+
+/-- **The lengths `Zk.decode sh` checks**, its grinding nonces `0`, and a file short enough for its lengths to fit a
+`u64`. -/
 def Shaped (sh : Shape) (p : ZkProof) : Prop :=
   let s := sh.sched
   let R := s.levels.size - 1
@@ -66,6 +72,6 @@ def Shaped (sh : Shape) (p : ZkProof) : Prop :=
     LevelOk sh (lvl R) 16 ⟨lg.finalProof.rows, lg.finalProof.siblings, lg.finalProof.salts⟩ ∧
     lg.messages.size = s.k0 + 8 + 7 * (R - 1) ∧ lg.queryNonces.size = R + 1 ∧ lg.oodValues.size = 1 + 2 * R ∧
     lg.claimNonces.size = 3 * R + 2 ∧ lg.consistencyNonces.size = R + 1 ∧
-    (∀ x ∈ p.inner.salts, x.size = 192) ∧ (∀ q ∈ p.inner.paths, ∀ x ∈ q, x.size = 64)
+    (∀ x ∈ p.inner.salts, x.size = 192) ∧ (∀ q ∈ p.inner.paths, ∀ x ∈ q, x.size = 64) ∧ NoncesZero lg
 
 end FlockSoundness.Discharge.ZkView

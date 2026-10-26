@@ -6,6 +6,8 @@ negatives.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside M0's tree (its `verity_flock`).
+- `r2_population.py`: the other population every driver's and `replay.py`'s registration-partition-mismatch negative (R2)
+  registers, its first template one instance short, or one over where it has a single instance.
 - `pod.sh`: the entry point on a CPU pod.
 - `a5.sh`: run A5's entry point on a CPU machine. A5 is a deferred Commit's window, a stand-in linked to its run root, the
   commitment its record was committed in and its replay bundle: the CPU RoPE d64 Commit fixture (`COMMIT_SCHEME`: vllm-v1 by
@@ -22,7 +24,29 @@ negatives.
 - `a5_row_tables.py` (`a5_tp.sh` with `STANDIN=row-tables`): A5 on a window with row tables, which no TP window of record has
   yet: `integrations/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
-  verifies each drawn chunk with its table's registered reads (`--registered`, `row_tables.registered_reads`).
+  verifies each drawn chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
+- `a5_warden.py` (`a5_tp.sh` with `STANDIN=warden`, `warden:altered`, `warden:pad`, `warden:pad-named` or `warden:swapped`):
+  A5 on a window with transfer gates, which no served window has yet: two chunks of the warden's toy unit whose ports are the
+  bucket rows of one connection's ingress and egress cells (a row a bucket, registration v2), committed under the warden's
+  salts, proved whole (the work law's selection All) beside a drawn rest, on a local challenger's coins or the verifier's
+  own. The units' wiring is the Program's (`warden_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
+  cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the warden signed,
+  named by the units' value and each unit's read (connection, cell) placed by the wiring the warden signed
+  (`warden_rows.port`, after `check_registration` under the warden's key), which refuses a foreign, a duplicate and a
+  padding-slot read by name; the altered run, and a statement made for another units' wiring (a pad in a data cell's place,
+  its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads. Its warden run
+  is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `warden_replay.py`'s: a served window's requests through the
+  warden, each answered with the tokens the server streamed it.
+- `a5_tp_gates.py` (`a5_tp.sh` with `A5_COINS=verifier` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
+  `tp-gates:other-collective`, `tp-gates:other-request` or `tp-gates:own`): A5 on both ranks of a synthetic Llama TP2 step
+  of two requests whose cross-rank transfers hold transfer gates, which no served TP2 window has yet. Each rank's partial of
+  each reduction (layer 0's embedding, o_proj and down_proj, H = 2048) for each request is a registered value its
+  registration names; each rank's chunk of a request's reduction, the registered `AllReduce2_v1{H}` with its input's two
+  rows staged as two ports, is
+  proved whole beside a drawn rest, and Lean verifies it with the verifier's own registered reads of both ranks' partials of
+  that request at the roots each owner registered, every registration read before any rank's coin. A received row moved one
+  bit (`--altered`), two tokens' rows swapped, another collective's partial, another request's, and the receiving rank's own
+  partial read as its peer's (`--made-for`) are each refused by Lean's registered reads on rank 1, rank 0 accepted.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job (`research run --on
   vy-glm53-eu2 --cwd source -- bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
@@ -58,6 +82,20 @@ negatives.
   per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
   staged unit: the cost of c drawn units in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
+- `prove_bundle.sh`: a drawn-unit replay bundle (`benchmarks/e2e_demo`, `verity/drawn-unit-bundle/v2`) proved by
+  `prove_bundle.py`. `prove_bundle.py make` writes the torch loop's window under the fixture's test key and the bundle of
+  its draw: the fixture's `FIXTURE_DRAW`, or with `PB_K=K` a live one over a window registered `subset:K`, the
+  challenger's receipt of the registration and then Lean `flock-verify draw --registration` of the registered law's
+  units over the whole partition on its own coins. The bundle is held to the prover's window: its own check (the draw's
+  law the registered one among it), its run, registration and partition, each drawn member's public body and a live
+  draw's receipt and record. Each drawn member is one `prove --zk` session behind the Lean firewall, one at a time, served the bundle's
+  draw, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `zk_mutants.py`'s one-bit
+  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered window's member, stopped by the firewall and
+  refused by Lean without it.
+- `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
+  `prove_path/run.sh` builds, with the firewall's send check. It runs in a proofs slot, one point at a time. Each session's
+  record carries its wall time and its summed peak memory (prover, live verifier and firewall), which is what a CPU node
+  spends on one drawn statement of a block's draw (PRF-171).
 - `forged_proofs.sh`: the fixture of C-Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest drawn `--zk` session and two whose committed output word is wrong, proved with the prover's self-check

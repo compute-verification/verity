@@ -159,7 +159,7 @@ class Setup:
         self.population = P.units(program, query)
         self.templates = [t for t, _ in P.strata(program, query)]
         part = P.partition(program, query)
-        self.ports = {p: {"domain": R.served_domain(self.sha512, P.digest(part), p, schema, leaves, "r-test"), "leaves": leaves}
+        self.ports = {p: {"domain": R.window_domain(self.sha512, P.digest(part), p, schema, leaves, "r-test"), "leaves": leaves}
                       for p, schema, leaves in (("out", "u16", 2 * self.population),
                                                 ("x", "hm96-sha512/row/v1", self.population))}
 

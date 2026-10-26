@@ -15,8 +15,10 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program.registry import boolean_sigma as SG
-from verity_vllm.program.registry import tp_allreduce as TA
+from verity_vllm.pipeline import serving_templates as ST
+from verity.ml.definitions.registry import boolean_sigma as SG
+from verity.ml.definitions.registry import deepgemm as DG
+from verity.ml.definitions.registry import tp_allreduce as TA
 
 WORLD, N = 4, 256
 STATICS = {"WORLD": WORLD, "N": N, "SHOT": 1, "CLUSTER": 1, "EPS": 1e-5, "FMA": False}
@@ -104,14 +106,14 @@ def test_a_row_holds_each_part_at_its_statics_and_the_residual_at_every_halving(
 
 @pytest.mark.parametrize("family", list(SRW.PARTS))
 def test_each_part_reads_what_the_row_gives_it_and_the_parts_return_every_output_once(family):
-    whole = {"AllReduceRmsNormMnnvl_v1": fused}[family]()
+    whole = {"AllReduceRmsNormMnnvl_v1": fused, "DeepGemmFp8Linear_v1": lambda: bind(DG.DeepGemmFp8Linear, K=256, N=200)}[family]()
     params, ret = whole.signature()
     outs = ret.fields
     assert sorted(j for p in SRW.PARTS[family] for j in p[2]) == list(range(len(outs)))
     for fam, reads, returns in SRW.PARTS[family]:
-        pp, pr = SRW._bind(descriptor_id(whole), fam).signature()
+        pp, pr = SRW._bind(descriptor_id(whole), fam, **ST.PART_STATICS.get(family, {})).signature()
         assert [ty for _n, ty in pp] == [(params[g][1] if src == "arg" else outs[g]) for src, g in reads], fam
-        assert [pr] == [outs[j] for j in returns], fam
+        assert list(getattr(pr, "fields", None) or (pr,)) == [outs[j] for j in returns], fam
 
 
 @pytest.mark.parametrize("w", [N, N // 2, N // 8])

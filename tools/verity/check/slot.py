@@ -79,8 +79,8 @@ from pathlib import Path
 
 SLOTS = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/slots"))
 #: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
-LANE_RUN = ("`research run --on vy-nebius-cpu-K --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && "
-            "uv run tools/verity/check/suites.py --changed origin/main --quick'`")
+LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+            'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 LINE = "check-line"
 POLL_S = 20
 #: the exit of a waiter that gave up (`--wait-max`): CMD never ran
@@ -127,6 +127,22 @@ def parse(text: str) -> list[dict]:
                       "trains": opts.get("only") == "trains", "mem": int(opts["mem"]) if "mem" in opts else None,
                       "scope": opts.get("scope") == "1"})
     return slots
+
+
+def lane_pools(slots_file: Path) -> list[Path]:
+    """The pools beside `slots_file` (`NAME/slots` in its directory, not a `*.bak-*` copy) with a slot a lane check may take: n2's
+    `gpu` and cpu-1's `research` beside their all-trains default pools (CI-164)."""
+    out = []
+    for p in sorted(slots_file.parent.glob("*/slots")):
+        if ".bak-" in p.parent.name:
+            continue
+        try:
+            listed = parse(p.read_text())
+        except (OSError, ValueError):
+            continue
+        if any(not s["trains"] for s in listed):
+            out.append(p)
+    return out
 
 
 def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
@@ -373,14 +389,17 @@ def started(pid: int, proc: Path = Path("/proc")) -> datetime | None:
 
 
 def asker(by: str | None = None, twin: str | None = None) -> dict:
-    """Who asked for a slot: this process, the run it belongs to, the tree it checks and who (--by, else RESEARCH_AGENT_URL),
+    """Who asked for a slot: this process, the run it belongs to, the tree it checks and its commit (RESEARCH_SOURCE_SHA, the
+    shipped tree's: a run's clone of it is <root>/scratch/<run id>/tree, which names none), who (--by, else RESEARCH_AGENT_URL),
     and its pair when it is a twin."""
     return {"pid": os.getpid(), "run": os.environ.get("RESEARCH_RUN_ID"), "tree": os.getcwd(),
+            **({"commit": c} if (c := os.environ.get("RESEARCH_SOURCE_SHA")) else {}),
             "by": by or os.environ.get("RESEARCH_AGENT_URL"), **({"twin": twin} if twin else {})}
 
 
 def describe(who: dict) -> str:
-    parts = [f"run {who['run']}" if who.get("run") else "", f"tree {Path(who['tree']).name}" if who.get("tree") else "",
+    tree = who.get("commit") or (Path(who["tree"]).name if who.get("tree") else "")
+    parts = [f"run {who['run']}" if who.get("run") else "", f"tree {tree}" if tree else "",
              f"by {who['by']}" if who.get("by") else "", f"twin {who['twin']}" if who.get("twin") else "",
              f"slot taken {who['took']}" if who.get("took") else ""]
     return ", ".join(p for p in parts if p)
@@ -497,7 +516,7 @@ def holding(lock: Path, who_file: Path, now: datetime, proc: Path = Path("/proc"
            "minutes": round((now - t).total_seconds() / 60) if t else None, "cmd": cmd[:200]}
     who = _read(who_file)
     if who.get("pid") == pid:
-        out.update({k: who[k] for k in ("run", "tree", "by", "twin", "took") if who.get(k)})
+        out.update({k: who[k] for k in ("run", "tree", "commit", "by", "twin", "took") if who.get(k)})
     return out
 
 
@@ -543,7 +562,7 @@ def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
         who = _read(p)
         out.append({"since": f"{t:%Y-%m-%dT%H:%MZ}", "minutes": round((now - t).total_seconds() / 60),
                     "priority": p.name.startswith(PRIORITY), "pid": who.get("pid", int(p.name.split("-")[-1])),
-                    **{k: who[k] for k in ("run", "tree", "by", "twin") if who.get(k)}})
+                    **{k: who[k] for k in ("run", "tree", "commit", "by", "twin") if who.get(k)}})
     return out
 
 
@@ -723,7 +742,12 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     if not slots:
         sys.exit(f"slot: none of {SLOTS}'s slots is within this process's cores; {DIRECT_CPUS_FIX}")
     if not priority and all(s["trains"] for s in slots):
-        sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); a lane check runs on another machine. A PR lands "
+        pools = lane_pools(SLOTS)
+        where = ("a lane check takes a lane pool here: " + ", or ".join(
+            f"`CHECK_SLOTS={p} python3 tools/verity/check/slot.py --by LANE -- CMD...`" for p in pools)
+            + " (`research run --pool NAME` sends one by its directory's name, for the pools `research run --help` names)"
+            if pools else "a lane check runs on another machine")
+        sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); {where}. A PR lands "
                  f"on an eyeball review, and no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")
     me = asker(by, pair)
     ticket, tfd = join(SLOTS.parent, priority=priority, who=me, rank=rank)

@@ -33,9 +33,9 @@ def SCHEMAS : List String := [HmRow.ROW_SCHEMA, HmRow.ROW_SCHEMA_V2, HmRow.ROW_S
 def COMPLETE_KEY : String := "complete"
 /-- The keys a `FORMAT` file holds. -/
 def FILE_KEYS : List String := ["format", "ports", COMPLETE_KEY]
-/-- The keys a `FORMAT` file's port holds; `known` is `RegKnown.KNOWN_KEY`. -/
+/-- The keys a `FORMAT` file's port holds; `known` is `RegKnown.KNOWN_KEY`, `param` `PARAM_KEY`. -/
 def PORT_KEYS : List String :=
-  ["value", "root", "leaves", "words", WIDTH_KEY, "domain", SCHEMA_KEY, "reads", READS_FROM_KEY, "known"]
+  ["value", "root", "leaves", "words", WIDTH_KEY, "domain", SCHEMA_KEY, "reads", READS_FROM_KEY, "known", "param"]
 
 /-- Every key of the object `j` is one of `keys`. -/
 def keysIn (j : Json) (keys : List String) : Bool :=
@@ -277,6 +277,52 @@ def check (c : Circuit) (pub : Public) (own : Option (Array Port)) (derived : Bo
   let indices ← unitIndices pub
   own.toList.forM (checkPort c pub t indices)
 
+/-- The callees of the verifier's own program bound at registration: each `RegisteredInput<w>_v1`
+(`Program.inputId?`'s `registration`) among its descriptor's callees, which every node of every Definition names its
+callee in (`TemplateQuery.Desc`, the descriptor as the template queries read it). A node reads a registered input exactly
+when its callee is one of these, wherever it sits. -/
+def programInputs (d : TemplateQuery.Desc) : Array String :=
+  d.callees.filter fun id => (Program.inputId? id).map (·.1) == some Program.REGISTRATION
+
+/-- **A program that reads a registered value is verified only against registered roots** (PROTOCOL.md §16.10): with the
+verifier's own program (`program`, `--program`), a statement whose program has a `RegisteredInput<w>_v1` callee
+(`programInputs`) is refused unless the verifier holds its own registered reads (`registered`, `--registered`), whatever
+the statement's files say. The public file's header `registered` is the prover's, and the circuit marks no port
+registered, so neither can tell the verifier its rows of a registered value must open a registered root: a statement that
+names none would commit them afresh. With the registered reads, `check` opens every port of them, header or not. A
+program that does not parse is refused. -/
+def checkProgram (program : Option ByteArray) (registered : Bool) : V Unit :=
+  match program, registered with
+  | none, _ => .ok ()
+  | some _, true => .ok ()
+  | some b, false =>
+    match TemplateQuery.Desc.parse b with
+    | .error e => .error e
+    | .ok d =>
+      match (programInputs d)[0]? with
+      | none => .ok ()
+      | some id =>
+        .error s!"registered reads: the verifier's program reads a registered value ({id}), and the verifier holds no registered roots (--registered): its rows would be committed afresh, whatever the statement's public file names"
+
+/-- `checkProgram` accepts the verifier's program `b` only with its registered reads, or when `b` parses to a program
+with no registered input. -/
+theorem checkProgram_ok {b : ByteArray} {registered : Bool} (h : checkProgram (some b) registered = .ok ()) :
+    registered = true ∨ ∃ d, TemplateQuery.Desc.parse b = .ok d ∧ programInputs d = #[] := by
+  cases registered with
+  | true => exact .inl rfl
+  | false =>
+    refine .inr ?_
+    simp only [checkProgram] at h
+    split at h
+    · cases h
+    · next P hd =>
+      refine ⟨P, hd, ?_⟩
+      split at h
+      · next hn =>
+        have : (programInputs P).size ≤ 0 := Array.getElem?_eq_none_iff.mp hn
+        exact Array.eq_empty_of_size_eq_zero (by omega)
+      · cases h
+
 /-- The file's `complete` (`COMPLETE_KEY`), false when absent. -/
 def completeOf (j : Json) : V Bool :=
   match j.getObjVal? COMPLETE_KEY with
@@ -307,6 +353,129 @@ theorem checkComplete_ok {c : Circuit} {own : Array Port} (h : checkComplete c o
     obtain ⟨r, hr, he⟩ := Array.any_eq_true'.mp (Array.all_eq_true_iff_forall_mem.mp hc p hp)
     exact ⟨r, hr, by simpa using he⟩
   · cases h
+
+/-! ### Every registered input the statement's template reads has a port -/
+
+/-- The key of a `FORMAT` port that names the template parameter it reads (`registered.reads`' key: the parameter's name,
+or `name[i]` for row `i` of an array of rows), when the port is not named after it (`reads_file`'s `ports`). -/
+def PARAM_KEY : String := "param"
+
+/-- The template parameter each port of a `--registered` file reads, by `PARAM_KEY`, else the port's own name. -/
+def paramsOf (j : Json) : V (Array String) := do
+  let .ok (.obj kvs) := j.getObjVal? "ports" | throw "registered reads: ports is not an object"
+  kvs.toArray.mapM fun (name, e) => if J.has e PARAM_KEY then J.str e PARAM_KEY "registered reads" else pure name
+
+/-- Definition `fn` of `P` is an input bound at registration (`RegisteredInput<w>_v1`). -/
+def regDef (P : Program.Prog) (fn : Nat) : Bool :=
+  match P.defs[fn]? with
+  | some f => f.prim && f.binding == some Program.REGISTRATION
+  | none => false
+
+/-- The root's nodes of `P`. -/
+def rootNodes (P : Program.Prog) : Array Program.Node := ((P.defs[P.root]?).map (·.body.nodes)).getD #[]
+
+/-- Root node `k` of `P` is a registered input. -/
+def regNode (P : Program.Prog) (k : Nat) : Bool := ((rootNodes P)[k]?).any (regDef P ·.fn)
+
+/-- The root nodes a reference part reads (`n` space; the root has no parameters). -/
+def partNodes : Program.Part → Array Nat
+  | .affine p i _ _ => if p then #[] else #[i]
+  | .strided p i _ _ _ _ _ => if p then #[] else #[i]
+  | .explicit it => (it.filter (!·.p)).map (·.i)
+
+/-- A root node's argument reads a registered input: a part of it reads a `RegisteredInput<w>_v1` root node. -/
+def argReads (P : Program.Prog) (a : Program.Arg) : Bool := a.seq.parts.any fun q => (partNodes q).any (regNode P)
+
+/-- **The template parameters that read a registered input** (PROTOCOL.md §16.10), from the verifier's own program: for
+each root node that calls `t` (a template query's instance of it), each parameter of `t` whose argument reads a
+`RegisteredInput<w>_v1` root node, with its type. Input nodes appear only in the root's body (`Program.decode`), so a
+template instance reads a registered value exactly through these arguments. It reads the root's nodes and their argument
+parts, the descriptor, never the unrolled circuit. -/
+def regParams (P : Program.Prog) (t : String) : Array (String × Program.Ty) :=
+  ((rootNodes P).filter fun x => (P.defs[x.fn]?).any (·.key == t)).flatMap fun x =>
+    ((Array.range x.args.size).filter fun i => (x.args[i]?).any (argReads P)).filterMap fun i =>
+      (P.defs[x.fn]?).bind (·.params[i]?)
+
+/-- The program has a registered input: a `RegisteredInput<w>_v1` root node. -/
+def regRoots (P : Program.Prog) : Bool := (rootNodes P).any (regDef P ·.fn)
+
+/-- Parameter `p` is read by a port whose parameter (`paramsOf`) is `params`' : one port of the whole parameter, or, for
+an array, one port of each row (`name[i]`), as `registered.reads` keys an array of whole rows. -/
+def coversParam (params : Array String) (p : String × Program.Ty) : Bool :=
+  params.contains p.1 || match p.2 with
+    | .array n _ => n > 0 && (List.range n).all fun i => params.contains s!"{p.1}[{i}]"
+    | _ => false
+
+/-- The first template parameter that reads a registered input and that no port's parameter covers. -/
+def coverMiss (P : Program.Prog) (t : String) (params : Array String) : Option (String × Program.Ty) :=
+  (regParams P t).find? fun p => !coversParam params p
+
+/-- The verifier's own partition object's query is a template query (`TemplateQuery.templatesOf`), whose instances are
+the program's root nodes. -/
+def templatePartition (partition : Option Json) : Bool :=
+  match partition with
+  | none => false
+  | some o =>
+    let q := (o.getObjVal? "query").toOption.getD Json.null
+    (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "")
+      ((q.getObjValAs? Nat "version").toOption.getD 0) ((q.getObjVal? "params").toOption.getD Json.null)).isSome
+
+/-- **Every registered input the statement reads has a port** (PROTOCOL.md §16.10): with the verifier's own program and
+registered reads, a program with a `RegisteredInput<w>_v1` root node is verified only under a template query (whose units
+are the root's instances of the circuit's template, `HmRow.queryTemplate`), and every parameter of that template that
+reads one (`regParams`) is read by a port of the verifier's registered reads (`coversParam`, by the ports' `params`,
+`paramsOf`), whose rows `check` opens at the registered root. Without it, a parameter the registered reads leave out would
+have its rows committed afresh, whatever the reads hold for the others. Without the program or the registered reads it
+holds nothing: `checkProgram` refuses a program that reads a registered value without the reads, and `verify` refuses a
+session without the program. A program that does not decode is refused. -/
+def checkCover (c : Circuit) (program : Option ByteArray) (partition : Option Json) (own : Option (Array Port))
+    (params : Array String) : V Unit :=
+  match program, own with
+  | some b, some _ =>
+    match Program.decode b with
+    | .error e => .error e
+    | .ok P =>
+      if !regRoots P then .ok ()
+      else match templatePartition partition, HmRow.queryTemplate c with
+        | false, _ => .error "registered reads (cover): the verifier's program reads a registered value, and its partition is not a template query: a registered value is read by a template query's instances, whose parameters the verifier holds to its registered reads"
+        | true, none => .error "registered reads (cover): META program_digests does not name the circuit's one template, whose parameters the verifier holds to its registered reads"
+        | true, some (t, _) =>
+          match coverMiss P t params with
+          | none => .ok ()
+          | some (name, _) => .error s!"registered reads (cover): parameter {name} of {t} reads a registered input of the verifier's program, and no port of the verifier's registered reads reads it: its rows would be committed afresh"
+  | _, _ => .ok ()
+
+theorem coverMiss_none {P : Program.Prog} {t : String} {params : Array String} (h : coverMiss P t params = none) :
+    ∀ p ∈ regParams P t, coversParam params p = true := by
+  intro p hp
+  have := Array.find?_eq_none.mp h p hp
+  simpa using this
+
+/-- **An accepted cover check covers every registered input the template reads**: where `checkCover` accepts the
+verifier's program `b` (decoding to `P`) and registered reads, and `P` has a registered input, the partition is a template
+query, the circuit's template is some `t`, and every parameter of `t` that reads a registered input of `P` is covered by a
+port's parameter. -/
+theorem checkCover_ok {c : Circuit} {b : ByteArray} {partition : Option Json} {own : Array Port} {params : Array String}
+    {P : Program.Prog} (h : checkCover c (some b) partition (some own) params = .ok ()) (hd : Program.decode b = .ok P)
+    (hr : regRoots P = true) :
+    templatePartition partition = true ∧ ∃ t x, HmRow.queryTemplate c = some (t, x) ∧
+      ∀ p ∈ regParams P t, coversParam params p = true := by
+  revert h
+  simp only [checkCover, hd, hr, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+  cases hp : templatePartition partition with
+  | false => intro h; simp at h
+  | true =>
+    cases hq : HmRow.queryTemplate c with
+    | none => intro h; simp at h
+    | some tx =>
+      obtain ⟨t, x⟩ := tx
+      intro h
+      refine ⟨rfl, t, x, rfl, coverMiss_none ?_⟩
+      cases hm : coverMiss P t params with
+      | none => rfl
+      | some y =>
+        obtain ⟨n, ty⟩ := y
+        simp [hm] at h
 
 /-- The registered values that are a round's commitment by an index, `<prefix><i>`: round `i`'s commitment `rec-c<i>`,
 which V*'s algebra reads; level `l`'s committed tops `rec-top-L<l>`, which its opening statement reads; R's registered
@@ -432,13 +601,27 @@ def checkDescription (c : Circuit) (pub : Public) (own : Array Port) : V Unit :=
   let some t := pub.tables | throw "registered reads: a registered port is a table of a shared-row file"
   own.toList.forM (checkDescriptionPort c pub t)
 
+/-- The first of the circuit's ports whose name an earlier port has. -/
+def dupName (c : Circuit) : Option Nat :=
+  (List.range c.ports.size).find? fun q => (List.range q).any fun q' => c.ports[q']!.name == c.ports[q]!.name
+
+/-- **With registered reads, the circuit names each port once**: the verifier's registered reads, and every check of them,
+name a port by its name, so a second port of a name is one no check reads. -/
+def namesOnce (c : Circuit) : V Unit :=
+  match dupName c with
+  | some q => throw s!"registered reads: the circuit names port {c.ports[q]!.name} twice, and a registered read names one port"
+  | none => pure ()
+
 end Registered
 
-/-- An hm96 statement's registered reads (`Registered.check`). A hidden-output statement's registered ports may be its
-output rows as well as its input rows (§16.13): an output row's table is its instances' own rows, each opened against the
-registered root at the position its unit reads, so the instance's output is that row of the registered value. -/
+/-- An hm96 statement's registered reads (`Registered.check`), and with the verifier's own, a circuit that names each port
+once (`Registered.namesOnce`). A hidden-output statement's registered ports may be its output rows as well as its input
+rows (§16.13): an output row's table is its instances' own rows, each opened against the registered root at the position
+its unit reads, so the instance's output is that row of the registered value. -/
 def checkRegistered (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
-  Registered.check st.c st.pub registered (Registered.derived st.partition)
+  match registered with
+  | some _ => Registered.namesOnce st.c >>= fun _ => Registered.check st.c st.pub registered (Registered.derived st.partition)
+  | none => Registered.check st.c st.pub none (Registered.derived st.partition)
 
 /-- What a verdict reports of the rows its statements' registered ports opened: `{port: [[position, b ‖ c] ...]}`, each
 table row's stated position and its hiding commitment `b ‖ c` (the commit-time opening's digest), in table order across

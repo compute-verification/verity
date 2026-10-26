@@ -220,7 +220,9 @@ theorem ligShaped_ligOfRead {st : Setup} {sch : Flock.Schedule} {H : ℕ} {sl : 
     LigShaped st sch (ligOfRead H sl sch x) := by
   subst hS
   refine ⟨levelOk_levelOf hH _ _ _ _, Array.size_ofFn, fun i hi => ?_, Array.size_ofFn, fun i hi => ?_,
-    levelOk_levelOf hH _ _ _ _, Array.size_replicate, Array.size_replicate, Array.size_replicate⟩
+    levelOk_levelOf hH _ _ _ _, Array.size_replicate, Array.size_replicate, Array.size_replicate,
+    ⟨fun _ hx => (Array.mem_replicate.1 hx).2, fun _ hx => (Array.mem_replicate.1 hx).2,
+      fun _ hx => (Array.mem_replicate.1 hx).2⟩⟩
   · simp only [ligOfRead, Array.getElem_ofFn]
     exact capOk_capArr hH _
   · simp only [ligOfRead, Array.getElem_ofFn]

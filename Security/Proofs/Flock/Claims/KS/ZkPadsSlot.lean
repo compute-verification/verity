@@ -121,53 +121,6 @@ end Session
 
 /-! ## At the masked simulator -/
 
-/-- **`ZkPadsAlign` holds at every message**: the pads fork round is the tables in front's coins, rep 0's if `r = 1`,
-and the link coin (`zkB2`); the simulated strategy follows `SchedC` at `r · repRounds` (`schedC_simAtJZ` on
-`zkStreams`, as `zkBatchAlign`), so it reaches the pads node there (`slotPadsZ_of_batch`), and `advPadsSZ_le_forkC`
-gives the alignment, table `j`'s position in the session being `j` (`take_gamesZC_length`). -/
-theorem zkPadsAlign (x : Claims.Msg) : ZkPadsAlign x := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C r u
-  have hjS : j < sts.size := by rw [← zk_tables_length hset]; exact hj
-  have ht : zkTbl sts j = j := by unfold zkTbl; exact ite_eq_left hjS
-  have hv : (zkRd hset h0 L hz hk hlay j (.inl (.inr (.inl r)))).val =
-      zkFront spec sts j + r.val * repRounds true spec sts[zkTbl sts j]! + 1 := by
-    show zkB2 (zkBase spec sts (zkTbl sts j)) (repRounds true spec sts[zkTbl sts j]!) r = _
-    rcases zkB2_cases (zkBase spec sts (zkTbl sts j)) (repRounds true spec sts[zkTbl sts j]!) r with
-      ⟨a, e⟩ | ⟨a, e⟩ <;> rw [e, a] <;> unfold zkBase zkFront <;> omega
-  obtain ⟨-, hR, -, -⟩ := zkRd_facts h0 L hz hk hlay j
-  have hkR : r.val * repRounds true spec sts[zkTbl sts j]! <
-      repRounds true spec sts[zkTbl sts j]! + repRounds true spec sts[zkTbl sts j]! := by
-    have := Nat.mul_le_mul_right (repRounds true spec sts[zkTbl sts j]!) (show r.val ≤ 1 by omega)
-    omega
-  have hsched : SchedC execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ (Exec.capOfRoot (zkRoot P x ω)[j]!)
-      (DeadZ j) (r.val * repRounds true spec sts[zkTbl sts j]!) (repRounds true spec sts[zkTbl sts j]!)
-      (zkFront spec sts j) (zkSimAt hs hin hset h0 L hz hk hlay hd P ω j hj C u) := by
-    rw [ht] at hkR ⊢
-    rw [zkFront_eq hjS]
-    have hJ : sts.size ≤ (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length := by
-      rw [tabsJ_length, zk_tables_length hset]
-    refine schedC_simAtJZ execArith ZkExec.hs512 _ _ _ _ spec.dg _ _ _
-      (capOf := fun rs j => Exec.capOfRoot rs[j.val]!) (zkN x) _ (fun _ _ _ => rfl) (zkRoot P x ω) _ _ _ _
-      (fun t => repRounds true spec sts[t]!) _ _ hkR
-      (fromS (fun t => repRounds true spec sts[t]!) (j + 1) (sts.size - (j + 1))) (fun p hp => ?_) fun pts => ?_
-    · have := mem_fromS _ _ _ p hp
-      dsimp only [finJ]
-      omega
-    · have h := zkLive_sched hJ h0 (zk_mPts_le hs hin hset) P ω u pts (zkStreams_length hz hset)
-      rw [zkStreams_split hz hjS] at h
-      exact h
-  have ha := advPadsSZ_le_forkC execArith ZkExec.hs512 (zkTabs h0 L hz hk hlay j) _ _ _ r.val _ _
-    (slotPadsZ_of_batch _ _ _ _ _ _ r.val r.isLt _ _ (DeadZ j)
-      (fun e b b' hb _ => by
-        rw [take_gamesZC_length]
-        exact ind_conflictPads_nul _ (two_le_zkTabsN h0 L hz hk hlay j) _ _ _ _ hb)
-      _ (schedZ_of_schedC _ _ _ _ _ _ _ _ _ _ _ hsched))
-  rw [take_gamesZC_length] at ha
-  unfold ZkPadsAlignQ
-  rw [hv]
-  exact ha
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -219,6 +172,13 @@ theorem zkPadsAlign (x : Claims.Msg) : ZkPadsAlign x := by
   exact ha
 
 end Gen
+
+/-- **`ZkPadsAlign` holds at every message**: the pads fork round is the tables in front's coins, rep 0's if `r = 1`,
+and the link coin (`zkB2`); the simulated strategy follows `SchedC` at `r · repRounds` (`schedC_simAtJZ` on
+`zkStreams`, as `zkBatchAlign`), so it reaches the pads node there (`slotPadsZ_of_batch`), and `advPadsSZ_le_forkC`
+gives the alignment, table `j`'s position in the session being `j` (`take_gamesZC_length`). -/
+theorem zkPadsAlign (x : Claims.Msg) : ZkPadsAlign x :=
+  Gen.zkPadsAlign (S := S₀) (x := x)
 
 namespace Gen
 

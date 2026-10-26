@@ -1,0 +1,36 @@
+{
+ "definitions": {
+  "LlBf16FmaStepFirstX_v1": {
+   "and": 50,
+   "type": "ab334f6a190eb355bd1885080f2966a9f683ce33523378fdedf77ff2929a6bff88d3de99ba28797858e49ba919376546fb006ac36bc011fdba835f91817e8e4c"
+  },
+  "LlBf16FmaStepFirst_v1": {
+   "and": 1237,
+   "type": "bde3dea256464cdd282386c426e20fc44bb16ab7ed7152f9768418ddab2c6b0fdbf6838c60380eb7fd68cb4db36009675741635e9d6c14335f81d54d3283d9b0"
+  },
+  "LlBf16FmaStepX_v1": {
+   "and": 50,
+   "type": "ab334f6a190eb355bd1885080f2966a9f683ce33523378fdedf77ff2929a6bff88d3de99ba28797858e49ba919376546fb006ac36bc011fdba835f91817e8e4c"
+  },
+  "LlBf16FmaStep_v1": {
+   "and": 2117,
+   "type": "ec010ed57c2a5b693d8eb7be9fe76b339e9d00db26dfbff0eb3b927e250f2720c04bde86025c65790b8b05f23810ece166163d9a43a108c0a8b30897dc1a0e85"
+  },
+  "LlBf16MulAddStepFirstX_v1": {
+   "and": 18,
+   "type": "5c5af312b1cfe126298aaf0b3d110e18f9359a4f90d2edff27a018aad18fb6bcf776240453fe1e4412d36a68a07e1cc055285a969c6add142a42cc9e2aac64af"
+  },
+  "LlBf16MulAddStepFirst_v1": {
+   "and": 1503,
+   "type": "e06a555e2ca7d631751d0977d9dfaa01bb0e5b1de0e5a4475cc3d8da344c693422dcc1705b7baa592b4094fb3a3844aaa40f7b53e6ae1fa3959b27892fb67ea1"
+  },
+  "LlBf16MulAddStepX_v1": {
+   "and": 18,
+   "type": "5c5af312b1cfe126298aaf0b3d110e18f9359a4f90d2edff27a018aad18fb6bcf776240453fe1e4412d36a68a07e1cc055285a969c6add142a42cc9e2aac64af"
+  },
+  "LlBf16MulAddStep_v1": {
+   "and": 1543,
+   "type": "1eaf8627dbe26e85e96e31373f2f6352f2c2a9017840ae39d9d833208d173f21a71225225f583d7920228867176dff107e76be2f1a8e442b660aa9703d207703"
+  }
+ }
+}

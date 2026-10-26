@@ -62,7 +62,7 @@ def fixed(byte: int):
 def _ports() -> dict:
     part = P.partition(P.mixed_population_program([(t, COUNTS[P.template_id(t)]) for t in WINDOW]), QUERY)
     n = sum(COUNTS.values())
-    return {p: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
+    return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
             for p, leaves in (("x", n), ("out", 2 * n))}
 
 
@@ -192,3 +192,46 @@ def test_the_replay_reads_no_more_than_the_honest_draw():
     assert replay(2) == b"\x01\x02" and replay.at == 2
     with pytest.raises(AC.Ch.CoinError, match="past the honest draw"):
         replay(2)
+
+
+def _clock_and_sleep():
+    now, slept = [0.0], []
+
+    def sleep(s):
+        slept.append(s)
+        now[0] += s
+
+    return (lambda: now[0]), sleep, slept
+
+
+def test_a_session_whose_tunnel_listens_late_is_connected_once_it_listens():
+    clock, sleep, slept = _clock_and_sleep()
+    tries = []
+
+    def connect(address, secret):
+        tries.append((address, secret))
+        if len(tries) < 3:
+            raise ConnectionRefusedError(111, "Connection refused")
+        return "client"
+
+    assert AC.connect_when_listening("127.0.0.1:7811", b"s", connect, 120, clock, sleep) == "client"
+    assert tries == [("127.0.0.1:7811", b"s")] * 3 and slept == [0.5, 0.5]
+
+
+def test_a_session_that_never_listens_or_fails_otherwise_raises():
+    clock, sleep, slept = _clock_and_sleep()
+
+    def refused(address, secret):
+        raise ConnectionRefusedError(111, "Connection refused")
+
+    with pytest.raises(ConnectionRefusedError):
+        AC.connect_when_listening("127.0.0.1:7811", None, refused, 2, clock, sleep)
+    assert len(slept) == 4
+
+    def hello_refused(address, secret):
+        raise AC.Ch.CoinError("the challenger refused the hello")
+
+    clock, sleep, slept = _clock_and_sleep()
+    with pytest.raises(AC.Ch.CoinError):
+        AC.connect_when_listening("127.0.0.1:7811", None, hello_refused, 120, clock, sleep)
+    assert slept == []

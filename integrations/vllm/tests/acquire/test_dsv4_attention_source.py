@@ -36,6 +36,9 @@ from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES
 from verity_vllm.commit.committer.plan_cache import PlanMetas
 from verity_vllm.query.manifest.bind import Binder
 
+#: nearly every test here builds and serves a DeepSeek-V4 stand-in, seconds to minutes each, so the whole module is slow
+pytestmark = pytest.mark.slow
+
 OTHERS = tuple(b for b in RS.BINDERS if b != DS.BINDER)
 TAPS_ = [t for t in CMAP["taps"] if (t.get("commit") or {}).get("binder") == DS.BINDER]
 #: committed name -> (role, layer)

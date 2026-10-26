@@ -55,8 +55,9 @@ permutation ra-codec-tensor proposes for it is a layout of its own here.
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
 that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.  Its order is
 the tree's, not necessarily the reads': listed in store order, a plan is one run per contiguous range it reads.
-`Plan.from_array` takes the runs as an (R, 2) numpy array, as a store holds them, and checks and encodes them in numpy
-(`verity.ml.kernels.plans`: a protocol imports no third-party package); the suite holds it to `Plan` on the same rows.
+`Plan.from_array` takes the runs as an (R, 2) array, as a store holds them, and checks and encodes them column by
+column through the buffer protocol, in the standard library (a protocol imports no third-party package, and a verifier
+no `verity.ml` code); the suite holds it to `Plan` on the same rows.
 `Plan.changed` is the next pass's plan from its change, the blocks it adds and removes, in store order.
 """
 
@@ -66,7 +67,9 @@ import bisect
 import hashlib
 import itertools
 import math
+import operator
 import struct
+import sys
 from array import array
 from collections.abc import Iterator, Sequence
 
@@ -121,17 +124,19 @@ def store_blocks(blocks: object) -> int:
     return blocks
 
 
-def _u64s(native: bytes) -> array:
-    out = array("Q")
-    out.frombytes(native)
-    return out
+_RUNS = "a plan is 1 to 2^32 − 1 runs"
+_RUN = "a run is (first, count) with count ≥ 1, inside the store"
+_CONTINUED = "a run that starts where the one before it ends is part of it"
+_DISJOINT = "a plan's runs are disjoint: no block is read twice in a pass"
+#: The buffer formats `Plan.from_array` reads in place: one native integer (struct's codes; numpy's int8 … uint64).
+_NATIVE_INTS = frozenset("bBhHiIlLqQ")
 
 
 class Plan:
     """What one pass reads, in read order, in a store of `blocks` blocks: `runs` of `(first, count)` consecutive blocks.
     Construction refuses any plan but a canonical one of distinct blocks (the format above), so equal read sequences
     have equal digests and no block is read twice.  `Plan.from_array` is the same plan, or the same refusal, from an
-    (R, 2) integer numpy array of runs, checked and encoded in numpy."""
+    (R, 2) integer array of runs, checked column by column."""
 
     __slots__ = ("blocks", "_encoding", "_firsts", "_ends", "_runs", "_digest")
 
@@ -139,16 +144,16 @@ class Plan:
         store_blocks(blocks)
         runs = tuple(runs) if isinstance(runs, Sequence) else None
         if runs is None or not 1 <= len(runs) < 1 << 32:
-            raise ValueError("a plan is 1 to 2^32 − 1 runs")
+            raise ValueError(_RUNS)
         for r in runs:
             if (type(r) is not tuple or len(r) != 2 or any(type(x) is not int for x in r) or r[0] < 0 or r[1] < 1
                     or r[0] + r[1] > blocks):
-                raise ValueError("a run is (first, count) with count ≥ 1, inside the store")
+                raise ValueError(_RUN)
         if any(a[0] + a[1] == b[0] for a, b in zip(runs, runs[1:])):
-            raise ValueError("a run that starts where the one before it ends is part of it")
+            raise ValueError(_CONTINUED)
         ordered = sorted(runs)
         if any(a[0] + a[1] > b[0] for a, b in zip(ordered, ordered[1:])):
-            raise ValueError("a plan's runs are disjoint: no block is read twice in a pass")
+            raise ValueError(_DISJOINT)
         encoding = len(runs).to_bytes(4, "big") + b"".join(f.to_bytes(8, "big") + c.to_bytes(8, "big") for f, c in runs)
         self._set(blocks, encoding, array("Q", (f for f, _ in runs)), array("Q", itertools.accumulate(c for _, c in runs)),
                   runs)
@@ -163,18 +168,47 @@ class Plan:
 
     @classmethod
     def from_array(cls, runs, blocks: int) -> Plan:
-        """`Plan` of the rows of `runs`, an (R, 2) integer numpy array, as `(first, count)` tuples: the same plan with
-        the same digest, or the same refusal, checked and encoded in numpy (`verity.ml.kernels.plans`), so a KV pass's
-        10^5 runs take milliseconds.  An array of any other shape or dtype is `Plan` of its rows as tuples."""
-        from verity.ml.kernels import plans
+        """`Plan` of the rows of `runs`, an (R, 2) array, as `(first, count)` tuples: the same plan with the same
+        digest, or the same refusal.  An array that exports C-ordered native integers (a numpy array of int8 … uint64)
+        is read through the buffer protocol and checked column by column, each rule over every run in the reference's
+        order; anything else is `Plan` of its rows (`tolist`) as tuples.
 
+        Disjointness is checked on the firsts and the ends sorted apart, the k-th end at most the (k+1)-th first for
+        every k: runs of count ≥ 1 are disjoint exactly then.  (Sorted by first, disjoint runs are sorted by end too.
+        Conversely, the k runs ending by the (k+1)-th first start before it, so no two runs share a first and those k
+        are the first k by first: the k-th by first ends by the next one's first.)"""
         store_blocks(blocks)
-        out = plans.checked(runs, blocks)
-        if out is None:
+        try:
+            view = memoryview(runs)
+        except (TypeError, ValueError):
+            view = None
+        if (view is None or view.ndim != 2 or view.shape[1] != 2 or view.format not in _NATIVE_INTS
+                or not view.c_contiguous):
             rows = runs.tolist()
             return cls(tuple(tuple(r) if type(r) is list else r for r in rows) if type(rows) is list else rows, blocks)
+        if not 1 <= len(view) < 1 << 32:
+            raise ValueError(_RUNS)
+        raw = view.cast("B")
+        flat = raw.cast(view.format)
+        firsts, counts = flat[0::2].tolist(), flat[1::2].tolist()
+        ends = list(map(operator.add, firsts, counts))
+        if min(firsts) < 0 or min(counts) < 1 or max(ends) > blocks:
+            raise ValueError(_RUN)
+        if any(map(operator.eq, ends, itertools.islice(firsts, 1, None))):
+            raise ValueError(_CONTINUED)
+        if any(map(operator.gt, sorted(ends), itertools.islice(sorted(firsts), 1, None))):
+            raise ValueError(_DISJOINT)
+        words = array("Q")
+        if view.itemsize == words.itemsize:
+            words.frombytes(raw)  # every word is nonnegative now, so a signed one's bytes are its u64's
+        else:
+            words.extend(flat.tolist())
+        native_firsts = words[0::2]
+        if sys.byteorder == "little":
+            words.byteswap()
         plan = object.__new__(cls)
-        plan._set(blocks, out[0], _u64s(out[1]), _u64s(out[2]), None)
+        plan._set(blocks, len(firsts).to_bytes(4, "big") + words.tobytes(), native_firsts,
+                  array("Q", itertools.accumulate(counts)), None)
         return plan
 
     @property

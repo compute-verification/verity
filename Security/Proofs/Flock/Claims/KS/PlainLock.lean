@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.KS.PlainSim
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain simulator's lockstep
@@ -134,6 +135,52 @@ theorem run_acc_iff_last {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type}
         List.map_congr_left fun i hi => h (i + 1) (by have := List.mem_range.1 hi; omega)]
       exact next_acc_last H _ _ _ _
 
+/-- **`VK keep`'s acceptance does not read its last coin** (`next_acc_last`'s proof, at `nextK keep`). -/
+theorem nextK_acc_last (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg}
+    (c₀ : Coin) (l : List Coin) (c c' : Coin) :
+    ((nextK keep x as (c₀ :: (l ++ [c]))).eval H).1 = .acc ↔
+      ((nextK keep x as (c₀ :: (l ++ [c']))).eval H).1 = .acc := by
+  have key : ∀ c c' : Coin, ((nextK keep x as (c₀ :: (l ++ [c]))).eval H).1 = .acc →
+      ((nextK keep x as (c₀ :: (l ++ [c']))).eval H).1 = .acc := by
+    intro c c' h
+    cases ha : act false x as (c₀ :: (l ++ [c])) with
+    | rej => rw [nextK_rej keep H ha] at h; cases h
+    | coin d => rw [nextK_coin keep H ha] at h; cases h
+    | decide s spec sts link c₁ mids f =>
+      have hb := act_last_decide ha c'
+      unfold nextK at h ⊢
+      rw [ha] at h
+      rw [hb]
+      exact h
+  exact ⟨key c c', key c' c⟩
+
+/-- **A run of `VK keep` accepts regardless of its last coin** (`run_acc_iff_last`'s proof, at `nextK keep`). -/
+theorem run_acc_iff_lastK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω)
+    (x : Claims.Msg) (ω : Ω) (r₁ r₂ : Fin ((V false).k x) → Coin)
+    (h : ∀ i, i + 1 < (V false).k x → Claims.coinSeq r₁ i = Claims.coinSeq r₂ i) :
+    (Claims.run H P (VK keep) x ω r₁).out = .acc ↔ (Claims.run H P (VK keep) x ω r₂).out = .acc := by
+  replace h : ∀ i, i + 1 < (V false).k x →
+      Claims.coinSeq (k := (VK keep).k x) r₁ i = Claims.coinSeq (k := (VK keep).k x) r₂ i := h
+  unfold Claims.run
+  refine stepWith_acc_iff H P x ω _ _ ((V false).k x) (fun bs hb => ?_) (fun bs hb => ?_) _ [] [] _
+    (by rw [List.length_nil, Nat.zero_add]; exact congrFun (VK_k keep) x)
+  · show nextK keep x bs _ = nextK keep x bs _
+    congr 1
+    exact List.map_congr_left fun i hi => h i (by have := List.mem_range.1 hi; omega)
+  · show ((nextK keep x bs _).eval H).1 = .acc ↔ ((nextK keep x bs _).eval H).1 = .acc
+    cases hs : setupOf false x with
+    | none =>
+      rw [nextK_rej keep H (act_none hs _ _), nextK_rej keep H (act_none hs _ _)]
+    | some p =>
+      obtain ⟨s', spec, sts⟩ := p
+      have hK : 2 ≤ (V false).k x := by
+        show 2 ≤ (match setupOf false x with | some (_, spec, sts) => 2 + rounds false spec sts | none => 1)
+        rw [hs]
+        exact Nat.le_add_right 2 _
+      rw [hb, range_map_ends _ hK, range_map_ends _ hK, h 0 (by omega),
+        List.map_congr_left fun i hi => h (i + 1) (by have := List.mem_range.1 hi; omega)]
+      exact nextK_acc_last keep H _ _ _ _
+
 /-- **A run's messages are `P`'s along its coins**: each message `P` sends at the history of the coins' bytes
 before it (`depMsg`), wherever the verifier answers each round with its coin's bytes. -/
 theorem stepWith_dep {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (V' : Claims.Verifier Coin)
@@ -190,6 +237,13 @@ theorem run_dep {zk : Bool} (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Cla
     (Claims.run H P (V zk) x ω r).msgs.map Prod.fst =
       (List.range (Claims.run H P (V zk) x ω r).msgs.length).map (depMsg H P x ω (Claims.coinSeq r)) :=
   stepWith_dep H P (V zk) x ω _ (Claims.Bridge.answersCoin_deploy zk H x) _ [] [] _ rfl rfl rfl
+
+/-- **A run of `VK keep`'s messages are `P`'s along its coins** (`stepWith_dep`). -/
+theorem run_depK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
+    (ω : Ω) (r : Fin ((V false).k x) → Coin) :
+    (Claims.run H P (VK keep) x ω r).msgs.map Prod.fst =
+      (List.range (Claims.run H P (VK keep) x ω r).msgs.length).map (depMsg H P x ω (Claims.coinSeq r)) :=
+  stepWith_dep H P (VK keep) x ω _ (Claims.Bridge.answersCoin_VK keep H x) _ [] [] _ rfl rfl rfl
 
 theorem depHist_congr {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     {c₁ c₂ : ℕ → Coin} : ∀ j, (∀ i < j, c₁ i = c₂ i) → depHist H P x ω c₁ j = depHist H P x ω c₂ j
@@ -331,17 +385,22 @@ noncomputable def plainAcc {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (
     (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536) : Bool :=
   decide ((Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r'))).out = .acc)
 
+/-- Whether `VK keep` accepts `P` at `plainΦ`'s coins. -/
+noncomputable def plainAccK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+    (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536) : Bool :=
+  decide ((Claims.run sha512 P (VK keep) x ω (plainΦ x spec st (u, r'))).out = .acc)
+
 /-- **The simulator sends `plainB` along the live history.** -/
-theorem plainSim_msg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+theorem plainSim_msgK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
     (hL : plainN x + 2 = (V false).k x) (k : ℕ) (hk : k ≤ plainN x) :
-    (((plainSim P x spec st).next x (plainHl P x spec st ω hw (plainDm P x spec st ω u r')
-        (plainB x spec st (plainDm P x spec st ω u r') (plainAcc P x spec st ω u r')) r' k) (ω, u)).eval sha512).1 =
-      plainB x spec st (plainDm P x spec st ω u r') (plainAcc P x spec st ω u r') k := by
+    (((plainSimK keep P x spec st).next x (plainHl P x spec st ω hw (plainDm P x spec st ω u r')
+        (plainB x spec st (plainDm P x spec st ω u r') (plainAccK keep P x spec st ω u r')) r' k) (ω, u)).eval sha512).1 =
+      plainB x spec st (plainDm P x spec st ω u r') (plainAccK keep P x spec st ω u r') k := by
   have hc := simCoins_agree P x spec st ω hw hm1 (plainDm P x spec st ω u r')
-    (plainB x spec st (plainDm P x spec st ω u r') (plainAcc P x spec st ω u r')) u r' hL k
-  simp only [plainSim, Claims.OC.eval]
-  unfold plainMsg
+    (plainB x spec st (plainDm P x spec st ω u r') (plainAccK keep P x spec st ω u r')) u r' hL k
+  simp only [plainSimK, Claims.OC.eval]
+  unfold plainMsgK
   rw [plainHl_length, ite_eq_right (Nat.succ_ne_zero k)]
   by_cases hkN : k < plainN x
   · rw [ite_eq_left (show k + 1 ≤ plainN x by omega)]
@@ -349,15 +408,24 @@ theorem plainSim_msg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec :
     exact congrArg _ (depMsg_congr sha512 P x ω fun i hi => hc i hi)
   · rw [ite_eq_right (show ¬ k + 1 ≤ plainN x by omega)]
     conv_rhs => rw [plainB, ite_eq_right hkN]
-    have hacc := run_acc_iff_last sha512 P x ω (simCoins x spec st u _) (plainΦ x spec st (u, r'))
+    have hacc := run_acc_iff_lastK keep sha512 P x ω (simCoins x spec st u _) (plainΦ x spec st (u, r'))
       fun i hi => hc i (by omega)
-    by_cases ha : (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r'))).out = .acc
+    by_cases ha : (Claims.run sha512 P (VK keep) x ω (plainΦ x spec st (u, r'))).out = .acc
     · rw [ite_eq_left (hacc.2 ha)]
-      conv_rhs => rw [plainAcc, decide_eq_true ha, ite_eq_left rfl]
+      conv_rhs => rw [plainAccK, decide_eq_true ha, ite_eq_left rfl]
       exact depMsg_congr sha512 P x ω fun i hi => hc i hi
     · rw [ite_eq_right (mt hacc.1 ha)]
-      conv_rhs => rw [plainAcc, decide_eq_false ha]
+      conv_rhs => rw [plainAccK, decide_eq_false ha]
       rfl
+
+/-- `plainSim_msgK` at the deployed plain verifier (`keep := id`). -/
+theorem plainSim_msg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+    (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
+    (hL : plainN x + 2 = (V false).k x) (k : ℕ) (hk : k ≤ plainN x) :
+    (((plainSim P x spec st).next x (plainHl P x spec st ω hw (plainDm P x spec st ω u r')
+        (plainB x spec st (plainDm P x spec st ω u r') (plainAcc P x spec st ω u r')) r' k) (ω, u)).eval sha512).1 =
+      plainB x spec st (plainDm P x spec st ω u r') (plainAcc P x spec st ω u r') k :=
+  plainSim_msgK id (Ω := Ω) (P := P) (x := x) (spec := spec) (st := st) (ω := ω) (hw := hw) (hm1 := hm1) (u := u) (r' := r') (hL := hL) (k := k) (hk := hk)
 
 /-- **A round on the plain wire reads back as its submission.** -/
 theorem plainSub_round (rep n : ℕ) (a : Claims.Msg) (hr : rep < 2) (hn : n ≤ 65536) :
@@ -389,6 +457,37 @@ theorem plainCnt_le (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) {i : ℕ} 
 
 /-- **The simulator's live outcome**: `P`'s roots, the live link points, the rounds of its submissions and the proof
 files of its last message. -/
+theorem plainSim_liveOutK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+    (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
+    (hL : plainN x + 2 = (V false).k x) :
+    liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 (plainSimK keep P x spec st) x
+        (ω, u) r' =
+      ⟨(plainWire spec.mPts hw).root ((P.next x [] ω).eval sha512).1,
+        (ptsIf (plainWire spec.mPts hw)).proj (Claims.coinSeq r' 0),
+        foldS (plainDg spec) (plainS x spec st (plainDm P x spec st ω u r')) (fun i => Claims.coinSeq r' (i + 1))
+          (plainN x) (fun _ _ => []),
+        (plainWire spec.mPts hw).proofs
+          (plainB x spec st (plainDm P x spec st ω u r') (plainAccK keep P x spec st ω u r') (plainN x))⟩ := by
+  have hS : ∀ k < plainN x, (plainW spec hw x).sub
+      (plainB x spec st (plainDm P x spec st ω u r') (plainAccK keep P x spec st ω u r') k) =
+        some (plainS x spec st (plainDm P x spec st ω u r') k) := fun k hk => by
+    show plainSub _ = _
+    rw [plainB, ite_eq_left hk]
+    exact plainSub_round _ _ _ (plainRep_lt spec st (k + 1)) (plainCnt_le x spec st (Nat.succ_ne_zero k))
+  have hb : ∀ k ≤ plainN x, (((plainSimK keep P x spec st).next x
+      ([((((plainSimK keep P x spec st).next x [] (ω, u)).eval sha512).1,
+          (plainW spec hw x).encPts ((ptsIf (plainW spec hw x)).proj (Claims.coinSeq r' 0)))] ++
+        liveH (plainW spec hw x)
+          (plainB x spec st (plainDm P x spec st ω u r') (plainAccK keep P x spec st ω u r'))
+          (plainS x spec st (plainDm P x spec st ω u r')) (fun i => Claims.coinSeq r' (i + 1)) k) (ω, u)).eval
+        sha512).1 = plainB x spec st (plainDm P x spec st ω u r') (plainAccK keep P x spec st ω u r') k := fun k hk => by
+    rw [plainSim_firstK keep]
+    exact plainSim_msgK keep P x spec st ω hw hm1 u r' hL k hk
+  rw [liveOut_known plainN (plainDg spec) (plainW spec hw) sha512 (plainSimK keep P x spec st) x (ω, u) r' _ _ hS hb,
+    plainSim_firstK keep]
+  rfl
+
+/-- `plainSim_liveOutK` at the deployed plain verifier (`keep := id`). -/
 theorem plainSim_liveOut {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (hw : 2 * spec.mPts ≤ 65536) (hm1 : 1 ≤ spec.mPts) (u : plainTape x) (r' : Fin (plainN x + 2) → LCoin 65536)
     (hL : plainN x + 2 = (V false).k x) :
@@ -399,24 +498,7 @@ theorem plainSim_liveOut {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (sp
         foldS (plainDg spec) (plainS x spec st (plainDm P x spec st ω u r')) (fun i => Claims.coinSeq r' (i + 1))
           (plainN x) (fun _ _ => []),
         (plainWire spec.mPts hw).proofs
-          (plainB x spec st (plainDm P x spec st ω u r') (plainAcc P x spec st ω u r') (plainN x))⟩ := by
-  have hS : ∀ k < plainN x, (plainW spec hw x).sub
-      (plainB x spec st (plainDm P x spec st ω u r') (plainAcc P x spec st ω u r') k) =
-        some (plainS x spec st (plainDm P x spec st ω u r') k) := fun k hk => by
-    show plainSub _ = _
-    rw [plainB, ite_eq_left hk]
-    exact plainSub_round _ _ _ (plainRep_lt spec st (k + 1)) (plainCnt_le x spec st (Nat.succ_ne_zero k))
-  have hb : ∀ k ≤ plainN x, (((plainSim P x spec st).next x
-      ([((((plainSim P x spec st).next x [] (ω, u)).eval sha512).1,
-          (plainW spec hw x).encPts ((ptsIf (plainW spec hw x)).proj (Claims.coinSeq r' 0)))] ++
-        liveH (plainW spec hw x)
-          (plainB x spec st (plainDm P x spec st ω u r') (plainAcc P x spec st ω u r'))
-          (plainS x spec st (plainDm P x spec st ω u r')) (fun i => Claims.coinSeq r' (i + 1)) k) (ω, u)).eval
-        sha512).1 = plainB x spec st (plainDm P x spec st ω u r') (plainAcc P x spec st ω u r') k := fun k hk => by
-    rw [plainSim_first]
-    exact plainSim_msg P x spec st ω hw hm1 u r' hL k hk
-  rw [liveOut_known plainN (plainDg spec) (plainW spec hw) sha512 (plainSim P x spec st) x (ω, u) r' _ _ hS hb,
-    plainSim_first]
-  rfl
+          (plainB x spec st (plainDm P x spec st ω u r') (plainAcc P x spec st ω u r') (plainN x))⟩ :=
+  plainSim_liveOutK id (Ω := Ω) (P := P) (x := x) (spec := spec) (st := st) (ω := ω) (hw := hw) (hm1 := hm1) (u := u) (r' := r') (hL := hL)
 
 end FlockDeploy.KS

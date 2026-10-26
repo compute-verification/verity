@@ -1,0 +1,36 @@
+{
+ "definitions": {
+  "Dsv4GlobalTopkLen_v2{TOPK=1024}": {
+   "and": 1041,
+   "type": "7a863426b6c236feba35eecc67c9eb8242ef5c3e96dc52b04551f9ce782c647430df2dc35a108369e1167de7f46578695c736ab3c2364cdad4f8983e8dbf30a4"
+  },
+  "Dsv4GlobalTopkLen_v2{TOPK=16}": {
+   "and": 27,
+   "type": "585d656498b1cae1a96f13b118c086f0a21d829d7774f7042b2d194b80fd492e37988c8dfd653c6c55ebf7fc2a44790f10f6785ed016cf6d06aa9a7d55fdc4b4"
+  },
+  "Dsv4GlobalTopkLen_v2{TOPK=8}": {
+   "and": 18,
+   "type": "949f7a8f99dcf4894e7ad009ed2071b21788c9011553f135174090bd71a3a18eaac7f9a916c9650d23e3eb28c71e0fea2fc0bc02f90dc662dcf90e5d6e5e6868"
+  },
+  "Dsv4GlobalTopkSlot_v2{BS=4,NB=8}": {
+   "and": 268,
+   "type": "25f24189f9a02ed877b665f8b3935532af16204d17b800e6a7c0f93dfe9e3a1700d2d67a6719bf38552c02c462b8b92c432d26ff15d2da7e7fc5fd312d5db2b5"
+  },
+  "Dsv4GlobalTopkSlot_v2{BS=64,NB=16}": {
+   "and": 443,
+   "type": "6ff7de9dc776b408b4373e68cda73c2987c26bd06673f81ece03cf68b01fa24912e1f0923e9962f89cc73d9d200950b957c066ca5cf48bd455ed544d159ef60b"
+  },
+  "Dsv4GlobalTopkSlot_v2{BS=64,NB=4096}": {
+   "and": 106515,
+   "type": "ea00d9e2a6e85ca8a6d0fdc3a67d445223512a2e1b495318cfcbf9c1b7c72fd5a937d48c3b42d788303e977c214f826fd8ffe21a62ebd4db0063ddc396e89398"
+  },
+  "Dsv4GlobalTopk_v2{TOPK=16,BS=64,NB=16}": {
+   "and": 7115,
+   "type": "6e3f43d901b106736438eda5cf154b4ffd1f350ebe115ce4d4fdc1538b7f1d3a7d7981409d2d2fbfb814a4d3937b73a8e059e8bb6625729c25a13677aef64114"
+  },
+  "Dsv4GlobalTopk_v2{TOPK=8,BS=4,NB=8}": {
+   "and": 2162,
+   "type": "6a0dba50193a71432ade17586b521a26ee197bc019b8b4e78c265e90c00b73984d4f49e3a7611806da01b0edd5bf8f9a82bb6609b3df31fe3e6823b63033def7"
+  }
+ }
+}

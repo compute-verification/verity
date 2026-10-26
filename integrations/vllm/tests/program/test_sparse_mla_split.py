@@ -18,12 +18,12 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import evaluate
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import sparse_mla_split_twins as TW
-from verity_vllm.program.registry import boolean_sparse_mla_split as BX
-from verity_vllm.program.registry import mla_capture as MC
-from verity_vllm.program.registry import sparse_mla as M
-from verity_vllm.program.registry import sparse_mla_split as W
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
+from verity.ml.definitions.registry import boolean_sparse_mla_split as BX
+from verity_vllm.program import mla_capture as MC
+from verity.ml.definitions.registry import sparse_mla as M
+from verity.ml.definitions.registry import sparse_mla_split as W
 from tests.program.test_boolean_fp8 import F32_SPECIALS, _flat, _inputs
 from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head, _val
 
@@ -363,6 +363,18 @@ def _combine(lse, o) -> np.ndarray:
 def _part(T, DR, DV, BN, scale, qn, qr, kv) -> np.ndarray:
     part = bind(W.SparseMlaSplitPart, T=T, DR=DR, DV=DV, BN=BN, SCALE=scale, **FA3)
     return np.asarray(evaluate(part, qn.tolist(), qr.tolist(), kv.reshape(-1).tolist()), dtype=U32)
+
+
+@pytest.mark.parametrize("T", [8, 16, 40])
+def test_the_part_twin_is_the_word(T: int) -> None:
+    """`part_rows` on a split's keys (one partial block, one whole block, a partial third) is the word part word for word."""
+    DR, DV, BN = 16, 16, 16
+    rng = np.random.default_rng(T + 100)
+    qn, qr, kv = _bf16(rng, (2, DV)), _bf16(rng, (2, DR)), _bf16(rng, (T, DV + DR), 0.5)
+    o, lse, nf = TW.part_rows(qn, qr, kv, T=T, DR_=DR, DV=DV, BN=BN, scale=0.0625)
+    assert not nf.any()
+    for r in range(2):
+        assert np.array_equal(np.append(o[r], lse[r]).astype(U32), _part(T, DR, DV, BN, 0.0625, qn[r], qr[r], kv))
 
 
 def _parts(T, NS, DR, DV, BN, scale, qn, qr, kv) -> tuple[np.ndarray, np.ndarray]:

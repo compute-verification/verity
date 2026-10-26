@@ -143,21 +143,6 @@ theorem parsed_of_parse {zk : Bool} {rel : Readable.Parsed → Readable.Relation
       Readable.Parses p ∧ p.sts.size = s.tables ∧ ∀ j, table zk rel x j = some (Readable.toReadable rel (p.only j)) :=
   KS.Gen.parsed_of_parse (S := KS.S₀) (zk := zk) (rel := rel) (x := x) (s := s) (hs := hs)
 
-/-- **The deployed relation splits by table**: at an in-scope statement the claims' parser accepts, a witness is in the
-relation exactly when, for every table `j`, its share (`Readable.tableWit`: hidden values `a·J + j`) is in the relation
-of table `j`'s own statement (`table`). -/
-theorem relS_split {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
-    (hs : parse zk Readable.relation x = some s) (hin : Claims.Flock.InScope zk s) (w : Claims.Flock.Wit) :
-    Claims.Flock.RelS s w ↔ ∀ j < s.tables, ∃ t, table zk Readable.relation x j = some t ∧
-      Claims.Flock.RelS t (Readable.tableWit s.tables w j) := by
-  obtain ⟨p, -, rfl, hP, hsz, htab⟩ := parsed_of_parse hs
-  obtain ⟨-, -, -, -, -, ht, -, -, -, hpi, -⟩ := hin
-  simp only [Readable.toReadable, Readable.Read.form, Bool.not_eq_true] at ht hpi
-  have hpi' : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hpi])
-  rw [Readable.relS_only hP ht hpi' w, ← hsz]
-  simp only [htab, Option.some.injEq, exists_eq_left']
-
-
 namespace KS.Gen
 
 variable [S : ZkSetup]
@@ -177,6 +162,15 @@ theorem relS_split {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
   simp only [htab, Option.some.injEq, exists_eq_left']
 
 end KS.Gen
+
+/-- **The deployed relation splits by table**: at an in-scope statement the claims' parser accepts, a witness is in the
+relation exactly when, for every table `j`, its share (`Readable.tableWit`: hidden values `a·J + j`) is in the relation
+of table `j`'s own statement (`table`). -/
+theorem relS_split {zk : Bool} {x : Claims.Msg} {s : Claims.Flock.Stmt}
+    (hs : parse zk Readable.relation x = some s) (hin : Claims.Flock.InScope zk s) (w : Claims.Flock.Wit) :
+    Claims.Flock.RelS s w ↔ ∀ j < s.tables, ∃ t, table zk Readable.relation x j = some t ∧
+      Claims.Flock.RelS t (Readable.tableWit s.tables w j) :=
+  KS.Gen.relS_split (S := KS.S₀) (zk := zk) (x := x) (s := s) (hs := hs) (hin := hin) (w := w)
 
 /-- **At one table, the table's own statement is the statement.** -/
 theorem table_zero_of_tables_eq_one {zk : Bool} {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg}

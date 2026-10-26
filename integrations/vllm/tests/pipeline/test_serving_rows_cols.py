@@ -15,15 +15,16 @@ from verity.ml.circuits.evaluation import evaluate_batch
 
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
-from verity_vllm.program.registry import boolean_moe as BMOE
-from verity_vllm.program.registry import boolean_tp_allreduce as BTA
-from verity_vllm.program.registry import moe as M
-from verity_vllm.program.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import boolean_moe as BMOE
+from verity.ml.definitions.registry import boolean_tp_allreduce as BTA
+from verity.ml.definitions.registry import moe as M
+from verity.ml.definitions.registry import tp_allreduce as TA
 
 TOPK, WORLD, W = 3, 4, 8
 OPS = {"MoeSum_v1": "model.layers.3.mlp.experts", "AllReduceMnnvl_v1": "model.layers.6.mlp"}
-#: the families that are rows of their own (a part's blocks: test_serving_rows_parts.py)
-FAMILIES = [f for f in SRW.COLS if f not in SRW.PART_OF]
+#: the families that are rows of their own and elementwise at every statics (a part's blocks: test_serving_rows_parts.py; torch's
+#: multimem all-reduce, whose blocks `cols_refused` restricts: test_serving_rows_multimem.py)
+FAMILIES = [f for f in SRW.COLS if f not in SRW.PART_OF and f != "AllReduceMultimem_v1"]
 
 
 def defn(family: str, w: int, boolean: bool = False):

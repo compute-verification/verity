@@ -21,13 +21,13 @@ import pytest
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program import boolean as BB
-from verity_vllm.program.registry import b1  # noqa: F401  (registers RoPEHead_v1)
-from verity_vllm.query.call_scope import specialization
+from verity.ml.definitions import boolean as BB
+from verity.ml.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
+from verity.ml.definitions.call_scope import specialization
 from verity_vllm.query.program_view import spec_base, spec_statics
 
 from tests.pipeline import served_rope as SR
@@ -103,7 +103,7 @@ def test_a_boolean_templates_window_commits_the_word_rows_and_passes_the_verifie
     defn = bind(REGISTRY["RoPEHead_v2"], D=D)
     program, query = P.population_program(defn, HEADS), P.template_instance_query(defn)
     part = P.digest(P.partition(program, query))
-    ports = {f"{ROPE_BITS}/{p}": {"leaves": HEADS, "domain": R.served_domain(P.program_digest(program), part, f"{ROPE_BITS}/{p}",
+    ports = {f"{ROPE_BITS}/{p}": {"leaves": HEADS, "domain": R.window_domain(P.program_digest(program), part, f"{ROPE_BITS}/{p}",
                                                                              CS.ROW_SCHEMA, HEADS, c["run_root"])}
              for p in ("x", "cs", "out")}
     v = R.check(rec, program, query, DR.parse_law(LAW), CS.SCHEME, ports,

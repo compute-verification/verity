@@ -943,6 +943,10 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     if (tables is None) != (refs is None) or (tables is not None and not share_rows):
         raise ValueError("tables and refs are given together, with share_rows")
     if registered is not None:
+        names = [p.name for p in ports]
+        if len(set(names)) != len(names):
+            dup = next(nm for i, nm in enumerate(names) if nm in names[:i])
+            raise ValueError(f"registered reads: the circuit names port {dup} twice, and a registered read names one port")
         if tables is None or salts is None or not registered or not set(registered) <= {p.name for p in ports}:
             raise ValueError("registered: some rows' tables (input ports' or output rows'), given with their tables, refs and "
                              "registered salts")

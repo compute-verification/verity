@@ -15,7 +15,7 @@ from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.fold.patterns import ALIAS_OPS, classify_transparent
 from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
-from verity_vllm.engine.profiles import dense_generic as dg
+from verity_vllm.engine.profiles import dense_generic as dg, generic
 from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, StepContext, Transparent, Unsupported, spec_label
 from verity_vllm.observe.fold.tree import build_trees
@@ -83,7 +83,7 @@ def test_weights_record_carries_e4m3_weights_block_scales_and_head_norms():
     # a bf16 Llama-architecture configuration is untouched by the two facts
     C0 = dict(C)
     C0.pop("QK_NORM"), C0.pop("FP8_BLOCK")
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     assert analytic.weights_type(C0) == analytic.weights_type(C0) and dict(analytic.weights_type(C0).fields)["layers"].elem == b1.layer_weights_type(C0)
 
 
@@ -104,18 +104,18 @@ def test_weight_map_names_the_scales_and_head_norms_only_under_the_facts():
 
 def test_other_quantization_schemes_refuse_fail_closed():
     cfg = json.loads(CFG_PATH.read_text())
-    assert dg.supported_family(cfg) is None
+    assert generic.structural_refusal(cfg) is None
     bad = dict(cfg, quantization_config=dict(cfg["quantization_config"], weight_block_size=None))
-    assert "weight_block_size" in dg.supported_family(bad)
+    assert "weight_block_size" in generic.structural_refusal(bad)
     bad = dict(cfg, quantization_config=dict(cfg["quantization_config"], activation_scheme="static"))
-    assert "activation_scheme" in dg.supported_family(bad)
+    assert "activation_scheme" in generic.structural_refusal(bad)
     bad = dict(cfg, quantization_config={"quant_method": "compressed-tensors"})
-    assert "quant_method" in dg.supported_family(bad)
+    assert "quant_method" in generic.structural_refusal(bad)
     bad = dict(cfg, quantization_config=dict(cfg["quantization_config"], modules_to_not_convert=["lm_head", "model.layers.3.mlp.down_proj"]))
-    assert "mixed-precision" in dg.supported_family(bad)
+    assert "mixed-precision" in generic.structural_refusal(bad)
     with pytest.raises(ValueError):
-        dg.derive_config(bad, repo=None, revision=None)
-    assert "head_dim" in dg.supported_family({k: v for k, v in cfg.items() if k != "head_dim"})
+        generic.derive_config(bad, repo=None, revision=None)
+    assert "head_dim" in generic.structural_refusal({k: v for k, v in cfg.items() if k != "head_dim"})
 
 
 # ---------------------------------------------------------------- patterns

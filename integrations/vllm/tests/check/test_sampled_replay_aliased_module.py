@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import driver as SR, index as IX, opening as OP
-from verity_vllm.program.kernels import rows as RK
+from verity.ml.definitions.numerics import rows as RK
 from tests.check.test_sampled_replay import Honest, _bf16, _program, _programs, _weights
 
 # the rope / attention Program is dense's (ruling R17-9 / R17-11 units, on the int line); a tree without it cannot run this end to end
@@ -94,6 +94,7 @@ def test_with_the_manifest_alias_table_the_replay_reads_invocation_one_of_the_ca
     assert pop["query_checks"]["identities_without_rows"]["n"] == 0 and pop["query_checks"]["vus_outside_query"]["n"] == 0, pop["query_checks"]
 
 
+@pytest.mark.slow
 def test_a_wrong_invocation_in_the_alias_table_never_reads_a_neighbours_words():
     world, bmap, committed, manifest, attn = _aliased_world()
     # (a) the alias points at invocation 0 -- nothing of the shared module is bound there in this world: missing by name, not layer 1's words

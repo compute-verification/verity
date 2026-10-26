@@ -86,7 +86,13 @@ theorem dgWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (h
 theorem decodeWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
     (hh : S.Hashes hs hs') (spec : SessionSpec) (text : String) :
     S.R (Record.decodeWith hs spec text) (Record.decodeWith hs' spec text) := by
-  unfold Record.decodeWith
+  unfold Record.decodeWith Record.decodeJWith
+  sim_walk [dgWith_sim S hh]
+
+theorem decodeJWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
+    (hh : S.Hashes hs hs') (spec : SessionSpec) (j : Lean.Json) :
+    S.R (Record.decodeJWith hs spec j) (Record.decodeJWith hs' spec j) := by
+  unfold Record.decodeJWith
   sim_walk [dgWith_sim S hh]
 
 theorem bindAndZerocheckWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
@@ -152,5 +158,11 @@ theorem verifyWithM_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Floc
     S.R (verifyWithM hs spec tabs record proofs) (verifyWithM hs' spec tabs record proofs) := by
   unfold verifyWithM
   sim_walk [decodeWith_sim S hh, dgWith_sim S hh, verifyRepWith_sim S hh]
+
+theorem verifyJWithM_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
+    (hh : S.Hashes hs hs') (spec : SessionSpec) (tabs : Array Setup) (j : Lean.Json) (proofs : Array ByteArray) :
+    S.R (verifyJWithM hs spec tabs j proofs) (verifyJWithM hs' spec tabs j proofs) := by
+  unfold verifyJWithM
+  sim_walk [decodeJWith_sim S hh, dgWith_sim S hh, verifyRepWith_sim S hh]
 
 end Flock.With

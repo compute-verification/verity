@@ -1,4 +1,4 @@
-"""`TargetProfile.ir = "boolean"` (`verity_vllm.program.boolean`): a derived Program on bits.
+"""`TargetProfile.ir = "boolean"` (`verity.ml.definitions.boolean`): a derived Program on bits.
 
 * the table: each word Definition's Boolean version is the registered Boolean Definition whose `word` names it, a function-valued
   static bound to its own Boolean version (`DotBf16_v2{K, DOT}` -> `DotBf16_v3{K, DOT=HopperBF16WgmmaDot16_v2}`), and a static
@@ -25,9 +25,9 @@ from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as MP
-from verity_vllm.program import boolean as BB
+from verity.ml.definitions import boolean as BB
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity_vllm.program.replay import replayer
+from verity.ml.definitions.replay import replayer
 
 F32, BF16 = Value(32), Value(16)
 PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", Record(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
@@ -111,9 +111,10 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
     assert list(e.value.missing) == ["Twice_v1{N=4}"]
 
 
+@pytest.mark.slow
 def test_the_served_norms_bind_their_mufu_statics_to_mufus_boolean_versions():
     from verity.ml.circuits.ops.boolean import mufu as BM
-    from verity_vllm.program.registry import b1, boolean_norms as BN
+    from verity.ml.definitions.registry import b1, boolean_norms as BN
     cuda = BB.boolean_version(bind(b1.RMSNormFusedCuda, N=16, EPS=1e-5))
     triton = BB.boolean_version(bind(b1.RMSNormTriton, N=16, EPS=1e-5))
     assert _spec_id(cuda) == _spec_id(bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)))
@@ -153,13 +154,14 @@ def test_the_lifted_program_is_bits_throughout_and_the_word_program_is_not():
 
 def test_a_word_derivation_report_becomes_its_program_on_bits():
     from verity.ml.circuits.codec import encode_program, program_digest
+    from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import DeriveReport
 
     P = Program(_derived(), annotations={"note": "carried"})
     desc = encode_program(P)
     prov = {"result": {"root": _spec_id(P.fn), "digest": program_digest(desc), "gates": P.gates}}
     word = DeriveReport(P, None, prov, prov["result"]["digest"], _spec_id(P.fn), P.gates, descriptor=desc)
-    rep = BB.derived(word)
+    rep = derived(word)
     bits = Program(BB.lift(P.fn))
     assert rep.ok and rep.digest == program_digest(bits) == program_digest(rep.descriptor) != word.digest
     assert rep.root == _spec_id(bits.fn) and rep.gates == bits.gates and rep.program.annotations == {"note": "carried"}
@@ -201,6 +203,7 @@ def test_a_definition_with_no_boolean_version_is_refused_by_name():
 
 def test_derive_refuses_a_call_with_no_boolean_version_by_name():
     torch = pytest.importorskip("torch")
+    from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import derive_report
 
     class M(torch.nn.Module):
@@ -210,11 +213,11 @@ def test_derive_refuses_a_call_with_no_boolean_version_by_name():
     ex = [torch.empty(4, dtype=torch.float32, device="meta")] * 2
     word = derive_report(M(), ex, mode="reference")
     assert word.ok and "ir" not in word.provenance
-    rep = BB.derived(word)
+    rep = derived(word)
     assert not rep.ok and rep.unsupported.reason == "numerics_unregistered"
     assert sorted(rep.unsupported.detail["missing"]) == ['AddRef_v1{N=4,DT="f32"}', 'MulRef_v1{N=4,DT="f32"}']
     assert rep.provenance["ir"] == {"ir": "boolean", "word_root": word.root, "word_digest": word.digest}
-    assert BB.derived(rep) is rep
+    assert derived(rep) is rep
 
 
 def test_bit_offsets_are_the_prefix_sums_of_the_leaf_widths():

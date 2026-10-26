@@ -44,6 +44,64 @@ def test_a_template_frame_wraps_the_same_turns():
     assert all(q["prompt"][1:4] == encode("<u>")[1:] and q["prompt"][-7:] == encode("</u><a>")[1:] for q in reqs)
 
 
+def test_shared_prefix_traffic_opens_with_system_prompts_and_goes_on_in_turns():
+    kw = dict(seed=3, prompt_tokens=(16, 128), max_tokens=8, rate=0.5)
+    first = CA.traffic(encode, 40, **kw)
+    reqs = CA.traffic(encode, 40, **kw, system_prompts=3, system_tokens=200, turns=2)
+    assert CA.traffic(encode, 40, **kw, system_prompts=0, turns=0) == first
+    systems = [CA.system_prompt(encode, i, 200, True) for i in range(3)]
+    assert all(200 <= len(s) < 400 for s in systems) and len({tuple(s) for s in systems}) == 3
+    heads = [q for q in reqs if "follows" not in q]
+    assert [q["request_id"] for q in heads] == [q["request_id"] for q in first]
+    assert all(q["prompt"][0] == 0 and any(q["prompt"][1:1 + len(s)] == s for s in systems) for q in heads)
+    assert {sum(q["prompt"][1:1 + len(s)] == s for q in heads) > 1 for s in systems} == {True}   # each shared
+    later = [q for q in reqs if "follows" in q]
+    assert later and all("prompt" not in q for q in later) and {q["request_id"].rsplit(".", 1)[1] for q in later} == {"t1", "t2"}
+    ids = {q["request_id"] for q in reqs}
+    assert all(q["follows"] in ids and q["suffix"][:len(encode("<|eot_id|>")) - 1] == encode("<|eot_id|>")[1:] for q in later)
+
+
+def test_a_turn_is_its_last_turns_prompt_and_stream_then_its_suffix():
+    parent = {"request_id": "a", "prompt": [0, 1, 2]}
+    q = {"request_id": "a.t1", "follows": "a", "gap": 2, "suffix": [7, 8], "sampling": {"max_tokens": 4}}
+    assert CA.next_turn(q, parent, [5, 6], 10, max_model_len=64)
+    assert q["prompt"] == [0, 1, 2, 5, 6, 7, 8] and q["arrive_step"] == 13
+    long = {**q, "sampling": {"max_tokens": 60}}
+    del long["prompt"]
+    assert not CA.next_turn(long, parent, [5, 6], 10, max_model_len=64) and "pass --max-model-len 64" in long["skipped"]
+
+
+def three_turn_checks(flip=None):
+    from tests.commit.test_served_record import A_OUT, A_PROMPT, B_OUT, B_PROMPT, C_OUT, C_PROMPT, SEED, three_turns
+    rec = three_turns(flip)
+    served = {"a": (A_PROMPT, A_OUT), "b": (B_PROMPT, B_OUT), "c": (C_PROMPT, C_OUT)}
+    checks = [({"request_id": r, "prompt": p, "sampling": {"seed": SEED}}, None, rec.check(r, p, o, seed=SEED))
+              for r, (p, o) in served.items()]
+    return rec, checks, {r: o for r, (_p, o) in served.items()}
+
+
+def test_the_negative_control_flips_a_reused_prefix_and_both_checks_fail():
+    rec, checks, streamed = three_turn_checks()
+    assert all(c["passed"] for _q, _f, c in checks)
+    neg = CA.prefix_negative(rec, checks, streamed, lambda q: q["sampling"]["seed"])
+    assert neg["reader"] == "b" and neg["source"] == "a" and neg["position"] == 2 and neg["caught"], neg
+    assert rec.requests["a"].inputs[2] == 3, "the flip is on a copy of the record"
+    plain = [(q, f, {**c, "prefix_spans": []}) for q, f, c in checks]
+    assert CA.prefix_negative(rec, plain, streamed, lambda q: 0) is None
+
+
+def test_with_the_cache_on_a_run_passes_only_with_a_hit_and_its_negative_caught():
+    win = {"window": 0, "passed": True, "commit": {"steps": 4}}
+    _rec, checks, _s = three_turn_checks()
+    neg = {"caught": True}
+    got = CA.summarize(checks, [win], engine_steps=5, idle_steps=0, prefix_caching=True, negative=neg)
+    assert got["passed"] and got["cache_hits"] == 2 and got["cached_positions"] == 14 and got["multi_source_hits"] == 1, got
+    assert not CA.summarize(checks, [win], engine_steps=5, idle_steps=0, prefix_caching=True, negative={"caught": False})["passed"]
+    cold = [(q, f, {**c, "cache_hit": 0, "prefix_spans": []}) for q, f, c in checks]
+    assert not CA.summarize(cold, [win], engine_steps=5, idle_steps=0, prefix_caching=True)["passed"]
+    assert CA.summarize(cold, [win], engine_steps=5, idle_steps=0)["passed"]
+
+
 @pytest.mark.parametrize("text", ["16", "a:b", "0:4", "9:3"])
 def test_prompt_range_refuses(text):
     with pytest.raises(UsageError):

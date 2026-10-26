@@ -1,5 +1,5 @@
 import Proofs.Nci.Throttling
-import Models.Nci.Guarantees.Reads
+import Definitions.Nci.Guarantees.Reads
 
 /-!
 # Updated matrix multiplications are throttled, in reads form

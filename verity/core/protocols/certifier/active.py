@@ -18,7 +18,10 @@ frames against that template, and nothing else of a frame is free). On egress a 
 `TOKEN_BYTES` bytes padded with NUL to `EVENT_TEXT` characters, and `EVENT_TAIL`, so a token is one frame, or one per
 `TOKEN_BYTES` of it (`events`). An id event (`id_event`, `ID_EVENT_BYTES`) is that object with no text: its request's
 ingress ordinal and one sampled token's id, each in `ID_DIGITS` decimal characters, so a response is one event a token
-and its frames name their request whatever order the responses interleave in. On ingress a request is its length
+and its frames name their request whatever order the responses interleave in. A compact record (`compact_record`,
+`COMPACT_RECORD`, 8 bytes) carries the same two fields in binary, with the response's finish in the token field's
+flags (`COMPACT_LAST`, `COMPACT_STOP`), and its frame is the record zero-filled to B with no header (`compact_cell`,
+`compact_placement`), so B can be 8 (`Proxy(compact=True)`). On ingress a request is its length
 (u32be) and its bytes, cut into `DATA` frames of B − 9 bytes on `CANONICAL_STREAM`, the last zero-filled
 (`request_frames`): it ends where its length says, so every frame's header is the same. An id request (`id_request`) is
 a token-id prompt's `/v1/completions` request whose every field is at a place its prompt's length fixes, and its frames
@@ -40,7 +43,9 @@ takes one event, and the trace orders a shared boundary's two ticks either way.
 **Egress.** The server's bytes on a stream are cut after every `\\n\\n`, the end of a server-sent event, so a frame's
 content is fixed by the bytes and never by how they were read. The event's `id:` field is its position in the
 Program's canonical order on the link, and the frame is what follows that line (`event_body`): neither the position
-nor an HTTP response head before it is recorded. A frame's anchor is the egress bucket in which the ingress certifier
+nor an HTTP response head before it is recorded. Under `compact` the server's bytes are an HTTP response head, then
+units of `COMPACT_UNIT_BYTES` (`CompactUnits`): the position (u32be) and a compact record of the connection's own
+request, and the frame is the record (`compact_cell`). A frame's anchor is the egress bucket in which the ingress certifier
 released its stream's request's last frame (the request is recorded there), and its logical index
 is its position in its stream. A frame read at time s is ready at bucket ⌊s/τ_b⌋ + 1, the first that starts after it.
 At bucket t the shaper hands, in canonical order, each frame whose `max(h(k), ready(k), last)` is at most t, where
@@ -56,7 +61,8 @@ its stream's server connection.
 **The salt** (`Proxy(salt=…)`, off by default) is `salt_bits` bits (512 by default) per PoUW window from the
 certifier's own randomness (`fresh_salt`), released into the block only. PoUW window p is the `pouw_window` = k
 certifier windows p·k … p·k + k − 1 (k = 1 by default). At p's first ingress tick, t_s, the certifier draws p's salt
-and enqueues its own salt frame ahead of that bucket's arrivals (`Bucketer(first=…)`): kind `SALT` on `SALT_STREAM`,
+and enqueues its own salt frame at the head of the queue, ahead of that bucket's arrivals and of any queue carried
+from the window before (`Bucketer(first=…)`), so it leaves in that bucket's slot 0: kind `SALT` on `SALT_STREAM`,
 its payload u64be p followed by `PLACEHOLDER`, 64 zero bytes. The frame and its slot are fixed by the window and the
 traffic, so every record is a function of the traffic alone and none depends on the salt. When the ingress certifier
 releases that frame (the `Bucketer` knows it by its place in the queue, so a link frame of the same bytes is never taken
@@ -94,8 +100,10 @@ salt needs authenticity, not confidentiality: after t_d the block's server alrea
 `pouw.salt` as a public input, so nothing is encrypted. `serve_reveals(proxy, host, port)` serves both calls beside
 `run`, one JSON line per request and per answer, and `RemoteCertifier` is the challenger's client, which takes the
 certifier's key and run id from the deployment record and returns the value it verified, as a keyless proxy does in
-process. A refusal is unsigned: forged on the path, it costs the window as dropping the answer would. What the keys
-leave on `trusted-nebius-host` is the certifier's own (its signing key and leaf state on its host, and its word on what
+process. A refusal is unsigned: forged on the path, it costs the window as dropping the answer would. Given
+`certificates`, the endpoint also serves each certifier window's certificates' public part to any caller, unsigned: each
+signs a salted digest of its record's head, a hiding commitment, and verifies on its own signature. What the keys
+leave on `trusted-host` is the certifier's own (its signing key and leaf state on its host, and its word on what
 it signs) and the deployment record's custody (the keys and the run id it gives each side). Without the keys,
 `reveal(p, registration)` and `committed(p, registration)` are the in-process calls the tests and replays make, and
 hold only on the auditor's side.
@@ -148,7 +156,8 @@ closes faulted while its queue would still hold frames faults the next one too, 
   certifier could: the window of bucket t is faulted, and the frame is dropped with the queue. A window closed before
   the frame was handed can't be faulted any more; its record is the Program's on the frames handed by its close;
 - a malformed frame (`malformed`): an event whose body is longer than a frame, without a position or with one already
-  seen, on a stream with no released request, or bytes left unframed at the stream's end; on a sealed pair link, a
+  seen, on a stream with no released request, or bytes left unframed at the stream's end; under `compact`, a unit
+  whose record isn't one or names another request than its connection's; on a sealed pair link, a
   unit that doesn't open at its slot's nonce, and every window after it.
 """
 
@@ -170,7 +179,7 @@ import struct
 import threading
 import time
 from collections import defaultdict, deque
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from dataclasses import dataclass, field
 
@@ -376,6 +385,124 @@ def id_event_data(body: bytes) -> tuple[int, int] | None:
         return None
 
 
+#: a compact record (`compact_record`): its request's ingress ordinal, then its token field, each u32be
+COMPACT_RECORD = struct.Struct(">II")
+#: the token field's flag on a response's last output (finish `length`, or `stop` with `COMPACT_STOP`)
+COMPACT_LAST = 1 << 31
+#: the token field's flag, beside `COMPACT_LAST`, on a sampled stop token (finish `stop`): the field still carries the
+#: stop token's id, whichever of the model's EOS ids was sampled
+COMPACT_STOP = 1 << 30
+#: what the server writes the proxy for each record under `Proxy(compact=True)`: its canonical position, u32be
+COMPACT_POSITION = struct.Struct(">I")
+COMPACT_UNIT_BYTES = COMPACT_POSITION.size + COMPACT_RECORD.size
+COMPACT_FINISHES = (None, "length", "stop")
+COMPACT_FLAGS = {None: 0, "length": COMPACT_LAST, "stop": COMPACT_LAST | COMPACT_STOP}
+
+
+def compact_record(request: int, token_id: int, finish: str | None = None) -> bytes:
+    """One sampled token as a compact record, `COMPACT_RECORD.size` bytes: its request's ingress ordinal (≥ 1, so no
+    record is all zero) and its token field, the token's id (below `COMPACT_STOP`) with its finish's flags
+    (`COMPACT_FLAGS`): none while more outputs follow, `COMPACT_LAST` on the response's last output at `max_tokens`
+    (`finish` "length"), and `COMPACT_LAST` and `COMPACT_STOP` on a sampled stop token (`finish` "stop"), whose id is
+    the EOS id the model sampled. A field with `COMPACT_STOP` and not `COMPACT_LAST` is no record's."""
+    if type(request) is not int or not 1 <= request < 1 << 32:
+        raise ValueError(f"a request's ordinal is a u32 ≥ 1, not {request!r}")
+    if finish not in COMPACT_FINISHES:
+        raise ValueError(f"a compact record's finish is one of {COMPACT_FINISHES}, not {finish!r}")
+    if type(token_id) is not int or not 0 <= token_id < COMPACT_STOP:
+        raise ValueError(f"a compact token id is below {COMPACT_STOP}, not {token_id!r}")
+    return COMPACT_RECORD.pack(request, token_id | COMPACT_FLAGS[finish])
+
+
+def compact_cell(record: bytes, frame_bytes: int) -> bytes:
+    """A compact record's egress frame: the record, zero-filled to B; padding, B zero bytes, is never one."""
+    if len(record) != COMPACT_RECORD.size or frame_bytes < COMPACT_RECORD.size:
+        raise ValueError(f"a compact cell is a {COMPACT_RECORD.size}-byte record in a frame of at least its size")
+    return record + bytes(frame_bytes - COMPACT_RECORD.size)
+
+
+def compact_record_data(cell: bytes) -> tuple[int, int, str | None] | None:
+    """(request ordinal, token id, finish) of a compact cell or record (`compact_record`); None for bytes that aren't
+    one."""
+    if len(cell) < COMPACT_RECORD.size or any(cell[COMPACT_RECORD.size :]):
+        return None
+    request, field = COMPACT_RECORD.unpack_from(cell)
+    finish = next(f for f in ("stop", "length", None) if field & COMPACT_FLAGS[f] == COMPACT_FLAGS[f])
+    got = (request, field & (COMPACT_STOP - 1), finish)
+    try:
+        return got if compact_record(*got) == bytes(cell[: COMPACT_RECORD.size]) else None
+    except ValueError:
+        return None
+
+
+def compact_records_of(request: int, sampled: Sequence[int], eos: Iterable[int], aborted: bool = False) -> list[bytes]:
+    """The compact records of a response whose sampled ids are `sampled`: each id unmarked but the last, a stop where
+    it is one of the model's EOS ids (`eos`) and the length's mark where it isn't; every one unmarked when its client
+    aborted it (`aborted`), since no record says an abort."""
+    stops = frozenset(eos)
+    return [compact_record(request, t, None if aborted or k < len(sampled) - 1 else "stop" if t in stops else "length")
+            for k, t in enumerate(sampled)]
+
+
+def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterable[int], cells: Iterable[bytes], *,
+                              max_tokens: Mapping[int, int], aborted: Collection[int] = ()) -> list[tuple[int, str]]:
+    """A link's compact cells held to the Commit's sampled ids (`sampled`, each request's by its ingress ordinal):
+    ordinal o's cells, in canonical order, are `compact_records_of(o, sampled[o], eos, o in aborted)`, one for one, so
+    each carries the id the model sampled there, the response is as long as the Commit's, and its finish is the
+    Commit's, a stop only where the Commit sampled EOS. `aborted` are the ordinals whose finish in the Commit is a
+    client's abort, each one's response held to 1 ≤ k < `max_tokens[o]` ids and none of them EOS; any other's length
+    finish is at `max_tokens[o]` exactly. `cells` are the link's frames in canonical order, padding left out. A
+    violation is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits
+    whatever ids and finish the server writes; this is the rule the I/O tie holds each response's length and finish
+    to. An abort is the Commit's word, not something on the link: the advice charges its `output_len` in full."""
+    stops = frozenset(eos)
+    got: dict[int, list[tuple[int, str | None]]] = defaultdict(list)
+    out: list[tuple[int, str]] = []
+    for cell in cells:
+        if (c := compact_record_data(cell)) is None:
+            out.append((0, "a cell that isn't a compact record"))
+        else:
+            got[c[0]].append(c[1:])
+    for o in sorted(set(got) | set(sampled)):
+        if o not in sampled:
+            out.append((o, "no request of the Commit is this ordinal"))
+            continue
+        ids, m, gone = sampled[o], max_tokens[o], o in aborted
+        want = [compact_record_data(r)[1:] for r in compact_records_of(o, ids, stops, gone)]
+        mine = got.get(o, [])
+        k = next((k for k, (g, w) in enumerate(zip(mine, want)) if g != w), None)
+        if k is not None and mine[k][0] != want[k][0]:
+            out.append((o, f"output {k} is id {mine[k][0]} where the Commit sampled {want[k][0]}"))
+        elif k is not None:
+            out.append((o, f"finish {mine[k][1] or 'none'} on output {k} where the Commit's is {want[k][1] or 'none'}"))
+        elif len(mine) != len(want):
+            out.append((o, f"{len(mine)} records where the Commit sampled {len(want)} ids"))
+        elif gone and not ids:
+            out.append((o, "an abort before any output"))
+        elif gone and len(ids) >= m:
+            out.append((o, f"an abort at {len(ids)} outputs where max_tokens is {m}"))
+        elif gone and stops & set(ids):
+            out.append((o, "an abort on an EOS id"))
+        elif want and want[-1][1] == "length" and len(ids) != m:
+            out.append((o, f"a length finish at {len(ids)} outputs where max_tokens is {m}"))
+    return out
+
+
+def compact_unit(position: int, record: bytes) -> bytes:
+    """What the server writes the proxy for one record: its canonical position (`COMPACT_POSITION`), then the record."""
+    if len(record) != COMPACT_RECORD.size:
+        raise ValueError(f"a compact record is {COMPACT_RECORD.size} bytes")
+    return COMPACT_POSITION.pack(position) + record
+
+
+def compact_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
+    """The compact egress template's (p, s, prefix, suffix): the record at 0 … `COMPACT_RECORD.size`, zero fill after
+    it, and nothing else."""
+    if frame_bytes < COMPACT_RECORD.size:
+        raise ValueError(f"a {frame_bytes}-byte frame has no room for a compact record")
+    return 0, COMPACT_RECORD.size, b"", b""
+
+
 #: an id request's HTTP head, up to its length (`id_request`)
 ID_REQUEST_HEAD = (b"POST /v1/completions HTTP/1.1\r\nhost: server\r\ncontent-type: application/json\r\n"
                    b"content-length:")
@@ -400,14 +527,18 @@ def _name_field(s: str, what: str) -> bytes:
 
 
 def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int, temperature: float = 0.0,
-               top_p: float = 1.0, seed: int = 0, frame_bytes: int) -> bytes:
+               top_p: float = 1.0, seed: int = 0, frame_bytes: int, offset: int = LENGTH.size) -> bytes:
     """A canonical `/v1/completions` request of a token-id prompt, whose every field is at a place fixed by the
     prompt's length and the frame size alone, in the link frames `request_frames` puts it in: `ID_REQUEST_HEAD`, its
     body's length in `ID_DIGITS` characters (HTTP's optional whitespace before it), in the first frame, then the body,
     streamed, with no stop strings: `max_tokens` and `seed` in `ID_DIGITS` characters, `temperature` and `top_p` in
     eight (six decimals), `model` and `user` each in `ID_NAME_BYTES`, and each prompt id in its own `ID_FIELD_BYTES`.
     No field straddles a frame: spaces (JSON's whitespace) before one that would move it, with its key, to the next.
-    At 4096-byte frames every field but the prompt's is in the first frame."""
+    At 4096-byte frames every field but the prompt's is in the first frame. `offset` is the request's first byte's
+    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the warden's cells
+    (`warden.cells`, which carry the bytes alone)."""
+    if offset not in (0, LENGTH.size):
+        raise ValueError(f"an id request starts its first frame's payload at 0 or {LENGTH.size}, not {offset!r}")
     if not prompt or isinstance(prompt, (str, bytes)):
         raise ValueError("an id request's prompt is at least one token id")
     pieces = [b'{"max_tokens":' + _u32_field(max_tokens, "max_tokens"),
@@ -417,7 +548,7 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
               b',"user":' + _name_field(user, "a user"), b',"prompt":',
               *((b"," if k else b"[") + _u32_field(t, "a prompt id") for k, t in enumerate(prompt)), b"]}"]
     room = frame_bytes - HEADER.size
-    at = LENGTH.size + len(ID_REQUEST_HEAD) + ID_DIGITS + 4
+    at = offset + len(ID_REQUEST_HEAD) + ID_DIGITS + 4
     if at > room or max(map(len, pieces)) > room:
         raise ValueError(f"a {frame_bytes}-byte frame has no room for an id request's head or a field")
     parts = []
@@ -637,6 +768,29 @@ class Events:
         return out
 
 
+class CompactUnits:
+    """Cuts a server connection under `Proxy(compact=True)`: an HTTP response head, through its first `\\r\\n\\r\\n`,
+    then `COMPACT_UNIT_BYTES`-byte units, each (position, record). The cuts depend only on the bytes, not on how they
+    were read; `buffer` holds what is left uncut."""
+
+    def __init__(self) -> None:
+        self.buffer, self.head = bytearray(), False
+
+    def feed(self, data: bytes) -> list[tuple[int, bytes]]:
+        self.buffer += data
+        if not self.head:
+            if (i := self.buffer.find(b"\r\n\r\n")) < 0:
+                return []
+            del self.buffer[: i + 4]
+            self.head = True
+        n = len(self.buffer) - len(self.buffer) % COMPACT_UNIT_BYTES
+        out = [(COMPACT_POSITION.unpack_from(self.buffer, k)[0],
+                bytes(self.buffer[k + COMPACT_POSITION.size : k + COMPACT_UNIT_BYTES]))
+               for k in range(0, n, COMPACT_UNIT_BYTES)]
+        del self.buffer[:n]
+        return out
+
+
 class Shaper:
     """The honest shaper and the egress certifier on one link, fed frames as they arrive (no I/O).
 
@@ -727,10 +881,12 @@ class Shaper:
 class Bucketer:
     """The ingress certifier on one link, fed frames as they arrive (no I/O): a frame arriving at bucket time s is
     `arrive`d with ⌈s⌉ and enqueued at that tick; `tick` returns the released row, with the record at a window's end.
-    With `first`, each window's first tick enqueues the certifier's own frame `first(window)`, if it gives one, ahead of
-    that bucket's arrivals. The bucketer follows it by its place in the queue, never by its bytes: `own` maps each slot
-    of the row last released that holds one to its window, and one a fault drops is never released. With `start`, it
-    begins at window `start`'s first bucket, its certifier at that window.
+    With `first`, each window's first tick enqueues the certifier's own frame `first(window)`, if it gives one, at the
+    head of the queue: ahead of that bucket's arrivals and of any queue carried from the window before, so it leaves in
+    slot 0 of that bucket (r_in ≥ 1) and the window's request frames are bucket 0's count less one, exactly. The
+    bucketer follows it by its place, never by its bytes: `own` maps the slot of the row last released that holds one
+    to its window, and one a fault drops is never released. With `start`, it begins at window `start`'s first bucket,
+    its certifier at that window.
 
     With `served` (off by default), a served link's admission rule (`served.Admission`): arrived frames are enqueued
     only as whole requests of the profile's F_in frames, and only while the window, with the request, still ends idle
@@ -757,16 +913,16 @@ class Bucketer:
         self.waiting: deque[tuple[int, bytes]] = deque()
         self.t = start * certifier.params.buckets
         self.own: dict[int, int] = {}
-        self._own: list[tuple[int, int]] = []  # (place in the queue, window) of each own frame queued
 
     def arrive(self, frame: bytes, bucket: int) -> None:
         self.waiting.append((bucket, frame))
 
     def tick(self) -> tuple[Row, Record | None]:
         c, T = self.certifier, self.certifier.params.buckets
+        own = None
         if self.first is not None and self.t % T == 0 and (frame := self.first(self.t // T)) is not None:
-            self._own.append((c.queued, self.t // T))
-            c.enqueue(frame)
+            own = self.t // T
+            c.enqueue(frame, first=True)
         a = self.served
         if a is None:
             while self.waiting and self.waiting[0][0] <= self.t:
@@ -782,14 +938,8 @@ class Bucketer:
         row = c.tick()
         if a is not None:
             self.counts.append(row_count(row))
-        if self._own:
-            n = row_count(row)
-            # a fault empties the queue, and its window enqueues nothing after it
-            kept = [(place, w) for place, w in self._own if place < c.queued + n]
-            self.own = {place: w for place, w in kept if place < n}
-            self._own = [(place - n, w) for place, w in kept if place >= n]
-        elif self.own:
-            self.own = {}
+        # a fault before the release empties the queue, the own frame with it, and pads the row
+        self.own = {} if own is None or row[0] is None else {0: own}
         self.t += 1
         return row, c.close_window() if self.t % T == 0 else None
 
@@ -927,6 +1077,7 @@ class _Stream:
     count: int = 0
     out: asyncio.Queue = field(default_factory=asyncio.Queue)
     events: Events = field(default_factory=Events)
+    units: CompactUnits = field(default_factory=CompactUnits)
     task: asyncio.Task | None = None
     window: int | None = None  # the ingress window of its release
     deadline: float | None = None  # when its request must be written upstream
@@ -961,7 +1112,7 @@ class Proxy:
       (`reveal_request_message`) and answer a `Revealed` that `signer`, the network certifier's own key, signed
       (`reveal_response_message`), which `serve_reveals` serves to a `RemoteCertifier`; without them they are the
       in-process calls, which take no request and return the value. `challenger_key` comes from the auditor's
-      deployment record, never from the prover's configuration, and `trusted-nebius-host` covers that record's custody.
+      deployment record, never from the prover's configuration, and `trusted-host` covers that record's custody.
       Both messages bind the signer's `key_id` and `run_id`, 32 bytes (`RUN_ID_BYTES`) the proxy draws from
       `run_nonce` at construction (the certifier's own randomness by default), so a request or an answer of one run,
       or of another proxy on the same link name, is never taken in another;
@@ -974,6 +1125,11 @@ class Proxy:
     - with `ordinals`, each stream's server connection opens with a header (`HEADER`, 9 bytes) of kind `ORDINAL`
       whose stream is the stream's, the request's ingress ordinal, before the request's bytes, so that the server
       can name the request in its response's id events (`id_event`);
+    - with `compact` (which takes `ordinals`), each server connection is compact records (`CompactUnits`: an HTTP
+      response head, then (position, record) units, `compact_unit`), and each egress frame is a record zero-filled to
+      B (`compact_cell`), B ≥ 8: a record that isn't one (`compact_record_data`) or names another request than its
+      connection's is malformed. The Lean certifier device models it (`CertifierDevice`'s `Config.compact`), and the
+      gate's rehearsal runs it (`certifier-rehearse --traffic varied --compact B`);
     - with `pair` (off by default), the link is a sealed pair link to another of the auditor's certifiers: each egress
       slot, frame or padding, is written sealed (`Pair.sealer`) after the egress certifier records it, and each unit
       read is opened (`Pair.opener`) before the ingress certifier takes it, so every record is the unsealed run's. A
@@ -993,10 +1149,13 @@ class Proxy:
                  position: int = 0, reveal_deadline: float | None = None, prover_key: PublicKey | None = None,
                  prover_context: bytes = b"", challenger_key: PublicKey | None = None,
                  signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes,
-                 served: ServedProfile | None = None, ordinals: bool = False,
+                 served: ServedProfile | None = None, ordinals: bool = False, compact: bool = False,
                  pair: Pair | None = None) -> None:
         if (egress.buckets * egress.bucket_ms) != (ingress.buckets * ingress.bucket_ms):
             raise ValueError("the egress and ingress grids have windows of the same length")
+        if compact and not (ordinals and egress.frame_bytes >= COMPACT_RECORD.size):
+            raise ValueError(f"compact records name their request by its ingress ordinal (ordinals) and fill egress "
+                             f"frames of at least {COMPACT_RECORD.size} bytes")
         if pair is not None and (pair.sealer.params != egress or pair.opener.params.frame_bytes != ingress.frame_bytes):
             raise ValueError("a pair link seals this certifier's egress grid and opens frames of its ingress size")
         if prover is not None and syncs:
@@ -1013,6 +1172,7 @@ class Proxy:
         if not (type(pouw_window) is int and pouw_window >= 1):
             raise ValueError(f"a PoUW window is a positive number of certifier windows, not {pouw_window!r}")
         self.upstream, self.egress, self.ingress, self.ordinals = upstream, egress, ingress, ordinals
+        self.compact = compact
         self.origin, self.slack, self.clock, self.sleep = origin, slack, clock, sleep
         self.windows = len(syncs) if windows is None else windows
         if not 0 <= start <= self.windows or position < 0:
@@ -1402,10 +1562,14 @@ class Proxy:
         try:
             while data := await reader.read(1 << 16):
                 ready = self._bucket_ready(self.clock())
-                for event in st.events.feed(data):
-                    self._egress_event(s, st, event, ready)
+                if self.compact:
+                    for position, record in st.units.feed(data):
+                        self._egress_record(s, st, position, record, ready)
+                else:
+                    for event in st.events.feed(data):
+                        self._egress_event(s, st, event, ready)
                 self._changed.set()
-            if st.events.buffer:
+            if st.events.buffer or st.units.buffer:
                 self.shaper.certifier.fault(Reason.MALFORMED)
         finally:
             st.ended = self._bucket_ready(self.clock())
@@ -1414,10 +1578,23 @@ class Proxy:
 
     def _egress_event(self, s: int, st: _Stream, event: bytes, ready: int) -> None:
         position, body = event_position(event), event_body(event)
-        if position is None or st.anchor is None or HEADER.size + len(body) > self.egress.frame_bytes:
+        if position is None or HEADER.size + len(body) > self.egress.frame_bytes:
             self.shaper.certifier.fault(Reason.MALFORMED)
             return
-        frame = LogicalFrame(encode_frame(DATA, CANONICAL_STREAM, body, self.egress.frame_bytes), st.anchor, st.count)
+        self._egress_frame(s, st, position, encode_frame(DATA, CANONICAL_STREAM, body, self.egress.frame_bytes), ready)
+
+    def _egress_record(self, s: int, st: _Stream, position: int, record: bytes, ready: int) -> None:
+        got = compact_record_data(record)
+        if got is None or got[0] != s:
+            self.shaper.certifier.fault(Reason.MALFORMED)
+            return
+        self._egress_frame(s, st, position, compact_cell(record, self.egress.frame_bytes), ready)
+
+    def _egress_frame(self, s: int, st: _Stream, position: int, payload: bytes, ready: int) -> None:
+        if st.anchor is None:
+            self.shaper.certifier.fault(Reason.MALFORMED)
+            return
+        frame = LogicalFrame(payload, st.anchor, st.count)
         self.frames.append((position, s, st.count, st.anchor, ready))
         st.count += 1
         self.shaper.arrive(position, frame, ready)
@@ -1425,22 +1602,32 @@ class Proxy:
 
 _KINDS = {"salt": SALT_KIND, "weights": WEIGHTS_KIND}
 _MALFORMED = ("a request is a JSON object of window, kind (salt or weights), registration (record, receipt, digest) "
-              "and request (the challenger's signature, hex)")
+              "and request (the challenger's signature, hex), or of window and kind certificates")
 
 
 def _line(answer: Mapping) -> bytes:
     return json.dumps(answer).encode() + b"\n"
 
 
-def _reveal_answer(proxy: Proxy, line: bytes) -> dict:
+def _reveal_answer(proxy: Proxy, line: bytes, certificates: Callable[[int], Mapping | None] | None = None) -> dict:
     """`serve_reveals`' answer to one request line."""
     try:
         req = json.loads(line)
-        what, reg = _KINDS[req["kind"]], req["registration"]
-        registration = Registration(reg["record"], reg["receipt"], reg["digest"], 0)
-        window, request = req["window"], bytes.fromhex(req["request"])
+        window, what = req["window"], req["kind"]
+        if what != "certificates":
+            what, reg = _KINDS[what], req["registration"]
+            registration = Registration(reg["record"], reg["receipt"], reg["digest"], 0)
+            request = bytes.fromhex(req["request"])
     except (ValueError, KeyError, TypeError):
         return {"refused": _MALFORMED}
+    if what == "certificates":
+        if certificates is None:
+            return {"refused": "this certifier serves no certificates"}
+        if not (type(window) is int and window >= 0):
+            return {"refused": _MALFORMED}
+        if (public := certificates(window)) is None:
+            return {"refused": f"window {window}'s records aren't all certified, so its certificates aren't served"}
+        return dict(public) | {"window": window}
     try:
         out = (proxy.reveal if what == SALT_KIND else proxy.committed)(window, registration, request)
     except (RuntimeError, ValueError) as e:
@@ -1449,14 +1636,18 @@ def _reveal_answer(proxy: Proxy, line: bytes) -> dict:
             "key_id": out.key_id.hex(), "run_id": out.run_id.hex()}
 
 
-async def serve_reveals(proxy: Proxy, host: str, port: int) -> asyncio.Server:
+async def serve_reveals(proxy: Proxy, host: str, port: int, *,
+                        certificates: Callable[[int], Mapping | None] | None = None) -> asyncio.Server:
     """The certifier's reveal endpoint, on `run`'s loop: it answers each JSON line a connection sends, `{"window",
     "kind": "salt" | "weights", "registration": {"record", "receipt", "digest"}, "request"}` (the challenger's signature
     in hex), with one JSON line, `{"window", "value", "signature", "key_id", "run_id"}` (hex), the `Revealed` of
     `proxy.reveal` or `proxy.committed`, or `{"refused": reason}` for whatever they refuse and for a line that isn't a
     request. The registration's `order` isn't sent: the certifier reads its record, receipt and digest. It serves only
     a proxy with a challenger key and a signer, and each call runs off the loop, since verifying and signing hash for
-    milliseconds and the ticks have `slack`. Returns the listening server: `close()` stops it."""
+    milliseconds and the ticks have `slack`. With `certificates`, `{"window", "kind": "certificates"}`, which needs no
+    signature, is answered `certificates(window)` with its `window`: the public part of the window's certificates, the
+    caller's to keep (the module docstring's "The reveal over the network"), refused while it gives None, before every
+    record of the window is certified. Returns the listening server: `close()` stops it."""
     if proxy.challenger_key is None:
         raise ValueError("a proxy serves reveals only with a challenger key and a signer")
 
@@ -1472,7 +1663,7 @@ async def serve_reveals(proxy: Proxy, host: str, port: int) -> asyncio.Server:
                     break
                 if not line:
                     break
-                writer.write(_line(await asyncio.to_thread(_reveal_answer, proxy, line)))
+                writer.write(_line(await asyncio.to_thread(_reveal_answer, proxy, line, certificates)))
                 await writer.drain()
         except ConnectionError:
             pass
@@ -1568,9 +1759,11 @@ def check_salts(audit: Audit, link: str, records: Sequence[Record], windows: int
     """The audit's read of the salt on ingress link `link` for certifier windows 0 … windows − 1, given the salts
     `reveal` gave by PoUW window of `pouw_window` certifier windows: PoUW window p, at its first certifier window
     w = p·`pouw_window`, is accepted if w has exactly one raw record, which holds exactly one salt frame of p, carrying
-    `PLACEHOLDER`, and p's revealed salt has `salt_bits` bits. Anything else, a missing salt included, is a `salt`
-    violation at w. The verdicts join `audit`'s. A committed or certified record doesn't show its frames, so a proof
-    opens the salt frame there."""
+    `PLACEHOLDER`, as the first frame of its bucket 0 (slot 0, where `Bucketer` releases it), and p's revealed salt has
+    `salt_bits` bits. Anything else, a missing or moved salt included, is a `salt` violation at w. The place is pinned
+    because the served counts (`served.derive`) take bucket 0's first `own` frames for the salt: the same counts with
+    the salt in a later bucket would derive other request ends. The verdicts join `audit`'s. A committed or certified
+    record doesn't show its frames, so a proof opens the salt frame there, at bucket 0 slot 0."""
     by_window: dict[int, list[Record]] = defaultdict(list)
     for r in records:
         if not isinstance(r, Record):
@@ -1583,9 +1776,11 @@ def check_salts(audit: Audit, link: str, records: Sequence[Record], windows: int
         found, salt, prefix = by_window.get(w, []), salts.get(p), p.to_bytes(8, "big")
         accepted = False
         if len(found) == 1 and salt is not None and 8 * len(salt) == salt_bits:
-            held = [x for row in found[0].grid for k, s, x in map(decode_frame, row[: row_count(row)])
+            grid = found[0].grid
+            held = [x for row in grid for k, s, x in map(decode_frame, row[: row_count(row)])
                     if k == SALT and s == SALT_STREAM and x[:8] == prefix]
-            accepted = held == [prefix + PLACEHOLDER]
+            first = decode_frame(grid[0][0]) if grid and row_count(grid[0]) else None
+            accepted = held == [prefix + PLACEHOLDER] and first == (SALT, SALT_STREAM, prefix + PLACEHOLDER)
         out.append(Verdict(link, w, None if accepted else "salt"))
     audit.verdicts.extend(out)
     return out

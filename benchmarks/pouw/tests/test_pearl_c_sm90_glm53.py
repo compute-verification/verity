@@ -39,13 +39,13 @@ def test_linears_are_one_tp8_ranks():
 
 
 def test_domain_refuses_the_short_k_and_narrow_n():
-    """k = 256 and 512 are under the record's k ≥ 1,024; n = 160 is not a multiple of 64.  Every other linear is in, with γ
-    at both FADD readings, the data sheet's (cheaper add) a little above the record's, and γ falling with n."""
+    """k = 512 is under the record's k ≥ 1,024 and not its census k = 256 (which takes both down projections); n = 160 is
+    not a multiple of 64.  Every other linear is in, with γ at both FADD readings, the data sheet's (cheaper add) a little
+    above the record's, and γ falling with n."""
     rows = {r["name"]: r for r in G.table()}
     refused = {name for name, r in rows.items() if r["refused"]}
-    assert refused == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj", "mlp.shared_experts.down_proj",
-                       "mlp.experts.w2"}
-    assert all("1024 <= k" in rows[x]["refused"][0] for x in refused - {"self_attn.indexer.wk_weights_proj"})
+    assert refused == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj"}
+    assert "1024 <= k" in rows["self_attn.kv_b_proj"]["refused"][0]
     assert "n of 64" in rows["self_attn.indexer.wk_weights_proj"]["refused"][0]
     for name, r in rows.items():
         if name not in refused:
@@ -55,12 +55,12 @@ def test_domain_refuses_the_short_k_and_narrow_n():
 
 def test_expert_parallel_brings_the_experts_into_the_domain():
     """With the routed experts expert-parallel (EP = TP = 8) a rank holds 32 whole experts, w13 (4096, 6144) and w2
-    (6144, 2048), both in the domain; the shared expert stays sharded, its down at k = 256 refused."""
+    (6144, 2048), both in the domain; the shared expert stays sharded, its down at the census's k = 256."""
     rows = {r["name"]: r for r in G.table(ep=True)}
     assert {x: (rows[x]["n"], rows[x]["k"]) for x in ("mlp.experts.w13", "mlp.experts.w2")} == {
         "mlp.experts.w13": (4096, 6144), "mlp.experts.w2": (6144, 2048)}
-    assert {x for x, r in rows.items() if r["refused"]} == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj",
-                                                            "mlp.shared_experts.down_proj"}
+    assert {x for x, r in rows.items() if r["refused"]} == {"self_attn.kv_b_proj", "self_attn.indexer.wk_weights_proj"}
+    assert (rows["mlp.shared_experts.down_proj"]["k"], rows["mlp.shared_experts.down_proj"]["refused"]) == (256, [])
     shapes = G.in_domain()
     assert (4096, 6144) in shapes and shapes[(4096, 6144)]["ep"] and not shapes[(6144, 2048)]["ep"]
     assert shapes[(6144, 2048)]["name"] == "self_attn.o_proj"
@@ -249,6 +249,10 @@ class Run:
         self.card, self.order, self.device = card, order, "cuda"
         self.graphs, self.hashing, self.whole_defer, self.leak = True, True, False, None
         self.log, self._whole, self.units, self.ran, self.poisoned = [], None, 0, [], False
+        self.repeat_at = None
+
+    def epoch_calls(self):
+        return self.units
 
     def whole_key(self):
         return (self.hashing, self.whole_defer and self.hashing) if self.graphs else None
@@ -394,7 +398,7 @@ def retained(tmp_path_factory):
     sys.path.insert(0, str(HERE.parent / "clear"))
     import clear_work as CW
     from clear_audit import Prover
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     from verity.core.protocols.pouw.audit import (
         HM96_TRANSCRIPT,

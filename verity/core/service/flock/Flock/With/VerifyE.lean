@@ -24,13 +24,10 @@ variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
 
 namespace Record
 
-/-- **`Record.decodeWith` with its digests of encodings read through `keep`** (S5–S7, S12's digest width and retained
-bytes' digest, S13, S14): `keep := id` is `decodeWith` (`decodeWith_eq_decodeWithK`), `keep := fun _ => true` drops
-them (`decodeWithE`). -/
-def decodeWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (text : String) : M Session := do
-  let j ← match Json.parse text with
-    | .ok j => pure j
-    | .error e => throw s!"record: not JSON: {e}"
+/-- **`Record.decodeJWith` with its digests of encodings read through `keep`** (S5–S7, S12's digest width and
+retained bytes' digest, S13, S14), at the record's parsed value `j`: `keep := id` is `decodeJWith`
+(`decodeJWith_eq_decodeJWithK`). -/
+def decodeJWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (j : Json) : M Session := do
   -- S1
   check ((← str j "kind") == "flock-live-session/v1") "S1: not a flock-live-session/v1 record"
   check (isNull j "aborted") "S1: the live session aborted"
@@ -43,7 +40,8 @@ def decodeWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (tex
     let _ ← CoinTree.checkRecord ct nonce (← fld j "coin_tree")
   -- S3
   let cfg ← fld j "config"
-  check ((← fld cfg "require_link") == Json.bool true) "S3/F1: require_link is not true"
+  -- a match, not `Json`'s `==` (a `partial def`, so no proof can evaluate it)
+  check ((← fld cfg "require_link") matches Json.bool true) "S3/F1: require_link is not true"
   check ((← str j "link_mode") == "exchange") "S3/E1: link_mode is not exchange"
   let l ← fld j "link"
   check ((← str l "mode") == "exchange") "S3/E1: link.mode is not exchange"
@@ -128,6 +126,23 @@ def decodeWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (tex
   let proofSha ← (← arr j s!"proof_{dk}").mapM fun p => do pure ((← str p "stream"), (← str p dk))
   return { rootF, rootB, publics, points := pts, y, streams, proofSha }
 
+/-- **`Record.decodeWith` with its digests of encodings read through `keep`**: the parse, then `decodeJWithK`.
+`keep := id` is `decodeWith` (`decodeWith_eq_decodeWithK`), `keep := fun _ => true` drops them (`decodeWithE`). -/
+def decodeWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (text : String) : M Session := do
+  let j ← match Json.parse text with
+    | .ok j => pure j
+    | .error e => throw s!"record: not JSON: {e}"
+  decodeJWithK keep hs spec j
+
+theorem decodeWithK_of_parse [LawfulMonad M] (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec)
+    {text : String} {j : Json} (h : Json.parse text = .ok j) :
+    decodeWithK keep hs spec text = decodeJWithK keep hs spec j := by
+  simp only [decodeWithK, h, pure_bind]
+
+theorem decodeJWith_eq_decodeJWithK (hs : Hashes M) (spec : SessionSpec) (j : Json) :
+    decodeJWith hs spec j = decodeJWithK id hs spec j :=
+  rfl
+
 /-- `Record.decodeWith` with its digests of encodings dropped. -/
 def decodeWithE (hs : Hashes M) (spec : SessionSpec) (text : String) : M Session :=
   decodeWithK (fun _ => true) hs spec text
@@ -170,6 +185,44 @@ theorem verifyWithM_eq_verifyWithMK (hs : Hashes M) (spec : SessionSpec) (tabs :
     (proofs : Array ByteArray) : verifyWithM hs spec tabs record proofs = verifyWithMK id hs spec tabs record proofs :=
   rfl
 
+/-- `verifyWithMK keep` at the record's parsed value `j` (`Record.decodeJWithK`); at a record that parses to `j` it is
+`verifyWithMK keep` (`verifyWithMK_of_parse`), and at `keep := id` it is `verifyJWithM`
+(`verifyJWithM_eq_verifyJWithMK`). -/
+def verifyJWithMK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : Json)
+    (proofs : Array ByteArray) : M Unit := do
+  if tabs.size != spec.tables.size || tabs.size == 0 then throw "setup: one statement per table expected"
+  let sess ← Record.decodeJWithK keep hs spec j
+  for (st, p) in tabs.zip sess.publics do st.publics p
+  let schs ← tabs.mapM fun st => match fast100 st.m with
+    | some sch => pure sch
+    | none => throw s!"m = {st.m}: no fast100 schedule"
+  let want := spec.repStreams
+  if proofs.size != want.size then throw s!"{want.size} proofs expected"
+  if sess.proofSha.size != want.size || !want.all (fun (_, _, w) => sess.proofSha.any (·.1 == w)) then
+    throw s!"S17: proof_{spec.dk} does not list exactly the tables' rep streams"
+  for ((_, _, w), b) in want.zip proofs do
+    if !keep ((sess.proofSha.find? (·.1 == w)).map (·.2) == some (hexOf (← spec.dgWith hs b))) then
+      throw s!"S17: {w}: the proof is not the one the server received"
+  for i in [0:tabs.size] do
+    let (st, sch) := (tabs[i]!, schs[i]!)
+    let c0 ← verifyRepWith hs spec st sch sess i 0 proofs[2 * i]!
+    let c1 ← verifyRepWith hs spec st sch sess i 1 proofs[2 * i + 1]!
+    if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
+
+theorem verifyWithMK_of_parse [LawfulMonad M] (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec)
+    (tabs : Array Setup) {record : String} {j : Json} (proofs : Array ByteArray) (h : Json.parse record = .ok j) :
+    verifyWithMK keep hs spec tabs record proofs = verifyJWithMK keep hs spec tabs j proofs := by
+  simp only [verifyWithMK, verifyJWithMK, Record.decodeWithK_of_parse keep hs spec h]
+
+theorem verifyJWithM_eq_verifyJWithMK (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : Json)
+    (proofs : Array ByteArray) : verifyJWithM hs spec tabs j proofs = verifyJWithMK id hs spec tabs j proofs :=
+  rfl
+
+/-- The element-level verdict at the record's parsed value `j`. -/
+def verifyJWithME (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : Json) (proofs : Array ByteArray) :
+    M Unit :=
+  verifyJWithMK (fun _ => true) hs spec tabs j proofs
+
 /-- The element-level verdict with SHA-512 replaced by `h`. -/
 def verifyWithE (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) : V Unit :=
@@ -186,7 +239,14 @@ theorem decodeWithK_sim {N : Type → Type} [Monad N] [MonadExceptOf String N] [
     [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
     (keep : Bool → Bool) (spec : SessionSpec) (text : String) :
     S.R (Record.decodeWithK keep hs spec text) (Record.decodeWithK keep hs' spec text) := by
-  unfold Record.decodeWithK
+  unfold Record.decodeWithK Record.decodeJWithK
+  sim_walk [dgWith_sim S hh]
+
+theorem decodeJWithK_sim {N : Type → Type} [Monad N] [MonadExceptOf String N] [MonadLiftT V N] (S : Sim M N)
+    [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
+    (keep : Bool → Bool) (spec : SessionSpec) (j : Json) :
+    S.R (Record.decodeJWithK keep hs spec j) (Record.decodeJWithK keep hs' spec j) := by
+  unfold Record.decodeJWithK
   sim_walk [dgWith_sim S hh]
 
 theorem verifyWithMK_sim {N : Type → Type} [Monad N] [MonadExceptOf String N] [MonadLiftT V N] (S : Sim M N)
@@ -195,6 +255,13 @@ theorem verifyWithMK_sim {N : Type → Type} [Monad N] [MonadExceptOf String N] 
     S.R (verifyWithMK keep hs spec tabs record proofs) (verifyWithMK keep hs' spec tabs record proofs) := by
   unfold verifyWithMK
   sim_walk [decodeWithK_sim S hh, dgWith_sim S hh, verifyRepWith_sim S hh]
+
+theorem verifyJWithMK_sim {N : Type → Type} [Monad N] [MonadExceptOf String N] [MonadLiftT V N] (S : Sim M N)
+    [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
+    (keep : Bool → Bool) (spec : SessionSpec) (tabs : Array Setup) (j : Json) (proofs : Array ByteArray) :
+    S.R (verifyJWithMK keep hs spec tabs j proofs) (verifyJWithMK keep hs' spec tabs j proofs) := by
+  unfold verifyJWithMK
+  sim_walk [decodeJWithK_sim S hh, dgWith_sim S hh, verifyRepWith_sim S hh]
 
 theorem verifyWithME_sim {N : Type → Type} [Monad N] [MonadExceptOf String N] [MonadLiftT V N] (S : Sim M N)
     [LawfulMonad M] [LawfulMonad N] {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
@@ -285,7 +352,14 @@ end Sim
 theorem decodeWithK_impSt {σ : Type} (hs : Flock.Hashes (StV σ)) {k₁ k₂ : Bool → Bool}
     (hk : ∀ b, k₁ b = true → k₂ b = true) (spec : SessionSpec) (text : String) :
     (Sim.impSt σ).R (Record.decodeWithK k₁ hs spec text) (Record.decodeWithK k₂ hs spec text) := by
-  unfold Record.decodeWithK
+  unfold Record.decodeWithK Record.decodeJWithK
+  sim_walk [dgWith_sim (Sim.impSt σ) (Sim.impSt_hashes σ hs), Sim.impSt_keep hk, Sim.impSt_keep_and hk,
+    Sim.impSt_and_keep hk]
+
+theorem decodeJWithK_impSt {σ : Type} (hs : Flock.Hashes (StV σ)) {k₁ k₂ : Bool → Bool}
+    (hk : ∀ b, k₁ b = true → k₂ b = true) (spec : SessionSpec) (j : Json) :
+    (Sim.impSt σ).R (Record.decodeJWithK k₁ hs spec j) (Record.decodeJWithK k₂ hs spec j) := by
+  unfold Record.decodeJWithK
   sim_walk [dgWith_sim (Sim.impSt σ) (Sim.impSt_hashes σ hs), Sim.impSt_keep hk, Sim.impSt_keep_and hk,
     Sim.impSt_and_keep hk]
 
@@ -295,6 +369,14 @@ theorem verifyWithMK_impSt {σ : Type} (hs : Flock.Hashes (StV σ)) {k₁ k₂ :
     (Sim.impSt σ).R (verifyWithMK k₁ hs spec tabs record proofs) (verifyWithMK k₂ hs spec tabs record proofs) := by
   unfold verifyWithMK
   sim_walk [decodeWithK_impSt hs hk, dgWith_sim (Sim.impSt σ) (Sim.impSt_hashes σ hs),
+    verifyRepWith_sim (Sim.impSt σ) (Sim.impSt_hashes σ hs), Sim.impSt_keep_ite hk]
+
+theorem verifyJWithMK_impSt {σ : Type} (hs : Flock.Hashes (StV σ)) {k₁ k₂ : Bool → Bool}
+    (hk : ∀ b, k₁ b = true → k₂ b = true) (spec : SessionSpec) (tabs : Array Setup) (j : Json)
+    (proofs : Array ByteArray) :
+    (Sim.impSt σ).R (verifyJWithMK k₁ hs spec tabs j proofs) (verifyJWithMK k₂ hs spec tabs j proofs) := by
+  unfold verifyJWithMK
+  sim_walk [decodeJWithK_impSt hs hk, dgWith_sim (Sim.impSt σ) (Sim.impSt_hashes σ hs),
     verifyRepWith_sim (Sim.impSt σ) (Sim.impSt_hashes σ hs), Sim.impSt_keep_ite hk]
 
 end With

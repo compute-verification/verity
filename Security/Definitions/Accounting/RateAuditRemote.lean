@@ -31,11 +31,11 @@ program) and the root it is seeded at are any function of the store and of the e
 their oracle families at every root and their samples), and of nothing of its own pass or later. `Chain.oracle` is pass
 `j`'s oracle at that root. Each pass draws its own sample of `s` words after its output.
 
-**Grinding.** The seed is Fiat–Shamir, so a prover may hash candidate roots with pass `j`'s seed before it commits one,
-and keep the root whose oracle it likes. `GrindChain` gives it `G` candidates, fixed by the earlier passes' coins and
-the store, and lets it pick one as any function of pass `j`'s whole oracle family; pass `j`'s device may depend on the
-pick. Keeping one candidate at every pass is a `Chain` (`GrindChain.atCand`), so grinding costs at most a factor `G`
-in each pass's error.
+**Grinding.** The seed is Fiat–Shamir (`fiat-shamir`), so a prover may hash candidate roots with pass `j`'s seed before
+it commits one, and keep the root whose oracle it likes. `GrindChain` gives it `G` candidates, fixed by the earlier
+passes' coins and the store, and lets it pick one as any function of pass `j`'s whole oracle family; pass `j`'s device
+may depend on the pick. Keeping one candidate at every pass is a `Chain` (`GrindChain.atCand`), so grinding costs at
+most a factor `G` in each pass's error.
 -/
 
 namespace Accounting.Rate

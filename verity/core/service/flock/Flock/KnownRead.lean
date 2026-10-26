@@ -91,15 +91,11 @@ def bitOut (c : Circuit) (cs : List (Nat × Nat)) (q k : Nat) : Bool :=
 def shapeOk (p : Port) (ks : Array (Array Nat × ByteArray)) : Bool :=
   p.v2 && p.segs.isNone && ks.all (·.1.size == p.words)
 
-/-- The first port whose name an earlier port has. -/
-def dupName (c : Circuit) : Option Nat :=
-  (List.range c.ports.size).find? fun q => (List.range q).any fun q' => c.ports[q']!.name == c.ports[q]!.name
-
 /-- **Each known value names one port of the circuit**: where the `--registered` file names known content, the circuit
-names each of its ports once (`dupName`), and has a port of each name the known content names. -/
+names each of its ports once (`Registered.dupName`), and has a port of each name the known content names. -/
 def namesOk (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) : V Unit :=
   if known.isEmpty then pure ()
-  else match dupName c with
+  else match Registered.dupName c with
     | some q => throw s!"registered reads: the circuit names port {c.ports[q]!.name} twice, so its known content names no one row"
     | none => known.toList.forM fun (name, _) =>
         if c.ports.any (·.name == name) then pure ()

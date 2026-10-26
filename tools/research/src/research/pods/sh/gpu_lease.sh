@@ -43,7 +43,10 @@
 # The oldest waiter, when the free GPUs and the preemptible leases together cover what it needs, stops the newest preemptible
 # leases: SIGTERM to the whole scope (else the pid), SIGKILL 30 s later, each logged to $GPU_LEASE_DIR/preempted.log.  The stopped
 # job exits 143 and restarts however its launcher restarts it.  A request without --wait preempts nothing, and neither does a
-# --preemptible one: fill work waits for fill work, or a queue of it would stop its own leases in turn.
+# --preemptible one: fill work waits for fill work, or a queue of it would stop its own leases in turn.  A preemptible lease is
+# taken only once its grace since its grant has passed: its own --max-min, at most $GPU_LEASE_PREEMPT_GRACE_MAX_S (2400), or
+# $GPU_LEASE_PREEMPT_GRACE_S (600) without one, so a point that started finishes (INF-194: on node 2, 24 Oct 01:11-01:41Z, 23
+# benchmark points were stopped 4-35 min in, each losing its whole engine start); the waiter waits for it meanwhile.
 #
 # --timed (or GPU_LEASE_TIMED=1) tags a timed window: the lease records timed=1, and the server's ops daemon keeps the machine quiet
 # while it is held (it pauses other CPU-heavy work; on vy-nebius-2, node_ops.py).  A lease of every GPU by one holder counts as one
@@ -149,12 +152,23 @@ preempt_for() {
   # the oldest waiter stops the newest preemptible leases when, with the free GPUs, they cover what it needs
   local want=$1 i fd owner free=0
   local -a pre=()
+  local now since until grace since_s until_s
+  now=${GPU_LEASE_NOW:-$(date -u +%s)}
   for i in "${CANDIDATES[@]}"; do
     exec {fd}>>"$dir/$i.lock" || continue
     if flock -n -s "$fd"; then free=$((free + 1)); exec {fd}>&-; continue; fi
     exec {fd}>&-
     owner=$(cat "$dir/$i.owner" 2>/dev/null)
-    case " $owner " in *" preempt=1 "*) pre+=("$(echo "$owner" | sed -n 's/.*since=\([^ ]*\).*/\1/p') $i") ;; esac
+    case " $owner " in *" preempt=1 "*) ;; *) continue ;; esac
+    since=$(echo "$owner" | sed -n 's/.*since=\([^ ]*\).*/\1/p')
+    until=$(echo "$owner" | sed -n 's/.* until=\([^ ]*\).*/\1/p')
+    since_s=$(date -u -d "$since" +%s 2>/dev/null) || since_s=0
+    grace=${GPU_LEASE_PREEMPT_GRACE_S:-600}
+    if [ -n "$until" ] && until_s=$(date -u -d "$until" +%s 2>/dev/null); then
+      grace=$((until_s - since_s)); [ "$grace" -le "${GPU_LEASE_PREEMPT_GRACE_MAX_S:-2400}" ] || grace=${GPU_LEASE_PREEMPT_GRACE_MAX_S:-2400}
+    fi
+    [ $((now - since_s)) -ge "$grace" ] || continue
+    pre+=("$since $i")
   done
   [ "$free" -lt "$want" ] && [ $((free + ${#pre[@]})) -ge "$want" ] || return 0
   printf '%s\n' "${pre[@]}" | sort -r | head -n $((want - free)) | while read -r _ i; do stop_lease "$i"; done

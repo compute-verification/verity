@@ -13,9 +13,9 @@ import pytest
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
-from verity_vllm.program import boolean as BB
-from verity_vllm.program.registry import tp_allreduce as TA
-from verity_vllm.program.registry import tp_allreduce_check as K
+from verity.ml.definitions import boolean as BB
+from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce_check as K
 
 #: signed zeros, the smallest and largest subnormals, the smallest normals, +-1, the finite maxima, infinities, NaNs
 SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x807F, 0x0080, 0x8080, 0x3F80, 0xBF80, 0x7F7F, 0xFF7F, 0x7F80,
@@ -43,7 +43,7 @@ def _ev(fn, *args: np.ndarray) -> list[np.ndarray]:
 
 
 @pytest.mark.parametrize("shot,N,cluster,fma", [(1, 256, 1, False), (2, 256, 1, True), (1, 512, 2, True), (2, 512, 2, False),
-                                                (1, 1536, 2, True)])
+                                                pytest.param(1, 1536, 2, True, marks=pytest.mark.slow)])
 def test_the_fused_norm_is_its_parts_composed(shot: int, N: int, cluster: int, fma: bool) -> None:
     rng = np.random.default_rng(N + 10 * shot + cluster)
     parts, res, w = _cases(rng, 3, N)
@@ -68,7 +68,7 @@ def test_the_parts_word_views_and_boolean_versions() -> None:
         assert TR.word_of(bits).id == word.id
 
 
-@pytest.mark.parametrize("which", ["residual", pytest.param("norm", marks=pytest.mark.slow)])
+@pytest.mark.parametrize("which", ["residual", "norm"])
 def test_the_parts_on_bits_compute_their_words(which: str) -> None:
     """The norm's σ version at N = 256 is about 6M gates (a few seconds)."""
     rng = np.random.default_rng(3)

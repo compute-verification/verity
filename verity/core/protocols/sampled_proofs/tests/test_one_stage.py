@@ -32,7 +32,7 @@ SERVED = {"kind": "served", "row": 101, "run": "r-test"}
 
 def _ports(prog, q, n: int) -> dict:
     part = P.partition(prog, q)
-    return {p: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), p, schema, leaves, "r-test")}
+    return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, schema, leaves, "r-test")}
             for p, schema, leaves in (("x", "hm96-sha512/row/v1", n), ("out", "u16", 2 * n))}
 
 
@@ -258,17 +258,17 @@ def test_registration_refusals():
     assert len(codes) == 1 and set(next(iter(codes))) == {"R3-domain", "R3-leaves"}
 
 
-def test_served_domains_bind_program_partition_port_schema_leaves_and_run():
+def test_window_domains_bind_program_partition_port_schema_leaves_and_run():
     from verity.ml.commitments.identity import identity_digest_sha512
     from verity.ml.commitments.indexed import RangeIndexedDomain
     from verity.ml.commitments.merkle import CommitmentDomain
 
     base = ("a" * 128, "b" * 128, "x", "hm96-sha512/row/v1", 6, "r1")
-    d = R.served_domain(*base)
+    d = R.window_domain(*base)
     binding = identity_digest_sha512("verity/one-stage/served-domain/v1", dict(zip(("program", "partition", "port", "schema", "leaves", "run"), base)))
     assert len(d) == 128 and d == CommitmentDomain(binding, -1, RangeIndexedDomain(0, 6), hash="sha512").domain_id.hex()
     for i, other in ((0, "c" * 128), (1, "c" * 128), (2, "cs"), (3, "u16"), (4, 7), (5, "r2")):
-        assert R.served_domain(*base[:i], other, *base[i + 1:]) != d
+        assert R.window_domain(*base[:i], other, *base[i + 1:]) != d
 
 
 def test_receipt_names_the_record():

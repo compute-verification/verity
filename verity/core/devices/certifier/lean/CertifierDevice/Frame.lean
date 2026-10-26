@@ -9,7 +9,9 @@ placeholder (`saltFrame`); a server's byte stream is cut after every `\n\n` (`Ev
 event's `id:` field is its canonical position (`eventPosition`), and what follows that line is the frame's payload
 (`eventBody`). On the link every request is its length (u32be) and its bytes over `DATA` frames, and `Requests.feed` cuts
 the released payloads back into requests, the k-th on stream k. A frame's bits (`bitsOf`) are the payload the Program
-carries.
+carries. Under `ordinals` a stream's server connection opens with `ordinalHeader`; under `compact` the server's bytes
+are an HTTP response head, then (position, record) units (`CompactUnits.feed`), and a frame is the record zero-filled
+(`compactCell`), a record naming its request by ordinal (`compactOrdinal`).
 -/
 
 namespace CertifierDevice
@@ -112,6 +114,66 @@ def Requests.feed (r : Requests) (payload : ByteArray) : Requests × Nat × Byte
   let data := payload.extract 0 r.left
   let left := r.left - data.size
   ({ r with left }, r.stream, data, left == 0)
+
+/-- `ORDINAL`: the kind of the header (`HEADER`, with the stream and length 0) that opens a stream's server connection
+under `ordinals`; never on a link. -/
+def kindOrdinal : Nat := 4
+
+/-- The header that opens stream `s`'s server connection under `ordinals`. -/
+def ordinalHeader (s : Nat) : ByteArray := ⟨#[kindOrdinal.toUInt8]⟩ ++ be32 s.toUInt32 ++ be32 0
+
+/-- `COMPACT_RECORD.size`: a compact record is its request's ingress ordinal (u32be) and its token field (u32be). -/
+def compactRecordSize : Nat := 8
+
+/-- `COMPACT_LAST`: the token field's flag on the response's last output (finish `length`, or `stop` with
+`compactStop`). -/
+def compactLast : Nat := 2 ^ 31
+
+/-- `COMPACT_STOP`: the token field's flag, beside `compactLast`, on a sampled stop token, whose id the field still
+carries. -/
+def compactStop : Nat := 2 ^ 30
+
+/-- `COMPACT_UNIT_BYTES`: what the server writes for each record, its canonical position (u32be), then the record. -/
+def compactUnitBytes : Nat := 4 + compactRecordSize
+
+/-- `compact_record_data`'s request ordinal: a compact cell or record is `compactRecordSize` bytes, zero after them, of
+an ordinal ≥ 1 and a token field that is an id below `compactStop` with no flag, `compactLast`, or `compactLast` and
+`compactStop`, so a field with `compactStop` and not `compactLast` is no record's; none for bytes that aren't one. The
+device reads only the ordinal: the token field, finish included, is the server's. -/
+def compactOrdinal (cell : ByteArray) : Option Nat :=
+  if cell.size < compactRecordSize || (cell.toList.drop compactRecordSize).any (· != 0) then none else
+  let request := be32At cell 0
+  let field := be32At cell 4
+  if request == 0 || field / compactStop == 1 then none else some request
+
+/-- `compact_cell`: a compact record's egress frame, the record zero-filled to `B` bytes; none where Python raises (the
+record doesn't fit). -/
+def compactCell (record : ByteArray) (B : Nat) : Option ByteArray :=
+  if record.size > B then none else some (record ++ ⟨Array.replicate (B - record.size) 0⟩)
+
+/-- The index of the first `\r\n\r\n` in `b`. -/
+def headEnd (b : ByteArray) : Option Nat :=
+  (List.range b.size).find? fun i =>
+    i + 3 < b.size && b.get! i == 13 && b.get! (i + 1) == 10 && b.get! (i + 2) == 13 && b.get! (i + 3) == 10
+
+/-- `CompactUnits`: a server connection's bytes not yet cut, and whether its HTTP response head is past. -/
+structure CompactUnits where
+  buffer : ByteArray := ByteArray.empty
+  head : Bool := false
+
+/-- `CompactUnits.feed`: append; until the head is past, drop through the first `\r\n\r\n` once there is one; then cut
+every whole `compactUnitBytes` unit, first to last, into (position, record). -/
+def CompactUnits.feed (u : CompactUnits) (data : ByteArray) : CompactUnits × Array (Nat × ByteArray) :=
+  let b := u.buffer ++ data
+  let (b, head) := if u.head then (b, true) else
+    match headEnd b with
+    | some i => (b.extract (i + 4) b.size, true)
+    | none => (b, false)
+  if !head then ({ buffer := b }, #[]) else
+  let n := b.size / compactUnitBytes
+  let out := (List.range n).toArray.map fun k =>
+    (be32At b (k * compactUnitBytes), b.extract (k * compactUnitBytes + 4) ((k + 1) * compactUnitBytes))
+  ({ buffer := b.extract (n * compactUnitBytes) b.size, head := true }, out)
 
 /-- `Events`: the bytes of a stream not yet cut into events. -/
 structure Events where

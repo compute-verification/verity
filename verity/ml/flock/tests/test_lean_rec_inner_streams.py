@@ -117,8 +117,7 @@ def test_verify_reads_candidate_3s_transcript(tmp_path):
     """`verify --rec-inner-transcript` reads the transcript among its inputs, before it sets anything up: on candidate 3's
     session it goes on to the statement (here none, so the session is refused for its files), and on the session with a
     stream missing it stops there (exit 2). The inner statement is its circuit's header (whose META binds R's registration)
-    beside stand-ins for its public input and partition, which nothing reads before the session; `--rec-inner-coins` holds
-    no META, so it binds no registration."""
+    beside stand-ins for its public input and partition, which nothing reads before the session."""
     (tmp_path / "partition.json").write_text("{}")
     (tmp_path / "empty").write_text("")
 

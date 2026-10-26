@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tests.predict.test_predict import TINY, _phi
+from tests.program.predict.test_predict import TINY, _phi
 from verity.ml.circuits import Array, Program, Value
 from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
@@ -23,9 +23,9 @@ from verity_vllm.check.replay import definitions as DF
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline.build import _instance_rows
 from verity_vllm.pipeline.tp import rank_replay as RR
-from verity_vllm.predict.build import build_program
+from verity_vllm.program.predict.build import build_program
 
-NORM = "RMSNormTriton_v1{"
+NORM = "RMSNormTriton_v5{"
 REQ = {"request_id": "q0", "index": 0, "prompt_token_ids": [3, 1, 4, 1], "max_tokens": 2, "arrive_step": 0}
 V16 = Value(16)
 
@@ -100,7 +100,7 @@ def test_the_c2_replay_refuses_it_too(tmp_path, program):
 def test_both_loaders_refuse_a_row_kernel_that_is_not_its_definition(tmp_path, program, monkeypatch):
     """The Build is of record, but the row kernel the replay grades its norm rows by is one bit off its Definition: refused by
     name before any row is graded, by the kernel's self-check."""
-    from verity_vllm.program.kernels import derived_rows as DR
+    from verity.ml.definitions.numerics import derived_rows as DR
 
     dg = _build(tmp_path / "built", program)
     monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})
@@ -108,10 +108,10 @@ def test_both_loaders_refuse_a_row_kernel_that_is_not_its_definition(tmp_path, p
     right = DR.rmsnorm_triton_rows
     monkeypatch.setattr(DR, "rmsnorm_triton_rows", lambda x, w, eps: {"out": right(x, w, eps)["out"] ^ 1})
     monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})
-    with pytest.raises(RuntimeError, match=r"^rank 0: REFUSED \(a row kernel is not its Definition\): RMSNormTriton_v1: "):
+    with pytest.raises(RuntimeError, match=r"^rank 0: REFUSED \(a row kernel is not its Definition\): RMSNormTriton_v5: "):
         _rank(tmp_path / "built", dg)
     monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})
-    with pytest.raises(RuntimeError, match=r"^replay: REFUSED \(a row kernel is not its Definition\): RMSNormTriton_v1: .* mismatches"):
+    with pytest.raises(RuntimeError, match=r"^replay: REFUSED \(a row kernel is not its Definition\): RMSNormTriton_v5: .* mismatches"):
         _c2(tmp_path / "built", dg)
 
 

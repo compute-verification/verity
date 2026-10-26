@@ -192,6 +192,10 @@ def DrawMatches (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
 /-- **The record's live session reads** (`liveOf`: the record is JSON with its link, points and streams). -/
 def LiveReads (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, liveOf o.spec o.record = .ok o.live
 
+/-- **The record is in its canonical text** (S0, `Flock.RecordText.check`). -/
+def RecordCanonical (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop :=
+  ∀ o : Run H rel, Flock.RecordText.check o.record = .ok ()
+
 /-- **Custody: the record's `root_B` is the link message's.** -/
 def CustodyRootB (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : Prop := ∀ o : Run H rel, (o.live.rootB.toList == o.link.1) = true
 
@@ -320,6 +324,7 @@ structure Goals (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Reada
   ligerito : Ligerito H rel
   consumed : Consumed H rel
   capCommitted : CapCommitted H rel
+  canonical : RecordCanonical H rel
 
 /-! ## The checks proved here -/
 
@@ -338,7 +343,7 @@ theorem Run.recordFits {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed �
     o.record.toUTF8.size < 2 ^ 64 :=
   o.ready_parts.2.2.2.2 o.w o.ω o.r o.record o.proofs o.bodies o.ran
 
-/-- **A drawn session**: `checks` never reaches `drawLaw zk none`. -/
+/-- **A drawn session**: `checks` never reaches `drawLaw zk tags false none`. -/
 theorem Case.drawn {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : Case H rel) : c.s.read.draw.isNone = false := by
   have := c.ready_parts.1
   cases h : c.s.read.draw
@@ -415,7 +420,7 @@ theorem Run.verdict_ok {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed �
 theorem Run.checks_ok' {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (g : Goals H rel) (o : Run H rel) :
     checks false o.s o.spec o.x o.link (Claims.coinSeq o.r 0) o.mids o.final = .ok () :=
   checks_ok o.stmt_ok (g.draw o) (g.liveReads o)
-    (custody_ok (g.rootB o) (g.publicsLink o) (g.points o) (g.count o) (g.rounds o)) o.scope_ok o.drawn
+    (custody_ok (g.rootB o) (g.publicsLink o) (g.points o) (g.count o) (g.rounds o)) o.scope_ok o.drawn (g.canonical o)
 
 /-- **The honest prover is accepted** at every honest run at a good case. -/
 theorem Run.acc {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (g : Goals H rel) (o : Run H rel) :

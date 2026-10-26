@@ -38,7 +38,8 @@ def test_the_lut_is_fattn_refs():
     assert A.LUT.tolist() == O.LUT.tolist() and A.LUT[0] == 127 and A.LUT.dtype == np.int64
 
 
-@pytest.mark.parametrize("s, h, g, d", [(1, 4, 4, 8), (5, 8, 2, 64), (16, 8, 2, 64), (17, 4, 1, 32), (37, 8, 2, 64), (70, 32, 8, 128)])
+@pytest.mark.parametrize("s, h, g, d", [(1, 4, 4, 8), (5, 8, 2, 64), (16, 8, 2, 64), (17, 4, 1, 32), (37, 8, 2, 64),
+                                        pytest.param(70, 32, 8, 128, marks=pytest.mark.slow)])
 @pytest.mark.parametrize("scale, spread", [(1e-3, 1.0), (1.0, 1.0), (300.0, 1.0), (1.0, 0.3)])
 def test_a_window_is_the_reference(s, h, g, d, scale, spread):
     q, k, v = _window(s, h, g, d, seed=s * 7 + h, scale=scale)

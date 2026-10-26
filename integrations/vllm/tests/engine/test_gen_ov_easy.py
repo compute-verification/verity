@@ -28,7 +28,7 @@ from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager_qwen15 as Q15
 L = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B")
 Q = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN05")
 B7 = importlib.import_module("verity_vllm.engine.profiles.derived_B7")
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"
@@ -206,6 +206,7 @@ def test_workload_file():
 
 # --- the sealed driver resolves the case to the profile module; the engine arg reaches every GPU stage -----------------------
 
+@pytest.mark.slow
 def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
     out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", "--case", "B7", "--workload", WORKLOAD, "--out", "/r/RUN",
                           "--cards-dir", "/r/cards", "--python-gpu", "/pod/py311", "--python-cpu", "/pod/py312", "--checkpoint-dir", "/ck/snap",

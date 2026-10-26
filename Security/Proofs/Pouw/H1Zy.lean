@@ -1,8 +1,10 @@
+import Proofs.Pouw.H1Zy.ChainVectors
 import Proofs.Pouw.H1Zy.Combine
 import Proofs.Pouw.H1Zy.CombineBits
 import Proofs.Pouw.H1Zy.DequantVectors
 import Proofs.Pouw.H1Zy.Lane
 import Proofs.Pouw.H1Zy.LaneBits
+import Proofs.Pouw.H1Zy.Stream
 import Proofs.Pouw.H1Zy.Tile
 import Proofs.Pouw.H1Zy.LaneChunk
 
@@ -17,6 +19,9 @@ cell's record z as the exact dot of its rows' codes and its y as the dequant of 
 `Combine`: `PouwH1Combine_v1`'s `ok` is `true` exactly when the lanes' partials XOR, in lane order, to the receipt
 (`Pouw.H1Zy.combineOk_iff`). `Proofs.Accounting.TS.Session.Lanes.Combine` reads it as `LeafChecks`' combine field.
 
+`ChainVectors`: `Pouw.H1Zy.h1Chain`'s pieces, seeds and noise stream, and its chain on a lane's noise, on values the
+Python computes, checked by the kernel.
+
 `CombineBits`: the combine's body on bits computes it on words (`Pouw.H1Zy.combineBits_bitsOf`), each piece's lowering
 its word view.
 
@@ -30,6 +35,10 @@ lane field.
 
 `LaneBits`: the lane's body on bits computes it on words (`Pouw.H1Zy.laneBits_bv`), each restated piece's lowering its
 word view (the multiply's, `Pouw.H1Zy.immaS8Bits_bv`, from Baugh–Wooley and the clamp).
+
+`Stream`: at the same `K`, a lane's `ok` over `PouwH1Tile_v3` is its `ok` over `PouwH1Tile_v1` at every seed
+(`Pouw.H1Zy.laneOkZ_eq_laneOk`, `Pouw.H1Zy.laneZ3_eq`). `Proofs.Accounting.TS.Session.Lanes.Stream` reads it as
+`LeafChecks`' lane field at v3 lanes.
 
 `LaneChunk`: a lane's `n` chunk statements, each `ok = true`, chunk `c + 1`'s carry in chunk `c`'s carry out, give the
 whole lane's `ok = true` at the chain machine's words on the rows they read joined (`Pouw.H1Zy.laneOk_of_chunks`), and so

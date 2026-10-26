@@ -20,6 +20,7 @@ from verity_vllm.check.match.program_compare import load_derived
 BUILD_101_TRY5 = "art:0e6911da"
 
 
+@pytest.mark.slow
 def test_a_single_request_components_address_map_counts_its_splits_constants(tmp_path):
     """The Build's own path on CPU: a single-request stochastic Program (a constant S, one `Const32[S]` per select) composed by GP-01."""
     V, S, LP, STEPS = 64, 4, 3, 2
@@ -40,6 +41,7 @@ def test_a_component_without_splits_constants_is_counted_as_compared():
     assert addressed_instances(SimpleNamespace(inst=[{}] * 5)) == 5
 
 
+@pytest.mark.slow
 def test_101s_fifth_build_is_addressed_as_its_component_is_compared(tmp_path):
     """#101's stored fifth Build: the address map's `n_instances` for r0 equals its request Program's compared instances plus its 32 bound
     splits constants (46,654 + 32 = 46,686), the count G4 failed on."""

@@ -37,6 +37,7 @@ pub mod firewall;
 pub mod glue;
 pub mod proved_scope;
 pub mod pure_block;
+pub mod record_text;
 #[cfg(feature = "glue")]
 pub mod tables;
 pub mod typed;
@@ -985,8 +986,8 @@ pub struct LiveChallenger {
     pending: Vec<u8>,
     rounds: u64,
     forks: AtomicU32,
-    /// The value `grind_pow` returns and absorbs. Live coins need no grinding; a nonzero value models a prover that
-    /// chooses its nonce (negative 4): the coin that follows is drawn by the verifier regardless.
+    /// The value `grind_pow` returns and absorbs: `0`, the only nonce the verifier accepts (R4). Live coins need no
+    /// grinding; a nonzero value models a prover that chooses its nonce (negative 4), which the verifier refuses.
     pub pow_nonce: u64,
     pub tamper: Option<Tamper>,
     deferred: Vec<u8>,
@@ -2393,10 +2394,11 @@ impl Challenger for ReplayChallenger {
         unreachable!("the verifier's challenger never grinds")
     }
 
-    /// R4: the nonce is a message like any other (bound by the round digest); the coin does not depend on it.
+    /// R4: the nonce is a message like any other (bound by the round digest), and must be `0`: the coin does not depend on
+    /// it, so the verifier refuses every other nonce, as the Lean verifier's decoder does (D21).
     fn verify_pow(&mut self, nonce: u64, _bits: u32) -> bool {
         self.observe_bytes(&nonce.to_le_bytes());
-        true
+        nonce == 0
     }
 
     fn fork(&mut self, label: &'static [u8]) -> Self {

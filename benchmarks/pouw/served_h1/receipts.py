@@ -19,6 +19,14 @@ through the driver API when a cubin is given, else hashlib); then on the device
   lanes and chains of y, then of z: the receipt's 2 (KS + m) u32 words.
 
 z, the plain A Bᵀ cell, is the served y's integer product and no part of this computation.
+
+Under J10-R (``j10r``: `h1tile.PouwH1Tile_v5`, `h1tile.j10r_reference`) the call has one noise seed, seed_c =
+`seeds.call_seed` (salt, base, root(A), root(B)), ``base`` the call's first unit position (J10-R's ``call``), and one stream,
+blocks 0 .. M RB + N CB - 1 of seed_c's at call scale (`h1tile.Layout(M, N, K)`: call row i at i RB, call column j at
+M RB + j CB), hashed once a call (`call_streams`: `noise.cu`'s `h1_noise_calls`, one launch for many calls, else
+hashlib). Unit (I, J) gathers call rows 32 I .. and columns 32 J .. from it (`j10r_counters`, `h1tile.j10r_unit_blocks`
+at `h1tile.j10r_blocks`), in seed_j's noise layout, so the unit's chain above is v1's; its fold keys stay σ_R's at its own
+position. M is the call's A slot, whole row blocks.
 """
 from __future__ import annotations
 
@@ -81,6 +89,8 @@ class Cubin:
         self.mod, self.fn = C.c_void_p(), C.c_void_p()
         self._ck(self.lib.cuModuleLoadData(C.byref(self.mod), C.c_char_p(self.image)), "cuModuleLoadData")
         self._ck(self.lib.cuModuleGetFunction(C.byref(self.fn), self.mod, b"h1_noise"), "cuModuleGetFunction")
+        self.fn_calls = C.c_void_p()
+        self._ck(self.lib.cuModuleGetFunction(C.byref(self.fn_calls), self.mod, b"h1_noise_calls"), "cuModuleGetFunction")
         self.tag = [int.from_bytes(SD.NOISE_TAG[8 * i:8 * i + 8], "big") for i in range(3)]
 
     @staticmethod
@@ -95,9 +105,24 @@ class Cubin:
         total = u * n
         args = [C.c_uint64(seeds.data_ptr()), C.c_uint64(u), C.c_uint32(n), *[C.c_uint64(t) for t in self.tag],
                 C.c_uint64(out.data_ptr()), C.c_int32(int(sink))]
+        self._go(self.fn, total, block, args)
+
+    def launch_calls(self, seeds: torch.Tensor, starts: torch.Tensor, out: torch.Tensor, sink: bool = False,
+                     block: int = 128) -> None:
+        """J10-R's call streams, `h1_noise_calls`: seeds (calls, 8) int64 (each call's seed_c) and starts (calls + 1,)
+        int64 (call c's stream is the launch's blocks starts[c] .. starts[c + 1] - 1) on the device -> out (starts[-1], 16)
+        int32 halves, or with `sink` (starts[-1],) int32, each block's XOR of its halves."""
+        total = int(starts[-1])
+        args = [C.c_uint64(seeds.data_ptr()), C.c_uint64(starts.data_ptr()), C.c_uint32(seeds.shape[0]),
+                *[C.c_uint64(t) for t in self.tag], C.c_uint64(out.data_ptr()), C.c_int32(int(sink))]
+        self._go(self.fn_calls, total, block, args)
+
+    def _go(self, fn: C.c_void_p, total: int, block: int, args: list) -> None:
+        if not total:
+            return
         params = (C.c_void_p * len(args))(*[C.cast(C.pointer(a), C.c_void_p) for a in args])
         stream = C.c_void_p(torch.cuda.current_stream().cuda_stream)
-        self._ck(self.lib.cuLaunchKernel(self.fn, C.c_uint32(-(-total // block)), 1, 1, C.c_uint32(block), 1, 1, 0, stream,
+        self._ck(self.lib.cuLaunchKernel(fn, C.c_uint32(-(-total // block)), 1, 1, C.c_uint32(block), 1, 1, 0, stream,
                                          params, None), "cuLaunchKernel")
 
 
@@ -113,6 +138,45 @@ def noise_blocks(seeds: list[bytes], n: int, device, cubin: Cubin | None) -> tor
     out = torch.empty(len(seeds), n, 16, dtype=torch.int32, device=device)
     cubin.launch(seed_words(seeds, device), n, out)
     return out.to(torch.int64) & M32
+
+
+# -- J10-R's call streams ------------------------------------------------------------------------------------------------
+
+def stream_blocks(m: int, n: int, k: int) -> int:
+    """A call's J10-R stream length in blocks: its M rows' and N columns' at call scale, `h1tile.Layout(M, N, K).blocks`."""
+    return HT.Layout(m, n, k).blocks
+
+
+def call_streams(seeds: list[bytes], counts: list[int], device, cubin: Cubin | None) -> list[torch.Tensor]:
+    """Each call's stream, blocks 0 .. counts[c] - 1 of seeds[c] (its seed_c), as (counts[c], 16) int64 halves on `device`:
+    the kernel's (`h1_noise_calls`, one launch for every call) when `cubin` is given, else hashlib's."""
+    if len(seeds) != len(counts):
+        raise ValueError(f"{len(seeds)} seeds for {len(counts)} calls")
+    if cubin is None:
+        out = []
+        for s, nb in zip(seeds, counts):
+            head = SD.NOISE_TAG + bytes(s)
+            raw = b"".join(hashlib.sha512(head + t.to_bytes(8, "big")).digest() for t in range(nb))
+            out.append(torch.from_numpy(_halves(raw).reshape(nb, 16)).to(device))
+        return out
+    starts = [0]
+    for nb in counts:
+        starts.append(starts[-1] + int(nb))
+    got = torch.empty(starts[-1], 16, dtype=torch.int32, device=device)
+    cubin.launch_calls(seed_words(seeds, device), torch.tensor(starts, dtype=torch.int64, device=device), got)
+    got = got.to(torch.int64) & M32
+    return [got[lo:hi] for lo, hi in zip(starts[:-1], starts[1:])]
+
+
+def j10r_counters(ri: torch.Tensor, cj: torch.Tensor, m: int, k: int) -> torch.Tensor:
+    """The counters of seed_c's blocks units (ri, cj) read, (U, blocks) int64, rows' then columns', each row's or column's
+    blocks in turn: `h1tile.j10r_unit_blocks` at `h1tile.j10r_blocks`(M = m, K = k, the 32 × 32 tile, ri, cj), seed_j's
+    noise layout (`tile_receipts`' ``noise``)."""
+    lay = layout(k)
+    rb, cb, ar = lay.rb, lay.cb, torch.arange(R, device=ri.device)
+    rows = ((R * ri[:, None] + ar)[:, :, None] * rb + torch.arange(rb, device=ri.device)).flatten(1)
+    cols = (m * rb + (C_ * cj[:, None] + ar)[:, :, None] * cb + torch.arange(cb, device=ri.device)).flatten(1)
+    return torch.cat([rows, cols], 1)
 
 
 # -- the unit on the device ----------------------------------------------------------------------------------------------
@@ -232,10 +296,21 @@ class Call:
         return units(self.a.shape[0], self.b.shape[0])
 
 
+def call_stream(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, cubin: Cubin | None = None) -> torch.Tensor:
+    """The call's J10-R stream on its device, (M RB + N CB, 16) int64 halves: seed_c's (`seeds.call_seed` at the call's first
+    position ``base``) at call scale. ValueError unless M is whole row blocks (the window Program's slot is)."""
+    (m, k), n = call.a.shape, call.b.shape[0]
+    if m % R or not m:
+        raise ValueError(f"a J10-R call's A is its slot, whole blocks of {R} rows, not {m}")
+    return call_streams([SD.call_seed(salt, base, root_a, root_b)], [stream_blocks(m, n, k)], call.a.device, cubin)[0]
+
+
 def call_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, cubin: Cubin | None = None,
-                  chunk: int | None = None, only: list[int] | None = None, lanes: bool = False) -> np.ndarray:
+                  chunk: int | None = None, only: list[int] | None = None, lanes: bool = False, j10r: bool = False,
+                  stream: torch.Tensor | None = None) -> np.ndarray:
     """The call's receipts (units, 2 sets) uint32, unit u at position base + u (`only`: those units, in that order); with
-    `lanes` each lane's words (units, LANES, 2 sets), whose XOR over lanes is the receipt (`tile_receipts`)."""
+    `lanes` each lane's words (units, LANES, 2 sets), whose XOR over lanes is the receipt (`tile_receipts`). `j10r`: J10-R's
+    unit (`h1tile.PouwH1Tile_v5`), each unit's noise gathered from the call's stream (``stream``, else `call_stream`)."""
     k = call.a.shape[1]
     lay = layout(k)
     chunk = chunk or max(16, (1 << 20) // k)
@@ -243,14 +318,20 @@ def call_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: byt
     pick = list(range(len(us))) if only is None else list(only)
     dev = call.a.device
     ar = torch.arange(R, device=dev)
+    if j10r and stream is None:
+        stream = call_stream(call, salt, base, root_a, root_b, cubin)
     out = np.empty((len(pick),) + ((LANES,) if lanes else ()) + (2 * lay.sets,), dtype=np.uint32)
     for at in range(0, len(pick), chunk):
         part = pick[at:at + chunk]
-        seeds, sigmas = unit_seeds(salt, [base + u for u in part], root_a, root_b)
-        noise = noise_blocks(seeds, lay.blocks, dev, cubin)
-        keys = noise_blocks(sigmas, LANES, dev, cubin)
         ri = torch.tensor([us[u][0] for u in part], device=dev)
         cj = torch.tensor([us[u][1] for u in part], device=dev)
+        if j10r:
+            sigmas = [SD.receipt_seed(salt, base + u, root_a, root_b) for u in part]
+            noise = stream[j10r_counters(ri, cj, call.a.shape[0], k)]
+        else:
+            seeds, sigmas = unit_seeds(salt, [base + u for u in part], root_a, root_b)
+            noise = noise_blocks(seeds, lay.blocks, dev, cubin)
+        keys = noise_blocks(sigmas, LANES, dev, cubin)
         a = call.a[ri[:, None] * R + ar].to(torch.int64)
         b = call.b[cj[:, None] * C_ + ar].to(torch.int64)
         out[at:at + len(part)] = tile_receipts(a, b, noise, keys, lanes).cpu().numpy().astype(np.uint32)
@@ -258,13 +339,18 @@ def call_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: byt
 
 
 def reference(call: Call, salt: bytes, base: int, root_a: bytes, root_b: bytes, u: int,
-              gated=None) -> tuple[list[int], list[int]]:
+              gated=None, j10r: bool = False) -> tuple[list[int], list[int]]:
     """`h1tile.reference` on unit u of the call: (z, receipt); `gated`, the tile's 32 admit bits, is `PouwH1Tile_v4`'s
     input (a dead tile, every bit 0, has the zero receipt), None the ungated unit (a dead tile's receipt as its noise gives
-    it)."""
+    it). `j10r`: `h1tile.j10r_reference`, ``call`` = base and ``blocks`` its tile's `h1tile.j10r_blocks` at the call's M."""
     i, j = call.units[u]
     a = (call.a[R * i:R * i + R].to(torch.int64).cpu() & 0xFF).tolist()
     b = (call.b[C_ * j:C_ * j + C_].to(torch.int64).cpu() & 0xFF).tolist()
+    if j10r:
+        if gated is not None:
+            raise ValueError("J10-R's unit (PouwH1Tile_v5) takes no admit bits")
+        blocks = HT.j10r_blocks(call.a.shape[0], call.a.shape[1], (R, C_), i, j)
+        return HT.j10r_reference(a, b, salt, base + u, (root_a, root_b), base, blocks)
     bits = None if gated is None else [int(x) for x in np.asarray(gated, dtype=np.uint8)]
     return HT.reference(a, b, salt, base + u, (root_a, root_b), gated=bits)
 
@@ -288,5 +374,6 @@ def gated_reference(call: Call, admit, salt: bytes, base: int, root_a: bytes, ro
     return reference(call, salt, base, root_a, root_b, u, gated=np.asarray(admit)[R * i:R * i + R])[1]
 
 
-__all__ = ["Call", "Cubin", "LANES", "call_receipts", "gated_receipts", "gated_reference", "layout", "noise_blocks",
-           "noise_blocks_cpu", "reference", "tile_receipts", "unit_seeds", "units"]
+__all__ = ["Call", "Cubin", "LANES", "call_receipts", "call_stream", "call_streams", "gated_receipts", "gated_reference",
+           "j10r_counters", "layout", "noise_blocks", "noise_blocks_cpu", "reference", "stream_blocks", "tile_receipts",
+           "unit_seeds", "units"]

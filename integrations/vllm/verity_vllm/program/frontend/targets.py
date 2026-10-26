@@ -1,6 +1,6 @@
 """Target-keyed registered numerical bindings — the Definition variant a GEMM / attention launch binds to on the declared target.
 
-[R13 lane hopper, on lane ampere's mechanism.]  Two facts of the `TargetProfile` decide a launch's Definition, and the two registries
+Two facts of the `TargetProfile` decide a launch's Definition, and the two registries
 split along them:
 
 * the GEMM *launch geometry* (tiling table / default tiling, the k16 step the Triton kernel lowers to) is `verity_vllm.program.frontend.gemm_targets`
@@ -32,18 +32,18 @@ from typing import Any
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
                                           HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32)
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import fa2_check_inf as F2
-from verity_vllm.program.registry import attention_vocab
-from verity_vllm.program.registry import cuda_rmsnorm as CR
-from verity_vllm.program.registry import value_inputs as VI
-from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import fp8, nvfp4
-from verity_vllm.program.registry import fp8_vocab
-from verity_vllm.program.registry import gemm_bias as GB
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import fa2_check_inf as F2
+from verity.ml.definitions.registry import attention_vocab
+from verity.ml.definitions.registry import cuda_rmsnorm as CR
+from verity.ml.definitions.registry import value_inputs as VI
+from verity.ml.definitions.registry import fa3_check_inf as F3
+from verity.ml.definitions.registry import fp8, nvfp4
+from verity.ml.definitions.registry import fp8_vocab
+from verity.ml.definitions.registry import gemm_bias as GB
+from verity.ml.definitions.registry import prims as P
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
-from verity_vllm.program.registry.hopper import Fa3InvSum
+from verity.ml.definitions.registry.hopper import Fa3InvSum
 
 
 class UnregisteredTarget(ValueError):
@@ -168,7 +168,7 @@ def gemm_bias_spec(profile, K: int, N: int):
 def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
     """The registered Definition of one (token, slot) pair of a `fused_moe_kernel` launch on the declared target: the w13 launch
     (`routed` False) or the w2 launch with the routed weight."""
-    from verity_vllm.program.registry import moe as M
+    from verity.ml.definitions.registry import moe as M
     dot = moe_expert_dot(profile)
     if dot is None:
         return bind(M.MoeExpertGemmW if routed else M.MoeExpertGemm, E=int(E), K=int(K), N=int(N))
@@ -208,7 +208,7 @@ def moe_expert_fp8_launch_dot(profile, bm: int, bn: int, warps: int, swap: bool)
     target_dot = moe_expert_fp8_dot(profile)
     if profile.batch_invariant or tuple(profile.compute_capability) != (9, 0):
         return target_dot
-    from verity_vllm.program.registry import fp8_moe
+    from verity.ml.definitions.registry import fp8_moe
     dot = fp8_moe.sm90_dot(int(bm), int(bn), int(warps), bool(swap))
     if dot not in FP8_DOTS.values():
         raise UnregisteredTarget(f"block-FP8 fused-MoE tile {bm}x{bn}, {warps} warps, SWAP_AB={swap}: "
@@ -250,7 +250,7 @@ def moe_expert_fp8_gemm_spec(profile, E: int, K: int, N: int, G: int, KB: int, S
                              routed: bool):
     """The registered Definition of one (token, slot) pair of a block-FP8 `fused_moe_kernel` launch on the declared target:
     `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,SWAP,DOT}`, the w13 launch (`routed` False) or the w2 launch with the routed weight."""
-    from verity_vllm.program.registry import fp8_moe_experts as X
+    from verity.ml.definitions.registry import fp8_moe_experts as X
     return bind(X.MoeExpertFp8GemmW if routed else X.MoeExpertFp8Gemm, E=int(E), K=int(K), N=int(N), G=int(G), KB=int(KB),
                 SWAP=bool(SWAP), DOT=moe_expert_fp8_launch_dot(profile, BM, BN, WARPS, SWAP))
 
@@ -334,7 +334,7 @@ def fa2_masked_from(profile, T: int, D: int, seqlen_q: int, row: int, own_rows: 
 
 
 class LaunchContextConflict(ValueError):
-    """[R15 hopper HOP-03] the launch context of a request shape is not one value (requests of the same (LP, T) are co-scheduled with
+    """[HOP-03] the launch context of a request shape is not one value (requests of the same (LP, T) are co-scheduled with
     different batches) and the target's tile rule reads it: the component Program cannot be built for that shape as one Program."""
 
 
@@ -343,7 +343,7 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
 
     FA3's tile (`fa3_kblock_n`) reads the varlen launch's `max_seqlen_q` = the most query rows any ONE sequence of the launch has; the
     request wrapper sees only its own rows (its prompt on step 0, one row per decode step), which IS the launch's value for a batch of one
-    (B1: unchanged) and is NOT when the request is co-scheduled with a longer prompt (measured M-0225: an 8-token prompt in a B8 prefill
+    (B1: unchanged) and is NOT when the request is co-scheduled with a longer prompt (measured: an 8-token prompt in a B8 prefill
     launch with a 1024-token prompt runs the 192 x 128 tile, BN 128, while its standalone Program said 64 x 192, BN 192).  `spec`:
         None                 -> None (no declared context: every step uses its own rows -- the B1 semantics, digests unchanged)
         int N                -> {0: N}                    the prefill step's launch has a sequence of N query rows (co-arrival, no later arrivals)
@@ -402,17 +402,17 @@ def _launch_batch(steps) -> dict[str, Any]:
 
 
 class LaunchContextInvalid(ValueError):
-    """[R15 hopper HOP-03b, rev-pm M-0326 T1/T2] a DECLARED launch context that cannot be the context of this request: it does not name a
+    """[HOP-03b, rev-pm M-0326 T1/T2] a DECLARED launch context that cannot be the context of this request: it does not name a
     step the request runs (a truncated declaration would silently fall back to own rows = the M-0225 bug through the CLI), or it names a
     max_seqlen_q below the request's own rows at that step (the launch contains the request; a smaller value is another shape's context).
     Refused on every target: it is a wrong structural input, not a tile question."""
 
 
 def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> tuple[int, str]:
-    """[R15 hopper HOP-03] The `seqlen_q` the attention tile rule must read for a request's step: the launch's max over all sequences,
+    """[HOP-03] The `seqlen_q` the attention tile rule must read for a request's step: the launch's max over all sequences,
     never less than this request's own rows (the launch contains the request).  Returns (seqlen_q, source):
     ("own rows" when no context is declared; "declared launch context" when one is).  A declared context that does not name the step,
-    or names a value below the request's own rows, is refused (`LaunchContextInvalid`) -- never completed or corrected (rev-pm M-0326 T1/T2:
+    or names a value below the request's own rows, is refused (`LaunchContextInvalid`) -- never completed or corrected (rev-pm T1/T2:
     row_pod's `launch_context` always declares every step of the shape, so both are CLI-only misdeclarations)."""
     own = int(own_rows)
     if not launch:
@@ -623,7 +623,7 @@ def softcapped(spec, cap: float):
     """The softcapped chain of a plain attention row's Definition `spec`, with the same statics and `CAP = cap`: `AttentionSoftcap_v1`
     for `Attention_v3` (the accepted target), `AttentionSoftcap_v2` for `Attention_v5` (FA2's per-iteration `Check_inf`).  No other
     chain has a registered softcapped form (UnregisteredTarget)."""
-    from verity_vllm.program.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
+    from verity.ml.definitions.registry import dense as DN, fa2_softcap as F2S  # noqa: PLC0415
     body = {"Attention_v3": DN.AttentionSoftcap, "Attention_v5": F2S.AttentionSoftcapV2}.get(spec.base_id)
     if body is None:
         raise UnregisteredTarget(f"{spec.base_id} has no registered softcapped chain: a softcapped row is registered on the accepted target "

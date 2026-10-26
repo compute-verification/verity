@@ -7,7 +7,8 @@ at peak), marks each term checked or unchecked (an unchecked term is work an adv
 derives:
 
 - Ω: W_ref over the work the scheme's conjecture credits (NCP: the 3k-deep GEMM, 3·m·k·n; Pearl: its FP8 GEMM);
-- γ where the scheme names γ_0: γ = 1 − (1 − γ_0)/Ω (Lean `gammaFromTTNCP`), the conservative reduction;
+- γ where the scheme names γ_0: γ = 1 − (1 − γ_0)/Ω (Lean `gammaFromTTNCP`), the conservative reduction, at a k with
+  γ_0 >= d/(3k) only (TT_NCP's premise; a shape below it is refused);
 - γ's floor from unchecked work: skippable/W_ref, whatever the conjecture;
 - hashing (free in γ, reported as overhead): hashed bytes and SHAKE256-priced units per useful MAC;
 - the overhead against the plain GEMM of the same datatype, in W1 units.
@@ -103,6 +104,9 @@ def pct(x: Fraction) -> str:
 
 
 def row(scheme: str, m: int, k: int, n: int) -> Row:
+    if scheme == "ncp-v1" and GAMMA0_NCP * 3 * k < D:
+        raise ValueError(f"ncp-v1 at k = {k}: γ_0 = {GAMMA0_NCP} is under d/(3k) = {Fraction(D, 3 * k)}, where TT_NCP is "
+                         "not claimed (Lean `TTNCP`'s premise; the one-segment adversary wins below it)")
     if scheme == "ncp-v1":
         terms, credited, plain = ncp_terms(m, k, n), 3 * m * k * n, m * k * n * MAC_INT8
         words = ncp_hash_words(m, k, n)

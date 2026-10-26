@@ -111,6 +111,13 @@ def hm96_rows(domain_id: bytes, row_bits: int, salt: tuple = ("given",), schema:
     return Spec(**row_v2_spec(domain_id, row_bits, schema=schema.encode(), **_hm96(), **_salt(salt)))
 
 
+def chunk_rows(domain_id: bytes, k: int, chunks: int, salt: tuple = ("given",)) -> tuple[Spec, int]:
+    """An H1 table's chunk leaves at K = k (vc_chunk_rows_launch's, chunks = weights.chunks(k)): their hm96-sha512/row/v2
+    spec under the value's domain, and the least out_stride their launch takes."""
+    lb = k // chunks + 4
+    return hm96_rows(domain_id, 8 * lb, salt), -(-lb // 16) * 16
+
+
 def served_rows(domain_id: bytes, n_words: int, salt: tuple = ("given",)) -> Spec:
     """verity_vllm's serving rows: u16 words, x their sha512/row/v1 digest (role x), hm96-sha512/row/v1 leaves."""
     from verity.ml.commitments.rowleaf import ROLE_X, SCHEMA_HM96_SHA512_ROW, sha512_row_prefix
@@ -167,6 +174,7 @@ _SIGS = {
     "vc_init": (_I, []),
     "vc_sha512_launch": (_I, [_P, _U64, _U64, _U64, _P, _P]),
     "vc_compress_launch": (_I, [_P, _P, _U64, _P, _P]),
+    "vc_chunk_rows_launch": (_I, [_P, _U64, _P, _U64, ctypes.c_uint32, ctypes.c_uint32, _P, _U64, _P]),
     "vc_rows_scratch_bytes": (_U64, [_P, _U64]),
     "vc_rows_launch": (_I, [_P, _P, _P, _U64, _U64, _P, _P, _P]),
     "vc_tiles_count": (_U64, [_P]),

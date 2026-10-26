@@ -2,13 +2,13 @@
 name: friction
 description: >
   What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask the owner or your
-  coordinator when you can't tell, take only money past a budget line, keys and claims to Daniel, record a ruling as a
+  coordinator when you can't tell, take only keys, access and claims to Daniel (spend is its lead's call), record a ruling as a
   rule where the next agent will read it, or leave a short friction note when you can't fix it now. Holds the standing
   rulings that AGENTS.md and the other skills don't state (what an agent may change without asking, and protocol and
   claim rulings), and the `kind: friction` note format with its `severity: incident` flag. Use when you worked around
-  something, a step bit you twice, you see a better abstraction, you're unsure whether a change is yours to make, you
-  just got a ruling from Daniel, you're the coordinator reading friction notes, or a command fails for missing
-  credentials.
+  something, a step bit you twice, a step you repeat keeps you waiting, you see a better abstraction, you're unsure
+  whether a change is yours to make, you just got a ruling from Daniel, you're the coordinator reading friction notes, or
+  a command fails for missing credentials.
 ---
 
 # Friction
@@ -34,7 +34,9 @@ Most friction is. Fix it at the source, in the PR you're working on or a small o
 - a bug in a shared tool that stops it doing what its own docs or help say;
 - a wrong or missing command, flag or gotcha in a skill or a `kb/` doc;
 - a failure message that didn't say how to fix the failure;
-- a flaky test: delete it; a needlessly slow one: shrink it or delete it.
+- a flaky test: delete it; a needlessly slow one: shrink it or delete it;
+- a loop of yours that keeps you waiting, a build, run or check you repeat that takes more than about 10 minutes: make it
+  incremental, warm or cached.
 
 Say what you fixed in the PR description. It needs no note.
 
@@ -45,8 +47,8 @@ in-flight files, or deletes others' work. Check `AGENTS.md`, the owning skill an
 follow one if it covers the case. Otherwise ask the owner of what the change touches, or your coordinator when owners
 disagree or you can't tell who owns it (a handle holder: `research msg send --to @HANDLE`; a worker: its report to the
 coordinator that launched it). Give the case, the change and your recommendation in a few lines, and prepare the change
-meanwhile. Only spend past a budget line, keys and access, and claims (what a guarantee says or rests on) go on to Daniel,
-through `.agents/skills/asking-daniel/SKILL.md`.
+meanwhile. Only keys and access, and claims (what a guarantee says or rests on) go on to Daniel, through
+`.agents/skills/asking-daniel/SKILL.md`. Spend, a short budget line included, is the call of the lead whose line pays (13 Oct).
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`.
 
@@ -66,7 +68,8 @@ still states it (`AGENTS.md`, `README.md`, the skills, docstrings, docs).
 ## 4. Note it, when you can't fix it now
 
 Write a friction note when the fix isn't yours or can't happen now, and the friction cost something: a failed run or check,
-about half an hour, or the second time you hit it. Not for what you fixed, and not for one-off slips. Search the notes
+about half an hour, the second time you hit it, or a wait of more than about 10 minutes that you repeat, even when nothing
+fails (give its minutes a wait and waits a day). Not for what you fixed, and not for one-off slips. Search the notes
 first: if one covers it, write a two-line note naming it under `recurs:`, because repeats are what get fixed. A note is a
 file, never a message, so it pings nobody; a blocker still goes to your coordinator as a message.
 
@@ -89,7 +92,8 @@ Save it as `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-friction-<slug>.md`.
 note in its report, and its coordinator saves it. The notes are public: nothing private (lane contract §5b).
 
 The admin (`@top`) reads new friction notes once a day (`research notes mcp`, `search_notes` with `kind: friction` and
-`since`) and turns a repeat into a fix assigned to its owner; only a repeat whose fix needs keys or a claim goes to Daniel.
+`since`) and turns a repeat or a repeated wait into a fix assigned to its owner with an ETA, then checks that the fix
+landed and held; only a repeat whose fix needs keys or a claim goes to Daniel.
 
 ## Standing rulings
 
@@ -119,11 +123,27 @@ What an agent may change:
 - (2 Oct) An overhead reported to Daniel is the `--zk` prover's only, over the time the computation's FLOPs take at the
   census's dense datasheet peak for its dtype, to one significant digit.
 
+Keys and access:
+
+- (25 Oct) The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
+  so stopping a machine never waits on an agent VM. A key that could also start, create or delete is a new ask.
+- (25 Oct) Workers open and edit their own lane's PRs with `research pr open|edit`, through a GitHub App on the control
+  pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head branch
+  isn't the caller's lane's. Drive's App stays the only one that can move `main`.
+
 Landing:
 
-- (24 Oct 06:05Z) PRs land on an eyeball review, and the full check runs after landing; `main` no longer passes the whole
-  check before a landing. A PR that changes a `lean-audit.json` lock keeps its Lean check first, and reviewers are agents ci
-  staffs, never the PR's owner. Drive does it with `land = "review"` (AGENTS.md "Checking and merging").
+- (24 Oct 06:05Z) PRs land on an eyeball review, and the full check runs after landing; `main` no longer passes the
+  whole check before a landing. A PR that changes a `lean-audit.json` lock, or Lean that runs as code (outside
+  `Security/`), keeps its Lean check first; Lean proofs alone land on the verdict and are checked after landing, a
+  failure reverting them (25 Oct 11:19 PM PDT). Reviewers are agents ci staffs, never the PR's owner. Drive does it with
+  `land = "review"` (AGENTS.md "Checking and merging").
+- (25 Oct 09:40Z, delegated to the vLLM coordinator) The vLLM integration's lint ratchets are no-growth: no change adds an
+  exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
+  cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
+- (25 Oct 11:20Z, the vLLM coordinator under that delegation) A `# noqa` is an exception too: in `integrations/vllm`, no
+  change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
+  retirement. The ratchet gate counts them, with no allowlist.
 
 Protocols and claims:
 
@@ -142,9 +162,10 @@ Protocols and claims:
 - (12 Oct) Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
   are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity
-  assumption), claims 0.15% over a 10-minute horizon with every window at most 1%, and never changes the model's logits.
+  assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
+  model's logits.
 - (18 Oct, ASK-16) PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. C-Flock's
+  (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. C-Flock's
   knowledge soundness keeps the collision form.
 - (19 Oct, ASK-72 and ASK-73) The deployed recursion's bound record states its inner claim at IVStar at the weight
   `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor

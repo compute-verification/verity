@@ -10,7 +10,8 @@ id = "llama31-8b-1gpu-pearl-c-whole-served"
 #
 # The whole-step arm runs vLLM's FULL_DECODE_ONLY graphs at the preset's capture sizes without torch.compile, at the
 # `compiled` execution label (vLLM's kernels without batch invariance, as `stock-fp8@compiled`), the serial schedule and
-# each call's tile hashing beside the next call (`whole_defer`); prefill and mixed steps run eagerly. Its gate is the
+# each call's tile hashing beside the next call (`whole_defer`) and its A tree beside its own forming and GEMM
+# (`whole_defer_a`); prefill and mixed steps run eagerly. Its gate is the
 # Pearl-C call check with the calls graphed and `e2e.whole_check` (a forward captured whole, replayed bit for bit as the
 # eager calls). The PoUW option refuses a non-eager engine (`pouw.refusals`), so this arm installs Pearl-C itself, as
 # `PearlCArm` does, with one pass per engine step. Pearl-C's y carries the epoch's live salt: no arm is its token control.

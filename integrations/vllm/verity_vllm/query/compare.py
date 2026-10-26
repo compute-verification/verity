@@ -20,13 +20,15 @@ import json
 from collections import Counter, defaultdict
 from typing import Any, Iterable
 
+from verity.ml.circuits.codec import canonical_json
+
 __all__ = ["identity_key", "compare", "summarize"]
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 
 
 def identity_key(r: dict[str, Any]) -> str:
-    return json.dumps([r[k] if k != "element_range" else list(r[k]) for k in IDENTITY_KEY], separators=(",", ":"), sort_keys=True)
+    return canonical_json([r[k] if k != "element_range" else list(r[k]) for k in IDENTITY_KEY]).decode()
 
 
 def _address(r: dict[str, Any]) -> tuple:
