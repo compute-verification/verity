@@ -5,7 +5,7 @@ residual premises for the class the search doesn't reach.
 The headline `Accounting.SecurityProofs.TS.Sm120SheetHeadline` (#2482/#2791) rests on `FoldOptFoldedAt Sm120.model
 (run x) ((1 - share)·Nw) lam` at its certificate π* (`Sm120.piStar`: the facet `.issue`, or `.issue` with a weight
 moved onto `.smem`, A5b's shared-memory row). `FoldOptFoldedAt Z run folded lam` is
-`(1 - Z.muF)·folded·Z.phiStar lam ≤ Z.G.price lam (nfold run)` (#2791 `Models/Accounting/Assumptions/TS.lean`). On the
+`(1 - Z.muF)·folded·Z.phiStar lam ≤ Z.G.price lam (nfold run)` (#2791 `Definitions/Accounting/Assumptions/TS.lean`). On the
 data-sheet machine every facet row but the pipes is simple, and FOLD-OPT at π* follows from FOLD-OPT at `.issue`:
 
 - at π* = w_issue·`.issue` + w_smem·`.smem` a class k costs w_issue + w_smem·smem(k)/32 ≥ w_issue a warp instruction,
