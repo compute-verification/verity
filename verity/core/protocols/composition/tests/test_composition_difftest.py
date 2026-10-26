@@ -278,7 +278,7 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int) 
     seen.clear()
     stats = D.run(p, examples=examples, seed=0, server=server)
     print(f"{p.label}: {stats}, verdicts {dict(seen)}")
-    assert stats.examples == examples and stats.counts == {v: seen[v] for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
+    assert stats.examples == examples and stats.counts == {v: seen[v] for v in (R.ACCEPT, R.REJECT, R.UNDECIDED) if seen[v]}
     assert seen[R.ACCEPT] == 0, dict(seen)
     for kind in (R.REJECT, R.UNDECIDED, "reject, a component undecided", "reject, no component rejected"):
         assert seen[kind] > examples // 50, (kind, dict(seen))
