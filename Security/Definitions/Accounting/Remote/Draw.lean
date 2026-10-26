@@ -1,12 +1,14 @@
 import Mathlib
 import Definitions.Accounting.Actual.WipeDraw
+import Definitions.Hash.RowLeaf
 import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The remote audit's opening draw (trusted)
 
 The draw `audit.pooled` reads, as the verifier runs it. A session has `n` windows, in order. Window `t` registers its
-`U_t ≤ m` receipts and their roots, which fix which of them are correct. Then the challenger releases window `t`'s
+`U_t ≤ m` receipts and their roots, which fix which of them are correct unless an opening collides (`Receipts`). Then
+the challenger releases window `t`'s
 openings coin, live, to the verifier and the prover, and the verifier opens `s'_t = min(s_t, U_t)` distinct receipts of
 the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openings")` under the key
 `derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})` (`verity/ml/randomness`), a partial Fisher–Yates whose step
@@ -61,6 +63,20 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   It is the hybrid over windows, the earlier windows real and window `t` given, with the later windows replaced by
   their bound as a coin: they read window `t`'s whole coin, which a distinguisher given `b` instead of a key doesn't
   have, and on uniform blocks each lands with probability at most its bound given the windows before.
+* `Receipts`: **the receipts as the window's roots hold them.** Window `t` registers its receipts as
+  `hm96-sha512/row/v2` leaves, 16 receipts a leaf, in frame-v3-sha512 trees, and sends their roots before its coin is
+  released (`RemoteAudit.verifyWindow`). `opened t ω p` is the opening the prover presents for receipt `p` when the
+  window opens it, `held t ω p` the opening the root holds for it: of the rows the prover presents for `p`, opened and
+  accepted, over the openings coins from window `t`'s on with the other coins and the earlier windows' openings coins
+  as in `ω`, the most likely one (ties in a fixed order), as presented on the first such coins in a fixed order.
+  `held` reads only what is fixed before coin `t`, so a session whose correct receipts are those whose held row is
+  correct meets `Live`. A root alone fixes no row: the prover may present another one. `Moved t ω p` is the verifier
+  accepting both openings at the receipt's root and rank with different rows, and `Collides t ω p` two different
+  messages hashed by the two checks with one digest, which every move gives (`Hash.Guarantees.RowBinding`, proved).
+  `binding D prf rest` is **the receipts' binding term**: the probability that some window's opened receipt moved,
+  and so collides. The held row being the likeliest, two runs of the prover from window `t`'s roots on independent
+  coins present receipt `p` opened with different accepted rows with probability at least the square of its moving
+  (the fork form), so the term's bound is that of such a finder (claim `cr/sha-512`, `ledger.binding`).
 * `pooled n U s' δ`: `audit.pooled`'s horizon reading, the most wrong receipts `Σ_t f_t·U_t` over the shares `f_t` with
   `0 ≤ f_t ≤ 1 − s'_t/U_t` and `Σ_t s'_t·f_t ≤ budget S δ = S·(1 − δ^(1/S))`, `S = Σ_t s'_t`. `audit.pooled` computes it
   greedily, the windows taken by `U_t/s'_t` falling (the fractional knapsack's optimum); that the greedy order reaches
@@ -212,5 +228,53 @@ noncomputable def hide [Fintype X] (com : Coins n κ X → Cm) (prf : Fin n → 
     (Pous.pr ((F.play (junk com t)).potential prf δ t) - Pous.pr ((F.play com).potential prf δ t))
 
 end Committed
+
+/-- **A session's receipts as the windows' roots hold them**: receipt `p` of window `t` at coins `ω` is a row of an
+hm96 bit-row leaf at rank `rank t ω p` of the tree whose root `root t ω p` the window registered, checked by
+`verifier t ω p` under `hash` (SHA-512). `held t ω p` is the opening the root holds for it, `opened t ω p` the one the
+prover presents when the window opens it. -/
+structure Receipts (n κ : ℕ) (X : Type) where
+  /-- The hash, SHA-512. -/
+  hash : Hash.Msg → Hash.Digest
+  /-- What the verifier holds for receipt `p`'s leaf: its domain, the hm96 key and the format (`row/v2`). -/
+  verifier : Fin n → Coins n κ X → ℕ → Hash.RowLeaf.Verifier
+  /-- The root window `t` registered for receipt `p`. -/
+  root : Fin n → Coins n κ X → ℕ → Hash.Digest
+  /-- Receipt `p`'s leaf's rank. -/
+  rank : Fin n → Coins n κ X → ℕ → ℕ
+  /-- The opening the root holds for receipt `p`: of the rows the prover presents for it, opened and accepted, over
+  the openings coins from window `t`'s on with the other coins and the earlier windows' openings coins as in `ω`, the
+  most likely (ties in a fixed order), as presented on the first such coins in a fixed order. -/
+  held : Fin n → Coins n κ X → ℕ → Hash.RowLeaf.Opening
+  /-- The opening the prover presents for receipt `p`. -/
+  opened : Fin n → Coins n κ X → ℕ → Hash.RowLeaf.Opening
+
+namespace Receipts
+
+variable {n κ : ℕ} {X : Type} (R : Receipts n κ X)
+
+/-- **Receipt `p` of window `t` moved**: the verifier accepts both the opening its root holds and the one presented, at
+its root and rank, and they carry different rows. -/
+def Moved (t : Fin n) (ω : Coins n κ X) (p : ℕ) : Prop :=
+  Hash.RowLeaf.accepts R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p) (R.held t ω p) ∧
+    Hash.RowLeaf.accepts R.hash R.hash (R.verifier t ω p) (R.root t ω p) (R.rank t ω p) (R.opened t ω p) ∧
+    (R.held t ω p).row ≠ (R.opened t ω p).row
+
+/-- **Receipt `p` of window `t` collides**: two different messages that the checks of its held and its presented
+openings hashed have one digest, under the leaf and path checks or under the row digests. -/
+def Collides (t : Fin n) (ω : Coins n κ X) (p : ℕ) : Prop :=
+  Hash.CollisionIn R.hash
+      (Hash.RowLeaf.outerHashed R.hash R.hash (R.verifier t ω p) (R.rank t ω p) (R.held t ω p) ++
+        Hash.RowLeaf.outerHashed R.hash R.hash (R.verifier t ω p) (R.rank t ω p) (R.opened t ω p)) ∨
+    Hash.CollisionIn R.hash
+      (Hash.RowLeaf.innerHashed R.hash (R.verifier t ω p) (R.held t ω p) ++
+        Hash.RowLeaf.innerHashed R.hash (R.verifier t ω p) (R.opened t ω p))
+
+/-- **The receipts' binding term**: the probability that some window opens a receipt that moved and collides. -/
+noncomputable def binding [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Session n m s κ X)
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) : ℝ≥0∞ :=
+  Pous.pr fun ω => ∃ t, ∃ p ∈ D.opened prf rest t ω, R.Moved t ω p ∧ R.Collides t ω p
+
+end Receipts
 
 end Accounting.Remote.Draw

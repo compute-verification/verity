@@ -423,7 +423,8 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert honest["error"]["delta_rejection"] > 0 and honest["error"]["named_terms"] == al.NAMED_TERMS
         assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
         assert next(x for x in al.table(doc).splitlines() if x.startswith(f"line {t}:")).endswith(
-            "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + δs + Σ_t k_t/2^64) summed over the credited "
+            "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the "
+            "credited "
             "sessions, "
             "beside Σ_t Adv(prf t) (claim prf/sha-512), named and in no total")
         assert doc["conditional_on"] == al.CONDITIONAL_ON and list(doc["conditional_on"]) == ["NoOutsideCompute"]
@@ -805,8 +806,8 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     e = al.session_error(a)
     total = Fraction(a["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"])
     parts = {"delta_profile": Fraction(1, 2 ** 40), "delta_slack": Fraction(700, 2 ** 41),
-             "delta_hiding": Fraction(al.ledger.hiding_over(700)), "delta_sketch": Fraction(1, 2 ** 60),
-             "delta_rejection": Fraction(48 * 700, 2 ** 64)}
+             "delta_hiding": Fraction(al.ledger.hiding_over(700)), "delta_binding": Fraction(0),
+             "delta_sketch": Fraction(1, 2 ** 60), "delta_rejection": Fraction(48 * 700, 2 ** 64)}
     assert e["exact"] == {**{k: str(x) for k, x in parts.items()}, "total": str(total)}
     assert e["total"] == float(total) and e["log2_total"] == al.timing.log2(total)
     assert sum(parts.values()) - total == parts["delta_hiding"] and e["delta_slack"] > 300 * e["delta_profile"]
