@@ -23,6 +23,9 @@ open _root_.Flock
 open Claims (Msg)
 open Claims.Recursion.VStarB (readForms formBit)
 
+theorem ofFn_xor (d : Fin 64 → UInt8) (y : Salt) :
+    List.ofFn (asX d + maskX y) = List.ofFn (fun i : Fin 64 => d i ^^^ maskOf y i) := rfl
+
 /-- **hm96's commit string of a row's message is the inner prover's leaf**: `SHA-512(rowMsg) ⊕ M·y`, then `c`. -/
 theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
     FlockSoundness.Binding.commitString (rowMsg ws) (List.ofFn y) =
@@ -32,29 +35,28 @@ theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
   unfold FlockSoundness.Binding.commitString hmLeaf saltH
   dsimp only
   refine congrArg₂ HAppend.hAppend ?_ ?_
-  · rw [show List.ofFn (asX (digestOf ws) + maskX y) =
-      List.ofFn (fun i : Fin 64 => asX (digestOf ws) i ^^^ maskX y i) from rfl]
-    unfold asX maskX
+  · rw [ofFn_xor]
     have hl := length_xorMask (rowMsg ws) (List.ofFn y)
     have hd := FlockSoundness.Discharge.Hm.length_digBytes (FlockSoundness.Refine.H512 (rowMsg ws))
     have hk := FlockSoundness.Refine.K512.mask_len (List.ofFn y)
     apply List.ext_getElem (by rw [hl, List.length_ofFn])
     intro i h1 h2
     have hi : i < 64 := by rw [hl] at h1; exact h1
-    rw [List.getElem_ofFn]
-    simp only [FlockSoundness.Merkle.xorBytes, List.getElem_zipWith]
+    simp only [List.getElem_ofFn, FlockSoundness.Merkle.xorBytes, List.getElem_zipWith]
     refine congrArg₂ HXor.hXor ?_ ?_
     · unfold digestOf
-      rw [sha512_eq, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by rw [hd]; exact hi)]
-      rfl
+      rw [sha512_eq]
+      simp only [List.getD_eq_getElem?_getD, Option.getD_some, List.getElem?_eq_getElem
+        (show i < (FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 (rowMsg ws))).length by
+          rw [hd]; exact hi)]
     · unfold maskOf
-      rw [FlockSoundness.Refine.K512_mask, VStarTrace.get!_eq, List.toArray_ofFn]
-      simp only [Array.getElem_toList]
-      rw [Array.getElem?_eq_getElem (by
-        have := hk; rw [FlockSoundness.Refine.K512_mask, List.toArray_ofFn, Array.length_toList] at this
+      have hM : i < (Hm96.Default512.mask ⟨Array.ofFn y⟩).data.size := by
+        have := hk
+        rw [FlockSoundness.Refine.K512_mask, List.toArray_ofFn, Array.length_toList] at this
         have hL : FlockSoundness.Refine.K512.L = 64 := rfl
-        omega)]
-      rfl
+        omega
+      rw [FlockSoundness.Refine.K512_mask, VStarTrace.get!_eq, List.toArray_ofFn]
+      simp only [Array.getElem_toList, Array.getElem?_eq_getElem hM, Option.getD_some]
   · rw [hsp, sha512_eq]
     rfl
 
@@ -112,7 +114,7 @@ theorem rowHidden_staged {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} 
     rw [hnm]
     have hqs := (Array.findIdx?_eq_some_iff_getElem.1 hqi).1
     have hN := in_block hrows hout hqi
-    rw [getElem!_pos c.ports q hqs] at hN
+    rw [getElem!_pos c.ports _ hqs] at hN
     exact ⟨_, rowHidden_eq _ hl hqi hqs hN⟩
   · rw [hsv'] at hN
     have e : sv = .cap l N := Option.some.inj hN
@@ -120,7 +122,7 @@ theorem rowHidden_staged {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} 
     have htop : "top" ∉ (VStar.Stmt.cap l N).sub.outputs := by show "top" ∉ ["out"]; decide
     have hqs := (Array.findIdx?_eq_some_iff_getElem.1 hq).1
     have hN' := in_block hrows htop hq
-    rw [getElem!_pos c.ports q hqs] at hN'
+    rw [getElem!_pos c.ports _ hqs] at hN'
     exact ⟨_, rowHidden_eq _ hl hq hqs hN'⟩
 
 /-- **A slot at the deployed builder's witness outputs the inner prover's commit string** of the row the stager placed
