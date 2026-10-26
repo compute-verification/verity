@@ -1108,6 +1108,45 @@ def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_ch
     assert _run(root)["stats"]["task_list"]
 
 
+def _named(target: str) -> str:
+    """The harness with ``target`` named on the command line (`cli._tasks`' last branch, resolved by `targets.definition`), not
+    found by ``--all``."""
+    return (HARNESS.replace("TG.load_registries = lambda: None",
+                            "TG.load_registries = lambda: None\n"
+                            "from verity.ml.circuits.defs import REGISTRY\n"
+                            "TG.definition = lambda spec: REGISTRY[spec].bind()")
+            .replace("cli.run([], CK.Options(), everything=True,", f"cli.run([{target!r}], CK.Options(),"))
+
+
+def test_a_target_named_on_the_command_line_is_keyed_by_its_descriptor_and_holds_its_modules(tmp_path):
+    """CIR-116: a Definition named on the command line was built inside its check, so its key held no descriptor and its entry
+    only what that check's recording noted; #4824's five served sizes were reused after `shared_row.py` changed, until they
+    ran with `--no-cache`.  Built with the task list, it is a root as a sidecar's target is: its key holds its descriptor, its
+    entry the modules it reaches, and an edit to one of them checks it again."""
+    root = _tree(tmp_path)
+    assert _run(root, _named("SynTop_v1"))["hits"] == []
+    assert _run(root, _named("SynTop_v1"))["hits"] == ["SynTop_v1"]
+    e = _entry(root, "SynTop_v1")
+    assert "descriptor" in e["key"]["request"] and {"syn.top", "syn.sub", "syn.prims"} <= set(e["reads"]["modules"])
+    _edit(root, "syn/top.py", "operands(a, b)", "operands(a, a)")
+    out = _run(root, _named("SynTop_v1"))
+    assert out["hits"] == [] and out["stats"]["stored"] == 1
+    assert _values(root, "SynTop_v1") == [[6], [3 + 0x0105]]
+
+
+def test_a_target_named_on_the_command_line_reruns_when_its_descriptor_changes_with_no_module_it_holds(tmp_path):
+    """SynKn's body reads `syn.knob.N`, which another binding sets from `syn.ksize`: no module SynKn holds changes when
+    `syn.ksize` does, and named on the command line it reran only once its key held its descriptor (CIR-116)."""
+    root = _tree(tmp_path)
+    _bindings(root, '(("_set_roots",), setknob)', '(("_knobbed_roots",), knobbed)', families=("SynKn_v1",))
+    assert _run(root, _named("SynKn_v1"))["hits"] == []
+    assert "syn.ksize" not in _entry(root, "SynKn_v1")["reads"]["modules"]
+    _edit(root, "syn/ksize.py", "K = 1", "K = 2")
+    out = _run(root, _named("SynKn_v1"))
+    assert out["hits"] == [] and out["stats"]["stored"] == 1
+    assert _values(root, "SynKn_v1") == [[3 + 2 * 0x0105], [3 + 3 * 0x0105]]
+
+
 #: the harness with each target checked in a process of its own, forked from a zygote that is itself forked from the harness's
 #: process once the task list is built (`cli.Zygote` ``fork``, as `circuit-check` runs), so it holds this process's catalog
 FORKED = HARNESS.replace("log=None, cache=", "log=None, jobs=2, isolate=True, fork=True, cache=")

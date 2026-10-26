@@ -1430,7 +1430,7 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
             by_file.setdefault(os.path.abspath(f), name)
     acc = Frame()
     acc.merge(fr)
-    if not roots:                                      # a template, or a target named on the command line: its whole bindings
+    if not roots:                                      # a template, or a named target that doesn't resolve: its whole bindings
         for u in units:
             if u in _PRODUCED:
                 acc.merge(_PRODUCED[u], defs=False)
