@@ -113,7 +113,7 @@ def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
         import hashlib
         h = hashlib.blake2b(repr((int(ntok), int(nreq), geo)).encode(), digest_size=8).digest()
         return int.from_bytes(h, "little") & 0x7FFF_FFFF_FFFF_FFFF, "geometry"
-    except Exception:
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return (int(ntok) << 16) | (int(nreq) & 0xFFFF), "counts"
 
 
@@ -415,12 +415,9 @@ class NativeCollectCommitter(NativeHostCommitter):
 
             def gather_batch_req_state(*a, **kw):
                 res = orig_gather(*a, **kw)
-                try:
-                    bs = res[0] if isinstance(res, tuple) else res
-                    if bs is not None and getattr(bs, "req_ids", None) is not None:
-                        me._cur_batch = bs
-                except Exception:  # noqa: BLE001
-                    pass
+                bs = res[0] if isinstance(res, tuple) and res else res
+                if bs is not None and getattr(bs, "req_ids", None) is not None:
+                    me._cur_batch = bs
                 return res
 
             self._hooks.patch(runner, "gather_batch_req_state", gather_batch_req_state)

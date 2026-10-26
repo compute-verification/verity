@@ -69,11 +69,8 @@ def runtime_tree_of(model: Any, runner: Any = None, *, source: str = "live") -> 
     r: dict[str, Any] = {"sample": bool(runner is not None and hasattr(runner, "sample")), "sampler_module": False, "source": "engine runner" if runner is not None else "no runner"}
     if runner is not None:
         smp = getattr(runner, "sampler", None)
-        try:
-            import torch
-            r["sampler_module"] = isinstance(smp, torch.nn.Module)
-        except ImportError:                                                        # pragma: no cover
-            r["sampler_module"] = smp is not None
+        import torch
+        r["sampler_module"] = isinstance(smp, torch.nn.Module)
         if r["sampler_module"]:
             r["sampler_class"] = mro_names(smp)
     return RuntimeTree(modules=mods, buffers=bufs, runner=r, source=source)
