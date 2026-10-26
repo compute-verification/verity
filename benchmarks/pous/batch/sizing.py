@@ -21,7 +21,7 @@ Bin(b, f), so a batch passes with probability
 and n batches with at most its n-th power. As b grows, cap/b falls to R·s/X, so no batch catches a prover missing less
 than f_inf = R·s/X, and what the round certifies is at most (1 − f_inf)·|C*|.
 
-    sizing.py --rate R [--rtt-ms 100.18] [--margin-ms 5] [--x-mbps ...] [--f 0.1,...] [--delta 0.01] [--out F]
+    sizing.py --rate R [--rtt-ms 100.18] [--margin-ms 10] [--hash-gbps H] [--f 0.1,...] [--delta 0.01] [--out F]
 
 prints, for each timed rate X and each f, f_inf, the smallest power-of-two batch one round of which reaches δ, and its
 T and cap, and writes the same as JSON.
@@ -114,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rate", type=float, required=True, help="R: blocks a second everything the prover reaches encodes")
     ap.add_argument("--rtt-ms", type=float, default=100.18, help="RTT_max (r20261025-233837-b76c: max of 20 connects)")
     ap.add_argument("--rtt-p50-ms", type=float, default=97.39, help="the round trip a window-limited link divides by")
-    ap.add_argument("--margin-ms", type=float, default=5.0)
+    ap.add_argument("--margin-ms", type=float, default=10.0)
     ap.add_argument("--delta", type=float, default=0.01, help="the bound one round must reach (P2's δ = 1%%)")
     ap.add_argument("--f", default="", help="extra missing fractions, comma-separated (always: 0.10, 1/19, obligation)")
     ap.add_argument("--hash-gbps", type=float, default=0.0, help="H, GB/s: add the keyed commitment's row")
