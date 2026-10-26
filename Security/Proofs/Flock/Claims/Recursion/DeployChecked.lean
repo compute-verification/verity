@@ -197,8 +197,11 @@ theorem drawTied_of_scope {rel : Flock.Readable.Parsed → Flock.Readable.Relati
     sts.size = 1 → FlockDeploy.drawEq (drawOfU spec.unitDraw) s.read.draw = true := by
   intro h1
   obtain ⟨d, hU, hdd, hn⟩ := FlockComplete.JsonRT.unitDraw_one hS hs h1 hd
+  have hnn := (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some hs).1 hdd).1
   have hu : drawOfU (some d) = some d := by
-    cases d <;> first | exact absurd rfl hn | rfl
+    cases d with
+    | null => exact absurd rfl hn
+    | _ => exact congrArg some hnn
   rw [hU, hdd, hu]
   exact FlockDeploy.drawEq_refl _
 
