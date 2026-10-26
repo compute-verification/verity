@@ -10,7 +10,7 @@ import Properties.Verity.Game
 # Sampled proofs' recursive configuration: the component's property and its target (ONE-9p)
 
 Sampled proofs' recursive configuration (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`, which
-`VStar.Recursive.Integrity` runs when the auditor's parameters name `"form": "recursive"`) checks, on the prover's blobs,
+`VStar.Recursive.Sampled` runs when the auditor's parameters name `"form": "recursive"`) checks, on the prover's blobs,
 the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. This module states two things.
 
 * **The property** (`acc_of_accepts`). Take a run of the deployed recursive verifier that `RecursiveKSAt` reads
@@ -166,13 +166,18 @@ open Accounting (Device)
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α]
 
 /-- **The recursive configuration's verdict**: `Vocab.Verdict .sampled` with the recursive configuration's compiled
-component in place of onsite's sampled component. The circuit file passed the commit phase's check (`Registered`, R6),
-the recursive component accepts what the prover sent on some blobs, and every release its check read is in the
-device's log. The blobs are content-addressed bytes sent with the evidence, last, and the event counts any blobs on
-which the component accepts. -/
+component in place of onsite's sampled component. The conjuncts:
+* the circuit file passed the commit phase's check (`Registered`, R6);
+* the parameters name the recursive form;
+* sampled proofs' component accepts what the prover sent, on some blobs;
+* every release its check read is in the device's log.
+
+The blobs are content-addressed bytes sent with the evidence, last, and the event counts any blobs on which the
+component accepts. -/
 def RecVerdict (V : Vocab d α) (o : Verity.Outcome) : Prop :=
   V.Registered o.params o.file ∧
-    (∃ bs, (VStar.Recursive.Integrity.protocol.answer o.params o.commitment o.evidence bs).verdict = .accept) ∧
+    (∃ j p, Core.canonicalJson o.params = .ok j ∧ VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p)) ∧
+    (∃ bs, (VStar.Recursive.Sampled.protocol.answer o.params o.commitment o.evidence bs).verdict = .accept) ∧
     ∀ r ∈ V.coinsRead .sampled o.sent, r ∈ o.log
 
 /-- **The honest half** (non-vacuity, from HONESTIV). On every dense statement where the inner relation holds, the
@@ -247,10 +252,10 @@ structure SessionIn (V : Vocab d α) (Dp : Claims.Recursion.Deploy Coin) (IV : C
   prob_le : ∀ E : Verity.Outcome → Prop, Game.prob E (V.game θ F c) σ ≤
     ENNReal.ofReal (Claims.Ex fun ξ => Claims.Pr fun s : Ω × (Fin (Dp.V.k (x ξ)) → Coin) => E (out ξ s))
   names_shows : ∀ ξ s bs j p e,
-    (VStar.Recursive.Integrity.protocol.answer (out ξ s).params (out ξ s).commitment (out ξ s).evidence bs).verdict =
+    (VStar.Recursive.Sampled.protocol.answer (out ξ s).params (out ξ s).commitment (out ξ s).evidence bs).verdict =
       .accept →
-    Core.canonicalJson (out ξ s).params = .ok j → VStar.Recursive.Integrity.paramsOfJson j = .ok (.inr p) →
-    VStar.Recursive.Integrity.evidenceOf (out ξ s).evidence = .ok (.inr e) →
+    Core.canonicalJson (out ξ s).params = .ok j → VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p) →
+    VStar.Recursive.Sampled.evidenceOf (out ξ s).evidence = .ok (.inr e) →
     Names p e (Core.Blobs.ofArray bs) (x ξ) ∧
       Shows IV st (x ξ) e.proofs (Core.Blobs.ofArray bs) (Claims.run FlockDeploy.sha512 (P ξ) Dp.V (x ξ) s.1 s.2).seen
 
