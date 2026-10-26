@@ -341,15 +341,11 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
     the certifier program (`verity/core/protocols/certifier/lean/`, `NetworkCertifier`, with its
     difftest), the NCI check (`verity/core/protocols/network/nci/lean/`, `NciCheck`, with its difftest) and the remote
     bandwidth audit's verifier (`verity/core/protocols/remote_bandwidth/lean/`, `RemoteAudit`, with its difftest).
-  - The ZK server is Lean, and its Rust path is dropped: under `FC_FIREWALL=1` every round that leaves, level 0's
-    commitment, the opening, the inner proof and each rep's proof file are computed by `Flock.Firewall` (the session
-    loop, each rep's frame, `Level0`, the finish), and a recursive session's release (`--firewall-state`) by
-    `core_firewall`. `flock-circuit` (Rust) still
-    computes the prover workers' values (the host witness, the device's rounds, which the frame passes or fails against
-    the Lean's) and the algebraic phase's scheduled rounds. Its own checks can only refuse more, and it relays the
-    rounds, coins and proof files (live `PROTOCOL.md` §10.4). The ZK theorem (`Flock.zk_server_lean_loop`) reads the
-    released bytes only through named hypotheses not yet proved about the live path (`LiveRoundEq`, `FillRoundEq`,
-    `FinishIs`, `LinkRoundEq`, `ProgReads`), so the ZK server is not yet proved.
+  - The ZK server is Lean, and its Rust path is dropped: under `FC_FIREWALL=1` every byte that leaves is computed by
+    `Flock.Firewall`, and a recursive session's release by `core_firewall`; `flock-circuit` (Rust) computes the prover
+    workers' values, can only refuse more, and relays (live `PROTOCOL.md` §10.4). The ZK theorem
+    (`Flock.zk_server_lean_loop`) reads the released bytes only through named hypotheses not yet proved about the live
+    path, so the ZK server is not yet proved.
   - The analysis is `Security/`. Its spec is `Definitions/` (each component's vocabulary) and `Models/` (its named
     assumptions and guarantee statements), the package `security` (Mathlib, no ArkLib). `Proofs/` is the nested package
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
