@@ -171,7 +171,7 @@ def step(engine: E.Engine, slots: int, reps: int, variant: str, clock: Clock) ->
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--slots", type=int, nargs="*", default=[4096, 12288])
+    ap.add_argument("--slots", type=int, nargs="*", default=[4096, 16384])
     ap.add_argument("--sweep-slots", type=int, default=4096)
     ap.add_argument("--variants", nargs="*", default=None, help="the sweep's variants (default: every built one)")
     ap.add_argument("--step-variant", default=None, help="the steps' row kernel (default: the sweep's fastest)")

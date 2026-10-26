@@ -196,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--device", default="cuda")
-    ap.add_argument("--layout-slots", type=int, nargs="*", default=[4096, 12288])
+    ap.add_argument("--layout-slots", type=int, nargs="*", default=[4096, 16384])
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     engine = E.Engine(a.device)
