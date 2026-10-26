@@ -50,7 +50,7 @@ theorem accPiece_of_chain {x : Msg} {ms : List Msg} {cs : List Coin} {ch : ℕ �
   intro q hq
   have he : ∃ ch, ChainHolds rd key x ms cs ch := ⟨ch, h⟩
   have hs := Classical.choose_spec he q hq
-  have hc : chainC rd key x ms cs = Classical.choose he := dif_pos he
+  have hc : chainC rd key x ms cs = Classical.choose he := by rw [chainC, dif_pos he]
   unfold accPiece
   rw [hc]
   exact hs
@@ -60,11 +60,12 @@ theorem targetE_accRC (P : Msg → List Msg → List Coin → Prop)
     (hP : ∀ x ms cs, P x ms cs → ∀ q ∈ rowDPieces key x, accPiece rd key q x ms cs) :
     TargetE rd P (accRC rd key) := by
   intro x ms cs hA D cls i hi
+  obtain ⟨h1, h2, h3, h4⟩ := hA
   exact targetE_rowD rd (fun x' ms' cs' => P x' ms' cs' ∧ cs' = cs) (fun x' ms' => chainC rd key x' ms' cs) key
     (fun x' ms' cs' h q hq => by
       obtain ⟨h, rfl⟩ := h
       exact hP x' ms' cs' h q hq)
-    x ms cs ⟨hA.1, hA.2.1, hA.2.2.1, hA.2.2.2, rfl⟩ D cls i hi
+    x ms cs ⟨h1, h2, h3, h4, rfl⟩ D cls i hi
 
 section Joint
 
