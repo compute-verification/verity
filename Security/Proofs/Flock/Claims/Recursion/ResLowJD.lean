@@ -33,7 +33,7 @@ theorem ownRD_inner {x : Msg} {q : ResPiece} {s : ℕ} (h : ownRD x q = some s) 
       obtain ⟨hsz, hp, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 h
       refine ⟨r, ss, ?_⟩
       cases he : ss[s] with
-      | inner j nm pt => exact ⟨j, nm, pt, hr, hss, by rw [Array.getElem?_eq_getElem hsz, he]⟩
+      | inner j nm pt => exact ⟨j, nm, pt, rfl, hss, by rw [Array.getElem?_eq_getElem hsz, he]⟩
       | _ => rw [he] at hp; simp [isResOf] at hp
 
 /-- **`ResLowJ` from LOWRES' per-part share**: at the deployed layout `DeployedR.layR elem`, wherever each algebra
