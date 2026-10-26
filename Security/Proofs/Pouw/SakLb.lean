@@ -3,6 +3,8 @@ import Definitions.Pouw.Assumptions.Dither
 /-!
 # SAK(matmul) from a pointwise work premise: what is proved, and the residual
 
+CMP-167 (SAK-LB, `note:compute-research/20261026T2345Z-draft-sak-lb`).
+
 `Definitions.Pouw.Assumptions.Dither.SAKMatmul` bounds a words program's moment
 `E_σ[1_{d ∉ Deg ∧ pass} · e^{η (pub − cost)₊}] ≤ 1`. It mixes two things: what a program must spend to get a fraction of
 the round's words right (an algorithmic statement about exact matrix products in 𝓜), and how the round's check and its
@@ -215,7 +217,7 @@ most `B` bits fixed before the round's coins, costs at least the fraction of the
 the luck allowance `lam`, at every dither outside a set `Deg` of probability at most `κdeg B`:
 `rightFrac · pub − lam ≤ cost_μ`.
 
-In plain words: no program gets a fraction `φ` of a noised product's segment prefix sums right for less than `φ` of
+In plain words: no program gets a fraction `φ` of a sampling block's noised prefix sums right for less than `φ` of
 the public best's priced cost, but for `lam` (the words a program can guess) and on all but `κdeg B` of the dithers.
 It speaks of every program: bilinear schemes (what `Proofs.Core.Bilinear` bounds), table lookups, advice and
 precomputation. It is falsified by any program on the card, with any advice, that gets a fraction `φ` of the words

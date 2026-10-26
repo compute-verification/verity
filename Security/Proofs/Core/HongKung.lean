@@ -15,8 +15,8 @@ CMP-167 item 2 (SAK-LB): the combinatorial core of the data-movement lower bound
 Hong–Kung's argument reads `parts_le` at `h = 2M` (scaled by the words an entry takes): a run with `M` words of fast
 memory, cut into segments of `M` words moved, touches in each segment at most the `M` words it holds at the segment's
 start and the `M` it moves, so it moves at least `M (T − 1) ≥ m k n / (2√2 √M) − M` words. At the served shapes and the
-cards' rates this is at most 2.8 % of the tensor units' time (note:compute-research SAK-LB), so the bound does not
-bind: P1's floor on the tensor units does.
+cards' rates this is at most 2.8% of the tensor units' time (`note:compute-research/20261026T2345Z-draft-sak-lb`), so
+the bound does not bind: P1's floor on the tensor units does.
 -/
 
 namespace Verity.Accel.HongKung
