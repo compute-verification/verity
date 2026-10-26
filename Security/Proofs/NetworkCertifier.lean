@@ -31,6 +31,7 @@ import Proofs.NetworkCertifier.WindowCharge
 import Proofs.NetworkCertifier.Warden
 import Proofs.NetworkCertifier.Tap
 import Proofs.NetworkCertifier.RecordRows
+import Proofs.NetworkCertifier.PeriodClaim
 
 /-!
 # Proofs of the network certifier's guarantees
