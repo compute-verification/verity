@@ -110,7 +110,8 @@ with the pooled cards' and the other devices', under which
   resource and nothing of the other devices, takes the run's ticks and its backlog as wall time, and imports nothing.
 
 So `SAKMatmul` at `G` speaks of every words program of the card at `x`, at the card's rates; the dual price, the honest
-cost `H` and the capacity `C` are in the card's units. The commitment and the round's other programs read the oracle
+cost `H` and the capacity `C` are in the card's units. `G.ext` is read as the network certifier's count of the bits
+crossing the period's devices' links in either direction (RT-PROTO P2: egress counted as well as ingress). The commitment and the round's other programs read the oracle
 `P.Orc`, which the card machine has no instruction for: their reading on the card is ABSORB-THM's realization (an oracle
 query priced at the public best's speed, R-ACCEL-7), open. A program of `G` cheaper than any of the card's makes
 `SAKMatmul` or `ShaSpeed` false at `G`, and the headline then says nothing at that `G`; the `G` the headline is read at

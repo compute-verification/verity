@@ -34,17 +34,18 @@ theorem workSoundH200_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : Work
 theorem workSoundSm120_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : WorkSoundSm120 :=
   workSoundAt_of_workSound h _
 
-/-- An open parameter at θ's floors: every dot the constant zero (in product form), `sync = 1`, `b1 = 1/8`,
-`madHi = 2`, no backlog. -/
+/-- An open parameter at θ's floors: every dot, dense and sparse, the constant zero (in product form), `sync = 1`,
+`b1 = 1/8`, `madHi = 2`, no backlog. -/
 def floorOpen : Verity.Accel.Open where
   slack := 0
   b1 := 1 / 8
   sync := 1
   madHi := 2
   dot _ _ _ _ := fun _ _ _ => 0
+  dotSp _ _ _ _ := fun _ _ _ => 0
 
 theorem floorOpen_productForm : Verity.Assumptions.AccelProductForm floorOpen :=
-  fun _ _ _ _ => ⟨fun _ _ _ _ => 0, fun _ _ _ _ _ => rfl⟩
+  ⟨fun _ _ _ _ => ⟨fun _ _ _ _ => 0, fun _ _ _ _ _ => rfl⟩, fun _ _ _ _ => ⟨fun _ _ _ _ => 0, fun _ _ _ _ _ => rfl⟩⟩
 
 /-- The H200's floors with the product form are met. -/
 theorem h200_floors :
