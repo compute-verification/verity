@@ -26,6 +26,7 @@
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
+  "Properties.Pous.EndToEndAt",
   "Properties.Accounting.Requirement",
   "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins",
@@ -476,6 +477,12 @@
    "signature": ["Pous.EndToEnd.SecurityProofs.endToEndRing : Pous.EndToEnd.EndToEndRing"],
    "assumptions": [],
    "type_hash": "5dc7c76ddb97e183be16c13ca978691fc8dafb21666007a67234aaa14048fee3"
+  },
+  "Pous.EndToEnd.SecurityProofs.endToEndRingAt": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure": {
+   "owner": "@memory-accounting"
   },
   "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": {
    "owner": "@memory-accounting",
@@ -2640,6 +2647,10 @@
     "function": "MemoryChallenger.verdict",
     "outcome": "accept"
    },
+   "Pous.EndToEnd.SecurityProofs.drawAtMost": {
+    "function": "FlockSoundness.Randomness.uniformOn",
+    "outcome": "none"
+   },
    "Pous.EndToEnd.SecurityProofs.drawExact": {
     "function": "FlockSoundness.Randomness.uniformOn",
     "outcome": "none"
@@ -2974,6 +2985,8 @@
    "PousCheck.Properties.PublishesRoot": "unstated: No lock lists a guarantee that states it (note:proofs/20261009T0100Z-finding-shape-sweep): @memory-accounting lists its theorem under guarantees, which then needs an entry under shape.properties.",
    "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousCheck.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
+   "Pous.EndToEnd.SecurityProofs.endToEndRingAt": "frozen: endToEndRing's game at every block count N, a bound on a game's probability in the ring model, not a property of one function: c + ε from a bound c on P2's audit at N and the coin commitments' hiding ε at N; it speaks of the deployed system as endToEndRing does",
+   "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure": "frozen: endToEndRingAt with c from P2RingRoundSecure (PousP2Rounds.graded), at every N it covers (2^19 to 2^25); a bound on a game's probability in the ring model, not a property of one function",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
    "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_readsExact (Proofs.Properties.Nci.Agrees) proves it from ReadsExact (Proofs.Properties.Nci.Novel: Desc.analyze's reads per root node are the unrolled operands outside it), the one open statement: descAgrees_of_open (Proofs.Properties.Nci.Novel) proves it from OperandsResolve (Proofs.Properties.Nci.Walk), BodiesOk and ReadsExact, bodiesOk (Proofs.Properties.Nci.BodiesOk) proves BodiesOk (Proofs.Properties.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), operandsResolve_of (Proofs.Properties.Nci.OperandsResolve) proves OperandsResolve from it, and novelExact_of proves NovelExact from ReadsExact with novelWidthExact (Proofs.Properties.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
