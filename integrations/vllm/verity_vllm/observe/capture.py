@@ -57,7 +57,7 @@ from verity_vllm.observe import triton_adapter
 
 from verity_vllm.engine import hooks
 from verity_vllm.engine.build import Engine
-from verity_vllm.engine.pinned import DEVICE_BACKED, IDENTITY_ALIAS_OPS, PinnedArena, device_backed, spanned_bytes, storage_bytes_view
+from verity_vllm.observe.pinned import DEVICE_BACKED, IDENTITY_ALIAS_OPS, PinnedArena, device_backed, spanned_bytes, storage_bytes_view
 from verity_vllm.engine.run_facts import model_config_subset, profile_manifest
 
 

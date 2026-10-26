@@ -243,6 +243,8 @@ class TP2CaptureWorkerExtension:
         import torch
 
         from verity_vllm.engine import vllm_adapter as va
+        from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
+        from verity_vllm.observe.events import RunHeader
         from verity_vllm.pipeline.m1_capture import dump_cos_sin
 
         facts = _tp_facts(self)
@@ -255,11 +257,11 @@ class TP2CaptureWorkerExtension:
         post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
         engine = va.Engine(llm=_LLMShim(self), runner=runner, model=model, cp=dict(cp), kwargs=dict(engine_kwargs),
                            env_flags=dict(env_flags), build_s=0.0, case=case, target=target)
-        header = va.make_header(engine, workload, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
-                                extra_notes={"tp2": {"rank": rank, "world_size": world, "log": f"log.rank{rank}.jsonl.gz",
-                                                     "seam": "worker_extension_cls " + EXTENSION, "facts": facts},
-                                             "snapshot_steps": sorted(snapshot_steps), "weights_verified": bool(weights_verified),
-                                             "argv": list(argv or [])})
+        header = make_header(engine, workload, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
+                             extra_notes={"tp2": {"rank": rank, "world_size": world, "log": f"log.rank{rank}.jsonl.gz",
+                                                  "seam": "worker_extension_cls " + EXTENSION, "facts": facts},
+                                          "snapshot_steps": sorted(snapshot_steps), "weights_verified": bool(weights_verified),
+                                          "argv": list(argv or [])})
         # the protected adapter builds the manifest with tensor_parallel_size=1 (its signature has no TP argument): record
         # the truth in the manifest copy this rank writes and derive the profile id from it (PROPOSED: profile_manifest passes
         # engine.kwargs["tensor_parallel_size"] to build_manifest)
@@ -270,19 +272,19 @@ class TP2CaptureWorkerExtension:
             man.setdefault("parallelism", {})["tensor_parallel_size"] = world
             man.setdefault("engine_kwargs", {})["tensor_parallel_size"] = world
             pid = prof.profile_id_of(man)
-            header = va.RunHeader(header.schema, header.created_utc, pid, man, header.model, header.workload, dict(header.notes))
+            header = RunHeader(header.schema, header.created_utc, pid, man, header.model, header.workload, dict(header.notes))
             header.notes["profile_id_method"] = (header.notes.get("profile_id_method", "") +
                                                  f"; tp2_worker: parallelism/engine_kwargs.tensor_parallel_size={world} added to the manifest "
                                                  f"before hashing (the adapter's own id was {pid_adapter})")
-        cfg = va.ObserverConfig(mode="record", reenter=reenter, triton=triton, module_hooks=module_hooks, write_log=True,
-                                snapshot_steps=frozenset(int(s) for s in snapshot_steps),
-                                snapshot_dir=rank_dir if snapshot_steps else None, snapshot_max_bytes=int(snapshot_max_bytes))
+        cfg = ObserverConfig(mode="record", reenter=reenter, triton=triton, module_hooks=module_hooks, write_log=True,
+                             snapshot_steps=frozenset(int(s) for s in snapshot_steps),
+                             snapshot_dir=rank_dir if snapshot_steps else None, snapshot_max_bytes=int(snapshot_max_bytes))
         log_path = out / f"log.rank{rank}.jsonl.gz"
 
         def log(*a: Any) -> None:
             print(f"[tp2 rank {rank}] " + " ".join(str(x) for x in a), flush=True)
 
-        cap = va.Capture(engine, header=header, log_path=log_path, config=cfg, log=log)
+        cap = Capture(engine, header=header, log_path=log_path, config=cfg, log=log)
         cap.install()
         cs = dump_cos_sin(engine, rank_dir)
         (rank_dir / "versions.json").write_text(json.dumps(va.versions_doc(engine), indent=1) + "\n")
