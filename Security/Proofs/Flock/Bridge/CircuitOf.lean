@@ -465,7 +465,7 @@ variable {tags cf tables pf}
 theorem parsedOf_eq {D : Flock.Desc} {pub : Flock.Public} (hD : Flock.Desc.parse tags cf tables = .ok D)
     (hpub : HmOut.loadPublic tags D.unroll pf = .ok pub) (hU : FlockSoundness.Built D.unroll.unit) :
     parsedOf tags cf tables pf = some ⟨D, hU, pub.n⟩ := by
-  simp only [parsedOf, hD, hpub, dif_pos hU]
+  simp [parsedOf, hD, hpub, hU]
 
 /-- Files that parse are files the verifier reads: the circuit file to the parse's descriptor, and the public file
 to its population. -/
