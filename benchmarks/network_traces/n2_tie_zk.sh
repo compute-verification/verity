@@ -5,8 +5,8 @@
 #   research run --on MACHINE --source . --project verity --as LANE --cwd clone --timeout 180m --env N2_MEM_GB=56 -- \
 #     env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/network_traces/n2_tie_zk.sh
-# env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_JOBS (--jobs, members proved at once, 2 by
-#      default)  N2_PORT (--port)  N2_CACHE (the build cache, kept across runs where writable)  N2_DEBUG_CLEAR=1
+# env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_PORT (--port; the members are proved one after
+#      another)  N2_CACHE (the build cache, kept across runs where writable)  N2_DEBUG_CLEAR=1
 #      (--debug-clear)  N2_DRY=1 (the instances and references only)
 # Kept in $OUT/n2tie: the driver's records and logs, the public files and everything the verifier received; never a
 # prover's file (inst-*, prover-instances.bin) nor a circuit (its pin is kept), nor a session's archive.
@@ -24,8 +24,8 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
   > "$OUT/build-firewall.log" 2>&1
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "n2tie: no firewall frame"; exit 7; }
 
-log "n2tie: proving, jobs ${N2_JOBS:-2}${N2_DRY:+, dry}"
-"$PY" benchmarks/network_traces/n2_tie_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/n2tie" --jobs "${N2_JOBS:-2}" \
+log "n2tie: proving${N2_DRY:+, dry}"
+"$PY" benchmarks/network_traces/n2_tie_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/n2tie" \
   ${N2_PORT:+--port "$N2_PORT"} ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 \
   | tee -a "$OUT/n2tie.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}

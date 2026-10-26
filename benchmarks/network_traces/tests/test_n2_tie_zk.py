@@ -2,13 +2,16 @@
 prover's ``pub`` row is the verifier's own, give the member's verdicts (`EXPECT`): honest tied; carried, IoTieRequest
 accepting bucket 4 on an added carried field count whose row isn't the verifier's; forged and split, refused. Each
 witness row is whole u16 words, and the scan's blobs are the warden's held cells and the rows' salts, never an empty
-slot. Nothing here lowers or proves (`n2_tie_zk.prove` does, on a node)."""
+slot. ``--jobs`` is 1 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or
+proves (`n2_tie_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
 import importlib.util
 import sys
 from pathlib import Path
+
+import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 
@@ -51,3 +54,11 @@ def test_the_scan_looks_for_held_cells_and_salts_alone():
     cells = [row[i:i + tz.B] for x in rd.windows for row in x.cells.rows for i in range(0, len(row), tz.B)]
     assert sorted(blobs[k] for k in held) == sorted(c for c in cells if c != bytes(tz.B))
     assert held and sum(1 for k in blobs if k.startswith("salt")) == len(rd.windows) * tz.T
+
+
+def test_jobs_is_one_firewalled_session_at_a_time(monkeypatch):
+    monkeypatch.setattr(tz, "prove", lambda a: a.jobs)
+    argv = ["prove", "--out", "o", "--dry"]
+    assert tz.main(argv) == 1 and tz.main([*argv, "--jobs", "1"]) == 1
+    with pytest.raises(SystemExit, match="outer proofs go through the firewall one at a time"):
+        tz.main([*argv, "--jobs", "2"])

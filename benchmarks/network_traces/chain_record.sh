@@ -24,13 +24,15 @@
 #      isn't LMS at lms.DEPLOYED, H = 20)
 #      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
 #      an art: id, or a directory)
-#      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_JOBS (members proved at once, 2)  CR_N2_WINDOWS (n2_advised_zk.py's
-#      --windows)  CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the
+#      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_WINDOWS (n2_advised_zk.py's --windows)
+#      CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the
 #      advice doesn't bind, the advised unit on n2_advised_zk's simulated link, labelled a stand-in)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
 #      CR_WARDEN_RUN (the warden rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more scan_zk.py
 #      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
-#      CR_SERIAL=1 (n2 then scan; at once by default)  CR_CACHE (the build cache; hidden_zk's by default)
+#      CR_CACHE (the build cache; hidden_zk's by default)
+# n2 runs, then scan: outer proofs go through the firewall one at a time (n2_zk.ONE_SESSION), so no two of their
+# provers' firewalled sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive or a signer's
 # state.
@@ -107,10 +109,10 @@ keep() {   # keep FROM TO: the public files and what the verifier received, neve
 n2() {
   export HONEST CLIENT BIN LEAN E2E N2OUT=$W/n2
   local advised="$PY benchmarks/network_traces/n2_advised_zk.py prove --bin $BIN --lean $LEAN --out $N2OUT \
-    --jobs ${CR_N2_JOBS:-2} ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS}"
+    ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS}"
   if [ -n "${CR_N2_CMD:-}" ]; then cmd=$CR_N2_CMD
   elif [ "$PROFILE" != advice ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --run $HONEST --bin $BIN \
-    --lean $LEAN --out $N2OUT --jobs ${CR_N2_JOBS:-2} ${CR_N2_ROUNDS:+--rounds $CR_N2_ROUNDS}"
+    --lean $LEAN --out $N2OUT ${CR_N2_ROUNDS:+--rounds $CR_N2_ROUNDS}"
   elif [ "$BOUND" = 1 ]; then cmd="$advised --e2e $E2E ${CR_N2_WINDOWS:+--windows $CR_N2_WINDOWS}"
   else
     why="the run is on the advice profile, whose counts N2's advised unit decides on the endpoint's advice, and "
@@ -142,7 +144,7 @@ scan() {
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
   [ -n "$wr" ] && echo "$WARDEN" > "$W/scan.warden"
 }
-if [ -n "${CR_SERIAL:-}" ]; then n2; scan; else n2 & scan & wait; fi
+n2; scan
 
 # ---- the report --------------------------------------------------------------------------------------------------------
 "$PY" - "$OUT/job.json" "$W" <<EOF
