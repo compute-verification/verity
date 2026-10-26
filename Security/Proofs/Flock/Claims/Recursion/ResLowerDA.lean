@@ -78,7 +78,7 @@ theorem ownRD_some {x : Msg} {q : ResPiece} {s : ℕ} (ho : ownRD x q = some s) 
           exact ⟨nm, pt, ht⟩
         | _ => simp [isResOf] at hp
       obtain ⟨nm, pt, hget⟩ := key ss[s] (Array.getElem?_eq_getElem hsz) hp
-      exact ⟨r, ss, nm, pt, hr, hss, hget⟩
+      exact ⟨r, ss, nm, pt, by first | rfl | exact hr, by first | rfl | exact hss, hget⟩
 
 /-- **The concrete pieces, opened**: a piece of `resPD x` is group `p`'s at rep `r < 2`, keyed `(p, r, 0, 0)` at the
 `S` of `shI`'s part `p`. -/
