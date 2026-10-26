@@ -253,7 +253,7 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
 - No faulty term with every unit drawn, and D_j = 1.
 
 The two forms:
-- The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,352 bits, and
+- The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
   Fmax·log2(N + 1). Fmax is 5 at δ = 1% and 14 at δ = 10⁻⁶. The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
 - The per-period form (`PeriodLeakAccepted`, #4326, #4349, #4373, #4370) has no δ term with every unit drawn.
