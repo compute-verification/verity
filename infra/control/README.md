@@ -111,7 +111,8 @@ $CP "cat > /data/infra/msg.sh && chmod +x /data/infra/msg.sh" < infra/control/ms
 ~~~
 
 `monitors-relay`'s `drift` reads git history the tree lacks from `/data/watchers/repo`, cloned once with the pod's deploy key, and
-`fixtures-public`, the failed-check posts and the router call `gh`, installed once into `/data/watchers/bin`:
+`fixtures-public`, `unverified-main` (which also reads drive's `/root/.research/queue/verity.state.json`), the failed-check posts and
+the router call `gh`, installed once into `/data/watchers/bin`:
 
 ~~~sh
 $CP 'K="ssh -i /data/state/secrets/verity-deploy -o IdentitiesOnly=yes -o UserKnownHostsFile=/data/state/secrets/known_hosts"; \

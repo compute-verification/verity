@@ -1404,3 +1404,44 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
     row["suite"], calls[:] = True, []                     # a suites.py run's failed suite rings, and the lander decides
     (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=answer, act=True))
     assert "Cancelled" not in f.text and not any("cancel" in c for c in calls)
+
+
+def test_unverified_main_rings_ci_and_top_each_hour_past_three_until_a_post_landing_run_passes(tmp_path, monkeypatch):
+    """top, 26 Oct: main went a day and a half with no passing post-landing check and nobody outside ci heard. The relay reads
+    drive's last verified commit from its state (not its log, so a stopped drive still rings) and times main's lag from the
+    oldest landing after it: main's first-parent commits (drive's merges), not GitHub's compare, which lists each PR's own
+    commits, dated when their branch made them (ci, 26 Oct)."""
+    state = tmp_path / M.DRIVE_STATE
+    state.parent.mkdir(parents=True)
+    verified = "595cce6ddaf69e4411d8b11df4e91878c5826e27"
+    state.write_text(json.dumps({"drive": {"postland": {"verified": verified}}}))
+    monkeypatch.setenv("RESEARCH_DEPLOY_REPO", str(tmp_path / "repo"))
+    since = T0 - 3 * 3600 - 60                                              # drive's first landing past it, 3 h 1 min ago
+
+    def git(*landings):
+        log = "".join(f"{i:040x} {int(t)}\n" for i, t in enumerate(landings))
+        return Run((has("fetch"), (0, "", "")), (lambda a, _i: f"{verified}..FETCH_HEAD" in a and "--first-parent" in a,
+                                                  (0, log, "")))
+
+    run = git(T0 - 60, T0 - 1800, since)                                    # git log lists the newest first
+    log = tmp_path / M.DRIVE_LOG
+    log.parent.mkdir(parents=True)
+    log.write_text(f"{M.iso(T0 - 31 * 60)} tick rc=0 1\n{M.iso(T0 - 31 * 60)} other line\n")      # drive's last tick: 31 min ago
+    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run))
+    assert f.key == "595cce6ddaf6:3" and f.owners == ("ci", "top")
+    assert "3 h" in f.text and "`595cce6ddaf6`" in f.text and "3 landing(s)" in f.text
+    assert ["git", "-C", str(tmp_path / "repo"), "fetch", "-q", "origin", "main"] in [c for c, _ in run.calls]
+    assert M.unverified_main(M.Ctx(now=T0 - 120, root=tmp_path, run=run)) == [], "under 3 h behind: quiet"
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=git())) == [], "main is its last verified commit"
+    with open(log, "a") as fh:
+        fh.write(f"{M.iso(T0 - 120)} tick rc=1 1\n")
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run)) == [], "drive ticks: its own _behind alarm rings"
+    log.unlink()
+
+    m, alerts, st = M.BY_ID["unverified-main"], tmp_path / "alerts", M.new_state()
+    for now in (T0, T0 + 600, T0 + 3600):                                  # primed, the same hour again, the next hour
+        M.step(st, [m], lambda memo, now=now: M.Ctx(now=now, memo=memo, root=tmp_path, run=git(T0 - 60, since)), now,
+               M.AlertDir(alerts), by="test", force=True)
+    lines = (alerts / "monitors.jsonl").read_text().splitlines()
+    assert [(x["event"], x["key"], x["owners"]) for x in map(json.loads, lines)] == [
+        ("event", "unverified-main|595cce6ddaf6:4", ["ci", "top"])]

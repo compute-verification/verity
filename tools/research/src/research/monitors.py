@@ -708,6 +708,57 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
                     cleared="*Cleared:* the public export holds every fixture main registers.")]
 
 
+#: drive's queue state on the control pod, whose `drive.postland.verified` is the last `main` a post-landing run passed
+DRIVE_STATE = "root/.research/queue/verity.state.json"
+DRIVE_LOG = "data/drive/drive.log"
+UNVERIFIED_S = 3 * 3600
+DRIVE_TICK_STALE_S = 30 * 60
+TICK_RE = re.compile(rb"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=", re.M)
+
+
+def drive_ticking(ctx: Ctx) -> bool:
+    """Whether drive's log (`DRIVE_LOG`) has a `tick rc=` line from the last `DRIVE_TICK_STALE_S`: drive is alive, so its own
+    `_behind` alarm speaks for a main left unverified (ci and top, 26 Oct)."""
+    try:
+        with open(ctx.root / DRIVE_LOG, "rb") as f:
+            f.seek(max(0, f.seek(0, 2) - (1 << 20)))
+            ticks = TICK_RE.findall(f.read())
+    except OSError:
+        return False
+    return bool(ticks) and ctx.now - datetime.strptime(ticks[-1].decode(), "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=timezone.utc).timestamp() < DRIVE_TICK_STALE_S
+
+
+def unverified_main(ctx: Ctx) -> list[Finding]:
+    """`main` has carried commits no post-landing run verified for over 3 h (top, 26 Oct: 467 PRs landed on an unverified main for
+    a day and a half with nobody outside ci told): drive's last verified commit (its state's `drive.postland.verified`) against
+    main, timed from the oldest landing after it: main's first-parent commits after it, drive's `Queue: #N` merges, each
+    committed when drive merged it (`git log --first-parent` in `$RESEARCH_DEPLOY_REPO`, the relay's clone, fetched here).
+    GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
+    hundreds hold no landing (ci, 26 Oct). One event per further hour behind, to ci and top, until a post-landing run verifies
+    main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
+    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead."""
+    if drive_ticking(ctx):
+        return []
+    state = json.loads((ctx.root / DRIVE_STATE).read_text())
+    verified = ((state.get("drive") or {}).get("postland") or {}).get("verified")
+    if not verified:
+        raise RuntimeError(f"/{DRIVE_STATE} names no drive.postland.verified")
+    repo = os.environ.get("RESEARCH_DEPLOY_REPO") or "/data/watchers/repo"
+    ctx.sh(["git", "-C", repo, "fetch", "-q", "origin", "main"], timeout=120)
+    landed = [ln.split() for ln in ctx.sh(["git", "-C", repo, "log", "--first-parent", "--format=%H %ct",
+                                           f"{verified}..FETCH_HEAD"], timeout=60).splitlines() if ln.strip()]
+    if not landed:
+        return []
+    since = float(landed[-1][1])
+    if (behind := ctx.now - since) < UNVERIFIED_S:
+        return []
+    hours = int(behind // 3600)
+    return [Finding(f"{verified[:12]}:{hours}", f"*`main` has gone {hours} h without a passing post-landing check*: its last "
+                    f"verified commit is `{verified[:12]}`, and {len(landed)} landing(s) followed it, the first at {iso(since)}.",
+                    owners=("ci", "top"))]
+
+
 # ---- every machine: its memory, the runs infrastructure killed, the peers it watches, the checks lost -----------------------------
 
 USER_SLICE = "/sys/fs/cgroup/user.slice/user-1001.slice"      # each research run is a session scope here (one ssh login each)
@@ -1347,6 +1398,10 @@ MONITORS: list[Monitor] = [
             "`not local and not on any source` was registered without `research data push`, so ask whoever registered it to push "
             "it; a loop that isn't running is restarted with `setsid -f /data/infra/fixtures_export.sh`.",
             every_s=900, for_s=1800, unread_s=4 * 3600),
+    Monitor("unverified-main", "ci", "warn", "relay", unverified_main,
+            "Read the newest post-landing run's verdict line (drive.log's 'told @ci' line names it): land the red suite's fix, or "
+            "revert the PR that broke it (AGENTS.md: main always passes). It rings again each hour until a post-landing run passes.",
+            every_s=600, events=True, unread_s=3600),
 ]
 BY_ID = {m.id: m for m in MONITORS}
 
