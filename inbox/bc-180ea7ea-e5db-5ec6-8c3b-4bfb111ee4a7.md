@@ -56,3 +56,4 @@ vy-nebius-cpu-5 has NO lean-warm directory (no base), so seeding a warm copy the
 
 ## 10:55Z from proofs: TopsPorted and SlotsFit
 DECIDED: first derive them from staged-part facts (TopsOpens' staged_circuit; LOWOPEN's copySite_staged / drSize_staged on lowopen-e09e 5e1ee8dfcd; CAPLOWER's MoreSlots on caplower-5b7e 81c78187bd). Only if no check the verifier makes implies one, add the refusal to readX (e.g. every later cap's part has port `top`) as a small verifier PR from origin/main, with #guards, Flock's Lean check and lean-agreement, then open and mark it. Say which route each took.
+- 22:13Z coordinator: cpu-4 /workspace is at 94% (13 warm copies, 173 GB). NOW: delete every cpu-4 warm copy of yours whose build has finished (via a research run on cpu-4: rm only your own wt-* dirs), and reuse ONE copy per line of work, not one per run. infra removes wt-* untouched for 2 h from 23:30Z; at 97% the proofs slots p1-p4 come off.

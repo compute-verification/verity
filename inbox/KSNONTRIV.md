@@ -30,3 +30,4 @@
       itself vacuous. I'll report by 23:30Z. If (B) can't close, the RecursiveKS entry goes on LEAN-66's allowlist with
       (A) as its reason. The fix is then a total JSON reader on the `rec-inner`/partition path (the code side), so that a
       fixture parses in the kernel.
+- 22:13Z coordinator: cpu-4 /workspace is at 94% (13 warm copies, 173 GB). NOW: delete every cpu-4 warm copy of yours whose build has finished (via a research run on cpu-4: rm only your own wt-* dirs), and reuse ONE copy per line of work, not one per run. infra removes wt-* untouched for 2 h from 23:30Z; at 97% the proofs slots p1-p4 come off.
