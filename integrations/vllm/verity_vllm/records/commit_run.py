@@ -1,8 +1,8 @@
 """The Commit record: one run of a Commit pair, a line of `commit/runs.jsonl`, as the verdict reads it (`check.verdict.build` and
 `execution_of_record`).
 
-Its writers are `pipeline.commit` (`verity/commit-integ/delta/v1`; R19's `verity_capture/bench/commit_delta.py` before it),
-`pipeline.tp.commit` (`verity/commit-integ/delta-tp/v1`; R19's `tp2_commit.py` before it) and `pipeline.serve_seal` (a sealed
+Its writers are `pipeline.commit` (`verity/commit-integ/delta/v1`; the retired `verity_capture/bench/commit_delta.py` before it),
+`pipeline.tp.commit` (`verity/commit-integ/delta-tp/v1`; the retired `tp2_commit.py` before it) and `pipeline.serve_seal` (a sealed
 serving window's run, with no schema field).  A top-level field none of them writes is refused by name.  The run's `commit` block
 is each rule's evidence, which `check.commit_rules` reads as written (`CommitBlock.entry`); the fields the verdict reads beside the
 rules are typed from it.

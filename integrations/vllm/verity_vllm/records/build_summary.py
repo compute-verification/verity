@@ -3,10 +3,10 @@ as the Commit's verdict reads the Build's `runtime-correspondence/v1` digest fro
 
 Its writers lay it out three ways (`layout`):
 
-* `tp1`: `pipeline.row_records.build_summary` and `add_workload` (R19's `row_pod.sh` before them), one entry per wrapper;
-* `tp`: `pipeline.row_records.tp_build_summary` (R19's `row_pod_tp2.sh` before it), `tp.world`, the entries per rank under
+* `tp1`: `pipeline.row_records.build_summary` and `add_workload` (the retired `row_pod.sh` before them), one entry per wrapper;
+* `tp`: `pipeline.row_records.tp_build_summary` (the retired `row_pod_tp2.sh` before it), `tp.world`, the entries per rank under
   `ranks`, rank 0's step digest under `step`;
-* `tp2-r19`: R19's `verity_capture/bench/tp2_evidence.py` (retired; the regression harness's TP2 reference rows carry it), rank 0's
+* `tp2-r19`: the retired `verity_capture/bench/tp2_evidence.py` (the regression harness's TP2 reference rows carry it), rank 0's
   entries as `step`/`request`, each rank's as `<wrapper>_rank<r>`, a digest per rank under `tp.ranks`, and its `cmd` and `note`.
 
 The file carries no schema field: its writers predate one, so `SCHEMA` names the record in a refusal and `dump` writes none.  An
