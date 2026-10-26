@@ -1,13 +1,14 @@
 """The weights' store and its decode call: the stand-in for CMP-95 item 2 (memory-accounting's layout and decode call) on
 the conventions kernels' decode-to-staging kernel already reads (`benchmarks/torch_gpu/s8_dec_linear`, KP2-DEC).
 
-**Layout.** W is the s8 codes of `shape.tensors()` back to back (`weights.Weights.base`). Block j of the store carries W bytes
+**Layout.** W is ALLP-IFACE's weights stream (`weights.Weights.stream`: every tensor's little-endian bytes, s8 codes, f32
+scales and bf16 gains and embeddings, at `Tensor.offset`). Block j of the store carries W bytes
 [2054 j, 2054 j + 2054) as bytes 2 .. 2055 of its big-endian 2,056-byte row, P2 v4 (`p2-16448/v4`,
 `verity.core.protocols.pous.schemes.p2`) at the registered point, keys from `sha512_keys` under `expand_prefix(salt)`; the
 last block is zero-padded. Block j is (segment, block) = divmod(j, 2^16).
 
-**The decode call.** `Store.stage(name, dst)` writes tensor ``name``'s codes, (N, K) s8, into the staging buffer ``dst`` (or a
-new one) from the blocks it overlaps: on the GPU by kernels' `Stage.decode` (`p2stage.cu`) when its library is given, else by
+**The decode call.** `Store.stage(name, dst)` writes linear ``name``'s codes, (N, K) s8, into the staging buffer ``dst`` (or a
+new one) from the blocks it overlaps, and `Store.load(name)` returns any tensor (scales, gains, embeddings) the same way: on the GPU by kernels' `Stage.decode` (`p2stage.cu`) when its library is given, else by
 the P2 reference on the CPU. Every stage is checked against the reference's refusals (a c >= p, or a decode wider than the
 payload): a refused block raises, never stages.
 
@@ -87,6 +88,9 @@ class Store:
     def stage(self, name: str, dst: Any | None = None) -> Any:
         raise NotImplementedError
 
+    def load(self, name: str) -> np.ndarray:
+        raise NotImplementedError
+
     def describe(self) -> dict:
         return {"kind": self.kind}
 
@@ -101,6 +105,9 @@ class GeneratorStore(Store):
     def stage(self, name: str, dst: Any | None = None) -> Any:
         return _into(self.weights.codes(name), dst)
 
+    def load(self, name: str) -> np.ndarray:
+        return self.weights.array(name)
+
 
 class P2Store(Store):
     """C's rows, (blocks, 2,056) u8, host (numpy) or device (torch); the deployment salt's key prefix; W's layout."""
@@ -109,9 +116,9 @@ class P2Store(Store):
     def __init__(self, weights: Weights, salt: bytes, rows: Any, stage_lib: str | None = None) -> None:
         if len(salt) != SALT_BYTES:
             raise ValueError(f"the deployment salt is {SALT_BYTES} bytes")
-        n = nblocks(weights.shape.w_bytes)
+        n = nblocks(weights.nbytes)
         if tuple(rows.shape) != (n, ROW):
-            raise ValueError(f"W of {weights.shape.w_bytes} bytes is {n} blocks of {ROW}, not {tuple(rows.shape)}")
+            raise ValueError(f"W of {weights.nbytes} bytes is {n} blocks of {ROW}, not {tuple(rows.shape)}")
         self.weights, self.salt, self.rows = weights, salt, rows
         self.prefix = S.expand_prefix(PARAMS, salt)
         self._stage = None
@@ -123,11 +130,11 @@ class P2Store(Store):
     @classmethod
     def encode(cls, weights: Weights, salt: bytes, workers: int = 1, chunk_blocks: int = 16) -> P2Store:
         prefix = S.expand_prefix(PARAMS, salt)
-        n, wb = nblocks(weights.shape.w_bytes), weights.shape.w_bytes
+        n, wb = nblocks(weights.nbytes), weights.nbytes
         jobs = []
         for first in range(0, n, chunk_blocks):
             lo, hi = first * PAYLOAD, min(wb, (first + chunk_blocks) * PAYLOAD)
-            jobs.append((prefix, first, weights.w_bytes(lo, hi - lo)))
+            jobs.append((prefix, first, weights.stream(lo, hi)))
         if workers > 1:
             with ProcessPoolExecutor(workers) as ex:
                 parts = list(ex.map(_encode_range, jobs))
@@ -159,6 +166,19 @@ class P2Store(Store):
         r = self.rows[j]
         return bytes(r if isinstance(r, np.ndarray) else r.cpu().numpy())
 
+    def _bytes(self, base: int, length: int) -> bytes:
+        js = blocks_of(base, length)
+        buf = bytearray()
+        for j in js:
+            buf += decode_block(self.prefix, j, self.block(j))
+        lo = base - js.start * PAYLOAD
+        return bytes(buf[lo:lo + length])
+
+    def load(self, name: str) -> np.ndarray:
+        t = self.weights.t[name]
+        a = np.frombuffer(self._bytes(t.offset, t.nbytes), {"s8": np.int8, "f32": "<f4", "bf16": "<u2"}[t.dtype])
+        return a.astype(a.dtype.newbyteorder("=")).reshape(t.shape)
+
     def stage(self, name: str, dst: Any | None = None) -> Any:
         n, k = self.weights.dims[name]
         base, length = self.weights.base(name), n * k
@@ -170,11 +190,7 @@ class P2Store(Store):
             if self._stage.flags():
                 raise Refused(f"{name}: the decode kernel flagged a block the reference refuses")
             return out.view(torch.int8).view(n, k)
-        buf = bytearray()
-        for j in js:
-            buf += decode_block(self.prefix, j, self.block(j))
-        lo = base - js.start * PAYLOAD
-        return _into(np.frombuffer(bytes(buf[lo:lo + length]), dtype=np.int8).reshape(n, k), dst)
+        return _into(np.frombuffer(self._bytes(base, length), dtype=np.int8).reshape(n, k), dst)
 
 
 def _into(codes: np.ndarray, dst: Any | None) -> Any:

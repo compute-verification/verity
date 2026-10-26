@@ -1,17 +1,17 @@
-"""The step's row ops and the W8A8 linear in torch, on whatever device their tensors are on, each the function circuits'
-plan states for its Definitions (CMP-92, comment af6de1f1, sections 1 and 1b): every f32 op one IEEE round to nearest
-(torch's elementwise CPU and CUDA kernels, no fast math, no FMA across separate ops, no FTZ), every reduction sequential in
-ascending index from +0 (a Python loop over the reduced index, vectorized over the rest; never torch's blocked sums), every
-bf16 rounding `cvt.rn.bf16.f32`. NaN words are not modelled: no op here produces one from finite inputs.
+"""The step's row ops and the W8A8 linear in torch, on whatever device their tensors are on, each the function of its row
+unit in circuits' plan (CMP-92, comment af6de1f1 as revised 23:30Z to size classes, sections 1 and 1b): every f32 op one IEEE
+round to nearest (torch's elementwise kernels, no fast math, no FMA across separate ops), division and sqrt correctly
+rounded through f64 (`div_rn`, `sqrt_rn`), every reduction sequential in ascending index from +0 (`seq_sum`, never torch's
+blocked sums), every bf16 rounding RNE. NaN words are not modelled: no op here makes one from finite inputs.
 
-    rmsnorm    RmsSumSqPart{C=128} per chunk, F32SumPart{G=64} per group of chunk sums, the group sums from +0,
-               RmsNormRecip (mean = RN(acc / N), rs = RN(1 / RN(sqrt(RN(mean + eps))))), RmsNormOut
-               (bf16(RN(w * bf16(RN(x * rs)))))
-    quantize   RowAbsMax{128[, RELU]} per chunk then over the chunks (exact), QuantS8Scale (RN(amax / 127), 1 when amax is 0),
-               QuantS8Pair (clamp(rne(RN(x / scale)), -128, 127)); RELU applies max(x, 0) first
-    s8_linear  ScaledMmS8Coordinate{K, GEMM_SM90_S8}: the exact s32 sum, then bf16((f32(acc) * sx) * sw), the token's scale first
-    add        Bf16Add: bf16(RN(a + b))
-    argmax     the first index of the greatest logit (ArgmaxChunkBest / ChunkIdx / Combine)
+    rmsnorm    RmsNormRow_v1{N, EPS}: s = sum_i RN(x_i^2) from +0, mean = RN(s / N), rs = RN(1 / RN(sqrt(RN(mean + eps)))),
+               out_j = bf16(RN(w_j * bf16(RN(x_j * rs))))
+    quantize   QuantRowS8_v1{N, RELU}: amax = max |x| (after max(x, 0) under RELU), scale = RN(amax / 127) (1 when amax is 0),
+               codes = clamp(rne(RN(x / scale)), -128, 127)
+    s8_linear  ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}: the exact s32 sum, then bf16(RN(RN(f32(acc) * sx) * sw))
+    add        Bf16AddRow_v1{N}: bf16(RN(a + b))
+    embed      the embedding row: bf16(RN(tok[:, token] + pos[:, t]))
+    argmax     the argmax row: the first index of the greatest logit
 
 The s32 sum is `torch._int_mm` on CUDA (exact for K < 2^17 in any order) and an int64 matmul on the CPU: the stand-in for
 kernels' KP2-S8 GEMM until it is handed over.
@@ -20,9 +20,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import torch
-
-from .shape import AMAX_CHUNK, RMS_CHUNK, RMS_GROUP
 
 
 def f32(x: torch.Tensor) -> torch.Tensor:
@@ -44,61 +43,42 @@ def sqrt_rn(a: torch.Tensor) -> torch.Tensor:
     return torch.sqrt(a.to(torch.float64)).to(torch.float32)
 
 
+def seq_sum(x: torch.Tensor) -> torch.Tensor:
+    """(B, N) f32 -> (B,): the sum in ascending index from +0, by numpy's ``add.accumulate`` on the host (sequential, unlike
+    every torch and numpy sum)."""
+    a = x.detach().to("cpu", torch.float32).numpy()
+    s = np.add.accumulate(a, axis=1, dtype=np.float32)[:, -1] + np.float32(0)
+    return torch.from_numpy(np.ascontiguousarray(s, dtype=np.float32)).to(x.device)
+
+
 def add(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return bf16(f32(a) + f32(b))
 
 
-def seq_sum(x: torch.Tensor) -> torch.Tensor:
-    """Σ over the last axis, in ascending index from +0."""
-    acc = torch.zeros(x.shape[:-1], dtype=torch.float32, device=x.device)
-    for i in range(x.shape[-1]):
-        acc = acc + x[..., i]
-    return acc
-
-
-@dataclass
-class Rms:
-    out: torch.Tensor      # (B, N) bf16
-    chunks: torch.Tensor   # (B, N / 128) f32: each chunk's sum of squares
-    groups: torch.Tensor   # (B, ceil(chunks / 64)) f32
-    rs: torch.Tensor       # (B,) f32
-
-
-def rmsnorm(x: torch.Tensor, w: torch.Tensor, eps: float) -> Rms:
-    b, n = x.shape
+def rmsnorm(x: torch.Tensor, w: torch.Tensor, eps: torch.Tensor) -> torch.Tensor:
+    """x (B, N) bf16, w (N,) bf16, eps a () f32 -> (B, N) bf16."""
+    n = x.shape[1]
     xf = f32(x)
-    chunks = seq_sum((xf * xf).view(b, n // RMS_CHUNK, RMS_CHUNK))
-    nc = chunks.shape[1]
-    ng = -(-nc // RMS_GROUP)
-    padded = torch.zeros(b, ng * RMS_GROUP, dtype=torch.float32, device=x.device)
-    padded[:, :nc] = chunks
-    groups = seq_sum(padded.view(b, ng, RMS_GROUP))
-    total = seq_sum(groups)
-    mean = div_rn(total, torch.full_like(total, float(n)))
-    root = sqrt_rn(mean + torch.tensor(eps, dtype=torch.float32, device=x.device))
-    rs = div_rn(torch.ones_like(root), root)
+    mean = div_rn(seq_sum(xf * xf), torch.full((x.shape[0],), float(n), dtype=torch.float32, device=x.device))
+    rs = div_rn(torch.ones_like(mean), sqrt_rn(mean + eps))
     h = bf16(xf * rs[:, None])
-    return Rms(bf16(f32(w)[None, :] * f32(h)), chunks, groups, rs)
+    return bf16(f32(w)[None, :] * f32(h))
 
 
 @dataclass
 class Quant:
     codes: torch.Tensor    # (B, K) s8
     scale: torch.Tensor    # (B,) f32
-    amax: torch.Tensor     # (B,) bf16
-    parts: torch.Tensor    # (B, K / 128) bf16: each chunk's absmax
 
 
 def quantize(x: torch.Tensor, relu: bool = False) -> Quant:
-    b, k = x.shape
     xf = f32(x)
     if relu:
         xf = torch.clamp_min(xf, 0.0)
-    parts = xf.abs().view(b, k // AMAX_CHUNK, AMAX_CHUNK).amax(-1)
-    amax = parts.amax(-1)
+    amax = xf.abs().amax(-1)
     scale = torch.where(amax > 0, div_rn(amax, torch.full_like(amax, 127.0)), torch.ones_like(amax))
     codes = torch.round(div_rn(xf, scale[:, None])).clamp(-128, 127).to(torch.int8)
-    return Quant(codes, scale, bf16(amax), bf16(parts))
+    return Quant(codes, scale)
 
 
 def s32_mm(xq: torch.Tensor, wq: torch.Tensor) -> torch.Tensor:

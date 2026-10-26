@@ -2,7 +2,7 @@
 decode-to-staging, every op's output committed per step, drawn units replayed bit for bit, each leg run or named, and the
 replay bundle and block record written to ``--out``.
 
-    python benchmarks/e2e_h200/run.py --out OUT [--shape mqa128-l2|mqa2k-l4|mqa16k-l52] [--batch B] [--steps T]
+    python benchmarks/e2e_h200/run.py --out OUT [--shape tiny|small|slice|h200] [--seed test|demo|TEXT] [--batch B] [--steps T]
         [--prompt-bytes P] [--device cpu|cuda] [--store generator|p2-encode|p2:PATH] [--salt HEX] [--stage-lib DIR]
         [--commit reference|host|device] [--draw K] [--tamper OP] [--run-id ID] [--seed S]
 
@@ -25,10 +25,14 @@ from e2e_h200 import legs as L  # noqa: E402
 from e2e_h200 import record as REC  # noqa: E402
 from e2e_h200.commit import Committer, fixture_secrets  # noqa: E402
 from e2e_h200.driver import Driver  # noqa: E402
-from e2e_h200.replay import Replayer  # noqa: E402
 from e2e_h200.shape import SHAPES  # noqa: E402
 from e2e_h200.store import GeneratorStore, P2Store  # noqa: E402
+from e2e_h200.units import Replayer  # noqa: E402
 from e2e_h200.weights import Weights  # noqa: E402
+from verity_torch_loop import weights as SW  # noqa: E402
+
+#: the weights' registration digest under the test salt key is computed for streams up to this size (about 1 s a MiB)
+DIGEST_BYTES = 1 << 26
 
 
 def prompts_for(run_id: str, batch: int, p: int) -> np.ndarray:
@@ -51,7 +55,7 @@ def make_store(a, weights: Weights, device: str):
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--shape", default="mqa128-l2", choices=sorted(SHAPES))
+    ap.add_argument("--shape", default="small", choices=sorted(SHAPES))
     ap.add_argument("--batch", type=int, default=4)
     ap.add_argument("--steps", type=int, default=4)
     ap.add_argument("--prompt-bytes", type=int, default=2)
@@ -66,12 +70,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pous-reads", type=int, default=16)
     ap.add_argument("--tamper", default="")
     ap.add_argument("--run-id", default="e2e-h200-fixture")
-    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--seed", default="test", help="test (ALLP-IFACE's TEST_SEED), demo (DEMO_SEED) or a text seed")
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     shape = SHAPES[a.shape]
-    weights = Weights(shape, a.seed)
+    seed = {"test": SW.TEST_SEED, "demo": SW.DEMO_SEED}.get(a.seed, a.seed.encode())
+    weights = Weights(shape, seed)
     t0 = time.perf_counter()
     store = make_store(a, weights, a.device)
     t_store = time.perf_counter() - t0
@@ -106,8 +111,8 @@ def main(argv: list[str] | None = None) -> int:
     }
     doc = REC.write_record(
         out, run_id=a.run_id, shape=shape, batch=a.batch, device=a.device,
-        weights={**weights.manifest(), "fixture_root": weights.fixture_root() if shape.w_bytes < 2**30 else None,
-                 "stands_in_for": "ALLP-IFACE's generator and registration root (CMP-95 item 1)"},
+        weights={**weights.manifest(), "registration_digest_test_key":
+                 weights.registration_digest() if weights.nbytes <= DIGEST_BYTES else None},
         store={**store.describe(), "seconds": t_store,
                "stands_in_for": None if store.kind == "p2-v4" else "MEM-69's P2-encoded store and its decode call"},
         commit={"backend": a.commit, "context": "fixture", "layout": "table-major: a table an op, a row a slot",
