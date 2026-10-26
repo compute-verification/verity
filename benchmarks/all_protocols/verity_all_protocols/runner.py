@@ -355,7 +355,8 @@ def mode_of(a: argparse.Namespace, argv: Sequence[str]) -> dict[str, Any]:
                       "windows": a.windows, "start": a.start, "tamper": sorted(a.tamper),
                       "tie_tamper": sorted(a.tie_tamper), "registered": a.registered, "wired": a.wired,
                       "requests": a.requests, "steps": a.steps, "cap": a.cap, "delta": a.delta,
-                      "certifier_tamper": os.environ.get("CERTIFIER_TAMPER")}}
+                      "certifier_tamper": os.environ.get("CERTIFIER_TAMPER"),
+                      "pouw_coins": f"gate:{a.pouw_gate}" if a.pouw_gate else "local" if a.pouw_live else "seeded"}}
 
 
 def main(argv: list[str] | None = None) -> int:
