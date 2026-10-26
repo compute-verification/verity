@@ -196,6 +196,22 @@ def test_joined_advice_numbers_each_windows_requests_after_the_windows_before_an
     assert all(b_ == frames[got.requests[o.request].id][o.index] for o, b_ in zip(ADV.outputs(got), got.release))
 
 
+def test_advice_from_io_is_the_certified_requests_each_kept_output_released_at_its_frame():
+    """`from_io` (--advice-from-io, a gate rehearsal's advice): the certified requests in arrival order, and each kept
+    output of each released in the bucket its certified frame went out."""
+    a = _link(n2.T)[0].session.link.advice
+    frames = {q.id: [] for q in a.requests}
+    for o, b in zip(ADV.outputs(a), a.release):
+        frames[a.requests[o.request].id].append(b)
+    io = [{"user": q.id, "prompt": [0] * q.prompt_len, "output": [0] * q.output_len, "finish": q.finish,
+           "frames": [[i, b] for i, b in enumerate(frames[q.id])]} for q in a.requests]
+    got = n2.from_io(io)
+    assert got.requests == a.requests
+    assert sorted((o.request, o.index) for o in ADV.outputs(got)) == \
+        sorted((r, i) for r, q in enumerate(a.requests) for i in range(q.output_len))
+    assert all(b == frames[got.requests[o.request].id][o.index] for o, b in zip(ADV.outputs(got), got.release))
+
+
 def test_the_verifier_derives_the_provers_public_row():
     """The verifier's own ``pub`` row is the prover's in every window of every member, and holds the window's view of
     the member's advice: moved and short state another view than honest's in some window, extra the same."""
