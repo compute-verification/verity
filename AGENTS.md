@@ -476,9 +476,8 @@ Each coordinator (a handle's holder, which its inbox route records: `research ms
 one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as subagents.
 There are no Cursor Projects (Daniel, 13 Oct). The admin holds `@top`: it opens handovers, keeps the roster, the
 quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work. It owns
-consolidation (Daniel, 26 Oct): open work, records and notation converge rather than multiply.
-Coordinators are launched, handed over and archived from Daniel's laptop with `infra/cursor/launch_coordinator.py`
-(`infra/cursor/README.md`).
+consolidation (Daniel, 26 Oct): work, records and notation converge, not multiply. Coordinators are launched, handed
+over and archived as `infra/cursor/README.md` says.
 
 - **Reread the rules every night.** At the start of each night, reread this file and the rulings in
   `.agents/skills/friction/SKILL.md` and `.agents/skills/lean-proofs/SKILL.md`: rules change during the day, and a lane
