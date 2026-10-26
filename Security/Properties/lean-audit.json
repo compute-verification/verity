@@ -2,6 +2,7 @@
  "roots": [
   "Properties.Pouw",
   "Properties.Pouw.Check",
+  "Properties.Pouw.PeriodCheck",
   "Properties.Pouw.Commit",
   "Properties.Pouw.LiveSalt",
   "Properties.Pouw.Period",
@@ -216,6 +217,7 @@
   "PouwWindow.Public",
   "PouwWindow.Length",
   "Properties.Pouw.Check",
+  "Properties.Pouw.PeriodCheck",
   "PouwWindow.Json",
   "PouwCheck.Json",
   "PouwCheck.Tile",
@@ -225,6 +227,7 @@
   "PouwCheck.Pass",
   "PouwCheck.WindowSalt",
   "PouwCheck.Credit",
+  "PouwCheck.Period",
   "CoreProtocol.Ratio",
   "CoreProtocol.Profile",
   "CoreProtocol.Protocol",
@@ -1612,6 +1615,15 @@
    "assumptions": [],
    "type_hash": "1b82a49aa4304690a55b410ba0f355427a923988bc8c20a52915a714de747bcf"
   },
+  "Properties.Pouw.PeriodCheck.acceptMeans": {
+   "owner": "@compute-accounting"
+  },
+  "Properties.Pouw.PeriodCheck.neverUndecided": {
+   "owner": "@compute-accounting"
+  },
+  "Properties.Pouw.PeriodCheck.periodCreditMeans": {
+   "owner": "@compute-accounting"
+  },
   "Properties.Pouw.Strata.strataTile": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Strata.strataTile : Properties.Pouw.Strata.StrataTile"],
@@ -2768,6 +2780,18 @@
    "Properties.Pouw.Commit.taggedSize": {
     "function": "PouwCommit.tagged",
     "outcome": "none"
+   },
+   "Properties.Pouw.PeriodCheck.acceptMeans": {
+    "function": "PouwCheck.Period.protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.PeriodCheck.neverUndecided": {
+    "function": "PouwCheck.Period.protocol.check",
+    "outcome": "undecided"
+   },
+   "Properties.Pouw.PeriodCheck.periodCreditMeans": {
+    "function": "PouwCheck.Credit.periodCredit",
+    "outcome": "accept"
    },
    "Properties.Pouw.Window.bucket8192": {
     "function": "PouwWindow.bucket",
