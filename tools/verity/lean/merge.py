@@ -37,7 +37,9 @@ and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every lis
 that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. For a `lakefile.toml`
 (`--lakefile`, `lakefile-lists`), a conflict all of whose sides are `[[require]]` blocks merges as a set of blocks, and one all
 of whose sides are a string array's items (`roots`) merges as a list, wrapped as ours wraps it: two branches that each require a
-package or add a root to `Security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's.
+package or add a root to `Security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's. In
+both, an import, a require or a root that one side removed stays removed, judged on the whole files (`kept`), so a line the
+other side moved can't bring it back.
 """
 from __future__ import annotations
 
@@ -309,8 +311,20 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
     return out, why
 
 
+def kept(o: set, a: set, b: set) -> set:
+    """The names a three-way merge of whole files keeps: (A ∩ B) ∪ (A − O) ∪ (B − O), what both sides have and what either
+    added.  A name one side removed while the other kept it stays removed, however git splits the file into hunks: a line
+    one side moved shows in a hunk as an addition, and the hunk alone would bring back what the other side removed
+    (#4690 onto `next`, 26 Oct: `Definitions.Accounting`'s retired import came back and Security stopped building)."""
+    return (a & b) | (a - o) | (b - o)
+
+
 def _imports(lines: list[str]) -> bool:
     return all(s.startswith("import ") or not s.strip() for s in lines)
+
+
+def _import_names(text: str) -> set[str]:
+    return {s.strip() for s in text.splitlines() if s.startswith("import ")}
 
 
 def _blocks(lines: list[str]) -> list[str] | None:
@@ -326,20 +340,34 @@ def _blocks(lines: list[str]) -> list[str] | None:
     return out
 
 
-def _requires(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
-    """A conflict all of whose sides are `[[require]]` blocks: ours' blocks with theirs' new ones, less what either removed."""
+def _require_key(require: dict) -> str:
+    return json.dumps(require, sort_keys=True)
+
+
+def _block_key(block: str) -> str | None:
+    try:
+        return _require_key(tomllib.loads(block)["require"][0])
+    except (tomllib.TOMLDecodeError, KeyError, IndexError):
+        return None
+
+
+def _requires(o: list[str], a: list[str], b: list[str], keep: set | None = None) -> list[str] | None:
+    """A conflict all of whose sides are `[[require]]` blocks: ours' blocks with theirs' new ones, less what either removed
+    (in the hunk, and in the whole files: ``keep``, `kept` of each side's requires)."""
     x, y, z = _blocks(o), _blocks(a), _blocks(b)
     if x is None or y is None or z is None:
         return None
     filled = [i for i, s in enumerate(a) if s.strip()]
     lead, trail = (a[:filled[0]], a[filled[-1] + 1:]) if filled else (a, [])
     merged = [k for k in y if k in z or k not in x] + [k for k in z if k not in y and k not in x]
+    merged = [k for k in merged if keep is None or (key := _block_key(k)) is None or key in keep]
     return lead + "\n".join(merged).splitlines(keepends=True) + trail
 
 
-def _array(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
+def _array(o: list[str], a: list[str], b: list[str], keep: set | None = None) -> list[str] | None:
     """A conflict all of whose sides are a string array's items (`roots`): ours' items with theirs' new ones, less what
-    either removed, wrapped at `WIDTH` with ours' opening, indent and close."""
+    either removed (in the hunk, and in the whole files: ``keep``, `kept` of each side's array items), wrapped at `WIDTH`
+    with ours' opening, indent and close."""
     sides = [[s for s in side if s.strip()] for side in (o, a, b)]
     if not sides[1] or not all(ITEM_LINE.match(s) for side in sides for s in side):
         return None
@@ -351,7 +379,7 @@ def _array(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
     lead = re.match(r"\s*", sides[1][0]).group(0)
     indent = re.match(r"\s*", sides[1][1]).group(0) if len(sides[1]) > 1 else (lead + "  " if head else lead)
     names = [re.findall(r'"([^"]*)"', "".join(side)) for side in sides]
-    merged = items(*names)
+    merged = [n for n in items(*names) if keep is None or n in keep]
     if not merged:
         return None
     pieces = [f'"{n}"' + ("]" if i == len(merged) - 1 and closes(sides[1]) else ",") for i, n in enumerate(merged)]
@@ -368,12 +396,36 @@ def _array(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
     return out + [line + "\n"]
 
 
+def _lakefile_names(text: str) -> tuple[set[str], set[str]] | None:
+    """A lakefile's requires (`_require_key`) and its string arrays' items, or None when it is not TOML."""
+    try:
+        doc = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return None
+    strings: set[str] = set()
+
+    def walk(v):
+        if isinstance(v, list):
+            strings.update(i for i in v if isinstance(i, str))
+            for i in v:
+                walk(i)
+        elif isinstance(v, dict):
+            for i in v.values():
+                walk(i)
+    walk(doc)
+    return {_require_key(r) for r in doc.get("require", []) if isinstance(r, dict)}, strings
+
+
 def lakefile(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
     """(the merged text, the number of conflicts left) of a `lakefile.toml`: git's own merge, then each conflict whose sides are
     only `[[require]]` blocks merged as a set of blocks, and each whose sides are only a string array's items (`roots`) merged
-    as a list (`items`), so two branches that each require a package or add a root merge.  Any other conflict (a comment, a
-    value) is left as git writes it, and so is a result that is not TOML."""
-    text, left = lean(base, ours, theirs, (_requires, _array))
+    as a list (`items`), so two branches that each require a package or add a root merge; a block or an item one side
+    removed stays removed (`kept`).  Any other conflict (a comment, a value) is left as git writes it, and so is a result
+    that is not TOML."""
+    sides = [_lakefile_names(p.read_text()) for p in (base, ours, theirs)]
+    requires, strings = (None, None) if None in sides else (kept(*(s[0] for s in sides)), kept(*(s[1] for s in sides)))
+    text, left = lean(base, ours, theirs, (lambda o, a, b: _requires(o, a, b, requires),
+                                           lambda o, a, b: _array(o, a, b, strings)))
     if not left:
         try:
             tomllib.loads(text)
@@ -385,9 +437,13 @@ def lakefile(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
 def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int]:
     """(the merged text, the number of conflicts left) of a `.lean` file: git's own merge (`git merge-file`), then each conflict
     whose three sides are only `import` lines merged as lists of imports (`items`), so two branches that each add a module to
-    an import list merge.  Any other conflict is left as git writes it.  ``resolvers`` (each `(base, ours, theirs)` lines to
-    the merged lines, or None) replace the imports rule."""
+    an import list merge.  Every import outside a conflict left is then held to the whole files' imports (`kept`), once
+    each: one side removed stays removed wherever git's hunks put it.  Any other conflict is left as git writes it.
+    ``resolvers`` (each `(base, ours, theirs)` lines to the merged lines, or None) replace the imports rule, and with them
+    no import is filtered."""
+    keep = None
     if resolvers is None:
+        keep = kept(*(_import_names(p.read_text()) for p in (base, ours, theirs)))
         resolvers = (lambda o, a, b: [s for s in items([s for s in o if s.strip()], [s for s in a if s.strip()],
                                                        [s for s in b if s.strip()])]
                      if _imports(a) and _imports(o) and _imports(b) else None,)
@@ -395,10 +451,17 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
                         str(theirs)], capture_output=True, text=True)
     if p.returncode < 0 or p.returncode > 127:
         raise ValueError(f"git merge-file failed: {p.stderr.strip()}")
-    out, left, lines, n = [], 0, p.stdout.splitlines(keepends=True), 0
+    out, left, lines, n, seen = [], 0, p.stdout.splitlines(keepends=True), 0, set()
+
+    def emit(s: str):
+        if keep is not None and s.startswith("import "):
+            if s.strip() not in keep or s.strip() in seen:
+                return
+            seen.add(s.strip())
+        out.append(s)
     while n < len(lines):
         if not lines[n].startswith("<<<<<<< ours"):
-            out.append(lines[n])
+            emit(lines[n])
             n += 1
             continue
         mid = next(i for i in range(n, len(lines)) if lines[i].startswith("||||||| base"))
@@ -407,7 +470,8 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
         a, o, b = lines[n + 1:mid], lines[mid + 1:sep], lines[sep + 1:end]
         merged = next((m for r in resolvers if (m := r(o, a, b)) is not None), None)
         if merged is not None:
-            out += merged
+            for s in merged:
+                emit(s)
         else:
             out += lines[n:end + 1]
             left += 1
