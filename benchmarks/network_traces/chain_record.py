@@ -27,8 +27,8 @@
   warden rows. A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes the report
   accepted. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
   isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
-  negatives are N2's members, the I/O tie's verdict on each tampered run, and the rehearsal's own on each run its check
-  refuses. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each window's draw and free
+  negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each
+  tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each window's draw and free
   inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ.
 """
 from __future__ import annotations
@@ -220,7 +220,9 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
 def endpoint_step(e: dict | None) -> dict:
     """network-e2e's ``--no-prove`` report on the run and the endpoint's records: the endpoint's own advice bound to the
     run's certified I/O and rebuilt from it (`chain.served_advice`), and the I/O tie's verdict on the honest run
-    (`chain.tie`), both in the clear."""
+    (`chain.tie`), both in the clear. The tie decides a tampered run only where the rehearsal's own check let it
+    through (no ``own_code`` in the report's ``negatives``: token), and must refuse it at exactly the link-windows its
+    changes fall in (``ok``); a run the check refused (late, extra) is the rehearsal's negative, not the tie's."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)", "in_the_clear": CLEAR["endpoint"]}
     chain = e.get("chain") or {}
@@ -232,9 +234,10 @@ def endpoint_step(e: dict | None) -> dict:
                                                                    for c in windows)}
     tie = {k: honest.get(k) for k in ("verdict", "ok", "codes", "requests", "outputs", "placed", "unplaced", "why")}
     ok = bool(advice["bound"] and advice["rebuilt"]) and honest.get("verdict") == "accepted"
+    checked = {n for n, g in (e.get("negatives") or {}).items() if g.get("own_code")}
     negatives = {name: r.get("verdict") == "refused" and r.get("ok") is True
-                 for name, r in (t.get("runs") or {}).items() if name != "honest" and r.get("verdict") in
-                 ("accepted", "refused")}
+                 for name, r in (t.get("runs") or {}).items() if name != "honest" and name not in checked
+                 and r.get("verdict") in ("accepted", "refused")}
     return {"verdict": "accepted" if ok else "refused", "advice": advice, "tie": tie | {"ran": t.get("ran"),
             "stand_ins": t.get("stand_ins")}, "negatives": negatives, "advice_bits": advice_bits(b),
             "in_the_clear": CLEAR["endpoint"]}

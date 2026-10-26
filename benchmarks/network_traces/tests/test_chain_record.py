@@ -206,14 +206,17 @@ def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_ta
     steps.scan = steps.warden_run = None
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [
         {"gate_run": "c1", "request": {"where": "off-host: a pool slot", "engine": "seeded:phase1"},
-         "strategies": {"honest": "accepted", "extra": "refused", "token": "accepted"}}]}))
+         "strategies": {"honest": "accepted", "late": "refused", "extra": "refused", "token": "accepted"}}]}))
     ep = json.loads(Path(steps.endpoint).read_text())
-    ep["chain"]["tie"]["runs"] |= {"token": {"verdict": "refused", "ok": True}, "extra": {"verdict": "n/a"}}
+    ep["chain"]["tie"]["runs"] |= {"token": {"verdict": "refused", "ok": True}, "extra": {"verdict": "n/a"},
+                                   "late": {"verdict": "refused", "ok": None}}
+    ep["negatives"] = {"late": {"own_code": "audit.status:coverage-never-established"}, "token": {"own_code": None}}
     Path(steps.endpoint).write_text(json.dumps(ep))
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["steps"]["scan"]["verdict"] == "not run"
     assert got["stubbed"][:3] == list(cr.STUBBED) and len(got["stubbed"]) == 5
-    assert got["negatives_refused"] == {"rehearsal/c1/extra": True, "tie/token": True, "n2/tampered": True}
+    assert got["negatives_refused"] == {"rehearsal/c1/late": True, "rehearsal/c1/extra": True, "tie/token": True,
+                                        "n2/tampered": True}
     assert "on the certifier-only path" in cr.markdown(got) and "Stubbed:" in cr.markdown(got)
     ep["chain"]["tie"]["runs"]["token"] = {"verdict": "accepted", "ok": False}
     Path(steps.endpoint).write_text(json.dumps(ep))
