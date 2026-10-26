@@ -23,17 +23,6 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Claims.Recursion.VStarB
 
-/-- **`JointV` is monotone in what each part shows.** -/
-theorem jointV_shows {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
-    {DO : Claims.Flock.Deploy Coin Col T} {L : LayoutB} {shape : Claims.Recursion.Form → Prop}
-    {shows shows' : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg} {x : Msg} {c : ℕ → Coin}
-    {xs : List Msg} {ws : List Claims.Flock.Wit} (hw : ∀ {s x xO c}, shows s x xO c → shows' s x xO c)
-    (h : JointV H D L (PartAcceptsV H D DO L shape shows cmt) x c xs ws) :
-    JointV H D L (PartAcceptsV H D DO L shape shows' cmt) x c xs ws := by
-  refine ⟨h.1, h.2.1, h.2.2.1, fun s hs => ?_⟩
-  obtain ⟨hst, h1, h2, h3, h4, h5⟩ := h.2.2.2 s hs
-  exact ⟨hst, h1, h2, h3, hw h4, h5⟩
-
 /-- **`PartOpensB` is antitone in what each part shows.** -/
 theorem partOpensB_shows {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     {DO : Claims.Flock.Deploy Coin Col T} {L : LayoutB} {shape : Claims.Recursion.Form → Prop}
@@ -264,109 +253,10 @@ theorem recKSDecompLV_of_leavesJD
     (hTop : OpenLower.CopyTopRP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
       Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
       (Rows.rowDPieces key) posAt) :
-    RecKSDecompLVD rd b aux nOf hd rest wE final w L := by
-  have h : Top.Targets rd (rowsD resP key) (holdsD rd key elemAt vvAt side posAt) (Top.accRC rd key) :=
-    Top.targets_of_open rd _ _ _ hRdep hDm
-      (Top.targetE_accRC rd key (fun P' ch h => Top.targetE_rowD rd P' ch key h) _
-        (rowEHolds_PD rd resP key elemAt vvAt side posAt))
-      (DecodeAt.decode_at rd _)
-  have hP : ∀ x, (recL rd b aux nOf hd rest wE final w L).parse x = parse x := fun _ => rfl
-  have hS : ∀ f, Claims.Recursion.Form.Dense f → Claims.Recursion.Form.Dense f := fun _ h => h
-  have hC := OpenLower.openCopyR_of FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
-    Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
-    (Rows.rowDPieces key) hP hS hSch
-    (OpenLower.copyFitsR_rowD FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
-      Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L key hP hS) hO
-  have hT := OpenLower.openTieRP_of FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
-    Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
-    (Rows.rowDPieces key) posAt
-    (OpenLower.copyBitsR_of FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
-      Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
-      (Rows.rowDPieces key) posAt hP hS hSch
-      (OpenLower.copyDirsR_of FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
-        Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w)
-        (Rows.rowDPieces key) posAt hDirs)) hTop
-  refine decompBV_lastSplitP_sharesJRV FlockDeploy.sha512 rd (Top.pieces (rowsD resP key))
-    (Top.pholds (holdsD rd key elemAt vvAt side posAt))
-    (Top.hpieces_of_targets rd (rowsD resP key) (holdsD rd key elemAt vvAt side posAt) (Top.accRC rd key) h)
-    _root_.Flock.Readable.relation (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE
-    rowInDeployed final w noB (ownD ownR) _root_.Flock.Readable.relation (bB b aux nOf hd rest) L
-    (bdR rd wE final w).IVStar Claims.Recursion.Form.Dense (deployZkRec _root_.Flock.Readable.relation)
-    (ResLower.showsDec recRead (bB b aux nOf hd rest)) (cmtTr recRead) ?_ ?_ ?_ ?_
-  · -- hR
-    intro x st hx hf r hr s hs
-    exact VPieces.ownP_lt ownR ownQR (fun _ _ => none) hs
-  · -- hrest
-    intro x st hx hf q hq hown hlast c ws hl hT'
-    have hX : DenseX x := ⟨st, hx, hf⟩
-    rcases mem_ivChecks _ _ _ hq with rfl | ⟨j, hj, rfl⟩ | ⟨j, hj, i, hi, rfl | rfl⟩ | ⟨q', hq', rfl⟩
-    · obtain ⟨os, last, hfin, hos, hcnt⟩ := hF x hX ws hl
-      exact ⟨RestRead.kI_pos x, os, last, hfin, hos, hcnt⟩
-    · have hj' : j < kI x - 1 := hj
-      obtain ⟨os, last, hfin, hos, hcnt⟩ := hF x hX ws hl
-      intro os' last' hf'
-      have hf'' : final ((L.msgs x ws).getD (kI x - 1) []) = some (os', last') := hf'
-      rw [hfin] at hf''
-      obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hf'')
-      rw [hLn x hX ws hl j hj']
-      exact congrArg (128 * ·) (hcnt j (by omega)).symm
-    · exact (hSR x hX j hj hown i hi c ws hl hT' _).1
-    · exact (hSR x hX j hj hown i hi c ws hl hT' _).2
-    · obtain ⟨r', rfl⟩ := hlast q' rfl
-      have hr' := mem_last_checks hq'
-      rcases List.mem_cons.1 hr' with rfl | hr'
-      · intro os last hfin hos
-        exact hRd x hX c ws hl hT' os last hfin hos
-      · obtain ⟨v, hv, rfl⟩ := List.mem_map.1 hr'
-        rcases List.mem_append.1 hv with hv | hv
-        · obtain ⟨b', hb', rfl⟩ := List.mem_map.1 hv
-          exact restBase_holds rd hB _ _ _ _ _ wE _ rowInDeployed final w _ _ L _ hx hb' c _
-        · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hv
-          exfalso
-          obtain ⟨r, hr, -, -⟩ := parse_read hx
-          obtain ⟨s, hs⟩ := VPieces.vown_some ownR ownQR (fun _ _ => none) resP (Rows.rowDPieces key)
-            (fun _ => []) (VPieces.nS_pos hr) (hOwn x hX).1 (hOwn x hX).2 (fun q hq => by simp at hq) p hp
-          have hown' : vown ownR ownQR (fun _ _ => none) x p = none := hown
-          rw [hs] at hown'
-          cases hown'
-  · -- hlowR
-    intro x st hx hf c xs ws hJD s hs q hq hown hnp
-    have hJ := OpenLower.jointV_shows (shows' := showsPart recRead (bB b aux nOf hd rest)) (fun h => h.1) hJD
-    obtain ⟨hSRl, hRdl⟩ := hlowR x st hx hf c ws (joint_of_jointP (OpenLower.jointP_of_jointV hJ)) s hs
-    rcases mem_ivChecks _ _ _ hq with rfl | ⟨j, hj, rfl⟩ | ⟨j, hj, i, hi, rfl | rfl⟩ | ⟨q', hq', rfl⟩
-    · cases (hown : (none : Option ℕ) = some s)
-    · cases (hown : (none : Option ℕ) = some s)
-    · exact (hSRl j hj hown i hi _).1
-    · exact (hSRl j hj hown i hi _).2
-    · cases q' with
-      | setup => cases (hown : (none : Option ℕ) = some s)
-      | tag _ => cases (hown : (none : Option ℕ) = some s)
-      | last r' =>
-        cases r' with
-        | read =>
-          intro os last hfin hos
-          exact hRdl hown os last hfin hos
-        | verdict v =>
-          cases v with
-          | base _ => cases (hown : (none : Option ℕ) = some s)
-          | piece p => exact (hnp p rfl).elim
-  · -- hlowP
-    intro x st hx hf c xs ws hJD s hs
-    have hJ := OpenLower.jointV_shows (shows' := showsPart recRead (bB b aux nOf hd rest)) (fun h => h.1) hJD
-    have hJP := OpenLower.jointP_of_jointV hJ
-    refine VPieces.piecesComputes_vown ownR ownQR (fun _ _ => none) (bdR rd wE final w)
-      (recL rd b aux nOf hd rest wE final w L) resP (Rows.rowDPieces key) (fun _ => []) (resHolds elemAt vvAt)
-      (openE rd key side posAt) (fun _ _ _ _ => True) ⟨x, st, hx, hf, rfl⟩
-      (hres x st hx hf c ws (OpenLower.jointP_of_jointV hJD) s hs) ?_ ?_
-    · have hop := OpenLower.openPieces_deployedP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
-        Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
-        (Rows.rowDPieces key) posAt hC hT hx hf hJP hs
-      have hac := Top.piecesComputes_accPiece rd key FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
-        (bdR rd wE final w) L Claims.Recursion.Form.Dense (acceptsLV rd b aux nOf hd rest wE final w L) hEJ ownQR
-        x st hx hf c xs ws hJ s
-      exact fun q hq ho os last hfin hk => ⟨hop q hq ho os last hfin hk, hac q hq ho os last hfin hk⟩
-    · intro q hq
-      simp at hq
+    RecKSDecompLVD rd b aux nOf hd rest wE final w L :=
+  recKSDecompLV_of_leavesJS rd b aux nOf hd rest wE final w L resP key elemAt vvAt side posAt ownR
+    (ResLower.showsDec recRead (bB b aux nOf hd rest)) (fun h => h.1)
+    hRdep hDm hEJ hB hF hLn hRd hSR hOwn hlowR hres hSch hO hDirs hTop
 
 end Assembly
 

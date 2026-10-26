@@ -78,7 +78,7 @@ accumulator ports up to one offset (P3), `ReadsAt` and the base checks. -/
 theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
-    (S : Claims.JsonSpec FlockComplete.printJ _root_.Flock.canon) (hBs : BasesHold rd)
+    (hBs : BasesHold rd)
     (hRd : RestRead.ReadsAt rd final (DeployedR.restR elem))
     (hset : ∀ xO, ∀ u ∈ resSetup xO, u ∈ b.setup xO)
     (hF : FramePorts rd wE final w b elem Claims.Recursion.Form.Dense recRead (cmtTr recRead))
@@ -169,7 +169,7 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
         ((List.range (RestRead.kI x)).map c).length := by
       simp only [List.length_append, List.length_map, List.length_singleton, List.length_range]
       exact hos'
-    obtain ⟨D⟩ := decAt_of (xo := x) (sto := st) S hBs hx hf hRk hlen
+    obtain ⟨D⟩ := decAt_of (xo := x) (sto := st) hBs hx hf hRk hlen
     have hshI := shI_alg (xo := x) (sto := st) D hx hf rfl hv
     obtain ⟨δ, hδ⟩ := hAc os last hfin hos ⟨D⟩
     have hFr' := hFr os last hfin hos ⟨D⟩
@@ -187,7 +187,7 @@ theorem resLowered_DB (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ �
     (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record)
     (rest : Msg → List (Msg × Claims.Out) → List UInt8)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
-    (S : Claims.JsonSpec FlockComplete.printJ _root_.Flock.canon) (hBs : BasesHold rd)
+    (hBs : BasesHold rd)
     (hRd : RestRead.ReadsAt rd final (DeployedR.restR elem))
     (hF : FramePorts rd wE final w (DecompBR.bB (deployedB b) aux nOf hd rest) elem Claims.Recursion.Form.Dense
       recRead (cmtTr recRead))
@@ -195,7 +195,7 @@ theorem resLowered_DB (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ �
       recRead (cmtTr recRead)) :
     ResLoweredPD rd wE final w (DecompBR.bB (deployedB b) aux nOf hd rest) elem Claims.Recursion.Form.Dense recRead
       (cmtTr recRead) DecompBR.resPD DecompBR.ownRD (Rows.elemReadC (Top.accRC rd key)) Rows.resVRead :=
-  resLowered_D rd key wE final w _ elem S hBs hRd (resSetup_deployedB b) hF hA
+  resLowered_D rd key wE final w _ elem hBs hRd (resSetup_deployedB b) hF hA
 
 end
 
@@ -244,7 +244,7 @@ theorem resLowJP_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → �
     (rest : Msg → List (Msg × Out) → List UInt8) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (hBs : BasesHold rd)
+    (hBs : BasesHold rd)
     (hRd : RestRead.ReadsAt rd final (DeployedR.restR elem))
     (hF : ResLower.FramePorts rd wE final w (bB (deployedB b) aux nOf hd rest) elem Claims.Recursion.Form.Dense
       recRead (cmtTr recRead))
@@ -253,6 +253,6 @@ theorem resLowJP_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → �
     ResLowJPD rd (deployedB b) aux nOf hd rest wE final w (DeployedR.layR elem) resPD
       (Rows.elemReadC (Top.accRC rd key)) Rows.resVRead ownRD :=
   fun x st hx hf c ws hJ s hs =>
-    ResLower.resLowered_DB rd key wE final w b aux nOf hd rest elem S hBs hRd hF hA x st hx hf c ws hJ s hs
+    ResLower.resLowered_DB rd key wE final w b aux nOf hd rest elem hBs hRd hF hA x st hx hf c ws hJ s hs
 
 end RecDeploy.DecompBR
