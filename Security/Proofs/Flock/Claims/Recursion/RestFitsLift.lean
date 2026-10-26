@@ -28,9 +28,17 @@ open FlockSoundness.Discharge.Exec (chunks closes chunks_flatten repFrames repFr
 noncomputable instance instFintypeF128 : Fintype F128 :=
   Fintype.ofEquiv (UInt64 × UInt64) ⟨fun a => ⟨a.1, a.2⟩, fun a => (a.lo, a.hi), fun _ => rfl, fun _ => rfl⟩
 
+theorem card_UInt64 : Fintype.card UInt64 = 2 ^ 64 := by
+  rw [← FinEnum.card_eq_fintypeCard]
+  rfl
+
+theorem card_UInt8 : Fintype.card UInt8 = 2 ^ 8 := by
+  rw [← FinEnum.card_eq_fintypeCard]
+  rfl
+
 theorem card_F128 : Fintype.card F128 = 2 ^ 128 := by
   rw [Fintype.card_congr (⟨fun a => (a.lo, a.hi), fun a => ⟨a.1, a.2⟩, fun _ => rfl, fun _ => rfl⟩ :
-    F128 ≃ UInt64 × UInt64), Fintype.card_prod, UInt64.card]
+    F128 ≃ UInt64 × UInt64), Fintype.card_prod, card_UInt64]
   norm_num
 
 theorem byteArray_ext {x y : ByteArray} (h : x.data = y.data) : x = y := by
@@ -45,7 +53,7 @@ theorem toBytes_surj (l : List UInt8) (hl : l.length = 16) : ∃ a : F128, a.toB
   have hf : Function.Injective f := fun a b h =>
     FlockSoundness.Refine.toBytes_inj (byteArray_ext (Array.toList_inj.1 (congrArg Subtype.val h)))
   have hc : Fintype.card F128 = Fintype.card (List.Vector UInt8 16) := by
-    rw [card_vector, card_F128, UInt8.card]
+    rw [card_vector, card_F128, card_UInt8]
     norm_num
   obtain ⟨a, ha⟩ := ((Fintype.bijective_iff_injective_and_card f).2 ⟨hf, hc⟩).2 ⟨l, hl⟩
   exact ⟨a, congrArg Subtype.val ha⟩
