@@ -26,7 +26,7 @@ import pytest
 
 from research import pythonpath as rpp
 from research.telemetry import source_identity as gsid
-from verity_vllm import config as vconfig
+from verity_vllm import config as vconfig, settings as vsettings
 from verity_vllm.pipeline import cli as vcli
 from verity_vllm.pipeline import research_tools
 from verity_vllm.pipeline import source_identity as sid
@@ -250,8 +250,8 @@ def test_repo_root_resolution_prefers_export_json_then_git_then_markers(tmp_path
 def _shipped_tree(tmp_path: Path) -> Path:
     """<root>/src/<sha>/ as `research run --source` lays it out: the repo root markers and the workspace declaration (every member's
     pyproject.toml), stub packages at Verity's locations, and the REAL source_identity modules (generic + project, with the verity_vllm.config
-    it locates the tree through, the research.pythonpath that names core's directories, and the CLI) so the precheck under test runs from
-    the shipped tree itself."""
+    it locates the tree through, the research.pythonpath that names core's directories, and the CLI with the settings it reads) so the
+    precheck under test runs from the shipped tree itself."""
     t = tmp_path / "src" / ("f" * 40)
     for rel in (*research_tools.CORE_DIRS, "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline",
                 "tools/research/src/research/telemetry"):
@@ -267,6 +267,7 @@ def _shipped_tree(tmp_path: Path) -> Path:
     shutil.copy(sid.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "source_identity.py")
     shutil.copy(vconfig.__file__, t / "integrations" / "vllm" / "verity_vllm" / "config.py")
     shutil.copy(vcli.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "cli.py")
+    shutil.copy(vsettings.__file__, t / "integrations" / "vllm" / "verity_vllm" / "settings.py")
     assert not (t / ".git").exists() and not (t / "EXPORT.json").exists()
     return t
 
