@@ -23,6 +23,34 @@ namespace RecDeploy
 open Flock
 open Claims (Msg)
 
+/-- **A staged rec-open part's setup holds the verifier's reads file**: its unit is the verifier's `rec-open/l<L>-h<H>`
+(`checkPart`'s name, `RecOpen.check` in the parse), and `RecCoins.check` refuses such a unit without `--registered`. -/
+theorem registered_recOpen {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR}
+    (hr : readX x = some r) {l LANES HH m : ℕ}
+    (hsv : (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.recOpen l LANES HH m))
+    {i : RecIns} {spec : SessionSpec} {sts : Array Stmt} (hsu : setupO xO = some (i, spec, sts)) :
+    ∃ own, i.base.registered = some own := by
+  obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss, hss, hsv'⟩, h0p, htab⟩ := stagedTables hS
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hsv
+  obtain rfl : sv = .recOpen l LANES HH m := Option.some.inj (hsv'.symm.trans hsv)
+  obtain ⟨-, hset⟩ := setupO_some hsu
+  have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
+  have e0 : p.sts[0] = sts[0] := by subst hp; rfl
+  have h0 : 0 < sts.size := by subst hp; exact h0p
+  obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0p
+  have hpar := FlockVBridge.params_of_check P.recNet ((htab 0 h0p).1.trans (FlockVBridge.name_recOpen l LANES HH m))
+  rw [e0] at hpar
+  have hcoin := Flock.Readable.array_forM_ok (RecIns.setup_coins hset) 0 h0
+  cases ho : i.base.registered with
+  | some own => exact ⟨own, rfl⟩
+  | none =>
+    exfalso
+    rw [ho] at hcoin
+    unfold RecCoins.check at hcoin
+    simp [hpar] at hcoin
+
 /-- **A rec-open part's `acc` (`acc_out`) slot at unit `n` is a registered `rec-acc` row at its chain position (the
 next)**: at a staged `.recOpen l` part the witness checks against, with the setup's table labelling its instances in
 order and the reads file `own`, port `nm`'s entry `reg` of `own` has `acc0`'s registration in the part's shared rows,
