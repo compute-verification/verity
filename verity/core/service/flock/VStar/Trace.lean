@@ -248,18 +248,24 @@ def bitAt (c : Circuit) (z : Array (Array (Array Bool))) (mask : Nat → Nat →
     | some r => mask blk (col - r.start)
     | none => false
 
-/-- What `bitAt` reads of the circuit at every bit, computed once: the block size, the nets newest first, each net's range
-and slot size, and the ranges newest first. -/
+/-- What `bitAt` reads of the circuit at every bit, computed once (compiled `Nat` powers are GMP calls): the block size,
+the nets newest first, each net's range, its start, its slot size and its circuit's size, and the ranges newest first with
+their spans. -/
 structure BitTables where
   bs : Nat
   ns : List Nat
   rs : Array Range
+  st : Array Nat
+  ss : Array Nat
   us : Array Nat
-  ms : List Range
+  ms : List (Range × Nat × Nat)
 
 def bitTables (c : Circuit) : BitTables :=
   { bs := 2 ^ c.kLog, ns := (List.range c.nets.size).reverse, rs := (Array.range c.nets.size).map c.rangeOf,
-    us := (Array.range c.nets.size).map fun n => 2 ^ (c.nets.getD n default).2.unitLog, ms := c.ranges.toList.reverse }
+    st := (Array.range c.nets.size).map fun n => (c.rangeOf n).start,
+    ss := (Array.range c.nets.size).map fun n => 2 ^ (c.rangeOf n).slotLog,
+    us := (Array.range c.nets.size).map fun n => 2 ^ (c.nets.getD n default).2.unitLog,
+    ms := c.ranges.toList.reverse.map fun r => (r, r.start, r.start + 2 ^ r.slotLog) }
 
 /-- `bitAt` reading its tables from `tb`. -/
 def bitAtT (z : Array (Array (Array Bool))) (mask : Nat → Nat → Bool) (tb : BitTables) (q : Nat) : Bool :=
@@ -267,17 +273,19 @@ def bitAtT (z : Array (Array (Array Bool))) (mask : Nat → Nat → Bool) (tb : 
   let col := q % tb.bs
   let fromNet := tb.ns.findSome? fun n =>
     let r := tb.rs.getD n default
-    let k := (col - r.start) / 2 ^ r.slotLog
-    let t := col - r.slot k
+    let st := tb.st.getD n 0
+    let sz := tb.ss.getD n 0
+    let k := (col - st) / sz
+    let t := col - (r.pos0 + k) * sz
     let zs := z.getD n #[]
-    if r.start ≤ col && k < r.count && t < tb.us.getD n 0 && blk * r.count + k < zs.size then
+    if st ≤ col && k < r.count && t < tb.us.getD n 0 && blk * r.count + k < zs.size then
       some ((zs.getD (blk * r.count + k) #[]).getD t false)
     else none
   match fromNet with
   | some v => v
   | none =>
-    match tb.ms.find? (fun r => r.kind == Kind.mask && r.start ≤ col && col < r.start + 2 ^ r.slotLog) with
-    | some r => mask blk (col - r.start)
+    match tb.ms.find? (fun x => x.1.kind == Kind.mask && x.2.1 ≤ col && col < x.2.2) with
+    | some x => mask blk (col - x.2.1)
     | none => false
 
 theorem findSome?_congr_mem {α β} {l : List α} {f g : α → Option β} (h : ∀ a ∈ l, f a = g a) :
@@ -287,15 +295,26 @@ theorem findSome?_congr_mem {α β} {l : List α} {f g : α → Option β} (h : 
   | cons a l ih =>
     simp only [List.findSome?_cons, h a List.mem_cons_self, ih fun x hx => h x (List.mem_cons_of_mem _ hx)]
 
+theorem find?_spans (l : List Range) (col : Nat) :
+    (l.map fun r => (r, r.start, r.start + 2 ^ r.slotLog)).find? (fun x => x.1.kind == Kind.mask && x.2.1 ≤ col && col < x.2.2) =
+      (l.find? fun r => r.kind == Kind.mask && r.start ≤ col && col < r.start + 2 ^ r.slotLog).map
+        fun r => (r, r.start, r.start + 2 ^ r.slotLog) := by
+  rw [List.find?_map]; rfl
+
 theorem bitAtT_bitTables (c : Circuit) (z : Array (Array (Array Bool))) (mask : Nat → Nat → Bool) :
     bitAtT z mask (bitTables c) = bitAt c z mask := by
   funext q
-  simp only [bitAtT, bitAt, bitTables]
+  delta bitAtT bitAt bitTables
+  dsimp only
+  rw [find?_spans]
   congr 1
-  apply findSome?_congr_mem
-  intro n hn
-  have h : n < c.nets.size := List.mem_range.mp (List.mem_reverse.mp hn)
-  simp [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range, h]
+  · apply findSome?_congr_mem
+    intro n hn
+    have h : n < c.nets.size := List.mem_range.mp (List.mem_reverse.mp hn)
+    simp [Array.getD_eq_getD_getElem?, h, Range.slot]
+  · funext m
+    cases (c.ranges.toList.reverse.find? fun r => r.kind == Kind.mask && r.start ≤ q % 2 ^ c.kLog &&
+      q % 2 ^ c.kLog < r.start + 2 ^ r.slotLog) <;> rfl
 
 /-- What the assigner mirrors: no typed template, no lookup, no segmented row, and no wire but the rows' (into a
 `sha512x3` or `hm96` slot). -/
@@ -319,10 +338,10 @@ def assign (c : Circuit) (pin : In.PartIn) (mask : Nat → Nat → Bool) : Optio
 def pack (f : Nat → Bool) (lo n : Nat) : ByteArray := Id.run do
   let mut out := ByteArray.empty
   for j in [0:n / 8] do
-    let mut v : Nat := 0
+    let mut v : UInt8 := 0
     for t in [0:8] do
-      if f (lo + 8 * j + t) then v := v + 2 ^ t
-    out := out.push v.toUInt8
+      if f (lo + 8 * j + t) then v := v ||| (1 : UInt8) <<< t.toUInt8
+    out := out.push v
   return out
 
 /-- What the difftest compares: per block, the SHA-512 of its `2^kLog` bits, and of each range's slots' bits (in
