@@ -703,12 +703,20 @@ def _pass_totals(run: Any) -> dict[str, int]:
 def _pearl_c_gate(run: Any) -> dict[str, Any]:
     """The experimental arm's own gate, `e2e.gate`'s call check, on the protocol arm's installed run: at every distinct
     (n, k), served y against x·Wᵀ within `bench_arm.ERR`, the commitment twice, and the ``hash_leaf``-omitted negative
-    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control."""
+    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control. Its ``coins`` are the
+    installed run's: a live session's (``challenger``, its salt epoch ``pass_index`` and the root its salt coin follows,
+    `salt.epoch_open_root` of the weights' root and that epoch) when the option took its salt from one, else
+    ``in-process``."""
 
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm
+    from verity.core.protocols.pouw.salt import epoch_open_root
 
     check = PearlCArm()
     check.run, check.schedule = run, run.schedule.name
+    c = run.commits
+    check.coins = ({"source": c["coin_source"], "session": c.get("session"), "pass_index": c["pass_index"],
+                    "salt_after": epoch_open_root(bytes.fromhex(c["weights_root"]), c["pass_index"]).hex()}
+                   if c.get("coin_source", "in-process") != "in-process" else {"source": "in-process"})
     check.weights = {w: x.tensor for w, x in run.weights.items()}
     got = check.gate(None)
     # The check begins and ends its own passes; the next forward's calls need an open pass, as the adapter's hook leaves

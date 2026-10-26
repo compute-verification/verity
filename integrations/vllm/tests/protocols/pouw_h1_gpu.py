@@ -300,6 +300,33 @@ def session_end(gate: Any, reserved: dict[str, Any]) -> dict[str, Any]:
             "ok": bool(end.get("closed") and end.get("complete"))}
 
 
+def fixed_length(decl: Any) -> dict[str, Any]:
+    """The fixed length `decl`'s window serves (``period-open --length``, core's `credit.LENGTH_FIELD`): each request's
+    public max_tokens, every one admitted at step 0 and run to its cap (``ignore_eos``, the public-cap done source)."""
+    return {"max_tokens": [decl.max_tokens] * decl.slots, "stop": "fixed"}
+
+
+def period_open_argv(name: str, circuit: str, draw_k: int, decl: Any) -> list[str]:
+    """``period-open`` of the Commit window's period `name`: cap 1 (the Commit's window alone, so a negative's refused
+    window, which ends complete, is never one of it), its circuit (the period's declared Program's digest), its draw K
+    (`pouw_h1_challenger.draw_k` over the declared layout, core's `credit.committed_k`), T and the fixed length
+    (`fixed_length`, core's `credit.committed_length`)."""
+    return ["period-open", "--name", name, "--cap", "1", "--circuit", circuit, "--draw-k", str(draw_k),
+            "--rows", str(decl.rows), "--length", json.dumps(fixed_length(decl), sort_keys=True, separators=(",", ":"))]
+
+
+def period_verb(gate: Any, argv: list[str]) -> dict[str, Any]:
+    """The gate's answer to `argv` (``period-open``/``period-close``); ValueError naming what it said when it refuses."""
+    p = subprocess.run(gate_argv(gate.argv, argv), capture_output=True, text=True)
+    try:
+        answer = json.loads(p.stdout)
+    except ValueError:
+        answer = None
+    if p.returncode or not isinstance(answer, dict) or "refused" in answer:
+        raise ValueError(f"the gate refused {argv[0]} (exit {p.returncode}): {(p.stdout + p.stderr)[-1000:]}")
+    return answer
+
+
 def model_key_of(gate: Any, model: str, circuit: str) -> Any:
     """The auditor's registration of `model` under the period's `circuit` and its salt key
     (`pouw_h1_served.ModelKey`), as the gate's ``model-key --model M --circuit C`` answers the lane's gate key; the key
@@ -758,7 +785,17 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
     if a.baseline_h1:
         doc["h1_baseline"] = window("baseline", plain, outdir / "baseline")
     if a.commit:
+        if a.period:
+            from verity_vllm.protocols.pouw.h1 import challenger as PHC
+            from verity_vllm.protocols.pouw.h1 import served as SV
+            draw_k = PHC.draw_k(SV.declared_layout(period[2]["shapes"], period[2]["modules"], decl.rows, decl.steps))
+            doc["period_gate"] = {"name": a.period, "length": fixed_length(decl), "draw_k": draw_k,
+                                  "open": period_verb(a.gate, period_open_argv(a.period, period[1], draw_k, decl))}
+            print(f"[gate] period {json.dumps(doc['period_gate'], default=str)}", flush=True)
         doc["h1_commit"] = window("commit", plain, outdir / "commit", commit=True)
+        if a.period:
+            doc["period_gate"]["close"] = period_verb(a.gate, ["period-close", "--name", a.period])
+            print(f"[gate] period {a.period} closed {json.dumps(doc['period_gate']['close'], default=str)}", flush=True)
         (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
         if a.negatives:
             doc["negatives"] = {}
@@ -1424,7 +1461,9 @@ def main(argv: list[str] | None = None) -> int:
                                                    "NAME), NAME this node's name in the gate's peers, and the next window's "
                                                    "is reserved once that session has ended (window_sessions)")
     ap.add_argument("--period", metavar="NAME", help="with --check-challenger: the lane's period the window is one of, which "
-                                                     "the ledger must credit with it accepted")
+                                                     "the ledger must credit with it accepted; with --commit and --peer: "
+                                                     "the period the run opens at its Commit window (period_open_argv, "
+                                                     "with --length) and closes once that window's session has ended")
     ap.add_argument("--descriptor", metavar="PROGRAM", help="with --check-challenger: the period's declared window Program "
                                                             "(the rehearsal's window-program.json.gz), whose bytes core's "
                                                             "credit reads the window's layout from")
@@ -1506,6 +1545,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.peer and not (a.challenger and a.gate and a.workload == "fill" and not a.handoff and a.session is None):
         ap.error("--peer is the fill workload's, with --challenger and --gate, without --session or --handoff (each window "
                  "reserves its own session)")
+    if a.period and not a.check_challenger and not (a.commit and a.peer):
+        ap.error("--period is --check-challenger's, or --commit's with --peer (the period its Commit window opens)")
     if a.negatives and not a.commit:
         ap.error("--negatives is --commit's")
     if a.credit and not (a.commit and a.receipts):

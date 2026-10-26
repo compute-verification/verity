@@ -14,7 +14,7 @@ the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEM
 """
 from __future__ import annotations
 
-from verity_vllm.program.registry.dense import TanhF32Rn, tanh_f32_bits  # noqa: F401
+from verity_vllm.program.registry.dense import TanhF32Rn, tanh_f32_bits
 
 SEMANTIC_ID = "dense/TanhF32Rn@v1"
 
