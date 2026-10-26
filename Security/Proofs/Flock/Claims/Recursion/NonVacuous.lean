@@ -170,9 +170,7 @@ theorem actR_of_dec (hr : ReadOkR rd x ms cs) (D : DecAt rd x ms cs) :
   | coin c => intro hr; exact (hr : False).elim
   | decide s spec sts link c₁ mids f =>
     intro _
-    have e := (FlockDeploy.actR_decide h).symm.trans D.dec
-    cases e
-    rfl
+    rw [← Option.some.inj ((FlockDeploy.actR_decide h).symm.trans D.dec)]
 
 /-- **Row C's sizes**: each rep's proof index is in range (`decR_fits`). -/
 theorem idx_lt (D : DecAt rd x ms cs) {i : ℕ} (hi : i < D.sts.size) (r : Fin 2) : 2 * i + r < D.d.f.ps.size := by
@@ -204,7 +202,7 @@ theorem runs_of_targets (hB : TargetB rd P acc) (hpts : TargetPoints rd P) (hL :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs →
       ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ), i < D.sts.size → (D.files cls i).Runs := by
   intro x ms cs hA D cls i hi
-  obtain ⟨⟨xo, sto, hst, hf, hx⟩, hr, hb, -⟩ := hA
+  obtain ⟨⟨xo, sto, hst, hf, hx⟩, hr, hb, -⟩ := id hA
   have hti : i < D.spec.tables.size := hT x ms cs hA D ▸ hi
   obtain ⟨pieces, sideAt, posAt, hholds, hside, hpos, hcover⟩ := hD x ms cs hA D cls i hi
   obtain ⟨S, gs, hS, hg, hsz, hw, hparts⟩ := hR x ms cs hA D cls i hi
@@ -243,193 +241,132 @@ def RowsHold {Q : Type} (rows : Msg → List Q) (holds : Q → Msg → List Msg 
     (ms : List Msg) (cs : List Coin) : Prop :=
   ∀ q ∈ rows x, holds q x ms cs
 
-section Pieces
+/-- **Every target**, at the parts' pieces `rows` (what `holds` says of each) and the reps' accumulators `acc`. -/
+structure Targets (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q)
+    (holds : Q → Msg → List Msg → List Coin → Prop) (acc : Msg → List Msg → List Coin → ℕ → Array F128) : Prop where
+  b : TargetB rd (RowsHold rows holds) acc
+  points : TargetPoints rd (RowsHold rows holds)
+  l : TargetL rd (RowsHold rows holds) acc
+  d : TargetD rd (RowsHold rows holds) acc
+  r : TargetR rd (RowsHold rows holds) acc
+  e : TargetE rd (RowsHold rows holds) acc
+  tables : TargetTables rd (RowsHold rows holds)
+  verdict : TargetVerdict rd (RowsHold rows holds) acc
 
-variable (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q) (holds : Q → Msg → List Msg → List Coin → Prop)
-  (acc : Msg → List Msg → List Coin → ℕ → Array F128)
-
-/-- **`hpieces` at the pieces**, from the targets at `P = RowsHold rows holds`. -/
-theorem hpieces_of_targets (hB : TargetB rd (RowsHold rows holds) acc) (hpts : TargetPoints rd (RowsHold rows holds))
-    (hL : TargetL rd (RowsHold rows holds) acc) (hD : TargetD rd (RowsHold rows holds) acc)
-    (hR : TargetR rd (RowsHold rows holds) acc) (hE : TargetE rd (RowsHold rows holds) acc)
-    (hT : TargetTables rd (RowsHold rows holds)) (hV : TargetVerdict rd (RowsHold rows holds) acc) :
+/-- **`hpieces` at the pieces, from the targets.** -/
+theorem hpieces_of_targets (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q)
+    (holds : Q → Msg → List Msg → List Coin → Prop) (acc : Msg → List Msg → List Coin → ℕ → Array F128)
+    (h : Targets rd rows holds acc) :
     ∀ (x : Msg) (ms : List Msg) (cs : List Coin), ReadOkR rd x ms cs →
       (∀ b ∈ VerdictP.bases, holdsR FlockDeploy.sha512 rd b x ms cs) →
       (∀ q ∈ pieces rows x, pholds holds q x ms cs) → holdsR FlockDeploy.sha512 rd .verdict x ms cs := by
   intro x ms cs hr hb hp
-  refine verdict_of_targets rd (RowsHold rows holds) acc hB hpts hL hD hR hE hT hV x ms cs
+  refine verdict_of_targets rd (RowsHold rows holds) acc h.b h.points h.l h.d h.r h.e h.tables h.verdict x ms cs
     ⟨hp .dense List.mem_cons_self, hr, hb, fun q hq => hp (.row q) ?_⟩
   exact List.mem_cons_of_mem _ (List.mem_map.2 ⟨q, hq, rfl⟩)
-
-end Pieces
 
 end Top
 
 /-! ## The premise of `RecursiveKS` at `nextR` -/
 
+section Premise
+
+/-- The deployed bound record at `nextR rd`. -/
+abbrev bdR (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) :=
+  bdDeployed _root_.Flock.Readable.relation (nextR rd) (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols
+    wE FlockDeploy.joinR rowInDeployed final w
+
+/-- V\*'s bound layout at the last round's pieces `fin`. -/
+abbrev layR (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) : LayoutB :=
+  layoutBTops (finOpen fin)
+
+/-- The compiled record at the coin server's transcript, whose inner view runs `IVStar` at `nextR rd`. -/
+abbrev recR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
+    (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :=
+  recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layR fin) (bdR rd wE final w).IVStar
+
+/-- What each part's circuit accepts, at the deployed outer `--zk` record and the coin server's record's reader. -/
+abbrev acceptsR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
+    (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) :=
+  PartAccepts FlockDeploy.sha512 (recR rd b aux nOf hd rest fin wE final w) (deployZkRec _root_.Flock.Readable.relation)
+    (layR fin) Claims.Recursion.Form.Dense (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead)
+
 /-- **`RecursiveKS`'s premise at the deployed reader**: `Flock.Assumptions.RecKSDecomp` (#3638) with `IVStar`'s last
 step `nextR rd` and its rows joined by `joinR`. At the brings whose transcript is the coin server's record, V\*'s bound
-layout and the deployed outer `--zk` record, wherever every part's circuit accepts at every dense compiled statement,
+layout and the deployed outer `--zk` record, wherever every part's circuit accepts at a dense compiled statement,
 `IVStar` accepts or two of the parts' recorded calls collide. -/
-def RecKSDecompR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round)
-    (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
+def RecKSDecompR (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
     (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ) : Prop :=
-  DecompB FlockDeploy.sha512
-    (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layoutBTops (finOpen fin))
-      (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-        (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-        w).IVStar)
-    (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-      (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-      w).IVStar
-    (layoutBTops (finOpen fin)) Claims.Recursion.Form.Dense
-    (PartAccepts FlockDeploy.sha512
-      (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layoutBTops (finOpen fin))
-        (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-          (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-          w).IVStar)
-      (deployZkRec _root_.Flock.Readable.relation) (layoutBTops (finOpen fin)) Claims.Recursion.Form.Dense
-      (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead))
+  DecompB FlockDeploy.sha512 (recR rd b aux nOf hd rest fin wE final w) (bdR rd wE final w).IVStar (layR fin)
+    Claims.Recursion.Form.Dense (acceptsR rd b aux nOf hd rest fin wE final w)
+
+variable (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q) (holds : Q → Msg → List Msg → List Coin → Prop)
+  (acc : Msg → List Msg → List Coin → ℕ → Array F128) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round)
+  (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)
+  (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
+  (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+
+/-- The split verdict at the pieces, where the targets hold. -/
+abbrev splitR (h : Top.Targets rd rows holds acc) :=
+  lastSplitP FlockDeploy.sha512 rd (Top.pieces rows) (Top.pholds holds) (Top.hpieces_of_targets rd rows holds acc h)
+
+/-- The inventory's holders at the split verdict. -/
+abbrev holdersR (ownB : Msg → VerdictR → Option ℕ) (ownQ : Msg → Top.Piece Q → Option ℕ) :=
+  ownHolders (recR rd b aux nOf hd rest fin wE final w) (layR fin)
+    (ownDeploy (ownJ (recR rd b aux nOf hd rest fin wE final w) (layR fin) (ownP ownB ownQ)))
 
 /-- **The top statement: `RecursiveKS`'s premise at `nextR`, from the targets.** At the deployed reader `rd`, the
-parts' pieces `rows` (what `holds` says of each) and the reps' accumulators `acc`: where each row's target holds at
-`P = RowsHold rows holds`, the owners are the statement's parts (`hR`), the checks no part holds hold off any
-witnesses (`hrest`), and each part's circuit accepting implies its share of the checks (`hlowR`) and of the pieces with
-`dense` among them (`hlowP`), `RecKSDecompR` holds. -/
-theorem recKSDecompR_of_targets (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q)
-    (holds : Q → Msg → List Msg → List Coin → Prop) (acc : Msg → List Msg → List Coin → ℕ → Array F128)
-    (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
-    (rest : Msg → List (Msg × Out) → List UInt8)
-    (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
-    (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
-    (hB : Top.TargetB rd (Top.RowsHold rows holds) acc) (hpts : Top.TargetPoints rd (Top.RowsHold rows holds))
-    (hL : Top.TargetL rd (Top.RowsHold rows holds) acc) (hD : Top.TargetD rd (Top.RowsHold rows holds) acc)
-    (hRr : Top.TargetR rd (Top.RowsHold rows holds) acc) (hE : Top.TargetE rd (Top.RowsHold rows holds) acc)
-    (hT : Top.TargetTables rd (Top.RowsHold rows holds)) (hV : Top.TargetVerdict rd (Top.RowsHold rows holds) acc)
-    (ownB : Msg → VerdictR → Option ℕ) (ownQ : Msg → Top.Piece Q → Option ℕ)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt),
-      (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layoutBTops (finOpen fin))
-        (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-          (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-          w).IVStar).parse x = some st → Claims.Recursion.Form.Dense st.form →
-      ∀ r ∈ (lastSplitP FlockDeploy.sha512 rd (Top.pieces rows) (Top.pholds holds)
-          (Top.hpieces_of_targets rd rows holds acc hB hpts hL hD hRr hE hT hV)).checks
-          (Claims.Recursion.xI (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest }
-            (layoutBTops (finOpen fin))
-            (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-              (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed
-              final w).IVStar) x), ∀ s,
-        ownP ownB ownQ x r = some s →
-          s < (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest }
-            (layoutBTops (finOpen fin))
-            (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-              (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed
-              final w).IVStar).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt),
-      (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layoutBTops (finOpen fin))
-        (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-          (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-          w).IVStar).parse x = some st → Claims.Recursion.Form.Dense st.form →
-      ∀ q ∈ ivChecks (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-            (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-            w)
+parts' pieces `rows` (what `holds` says of each) and the reps' accumulators `acc`: where every target holds (`h`), the
+owners are the statement's parts (`hR`), the checks no part holds hold off any witnesses (`hrest`), and each part's
+circuit accepting implies its share of the other checks (`hlowR`) and of the pieces, `dense` among them (`hlowP`),
+`RecKSDecompR` holds. -/
+theorem recKSDecompR_of_targets (h : Top.Targets rd rows holds acc) (ownB : Msg → VerdictR → Option ℕ)
+    (ownQ : Msg → Top.Piece Q → Option ℕ)
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
+      Claims.Recursion.Form.Dense st.form →
+      ∀ r ∈ (splitR rd rows holds acc h).checks (Claims.Recursion.xI (recR rd b aux nOf hd rest fin wE final w) x),
+        ∀ s, ownP ownB ownQ x r = some s → s < (recR rd b aux nOf hd rest fin wE final w).nS x)
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recR rd b aux nOf hd rest fin wE final w).parse x = some st →
+      Claims.Recursion.Form.Dense st.form →
+      ∀ q ∈ ivChecks (bdR rd wE final w)
           (deploySplit FlockDeploy.sha512 _root_.Flock.Readable.relation (nextR rd)
             (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-            w (nextR_coin rd FlockDeploy.sha512)
-            (lastSplitP FlockDeploy.sha512 rd (Top.pieces rows) (Top.pholds holds)
-              (Top.hpieces_of_targets rd rows holds acc hB hpts hL hD hRr hE hT hV)).toLast)
-          (Claims.Recursion.xI (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest }
-            (layoutBTops (finOpen fin))
-            (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-              (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed
-              final w).IVStar) x),
-        ownHolders (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest }
-            (layoutBTops (finOpen fin))
-            (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-              (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed
-              final w).IVStar) (layoutBTops (finOpen fin))
-          (ownDeploy (ownJ (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest }
-            (layoutBTops (finOpen fin))
-            (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-              (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed
-              final w).IVStar) (layoutBTops (finOpen fin)) (ownP ownB ownQ))) x q = none →
+            w (nextR_coin rd FlockDeploy.sha512) (splitR rd rows holds acc h).toLast)
+          (Claims.Recursion.xI (recR rd b aux nOf hd rest fin wE final w) x),
+        holdersR rd b aux nOf hd rest fin wE final w ownB ownQ x q = none →
         (∀ r, q = .elem r → ∃ r', r = .last r') →
-        ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
-          ws.length = (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest }
-            (layoutBTops (finOpen fin))
-            (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-              (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed
-              final w).IVStar).nS x →
-          (∀ e ∈ (layoutBTops (finOpen fin)).allCalls x ws, FlockDeploy.sha512 e.1 = e.2) →
-          q.Holds FlockDeploy.sha512 (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-              (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed
-              final w)
+        ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), ws.length = (recR rd b aux nOf hd rest fin wE final w).nS x →
+          (∀ e ∈ (layR fin).allCalls x ws, FlockDeploy.sha512 e.1 = e.2) →
+          q.Holds FlockDeploy.sha512 (bdR rd wE final w)
             (deploySplit FlockDeploy.sha512 _root_.Flock.Readable.relation (nextR rd)
               (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed
-              final w (nextR_coin rd FlockDeploy.sha512)
-              (lastSplitP FlockDeploy.sha512 rd (Top.pieces rows) (Top.pholds holds)
-                (Top.hpieces_of_targets rd rows holds acc hB hpts hL hD hRr hE hT hV)).toLast)
-            (Claims.Recursion.xI (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest }
-              (layoutBTops (finOpen fin))
-              (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-                (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed
-                final w).IVStar) x) c ((layoutBTops (finOpen fin)).msgs x ws))
-    (hlowR : ∀ s x c ms,
-      PartAccepts FlockDeploy.sha512
-        (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layoutBTops (finOpen fin))
-          (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-            (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-            w).IVStar)
-        (deployZkRec _root_.Flock.Readable.relation) (layoutBTops (finOpen fin)) Claims.Recursion.Form.Dense
-        (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead) s x c ms →
-      RestComputes FlockDeploy.sha512
-        (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layoutBTops (finOpen fin))
-          (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-            (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-            w).IVStar)
-        (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-          (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final w)
+              final w (nextR_coin rd FlockDeploy.sha512) (splitR rd rows holds acc h).toLast)
+            (Claims.Recursion.xI (recR rd b aux nOf hd rest fin wE final w) x) c ((layR fin).msgs x ws))
+    (hlowR : ∀ s x c ms, acceptsR rd b aux nOf hd rest fin wE final w s x c ms →
+      RestComputes FlockDeploy.sha512 (recR rd b aux nOf hd rest fin wE final w) (bdR rd wE final w)
         (deploySplit FlockDeploy.sha512 _root_.Flock.Readable.relation (nextR rd)
           (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final w
-          (nextR_coin rd FlockDeploy.sha512)
-          (lastSplitP FlockDeploy.sha512 rd (Top.pieces rows) (Top.pholds holds)
-            (Top.hpieces_of_targets rd rows holds acc hB hpts hL hD hRr hE hT hV)).toLast)
-        (ownHolders (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest }
-            (layoutBTops (finOpen fin))
-            (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-              (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed
-              final w).IVStar) (layoutBTops (finOpen fin))
-          (ownDeploy (ownJ (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest }
-            (layoutBTops (finOpen fin))
-            (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-              (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed
-              final w).IVStar) (layoutBTops (finOpen fin)) (ownP ownB ownQ)))) s x c ms)
-    (hlowP : ∀ s x c ms,
-      PartAccepts FlockDeploy.sha512
-        (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layoutBTops (finOpen fin))
-          (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-            (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-            w).IVStar)
-        (deployZkRec _root_.Flock.Readable.relation) (layoutBTops (finOpen fin)) Claims.Recursion.Form.Dense
-        (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead) s x c ms →
-      PiecesComputes (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-          (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final w)
-        (recBound _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layoutBTops (finOpen fin))
-          (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-            (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-            w).IVStar)
-        (Top.pieces rows) (Top.pholds holds) ownQ s x c ms) :
+          (nextR_coin rd FlockDeploy.sha512) (splitR rd rows holds acc h).toLast)
+        (holdersR rd b aux nOf hd rest fin wE final w ownB ownQ) s x c ms)
+    (hlowP : ∀ s x c ms, acceptsR rd b aux nOf hd rest fin wE final w s x c ms →
+      PiecesComputes (bdR rd wE final w) (recR rd b aux nOf hd rest fin wE final w) (Top.pieces rows)
+        (Top.pholds holds) ownQ s x c ms) :
     RecKSDecompR rd b aux nOf hd rest fin wE final w :=
   decompB_lastSplitP_shares FlockDeploy.sha512 rd (Top.pieces rows) (Top.pholds holds)
-    (Top.hpieces_of_targets rd rows holds acc hB hpts hL hD hRr hE hT hV) _root_.Flock.Readable.relation
+    (Top.hpieces_of_targets rd rows holds acc h) _root_.Flock.Readable.relation
     (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE rowInDeployed final w ownB ownQ
-    _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layoutBTops (finOpen fin))
-    (bdDeployed _root_.Flock.Readable.relation (nextR rd)
-      (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE FlockDeploy.joinR rowInDeployed final
-      w).IVStar
+    _root_.Flock.Readable.relation { b with tr := recTr aux nOf hd rest } (layR fin) (bdR rd wE final w).IVStar
     Claims.Recursion.Form.Dense (deployZkRec _root_.Flock.Readable.relation)
     (showsPart recRead { b with tr := recTr aux nOf hd rest }) (cmtTr recRead) hR hrest hlowR hlowP
+
+end Premise
 
 end
 
