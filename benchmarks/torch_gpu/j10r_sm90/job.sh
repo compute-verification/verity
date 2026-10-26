@@ -2,10 +2,11 @@
 # HASH-22's jobs (cwd = the source tree's root):
 #   build  (a CPU node) the fallback, j10r_ref.cu, at sm_90a: $OUT/lib/sm_90a/j10r_ref.so, ptxas's report, BUILD.txt
 #   cpu    build, then fixtures.py expected into $OUT/fixtures (uv sync first; FIX_ARGS, JOBS default 30)
-#   gpu    (vy-dc-h200-3) check.py, then bench.py, on the libraries sent (LIBS, default $RESEARCH_RUN_DIR/inputs, with
-#          expected.npz and fixtures.json): j10r_ref.so as the fallback, every h1u_*.so as an h1u build (and its _sm
-#          launch), s8_simple.py (#4472's, sent) as the bench's plain arm. Operands are generated before the lease, in a
-#          scratch directory removed at exit.
+#   gpu    (vy-dc-h200-3) check.py, then bench.py, on the files sent (LIBS, default $RESEARCH_RUN_DIR/inputs):
+#          expected.npz and fixtures.json, j10r_ref.so as the fallback, every h1u_*.so as an h1u build (and its _sm
+#          launch), s8_simple.py (#4472's) as the bench's plain arm. Fixtures not sent are computed here and the fallback
+#          not sent is built here (BUILD_REF=0: not), both before the lease, as are the operands, in a scratch directory
+#          removed at exit.
 #
 #   research run --on vy-nebius-cpu-4 --as kernels-kp2dec --project verity --source . --cwd source -- \
 #     env CHECK_SLOTS=/workspace/research/locks/kernels/slots python3 tools/verity/check/slot.py --by kernels -- \
@@ -51,16 +52,29 @@ case $WHAT in
     { echo "python $PY"; $PY -c 'import sys, torch, numpy; print(sys.version.split()[0], torch.__version__, torch.version.cuda, numpy.__version__)'
       nvidia-smi --query-gpu=index,name,compute_cap,driver_version --format=csv; ls -l "$LIBS"; } > "$OUT/env.txt" 2>&1
     S=$(mktemp -d /tmp/j10r-sm90.XXXXXX); trap 'rm -rf "$S"' EXIT
+    : > "$OUT/rc.txt"
+    FIX=$LIBS
+    if [ ! -f "$FIX/expected.npz" ]; then
+      FIX=$OUT/fixtures
+      $PY "$D/fixtures.py" expected --out "$FIX" --jobs "${JOBS:-$(nproc)}" ${FIX_ARGS:-} > "$OUT/fixtures.out" 2>&1
+      echo "fixtures rc $? ($(nproc) CPUs)" >> "$OUT/rc.txt"; tail -3 "$OUT/fixtures.out"
+    fi
+    REF=$LIBS/j10r_ref.so
+    if [ ! -f "$REF" ] && [ "${BUILD_REF:-1}" = 1 ]; then
+      NVCC=${NVCC:-$(for c in /usr/local/cuda-13.0 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { echo "$c/bin/nvcc"; break; }; done)}
+      build > "$OUT/build.out" 2>&1; echo "build rc $?" >> "$OUT/rc.txt"; cat "$OUT/build.out"
+      REF=$OUT/lib/sm_90a/j10r_ref.so
+    fi
     LA=()
-    [ -f "$LIBS/j10r_ref.so" ] && LA+=(--ref "$LIBS/j10r_ref.so")
+    [ -f "$REF" ] && LA+=(--ref "$REF")
     SM=
     for f in "$LIBS"/h1u_*.so; do [ -f "$f" ] && { LA+=(--h1u "$(basename "$f" .so)=$f"); SM=--sm; }; done
     [ -n "$SM" ] && LA+=("$SM")
-    $PY "$D/check.py" --fixtures "$LIBS" --out "$OUT" --scratch "$S" --operands-only ${CHECK_ARGS:-} > "$OUT/operands.out" 2>&1
-    echo "operands rc $?" > "$OUT/rc.txt"
+    $PY "$D/check.py" --fixtures "$FIX" --out "$OUT" --scratch "$S" --operands-only ${CHECK_ARGS:-} > "$OUT/operands.out" 2>&1
+    echo "operands rc $?" >> "$OUT/rc.txt"
     BA=${BENCH_ARGS:-}
     [ -f "$LIBS/s8_simple.py" ] && BA="--s8-simple $LIBS/s8_simple.py $BA"
-    export O=$OUT PY D S STEPS=${STEPS:-check bench} CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=$BA LIBS
+    export O=$OUT PY D S STEPS=${STEPS:-check bench} CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=$BA FIX
     export LA_S="${LA[*]}"
     # shellcheck disable=SC2016
     gpu-lease 1 --wait --max-min "${LEASE_MIN:-25}" -- bash -c '
@@ -68,9 +82,9 @@ case $WHAT in
         -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
       for s in $STEPS; do
         case $s in
-          check) $PY "$D/check.py" --fixtures "$LIBS" --out "$O" --scratch "$S" $LA_S $CHECK_ARGS > "$O/check.out" 2> "$O/check.err" ;;
+          check) $PY "$D/check.py" --fixtures "$FIX" --out "$O" --scratch "$S" $LA_S $CHECK_ARGS > "$O/check.out" 2> "$O/check.err" ;;
           bench) [ -f "$D/bench.py" ] || continue
-                 $PY "$D/bench.py" --fixtures "$LIBS" --out "$O" --scratch "$S" --check "$O/check.json" $LA_S $BENCH_ARGS \
+                 $PY "$D/bench.py" --fixtures "$FIX" --out "$O" --scratch "$S" --check "$O/check.json" $LA_S $BENCH_ARGS \
                    > "$O/bench.jsonl" 2> "$O/bench.err" ;;
         esac
         echo "$s rc $?" >> "$O/rc.txt"
