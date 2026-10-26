@@ -203,18 +203,24 @@ class Sketch:
         self.sigma = torch.zeros(units, rows, dtype=torch.int32, device=device)
         self.seen = torch.zeros(units, dtype=torch.int32, device=device)
         self.blocks = 0
-        self.checked = False
+        self.checked, self.int_mm = False, True
 
     def _mm(self, x: Any) -> Any:
+        """x · signs, exactly: by torch._int_mm where it runs (held to the float product once), else in float32, exact
+        since every partial sum is an integer below 2^24 (2,056 · 128)."""
         t = self.t
-        if self.device.type == "cuda" and x.shape[0] > 16:
-            out = t._int_mm(x, self.signs)
-            if not self.checked:
-                ref = (x[:64].to(t.float32) @ self.signs_f).to(t.int32)
-                if not t.equal(out[:64], ref):
-                    raise RuntimeError("torch._int_mm's sketch is not the exact product")
-                self.checked = True
-            return out
+        if self.int_mm and self.device.type == "cuda" and x.shape[0] > 16:
+            try:
+                out = t._int_mm(x, self.signs)
+            except RuntimeError:
+                self.int_mm = False
+            else:
+                if not self.checked:
+                    ref = (x[:64].to(t.float32) @ self.signs_f).to(t.int32)
+                    if not t.equal(out[:64], ref):
+                        raise RuntimeError("torch._int_mm's sketch is not the exact product")
+                    self.checked = True
+                return out
         return (x.to(t.float32) @ self.signs_f).to(t.int32)
 
     def add(self, rows: Any, j0: int) -> None:
@@ -485,6 +491,7 @@ class Engine:
         times["step_s"] = time.perf_counter() - t0
         times["covered_units"] = sk.covered()
         times["sketched_blocks"] = sk.blocks
+        times["int_mm"] = sk.int_mm and sk.checked
         if self.skip_layer is None and times["covered_units"] != self.units:
             raise RuntimeError(f"the step sketched {times['covered_units']} of {self.units} units whole")
         return sk.sigma, times
