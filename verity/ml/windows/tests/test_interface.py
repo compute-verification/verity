@@ -495,6 +495,10 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
     assert I.input_count(doc, BY_ID.__getitem__, {"w"}) == {"units": 12, "inputs": bits, "wired": 0, "registered": 12 * 8 * K,
                                                             "ingress": 0, "free": bits - 12 * 8 * K}
     assert I.input_count(doc, BY_ID.__getitem__, "weights")["registered"] == 0
+    nested = {**doc, "registered": {**doc["registered"], "params": {"w/a@8": 6 * K // 2},
+                                    "reads": [{**doc["registered"]["reads"][0], "param": "w/a@8"}]}}
+    assert I.input_count(nested, BY_ID.__getitem__, {"w"})["registered"] == 12 * 8 * K
+    assert I.input_count(nested, BY_ID.__getitem__, {"w/b@8"})["registered"] == 0
     assert "registered" not in json.loads(I.circuit_bytes(window()[0].circuit_record()))
     for bad, why in [({**doc["registered"], "params": {"w": 5 * K // 2}}, "leaves"),
                      ({**doc["registered"], "reads": [{**doc["registered"]["reads"][0], "port": "frames"}]}, "names no parameter"),
@@ -505,10 +509,13 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
 
 
 def test_a_read_covers_whole_members_and_reads_whole_rows():
+    """Members are cut where a read's units begin or end, as where a wire's do, so a read covers whole members: units 2..11
+    read the weight's rows as tables and units 0 and 1 hold their own rows."""
     reg = lambda r: I.Registered({"w": 6 * K // 2}, reads=(r,))  # noqa: E731
-    with pytest.raises(ValueError, match="covers part of"):
-        I.Window(I.Circuit("part", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 2, (5, 2), 0, (K // 2, 0)))),
-                 RUN, LAW, 4)
+    win = I.Window(I.Circuit("part", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 2, (5, 2), 0, (K // 2, 0)))),
+                   RUN, LAW, 4)
+    assert [(m.base, m.n, bool(m.tables)) for m in win.window.members] == [(0, 2, False), (2, 4, True), (6, 4, True),
+                                                                           (10, 2, True)]
     with pytest.raises(ValueError, match="whole registered rows"):
         I.Window(I.Circuit("half", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 0, (12,), 0, (K // 8,)))),
                  RUN, LAW, 4)

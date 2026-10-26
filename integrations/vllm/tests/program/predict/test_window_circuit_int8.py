@@ -12,6 +12,7 @@ import pytest
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import CLASS, GRAIN, OTHER, WINDOW, _blocks, _label, _labels, _source
 from verity_vllm.program.model import INT8_EXACT_QUANT
+from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.common import _arr
@@ -31,7 +32,8 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     """Each int8 linear is one `Int8RowQuant_v1{K}` unit and its `ScaledMmS8_v1{K, N}` in slices of 512 // (K / 2) columns (an
     s8 weight row is K / 2 words: 16 columns at K = 64, 8 at K = 128), each slice's ``x`` and ``sx`` one quantizer unit's codes
     and scale and its ``w`` and ``sw`` registered reads of the linear's s8 rows and f32 row scales (layer 0's q/k/v, o and
-    gate/up at their record offsets, a slice 16 rows on: 512 words of codes, 32 of scales); the LM head stays bf16 `Gemm_v2`.
+    gate/up, each its own weight and scales from row 0, a slice a row on: 512 words of codes, 32 of scales); the LM head
+    stays bf16 `Gemm_v2`.
     Two windows of the class are still one circuit, blocks included, with the weights pinned no input row is free, and every
     wire reads its own slot at its step or before."""
     reg = _registered()
@@ -52,10 +54,12 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
         assert [u for _, u, _ in x] == [u for _, u, _ in sx]
         assert sorted(Counter(u for _, u, _ in x).values()) == sorted(slices * 20)
     mm = ids["ScaledMmS8_v1{K=64,N=16}"]
-    reads = {(r.port, r.base, r.step[-1]) for r in circuit.registered.reads if r.reader == mm}
-    assert {("w", 16384, 512), ("sw", 20480, 32), ("w", 20736, 512), ("sw", 22784, 32), ("w", 22912, 512),
-            ("sw", 31104, 32)} <= reads
-    assert circuit.registered.params == {"weights": 56656}
+    reads = {(r.param, r.port, r.base, r.step[-1]) for r in circuit.registered.reads if r.reader == mm}
+    layer = "model.layers.0.self_attn.qkv_proj", "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.gate_up_proj"
+    assert {(WB.weight_param(f"{w}.{t}", n), p, 0, n) for w in layer for t, p, n in (("weight", "w", 512),
+                                                                                     ("weight_scale", "sw", 32))} <= reads
+    assert len(circuit.registered.params) == 24
+    assert {p.split("/", 1)[0] for p in circuit.registered.params} == {WC.WEIGHTS}
     assert IF.input_count(json.loads(json.dumps(circuit.description())), pins={WC.WEIGHTS})["free"] == 0
     assert _blocks(circuit) == _blocks(other)
     labels = _labels(circuit)

@@ -7,6 +7,7 @@ output among them.
 """
 from __future__ import annotations
 
+import bisect
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -20,6 +21,14 @@ from verity.ml.windows import interface as IF
 from .build import Unexpressible
 
 WEIGHTS = "weights"
+
+
+def weight_param(label: str, words: int) -> str:
+    """The registered parameter of weight ``label`` (its name in the weights record) read in rows of ``words`` u16 words:
+    one registration a weight and row width, so every read's base and steps are whole rows of it (`interface._reads_of`)
+    and its pin is a root over the weight's own rows (`interface.registered_reads`). A pin of `WEIGHTS` pins them all
+    (`interface.input_count`)."""
+    return f"{WEIGHTS}/{label}@{words}"
 
 
 @dataclass(frozen=True)
@@ -103,6 +112,9 @@ class _Builder:
     spans: dict[str, list[tuple[int, int, int, int]]] = field(default_factory=dict)
     #: each attention Definition's head plan (`window_circuit._Program._plan`), read once whatever its slots and layers
     plans: dict[str, list[tuple[Any, list[tuple[str, tuple[Any, ...]]]]]] = field(default_factory=dict)
+    #: the weights record's weights, ``(label, first word, words)`` in order, and the registered parameters read of them
+    weights: tuple[tuple[str, int, int], ...] = ()
+    params: dict[str, int] = field(default_factory=dict)
 
     def unit(self, fn: Any, count: int = 1) -> tuple[str, int]:
         """``count`` new units of ``fn`` at the current label: its descriptor id and the first one's index. Every slot makes
@@ -165,8 +177,33 @@ class _Builder:
         self._wire(tid, "parts", u, n, rows, ((n, s),))
         return tuple(Row(tid, u + i, "o0", len(rows) * rows[0].words) for i in range(n))
 
+    def weight(self, lo: int, hi: int, words: int) -> tuple[str, int]:
+        """The registered parameter of the one weight words [lo, hi) of the weights record lie in, read in rows of ``words``
+        (`weight_param`), and ``lo`` within it; refused where they span two weights."""
+        k = bisect.bisect_right([w[1] for w in self.weights], lo) - 1
+        if k < 0 or hi > self.weights[k][1] + self.weights[k][2]:
+            raise Unexpressible(f"a weight read of words [{lo}, {hi}) of the weights record spans two weights")
+        label, first, n = self.weights[k]
+        if n % words or (lo - first) % words:
+            raise Unexpressible(f"weight {label} of {n} words read from word {lo - first} in rows of {words}: its registration "
+                                "is whole rows of the port, every read on a row")
+        name = weight_param(label, words)
+        self.params[name] = n
+        return name, lo - first
+
     def read(self, tid: str, port: str, at: int, radix: Sequence[int], base: int, step: Sequence[int]) -> None:
-        self.reads.append(IF.Read(tid, port, WEIGHTS, at=at, radix=tuple(radix), base=base, step=tuple(step)))
+        """Units ``[at, at + Π radix)`` of ``tid`` read ``port`` from word ``base`` of the weights record on (``step`` words a
+        digit), as rows of their weight's registered parameter at the port's width (`weight`)."""
+        lay = IF.layout(self.fns[tid])
+        words = dict(lay.rows + lay.outs)[port]
+        param, lo = self.weight(base, base + words + sum((r - 1) * s for r, s in zip(radix, step)), words)
+        self.reads.append(IF.Read(tid, port, param, at=at, radix=tuple(radix), base=lo, step=tuple(step)))
+
+    def table(self, lo: int, words: int, rows: int) -> IF.Table:
+        """The registered table of ``rows`` rows of ``words`` from word ``lo`` of the weights record (an embedding's), one a
+        weight and width."""
+        param, off = self.weight(lo, lo + words * rows, words)
+        return self.tables.setdefault((lo, words, rows), IF.Table(f"table/{param}+{off}", param, off, words, rows))
 
     def _wire(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
               lead: tuple[tuple[int, int], ...] = ()) -> None:
