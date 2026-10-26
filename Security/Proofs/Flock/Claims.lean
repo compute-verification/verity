@@ -167,7 +167,6 @@ import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
 import Proofs.Flock.Claims.Recursion.VerdictRun
 import Proofs.Flock.Claims.Recursion.VerdictAssembly
 import Proofs.Flock.Claims.Recursion.DecodeAt
-import Proofs.Flock.Claims.Recursion.DecRRecJ
 import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
@@ -183,6 +182,8 @@ import Proofs.Flock.Claims.KS.PlainR
 import Proofs.Flock.Claims.Recursion.LastBindsR
 import Proofs.Flock.Claims.Recursion.KSLin2R
 import Proofs.Flock.Claims.Recursion.RoundSizes
+import Proofs.Flock.Claims.Recursion.RowDLevels
+import Proofs.Flock.Claims.Recursion.DecRRecJ
 import Proofs.Flock.Claims.Recursion.LayoutBAcc
 import Proofs.Flock.Claims.Recursion.LastCallsR
 import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
@@ -191,6 +192,9 @@ import Proofs.Flock.Claims.Recursion.RestReadsAt
 import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.KS.PlainRCapPrefix
 import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
+import Proofs.Flock.Claims.Recursion.HonestIVStarR
+import Proofs.Flock.Claims.Recursion.HonestPartsR
+import Proofs.Flock.Claims.Recursion.HonestRepR
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.KSFlockLinR

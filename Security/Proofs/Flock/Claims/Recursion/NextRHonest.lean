@@ -20,7 +20,8 @@ that.
   is `0` (the deployed provers', D20). Both reps of a table carry its level-0 cap, as `sessionP` commits each table
   once. The rep's schedule is `RecVStar.repRounds` at its frames' `m`, `k_log` and claims.
 * **Rows fix the fit** (`fitUnique`): two fits of one rep's rows have one cap, recursive caps and nonces, so frames of
-  one skeleton (`skel`, `repFrames_skel`), and in each round one value row (`RowsAt.vals_eq`), so one rep's frames
+  one skeleton (`skel`, `repFrames_skel`), which fixes each round's value count (`chunks_skel`, `vals_length_skel`), and
+  in each round one value row (`RowsAt.vals_eq`), so one rep's frames
   (`eq_of_skel_vals`, `fits_frames`), which fix every absorbed field and `T` (`repFrames_fields`, `ligFrames_fields`).
 * **The statements**: `RepFits` (the honest proof fits the honest rows) and `fitUnique` give `RepReadsBack`, that
   `readRep` reads the honest proof back (`repReadsBack_of`). That gives `ReadsBack`, that `decR` decides on the honest
@@ -43,11 +44,12 @@ open FlockSoundness.Discharge.Exec (chunks chunks_flatten repFrames repFrames_ch
 def rowMsg (b : ByteArray) : Claims.Msg := b.data.toList
 
 /-- **The honest prover's rows at a rep's rounds**, along its schedule: each round's top nodes' rows (the next of
-`caps`, in order, each `nodeRow`), then, where the round absorbs, one row of the values its frames `ch` absorb. -/
+`caps`, in order, each `nodeRow`), then, where the round absorbs, one row of the values its frames `ch` absorb, padded
+to whole blocks (`padRow`). -/
 def honestRows : List RecVStar.SchedRound → List (List Frame) → List (Array ByteArray) → List (List ByteArray)
   | s :: ss, ch :: chs, caps =>
     (((caps.take s.2.1.size).flatMap Array.toList).map nodeRow ++
-        (if s.2.2.2 then [(⟨(colBytes (vals ch)).toArray⟩ : ByteArray)] else [])) ::
+        (if s.2.2.2 then [(⟨(padRow (colBytes (vals ch))).toArray⟩ : ByteArray)] else [])) ::
       honestRows ss chs (caps.drop s.2.1.size)
   | _, _, _ => []
 
@@ -194,14 +196,49 @@ theorem eq_of_skel_vals : ∀ {fs fs' : List Frame}, fs.map skel = fs'.map skel 
     · obtain ⟨rfl, rfl⟩ := Frame.sq.inj h1
       rw [eq_of_skel_vals h2 hv]
 
-/-- **A round's rows fix the values it absorbs.** -/
+theorem closes_skel (f : Frame) : FlockSoundness.Discharge.Exec.closes (skel f) =
+    FlockSoundness.Discharge.Exec.closes f := by
+  cases f <;> rfl
+
+/-- **A frame list's rounds, skeleton by skeleton**: the skeleton's rounds are the rounds' skeletons. -/
+theorem chunks_skel : ∀ fs : List Frame, (chunks (fs.map skel)).1 = (chunks fs).1.map (List.map skel)
+  | [] => rfl
+  | f :: fs => by
+    have ih := chunks_skel fs
+    rw [List.map_cons]
+    simp only [chunks, closes_skel, ih]
+    cases FlockSoundness.Discharge.Exec.closes f <;> rcases (chunks fs).1 with _ | ⟨c, cs⟩ <;> simp
+
+/-- **The skeleton keeps the values' count.** -/
+theorem vals_length_skel : ∀ fs : List Frame, (vals (fs.map skel)).length = (vals fs).length
+  | [] => rfl
+  | .dom _ :: fs => vals_length_skel fs
+  | .label _ :: fs => vals_length_skel fs
+  | .one v :: fs => by
+    show (default :: vals (fs.map skel)).length = (v :: vals fs).length
+    simp only [List.length_cons, vals_length_skel fs]
+  | .vec vs :: fs => by
+    show (List.replicate vs.length default ++ vals (fs.map skel)).length = (vs ++ vals fs).length
+    rw [List.length_append, List.length_append, List.length_replicate, vals_length_skel fs]
+  | .bytes _ :: fs => vals_length_skel fs
+  | .sq _ _ :: fs => vals_length_skel fs
+
+theorem getD_map_skel : ∀ (L : List (List Frame)) (j : ℕ),
+    (L.getD j []).map skel = (L.map (List.map skel)).getD j []
+  | [], _ => by simp
+  | _ :: _, 0 => by simp
+  | _ :: L, j + 1 => by simpa using getD_map_skel L j
+
+/-- **A round's rows fix the values it absorbs**, at their count: the padded row (`padRow`) holds them first. -/
 theorem RowsAt.vals_eq {s : RecVStar.SchedRound} {rs : List ByteArray} {vs vs' : List F128} (h : RowsAt s rs vs)
-    (h' : RowsAt s rs vs') : vs = vs' := by
+    (h' : RowsAt s rs vs') (hl : vs.length = vs'.length) : vs = vs' := by
   cases hb : s.2.2.2
   · rw [h.2.2 hb, h'.2.2 hb]
   · have e := h.2.1.symm.trans h'.2.1
     rw [ite_eq_left hb, ite_eq_left hb] at e
-    exact colBytes_inj (by simpa using congrArg Array.toList (ByteArray.mk.inj (List.cons.inj e).1))
+    have e' : padRow (colBytes vs) = padRow (colBytes vs') := by
+      simpa using congrArg Array.toList (ByteArray.mk.inj (List.cons.inj e).1)
+    exact colBytes_inj (padRow_inj e' (by rw [Frame.colBytes_length, Frame.colBytes_length, hl]))
 
 /-- **Two fits of one rep's rows with one skeleton have one rep's frames.** -/
 theorem fits_frames {c : RepCtx} {rows : List (List ByteArray)} {p p' : Flock.Proof} {T T' : F128}
@@ -209,11 +246,16 @@ theorem fits_frames {c : RepCtx} {rows : List (List ByteArray)} {p p' : Flock.Pr
     (hs : (repFrames c.st c.sch c.dom c.n p T).map skel = (repFrames c.st c.sch c.dom c.n p' T').map skel) :
     repFrames c.st c.sch c.dom c.n p T = repFrames c.st c.sch c.dom c.n p' T' := by
   refine eq_of_skel_vals hs ?_
+  have hc : (chunksOf c p T).map (List.map skel) = (chunksOf c p' T').map (List.map skel) := by
+    unfold chunksOf
+    rw [← chunks_skel, ← chunks_skel, hs]
   have hv : (chunksOf c p T).map vals = (chunksOf c p' T').map vals := by
     refine List.ext_getElem (by rw [List.length_map, List.length_map, h.rounds, h'.rounds]) fun j hj hj' => ?_
     rw [List.length_map, h.rounds] at hj
+    have hl : (vals ((chunksOf c p T).getD j [])).length = (vals ((chunksOf c p' T').getD j [])).length := by
+      rw [← vals_length_skel, getD_map_skel, hc, ← getD_map_skel, vals_length_skel]
     rw [List.getElem_map, List.getElem_map, ← List.getD_eq_getElem _ [], ← List.getD_eq_getElem _ []]
-    exact (h.elems j hj).vals_eq (h'.elems j hj)
+    exact (h.elems j hj).vals_eq (h'.elems j hj) hl
   rw [← chunks_flatten (repFrames c.st c.sch c.dom c.n p T), ← chunks_flatten (repFrames c.st c.sch c.dom c.n p' T'),
     repFrames_chunks_snd, repFrames_chunks_snd, List.append_nil, List.append_nil, vals_flatten, vals_flatten]
   exact congrArg List.flatten hv
