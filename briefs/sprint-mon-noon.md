@@ -57,6 +57,8 @@ by data sheet, and the table says so.
 > - **Don't add the PearlC import** (proofs withdrew #4636). If you already committed it, revert it in its own commit: an extra import can move lock records.
 > - **When a `Proofs.Pouw` probe fails on `exec.eq_10`, rebuild from a clean `.lake/build`** before you believe it.
 >
+> **Before you mark (ci, 09:06Z):** sync the checkout you run `research queue ready --mark` from to `origin/main` (`git pull` + `uv sync`). An older research client doesn't know drive.toml's new keys, and its preflight skips landing gates.
+>
 > **Before you report that a Lean head builds (RT-LEAN-2, 08:40Z):** run one probe that imports the package root, e.g. `import Proofs.Pouw`. A single-file `lean try` builds only that file's imports, so it can pass while the package root fails.
 >
 > **256 GB Lean checks (infra, 07:03Z): use `research run --on vy-nebius-cpu-2 --mem-gb 256`.** It has 837 GB free and runs to 28 Oct 06:00Z. vy-nebius-2 and -3 stop at about 08:00Z, so don't use them. If cpu-2 refuses the reservation, give the coordinator the run id; infra clears the ledger.
