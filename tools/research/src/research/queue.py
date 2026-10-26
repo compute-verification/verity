@@ -122,7 +122,10 @@ Members the sync keeps never move for it.  A PR that doesn't merge cleanly is le
 which files conflict and which queued PRs touched them.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
 with the gate's fix: each PR the sync merges is judged, a new one or one merged again above a
-dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`.
+dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`.  A PR
+that contains one left out waits, recorded (the state's `waiting`) and told as a conflict is; `status` shows it waiting and
+names the PR it contains and why that one is out, judging each PR after those it contains (26 Oct: #4373 and #4436 showed
+'admitted' for six hours while their #4326 and #4349 conflicted with `main`).
 
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
 the tree that was checked, with no new merge commit.  A push refused because `main` moved leaves `main` alone; the next sync rebuilds
@@ -1135,6 +1138,7 @@ class Queue:
         tip = members[-1].commit if members else _out(self.workdir, "rev-parse", "origin/main")
         dropped: set[int] = set()
         conflicts: dict[str, dict] = {}
+        waits: dict[str, dict] = {}
         gates = gates_at(self.workdir, main) if order[k:] else ()
         merged = False
         for n in order[k:]:
@@ -1142,6 +1146,9 @@ class Queue:
             if blocked := [a for a in e.after if a in dropped]:
                 e.state, e.why = "waiting", f"contains #{blocked[0]}, which didn't merge"
                 dropped.add(n)
+                waits[str(n)] = {"head": e.pr.head, "why": e.why, "handle": self.handle(e.pr)}
+                if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
+                    self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
                 continue
             (commit, why), merged = self._merge(tip, e.pr, members), True
             if commit is not None:
@@ -1166,7 +1173,7 @@ class Queue:
         self.log(f"research queue: `{self.branch}` at {tip[:12]}: {len(members)} PR(s) above `main`"
                  + (f", kept {k}, merged {len(members) - k}" if members else "") + (" (dry run: not pushed)" if dry_run else ""))
         if not dry_run:
-            state["conflicts"] = conflicts
+            state["conflicts"], state["waiting"] = conflicts, waits
             self.save_state(state)
         return members, entries
 
@@ -1276,11 +1283,16 @@ class Queue:
         for i, m in enumerate(self.chain(), 1):
             if m.pr in entries and entries[m.pr].pr.head == m.head:
                 entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
-        conflicts = state.get("conflicts", {})
+        conflicts, waits = state.get("conflicts", {}), state.get("waiting", {})
         main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
-        for n, e in entries.items():
-            if e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
+        for n in contained_first(entries):
+            e = entries[n]
+            if e.state == "ready" and (out := [a for a in e.after if a in entries and entries[a].state in ("refused", "waiting")]):
+                e.state, e.why = "waiting", f"contains #{out[0]}, which is {entries[out[0]].state}: {entries[out[0]].why}"
+            elif e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
+            elif e.state == "ready" and (w := waits.get(str(n))) and w["head"] == e.pr.head:
+                e.state, e.why = "waiting", f"{w['why']} (at the last sync)"
             elif e.state == "ready" and (files := conflicting_files(self.workdir, main, e.pr.head)):
                 e.state, e.why = "refused", (f"conflicts with `main` in {', '.join(files)}: merge `main` into the branch and "
                                              f"re-mark it")
@@ -1306,6 +1318,25 @@ class Queue:
 _COLD_PREFIXES = ("verity/ml/circuits/", "tools/verity/circuit_check/", "integrations/vllm/verity_vllm/",
                   "verity/core/protocols/pouw/", "verity/core/protocols/pous/", "verity/ml/flock/python/",
                   "verity/ml/commitments/", "verity/ml/private_circuits/", "benchmarks/numerical/python/")
+
+
+def contained_first(entries: dict[int, Entry]) -> list[int]:
+    """``entries``' numbers, each after the PRs it contains (`Entry.after`), so a PR is judged after what it contains."""
+    out: list[int] = []
+    seen: set[int] = set()
+
+    def place(n: int) -> None:
+        if n in seen:
+            return
+        seen.add(n)
+        for a in entries[n].after:
+            if a in entries:
+                place(a)
+        out.append(n)
+
+    for n in sorted(entries):
+        place(n)
+    return out
 
 
 def forces_cold(files: Iterable[str]) -> bool:
