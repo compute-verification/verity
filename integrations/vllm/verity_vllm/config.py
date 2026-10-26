@@ -192,8 +192,9 @@ def row_target(row: str) -> str | None:
 #: The protocols a run can enable (`verity_vllm.protocols`), in install order, innermost first: PoUW replaces the
 #: linear layers' GEMMs, POUS decodes the weights those GEMMs read, sampled proofs commits what the model computed.
 PROTOCOLS = ("pouw", "pous", "sampled-proofs")
-#: The set a row runs when its target declares none: sampled proofs alone, the Commit as it has always run.
-DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:vllm-v1",)
+#: The set a row runs when its target declares none: sampled proofs alone, the Commit under its committer's scheme
+#: (rows-sha512 by default, `pipeline.commit --commit-scheme`).
+DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:rows-sha512",)
 _SCHEME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/+-]*")
 
 
