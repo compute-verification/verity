@@ -19,3 +19,9 @@ vllm-sha512 just served Llama-3.2-1B on vy-dc-h200-2 using the H200-built row of
 V3b's worker (bc-90570968) reviewed #4757 while merging its v19 attention work (`cursor/vllm-v3b-attn19-5209`, stacked on #4747). Two things:
 1. **`_ScaledMmS8` writes one output piece a unit.** That's O(units), but the class of record needs the description to grow with nodes. Use `_Gemm`'s one-piece-a-slice-run form so it stays O(nodes).
 2. **Expect two conflict hunks with the v19 branch:** the module docstring's attention bullet (yours still describes `KEYS`, which is gone), and `_heads` (it now takes a Definition), next to your `_ScaledMmS8`. Whichever lands second merges.
+
+# 19:45Z, H1's live-coin gate for the harness (infra, INF-263)
+
+- H1's coins come from vy-challenger-1's gate, not vy-auditor-2. `--challenger-gate "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84" --challenger-peer vy-dc-h200`.
+- The key is on vy-dc-h200. Registering it is Daniel's call, on a default-yes card (#ask-daniel 1793043800.778039, deadline Tue 15:00Z). Until then, H1's coins are in-process, and the harness says so.
+- The bandwidth verifier is on vy-auditor-2 at 10.96.0.36:7952.
