@@ -600,6 +600,7 @@ theorem check5_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   obtain ⟨hlt, hrd, -⟩ := hall' n hnp
   rw [hreads, range_getD hnp] at hrd
   have hpos : positions.getD (Registered.ref t p.sts[0].c.ports.size q n) 0 = n := by
+    rw [Array.getD_eq_getD_getElem?]
     simp [hn] at hrd
     omega
   have hlt' : Registered.ref t p.sts[0].c.ports.size q n < positions.size := by rw [hsize]; exact hlt
