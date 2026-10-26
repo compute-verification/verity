@@ -5,8 +5,8 @@ vendored from #1036's trial, over the harness's framing of the core interface (`
 mirror over the certifier's certificates and one-stage's answers,
 `verity/core/protocols/network/tests/test_network_period_protocol.py`), for sampled proofs' one-stage audit on the
 proofs themselves (`verity/sampled-proofs/one-stage/v2`) `one_stage_zk`: v2's framing over v1's `one_stage` and decoders
-(`verity/core/service/sampled_proofs/tests/test_difftest.py`), on the cases v2 decides without a proof, and for space
-(`verity/pous/p2/v4/run`) and bandwidth
+(`verity/core/service/sampled_proofs/tests/test_difftest.py`), on the cases v2 decides without a proof, the wipe's
+(`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth
 (`verity/remote-bandwidth/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each component's own difftest holds its Lean to that Python; this one holds the composition of them.
 
@@ -75,6 +75,8 @@ POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
 PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_network_period_protocol.py")
+#: The wipe protocol in Python: `answer`, its mirror under S1's LMS, and `case`, a signed wipe aimed at a kind (`KINDS`).
+WIPE_CASES = module("wipe_protocol_case", CORE / "devices/memory_challenger/lean/tests/wipe_protocol_case.py")
 
 
 def trial_verdict(verdicts: list[str]) -> str:
@@ -201,6 +203,8 @@ SAMPLED_PROOFS = Ported(V2, one_stage_zk, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 BANDWIDTH = Recorded("verity/remote-bandwidth/v0")
+#: The wipe, `MemoryChallenger.WipeProtocol.protocol`.
+WIPE = Ported("verity/wipe/v0", WIPE_CASES.answer)
 
 
 def bind(id: str, digests: list[tuple[str, bytes]]) -> bytes:
@@ -323,4 +327,4 @@ class Product:
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids.
 REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
-ONSITE = Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS))
+ONSITE = Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS, WIPE))

@@ -86,7 +86,7 @@ OUTSIDE = tuple(dataclasses.replace(e, onsite=False) if e.name == "bandwidth" el
 def test_a_rejecting_audit_rejects_though_it_is_no_onsite_component(tmp_path):
     r = decide(tmp_path, integrity=fake("accept"), bandwidth=fake("reject"), table=OUTSIDE)
     assert r["composed"]["verdict"] == "reject"
-    assert r["composed"]["outside_onsite"] == ["bandwidth", "wipe"]
+    assert r["composed"]["outside_onsite"] == ["bandwidth"]
 
 
 def onsite_exe(tmp_path: Path, verdict: str = "accept", reason: str | None = None) -> Path:
@@ -220,11 +220,12 @@ def test_onsite_accepting_while_an_outside_audit_is_undecided_is_undecided(tmp_p
 def test_the_table_names_every_onsite_component_once():
     onsite = C.onsite_components()
     assert onsite == ["NetworkCheck.Period.protocol", "PousCheck.RunProtocol.protocol", "PouwCheck.protocol",
-                      "RemoteAudit.Protocol.protocol", "SampledProofs.OneStageZk.protocol"], "onsite's components changed"
+                      "RemoteAudit.Protocol.protocol", "SampledProofs.OneStageZk.protocol",
+                      "MemoryChallenger.WipeProtocol.protocol"], "onsite's components changed"
     named = sorted(e.component for e in T.TABLE if e.onsite)
     assert named == sorted(C.component_of(x)[0] for x in onsite)
     assert len({e.name for e in T.TABLE}) == len({e.component for e in T.TABLE}) == len(T.TABLE) == 6
-    assert len(named) == 5
+    assert len(named) == 6
     assert T.TABLE[0].name == "integrity", "integrity runs first: PoUW's evidence is its answer"
 
 

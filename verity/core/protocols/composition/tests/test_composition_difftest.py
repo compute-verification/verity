@@ -2,8 +2,8 @@
 reference (`reference.py`: the trial's composition rule with top's reject dominance, over the harness's framing of the
 core interface and the components' own Python). Hypothesis draws each component's case to accept, reject, be undecided or
 fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases`, the network certifier's period `build`,
-sampled proofs' audits as v2's cases, `v2_case`; space's and bandwidth's from the small periods of their hooks,
-`periods.py`), hands every component the same blobs (`BLOBS`, v2's circuit and public file), then often breaks the
+sampled proofs' audits as v2's cases, `v2_case`, the wipe's signed wipes, `wipe_protocol_case.case`; space's and
+bandwidth's from the small periods of their hooks, `periods.py`), hands every component the same blobs (`BLOBS`, v2's circuit and public file), then often breaks the
 composition's own inputs (a component dropped, unknown, repeated or out of order, a case under other params, a wrong or
 short commitment, non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a field missing
 or not hex, not an object), and every field of the outcome but its reason must agree exactly. v2 accepts only on a
@@ -110,6 +110,8 @@ def kinds(C) -> list[str]:
         return [k for k in KINDS if k in C.cases]
     if C is R.SAMPLED_PROOFS:
         return list(V2_CASES)
+    if C is R.WIPE:
+        return list(R.WIPE_CASES.KINDS)
     return [R.ACCEPT, R.REJECT, R.UNDECIDED]
 
 
@@ -126,6 +128,8 @@ def component_case(draw, C, kind: str | None) -> dict:
         case = R.POUW_CASES.instance(draw(st.randoms(use_true_random=False)), name)
     elif C is R.CERTIFIER:
         case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
+    elif C is R.WIPE:
+        case = R.WIPE_CASES.case(kind, draw(st.integers(0, 1)))
     else:
         case = draw(V2_CASES[R.UNDECIDED if kind == R.ACCEPT else kind])
     root = bytes.fromhex(case["commitment"])
@@ -245,9 +249,14 @@ remote_server = D.server_fixture(REMOTE)
 
 @pytest.fixture(scope="module")
 def recorded(tmp_path_factory):
-    """Space's and bandwidth's cases, made once (their memory challenger's session logs under the suite's basetemp)."""
+    """Space's and bandwidth's cases, made once (their memory challenger's session logs under the suite's basetemp), and
+    the wipe's test signer's files under it too while the module's tests draw wipes."""
     if not R.POUS.cases:
         periods.build(tmp_path_factory.mktemp("periods"))
+    ts = R.WIPE_CASES.M.ts
+    ts.DIR = tmp_path_factory.mktemp("test-signer")
+    yield
+    ts.DIR = None
 
 
 def test_the_rule_changes_the_trial_only_where_a_rejection_meets_an_undecided_component():

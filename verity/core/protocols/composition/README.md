@@ -45,6 +45,7 @@ keyed by the component's id. On rejection or undecided nothing is public.
 | integrity (sampled proofs' one-stage audit on the proofs themselves, which it reads as blobs) | yes | yes | `SampledProofs.OneStageZk.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
 | space (PoUS's check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | bandwidth (the remote bandwidth session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
+| the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../devices/memory_challenger/lean`) | `verity/wipe/v0` |
 
 Until its port lands, a component is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port
 replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package
@@ -68,8 +69,9 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), and
 each component's own Python (PoUW's `core_check.case`; for integrity, v2's framing over sampled proofs' one-stage
 difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2 decides without a session's proof; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
-certificates and one-stage's answers, on small signed periods from its `build`), which that component's own difftest
-holds its Lean to; for space and bandwidth, their Python verifiers' answers on small periods of their hooks
+certificates and one-stage's answers, on small signed periods from its `build`; the wipe's mirror,
+`wipe_protocol_case.answer`, on signed wipes from its `case`), which that component's own difftest holds its Lean to;
+for space and bandwidth, their Python verifiers' answers on small periods of their hooks
 (`tests/periods.py`: `pous.period.run` signed at S1's deployed parameters, honest and cheating, and
 `remote_bandwidth.period.run`, honest, cheating and unverified), whose Lean their packages' difftests hold to those
 verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_protocol.py`).
