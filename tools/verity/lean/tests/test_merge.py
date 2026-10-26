@@ -436,6 +436,26 @@ def test_a_lakefile_root_or_require_one_side_removed_stays_removed_where_the_oth
     assert left == 0 and [r["name"] for r in tomllib.loads(text)["require"]] == ["a", "c", "x", "y"], "both added: both"
 
 
+def test_a_root_or_require_one_side_removed_stays_removed_where_git_merges_the_other_side_s_move_cleanly(tmp_path):
+    """ci's case against ef47f3bd (#4814): roots A..H, ours removes B, theirs moves B after D.  Git merges that without a
+    conflict, to [A, C, D, B, E, F, G, H]; the whole merged file is held to `kept`, so B stays removed.  Requires alike."""
+    import tomllib
+    roots = lambda *ms: 'name = "p"\n\n[[lean_lib]]\nname = "P"\nroots = [' + ",\n  ".join(f'"{m}"' for m in ms) + "]\n"
+    req = lambda *ns: 'name = "p"\n' + "".join(f'\n[[require]]\nname = "{n}"\npath = "../{n}"\n' for n in ns) + \
+        '\n[[lean_lib]]\nname = "P"\n'
+    for side, (o, a, b) in {"roots": (roots(*"ABCDEFGH"), roots(*"ACDEFGH"), roots(*"ACDBEFGH")),
+                            "require": (req(*"abcdefgh"), req(*"acdefgh"), req(*"acdbefgh"))}.items():
+        for n, t in (("base", o), ("ours", a), ("theirs", b)):
+            (tmp_path / n).write_text(t)
+        clean = subprocess.run(["git", "merge-file", "-p", *(str(tmp_path / n) for n in ("ours", "base", "theirs"))],
+                               capture_output=True, text=True)
+        assert clean.returncode == 0 and tomllib.loads(clean.stdout) != tomllib.loads(a), "git alone brings it back"
+        text, left = _lakefile(tmp_path, o, a, b)
+        assert left == 0 and text == a, text
+    text, left = _lakefile(tmp_path, req(*"abcd"), req(*"acd"), req(*"acdbx"))
+    assert left == 0 and [r["name"] for r in tomllib.loads(text)["require"]] == ["a", "c", "d", "x"], text
+
+
 def test_git_merges_two_branches_that_each_import_a_new_module_with_the_installed_driver(tmp_path, monkeypatch):
     for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                  "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():

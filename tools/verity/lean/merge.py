@@ -366,8 +366,8 @@ def _requires(o: list[str], a: list[str], b: list[str], keep: set | None = None)
 
 def _array(o: list[str], a: list[str], b: list[str], keep: set | None = None) -> list[str] | None:
     """A conflict all of whose sides are a string array's items (`roots`): ours' items with theirs' new ones, less what
-    either removed (in the hunk, and in the whole files: ``keep``, `kept` of each side's array items), wrapped at `WIDTH`
-    with ours' opening, indent and close."""
+    either removed in the hunk (and not in ``keep``), wrapped at `WIDTH` with ours' opening, indent and close.  `lakefile`
+    then holds every array to the whole files (`_hold`)."""
     sides = [[s for s in side if s.strip()] for side in (o, a, b)]
     if not sides[1] or not all(ITEM_LINE.match(s) for side in sides for s in side):
         return None
@@ -382,7 +382,15 @@ def _array(o: list[str], a: list[str], b: list[str], keep: set | None = None) ->
     merged = [n for n in items(*names) if keep is None or n in keep]
     if not merged:
         return None
-    pieces = [f'"{n}"' + ("]" if i == len(merged) - 1 and closes(sides[1]) else ",") for i, n in enumerate(merged)]
+    return _wrap(merged, head, lead, indent, closes(sides[1]))
+
+
+def _wrap(merged: list[str], head: str | None, lead: str, indent: str, close: bool) -> list[str]:
+    """A string array's items as lines: ``head`` (`roots = [`) and the first item after ``lead``, the rest after ``indent``,
+    wrapped at `WIDTH`, closed with `]` when ``close``."""
+    if not merged:
+        return [lead + (head or "") + ("]" if close else "") + "\n"]
+    pieces = [f'"{n}"' + ("]" if i == len(merged) - 1 and close else ",") for i, n in enumerate(merged)]
     out, line = [], lead + head if head else lead
     start = line
     for piece in pieces:
@@ -396,36 +404,108 @@ def _array(o: list[str], a: list[str], b: list[str], keep: set | None = None) ->
     return out + [line + "\n"]
 
 
-def _lakefile_names(text: str) -> tuple[set[str], set[str]] | None:
-    """A lakefile's requires (`_require_key`) and its string arrays' items, or None when it is not TOML."""
+def _lakefile_names(text: str) -> tuple[set[str], dict[str, set[str]]] | None:
+    """A lakefile's requires (`_require_key`) and its string arrays' items by the array's key (`roots`, every library's
+    together), or None when it is not TOML."""
     try:
         doc = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
         return None
-    strings: set[str] = set()
+    strings: dict[str, set[str]] = {}
 
     def walk(v):
         if isinstance(v, list):
-            strings.update(i for i in v if isinstance(i, str))
             for i in v:
                 walk(i)
         elif isinstance(v, dict):
-            for i in v.values():
+            for k, i in v.items():
+                if isinstance(i, list) and all(isinstance(x, str) for x in i):
+                    strings.setdefault(k, set()).update(i)
                 walk(i)
     walk(doc)
     return {_require_key(r) for r in doc.get("require", []) if isinstance(r, dict)}, strings
+
+
+def _drop(span: list[str], head: str, merged: list[str]) -> list[str]:
+    """A string array's lines (``span``, opening with ``head``) holding only ``merged`` (its items, in order, less some): each
+    item left on its own line, a line left without items dropped; rewrapped (`_wrap`) when the opening line keeps none."""
+    left, rows = list(merged), []
+    for s in span:
+        mine = []
+        for x in re.findall(r'"([^"]*)"', s):
+            if left and left[0] == x:
+                mine.append(left.pop(0))
+        rows.append((s, mine))
+    lead = re.match(r"\s*", span[0]).group(0)
+    if not rows[0][1]:
+        indent = re.match(r"\s*", span[1]).group(0) if len(span) > 1 else lead + "  "
+        return _wrap(merged, head, lead, indent, True)
+    out = []
+    for i, (s, mine) in enumerate(rows):
+        if mine:
+            start = lead + head if i == 0 else re.match(r"\s*", s).group(0)
+            out.append(start + " ".join(f'"{x}",' for x in mine))
+    out[-1] = out[-1][:-1] + "]"
+    return [s + "\n" for s in out]
+
+
+def _hold(text: str, requires: set[str], strings: dict[str, set[str]]) -> str:
+    """The merged lakefile ``text`` with every `[[require]]` block and every string array's item held to the whole files
+    (``requires``, once each, and ``strings`` by the array's key: `kept` of each side's), outside any conflict left.  Git
+    merges a removal on one side and a move on the other without a conflict, bringing back what was removed."""
+    lines, out, seen, n = text.splitlines(keepends=True), [], set(), 0
+    while n < len(lines):
+        s = lines[n]
+        if s.startswith("<<<<<<<"):
+            end = next((i for i in range(n, len(lines)) if lines[i].startswith(">>>>>>>")), len(lines) - 1)
+            out += lines[n:end + 1]
+            n = end + 1
+            continue
+        m = ITEM_LINE.match(s)
+        if m and m.group(1):
+            end = n
+            while not lines[end].rstrip().endswith("]") and end + 1 < len(lines) and ITEM_LINE.match(lines[end + 1]) \
+                    and not ITEM_LINE.match(lines[end + 1]).group(1):
+                end += 1
+            span = lines[n:end + 1]
+            key = re.match(r"\s*(\w+)", m.group(1)).group(1)
+            names = re.findall(r'"([^"]*)"', "".join(span))
+            if span[-1].rstrip().endswith("]") and key in strings:
+                merged = [x for x in names if x in strings[key]]
+                if merged != names:
+                    span = _drop(span, m.group(1), merged)
+            out += span
+            n = end + 1
+            continue
+        if s.strip() == "[[require]]":
+            end = n + 1
+            while end < len(lines) and lines[end].strip() and not lines[end].lstrip().startswith("[") \
+                    and not lines[end].startswith(("<<<<<<<", "|||||||", "=======", ">>>>>>>")):
+                end += 1
+            key = _block_key("".join(lines[n:end]))
+            if key is not None and (key not in requires or key in seen):
+                if out and not out[-1].strip():
+                    out.pop()
+                n = end
+                continue
+            seen.add(key)
+        out.append(s)
+        n += 1
+    return "".join(out)
 
 
 def lakefile(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
     """(the merged text, the number of conflicts left) of a `lakefile.toml`: git's own merge, then each conflict whose sides are
     only `[[require]]` blocks merged as a set of blocks, and each whose sides are only a string array's items (`roots`) merged
     as a list (`items`), so two branches that each require a package or add a root merge; a block or an item one side
-    removed stays removed (`kept`).  Any other conflict (a comment, a value) is left as git writes it, and so is a result
+    removed stays removed anywhere in the merged file, conflict or not (`kept`, `_hold`).  Any other conflict (a comment, a value) is left as git writes it, and so is a result
     that is not TOML."""
     sides = [_lakefile_names(p.read_text()) for p in (base, ours, theirs)]
-    requires, strings = (None, None) if None in sides else (kept(*(s[0] for s in sides)), kept(*(s[1] for s in sides)))
-    text, left = lean(base, ours, theirs, (lambda o, a, b: _requires(o, a, b, requires),
-                                           lambda o, a, b: _array(o, a, b, strings)))
+    requires = None if None in sides else kept(*(s[0] for s in sides))
+    text, left = lean(base, ours, theirs, (lambda o, a, b: _requires(o, a, b, requires), _array))
+    if requires is not None:
+        keys = set().union(*(s[1] for s in sides))
+        text = _hold(text, requires, {k: kept(*(s[1].get(k, set()) for s in sides)) for k in keys})
     if not left:
         try:
             tomllib.loads(text)
