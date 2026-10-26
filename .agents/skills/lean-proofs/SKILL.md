@@ -164,11 +164,22 @@ The dated text is note:lean/20261020T1000Z-report-lean-proofs-rulings-archive.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
-  bounded by what the run carries. No advantage bounds, except PoUW's named random-oracle premises for SHA-512
+  bounded by what the run carries. No assumed advantage bounds, except PoUW's named random-oracle premises for SHA-512
   (`StraightLineExtraction`, `SeedExtractedAt`; ASK-16), each a named `Prop` the lock lists. An input
   condition is a verifier refusal, not a hypothesis.
-- For a commit-then-coin step the break is the fork form (two runs of the prover's strategy sharing a commitment), and
-  the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
+- One adversary class (top, 26 Oct, on Daniel's word to decide it): a guarantee holds for every prover strategy τ, with
+  no budget class. Its probabilistic form is `Pr[accept ∧ the claim fails on E^τ's values] ≤ δ + f(Pr[B^τ exhibits a
+  SHA-512 collision])`, plus an LMS forgery term where signatures enter. Here `E` is a fixed named extractor and `B` an
+  explicit finder built from τ that runs in about τ's time (C-Flock's `XplurZC` and `outCZC`). Collision resistance is
+  then applied to `B` alone, outside the theorem.
+- A claim reads the fixed extractor's transcript, never a witness the prover picks, and a break counts only collisions
+  the run or the extractor exhibits (R4′, 26 Oct). For a commit-then-coin step the break is the fork form (two runs of
+  the prover's strategy sharing a commitment), and the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
+- Every security guarantee has two lemmas beside it in the lock, as a claim has `meets` and `fails`: honest (its
+  hypotheses hold at the honest deployed instance) and nontrivial (its conclusion is false for a verifier that accepts
+  everything). A guarantee that fails either one says nothing. On 26 Oct three did: a prover-chosen `∃`, a premise
+  that never held, and a break ("two openings exist") that always holds. The Lean check is to enforce this for new and
+  changed guarantees (LEAN-66); the one theorem and its legs have theirs by F3.
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not claims:
   they live in `Proofs/` with one concrete instance where the honest case holds.
