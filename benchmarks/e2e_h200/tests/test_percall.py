@@ -12,6 +12,7 @@ from e2e_h200 import percall as P
 from e2e_h200.commit import Committer, fixture_salt, fixture_secrets
 from e2e_h200.driver import Driver, Params
 from e2e_h200.shape import Shape
+from e2e_h200.slots import Request, SlotKV, SlotShape
 from e2e_h200.store import GeneratorStore
 from e2e_h200.weights import Weights
 
@@ -42,6 +43,15 @@ def test_every_served_linear_call_is_a_call_and_every_z_the_served_sums(params):
     assert doc["units"] == doc["z_checked_units"] == 2 * (2 + 2 + 2 + 2 + 4 + 2 + 8)
     assert doc["first_position"] == 1 << P.POS_SHIFT
     assert res.root == serve(params, batch=64).root
+
+
+def test_the_serve_path_runs_the_units_on_every_call_of_every_step(params):
+    sub = P.python(SHAPE, run_id="t")
+    d = Driver(SHAPE, params, 32, Committer("reference", *fixture_secrets("t")), subcircuits=[sub])
+    kv = SlotKV(SlotShape(32, SHAPE.layers, SHAPE.context, SHAPE.head_dim, prompt=1, generate=1), "cpu")
+    d.serve(kv, [Request(i, bytes([int(PROMPTS[i, 0])])) for i in range(32)])
+    assert len(sub.steps) == len(d.results) >= 1 and sub.mismatches == 0
+    assert all(s["calls"] == 7 and s["units"] == 22 for s in sub.steps)
 
 
 class Skewed(P.PerCall):
