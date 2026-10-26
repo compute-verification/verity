@@ -53,10 +53,8 @@ python tools/verity/lean/check.py PKG  the full check, which the train's check r
   build rebuilds the edited file.
 
 - **Where it runs.** Build on a CPU machine. Never `lake update`, and never change a `require`, a revision or
-  `lean-toolchain` in a feature PR. `check.py` refuses an ArkLib package below 24 GiB (memory and swap, within its
-  cgroup; `VERITY_LEAN_MEM_FLOOR_GIB` overrides, 0 for none) and a whole-Security audit (`Security` with Security/Proofs
-  beside it) below 160 GiB. The refusal prints where
-  to run it instead; a queued Security audit takes `--kind lean-audit`.
+  `lean-toolchain` in a feature PR. `check.py` refuses an ArkLib package below 24 GiB and a whole-Security
+  audit below 160 GiB, and prints where to run it instead; a queued Security audit takes `--kind lean-audit`.
 - **The fast path is for the lock and the mark, not the edit loop**: it gives your records, and the `--update` printout
   Daniel's DM carries, without a build of your own, once `verity lean try` passes on your files:
 
@@ -121,9 +119,7 @@ python tools/verity/lean/check.py PKG  the full check, which the train's check r
   VCVio, CompPoly) could prove gets an `upstream.watch` entry listing the dependency's constants it is about (none for
   one over our own definitions, or about a single number). When the check fails on a new upstream theorem, read it, say
   in the PR whether it discharges the assumption, and run `tools/verity/lean/upstream.py PKG --ack`. At a dependency
-  bump also run `upstream.py PKG --lean`; at a toolchain bump re-read `lean_io_get_random_bytes` in its
-  `src/runtime/io.cpp` (A3 in `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`; `tests/test_lean_packages.py` checks
-  the version it names).
+  bump also run `upstream.py PKG --lean`; at a toolchain bump `tests/test_lean_packages.py` says what to re-read.
 - **A changed record is a changed claim.** If `--update` changes a record you didn't mean to, your edit changed what that
   guarantee says: undo it, or say so in the PR. Paste the printout into the PR; when it lands, Daniel's DM shows it, and
   that DM is the check. Nothing waits on a reviewer.
