@@ -1,6 +1,6 @@
 """PoUW's leg of all-protocols: one period of the torch loop through PoUW's Core.Protocol, `verity/pouw/v1`.
 
-``leg(period_dir, node, out)`` reads the period's records as `verity_torch_loop.serve` writes them (``registration.json``,
+``leg(period_dir, node, out)`` reads the period's records as `verity_toy.serve` writes them (``registration.json``,
 ``circuit.json``, ``index.json``) and answers the period with PoUW's window check (`core_check.answer`, the Python
 reference the difftest holds to the Lean `pouw-check`). With ``VERITY_POUW_CHECK`` naming a built ``pouw-check``, the
 Lean answers too and must agree with it byte for byte. It returns the canonical answer {commitment, profile, protocol,

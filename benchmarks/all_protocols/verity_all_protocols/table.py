@@ -4,7 +4,7 @@ A leg is ``benchmarks/all_protocols/legs/<component>.py`` (``-`` as ``_``) defin
 
     leg(period_dir: Path, node: str, out: Path) -> dict
 
-``period_dir`` is the window's loop records: the window `verity_torch_loop.serve` wrote (``registration.json``,
+``period_dir`` is the window's loop records: the window `verity_toy.serve` wrote (``registration.json``,
 ``circuit.json``, ``window.json``, ``index.json``, the value files, ``serve.json``; with ``--pouw h1`` PoUW's window in
 ``pouw/``), with ``period.json`` (`PERIOD`, its name kept for the legs written against it: the window's index as
 ``window`` and ``period``, the circuit the verifier registered before the loop ran, the run root it published, the law,

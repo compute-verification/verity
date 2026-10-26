@@ -11,7 +11,7 @@
 #     --send /tmp/store-toy.tar [--send SLICE/setup.json --send SLICE/00000.c --send SLICE/00000.json ...] \
 #     -- bash benchmarks/torch_gpu/p2_stage/session.sh
 #
-# (WEIGHTS: ALLP-IFACE's verity_torch_loop, whose weights.py writes the seeded stream; h200-manifest.json: its manifest
+# (WEIGHTS: ALLP-IFACE's verity_toy, whose weights.py writes the seeded stream; h200-manifest.json: its manifest
 # with digests, art:6600b3ec….)
 #
 # With ENCODED=1 the store is memory-accounting's encoded store, read only: the layer's segment files of it (each
@@ -97,7 +97,7 @@ print(*L.Weights.of(json.load(open(os.environ["MANIFEST"]))).span(int(os.environ
 EOF
 )
 if [ ! -e "$SRC/w.key" ]; then
-  "$PY" -m verity_torch_loop.weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
+  "$PY" -m verity_toy.weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
     --workers "$(nproc)" 2>> "$O/prepare.log" && echo "$SEED $LO $HI" > "$SRC/w.key"
   step prepare $?
 else

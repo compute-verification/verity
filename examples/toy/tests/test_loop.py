@@ -18,7 +18,7 @@ import pytest
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.windows import interface as IF, rows as CS
-from verity_torch_loop import compile as C, loop as L, serve as S
+from verity_toy import compile as C, loop as L, serve as S
 
 LAW = D.parse_law("stratified:2")
 
@@ -104,9 +104,9 @@ def test_its_compiler_registers_its_code_s_digest_at_its_commit_and_the_verifier
     c = C.compiler()
     assert c == {"name": C.NAME, "digest": IF.compiler_digest(C.NAME, C.REPO, C.CODE), "commit": IF.commit_of(C.REPO)}
     assert IF.advice_binding(c, "ab" * 64, 8)["compiler"] == c
-    assert C.main(["--table", "py", "-m", "verity_torch_loop.compile", "--law", "subset:2"]) == 0
+    assert C.main(["--table", "py", "-m", "verity_toy.compile", "--law", "subset:2"]) == 0
     assert json.loads(capsys.readouterr().out) == {C.NAME: {
-        "digest": c["digest"], "argv": ["py", "-m", "verity_torch_loop.compile", "--law", "subset:2"],
+        "digest": c["digest"], "argv": ["py", "-m", "verity_toy.compile", "--law", "subset:2"],
         "code": list(C.CODE), "pythonpath": list(C.PYTHONPATH)}}
     assert all((C.REPO / p).is_dir() for p in (*C.CODE, *C.PYTHONPATH))
 
@@ -135,7 +135,7 @@ def test_its_unit_composes_into_c_flocks_unit_statement(tmp_path):
 
 
 def test_the_loop_loads_no_vllm():
-    code = ("import sys, verity_torch_loop.checkpoint, verity_torch_loop.compile, verity_torch_loop.loop, verity_torch_loop.serve; "
+    code = ("import sys, verity_toy.checkpoint, verity_toy.compile, verity_toy.loop, verity_toy.serve; "
             "print(sorted(m for m in sys.modules if m.split('.')[0] in ('verity_vllm', 'vllm')))")
     got = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True, cwd=Path(L.__file__).parents[1])
     assert got.stdout.strip() == "[]"

@@ -100,7 +100,7 @@ def main(argv=None) -> int:
     ap.add_argument("--layout", type=Path, required=True)
     ap.add_argument("--weights", type=Path, required=True)
     ap.add_argument("--w", type=Path, help="the stream's bytes at their offsets (else the generator's)")
-    ap.add_argument("--generator", default="verity_torch_loop.weights")
+    ap.add_argument("--generator", default="verity_toy.weights")
     ap.add_argument("--shape", default="h200")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1")
     store = ap.add_mutually_exclusive_group(required=True)

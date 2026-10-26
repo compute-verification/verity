@@ -25,7 +25,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # torch_loop_stub.py serves the torch loop's model.
 inputs = ["integrations/vllm/workloads", "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/window_advice.py",
-          "benchmarks/live_challenger", "benchmarks/one_stage/a5_coins.py", "integrations/torch_loop/verity_torch_loop",
+          "benchmarks/live_challenger", "benchmarks/one_stage/a5_coins.py", "examples/toy/verity_toy",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
           "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz",

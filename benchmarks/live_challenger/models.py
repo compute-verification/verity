@@ -49,7 +49,7 @@ from verity.ml.circuits.codec import canonical_json
 MANIFEST = Path("integrations/vllm/manifests/checkpoints-int8.json")
 #: the manifests a role may be in, each read from the pinned tree only: vLLM's int8 recipe pins, then the torch loop's served
 #: weights (which vLLM's manifest can't hold, its entries being recipe pins); a role is in exactly one of them
-MANIFESTS = (MANIFEST, Path("integrations/torch_loop/manifests/checkpoints-int8.json"))
+MANIFESTS = (MANIFEST, Path("examples/toy/manifests/checkpoints-int8.json"))
 PINS = Path("verity/core/protocols/pouw/lean/check/models.json")
 #: vLLM's merged modules at TP = 1: a fused linear's rows are its parts' rows in turn, its scales the same
 FUSED = {"qkv_proj": ("q_proj", "k_proj", "v_proj"), "gate_up_proj": ("gate_proj", "up_proj")}

@@ -12,7 +12,7 @@ import pytest
 import pouw
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import window as Wd
-from verity_torch_loop import serve
+from verity_toy import serve
 
 UNPINNED = "params: check.template is not a tile template the verifier pins"
 

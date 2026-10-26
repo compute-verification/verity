@@ -31,12 +31,12 @@
 #     served window's verifier traces its own Build of each Program I2 compiles with (prove_path.py audit's and circuit's
 #     --vllm-python): the rows' names, the parameters' names and types, supplied, the correspondence and prefix_cache.json are
 #     no Program digest's, so the verifier never reads them from the row dir. Default the tree's venv, which holds no vLLM.
-#   PP_TORCH_LOOP=1: a window of an integration that is not vLLM (integrations/torch_loop: a W8A8 MLP in PyTorch, its one
+#   PP_TORCH_LOOP=1: a window of an integration that is not vLLM (examples/toy: a W8A8 MLP in PyTorch, its one
 #     template ScaledMmS8Coordinate_v1{K=128}), honest and tampered (every output's bit 0 flipped), each audited from its records
 #     alone under PP_LAW (default subset:2), in members of PP_TORCH_LOOP_CAP units (default 8), each arm a run of its own
 #     (--run-id): once against the circuit's SHA-512 from the loop's shape and run, printed before it runs
 #     (records_audit.py --circuit), and once with its schedule committed
-#     as advice under its compiler (verity_torch_loop.compile, run by the audit as a command: --opening, --compilers); each
+#     as advice under its compiler (verity_toy.compile, run by the audit as a command: --opening, --compilers); each
 #     tampered window must be refused by Lean. PP_TORCH_LOOP_SHAPE: more serve.py flags (--requests, --steps).
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
@@ -230,11 +230,11 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
   fi
 elif [ -n "${PP_TORCH_LOOP:-}" ]; then
   TLAW=${PP_LAW:-subset:2} TCAP=${PP_TORCH_LOOP_CAP:-8}
-  TL="$PY -m verity_torch_loop.serve --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
-  export PYTHONPATH=$REPO/integrations/torch_loop
+  TL="$PY -m verity_toy.serve --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
+  export PYTHONPATH=$REPO/examples/toy
   # the verifier's table of the loop's compiler: its name, the digest over its code, the code and import paths the audit
   # recomputes that digest over and runs it with in its checkout of the registered commit, and the command
-  $PY -m verity_torch_loop.compile --table $PY -m verity_torch_loop.compile --law $TLAW --cap $TCAP \
+  $PY -m verity_toy.compile --table $PY -m verity_toy.compile --law $TLAW --cap $TCAP \
     > $O/torch-loop-compilers.json || exit 8
   loop() {  # NAME [--compiled] [--tamper]: the torch loop's window, audited from its records alone against the circuit
             # registered before it ran, or (--compiled) against its compiler's output on its committed schedule. Each arm is

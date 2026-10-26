@@ -8,7 +8,7 @@ result over each monitoring period of a datacenter.
 A window is one stretch of one machine's serving and its audits, and a monitoring period is the many windows on every
 machine of a deployment a result is about (`ARCHITECTURE.md`'s Glossary). Per window W (``--start`` on): the verifier
 registers the loop's circuit from its shape and run id (``serve --circuit-only``), the loop serves once
-(`integrations/torch_loop`, run id ``RUN/wW``, so each window has a root of its own) and writes its window into scratch
+(`examples/toy`, run id ``RUN/wW``, so each window has a root of its own) and writes its window into scratch
 with ``period.json`` beside it (the legs' records, `table.PERIOD`); each protocol of `table.TABLE` audits it through its leg
 (`decide`), up to ``--jobs`` windows at once, each audit on ports of its own; and ``DIR/wW/report.json`` holds the window's
 report, also appended to ``DIR/reports.jsonl``:
@@ -31,7 +31,7 @@ profile's), ``epsilon`` (a sampled protocol's bound on wrong units as a share of
 ``m0-pythonpath``). ``--tamper W,...``: those windows' loop records outputs that are not its model's (`serve --tamper`)
 and its prover skips its self-check, so a drawn unit's proof is of a false witness. ``--pouw h1`` (until ALLP-H1LOOP's
 ``serve --pouw h1`` lands): the loop also writes PoUW's window (its linears as the pinned H1 tile) to ``<window>/pouw``,
-and ``verity_torch_loop.pouw_audit`` audits it into ``<window>/pouw/answer.json`` before the legs run. Only the window's
+and ``verity_toy.pouw_audit`` audits it into ``<window>/pouw/answer.json`` before the legs run. Only the window's
 public files are kept in ``DIR`` (never a prover's file: its rows and salts).
 """
 from __future__ import annotations
@@ -57,7 +57,7 @@ from .table import ANSWERS, PERIOD, TABLE, Entry, LegFn, check_answer, leg_of
 
 FORMAT = "verity/all-protocols-window/v1"
 ROOT = Path(__file__).resolve().parents[3]
-LOOP = ROOT / "integrations" / "torch_loop"
+LOOP = ROOT / "examples" / "toy"
 PUBLIC = ("registration.json", "window.json", "index.json", "circuit.json", "serve.json", PERIOD)
 
 
@@ -132,9 +132,9 @@ def _python(module: str, argv: Sequence[str], log: Path | None = None) -> subpro
 
 def serve(argv: Sequence[str]) -> dict[str, Any]:
     """The torch loop's ``serve`` with ``argv``: its JSON line."""
-    p = _python("verity_torch_loop.serve", argv)
+    p = _python("verity_toy.serve", argv)
     if p.returncode != 0:
-        raise RuntimeError(f"verity_torch_loop.serve {' '.join(argv)} exited {p.returncode}: {p.stderr[-3000:]}")
+        raise RuntimeError(f"verity_toy.serve {' '.join(argv)} exited {p.returncode}: {p.stderr[-3000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])
 
 
@@ -163,7 +163,7 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
 
 
 def pouw_audit(period_dir: Path, out: Path) -> dict[str, Any]:
-    """PoUW's audit of the window's H1 window (``verity_torch_loop.pouw_audit``, ALLP-H1LOOP's), before the legs: it writes
+    """PoUW's audit of the window's H1 window (``verity_toy.pouw_audit``, ALLP-H1LOOP's), before the legs: it writes
     ``<window>/pouw/answer.json``, which PoUW's leg reads. -> its rc and ``POUW`` line."""
     p = json.loads((period_dir / PERIOD).read_text())
     t = p["tools"]
@@ -172,7 +172,7 @@ def pouw_audit(period_dir: Path, out: Path) -> dict[str, Any]:
             "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"], "--lean", t["flock-verify"],
             "--firewall", t["flock-firewall"], "--out", str(period_dir.parent / f"{period_dir.name}-pouw"),
             *(["--forged"] if p.get("prover_env") else [])]
-    r = _python("verity_torch_loop.pouw_audit", argv, out / "pouw-audit")
+    r = _python("verity_toy.pouw_audit", argv, out / "pouw-audit")
     lines = [x for x in (out / "pouw-audit.log").read_text().splitlines() if x.startswith("POUW ")]
     return {"rc": r.returncode, "line": json.loads(lines[-1].split(" ", 1)[1]) if lines else None}
 

@@ -232,7 +232,7 @@ def test_another_registration_is_refused(fresh, bundle) -> None:
 
 
 def test_weights_under_other_salts_are_refused(fresh) -> None:
-    from verity_torch_loop import loop as L
+    from verity_toy import loop as L
     other = B.torch_loop_weights(L.Model(), hashlib.sha256(b"another test key").digest(), "torch-loop/mlp-w8a8-h128/seed0")
     with pytest.raises(ValueError, match="committed under its own salt"):
         _build(fresh, [5], weights=other)

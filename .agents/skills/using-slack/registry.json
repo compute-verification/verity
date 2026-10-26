@@ -225,7 +225,7 @@
         "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/all_protocols/",
-        "integrations/torch_loop/",
+        "examples/toy/",
         "benchmarks/pouw/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",

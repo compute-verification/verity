@@ -10,7 +10,7 @@ import struct
 from pathlib import Path
 
 from verity.core.protocols.pouw import weights as Wt
-from verity_torch_loop import checkpoint as K, loop as L
+from verity_toy import checkpoint as K, loop as L
 
 GATE = Path(__file__).resolve().parents[3] / "benchmarks" / "live_challenger" / "models.py"
 LINEARS = ["model.layers.0.mlp.up_proj", "model.layers.1.mlp.down_proj"]
@@ -31,7 +31,7 @@ def entry() -> dict:
 
 
 def test_the_committed_files_are_the_ones_the_model_writes(capsys):
-    assert K.main(["--check"]) == 0, f"{capsys.readouterr().out}: rewrite them with `python -m verity_torch_loop.checkpoint`"
+    assert K.main(["--check"]) == 0, f"{capsys.readouterr().out}: rewrite them with `python -m verity_toy.checkpoint`"
 
 
 def test_the_safetensors_hold_the_served_weights_bit_for_bit():

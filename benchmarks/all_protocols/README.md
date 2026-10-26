@@ -1,6 +1,6 @@
 # all_protocols
 
-`verity bench all-protocols` (`run.sh`): every window, one run of the torch loop (`integrations/torch_loop`, a two-layer
+`verity bench all-protocols` (`run.sh`): every window, one run of the torch loop (`examples/toy`, a two-layer
 W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own and composed through onsite Verity
 (`verity/core/protocols/onsite`). The result is per monitoring period, over all compute: a week, a month and a year of
 every machine of a census deployment, the pooled total first and the per-window figure beside it.
@@ -37,7 +37,7 @@ every machine of a census deployment, the pooled total first and the per-window 
   `ALLP` line per window, led by the monitoring period. `--jobs J` audits J windows at once, each on its own ports.
   `--start I` numbers another machine's windows apart. `--tamper W,...` makes those windows' loop record outputs that
   aren't its model's. `--pouw h1` (until ALLP-H1LOOP's `serve --pouw h1` lands) also serves PoUW's H1 window and audits
-  it with `verity_torch_loop.pouw_audit` before the legs.
+  it with `verity_toy.pouw_audit` before the legs.
 
 | name | protocol | leg file | owner | state |
 | --- | --- | --- | --- | --- |
@@ -49,7 +49,7 @@ every machine of a census deployment, the pooled total first and the per-window 
 
 ~~~sh
 research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 -- \
-  bash benchmarks/all_protocols/run.sh --windows 4 --jobs 4 --tamper 3
+  bash examples/toy/run.sh --windows 4 --jobs 4 --tamper 3
 research run --on vy-nebius-cpu-5 --project verity --source . --cwd clone --mem-gb 96 -- \
-  bash benchmarks/all_protocols/run.sh --windows 4 --start 4 --jobs 4
+  bash examples/toy/run.sh --windows 4 --start 4 --jobs 4
 ~~~

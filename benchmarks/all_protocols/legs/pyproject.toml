@@ -3,10 +3,10 @@
 # their path to serve the period they answer.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "../../../integrations/torch_loop"]
+pythonpath = [".", "../../../examples/toy"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # `verity`: PoUW's window check and credit, and the interface the loop writes its period through.
-# `integrations/torch_loop`: the loop the tests serve a period of.
-inputs = ["verity", "integrations/torch_loop"]
+# `examples/toy`: the loop the tests serve a period of.
+inputs = ["verity", "examples/toy"]

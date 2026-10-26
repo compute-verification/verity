@@ -1,8 +1,8 @@
 """The torch loop's window, written for the audit from its records alone (`benchmarks/prove_path/records_audit.py`).
 
-    python -m verity_torch_loop.serve --out DIR [--law L] [--requests 3,7] [--steps 2] [--h 128] [--cap 8] [--run-id ID] \\
+    python -m verity_toy.serve --out DIR [--law L] [--requests 3,7] [--steps 2] [--h 128] [--cap 8] [--run-id ID] \\
         [--tamper] [--opening FILE]
-    python -m verity_torch_loop.serve --circuit-only [the same shape and --run-id]
+    python -m verity_toy.serve --circuit-only [the same shape and --run-id]
 
 The first serves the requests (`loop.TorchLoop`), commits every unit and writes the window (``circuit.json``, the
 registration under core's ``one_stage.registration``, the value files) to ``--out``, and prints the circuit record's

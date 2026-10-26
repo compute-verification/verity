@@ -10,7 +10,7 @@ evaluator by tests/test_s8_simple.py, and by `verify` itself on a sample of coor
 
 * **edge** weights: uniform s8 codes; the first channels are `SPECIALS` (a code pattern and a scale each), the rest have
   a typical scale (|N(0,1)| 0.02 / 127), or one in 8 a uniformly random f32 word (any exponent, NaN and inf included).
-* **served** weights: layer 0's tensors of the demo's weights (`verity_torch_loop.weights`, shape H200, the public seed),
+* **served** weights: layer 0's tensors of the demo's weights (`verity_toy.weights`, shape H200, the public seed),
   kv the rows of wk then wv.
 * x, under both: uniform s8 codes drawn on the GPU, the first rows `SPECIALS` with their scales, the rest a typical scale
   (|N(0,1)| / 127) or one in 8 a random f32 word. The patterns: max-magnitude codes (all -128, all 127, alternating),
@@ -151,7 +151,7 @@ def sample_rows(m: int, t: int, rng: np.random.Generator) -> np.ndarray:
 
 def weights_module(path: str | None):
     if not path:
-        from verity_torch_loop import weights
+        from verity_toy import weights
         return weights
     name = "s8_simple_served_weights"
     if name not in sys.modules:
@@ -456,7 +456,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--shapes", type=_shapes, default=dict(SHAPES), help="names of SHAPES, or NAME=N:K, comma-separated")
     ap.add_argument("--ms", type=lambda s: [int(v) for v in s.split(",")], default=list(MS))
     ap.add_argument("--device", default="cuda")
-    ap.add_argument("--weights-module", help="verity_torch_loop/weights.py, where it isn't importable")
+    ap.add_argument("--weights-module", help="verity_toy/weights.py, where it isn't importable")
     ap.add_argument("--jobs", type=int, default=min(16, os.cpu_count() or 1))
     a = ap.parse_args(argv)
     return {"weights": write_weights, "gpu": run_gpu, "verify": run_verify}[a.phase](a)

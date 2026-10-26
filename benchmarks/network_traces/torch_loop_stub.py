@@ -1,4 +1,4 @@
-"""torch-loop-stub: an OpenAI streaming endpoint shaped like the torch loop (`integrations/torch_loop`), the upstream of the
+"""torch-loop-stub: an OpenAI streaming endpoint shaped like the torch loop (`examples/toy`), the upstream of the
 network certifier's rehearsal (`certifier_serve.py rehearse --upstream URL --traffic varied --compact 256`).
 
     python torch_loop_stub.py [--host 127.0.0.1] [--port 0] [--steps 2] [--h 128] [--seed 0] [--id-payload 503]
@@ -39,8 +39,8 @@ import torch
 
 from verity.core.protocols.certifier import active as A, io_tie as IT, release as REL
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "integrations" / "torch_loop"))
-from verity_torch_loop import loop as L  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "examples" / "toy"))
+from verity_toy import loop as L  # noqa: E402
 
 #: a compact record's token field holds an id below 2^30 (`active.COMPACT_STOP`)
 ID_BITS = 30

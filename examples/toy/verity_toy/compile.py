@@ -1,7 +1,7 @@
 """The torch loop's registered compiler: its schedule, the advice, to its circuit; the command `records_audit.py` runs.
 
-    python -m verity_torch_loop.compile [--law L] [--cap N] --advice FILE --out FILE
-    python -m verity_torch_loop.compile --identity
+    python -m verity_toy.compile [--law L] [--cap N] --advice FILE --out FILE
+    python -m verity_toy.compile --identity
 
 The advice is the loop's schedule (`schedule_bytes`: its requests' token ids and its decode steps), the run-time choice its
 circuit depends on: one unit per output coordinate of each linear at each request and step. The command writes the circuit
@@ -28,9 +28,9 @@ NAME = "torch-loop/compile/v0"
 REFUSED = 2
 #: the repository paths whose code fixes the map from schedule to circuit, which the compiler's digest is over: this package
 #: and Verity, whose interface and circuits it builds the record with
-CODE = ("integrations/torch_loop/verity_torch_loop", "verity")
+CODE = ("examples/toy/verity_toy", "verity")
 #: the repository paths the command imports from, its ``PYTHONPATH`` in the verifier's checkout of its commit
-PYTHONPATH = (".", "integrations/torch_loop")
+PYTHONPATH = (".", "examples/toy")
 REPO = Path(__file__).resolve().parents[3]
 
 
@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         requests, steps = schedule(data)
     except ValueError as e:
-        print(f"verity_torch_loop.compile: {e}", file=sys.stderr)
+        print(f"verity_toy.compile: {e}", file=sys.stderr)
         return REFUSED
     Path(a.out).write_bytes(IF.circuit_bytes(circuit_record(requests, steps, D.parse_law(a.law), a.cap)))
     print(json.dumps({"bits": 8 * len(data)}))

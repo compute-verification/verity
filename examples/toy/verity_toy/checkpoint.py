@@ -11,7 +11,7 @@
   sha256, the recipe (the loop's width, vocabulary and seed), and ``linears``: the loop's op paths in its order
   (`loop.Model.op_path`), which the gate requires the window's linears to be.
 
-``python -m verity_torch_loop.checkpoint`` writes both from the model; ``--check`` exits 1 when the files differ.
+``python -m verity_toy.checkpoint`` writes both from the model; ``--check`` exits 1 when the files differ.
 """
 from __future__ import annotations
 
@@ -88,8 +88,8 @@ def entry(model: L.Model, blobs: dict[str, bytes]) -> dict[str, Any]:
             "files": {n: {"size": len(b), "sha256": hashlib.sha256(b).hexdigest()} for n, b in sorted(blobs.items())},
             "linears": [model.op_path(i) for i in range(len(model.layers))],
             "recipe": {"id": RECIPE, "h": model.h, "vocab": int(model.embed.shape[0]), "seed": model.seed},
-            "note": "the torch loop's served weights (integrations/torch_loop, `loop.Model()`), written by "
-                    "`python -m verity_torch_loop.checkpoint`; no hub repo holds them"}
+            "note": "the torch loop's served weights (examples/toy, `loop.Model()`), written by "
+                    "`python -m verity_toy.checkpoint`; no hub repo holds them"}
 
 
 def manifest(model: L.Model) -> bytes:

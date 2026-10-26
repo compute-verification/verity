@@ -3,7 +3,7 @@ every tensor of a decoder of any `Shape` (the H200 demo's frozen shape `H200`, P
 registration of those tensors as core's registered values (``one_stage.registered``), computed in parallel.
 
 No torch: memory-accounting's encoder, the loop and the all-protocols runner run it with this directory on their path
-(``PYTHONPATH=integrations/torch_loop python -m verity_torch_loop.weights ...``).
+(``PYTHONPATH=examples/toy python -m verity_toy.weights ...``).
 
 * **The model** (`Shape`): a pre-norm decoder with learned absolute positions, ``heads`` query heads of ``head_dim`` and
   ``kv_heads`` KV heads (1: MQA), a ReLU MLP of width ``mlp``, a byte vocabulary, W8A8 linears (s8 codes, an f32 scale per
@@ -579,7 +579,7 @@ def fixture() -> dict[str, Any]:
     stream's length and first 64 bytes, the first and last rows of layer 0's tensors and of those outside the layers, and
     SHA-256 of every tensor's
     (`first_rows`, as compact JSON). `H200`'s whole manifest, with each tensor's SHA-256 under `DEMO_SEED`, is an artifact
-    of the evidence store (``integrations/torch_loop/README.md``)."""
+    of the evidence store (``examples/toy/README.md``)."""
     out: dict[str, Any] = {"format": "verity/seeded-weights/fixture/v1", "seed": TEST_SEED.hex(),
                            "salt_key": TEST_SALT_KEY.hex(), "program": TEST_PROGRAM, "shapes": {}}
     for s in (TINY, PHASE1):

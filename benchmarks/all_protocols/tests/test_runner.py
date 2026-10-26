@@ -232,7 +232,7 @@ def test_pouw_h1_audits_before_the_legs(tmp_path, monkeypatch):
         "loop": {}, "seconds": {}, "protocols": {}, "composed": {}})
     a = Namespace(node="n", pouw="h1", onsite=None)
     r = RN.window(0, "run", a, tmp_path, tmp_path / "out", (d, {}))
-    assert order == [1] and calls[0][0] == "verity_torch_loop.pouw_audit"
+    assert order == [1] and calls[0][0] == "verity_toy.pouw_audit"
     argv = calls[0][1]
     assert argv[argv.index("--circuit") + 1] == "77" * 64 and argv[argv.index("--window") + 1] == str(d / "pouw")
     assert "--forged" not in argv

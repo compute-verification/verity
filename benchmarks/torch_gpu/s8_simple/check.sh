@@ -6,7 +6,7 @@
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --cwd source --env GPU_LEASE_WHO=kernels-ks8simple \
 #     [--send weights.py] -- bash benchmarks/torch_gpu/s8_simple/check.sh [--sets ...] [--shapes ...] [--ms ...]
 #
-# `--send` ships compute-accounting's `verity_torch_loop/weights.py` for the served set while the tree lacks it. Exit: 0
+# `--send` ships compute-accounting's `verity_toy/weights.py` for the served set while the tree lacks it. Exit: 0
 # every checked word is the Definition's, 1 a mismatch, 4 the weights failed, else the GPU phase's code.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run under research run}; OUT=$D/out; mkdir -p "$OUT"
@@ -14,7 +14,7 @@ HERE=benchmarks/torch_gpu/s8_simple
 TMP=/workspace/pouw; mkdir -p "$TMP" 2>/dev/null && [ -w "$TMP" ] || TMP=${TMPDIR:-/tmp}
 S=$(mktemp -d "$TMP/tmp-s8simple.XXXXXX"); trap 'rm -rf "$S"' EXIT
 for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
-export PYTHONPATH=$PWD/integrations/torch_loop:$PWD PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH=$PWD/examples/toy:$PWD PYTHONDONTWRITEBYTECODE=1
 WM=(); [ -f "$D/inputs/weights.py" ] && WM=(--weights-module "$D/inputs/weights.py")
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
 "$PY" "$HERE/check.py" weights --scratch "$S" "${WM[@]}" "$@" || { echo "weights 4" | tee "$OUT/status.txt"; exit 4; }
