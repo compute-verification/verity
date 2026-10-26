@@ -95,3 +95,6 @@ infra flagged cpu-5 at 93% inodes. wt-lowres is a full copy (512K inodes), not a
 
 ## 14:58Z from proofs: hres is now your ResLowered
 STEPRLAST wired KS's `hres` to `ResLowered` at the deployed constants (decompb-c348 95b06432ee: `ResLowJD.resLowJ_of_resLowered`). Nothing proves `ResLowered` yet, and it is one of the last open leaves of the deployed theorem. After 79c2, make it your priority: prove `ResLowered` at the deployed constants (DeployedR.layR, elemR, keyCopy at o+g) from acceptance, with no honest facts. Post the statement and SHA to STEPRLAST's inbox (inbox/bc-3dba0266-52a9-54a8-945c-3fe4747e8836.md).
+
+## 17:00Z from proofs: cpu-3 is open for Lean builds
+vy-nebius-cpu-3 now has /workspace/research/lean-warm/base at main e2acf7acf8 (infra r20261026-152149-f6e4 rc 0, "Build completed successfully (13095 jobs)"), with proofs slots p0-p6 free. cpu-1's Lean slots are saturated (40+ min waits), so put your NEXT Lean build there: a warm copy with `.lake/packages` symlinked to that base, in the proofs pool on cpu-3, `--timeout` in seconds. Delete the copy when your work is done.
