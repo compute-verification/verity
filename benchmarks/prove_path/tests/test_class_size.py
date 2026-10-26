@@ -1,9 +1,10 @@
 """class_size (V3b): a window class's padded size, projected from one Program lowered at a small probe class.
 
 * the lowering projected from a probe of 3 positions is, template for template, TINY's exact lowering at a class of 7
-  positions (`window_circuit.class_circuit`), and at TINY of 2,048 positions at a class of 261, past two key blocks of 128:
-  every template but the heads and their key gathers is a fixed count a position, `TokenFeed_v1` one a prompt position and
-  `SlotRow_v1` one a Program;
+  positions (`window_circuit.class_circuit`), at a class of two lanes (its scan state row another), and at TINY of 2,048
+  positions at a class of 261, past two key blocks of 128: every template but the heads and their key gathers is a fixed
+  count a position, `TokenFeed_v1` one a prompt position, `ScanSlots_v1`, `SlotRow_v1` and `SlotEntry_v1` one a Program and
+  `OutCollect_v1` one a position;
 * v19's heads (#4263), at a block of 3 keys: a head over T keys is its first block, ceil(T / 3) - 1 full ones (none
   guarded: a one-row decode's FA2 guards its first visited block only) and its end; its keys reach it through one gather a
   full block, shared, and its first block's own where that block is neither one key nor full;
@@ -54,9 +55,10 @@ def _census(cls: WindowClass, config: dict = TINY, grain: Grain = GRAIN) -> dict
 
 
 def test_the_lowering_projected_from_a_probe_is_the_exact_lowering_at_a_larger_class():
-    probe, at = _census(PROBE), WindowClass(1, 5, 3)
+    probe, at, two = _census(PROBE), WindowClass(1, 5, 3), WindowClass(2, 5, 3)
     assert PROBE.positions == 3 and at.positions == 7
     assert CZ.project(probe, PROBE, at) == _census(at)
+    assert CZ.project(probe, PROBE, two) == _census(two) and "ScanSlots_v1{NS=4550,NP=5,IDB=17,K0=12,K=45}" in _census(two)
 
 
 @pytest.mark.slow

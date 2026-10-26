@@ -7,7 +7,8 @@ projection (`project`) from an exact lowering of one Program of the same registr
 key block, which the tests hold to the exact lowering past one block and two, and at the class of record itself:
 
 * every template but the heads and their key gathers is a fixed number of units a position (`TokenFeed_v1` a prompt
-  position, `SlotRow_v1` one a Program), read off the probe, which is refused unless each divides evenly;
+  position; `ScanSlots_v1`, at the class's scan state row, `SlotRow_v1` and `SlotEntry_v1` one a Program; `OutCollect_v1`
+  one a position, its first the first's), read off the probe, which is refused unless each divides evenly;
 * a head over T keys is `AttentionHead_v19`'s Calls: `AttnBlockFirst_v1{NVIS}` (its last NVIS = T - (nb - 1)·BN keys),
   nb - 1 `AttnBlock_v5` and `AttnHeadEnd_v1`, nb = ceil(T / BN), a full block's CHECK whether FA2 guards it (its
   ``MASKED_FROM``, `attention_vocab.fa2_masked_from` of the Program's one-row decode: its first visited block only). Its
@@ -31,6 +32,8 @@ from collections import Counter
 from collections.abc import Mapping
 from typing import Any
 
+from verity_vllm.program.predict import scan_state as SS
+
 from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
 
 FIRST = "AttnBlockFirst_v1"
@@ -38,6 +41,9 @@ END = "AttnHeadEnd_v1"
 BLOCK = "AttnBlock_v5"
 FEED = "TokenFeed_v1"
 ROW = "SlotRow_v1"
+SCAN = "ScanSlots_v1"
+COLLECT = "OutCollect_v1"
+ENTRY = "SlotEntry_v1"
 GATHER = "AllGather_v1"
 
 
@@ -49,6 +55,12 @@ def label(fn: Any) -> str:
 def statics(lab: str) -> tuple[str, dict[str, Any]]:
     fam, _, body = lab.partition("{")
     return fam, {k: json.loads(v) for k, v in (kv.split("=") for kv in body.rstrip("}").split(",") if kv)}
+
+
+def _relabel(lab: str, **at: Any) -> str:
+    """``lab`` with the statics ``at`` names set to theirs, where it has them."""
+    fam, s = statics(lab)
+    return fam + "{" + ",".join(f"{k}={json.dumps(at.get(k, v))}" for k, v in s.items()) + "}"
 
 
 def census(circuit: Any) -> dict[str, int]:
@@ -96,10 +108,14 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
             out[lab.replace(f"NP={NP0}", f"NP={cls.prompt}")] += 1 if s["FIRST"] else cls.prompt - 1
             if n != (1 if s["FIRST"] else NP0 - 1):
                 raise ValueError(f"the probe has {n} {lab} units, not one a prompt position")
-        elif fam == ROW:
-            out[lab.replace(f"NP={NP0}", f"NP={cls.prompt}")] += 1
+        elif fam in (SCAN, ROW, ENTRY):
+            out[label(SS.bridge(cls.scan, cls.prompt)) if fam == SCAN else _relabel(lab, NP=cls.prompt, KO=cls.outputs)] += 1
             if n != 1:
                 raise ValueError(f"the probe has {n} {lab} units, not one a Program")
+        elif fam == COLLECT:
+            out[_relabel(lab, KO=cls.outputs)] += 1 if s["FIRST"] else P - 1
+            if n != (1 if s["FIRST"] else P0 - 1):
+                raise ValueError(f"the probe has {n} {lab} units, not one a position")
         elif n % P0:
             raise ValueError(f"the probe has {n} {lab} units, not a fixed count at each of its {P0} positions")
         elif n:

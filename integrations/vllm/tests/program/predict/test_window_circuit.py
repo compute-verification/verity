@@ -1,9 +1,10 @@
 """verity_vllm.program.predict.window_circuit (V3b at ASK-122's fixed slots): a served window is its class's one Circuit of the
-catalog's units, a class Program a slot whatever the traffic, every input row wired from its writer's row, a registered read
-of the weights or a slot's ingress row, and nothing free. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5
-positions a Program), at a grain small enough to slice TINY's GEMMs and cut its ports; the class's circuit, its blocks
-included, is the same for windows that differ in everything, their request count included. At the class of record's slots
-(8, 4 at each of buckets 0 and 16) with TINY's caps, a 3-request and an 8-request window are one circuit. A head is
+catalog's units, a class Program a slot whatever the traffic, every input row wired from its writer's row or a registered read
+of the weights or the network certifier's scan state rows, and nothing free; a slot's outputs leave as its entry of the scan's
+Programs' row. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program), at a grain small
+enough to slice TINY's GEMMs and cut its ports; the class's circuit, its blocks included, is the same for windows that differ
+in everything, their request count included. At the class of record's slots (8, 4 at each of buckets 0 and 16) with TINY's
+caps, a 3-request and an 8-request window are one circuit. A head is
 `AttentionHead_v19`'s Calls, a unit each: past 128 keys (TINY at 2,048 positions, a grain of 256 rows) its full key blocks'
 gathers are made once and read by every later position, and the class of record itself lowers at TINY (slow).
 """
@@ -16,11 +17,14 @@ from collections import Counter
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
+from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit, window_circuit
 
+from verity.core.protocols.certifier import ingress_scan as IS
+from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
 
 GRAIN = Grain(gemm_words=512, rows=9, select=64)
@@ -40,6 +44,11 @@ THREE = ([(4, 2, G2), (2, 2, G2), (3, 1, {**S.GREEDY, "max_tokens": 1})], [[(0, 
 EMB, COMBINE = "EmbeddingRead_v1{V=256,H=64}", "TokenSelectCombine_v2{V=256,C=64}"
 FIRST, FEED = "TokenFeed_v1{NP=4,FIRST=true}", "TokenFeed_v1{NP=4,FIRST=false}"
 ROW, MASK = "SlotRow_v1{NP=4}", "SlotMask_v1{}"
+#: the scan state read at TINY's 2 lanes (4,548 words a row), each position's collector and a slot's entry
+SCAN, ENTRY = "ScanSlots_v1{NS=4548,NP=4,IDB=17,K0=12,K=45}", "SlotEntry_v1{KO=2,IDB=17}"
+COLLECT0, COLLECT = "OutCollect_v1{KO=2,FIRST=true}", "OutCollect_v1{KO=2,FIRST=false}"
+#: the verifier's pins: the weights record's root and the scan state's
+PINS = {WC.WEIGHTS, SS.SCAN_STATE}
 
 
 def _label(fn) -> str:
@@ -79,7 +88,7 @@ def _source(circuit, tid: str, port: str, unit: int, row: int = 0) -> tuple[str,
 def test_windows_of_a_class_are_one_circuit_whatever_their_request_count(window):
     """The privacy property (ASK-122: only the slot count is public): WINDOW and OTHER differ in their requests' arrival
     steps, prompt lengths (4 and 3 against 3 and 2) and output lengths, and a window of one request in its request count too,
-    and their circuits' descriptions (units, wires, cuts, registered reads, ingress), blocks, templates and external ports are
+    and their circuits' descriptions (units, wires, cuts, registered reads), blocks, templates and external ports are
     byte for byte the class's circuit: the blocks' slots are the class's 2 whatever the window's requests."""
     circuit, _ = window
     cls = class_circuit(S._registered(), CLASS, None, GRAIN)
@@ -93,27 +102,29 @@ def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_o
     """At the class of record's slots, 4 a boundary at buckets 0 and 16 (at TINY's caps of 4 prompt ids and 2 outputs), a
     window of three requests (two anchored at bucket 0, one at 16) and one of eight (four at each) emit the
     same circuit, the same descriptor digest (SHA-512 of its description's bytes) and the same blocks: eight class Programs,
-    each slot's ingress row the system's ingress at its anchor."""
+    each slot's reading its lane of the scan's state row before its anchor (rows 0 and 16 of the 4-lane scan's 9,090 words)
+    and making its entry of the scan's Programs' row."""
     eight = _circuit(EIGHT, cls=SLOTS, placed=[(0, 1)] * 4 + [(16, 17)] * 4)
     three = _circuit(THREE, cls=SLOTS, placed=[(0, 1), (16, 18), (16, 31)])
     assert hashlib.sha512(_bytes(three)).hexdigest() == hashlib.sha512(_bytes(eight)).hexdigest()
     assert (three.ids, three.external, _blocks(three)) == (eight.ids, eight.external, _blocks(eight))
     assert (eight.blocks.slots, eight.blocks.steps) == (8, 5)
     n = {_label(fn): k for fn, k in eight.templates}
-    assert (n[ROW], n[FIRST], n[MASK], n[EMB]) == (8, 8, 8 * SLOTS.positions, 8 * SLOTS.positions)
-    row = IF.descriptor_id(next(fn for fn, _ in eight.templates if _label(fn) == ROW))
-    assert [g.doc() for g in eight.ingress] == [{"reader": row, "port": "row", "at": 0, "units": 4, "step": 0},
-                                                {"reader": row, "port": "row", "at": 4, "units": 4, "step": 16}]
+    scan = SCAN.replace("NS=4548", "NS=9090")
+    assert (n[scan], n[ROW], n[FIRST], n[MASK], n[EMB], n[ENTRY]) == (8, 8, 8, 8 * SLOTS.positions, 8 * SLOTS.positions, 8)
+    assert [(r.at, r.radix, r.base, r.step) for r in eight.registered.reads if r.param == SS.SCAN_STATE] == [
+        (0, (4, 2), 0, (0, 16 * 9090))]
+    assert eight.registered.params[SS.SCAN_STATE] == 32 * 9090 and not eight.ingress
 
 
 def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeypatch):
     """The class of record (`CLASS_OF_RECORD`, network-accounting's pick for ASK-122: EVERY 16, 4 slots a boundary, 8 a
-    32-bucket window) is 8 slots of 1,024 prompt ids and 64 outputs, slot 4b + j boundary b's lane j at bucket 16b. A
-    3-request and an 8-request window are each taken to the one class circuit, every slot's Program, with the same
-    arguments (its lowering is `test_the_class_of_record_lowers_within_the_grain_and_its_description_is_its_nodes`')."""
+    32-bucket window) is 8 slots of 1,024 prompt ids and 64 outputs, lane-major: slot 2j + b is boundary b's lane j at
+    bucket 16b. A 3-request and an 8-request window are each taken to the one class circuit, every slot's Program, with the
+    same arguments (its lowering is `test_the_class_of_record_lowers_within_the_grain_and_its_description_is_its_nodes`')."""
     assert (CLASS_OF_RECORD.slots, CLASS_OF_RECORD.lanes, CLASS_OF_RECORD.every, CLASS_OF_RECORD.positions) == (8, 4, 16, 1087)
     assert (CLASS_OF_RECORD.boundaries, CLASS_OF_RECORD.buckets) == ((0, 16), 32)
-    assert [CLASS_OF_RECORD.anchor(k) for k in range(8)] == [0] * 4 + [16] * 4
+    assert [(CLASS_OF_RECORD.anchor(k), CLASS_OF_RECORD.lane(k)) for k in range(8)] == [(16 * (k % 2), k // 2) for k in range(8)]
     calls = []
     monkeypatch.setattr(WC, "class_circuit", lambda *a: calls.append(a[1:]) or "the class circuit")
     reg = S._registered()
@@ -138,30 +149,36 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     """Each allocation's slots sit side by side in its template, so every slot's copy of a wire or read pattern is one: the
-    class of record's slots at 2 and at 8 Programs have the same 145 wires, 63 weight reads, root reads, openings and 79
-    inference entries, the 8 Programs 4 times the units and one ingress pattern a boundary."""
+    class of record's slots at 2 and at 8 Programs have the same 151 wires besides the scan read's, 64 registered reads (63
+    of the weights, one of the scan state), root reads, openings and 83 inference entries, the 8 Programs 4 times the units.
+    The scan read's wires are 2 a lane its Programs reach (its row and its head; lane-major, so a lane's slots follow on):
+    2 at 2 Programs, both lane 0's, and 8 at 8, whatever the boundaries."""
     reg = S._registered()
     two, eight = class_circuit(reg, SLOTS, 2, GRAIN), class_circuit(reg, SLOTS, None, GRAIN)
     shape = [(len(c.wires), len(c.registered.reads), len(c.registered.roots), len(c.registered.openings),
               len(c.blocks.inference)) for c in (two, eight)]
-    assert shape == [(145, 63, 2, 1, 79)] * 2 and two.ids == eight.ids
-    assert sum(n for _, n in eight.templates) == 4 * sum(n for _, n in two.templates) == 10136
-    assert [(g.at, g.units, g.step) for g in two.ingress] == [(0, 2, 0)]
-    assert [(g.at, g.units, g.step) for g in eight.ingress] == [(0, 4, 0), (4, 4, 16)]
+    assert shape == [(153, 64, 2, 1, 83), (159, 64, 2, 1, 83)] and two.ids == eight.ids
+    scan = IF.descriptor_id(next(fn for fn, _ in eight.templates if fn.name == "ScanSlots"))
+    assert [sum(w.writer == scan for w in c.wires) for c in (two, eight)] == [2, 2 * SLOTS.lanes]
+    assert sum(n for _, n in eight.templates) == 4 * sum(n for _, n in two.templates) == 10192
+    assert [[(r.at, r.radix, r.base, r.step) for r in c.registered.reads if r.param == SS.SCAN_STATE] for c in (two, eight)] == [
+        [(0, (2,), 0, (16 * 9090,))], [(0, (4, 2), 0, (0, 16 * 9090))]]
 
 
 def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_patterns(window):
     """Each slot is the class Program, its 5 positions each the whole stack, the LM head and the token select: TINY's GEMMs
     sliced 8 columns a unit, its RoPE a unit a head, its attention a unit a head a Call of `AttentionHead_v19`'s body (position
     p's first key block of p + 1 keys, `AttnBlockFirst_v1{NVIS=p + 1}`, and its end), its token select four chunks and a
-    combine, positions 0..3's tokens `TokenFeed_v1` units, its ingress row a `SlotRow_v1` and each position's
-    output a `SlotMask_v1`; a port read from several writers is cut, its groups gathered by `AllGather_v1` units, and the
-    wiring is a pattern per run, the two slots' one, not a wire per unit. The external rows are the slots' ingress rows and
-    their masked outputs."""
+    combine, positions 0..3's tokens `TokenFeed_v1` units, its row a `SlotRow_v1` of its lane of the scan state row
+    (`ScanSlots_v1`), each position's select masked (`SlotMask_v1`) and collected (`OutCollect_v1`), and its last position's
+    `SlotEntry_v1`; a port read from several writers is cut, its groups gathered by `AllGather_v1` units, and the wiring is a
+    pattern per run, the two slots' one, not a wire per unit, but for the scan read's two a lane. The external rows are the
+    scan state rows the slots read and their entries."""
     circuit, ids = window
     label = {tid: name for name, tid in ids.items()}
     assert {label[IF.descriptor_id(fn)]: n for fn, n in circuit.templates} == {
-        EMB: 10, FIRST: 2, FEED: 6, ROW: 2, MASK: 10, "RMSNormTriton_v5{N=64}": 10, "Gemm_v2{K=64,N=8}": 1440,
+        EMB: 10, FIRST: 2, FEED: 6, SCAN: 2, ROW: 2, MASK: 10, COLLECT0: 2, COLLECT: 8, ENTRY: 2,
+        "RMSNormTriton_v5{N=64}": 10, "Gemm_v2{K=64,N=8}": 1440,
         "RoPEHead_v1{D=16}": 120, **{f"AttnBlockFirst_v1{{D=16,NVIS={t},BN=128}}": 16 for t in range(1, 6)},
         "AttnHeadEnd_v1{D=16}": 80, "RMSNormFusedCuda_v2{N=64}": 40, "SiluMul_v2{I=128}": 20, "Gemm_v2{K=128,N=4}": 320, "TokenSelectChunk_v2{C=64}": 40,
         COMBINE: 10, "Gemm_v2{K=64,N=1}": 10, "AllGather_v1{WORLD=2,N=8}": 40, "AllGather_v1{WORLD=2,N=16}": 16,
@@ -188,18 +205,25 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
         ("SlotMask_v1", "tok", "TokenSelectCombine_v2", "o0"): 1, ("TokenFeed_v1", "sel", "TokenSelectCombine_v2", "o0"): 1,
         ("TokenFeed_v1", "slot", "SlotRow_v1", "o1"): 1, ("TokenFeed_v1", "slot", "TokenFeed_v1", "o1"): 2,
         ("TokenSelectChunk_v2", "x", "AllGather_v1", "o0"): 1, ("TokenSelectCombine_v2", "best", "AllGather_v1", "o0"): 1,
-        ("TokenSelectCombine_v2", "idx", "TokenSelectChunk_v2", "o1"): 1, ("TokenSelectCombine_v2", "x0", "Gemm_v2", "o0"): 1}
-    assert circuit.external == tuple(sorted((f"{ids[MASK]}/o0", f"{ids[ROW]}/row")))
+        ("TokenSelectCombine_v2", "idx", "TokenSelectChunk_v2", "o1"): 1, ("TokenSelectCombine_v2", "x0", "Gemm_v2", "o0"): 1,
+        ("SlotRow_v1", "row", "ScanSlots_v1", "o0"): 1, ("SlotRow_v1", "row", "ScanSlots_v1", "o2"): 1,
+        ("OutCollect_v1", "head", "ScanSlots_v1", "o1"): 1, ("OutCollect_v1", "head", "ScanSlots_v1", "o3"): 1,
+        ("OutCollect_v1", "state", "OutCollect_v1", "o0"): 2, ("OutCollect_v1", "tok", "SlotMask_v1", "o0"): 2,
+        ("SlotEntry_v1", "occ", "SlotRow_v1", "o0"): 1, ("SlotEntry_v1", "state", "OutCollect_v1", "o0"): 1}
+    assert circuit.external == (f"{ids[SCAN]}/state", f"{ids[ENTRY]}/o0")
 
 
 def test_a_positions_token_is_its_feed_below_the_prompt_cap_and_the_previous_select_past_it(window):
-    """Each slot's ingress row is the system's ingress at its anchor, read by its `SlotRow_v1` and opened into the slot its
-    first position's feed reads; each later feed reads its predecessor's slot and the previous position's select, and
-    position p's embedding reads its feed's token for p < 4 and position p - 1's select at p = 4. A template's units are a
-    position's slots side by side (slot k's position p at 2p + k)."""
+    """Each slot's row is its lane's of the scan state row before its anchor (both slots at bucket 0, lanes 0 and 1, row 0 of
+    the registered scan state), read by its `ScanSlots_v1` and opened by its `SlotRow_v1` into the slot its first position's
+    feed reads; each later feed reads its predecessor's slot and the previous position's select, and position p's embedding
+    reads its feed's token for p < 4 and position p - 1's select at p = 4. A template's units are a position's slots side by
+    side (slot k's position p at 2p + k)."""
     circuit, ids = window
-    first, feed, emb, comb, row = ids[FIRST], ids[FEED], ids[EMB], ids[COMBINE], ids[ROW]
-    assert [g.doc() for g in circuit.ingress] == [{"reader": row, "port": "row", "at": 0, "units": 2, "step": 0}]
+    first, feed, emb, comb, row, scan = ids[FIRST], ids[FEED], ids[EMB], ids[COMBINE], ids[ROW], ids[SCAN]
+    assert not circuit.ingress and [r.doc() for r in circuit.registered.reads if r.param == SS.SCAN_STATE] == [
+        {"reader": scan, "port": "state", "param": SS.SCAN_STATE, "at": 0, "radix": [2], "base": 0, "step": [0]}]
+    assert [_source(circuit, row, "row", u) for u in (0, 1)] == [(scan, 0, "o0"), (scan, 1, "o2")]
     assert [_source(circuit, first, "slot", u) for u in (0, 1)] == [(row, 0, "o1"), (row, 1, "o1")]
     assert [_source(circuit, feed, "slot", u) for u in range(6)] == [(first, 0, "o1"), (first, 1, "o1")] + [
         (feed, u, "o1") for u in range(4)]
@@ -208,28 +232,75 @@ def test_a_positions_token_is_its_feed_below_the_prompt_cap_and_the_previous_sel
         (feed, u, "o0") for u in range(6)] + [(comb, 6, "o0"), (comb, 7, "o0")]
 
 
-def test_each_output_is_its_select_masked_by_its_slots_occupancy_word(window):
-    """Position p of slot k's output is a `SlotMask_v1` of its select and its slot's occupancy word (`SlotRow_v1`'s ``o0``),
-    so an empty slot's outputs are `io_shell.EMPTY` wherever they are read; the masked outputs, not the selects, are the
-    circuit's external rows."""
+def test_a_slots_outputs_are_its_masked_selects_collected_into_its_entry(window):
+    """Position p of slot k's select is masked by its slot's occupancy word (`SlotMask_v1`, `SlotRow_v1`'s ``o0``) and
+    collected (`OutCollect_v1`: the first position's from its lane's scan head, every later one's from its predecessor's);
+    its last position's `SlotEntry_v1` reads the last collector and the same occupancy word, so an empty slot's entry is zero.
+    The entries, not the selects or the masked outputs, are the circuit's external rows."""
     circuit, ids = window
-    mask, comb, row = ids[MASK], ids[COMBINE], ids[ROW]
+    mask, comb, row, scan = ids[MASK], ids[COMBINE], ids[ROW], ids[SCAN]
+    first, rest, entry = ids[COLLECT0], ids[COLLECT], ids[ENTRY]
     assert [_source(circuit, mask, "occ", u) for u in range(10)] == [(row, u % 2, "o0") for u in range(10)]
     assert [_source(circuit, mask, "tok", u) for u in range(10)] == [(comb, u, "o0") for u in range(10)]
-    assert f"{comb}/o0" not in circuit.external and f"{mask}/o0" in circuit.external
+    assert [_source(circuit, first, "head", u) for u in (0, 1)] == [(scan, 0, "o1"), (scan, 1, "o3")]
+    assert [_source(circuit, first, "tok", u) for u in (0, 1)] == [(mask, 0, "o0"), (mask, 1, "o0")]
+    assert [_source(circuit, rest, "tok", u) for u in range(8)] == [(mask, 2 + u, "o0") for u in range(8)]
+    assert [_source(circuit, rest, "state", u) for u in range(8)] == [(first, 0, "o0"), (first, 1, "o0")] + [
+        (rest, u, "o0") for u in range(6)]
+    assert [_source(circuit, entry, "occ", u) for u in (0, 1)] == [(row, 0, "o0"), (row, 1, "o0")]
+    assert [_source(circuit, entry, "state", u) for u in (0, 1)] == [(rest, 6, "o0"), (rest, 7, "o0")]
+    assert not {f"{comb}/o0", f"{mask}/o0"} & set(circuit.external) and f"{entry}/o0" in circuit.external
+
+
+def test_a_slots_entry_stops_at_the_registered_models_stop_ids(window):
+    """The entry's ``STOP`` is `stop_ids`, the registered model's config's ``eos_token_id`` (an id, a list of them or none):
+    TINY declares none, Llama-3.2-1B one (128001), and a list is its set in order."""
+    circuit, ids = window
+    assert circuit.template(ids[ENTRY]).bindings["STOP"] == WC.stop_ids(S._registered()) == ()
+    assert WC.stop_ids(S._registered({**S.TINY, "eos_token_id": 128001})) == (128001,)
+    assert WC.stop_ids(S._registered({**S.TINY, "eos_token_id": [9, 3, 9]})) == (3, 9)
+
+
+def test_the_scan_state_row_is_pr2s_form_and_its_wide_read_is_one_row_a_slot():
+    """The scan state row a slot reads (`scan_state.layout`) is `ingress_scan`'s head and slots with ``occ``, a 0/1 word,
+    before ``n`` (network-accounting's PR2 form): at the class of record (4 lanes, KO 64, w63's cells) 9,353 u16 words, lane
+    j's fields 37,387 bits apart. `ScanSlots_v1` reads it whole, one registered row a slot, and gives every lane's
+    `SlotRow_v1` row (2,052 words at 1,024 prompt ids) and head (4), of which a slot's two are wired: its unit is 1 + 2·4
+    rows, 3 rows and 3 heads of them unread. A row packed by `layout` reads back each lane's fields, ids at `io_shell.position`."""
+    scan = CLASS_OF_RECORD.scan
+    lay, base = SS.layout(scan), [f for f, _ in IS.slot_layout(scan)]
+    assert (SS.words(scan), scan.K0, scan.K, scan.IDB, scan.KO) == (9353, 12, 45, 17, 64)
+    assert [k.split(".", 1)[1] for k in lay if k.startswith("0.")] == base[:base.index("n")] + ["occ"] + base[base.index("n"):]
+    assert [lay[f"{j}.occ"][0] - lay["0.occ"][0] for j in range(4)] == [37387 * j for j in range(4)]
+    bridge = SS.bridge(scan, CLASS_OF_RECORD.prompt)
+    lay_ = IF.layout(bridge)
+    assert lay_.rows == (("state", 9353),) and [w for _, w in lay_.outs] == [2052, 4] * 4
+    assert sum(map(len, IF.unit_rows(bridge))) == 1 + 2 * 4
+    small = SLOTS.scan
+    lay, x = SS.layout(small), 0
+    fields = [(1, 3, 2, [7, 0x1FFFF, 0, 9]), (0, 0, 0, [0] * 4), (1, 1, 2, [5, 0, 0, 0]), (0, 0, 0, [0] * 4)]
+    for j, (occ, lp, m, ids) in enumerate(fields):
+        x |= occ << lay[f"{j}.occ"][0] | lp << lay[f"{j}.fields"][0] | m << lay[f"{j}.max_tokens"][0]
+        x |= sum(v << lay[f"{j}.ids"][0] + 17 * IO.position(small.K0, small.K, p) for p, v in enumerate(ids))
+    row = [x >> 16 * k & 0xFFFF for k in range(SS.words(small))]
+    b = SS.bridge(small, SLOTS.prompt).bindings
+    got = IO.slots_reference(row, 4, 17, small.K0, small.K, b["OCC"], b["LP"], b["MAX"], b["IDS"])
+    assert got == [([occ, lp, *ids], [lp, m]) for occ, lp, m, ids in fields]
 
 
 def test_the_weights_and_the_embedding_are_registered_reads(window):
-    """The weights record is the one registered parameter: GEMM slices, norms and RoPE read their rows from it at public
-    positions, and the embedding is `EmbeddingRead_v1`'s opening of the table over its first V·H words, keyed by ``tok``
-    and pinned by its verdict. With TINY's tied embeddings the LM head's first row, which the token select's ``x0`` unit
-    reads, is the table's first row. Both slots' reads of a node are one pattern (RoPE's a slot digit of step 0)."""
+    """The weights record and the scan state are the registered parameters (the scan state the window's 16 buckets' rows of
+    4,548 words): GEMM slices, norms and RoPE read their rows from the weights at public positions, and the embedding is
+    `EmbeddingRead_v1`'s opening of the table over its first V·H words, keyed by ``tok`` and pinned by its verdict. With
+    TINY's tied embeddings the LM head's first row, which the token select's ``x0`` unit reads, is the table's first row.
+    Both slots' reads of a node are one pattern (RoPE's a slot digit of step 0)."""
     circuit, ids = window
     reg = circuit.registered
-    assert reg.params == {"weights": 91472}
+    assert reg.params == {"weights": 91472, SS.SCAN_STATE: 16 * 4548}
     assert Counter((r.reader, r.port) for r in reg.reads) == {
         (ids["Gemm_v2{K=64,N=8}"], "w"): 30, (ids["Gemm_v2{K=128,N=4}"], "w"): 1, (ids["Gemm_v2{K=64,N=1}"], "w"): 1,
-        (ids["RMSNormFusedCuda_v2{N=64}"], "w"): 10, (ids["RMSNormTriton_v5{N=64}"], "w"): 1, (ids["RoPEHead_v1{D=16}"], "cs"): 20}
+        (ids["RMSNormFusedCuda_v2{N=64}"], "w"): 10, (ids["RMSNormTriton_v5{N=64}"], "w"): 1, (ids["RoPEHead_v1{D=16}"], "cs"): 20,
+        (ids[SCAN], "state"): 1}
     assert [t.doc() for t in reg.tables] == [{"name": "embedding@0", "param": "weights", "offset": 0, "words": 64, "rows": 256}]
     assert sorted(r.doc().items() for r in reg.roots) == sorted(
         {"reader": ids[EMB], "port": p, "table": "embedding@0", "of": p, "at": 0, "units": 10}.items() for p in ("domain", "root"))
@@ -292,16 +363,17 @@ def test_past_one_key_block_a_head_reads_its_full_blocks_gather_made_once(long):
     assert _source(circuit, full, "q", 0) == (rope, 12 * 128, "o0")
     assert [_source(circuit, full, p, 0) for p in ("m_prev", "l_prev", "o_prev")] == [(first, 8, o) for o in ("o0", "o1", "o2")]
     assert [_source(circuit, end, p, 8 * 128) for p in ("l", "o")] == [(full, 0, "o1"), (full, 0, "o2")]
-    assert max(_unit_rows(circuit).values()) == 129 and IF.input_count(circuit.description(), pins={WC.WEIGHTS})["free"] == 0
+    assert max(_unit_rows(circuit).values()) == 129 and IF.input_count(circuit.description(), pins=PINS)["free"] == 0
 
 
 @pytest.mark.slow
 def test_the_class_of_record_lowers_within_the_grain_and_its_description_is_its_nodes(monkeypatch):
     """The class of record itself (8 slots of 1,087 positions, a head over up to 1,087 keys: 8 full key blocks and a first
     of 63) lowers at TINY's geometry and a grain of 256 rows: no unit past the grain's rows (the largest a full block's
-    gather, its 128 parts and its output), every input row wired, registered or ingress, and its 8 Programs' 8 x 296,711
-    units (4 times 2 Programs') over 2 Programs' 33,278 wires, 13,047 weight reads and 13,062 inference entries, which grow
-    with the class Program's 26,088 nodes (its heads' Calls among them), not with its units or its slots. The baseline is 2
+    gather, its 128 parts and its output), every input row wired or registered, and its 8 Programs' 8 x 297,800 units (4
+    times 2 Programs') over 2 Programs' 33,284 wires besides the scan read's (2 a lane its Programs reach), 13,048 registered
+    reads and 13,066 inference entries, which grow with the class Program's 26,088 nodes (its heads' Calls among them), not
+    with its units or its slots. The baseline is 2
     Programs, as in `test_the_description_grows_with_the_class_programs_nodes_not_its_slots`: one Program's entries have a
     slot digit of 1, under which a step's unlike allocations run together (2,194 entries here), and from 2 on every
     allocation's slots are one entry's slot digit, so the entries are one list at any slot count. About a minute and a half
@@ -315,10 +387,10 @@ def test_the_class_of_record_lowers_within_the_grain_and_its_description_is_its_
     assert (n["AttnBlock_v5{D=16,NVIS=128,FIRST=false,BN=128,CHECK=false}"], n["AllGather_v1{WORLD=128,N=16}"]) == (
         8 * 2 * 4 * 4088, 8 * 8 * 8)
     assert max(_unit_rows(circuit).values()) == 129
-    assert sum(n.values()) == 4 * sum(k for _, k in two.templates) == 8 * 296_711
+    assert sum(n.values()) == 4 * sum(k for _, k in two.templates) == 8 * 297_800
     shape = [(len(c.wires), len(c.registered.reads), len(c.blocks.inference)) for c in (two, circuit)]
-    assert shape == [(33278, 13047, 13062)] * 2 and len(built.program.fn.body.nodes) == 26088
-    assert IF.input_count(circuit.description(), pins={WC.WEIGHTS})["free"] == 0
+    assert shape == [(33286, 13048, 13066), (33292, 13048, 13066)] and len(built.program.fn.body.nodes) == 26088
+    assert IF.input_count(circuit.description(), pins=PINS)["free"] == 0
 
 
 def _labels(circuit) -> dict[str, np.ndarray]:
@@ -338,22 +410,23 @@ def _labels(circuit) -> dict[str, np.ndarray]:
 
 def test_the_blocks_put_each_unit_at_its_slot_and_its_positions_step(window):
     """The inference block (`interface.Blocks`): the class's 2 slots are its slots and its 5 positions its steps, each
-    allocation's units an entry of its slots' runs side by side, like entries merged. Position p's embedding, select and mask
-    are step p, its feed (p = 1..3) step p, a slot's ingress row step 0, a head's Calls over T keys step T - 1 (their digits
-    layer, slot, head; the ends one template over every step; the key and value gathers' a layer's keys or values, the slot,
-    the KV group), and the entries tile every template.
+    allocation's units an entry of its slots' runs side by side, like entries merged. Position p's embedding, select, mask
+    and collector are step p, its feed (p = 1..3) step p, a slot's scan read and row step 0 and its entry step 4, a head's
+    Calls over T keys step T - 1 (their digits layer, slot, head; the ends one template over every step; the key and value
+    gathers' a layer's keys or values, the slot, the KV group), and the entries tile every template.
     Every wire's writer is of its reader's slot at its step or before: a slot reads only its own units, a position only its
     own and earlier positions'."""
     circuit, ids = window
     label = {tid: name for name, tid in ids.items()}
-    assert (circuit.blocks.slots, circuit.blocks.steps, len(circuit.blocks.inference)) == (2, 5, 79)
+    assert (circuit.blocks.slots, circuit.blocks.steps, len(circuit.blocks.inference)) == (2, 5, 83)
     by: dict[str, list] = {}
     for e in circuit.blocks.inference:
         by.setdefault(label[e.template], []).append((e.at, e.radix, e.axes, e.step))
     assert set(by) == set(ids)
     assert by[EMB] == by[COMBINE] == by[MASK] == [(0, (5, 2), ("step", "slot"), 0)]
-    assert (by[FIRST], by[ROW], by[FEED]) == ([(0, (2,), ("slot",), 0)], [(0, (2,), ("slot",), 0)],
-                                              [(0, (3, 2), ("step", "slot"), 1)])
+    assert by[FIRST] == by[SCAN] == by[ROW] == by[COLLECT0] == [(0, (2,), ("slot",), 0)]
+    assert (by[FEED], by[COLLECT], by[ENTRY]) == ([(0, (3, 2), ("step", "slot"), 1)], [(0, (4, 2), ("step", "slot"), 1)],
+                                                  [(0, (2,), ("slot",), 4)])
     att = "AttnBlockFirst_v1{{D=16,NVIS={},BN=128}}"
     assert by[att.format(5)] == [(0, (2, 2, 4), ("-", "slot", "-"), 4)]
     assert by["AttnHeadEnd_v1{D=16}"] == [(0, (5, 2, 2, 4), ("step", "-", "slot", "-"), 0)]
@@ -381,18 +454,21 @@ def test_inference_entries_are_the_slots_runs_side_by_side():
         WC._inference({"t": [(0, 2, 0, 0), (2, 1, 1, 0)]}, 2)
 
 
-def test_every_input_row_is_wired_registered_or_ingress_counted_from_the_description(window):
-    """`interface.input_count` over the circuit's description (JSON, no Program lowered) at the verifier's one pin, the
-    weights record's root, fixed before the run, finds no free input row, so a proof of the window's units leaves nothing
-    but the declared advice to the prover; the ingress is the two slots' rows, 6 i32s each (occupancy, prompt length and 4
-    ids). Every registered read, table read and opening is of the weights (the GEMM slices', norms' and RoPE tables' rows;
-    the embedding table's root, domain and rows), so with no pin all of them are free."""
+def test_every_input_row_is_wired_or_registered_counted_from_the_description(window):
+    """`interface.input_count` over the circuit's description (JSON, no Program lowered) at the verifier's pins, the weights
+    record's root, fixed before the run, and the scan state's, which the network certifier's scan proofs hold, finds no free
+    input row and no ingress, so a proof of the window's units leaves nothing but the declared advice to the prover. The
+    registered reads, table reads and openings are of the weights (the GEMM slices', norms' and RoPE tables' rows; the
+    embedding table's root, domain and rows) but for the two slots' scan state rows (4,548 words each): with the weights'
+    pin alone those are free, and with no pin all of them are."""
     circuit, _ = window
     doc, reg = json.loads(json.dumps(circuit.description())), circuit.registered
-    assert {r.param for r in reg.reads} | {t.param for t in reg.tables} == set(reg.params) == {WC.WEIGHTS}
-    count = {"units": 2534, "inputs": 17424800, "wired": 2837536, "registered": 14586880, "ingress": 2 * 6 * 32, "free": 0}
-    assert IF.input_count(doc, pins={WC.WEIGHTS}) == count
-    assert IF.input_count(doc) == {**count, "registered": 0, "free": 14586880}
+    assert {r.param for r in reg.reads} | {t.param for t in reg.tables} == set(reg.params) == PINS
+    scan = 2 * 4548 * 16
+    count = {"units": 2548, "inputs": 17572128, "wired": 2839712, "registered": 14586880 + scan, "ingress": 0, "free": 0}
+    assert IF.input_count(doc, pins=PINS) == count
+    assert IF.input_count(doc, pins={WC.WEIGHTS}) == {**count, "registered": 14586880, "free": scan}
+    assert IF.input_count(doc) == {**count, "registered": 0, "free": 14586880 + scan}
 
 
 def test_what_the_class_doesnt_take_is_refused_by_name():
@@ -429,7 +505,8 @@ def test_a_window_its_slots_dont_place_is_refused_by_name():
     ok = _circuit(WINDOW, cls=cls, placed=[(0, 15), (16, 31)])
     assert _bytes(ok) == _bytes(class_circuit(S._registered(), cls, None, GRAIN))
     assert _bytes(_circuit(WINDOW, cls=cls, placed=[(0, 15), (16, 47)])) == _bytes(ok)
-    assert [(g.at, g.units, g.step) for g in ok.ingress] == [(0, 1, 0), (1, 1, 16)]
+    assert [(r.at, r.radix, r.base, r.step) for r in ok.registered.reads if r.param == SS.SCAN_STATE] == [
+        (0, (2,), 0, (16 * 2277,))]
     for placed, match in (
             (None, "2 requests anchored at bucket 0, past the 1 slots a boundary has"),
             ([(16, None), (16, None)], "2 requests anchored at bucket 16, past the 1 slots"),
@@ -479,4 +556,4 @@ def test_a_token_select_is_its_function_at_the_grains_chunk():
     assert (n["TokenSelectChunk_v2{C=128}"], n["TokenSelectCombine_v2{V=256,C=128}"]) == (20, 10)
     assert not [t for t in n if t.startswith(("TokenSelectChunk_v2{C=64}", "TokenSelectCombine_v2{V=256,C=64}"))]
     assert {_source(circuit, ids["TokenSelectChunk_v2{C=128}"], "x", u)[0] for u in range(20)} == {ids["AllGather_v1{WORLD=16,N=8}"]}
-    assert IF.input_count(circuit.description(), pins={WC.WEIGHTS})["free"] == 0
+    assert IF.input_count(circuit.description(), pins=PINS)["free"] == 0

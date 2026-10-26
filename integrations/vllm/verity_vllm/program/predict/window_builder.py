@@ -1,6 +1,7 @@
 """The window circuit's units as `window_circuit` lowers a class Program into them: each template's units, allocated a slot
 at a time with each allocation's slots side by side (`_Builder.unit`), the rows each unit's ports read (`_Feed`), the
-gathers that make several writers' rows one (`AllGather_v1`, made once a run of rows), the weight reads, and `settle`:
+gathers that make several writers' rows one (`AllGather_v1`, made once a run of rows), the registered reads (the weights'
+and the scan state's), and `settle`:
 each port's cut within its unit's rows and every feed wired as `interface.Wire` patterns, one a run of rows from one
 writer's output at a constant unit step. A unit holds at most ``Grain.rows`` rows in and out, a gather's parts and its
 output among them.
@@ -96,7 +97,6 @@ class _Builder:
     tables: dict[tuple[int, int, int], IF.Table] = field(default_factory=dict)
     roots: list[IF.TableRead] = field(default_factory=list)
     openings: list[IF.Opening] = field(default_factory=list)
-    ingress: list[IF.Ingress] = field(default_factory=list)
     gathered: dict[tuple[tuple[str, str, int, int, int], ...], Row] = field(default_factory=dict)
     #: the (slot, step) the next units are of, and each template's runs of units by theirs, ``(at, count, slot, step)``
     label: tuple[int, int] | None = None
@@ -165,8 +165,9 @@ class _Builder:
         self._wire(tid, "parts", u, n, rows, ((n, s),))
         return tuple(Row(tid, u + i, "o0", len(rows) * rows[0].words) for i in range(n))
 
-    def read(self, tid: str, port: str, at: int, radix: Sequence[int], base: int, step: Sequence[int]) -> None:
-        self.reads.append(IF.Read(tid, port, WEIGHTS, at=at, radix=tuple(radix), base=base, step=tuple(step)))
+    def read(self, tid: str, port: str, at: int, radix: Sequence[int], base: int, step: Sequence[int],
+             param: str = WEIGHTS) -> None:
+        self.reads.append(IF.Read(tid, port, param, at=at, radix=tuple(radix), base=base, step=tuple(step)))
 
     def _wire(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
               lead: tuple[tuple[int, int], ...] = ()) -> None:

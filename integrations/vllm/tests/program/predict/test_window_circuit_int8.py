@@ -15,6 +15,7 @@ from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.common import _arr
+from verity_vllm.program.predict.scan_state import SCAN_STATE
 from verity_vllm.program.predict.window_circuit import window_circuit
 
 from verity.ml.windows import interface as IF
@@ -32,7 +33,8 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     s8 weight row is K / 2 words: 16 columns at K = 64, 8 at K = 128), each slice's ``x`` and ``sx`` one quantizer unit's codes
     and scale and its ``w`` and ``sw`` registered reads of the linear's s8 rows and f32 row scales (layer 0's q/k/v, o and
     gate/up at their record offsets, a slice 16 rows on: 512 words of codes, 32 of scales); the LM head stays bf16 `Gemm_v2`.
-    Two windows of the class are still one circuit, blocks included, with the weights pinned no input row is free, and every
+    Two windows of the class are still one circuit, blocks included, with the weights and the scan state pinned no input row
+    is free, and every
     wire reads its own slot at its step or before."""
     reg = _registered()
     circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
@@ -55,8 +57,8 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     reads = {(r.port, r.base, r.step[-1]) for r in circuit.registered.reads if r.reader == mm}
     assert {("w", 16384, 512), ("sw", 20480, 32), ("w", 20736, 512), ("sw", 22784, 32), ("w", 22912, 512),
             ("sw", 31104, 32)} <= reads
-    assert circuit.registered.params == {"weights": 56656}
-    assert IF.input_count(json.loads(json.dumps(circuit.description())), pins={WC.WEIGHTS})["free"] == 0
+    assert circuit.registered.params == {"weights": 56656, SCAN_STATE: 16 * 4548}
+    assert IF.input_count(json.loads(json.dumps(circuit.description())), pins={WC.WEIGHTS, SCAN_STATE})["free"] == 0
     assert _blocks(circuit) == _blocks(other)
     labels = _labels(circuit)
     assert all((lab >= 0).all() for lab in labels.values())
