@@ -59,6 +59,17 @@ def test_a_sync_commits_pushes_and_the_other_machine_picks_it_up(machines):
     assert NS.sync(b, secrets=[]) == {**rep, "note": "already on the remote"}
 
 
+def test_a_sync_commits_where_signing_is_configured_but_cannot_sign(machines):
+    origin, a, _ = machines
+    _git(a, "config", "commit.gpgsign", "true")
+    _git(a, "config", "gpg.program", "false")
+    (a / "lanes" / "x").mkdir(parents=True)
+    (a / "lanes" / "x" / "report.md").write_text("CHECKPOINT none (20:00Z) [open] started\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"], rep["paths"]) == (0, True, 1)
+    assert _git(origin, "show", "main:lanes/x/report.md").startswith("CHECKPOINT")
+
+
 
 
 def _fail_once(monkeypatch, verb: str, stderr: str) -> list:
