@@ -40,9 +40,11 @@ theorem framesRead_fits {x : Msg} {v : FlockDeploy.Ins × SessionSpec × Array S
         (rounds (Rows.shapeNoCoin v.2.1 v.2.2)).flatten.toList.map (keyVal pT'.1 pT'.2) := by
   have hex : ∃ pT : Flock.Proof × F128, FitsRep (repCtx v.2.1 v.2.2 default (nodesR o₀) [] k)
       ((cutLens (repLens v.2.1 v.2.2) (ot.map rowsR)).getD k []) pT.1 pT.2 :=
-    ⟨pT, Rows.fitsRep_of rfl rfl rfl (Rows.repCtx_n hk c₁ default _ _ cs []) rfl rfl hfit⟩
+    ⟨pT, Rows.fitsRep_of (c := repCtx v.2.1 v.2.2 c₁ (nodesR o₀) cs k) rfl rfl rfl
+      (Rows.repCtx_n hk c₁ default _ _ cs []) rfl rfl hfit⟩
   refine ⟨Classical.choose hex,
-    Rows.fitsRep_of rfl rfl rfl (Rows.repCtx_n hk default c₁ _ _ [] cs) rfl rfl (Classical.choose_spec hex), ?_⟩
+    Rows.fitsRep_of (c := repCtx v.2.1 v.2.2 default (nodesR o₀) [] k) rfl rfl rfl
+      (Rows.repCtx_n hk default c₁ _ _ [] cs) rfl rfl (Classical.choose_spec hex), ?_⟩
   have h0 : (rowsOf ((((o₀ :: ot).map fun o => joinR (o.map Prod.fst)) ++ [last]).headD [])).map
       (List.map nodeOf) = some (nodesR o₀) := by
     simp only [List.map_cons, List.cons_append, List.headD_cons, rowsOf_joinR', Option.map_some]
@@ -78,7 +80,7 @@ theorem elemsOf_colBytes {vs : List F128} (pad : List UInt8) {n i : ℕ} (hi : i
     elemsOf (FlockSoundness.Refine.colBytes vs ++ pad) n i = vs[i] := by
   unfold elemsOf
   rw [if_pos hn]
-  refine FlockVBridge.eq_of_bitOf fun t ht => ?_
+  refine FlockVBridge.AccChain.eq_of_bitOf fun t ht => ?_
   rw [FlockVBridge.bitOf_ofBits _ ht, FlockVBridge.bitL_append_left _
     (by rw [FlockSoundness.Refine.Frame.colBytes_length]; omega), FlockVBridge.bitL_colBytes, FlockVBridge.wbit,
     show (128 * i + t) / 128 = i by omega, show (128 * i + t) % 128 = t by omega,
