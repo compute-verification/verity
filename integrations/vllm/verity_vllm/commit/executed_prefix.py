@@ -49,7 +49,10 @@ PROTOCOL SUMMARY (Commit stage: the execution extent check (`executed_prefix`) -
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Iterable
+
+from verity_vllm.records.commit_binding import CommitBinding
 
 ACTIVE_REFERENCE_ONLY = ("NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the "
                          "corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; "
@@ -137,7 +140,7 @@ def request_steps_of_record(epr: dict[str, Any], arrivals: dict[str, int]) -> di
     return {rid: list(range(int(arrivals.get(rid, 0)), int(arrivals.get(rid, 0)) + int(rec["executed_prefix_len"]))) for rid, rec in epr["requests"].items()}
 
 
-def executed_prefix_facts(epr: dict[str, Any], binding: dict[str, Any], linkage: dict[str, Any] | None, arrivals: dict[str, int],
+def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[str, Any] | None, linkage: dict[str, Any] | None, arrivals: dict[str, int],
                            stop: dict[str, Any], served_tokens: dict[str, list[int]] | None = None) -> dict[str, dict[str, Any]]:
     """The per-request FACTS OF RECORD reqval's `sampled_replay.executed_prefix_of_record`
     normalises into the not-executed class -- every one a named record fact, never a literal: `a_r` READ from the Match record
@@ -154,49 +157,50 @@ def executed_prefix_facts(epr: dict[str, Any], binding: dict[str, Any], linkage:
     run root equal to the committed sampled id, the C2 boundary linkage passed AND ran over exactly the request's executed prefix, and
     `lag_attested` is that link's, and `a_r_source` says so as a note, not a missing leg.  With both, both must hold wherever the token
     record places a shorter prefix; a token-record link not applied (a row that committed no sampled id) places none."""
-    cov = (binding or {}).get("coverage") or {}
-    link = cov.get("match_account_link") or {}
-    tj = link.get("tokens_json") or {}
-    g6 = link.get("global_match") or {}
-    cl = cov.get("commit_account_link") or {}
-    by_commit = bool(cl) and not link.get("match_dir")
-    with_commit = by_commit or bool(cl.get("required"))
+    cov = None if binding is None else CommitBinding.of(binding, "the Commit's binding").coverage
+    link = None if cov is None else cov.match_account_link
+    tj = None if link is None else link.tokens_json
+    g6 = None if link is None else link.global_match
+    cl = None if cov is None else cov.commit_account_link
+    by_commit = cl is not None and not (link is not None and link.match_dir)
+    with_commit = by_commit or (cl is not None and cl.required)
     horizon = (linkage or {}).get("horizon") or {}
     # [r19-int-21, F-r19-int-19] the account legs that are NOT beside the Commit, named: #39 (qwen25-15b i4096, l40s4) had its match/capture/
     # moved to /vault to free the disk (F-r19-int-14) while its Commit was queued; tokens.json (a_r per request, the lag attestation) went
     # with it, the link fell to the G6 leg for a_r and the class faulted 'a_r is not linked (linked=False)' + 'LAG rule not attested' after
     # 47 min -- a MISSING INPUT read as a verdict on the Program.  The fact names the missing leg(s); the consumer faults on it by name.
-    account_missing = [] if by_commit else [leg for leg, present in (("tokens.json", bool(tj)), ("global_match.json", bool(g6))) if not present]
-    past = (cov.get("rows_past_the_stop") or {}).get("steps_past_by_request") or {}
+    account_missing = [] if by_commit else [leg for leg, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
+    past = {} if cov is None or cov.rows_past_the_stop is None else cov.rows_past_the_stop.steps_past_by_request
     eos_set = {int(x) for x in (stop.get("eos") or [])} if stop.get("eos") is not None else None
     decl_lag = stop.get("declared_lag")
     lk_ok = bool(linkage and linkage.get("result") is True)
     out: dict[str, dict[str, Any]] = {}
     for rid, rec in (epr.get("requests") or {}).items():
         served_commit = rec.get("served_output_len")
-        m_served = (tj.get("served_by_request") or {}).get(rid)
-        g_len = ((g6.get("lengths_by_request") or {}).get(rid) or {}).get("served_output_len")
+        m_served = None if tj is None else tj.served_by_request.get(rid)
+        g_len = None if g6 is None or g6.served_by_request is None else g6.served_by_request.get(rid)
+        tr_served = None if cl is None or cl.served_by_request is None else cl.served_by_request.get(rid)
         if m_served is not None:
-            a_r, src = int(m_served), f"match record {tj.get('path')} (sha256 {str(tj.get('sha256'))[:16]}): tokens.json generated_token_ids"
+            a_r, src = int(m_served), f"match record {tj.path} (sha256 {tj.sha256[:16]}): tokens.json generated_token_ids"
         elif g_len is not None:
-            a_r, src = int(g_len), f"match record {g6.get('path')} (sha256 {str(g6.get('sha256'))[:16]}): G6 lengths_by_request.served_output_len"
-        elif by_commit and (cl.get("served_by_request") or {}).get(rid) is not None:
-            _rec = cl.get("record") or {}
-            a_r, src = int(cl["served_by_request"][rid]), (f"commit token record {_rec.get('path')} (sha256 {str(_rec.get('sha256'))[:16]}): generated_token_ids opened "
-                                                           "from the run root; no Match record beside the Commit (a config run has no Match stage): the prefix is "
-                                                           "linked to the Commit's token record")
+            a_r, src = int(g_len), f"match record {g6.path} (sha256 {g6.sha256[:16]}): G6 lengths_by_request.served_output_len"
+        elif by_commit and tr_served is not None:
+            a_r, src = int(tr_served), (f"commit token record {cl.record_path} (sha256 {str(cl.record_sha256)[:16]}): generated_token_ids opened "
+                                       "from the run root; no Match record beside the Commit (a config run has no Match stage): the prefix is "
+                                       "linked to the Commit's token record")
         else:
             a_r, src = int(served_commit if served_commit is not None else rec["cap"]), "the Commit's OWN served tokens (no Match record beside the Commit: NOT linked)"
         if account_missing:
             src += f"; Match account leg(s) NOT beside the Commit: {', '.join(account_missing)}"
-        linked = bool(link.get("ok") is True and (tj.get("tokens_equal") or {}).get(rid) is True and g6.get("verdict") == "PASS" and lk_ok)
-        lag_attested = bool(link.get("lag_attested"))
+        linked = bool(link is not None and link.ok and tj is not None and tj.tokens_equal.get(rid) is True
+                      and g6 is not None and g6.verdict == "PASS" and lk_ok)
+        lag_attested = link is not None and link.lag_attested
         if with_commit:
             # the boundary linkage must have run over exactly this executed prefix: the committed tokens are the ones the next step consumed
-            linked_c = bool(cl.get("ok") is True and (cl.get("tokens_committed") or {}).get(rid) is True and lk_ok
+            linked_c = bool(cl.ok is True and cl.tokens_committed is not None and cl.tokens_committed.get(rid) is True and lk_ok
                             and (horizon.get(rid) or {}).get("linked_steps") == rec.get("executed_prefix_len"))
             linked = linked_c if by_commit else (linked and linked_c)
-            lag_attested = bool(cl.get("lag_attested")) and (by_commit or lag_attested)
+            lag_attested = bool(cl.lag_attested) and (by_commit or lag_attested)
         out[rid] = {"a_r": a_r, "a_r_source": src, "lag": (int(decl_lag) if decl_lag is not None else -1), "cap": int(rec["cap"]), "arrive": int(arrivals.get(rid, 0)),
                     "eos_declared": (None if rec.get("last_served_token") is None or eos_set is None else (int(rec["last_served_token"]) in eos_set)),
                     "served_len_commit": served_commit, "linked": linked, "lag_attested": lag_attested,

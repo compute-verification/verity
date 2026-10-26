@@ -1372,7 +1372,8 @@ class Stream:
         aren't at least one instance for each of its templates and N in all, or a single unit's stream is given any
         (`population`), when the rule's rate law
         draws none or more than N units (`rate`, `selection_law`, before R1-R7), when either check fails, or, after both,
-        when the law draws a count that varies (`shapes`, `count_varies`) or its fleet refuses it (`halted`)."""
+        when the law draws a count that varies (`shapes`, `count_varies`), when the program's units read stratum by stratum
+        are not its N units in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
         deadline = self.spec.check.registration_deadline
         op: dict[str, Any] = {"op": "register"}
         got: dict[str, Any] = {}
@@ -1402,6 +1403,8 @@ class Stream:
                             work_table, registered, supplied, pinned, self.binding, schemas, window_root, held)
                 if v.ok and count_varies(law):
                     v = _refuse("shapes", {"law": law}).verdict
+                if v.ok and not P.in_order(program, self.spec.check.query, n):
+                    v = _refuse("population-order", {"population": n}).verdict
                 got.update(program=program, law=law, earlier=earlier)
             if v.ok and self._fleet is not None:
                 try:

@@ -79,17 +79,18 @@ theorem tabsOf_get! {sts : Array Stmt} {i : ℕ} (hi : i < sts.size) : (tabsOf s
 
 /-- **An honest run decides at every set-up statement** whose tables have a `fast100` schedule and extra claims at the
 first coin's link points: on the honest prover's messages from `honestCaps` and `honestPs`, wherever their rows fit a
-message and the last message reads as `honestPs`, `decR` decides. -/
+message and the last message reads as `honestPs`, shaped for their files, at the statement, `decR` decides. -/
 theorem honestRun_decides {rd : Claims.Msg → Option FinalP} {x last : Claims.Msg} {cs : List Coin} {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {Ts : ℕ → F128} {fl : FinalP}
     (hx : setupOf false x = some (s, spec, sts)) (hc : cs.head? = some c₁)
     (htab : ∀ (i : ℕ) (hi : i < sts.size),
       (fast100 sts[i].m).isSome ∧ ∃ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e)
-    (hfit0 : RowsFit (capRows (honestCaps spec sts c₁)))
+    (hfit0 : RowsFit ((capRows (honestCaps spec sts c₁)).map nodeRow))
     (hfit : ∀ k < (honestPs spec sts c₁ cs.tail.dropLast).size,
       ∀ rs ∈ repRows (repCtx spec sts c₁ (capRows (honestCaps spec sts c₁)) cs.tail.dropLast k)
         (honestPs spec sts c₁ cs.tail.dropLast)[k]! (Ts k), RowsFit rs)
-    (hrd : rd last = some fl) (hps : fl.ps = honestPs spec sts c₁ cs.tail.dropLast) :
+    (hrd : rd last = some fl) (hps : fl.ps = honestPs spec sts c₁ cs.tail.dropLast) (hst : fl.stmt = x)
+    (hsh : ShapedAt spec sts c₁ (honestPs spec sts c₁ cs.tail.dropLast)) :
     ∃ d, decR rd x (honestMsgs (honestCaps spec sts c₁)
       ((List.range (honestPs spec sts c₁ cs.tail.dropLast).size).map fun k =>
         repRows (repCtx spec sts c₁ (capRows (honestCaps spec sts c₁)) cs.tail.dropLast k)
@@ -132,6 +133,6 @@ theorem honestRun_decides {rd : Claims.Msg → Option FinalP} {x last : Claims.M
     have h2 : 2 * (k / 2) / 2 = k / 2 := by omega
     rw [honestCaps_get hk2, honestP_cap, honestP_cap, h2]
   exact ⟨_, readsBack rd x last cs s spec sts c₁ (honestCaps spec sts c₁) (honestPs spec sts c₁ cs.tail.dropLast) Ts
-    fl hx hc (honestCaps_size ..) hcaps (honestPs_size ..) hrep hfit0 hfit hrd hps⟩
+    fl hx hc (honestCaps_size ..) hcaps (honestPs_size ..) hrep hfit0 hfit hrd hps hst hsh⟩
 
 end FlockDeploy

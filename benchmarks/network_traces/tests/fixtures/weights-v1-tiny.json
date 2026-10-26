@@ -1,5 +1,5 @@
 {
- "source": "CMP-95 interface 1's fixture, integrations/torch_loop/tests/fixtures/weights-v1.json on cursor/allp-iface-1de3 (#4445) at 6ec00cc41c: its seed, dummy salt key and test reader's digest, TINY's manifest, entries and registration digest for that reader, and H200's stream length, first 64 bytes and every tensor's first and last rows' digest",
+ "source": "CMP-95 interface 1's fixture, integrations/torch_loop/tests/fixtures/weights-v1.json on cursor/allp-h200-rows-1de3 (#4681) at 1fbe1cdb7e: its seed, dummy salt key and test reader's digest, TINY's manifest, entries and registration digest for that reader, and H200's stream length, first 64 bytes and every tensor's first and last rows' digest",
  "seed": "7665726974792f7365656465642d776569676874732f746573742d73656564",
  "salt_key": "949128c0518b7da645ef2b24ade03b84336ca041519d6861ec27801ced54d91d",
  "program": "b3a4990704e0dfab79e1325b90b252589edbdd8635c313691e89759cebd24f0359f94102e18b4029b391970410a4d69e322024100a5b52e82fe511525cda6dd8",
@@ -308,7 +308,7 @@
     }
    ]
   },
-  "registration": "82e303f099d1d6ca161e1ce69628f07c1a9f16f0dc525e26f7df537b72546134cc1e42a0c1adbf1a74cdcc091a954e73a64e64575cf61a0709b9b4b5e5407300",
+  "registration": "0c5e79455de86c5b0526d302591a939fb6a2a4c4e5ebca22679d879c4c3799ba0be4c38b9a5c436186ff1325a4b6ca94a39f16b2cd88780224e1235ba244fc15",
   "values": [
    {
     "domain": "0806640281bfb69375caacd4f1ebab728d632ee97485f8c588d0b6d8b52c0ebc3dcde21ec48955a54e29604ff05ce7d41555b2ad861d7a1041531a1223ce1091",
@@ -339,12 +339,11 @@
     "words": 8
    },
    {
-    "domain": "44ed5702eb170e4f3043f56a0ec68e9b0ef8629d7357c2246d2b4e6f28a54a9239b17234c8080419a543b40f5878011320b52ce1b9bad675def6d7c3844c435a",
+    "domain": "c5013b1d3d857e820932d3d2780ff1209ee0675fe11ec3faaf728e92302044357e2ca1a23c79567513d22e3315ddbb54ac88dd975f5e504cb646777c640b4ce8",
     "leaves": 32,
-    "root": "ef3dcef0ec11a0342f0ecf46ecfd167447bd51c1b1a26c8149bd6eced4ffdc878225b5c91e1cf110096e0eb23a0f7c9e70619306ee2886e0f79b8f90a218daf8",
+    "root": "7cb2bc3ea02a96a3f5d1759de1e1a611c35b96b461b02551ed35f75adf4aa579cca10939a895b629a78a062d87d76264ffe8c1e500d627e617d31d9621f32faa",
     "value": "l0.wq.scale",
-    "word_bits": 32,
-    "words": 1
+    "words": 2
    },
    {
     "domain": "3743bb16c32e953ab16d2942077c09d961ac204316dd00eb9fd4e3d92c07a9596d41319954af0943dfc0a94064a6822e28115deb2700387d67ffe3268c884906",
@@ -354,12 +353,11 @@
     "words": 8
    },
    {
-    "domain": "1fdf6cf1cdf6ca370c2d0ecc70eff3a6e5759bc0c12e7bf6996defeaf1c4f34aa76f93372cce540dc98d94c873f207910a9a78e1d96d6f9646c4e149c1a7f234",
+    "domain": "a99b11352f23d858a9a4e9e3465724e59ca2f867f4a965daffa84a46875ba220ea981251b70415aa3a4544616c45d6023adb2d9d8c62d895911b46c63a5bae2e",
     "leaves": 16,
-    "root": "ece8fb4053f52165c00487f94196eca57871354649473a0274a6d90655ed1860fdc74970eb4be60b9e6cc2cd8cf26d7d6ab8c35d69315b992003c07fec03d74b",
+    "root": "84d8635e3506d0dc3704b82fd5b43d509b50bb88ab9d01d3379b7d7acd80e7391e46241b5557db30ba596ff4196af4749c34fb69da776a2baad7fcd8b75cf549",
     "value": "l0.wk.scale",
-    "word_bits": 32,
-    "words": 1
+    "words": 2
    },
    {
     "domain": "11f104fc1ed3a079492d4d4e6a438d4fc04d20d2ea943c54454adc6c8be32bc6cb76f8410183dd3e807a0970262849bd76727ddf1ff65095f6afbae1ecf8aa78",
@@ -369,12 +367,11 @@
     "words": 8
    },
    {
-    "domain": "3cbd146f6d761437ceadf3cd004be6947905ca6ae652995a8b0235baf7d05ce1a9fb66fbd1666aa5ff419b612a994316f2c1eff7784f972d8c33682abab28fad",
+    "domain": "ddeaaeb575d2cc791a31c3c331075aa421eb76593166d4ddbdac9b45c0146ae814dffbad0ec3f1c90856791593a84a2ca78241b0f5ac89e656a0eaa3d78ab605",
     "leaves": 16,
-    "root": "d01ace1a8b75955bab03a40098ad89a960ec9abfe9cfbba2d32f481b92338f88bd9ad3a351c4c2244aeb6103c5b15fc8fe9b6b56b932ba1081a201141e50b58f",
+    "root": "2eafe526ee69ad79f1a833ef64c8e364cf3a4369e3016fc307e8e789a65908da9ebf0c1fabfafbb05ccd86e3d083ec6b411927b6637e7c7f23efd31ff6124244",
     "value": "l0.wv.scale",
-    "word_bits": 32,
-    "words": 1
+    "words": 2
    },
    {
     "domain": "fbdecf148384e69fd176430ceff164920635e7de3f0706a52e6041f417e59838f0e6645784287ace72e0757ab7a2f96e68581f12d4180aaeb3c8661803fff7fd",
@@ -384,12 +381,11 @@
     "words": 8
    },
    {
-    "domain": "ed4b6f4d9a4070ae3ad142e8a5c6a416975e47fadca93250410229c1b1867c7ca4353c302c691acfdb7ddaacdef20beb1f89e65dda38ca924f0711873fb75bd3",
+    "domain": "b2e08f8beb943f46bad6c470fd9db90518f1ef30e70c3007ef2531635245479779e3ac3301ba5f0c85cda4812f531aa672cadfeab2b99f8509f6241c71fcf949",
     "leaves": 32,
-    "root": "085b9ea5263a25d84310e6bf75f1eb84bdc5174837522095c14c55a4b50bb861cb6ba8013db376b14ccb0f7a7030363d8ecfe541b2976e497ef83a692d087d74",
+    "root": "dc0a2a11f8ba0dcdd8c58a88c9e09b5463a17839a92cb5731c2c8d1c1be68b8314679f1b828268a325d050542694c30db1203abb1410833e3a4d2655411970b2",
     "value": "l0.wo.scale",
-    "word_bits": 32,
-    "words": 1
+    "words": 2
    },
    {
     "domain": "e01e07c3226948d70a4359572e2aaa8ae212cdde6954cfd371e24469d612bc37058163c4a00ffab6d1c65de8c997a94e51138a7adfa6afd52fc9348ec18d9bff",
@@ -406,12 +402,11 @@
     "words": 8
    },
    {
-    "domain": "ac16608592b6233e89ffe340b1353ee1a608fdaf9650ebf9269c4aa9fc2a8f3476dd599144e3fdc3dd1ea39d2ff85793956a6c3d7b04a33b756dccd8a9af8c85",
+    "domain": "9c6f75673ff9870edefadd234f7079aad13cbad233f14d02522640778da4af2b9e5e8d6be4b816960c25ba365d3120f415c56210ee30666eee639a5a300ddbe7",
     "leaves": 64,
-    "root": "75dbdfc806501cd0d6fb5a4852a49a97e511295d5cfa36f8a7be3c39d7797881ab2d16ce3cf9ea3b39d0c807a76c8d50ca0e085c045e9b708e02839293b912f9",
+    "root": "df2698118408c588ab465336810db08adc3b9eb3a4b63c7859fbed246d63a9866540d9a7be91c1865305efffb8dc189739f441e9559b2a67d9fa14f3dd0fa899",
     "value": "l0.wup.scale",
-    "word_bits": 32,
-    "words": 1
+    "words": 2
    },
    {
     "domain": "c7f8a5077c8f7346241cda9cda0be8dc5d670dee76b64f850008556f9bff78d5db34de9051e930a282b0bfe6e424d8363afb9b144c7045ea6fdd11f9513ddc16",
@@ -421,12 +416,11 @@
     "words": 8
    },
    {
-    "domain": "45ad362013915a4e2753e1b26cd07740d3360ceefdea2f2075f998ff962152282373ffd4466a9319bf7c3fa72e35ee464a871d894337868ac5359bac2ef3fb89",
+    "domain": "89bb47771fdbfa003dabe2a8245f92bbcb20d3ea602bb0097c26e8d920a6ab3967124c27a87a15e4887b0427e2bc498f571fca59abeb0210830a4491dec3a0eb",
     "leaves": 32,
-    "root": "aa8dc4988708c3ddde6d14bf5581a4ac5b40219760ee791d54a43cf7141f658360eed152d508cdebcbb4c36a392ca7175968cb5f3684dc76192dff486120b2bf",
+    "root": "962a9bd1e1b817581734033798c2b4f6d091570b5c98abeda0fd9d3c95fea484f34c9cbe7737019ff8de8ec7589584848729c3808dcc1a5b15667606d87b2026",
     "value": "l0.wdown.scale",
-    "word_bits": 32,
-    "words": 1
+    "words": 2
    },
    {
     "domain": "a5fa6b1da957027d7ab484780866d14668010880eae37f1d5ba49d6b1ba9618b476634a745bbe5574892d9ade8ce5c86b63b198b600c0ca5ef7eebf9ca1c1e1d",
@@ -443,12 +437,11 @@
     "words": 8
    },
    {
-    "domain": "30a8f42ee494f30ff08ce8cc3a283787cac38599aa64db9822499796e8c2071216c72d93b21ba3b409e8ca5b2a1c3b0d4f3d8df3d55bf638757ae8080900f79f",
+    "domain": "26e90a81bde47c42112d07713a7025e19ab3265d3a442620af725169062b21c28af8c5ba7c389aaf8cd01a96e6f9ee4bce1d7c0660bb57491a6543f25ab4550a",
     "leaves": 256,
-    "root": "c8dc780faef3f5be5dafe2cb3f5c4ca0e180b6f64724f2d4011e16fa9b2f11d118d6d88f75822929ec9c975ae9b62e335b94682e2244b0735c68dec74b230f56",
+    "root": "cd5e0c9abff4952f8eb9e8e6cd4edc28a7088fb65f3bafa2b90f775b73ef47d177779e03745642635b17aa3a16371b5a9df6081312156a2558cbb18f2a3a9702",
     "value": "head.scale",
-    "word_bits": 32,
-    "words": 1
+    "words": 2
    }
   ]
  },
