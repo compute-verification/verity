@@ -28,7 +28,7 @@
     {"file": "verity_vllm/check/oracle_compare.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/oracle-compare/v1"},
     {"file": "verity_vllm/check/poc_description.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/description/v1"},
     {"file": "verity_vllm/check/poc_required_interface.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/required/v1"},
-    {"file": "verity_vllm/check/replay", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 57},
+    {"file": "verity_vllm/check/replay", "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": 56},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/sampled-replay/v1"},
     {"file": "verity_vllm/check/replay/linkage.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/boundary-linkage/v1"},
     {"file": "verity_vllm/check/replay/population.py", "kind": "schema-literal", "symbol": "moe_plane_alias_check", "detail": "verity-sweep/moe-plane-alias-check/v1"},
