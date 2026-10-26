@@ -12,8 +12,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from verity_vllm.engine import static_schedule
 from verity_vllm.config import RowEngine
 from verity_vllm.program import prefix_plan as PP
@@ -120,7 +118,7 @@ ACCEPTED_TOKENS: dict[str, list[int]] = {
 
 
 def execution_of_workload(workload: dict | None) -> str | None:
-    """[R15 EXEC-02] The execution label a workload manifest declares: an explicit top-level `execution` (or `sweep.execution`) when the
+    """The execution label a workload manifest declares: an explicit top-level `execution` (or `sweep.execution`) when the
     schema carries one, else the last `__` token of `sweep.row_id` (`…__greedy__bi-eager` -> 'bi-eager'); None for a workload that is not
     a sweep row (no row id: the caller's default applies and the header records `declared_execution: null`)."""
     if not isinstance(workload, dict):
@@ -232,13 +230,17 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
 #: tensors only under some of them (`runner.sampler/seed` only for an explicitly seeded batch), so a bounded warm-up that dropped them
 #: learned plans every seeded record step overran (SmolLM2-135M Gumbel sm_120: +8 B past a chunk boundary = +256 B, failed closed).
 THROWAWAY_SAMPLING_FIELDS = ("seed", "n", "variant", "temperature", "top_p", "top_k")
+#: The warm-up prompts' token seed for a single warm-up pass.
+WARMUP_SEED = 0x5EED_7A9B
 
 
-def throwaway_requests(engine: Engine, like: list[dict], seed: int = 0x5EED_7A9B) -> list[dict]:
+def throwaway_requests(engine: Engine, like: list[dict], seed: int) -> list[dict]:
     """Warm-up prompts of the same lengths, random tokens (prefix caching is off; they share no block anyway), with the same per-request
     sampling fields (`THROWAWAY_SAMPLING_FIELDS`): the warm-up stages the same layout as the run it stands in for."""
+    from verity_vllm.commit import challenge
+
     vocab = int(getattr(engine.llm.llm_engine.vllm_config.model_config.hf_config, "vocab_size", 32000))
-    rng = np.random.default_rng(seed)
+    rng = challenge.generator(seed)
     out = []
     for i, r in enumerate(like):
         w = {"request_id": f"warmup-{i}", "prompt_token_ids": rng.integers(3, vocab - 1, size=len(r["prompt_token_ids"])).tolist(),
