@@ -18,6 +18,7 @@
   period's, and its free inputs are `interface.input_count`'s (slow);
 * ``CERTIFIER_PATH`` picks the path, the certifier-only one by default, and the warden path's stubbed lines are the
   other's less its records' gap; ``WARDEN_TAMPER`` names the stub's tampers;
+* of the windows the runner audits at once, one makes the run's session and the others read it (`once`);
 * the warden session's run parses as the gate's scan rehearsal at the scan's own schedule, a period's link-windows are
   its group's in ``groups.json``, and the certified ids match the registered outputs' by connection, else by content,
   and a stub's changed byte, extra id or lost id is no match;
@@ -41,6 +42,7 @@ import hashlib
 import importlib.util
 import json
 import sys
+import threading
 from argparse import Namespace
 from fractions import Fraction
 from pathlib import Path
@@ -341,6 +343,31 @@ def test_the_path_is_certifier_paths_and_the_certifier_only_one_by_default(monke
     assert L.STUBBED["warden"][:2] == L.STUBBED["certifier"][1:]
 
 
+def test_windows_audited_at_once_make_the_runs_one_session_once(tmp_path):
+    s, entered, go, made, got = tmp_path / L.SESSION, threading.Event(), threading.Event(), [], {}
+
+    def first(d: Path) -> dict:
+        entered.set()
+        go.wait()
+        made.append("first")
+        (d / "session.json").write_text(json.dumps({"by": "first"}))
+        return {"by": "first"}
+
+    def second(d: Path) -> dict:
+        made.append("second")
+        return {"by": "second"}
+
+    a = threading.Thread(target=lambda: got.update(a=L.once(s, first)))
+    a.start()
+    entered.wait()
+    b = threading.Thread(target=lambda: got.update(b=L.once(s, second)))
+    b.start()
+    go.set()
+    a.join()
+    b.join()
+    assert made == ["first"] and got == {"a": {"by": "first"}, "b": {"by": "first"}}
+
+
 def test_the_warden_sessions_tampers_are_the_stubs(monkeypatch):
     monkeypatch.delenv("WARDEN_TAMPER", raising=False)
     assert L.warden_tampers() == list(L.WARDEN_TAMPERS) and set(L.WARDEN_TAMPERS) <= set(S.TAMPERS)
@@ -633,10 +660,10 @@ def test_the_block_leg_fits_the_block_records_schema_its_fixture_and_its_runner_
 
 
 @pytest.mark.slow
-def test_a_loop_period_registers_what_the_stub_serves(tmp_path):
+def test_a_loop_window_registers_what_the_stub_serves(tmp_path):
     a = Namespace(law="subset:2", cap=8, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={},
-                  periods=1, weights=None)
-    d, _ = RN.loop_period(0, "test", a, tmp_path / "scratch", tmp_path / "out")
+                  pouw=None, delta="1/100", start=0, windows=1, weights=None)
+    d, _ = RN.loop_window(0, "test", a, tmp_path / "scratch", tmp_path / "out")
     units = L.loop_units(d)
     assert L.requests_of(d, units) == ([3, 7], STEPS, H)
     outputs = L.registered_outputs(units)
@@ -647,15 +674,15 @@ def test_a_loop_period_registers_what_the_stub_serves(tmp_path):
 
 @pytest.mark.slow
 @pytest.mark.skipif(not hasattr(S.L, "commit_weights"), reason="registered weights (#4426) are not in this tree yet")
-def test_a_registered_weights_period_reads_unit_for_unit_as_the_plain_one(tmp_path):
+def test_a_registered_weights_window_reads_unit_for_unit_as_the_plain_one(tmp_path):
     from verity.ml.windows import interface as IF
 
     a = Namespace(law="subset:2", cap=8, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={},
-                  periods=1, weights=None)
-    plain, _ = RN.loop_period(0, "test", a, tmp_path / "plain", tmp_path / "plain-out")
+                  pouw=None, delta="1/100", start=0, windows=1, weights=None)
+    plain, _ = RN.loop_window(0, "test", a, tmp_path / "plain", tmp_path / "plain-out")
     weights = {"opening": tmp_path / "opening.json", "pin": tmp_path / "pin.json"}
     RN.serve(["--commit-weights", str(weights["opening"]), "--pin", str(weights["pin"])])
-    d, _ = RN.loop_period(0, "test", Namespace(**{**vars(a), "weights": weights}), tmp_path / "reg", tmp_path / "reg-out")
+    d, _ = RN.loop_window(0, "test", Namespace(**{**vars(a), "weights": weights}), tmp_path / "reg", tmp_path / "reg-out")
     assert json.loads((d / "period.json").read_text())["registered"] == str(weights["pin"])
     assert all("shared_rows" in m for m in json.loads((d / "window.json").read_text())["members"])
     got, want = L.loop_units(d), L.loop_units(plain)

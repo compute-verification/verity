@@ -74,6 +74,7 @@ so no observation moves), and no connection through the network certifier but th
 from __future__ import annotations
 
 import base64
+import fcntl
 import json
 import math
 import os
@@ -84,7 +85,7 @@ import sys
 import tempfile
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
@@ -328,13 +329,24 @@ def _periods(period_dir: Path) -> int:
     return period["periods"]
 
 
+def once(s: Path, make: Callable[[Path], dict[str, Any]]) -> dict[str, Any]:
+    """The run's one session in ``s``: its record ``s/session.json``, made by ``make(s)`` while holding ``s``'s lock, so
+    that of the windows the runner audits at once (``--jobs``) one makes it and the others read it."""
+    s.mkdir(parents=True, exist_ok=True)
+    with open(s.parent / f"{s.name}.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if (s / "session.json").exists():
+            return json.loads((s / "session.json").read_text())
+        return make(s)
+
+
 def session(period_dir: Path) -> dict[str, Any]:
     """The run's one certifier session (module docstring), made at its first period in the runner's scratch beside the
-    period's window (``period_dir.parent``); its record ``session.json``."""
-    s = period_dir.parent / SESSION
-    if (s / "session.json").exists():
-        return json.loads((s / "session.json").read_text())
-    s.mkdir(parents=True, exist_ok=True)
+    period's window (``period_dir.parent``); its record ``session.json`` (`once`)."""
+    return once(period_dir.parent / SESSION, lambda s: _session(period_dir, s))
+
+
+def _session(period_dir: Path, s: Path) -> dict[str, Any]:
     tools, exes = _tools(period_dir), lean_exes()
     prompts, steps, h = requests_of(period_dir)
     periods, height = _periods(period_dir), _env_int("CERTIFIER_HEIGHT", 10)
@@ -567,11 +579,11 @@ def warden_tampers() -> list[str]:
 
 def warden_session(period_dir: Path) -> dict[str, Any]:
     """The run's one warden session (module docstring), made at its first period in the runner's scratch beside the
-    period's window (``period_dir.parent``); its record ``session.json``."""
-    s = period_dir.parent / WARDEN_SESSION
-    if (s / "session.json").exists():
-        return json.loads((s / "session.json").read_text())
-    s.mkdir(parents=True, exist_ok=True)
+    period's window (``period_dir.parent``); its record ``session.json`` (`once`)."""
+    return once(period_dir.parent / WARDEN_SESSION, lambda s: _warden_session(period_dir, s))
+
+
+def _warden_session(period_dir: Path, s: Path) -> dict[str, Any]:
     tools, exes = _tools(period_dir), lean_exes()
     prompts, steps, h = requests_of(period_dir)
     rec = warden_rehearse(s, prompts, steps, h, _periods(period_dir), _env_int("CERTIFIER_HEIGHT", 10),
@@ -1161,7 +1173,7 @@ __all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "DELTAS", "PATHS", "PROTOCOL", "P
            "TAMPERED_WINDOW", "WARDEN_PENDING", "WARDEN_PUBLIC", "WARDEN_TAMPERED_PERIOD", "WARDEN_TAMPERS",
            "answer_of_outcome", "audit_answer", "block_leg", "case_of", "certified_events", "certifier_leg", "check",
            "clock_evidence", "free_inputs", "holds_at", "io", "layout", "leg", "loop_units", "match_ids",
-           "match_outputs", "n2_refusal", "n2_report", "period_windows", "publish", "registered_outputs", "requests_of",
+           "match_outputs", "n2_refusal", "n2_report", "once", "period_windows", "publish", "registered_outputs", "requests_of",
            "rows_case_of", "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_free", "scan_prove", "scan_schedule",
            "scan_window", "session", "term_delta", "warden_argv", "warden_ids", "warden_io", "warden_leg",
            "warden_period_windows", "warden_publish", "warden_rehearse", "warden_session", "warden_tampers",
