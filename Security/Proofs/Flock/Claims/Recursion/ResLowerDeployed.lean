@@ -1478,7 +1478,7 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
     {j : ℕ} {nm : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm pt))
     (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
     (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
-    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (hpc : ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
       _root_.Flock.Readable.parseBytes readOfO xO = some p →
@@ -1501,7 +1501,8 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
               os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) →
               _root_.Flock.Readable.rowsRead ns nv
                   (_root_.Flock.Readable.copyOf p 0 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) =
-                elemAt (Claims.Recursion.xI D x) (Bd.opened os last) q.key) :
+                elemAt (Claims.Recursion.xI D x) (Bd.opened os last)
+                  ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :
     PiecesComputes Bd D pieces (resHolds elemAt vvAt) ownQ s x c ms := by
   obtain ⟨-, xO, w, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
   obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, -, htab⟩ := stagedReads hs
@@ -1669,7 +1670,7 @@ def ResLowered (rd : Msg → Option FlockDeploy.FinalP) (wE : Msg → ℝ)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
-    (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+    (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128) : Prop :=
   ∀ s x c ms, PartAccepts FlockDeploy.sha512
       (recBound _root_.Flock.Readable.relation b (DeployedR.layR elem) (_root_.RecDeploy.bdR rd wE final w).IVStar)
@@ -1688,7 +1689,7 @@ theorem resLowered_parts {rd : Msg → Option FlockDeploy.FinalP} {wE : Msg → 
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
     {pieces : Msg → List ResPiece} {ownQ : Msg → ResPiece → Option ℕ}
-    {elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
+    {elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
     {vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128}
     (h : ResLowered rd wE final w b elem shape untr cmt pieces ownQ elemAt vvAt)
     (hin : ∀ x q s, q ∈ pieces (Claims.Recursion.xI

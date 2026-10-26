@@ -55,7 +55,7 @@ def TargetRDep : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size →
       (∀ r : Fin 2, (acc x ms cs (2 * i + r)).size = 4) ∧
-      ∃ (rpieces : List ResPiece) (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
+      ∃ (rpieces : List ResPiece) (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
         (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128) (keyAt : Fin 2 → ℕ → ℕ × ℕ × ℕ × ℕ),
         (∀ q ∈ rpieces, resHolds elemAt vvAt q x ms cs) ∧
         (∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
@@ -65,7 +65,7 @@ def TargetRDep : Prop :=
         (∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
           structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
           ∀ (r : Fin 2) p (hp : p < gs.size) k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
-            elemAt x ms (keyAt r p) k =
+            elemAt x ms cs (keyAt r p) k =
               el (D.rep cls (acc x ms cs) i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k]) ∧
         ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
           structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →

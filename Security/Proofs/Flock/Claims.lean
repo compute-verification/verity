@@ -174,6 +174,7 @@ import Proofs.Flock.Claims.Recursion.NonVacuous
 import Proofs.Flock.Claims.Recursion.VerdictRowEAcc
 import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
 import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
+import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
 import Proofs.Flock.Claims.Recursion.VPiecesDeployed
 import Proofs.Flock.Claims.Recursion.VerdictRowL
 import Proofs.Flock.Claims.Recursion.RoundCounts
@@ -209,6 +210,20 @@ import Proofs.Flock.Claims.Recursion.LastCallsR
 import Proofs.Flock.Claims.Recursion.RowDLevels
 import Proofs.Flock.Claims.Recursion.RowDMerkle
 import Proofs.Flock.Claims.Recursion.RowDAccept
+import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+import Proofs.Flock.Claims.Recursion.RestReadsAt
+import Proofs.Flock.Claims.KS.PlainRConflict
+import Proofs.Flock.Claims.KS.PlainRCapPrefix
+import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
+import Proofs.Flock.Claims.Recursion.LastSharedR
+import Proofs.Flock.Claims.Recursion.LastFilesR
+import Proofs.Flock.Claims.Recursion.LastCallsR
+import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+import Proofs.Flock.Claims.Recursion.InnerAtCoins
+import Proofs.Flock.Claims.Recursion.InnerSetupSame
+import Proofs.Flock.Claims.Recursion.InnerExtras
+import Proofs.Flock.Claims.Recursion.VVTieOf
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
@@ -234,6 +249,8 @@ import Proofs.Flock.Claims.Recursion.FlockKSDeployK
 import Proofs.Flock.Claims.Recursion.PlainK
 import Proofs.Flock.Claims.Recursion.SlotsCalls
 import Proofs.Flock.Claims.Recursion.SlotsPorted
+import Proofs.Flock.Claims.Recursion.ElemRead
+import Proofs.Flock.Claims.Recursion.VerdictRowRLeaf
 import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.DeployTables
