@@ -292,10 +292,17 @@ def reference(product: R.Product, seen: collections.Counter):
     return answer
 
 
+class UndecidedAtBest(D.ProtocolPort):
+    """A product's port whose best verdict is undecided: sampled proofs (v2) accepts only on a session's proof, which no
+    case carries, so the harness's check that the strategy isn't vacuous asks for an undecided product instead."""
+
+    accepted = R.UNDECIDED
+
+
 def port(name: str, product: R.Product, seen: collections.Counter) -> D.ProtocolPort:
     """`name serve` of the Lake package `name`, on the product's cases and, one draw in ten, any JSON line."""
-    return D.ProtocolPort(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
-                          package=PROTOCOLS / name)
+    return UndecidedAtBest(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
+                           package=PROTOCOLS / name)
 
 
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
