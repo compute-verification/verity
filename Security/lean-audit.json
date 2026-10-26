@@ -31145,6 +31145,7 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
+    "Flock.SecurityProofs.SampledKSLiveStated",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
