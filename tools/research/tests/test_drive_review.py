@@ -1252,6 +1252,63 @@ def test_a_passed_lean_check_holds_next_until_it_lands_and_an_ejection_below_it_
     assert [m.pr for m in chain] == [1, 3] and chain[0].commit == one and top not in {m.commit for m in chain}, world.logs
 
 
+def test_an_eject_off_drive_leaves_next_under_a_running_lean_check_and_records_the_ejection(world, monkeypatch, capsys):
+    """26 Oct 19:41Z: compute-accounting's `research queue eject 4573`, of a PR not on `next`, rebuilt all 132 members of `next`
+    ("kept 0, merged 132"), and verity-agents[bot] force-pushed it, dropping two running hand Lean checks."""
+    import research.drive as D
+    from research.cli import main as research_main
+
+    h = Review(world, monkeypatch, nonlean_first=False)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.gh.put(9, head := world.change({"c.txt": "9\n"}), ready=False)    # open, never on `next`
+    h.review(1)
+    h.tick()
+    one = h.q.chain()[0].commit
+    assert h.launched == [(one, "m1", False)], world.logs
+    monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
+    monkeypatch.setattr(D, "merge_thread_post", lambda *a, **k: True)
+    monkeypatch.delenv("RESEARCH_DRIVE")
+    refs = lambda: _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
+    before = refs()
+    assert research_main(["queue", "eject", "9", "--reason", "x", "--by", "compute-accounting", "--workdir", str(h.q.workdir),
+                          "--remote", str(world.origin), "--repo", "o/verity", "--store", str(world.tmp / "store")]) == 0
+    assert refs() == before and "drive's next tick rebuilds `next` without it" in capsys.readouterr().out
+    state = h.q.load_state()
+    assert state["ejected"]["9"]["head"] == head and state["ejected"]["9"]["by"] == "compute-accounting"
+    (mark,) = world.store.labels(label_target(9, head), key=vocab.READY)
+    assert mark.value is False and mark.by == "compute-accounting"
+    assert state["drive"]["lean"][one]["state"] is None
+    with pytest.raises(QueueError, match="moved only by drive's App"):
+        h.q.sync()                                                          # nor any other caller
+    assert refs() == before
+    monkeypatch.setenv("RESEARCH_DRIVE", "1")
+    h.tick()
+    assert h.q.chain()[0].commit == one and h.cancelled == [], world.logs
+
+
+def test_a_hand_sync_on_drive_keeps_next_up_to_drives_running_and_passed_lean_checks(world, monkeypatch):
+    h = Review(world, monkeypatch, nonlean_first=False)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 3]
+    h.d.hand_lean(chain[1].commit, "ci")
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    h.tick()
+    assert h.d.q.load_state()["drive"]["lean"][chain[1].commit]["state"] == "passed"
+    world.gh.put(1, world.change({"a.txt": "one\n"}))                       # a new head at the bottom, marked
+    hand = world.queue(nonlean_first=False)
+    assert hand.hold_lean_checks() == 2
+    hand.sync()
+    assert [m.commit for m in hand.chain()[:2]] == [m.commit for m in chain[:2]], world.logs
+    world.queue(nonlean_first=False).sync()                                 # without drive's hold it rebuilds from the bottom
+    assert [m.pr for m in h.q.chain()] == [2, 3, 1], world.logs
+
+
 def test_lean_check_refuses_a_commit_whose_recorded_lean_check_passed_naming_its_run(world, monkeypatch):
     """infra's review of #4670 (26 Oct 11:04Z): a hand check at a commit drive records as passed replaced the pass with a pending
     check, so what it covered waited again."""

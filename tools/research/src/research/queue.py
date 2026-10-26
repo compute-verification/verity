@@ -113,7 +113,9 @@ that conflicts costs one call).  A merge whose only conflicts are in pins (`tool
 sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from the merged tree (`repinned`): two PRs that each
 change a pinned input both change its pin.  So a new push moves its PR to the tip, a dropped PR takes the commits after it
 along (they're merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
-runs doesn't change (`hold`): then every sync, drive's, `eject`'s or a hand one, leaves `next` as it is until that check ends.  A
+runs doesn't change (`hold`): then every sync, drive's or a hand one, leaves `next` as it is until that check ends.  Only drive
+syncs (`Queue._drive_only`): `eject` only withdraws the mark, for drive's next tick, and a hand `sync` on the control pod keeps
+`next` up to drive's running and passed Lean checks (`lean_hold`).  A
 PR whose head contains another open PR's head goes in after it and waits while that one waits, unless it carries that one's
 change: the same owner, or that one's owner withdrew its mark (`Queue._carried`).  What a sync merges on top goes non-Lean first
 (drive.toml's `nonlean_first`, on by default: `Queue._nonlean_order`): each PR whose own change is no Lean change (`lean_change`
@@ -555,6 +557,15 @@ def lean_running(state: dict, pr: int) -> str | None:
         if rec.get("state") is None and not rec.get("stacked") and any(n == pr for n, _ in rec.get("members") or ()):
             return " ".join(rec.get("ids") or ()) or "(launching)"
     return None
+
+
+def lean_hold(state: dict, chain: list[Member]) -> int:
+    """How many members at the bottom of ``chain`` drive's Lean checks keep in place: up to the highest commit of one in drive's
+    state (`drive["lean"]`) that runs, launches or passed, as drive's review tick holds them (`Driver._running_lean`,
+    `_landable`).  A passed one holds whether or not its prefix lands yet; drive's next tick decides that."""
+    lean = (state.get("drive") or {}).get("lean") or {}
+    held = {c for c, rec in lean.items() if rec.get("state") in (None, "passed")}
+    return max((i + 1 for i, m in enumerate(chain) if m.commit in held), default=0)
 
 
 def _who(name: str) -> str:
@@ -1107,7 +1118,8 @@ class Queue:
 
     def sync(self, dry_run: bool = False) -> tuple[list[Member], dict[int, Entry]]:
         """Rebuild `next` (see the module's `next`), unless a running check holds it on its base (`holding`): then nothing on it
-        changes, and (its members as built, {}) is returned."""
+        changes, and (its members as built, {}) is returned.  Off drive it refuses before anything (`_drive_only`)."""
+        self._drive_only(self.branch, "queue sync", dry_run)
         self._clone()
         state = self.load_state()
         prs = [p for p in self.github.open_prs() if p.base == "main"]
@@ -1171,6 +1183,25 @@ class Queue:
             self.save_state(state)
         return members, entries
 
+    def _drive_only(self, ref: str, verb: str, dry_run: bool) -> None:
+        """Refuse a push of `main` or `next` (`merge.DRIVE_ONLY`) here unless this is drive (`merge.on_drive`), whatever the caller:
+        GitHub's rulesets don't stop verity-agents[bot] (26 Oct 19:42Z: a VM's `research queue eject 4573` force-pushed a rebuild
+        of `next` that dropped two running Lean checks, as on 23 Oct 07:07Z)."""
+        from .merge import DRIVE_ONLY, off_drive, on_drive
+
+        if not dry_run and not self.shadow and ref in DRIVE_ONLY and not on_drive():
+            raise QueueError(off_drive(ref, verb))
+
+    def hold_lean_checks(self) -> int:
+        """For a sync that isn't drive's tick (`research queue sync` on the control pod): keep `next` in place up to its highest
+        commit with a running or passed Lean check in drive's state (`lean_hold`), as drive's tick does, and return how many."""
+        self._clone()
+        self.fetch()
+        chain = self.chain()
+        self.hold = lean_hold(self.load_state(), chain)
+        self.frozen = {m.pr for m in chain[:self.hold]}
+        return self.hold
+
     def eject(self, pr: int, reason: str, by: str, sha: str | None = None) -> PR:
         """Withdraw ``pr``'s mark and keep it off the queue's branch; with ``sha``, only while that is still its head (CI-134: an
         eject that waited for drive's tick withdrew the mark of a head its owner had pushed meanwhile, 18 and 21 Oct)."""
@@ -1219,9 +1250,11 @@ class Queue:
     # -- landing
 
     def land(self, dry_run: bool = False) -> Member | None:
-        """Fast-forward `main` to the newest commit on the queue's branch that the gate accepts, and push it (never with --shadow)."""
+        """Fast-forward `main` to the newest commit on the queue's branch that the gate accepts, and push it (never with --shadow).
+        Off drive it refuses before anything (`_drive_only`)."""
         from .merge import Refused, gate
 
+        self._drive_only("main", "queue land", dry_run)
         self._clone()
         self.fetch()
         chain = self.chain()
@@ -2871,6 +2904,8 @@ def main(argv: list[str]) -> int:
         if a.command in ("sync", "land") and not (a.dry_run or on_drive()):
             raise QueueError(off_drive(q.branch if a.command == "sync" else "main", f"queue {a.command}"))
         if a.command == "sync":
+            if held := q.hold_lean_checks():
+                print(f"research queue: drive's Lean checks keep `{q.branch}`'s bottom {held} member(s) in place")
             q.sync(dry_run=a.dry_run)
             return 0
         if a.command == "land":
@@ -2890,15 +2925,15 @@ def main(argv: list[str]) -> int:
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
+        # no sync here, on drive or off: drive's tick rebuilds `next` with its hold, its `first` and its flags (26 Oct 19:41Z: an
+        # eject's sync rebuilt all 132 members of `next` and dropped two running Lean checks)
         told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
         if on_drive() and (busy := lean_running(q.load_state(), a.pr)):
             print(f"research queue: #{a.pr}'s mark is withdrawn; the Lean check {busy} covers it, so drive rebuilds `{q.branch}` "
                   f"the tick after that check ends, and lands nothing from #{a.pr} up meanwhile")
-        elif on_drive():
-            q.sync()
         else:
-            print(f"research queue: #{a.pr}'s mark is withdrawn; drive's next tick rebuilds `{q.branch}` without it (only drive "
-                  "pushes it)")
+            print(f"research queue: #{a.pr}'s mark is withdrawn; drive's next tick rebuilds `{q.branch}` without it (only drive's "
+                  "tick pushes it)")
         return told
     except QueueError as e:
         print(f"research queue: {e}", file=sys.stderr)

@@ -10,7 +10,7 @@ agent acts unless the automation refuses).  A loop runs it every few minutes.  H
    the sweep.
 2. Sync `next` (`Queue.sync`): admit and drop PRs, rebuild on a moved `main`; but while a check of `next` runs and `main` moved
    by files its train doesn't change (and no check tooling), `next` stays on its base so the check isn't wasted (`held`, the
-   rule `queue.hold` keeps for every sync: `eject`'s and a hand one read drive's launches from the state file).
+   rule `queue.hold` keeps for every sync: a hand one reads drive's launches from the state file, and `eject` syncs nothing).
 3. Check `next` in trains of `train_size` PRs, each stacked on the one below (every `train_size`-th member's commit, and the
    tip): `train.sh COMMIT MACHINE`, with `--agreement` when the train changes a `lean-audit.json` (the lander's rule; train.sh
    itself sends the build for C-Flock's paths), the lowest unchecked first, while fewer than `max_running` checks run, and

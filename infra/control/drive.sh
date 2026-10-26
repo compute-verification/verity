@@ -20,7 +20,7 @@
 # progress to end, `drive.sh start` removes it once a dry-run push of next shows the token can push, `drive.sh status` says
 # which and shows the log's tail, and `drive.sh once [FLAGS]` runs one tick here in the foreground, after the one in progress,
 # with FLAGS added (`--dry-run`). `drive.sh queue ARGS` runs `research queue ARGS` the same way, between ticks, against drive's
-# state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json and syncs next), and `drive.sh merge
+# state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json; the next tick rebuilds next), and `drive.sh merge
 # ARGS` runs `research merge ARGS` (a pure move's `--push`) on branch main, reset to origin's. All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
 # the verity-drive App move main and next (23 Oct), and `research` refuses those pushes anywhere else.
 # Log: /data/drive/drive.log
