@@ -14,7 +14,8 @@ accounting envelopes is to be stated on these objects.
 
 * A **Boolean circuit** (`Circuit.Boolean`) is a circuit whose every gate holds one bit and whose every operation gate
   reads at least one gate: the draft's positive fan-in, with constants as registered input gates. Its gate basis is
-  whatever `op` computes; its bounded fan-in is the basis's, which no statement here reads. The circuit's **size**
+  whatever `op` computes. The basis's bounded fan-in is `Circuit.FanIn C a`, which a statement comparing sizes across
+  circuits takes and none of Lemma 1, Theorem 3 and Lemma A.1 needs. The circuit's **size**
   `|C|` is its number of operation gates, `C.size C.computed`. A multi-bit value is a bundle of gates, read in order as
   the string `bits X l`.
 * The **registration** `R = (θ, C, 𝓘)` (`Registration`) is a declaration `(C, θ)`, the fixed values of `θ`'s gates and
@@ -42,6 +43,10 @@ namespace Circuit
 structure Boolean (C : Circuit) : Prop where
   one_bit : ∀ g, C.w g = 1
   fanin_pos : ∀ g, C.isInput g = false → (C.reads g).Nonempty
+
+/-- **Fan-in at most `a`**: every gate reads at most `a` gates. Sizes are compared at a fixed basis of bounded fan-in:
+one gate of unbounded fan-in can compute a whole product. -/
+def FanIn (C : Circuit) (a : ℕ) : Prop := ∀ g, (C.reads g).card ≤ a
 
 /-- The bits of a bundle of gates `l` in `X`, gate by gate in `l`'s order, each gate's value least significant bit
 first. On a Boolean circuit, one bit per gate. -/
