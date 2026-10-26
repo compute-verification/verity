@@ -14,8 +14,8 @@ import itertools
 import json
 import socket
 import sys
-import threading
 import types
+from concurrent import futures
 
 import pytest
 import torch
@@ -70,8 +70,12 @@ class Model:
 
     def __init__(self) -> None:
         g = torch.Generator().manual_seed(7)
-        w = lambda n, k: torch.randint(-127, 128, (n, k), dtype=torch.int8, generator=g)  # noqa: E731
-        s = lambda n: torch.rand(n, 1, generator=g) + 0.5  # noqa: E731
+
+        def w(n, k):
+            return torch.randint(-127, 128, (n, k), dtype=torch.int8, generator=g)
+
+        def s(n):
+            return torch.rand(n, 1, generator=g) + 0.5
         q, k = Linear(w(24, 16), s(24)), Linear(w(40, 16), s(40))
         head = Linear(w(24, 16), s(24))
         head.weight = q.weight
@@ -211,27 +215,21 @@ def _in_process_party(signer, log):
 
     def session(party, request, respond):
         a, b = socket.socketpair()
-        side, coins = {}, COINS[:-1] + bytes([len(calls)])
+        coins = COINS[:-1] + bytes([len(calls)])
 
         def challenger():
+            with b, b.makefile("rwb") as f:
+                return CP.serve(f, request, signer=signer, log=log, coins=coins, domain=period.SESSION_DOMAIN,
+                                clock=_ticks())
+        with futures.ThreadPoolExecutor(1) as pool:
+            served = pool.submit(challenger)
             try:
-                with b, b.makefile("rwb") as f:
-                    side["sid"], side["session"] = CP.serve(f, request, signer=signer, log=log, coins=coins,
-                                                            domain=period.SESSION_DOMAIN, clock=_ticks())
-            except BaseException as e:  # noqa: BLE001 - re-raised in the test's thread
-                side["error"] = e
-        t = threading.Thread(target=challenger)
-        t.start()
-        try:
-            with a, a.makefile("rwb") as f:
-                rounds = CP.answer(f, request["block_bytes"], respond)
-        finally:
-            t.join()
-            if "error" in side:
-                raise side["error"]
+                with a, a.makefile("rwb") as f:
+                    rounds = CP.answer(f, request["block_bytes"], respond)
+            finally:
+                sid, served_session = served.result()
         calls.append((party, request))
-        return CP.report(side["sid"], side["session"], signer.public_key) | {"host": party.host,
-                                                                            "rounds": rounds - CP.WARMUPS}
+        return CP.report(sid, served_session, signer.public_key) | {"host": party.host, "rounds": rounds - CP.WARMUPS}
     return session, calls
 
 
