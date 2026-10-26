@@ -83,10 +83,12 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 |---|---|---|
 | BRA, EXIT | covered | `bra` on a register, and a thread past its text's end |
 | predication (`@P`) | coarse | `pred` on a register (predicates are registers here) |
-| BRX, JMX, CALL, RET, BSSY, BSYNC, WARPSYNC, BREAK | missing | indirect branches and calls, which are emulable by `bra` trees at more units |
+| BRX, JMX, CALL, RET | missing | indirect branches and calls, which are emulable by `bra` trees at more units |
+| BSSY, BSYNC, WARPSYNC, BREAK | coarse | convergence: no data effect, and the schedule is free |
 | BAR, SYNCS (mbarrier), MEMBAR, FENCE, DEPBAR, ERRBAR, CCTL | coarse | the model is sequential within a tick and latency-free, so every synchronization holds at no cost |
 | S2R (`%tid`, `%clock`, `%smid`), CS2R | missing | special registers. A clock read is time as data, a side channel the model doesn't have |
-| VOTE, MATCH, ELECT, NANOSLEEP, YIELD, PMTRIG | missing | |
+| VOTE, MATCH, ELECT | missing | |
+| NANOSLEEP, YIELD, PMTRIG | coarse | no data effect |
 
 ## Every opcode of BU's lists
 
