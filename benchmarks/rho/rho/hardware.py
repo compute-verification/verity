@@ -7,10 +7,11 @@ trays, each with its own NICs, certifier and side channels) carry host memory, h
 line rate is `links` (`β_X`, `Accounting.linkCapacity`). What a wipe leaves in it is the onsite regime's
 (`regimes.Onsite`).
 
-A location's size moves the physical cut: an NVL72 rack has 9 times an HGX server's devices, so about 9 times its wipe
-residual and its served ingress, and (at B200's rate per GPU) 23 times its compute. A bound linear in the block's input
-`K` gives a big location the same share as a small one; one superlinear in `K` (`CoverTraining`'s `k²/b`) gives it more,
-and a state that fits in one location's `K` trains there unthrottled.
+A location's size moves the physical cut: an NVL72 rack has 9 times an HGX H200 server's devices, so 9 times its wipe
+residual, and 23 times its compute, so 23 times its certified ingress (`α Φ`). Its window's input `K` grows less than
+its compute (15 times at today's numbers), so a bound linear in `K` gives it a smaller share and one superlinear in `K`
+(`CoverTraining`'s `k²/b`) may give it a larger one; and a state that fits in one location's `K` trains there
+unthrottled (Kimi K2's 16-bit state fits a rack's day, not a server's).
 
 A **fleet** is the adversary's monitored locations and its dark share of compute: one connected pool outside every
 monitored region, which runs unencumbered (Daniel, 25 Oct), at its own utilization `mfu_dark`. A **horizon** is the
