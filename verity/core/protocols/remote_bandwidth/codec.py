@@ -47,6 +47,8 @@ the seed's key is a bijection from canonical blocks to payload blocks, and a pay
 fixes the encoded store; under a bound key, a block and a digest decode to the payload only if it has that digest.  A
 payload word at or above p is refused: c is below 2^16, so its top 16 bits are all ones, a NaN under bf16 (and its top
 byte 0xFF, one under E4M3), and every block of finite values encodes.
+
+A registration over PoUS's P2 store names `P2Codec` instead: PoUS's codec, which this protocol only names.
 """
 
 from __future__ import annotations
@@ -136,6 +138,56 @@ class Codec:
 
 DEFAULT = Codec(P1024, 3, True)
 FALLBACK = Codec(P1024, 2, True)
+
+P2_POINT = (16448, 21065)
+"""`w` and `c0` of PoUS's registered P2 point (`pous.schemes.p2.POINT`, which the suite holds this to)."""
+P2_EXPANDER = "sha512-ctr-v4"
+P2_LAYOUT = "p2-unit4/v0"
+"""A P2 store's block layout: a receipt's vector is a unit of four consecutive blocks in store order (`p2.py`)."""
+
+
+@dataclass(frozen=True, slots=True)
+class P2Codec:
+    """PoUS's P2 (`verity.core.protocols.pous.schemes.p2`, `p2-16448/v4`) as a P2 registration names it
+    (`p2.Registration`): the registered point's `w` and `c0`, keys by counter-mode SHA-512, and the store's
+    segments.  A P2 store's blocks are PoUS's 2,056-byte codewords, opened on PoUS's `vk` and never decoded by this
+    protocol, and its receipts are of units under `P2_LAYOUT`.  Nothing of the Sloth codec above takes it, and
+    `audit.Rebuild` refuses it: μ_rebuild over a P2 store waits on the squaring ceiling at P2's encode
+    (`Accounting.Remote.Held.Assumptions.SquaringCeilingP2`, drafted)."""
+
+    blocks_per_segment: int
+    segments: int
+    w: int = P2_POINT[0]
+    c0: int = P2_POINT[1]
+    expander: str = P2_EXPANDER
+
+    def __post_init__(self) -> None:
+        if (self.w, self.c0, self.expander) != (*P2_POINT, P2_EXPANDER):
+            raise ValueError(f"a P2 store is at PoUS's registered point, w = {P2_POINT[0]} and c0 = {P2_POINT[1]}, "
+                             f"keys by {P2_EXPANDER}")
+        for name in ("blocks_per_segment", "segments"):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
+                raise ValueError(f"a P2 store's {name} is a positive integer")
+        if self.blocks_per_segment > 1 << 16 or self.segments >= 1 << 32:
+            raise ValueError("a P2 store's segments are at most 2^16 blocks (vk's u16 index), and fewer than 2^32")
+
+    @property
+    def name(self) -> str:
+        return f"p2-{self.w}/v4"
+
+    @property
+    def blocks(self) -> int:
+        """N, the store's 2,056-byte blocks."""
+        return self.blocks_per_segment * self.segments
+
+    @property
+    def block_encode_squarings(self) -> int:
+        """A block's encode in squarings, two roots each the bit length of (p + 1)/4 less one: 32,890."""
+        return 2 * ((((1 << self.w) - self.c0 + 1) // 4).bit_length() - 1)
+
+    def to_json(self) -> dict:
+        return {"blocks_per_segment": self.blocks_per_segment, "c0": self.c0, "expander": self.expander,
+                "segments": self.segments, "w": self.w}
 
 
 def _xof(message: bytes, length: int) -> bytes:
