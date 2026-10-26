@@ -264,7 +264,7 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
     committer: Any = Null() if mode == "serve" else \
         Pipelined(plan, ctx, key, shape, salt) if mode in OVERLAPPED else LayoutCommitter(plan, ctx, key, shape, salt)
     d.committer, d.results, d.device_sync = committer, [], mode not in OVERLAPPED
-    tabs = stand_in(shape, a.batch, dev, a.seed) if mode == "commit" else None
+    tabs = stand_in(shape, a.batch, dev, a.table_seed) if mode == "commit" else None
     torch.cuda.synchronize(dev)
     torch.cuda.reset_peak_memory_stats(dev)
     m0 = torch.cuda.memory_allocated(dev)
@@ -389,7 +389,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--warm", type=int, default=1, help="served steps before the runs")
     ap.add_argument("--prompt-bytes", type=int, default=8)
     ap.add_argument("--workers", type=int, default=os.cpu_count() or 1)
-    ap.add_argument("--seed", default="demo")
+    ap.add_argument("--seed", default="demo", help="the weights' seed: test, demo or a text seed")
+    ap.add_argument("--table-seed", type=int, default=20261026, help="the commit-alone run's stand-in tables")
     ap.add_argument("--run-id", default="e2e-h200-overlap")
     ap.add_argument("--skip", type=float, default=1.0, help="seconds of each run the telemetry statistics skip")
     a = ap.parse_args(argv)
