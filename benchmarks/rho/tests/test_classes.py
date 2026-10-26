@@ -121,6 +121,7 @@ def test_premise_shares():
     assert classes.chained_share(K, 2.5, 61, 4e8) == 60 / 61
     assert classes.chained_share(1e10, 2.5, 61, 4e8) == 50 / 61
     assert classes.chained_share(WINDOW.inputs, 2.5, 61, 4e8) == 0
+    assert classes.chained_share_one(1e10, 4, 2.5, 61, 4e8) == classes.chained_share(1e10, 2.5, 61, 4e8)
     bits = KIMI.layer_bits
     assert classes.expensive_share(K, bits, 61) == 60 / 61
     assert classes.expensive_share(17.5 * bits, bits, 61) == 43 / 61

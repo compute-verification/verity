@@ -103,6 +103,11 @@ def chained_share(k: float, c_w: float, layers: int, layer_weights: float) -> fl
     return max(0, layers - math.floor(k / (c_w * layer_weights)) - 1) / layers
 
 
+def chained_share_one(k: float, c_w: float, c_a: float, layers: int, layer_weights: float) -> float:
+    """`chained_share` at `CoveringBound`'s one cost `c = min(c_w, c_a)`, whose depth needs `c D > k`."""
+    return chained_share(k, min(c_w, c_a), layers, layer_weights)
+
+
 def expensive_share(k: float, layer_bits: float, layers: int) -> float:
     """`1 − cheap(k)`: the share of the products whose activation isn't computable from token ids by a block of `k`
     bits. A block that reads the first `n = ⌊k / layer_bits⌋` layers' updates computes layers `0..n`'s inputs, so
@@ -139,7 +144,8 @@ def covering_additive(k: float, c_w: float, c_a: float) -> float:
 
 def covering_priced(k: float, c_a: float, price: float, price_max: float) -> float:
     """`CoveringBoundPriced`: the chained blocks' prices add up to at most `k (k / c_a) + t k` per block, so at a mean
-    price `p̄` a block finishes at most `(k² / c_a + t k) / p̄`."""
+    price `p̄` a block finishes at most `(k² / c_a + t k) / p̄`. Its depth condition, any `D` weights costing more than
+    `k`, is read at the price floor `c_w` (`chained_share`)."""
     return (k * k / c_a + price_max * k) / price
 
 
@@ -245,7 +251,8 @@ CLASSES: Mapping[str, Argument] = {a.name: a for a in (
             ("c_w", "c_a"), chained, counts="kappa_forward", share=chained_share, share_reads=("c_w", *DEPTH)),
     Formula("covering", ("Nci.Guarantees.CoveringBound", "Nci.Assumptions.ParameterHard",
                          "Nci.Assumptions.ActivationChained"),
-            ("c_w", "c_a"), covering, counts="kappa_forward", share=chained_share, share_reads=("c_w", *DEPTH)),
+            ("c_w", "c_a"), covering, counts="kappa_forward", share=chained_share_one,
+            share_reads=("c_w", "c_a", *DEPTH)),
     Formula("covering-two-costs", ("Nci.Guarantees.CoveringBoundTwoCosts", "Nci.Assumptions.ParameterHardAt",
                                    "Nci.Assumptions.ActivationChainedAt"),
             ("c_w", "c_a"), chained, counts="kappa_forward", share=chained_share, share_reads=("c_w", *DEPTH)),
