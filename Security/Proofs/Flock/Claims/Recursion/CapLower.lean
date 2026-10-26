@@ -101,7 +101,6 @@ theorem commit_bind {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.sha51
     (by rw [FlockSoundness.Refine.hL512, FlockSoundness.Refine.K512.mask_len])
     (by rw [FlockSoundness.Refine.hL512, FlockSoundness.Refine.K512.mask_len]) hb
 
-set_option maxRecDepth 20000 in
 /-- **Two hm96 slots with one commit string hold one row**, wherever both output their commit strings
 (`SlotCommits`), their rows are hashed under one prefix (`rowPfx`: ports of one word count), and both slots' calls
 (`hmCalls`) are among true evaluations `l` with no collision. -/
@@ -124,6 +123,7 @@ theorem slot_rows_eq {c c' : Circuit} {nm nm' : String} {q q' n n' : ℕ} {w w' 
     (hin (Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512) (by simp [hmCalls]))
   have hy0' := List.mem_map_of_mem (f := Prod.fst)
     (hin' (Hm96.Default512.saltPrefix.data.toList, hmSalt c' q' n', (hmCommit c' q' n').drop 512) (by simp [hmCalls]))
+  dsimp only at hy0 hy0'
   have hy : FlockSoundness.Refine.K512.saltPrefix ++ readForms w (hmSalt c q n) ∈ l.map Prod.fst := by
     rw [hsp]; exact hy0
   have hy' : FlockSoundness.Refine.K512.saltPrefix ++ readForms w' (hmSalt c' q' n') ∈ l.map Prod.fst := by
