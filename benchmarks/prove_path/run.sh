@@ -274,7 +274,7 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
 elif [ -n "${PP_TORCH_FROZEN:-}" ]; then
   TLAW=${PP_LAW:-subset:64} TCAP=${PP_TORCH_LOOP_CAP:-16384}
   TF="$PY -m verity_torch_loop.serve_frozen --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
-  for c in ${PP_TORCH_FROZEN_CAPS-s8-mlp=512}; do TF="$TF --cap-of $c"; done
+  for c in ${PP_TORCH_FROZEN_CAPS-s8-width=1024 s8-mlp=256}; do TF="$TF --cap-of $c"; done
   export PYTHONPATH=$REPO/integrations/torch_loop
   frozen() {  # NAME [--tamper [--tags T,...]]: the step's windows, each audited from its records alone against the circuit
               # registered before it ran; the arm is a run (and its windows roots) of its own
