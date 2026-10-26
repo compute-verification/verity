@@ -86,7 +86,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/protocol_options/pouw_h1_kept.py",
           "integrations/vllm/verity_vllm/protocol_options/pouw_h1_live.py",
           "integrations/vllm/verity_vllm/protocol_options/pouw_h1_served_files.py",
-          "integrations/vllm/verity_vllm/protocol_options/pouw_h1_tables_device.py",
           "integrations/vllm/verity_vllm/commit",
           "integrations/vllm/verity_vllm/query/__init__.py", "integrations/vllm/verity_vllm/query/manifest",
           "integrations/vllm/verity_vllm/program/__init__.py", "integrations/vllm/verity_vllm/program/frontend/__init__.py",
