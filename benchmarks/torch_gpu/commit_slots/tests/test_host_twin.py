@@ -1,5 +1,5 @@
-"""The kernels' functions (commit_slots.cuh), run one loop a kernel by the host twin through slots_gpu's own plan and step
-code, give the reference's roots; the streaming call refuses what isn't the layout's."""
+"""The engine's host twin (``../sha512_rows``), driven by slots_gpu's own plan and step code, gives the reference's roots;
+regrouping a layout changes no root; the streaming call refuses what isn't the layout's."""
 from __future__ import annotations
 
 import json
@@ -38,6 +38,15 @@ def test_two_h200_layers() -> None:
     layout = S.h200_layout(layers=2)
     out = S.random_outputs(layout, 3, np.random.default_rng(7))
     assert G.commit(G.Plan(CTX, layout, "host"), 9, KEY, out, 3) == S.commit(CTX, layout, 9, KEY, out, 3)
+
+
+@pytest.mark.parametrize(("layout", "k"), [(S.h200_layout(layers=3), 2), (S.edge_layout(), 2)], ids=["h200-3-by-2", "edge-by-2"])
+def test_regrouped_layers_give_the_same_digest_and_roots(layout: S.Layout, k: int) -> None:
+    grouped = G.regroup(layout, k)
+    assert len(grouped.groups) == -(-len(layout.groups) // k) and S.layout_digest(grouped) == S.layout_digest(layout)
+    out = S.random_outputs(layout, 3, np.random.default_rng(11))
+    joined = [[t for ts in out[i:i + k] for t in ts] for i in range(0, len(out), k)]
+    assert G.commit(G.Plan(CTX, grouped, "host"), 4, KEY, joined, 3) == S.commit(CTX, layout, 4, KEY, out, 3)
 
 
 def test_a_step_reuses_its_plan_and_its_root_moves_with_the_step_and_the_key() -> None:

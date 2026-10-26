@@ -17,5 +17,6 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# The kernels include commit_gpu's SHA-512 (commit_slots.cuh), and slots_gpu hashes it into the build's cache key.
-inputs = ["benchmarks/pouw/commit_gpu/sha512.cuh"]
+# slots_gpu runs HASH-20's engine (sha512_rows: engine.py and the host twin's sources), whose device build includes
+# commit_gpu's SHA-512 and hashes it into the build's cache key.
+inputs = ["benchmarks/torch_gpu/sha512_rows", "benchmarks/pouw/commit_gpu/sha512.cuh"]

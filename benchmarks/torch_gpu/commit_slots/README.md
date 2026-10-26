@@ -3,8 +3,9 @@
 The call that commits a serving step's proof-unit outputs (CMP-95 item 3, Linear HASH-13): every unit's outputs as
 `hm96-sha512/row/v2` rows under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a drawn
 unit opens by replaying its own request. `slots.py` is the CPU reference and this file's executable form;
-`slots_gpu.py` runs the same call on the GPU (or on its host twin), on top of `benchmarks/pouw/commit_gpu/sha512.cuh`.
-`fixtures/commit-slots-v1.json` is the interface's fixture.
+`slots_gpu.py` runs the same call on the GPU (or on its host twin) on HASH-20's SHA-512 engine
+(`benchmarks/torch_gpu/sha512_rows/`): the engine hashes rows into hm96 leaves and builds frame-v3 levels, and
+`slots_gpu.py` lays them out as one subtree per slot. `fixtures/commit-slots-v1.json` is the interface's fixture.
 
 ## The call
 
@@ -22,13 +23,16 @@ G.commit(plan, step, salt_key, outputs, slots) -> S.StepCommit(root, slot_roots)
 sc = G.StepCommitter(plan, step, slots, salt_key)
 sc.add(tensors)                                    # each group, in order; enqueued on a side stream, no host sync
 pending = sc.finish()                              # pending.result() -> S.StepCommit; pending.ready() polls
+
+# several layers a launch: the same units, rows, digest and roots (the group's tensors are its layers', in order)
+plan = G.Plan(context, G.regroup(layout, 4))
 ```
 
 - `context`: 64 bytes naming the run (the model and serving instance); every domain binds it.
 - `layout`: the step's public structure (`S.Layout`): groups (what one `add` commits) of units of rows, each row the
   concatenation of byte ranges (`S.Part(source, offset, nbytes)`) of a slot's row of the group's tensors. Every slot has
-  the same layout; a unit holds at most 262,144 bits (its size class). The GPU takes at most two parts a row, 24
-  tensors a group, 128 rows a unit and 2^16 units a slot.
+  the same layout; a unit holds at most 262,144 bits (its size class). The engine takes at most two parts a row.
+  Groups are the prover's plumbing (one launch each): the layout's digest binds only its units' rows.
 - `step`: the step's index; `slots`: how many sequence slots it has.
 - `salt_key`: 32 bytes, `S.fresh_salt_key()` (the OS generator), fresh each step and the prover's alone, kept with the
   step's record to open from.
@@ -97,7 +101,8 @@ quantizer (2 units of codes and one of the scale), down and residual.
 
 ## Measured on the H200
 
-Run `r20261026-002612-bfed` (vy-dc-h200, one H200, commit 2eb946b41c, `gpu.sh`):
+Run `r20261026-002612-bfed` (vy-dc-h200, one H200, commit 2eb946b41c, `gpu.sh`), on the call's own kernels, before it
+moved onto the engine:
 
 - **Bit-exact.** Every `check.py` check passed. That covers the fixture's root, the edge layout at 1 to 300 slots against
   the reference and at 4,097 and 20,480 against the host twin, and two and three H200 layers. It also covers the frozen
@@ -120,11 +125,11 @@ Run `r20261026-002612-bfed` (vy-dc-h200, one H200, commit 2eb946b41c, `gpu.sh`):
 ## Files
 
 - `slots.py`: the reference, `edge_layout()`, `h200_layout()`, and `python slots.py fixture` (writes the fixture).
-- `commit_slots.cuh`: the hashing shared by the kernels and the host twin (rows, salts, hm96 leaves, frame nodes, the
-  per-slot fold and the step tree); `commit_slots.cu` the kernels; `commit_slots_host.cpp` the host twin.
-- `slots_gpu.py`: `Plan`, `StepCommitter`, `commit`; builds cached under `~/.cache/verity/commit_slots`.
+- `slots_gpu.py`: `Plan`, `StepCommitter`, `commit` and `regroup` on the engine (`../sha512_rows/engine.py`, its builds
+  cached under `~/.cache/verity/sha512_rows`). Its uploads go through pinned memory, so no call waits on the side stream.
 - `check.py`: the GPU's roots against the reference's (edge layouts, and the H200 layout at 4,096 to 20,480 slots on
   sampled slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8
   GEMMs; `gpu.sh`: both, with the tests, under one GPU lease (its header has the `research run` line).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
-  refusals, the host twin against the reference, and (with a GPU) the kernels against the host twin.
+  refusals, the host twin against the reference (regrouped layouts included), and (with a GPU) the device against the
+  host twin.

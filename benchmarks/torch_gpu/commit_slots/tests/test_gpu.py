@@ -1,4 +1,5 @@
-"""On a CUDA device: the kernels give the reference's roots (the recorded runs are check.py's, at the frozen shape)."""
+"""On a CUDA device: the call on the engine's device build gives the reference's roots (the recorded runs are check.py's,
+at the frozen shape)."""
 from __future__ import annotations
 
 import shutil

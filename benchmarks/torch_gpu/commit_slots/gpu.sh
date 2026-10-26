@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# commit_slots on one leased GPU (cwd = the source tree's root): outside the lease, the kernels' build (nvcc, for this GPU)
-# and the host twin's; under one lease of at most LEASE_MIN minutes, the GPU tests, check.py (the roots against the CPU
-# reference's, the frozen layout at 4,096 to 20,480 slots on sampled slots) and bench.py (GB/s and share of the step).
-# Python is the node's serving venv (CUDA torch), with the tree on PYTHONPATH.
+# commit_slots on one leased GPU (cwd = the source tree's root): outside the lease, the engine's build (sha512_rows; nvcc,
+# for this GPU) and its host twin's; under one lease of at most LEASE_MIN minutes, the GPU tests, check.py (the roots
+# against the CPU reference's, the frozen layout at 4,096 to 20,480 slots on sampled slots) and bench.py (GB/s and share of
+# the step). Python is the node's serving venv (CUDA torch), with the tree on PYTHONPATH.
 #
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --cwd source --env GPU_LEASE_WHO=kernels-kcommit \
 #     -- bash benchmarks/torch_gpu/commit_slots/gpu.sh
@@ -21,8 +21,8 @@ git rev-parse HEAD > "$O/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:
 { echo "python $PY"; $PY -c 'import sys, torch, numpy; print(sys.version.split()[0], torch.__version__, torch.version.cuda, numpy.__version__)'
   echo "cuda ${CUDA:-none}"; nvcc --version | tail -2; nvidia-smi --query-gpu=index,name,compute_cap,driver_version --format=csv; } \
   > "$O/env.txt" 2>&1
-ARCH=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d .)
-$PY -c "import slots_gpu as G; G.device_lib('$ARCH'); G.host_lib(); print(G.BUILD_DIR)" > "$O/build.txt" 2>&1
+CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d ' ')
+$PY -c "import slots_gpu as G; print(G.build('$CAP'))" > "$O/build.txt" 2>&1
 echo "build rc $?" > "$O/rc.txt"
 export O PY D ROOT STEPS=${STEPS:-tests check bench} CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=${BENCH_ARGS:-}
 export LEASE_MIN=${LEASE_MIN:-25} LEASE_END=${LEASE_END:-}
