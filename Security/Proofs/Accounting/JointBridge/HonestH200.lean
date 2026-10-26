@@ -153,7 +153,7 @@ theorem h200_sound (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetc
     (jointRun n).Sound (cert n δs) (Accounting.h200S8Price sha fetch) .pouw (δs + n * (0 + 0)) := by
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hStaged, hMu, hRB, hGs,
     hUF, -, -, -⟩ := HonestH1.h1_meets n hn hδs
-  exact WorkOfH1CheckedCreditPeriodH200 sha fetch Unit Unit Unit (fun _ => Paths HonestH1.Ω1 n) (device n)
+  exact WorkOfH1CheckedCreditPeriodH200 sha fetch 4 8 Unit Unit Unit (fun _ => Paths HonestH1.Ω1 n) (device n)
     emptyCircuit (jointRun n) (cert n δs) Honest.scheme HonestH1.circuit hn hN HonestH1.hr1 hM HonestH1.hK24
     HonestH1.prm HonestH1.enc HonestH1.staged HonestH1.flat δs 0 0 (fun _ => HonestH1.windows n)
     (fun _ => HonestH1.opened) (fun _ => HonestH1.salt) (fun _ => HonestH1.period n) (fun _ => HonestH1.play n)

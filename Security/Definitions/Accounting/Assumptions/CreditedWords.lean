@@ -21,7 +21,8 @@ outside, through the network.
 It is priced, not counted: work on every op class counts at its price, so a word computed on the CUDA cores counts
 too, and its multiply-adds cost more there (at `Accounting.h200S8Price` an INT8 tensor-core multiply-add costs `1` and
 a CUDA-core op `32`, so `IDP4A`'s four multiply-adds an op cost `8` each). `m` is the fewest multiply-adds any credited
-word stands for (`Accounting.Compose.minWordMacs`), `512` for an H1 + fx1 tile of `PouwH1Tile_v1`'s shape alone.
+word stands for (`Accounting.Compose.minWordMacs`): `16·R·C` for H1 + fx1 tiles of one shape `R × C`
+(`Accounting.receiptWordMacs`), `512` at `PouwH1Tile_v1`'s `4 × 8` and `16384` at `_v5`'s and `_v6`'s warp.
 
 Why it is a premise: it is a work lower bound for computing a word, Theorem O (the naive-optimal priced floor, which
 holds on paper only: `Definitions.Pouw.Guarantees.RelativeSecurity`'s docstring) at the H1 tile's scale, and Theorem O

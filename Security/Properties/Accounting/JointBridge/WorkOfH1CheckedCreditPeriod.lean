@@ -13,8 +13,8 @@ check's credit over the accepted prefix, `m = Accounting.Compose.minWordMacs Sc 
 bits a word), from `Properties.Pouw.Period.H1CheckedCreditPeriod` and its premises, with its error
 `δ_s + n·(δ_bind + δ_ks)`. It is `Properties.Accounting.JointBridge.WorkOfCreditedWords` at H1's instance.
 `WorkOfH1CheckedCreditPeriod` is it at every price, word count and word width, and `WorkOfH1CheckedCreditPeriodH200`
-at the H200's INT8 price (`Accounting.h200S8Price`), `PouwH1Tile_v1`'s `512` multiply-adds a receipt word
-(`Accounting.receiptWordMacs 4 8`) and its `32` bits.
+at the H200's INT8 price (`Accounting.h200S8Price`), an `R × C` tile's `16·R·C` multiply-adds a receipt word
+(`Accounting.receiptWordMacs R C`) and its `32` bits.
 
 The other audits' coins fix the adversary the device is in H1's game, so the windows, the service's openings, the
 salts, the period's live tiles, the play, its folded words and the right words it imported are functions of them
@@ -92,15 +92,17 @@ multiply-add count `macs` and word width `b` (`WorkOfH1CheckedCreditPeriodAt`). 
 def WorkOfH1CheckedCreditPeriod : Prop :=
   ∀ (p : Accounting.Price) (macs : Accounting.Compose.Kind → ℕ) (b : ℕ), WorkOfH1CheckedCreditPeriodAt p macs b
 
-/-- **PoUW's per-period guarantee in the joint period from H1's checked credit on the H200, at INT8**:
-`WorkOfH1CheckedCreditPeriodAt` at `Accounting.h200S8Price sha fetch` (an INT8 tensor-core multiply-add `1`, a
+/-- **PoUW's per-period guarantee in the joint period from H1's checked credit on the H200, at INT8, for `R × C`
+tiles**: `WorkOfH1CheckedCreditPeriodAt` at `Accounting.h200S8Price sha fetch` (an INT8 tensor-core multiply-add `1`, a
 CUDA-core op `32`, an oracle query `⌈sha⌉`, in dense E4M3 multiply-adds, W1's prices on `W1Device.s8H100`), every word
-at `PouwH1Tile_v1`'s `receiptWordMacs 4 8 = 512` multiply-adds, and `32` bits a word (a receipt word is the XOR of the
-lanes' 32-bit halves), for every SHA-512 and fetch price. The certificate it admits on an accepted period is
-`W ≤ 512·(credit − K/32)` dense E4M3 multiply-adds, for a declared circuit with a credited word (`m` is `0` for one
-with none). -/
+at an `R × C` tile's `receiptWordMacs R C = 16·R·C` multiply-adds at any `K`, and `32` bits a word (a receipt word is
+the XOR of the lanes' 32-bit halves), for every SHA-512 and fetch price and every tile shape. `PouwH1Tile_v1`'s is
+`R × C = 4 × 8`, `512` a word; `PouwH1Tile_v5` and `_v6` (v1 and v3 under J10-R's noise, with v1's receipt) at a warp,
+`32 × 32`, `16384`. The certificate it admits on an accepted period is `W ≤ 16·R·C·(credit − K/32)` dense E4M3
+multiply-adds, for a declared circuit with a credited word (`m` is `0` for one with none); a circuit of several tile
+shapes takes the smallest. -/
 def WorkOfH1CheckedCreditPeriodH200 : Prop :=
-  ∀ sha fetch : ℚ,
-    WorkOfH1CheckedCreditPeriodAt (Accounting.h200S8Price sha fetch) (fun _ => Accounting.receiptWordMacs 4 8) 32
+  ∀ (sha fetch : ℚ) (R C : ℕ),
+    WorkOfH1CheckedCreditPeriodAt (Accounting.h200S8Price sha fetch) (fun _ => Accounting.receiptWordMacs R C) 32
 
 end Properties.Accounting.JointBridge

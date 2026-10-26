@@ -55,6 +55,6 @@ theorem WorkOfH1CheckedCreditPeriod : Properties.Accounting.JointBridge.WorkOfH1
 /-- **The joint period's PoUW guarantee from H1's checked credit on the H200, at INT8**
 (`Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200`). -/
 theorem WorkOfH1CheckedCreditPeriodH200 : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200 :=
-  fun sha fetch => WorkOfH1CheckedCreditPeriod (h200S8Price sha fetch) (fun _ => receiptWordMacs 4 8) 32
+  fun sha fetch R C => WorkOfH1CheckedCreditPeriod (h200S8Price sha fetch) (fun _ => receiptWordMacs R C) 32
 
 end Accounting.SecurityProofs.Bridge

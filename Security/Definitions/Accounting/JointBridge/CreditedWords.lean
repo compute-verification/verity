@@ -62,8 +62,10 @@ structure RealizesCreditedWords {ι : Type} {d : Device ι} {α : Type} [Fintype
   cert_le : ∀ ξ y, acc ξ (coin y) → c.W ≤ m * p .tc * (credit ξ (coin y) - c.helpWords b)
 
 /-- **The tensor-core multiply-adds one committed receipt word stands for**, on an H1 + fx1 tile of `R` rows and `C`
-columns: a CP-W checkpoint binds one 32-wide `K`-segment of the tile's `R·C` products and is two committed words
-(`Gates.Site.parts`), so `32·R·C / 2`. `PouwH1Tile_v1`'s is `receiptWordMacs 4 8 = 512`. -/
+columns, at any `K`: a CP-W checkpoint binds one 32-wide `K`-segment of the tile's `R·C` products and is two committed
+words (`Gates.Site.parts`), so `32·R·C / 2`. `PouwH1Tile_v1`'s is `receiptWordMacs 4 8 = 512`; `PouwH1Tile_v5`'s and
+`_v6`'s (v1 and v3 under J10-R's noise, with v1's receipt, so the same words credited) at a warp,
+`receiptWordMacs 32 32 = 16384`. -/
 def receiptWordMacs (R C : ℕ) : ℕ := 16 * R * C
 
 /-- **The fewest multiply-adds any credited word of the declared circuit stands for**, at `macs k` for a word of kind
