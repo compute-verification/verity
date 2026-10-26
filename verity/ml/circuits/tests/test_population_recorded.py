@@ -5,16 +5,20 @@ recorded in `population_recorded.json` (written on main before a unit's populati
 `TemplatePopulations` v1 and v0 over each consecutive pair of them.
 
 A change meant to change these programs rewrites the record (``python test_population_recorded.py --write``) and says so;
-any other change leaves it as it is."""
+any other change leaves it as it is. The programs are built in a child process: the sidecars import modules that register
+kernels, which `test_evaluation`'s registry test would otherwise see in the same worker."""
 from __future__ import annotations
 
 import hashlib
 import importlib.util
 import itertools
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition
@@ -60,9 +64,11 @@ def programs() -> dict[str, dict[str, str]]:
     return out
 
 
+@pytest.mark.slow
 def test_every_recorded_population_keeps_its_id_and_digest():
     recorded = json.loads(RECORD.read_text())["programs"]
-    now = programs()
+    now = json.loads(subprocess.run([sys.executable, __file__, "--print"], capture_output=True, text=True,
+                                    check=True).stdout)
     gone = sorted(set(recorded) - set(now))
     changed = sorted(k for k in recorded if k in now and now[k] != recorded[k])
     assert not gone and not changed, (
@@ -74,3 +80,5 @@ def test_every_recorded_population_keeps_its_id_and_digest():
 
 if __name__ == "__main__" and sys.argv[1:] == ["--write"]:
     RECORD.write_text(json.dumps({"about": ABOUT, "programs": programs()}, indent=1, sort_keys=True) + "\n")
+elif __name__ == "__main__" and sys.argv[1:] == ["--print"]:
+    print(json.dumps(programs()))
