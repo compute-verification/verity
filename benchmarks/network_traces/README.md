@@ -62,15 +62,16 @@ record ran on it.
 | network certifier | c20261025T224504Z-2982 | r20261025-205018-6541 (:18097, `--window-requests 4`) | accepted |
 | the network certifier functioning as an active warden | c20261025T230848Z-30ab | 6541 | void: lateness |
 | the same | c20261025T234322Z-0420 | r20261025-233025-9995 (:18098, `--window-requests 8`) | void: lateness |
-| the same, `--tokens 16` | c20261026T000242Z-89bf | 9995 | running |
+| the same, `--tokens 16` | c20261026T000242Z-89bf | 9995 | void: lateness |
 | N2 on 2982 | r20261025-231253-ebf6, r20261025-231301-6b61, r20261025-231310-20da | | accepted |
-| the scan | not yet run: it needs an active-warden leg that isn't void | | |
+| the scan | not run: every active-warden leg is void | | |
 
 - The network certifier leg ran `certifier-rehearse`: 100 varied requests of up to 64 tokens, 49 windows, the advice
   profile and an LMS key of H = 20. It is stored as art:fc8d4f61ebb0a45ecd47456d818bebcfeb0723ab1a8f00dd98f7983064eed76b.
 - The active-warden legs ran `warden-rehearse --scan --minutes 20 --requests 100`. Their public files are stored as
-  art:1aa7089c7e11b282335c44f79d07ee6a9278cc49141539d8d559d3af3d074e84 (30ab) and
-  art:8da6ee13709bab38668a08750095b24f3aa3229584335ff8995921f14ba2da85 (0420), each labelled `void lateness`.
+  art:1aa7089c7e11b282335c44f79d07ee6a9278cc49141539d8d559d3af3d074e84 (30ab),
+  art:8da6ee13709bab38668a08750095b24f3aa3229584335ff8995921f14ba2da85 (0420) and
+  art:af3344f7e9466408d8eb598e1db69625c6d27fbd93c01444929166abc885ac95 (89bf), each labelled `void lateness`.
 
 **The steps on 2982.**
 
@@ -105,7 +106,12 @@ probability 37/49 ≈ 0.76.
 - No witness piece leaked to the verifier. The finds the scan lists are structured: each straddles the proof format's
   fields.
 
-**Why the active-warden legs are void.** The gate's traffic is seeded, so both legs sent the same schedule.
+**Why the active-warden legs are void.** The gate's traffic is seeded, so all three legs sent the same schedule. On
+every leg the network certifier itself kept time, and the endpoint served every request, to its end or to the client's
+abort after the network certifier had failed it. The lateness is between the endpoint's output and the egress
+schedule.
+
+The first two legs:
 - Connections 81 and 82 arrive at t ≈ 151.5 s, in a burst of four requests within 1.2 s:
   - 81 has a prompt of 531 ids and 43 tokens;
   - 82 has a prompt of 839 ids and 20 tokens.
@@ -119,10 +125,24 @@ probability 37/49 ≈ 0.76.
 - The network certifier itself kept time on both legs: 225 of 225 link-windows certified, a peak tick lateness of
   2.23 ms and 4.30 ms, and none past the 25 ms slack.
 - `--window-requests 8` didn't change it: both legs fail the same two connections at the same buckets.
-- The third leg caps every output at 16 tokens, the gate's least `--tokens`.
 
-**K per monitoring period** (`chain_record.py leak`). These are 0420's files, until a leg that isn't void replaces
-them. K uses:
+The third leg, 89bf, capped every output at 16 tokens (`--tokens 16`, the least the gate takes) and failed more:
+- 10 connections failed closed as late: 54, 55, 63, 65, 71, 72, 74, 81, 82 and 83. Each failed at egress cell 0 to 8,
+  before any output token reached the network certifier. 90 of 100 requests ended.
+- The network certifier kept time: 225 of 225 link-windows certified, a peak tick lateness of 2.10 ms, none past the
+  slack.
+- All ten are in the schedule's four bursts, at t ≈ 106, 120–122, 138–139 and 151–152 s. The endpoint's records put
+  them in its four windows of several requests there (139, 144, 149 and 154). Those windows' sealed bundles are
+  5.6–10.8 GB, against about 0.3 GB for a window of one request, and their seals were queued 47–72 s behind.
+- On 0420 the same bursts' windows sealed 7–29 s behind, and only the window carried across a close failed. Over 89bf
+  the endpoint's seal queue grew from 0 to 97 s (114.6 GB sealed for 100 requests); over 0420 it reached 53 s.
+- So shorter outputs didn't help. The failures coincide with the endpoint's sealing load (large burst windows sealed
+  behind a backlog), not with output length. Which part of the endpoint's sealing delays its streaming isn't
+  established.
+
+**K per monitoring period** (`chain_record.py leak`). These are 0420's files. 89bf's parameters and traffic are the
+same (100 requests over 75 link-windows), so the tables hold for it too. No scan ran, since every active-warden leg is
+void: K is the scan's terms on these legs' parameters with every unit drawn. K uses:
 - the leg's parameters (`deployment.json`): B = 512, lanes = 4, r = 4, D = 21, T = 32 buckets of 100 ms, and
   egress_cells = 65;
 - its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
