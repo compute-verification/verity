@@ -31,6 +31,18 @@
 #     served window's verifier traces its own Build of each Program I2 compiles with (prove_path.py audit's and circuit's
 #     --vllm-python): the rows' names, the parameters' names and types, supplied, the correspondence and prefix_cache.json are
 #     no Program digest's, so the verifier never reads them from the row dir. Default the tree's venv, which holds no vLLM.
+#   PP_TORCH_FROZEN=1: the torch loop's decode step at the frozen H200 shape (verity_torch_loop.serve_frozen: width 16,384, MQA,
+#     MLP 65,536, every matmul coordinate a unit), one window per template, each audited from its records alone against the
+#     circuit registered before it ran, under PP_LAW (default subset:64, per window) in members of PP_TORCH_LOOP_CAP units
+#     (default 16384; PP_TORCH_FROZEN_CAPS a tag's own, default "s8-width=1024 s8-mlp=256": C-Flock refuses a member past
+#     m = log2(blocks) + k_log = 35, and the s8 units are k_log 25 and 27, one a block), committed by
+#     PP_TORCH_FROZEN_WORKERS processes (default 16); then the tampered step (every output's
+#     bit 0 flipped), whose drawn units Lean must refuse, on PP_TORCH_FROZEN_TAMPERED tags (default all; "none" skips it);
+#     an honest window's first drawn session's proof edited one bit at a time (records_audit.py --flip-proofs, at most
+#     PP_TORCH_FROZEN_FLIPS a tag, default "bf16-dot=64 s8-width=2 s8-mlp=1"), and its public file one bit at a time under the
+#     honest proof, each of which Lean verify must refuse;
+#     W per block and pooled (frozen_w) into $O/w.json. PP_ONLY=honest|forged runs one arm. PP_TORCH_LOOP_SHAPE: more
+#     serve_frozen.py flags (--layers, --position, --tags, --keep).
 #   PP_TORCH_LOOP=1: a window of an integration that is not vLLM (integrations/torch_loop: a W8A8 MLP in PyTorch, its one
 #     template ScaledMmS8Coordinate_v1{K=128}), honest and tampered (every output's bit 0 flipped), each audited from its records
 #     alone under PP_LAW (default subset:2), in members of PP_TORCH_LOOP_CAP units (default 8), each arm a run of its own
@@ -139,7 +151,7 @@ PP="$PY benchmarks/prove_path/prove_path.py"
 keep() {  # NAME: $W/NAME's records into $O/NAME
   mkdir -p $O/$1
   (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
-    ! -path './builds/*' -print0 \
+    ! -path './builds/*' ! -path './proof-edits/*/sessions/*' ! -path './proof-edits/mutants/*/*' ! -path './proof-edits/*/member/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
 }
 run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, then the verifier's audit; RUN is the committed
@@ -236,6 +248,43 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
       run llama "$LLAMA" $W/advice.bin ${PP_PARTITION:-$STEP1} "" || rc=1
       run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
     fi
+  fi
+elif [ -n "${PP_TORCH_FROZEN:-}" ]; then
+  TLAW=${PP_LAW:-subset:64} TCAP=${PP_TORCH_LOOP_CAP:-16384}
+  TF="$PY -m verity_torch_loop.serve_frozen --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
+  for c in ${PP_TORCH_FROZEN_CAPS-s8-width=1024 s8-mlp=256}; do TF="$TF --cap-of $c"; done
+  export PYTHONPATH=$REPO/integrations/torch_loop
+  frozen() {  # NAME [--tamper [--tags T,...]]: the step's windows, each audited from its records alone against the circuit
+              # registered before it ran; the arm is a run (and its windows roots) of its own
+    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 rc=0 tag c run flips f; shift
+    [ "${1:-}" = --tamper ] && forged=--forged
+    mkdir -p $O/$name
+    $TF --run-id $id --circuit-only "$@" > $O/$name/circuit-before.json || return 1
+    $TIME $TF --run-id $id --out $W/$name --workers ${PP_TORCH_FROZEN_WORKERS:-16} "$@" > $O/$name/serve.json 2> $O/$name/serve.err \
+      || { tail -30 $O/$name/serve.err; return 1; }
+    cut -c1-3000 $O/$name/serve.json
+    for tag in $($PY -c 'import json, sys; print(" ".join(json.load(open(sys.argv[1]))["windows"]))' $O/$name/serve.json); do
+      c=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' $O/$name/circuit-before.json $tag) || return 1
+      run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["windows"][sys.argv[2]]["run"])' $O/$name/serve.json $tag) || return 1
+      mkdir -p $O/$name/$tag/window && cp $W/$name/$tag/{registration,window,index,circuit}.json $O/$name/$tag/window/
+      flips=0
+      [ -z "$forged" ] && for f in ${PP_TORCH_FROZEN_FLIPS-bf16-dot=64 s8-width=2 s8-mlp=1}; do [ "${f%%=*}" = $tag ] && flips=${f#*=}; done
+      $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name/$tag --law $TLAW --circuit $c --run $run \
+        ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged --flip-proofs $flips "${CH[@]}" \
+        --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name-$tag > $O/$name/$tag/audit.log 2> $O/$name/$tag/audit.err \
+        || rc=1
+      grep -E '^(RECORDS|PROOF-EDITS)' $O/$name/$tag/audit.log | cut -c1-6000; tail -25 $O/$name/$tag/audit.err
+      keep $name-$tag
+    done
+    return $rc
+  }
+  if [ "${PP_ONLY:-}" != forged ]; then
+    frozen torch-frozen || rc=1
+    $PY -m verity_torch_loop.frozen_w --serve $O/torch-frozen/serve.json --law $TLAW > $O/w.json && cat $O/w.json || rc=1
+  fi
+  TT=${PP_TORCH_FROZEN_TAMPERED:-}
+  if [ "${PP_ONLY:-}" != honest ] && [ "$TT" != none ]; then
+    frozen torch-frozen-tampered --tamper ${TT:+--tags $TT} || rc=1
   fi
 elif [ -n "${PP_TORCH_LOOP:-}" ]; then
   TLAW=${PP_LAW:-subset:2} TCAP=${PP_TORCH_LOOP_CAP:-8}

@@ -1,6 +1,6 @@
 # verity-vllm
 
-The Verity x vLLM integration: the Torch/vLLM-derived Programs (`verity_vllm.program.registry`, `verity_vllm.program.frontend`), the
+The Verity x vLLM integration: the Torch/vLLM-derived Programs (`verity.ml.definitions.registry`, `verity_vllm.program.frontend`), the
 runtime capture and Match/Commit machinery (`verity_vllm`), and the qualification sweep (`verity_vllm/ops`,
 `workloads/`).  Promoted from `veritor@0903f60d6` (release `r18-int-3`) as one working closure; see the Notion page
 "Veritor → Verity migration" for the decisions and the evidence index.
@@ -77,7 +77,7 @@ required-value manifest: `format.py` the shared vocabulary, `verify.py` the rebu
 and `verity.ml.circuits.liveness`.  Never: execution data, hooks, model names, anything read from a run.
 
 **`correspondence/`** implements *runtime correspondence* as data: `runtime.py` (runtime-correspondence/v1),
-`reader_for_query.py` / `reader_for_acquire.py`; and *occurrence resolution*: `resolve.py`, `resolve_decomp.py`.  Never:
+`reader_for_query.py` / `reader_for_acquire.py`.  Never:
 verification policy, commitment positions, requiredness, verdicts.
 
 **`observe/`** implements *value observation* (the Match-side capture): `observer.py` (the TorchDispatchMode), `events.py` /
@@ -144,7 +144,7 @@ above would import.
 
 The stdlib-only core of `verity_ir` (`types refs defs program layout evaluate query codec parts query_codec`, `gateset`
 as `query_ast`) is `verity.ml.circuits` in `verity`, and its `plan` is `verity.core.protocols.sampled_proofs.plan` in `verity/core/protocols/sampled_proofs`; the on-demand primitive families
-veritor hardcoded in `codec.py` are registered by `verity_vllm/program/registry/__init__.py` through `verity.ml.circuits.codec.register_lazy_family`.
+veritor hardcoded in `codec.py` are registered by `verity/ml/definitions/registry/__init__.py` through `verity.ml.circuits.codec.register_lazy_family`.
 
 ## Vocabulary (frozen; Notion "vLLM integration v2 — Draft 3" §12)
 
@@ -154,7 +154,7 @@ subcircuit, backend family and backend mean what the root README's Glossary says
 
 Core (Verity semantics, `verity`):
 
-- **Definition** — a registered function with a total evaluator on encodings (`verity_vllm.program.registry`).
+- **Definition** — a registered function with a total evaluator on encodings (`verity.ml.definitions.registry`).
 - **Call** — one application of a Definition inside a Program (retires "Program row", "instance" in prose; `instances.json.gz` stores Calls).
 - **Value** — an input or output of a Call (retires "Member" in prose; the serialized `member` / `output_member` field keeps its name).
 - **Program** — the sequence of Calls with its dataflow; `program_digest` covers the dataflow only.
@@ -195,7 +195,7 @@ Layers and where they live (Draft 3 §12.1):
 
 | layer | responsibility | today |
 | --- | --- | --- |
-| Program | Definitions, Calls, dataflow, `program_digest` | `verity_vllm/program/registry`, `verity_vllm/program/frontend` (lowering rules) |
+| Program | Definitions, Calls, dataflow, `program_digest` | `verity/ml/definitions/registry`, `verity_vllm/program/frontend` (lowering rules) |
 | query | Q(P), proof units, boundary and required values | `verity_vllm/query` (`module_body`, `word`), `verity_vllm/pipeline/manifest.py` (`verity-vllm manifest`: the manifest of record), `verity_vllm/check/poc_required_interface.py` |
 | runtime correspondence | Call ↔ module path / fx node / slot | `verity_vllm/correspondence`, `verity_vllm/program/lifting`, `verity_vllm/correspondence/reader_for_query.py`, `verity_vllm/correspondence/runtime.py` |
 | acquisition | acquisition plan, taps, hooks, collector | `verity_vllm/acquire` (`plan.py` ROUTE_OF_FAMILY, `install.py`, `stage.py`); hazard / analytic owners in `commit/committer/native_collect.py`, `commit/committer/native_host.py`, `commit/committer/hidden_gpu_src/` |

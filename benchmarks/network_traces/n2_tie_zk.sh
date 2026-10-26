@@ -8,9 +8,9 @@
 # On a GPU node with N2_GPU=1, the prover is a8_gpu.sh's CUDA build (70-class-sweep.sh BUILD_ONLY=1, kept under
 # FLOCK_WORK) on the GPU the run leased:
 #   research run --on GPU_NODE --gpus 1 --cpus 32 --mem-gb 96 --source . --project verity --cwd clone --timeout 180m \
-#     --env N2_MEM_GB=96 --env N2_GPU=1 --env N2_CLASS=served --env N2_JOBS=1 -- bash benchmarks/network_traces/n2_tie_zk.sh
-# env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_JOBS (--jobs, members proved at once, 2 by
-#      default)  N2_PORT (--port)  N2_CACHE (the build cache, kept across runs where writable)  N2_DEBUG_CLEAR=1
+#     --env N2_MEM_GB=96 --env N2_GPU=1 --env N2_CLASS=served -- bash benchmarks/network_traces/n2_tie_zk.sh
+# env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_PORT (--port; the members are proved one after
+#      another)  N2_CACHE (the build cache, kept across runs where writable)  N2_DEBUG_CLEAR=1
 #      (--debug-clear)  N2_DRY=1 (the instances and references only)  N2_CLASS (--class: test, served or warden)
 #      N2_WARDEN_RUN (--warden-run, N2_CLASS=warden's warden run, an absolute path on the node)  N2_WINDOWS (--windows)
 #      N2_GPU=1 (--gpu)  FLOCK_WORK (N2_GPU's build, /workspace/jobs/proof-throughput by default)
@@ -46,7 +46,7 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
   > "$OUT/build-firewall.log" 2>&1
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "n2tie: no firewall frame"; exit 7; }
 
-log "n2tie: proving, jobs ${N2_JOBS:-2}${N2_DRY:+, dry}"
+log "n2tie: proving${N2_DRY:+, dry}"
 GPU_ARG= SMI=
 if [ "${N2_GPU:-0}" = 1 ]; then
   GPU_ARG=--gpu
@@ -55,7 +55,7 @@ if [ "${N2_GPU:-0}" = 1 ]; then
     > "$OUT/gpu-samples.csv" 2>&1 &
   SMI=$!
 fi
-"$PY" benchmarks/network_traces/n2_tie_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/n2tie" --jobs "${N2_JOBS:-2}" \
+"$PY" benchmarks/network_traces/n2_tie_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/n2tie" \
   --class "${N2_CLASS:-test}" $GPU_ARG \
   ${N2_WARDEN_RUN:+--warden-run "$N2_WARDEN_RUN"} ${N2_WINDOWS:+--windows "$N2_WINDOWS"} \
   ${N2_PORT:+--port "$N2_PORT"} ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 \

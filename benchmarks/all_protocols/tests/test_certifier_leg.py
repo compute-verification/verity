@@ -1,7 +1,8 @@
 """The communication leg (`legs/certifier.py`) on what it reads and what it writes, without a certifier session:
 
 * a served plan of the period's prompts, a link-window per group, puts period p's requests in link-window p, each with
-  its own prompt, and has no period past the session's; the stub serves those bodies and refuses any other;
+  its own prompt, and has no period past the session's; the toy's stub serves those bodies (``ignore_eos``, no
+  ``min_tokens``) and refuses any other, a body that still sends ``min_tokens`` among them;
 * N2's outcome of record is one-stage's answer on the link-window's one unit, and its refusal a reject;
 * the integrity leg's accepted audit is re-decided at the leg's δ (one-stage's bound on wrong units), and its refusal
   kept as it is;
@@ -18,7 +19,8 @@
   period's, and its free inputs are `interface.input_count`'s (slow);
 * ``CERTIFIER_PATH`` picks the path, the certifier-only one by default, and the warden path's stubbed lines are the
   other's less its records' gap; ``WARDEN_TAMPER`` names the stub's tampers;
-* of the windows the runner audits at once, one makes the run's session and the others read it (`once`);
+* of the windows the runner audits at once, one makes the run's session and the others read it (`once`), and the
+  session proves N2's members one firewalled session at a time (``n2_zk.py prove --jobs 1``);
 * the warden session's run parses as the gate's scan rehearsal at the scan's own schedule, a period's link-windows are
   its group's in ``groups.json``, and the certified ids match the registered outputs' by connection, else by content,
   and a stub's changed byte, extra id or lost id is no match;
@@ -112,10 +114,21 @@ def test_a_period_is_its_own_link_window_with_its_own_prompts_and_the_last_takes
 def test_the_stub_serves_each_fixed_plan_body_of_the_loops_steps():
     _, p = plan(1)
     model = f"torch-loop/mlp-w8a8-h{H}"
+    assert all(q["body"]["ignore_eos"] is True and "min_tokens" not in q["body"] for q in p["requests"])
     assert [S.refusal(q["body"] | {"model": model}, STEPS) for q in p["requests"]] == [None, None]
-    assert S.refusal(cs.request_body(model, STEPS + 1, [3]), STEPS)
-    assert S.refusal(cs.request_body(model, STEPS, [3], temperature=1.0), STEPS)
-    assert S.refusal(cs.request_body(model, STEPS, [3]) | {"min_tokens": 1}, STEPS)
+    assert "steps" in S.refusal(cs.request_body(model, STEPS + 1, [3]), STEPS)
+    assert "greedy" in S.refusal(cs.request_body(model, STEPS, [3], temperature=1.0), STEPS)
+    assert "ignore_eos" in S.refusal(cs.request_body(model, STEPS, [3]) | {"ignore_eos": False,
+                                                                           "return_token_ids": True}, STEPS)
+
+
+def test_the_stub_refuses_a_body_that_still_sends_min_tokens():
+    model = f"torch-loop/mlp-w8a8-h{H}"
+    fixed = cs.request_body(model, STEPS, [3])
+    varied = cs.varied_body(model, {"prompt": [3], "max_tokens": STEPS, "seed": 1}) | {"return_token_ids": True}
+    assert S.refusal(fixed, STEPS) is None and S.refusal(varied, STEPS) is None
+    for body in (fixed | {"min_tokens": STEPS}, fixed | {"min_tokens": 1}, varied | {"min_tokens": 1}):
+        assert "min_tokens" in S.refusal(body, STEPS)
 
 
 def test_n2s_outcome_is_one_stages_answer_on_the_link_windows_one_unit():
@@ -366,6 +379,38 @@ def test_windows_audited_at_once_make_the_runs_one_session_once(tmp_path):
     a.join()
     b.join()
     assert made == ["first"] and got == {"a": {"by": "first"}, "b": {"by": "first"}}
+
+
+def test_the_session_proves_n2s_members_one_firewalled_session_at_a_time(tmp_path, monkeypatch):
+    period, s, calls = tmp_path / "period", tmp_path / L.SESSION, []
+    period.mkdir()
+    s.mkdir()
+    (period / "period.json").write_text(json.dumps({"periods": 2}))
+
+    class Stub:
+        def terminate(self) -> None:
+            pass
+
+        def wait(self) -> None:
+            pass
+
+    def run(argv, log, env=None) -> int:
+        calls.append(list(argv))
+        out = Path(argv[argv.index("--out") + 1])
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "summary.json").write_text("{}")
+        return 0
+
+    monkeypatch.setattr(L, "_tools", lambda d: {"flock-circuit": "fc", "flock-verify": "fv", "flock-firewall": "ff",
+                                                 "m0-pythonpath": ""})
+    monkeypatch.setattr(L, "lean_exes", lambda: {"network-records": "nr"})
+    monkeypatch.setattr(L, "requests_of", lambda d: ([1, 2], 3, 4))
+    monkeypatch.setattr(L, "_stub", lambda *a: (Stub(), "http://stub"))
+    monkeypatch.setattr(L, "_run", run)
+    monkeypatch.setenv("CERTIFIER_TAMPER", "extra")
+    L._session(period, s)
+    n2 = next(c for c in calls if Path(c[1]).name == "n2_zk.py")
+    assert n2[n2.index("--rounds") + 1] == "honest,extra" and n2[n2.index("--jobs") + 1] == "1"
 
 
 def test_the_warden_sessions_tampers_are_the_stubs(monkeypatch):
