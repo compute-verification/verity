@@ -1964,6 +1964,7 @@
   "PouwCheck.Check",
   "PouwCheck.Protocol",
   "PouwCheck.Pass",
+  "PouwCheck.WindowSalt",
   "PouwCheck.Credit",
   "CoreProtocol.Ratio",
   "CoreProtocol.Profile",
