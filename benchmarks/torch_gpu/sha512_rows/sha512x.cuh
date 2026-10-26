@@ -8,7 +8,7 @@
 //
 // V picks the pipe of each sigma's shifts, two bits each (S0 | S1 << 2 | s0 << 4 | s1 << 6): 0 funnel shifts on the integer
 // ALU, 1 the high half of each rotation and shift as mul.hi / mad.lo by 2^k on the FMA pipe and the low half a funnel shift,
-// 2 both halves on the FMA pipe, 3 three FMA-pipe instructions a rotation and two a shift, none on the ALU (rotr3). On sm_90
+// 2 both halves on the FMA pipe, 3 four FMA-pipe instructions a rotation and three a shift, none on the ALU (rotr3). On sm_90
 // IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a balanced V issues more than one integer pipe's worth
 // a cycle. The multiply form is commit_gpu's rotr_fma; the power of two comes from constant memory so ptxas can't fold the
 // multiply back into a shift. On the host every V is the plain function.
@@ -58,10 +58,6 @@ static const u64 K_HOST[80] = {SX_K_LIST};
 __constant__ u32 POW2[33] = {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u, 1u << 10, 1u << 11, 1u << 12, 1u << 13,
                              1u << 14, 1u << 15, 1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22,
                              1u << 23, 1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31, 0u};
-__constant__ u32 POW2X[33] = {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u, 1u << 10, 1u << 11, 1u << 12, 1u << 13,
-                              1u << 14, 1u << 15, 1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22,
-                              1u << 23, 1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31, 0u};
-
 SX_HD const u64* kconst() {
 #ifdef __CUDA_ARCH__
   return K_DEV;
@@ -97,23 +93,23 @@ __device__ __forceinline__ u32 madlo(u32 y, u32 m, u32 t) {
   asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(y), "r"(m), "r"(t));
   return r;
 }
-__device__ __forceinline__ u32 madhi(u32 y, u32 m, u32 t) {
-  u32 r;
-  asm("mad.hi.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(y), "r"(m), "r"(t));
+__device__ __forceinline__ u64 mulwide(u32 x, u32 m) {
+  u64 r;
+  asm("mul.wide.u32 %0, %1, %2;" : "=l"(r) : "r"(x), "r"(m));
   return r;
 }
-// (hi:lo) rotated right by n (0 < n < 32) as (rhi:rlo), and shi = hi >> n, with m = 2^(32 - n): one mul.wide gives
-// hi * m = (hi >> n : hi << (32 - n)); rhi is lo * m + (hi >> n) (mad.lo) and rlo, also x >> n's low word,
-// (lo * m >> 32) + (hi << (32 - n)) (mad.hi), each a sum of disjoint bit ranges. The mad.hi's multiplier is POW2X's: from
-// one multiplier ptxas pairs the mad.lo and mad.hi into a mad.wide, which it splits into a mul.wide and an IADD3.
+// (hi:lo) rotated right by n (0 < n < 32) as (rhi:rlo), and shi = hi >> n, all on the FMA pipe: with m = 2^(32 - n), one
+// mul.wide each gives hi * m = (hi >> n : hi << (32 - n)) and lo * m = (lo >> n : lo << (32 - n)), and rhi =
+// (lo << (32 - n)) + (hi >> n) and rlo = (lo >> n) + (hi << (32 - n)), also x >> n's low word, are each a sum of disjoint
+// bit ranges, added by mad.lo with a multiplier of 1. Fewer instructions cost more in SASS: ptxas splits a mad.wide with a
+// 64-bit addend into a mul.wide and an IADD3, and gives a mad.hi's addend two moves (IMAD.HI adds a register pair).
 template <int n>
 __device__ __forceinline__ void rotr3(u32 lo, u32 hi, u32& rhi, u32& rlo, u32& shi) {
-  const u32 m = POW2[32 - n];
-  u64 p;
-  asm("mul.wide.u32 %0, %1, %2;" : "=l"(p) : "r"(hi), "r"(m));
+  const u32 m = POW2[32 - n], one = POW2[0];
+  const u64 p = mulwide(hi, m), q = mulwide(lo, m);
   shi = (u32)(p >> 32);
-  rhi = madlo(lo, m, shi);
-  rlo = madhi(lo, POW2X[32 - n], (u32)p);
+  rhi = madlo((u32)q, one, shi);
+  rlo = madlo((u32)(q >> 32), one, (u32)p);
 }
 #endif
 

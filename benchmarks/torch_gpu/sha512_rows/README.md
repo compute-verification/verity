@@ -42,8 +42,8 @@ tensors, which at 4,096 slots fills the GPU better than one layer a call (25 row
 - 0: funnel shifts on the integer ALU;
 - 1: the high half of each rotation as mul.hi/mad.lo on the FMA pipe;
 - 2: both halves on the FMA pipe;
-- 3: none on the ALU (`rotr3`): a rotation is one mul.wide of the high word, a mad.lo and a mad.hi of the low word
-  (IMAD.WIDE, IMAD, IMAD.HI), a shift the mul.wide and the mad.hi.
+- 3: none on the ALU (`rotr3`): a rotation is a mul.wide of each word and two adds as mad.lo by 1 (2 IMAD.WIDE, 2 IMAD), a
+  shift one add fewer.
 
 A trailing `s` runs the rounds straight-line (`engine.variant_flags`).
 
