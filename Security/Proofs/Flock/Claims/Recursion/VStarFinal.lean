@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.VStarHonest
 import Proofs.Flock.Claims.Recursion.VStarFitHeld
+import Proofs.Flock.Claims.Recursion.VStarFitPin
 
 /-!
 # What each V\* part's circuit accepts on the honest run, with hh's fitting discharged (`honest_partAccepts_final`)
@@ -14,7 +15,10 @@ each one piece:
 * `hhFit`, `hh` from the fitting: `hh_A0` at the schedule (`schedMatches_dense`), the trace at the fitted port inputs
   (`TraceOk` and `SlotsOk`) and the run's messages being their rows' commit strings (`hmsg_run`);
 * the schedule `x` reads, and part `s`'s staging (`StagedPart`);
-* the stager accepts at the honest source (`hok`);
+* the tape exception (`hTops`): at each level above 0 the two reps' tops differ (`sameTop` false), as they do
+  wherever a salt differs (`sameTop_false_of_salt`); they coincide with probability at most `2^-1536` a pair, a
+  completeness error, and a non-vacuity instance picks a tape off it;
+* the stager accepts at the honest source where the tape is off the exception (`hok`);
 * the parts holding one round's row agree on its port's words (`hW`).
 -/
 
@@ -57,9 +61,13 @@ theorem honest_partAccepts_final (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (
       (∀ i < RestRead.kI x - 1, ∀ o m, (o, m) ∈ L.piecesOf x s wO i → ((ms.getD i []).drop o).take m.length = m) →
       (∃ (xr : XR) (rs : Array RecVStar.SchedRound), readX x = some xr ∧ repSched xr.shape = some rs) →
       (∃ (stg : Stage) (xO : Msg), StagedPart stg s x xO) →
-      (∀ st c src, partAt x s = some (st, c) →
-        srcOf (Ir.fit x) x w ω.1 (hist.take (RestRead.kI x - 1)) = some src →
-        ∃ pin, _root_.VStar.In.partIn src (progOf c) st = .ok pin) →
+      (∀ src, srcOf (Ir.fit x) x w ω.1 (hist.take (RestRead.kI x - 1)) = some src → ∀ l, 0 < l → ∀ a b,
+        (src.tops[0]!)[l]? = some a → (src.tops[1]!)[l]? = some b → _root_.VStar.In.sameTop a b = false) →
+      ((∀ src, srcOf (Ir.fit x) x w ω.1 (hist.take (RestRead.kI x - 1)) = some src → ∀ l, 0 < l → ∀ a b,
+          (src.tops[0]!)[l]? = some a → (src.tops[1]!)[l]? = some b → _root_.VStar.In.sameTop a b = false) →
+        ∀ st c src, partAt x s = some (st, c) →
+          srcOf (Ir.fit x) x w ω.1 (hist.take (RestRead.kI x - 1)) = some src →
+          ∃ pin, _root_.VStar.In.partIn src (progOf c) st = .ok pin) →
       (∀ xr, readX x = some xr → ∀ s₁ c₁ h₁ s₂ c₂ h₂, xr.w.parts[s₁]?.bind partCircuit = some c₁ →
         h₁ ∈ heldRows xr s₁ → xr.w.parts[s₂]?.bind partCircuit = some c₂ → h₂ ∈ heldRows xr s₂ → h₁.1 = h₂.1 →
         (c₁.ports[h₁.2.2.1]?).map (·.words) = (c₂.ports[h₂.2.2.1]?).map (·.words)) →
@@ -75,7 +83,7 @@ theorem honest_partAccepts_final (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (
         ∀ i < L.rounds x, ∀ m, L.held x s wO i = some m → ms.getD i [] = m) →
       Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
         Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s x (Claims.coinSeq r) ms := by
-  intro b bR L bL I D hN hS hW w st hR hx hf ω r hacc hI s hs hist wO ms hTm hnc hA hpE hsch hSt hok hWd hhFit
+  intro b bR L bL I D hN hS hW w st hR hx hf ω r hacc hI s hs hist wO ms hTm hnc hA hpE hsch hSt hTops hok hWd hhFit
   obtain ⟨xr, rs, hxr, hrs⟩ := hsch
   obtain ⟨stg, xO, hSP⟩ := hSt
   have hrun : I.V.k (xIOf x) + kS x ≤ (Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).msgs.length :=
@@ -85,6 +93,6 @@ theorem honest_partAccepts_final (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (
     simp only [hist, List.length_map, List.length_take]
     omega
   exact honest_partAccepts_deployed mask Ir b0 x aux nOf hd recRest decI hN hS hW hR hx hf ω r hacc hI s hs hTm hnc
-    hA hpE (hhFit (hfit_A0 OpenRows.elemR hxr hrs hSP hlen hok (hWd xr hxr)))
+    hA hpE (hhFit (hfit_A0 OpenRows.elemR hxr hrs hSP hlen (hok hTops) (hWd xr hxr)))
 
 end RecDeploy.VStarHonest
