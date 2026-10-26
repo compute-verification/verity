@@ -70,15 +70,17 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
 
 def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes]) -> int:
     """The prover's side over the connection `f`: each index answered with `respond(index)` until the challenger ends the
-    session; the rounds answered."""
+    session, the collector paused as on the challenger's side (`memory_challenger.collector_paused`); the rounds
+    answered."""
     n = 0
-    while (i := int.from_bytes(_read(f, 8), "big")) != END:
-        block = respond(i)
-        if len(block) != block_bytes:
-            raise ValueError(f"an answer is the whole {block_bytes}-byte block, not {len(block)} bytes")
-        f.write(block)
-        f.flush()
-        n += 1
+    with mc.collector_paused():
+        while (i := int.from_bytes(_read(f, 8), "big")) != END:
+            block = respond(i)
+            if len(block) != block_bytes:
+                raise ValueError(f"an answer is the whole {block_bytes}-byte block, not {len(block)} bytes")
+            f.write(block)
+            f.flush()
+            n += 1
     return n
 
 

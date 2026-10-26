@@ -1,11 +1,12 @@
 """`challenger_party`: the memory challenger's side and the prover's over a socket pair, each in its own thread, the
 challenger on an injected clock. Given the period's coins, the challenger's side designates the id `period.run` does in
 one process and challenges the same indices. The run's check accepts its session against the honest prover and refuses
-it against one that answers zeros. `Party.of` reads `period.json`'s challenger host, and `placement` says whether
-`trusted-nebius-host`'s premise holds."""
+it against one that answers zeros. The prover answers with the collector paused, as the challenger does. `Party.of` reads
+`period.json`'s challenger host, and `placement` says whether `trusted-nebius-host`'s premise holds."""
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import socket
@@ -86,6 +87,17 @@ def test_a_short_answer_is_refused_by_the_prover() -> None:
         fa.flush()
         with pytest.raises(ValueError, match="whole 8-byte block"):
             CP.answer(fb, 8, lambda i: bytes(7))
+
+
+def test_the_prover_answers_with_no_collection_inside_the_rounds() -> None:
+    seen: list[bool] = []
+    a, b = socket.socketpair()
+    with a, b, a.makefile("rwb") as fa, b.makefile("rwb") as fb:
+        fa.write(b"".join(i.to_bytes(8, "big") for i in (5, 1, 4, CP.END)))
+        fa.flush()
+        assert CP.answer(fb, 8, lambda i: (seen.append(gc.isenabled()), bytes([i]) * 8)[1]) == 3
+        assert fa.read(24) == bytes([5]) * 8 + bytes([1]) * 8 + bytes([4]) * 8
+    assert seen == [False] * 3 and gc.isenabled()
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:
