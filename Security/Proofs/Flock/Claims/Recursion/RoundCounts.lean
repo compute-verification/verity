@@ -95,13 +95,14 @@ theorem hz (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : i < D.sts
   generalize ((D.files cls i).stream r).rounds = R at hR hsz hne
   split
   · rename_i h2
-    have h2' : 2 < (R.map (·.coins)).size := by rw [Array.size_map]; omega
+    have h2R : 2 < R.size := by omega
+    have h2' : 2 < (R.map (·.coins)).size := by rw [Array.size_map]; exact h2R
     have hmem : (R.map (·.coins))[2]! ∈ R.map (·.coins) := by
       rw [getElem!_pos _ 2 h2']
       exact Array.getElem_mem h2'
     have hX := hne _ hmem
     have e : (R[2]!).coins = (R.map (·.coins))[2]! := by
-      rw [getElem!_pos _ 2 h2', Array.getElem_map, getElem!_pos R 2 (by simpa using h2')]
+      rw [getElem!_pos _ 2 h2', Array.getElem_map, getElem!_pos R 2 h2R]
     have hc : (canonRounds D.spec D.sts cs.tail.dropLast (2 * i + r))[2]! =
         (cs.tail.dropLast.getD (((repLens D.spec D.sts).take (2 * i + r)).sum + 2) default).vals
           ((RecDeploy.repSchedAt D.spec D.sts[(2 * i + r) / 2]!).getD 2 default).1 := by
@@ -121,9 +122,10 @@ theorem hsz_of_sched (acc : ℕ → Array F128) (hnd : (D.spec.repStreams.toList
     (hsched : (RecDeploy.repSchedAt D.spec D.sts[i]!).map (·.1) = roundSizes (D.sh cls i)) :
     (D.rep cls acc i r).rounds.toList.map Array.size = roundSizes (D.sh cls i) := by
   have hR := D.rounds_canon cls i hnd hi hti r
+  have hd : (2 * i + (r : ℕ)) / 2 = i := by have := r.isLt; omega
   have hL : (repLens D.spec D.sts).getD (2 * i + r) 0 = (RecDeploy.repSchedAt D.spec D.sts[i]!).length := by
     have hk : 2 * i + r < 2 * D.sts.size := by omega
-    simp [repLens, List.getD_eq_getElem?_getD, hk, rep_div_two i r]
+    simp [repLens, List.getD_eq_getElem?_getD, hk, hd]
   change (((D.files cls i).stream r).rounds.map (·.coins)).toList.map Array.size = _
   rw [hR, ← hsched]
   apply List.ext_getElem
@@ -131,8 +133,8 @@ theorem hsz_of_sched (acc : ℕ → Array F128) (hnd : (D.spec.repStreams.toList
     exact hL
   · intro j h₁ h₂
     have hj : j < (RecDeploy.repSchedAt D.spec D.sts[i]!).length := by simpa using h₂
-    simp only [canonRounds, rep_div_two i r]
-    simp [FlockDeploy.Coin.vals, List.getD_eq_getElem?_getD, hj]
+    simp only [canonRounds, hd]
+    simp [FlockDeploy.Coin.vals, List.getD_eq_getElem?_getD, hd, hj]
 
 end DecAt
 
