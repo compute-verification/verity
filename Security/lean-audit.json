@@ -1895,7 +1895,7 @@
   "Definitions.Accounting.Guarantees.Bandwidth",
   "Definitions.Hash",
   "Definitions.Hash.Guarantees",
-  "Definitions.Population",
+  "Definitions.SampledProofs",
   "Proofs.Accounting.TS.Session"
  ],
  "claims": {
@@ -2435,11 +2435,6 @@
    "why": "a guarantee is stated over the hash area's definitions, never over a proof",
    "sealed": true
   },
-  "Definitions.Population": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
-   "except": [],
-   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
-  },
   "Definitions.Nci.Guarantees.FitRate": {
    "imports": [
     "Mathlib",
@@ -2462,6 +2457,11 @@
    ],
    "except": [],
    "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof; the game's uniform average and probability, and the draw law, are core's (Definitions.Core.Game, Definitions.Core.Draw); a Merkle collision is the hash area's (Definitions.Hash.Basic)"
+  },
+  "Definitions.SampledProofs": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.SampledProofs"],
+   "except": [],
+   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
   }
  },
  "reads_exempt": {
