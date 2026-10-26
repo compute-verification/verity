@@ -97,15 +97,20 @@ def cut(blobs: dict[str, bytes], size: int) -> dict[str, bytes]:
     return pieces
 
 
-def public_pieces(a8, blobs: dict[str, bytes], held: set[str], public: bytes) -> tuple[dict[str, bytes], set[str], list[str]]:
+def public_pieces(a8, blobs: dict[str, bytes], held: set[str], public: bytes,
+                  fields: bool = False) -> tuple[dict[str, bytes], set[str], list[str]]:
     """`blobs` cut into the scan's pieces (`cut`, at `a8.needles`' size), less the pieces `public` holds raw or as hex:
     what the statement fixes before any witness (the staged circuit, which the stager writes from the Definition before
     any instance), which the verifier has whatever the witness. Returns the pieces to scan for, the held ones (pieces of
-    a blob in `held`) and the excluded pieces' hex."""
+    a blob in `held`, which the prover's instance holds as it is) and the excluded pieces' hex. A held blob is a whole
+    row, which the instance packs into 16-byte elements, its last one zero-padded; with `fields` it is a field inside a
+    row (a head in N2's ``wit`` row), followed there by the next field's bytes (the head's salt), so its zero-padded
+    last chunk isn't held, while its last 16 bytes, which cover the same tail, are."""
     pieces = cut(blobs, a8.PIECE)
     out = {pieces[k] for k in a8.find(public, a8.needles(pieces))}
     kept = {k: x for k, x in pieces.items() if x not in out}
-    return kept, {k for k in kept if k.rsplit(" @", 1)[0] in held}, sorted(x.hex() for x in out)
+    padded = {f"{k} @{len(b) - len(b) % a8.PIECE}" for k, b in blobs.items() if fields and len(b) % a8.PIECE}
+    return kept, {k for k in kept if k.rsplit(" @", 1)[0] in held and k not in padded}, sorted(x.hex() for x in out)
 
 
 def is_stream(name: str) -> bool:
