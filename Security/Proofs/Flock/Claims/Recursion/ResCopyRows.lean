@@ -56,7 +56,8 @@ theorem nodup_of_innerUnit {S : VStar.RepS} {nm : String} {u : VStar.UnitC} (h :
     · exact (eraseDups_nodup _ _ le_rfl).2 hne
     · have h1 : ((S.ports.map (·.1)).eraseDups.length != (S.ports.map (·.1)).length ||
           (S.ports.map (·.1)).contains "v" || S.ports.any (·.2 < 1)) = true := by
-        simp [hne]
+        simp only [Bool.or_eq_true]
+        exact Or.inl (Or.inl (bne_iff_ne.2 hne))
       simp only [h1, ↓reduceIte] at hc
       contradiction
 
@@ -240,17 +241,14 @@ theorem copy_rowElems {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
     rfl
   rw [hrh, Option.getD_some, rowsRead_port hi ho]
   unfold _root_.Flock.Readable.readElems elemsOf
-  rw [if_pos ho, if_pos ho]
+  rw [ite_eq_left ho, ite_eq_left ho]
   refine FlockVBridge.OfVStar.ofBits_congr fun t htt => ?_
   show Flock.Readable.copyOf p 0 ht w (n / p.sts[0].c.g) (n % p.sts[0].c.g) 0 (rowPortCol ns i + (128 * o + t)) = _
   rw [hnsi] at ho
-  rw [bitL_readForms]
-  · simp only [List.getElem_map, List.getElem_range, formBit_var]
-    rw [hwords] at hN
-    rw [hrpc, Claims.Recursion.VStar.copyOf_eq (by omega), hwords]
-    simp [Claims.Recursion.VStar.copyIdx, hsz, hupv]
-  · simp only [List.length_map, List.length_range]
-    rw [hbits]
-    omega
+  rw [bitL_readForms (by simp only [List.length_map, List.length_range]; rw [hbits]; omega)]
+  simp only [List.getElem_map, List.getElem_range, formBit_var]
+  rw [hwords] at hN
+  rw [hrpc, Claims.Recursion.VStar.copyOf_eq (by omega), hwords]
+  simp [Claims.Recursion.VStar.copyIdx, hsz, hupv]
 
 end RecDeploy.ResLower
