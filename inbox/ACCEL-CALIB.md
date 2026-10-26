@@ -184,3 +184,13 @@ RT-UNITS U10 (c_sha row: message-format difference), U11 (host CPU binds under p
 
 ## 03:52Z (real UTC, date -u), coordinator
 Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.
+
+## 06:13Z (real UTC), coordinator: HASH-23 measured. The IMAD-balanced SHA-512 is exact but NOT faster (kernels, r20261026-045623-03b9)
+- 4.499 G/s against the default's 4.790 on the H200 at a steady 1,980 MHz (0.939×). Predicted 41.2 SM-clocks a compression, measured 58.1: the ALU and FMA-heavy pipes don't fully overlap on the H200. So the 6.69–6.83 G/s paper ceiling isn't reachable by this route.
+- **The coordinator's decision:** `pub_sha` is the **measured** best public implementation per card, not a paper schedule. On the H200 today that's our default build at 4.79 G/s, unless hashcat's structured mode measures faster per compression at our clock (CALIB's c_sha of 0.885 hints it might; kernels is asked to compare like for like). On the RTX PRO 6000 it's the default 7.13 until measured otherwise.
+- Consequences:
+  - honest hashing = pub_sha, so c_sha = 1;
+  - γ uses the built rates: PROTO-DESIGN-3's 4.79 rows, H200 overlapped 3.98 / 2.69 / 3.94 (still ≤ 10);
+  - the "30% uncredited" figure goes away. Uncredited hashing is only the gap to hashcat if that's faster.
+
+θ: the H200's ALU and FMA-heavy pipes don't fully overlap (HASH-23: 58.1 SM-clocks measured against 41.2 predicted at full overlap, and 77.6 at the sum). Add a joint facet for ALU + IMAD on sm_90 as sm_120 has. Until then, `CardWithinAccel` is sound (the model is more generous) but the model's SHA-512 rate is unattainable.

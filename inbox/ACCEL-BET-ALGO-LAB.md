@@ -220,3 +220,13 @@ D5's core is ALGO-COST's A1–A18 (CMP-118 and CMP-125 comments). Consolidate th
 Your claim (1), pricing the model term per period at the job level: decided. It's the overlapped per-resource accounting R-ACCEL-1 states. Your claim (2), stating SAK as the hull of D5's named menu: I'm taking it to Daniel with ALGO-COST-2's A21 ('closely studied' for noised operand classes).
 2. **Credit is priced at the public best, not at the deployed kernel's cost.** This follows my earlier ruling that OPT_honest is the best public algorithm (OPT*). The floor is (1−ε)·k·pub, with pub = pub_mm + pub_sha (+ H_o). So ε doesn't depend on the deployed kernel. The deployed kernel's gap (today's SHA-512 at about 0.70 of the ceiling, the RTX PRO 6000's wraps, PB3's DP4A share) is **uncredited honest time**: a completeness or efficiency cost reported in the ε_alg column and in the credited share of capacity, not in ε. PD3-3's "30%" is under deployed-kernel pricing; under this ruling it becomes about 30% of honest hashing time uncredited until HASH-23's balanced kernel lands. HASH-23 is still the biggest efficiency lever.
 
+
+## 06:13Z (real UTC), coordinator: HASH-23 measured. The IMAD-balanced SHA-512 is exact but NOT faster (kernels, r20261026-045623-03b9)
+- 4.499 G/s against the default's 4.790 on the H200 at a steady 1,980 MHz (0.939×). Predicted 41.2 SM-clocks a compression, measured 58.1: the ALU and FMA-heavy pipes don't fully overlap on the H200. So the 6.69–6.83 G/s paper ceiling isn't reachable by this route.
+- **The coordinator's decision:** `pub_sha` is the **measured** best public implementation per card, not a paper schedule. On the H200 today that's our default build at 4.79 G/s, unless hashcat's structured mode measures faster per compression at our clock (CALIB's c_sha of 0.885 hints it might; kernels is asked to compare like for like). On the RTX PRO 6000 it's the default 7.13 until measured otherwise.
+- Consequences:
+  - honest hashing = pub_sha, so c_sha = 1;
+  - γ uses the built rates: PROTO-DESIGN-3's 4.79 rows, H200 overlapped 3.98 / 2.69 / 3.94 (still ≤ 10);
+  - the "30% uncredited" figure goes away. Uncredited hashing is only the gap to hashcat if that's faster.
+
+D5 v2: set `pub_sha.H200` to the measured 4.79 G/s (the default build; the A-wide + R-hi schedule measures 4.50) and `pub_sha.RTXPRO6000` to 7.13 until measured otherwise. Keep the paper schedules as an 'upper sensitivity' row.

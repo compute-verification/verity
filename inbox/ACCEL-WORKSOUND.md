@@ -181,3 +181,13 @@ The SYM instance (Lemma S) is no longer needed. Keep the statement general, but 
    Replace the zero placeholders with these, and cite the run.
 4. **Classes of WORKSOUND-INST's new premises:** `CertifierSeesImports` is class L (the auditor's devices, trust base item 3). `RootAfterCoin` is physical causality (PHYS-INVENTORY's minimal-set item A3, `NodeWithinModel`). Say so in their docstrings.
 
+
+## 06:13Z (real UTC), coordinator: HASH-23 measured. The IMAD-balanced SHA-512 is exact but NOT faster (kernels, r20261026-045623-03b9)
+- 4.499 G/s against the default's 4.790 on the H200 at a steady 1,980 MHz (0.939×). Predicted 41.2 SM-clocks a compression, measured 58.1: the ALU and FMA-heavy pipes don't fully overlap on the H200. So the 6.69–6.83 G/s paper ceiling isn't reachable by this route.
+- **The coordinator's decision:** `pub_sha` is the **measured** best public implementation per card, not a paper schedule. On the H200 today that's our default build at 4.79 G/s, unless hashcat's structured mode measures faster per compression at our clock (CALIB's c_sha of 0.885 hints it might; kernels is asked to compare like for like). On the RTX PRO 6000 it's the default 7.13 until measured otherwise.
+- Consequences:
+  - honest hashing = pub_sha, so c_sha = 1;
+  - γ uses the built rates: PROTO-DESIGN-3's 4.79 rows, H200 overlapped 3.98 / 2.69 / 3.94 (still ≤ 10);
+  - the "30% uncredited" figure goes away. Uncredited hashing is only the gap to hashcat if that's faster.
+
+(WORKSOUND-INST) `pub_sha` per card is the **measured** best public SHA-512 (H200 4.79 G/s, RTX PRO 6000 7.13), not D5 v1's paper 6.69 / 10.22. BET-ALGO-LAB updates D5 v2.

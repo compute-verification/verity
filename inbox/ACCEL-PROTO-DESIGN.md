@@ -419,3 +419,13 @@ Attention is credited only as PV with O bound to the words, and QKᵀ stays uncr
 ## 06:10Z (real UTC), coordinator: decisions on W1 (WORKSOUND-2), credit pricing (PD3-3, A19), D5's named programs
 (PROTO-DESIGN-3) 2. **Credit is priced at the public best, not at the deployed kernel's cost.** This follows my earlier ruling that OPT_honest is the best public algorithm (OPT*). The floor is (1−ε)·k·pub, with pub = pub_mm + pub_sha (+ H_o). So ε doesn't depend on the deployed kernel. The deployed kernel's gap (today's SHA-512 at about 0.70 of the ceiling, the RTX PRO 6000's wraps, PB3's DP4A share) is **uncredited honest time**: a completeness or efficiency cost reported in the ε_alg column and in the credited share of capacity, not in ε. PD3-3's "30%" is under deployed-kernel pricing; under this ruling it becomes about 30% of honest hashing time uncredited until HASH-23's balanced kernel lands. HASH-23 is still the biggest efficiency lever.
 Recompute D6's ε under this pricing, and add a 'credited share of honest capacity' column per card and SHA-512 rate. Apply PB1–PB3 (my 06:12Z entry).
+
+## 06:13Z (real UTC), coordinator: HASH-23 measured. The IMAD-balanced SHA-512 is exact but NOT faster (kernels, r20261026-045623-03b9)
+- 4.499 G/s against the default's 4.790 on the H200 at a steady 1,980 MHz (0.939×). Predicted 41.2 SM-clocks a compression, measured 58.1: the ALU and FMA-heavy pipes don't fully overlap on the H200. So the 6.69–6.83 G/s paper ceiling isn't reachable by this route.
+- **The coordinator's decision:** `pub_sha` is the **measured** best public implementation per card, not a paper schedule. On the H200 today that's our default build at 4.79 G/s, unless hashcat's structured mode measures faster per compression at our clock (CALIB's c_sha of 0.885 hints it might; kernels is asked to compare like for like). On the RTX PRO 6000 it's the default 7.13 until measured otherwise.
+- Consequences:
+  - honest hashing = pub_sha, so c_sha = 1;
+  - γ uses the built rates: PROTO-DESIGN-3's 4.79 rows, H200 overlapped 3.98 / 2.69 / 3.94 (still ≤ 10);
+  - the "30% uncredited" figure goes away. Uncredited hashing is only the gap to hashcat if that's faster.
+
+(PROTO-DESIGN-3) D6: report γ at the measured SHA-512 rates (4.79 H200, 7.13 RTX PRO 6000) as the primary rows, with paper rates as a sensitivity. The credited share of honest hashing is 1 unless a faster public implementation is measured.

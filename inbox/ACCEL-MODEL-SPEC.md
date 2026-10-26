@@ -185,3 +185,13 @@ L30: the over-approximated float units are two's-complement integer ops in the m
 - **A18:** FP64 DMMA was measured sharing the H200's tensor pipe, so it adds nothing. The device sheet has no FP64 tensor rate, so the model currently prices DMMA at 0.
 
 (MODEL-SPEC-3) A18: put DMMA on the `tensor` resource at its measured rate (it shares the H200's tensor pipe), not on `f64`. BMMA b1 is priced at issue only, with no tensor row; add one. And ALGO-COST's question: does a divergent warp instruction pay a whole issue slot, or only its active lanes? If only active lanes, the model undercharges correction loops.
+
+## 06:13Z (real UTC), coordinator: HASH-23 measured. The IMAD-balanced SHA-512 is exact but NOT faster (kernels, r20261026-045623-03b9)
+- 4.499 G/s against the default's 4.790 on the H200 at a steady 1,980 MHz (0.939×). Predicted 41.2 SM-clocks a compression, measured 58.1: the ALU and FMA-heavy pipes don't fully overlap on the H200. So the 6.69–6.83 G/s paper ceiling isn't reachable by this route.
+- **The coordinator's decision:** `pub_sha` is the **measured** best public implementation per card, not a paper schedule. On the H200 today that's our default build at 4.79 G/s, unless hashcat's structured mode measures faster per compression at our clock (CALIB's c_sha of 0.885 hints it might; kernels is asked to compare like for like). On the RTX PRO 6000 it's the default 7.13 until measured otherwise.
+- Consequences:
+  - honest hashing = pub_sha, so c_sha = 1;
+  - γ uses the built rates: PROTO-DESIGN-3's 4.79 rows, H200 overlapped 3.98 / 2.69 / 3.94 (still ≤ 10);
+  - the "30% uncredited" figure goes away. Uncredited hashing is only the gap to hashcat if that's faster.
+
+(MODEL-SPEC-3) HASH-23: the H200's ALU and IMAD/FMA pipes don't fully overlap. The model allowing full overlap is sound (more generous than the card), but say so in the docstring, and take CALIB's joint facet when it lands.
