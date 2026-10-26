@@ -32,7 +32,7 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: partition.json, served.json, registered.json, tables/), session/ (the drawn --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    G.SCHEMA: "art:eeb1ed6ad88c683f6dfd3b0ffd2e9941c47f2fcb6f39c097e8f2f20720c6ce4a",
+    G.SCHEMA: "art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b",
     G.SCHEMA_V2: "art:4eadb4798932aa89be0c06869a1b057c4b811c4e815483675f14b5ef71979c2a",
     G.SCHEMA_SEG: "art:77b4e30bd61738eaac34ca8a8318a0624df05d03dd46289862d27e69c75d4be3",
 }
