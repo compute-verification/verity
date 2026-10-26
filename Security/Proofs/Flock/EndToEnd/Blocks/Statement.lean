@@ -4,7 +4,7 @@ import Proofs.Flock.EndToEnd.Period.Statement
 # The integrity audit per server-time block, and over a horizon of blocks (trusted)
 
 A server's life is cut into server-time blocks by certified wipes. Over a horizon, its `--zk` sessions are numbered in
-serve order, session `t` a `HiddenWindow` `W t` with a fresh live subset draw, and block `b` is the sessions from
+serve order, session `t` a `SamplingBlock` `W t` with a fresh live subset draw, and block `b` is the sessions from
 `start b` up to `start (b + 1)` (`ServerBlocks`): a wipe separates block `b`'s last session from block `b + 1`'s
 first. One prover strategy plays every session of every block (`Period.game` over the horizon's sessions), adaptively,
 so a block's sessions may depend on everything the prover saw in the blocks before.
@@ -19,11 +19,11 @@ so a block's sessions may depend on everything the prover saw in the blocks befo
   horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading.
 
 The named assumptions are `IntegrityHorizon`'s, at the sessions each statement reads: A3 (`uniform/io-getrandombytes`)
-for each session's draw bytes, `live-verifier` (`HiddenWindow.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
+for each session's draw bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
 (`LinkCRZC`) at every strategy a session is played with on some run (`Period.Plays`). The proofs are
 `Flock.SecurityProofs.IntegrityBlock`, `IntegrityBlocks` and `IntegrityHorizonBlocks`.
 
-A wrong unit is counted in the session that holds it (`HiddenWindow.wrongSet`). The state a block carries across a wipe
+A wrong unit is counted in the session that holds it (`SamplingBlock.wrongSet`). The state a block carries across a wipe
 (the KV cache, committed before the wipe and read after it) is an input of the next block's sessions, and these
 statements say nothing of whether the value a session reads there is the one the block before committed.
 -/
@@ -39,7 +39,7 @@ open scoped ENNReal
 order; block `b` is the sessions from `start b` up to `start (b + 1)`, so the blocks partition the horizon's first
 `start B` sessions, and a wipe sits before session `start b` for each `0 < b < B`. -/
 structure ServerBlocks where
-  W : ℕ → HiddenWindow
+  W : ℕ → SamplingBlock
   B : ℕ
   start : ℕ → ℕ
   start_zero : start 0 = 0

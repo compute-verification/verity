@@ -4,11 +4,12 @@ import Proofs.Flock.EndToEnd.Period
 /-!
 # Proof of the integrity audit per server-time block, and over a horizon of blocks
 
-* `Flock.SecurityProofs.integrity_on`: `IntegrityHorizon` on a set `I` of the period's windows. The probability that
-  every window of `I` is accepted and `I`'s wrong units total at least `M` is at most `(1 − q)^M + Σ_{t ∈ I} (ε_ks,t +
-  δ_link,t)`. It is `IntegrityHorizon`'s proof with every window outside `I` weighing nothing: `period_union` over the
-  windows of `I` accepted with a drawn unit wrong, and `period_horizon` with weight `|W_t|` at a window of `I` and `0`
-  elsewhere, where the window's miss probability `≤ 1 = (1 − q)^0`.
+* `Flock.SecurityProofs.integrity_on`: `IntegrityHorizon` on a set `I` of the period's sampling blocks. The probability
+  that every sampling block of `I` is accepted and `I`'s wrong units total at least `M` is at most
+  `(1 − q)^M + Σ_{t ∈ I} (ε_ks,t + δ_link,t)`. It is `IntegrityHorizon`'s proof with every sampling block outside `I`
+  weighing nothing: `period_union` over the sampling blocks of `I` accepted with a drawn unit wrong, and
+  `period_horizon` with weight `|W_t|` at a sampling block of `I` and `0` elsewhere, where the sampling block's miss
+  probability `≤ 1 = (1 − q)^0`.
 * `IntegrityBlock`: `integrity_on` at block `b`'s sessions, with `M = ⌈ln(1/δ)/q⌉`.
 * `IntegrityBlocks`: the union bound over the blocks (`value_exists_finset_le`), each block's by `IntegrityBlock`.
 * `IntegrityHorizonBlocks`: `IntegrityHorizon` over the horizon's `start B` sessions, whose terms regroup by block
@@ -20,7 +21,7 @@ namespace Flock.SecurityProofs
 open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
 
-/-- The wrong units of the windows of `I`, as a sum over every window weighing `0` outside `I`. -/
+/-- The wrong units of the sampling blocks of `I`, as a sum over every sampling block weighing `0` outside `I`. -/
 theorem sum_filter_wrong (I : Finset ℕ) (l : List WindowRec) :
     ((l.filter fun r => r.idx ∈ I).map WindowRec.wrong).sum =
       (l.map fun r => if r.idx ∈ I then r.wrong else 0).sum := by
@@ -31,8 +32,8 @@ theorem sum_filter_wrong (I : Finset ℕ) (l : List WindowRec) :
       · simp [h, ih]
       · simp [h, ih]
 
-/-- **`IntegrityHorizon` on a set `I` of the period's windows**, at `M` wrong units. -/
-theorem integrity_on (W : ℕ → HiddenWindow) (T : ℕ) (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
+/-- **`IntegrityHorizon` on a set `I` of the period's sampling blocks**, at `M` wrong units. -/
+theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     (hqt : ∀ t ∈ I, q ≤ ((W t).kd : ℝ) / (W t).n)
     (hA3 : ∀ t ∈ I, Assumptions.UniformRandomBytes (W t).Lb (W t).src)
     (s : Strategy (Period.game W T)) (hs : PeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s) (M : ℕ) :
@@ -41,7 +42,7 @@ theorem integrity_on (W : ℕ → HiddenWindow) (T : ℕ) (I : Finset ℕ) {q : 
       ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((W t).ks + (W t).link) := by
   set x : ℝ≥0∞ := ENNReal.ofReal (1 - q)
   have hx : x ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
-  -- some window of `I` accepted with a drawn unit wrong
+  -- some sampling block of `I` accepted with a drawn unit wrong
   have hA := period_union (fun t => (W t).game) (fun t => (W t).record t)
     (fun r => r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) (fun t τ => (W t).CR τ)
     (fun t => if t ∈ I then (W t).ks + (W t).link else 0)
