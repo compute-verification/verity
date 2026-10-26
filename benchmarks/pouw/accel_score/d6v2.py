@@ -714,7 +714,10 @@ def report(D: dict) -> str:
 LEAN = [
     "`PubBest` → public size: the menu's hull at a resource's gate price (`gates.d5_sigma`'s cheapest instruction a "
     "unit), no makespan variable and no duals; `SAKMatmul` becomes: no program for the block's products is smaller "
-    "than S_b (an assumption on the menu, as today's hull statement is).",
+    "than S_b. As a premise in gates that is false against table circuits (RT-SIZE's RS1; the S_b table's wired "
+    "column, about 1/17 of S_b), so it can't be named as an assumption as it stands: either the statement restricts "
+    "the menu to programs without indexed reads and says why the actual circuit has none, or the premise moves to "
+    "𝓜's resources (RS1's fix). Either is a claim, Daniel's.",
     "`Hmac` (the credited MACs' price at μ°) → `Hsize`: S_b = s_b · (the block's MACs), s_b public, read from the "
     "registration; delete every μ°, μ¹ and dual-price lemma that only `Hmac` used.",
     "`W_b` (a block's weight in the draw) → S_b / S_reg: the challenger draws a gate of S_reg, so a proof block in "
@@ -724,7 +727,12 @@ LEAN = [
     "`Lane.eval`/`dmmaEval` circuit's size) as the objective, and s_× (the fewest gates of a counted operation) as a "
     "named assumption (a lower bound the builders don't prove).",
     "U(X, J) = Φ_X|J| − |A[X,J] ∩ W_cert| and its U/s_× counted operations, per serving block of exactly c_S gates "
-    "(padded), summed over a monitoring period's blocks; ε_dark's leaves as q_U(L_dark).",
+    "(padded), summed over a monitoring period's blocks; ε_dark's leaves as q_U(L_dark). U/s_× needs each counted "
+    "operation to own s_× gates of A (Contains, no sharing): a named Prop the theorem takes, which RT-SIZE's RS3 "
+    "shows false for matrix products in general, so it too is a claim.",
+    "The measure: `Verity.Circuit`'s `size` counts gates of any width as 1 (RS2). This build counts the canonical "
+    "Boolean circuit's And2 + Xor2 + Not, its companion And2 alone; the Lean's size must be one of them, on the "
+    "Boolean profile, named once.",
     "ε_net → the channel term k_infil/k_exfil in bits at the network certifier's boundary, no MAC price.",
     "Everything on LEAN-63's single circuit type and partition.",
 ]
