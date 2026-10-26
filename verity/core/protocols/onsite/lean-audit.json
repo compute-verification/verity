@@ -8,6 +8,7 @@
    "imports": [
     "CoreComposition.Blobs",
     "CoreComposition.Cases",
+    "MemoryChallenger.WipeProtocol",
     "NetworkCheck.Period",
     "PousCheck.RunProtocol",
     "PouwCheck.Protocol",
