@@ -3,7 +3,8 @@
 the auditor's host signed rather than from the verifier's stamps.
 
 **Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
-`RemoteAudit.Line.lineOfRecord` with its W from `RemoteAudit.Pooled`) computes each session's line off its record from
+`RemoteAudit.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `RemoteAudit.Pooled` over the
+record's draws) computes each session's line off its record from
 the inputs `verifier.recorded_inputs` reads, and `remote_bandwidth.line` computes it beside it from the same JSON
 (`line.line_of_record`):
 the two are compared exactly, every rational as text in lowest terms and every integer, and a session where they
@@ -16,7 +17,10 @@ root reached it at the first `received_at` of a request naming it by place (`aud
 names it (`audit.Session.close` asks for the coin after the window's last root), and a paced window is drawn at its
 k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, σ_(g+2)'s request names the same root too. At
 one window in flight (`audit.Pace.in_flight` 1) σ_(g+1)'s request names it and openings coin g's leaves once σ_(g+1)
-is back, so this reading, which doesn't take f, ends L_g about a round trip to the challenger past s_(g+1). Both
+is back, so this reading, which doesn't take f, ends L_g about a round trip to the challenger past s_(g+1). Drawn
+G > 1 windows a coin (`groups_per_coin`), openings coin c's request names only the last root of draw c's last window,
+and another window's A_g is the first request that leaves after its last root, σ_(g+2)'s at the earliest, which above
+k = 1 names a root of window g + 1 and so ends L_g later than the window did. Both
 times are the challenger's monotonic clock in its release log, whose lines its close signs (`challenger.session_of`),
 and whose close, record and refused hellos the auditor's ledger sealed at the session's end (`remote.trusted_session`).
 So L_g = max(A_g, s_(g+1)) − s_g on the challenger's clock holds group g's reads: they come after its coin, whose seed
@@ -105,8 +109,9 @@ with none credited) is conditional on `ProviderLockdown` in its place; any other
 `NoOutsideCompute`, as without the file. It changes no credit.
 
 **From the transcript** (`line_of`). Where the run's out/ keeps a session's transcript (`transcripts/`, a host run
-fetched with `--transcripts`), the Lean makes the session's record itself, `Session.run` on the transcript
-(`Line.lineOfRun`, `LineHeld`'s `lineOf`), and refuses a kept record that isn't it; elsewhere it reads the kept
+fetched with `--transcripts`), the Lean makes the session's record itself, `Shared.run` at the session's
+`groups_per_coin` on the transcript (`Session.run` at one; `Line.lineOfRun`, `LineHeld`'s `lineOf`), and refuses a kept
+record that isn't it; elsewhere it reads the kept
 record. The verifier's clock's reading holds the times seen to the record's; the challenger's clock's doesn't.
 
 **The boundary** (`--boundary FILE --boundary-pin SHA512`, off by default; `boundary_check`). With it, a sixth check
@@ -274,23 +279,37 @@ def release_log(lines: list[str]) -> dict[str, dict[str, list]]:
     return fam
 
 
-def auditor_seen(lines: list[str], seen: list[dict]) -> tuple[list[dict], dict]:
+def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple[list[dict], dict]:
     """`seen` (a session's `windows_seen`) with each group's coin and last root on the challenger's clock: `released_ns`
     challenge coin g's release, `arrivals_ns` the first receipt of the requests that name the window's last root by
     their place, openings coin g's and, when it names the same root, σ_(g+2)'s; and which family's came first. Both
     leave only once that root has come, so a root the prover repeats can't make A_g early, as an earlier request
-    naming the same value (σ_(g+1)'s, or another window's) would."""
+    naming the same value (σ_(g+1)'s, or another window's) would.
+
+    Drawn `per_coin` G > 1 windows a coin (`groups_per_coin`), only a draw's last window closes, so openings coin c's
+    request names the last root of draw c's last window and no request names another window's by place. A_g is then
+    the first receipt of the requests that leave only once window g's last root has come: openings coin g // G's and
+    σ_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
+    That time is at or after A_g, so L_g is at least window g's own and the line credits no more."""
     fam = release_log(lines)
     ch, op = fam.get("challenge"), fam.get("openings")
     n = len(seen)
-    if ch is None or op is None or len(ch["released"]) < n or len(op["after"]) < n:
+    draws = -(-n // per_coin)
+    if ch is None or op is None or len(ch["released"]) < n or len(op["after"]) < draws:
+        want = (f"one of each for each of {n} groups" if per_coin == 1 else
+                f"one challenge coin for each of {n} groups and one openings coin for each of their {draws} draws")
         raise ValueError(f"the release log holds {len((ch or {}).get('released', ()))} challenge and "
-                         f"{len((op or {}).get('after', ()))} openings coins, not one of each for each of {n} groups")
+                         f"{len((op or {}).get('after', ()))} openings coins, not {want}")
     out, by = [], {}
     for g, w in enumerate(seen):
-        t, label = op["received"][g], "openings"
-        if g + 2 < len(ch["after"]) and ch["after"][g + 2] == op["after"][g] and ch["received"][g + 2] < t:
-            t, label = ch["received"][g + 2], "challenge"
+        if per_coin == 1:
+            t, label = op["received"][g], "openings"
+            if g + 2 < len(ch["after"]) and ch["after"][g + 2] == op["after"][g] and ch["received"][g + 2] < t:
+                t, label = ch["received"][g + 2], "challenge"
+        else:
+            t, label = op["received"][g // per_coin], "openings"
+            if g + 2 < n and ch["received"][g + 2] < t:
+                t, label = ch["received"][g + 2], "challenge"
         by[label] = by.get(label, 0) + 1
         out.append({**w, "released_ns": ch["released"][g], "arrivals_ns": [t] if w["arrivals_ns"] else []})
     return out, {"last_root_first_named_by": by}
@@ -496,11 +515,11 @@ def recorded_append_coins(session: dict) -> int | None:
 
 
 def recorded_binding(session: dict) -> Fraction:
-    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its
-    windows, the most receipts a window of it can have (`ledger.window_receipts`, at its pace's k, its registered
-    blocks and, when its append coins aren't recorded (`recorded_append_coins`), the codec's `max_blocks`) and its
-    draw cap `samples`, F·C the queries its sketch term (`sketch_failure`) charged; 0 for a record with no sketch
-    term, which states no C."""
+    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its draws
+    (`V.recorded_windows`, a window each at `groups_per_coin` g = 1), the most receipts a draw of it can have (g times
+    `ledger.window_receipts`, at its pace's k, its registered blocks and, when its append coins aren't recorded
+    (`recorded_append_coins`), the codec's `max_blocks`) and its draw cap `samples`, F·C the queries its sketch term
+    (`sketch_failure`) charged; 0 for a record with no sketch term, which states no C."""
     sf = (session.get("ledger") or {}).get("sketch_failure")
     if not sf:
         return Fraction(0)
@@ -509,8 +528,8 @@ def recorded_binding(session: dict) -> Fraction:
     appends = recorded_append_coins(session)
     L = ledger.window_receipts(None if pace is None else audit.Pace(pace["k"], pace["window_ns"]), public["blocks"],
                                1 if appends is None else appends, wire.codec_named(public["codec"]).max_blocks)
-    return Fraction(ledger.binding_over(len(V.recorded_windows(session)[0]), L, session["samples"],
-                                        sf.get("outside", 1) * sf["compressions"]))
+    return Fraction(ledger.binding_over(len(V.recorded_windows(session)[0]), public.get("groups_per_coin", 1) * L,
+                                        session["samples"], sf.get("outside", 1) * sf["compressions"]))
 
 
 def union_error(rows: list[dict]) -> dict:
@@ -991,7 +1010,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         row["T"] = t
         if not s["accepted"]:
             continue
-        seen, row["named"] = auditor_seen(log, s["windows_seen"])
+        seen, row["named"] = auditor_seen(log, s["windows_seen"], s.get("groups_per_coin", 1))
         if boundary is not None and c.get("challenger") == "gate":
             row["credit"] = with_check(row["credit"], BOUNDARY, boundary_check(boundary, seen))
         a = copy.deepcopy(s)
