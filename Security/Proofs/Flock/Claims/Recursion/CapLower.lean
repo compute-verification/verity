@@ -55,9 +55,9 @@ theorem decompB_of_jointNC {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} 
         ∀ s < D.nS x, chk s x c (L.msgs x ws))
     (hD : DecompB H D IV L shape chk) : DecompB H D IV L shape chk' := by
   intro x st hx hf c ws hl hT hC
-  cases hcol : (Claims.findColl (L.allCalls x ws)).isSome with
-  | true => exact Or.inr hcol
-  | false => exact hD x st hx hf c ws hl hT (hle x st hx hf c ws ⟨⟨hl, hT, hC⟩, hcol⟩)
+  by_cases hcol : (Claims.findColl (L.allCalls x ws)).isSome = true
+  · exact Or.inr hcol
+  · exact hD x st hx hf c ws hl hT (hle x st hx hf c ws ⟨⟨hl, hT, hC⟩, by simpa using hcol⟩)
 
 /-! ## What a cap row carries -/
 
@@ -112,15 +112,23 @@ theorem slot_rows_eq {c c' : Circuit} {nm nm' : String} {q q' n n' : ℕ} {w w' 
     (hin' : ∀ p ∈ hmCalls c' nm' q' n', (p.1 ++ readForms w' p.2.1, readForms w' p.2.2) ∈ l) :
     readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var) =
       readForms w' (((rowHidden c' nm' n').getD []).map HmNets.Lin.var) := by
-  have hr := List.mem_map_of_mem (f := Prod.fst) (hin ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [],
+  have hr : rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var) ∈ l.map Prod.fst :=
+    List.mem_map_of_mem (f := Prod.fst) (hin ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [],
     ((rowHidden c nm n).getD []).map HmNets.Lin.var, hmDigest c q n) (by simp [hmCalls]))
-  have hr' := List.mem_map_of_mem (f := Prod.fst) (hin' ((c'.ports[q']?.map fun p =>
+  have hr' : rowPfx c' q' ++ readForms w' (((rowHidden c' nm' n').getD []).map HmNets.Lin.var) ∈ l.map Prod.fst :=
+    List.mem_map_of_mem (f := Prod.fst) (hin' ((c'.ports[q']?.map fun p =>
     (HmRow.rowPrefix p.words).data.toList).getD [], ((rowHidden c' nm' n').getD []).map HmNets.Lin.var,
     hmDigest c' q' n') (by simp [hmCalls]))
-  have hy := List.mem_map_of_mem (f := Prod.fst)
-    (hin (Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512) (by simp [hmCalls]))
-  have hy' := List.mem_map_of_mem (f := Prod.fst)
-    (hin' (Hm96.Default512.saltPrefix.data.toList, hmSalt c' q' n', (hmCommit c' q' n').drop 512) (by simp [hmCalls]))
+  have hsp : FlockSoundness.Refine.K512.saltPrefix = Hm96.Default512.saltPrefix.data.toList := by
+    unfold FlockSoundness.Refine.K512; rfl
+  have hy : FlockSoundness.Refine.K512.saltPrefix ++ readForms w (hmSalt c q n) ∈ l.map Prod.fst := by
+    rw [hsp]
+    exact List.mem_map_of_mem (f := Prod.fst)
+      (hin (Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512) (by simp [hmCalls]))
+  have hy' : FlockSoundness.Refine.K512.saltPrefix ++ readForms w' (hmSalt c' q' n') ∈ l.map Prod.fst := by
+    rw [hsp]
+    exact List.mem_map_of_mem (f := Prod.fst)
+      (hin' (Hm96.Default512.saltPrefix.data.toList, hmSalt c' q' n', (hmCommit c' q' n').drop 512) (by simp [hmCalls]))
   have e := commit_bind (r := rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var))
     (r' := rowPfx c' q' ++ readForms w' (((rowHidden c' nm' n').getD []).map HmNets.Lin.var))
     (y := readForms w (hmSalt c q n)) (y' := readForms w' (hmSalt c' q' n')) hT hnc hr hr' hy hy'
@@ -210,7 +218,6 @@ theorem capTop_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin �
   obtain ⟨r', ss', hr', hss', s', N', c', w', hs', hc', hw', hlt, hcap⟩ :=
     hS x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last hfin hl
   obtain ⟨-, hHH⟩ := sideLevel D shape rd hP hD hx hf hr hss hsv ho (Bd.opened os last)
-  dsimp only
   rw [← hHH]
   exact (hO x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht hnc r' ss' hr' hss' s' N' c' w'
     hs' hc' hw' hlt).trans hcap.symm
