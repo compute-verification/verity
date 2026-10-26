@@ -32,6 +32,7 @@ import sys
 import tarfile
 from collections import defaultdict
 from dataclasses import replace
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -335,6 +336,11 @@ def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_
         "u")[2:])
     assert (plain.tokens, plain.rate, plain.prompt_range, plain.seed, plain.eos_ids, plain.in_flight, plain.profile,
             plain.strategies) == (64, A.CERTIFIER_VARIED_RATE, "16:1024", 0, None, 4, cs.PROFILES[0], "honest")
+    assert (plain.margin, plain.prompts_file) == (2.0, None)
+    given = cs.parser().parse_args(A.certifier_command(
+        {k: req[k] for k in ("run", "requests", "traffic", "temperature", "top_p", "tamper")}
+        | {"margin": 4.0, "prompts": {"count": 3, "ids": 4}}, tmp_path / "out", "u")[2:])
+    assert (given.margin, given.prompts_file, given.out) == (4.0, tmp_path / A.WITNESS / A.PROMPTS, tmp_path / "out")
 
 
 def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_major(tmp_path):
@@ -1049,6 +1055,53 @@ def test_a_varied_request_is_an_id_request_in_frames_its_prompts_length_fixes(le
     assert active.request_frame_count(len(raw), cs.FRAME_BYTES) == active.id_request_frames(length, cs.FRAME_BYTES)
     assert active.id_request_fields(raw, cs.FRAME_BYTES) == fields | {"user": "varied.99999"}
     assert json.loads(raw.partition(b"\r\n\r\n")[2]) == cs.varied_body(fields["model"], q) | {"user": "varied.99999"}
+
+
+def test_given_prompts_are_sent_in_turn_at_the_same_seeds_arrivals_max_tokens_and_seeds(monkeypatch):
+    """With `prompts` (`--prompts-file`, the gate's `--prompts`) request j's prompt is the (j mod n)-th of the n and
+    nothing is tokenized; its arrival, `max_tokens`, seed and session are what the same seed gives the chat turns."""
+    monkeypatch.setattr(cs, "tokenize", lambda url, model, text, key=None: list(text.encode()))
+    prompts = [[70001, 3], [5], [7]]
+    turns = cs.varied_requests("u", "m", 7, rate=0.2, prompt_tokens=(8, 8), max_tokens=24, seed=5, name="r")
+    monkeypatch.setattr(cs, "tokenize", lambda *a, **k: pytest.fail("tokenized given prompts"))
+    given = cs.varied_requests("u", "m", 7, rate=0.2, prompt_tokens=(8, 8), max_tokens=24, seed=5, name="r",
+                               prompts=prompts)
+    assert [q["prompt"] for q in given] == [prompts[j % 3] for j in range(7)]
+    assert [{k: v for k, v in q.items() if k != "prompt"} for q in given] == \
+        [{k: v for k, v in q.items() if k != "prompt"} for q in turns]
+    assert len({tuple(q["prompt"]) for q in turns}) == 1
+    for bad in ([], [[1], []]):
+        with pytest.raises(ValueError, match="prompts: at least one"):
+            cs.varied_requests("u", "m", 7, prompts=bad)
+
+
+def test_the_varied_plan_takes_the_prompts_file_and_its_timing_widens_with_the_margin(tmp_path, monkeypatch):
+    """`plan_of` on varied traffic reads `--prompts-file` for the requests' prompts and plans at `--margin`: a larger
+    margin waits longer for each request's first frame (Δ0) and plans a slower rate (ρ0), the plan recording both;
+    fixed traffic refuses the file. The probes are the toy engine's: a token every 0.33 s after 0.4 s."""
+    (tmp_path / "prompts.json").write_text(json.dumps([[1, 2, 3, 4, 5, 6, 7, 8], [9, 10, 11, 12, 13, 14, 15, 16]]))
+
+    def probe(url, model, requests, key, clock, sleep):
+        return {"url": url, "model": model, "upstream_fields": cs.UPSTREAM_FIELDS, "responses": [
+            {"session": q["session"], "max_tokens": q["max_tokens"], "prompt_tokens": len(q["prompt"]),
+             "tokens": q["max_tokens"], "token_s": [0.4 + 0.33 * k for k in range(q["max_tokens"])],
+             "finish": "length", "last": 1} for q in requests]}
+    monkeypatch.setattr(cs, "probe_varied", probe)
+    monkeypatch.setattr(cs, "tokenize", lambda *a, **k: pytest.fail("tokenized given prompts"))
+    plans = {}
+    for margin in (2.0, 4.0):
+        args = argparse.Namespace(model="toy", api_key_env=None, traffic="varied", requests=6, rate=0.2,
+                                  prompt_range="16:1024", tokens=24, seed=0, probes=4, eos_ids="0", margin=margin,
+                                  prompts_file=tmp_path / "prompts.json")
+        _, _, plans[margin] = cs.plan_of(args, "u")
+    for margin, plan in plans.items():
+        assert [q["id_request"]["prompt"][0] for q in plan["requests"]] == [1, 9, 1, 9, 1, 9]
+        assert plan["varied"]["margin"] == margin and plan["varied"]["prompt_tokens"] == [8, 8]
+    two, four = plans[2.0]["varied"], plans[4.0]["varied"]
+    assert four["delta0_buckets"] > two["delta0_buckets"] and Fraction(four["rho0"]) < Fraction(two["rho0"])
+    fixed = argparse.Namespace(model="toy", api_key_env=None, traffic="fixed", prompts_file=tmp_path / "prompts.json")
+    with pytest.raises(SystemExit, match="--prompts-file: varied traffic's"):
+        cs.plan_of(fixed, "u")
 
 
 def _no_sleep(seconds: float) -> None:
