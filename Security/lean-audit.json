@@ -3290,6 +3290,18 @@
    "assumptions": [],
    "type_hash": "52c4ce2f8005c313ffa4a0e785a9679cdbb09e369d9d64275a43023bbda85986"
   },
+  "Accounting.SecurityProofs.JointHorizonBlocks": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointHorizonBlocks : Accounting.Guarantees.JointHorizonBlocks"],
+   "assumptions": [],
+   "type_hash": "f3e44a6b16ecd753748997a80b92bf2bc8c54f0f629c514f20c1a3f9133ed37c"
+  },
+  "Accounting.SecurityProofs.JointHorizonBlocksA": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointHorizonBlocksA : Accounting.Guarantees.JointHorizonBlocksA"],
+   "assumptions": [],
+   "type_hash": "44fa6ebcc2dd58e4949f72a01d94cf019d868d99eaada13ae4c6a98b07b80d3c"
+  },
   "Accounting.SecurityProofs.JointHorizonBlocksAbstract": {
    "owner": "@lean",
    "signature": [
@@ -3297,6 +3309,12 @@
    ],
    "assumptions": [],
    "type_hash": "fd1876c7178f149d9b2f37764af8c626bfe916d1d6dd6bb731c59bead5db5e17"
+  },
+  "Accounting.SecurityProofs.JointHorizonBlocksLegs": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointHorizonBlocksLegs : Accounting.Guarantees.JointHorizonBlocksLegs"],
+   "assumptions": [],
+   "type_hash": "68dde909d4760fe6bf5586fa1e9c403148c9c10907160757d962f5fdfdba5159"
   },
   "Accounting.SecurityProofs.JointPerRun": {
    "owner": "@memory-accounting",
@@ -11601,7 +11619,10 @@
    "Flock.SecurityProofs.SampledKSLiveStated": "frozen (no-function): It states no property of the verifier: it reads SampledKSLive (Security/Proofs/Flock/Bridge/Statement.lean), so the lock records its text, and it leaves when a guarantee proves SampledKSLive at the deployed sampled verifier.",
    "NetTiming.SecurityProofs.SampledLeakRegistered": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS and Commitment.Binds at each deployment, and the registration's openings RegOpens), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_registered's statement with sampledLeak_reg's count, at the registered inputs' registration values (AsReg at regVal) rather than the trace's, a disagreement being a collision Breg finds.",
    "Flock.SecurityProofs.SampledKSLiveV2": "frozen (no-function): the network certifier chain's theorem, proved; it reads SampledKSLiveV2 (Security/Proofs/Flock/Bridge/Canon.lean), the row/v2 sampled statement at the constants and canonAt, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
-   "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": "frozen (no-function): It carries C-Flock's integrity audit over a horizon of windows (Flock.Guarantees.IntegrityHorizon) to the sampled audit's per-period guarantee (PeriodRun.Sound) of an abstract period of the device model whose verdict is a field of the run, not a Lean function, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityPeriod, Security/Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list."
+   "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": "frozen (no-function): It carries C-Flock's integrity audit over a horizon of windows (Flock.Guarantees.IntegrityHorizon) to the sampled audit's per-period guarantee (PeriodRun.Sound) of an abstract period of the device model whose verdict is a field of the run, not a Lean function, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityPeriod, Security/Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointHorizonBlocks": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks and the wipes that open them, on one coin space: each block's five per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract block of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointBlocks.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointHorizonBlocksLegs": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks on one coin space, for a set of the audits: each block's per-period guarantees for the audits of the set are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -12758,7 +12779,10 @@
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointHorizon",
+    "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
@@ -13553,6 +13577,19 @@
     "Accounting.Guarantees.Joint": "994a9f616574f737ac1bb98ceeb5051f135976d5bf3d90328dece5cffa401887"
    },
    "guarantees": ["Accounting.SecurityProofs.CovertResidual", "Accounting.SecurityProofs.Joint"]
+  },
+  "Definitions.Accounting.Guarantees.JointBlocks": {
+   "digest": "e20a8b898619a36d3f269089d18212bec683737e37bd87e176f025d8ccc341ee",
+   "definitions": {
+    "Accounting.Guarantees.JointHorizonBlocks": "5821543be7c4950777feb80573f5762d9c9ab740ac878155676591eb79d06ae4",
+    "Accounting.Guarantees.JointHorizonBlocksA": "c1f730bea4fe4aed554f0272d955127720cfa2a88f0333840a833a258fdfefb6",
+    "Accounting.Guarantees.JointHorizonBlocksLegs": "977fc500292ef7b2e29f3b344209f12e2d27dcb936c31439ae6a2e3f2885be7a"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs"
+   ]
   },
   "Definitions.Accounting.Guarantees.JointBlocksAbstract": {
    "digest": "981f89e464f8b866fd9f8d83f67e70260c622ddb1af824ef56c6daeb94c65599",
@@ -14490,7 +14527,10 @@
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointHorizon",
+    "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
@@ -14500,6 +14540,27 @@
     "Accounting.SecurityProofs.RateOfAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartialPasses"
    ]
+  },
+  "Definitions.Accounting.JointBlocks": {
+   "digest": "d6ba4d7b6474ca99c9be8cea8d973f0a33094fb0b576e38f26338dfd4dac2f90",
+   "definitions": {
+    "Accounting.BlockWipe": "4e6b624aca50d5cff6db7896b72d66070634fbf8de4531d52df732eac4d9e169",
+    "Accounting.BlockWipe.Survives": "7e7951f83601cdf8272926110b873c1c2f9257f27bab24c34ad6a134d14052d9",
+    "Accounting.BlockWipe.accepts": "c684e05bcadd3eb6cc9e4e82ee69f130d62e99c8b54d927f2e91547fc3f8d031",
+    "Accounting.BlockWipe.fill": "14c0036acc539e5249fcdfc3f23287f364012e997e9a4d982a1c53f97cddff19",
+    "Accounting.BlockWipe.kept": "d7e77a8fd6b794955d6ee0dabf9c2b179738207e63cb4b3ad86c2c8222059a2b",
+    "Accounting.BlockWipe.unfilled": "05684390801f0e6ed1fa5be094a30b94bc8f83b1734a8fd118797e7a7082b059",
+    "Accounting.BlocksRun": "16915e0510ba25751abe6c9a97dd81faaa05512e0064c8e4c9f0bd8f2ef54546",
+    "Accounting.BlocksRun.MemoryTerm": "805258ae6ba9189d21a9747e580ac86b067335e28b36a57690e5228885e53d18",
+    "Accounting.BlocksRun.block": "00a1317756a2bc7d26a6efcc365a07ed3cde9c0d57463587ad4401bb5ede1b25",
+    "Accounting.BlocksRun.chal": "238f15926a3630ddd179f35d34aa8a63ce40c324aa63961bde6d40708b2d6e9c",
+    "Accounting.BlocksRun.readDeadline": "11fe0caa14f2c41264fcbbdccd31a36535516799d0639b26ca67461fae632579",
+    "Accounting.BlocksRun.sideBits": "6bd6e6d8e58f3881cf717e3072f82098966561e4fb8231c316e85976116de643",
+    "Accounting.BlocksRun.undeclared": "f43f77117bf092ad232384aaa9175ea382d57367ea7371a0ea9c4a5efcba9d21",
+    "Accounting.BlocksRun.weights": "6c6b9fb9eddd2e62c9c91fdf062da259a4d1d9b34408b3b9701b1bf0ad6f4938",
+    "Accounting.BlocksRun.wipe": "085e4093e9e5cc263b651909d4b218d8325e397865b1ee6fa2b276f7836ff0c7"
+   },
+   "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocks"]
   },
   "Definitions.Accounting.JointPeriod": {
    "digest": "1bd7aa7b193bcd9a8591295185d5bfac76487671f52e32c46d11e0c8f0a011f5",
@@ -14540,7 +14601,10 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.JointHorizon",
+    "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPeriod"
    ]
   },
@@ -17363,7 +17427,10 @@
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.JointHorizon",
+    "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
@@ -17719,7 +17786,10 @@
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.JointHorizon",
+    "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPeriod",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
@@ -23300,7 +23370,10 @@
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointHorizon",
+    "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
