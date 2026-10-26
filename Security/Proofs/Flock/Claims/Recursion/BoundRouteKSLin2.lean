@@ -158,8 +158,8 @@ theorem PrF0I_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H :
   rw [h]
   try rfl
 
-/-- **`ksLin2_of_C` with the inner setup's calls searched**: the finders read the calls at `withSetup H` on both sides,
-and the inner view only through `accAtI` (`PrFCI_C_setup`, `PrF0I_C_setup`). -/
+/-- **`ksLin2_of_C` with the inner setup's calls searched, at the V finders**: the finders read the calls at
+`withSetup H` on both sides, and the inner view only through `accAtI` (`PrFCI_C_setup`, `PrF0I_C_setup`). -/
 theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero Col'] (H : Msg → Msg)
     (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (hCF : Bd.LastCoinFree H)
@@ -171,7 +171,7 @@ theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] 
         Real.sqrt (Claims.Recursion.γ (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) x *
           Claims.PrB H (deployRecC Bd ivScope b).V P x) +
         (4 * (Inner.ofFlock Bd.deploy decI).V.k (Claims.Recursion.xI (deployRecC Bd ivScope b) x) + 1) *
-          Claims.Recursion.PrBinner H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO
+          Claims.Recursion.PrBinnerV H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO
             P x +
         4 * Cp.width (Claims.Recursion.xI (deployRecC Bd ivScope b) x) *
           (Claims.Recursion.PrFCI H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO Cp
@@ -181,7 +181,7 @@ theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] 
           (((Inner.ofFlock Bd.deploy decI).k (Claims.Recursion.xI (deployRecC Bd ivScope b) x) : ℝ) + 1) /
             ((R : ℝ) + 1)) +
         Claims.Recursion.βdev2 (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) Cp x *
-          (Claims.Recursion.PrFdev H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P
+          (Claims.Recursion.PrFdevV H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P
             x M + 1 / ((M : ℝ) + 1))) :
     Claims.PrBad H (deployRec Bd.IVStar ivScope b).V
         (Claims.Recursion.R (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI))
@@ -190,7 +190,7 @@ theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] 
         Real.sqrt (Claims.Recursion.γ (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) x *
           Claims.PrB H (deployRec Bd.IVStar ivScope b).V P x) +
         (4 * (Inner.ofFlock Bd.deploy decI).V.k (Claims.Recursion.xI (deployRec Bd.IVStar ivScope b) x) + 1) *
-          Claims.Recursion.PrBinner H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO
+          Claims.Recursion.PrBinnerV H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO
             decO P x +
         4 * Cp.width (Claims.Recursion.xI (deployRec Bd.IVStar ivScope b) x) *
           (Claims.Recursion.PrFCI H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO
@@ -200,7 +200,7 @@ theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] 
           (((Inner.ofFlock Bd.deploy decI).k (Claims.Recursion.xI (deployRec Bd.IVStar ivScope b) x) : ℝ) + 1) /
             ((R : ℝ) + 1)) +
         Claims.Recursion.βdev2 (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) Cp x *
-          (Claims.Recursion.PrFdev H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO
+          (Claims.Recursion.PrFdevV H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO
             decO P x M + 1 / ((M : ℝ) + 1)) := by
   rw [PrFCI_C_setup H Bd decI ivScope b DO decO hCF Cp P x M, PrF0I_C_setup H Bd decI ivScope b DO decO hCF P x R]
     at h
