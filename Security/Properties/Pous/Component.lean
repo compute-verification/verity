@@ -36,6 +36,11 @@ the same steps for the composition that takes it.
 * `WipeDigest`: the wipe's `RunDigest`.
 
 Each is proved in `Proofs.Properties.Pous.Component` (`Pous.Component.SecurityProofs`) and listed in the lock.
+
+`RunAcceptsBy`, `RunBindsBy` and `WipeAcceptsBy` are `RunAccepts`, `RunBinds` and `WipeAccepts` about any `check` of
+the compiled check's type: at the compiled check each is its guarantee (`Iff.rfl`), and at a check that accepts
+everything (`AcceptsAll`) each is false, which is each guarantee's nontrivial lemma. The digests have none: they are
+equations about the code's digest, and no check takes part in them.
 -/
 
 open MemoryChallenger MemoryChallenger.Properties
@@ -61,7 +66,9 @@ def RunAccepts : Prop :=
 
 /-- **The digest of PoUS's commitment is SHA-512 of its bytes.** If `RunProtocol.decodeCommitment` decodes the bytes
 `b` to the setup outputs `pub`, the digest the composition binds for PoUS's case (`RunProtocol.digest`) is SHA-512 of
-`b`: the decoder takes only canonical JSON, in the form `pub`'s encoder writes. -/
+`b`: the decoder takes only canonical JSON, in the form `pub`'s encoder writes. It has no nontrivial lemma, since no
+check takes part in it (it is an equation between two functions of `b`, which no verifier's decision changes), and no
+honest lemma beyond its hypothesis that `b` decodes, which the composition establishes before it binds a digest. -/
 def RunDigest : Prop :=
   ∀ (b : ByteArray) (pub : SetupProtocol.Public),
     RunProtocol.decodeCommitment b = .ok pub → RunProtocol.digest pub = Flock.Sha512.hash b
@@ -118,9 +125,48 @@ def WipeAccepts : Prop :=
           out = WipeProtocol.certify c.params (StreamedWipe.egressUnits s.egressBits) ∧
           prof = (c.params, StreamedWipe.egressUnits s.egressBits)
 
-/-- **The digest of the wipe's commitment is SHA-512 of its bytes**: `RunDigest` for `WipeProtocol`. -/
+/-- **The digest of the wipe's commitment is SHA-512 of its bytes**: `RunDigest` for `WipeProtocol`, and like it with
+no honest or nontrivial lemma: no check takes part in it. -/
 def WipeDigest : Prop :=
   ∀ (b : ByteArray) (c : StreamedWipe.Commitment),
     WipeProtocol.decodeCommitment b = .ok c → WipeProtocol.digest c = Flock.Sha512.hash b
+
+/-! ### The statements about any check -/
+
+/-- `check` accepts every input, whatever it publishes. -/
+def AcceptsAll {P C E O R : Type} (check : P → C → E → Core.Outcome O R) : Prop :=
+  ∀ p c e, ∃ out prof, check p c e = .accept out prof
+
+/-- `RunAccepts` with `check` in place of PoUS's compiled check. -/
+def RunAcceptsBy
+    (check : RunProtocol.Params → SetupProtocol.Public → RunProtocol.Evidence →
+      Core.Outcome RunProtocol.Public Run.Point) : Prop :=
+  ∀ (p : RunProtocol.Params) (pub : SetupProtocol.Public) (e : RunProtocol.Evidence) (out : RunProtocol.Public)
+    (prof : Run.Point),
+    check p pub e = .accept out prof →
+      AcceptedAt p.point p.trusted.toList e.setup.commitment e.setup.store pub e.digests e.session p.sessionId ∧
+        out = RunProtocol.certify p.point ∧ prof = p.point
+
+/-- `RunBinds` with `check`'s acceptance in place of PoUS's compiled check's. -/
+def RunBindsBy
+    (check : RunProtocol.Params → SetupProtocol.Public → RunProtocol.Evidence →
+      Core.Outcome RunProtocol.Public Run.Point) : Prop :=
+  ∀ (p : RunProtocol.Params) (pub : SetupProtocol.Public) (e e' : RunProtocol.Evidence),
+    (∃ out prof, check p pub e = .accept out prof) → (∃ out prof, check p pub e' = .accept out prof) →
+      (e.setup.commitment = e'.setup.commitment ∧ e.setup.store = e'.setup.store ∧ e.digests = e'.digests) ∨
+        (let xs := forkStrings p.point.params pub e e'
+         ∃ x ∈ xs, ∃ y ∈ xs, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y)
+
+/-- `WipeAccepts` with `check` in place of the wipe's compiled check. -/
+def WipeAcceptsBy
+    (check : WipeProtocol.Params → StreamedWipe.Commitment → WipeProtocol.Evidence →
+      Core.Outcome WipeProtocol.Public (StreamedWipe.Params × Int)) : Prop :=
+  ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence) (out : WipeProtocol.Public)
+    (prof : StreamedWipe.Params × Int),
+    check p c e = .accept out prof →
+      c.server = p.server ∧ c.session = p.session ∧
+        ∃ s, e.signed = some s ∧ WipeChecked SCHEMES p.trusted.toList s c ∧
+          out = WipeProtocol.certify c.params (StreamedWipe.egressUnits s.egressBits) ∧
+          prof = (c.params, StreamedWipe.egressUnits s.egressBits)
 
 end Pous.Component

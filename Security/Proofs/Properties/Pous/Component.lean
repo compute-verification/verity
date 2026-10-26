@@ -1,6 +1,7 @@
 import Properties.Pous.Component
 import Proofs.Properties.Pous.RunAt
 import Proofs.Properties.Pous.MemoryChallenger
+import Proofs.Properties.CertifierDevice.Lms
 import Mathlib.Tactic.SplitIfs
 
 /-!
@@ -16,6 +17,15 @@ import Mathlib.Tactic.SplitIfs
 * `wipeAccepts`: `StreamedWipe.verdict` is its checks before the batches (`wpre`) followed by the batches (`wtail`),
   as `MemoryChallenger.verdict` is in `Proofs.Properties.Pous.MemoryChallenger`; an accepted verdict has no reason, so
   each check passed.
+
+Each acceptance statement's two lemmas:
+
+* nontrivial: `runAccepts_fails`, `runBinds_fails`, `wipeAccepts_fails`, each `¬ …By check` for every check that
+  accepts everything, and `runBinds_break_fails`, that `RunBinds`' collision is not always there; `runAccepts_by`,
+  `runBinds_by` and `wipeAccepts_by` read each guarantee as its `…By` at the compiled check;
+* honest: `runAccepts_complete` (of `RunAccepts` and `RunBinds`) and `wipeAccepts_complete`, the converses, and
+  `wipeAccepts_meets`, an honest wipe signed by any key `Lms.key` derives at S1's deployed parameters, which the
+  wipe's check accepts. A run's instance is open, as setup's completeness is (`runAccepts_complete`).
 -/
 
 namespace Pous.Component.SecurityProofs
@@ -426,5 +436,202 @@ theorem wipeAccepts : WipeAccepts := by
         simp only [Bool.and_eq_false_imp, beq_iff_eq, decide_eq_false_iff_not, Int.not_lt] at g4
         exact ⟨g1.1.1, g1.1.2, g1.2, g2, g3.1, g3.2, g4⟩
       next => cases h'
+
+/-! ## Each guarantee's honest and nontrivial lemmas -/
+
+theorem runAccepts_by : RunAccepts ↔ RunAcceptsBy RunProtocol.protocol.check := Iff.rfl
+
+theorem runBinds_by : RunBinds ↔ RunBindsBy RunProtocol.protocol.check := Iff.rfl
+
+theorem wipeAccepts_by : WipeAccepts ↔ WipeAcceptsBy WipeProtocol.protocol.check := Iff.rfl
+
+/-- **`RunAccepts` is false of a check that accepts everything** (its nontrivial lemma). Such a check accepts a run
+whose setup outputs carry a salt (one zero byte) its setup's commitment doesn't (none), which no setup publishes
+(`PublishesRoot`), so the run is not `AcceptedAt`. -/
+theorem runAccepts_fails : ∀ check, AcceptsAll check → ¬ RunAcceptsBy check := by
+  intro check hall h
+  obtain ⟨out, prof, hc⟩ := hall ⟨Run.DEPLOYED, .empty, #[]⟩ ⟨0, .empty, .empty, ⟨#[0]⟩⟩
+    ⟨.empty, ⟨default, default, #[]⟩, ⟨⟨.empty, .empty⟩, #[]⟩⟩
+  have hs := (h _ _ _ _ _ hc).1.1
+  have hsalt := congrArg ByteArray.size (PousCheck.Properties.SecurityProofs.publishesRoot _ _ _ _ () hs).2.2.1
+  exact absurd hsalt (by decide)
+
+private theorem nodeInputs_zero (L : Array ByteArray) (lo : Nat) : nodeInputs L lo 0 = [] := by
+  unfold nodeInputs
+  simp
+
+/-- At a point of no blocks, two runs with no `C*` hash nothing. -/
+private theorem fork_nil {q : P2.Params} (hq : q.blocks = 0) (pub : SetupProtocol.Public) {e e' : RunProtocol.Evidence}
+    (h : e.setup.store = #[]) (h' : e'.setup.store = #[]) : forkStrings q pub e e' = [] := by
+  simp [forkStrings, tableStringsAt, Run.rowLeaves, leaves, flat, hq, h, h', nodeInputs_zero]
+
+/-- **`RunBinds`' collision is not always there**: at a point of no blocks, two runs with no `C*` hash no strings, so
+none of them collide. -/
+theorem runBinds_break_fails : ¬ ∀ (q : P2.Params) (pub : SetupProtocol.Public) (e e' : RunProtocol.Evidence),
+    (let xs := forkStrings q pub e e'
+     ∃ x ∈ xs, ∃ y ∈ xs, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y) := by
+  intro h
+  obtain ⟨x, hx, -⟩ := h ⟨0, 0, 0, 0⟩ ⟨0, .empty, .empty, .empty⟩
+    ⟨.empty, ⟨default, default, #[]⟩, ⟨⟨.empty, .empty⟩, #[]⟩⟩ ⟨.empty, ⟨default, default, #[]⟩, ⟨⟨.empty, .empty⟩, #[]⟩⟩
+  rw [fork_nil rfl _ rfl rfl] at hx
+  simp at hx
+
+/-- **`RunBinds` is false of a check that accepts everything** (its nontrivial lemma). Such a check accepts two runs on
+one setup output at a point of no blocks, with no `C*` and setup commitments to different `W`s: they carry two setup
+commitments, and their strings hold no collision (`runBinds_break_fails`'s pair). -/
+theorem runBinds_fails : ∀ check, AcceptsAll check → ¬ RunBindsBy check := by
+  intro check hall h
+  rcases h ⟨⟨⟨0, 0, 0, 0⟩, 0, 0⟩, .empty, #[]⟩ ⟨0, .empty, .empty, .empty⟩
+      ⟨.empty, ⟨default, default, #[]⟩, ⟨⟨.empty, .empty⟩, #[]⟩⟩
+      ⟨.empty, ⟨default, default, #[]⟩, ⟨⟨⟨#[0]⟩, .empty⟩, #[]⟩⟩ (hall _ _ _) (hall _ _ _) with
+    ⟨hw, -⟩ | ⟨x, hx, -⟩
+  · exact absurd (congrArg (fun c => c.w.size) hw) (by decide)
+  · rw [fork_nil rfl _ rfl rfl] at hx
+    simp at hx
+
+/-- **`WipeAccepts` is false of a check that accepts everything** (its nontrivial lemma). Such a check accepts a
+session signed under a key the verifier doesn't trust (its list empty), which is not `WipeChecked`. -/
+theorem wipeAccepts_fails : ∀ check, AcceptsAll check → ¬ WipeAcceptsBy check := by
+  intro check hall h
+  obtain ⟨out, prof, hc⟩ := hall ⟨.empty, .empty, #[]⟩ default ⟨some default⟩
+  obtain ⟨-, -, s, -, ⟨⟨-, -, hk, -⟩, -⟩, -⟩ := h _ _ _ _ _ hc
+  simp at hk
+
+/-- **The compiled check accepts every run `AcceptedAt` accepts** (the honest lemma of `RunAccepts` and of `RunBinds`),
+publishing `certify` of the point: `RunAccepts`' hypothesis holds exactly where the decision of record does, and two
+runs it accepts are two accepted runs. That an honest run is `AcceptedAt` is setup's completeness
+(`PousCheck.Properties.AcceptsComplete`, open) and the composed check's on an honest session: its instance waits on
+the kernel evaluating `Commit.commit`, which reads the manifest through `Flock.canon` (well-founded recursion), and on
+SHA-512 Merkle roots and coin openings; the difftest's honest scenario runs it on the compiled code. -/
+theorem runAccepts_complete : ∀ (p : RunProtocol.Params) (pub : SetupProtocol.Public) (e : RunProtocol.Evidence),
+    AcceptedAt p.point p.trusted.toList e.setup.commitment e.setup.store pub e.digests e.session p.sessionId →
+      RunProtocol.protocol.check p pub e = .accept (RunProtocol.certify p.point) p.point := by
+  intro p pub e h
+  have ha := (RunProtocol.accepts_iff _ _ _ _ _ _ _ _ _).mpr h
+  show RunProtocol.check SCHEMES p pub e = _
+  unfold RunProtocol.check
+  rw [ha]
+
+private theorem forIn'_keep {α σ : Type} (l : List α) (f : (a : α) → a ∈ l → σ → Id (ForInStep σ))
+    (hf : ∀ a h b, f a h b = pure (.yield b)) (init : σ) : forIn' l init f = pure init := by
+  induction l generalizing init with
+  | nil => rfl
+  | cons a as ih =>
+    rw [List.forIn'_cons, hf a List.mem_cons_self init]
+    exact ih (fun a' m b => f a' (List.mem_cons_of_mem _ m) b) (fun a' m b => hf a' _ b) init
+
+/-- `wtail` keeps its reasons when every batch passes. -/
+private theorem wtail_keep (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
+    (hg : ∀ b < s.batches.size, WGood s c b) :
+    wtail s c r0 = ⟨r0.isEmpty, r0, StreamedWipe.egressUnits s.egressBits⟩ := by
+  unfold wtail
+  simp only [Id.run]
+  rw [Std.Legacy.Range.forIn'_eq_forIn'_range', forIn'_keep]
+  · rfl
+  · intro b hb r
+    have hb' : b < s.batches.size := by simp at hb; omega
+    obtain ⟨g1, g2, g3, g4⟩ := hg b hb' hb'
+    simp only [g1, g2, g3, g4, Bool.false_eq_true, ↓reduceIte] <;> rfl
+
+private theorem wgood_of (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (b : Nat)
+    (h : ∀ hb : b < s.batches.size,
+      s.batches[b].b = (b : Int) ∧ s.batches[b].first = ((b * c.params.batch : Nat) : Int) ∧
+        s.batches[b].count = min (c.params.batch : Int) ((c.params.k : Int) - s.batches[b].first) ∧
+        s.batches[b].wrong = 0 ∧ 0 ≤ s.batches[b].elapsedNs ∧ s.batches[b].elapsedNs ≤ (c.params.limitNs : Int) ∧
+        (b = 0 → s.fillEndNs ≤ s.batches[b].sendNs)) : WGood s c b := by
+  intro hb
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7⟩ := h hb
+  refine ⟨by simp [h1, h2, h3], by simp [h4], by simp [h5, h6], ?_⟩
+  by_cases h0 : b = 0
+  · subst h0
+    simp [Int.not_lt.2 (h7 rfl)]
+  · simp [h0]
+
+private theorem wpre_nil (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
+    (c : StreamedWipe.Commitment)
+    (hk : ∃ p, schemes.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧
+      ∃ m, s.message = .ok m ∧ lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true)
+    (hcm : s.commitment = c) (hcov : c.params.batch = 1) (hend : s.ended = StreamedWipe.COMPLETE)
+    (hsize : s.batches.size = c.params.batches) : wpre schemes trusted s c = #[] := by
+  obtain ⟨p, hp, ht, m, hm, hv⟩ := hk
+  have hok : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) = .ok true := by
+    rw [hm]
+    exact hv
+  have hc : trusted.contains s.publicKey = true := List.elem_eq_true_of_mem ht
+  subst hcm
+  unfold wpre
+  simp [Id.run, hp, hok, hc, StreamedWipe.Params.covered, hcov, hend, hsize]
+
+/-- **The wipe's compiled check accepts every signed session `WipeChecked` describes** (the honest lemma of
+`WipeAccepts`, with `wipeAccepts_meets` its instance), on the period's server and session, publishing `certify` of
+the commitment's parameters and the session's egress: `WipeAccepts`' hypothesis holds exactly where its conclusion
+does. -/
+theorem wipeAccepts_complete : ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence)
+    (s : StreamedWipe.Signed), c.server = p.server → c.session = p.session → e.signed = some s →
+      WipeChecked SCHEMES p.trusted.toList s c →
+      WipeProtocol.protocol.check p c e =
+        .accept (WipeProtocol.certify c.params (StreamedWipe.egressUnits s.egressBits))
+          (c.params, StreamedWipe.egressUnits s.egressBits) := by
+  intro p c e s hsv hss hse ⟨hk, hcm, hcov, hend, hsize, hb⟩
+  have hv : StreamedWipe.verdict SCHEMES p.trusted.toList s c =
+      ⟨true, #[], StreamedWipe.egressUnits s.egressBits⟩ := by
+    rw [wverdict_eq, wpre_nil _ _ s c hk hcm hcov hend hsize,
+      wtail_keep s c _ fun b _ => wgood_of s c b (hb b)] <;> rfl
+  show WipeProtocol.check SCHEMES p c e = _
+  unfold WipeProtocol.check
+  simp [hsv, hss, hse, hv]
+
+/-- The honest wipe's commitment: one 64-byte label, `k = 1` read revealed one index a batch, a 1 ns deadline, and one
+tier the fill covers exactly (valid: `StreamedWipe.Params.check`). -/
+private def honestCommitment : StreamedWipe.Commitment := ⟨.empty, .empty, ⟨1, 1, 1, 1, #[("gpu", 64)]⟩⟩
+
+/-- Its one batch: batch 0, of index 0, sent when the fill ended and answered at once with no wrong answer. -/
+private def honestBatch : StreamedWipe.Batch := ⟨0, 0, 1, 0, 0, 0, .empty⟩
+
+/-- The session, ended complete under S1's scheme, the key `pk` and the signature `sig`. -/
+private def honestSession (pk sig : ByteArray) : StreamedWipe.Signed :=
+  ⟨honestCommitment, StreamedWipe.COMPLETE, 0, 0, #[honestBatch], 0, LMS, pk, sig⟩
+
+private theorem honest_message :
+    ∃ m, StreamedWipe.message honestCommitment StreamedWipe.COMPLETE 0 0 #[honestBatch] 0 = .ok m := by
+  unfold StreamedWipe.message StreamedWipe.recordsRoot
+  rw [Array.mapM_eq_mapM_toList]
+  exact ⟨_, rfl⟩
+
+/-- **An honest wipe is accepted** (the instance of `WipeAccepts`' honest lemma): for every key `Lms.key` derives at
+S1's deployed LMS parameters (`Lms.deployed`, the one scheme `SCHEMES` accepts), the session of one batch at `k = 1`,
+answered with no wrong answer and on time after the fill, ended complete and signed at leaf 0 with `Lms.signAt` on its
+message, is accepted by the wipe's compiled check of a verifier that trusts that key, on the session's server and
+session. The signature verifies by LMS's correctness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). -/
+theorem wipeAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.key Lms.deployed I seed = .ok k →
+    ∃ (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence) (out : WipeProtocol.Public)
+      (prof : StreamedWipe.Params × Int),
+      WipeProtocol.protocol.check ⟨c.server, c.session, #[k.publicKey]⟩ c e = .accept out prof := by
+  intro I seed k hk
+  obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
+  subst hIk
+  have hroot : (k.tree[1]!).size = Lms.deployed.N :=
+    Properties.CertifierDevice.Proofs.Lms.node_size hk (by decide) 1 le_rfl (by decide)
+  have hpub : k.publicKey.size = 16 + Lms.deployed.N := by
+    simp only [Lms.PrivateKey.publicKey, ByteArray.size_append, hIs, hroot]
+  have hI : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
+  obtain ⟨m, hm⟩ := honest_message
+  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I honestCommitment.session m = .ok M := by
+    unfold memoryChallengerMessage
+    simp [hIs]
+  obtain ⟨sig, hsig⟩ :=
+    Properties.CertifierDevice.Proofs.Lms.lmsSigns 64 1 20 false Lms.deployed k.I seed k 0 M rfl hk (by decide)
+  obtain ⟨hver, hdec⟩ :=
+    Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed k.I seed k 0 M sig rfl hk hsig
+  have hlms : lmsVerify Lms.deployed k.publicKey honestCommitment.session m sig.encode = .ok true := by
+    unfold lmsVerify
+    simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, bind, Except.bind] <;> rfl
+  refine ⟨honestCommitment, ⟨some (honestSession k.publicKey sig.encode)⟩, _, _,
+    wipeAccepts_complete ⟨honestCommitment.server, honestCommitment.session, #[k.publicKey]⟩ honestCommitment
+      ⟨some (honestSession k.publicKey sig.encode)⟩ (honestSession k.publicKey sig.encode)
+      rfl rfl rfl ⟨⟨Lms.deployed, rfl, List.mem_singleton.2 rfl, m, hm, hlms⟩, rfl, rfl, rfl, rfl, ?_⟩⟩
+  intro b hb
+  obtain rfl : b = 0 := by simp [honestSession] at hb; omega
+  simp [honestSession, honestBatch, honestCommitment, StreamedWipe.Batch.elapsedNs]
 
 end Pous.Component.SecurityProofs
