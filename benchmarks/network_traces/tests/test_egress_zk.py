@@ -43,3 +43,16 @@ def test_each_members_host_read_is_the_members(tmp_path):
     a, b = moved.changed["units"]
     assert moved.rows[a] == honest.rows[b] and moved.rows[b] == honest.rows[a] != honest.rows[b]
     assert moved.states[a] == honest.states[b] and moved.verdicts == [1] * T
+
+
+def test_the_control_holds_every_piece_but_a_rows_packed_tail(tmp_path):
+    """The instance file lays the ``state`` table's rows back to back. Every piece the scan cuts of them is there but
+    each row's zero-padded last piece, which `packed` names; a nonzero tail, as the honest member's states 3 to 5 end
+    in, is not there."""
+    mr = ez.member_rows("honest", ez.link(tmp_path))
+    states = {f"state {i}": b"".join(w.to_bytes(2, "little") for w in ws) for i, ws in enumerate(mr.words)}
+    assert {len(s) % 16 for s in states.values()} == {ez.SHAPE.state_bits // 8 % 16} != {0}
+    laid, pieces, tails = b"".join(states.values()), ez.WZ.LS.cut(states, 16), ez.packed(states, 16)
+    assert tails and all(x in laid for k, x in pieces.items() if k not in tails)
+    assert any(x not in laid for k, x in pieces.items() if k in tails)
+    assert ez.packed({"a": bytes(32), "b": bytes(20)}, 16) == {"b @16"}
