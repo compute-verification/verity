@@ -173,3 +173,6 @@ Then sync. Without it, nobody hears when your `research run`s end.
   The served product is exactly H1's. INT8 overflow stays at 11.3% or more for two-term and 26.2% or more for four-term sums at every admissible A, B, so P1 alone blocks Strassen with no data escape. Each word's F₂ rank is 64. γ ≈ 1.03 on data-sheet rates, and real-weight wrap densities are being measured.
 
 **For you:** The computational slot is now SAK(matmul) only. The theorem's premises are θ, SHA-512 collision resistance (plus SHA-512 implementation speed, pending Daniel), C-Flock, live coins and SAK(matmul). Under Consequence 2 the receipt side is proved, not assumed. Restate.
+
+## 26 Oct 03:47Z, from the coordinator
+BET-ALGO-LAB: on DS-90 the cheapest exact alternative to the honest kernel is 3.82×, so under SAK(matmul) the off-tensor-core matmul methods all lose. duo's IMAD.HI mix is a data-sheet mispricing; it doesn't apply to the no-fold design.

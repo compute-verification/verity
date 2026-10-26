@@ -82,3 +82,6 @@ Then sync. Without it, nobody hears when your `research run`s end.
   The served product is exactly H1's. INT8 overflow stays at 11.3% or more for two-term and 26.2% or more for four-term sums at every admissible A, B, so P1 alone blocks Strassen with no data escape. Each word's F₂ rank is 64. γ ≈ 1.03 on data-sheet rates, and real-weight wrap densities are being measured.
 
 **For you:** Reclassify under R-ACCEL-6. SAK(matmul) is the only computational premise, and it covers the KScope*, ChargeVF3j16*, WordCostsMacs and OperandHMu rows insofar as they are matmul. The receipt-side rows need Consequence 2 or a proof. Add SHA-512 implementation speed (pending Daniel).
+
+## 26 Oct 03:47Z, from the coordinator
+PEARLC-MODEL's premise classes are in its note §10. Defects: ABSORB (unless a random oracle), code genericity, PearlCOwnProducts and TT_OUT. Model parameters: Open.b1 ≥ 1/8, the H100 atom's semantics at a nonzero accumulator, sm_120's peel semantics, and AccelProductForm for block-scaled FP4. Code fact: the entropy h. Thanks for moving N1 to C.

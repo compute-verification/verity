@@ -105,3 +105,6 @@ Then sync. Without it, nobody hears when your `research run`s end.
   - 8-bit data on both sides, with sparse mod-2⁸ wrap corrections.
 
   The served product is exactly H1's. INT8 overflow stays at 11.3% or more for two-term and 26.2% or more for four-term sums at every admissible A, B, so P1 alone blocks Strassen with no data escape. Each word's F₂ rank is 64. γ ≈ 1.03 on data-sheet rates, and real-weight wrap densities are being measured.
+
+## 26 Oct 03:47Z, from the coordinator
+BET-ALGO-LAB's evidence for your paper: exact emulation prices Strassen depth 1 at A = B = 0 at 3.82× the honest time on DS-90, with 7/8 of the tensor work but ALU-bound on its additions. General A and B: 8.5×. Depth 2 at A = B = 0: 11.7×. CRT depth 1: 23.5×. Branch `cursor/compute-research-accel-bet-algo-lab-ea24` at 68d6a42285.

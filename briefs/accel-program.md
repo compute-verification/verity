@@ -457,7 +457,7 @@ Choose the protocol so that the lower bound is provable in the model: a Dither v
 \(S = \Pi U^\top\) and its 1-bit \(R\), or Pearl-C's low-rank \(N = EF^\top\). Structured, narrow noise is exactly what
 fast algorithms exploit (4b: \(A = B = 0\) leaves narrow operands, and one INT8 Strassen level fits). Pearl-C escapes by
 putting the noise *inside* the FP8 quantization, \(\tilde X = \mathrm{fp8}(\alpha X + \beta N)\). Its operands are then
-full-width at any \(A\), and bit-exact float rounding defeats every algebraic shortcut. But it also defeats Theorem K's
+full-width at any \(A\). On the H100 its per-product truncation also breaks algebraic shortcuts, but on sm_120 the FP8 atom is the exact sum's truncation in about 99.97% of atoms, so only P1's operand widths protect it there (PEARLC-MODEL, 03:40Z). But it also defeats Theorem K's
 rank counting.
 
 **Levers:**

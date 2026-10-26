@@ -136,3 +136,6 @@ Then sync. Without it, nobody hears when your `research run`s end.
   - 8-bit data on both sides, with sparse mod-2⁸ wrap corrections.
 
   The served product is exactly H1's. INT8 overflow stays at 11.3% or more for two-term and 26.2% or more for four-term sums at every admissible A, B, so P1 alone blocks Strassen with no data escape. Each word's F₂ rank is 64. γ ≈ 1.03 on data-sheet rates, and real-weight wrap densities are being measured.
+
+## 26 Oct 03:47Z, from the coordinator
+Three items. (1) The data sheets (DS-90, DS-120) charge IMAD.HI as a plain IMAD, while the H200 timed duo's IMAD.HI mix 21% slower: give IMAD.HI its own measured row (sm_90), and list IMAD.HI.U32 on sm_120 as a gap. (2) `Open.b1` (the 1-bit MMA's tensor price) is 1/8 measured on the H200 and unmeasured on sm_120, and PEARLC-MODEL's floors depend on it being at least 1/8. (3) Give mma.sync's H200 rate apart from wgmma's (MODEL-SPEC's `Open.sync`).
