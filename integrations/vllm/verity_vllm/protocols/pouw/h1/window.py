@@ -16,13 +16,20 @@ the gate's open answer, and opens its salt after the weights' root. Round s's co
 root its session was opened on (serve.py's ``--root``, RT4-INT-24), H1's R. The challenger is auditor-trusted
 (`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it through ``ssh -R``
 on its own 127.0.0.1.
+
+A reserve joins its lane's open period, and a Pearl-C salt-only session is a window H1's checks refuse
+(`window.live_epoch_reason`), so one reserved in an H1 period (`H1_PERIOD`) is a wasted session whose period earns
+nothing. `reserve_salt` refuses before reserving, and Pearl-C's install before any patch or open (the pouw setting
+``period``), on the lane's open period as the auditor's ledger has it (`open_period`, `period_reason`).
 """
 from __future__ import annotations
 
 import contextlib
+import json
 import time
-from typing import Any, Callable, Iterator, Mapping
+from typing import Any, Callable, Iterable, Iterator, Mapping
 
+from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import salt_of
@@ -40,6 +47,9 @@ TRIES = 120
 #: over W is numbered that count, k (a manifest's ``pass_index``), and opens on `salt.epoch_open_root` of W and k, so a
 #: reinstall committing the same W (the same hm96 key over the same weights) opens a root of its own
 EPOCHS: dict[str, int] = {}
+#: what only an H1 period's open commits, for H1's window credit to read (core's `credit.committed_k`, `committed_rows`
+#: and `committed_length`): a period whose open commits any of them is H1's
+H1_PERIOD = (CR.K_FIELD, CR.ROWS_FIELD, CR.LENGTH_FIELD)
 
 
 def session_setting(raw: Any) -> dict[str, Any] | None:
@@ -103,6 +113,45 @@ def reserved_of(raw: Any) -> dict[str, Any] | None:
                          f"(a gate session id) and optionally {', '.join(repr(k) for k in RESERVE_FIELDS)}, not {raw!r}: the "
                          "window opens it itself, on its window-open root (the pouw setting 'gate')")
     return dict(raw)
+
+
+def open_period(lines: Iterable[str], lane: str) -> dict[str, Any] | None:
+    """The ``period-open`` body of lane `lane`'s open period in the auditor's ledger `lines` (the gate's ``ledger``, one
+    entry a line), None when the lane has none open."""
+    opened = None
+    for e in map(json.loads, lines):
+        if e["kind"] == "period-open" and e["body"].get("lane") == lane:
+            opened = e["body"]
+        elif e["kind"] == "period-close" and opened is not None and e["body"]["period"] == opened["period"]:
+            opened = None
+    return opened
+
+
+def period_setting(raw: Any) -> dict[str, Any] | None:
+    """The pouw setting ``period``: None (the lane has no period open) or its open period's ``period-open`` body
+    (`open_period`); ValueError otherwise."""
+    if raw is not None and not (isinstance(raw, Mapping) and isinstance(raw.get("period"), str)):
+        raise ValueError("pouw setting 'period' is the lane's open period, its period-open body in the auditor's ledger "
+                         f"({{'period', 'lane', ...}}, pouw_h1_window.open_period), or None when none is open, not {raw!r}")
+    return None if raw is None else dict(raw)
+
+
+def period_reason(period: Mapping[str, Any] | None, reserved: Mapping[str, Any] | None = None) -> str | None:
+    """Why a salt-only session (Pearl-C's, `window.SALT_FAMILIES`) is not reserved, or once reserved not opened, while
+    `period` is the lane's open period (its ``period-open`` body, `open_period`; None: none open), or None: `period` is
+    H1's (its open commits `H1_PERIOD`), or the gate's reserve answer `reserved` joined a period other than `period`."""
+    name = None if period is None else period["period"]
+    h1 = [f for f in H1_PERIOD if period is not None and f in period]
+    if h1:
+        return (f"the lane's open period {name} is H1's (its open commits {', '.join(h1)}): a salt-only session is a "
+                "window H1's checks refuse (window.live_epoch_reason), so in it the session is wasted and the period "
+                "earns nothing; reserve while the lane's open period is a Pearl-C one, or none")
+    if reserved is not None and reserved.get("period") != name:
+        joined = reserved.get("period")
+        return (f"the gate's reserve answer joined {f'period {joined}' if joined else 'no period'}, but the lane's open "
+                f"period read from the auditor's ledger (the pouw setting 'period', pouw_h1_window.open_period) is "
+                f"{name or 'none'}, so whether the period the session joined is H1's isn't known")
+    return None
 
 
 def _live(entry: str, at: str, steps: int, given: Mapping[str, Any],
@@ -204,6 +253,24 @@ def salt_session(entry: str, settings: Any, root: bytes, opens: bool
     return client, c, opening, salt_of(c, opening.coin, root), PHC.carried(given), k
 
 
+def reserve_salt(call: Callable[..., Mapping[str, Any]], ledger: Callable[[], Iterable[str]], lane: str, peer: str,
+                 epoch: int) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """A salt-only session (`window.SALT_FAMILIES`, Pearl-C's) reserved at infra's gate, as words (`call`,
+    ``reserve --peer PEER``, under lane `lane`'s gate key), and the lane's open period it joined, read from the gate's
+    `ledger` before reserving (`open_period`). Refused (ValueError) before reserving while that period is H1's, and
+    before any open when the reserve joined another (`period_reason`). Returns the gate's reserve answer and the
+    period."""
+    period = open_period(ledger(), lane)
+    if (why := period_reason(period)) is not None:
+        raise ValueError(f"refused before reserving a salt-only session: {why}")
+    families = json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":"))
+    reserved = dict(call("reserve", "--peer", peer, "--scheme", Wd.LIVE_SCHEME, "--families", families,
+                         "--epoch", str(epoch)))
+    if (why := period_reason(period, reserved)) is not None:
+        raise ValueError(f"session {reserved.get('session')} is reserved and refused before its open: {why}")
+    return reserved, period
+
+
 def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, root: bytes, k: int = 0,
                  at: str = "127.0.0.1:0", tries: int = TRIES, wait: Callable[[float], Any] = time.sleep
                  ) -> tuple[Any, LiveCommitment, LiveOpening, bytes, dict[str, Any]]:
@@ -297,5 +364,6 @@ def finish(run: Any, client: Any) -> None:
             run.details["challenger"] = {"closed": why is None, **({"reason": why} if why else {})}
 
 
-__all__ = ["EPOCHS", "Gate", "RESERVE_FIELDS", "TRIES", "Window", "at_port", "closed_on_error", "connect", "finish", "gate_of",
-           "open_session", "opened", "refusals", "reserved_of", "salt_session", "session", "session_setting"]
+__all__ = ["EPOCHS", "Gate", "H1_PERIOD", "RESERVE_FIELDS", "TRIES", "Window", "at_port", "closed_on_error", "connect",
+           "finish", "gate_of", "open_period", "open_session", "opened", "period_reason", "period_setting", "refusals",
+           "reserve_salt", "reserved_of", "salt_session", "session", "session_setting"]

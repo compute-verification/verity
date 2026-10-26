@@ -1579,14 +1579,15 @@ def test_a_restarted_watch_keeps_the_spells_rings(tmp_path):
     assert [r["window"] for r in silent(tmp_path)] == [1, 2]
 
 
-def node_run(root, rid, ended, *, by="", state="done", rc=0, wall_s=750.0, command=None, job="", lane=""):
+def node_run(root, rid, ended, *, by="", state="done", rc=0, wall_s=750.0, command=None, job="", lane="", tree=""):
     """A run dir as `research run` leaves it on a node: runs/<rid>/{status,job}.json and requests/<rid>/request.json."""
     d, q = root / "runs" / rid, root / "requests" / rid
     d.mkdir(parents=True)
     q.mkdir(parents=True)
     (d / "status.json").write_text(json.dumps({"state": state, "rc": rc, "wall_s": wall_s, "transitions": [
         {"state": "running", "t_utc": W.iso(ended - wall_s)}, {"state": state, "t_utc": W.iso(ended)[:-1] + ".250Z"}]}))
-    (d / "job.json").write_text(json.dumps({"ownership": {"job": job, "lane": lane}, "computation": {"stage": ""}}))
+    (d / "job.json").write_text(json.dumps({"ownership": {"job": job, "lane": lane},
+                                             "computation": {"stage": "", **({"tree_sha": tree} if tree else {})}}))
     (q / "request.json").write_text(json.dumps({"command": command or ["python", "-m", "bench", "--seed", "1"],
                                                 **({"submitted_by": by} if by else {})}))
     W.os.utime(d / "status.json", (ended, ended))
@@ -1699,6 +1700,46 @@ def test_a_run_ends_sender_resolves_as_a_learned_worker_does_and_the_rest_are_on
     assert sorted((u["run"], u["node"], u["rc"]) for u in unsent["runs"]) == [
         ("r20261019-052718-24a9", "vy-nebius-2", 8), ("r20261019-192229-3606", "vy-nebius-1", 143)]
     assert censusand in w.awaiting, "the worker's end starts its clock, for its coordinator to resume it"
+
+
+def test_a_run_ends_unknown_sender_is_rung_to_the_handle_its_branch_names(tmp_path):
+    """25 Oct: infra traced seven unknown senders by hand, each from the run's tree to the branch that had it as its head to the
+    lane (TOP-90 row 21). The branch's suffix in the registry's `branch_suffixes`, or a handle its name starts with, routes it;
+    a sha no branch had stays @infra's."""
+    url = "https://cursor.com/agents/{}".format
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    reg = json.loads((tmp_path / "registry.json").read_text())
+    reg["handles"].append({"handle": "kernels", "holder": "the kernels coordinator"})
+    for h in reg["handles"]:
+        if h["handle"] == "circuits":
+            h["branch_suffixes"] = ["8c79"]
+    (tmp_path / "registry.json").write_text(json.dumps(reg))
+    a, b, c = "a" * 40, "b" * 40, "c" * 40
+    w.heads = {"t0": T0, "t": T0, "heads": {"cursor/kernels-kp2s8-8c40": [b, T0]},
+               "shas": {a: ["cursor/circuits-demowl-8c79", T0], b: ["cursor/kernels-kp2s8-8c40", T0]}}
+    w.sweep(lambda r: None)
+    clock.t += 60
+    node_run(roots["vy-nebius-1"], "r20261025-232710-0001", clock.t, by=url("bc-e7fea65b-bbd7-5c6c-a635-ebfb68240c07"), tree=a)
+    node_run(roots["vy-nebius-1"], "r20261025-232710-0002", clock.t, by=url("bc-5525ca1e-435c-5c8a-823a-eb79a408f170"), tree=b)
+    node_run(roots["vy-nebius-1"], "r20261025-232710-0003", clock.t, by=url("bc-9f0ed9de-4f13-5f31-9e6b-dab2b7a1ac12"), tree=c)
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    got = {r["run"]: (r["handle"], r["role"]) for r in ended(tmp_path) if r["role"] != "unknown"}
+    assert got == {"r20261025-232710-0001": ("circuits", "lane"), "r20261025-232710-0002": ("kernels", "lane")}
+    (unsent,) = [r for r in ended(tmp_path) if r["role"] == "unknown"]
+    assert [u["run"] for u in unsent["runs"]] == ["r20261025-232710-0003"]
+
+
+def test_read_heads_remembers_each_pushed_sha_s_branch_for_two_days(tmp_path):
+    api, clock, w, sh, _ = nodes_setup(tmp_path)
+    w.git_remote = "git@example:verity.git"
+    w.heads = {"t0": T0, "t": T0, "heads": {}, "shas": {"d" * 40: ["cursor/old-1111", T0 - W.HEADS_SHA_KEEP_S - 1]}}
+    sh.heads = {"cursor/lean-x-fc8d": "a" * 40}
+    w.read_heads(clock.t)
+    sh.heads = {"cursor/lean-x-fc8d": "b" * 40}
+    w.read_heads(clock.t + W.HEADS_EVERY_S)
+    assert (w.branch_of("a" * 40), w.branch_of("b" * 40), w.branch_of("d" * 40)) == (
+        "cursor/lean-x-fc8d", "cursor/lean-x-fc8d", ""), "an older head of a branch still names it; a stale one is forgotten"
 
 
 def test_a_quiet_handles_runs_are_not_rung(tmp_path):
