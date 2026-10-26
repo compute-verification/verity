@@ -237,6 +237,26 @@ __device__ __forceinline__ void st2(uint16_t* p, float x, float y, int k, int n,
     if (k + 1 < n) p[1] = (uint16_t)(w >> 16);
 }
 
+// The _h16 and _s16 PV's d a pass (8 d tiles), which bounds their registers at head dim 128.
+constexpr int PV_DC = 64;
+
+// B of PV's step with A's keys ka, ka + 1, ka + 8, ka + 9 (ka = 16s + 2t) for d tiles dt < N: V's rows of those keys (the
+// zero code at or past n) at column 8 dt of V, which points at this lane's d (d0 + g).
+template <int N>
+__device__ __forceinline__ void v_frags(uint32_t (&Bv)[N][2], const uint16_t* V, int64_t vr, int ka, int n) {
+    const int kb = ka + 8;
+    const bool l0 = ka < n, l1 = ka + 1 < n, l2 = kb < n, l3 = kb + 1 < n;
+    const uint16_t* r0 = V + (l0 ? ka : 0) * vr;
+    const uint16_t* r1 = V + (l1 ? ka + 1 : 0) * vr;
+    const uint16_t* r2 = V + (l2 ? kb : 0) * vr;
+    const uint16_t* r3 = V + (l3 ? kb + 1 : 0) * vr;
+#pragma unroll
+    for (int dt = 0; dt < N; ++dt) {
+        Bv[dt][0] = pack(l0 ? r0[8 * dt] : 0u, l1 ? r1[8 * dt] : 0u);
+        Bv[dt][1] = pack(l2 ? r2[8 * dt] : 0u, l3 ? r3[8 * dt] : 0u);
+    }
+}
+
 template <int D>
 __device__ __forceinline__ void qk8(const AttnArgs& a) {
     const int lane = threadIdx.x & 31, g = lane >> 2, t = lane & 3;
@@ -371,30 +391,29 @@ __device__ __forceinline__ void pv16(const AttnArgs& a) {
     for (int h0 = w.h0; h0 < a.H; h0 += w.hstep) {
         const uint16_t* pa = a.x + w.b * a.xs[0] + (h0 + g) * a.xs[1] + w.q * a.xs[2];
         const uint16_t* pb = pa + 8 * a.xs[1];
-        const uint16_t* V = a.kv + w.b * a.kvs[0] + (h0 >> a.gshift) * a.kvs[1] + g;  // B's column: d = 8 dt + g
-        float acc[D / 8][4];
-#pragma unroll
-        for (int dt = 0; dt < D / 8; ++dt) acc[dt][0] = acc[dt][1] = acc[dt][2] = acc[dt][3] = 0.0f;
 #pragma unroll 1
-        for (int s = 0; s < steps; ++s) {
-            const int ka = 16 * s + 2 * t, kb = ka + 8;  // A's keys ka, ka + 1 and kb, kb + 1; B's rows the same
-            const uint32_t A[4] = {ld2(pa + ka, ka, w.seen, pin), ld2(pb + ka, ka, w.seen, pin), ld2(pa + kb, kb, w.seen, pin),
-                                   ld2(pb + kb, kb, w.seen, pin)};
-            const bool l0 = ka < w.seen, l1 = ka + 1 < w.seen, l2 = kb < w.seen, l3 = kb + 1 < w.seen;
+        for (int d0 = 0; d0 < D; d0 += PV_DC) {
+            const uint16_t* V = a.kv + w.b * a.kvs[0] + (h0 >> a.gshift) * a.kvs[1] + d0 + g;  // B's column: d0 + 8 dt + g
+            float acc[PV_DC / 8][4];
 #pragma unroll
-            for (int dt = 0; dt < D / 8; ++dt) {
-                const uint16_t* v = V + 8 * dt;
-                const uint32_t Bv[2] = {pack(l0 ? v[ka * vr] : 0u, l1 ? v[(ka + 1) * vr] : 0u),
-                                        pack(l2 ? v[kb * vr] : 0u, l3 ? v[(kb + 1) * vr] : 0u)};
-                mma_bf16(acc[dt], A, Bv, acc[dt]);
+            for (int dt = 0; dt < PV_DC / 8; ++dt) acc[dt][0] = acc[dt][1] = acc[dt][2] = acc[dt][3] = 0.0f;
+#pragma unroll 1
+            for (int s = 0; s < steps; ++s) {
+                const int ka = 16 * s + 2 * t, kb = ka + 8;  // A's keys ka, ka + 1 and kb, kb + 1; B's rows the same
+                const uint32_t A[4] = {ld2(pa + ka, ka, w.seen, pin), ld2(pb + ka, ka, w.seen, pin),
+                                       ld2(pa + kb, kb, w.seen, pin), ld2(pb + kb, kb, w.seen, pin)};
+                uint32_t Bv[PV_DC / 8][2];
+                v_frags(Bv, V, vr, ka, w.seen);
+#pragma unroll
+                for (int dt = 0; dt < PV_DC / 8; ++dt) mma_bf16(acc[dt], A, Bv[dt], acc[dt]);
             }
-        }
-        uint16_t* Oa = a.out + w.b * a.os[0] + (h0 + g) * a.os[1] + w.q * a.os[2] + 2 * t;
-        uint16_t* Ob = Oa + 8 * a.os[1];
+            uint16_t* Oa = a.out + w.b * a.os[0] + (h0 + g) * a.os[1] + w.q * a.os[2] + d0 + 2 * t;
+            uint16_t* Ob = Oa + 8 * a.os[1];
 #pragma unroll
-        for (int dt = 0; dt < D / 8; ++dt) {  // d = 8 dt + 2t, + 1 of heads h0 + g (acc 0, 1) and h0 + g + 8 (2, 3)
-            st2(Oa + 8 * dt, acc[dt][0], acc[dt][1], 0, 2, pout);
-            st2(Ob + 8 * dt, acc[dt][2], acc[dt][3], 0, 2, pout);
+            for (int dt = 0; dt < PV_DC / 8; ++dt) {  // d = d0 + 8 dt + 2t, + 1 of heads h0 + g (acc 0, 1), h0 + g + 8 (2, 3)
+                st2(Oa + 8 * dt, acc[dt][0], acc[dt][1], 0, 2, pout);
+                st2(Ob + 8 * dt, acc[dt][2], acc[dt][3], 0, 2, pout);
+            }
         }
     }
 }
@@ -458,10 +477,9 @@ __device__ __forceinline__ void pv16s(const AttnArgs& a) {
     if (steps > S16_KEYS / 16) return;
     const bool pin = pairs_ok(a.x, a.xs), pout = pairs_ok(a.out, a.os);
     const int64_t vr = a.kvs[2];
-    constexpr int DC = 64;  // d a pass: V's B for every step and 8 d tiles in 32 registers
 #pragma unroll 1
-    for (int d0 = 0; d0 < D; d0 += DC) {
-        uint32_t Bv[S16_KEYS / 16][DC / 8][2];  // step s's B for d tile dt, loaded once for every group of KV head kvh
+    for (int d0 = 0; d0 < D; d0 += PV_DC) {
+        uint32_t Bv[S16_KEYS / 16][PV_DC / 8][2];  // step s's B for d tile dt, loaded once for every group of KV head kvh
         int kvh = -1;
 #pragma unroll 1
         for (int h0 = w.h0; h0 < a.H; h0 += w.hstep) {
@@ -469,22 +487,13 @@ __device__ __forceinline__ void pv16s(const AttnArgs& a) {
                 kvh = h0 >> a.gshift;
                 const uint16_t* V = a.kv + w.b * a.kvs[0] + kvh * a.kvs[1] + d0 + g;  // B's column: d = d0 + 8 dt + g
 #pragma unroll
-                for (int s = 0; s < S16_KEYS / 16; ++s) {
-                    const int ka = 16 * s + 2 * t, kb = ka + 8;
-                    const bool l0 = ka < w.seen, l1 = ka + 1 < w.seen, l2 = kb < w.seen, l3 = kb + 1 < w.seen;
-#pragma unroll
-                    for (int dt = 0; dt < DC / 8; ++dt) {
-                        const uint16_t* v = V + 8 * dt;
-                        Bv[s][dt][0] = pack(l0 ? v[ka * vr] : 0u, l1 ? v[(ka + 1) * vr] : 0u);
-                        Bv[s][dt][1] = pack(l2 ? v[kb * vr] : 0u, l3 ? v[(kb + 1) * vr] : 0u);
-                    }
-                }
+                for (int s = 0; s < S16_KEYS / 16; ++s) v_frags(Bv[s], V, vr, 16 * s + 2 * t, w.seen);
             }
             const uint16_t* pa = a.x + w.b * a.xs[0] + (h0 + g) * a.xs[1] + w.q * a.xs[2];
             const uint16_t* pb = pa + 8 * a.xs[1];
-            float acc[DC / 8][4];
+            float acc[PV_DC / 8][4];
 #pragma unroll
-            for (int dt = 0; dt < DC / 8; ++dt) acc[dt][0] = acc[dt][1] = acc[dt][2] = acc[dt][3] = 0.0f;
+            for (int dt = 0; dt < PV_DC / 8; ++dt) acc[dt][0] = acc[dt][1] = acc[dt][2] = acc[dt][3] = 0.0f;
 #pragma unroll
             for (int s = 0; s < S16_KEYS / 16; ++s) {  // each word's chain: its kp/16 steps in order, from +0
                 if (s < steps) {
@@ -492,13 +501,13 @@ __device__ __forceinline__ void pv16s(const AttnArgs& a) {
                     const uint32_t A[4] = {ld2(pa + ka, ka, w.seen, pin), ld2(pb + ka, ka, w.seen, pin),
                                            ld2(pa + kb, kb, w.seen, pin), ld2(pb + kb, kb, w.seen, pin)};
 #pragma unroll
-                    for (int dt = 0; dt < DC / 8; ++dt) mma_bf16(acc[dt], A, Bv[s][dt], acc[dt]);
+                    for (int dt = 0; dt < PV_DC / 8; ++dt) mma_bf16(acc[dt], A, Bv[s][dt], acc[dt]);
                 }
             }
             uint16_t* Oa = a.out + w.b * a.os[0] + (h0 + g) * a.os[1] + w.q * a.os[2] + d0 + 2 * t;
             uint16_t* Ob = Oa + 8 * a.os[1];
 #pragma unroll
-            for (int dt = 0; dt < DC / 8; ++dt) {
+            for (int dt = 0; dt < PV_DC / 8; ++dt) {
                 st2(Oa + 8 * dt, acc[dt][0], acc[dt][1], 0, 2, pout);
                 st2(Ob + 8 * dt, acc[dt][2], acc[dt][3], 0, 2, pout);
             }
