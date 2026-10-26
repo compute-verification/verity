@@ -1,0 +1,4 @@
+order = 371
+path = "`theory/c_bit.py`"
+runs_on = "CPU"
+what = "ACCEL ALGO-COST for SEG-COINS: the cheapest price of b c^T on 0/1 operands, per card; exact check that depth-2 Strassen's forms of bits stay in E2M1's integers (FP4 at 2x INT8 on the RTX PRO 6000, 0.383 of an INT8 product) and depth 3's don't (note:compute-research/20261026T0340Z-draft-accel-algo-cost)"
