@@ -254,7 +254,7 @@ def _build_kind(settings, M, N=H, rows=None):
     from types import SimpleNamespace
     from verity_vllm.program.frontend.rules.vllm_bindings import collectives as BC
     from verity_vllm.program.frontend.rules.vocab import vocabulary_for
-    from verity_vllm.program.registry import tp_allreduce as T
+    from verity.ml.definitions.registry import tp_allreduce as T
 
     setting, route = T.served_route(settings, M, N)
     plan = {"captured": T.covered(setting, N, route, M), "M": M, "rows_n": rows or M, "N": N}
