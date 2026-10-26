@@ -1,5 +1,6 @@
 import Proofs.Flock.Recursive.KS
 import Proofs.Flock.Claims.Recursion.DeployedBrings
+import Proofs.Flock.Claims.Recursion.DeployedBringsLam
 
 /-!
 # `RecursiveKSAt` from chain B's leaves at the deployed brings
