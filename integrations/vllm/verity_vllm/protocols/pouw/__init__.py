@@ -186,9 +186,7 @@ class Settings:
     #: ``graphs`` the engine's CUDA-graph capture sizes, none when eager (`pouw_h1_static.graph_pad`)
     served: Any = None
     graphs: tuple[int, ...] = ()
-    #: Pearl-C's: the lane's open period as the auditor's ledger had it before the gate reserved ``session`` (its
-    #: ``period-open`` body, `pouw_h1_window.open_period`; None: none open), which the install refuses when it is H1's or
-    #: not the period the reserve joined (`pouw_h1_window.period_reason`)
+    #: Pearl-C's: the lane's open period before ``session``'s reserve, or None (`pouw_h1_window.reserve_salt`, `period_reason`)
     period: Mapping[str, Any] | None = None
 
     @classmethod
