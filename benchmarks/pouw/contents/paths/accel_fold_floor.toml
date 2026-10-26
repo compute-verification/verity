@@ -1,0 +1,4 @@
+order = 287
+path = "`accel_score/fold_floor.py`"
+runs_on = "CPU"
+what = "whether a receipt fold at the fan-in floor (½ lane instruction a word, a data word as multiplier) binds its words, against main's li: the collision rate when one bit of a 32-word window flips"

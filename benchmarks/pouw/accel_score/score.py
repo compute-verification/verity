@@ -83,12 +83,21 @@ def check_j10r() -> None:
 
 
 def per_call(a_bits: Callable[[int, int, int], float], b_bits: Callable[[int, int, int], float],
-             extra: Callable[[int, int, int], float] = lambda m, n, k: 0.0) -> Callable[[int, int, int], float]:
-    """Fresh bits once a call (A side, B side), 512 a compression, plus CP-W's receipts of each 32 × 32 tile."""
+             extra: Callable[[int, int, int], float] = lambda m, n, k: 0.0,
+             seg: int = L) -> Callable[[int, int, int], float]:
+    """Fresh bits once a call (A side, B side), 512 a compression, plus CP-W's receipts (two words a segment of
+    ``seg``) of each 32 × 32 tile."""
     def h(m: int, n: int, k: int) -> float:
         tiles = (ceil_to(m, 32) // 32) * (n // 32)
-        return (a_bits(m, n, k) + b_bits(m, n, k)) / 512 + extra(m, n, k) + tiles * commit(64 * (k // L)) + 4
+        return (a_bits(m, n, k) + b_bits(m, n, k)) / 512 + extra(m, n, k) + tiles * commit(64 * (k // seg)) + 4
     return h
+
+
+def l16_receipts(h: Callable[[int, int, int], float]) -> Callable[[int, int, int], float]:
+    """``h`` with each 32 × 32 tile's receipts doubled: two words a 16-wide segment instead of a 32-wide one."""
+    def g(m: int, n: int, k: int) -> float:
+        return h(m, n, k) + (ceil_to(m, 32) // 32) * (n // 32) * commit(64 * (k // L))
+    return g
 
 
 @dataclass(frozen=True)
@@ -106,17 +115,27 @@ DESIGNS = [
     Design("J10-R v5/v6 (4x8, whole K)", 4.61, "model: duo at L=32", j10r((4, 8))),
     Design("J10-R v5/v6 (32x32, whole K)", 4.61, "model: duo at L=32", j10r((32, 32))),
     Design("J10-R + call keys (32x32)", 4.61, "model: duo at L=32", j10r((32, 32), call_keys=True)),
-    Design("Dither-2S LI-CP-W redux (fresh bits both sides)", 2.344, "model at measured rates, the H200 record",
+    Design("J10-R v5/v6 as built (32x32, duo)", 16.53 * ETA,
+           "BET-COVERAGE's projection: 16.53 peak MAC-times of lane work a MAC (h1umjc_sm, utilization 0.448)",
+           j10r((32, 32))),
+    Design("H1/J10-R + LI fold + call keys (32x32)", 1.558, "model DC-90: dither-c-li-l32 (binds JI90_0)",
+           j10r((32, 32), call_keys=True)),
+    Design("H1/J10-R + L=16 k16 tree3 fold (32x32)", 1.44,
+           "BET-BANDWIDTH sheet: mma.sync k16, L=16, fan-in-3 tree, issue-bound",
+           l16_receipts(j10r((32, 32), call_keys=True))),
+    Design("Dither-2S LI (fresh bits both sides)", 1.558, "model DC-90: dither-2s-li-l32 (binds JI90_0)",
            per_call(lambda m, n, k: m * k, lambda m, n, k: n * k)),
-    Design("Dither-C/1S LI-CP-W (A bits + U)", 2.344, "model, LI-CP-W redux's fold",
+    Design("Dither-C LI (A bits + U)", 1.558, "model DC-90: dither-c-li-l32",
            per_call(lambda m, n, k: m * k, lambda m, n, k: 7 * n * L)),
+    Design("Dither-2S LI-CP-W redux (fresh bits both sides)", 2.344, "model DC-90, honest/credited 1.407",
+           per_call(lambda m, n, k: m * k, lambda m, n, k: n * k)),
     Design("WRAP-HYBRID (A mod 2^8 full-width, B + U)", 2.6, "estimate: 2 MMAs (wrap correction) beside LI-CP-W",
            per_call(lambda m, n, k: m * k + 8 * 16 * m, lambda m, n, k: 7 * n * L)),
     Design("Pearl-C (FP8, as measured)", 4.52, "measured r20261025-145823-df25 (top 25 Oct), its own hashing inside",
            lambda m, n, k: 0.0),
     Design("BET-PEARL-I8 (int8 forming, low-rank N)", 4.52, "estimate: Pearl-C's forming and peel, integer",
            per_call(lambda m, n, k: 8 * 64 * m, lambda m, n, k: 8 * 64 * k)),
-    Design("ROM per word (SHA-512 of every word)", 2.344, "LI-CP-W plus a compression every 32 words",
+    Design("ROM per word (SHA-512 of every word)", 1.558, "LI plus a compression every 32 words",
            per_call(lambda m, n, k: m * k, lambda m, n, k: 7 * n * L, lambda m, n, k: m * n * k / (L * 32))),
 ]
 
@@ -186,7 +205,7 @@ def main() -> None:
             print(f"{d.name:52s} " + " ".join(f"{c:>22s}" for c in cells))
     print("\ncells: SHA-512 compressions a credited MAC, γ, coverage. γ_c sources:")
     for d in DESIGNS:
-        print(f"  {d.name}: γ_c {d.gamma_c} ({d.src})")
+        print(f"  {d.name}: γ_c {d.gamma_c:.4g} ({d.src})")
 
 
 if __name__ == "__main__":
