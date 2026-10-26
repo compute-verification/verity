@@ -113,4 +113,23 @@ theorem pr_prod_le (P : α × β → Prop) (p : ℝ) (hp : 0 ≤ p) (h : ∀ a, 
     _ = p * (Fintype.card α * Fintype.card β) := by
         rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]; ring
 
+namespace Proofs
+
+/-- The union bound over a finite index set. -/
+theorem pr_exists_le_sum {ι : Type} (s : Finset ι) (P : ι → α → Prop) :
+    pr (fun x => ∃ i ∈ s, P i x) ≤ ∑ i ∈ s, pr (P i) := by
+  classical
+  refine Finset.induction_on s ?_ ?_
+  · simp only [Finset.notMem_empty, false_and, exists_false, Finset.sum_empty]
+    exact le_of_eq (pr_eq_zero fun _ h => h)
+  · intro i s hi ih
+    rw [Finset.sum_insert hi]
+    calc pr (fun x => ∃ j ∈ insert i s, P j x) ≤ pr (fun x => P i x ∨ ∃ j ∈ s, P j x) := pr_mono fun x ⟨j, hj, h⟩ => by
+          rcases Finset.mem_insert.1 hj with rfl | hj
+          · exact Or.inl h
+          · exact Or.inr ⟨j, hj, h⟩
+      _ ≤ _ := (pr_or_le _ _).trans (add_le_add le_rfl ih)
+
+end Proofs
+
 end Pouw
