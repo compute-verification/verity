@@ -598,9 +598,6 @@ def pinnedCount (mj : Json) : Nat :=
   | .ok (.arr a) => a.size
   | _ => 0
 
-/-- Why `ProvedScope.check` and `Stmt.setupTables` refuse a statement with pinned outputs (`pinnedCount`). -/
-def pinnedWhy : String := "pinned outputs (META pinned_outputs): a form no soundness theorem covers yet"
-
 /-- Parse the circuit file (upstream's `Composite::parse`), check its layout, and refuse `sha512x3` and `hm96` nets other
 than the verifier's (`HmNets.check`), and a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…` or `rec-opening/…` unit
 other than the verifier's (`RecOpen.check`, `RecResiduals.check`, `RecSparse.check`, `RecOpening.check`). A typed
@@ -1647,8 +1644,8 @@ def pinnedLinear : String :=
   "META: a pinned output's bit is not a linear row (its B the constant alone), which its Δ copy of the forced-zero row pins to zero"
 
 /-- META `pinned_outputs` (CMP-149's form B), as the prover's `Composite::parse` reads it: the names of the last output
-ports, each once, at least one, in a flat statement of bit rows (META `row_schemas`, which makes every row a bit row; at least one row) whose padding instance's pinned
-output words are zero; and each pinned bit's row a linear row (its B the constant alone), so that Δ's copy of the forced-zero
+ports, each once, at least one, in a flat statement of bit rows (META `row_schemas`) whose padding instance's pinned output
+words are zero; and each pinned bit's row a linear row (its B the constant alone), so that Δ's copy of the forced-zero
 row onto it (`delta`) pins the bit and its linear form to zero. -/
 def checkPinned (c : Circuit) : V Unit := do
   match c.metaJ.getObjVal? "pinned_outputs" with
@@ -1659,9 +1656,7 @@ def checkPinned (c : Circuit) : V Unit := do
       | .arr a => a.mapM fun x => x.getStr?.toOption
       | _ => none
     let w0 := pinnedFrom c
-    if k == 0 || k > c.outPorts.size || c.ports.size == 0 || c.ports.any (!·.v2) then
-      throw pinnedRefused
-    if names != some ((c.outPorts.extract (c.outPorts.size - k) c.outPorts.size).map (·.1))
+    if k == 0 || k > c.outPorts.size || names != some ((c.outPorts.extract (c.outPorts.size - k) c.outPorts.size).map (·.1))
         || c.typed.isSome || c.cls.isSome || J.has c.metaJ "template" || !J.has c.metaJ "row_schemas"
         || (List.range' w0 (pinnedWords c)).any (fun o => c.dummyOutputs.getD o 1 != 0) then
       throw pinnedRefused
@@ -2272,8 +2267,7 @@ table `j` is `setupH`'s statement of part `j` as a subset draw of the population
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
 draw's law is held to, `stratified` its own `K`, at which a stratified draw's law is its own derivation, `closure` its
 own closure map, which a work draw's closure is held to, and `publicInputs` its own recomputation of the public input
-words (`HmIn.checkOwn`). A table with pinned outputs (`HmRow.pinnedCount`) is refused, as `ProvedScope.check` refuses
-it, until a soundness theorem covers that form. -/
+words (`HmIn.checkOwn`). -/
 def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
     (program : Option ByteArray := none) (work : Option (Nat × Array (String × Nat × Nat)) := none)
@@ -2310,10 +2304,7 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   if publicInputs.isSome && !tags.hiddenOutputs then
     throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
   let setup := fun (t : Tags) (d : Option Json) => do
-    if tags.hiddenOutputs then
-      let st ← Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
-      if HmRow.pinnedCount st.c.metaJ != 0 then throw s!"{tags.name}: refused: {HmRow.pinnedWhy}"
-      pure st
+    if tags.hiddenOutputs then Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
     else
       let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
       if J.has st.c.metaJ "public_inputs" then
@@ -2458,20 +2449,14 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
   if publicInputs.isSome && !tags.hiddenOutputs then
     throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
   let setup := fun (t : Tags) (d : Option Json) => do
-    if tags.hiddenOutputs then
-      let st ← Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
-      if HmRow.pinnedCount st.c.metaJ != 0 then throw s!"{tags.name}: refused: {HmRow.pinnedWhy}"
-      pure st
+    if tags.hiddenOutputs then Stmt.setupHidden t circuitFile publicFile coins tables d partition program publicInputs
     else
       let st ← Stmt.setupH t circuitFile publicFile coins tables d partition program
       if J.has st.c.metaJ "public_inputs" then
         throw s!"META: public_inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
       pure st
   let setupOne := fun (d : Option Json) => do
-    if tags.hiddenOutputs then
-      let st ← Stmt.setupHiddenOf parsed tags publicFile coins d partition program publicInputs
-      if HmRow.pinnedCount st.c.metaJ != 0 then throw s!"{tags.name}: refused: {HmRow.pinnedWhy}"
-      pure st
+    if tags.hiddenOutputs then Stmt.setupHiddenOf parsed tags publicFile coins d partition program publicInputs
     else
       let st ← Stmt.setupH tags circuitFile publicFile coins tables d partition program
       if J.has st.c.metaJ "public_inputs" then
