@@ -67,7 +67,7 @@ u32, u64, vp = ctypes.c_uint32, ctypes.c_uint64, ctypes.c_void_p
 
 class LeafArgs(ctypes.Structure):
     _fields_ = [("rows", vp), ("x", vp), ("out", vp), ("T", vp), ("salts", vp), ("key", u32 * 8), ("nonce0", u64),
-                ("ms_salt", u64 * 8), ("ms_leaf", u64 * 8), ("G", u32), ("S", u32)]
+                ("ms_salt", u64 * 8), ("ms_leaf", u64 * 8), ("G", u32), ("S", u32), ("minb", u32), ("pad_", u32)]
 
 
 def variant_flags(name: str) -> tuple[str, ...]:
@@ -361,11 +361,14 @@ class Engine:
         self._ok(rc, "leaf setup")
         return LeafTable(d_rows, (d_dids, d_schema), G)
 
-    def leaves(self, lt: LeafTable, x: Any, salts: SaltKey | Any, out: Any = None) -> Any:
-        """(G, S, 8): each row's frame leaf over hm96's tree leaf of x (``row_digests``) under salt y."""
+    def leaves(self, lt: LeafTable, x: Any, salts: SaltKey | Any, out: Any = None, minb: int = 0) -> Any:
+        """(G, S, 8): each row's frame leaf over hm96's tree leaf of x (``row_digests``) under salt y. ``minb`` is the leaf
+        kernel's blocks an SM (1 or 2; 0, the build's default, 2)."""
         G, S = int(x.shape[0]), int(x.shape[1])
         if G != lt.G:
             raise ValueError(f"x has {G} rows, the leaf table {lt.G}")
+        if minb not in (0, 1, 2):
+            raise ValueError("a leaf kernel runs 1 or 2 blocks an SM")
         out = self._words(G, S) if out is None else out
         a = LeafArgs()
         a.rows, a.x, a.out, a.T = self._ptr(lt.rows), self._ptr(x), self._ptr(out), self._ptr(self.table)
@@ -377,7 +380,7 @@ class Engine:
                 raise ValueError(f"salts are (G, S, 192) bytes, not {tuple(salts.shape)}")
             a.salts = self._ptr(salts)
         a.ms_salt[:], a.ms_leaf[:] = [int(v) for v in self.ms_salt], [int(v) for v in self.ms_leaf]
-        a.G, a.S = G, S
+        a.G, a.S, a.minb = G, S, minb
         self._ok(self.lib.sxr_leaves(self._stream(), ctypes.byref(a)), "leaves")
         return out
 

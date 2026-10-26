@@ -37,6 +37,7 @@ KEY = INST.default_key
 SALT_KEY = bytes(range(32, 64))
 ROOTS_SCHEMA = "frame-v3-sha512/root/v1"
 EDGE_BYTES = (0, 1, 13, 110, 111, 112, 127, 128, 129, 239, 240, 1023, 1024, 1025, 2048)
+LEAF_MINB = {False: (1, 2), True: (0,)}   # the leaf kernels checked on a device, and on the host twin
 
 
 def domain(tag: str, n: int) -> CommitmentDomain:
@@ -120,21 +121,23 @@ def check_leaves(engine: E.Engine, slots: int = 3, seed: int = 2) -> dict[str, A
     for g in range(G):
         for s in range(slots):
             ys[g, s] = np.frombuffer(rng.bytes(192), dtype=np.uint8)
-    got_key = E.digests(engine.leaves(lt, x, E.SaltKey(SALT_KEY, nonce0)))
-    got_given = E.digests(engine.leaves(lt, x, dev.put(ys)))
     bad_key = bad_given = 0
-    for g in range(G):
-        for s in range(slots):
-            xr = row_digest(ref_rows(tensors, rows, s)[g])
-            for y, got in ((salt(SALT_KEY, nonce0 + s, salt_row[g]), got_key), (ys[g, s].tobytes(), got_given)):
-                h = INST.tree_leaf(KEY, INST.commit_string(KEY, xr, y))
-                want = doms[did_of_row[g]].leaf(rank[g], position[g], SCHEMA_HM96_SHA512_ROW_V2, h)
-                bad = got[g * slots + s] != want
-                if got is got_key:
-                    bad_key += bad
-                else:
-                    bad_given += bad
-    return {"rows": G, "slots": slots, "mismatches": {"salt_key": bad_key, "salts": bad_given}}
+    for minb in LEAF_MINB[engine.host]:
+        got_key = E.digests(engine.leaves(lt, x, E.SaltKey(SALT_KEY, nonce0), minb=minb))
+        got_given = E.digests(engine.leaves(lt, x, dev.put(ys), minb=minb))
+        for g in range(G):
+            for s in range(slots):
+                xr = row_digest(ref_rows(tensors, rows, s)[g])
+                for y, got in ((salt(SALT_KEY, nonce0 + s, salt_row[g]), got_key), (ys[g, s].tobytes(), got_given)):
+                    h = INST.tree_leaf(KEY, INST.commit_string(KEY, xr, y))
+                    want = doms[did_of_row[g]].leaf(rank[g], position[g], SCHEMA_HM96_SHA512_ROW_V2, h)
+                    bad = got[g * slots + s] != want
+                    if got is got_key:
+                        bad_key += bad
+                    else:
+                        bad_given += bad
+    return {"rows": G, "slots": slots, "leaf_minb": list(LEAF_MINB[engine.host]),
+            "mismatches": {"salt_key": bad_key, "salts": bad_given}}
 
 
 def check_trees(engine: E.Engine, seed: int = 3) -> dict[str, Any]:
@@ -179,8 +182,8 @@ def check_layout(engine: E.Engine, slots: int, sample: Sequence[int], seed: int 
     dom = domain("layout-unit", 1)
     lt = engine.leaf_table([dom.domain_id], [0] * G, [0] * G, None, list(range(G)))
     x = engine.row_digests(table)
-    leaves = engine.leaves(lt, x, E.SaltKey(SALT_KEY))
-    xs, ls = E.digests(x), E.digests(leaves)
+    xs = E.digests(x)
+    ls = [E.digests(engine.leaves(lt, x, E.SaltKey(SALT_KEY), minb=m)) for m in LEAF_MINB[engine.host]]
     bad_x = bad_l = 0
     for s in sample:
         host = [t[s:s + 1].cpu().numpy() for t in dev_tensors]
@@ -188,8 +191,10 @@ def check_layout(engine: E.Engine, slots: int, sample: Sequence[int], seed: int 
             xr = row_digest(row)
             bad_x += xs[g * slots + s] != xr
             h = INST.tree_leaf(KEY, INST.commit_string(KEY, xr, salt(SALT_KEY, s, g)))
-            bad_l += ls[g * slots + s] != dom.leaf(0, 0, SCHEMA_HM96_SHA512_ROW_V2, h)
-    return {"slots": slots, "rows": G, "sampled_slots": list(sample), "mismatches": {"x": bad_x, "leaves": bad_l}}
+            want = dom.leaf(0, 0, SCHEMA_HM96_SHA512_ROW_V2, h)
+            bad_l += sum(got[g * slots + s] != want for got in ls)
+    return {"slots": slots, "rows": G, "sampled_slots": list(sample), "leaf_minb": list(LEAF_MINB[engine.host]),
+            "mismatches": {"x": bad_x, "leaves": bad_l}}
 
 
 def main(argv: list[str] | None = None) -> int:

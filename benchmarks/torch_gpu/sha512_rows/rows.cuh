@@ -239,6 +239,8 @@ struct LeafArgs {
   u64 ms_salt[8];        // the chaining value after hm96's salt prefix
   u64 ms_leaf[8];        // after its leaf prefix (the key's)
   u32 G, S;
+  u32 minb;              // the device kernel's blocks an SM (its register cap): 1 or 2, 0 for the default
+  u32 pad_;
 };
 
 // leaf_setup: the leaf prefix (merkle.CommitmentDomain.leaf_prefix(rank, position, schema, 64)), its first block compressed

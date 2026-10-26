@@ -1,7 +1,8 @@
 """On a CUDA device: the engine's throughput at the frozen H200 shape's per-step rows, as JSON to ``--out``/bench.json.
 
 1. **Variants.** One layer's rows (``h200_rows``: 25 rows, 663,824 bytes a slot) at ``--sweep-slots``, the row kernel in
-   every compression variant: GB/s of row bytes and row compressions a second, the SM clock and power after each.
+   every compression variant: GB/s of row bytes and row compressions a second, the SM clock and power after each; then
+   that layer's leaves in both leaf kernels (1 and 2 blocks an SM), leaves a second.
 2. **Steps.** A whole step at each of ``--slots`` and ``--layers-per-call`` k (52 / k calls, each the rows and leaves of k
    layers, their tensors reused by every call): every row's digest and hm96 leaf (salts from a key), each slot's tree over
    its 1,300 one-row units' roots (frame leaves, pads, 11 levels), and the step's tree over the slots' roots. Seconds a step,
@@ -120,12 +121,30 @@ def sweep(engine: E.Engine, slots: int, reps: int, clock: Clock, variants: list[
              "Gcomp_per_s": comps / best / 1e9, **clock.read()}
         print(json.dumps(r), flush=True)
         res.append(r)
+    G = len(rows)
+    dids = [identity_digest_sha512("verity/sha512-rows/bench/unit/v1", {"unit": g}) for g in range(G)]
+    lt = engine.leaf_table(dids, list(range(G)), [0] * G, None, list(range(G)))
+    leaves = torch.empty_like(out)
+    for minb in (1, 2):
+        engine.leaves(lt, out, E.SaltKey(KEY), leaves, minb)
+        ts = []
+        for _ in range(reps):
+            a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            a.record()
+            engine.leaves(lt, out, E.SaltKey(KEY), leaves, minb)
+            b.record()
+            b.synchronize()
+            ts.append(_ms(a, b) / 1e3)
+        r = {"leaf_minb": minb, "slots": slots, "leaves": G * slots, "s": ts, "Gleaves_per_s": G * slots / min(ts) / 1e9,
+             **clock.read()}
+        print(json.dumps(r), flush=True)
+        res.append(r)
     del tensors
     torch.cuda.empty_cache()
     return res
 
 
-def step(engine: E.Engine, slots: int, reps: int, variant: str, clock: Clock, per_call: int = 1) -> dict[str, Any]:
+def step(engine: E.Engine, slots: int, reps: int, variant: str, clock: Clock, per_call: int = 1, minb: int = 0) -> dict[str, Any]:
     """One step: LAYERS // per_call calls, each the rows and leaves of ``per_call`` layers (their own tensors, reused by
     every call), then the slot trees and the step tree."""
     tensors, rows = layer(slots, per_call)
@@ -148,7 +167,7 @@ def step(engine: E.Engine, slots: int, reps: int, variant: str, clock: Clock, pe
         for i in range(calls):
             engine.row_digests(table, variant, x)
             ev[1 + 2 * i].record()
-            engine.leaves(lts[i], x, salts, units[G * i:G * (i + 1)])
+            engine.leaves(lts[i], x, salts, units[G * i:G * (i + 1)], minb)
             ev[2 + 2 * i].record()
         per_slot = units.permute(1, 0, 2).contiguous()
         roots = engine.root(engine.frame_leaves(per_slot, [slot_did]), [slot_did])
@@ -171,7 +190,7 @@ def step(engine: E.Engine, slots: int, reps: int, variant: str, clock: Clock, pe
     leaf_comps = slots * U * 5
     width = 1 << (U - 1).bit_length()
     tree_comps = slots * (2 * U + 2 * (width - 1)) + 4 * slots
-    r = {"slots": slots, "variant": variant, "layers": LAYERS, "layers_per_call": per_call, "rows_a_slot": U,
+    r = {"slots": slots, "variant": variant, "leaf_minb": minb, "layers": LAYERS, "layers_per_call": per_call, "rows_a_slot": U,
          "committed_bytes": nbytes,
          "s": [q["s"] for q in runs], "best_s": best["s"], "split_s": best["split_s"], "GB_per_s": nbytes / best["s"] / 1e9,
          "row_GB_per_s": nbytes / best["split_s"]["rows"] / 1e9,
@@ -188,6 +207,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--variants", nargs="*", default=None, help="the sweep's variants (default: every built one)")
     ap.add_argument("--step-variant", default=None, help="the steps' row kernel (default: the sweep's fastest)")
     ap.add_argument("--layers-per-call", type=int, nargs="*", default=[1, 4], help="layers a row and leaf call (divides 52)")
+    ap.add_argument("--leaf-minb", type=int, choices=(1, 2), default=None, help="the steps' leaf kernel (default: the faster)")
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--check", type=Path, default=None, help="check.json: time steps only on a variant it found bit-exact")
     a = ap.parse_args(argv)
@@ -210,19 +230,23 @@ def main(argv: list[str] | None = None) -> int:
                            "torch": torch.__version__, "nvidia_smi": smi, "default": engine.default, "lib": str(engine.lib.path),
                            "layer_bytes_a_slot": sum(n for p in h200_rows()[1] for _, _, n in p)}
     t0 = time.time()
-    doc["sweep"] = sweep(engine, a.sweep_slots, a.reps, clock, a.variants or engine.variants) if a.sweep_slots else []
+    swept = sweep(engine, a.sweep_slots, a.reps, clock, a.variants or engine.variants) if a.sweep_slots else []
+    doc["sweep"] = [r for r in swept if "variant" in r]
+    doc["leaf_sweep"] = [r for r in swept if "leaf_minb" in r]
     for r in doc["sweep"]:
         r["bit_exact"] = None if exact is None else r["variant"] in exact
     ok = [r for r in doc["sweep"] if r["bit_exact"] is not False]
     fastest = max(ok, key=lambda r: r["GB_per_s"])["variant"] if ok else engine.default
     doc["step_variant"] = a.step_variant or fastest
+    doc["step_leaf_minb"] = a.leaf_minb or (max(doc["leaf_sweep"], key=lambda r: r["Gleaves_per_s"])["leaf_minb"]
+                                            if doc["leaf_sweep"] else 0)
     if exact is not None and doc["step_variant"] not in exact:
         doc["steps_skipped"] = f"no bit-exact variant to time (check: {sorted(exact)})"
         a.slots = []
     doc["steps"] = []
     for slots in a.slots:
         for k in a.layers_per_call:
-            r = step(engine, slots, a.reps, doc["step_variant"], clock, k)
+            r = step(engine, slots, a.reps, doc["step_variant"], clock, k, doc["step_leaf_minb"])
             torch.cuda.empty_cache()
             print(json.dumps(r), flush=True)
             doc["steps"].append(r)

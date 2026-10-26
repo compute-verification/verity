@@ -23,6 +23,9 @@
 #ifndef SXR_MINB
 #define SXR_MINB 2
 #endif
+#ifndef SXR_LEAF_MINB
+#define SXR_LEAF_MINB 2
+#endif
 
 using namespace sxr;
 
@@ -66,8 +69,10 @@ __global__ void __launch_bounds__(SXR_THREADS) k_leaf_setup(LeafRow* rows, u32 G
   if (t < G) leaf_setup<D>(rows[t], dids, schema, schema_len);
 }
 
-// T in shared memory (a block's 64 KB, loaded once), the leaves grid-stride over resident blocks
-__global__ void __launch_bounds__(SXR_THREADS) k_leaves(const __grid_constant__ LeafArgs a) {
+// T in shared memory (a block's 64 KB, loaded once), the leaves grid-stride over resident blocks; MINB blocks an SM caps
+// the registers (1: as many as it wants, 2: 128)
+template <int MINB>
+__global__ void __launch_bounds__(SXR_THREADS, MINB) k_leaves(const __grid_constant__ LeafArgs a) {
   extern __shared__ uint4 smem[];
   const uint4* Tg = reinterpret_cast<const uint4*>(a.T);
   for (int i = threadIdx.x; i < T_BYTES / 16; i += blockDim.x) smem[(i >> 4) * (TSTRIDE / 16) + (i & 15)] = __ldg(Tg + i);
@@ -78,6 +83,25 @@ __global__ void __launch_bounds__(SXR_THREADS) k_leaves(const __grid_constant__ 
   for (u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x; t < n; t += step) leaf<D>(a, T, TSTRIDE, (u32)(t / a.S), (u32)(t % a.S));
 }
 constexpr int LEAF_SMEM = 256 * TSTRIDE;
+
+template <int MINB>
+int launch_leaves(cudaStream_t stream, const LeafArgs& a, u64 n) {
+  static int resident[64] = {};   // a device's resident leaf blocks, once its shared-memory limit is raised
+  int dev = 0, rc;
+  if ((rc = cudaGetDevice(&dev))) return rc;
+  if (dev < 0 || dev >= 64) return (int)cudaErrorInvalidDevice;
+  if (!resident[dev]) {
+    int sms = 0, per_sm = 0;
+    if ((rc = cudaFuncSetAttribute(k_leaves<MINB>, cudaFuncAttributeMaxDynamicSharedMemorySize, LEAF_SMEM)) ||
+        (rc = cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev)) ||
+        (rc = cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, k_leaves<MINB>, SXR_THREADS, LEAF_SMEM)))
+      return rc;
+    resident[dev] = per_sm * sms > 0 ? per_sm * sms : 1;
+  }
+  const unsigned grid = (unsigned)std::min<u64>((n + SXR_THREADS - 1) / SXR_THREADS, (u64)resident[dev]);
+  k_leaves<MINB><<<grid, SXR_THREADS, LEAF_SMEM, stream>>>(a);
+  return (int)cudaGetLastError();
+}
 
 __global__ void __launch_bounds__(SXR_THREADS) k_frame_leaves(const u64* dids, u32 D_, const u64* values, u32 T, u32 n,
                                                                u64 rank0, const uint8_t* schema, u32 schema_len, u64* out) {
@@ -177,21 +201,10 @@ int sxr_leaf_setup(void* stream, LeafRow* rows, uint32_t G, const uint64_t* dids
 int sxr_leaves(void* stream, const LeafArgs* a) {
   const u64 n = (u64)a->G * a->S;
   if (!n) return 0;
-  static int resident[64] = {};   // a device's resident leaf blocks, once its shared-memory limit is raised
-  int dev = 0, rc;
-  if ((rc = cudaGetDevice(&dev))) return rc;
-  if (dev < 0 || dev >= 64) return (int)cudaErrorInvalidDevice;
-  if (!resident[dev]) {
-    int sms = 0, per_sm = 0;
-    if ((rc = cudaFuncSetAttribute(k_leaves, cudaFuncAttributeMaxDynamicSharedMemorySize, LEAF_SMEM)) ||
-        (rc = cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev)) ||
-        (rc = cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, k_leaves, SXR_THREADS, LEAF_SMEM)))
-      return rc;
-    resident[dev] = per_sm * sms > 0 ? per_sm * sms : 1;
-  }
-  const unsigned grid = (unsigned)std::min<u64>(blocks(n), (u64)resident[dev]);
-  k_leaves<<<grid, SXR_THREADS, LEAF_SMEM, (cudaStream_t)stream>>>(*a);
-  return launched();
+  const u32 minb = a->minb ? a->minb : SXR_LEAF_MINB;
+  if (minb == 1) return launch_leaves<1>((cudaStream_t)stream, *a, n);
+  if (minb == 2) return launch_leaves<2>((cudaStream_t)stream, *a, n);
+  return (int)cudaErrorInvalidValue;
 }
 
 int sxr_frame_leaves(void* stream, const uint64_t* dids, uint32_t D_, const uint64_t* values, uint32_t T, uint32_t n,
