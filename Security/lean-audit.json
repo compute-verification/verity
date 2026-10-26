@@ -10569,6 +10569,18 @@
    "assumptions": [],
    "type_hash": "4712837458217893fee3236ecf7855de0efd4d66a8b99532fddbcfb670bdb42b"
   },
+  "Verity.SecurityProofs.NaiveBeatsStrassenServed": {
+   "owner": "@compute-research",
+   "signature": ["Verity.SecurityProofs.NaiveBeatsStrassenServed : Verity.Guarantees.NaiveBeatsStrassenServed"],
+   "assumptions": [],
+   "type_hash": "b407fa486f5e45988b407261019fcf886e00671ee067333d6bff87e6957c2258"
+  },
+  "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": {
+   "owner": "@compute-research",
+   "signature": ["Verity.SecurityProofs.NaiveBeatsStrassenServedSize : Verity.Guarantees.NaiveBeatsStrassenServedSize"],
+   "assumptions": [],
+   "type_hash": "ee9ae0ad531577605e4a05aff701c4c348025113667db39d115b748e7c7e1e95"
+  },
   "Verity.SecurityProofs.PackSoundComplete": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.PackSoundComplete : Verity.Guarantees.PackSoundComplete"],
@@ -11723,7 +11735,9 @@
    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Gates.EncodeChainRefuted": "frozen (no-function): A counterexample to the named conjecture EncodeChainHardness, a circuit of the gate model with no budgeted gate that computes more words of the codec than its units allow, inside the conjecture's floor at every field of whole bytes with room for them, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet.",
-   "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk --ks-form's acceptance (Flock.PortRoots.check) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec."
+   "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk --ks-form's acceptance (Flock.PortRoots.check) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Verity.SecurityProofs.NaiveBeatsStrassenServed": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -17936,6 +17950,14 @@
     "Verity.SecurityProofs.SoundMono"
    ]
   },
+  "Definitions.Core.Guarantees.NaiveStrassen": {
+   "digest": "0f2986f521d2f0ef964691ab822e09c526f44c454c4216fe1ae5ce6a8e7e302a",
+   "definitions": {
+    "Verity.Guarantees.NaiveBeatsStrassenServed": "2bdd40bb2cd8a841c349071fc071ca32d82a8fdf98629f6e2c56693deb4e8226",
+    "Verity.Guarantees.NaiveBeatsStrassenServedSize": "4805bae99988d38bdb49800e1e5b401acb29311b40556fd336b7bde0d69d1679"
+   },
+   "guarantees": ["Verity.SecurityProofs.NaiveBeatsStrassenServed", "Verity.SecurityProofs.NaiveBeatsStrassenServedSize"]
+  },
   "Definitions.Core.Guarantees.PrivatePartition": {
    "digest": "338c36fe6dcf5a21be7bf3cc6af6b5118090c13871f3e320e121872843bff65d",
    "definitions": {
@@ -17991,6 +18013,56 @@
     "Verity.SecurityProofs.PackSoundComplete",
     "Verity.SecurityProofs.RangeGadget"
    ]
+  },
+  "Definitions.Core.NaiveStrassen": {
+   "digest": "86de79e5f336e9ca92c6b775b26a02821e3a445c963d5f70997b4d35b89afe21",
+   "definitions": {
+    "Verity.Accel.NaiveStrassen.Atom": "6a9df6699894d136083f709de65eb24b31a0d806094f46ea952f55ab026aef2a",
+    "Verity.Accel.NaiveStrassen.Atom.cap": "7aabd194bdd49d07f8835ab68ab7b40edf643f747fa609addb4f28c2586f336d",
+    "Verity.Accel.NaiveStrassen.Atom.casesOn": "e44893a2ba97f180e3404060965163675781c05c60c5b5974a87734a30f6b8c9",
+    "Verity.Accel.NaiveStrassen.Atom.coupling": "deea759b5194073c39dd1c0bcf0748c2b1bb214e868b85dc557f14bc3f378df9",
+    "Verity.Accel.NaiveStrassen.Atom.holds": "49ca48354043d6c4ffece7777f63a45414b6388b6f9d8a89bc55e6dfd51899e6",
+    "Verity.Accel.NaiveStrassen.Atom.rec": "6f310778c6fa504107aca6720b20cb2872e13fcf48a55d55af35f53cc0caaa40",
+    "Verity.Accel.NaiveStrassen.Atom.weight8": "addfd168cf5b297337150886387b53a720724d06038de7a86242a602265f8044",
+    "Verity.Accel.NaiveStrassen.NaiveBeatsStrassen": "e280c3b3137a64ca870916a4e935cd2a6e7140e88bc19bd3871036ad2b7ab80f",
+    "Verity.Accel.NaiveStrassen.NaiveBeatsStrassenUpTo": "f96d82422b78584d4795cd2f11b376499839a26bc6da26870118b7eb9ace46c7",
+    "Verity.Accel.NaiveStrassen.Sched": "5b0f7ab94ca92f7e09ad79b02e17e098d0cdeb2d6f6769b4f879913cc13aba89",
+    "Verity.Accel.NaiveStrassen.Sched.atom": "87afc4f58467b6bcc784131e02a9e42120b2382754d1a575fdb90303c839306c",
+    "Verity.Accel.NaiveStrassen.Sched.below": "2988ca7659307de8c7e67d0f02623128797c870bbae7add665ca3f4d5f6fe4e0",
+    "Verity.Accel.NaiveStrassen.Sched.brecOn": "ea043c930935796dd488706d9f2638a833952a1f342ee12d1364f77a716bb30e",
+    "Verity.Accel.NaiveStrassen.Sched.brecOn.go": "be6e1299791a00f689f802c0d492aaa56960048ea31c0c5b9a213b1f6191480d",
+    "Verity.Accel.NaiveStrassen.Sched.casesOn": "408e11bc22cb3339fa52c159aeff9d31b882687b24c15361ffbe0b38b9983db4",
+    "Verity.Accel.NaiveStrassen.Sched.cost": "af2d91eacb1c3e96a642018d7bbed5e98533a53374cc072319db3363147d9936",
+    "Verity.Accel.NaiveStrassen.Sched.fast": "f94df42a0c099ad9df234cf6f4912a726561f4274aa2d1e4d261bc84837d2106",
+    "Verity.Accel.NaiveStrassen.Sched.rec": "afac630f284863977415cf0e2d4a4e4014a757bfbc9aa0c29a34d5c6da557196",
+    "Verity.Accel.NaiveStrassen.Sched.scheme": "2533d58735452a65904a017e9f8e2c944b7d93a82de08b0390bd6063a5d10a45",
+    "Verity.Accel.NaiveStrassen.Sched.splitA": "bea4cc5e8f4fe15b66734b8f5b2f442400c0b86f2e42891bdf127c5d89b46c0a",
+    "Verity.Accel.NaiveStrassen.Sched.splitB": "4aedae80fb2ff7332eafa064d7c28b02a1694ff5e6ba6259fcb4596d7e6a27e7",
+    "Verity.Accel.NaiveStrassen.Sched.valid": "0774883442559a4dbe7095d94cee7fb747806bcca0e6081fa497e4f310935c3f",
+    "Verity.Accel.NaiveStrassen.Scheme": "29118e1302b2849caaed83771e00dcb055f09a8f2230f33845156d9da143d575",
+    "Verity.Accel.NaiveStrassen.Scheme.R": "1ed36dad95fd00e586c4a23f20b46203a67f69fa44115e0c477615eed6e2143c",
+    "Verity.Accel.NaiveStrassen.Scheme.casesOn": "44d994c5bd1ce6fd94e8d24fe293b3167378cfd74955c744c5c7fe1da118f41b",
+    "Verity.Accel.NaiveStrassen.Scheme.rec": "cbe2c2e647d507d382dac7ec40ebd9a70feae90441ee8f15e57e2f97852b601c",
+    "Verity.Accel.NaiveStrassen.Scheme.u": "d8eb1ccc002dfa75817f64f5faba85c3607d7fdad0e5a56863e5be71d5ec61d1",
+    "Verity.Accel.NaiveStrassen.Scheme.v": "2f43f8a2ca4e7cb1370790885bd28148f0334b8e64764109c5a0f1fd816bb7eb",
+    "Verity.Accel.NaiveStrassen.b1": "05fad3760ec645390838af11af2b4fa4ecaaef642f52bf4357e6f81fa1467690",
+    "Verity.Accel.NaiveStrassen.h200Measured": "f02e3d249abc87a06ae29614264878439d7d55cb95f7007f67434ef76e97b087",
+    "Verity.Accel.NaiveStrassen.h200Sheet": "a5215349caf4a76b9c5ff182b48ad0e4371282ce0b430dcecb700676dacf128c",
+    "Verity.Accel.NaiveStrassen.instBEqAtom": "2f29f8a9451eaf27ce27b39522e8527958118509b8784c9ad4adda6501f085e7",
+    "Verity.Accel.NaiveStrassen.instBEqAtom.beq": "d2f39cce637d9aebaebdae3ffbfc2ed8ee07b2c7027b474047ac47dcc3db4f5d",
+    "Verity.Accel.NaiveStrassen.instBEqScheme": "6c71a78addd86596075aaa65855d8b8faf71a46a8a2e901ab0c4f1366ae0de08",
+    "Verity.Accel.NaiveStrassen.instBEqScheme.beq": "ef7bc33cb544d4d4072abf4528ddd586e7cc022b45d6b6f4ccab7a06645e89e6",
+    "Verity.Accel.NaiveStrassen.l1": "f6c08fb0fdac8e291c96943566024633324c5ad44b3c52c7bc59ef5f29e248fa",
+    "Verity.Accel.NaiveStrassen.range": "2d70cbce5ab678e255ab3e4d18958f61a6bcb8a442080e2a5b565d9fce5cb0a0",
+    "Verity.Accel.NaiveStrassen.rtx6000Measured": "cfa85cd90dc50fa4077fa6fa81c3d5e971d2d10e1b25a160412456d75502f5b5",
+    "Verity.Accel.NaiveStrassen.rtx6000Sheet": "454c84cd318462dd6d0261b50a470c28d01dce98384003b3193c1b284a14fa8e",
+    "Verity.Accel.NaiveStrassen.s8": "01e6e7a2c2e8197737a7f3d50ab691122170efe43de978ec4f2fe603c2c5f52c",
+    "Verity.Accel.NaiveStrassen.schemes": "6a789cd6ffc86c01e33e290aa2296759092afb9904689eaf0a6469048a0b4c55",
+    "Verity.Accel.NaiveStrassen.strassen": "56267aa5b73ff766a66c8da8be2b7488734a572361e5bdbf611a6f0375623d56",
+    "Verity.Accel.NaiveStrassen.trivial": "d84e6de122f1dc1be3463db0fbda379ba48e299800a68e9dcc318772a63968ed",
+    "Verity.Accel.NaiveStrassen.winograd": "d74510582f946f857e9060affda05a512ca37f732bb344bce5003ef019ae9983"
+   },
+   "guarantees": ["Verity.SecurityProofs.NaiveBeatsStrassenServed", "Verity.SecurityProofs.NaiveBeatsStrassenServedSize"]
   },
   "Definitions.Core.Partition": {
    "digest": "cd62a959bae4097b5c572b107abdf27f78f780b0da2abde615976ba0423b8a10",
