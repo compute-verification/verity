@@ -3,7 +3,9 @@ engine and committer, the HTTP stream, the HTTP id -> engine id -> runner id map
 streamed ones."""
 from __future__ import annotations
 
+import collections
 import json
+import socket
 import threading
 import urllib.error
 import urllib.request
@@ -15,13 +17,14 @@ import numpy as np
 import pytest
 import torch
 
-from verity.core.protocols.certifier import compile_slice as CS, served_rows as SRW
+from verity.core.protocols.certifier import active as A, compile_slice as CS, io_tie as IT, release as REL, served_rows as SRW
 from verity_vllm.commit import served_record as SR
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
+from verity_vllm.pipeline.serve_admit import Admission
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
                   "ignore_eos": True, "temperature": 0}
@@ -93,6 +96,31 @@ def test_plain_frames_agree_with_vllm():
     pytest.importorskip("vllm.entrypoints.openai.completion.protocol")
     got = proto.framing_agrees(proto.VllmProtocol())
     assert got["agrees"], got["differences"]
+
+
+#: a two-token id-form stream at P = 140, every byte: each event 138 bytes and two spaces, then the end
+TWO_IDS_AT_140 = (
+    b'data: {"object":"chat.completion.chunk","created":0,"model":"verity","choices":[{"index":0,"token_id":      4853,'
+    b'"finish_reason":null}]}  \n\n'
+    b'data: {"object":"chat.completion.chunk","created":0,"model":"verity","choices":[{"index":0,"token_id":      4884,'
+    b'"finish_reason":null}]}  \n\n'
+    b"data: [DONE]\n\n")
+
+
+def test_ids_frames_are_the_scans_id_events():
+    """`IdsProtocol`: each id its own `io_tie.id_event` of P bytes, however many ids a delta carries; the stream's end
+    is the scan's trailer; no usage, and a stream returns its ids, whatever the request asks; P below an event's 138
+    bytes is refused."""
+    p = proto.IdsProtocol(force_include_usage=True, payload=140, base=proto.PlainProtocol(True))
+    assert (p.name, p.http, proto.PlainProtocol.http) == ("ids", False, True)
+    assert p.events(token_ids=[4853, 4884], text="ab", finish_reason=None) + proto.SSE_DONE == TWO_IDS_AT_140
+    assert proto.SSE_DONE == IT.TRAILER and p.events(token_ids=[]) == b""
+    req = p.parse(dict(CERTIFIER_BODY, stream_options={"include_usage": True, "continuous_usage_stats": True}))
+    assert (req.include_usage, req.continuous_usage, req.return_token_ids) == (False, False, True)
+    assert not p.parse(dict(CERTIFIER_BODY, stream=False)).return_token_ids
+    assert proto.PROTOCOLS["ids"] is proto.IdsProtocol and proto.ID_PAYLOAD == 512 - A.HEADER.size
+    with pytest.raises(ValueError, match="at least 138"):
+        proto.IdsProtocol(payload=137, base=proto.PlainProtocol())
 
 
 def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifiers_plan():
@@ -277,13 +305,14 @@ class Serving:
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
-                 served: dict | None = None, marks: Any = None, block: int | None = None) -> None:
+                 served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None) -> None:
         self.runner = Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
                                        clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
-        self.server = so.Server(proto=proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
+        self.server = so.Server(proto=protocol or proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512,
+                                tokenizer=Tokenizer(),
                                 defaults={"temperature": 1.0}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
         self.http = so.HttpThread(self.server, "127.0.0.1", 0)
         self.loop.engine.block = block
@@ -309,6 +338,16 @@ class Serving:
                 return r.status, r.read()
         except urllib.error.HTTPError as e:
             return e.code, e.read()
+
+    def send(self, request: bytes) -> bytes:
+        """``request``'s bytes on a connection of its own, and every byte the server sends until it closes."""
+        host, port = self.http.address
+        with socket.create_connection((host, port)) as c:
+            c.sendall(request)
+            got = b""
+            while chunk := c.recv(65536):
+                got += chunk
+        return got
 
 
 def events(raw: bytes) -> list[str]:
@@ -354,6 +393,86 @@ def test_errors_and_whole_response(tmp_path):
     body = json.loads(raw)
     assert status == 200 and body["usage"]["completion_tokens"] == 3 and body["choices"][0]["prompt_token_ids"] == [1, 101, 102]
     assert body["choices"][0]["text"] == "".join(f" w{t}" for t in body["choices"][0]["token_ids"])
+
+
+def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
+    """The warden's id request in cells of P + 9 bytes (`active.id_request`, offset 0)."""
+    return A.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + A.HEADER.size,
+                        offset=0)
+
+
+def shims_request(port: int) -> bytes:
+    """An id request as the network certifier's live shim sends it straight to the endpoint
+    (`benchmarks/network_traces/active_replay.LiveServer._serve`): its fields, the user forwarded and
+    certifier_serve's `UPSTREAM_FIELDS` added, compact, in a POST of the shim's own head with a release."""
+    body = json.loads(id_request().partition(b"\r\n\r\n")[2])
+    name = body.pop("user")
+    raw = json.dumps(body | {"user": name} | {"return_token_ids": True}, separators=(",", ":")).encode()
+    return (b"POST /v1/completions HTTP/1.1\r\nhost: 127.0.0.1:%d\r\ncontent-type: application/json\r\n" % port
+            + REL.release_head(0, b"run") + b"content-length: %d\r\nconnection: close\r\n\r\n" % len(raw) + raw)
+
+
+def dechunked(raw: bytes) -> tuple[bytes, bytes]:
+    """An HTTP response's head and its chunked body's bytes."""
+    head, _, rest = raw.partition(b"\r\n\r\n")
+    body = b""
+    while (size := int(rest[:rest.index(b"\r\n")], 16)):
+        start = rest.index(b"\r\n") + 2
+        body, rest = body + rest[start:start + size], rest[start + size + 2:]
+    return head, body
+
+
+def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
+    """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the warden's release headers
+    (`release.with_release`); its base for anything else, the shim's rebuilt POST, an id request in other cells, or
+    bytes that aren't a request."""
+    p = proto.IdsProtocol(payload=proto.ID_PAYLOAD, base=proto.PlainProtocol())
+    assert p.of(id_request()) is p and p.of(REL.with_release(id_request(), 3, b"run")) is p
+    assert p.of(shims_request(18097)) is p.base and p.of(id_request(140)) is p.base
+    assert p.of(b"") is p.base and p.of(id_request()[:-1]) is p.base
+    assert proto.PlainProtocol().of(id_request()).name == "plain"
+
+
+def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_path):
+    """``--protocol ids`` on the warden's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
+    release headers the warden adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
+    each sampled id one event of P bytes, then ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the
+    scan's P = 503 every P bytes are one id event, the cells the warden makes of them, and the whole is what
+    warden_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
+    response under ids is still the JSON one."""
+    for payload in (140, proto.ID_PAYLOAD):
+        ids = proto.IdsProtocol(True, payload=payload, base=proto.PlainProtocol(True))
+        with Serving(tmp_path / str(payload), commit=False, protocol=ids) as s:
+            raw = s.send(REL.with_release(id_request(payload), 0, b"run"))
+            assert s.send(id_request(payload)) == raw
+            status, whole = s.post("/v1/completions", dict(CERTIFIER_BODY, stream=False, max_tokens=2))
+        assert raw == b"".join(IT.id_event(t, payload) for t in (4853, 4884)) + IT.TRAILER
+        if payload == 140:
+            assert raw == TWO_IDS_AT_140
+        else:
+            cells = [raw[k:k + payload] for k in range(0, len(raw), payload)]
+            assert [len(c) for c in cells] == [payload, payload, len(IT.TRAILER)]
+            assert [int(c[len(IT.ID_EVENT_HEAD):len(IT.ID_EVENT_HEAD) + IT.ID_DIGITS]) for c in cells[:2]] == [4853, 4884]
+        assert status == 200 and json.loads(whole)["usage"]["completion_tokens"] == 2
+
+
+def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_path):
+    """The same endpoint under ``--protocol ids`` for the network certifier's leg (certifier_serve, straight to the
+    endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
+    ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's
+    (urllib) the same."""
+    ids = proto.IdsProtocol(True, payload=proto.ID_PAYLOAD, base=proto.PlainProtocol(True))
+    with Serving(tmp_path, commit=False, protocol=ids) as s:
+        assert [m["id"] for m in json.loads(urllib.request.urlopen(s.url + "/v1/models").read())["data"]] == ["m"]  # noqa: S310 (the test's own 127.0.0.1 endpoint)
+        assert json.loads(s.post("/tokenize", {"model": "m", "prompt": "a bb ccc"})[1])["tokens"] == [1, 101, 102, 103]
+        head, body = dechunked(s.send(shims_request(s.http.address[1])))
+        status, probed = s.post("/v1/completions", dict(CERTIFIER_BODY, max_tokens=2, return_token_ids=True))
+    assert head.startswith(b"HTTP/1.1 200 OK\r\n") and b"transfer-encoding: chunked" in head
+    for raw in (body, probed):
+        chunks = [json.loads(e) for e in events(raw)[:-1]]
+        assert [t for c in chunks for ch in c["choices"] for t in ch["token_ids"]] == [4853, 4884]
+        assert chunks[-1]["usage"]["completion_tokens"] == 2
+    assert status == 200
 
 
 def records(out: Path, name: str) -> list[dict]:
@@ -445,6 +564,71 @@ def test_a_window_closes_at_idle_once_it_holds_idle_close_steps(tmp_path, idle_c
     wins = [w for w in records(tmp_path, "windows.jsonl") if not w.get("empty")]
     assert len(wins) == windows and all(w["passed"] and w["seconds"] == {"open": 0.0, "close": 0.0} for w in wins)
     assert s.windows.summary()["passed"] and s.windows.summary()["requests_checked"] == 3
+
+
+class LoopSpy:
+    """`CommitWindows` as the engine loop drives it, recording the order requests reach the engine and each step's live ones."""
+
+    is_open = False
+
+    def __init__(self) -> None:
+        self.admitted_order: list[str] = []
+        self.live_at_steps: list[list[str]] = []
+
+    def admitted(self, adm: Any) -> None:
+        self.admitted_order.append(adm.engine_id)
+
+    def before_step(self, live: Any = ()) -> None:
+        self.live_at_steps.append(sorted(live))
+
+    def streamed(self, *_a: Any) -> None:
+        pass
+
+    def aborted(self, *_a: Any) -> None:
+        pass
+
+    def idle(self) -> None:
+        pass
+
+    def stepped(self) -> None:
+        pass
+
+
+def test_window_requests_holds_the_engine_to_its_cap_and_serves_the_rest_in_admission_order():
+    spy, got = LoopSpy(), {}
+    loop = so.EngineLoop(Engine(Runner()), spy, cap=2)
+    eids, lengths = [f"cmpl-{i}-0" for i in range(5)], [3, 1, 4, 2, 2]
+    for i, (eid, n) in enumerate(zip(eids, lengths)):
+        loop.submit(Admission(f"cmpl-{i}", eid, [1, 2 + i], {"max_tokens": n, "seed": 0},
+                              lambda d, e=eid: got.setdefault(e, []).append(d), {}))
+    loop.abort(eids[4])                                  # held, so it never reaches the engine
+    loop.drain("done")
+    loop.run()
+    assert spy.admitted_order == eids[:4], "held requests go in in admission order, the aborted one never"
+    assert max(len(live) for live in spy.live_at_steps) == 2 and loop.held == collections.deque()
+    assert {e: sum(len(d.token_ids) for d in ds) for e, ds in got.items()} == dict(zip(eids[:4], lengths[:4]))
+    assert all(ds[-1].finished and ds[-1].error is None for ds in got.values())
+
+
+def test_a_window_closes_before_a_step_that_would_bring_in_more_than_window_requests(tmp_path):
+    com = SimpleNamespace(_step_index=0, reset=lambda: None, install=lambda: None)
+    w = sc.CommitWindows(com, tmp_path, run_id="t", window_steps=64, request_cap=2)
+    closed: list[list[str]] = []
+
+    def close() -> None:
+        closed.append(sorted(w.in_window))
+        w.is_open = False
+
+    w.close = close
+    for live in (["a"], ["a", "b"], ["b"], ["b", "c"], ["c"], ["c", "d"], ["d", "e"]):
+        w.before_step(live)
+        com._step_index += 1
+    close()
+    assert closed == [["a", "b"], ["b", "c"], ["c", "d"], ["d", "e"]], "each window at most 2, a running request carried on"
+    unbounded = sc.CommitWindows(com, tmp_path, run_id="t", window_steps=64)
+    for live in (["a"], ["a", "b"], ["b", "c"]):
+        unbounded.before_step(live)
+    assert sorted(unbounded.in_window) == ["a", "b", "c"], "without the cap nothing closes on a third request"
 
 
 def test_check_fails_on_a_committed_id_that_was_not_served(tmp_path):

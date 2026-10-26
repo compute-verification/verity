@@ -7,6 +7,7 @@ Torch-free: the host (unpacked) committer path -- `commit_offline` is the exact 
 from __future__ import annotations
 
 import hashlib
+import json
 
 import pytest
 
@@ -513,6 +514,8 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
     epr = executed_prefix_of_record(["r0", "r1"], {"r0": [17, 0], "r1": [5, 6, 0]}, caps={"r0": CAP, "r1": CAP}, eos_of_record=[0], lag=0)
     rd = OC.OpenedReader(com, run)
     out = PS.padded_population(sr, pm, rd, epr)
+    assert hashlib.sha256(json.dumps([out, sr], sort_keys=True).encode()).hexdigest() == \
+        "f8e698e7bd359beba999dd0580036bfc527f9e2181b5ff64ca37d2ea95ccd9bd", "the record block and the population it rewrites, byte for byte"
     assert out["ok"], out["problems"]
     assert out["padding_entries"] == out["checked_entries"] == 35 and out["unread_n"] == 0 and out["mismatches_n"] == 0
     assert out["checked_words"] == sum(int(e["width_bytes"]) // PS.LIFTED_CONTAINER[e["encoding"]["committed_dtype"]][1] for e in pads)
