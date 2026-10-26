@@ -546,17 +546,37 @@ C_MM, C_SHA = 1.0, 1.0   # public best over honest at the cheapest registrable i
 # ⟨2,3,3;15⟩ at 0.870 of a naive honest kernel, 0.994 of one that runs Strassen itself. The H200's port keeps
 # Strassen at ≥ 1.68 there (A10).
 P1_C_MM = {"H200": 1.0, "RTX PRO 6000": 0.870}
+# D5's LP with PD2-1's O-route and the zero-high-digit peel (`d5_routes.py` at af8b754017; PD3-4), v2's picks at the
+# frozen tiles (H200 t = 2, RTX PRO 6000 t = 4), hashing at the ceiling: 1 − the MAC-weighted leak over OPT*.
+C_MM_D5 = {("H200", "Llama-3.1-8B"): 1 - 0.1484, ("H200", "Llama-3.1-70B"): 1 - 0.0785,
+           ("H200", "DeepSeek-V4-Pro"): 1 - 0.1112, ("RTX PRO 6000", "Llama-3.1-8B"): 1 - 0.0083,
+           ("RTX PRO 6000", "Llama-3.1-70B"): 1 - 0.0167, ("RTX PRO 6000", "DeepSeek-V4-Pro"): 1 - 0.0088}
 
 
-def eps_worksound(row: dict, delta: float, c_mm: float = C_MM, c_sha: float = C_SHA, net: float = 0.0) -> float:
-    """WORKSOUND's ε = (H_mm(1 − c_mm) + H_sha(1 − c_sha) + H_o)/H + ln(1/δ)/(ηk) + βK/(kH), at the period's binding
-    resource (the dual's vertex under the per-resource maximum): an ALU-bound period prices its ALU (SHA-512 for the
-    words, tree and coins; H_o 0, since wraps are outside credit), a tensor-bound one its tensor pipe (matmul, peels
-    included). ε_alg (PD2-1's and the tiles' routes) is part of 1 − c_mm. `net` is βK/(kH), 0 at no import."""
-    alu_bound = row["A"] - row["wrap_share"] > row["T"] * (1 + 1e-6)   # a balanced period also frees a matmul saving
-    h_mm, h_sha = (0.0, 1.0) if alu_bound else (1.0, 0.0)
+# θ's joint facets: on the H200 a saturated IGMMA takes 62.741 SMSP-cycles plus 0.981 per other warp instruction
+# (JI90_0), so tensor and issue time add and a tensor saving is a leak even in an ALU-bound period (PB1, PD3-4); sm_120's
+# joint1 (3.757 tensor + 0.317 vec) keeps the pipes overlapped.
+ADDITIVE = {"H200": True, "RTX PRO 6000": False}
+
+
+def eps_worksound(row: dict, delta: float, c_mm: float = C_MM, c_sha: float = C_SHA, net: float = 0.0,
+                  additive: bool = False) -> float:
+    """WORKSOUND's ε = (H_mm(1 − c_mm) + H_sha(1 − c_sha) + H_o)/H + ln(1/δ)/(ηk) + βK/(kH).
+
+    Overlapped pipes (`additive` False): at the period's binding resource (the dual's vertex under the per-resource
+    maximum), an ALU-bound period prices its ALU (SHA-512 for the words, tree and coins; H_o 0, since wraps are outside
+    credit), a tensor-bound one its tensor pipe (matmul, peels included). Additive pipes (the H200 under JI90_0): both
+    terms enter at their shares of T + A. ε_alg (PD2-1's and the tiles' routes) is part of 1 − c_mm; a c_mm from D5's
+    LP (`d5_routes.py`) is the whole job's leak over OPT*, so it enters in full. `net` is βK/(kH), 0 at no import."""
+    a = row["A"] - row["wrap_share"]
+    if additive:
+        h_mm, h_sha = row["T"] / (row["T"] + a), a / (row["T"] + a)
+    else:
+        alu_bound = a > row["T"] * (1 + 1e-6)   # a balanced period also frees a matmul saving
+        h_mm, h_sha = (0.0, 1.0) if alu_bound else (1.0, 0.0)
+    mm = 1 - c_mm if c_mm < 1 else h_mm * row["eps_alg"]
     eta = 1 - 2 ** -16
-    return h_mm * (1 - c_mm + row["eps_alg"]) + h_sha * (1 - c_sha) + math.log(1 / delta) / (eta * K_DRAWS) + net
+    return mm + h_sha * (1 - c_sha) + math.log(1 / delta) / (eta * K_DRAWS) + net
 
 
 PPL_H1 = {"Llama-3.1-8B": "+0.80%", "Llama-3.1-70B": "+1.77%", "DeepSeek-V4-Pro": "not run"}  # H1's (Qwen2.5-7B +0.51%)
@@ -570,7 +590,7 @@ def d6(budget: float = 0.0, c_mm: dict | None = None, c_sha: dict | None = None)
     ShaSpeed readings: (a) the paper ceiling, honest hashing at it (c_sha 1); (b) the built rate, today's kernel against
     hashcat's structured mode (C_SHA_TODAY). P1 on the RTX PRO 6000 takes P1_C_MM.
     Then the world model (rule L2; V4 is the world's request): εC and the uncredited FLOP a week, a month and a year."""
-    c_mm, c_sha = c_mm or {}, c_sha or {}
+    c_mm, c_sha = C_MM_D5 if c_mm is None else c_mm, c_sha or {}
     rows = v2_world(budget, frozen=True) + v2_world(budget, built=True, frozen=True)
     for r in rows:
         r["wrap_share"] = r["A"] - r["gamma"] * (1 - r["wrap_uncredited"]) if r["A"] >= r["T"] else 0.0
@@ -579,9 +599,9 @@ def d6(budget: float = 0.0, c_mm: dict | None = None, c_sha: dict | None = None)
         r["design"] = "P1" if " P1" in r["card"] else "v2"
         r["rate"] = "built" if " built" in r["card"] else "paper"
         cs = c_sha.get(card, 1.0) * (C_SHA_TODAY[card] if r["rate"] == "built" else 1.0)
-        cm = c_mm.get(card, 1.0) * (P1_C_MM[card] if r["design"] == "P1" else 1.0)
-        r["eps"] = {d: eps_worksound(r, d, c_mm=cm, c_sha=cs) for d in (0.01, 1e-6)}
-    print(f"\nD6 (c_mm {c_mm or 'pre-D5: 1'}, c_sha {c_sha or 'pre-D5: 1'}; eps is a lower bound until D5; theta: "
+        cm = c_mm.get((card, r["model"]), c_mm.get(card, 1.0))
+        r["eps"] = {d: eps_worksound(r, d, c_mm=cm, c_sha=cs, additive=ADDITIVE[card]) for d in (0.01, 1e-6)}
+    print(f"\nD6 (c_mm {'D5 + PD3-4 routes' if c_mm is C_MM_D5 else c_mm or 1}, c_sha {c_sha or 1} x the reading; theta: "
           f"CALIB's θ #4513)")
     print("| design, card, SHA-512 rate | γ overlapped 8B / 70B / V4 | γ additive | tensor util. | ε δ 1% (V4) | "
           "ε δ 1e-6 (V4) | coverage | perplexity (H1's) |")
