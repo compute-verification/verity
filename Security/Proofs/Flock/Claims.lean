@@ -160,6 +160,7 @@ import Proofs.Flock.Claims.Recursion.FinalPiece
 import Proofs.Flock.Claims.Recursion.VerdictPieces
 import Proofs.Flock.Claims.Recursion.OpenPieces
 import Proofs.Flock.Claims.Recursion.VerdictRun
+import Proofs.Flock.Claims.Recursion.NextRCounts
 import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
