@@ -158,6 +158,7 @@ import Proofs.Flock.Claims.Recursion.NextRRep
 import Proofs.Flock.Claims.Recursion.NextRSession
 import Proofs.Flock.Claims.Recursion.NextRRows
 import Proofs.Flock.Claims.Recursion.NextRCoins
+import Proofs.Flock.Claims.Recursion.NextRTables
 import Proofs.Flock.Claims.Recursion.ResAccepts
 import Proofs.Flock.Claims.Recursion.RowSlots
 import Proofs.Flock.Claims.Recursion.FinalPiece
