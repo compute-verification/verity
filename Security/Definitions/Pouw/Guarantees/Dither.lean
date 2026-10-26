@@ -13,13 +13,18 @@ The ACCEL program's headline (CMP-136, D2), on the accelerator model of `Definit
   one round at a time on instances registered before it (`Prover`),
   `Pr[accepted ∧ rv + W_other > OPT_honest + ε_A C] ≤ δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm + κ_dsha)`, `C` the
   registered rounds' honest cost at the dual price.
+* `WorkSoundNoFold`: the no-fold round with commit-and-open from SHA-512 as a random oracle
+  (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`) at the query budget the period's capacity allows, so
+  one `ε` and one `κ` for every prover (RT-LEAN-2 L39).
+* `FleetSound`: a fleet of units, each its own period whose coins reach only it, by the union bound over the units
+  (RT-PROTO-2 P16).
 * `FreedOfFloor`: the rounds' floor at the period's dual price bounds freed compute by `ε C` (weak duality); the step
   from the floor to `WorkSound`'s conclusion.
 -/
 
 namespace Pouw.Guarantees.Dither
 
-open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
+open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract
 
 /-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period** (R-ACCEL-1's freed compute; CMP-136).
 In every accelerator model `G` and for every round protocol `P` (the no-fold protocol is `noFoldRound` at its knobs, so
@@ -93,6 +98,64 @@ def WorkSound : Prop :=
         (∑ r, μ r * ξ A r) / ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))
       (∑ r, μ r * (1 * Pd.hon r))
       (fun A => δ + κS + κx A + κsha A + k * (κdmm (Badv A) + κdsha (Badv A)))
+
+/-- **The no-fold protocol is `(1 − ε)`-work-sound at one bound for every prover** (RT-LEAN-2 L39; CMP-136).
+`WorkSound` on the no-fold round `noFoldRound nf`, with commit-and-open's extraction proved from SHA-512 as a random
+oracle (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`) rather than assumed. The oracle is a uniform table
+`eo : nf.Orc ≃ (X → D)` under which the verifier's opening check is the Merkle path check, programs reach it only
+through their calls (`Accel.OracleCalls`), and the realization premise `ShaRealize` holds on runs within the cap `Q` at
+the query budget and schedule `q = ⌈Q⌉ + V` for every prover, `V` the verifier's evaluations: a run within the cap
+makes at most `Q` calls, so its commitment path's distinct queries, with the verifier's, are at most `q`, and a
+prover can't buy a larger `q` by padding. With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every
+prover, every prover gets the same bound:
+`ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
+`κ = δ + κ_S + (q² + k q (2q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`. -/
+def WorkSoundNoFold : Prop :=
+  ∀ (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Set (noFoldRound nf).Inst) (reg : Fin k → (noFoldRound nf).Inst)
+    (Obs : Type) (verdict : Verdict (noFoldRound nf) k Obs) (dev : Readings G (noFoldRound nf) k Obs) (Pd : Period G)
+    (μ : G.Res → ℝ) (Hmm Hsha Ho pubmm pubsha : (noFoldRound nf).Inst → ℝ) (η δ β K κS Q κsha : ℝ)
+    (κdmm κdsha : ℕ → ℝ) (Badv V : ℕ) (X D : Type) [Fintype X] [DecidableEq X] [Fintype D] [DecidableEq D]
+    [Inhabited D] (E : Enc X D Word) (eo : nf.Orc ≃ (X → D)) (rD : nf.Root → D) (pl : nf.Path → List (Bool × D × D))
+    (dirs : Fin nf.n × Fin nf.n' × Fin nf.nb → List Bool) (ξw ξl : G.Res → ℝ),
+    (∀ w, reg w ∈ Reg) → Pd.DualOpt μ 1 →
+    (∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubmm a ≤ Hmm a ∧ pubsha a ≤ Hsha a) →
+    ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) = ∑ r, μ r * Pd.hon r →
+    0 < η → 0 < δ → δ ≤ 1 → 0 ≤ β → 0 ≤ K → (∀ r, 0 ≤ ξw r) → (∀ r, 0 ≤ ξl r) →
+    (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) → 0 < G.shaPub μ → ∑ r, μ r * Pd.cap r ≤ Q * G.shaPub μ →
+    (∀ o r c v p, nf.opens o r c v p → Opens (eo o) E (rD r) (pl p) v ∧ (pl p).map Prod.fst = dirs c) →
+    G.G1 → G.G2 → G.G3 → G.OracleCalls eo → G.P1 → G.P2 →
+    SAKMatmul G (noFoldRound nf) μ Reg pubmm (fun a => η * (Hmm a + Hsha a + Ho a) / Hmm a) κdmm →
+    ShaSpeed G (noFoldRound nf) k reg μ pubsha (fun a => η * (Hmm a + Hsha a + Ho a) / Hsha a) κdsha
+      (fun _ => κsha) →
+    OutsourceWithinEgress G μ β → ServiceSound G (noFoldRound nf) k reg verdict dev κS →
+    ImportWithinCertifier G (noFoldRound nf) k verdict dev K →
+    ShaRealize G nf k reg Q E eo rD pl dirs ξw ξl (fun _ => ⌈Q⌉₊ + V) (fun _ _ => ⌈Q⌉₊ + V) (fun _ => Badv) →
+    FreedSound G (noFoldRound nf) k verdict dev Pd 1
+      (fun _ => epsWorkSound (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w)) (fun w => pubmm (reg w))
+          (fun w => pubsha (reg w)) η δ β K +
+        (∑ r, μ r * (k * ξw r + (⌈Q⌉₊ + V : ℕ) * ξl r)) / ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))
+      (∑ r, μ r * (1 * Pd.hon r))
+      (fun _ => δ + κS + (((⌈Q⌉₊ + V) * (⌈Q⌉₊ + V) + k * ((⌈Q⌉₊ + V) * (2 * (⌈Q⌉₊ + V) + 1)) : ℕ) : ℝ) /
+          Fintype.card D + κsha + k * (κdmm Badv + κdsha Badv))
+
+/-- **A fleet of units, each its own period** (RT-PROTO-2 P16: the rounds of units whose coins aren't serialized are
+not one sequence). Unit `u` of `N` runs its own period of `k` rounds on its own devices `Pd u`, under the service's
+verdict `verdict u` on its transcript and its devices' readings `dev u`. One oracle serves the fleet, and each unit
+draws its own coins, which reach no other machine before that unit has them. Unit `u`'s prover `A u` may read every
+other unit's coins, past and future (a coalition of units at its worst); what other units compute for it is work it
+exchanges with machines outside its devices, which the network certifier counts. If every unit's period is
+`(1 − ε_u)`-work-sound at one bound `κ_u ≥ 0` for every prover (`WorkSoundNoFold`), the probability over the oracle and
+every unit's coins that some unit's period is accepted while it frees more than `ε_u C_u` is at most `Σ_u κ_u`. Each
+unit at `δ/N`, so a luck term `ln(N/δ)/η` in its `ε_u`, gives the fleet `δ` for the luck, with `k` rounds a unit. -/
+def FleetSound : Prop :=
+  ∀ (G : Accel) (P : RoundProto) (k N : ℕ) (Obs : Type) (verdict : Fin N → Verdict P k Obs)
+    (dev : Fin N → Readings G P k Obs) (Pd : Fin N → Period G) (ε C κ : Fin N → ℝ),
+    (∀ u, 0 ≤ κ u) → (∀ u, FreedSound G P k (verdict u) (dev u) (Pd u) 1 (fun _ => ε u) (C u) (fun _ => κ u)) →
+    ∀ A : (u : Fin N) → ({v : Fin N // v ≠ u} → Fin k → P.Draw × P.Chk) → Prover G P k,
+      prob (fun ox : P.Orc × (Fin N → Fin k → P.Draw × P.Chk) => ∃ u,
+        (A u fun v => ox.2 v.1).Passes (verdict u) (dev u) ox.1 (ox.2 u) ∧
+          ∃ z, (Pd u).Fits ((A u fun v => ox.2 v.1).workUse ox.1 (ox.2 u)) z ∧
+            ¬ (Pd u).FreedWithin 1 z (ε u) (C u)) ≤ ∑ u, κ u
 
 /-- **Freed compute is at most `ε C` at the period's dual price** (R-ACCEL-1). On a period's devices (`Period`), let
 `μ ≥ 0` be a dual price for the other work (every job worth at most its use at `μ`) at which an honest strategy
