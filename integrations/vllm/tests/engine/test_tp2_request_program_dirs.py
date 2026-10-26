@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from verity_vllm.pipeline.tp.rank_replay import request_program_dirs  # noqa: E402
+from verity_vllm.pipeline.tp.rank_replay import request_program_dirs
 
 
 def _prog(root, name, lp, t, ok=True):

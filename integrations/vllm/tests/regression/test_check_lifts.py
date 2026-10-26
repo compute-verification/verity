@@ -43,7 +43,7 @@ def _record(w, **kw) -> tuple[dict, dict]:
 
 
 @pytest.mark.parametrize("seed,per_stratum,ring_slots", [(3, 2, None), (11, 1, 2)])
-def test_the_partition_recomputed_from_the_record_lifts_to_the_record(world, seed, per_stratum, ring_slots):  # noqa: F811
+def test_the_partition_recomputed_from_the_record_lifts_to_the_record(world, seed, per_stratum, ring_slots):
     rep, man = _record(world, per_stratum=per_stratum, seed=seed, ring_slots=ring_slots)
     assert rep["population"]["vus"] > 0 and rep["population"]["strata_n"] > 1
     doc = RP.recompute(rep, _programs(world))
@@ -56,13 +56,13 @@ def test_the_partition_recomputed_from_the_record_lifts_to_the_record(world, see
     assert all(".strata." not in x or x.endswith("sampled") or "population" not in x for x in d)
 
 
-def test_the_partition_over_the_moe_world_lifts_to_the_record(moe_world):  # noqa: F811
+def test_the_partition_over_the_moe_world_lifts_to_the_record(moe_world):
     rep, man = _record(moe_world, per_stratum=2, seed=5)
     assert rep["population"]["strata_n"] > 1 and rep["population"]["by_family"]
     assert resolver.diff(RP.lift(rep), RP.lift(RP.recompute(rep, _programs(moe_world)))) == []
 
 
-def test_a_changed_program_row_moves_a_count_by_name(world):  # noqa: F811
+def test_a_changed_program_row_moves_a_count_by_name(world):
     rep, man = _record(world, per_stratum=2, seed=3)
     progs = {rid: copy.deepcopy(world.inst) for rid in world.prompts}
     inst = next(iter(progs.values()))
