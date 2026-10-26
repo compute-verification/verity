@@ -125,11 +125,11 @@ noncomputable def S1 : Service where
   lam := 256
   card_seed := by
     refine (Fintype.card_congr (Equiv.prodPUnit (P1.Draw × P1.Chk))).trans ?_
-    simp [ditherRound, Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]
+    simp [ditherRound, Fintype.card_prod, Fintype.card_fin]
   Com := Unit
   Ans := P1.Tr
   Coins := Unit
-  verify _ σ T := by classical exact decide (P1.ok a0 σ.1.1 σ.1.2 T)
+  verify _ σ T := @decide (P1.ok a0 σ.1.1 σ.1.2 T) (Classical.propDecidable _)
 
 /-- The witness analysis map: every adversary's period is cut into the honest round. -/
 noncomputable def run1 (H : ℝ) : PeriodMap (flat H) S1 P1 1 :=
@@ -143,6 +143,10 @@ def honest (H : ℝ) : (flat H).Mc.Alg (S1.Seed × Unit) (S1.Com × S1.Ans) :=
 /-- The witness price: the one resource. -/
 def p1 : Unit → ℝ := fun _ => 1
 
+theorem prob_false {Ω : Type} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := by
+  unfold prob
+  simp
+
 theorem avg_le_one {Ω : Type} [Fintype Ω] (f : Ω → ℝ) (h : ∀ x, f x ≤ 1) : avg f ≤ 1 := by
   unfold avg
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | hpos
@@ -153,10 +157,13 @@ theorem avg_le_one {Ω : Type} [Fintype Ω] (f : Ω → ℝ) (h : ∀ x, f x ≤
 
 theorem priced_flat (H : ℝ) {I O : Type} (f : (flat H).Mc.Alg I O) (x : I) :
     (flat H).priced p1 f x = H * (f.1.2 : ℝ) := by
-  simp [Accel.priced, flat, p1]
+  change ∑ _r : Unit, (1 : ℝ) * (H * (f.1.2 : ℝ) / 1) = H * (f.1.2 : ℝ)
+  simp
 
 theorem simplex_p1 (H : ℝ) : Simplex (G := flat H) p1 := by
-  refine ⟨fun _ => ?_, ?_⟩ <;> simp [p1, flat]
+  refine ⟨fun _ => zero_le_one, ?_⟩
+  change ∑ _r : Unit, (1 : ℝ) = 1
+  simp
 
 theorem g1_flat (H : ℝ) : (flat H).G1 := by
   intro I O f x
@@ -185,8 +192,12 @@ theorem serviceSound_flat (H : ℝ) (hH : 0 ≤ H) (sha : Claims.Msg → Claims.
     ServiceSoundDither (flat H) S1 P1 (run1 H) (Equiv.refl _) sha fb fz 0 0 0 0 := by
   intro Ω' _ M _ r
   refine ⟨fun w => ?_, fun w => ?_, fun x _ => ⟨Or.inl ⟨rfl, trivial⟩, fun q => ?_, ?_⟩⟩
-  · simp [prob, run1]
-  · simp [prob, run1]
+  · show prob (fun _ => False) ≤ 0 + 0 * _
+    rw [prob_false]
+    simp
+  · show prob (fun _ => False) ≤ 0 + 0 * _
+    rw [prob_false]
+    simp
   · have ht : (1 : ℝ) ≤ (M.1.2 : ℝ) := by exact_mod_cast M.2
     show H * ((1 : ℕ) : ℝ) + 0 ≤ H * (M.1.2 : ℝ)
     simp only [Nat.cast_one, mul_one, add_zero]
@@ -198,8 +209,9 @@ theorem import_flat (H : ℝ) : ImportWithinCertifier (flat H) S1 0 := fun _ _ _
 
 /-- **The honest prover is accepted on every coin**, and commits first. -/
 theorem honest_accepted (H : ℝ) (σ : S1.Seed) :
-    S1.verify ((flat H).Mc.eval (honest H) (σ, ())).1 σ ((flat H).Mc.eval (honest H) (σ, ())).2 = true :=
-  decide_eq_true rfl
+    S1.verify ((flat H).Mc.eval (honest H) (σ, ())).1 σ ((flat H).Mc.eval (honest H) (σ, ())).2 = true := by
+  show @decide (P1.ok a0 σ.1.1 σ.1.2 (ditherHonest K1 a0 σ.1.1)) (Classical.propDecidable _) = true
+  exact @decide_eq_true _ (Classical.propDecidable _) rfl
 
 /-- **The honest witness** (rule I): at `k = 1`, `c = 1`, `β = K = 0` and no break, the honest prover of today's
 Dither round meets every hypothesis of `DitherWorkSound`, commits first, is accepted on every coin, and is priced

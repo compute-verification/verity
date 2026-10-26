@@ -152,12 +152,13 @@ noncomputable def avg {Ω : Type} [Fintype Ω] (f : Ω → ℝ) : ℝ := (∑ ω
 cost, with each imported bit worth `β`, falls short of `c` honest rounds' `H`. -/
 noncomputable def roundShortfall (c β H cost imp : ℝ) : ℝ := max 0 (c - (cost + β * imp) / H)
 
+open Classical in
 /-- **A round program's moment**: the average over the round's coins of `e^{η · shortfall}` where the check passes,
 `0` where it fails. The program `M` is fixed before the round's coins and computes the transcript from the first coin
 alone, so the transcript is committed before the check is drawn. -/
 noncomputable def roundMoment (G : Accel) (P : RoundProto) (p : G.Res → ℝ) (c η β H : ℝ) (a : P.Inst)
-    (M : G.Mc.Alg P.Draw P.Tr) : ℝ := by
-  classical exact avg fun x : P.Draw × P.Chk =>
+    (M : G.Mc.Alg P.Draw P.Tr) : ℝ :=
+  avg fun x : P.Draw × P.Chk =>
     if P.ok a x.1 x.2 (G.Mc.eval M x.1) then
       Real.exp (η * roundShortfall c β H (G.priced p M x.1) (G.ext M x.1)) else 0
 
