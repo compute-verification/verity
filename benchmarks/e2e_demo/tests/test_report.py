@@ -1,5 +1,5 @@
 """Demo A's report: it renders IFACE-B's block records with every number they don't hold as a placeholder, in Daniel's
-sections, refuses the words CMP-98 retires ("leg", "window", "template"), fills each number from exactly one source,
+sections, refuses the words CMP-98 retires ("leg", "window", "template") and the subprotocols' old names, fills each number from exactly one source,
 derives part 1's and part 3's figures from their inputs, and renders tonight's PyTorch dry run (r20261025-230005-b71a,
 period 30, written by `block_record.from_period`) labelled as such."""
 from __future__ import annotations
@@ -50,11 +50,12 @@ def test_every_placeholder_is_one_number_of_the_report() -> None:
     record, measured, derived = set(D.RECORD), set(D.MEASURED), set(D.DERIVED)
     assert not record & measured and not record & derived and not measured & derived
     periods = {n for n in derived if n.split("_")[0] in ("BLOCKS", "H", "B") and n.endswith(("WEEK", "MONTH", "YEAR"))}
-    assert names == (record | measured | derived | set(D.BLOCKS)) - periods - {"H_POOLED", "B_POOLED", "JOINT_LOCKED"}
+    assert names == ((record | measured | derived | set(D.BLOCKS)) - periods - {"H_POOLED", "B_POOLED", "JOINT_LOCKED"}
+                     - {"SECTIONS", "MISSES"})
     assert D.BANNED.search(D.TEMPLATE.read_text()) is None
 
 
-@pytest.mark.parametrize("word", ["leg", "Legs", "window", "templates"])
+@pytest.mark.parametrize("word", ["leg", "Legs", "window", "templates", "integrity", "Work", "space", "communication"])
 def test_the_retired_words_are_refused(word: str) -> None:
     with pytest.raises(ValueError, match=f"says {word!r}"):
         D.vocabulary(f"PoUW's {word} accepted")
@@ -64,7 +65,7 @@ def test_the_retired_words_are_refused(word: str) -> None:
 
 
 def test_the_word_leg_in_a_source_is_refused() -> None:
-    doc = {"format": D.MEASUREMENTS, "values": {"ZK_SESSIONS": {"value": 3, "source": "the integrity leg's sessions"}}}
+    doc = {"format": D.MEASUREMENTS, "values": {"ZK_SESSIONS": {"value": 3, "source": "the leg's sessions"}}}
     with pytest.raises(ValueError, match="says 'leg'"):
         D.render([_load("block-record-r2-period0")], doc)
 
@@ -108,7 +109,7 @@ def test_part_3s_h_and_b_are_the_planners_at_one_week() -> None:
     out = D.render([_load("block-record-r2-period0")], _costed())
     assert "budget 6,048 GPU-s = 1% of a one-week sampling block (604,800 H200-s" in out
     assert "a: n 10,080,000, 20,000 ANDs, 16 output bits, fixed 36 GPU-s, k 296,953" in out
-    assert "in its\nAND-weighted form: work is circuit size, so the detection budget is counted in ANDs." in out
+    assert "in its\nAND-weighted form: a unit's cost is its circuit size, so the detection budget is counted in ANDs." in out
     doc = _costed()
     del doc["values"]["PROVE_S_PER_AND"]
     unmeasured = D.render([_load("block-record-r2-period0")], doc)
@@ -165,7 +166,7 @@ def test_a_visible_failure_is_named_beside_the_verdict_and_fails_the_block() -> 
     assert "| fail (2 drawn units not proved: visible failures, no redraw) |" in out.split("## 1.")[0]
     assert "| ⟨VISIBLE_FAILURES⟩ | 2 | r20261026-120000-aaaa |" in out
     none = D.render([rec], {**_m(), "visible_failures": []})
-    assert "None: every drawn unit was proved." in none and "network accounting: **accept**." in none
+    assert "None: every drawn unit was proved." in none and "the network certifier: **accept**." in none
     unsaid = D.render([rec])
     assert "\n⟨VISIBLE_FAILURES⟩\n" in unsaid and "| ⟨VISIBLE_FAILURES⟩ | unfilled |" in unsaid
     with pytest.raises(ValueError, match="needs subcircuit, unit, step, slot, why, source"):
@@ -198,7 +199,7 @@ def test_demo_a_composes_its_three_protocols() -> None:
     assert D.demo_a_verdict(rejected) == "reject (PoUW)"
     absent = copy.deepcopy(rec)
     absent["legs"]["certifier"] = None
-    assert D.demo_a_verdict(absent) == "pending: no network accounting on the block's server"
+    assert D.demo_a_verdict(absent) == "pending: no network certifier on the block's server"
     with pytest.raises(ValueError, match="block record r20261025-210358-993e"):
         D.render([rejected])
 
@@ -209,7 +210,7 @@ def test_the_pytorch_dry_run_renders_labelled() -> None:
     assert R.check(rec) == {}
     out = D.render([rec], _load("demo-a-dry-run.measurements"), record_label="PyTorch dry run")
     assert out.splitlines()[2].startswith("> The PyTorch dry run's numbers are not marked in place")
-    assert "sampled proofs, PoUW and network accounting: **accept**." in out.replace("\n", " ")
+    assert "sampled proofs, PoUW and the network certifier: **accept**." in out.replace("\n", " ")
     assert "k = 64 units, drawn uniformly over the whole partition (1,024 units across 1 subcircuits" in out.replace(
         "\n", " ")
     assert "53 sessions (r20261025-230005-b71a)" in out
@@ -222,6 +223,44 @@ def test_the_pytorch_dry_run_renders_labelled() -> None:
     assert "21.7 *(M3 bench r20261026-093524-01df)* s at batch 1,024" in out
     assert "512 to 9 *(kernels #4666 bench)* s." in out
     assert "PoUW backing: this block's PoUW ran the v1 subset's tiles (PouwH1Tile_v1)" in out
-    assert ("| ⟨DRAWN_UNITS⟩ | 64 | block record r20261025-230005-b71a › integrity › quantity.drawn "
+    assert ("| ⟨DRAWN_UNITS⟩ | 64 | block record r20261025-230005-b71a › `integrity` › quantity.drawn "
             "*(PyTorch dry run)* |") in out
     assert "⟨FLIP_VERDICT⟩" in out and "⟨PROVING_GPU_S⟩" in out
+
+
+def _fallback(**row) -> dict:
+    base = {"what": "commit overhead at 4,096 slots", "value": 0.424, "unit": "s", "run": "r20261026-191502-b4da",
+            "verdict": "VERDICT best ...: overhead +0.334 s against <= 0.95 s", "target": {"op": "<=", "value": 0.95}}
+    return {"format": D.MEASUREMENTS, "status": "M3 fallback: live-drawn, opened, replayed (Python); not proved in C-Flock",
+            "sections": [{"title": "Commit overhead", "text": "On circuits' 1 KiB rows.", "rows": [{**base, **row}]}]}
+
+
+def test_the_fallback_starts_with_its_status_and_needs_no_block_record() -> None:
+    out = D.render([], _fallback())
+    assert out.splitlines()[0] == "M3 fallback: live-drawn, opened, replayed (Python); not proved in C-Flock"
+    assert "## 1. Commit overhead" in out and "ratio 0.446×, **met**). Run r20261026-191502-b4da." in out
+    assert "None: every number above met its target." in out and "⟨H_POOLED⟩" in out
+    with pytest.raises(ValueError, match="need a status"):
+        D.render([], {**_fallback(), "status": ""})
+
+
+def test_a_missed_target_is_a_visible_failure() -> None:
+    out = D.render([], _fallback(value=1.046)).split("## Visible failures")[1]
+    assert "**commit overhead at 4,096 slots**: 1.046 against target ≤ 0.95 s (ratio 1.1×). Run r20261026-191502-b4da." in out
+    done = D.render([], _fallback(what="S1 on main", value="open", unit=None, target={"op": "==", "value": "merged"}))
+    assert "**S1 on main**: open against target = merged. Run" in done
+
+
+@pytest.mark.parametrize("field", ["run", "verdict", "target"])
+def test_a_row_without_its_run_verdict_or_target_is_refused(field: str) -> None:
+    with pytest.raises(ValueError, match=f"names no {field}"):
+        D.render([], _fallback(**{field: ""}))
+    with pytest.raises(ValueError, match="has no run id"):
+        D.render([], _fallback(run="PR #4768"))
+
+
+def test_old_names_inside_a_quoted_verdict_line_are_kept() -> None:
+    out = D.render([], _fallback(verdict="Integrity Work Space Comm: reject at window 0"))
+    assert "`Integrity Work Space Comm: reject at window 0`" in out
+    with pytest.raises(ValueError, match="says 'integrity'"):
+        D.render([], _fallback(what="integrity bound"))
