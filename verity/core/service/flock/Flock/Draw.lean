@@ -451,8 +451,7 @@ def TABLES_LAW : String :=
 
 /-- Why one draw under `law` cannot be split into `count` equal tables, as `Stmt.setupTables` splits a session's draw, else
 none: one table takes any law; several take a law of fixed count (`Law.fixedCount`) that is positive and a multiple of
-`count`. A law's count is fixed before any coin, so `flock-verify draw --tables J` refuses here before reading one. A
-stratified draw that several tables split is one draw, and its claim is `JointStratifiedMT`. -/
+`count`. A law's count is fixed before any coin, so `flock-verify draw --tables J` refuses here before reading one. -/
 def tablesWhy (law : Law) (count : Nat) : Option String :=
   if count ≤ 1 then none
   else match law.fixedCount with
