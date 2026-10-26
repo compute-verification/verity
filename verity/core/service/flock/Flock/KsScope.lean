@@ -115,7 +115,7 @@ theorem drawWhy_none {count : Nat} {draw : Option Json} (h : drawWhy count draw 
     cases hj : Draw.UnitDraw.ofJson j with
     | error e => simp [hj] at h
     | ok d =>
-      refine ⟨j, d, rfl, rfl, fun k hk => ?_⟩
+      refine ⟨j, d, rfl, hj, fun k hk => ?_⟩
       simp only [hj, hk] at h
       split at h
       next hm => exact hm
