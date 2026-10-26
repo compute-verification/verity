@@ -1,6 +1,4 @@
 import Definitions.Flock.ZK.Table
-import Proofs.Flock.Soundness.ZK.Blocks
-import Proofs.Flock.Soundness.ZK.Dist
 
 /-!
 # Zero knowledge: the real prover's view and `S_shvzk`'s, with real hm96 leaves
