@@ -905,7 +905,9 @@ class Run:
                 continue
             full = f"{m_old}.{a.name}"
             nf = self.L.module(full)
-            if nf != full and nf in self.new_modules and a.name not in self.binds.get(m_old, ()):
+            # a submodule a longer entry keeps where it is stays imported from there when its package moves
+            if ((nf != full or self.L.module(m_old) != m_old) and nf in self.new_modules
+                    and a.name not in self.binds.get(m_old, ())):
                 parent, _, leaf = nf.rpartition(".")
                 asname = a.asname or (a.name if leaf != a.name else None)
                 if not parent:
@@ -956,7 +958,7 @@ class Run:
                 name, _, alias = it.partition(" as ")
                 name, alias = name.strip(), alias.strip()
                 full = self.L.module(f"{mod}.{name}")
-                if full != f"{mod}.{name}" and full in self.new_modules:
+                if (full != f"{mod}.{name}" or self.L.module(mod) != mod) and full in self.new_modules:
                     parent, _, leaf = full.rpartition(".")
                     asn = alias or (name if leaf != name else "")
                     groups.setdefault(parent, []).append(leaf + (f" as {asn}" if asn else ""))
@@ -989,6 +991,9 @@ class Run:
             if name.rpartition(".")[2] in FILE_SUFFIXES and name not in self.L.modules:
                 return name
             if any(name == d or name.startswith(d + ".") for d in self.L.keep_dotted):
+                return name
+            # `from M import n`: the import pass and `_from_strings` already put each name where it now lives
+            if re.search(r"\bfrom\s+$", text[max(0, m.start() - 16):m.start()]) and re.match(r"\s+import\b", text[m.end():]):
                 return name
             k = self.L.renamed_prefix(name)
             if k == 0:

@@ -1,0 +1,74 @@
+# PoUW's Python leaves core for `verity/ml/pouw/` (ONE-15, CMP-145; with ONE-14's builders): what
+# `tools/move/layout.py --map tools/move/pouw_map.toml` moves and rewrites. PoUW's verifier of record is its Lean
+# (`lean/check`, `lean/commit`, `lean/window`), so its Python is what AGENTS.md's design rule says Python is: `verity.ml`
+# mirroring the Lean for the prover, held to it by the difftests. Core keeps the Lean and `verifier.py`, the stdlib bridge
+# that builds and runs it. Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_torch_loop = "integrations/torch_loop/verity_torch_loop", verity_all_protocols = "benchmarks/all_protocols/verity_all_protocols" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_torch_loop = "integrations/torch_loop/verity_torch_loop", verity_all_protocols = "benchmarks/all_protocols/verity_all_protocols" }
+
+[paths]
+"verity/core/protocols/pouw/circuit/" = "verity/ml/pouw/circuit/"
+"verity/core/protocols/pouw/schemes/" = "verity/ml/pouw/schemes/"
+"verity/core/protocols/pouw/tests/" = "verity/ml/pouw/tests/"
+"verity/core/protocols/pouw/__init__.py" = "verity/ml/pouw/__init__.py"
+"verity/core/protocols/pouw/PROTOCOL.md" = "verity/ml/pouw/PROTOCOL.md"
+"verity/core/protocols/pouw/pyproject.toml" = "verity/ml/pouw/pyproject.toml"
+"verity/core/protocols/pouw/audit.py" = "verity/ml/pouw/audit.py"
+"verity/core/protocols/pouw/coins.py" = "verity/ml/pouw/coins.py"
+"verity/core/protocols/pouw/core_check.py" = "verity/ml/pouw/core_check.py"
+"verity/core/protocols/pouw/credit.py" = "verity/ml/pouw/credit.py"
+"verity/core/protocols/pouw/grind.py" = "verity/ml/pouw/grind.py"
+"verity/core/protocols/pouw/identifier.py" = "verity/ml/pouw/identifier.py"
+"verity/core/protocols/pouw/leaf_lanes.py" = "verity/ml/pouw/leaf_lanes.py"
+"verity/core/protocols/pouw/protocol.py" = "verity/ml/pouw/protocol.py"
+"verity/core/protocols/pouw/registration.py" = "verity/ml/pouw/registration.py"
+"verity/core/protocols/pouw/salt.py" = "verity/ml/pouw/salt.py"
+"verity/core/protocols/pouw/serving.py" = "verity/ml/pouw/serving.py"
+"verity/core/protocols/pouw/weights.py" = "verity/ml/pouw/weights.py"
+"verity/core/protocols/pouw/window.py" = "verity/ml/pouw/window.py"
+# core keeps these two, and the modules they name
+"verity/core/protocols/pouw/lean/" = "verity/core/protocols/pouw/lean/"
+"verity/core/protocols/pouw/verifier.py" = "verity/core/protocols/pouw/verifier.py"
+
+[retired]
+paths = []
+
+[split]
+
+[drop]
+paths = []
+
+[tokens]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`), and the two modules core keeps
+"verity.core.protocols.pouw" = "verity.ml.pouw"
+"verity.core.protocols.pouw.audit" = "verity.ml.pouw.audit"
+"verity.core.protocols.pouw.circuit" = "verity.ml.pouw.circuit"
+"verity.core.protocols.pouw.coins" = "verity.ml.pouw.coins"
+"verity.core.protocols.pouw.core_check" = "verity.ml.pouw.core_check"
+"verity.core.protocols.pouw.credit" = "verity.ml.pouw.credit"
+"verity.core.protocols.pouw.grind" = "verity.ml.pouw.grind"
+"verity.core.protocols.pouw.identifier" = "verity.ml.pouw.identifier"
+"verity.core.protocols.pouw.leaf_lanes" = "verity.ml.pouw.leaf_lanes"
+"verity.core.protocols.pouw.protocol" = "verity.ml.pouw.protocol"
+"verity.core.protocols.pouw.registration" = "verity.ml.pouw.registration"
+"verity.core.protocols.pouw.salt" = "verity.ml.pouw.salt"
+"verity.core.protocols.pouw.schemes" = "verity.ml.pouw.schemes"
+"verity.core.protocols.pouw.serving" = "verity.ml.pouw.serving"
+"verity.core.protocols.pouw.tests" = "verity.ml.pouw.tests"
+"verity.core.protocols.pouw.weights" = "verity.ml.pouw.weights"
+"verity.core.protocols.pouw.window" = "verity.ml.pouw.window"
+"verity.core.protocols.pouw.lean" = "verity.core.protocols.pouw.lean"
+"verity.core.protocols.pouw.verifier" = "verity.core.protocols.pouw.verifier"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and this map, changelogs, research's recorded moves), and files
+# whose bytes a digest pins.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]

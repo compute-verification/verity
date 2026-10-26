@@ -185,6 +185,32 @@ def test_a_subpackage_renamed_under_the_same_parent_is_renamed_where_it_is_impor
     assert (r / "run.py").read_text() == 'SCRIPT = """\nfrom pkg import new as O\nfrom pkg import keep\n"""\n', "and in a string"
 
 
+def test_a_submodule_a_longer_entry_keeps_stays_imported_from_its_package_when_the_package_moves(tmp_path):
+    """`pkg` moves to `new` but `pkg.kept` stays, by a longer entry: `from pkg import kept` keeps naming `pkg`, and only the
+    names that moved follow it (ONE-15's move rewrote `from verity.core.protocols.pouw import verifier` to `verity.ml.pouw`,
+    a module that doesn't exist, in 30 files)."""
+    r = tmp_path / "repo"
+    files = {"pkg/__init__.py": "", "pkg/kept.py": "X = 1\n", "pkg/moved.py": "Y = 2\n",
+             "use.py": "from pkg import kept as K\nfrom pkg import moved\nfrom pkg import kept, moved as M\n",
+             "run.py": 'SCRIPT = """\nfrom pkg import kept\nfrom pkg import moved\n"""\n',
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text(
+        '[roots]\nold = { pkg = "pkg", new = "new" }\nnew = { pkg = "pkg", new = "new" }\n\n[paths]\n'
+        '"pkg/__init__.py" = "new/__init__.py"\n"pkg/moved.py" = "new/moved.py"\n"pkg/kept.py" = "pkg/kept.py"\n\n'
+        '[modules]\n"pkg" = "new"\n"pkg.moved" = "new.moved"\n"pkg.kept" = "pkg.kept"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"], check=True,
+                   capture_output=True)
+    assert (r / "use.py").read_text() == ("from pkg import kept as K\nfrom new import moved\n"
+                                          "from pkg import kept\nfrom new import moved as M\n")
+    assert (r / "run.py").read_text() == 'SCRIPT = """\nfrom pkg import kept\nfrom new import moved\n"""\n', "and in a string"
+
+
 def test_a_distributions_tests_path_follows_the_move_and_moves_json_records_only_rows_the_tree_has(tmp_path):
     """In a moved file below a distribution, `tests/old/t.py` is that distribution's (the vLLM tp2 fixtures' README names
     `tests/collectives/...` from `integrations/vllm/`), and the root's `tests/` stays. A map row for a file an open branch
