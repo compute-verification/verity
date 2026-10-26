@@ -13,6 +13,7 @@ from tests.commit.test_binding_negatives import B8_CAP, B8_LP, PD, b8_engine_row
 from verity_vllm.commit import binding as B
 from verity_vllm.check import executed_prefix as EP
 from verity_vllm.check.replay.linkage import linkage_horizon
+from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 EOS = 50279
 
@@ -386,9 +387,10 @@ def _match_account(tmp_path, *, served=None, tj_lag=1, gm_verdict="PASS", g6_len
         lens = g6_lens if g6_lens is not None else {"rec-r0": {"served_output_len": 11, "executed_prefix_len": 12, "cap": 32, "cap_exhausted": False},
                                                      "rec-r1": {"served_output_len": 32, "executed_prefix_len": 32, "cap": 32, "cap_exhausted": True}}
         lag = g6_lag if g6_lag is not None else {"declared": 1, "record_attests": 1, "tokens_json_lag": 1, "exercised": True, "variable_lag": False}
-        gm = {"verdict": gm_verdict, "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
+        gm = {"schema": GM_SCHEMA, "verdict": gm_verdict, "reasons": [], "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
               "requests": [{"request_id": "rec-r0", "workload_request_id": U0, "index": 0}, {"request_id": "rec-r1", "workload_request_id": U1, "index": 1}],
-              "checks": [{"id": "G6", "status": "PASS" if gm_verdict == "PASS" else "FAIL", "lengths_by_request": lens, "lag": lag}]}
+              "checks": [{"id": "G6", "what": "chronology", "status": "PASS" if gm_verdict == "PASS" else "FAIL", "problems": [], "n_problems": 0,
+                          "lengths_by_request": lens, "lag": lag}]}
         (row / "global_match.json").write_text(json.dumps(gm))
     return str(row / "match")
 

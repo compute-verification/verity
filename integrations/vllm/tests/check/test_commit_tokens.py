@@ -25,6 +25,7 @@ from verity_vllm.check.replay.linkage import boundary_linkage, linkage_horizon
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import binding as B
 from verity_vllm.commit.opened import OpenedReader, UnverifiedUnlinked
+from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 C = CT.CommitTokens
 EOS, CAP, LAG, LAG_ROW = 2, 5, 1, 99
@@ -117,9 +118,10 @@ def _match_dir(tmp_path, *, gm_verdict: str = "PASS") -> str:
     tok = {"lag": {"value": LAG, "async_scheduling": True},
            "requests": [{"request_id": u, "generated_token_ids": SERVED[r], "max_tokens": CAP, **{k: v for k, v in lens[r].items() if k != "cap"}}
                         for u, r in ORDER.items()]}
-    gm = {"verdict": gm_verdict, "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
+    gm = {"schema": GM_SCHEMA, "verdict": gm_verdict, "reasons": [], "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
           "requests": [{"request_id": f"rec-{r}", "workload_request_id": u, "index": int(r[1:])} for u, r in ORDER.items()],
-          "checks": [{"id": "G6", "status": gm_verdict, "lengths_by_request": {f"rec-{r}": v for r, v in lens.items()},
+          "checks": [{"id": "G6", "what": "chronology", "status": gm_verdict, "problems": [], "n_problems": 0,
+                      "lengths_by_request": {f"rec-{r}": v for r, v in lens.items()},
                       "lag": {"declared": LAG, "record_attests": LAG, "tokens_json_lag": LAG, "exercised": True, "variable_lag": False}}]}
     (row / "match" / "capture" / "tokens.json").write_text(json.dumps(tok))
     (row / "global_match.json").write_text(json.dumps(gm))
