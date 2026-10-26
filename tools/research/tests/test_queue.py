@@ -1402,11 +1402,11 @@ FAKE_SYNC = (sys.executable, "-c", "import sys; from pathlib import Path; s = Pa
              "'error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided.', file=sys.stderr); sys.exit(2 * s)")
 
 
-def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None):
+def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, **kw):
     from research.queue import Preflight
 
     return Preflight(world.dev, str(world.origin), store or world.store, sync=FAKE_SYNC, python=sys.executable,
-                     root=world.tmp / "pre", log=world.logs.append, free=free, fetch=fetch)
+                     root=world.tmp / "pre", log=world.logs.append, free=free, fetch=fetch, **kw)
 
 
 def _preflight_main(world: World, extra: dict[str, str] | None = None) -> str:
@@ -1698,6 +1698,179 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #6 is lane-4's own: #4 carries it
 
 
+#: Lake packages as the Lean step reads them: `lean/a` (library `A`), `lean/a/Proofs` nested in it with `srcDir = ".."` and its
+#: library's roots listed (as Security/Proofs'), `lean/b` requiring `lean/a` by path, and `lean/c`, which doesn't
+LEAN_TREE = {
+    "lean/a/lakefile.toml": 'name = "a"\n\n[[lean_lib]]\nname = "A"\n',
+    "lean/a/lean-audit.json": "{}\n",
+    "lean/a/A/Base.lean": "def foo := 1\n",
+    "lean/a/A/Mid.lean": "/- Copyright\n  /- nested -/ still a comment -/\n-- a line\nimport A.Base\n\ndef mid := 1\nimport A.Alone\n",
+    "lean/a/A/Top.lean": "module\n\npublic import A.Mid\nimport Mathlib.Logic.Basic\n",
+    "lean/a/A/Alone.lean": "import Mathlib\n",
+    "lean/a/Scratch.lean": "import A.Top\n",
+    "lean/a/Proofs/lakefile.toml": 'name = "p"\nsrcDir = ".."\n\n[[require]]\nname = "a"\npath = ".."\n\n'
+                                   '[[lean_lib]]\nname = "Proofs"\nroots = ["Proofs.Core"]\n',
+    "lean/a/Proofs/lean-audit.json": "{}\n",
+    "lean/a/Proofs/Core/X.lean": "import A.Mid\n",
+    "lean/a/Proofs/Misc.lean": "import A.Base\n",
+    "lean/b/lakefile.toml": 'name = "b"\n\n[[require]]\nname = "a"\npath = "../a"\n\n[[lean_lib]]\nname = "B"\n',
+    "lean/b/lake-manifest.json": json.dumps({"packages": [{"type": "path", "name": "a", "dir": "../a"}]}),
+    "lean/b/lean-audit.json": "{}\n",
+    "lean/b/B/Use.lean": "import A.Top\n",
+    "lean/b/B/Other.lean": "import B.Use\n",
+    "lean/b/B/Old.lean": "import A.Gone\n",
+    "lean/c/lakefile.toml": 'name = "c"\n\n[[lean_lib]]\nname = "C"\n',
+    "lean/c/lean-audit.json": "{}\n",
+    "lean/c/C/Base.lean": "import A.Base\n",
+}
+
+
+def test_the_lean_step_builds_the_changed_modules_and_their_importers_transitively_in_the_package_and_its_path_requirers(tmp_path):
+    """#4405's signature change broke #4363's Accept.lean, two imports away: the importers are followed to the end, into the
+    packages requiring the changed one by path (a nested one too), and only modules a library's root holds are built."""
+    from research.queue import lean_graph, lean_imports
+
+    for rel, text in LEAN_TREE.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text)
+    files = sorted(LEAN_TREE)
+    assert lean_imports(LEAN_TREE["lean/a/A/Mid.lean"]) == ["A.Base"], "comments skipped, the header ends at the first command"
+    assert lean_imports(LEAN_TREE["lean/a/A/Top.lean"]) == ["A.Mid", "Mathlib.Logic.Basic"]
+    graph = lean_graph(tmp_path, files, ["lean/a/A/Base.lean", "README.md"])
+    assert graph.targets == {"lean/a/A/Base.lean": "A.Base", "lean/a/A/Mid.lean": "A.Mid", "lean/a/A/Top.lean": "A.Top",
+                             "lean/a/Proofs/Core/X.lean": "Proofs.Core.X", "lean/b/B/Use.lean": "B.Use",
+                             "lean/b/B/Other.lean": "B.Other"}
+    assert graph.upstream("lean/b/B/Other.lean") == ["lean/a/A/Base.lean", "lean/a/A/Mid.lean", "lean/a/A/Top.lean",
+                                                     "lean/b/B/Use.lean"]
+    assert lean_graph(tmp_path, files, ["lean/b/B/Use.lean"]).targets == {"lean/b/B/Use.lean": "B.Use",
+                                                                          "lean/b/B/Other.lean": "B.Other"}
+    assert lean_graph(tmp_path, files, ["lean/a/A/Gone.lean"]).targets == {"lean/b/B/Old.lean": "B.Old"}, "a deleted module's"
+    assert lean_graph(tmp_path, files, ["lean/a/README.md", "a.txt"]).targets == {}
+
+
+#: `lean_changed.py --build`'s stand-in for Lake: a file whose `-- needs NAME` line names no `def NAME` of the tree's Lean files
+#: fails, as Lean's `unknown identifier` would; each call's files are appended to $FAKE_LEAN_SEEN, and $FAKE_LEAN_SKIP skips
+FAKE_LEAN_BUILDER = """\
+import json, os, re, subprocess, sys
+from pathlib import Path
+files = sys.argv[sys.argv.index("--build") + 1:]
+with open(os.environ["FAKE_LEAN_SEEN"], "a") as f:
+    f.write(json.dumps(files) + "\\n")
+if os.environ.get("FAKE_LEAN_SKIP"):
+    print("lean-build: " + json.dumps({"built": {}, "failed": {}, "skipped": {"lean/a": os.environ["FAKE_LEAN_SKIP"]}}))
+    sys.exit(2)
+lean = subprocess.run(["git", "ls-files", "*.lean"], capture_output=True, text=True).stdout.split()
+defined = {n for g in lean for n in re.findall(r"^def (\\w+)", Path(g).read_text(), re.M)}
+failed = {g: f"error: {g}:2:0: unknown identifier '{n}'" for g in files
+          for n in re.findall(r"^-- needs (\\w+)", Path(g).read_text(), re.M) if n not in defined}
+built = {"/".join(g.split("/")[:2]): int(any(h.startswith("/".join(g.split("/")[:2])) for h in failed)) for g in files}
+print("lean-build: " + json.dumps({"built": built, "failed": failed, "skipped": {}}))
+sys.exit(1 if failed else 0)
+"""
+
+
+def _lean_world(world: World, monkeypatch) -> tuple[Path, Path]:
+    """`main` with what the preflight runs, `LEAN_TREE` and the stand-in builder, and #1 on `next`, whose B.Use reads `foo`; the
+    seen file, and a Lean slot file listing a `build` pool (a node's)."""
+    world.with_store_remote()
+    _move_main(world, {**PREFLIGHT_FILES, **LEAN_TREE, "tools/verity/lean/lean_changed.py": FAKE_LEAN_BUILDER})
+    world.gh.put(1, world.change({"lean/b/B/Use.lean": "import A.Top\n-- needs foo\n"}))
+    assert [m.pr for m in world.queue().sync()[0]] == [1]
+    monkeypatch.setenv("FAKE_LEAN_SEEN", str(seen := world.tmp / "lean-seen.jsonl"))
+    monkeypatch.delenv("FAKE_LEAN_SKIP", raising=False)
+    (slots := world.tmp / "lean-slots").write_text("build 2\n")
+    return seen, slots
+
+
+def test_the_preflight_refuses_a_head_that_breaks_a_lean_module_a_pr_on_next_owns_naming_it_its_error_and_that_pr(
+        world, monkeypatch, capsys):
+    """26 Oct: #4405, #4473, #4622 and #4641 each passed their own Lean check and broke a module of another PR on `next`, found an
+    hour later by drive's Lean check of the stack. A module failing on `next` too isn't the head's; one of the head's own that
+    fails only on the merge names the PR on `next` that changed what it imports."""
+    from research.queue import LakeBuild, MarkOnly, StoreLabels, ready
+
+    seen, slots = _lean_world(world, monkeypatch)
+    world.gh.put(2, h2 := world.change({"lean/a/A/Base.lean": "def bar := 1\n"}), ready=False)
+    pre = _preflight(world, lean=LakeBuild(slots=slots))
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=pre) == 1
+    err = capsys.readouterr().err
+    assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [
+        "  - Lean: `B.Use` (lean/b/B/Use.lean), of #1 on `next`, fails to build with this head merged: error: lean/b/B/Use.lean:2:0: "
+        "unknown identifier 'foo': merge or stack on that PR, never merge `next` (it carries unlanded PRs)"], err
+    calls = [json.loads(ln) for ln in seen.read_text().splitlines()]
+    assert calls == [["lean/a/A/Base.lean", "lean/a/A/Mid.lean", "lean/a/A/Top.lean", "lean/a/Proofs/Core/X.lean",
+                      "lean/b/B/Other.lean", "lean/b/B/Use.lean"], ["lean/b/B/Use.lean"]], "the merge, then what failed, on `next`"
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+
+    world.gh.put(2, h2, ready=True)                                    # #2 on `next` anyway (marked without the preflight)
+    assert [m.pr for m in world.queue().sync()[0]] == [1, 2]
+    seen.unlink()
+    world.gh.put(3, h3 := world.change({"lean/a/A/Top.lean": LEAN_TREE["lean/a/A/Top.lean"] + "-- tidied\n",
+                                        "lean/b/B/Use3.lean": "import A.Top\n-- needs foo\n"}), ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=pre) == 1
+    err = capsys.readouterr().err
+    assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [
+        "  - Lean: `B.Use3` (lean/b/B/Use3.lean), this head's own, fails to build with this head merged: error: "
+        "lean/b/B/Use3.lean:2:0: unknown identifier 'foo': it imports what #2 on `next` changed: merge or stack on that PR, never "
+        "merge `next` (it carries unlanded PRs)"], err
+    calls = [json.loads(ln) for ln in seen.read_text().splitlines()]
+    assert calls[1] == ["lean/b/B/Use.lean"] and "lean/b/B/Use.lean" in calls[0], "B.Use fails on `next` too: not #3's"
+    assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is False and _no_worktree_left(world)
+
+
+def test_the_lean_step_notes_why_it_built_nothing_and_refuses_nothing(world, monkeypatch, capsys):
+    """An agent VM keeps no warm Lean tree and builds nothing; a change more modules import than the preflight builds, a node
+    without Mathlib for the package, and a spent budget each leave the break to drive's Lean check: noted, never refused."""
+    from research.queue import LakeBuild, MarkOnly, ready
+
+    seen, slots = _lean_world(world, monkeypatch)
+    cases = [
+        (LakeBuild(slots=world.tmp / "absent"), {}, "this machine keeps no warm Lean tree", False),
+        (LakeBuild(slots=slots), {"lean_modules": 5}, "6 modules are or import what it changes, over the 5", False),
+        (LakeBuild(slots=slots), {"lean_s": 0}, "budget was spent before it started", False),
+        (LakeBuild(slots=slots), {}, "lean/a not built: no Mathlib here", True),
+    ]
+    for n, (lean, kw, says, built) in enumerate(cases, start=2):
+        if built:
+            monkeypatch.setenv("FAKE_LEAN_SKIP", "no Mathlib here")
+        seen.unlink(missing_ok=True)
+        world.gh.put(n, world.change({"lean/a/A/Base.lean": "def bar := 1\n", f"n{n}.txt": "x\n"}), ready=False)
+        world.logs.clear()
+        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=_preflight(world, lean=lean, **kw)) == 0, \
+            capsys.readouterr().err
+        said = next(s for s in world.logs if f"preflight: #{n} at" in s)
+        assert "nothing refused" in said and says in said, said
+        assert seen.exists() is built
+
+
+def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_its_result(tmp_path):
+    """Off a node, `ready --on` builds as `verity lean try` does: a `research run` of the tree in the node's pool, bounded by the
+    step's budget, whose stdout carries the result line."""
+    from research.queue import LEAN_BUILDER, LakeBuild
+
+    (tmp_path / "wt" / LEAN_BUILDER).parent.mkdir(parents=True)
+    (tmp_path / "wt" / LEAN_BUILDER).write_text("")
+    rid, argvs = "r20261026-120000-abcd", []
+    line = "lean-build: " + json.dumps({"built": {"lean/b": 1}, "failed": {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"},
+                                        "skipped": {}})
+
+    def run(argv, cwd, left):
+        argvs.append((argv[3:], left))
+        if argv[3] == "fetch":
+            (tmp_path / "runs" / rid).mkdir(parents=True)
+            (tmp_path / "runs" / rid / "stdout.log").write_text(f"lean-build: lean/b ...\n{line}\n")
+        return 1, f"research: run {rid} launched on vy-x (pod) pid=1 -> /r\n"
+
+    got = LakeBuild(on="vy-x", by="ci", slots=tmp_path / "absent", run=run, runs=lambda: tmp_path / "runs")(
+        tmp_path / "wt", ["lean/b/B/Use.lean"], 100)
+    assert got.failed == {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"} and got.notes == []
+    (launch, left), (fetch, _) = argvs
+    assert left == 100 and fetch == ["fetch", rid, "--on", "vy-x", "--all"]
+    assert launch == ["run", "--on", "vy-x", "--pool", "research", "--pool-wait", "90", "--as", "ci", "--project", "verity",
+                      "--source", str(tmp_path / "wt"), "--cwd", "clone", "--timeout", "90", "--wait", "--wait-every", "5",
+                      "--wait-max", "90", "--", "python3", LEAN_BUILDER, "--build", "lean/b/B/Use.lean"]
+
+
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):
     from research import queue as Q
 
@@ -1707,6 +1880,7 @@ def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monk
     base = ["queue", "ready", "3", "--mark", "--by", "lane-3", "--remote", str(world.origin), "--repo", "o/r"]
     assert research_main(base) == 0 and research_main([*base, "--no-preflight"]) == 0
     assert isinstance(seen[0], Q.Preflight) and seen[1] is None
+    assert isinstance(seen[0].lean, Q.LakeBuild) and seen[0].lean.on is None, "only `ready --on` ships the Lean step to a node"
     with pytest.raises(SystemExit) as e:
         research_main(["queue", "status", "--no-preflight"])
     assert e.value.code == 2 and "--no-preflight is for ready only" in capsys.readouterr().err
