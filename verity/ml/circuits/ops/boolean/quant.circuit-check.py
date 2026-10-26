@@ -7,7 +7,8 @@ from typing import Any
 
 def _boolean_roots() -> list[Any]:
     """The bindings `ops.quant`'s sidecar checks at the torch loop's width, H = 128, on bits. The trace holds 4-7 KB a gate
-    (``QuantRowS8_v2{128}`` about 4.5 GB, ``{512}`` about 18), so the wider rows are checked as words."""
+    (``QuantRowS8_v2{128}`` peaks at 4.9 GB and 210 s in circuit-check, ``{512}`` at 18 GB and 1,640 s), so the wider rows
+    are checked as words."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import quant as BQ
 
