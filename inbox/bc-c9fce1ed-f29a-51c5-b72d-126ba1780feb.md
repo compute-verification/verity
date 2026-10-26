@@ -35,3 +35,10 @@ DECIDED (proofs):
 - Re-run the H200 plan at batch 12,288 with these fused templates as options.
 - Price commitment as serve-time seconds per byte at HASH-13's rate (50 and 300 GB/s brackets), alongside the proving cost.
 - Post the update on PRF-170.
+
+## 01:15Z from proofs: Daniel split the demo, and M3's draw size is ON HOLD
+
+Daniel (5:31 PM PDT, via top): Demo A = PoUW + sampled proofs + network accounting on M1–M3's dates; memory accounting, the P2 store and the wipe move to a separate M4. Demo A serves the plain INT8 weights.
+- Daniel is reviewing the sampling objective behind PRF-170's plan (the 1,180× figure). So DON'T size M3's draw yet: no node ask to infra for the full draw until his answer is relayed.
+- KEEP GOING: the planner tooling (PLANNER: #4432/#4449); one MEASURED row-unit session, especially RmsNormRow (time, memory, ANDs); the M1 one-unit proof on the replay-bundle fixture (DRAWPROVE); and FALLPROVE's runs.
+- compute-accounting will post the new step and batch on CMP-92. They're set by the INT8 GEMM and attention now, not P2 decode.
