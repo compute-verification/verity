@@ -1,4 +1,4 @@
-"""[R17 D90, COORD R17-4] The fold-side rule for a tensor-parallel rank's collectives: `vllm.all_reduce.default` / `vllm.all_gather.default`
+"""The fold-side rule for a tensor-parallel rank's collectives: `vllm.all_reduce.default` / `vllm.all_gather.default`
 (pynccl behind vLLM's custom op) resolve to ONE `AllReduce2_v1{N}` / `AllGather2_v1{N}` instance per row whose single `parts` operand is a
 `resolver.Collective` -- this rank's own partial (a memory read of the collective INPUT storage, produced in this rank's log) and the PEER
 rank's partial (the fold's `peers_<request>` root parameter, root class `collective_received`) in RANK order -- and whose output is the
@@ -33,7 +33,7 @@ KINDS = {ALL_REDUCE_OP: "all_reduce", ALL_GATHER_OP: "all_gather"}
 class TpCollective:
     """`vllm.all_reduce(tensor [M,N] bf16, group) -> [M,N]`   -> `Compute(AllReduce2_v1{N}, rows=M, (Collective(own=tensor, "all_reduce", site),), (PerRow(out),))`
     `vllm.all_gather(tensor [M,N] bf16, dim, world, group) -> [M, world*N]` -> `Compute(AllGather2_v1{N}, rows=M, (Collective(own, "all_gather", site),), (PerRow(out),))`.
-    [lane vllm-tp-n] `world` is the profile's communicator size: 2 binds the `*2` identities above, > 2 binds `AllReduce_v2{WORLD,N}` /
+    `world` is the profile's communicator size: 2 binds the `*2` identities above, > 2 binds `AllReduce_v2{WORLD,N}` /
     `AllGather_v1{WORLD,N}` (`b1_tp2.all_reduce` / `all_gather`); the `parts` operand is `Array<world, Array<N, bf16>>` in rank order and
     the fold fills every peer rank's row from the request's `peers` root (one field per (collective, peer rank)).  An all-reduce on a
     route `tp_allreduce.CAPTURED` covers at the capture's settings, world, GPU and transport (`covered_route`) binds the Build's routed

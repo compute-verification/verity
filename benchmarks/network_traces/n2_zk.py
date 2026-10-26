@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import gc
 import hashlib
 import json
@@ -183,7 +184,8 @@ def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRec
 def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
     where no part fails; honest, none fails and every window accepts; tampered, window 0's egress head fails its counts
-    and its signed digest only; extra, egress heads fail their counts alone, on one window or more; late, egress heads
+    and its signed digest only (its signed digest alone on the advice profile, whose counts the unit leaves to N2's
+    advised unit); extra, egress heads fail their counts alone, on one window or more; late, egress heads
     fail their fields and counts, on one window or more. The ingress heads fail nothing, and every negative member
     refuses one window or more."""
     xs = rd.windows
@@ -196,7 +198,8 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     if name == "honest":
         return all(x.expect for x in xs)
     if name == "tampered":
-        return eg[0] == ["counts", "signed"] and not any(eg[1:])
+        advice = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE
+        return eg[0] == (["signed"] if advice else ["counts", "signed"]) and not any(eg[1:])
     allowed = {"extra": ([], ["counts"]), "late": ([], ["fields", "counts"])}[name]
     return all(f in allowed for f in eg) and allowed[1] in eg
 
@@ -220,8 +223,10 @@ def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
 
 
 #: The scan's one cutter (`leak_scan.public_pieces`: each row cut whole, less the pieces the staged circuit holds, such
-#: as a head's empty buckets, sixteen zero bytes), under the name the drivers that import this module call.
-public_pieces = LS.public_pieces
+#: as a head's empty buckets, sixteen zero bytes), under the name the drivers that import this module call. The held
+#: blobs are fields of the ``wit`` row (``fields``): an advised head, 157 + L + 4T bytes, ends off a 16-byte boundary,
+#: and the instance holds its salt after it, never its zero-padded last chunk.
+public_pieces = functools.partial(LS.public_pieces, fields=True)
 
 
 # --- a run on an injected clock ---------------------------------------------------------------------------------------
