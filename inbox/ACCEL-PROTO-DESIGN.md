@@ -341,3 +341,15 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 
 ## 04:08Z (real UTC), coordinator: decisions on RT-LEAN L27, L28, L29 and L3 (note:20261026T0310Z-draft-accel-rt-lean; CMP-136)
 (PROTO-DESIGN-2) After RT-LEAN's L27 decision, the headline's c is taken at the cheapest registrable instance (A = B = 0 for HYB). D6's ε must use that instance's public best, from D5.
+
+## 04:10Z (real UTC), coordinator: PROTO-DESIGN-2 turn 2 (note:20261026T0320Z-draft-accel-proto-design-2, head 2b9c90e1e1)
+- **PD2-2, SEG-COINS rejected for v2.** At A = B = 0, or low-rank operands, the prover gets O from the dither bits after the late coins and skips the peel: 22% of work leaked on the H200 and 11% on the RTX PRO 6000, at SKIP-FIX's points.
+- **The candidate replacement, noise tiles:** t noise tiles per segment, so hashing follows the segment while peels and leaks follow the tile. Break-even is about 3.4 tiles (H200) and 4.9 (RTX PRO 6000); the scorer picks 3 and 4. γ at 16-bit words with tiles: H200 frozen 2.89, 8B 6.14, 70B 4.08, V4 7.15 (its K 1536 shape at 15.7); RTX PRO 6000 1.74 / 3.20 / 2.16 / 3.38. **Not red-teamed yet.**
+- **Decode:** the weight-side dither costs about 242/m, so γ is 17.8 at m = 32, K = 8192, on the H200. The proposed fix is to reuse weight-side coins across calls; it must be priced first.
+- **8-bit words are ruled out** (ALGO-COST A6), so 16-bit it is (pending Daniel).
+- **Deadlines are real UTC:** 12:00Z is 5 AM PDT.
+
+(PROTO-DESIGN-2) Decisions:
+- **Attention:** COVER-ATTN's ATT serves S and O from a second plain stream, so attention's credited work is a noised copy, not the served product. That's the P1 or twin-style trade, accepted for attention only because its share is small (4–7% of MACs). D6 must report the uncredited serving share it creates. Re-check ATT's γ without SEG-COINS's long segments, using tiles instead.
+- **The V4 K 1536 shape at 15.7** is acceptable if the model-level, time-weighted γ ≤ 10. Report it.
+- **Decode:** price weight-side coin reuse across calls (ALGO-COST and RT-PROTO are checking). Report decode γ separately in D6, at m = 1, 32 and 256.

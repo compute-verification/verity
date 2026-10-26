@@ -61,3 +61,12 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 - **The certifier K/V noise stream** is about 0.07–1.1 GB/s a GPU.
 
 Price COVER-ATTN's PV lookup routes with real shared-memory and issue limits (it ignored them, which favours the adversary), on both cards, against the overlapped honest kernel.
+
+## 04:10Z (real UTC), coordinator: PROTO-DESIGN-2 turn 2 (note:20261026T0320Z-draft-accel-proto-design-2, head 2b9c90e1e1)
+- **PD2-2, SEG-COINS rejected for v2.** At A = B = 0, or low-rank operands, the prover gets O from the dither bits after the late coins and skips the peel: 22% of work leaked on the H200 and 11% on the RTX PRO 6000, at SKIP-FIX's points.
+- **The candidate replacement, noise tiles:** t noise tiles per segment, so hashing follows the segment while peels and leaks follow the tile. Break-even is about 3.4 tiles (H200) and 4.9 (RTX PRO 6000); the scorer picks 3 and 4. γ at 16-bit words with tiles: H200 frozen 2.89, 8B 6.14, 70B 4.08, V4 7.15 (its K 1536 shape at 15.7); RTX PRO 6000 1.74 / 3.20 / 2.16 / 3.38. **Not red-teamed yet.**
+- **Decode:** the weight-side dither costs about 242/m, so γ is 17.8 at m = 32, K = 8192, on the H200. The proposed fix is to reuse weight-side coins across calls; it must be priced first.
+- **8-bit words are ruled out** (ALGO-COST A6), so 16-bit it is (pending Daniel).
+- **Deadlines are real UTC:** 12:00Z is 5 AM PDT.
+
+Two new items for v2: (a) noise tiles, pricing the cross-term route (building each segment's word from the bit product plus cross terms) at t = 3 (H200) and 4 (RTX PRO 6000); (b) weight-side coin reuse across decode calls: does a fixed W' over many calls open amortized methods (tables over W', pre-adds)?
