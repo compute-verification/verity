@@ -3,19 +3,18 @@ Sampled proofs' recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.
 (`SampledProofs.OneStageZk`) with its one verdict of record computed by V*'s compiled check, the recursive verifier the
 auditor runs (`flock-verify verify --zk` once per V* part with that part's recursive inputs), on the blobs.
 
-* **params**: v1's, plus `recursive`, exactly `{"circuit", "parts"}`: the SHA-512 the auditor committed for the inner
-  statement's circuit file, and for each of V*'s statements at the inner shape, in `RecVStar.statements`' order, exactly
-  `{"bindings", "circuit", "partition", "program", "registered", "rows"}`: the part's `--rec-bindings` object, its
-  circuit's SHA-512, its partition object, its program's descriptor, its registered file (or null) and its `--rec-rows`
-  file (or null). The inner statement's program and partition are v1's `program` and `partition`, which must not be
-  null. Every one of them is the verifier's own and is fixed before any coin: `RecDeploy.RecX`'s, apart from the inner
-  public file;
+* **params**: v1's, plus `recursive`, exactly `{"circuit", "draw", "parts", "public", "registration"}`: the SHA-512s of
+  the inner statement's circuit file, its draw (`--rec-inner-draw`), its public file and the circuit registration
+  (`--rec-inner-registration`, or null), and for each of V*'s statements at the inner shape, in `RecVStar.statements`'
+  order, exactly `{"bindings", "circuit", "partition", "program", "registered", "rows"}`: the part's `--rec-bindings`
+  object, its circuit's SHA-512, its partition object, its program's descriptor, its registered file (or null) and its
+  `--rec-rows` file (or null). The inner statement's program and partition are v1's `program` and `partition`, which
+  must not be null. Every one of them is the verifier's own and is fixed before any coin, `RecDeploy.RecX`'s statement;
 * **commitment**: v1's (the registration record);
-* **evidence**: v1's without `verdicts`, with exactly one session, plus `recursive`, exactly `{"draw", "parts",
-  "public", "record", "registration", "transcript"}`: the SHA-512s of the inner public file, the inner session's record,
-  the coin server's transcript of the inner session, the inner statement's draw (`--rec-inner-draw`) and the circuit
-  registration (`--rec-inner-registration`, or null), and for each part `{"public", "record", "reps"}`: its staged public
-  file's SHA-512, its `session.json`'s and `{file: SHA-512}` naming at least each rep file its session reads;
+* **evidence**: v1's without `verdicts`, with exactly one session, plus `recursive`, exactly `{"parts", "record",
+  "transcript"}`: the SHA-512s of the inner session's record and the coin server's transcript of the inner session, and
+  for each part `{"public", "record", "reps"}`: its staged public file's SHA-512, its `session.json`'s and
+  `{file: SHA-512}` naming at least each rep file its session reads;
 * **blobs**: the files those digests name (`Core.Blobs`);
 * **check**: the verifier's inner shape from the inner statement's files (`RecVStar.innerOf`, as `flock-verify
   rec-inner --program` writes it); then, for each part `j`, `flock-verify verify --zk --statement verity/flock-circuit`
@@ -60,9 +59,13 @@ structure PartOwn where
   registered : Option Json
   rows : Option Json
 
-/-- The verifier's own inputs: the inner statement's circuit digest, program and partition, and the parts. -/
+/-- The verifier's own inputs: the inner statement's circuit, public file, draw and registration digests, its program
+and partition, and the parts. -/
 structure Own where
   circuit : String
+  pub : String
+  draw : String
+  registration : Option String
   programJ : Json
   program : ByteArray
   partition : Json
@@ -80,11 +83,8 @@ structure PartProof where
 
 /-- The recursive session's files, by SHA-512. -/
 structure Proofs where
-  pub : String
   record : String
   transcript : String
-  draw : String
-  registration : Option String
   parts : Array PartProof
 
 structure Evidence where
@@ -123,12 +123,18 @@ private def partOwnOf (j : Json) : V PartOwn := do
 
 /-- The params' `recursive`, with v1's program and partition the inner statement's. -/
 def ownOf (rec_ programJ : Json) (partition : Option Json) : V Own := do
-  exactly rec_ #["circuit", "parts"] "recursive"
+  exactly rec_ #["circuit", "draw", "parts", "public", "registration"] "recursive"
   let circuit ← digestOf (getD rec_ "circuit") "recursive: circuit"
+  let pub ← digestOf (getD rec_ "public") "recursive: public"
+  let draw ← digestOf (getD rec_ "draw") "recursive: draw"
+  let registration ← match getD rec_ "registration" with
+    | .null => pure none
+    | j => some <$> digestOf j "recursive: registration"
   let some partition := partition
     | throw "partition is null: the inner statement is set up against the verifier's own partition object"
   let .arr ps := getD rec_ "parts" | throw "recursive: parts is not a list"
-  pure { circuit, programJ, program := (← Flock.canon programJ).toUTF8, partition, parts := ← ps.mapM partOwnOf }
+  pure { circuit, pub, draw, registration, programJ, program := (← Flock.canon programJ).toUTF8, partition,
+         parts := ← ps.mapM partOwnOf }
 
 def paramsOfJson (j : Json) : V Params := do
   let some r := field? j "recursive"
@@ -155,16 +161,11 @@ private def partProofOf (j : Json) : V PartProof := do
 
 /-- The evidence's `recursive`. -/
 def proofsOf (j : Json) : V Proofs := do
-  exactly j #["draw", "parts", "public", "record", "registration", "transcript"] "the evidence's recursive"
-  let (.str pub, .str record, .str transcript, .str draw) :=
-      (getD j "public", getD j "record", getD j "transcript", getD j "draw")
-    | throw "recursive: public, record, transcript and draw are not digests"
-  let registration ← match getD j "registration" with
-    | .null => pure none
-    | .str d => pure (some d)
-    | _ => throw "recursive: registration is not a digest or null"
+  exactly j #["parts", "record", "transcript"] "the evidence's recursive"
+  let (.str record, .str transcript) := (getD j "record", getD j "transcript")
+    | throw "recursive: record and transcript are not digests"
   let .arr ps := getD j "parts" | throw "recursive: parts is not a list"
-  pure { pub, record, transcript, draw, registration, parts := ← ps.mapM partProofOf }
+  pure { record, transcript, parts := ← ps.mapM partProofOf }
 
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
@@ -229,18 +230,18 @@ structure InnerHeld where
 `RecCoins.filesInput`, `innerMetaRegistration`, `recTranscriptInput`, `recLinkInput`). -/
 def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   let circuitB ← bs.get o.circuit "the inner circuit"
-  let pubB ← bs.get pr.pub "the inner public file"
+  let pubB ← bs.get o.pub "the inner public file"
   let shape ← shapeOf circuitB pubB o.partition o.program
   let some record := String.fromUTF8? (← bs.get pr.record "the inner session's record")
     | throw "rec inner session: the record is not UTF-8"
-  let drawB ← bs.get pr.draw "the inner statement's draw"
+  let drawB ← bs.get o.draw "the inner statement's draw"
   let src : Flock.RecCoins.Source := .files
     { circuit := circuitB, pub := pubB, partition := o.partition, record,
       form := some { statement := INNER_STATEMENT, os := true, tables := [], draw := some drawB } }
   let bound : V (Option String × Option Flock.RecVStar.StackedShape) := do Flock.RecSetup.metaBound (← metaOf circuitB)
   let some t := String.fromUTF8? (← bs.get pr.transcript "rec inner transcript")
     | throw "rec inner transcript: not UTF-8"
-  let reg ← pr.registration.mapM fun d => do
+  let reg ← o.registration.mapM fun d => do
     let some s := String.fromUTF8? (← bs.get d "rec inner registration") | throw "rec inner registration: not UTF-8"
     pure s
   let commits ← Flock.RecSetup.commits (some shape) (pure t) (pure reg) bound record
@@ -318,16 +319,24 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
     Flock.RecordText.check record
   pure verdict
 
+/-- `pure ()` when `b`, else the refusal `why`. -/
+def need (b : Bool) (why : String) : V Unit := if b then pure () else throw why
+
+/-- The one inner form the recursive audit's soundness covers, `RecDeploy`'s `Form.Dense`: public inner circuits
+(`holo = false`), no RecSparse phase and no R. -/
+def dense (i : Flock.RecVStar.Inner) : Bool := !i.holo && i.sparse.isNone && i.stacked.isNone
+
 /-- **The recursive session's verdict**: the inner session held (`innerHeld`), one part per V* statement at its shape
 (`RecVStar.statements`), in order, and each part's verdict (`partVerdict`). Each part's verdict, by its statement's name,
 and the session's: accepted exactly when every part's is. -/
 def partVerdicts (o : Own) (pr : Proofs) (bs : Core.Blobs) : V (InnerHeld × Array (String × V Unit)) := do
   let h ← innerHeld o pr bs
   let ss ← Flock.RecVStar.statements h.shape
-  if o.parts.size != ss.size then
-    throw s!"recursive: the verifier holds {o.parts.size} parts, and V* has {ss.size} statements at the inner shape"
-  if pr.parts.size != ss.size then
-    throw s!"recursive: the evidence has {pr.parts.size} part sessions, and V* has {ss.size} statements at the inner shape"
+  need (dense h.shape) "recursive: the inner shape is not dense (private inner circuits, RecSparse or R)"
+  need (o.parts.size == ss.size)
+    s!"recursive: the verifier holds {o.parts.size} parts, and V* has {ss.size} statements at the inner shape"
+  need (pr.parts.size == ss.size)
+    s!"recursive: the evidence has {pr.parts.size} part sessions, and V* has {ss.size} statements at the inner shape"
   pure (h, (← partsAt h ss o pr bs (List.range ss.size)).toArray)
 where
   /-- The parts `js`' verdicts, in order: part `j`'s at V*'s statement `j`. -/
@@ -343,6 +352,14 @@ where
 /-- The units the recursive session proved: the inner public file's unit indices (`units.indices`) of the instances the
 inner record drew (`unit_draw.units`), ascending (`OneStageZk.provedUnits`). -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := OneStageZk.provedUnits pubB record
+
+/-- The units an accepted recursive session proved (`provedUnits` at the inner public file and record), and none for a
+refused one. -/
+def unitsOf (ok : Bool) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V (Array Nat) :=
+  if ok then do
+    provedUnits (← bs.get o.pub "the inner public file")
+      ((String.fromUTF8? (← bs.get pr.record "the inner session's record")).getD "")
+  else pure #[]
 
 /-- A part's verdict as the audit's verdict reports it. -/
 def partJson (x : String × V Unit) : Json :=
@@ -366,23 +383,20 @@ verdict. A refusal where the inputs refuse before any session, or where an accep
 partition object's, or its proved units are not the evidence's. -/
 def verdicts (o : Own) (session : String) (pr : Proofs) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
     V (Array (String × Json)) := do
-  let (_, parts) ← partVerdicts o pr bs
-  let ok := parts.all fun (_, v) => v.toBool
-  let why := match parts.findIdx? (fun (_, v) => !v.toBool) with
+  let parts := (← partVerdicts o pr bs).2
+  let ok := parts.all (·.2.toBool)
+  let why := match parts.findIdx? (!·.2.toBool) with
     | some j => match parts[j]? with
       | some (nm, .error e) => s!"part {j} ({nm}): {e}"
       | _ => ""
     | none => ""
   let programSha := OneStageZk.programDigest o.program
   let want := getD o.partition "program"
-  if ok && (programSha.map Json.str) != some want then
-    throw s!"session {session}'s inner program is {programSha.getD "none"}, not the partition object's {want.compress}"
-  let units ← if ok then
-      provedUnits (← bs.get pr.pub "the inner public file")
-        ((String.fromUTF8? (← bs.get pr.record "the inner session's record")).getD "")
-    else pure #[]
-  if let some want := provedUnits? then
-    if ok && units.qsort (· < ·) != want then throw "the units the recursive session proved are not the evidence's proved_units"
+  need (!(ok && (programSha.map Json.str) != some want))
+    s!"session {session}'s inner program is {programSha.getD "none"}, not the partition object's {want.compress}"
+  let units ← unitsOf ok o pr bs
+  need (!(ok && provedUnits?.any (units.qsort (· < ·) != ·)))
+    "the units the recursive session proved are not the evidence's proved_units"
   pure #[(s!"flock-verify/{session}", verdictJson ok session why units (parts.map partJson) programSha)]
 
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :

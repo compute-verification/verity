@@ -23,6 +23,7 @@
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
+  "Properties.SampledProofs.OneStageZk",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
@@ -158,6 +159,7 @@
   "CoreProtocol.Ratio",
   "CoreProtocol.Profile",
   "CoreProtocol.Protocol",
+  "CoreProtocol.Blobs",
   "Definitions.Pouw.RelativeSecurity",
   "Properties.Pouw.Commit",
   "PouwCommit.Tagged",
@@ -401,7 +403,14 @@
    "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, never over a proof"
   },
   "Properties.Verity": {
-   "imports": ["CoreOnsite", "Properties.Composition", "Definitions.Accounting.JointPeriod", "Definitions.Core.Game", "Definitions.Hash.RowLeaf", "Flock.Hash"],
+   "imports": [
+    "CoreOnsite",
+    "Properties.Composition",
+    "Definitions.Accounting.JointPeriod",
+    "Definitions.Core.Game",
+    "Definitions.Hash.RowLeaf",
+    "Flock.Hash"
+   ],
    "except": [],
    "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the period model's vocabulary, the shared game and the row-leaf opening it reads the commitment through, never over a proof"
   }
@@ -8546,7 +8555,11 @@
     "Properties.Composition.digests": "3f6c516221163d568ddc3ec0ad2128b6f40f10c8023f86cdbd9bc67367e89f38",
     "Properties.Composition.triples": "c13bf0420c351aa780cb5d3b9df5299a788f116b55f766540d9366b2993990d6"
    },
-   "guarantees": ["Properties.Composition.acceptMeans", "Properties.Composition.answerAccepts", "Verity.soundness_of_subprotocols"]
+   "guarantees": [
+    "Properties.Composition.acceptMeans",
+    "Properties.Composition.answerAccepts",
+    "Verity.soundness_of_subprotocols"
+   ]
   },
   "Properties.Evaluate": {
    "digest": "cd5c4e08ef821abd0b2f6be9c8d87edbb721cbc76cde9c021adc8949e7a7e177",
