@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.Dimension.A2Words
+import Definitions.Pouw.Assumptions.Dimension.A2Words
 import Proofs.Pouw.Dimension.PipeProofs
 
 /-!

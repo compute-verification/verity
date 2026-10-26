@@ -3,7 +3,7 @@
 A spatial unit is the machines behind network certifiers. The question is how much a covert sender can move across its
 boundary through **when** frames leave, once the content and order of every frame are fixed by the declared Program.
 This package is the reference for the answer, in the terms of its Lean analysis `NetTiming` (`Security/`: the
-areas `Definitions/NetworkCertifier`, `Models/NetworkCertifier` and `Proofs/NetworkCertifier`, whose `README.md` has the modelling choices). The
+areas `Definitions/NetworkCertifier`, `Definitions/NetworkCertifier` and `Proofs/NetworkCertifier`, whose `README.md` has the modelling choices). The
 tests mirror some of its statements by name; the Tests section lists which. The certifier program (`lean/`, the Lake
 package `certifier_program`, Lean core only) is the code the difftest runs, proved equal to the analysis's definitions.
 
@@ -1104,9 +1104,9 @@ requests, whose frames are a function of the prompt's length alone), for every p
     one that releases the frame, so a floor that read a declaration would carry one window's word into another's
     view. No floor reads one, so a wrong declaration refuses its own window and no other (REDTEAM phase 15), and the
     link's verdict, the AND over its windows, refuses the link. The verifier takes the sync the certifier ran each
-    window under only from the certifier's clock certificate of the window, verified under its key and session, and
-    a window without a valid one is refused, and the link with it
-    ([protocol/clock-certificate.md](protocol/clock-certificate.md));
+    window under only from the certifier's salted clock certificate of the window, opened against the digest it signs
+    under its key and session (the sync and the salt are witness, the certificate public), and a window without a
+    valid one is refused, and the link with it ([protocol/clock-certificate.md](protocol/clock-certificate.md));
   - `received`, `received[w]`.
 - **The unit** is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
   (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
@@ -1195,9 +1195,14 @@ requests, whose frames are a function of the prompt's length alone), for every p
   `RecordHead.encode`, and the unit reads them from the head it opens. It changes the head encoding that Lean pins, so
   it lands with the head check's and the Lean model's change, not before. With CERT-VARLEN's FIFO change the
   completed requests follow from the signed counts and the certified prompt lengths, so on ingress what's left is
-  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's clock certificate
-  beside its egress record, which the verifier holds the public declared sync to in the clear, so it needs no head
-  change ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
+  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's salted clock
+  certificate beside its egress record, so it needs no head change
+  ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
+- **Named gap: the clock's opening** (owned by network-accounting). A window's clock certificate signs its sync salted
+  (`certificate.clock_commitment`), and until N2's advised unit opens it the verifier of record opens it on the host
+  (`advised.SignedClocks`), so on a refused window it reads the sync the certifier ran. Closing it is a circuit change
+  to N2's advised unit, with its `circuit-check` report, not a Lean one: the design is in
+  [protocol/clock-certificate.md](protocol/clock-certificate.md) ("The opening is on the host").
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
@@ -1423,7 +1428,7 @@ the `8·B·N` bits read.
 ## The schedule's declared bound and the coins
 
 The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
-the trusted text: the last section of `Security/Models/NetworkCertifier/Guarantees.lean`'s documentation.
+the trusted text: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation.
 
 ## Advice for arbitrary serving: what it can carry
 
@@ -1499,7 +1504,7 @@ Each assumption, and what breaks without it:
   digest before the run. It reads nothing the prover chooses later.
   - The row's pin and the device pin (`predict.compiled`'s kernel configurations, autotune winners, cuBLAS routes and
     fused-MoE configurations) are registered items. The prover chooses them before the run, so they cost their size
-    once, like a hidden profile list (`Security/Models/NetworkCertifier/Guarantees.lean`, "The declaration"), unless the
+    once, like a hidden profile list (`Security/Definitions/NetworkCertifier/Guarantees.lean`, "The declaration"), unless the
     auditor fixes them from a reference device of its own.
   - The circuits are the exact silicon semantics. There is no tolerance: a band of t accepted values on a checked value
     frees log2 t bits there. No input names a reduction order, an atomic's interleaving or an autotune choice.
@@ -2229,7 +2234,7 @@ them.
   - **What it costs.** The protocol fixes the salt frame's place in the queue and its bytes, so it adds nothing to the
     ingress count `(r_in + 1)^T`. Its release into the block carries the certifier's coins, which no outside party
     chooses and nothing X sends can change, so it costs 0 bits by the argument the trusted text makes for the
-    challenger's coins (D7, `Security/Models/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin
+    challenger's coins (D7, `Security/Definitions/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin
     openings on a coin link, and doesn't name the certifier's salt yet.
 - **Back from maintenance** (`Proxy(start=k, position=p)`) is off by default, and with it off every record, wire and
   verdict is as above.

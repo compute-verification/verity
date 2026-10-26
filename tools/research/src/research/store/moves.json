@@ -1368,6 +1368,12 @@
         "integrations/vllm/verity_vllm/commit/tables.py": "verity/ml/windows/tables.py",
         "integrations/vllm/verity_vllm/commit/flock_inputs.py": "verity/ml/windows/flock_inputs.py"
       }
+    },
+    {
+      "paths": {
+        "Security/Models/": "Security/Definitions/",
+        "Security/Properties/Proofs/": "Security/Proofs/Properties/"
+      }
     }
   ]
 }

@@ -230,7 +230,7 @@ def main(args: Options) -> None:
 
     tw = None
     if not args.no_warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         with tl.span("prep.warmup_control"):
             _, tw = va.run_requests(eng, warm, wl["sampling"])
         print(f"[m1] warm-up (uninstrumented, {len(warm)} throwaway requests): {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)

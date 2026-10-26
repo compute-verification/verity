@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.Dampener
+import Definitions.Nci.Guarantees.Dampener
 import Proofs.Nci.Threads
 
 /-!
