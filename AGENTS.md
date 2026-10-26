@@ -466,7 +466,7 @@ Never print a secret's value.
   `research data label <run id|art:…> <key> <value> --by <lane> --ref <run id>`.
 - **Open work** (an ask that outlives its thread, what a handoff hands over) is an issue in the owning handle's Linear
   team (the using-slack skill).
-- **Architecture decisions** and Daniel's decisions log go in Notion, which the admin keeps.
+- **Architecture decisions** and Daniel's decisions log go in Notion.
 
 ## Lanes (worker agents)
 
@@ -475,7 +475,8 @@ If your launch message names you a lane, `~/.research/notes/kb/LANE-CONTRACT.md`
 Each coordinator (a handle's holder, which its inbox route records: `research msg handles`) is a plain Cursor cloud agent on the
 one-repo environment "Verity compute-verification". It owns one vertical slice and runs its own workers as subagents.
 There are no Cursor Projects (Daniel, 13 Oct). The admin holds `@top`: it opens handovers, keeps the roster, the
-quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work.
+quiet-lane sweep and Daniel's decisions log, relays to Daniel, and announces and settles; it does no lane work. It owns
+consolidation (Daniel, 26 Oct): open work, records and notation converge rather than multiply.
 Coordinators are launched, handed over and archived from Daniel's laptop with `infra/cursor/launch_coordinator.py`
 (`infra/cursor/README.md`).
 
