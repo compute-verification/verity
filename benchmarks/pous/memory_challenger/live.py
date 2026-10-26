@@ -171,7 +171,7 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
     if not state_p.exists():
         lms.LeafState.create(state_p, lms.public_key(key), p.H)
     scheme = mc.LMS if p == lms.DEPLOYED else mc.TEST_PREFIX + f"lms-sha512/n{p.N}-w{p.W}-h{p.H}/v0"
-    return mc.LmsSigner(key, lms.LeafState(state_p, lms.public_key(key), p.H), scheme=scheme)
+    return mc.LmsSigner(key, state_p, scheme=scheme)
 
 
 def session_log(path: str | os.PathLike, new_key: bool) -> Any:
@@ -366,7 +366,6 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
             gc.enable()
             if sessions_out is not None:
                 write_sessions(sessions_out, sig, sessions)
-        sig.state.close()
     expected = lambda i: digests[64 * i:64 * (i + 1)]  # noqa: E731
     records = judge(sessions, expected, {sig.public_key}, signer_schemes(sig.scheme))
     answers = [a for rec in records for a in rec["answers"]]

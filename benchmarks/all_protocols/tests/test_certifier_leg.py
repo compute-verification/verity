@@ -22,7 +22,8 @@
   period's, and its free inputs are `interface.input_count`'s (slow);
 * ``CERTIFIER_PATH`` picks the path, the certifier-only one by default, and the warden path's stubbed lines are the
   other's less its records' gap; ``WARDEN_TAMPER`` names the stub's tampers;
-* of the windows the runner audits at once, one makes the run's session and the others read it (`once`);
+* of the windows the runner audits at once, one makes the run's session and the others read it (`once`), and the
+  session proves N2's members one firewalled session at a time (``n2_zk.py prove --jobs 1``);
 * the warden session's run parses as the gate's scan rehearsal at the scan's own schedule, a period's link-windows are
   its group's in ``groups.json``, and the certified ids match the registered outputs' by connection, else by content,
   and a stub's changed byte, extra id or lost id is no match;
@@ -426,6 +427,38 @@ def test_windows_audited_at_once_make_the_runs_one_session_once(tmp_path):
     a.join()
     b.join()
     assert made == ["first"] and got == {"a": {"by": "first"}, "b": {"by": "first"}}
+
+
+def test_the_session_proves_n2s_members_one_firewalled_session_at_a_time(tmp_path, monkeypatch):
+    period, s, calls = tmp_path / "period", tmp_path / L.SESSION, []
+    period.mkdir()
+    s.mkdir()
+    (period / "period.json").write_text(json.dumps({"periods": 2}))
+
+    class Stub:
+        def terminate(self) -> None:
+            pass
+
+        def wait(self) -> None:
+            pass
+
+    def run(argv, log, env=None) -> int:
+        calls.append(list(argv))
+        out = Path(argv[argv.index("--out") + 1])
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "summary.json").write_text("{}")
+        return 0
+
+    monkeypatch.setattr(L, "_tools", lambda d: {"flock-circuit": "fc", "flock-verify": "fv", "flock-firewall": "ff",
+                                                 "m0-pythonpath": ""})
+    monkeypatch.setattr(L, "lean_exes", lambda: {"network-records": "nr"})
+    monkeypatch.setattr(L, "requests_of", lambda d: ([1, 2], 3, 4))
+    monkeypatch.setattr(L, "_stub", lambda *a: (Stub(), "http://stub"))
+    monkeypatch.setattr(L, "_run", run)
+    monkeypatch.setenv("CERTIFIER_TAMPER", "extra")
+    L._session(period, s)
+    n2 = next(c for c in calls if Path(c[1]).name == "n2_zk.py")
+    assert n2[n2.index("--rounds") + 1] == "honest,extra" and n2[n2.index("--jobs") + 1] == "1"
 
 
 def test_the_warden_sessions_tampers_are_the_stubs(monkeypatch):
