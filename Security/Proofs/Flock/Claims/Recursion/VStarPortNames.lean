@@ -195,8 +195,9 @@ theorem repRounds_countP {m kLog claims : ℕ} {sch : Schedule} {rs : Array RecV
           exact ⟨_, ht.symm, by simp [passAbs, lvAbs, hi, FlockDeploy.rep3], trivial⟩
         · simp [h4, hi] at ht
           exact ⟨_, ht.symm, by simp [passAbs, hi, FlockDeploy.rep3], trivial⟩) _ _ _ _ trivial hl
-  rw [← count_map_true, key, List.count_append,
-    show ((List.range' 0 (sch.levels.size - 1)).flatMap (passAbs (sch.levels.size - 1))).count true =
+  rw [← count_map_true, key, List.count_append]
+  simp only [Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one]
+  rw [show ((List.range' 0 (sch.levels.size - 1)).flatMap (passAbs (sch.levels.size - 1))).count true =
       levelAbs (sch.levels.size - 1) from count_flatMap_passAbs _ _ 0]
   simp [List.count_replicate] <;> omega
 
