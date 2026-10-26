@@ -4,9 +4,11 @@
 #   cpu    build, then fixtures.py expected into $OUT/fixtures (uv sync first; FIX_ARGS, JOBS default 30)
 #   gpu    (vy-dc-h200-3) check.py, then bench.py, on the files sent (LIBS, default $RESEARCH_RUN_DIR/inputs):
 #          expected.npz and fixtures.json, j10r_ref.so as the fallback, every h1u_*.so as an h1u build (and its _sm
-#          launch), s8_simple.py (#4472's) as the bench's plain arm. Fixtures not sent are computed here and the fallback
-#          not sent is built here (BUILD_REF=0: not), both before the lease, as are the operands, in a scratch directory
-#          removed at exit.
+#          launch), s8_simple.py (#4472's) as the bench's plain arm, and s8_linear's build.sh, s8_wgmma.cu, s8_acc.h,
+#          sass_gate.py, wgmma.py and configs.py (#4520's) as its wgmma arm, built here by that build.sh. Fixtures not
+#          sent are computed here, the fallback not sent is built here (BUILD_REF=0: not) and with no h1u_*.so sent
+#          h1u_build makes KCOMMIT-FB's three arms from this tree (BUILD_H1U=0: not), all before the lease, as are the
+#          operands, in a scratch directory removed at exit.
 #
 #   research run --on vy-nebius-cpu-4 --as kernels-kp2dec --project verity --source . --cwd source -- \
 #     env CHECK_SLOTS=/workspace/research/locks/kernels/slots python3 tools/verity/check/slot.py --by kernels -- \
@@ -14,7 +16,8 @@
 #   research run --on vy-dc-h200-3 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
 #     --env GPU_LEASE_WHO=kernels-kp2dec --send CPU_RUN/out/fixtures/expected.npz --send .../fixtures.json \
 #     --send CPU_RUN/out/lib/sm_90a/j10r_ref.so [--send .../h1u_kr.so ...] -- bash benchmarks/torch_gpu/j10r_sm90/job.sh gpu
-# Env: NVCC (default CUDA 13.0's), STEPS (gpu's, default "check bench"), CHECK_ARGS, BENCH_ARGS, LEASE_MIN (default 25),
+# Env: NVCC (default CUDA 13.0's), H1U_ARMS (NAME=DEFINES ..., default kr, kra and kraq), STEPS (gpu's, default "check
+# bench"), CHECK_ARGS, BENCH_ARGS, LEASE_MIN (default 25),
 # PY (default /workspace/cp/venv312's or /workspace/jobs/venv312's python, else torch and numpy from PyPI in a uv venv
 # in the scratch directory), JOBS.
 set -uo pipefail
@@ -35,6 +38,50 @@ build() {
     echo "flags -O3 -std=c++17 -shared -Xcompiler -fPIC -gencode arch=compute_90a,code=sm_90a"
     sha256sum "$lib/j10r_ref.so" "$D/j10r_ref.cu" benchmarks/codec_tensor/sha512.cuh; } > "$lib/BUILD.txt"
   cat "$lib/BUILD.txt"; grep -E 'registers|spill' "$lib/ptxas.txt"
+}
+
+# KCOMMIT-FB's sm_90a arms of benchmarks/hash/dither/h1u.cu (HASH-21), compiled from this tree with
+# benchmarks/hash/dither/j10r90.sh's defines and dither/job.sh's flags plus --no-compress: $OUT/lib/sm_90a/h1u_ARM.so,
+# their resource usage and BUILD.txt; then benchmarks/pouw/harness/sass_gate.py on them as sass_pins.json stands
+# (sass-gate.json, a diagnostic: the gate's verdict is HASH-21's)
+H1U_BASE=-DH1U_KSPLIT=4,-DH1K_AUTO=1,-DH1K_RONLY=1
+H1U_A=$H1U_BASE,-DH1U_JCTA=1,-DH1U_WARPS=4,-DH1U_JX=1,-DH1U_JBW=1
+h1u_build() {
+  local nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc} lib=$OUT/lib/sm_90a arm def rc=0 p pids=()
+  [ -x "$nv" ] || nv=$(command -v nvcc) || { echo "job.sh: no nvcc" >&2; return 2; }
+  mkdir -p "$lib"
+  local flags=(-O3 -std=c++17 -shared -Xcompiler -fPIC --expt-relaxed-constexpr -gencode arch=compute_90a,code=sm_90a
+               --no-compress)
+  for v in ${H1U_ARMS:-kr=$H1U_BASE kra=$H1U_A kraq=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1,-DH1U_JCS=2}; do
+    arm=${v%%=*}; def=${v#*=}
+    # shellcheck disable=SC2086
+    "$nv" "${flags[@]}" ${def//,/ } benchmarks/hash/dither/h1u.cu -o "$lib/h1u_$arm.so" > "$lib/build-h1u_$arm.log" 2>&1 &
+    pids+=($!)
+  done
+  for p in "${pids[@]}"; do wait "$p" || rc=2; done
+  [ $rc = 0 ] || { tail -30 "$lib"/build-h1u_*.log; return 2; }
+  local deps
+  deps=$("$nv" -M -std=c++17 benchmarks/hash/dither/h1u.cu 2>/dev/null | tr ' \\' '\n\n' | grep -v ':$' | grep . \
+    | xargs -r realpath -m --relative-to="$ROOT" | grep -v '^\.\./' | sort -u)
+  { echo "commit $(cat "$OUT/commit.txt")"; "$nv" --version | tail -2; echo "flags ${flags[*]}"
+    for v in ${H1U_ARMS:-kr=$H1U_BASE kra=$H1U_A kraq=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1,-DH1U_JCS=2}; do echo "arm $v"; done
+    sha256sum "$lib"/h1u_*.so $deps; } > "$lib/BUILD-h1u.txt"
+  for f in "$lib"/h1u_*.so; do
+    "$(dirname "$nv")/cuobjdump" --dump-resource-usage "$f" > "${f%.so}.res.txt" 2>&1
+  done
+  cat "$lib/BUILD-h1u.txt"; grep -h -A1 -E 'Function.*(h1umj|h1jr|h1_seeds_c)' "$lib"/h1u_*.res.txt | head -40
+  POUW_CUDA_BIN=$(dirname "$nv") POUW_SASS_GATE_CACHE=none python3 benchmarks/pouw/harness/sass_gate.py "$lib"/h1u_*.so \
+    --json "$OUT/sass-gate.json" > "$OUT/sass-gate.txt" 2>&1
+  echo "sass gate (sass_pins.json as it stands, diagnostic): rc $?"; tail -20 "$OUT/sass-gate.txt"
+}
+
+# KP2-S8's exact plain linear (benchmarks/torch_gpu/s8_linear, #4463 and #4520), sent as files: its build.sh run unchanged
+# from a scratch copy, $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
+s8_build() {
+  local w=$S/s8/benchmarks/torch_gpu/s8_linear nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
+  mkdir -p "$w" && cp "$LIBS"/{build.sh,s8_wgmma.cu,s8_acc.h,sass_gate.py,wgmma.py,configs.py} "$w/" || return 2
+  CUDA=$(dirname "$(dirname "$nv")") PY=/nonexistent bash "$w/build.sh" "$OUT/s8ship" >&2 || return 2
+  echo "$w"
 }
 
 case $WHAT in
@@ -66,21 +113,31 @@ case $WHAT in
       $PY "$D/fixtures.py" expected --out "$FIX" --jobs "${JOBS:-$(nproc)}" ${FIX_ARGS:-} > "$OUT/fixtures.out" 2>&1
       echo "fixtures rc $? ($(nproc) CPUs)" >> "$OUT/rc.txt"; tail -3 "$OUT/fixtures.out"
     fi
+    NVCC=${NVCC:-$(for c in /usr/local/cuda-13.0 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { echo "$c/bin/nvcc"; break; }; done)}
+    export NVCC
     REF=$LIBS/j10r_ref.so
     if [ ! -f "$REF" ] && [ "${BUILD_REF:-1}" = 1 ]; then
-      NVCC=${NVCC:-$(for c in /usr/local/cuda-13.0 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { echo "$c/bin/nvcc"; break; }; done)}
       build > "$OUT/build.out" 2>&1; echo "build rc $?" >> "$OUT/rc.txt"; cat "$OUT/build.out"
       REF=$OUT/lib/sm_90a/j10r_ref.so
+    fi
+    H1US=("$LIBS"/h1u_*.so)
+    if [ ! -f "${H1US[0]}" ] && [ "${BUILD_H1U:-1}" = 1 ]; then
+      h1u_build > "$OUT/h1u-build.out" 2>&1; echo "h1u build rc $?" >> "$OUT/rc.txt"; cat "$OUT/h1u-build.out"
+      H1US=("$OUT"/lib/sm_90a/h1u_*.so)
     fi
     LA=()
     [ -f "$REF" ] && LA+=(--ref "$REF")
     SM=
-    for f in "$LIBS"/h1u_*.so; do [ -f "$f" ] && { LA+=(--h1u "$(basename "$f" .so)=$f"); SM=--sm; }; done
+    for f in "${H1US[@]}"; do [ -f "$f" ] && { LA+=(--h1u "$(basename "$f" .so)=$f"); SM=--sm; }; done
     [ -n "$SM" ] && LA+=("$SM")
     $PY "$D/check.py" --fixtures "$FIX" --out "$OUT" --scratch "$S" --operands-only ${CHECK_ARGS:-} > "$OUT/operands.out" 2>&1
     echo "operands rc $?" >> "$OUT/rc.txt"
     BA=${BENCH_ARGS:-}
     [ -f "$LIBS/s8_simple.py" ] && BA="--s8-simple $LIBS/s8_simple.py $BA"
+    if [ -f "$LIBS/s8_wgmma.cu" ]; then
+      W8=$(s8_build 2> "$OUT/s8-build.out"); echo "s8 build rc $?" >> "$OUT/rc.txt"; tail -5 "$OUT/s8-build.out"
+      [ -f "$OUT/s8ship/s8_wgmma.cubin" ] && { export S8_WGMMA_CUBIN=$OUT/s8ship/s8_wgmma.cubin; BA="--wgmma $W8 $BA"; }
+    fi
     export O=$OUT PY D S STEPS=${STEPS:-check bench} CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=$BA FIX
     export LA_S="${LA[*]}"
     # shellcheck disable=SC2016

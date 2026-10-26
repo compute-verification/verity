@@ -1,7 +1,8 @@
 """J10-R's units against plain exact INT8 at the frozen shape's linears, interleaved, on one GPU (HASH-22):
 
     python bench.py --fixtures DIR --out OUT --scratch S [--h1u NAME=PATH ...] [--ref PATH] [--sm] [--s8-simple FILE]
-                    [--check check.json] [--ms 4096,16384] [--linears q,kv,o,up,down,head] [--reps 7] [--ref-reps 2]
+                    [--wgmma DIR] [--check check.json] [--ms 4096,16384] [--linears q,kv,o,up,down,head] [--reps 7]
+                    [--ref-reps 2]
 
 One call a linear and M, every row live, its operands `shape.whole`'s (the demo's served weights, the fixtures' A), its
 scales `shape.weight_scales` and `activation_scales`. The arms, timed by CUDA events one call at a time, in an order that
@@ -10,15 +11,19 @@ rotates each rep:
 * `plain`: s8_simple's `linear(x, sx, w, sw)` (#4472; --s8-simple names its file: `torch._int_mm` and the fused
   epilogue), else `torch._int_mm` and s8_simple's eager `scale`, restated;
 * `int_mm`: `torch._int_mm` alone, the s32 GEMM;
+* `wgmma` (--wgmma DIR, s8_linear's wgmma.py and configs.py, #4520): KP2-S8's exact linear, wgmma.scaled_mm at its tuned
+  config for the linear and M, into an output allocated once, held to plain's output on every cell;
 * each h1u build NAME: the call's J10-R receipts, kh_seeds_j10r then kh_units_multi_j10r (with --sm
   kh_units_multi_j10r_sm on every SM, the served launch);
-* `plain+NAME`: plain, then NAME's units, in one timed region (what serving them one after the other costs);
+* `plain+NAME`, `wgmma+NAME`: that plain arm, then NAME's units, in one timed region (what serving them one after the
+  other costs);
 * `ref` (--ref, --ref-reps reps): the fallback's seeds and receipts over every unit of the call (jr_seeds, jr_units).
 
 After the reps, every units arm runs once more under each poison (`units.twice`: no word unwritten or unstable) and is
 held to the fixtures: its sampled receipts and seed words, and plain's s32 sums at the sampled tiles, so every number
 comes from a build that was exact. overhead = units / plain and gamma =
-(plain + units) / plain, per call, per layer (q, kv, o, up and down) and per step (52 layers and the head). check.json
+(plain + units) / plain, per call, per layer (q, kv, o, up and down) and per step (52 layers and the head), and the same
+against wgmma under `vs_wgmma`. check.json
 (--check), when given, is copied into the report's `check` verdicts.
 """
 from __future__ import annotations
@@ -42,6 +47,8 @@ import units as UN
 
 import fixtures as F
 
+#: the plain arms a units arm is measured against, each with its serial arms (BASE+NAME)
+BASELINES = ("plain", "wgmma")
 
 def plain_of(path: str | None):
     """(name, fn(x, sx, w, sw)): s8_simple's linear from its file, else int_mm and its eager scale restated."""
@@ -61,6 +68,29 @@ def plain_of(path: str | None):
     return "torch._int_mm + scale (eager, restated)", eager
 
 
+def wgmma_of(path: str | None) -> dict | None:
+    """KP2-S8's exact linear (s8_linear's wgmma.py and configs.py in the directory `path`, the cubin $S8_WGMMA_CUBIN):
+    its identity, `cfg(m, n, k)` (configs.CONFIGS' tuned pick for (N, K) at M, as its run.py's table_cfg, else wgmma's
+    default) and `fn(x, sx, w, sw, y, cfg)`, wgmma.scaled_mm into y."""
+    if not path:
+        return None
+    mods = {}
+    for name in ("wgmma", "configs"):
+        spec = importlib.util.spec_from_file_location(f"s8_{name}", Path(path) / f"{name}.py")
+        mods[name] = sys.modules[f"s8_{name}"] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mods[name])
+    W, table = mods["wgmma"], mods["configs"].CONFIGS.get("wgmma:sm_90", {})
+    lib = W.lib()
+
+    def cfg(m: int, n: int, k: int):
+        rows = table.get((n, k))
+        if not rows:
+            return W.default_cfg(m, n, k, lib.sms)
+        return W.Cfg.parse(next((t for mm, t in rows if m <= mm), rows[-1][1]))
+
+    return {"identity": lib.identity(), "cfg": cfg, "fn": W.scaled_mm}
+
+
 def libs_of(h1u: list[str], ref: str | None, sm: bool) -> dict:
     libs: dict = {}
     for spec in h1u:
@@ -77,7 +107,7 @@ def tiles(z: torch.Tensor, n: int, picks: list[int]) -> np.ndarray:
                      for u in picks]).view(np.uint32)
 
 
-def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain, args, scratch: Path) -> dict:
+def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain, args, scratch: Path, wg: dict | None = None) -> dict:
     lin, m, n = c["linear"], c["m"], c["n"]
     a = torch.from_numpy(np.ascontiguousarray(S.whole("a", lin, m, scratch, args.jobs))).cuda()
     b = torch.from_numpy(np.ascontiguousarray(S.whole("b", lin, m, scratch, args.jobs))).cuda()
@@ -87,6 +117,11 @@ def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain, args, scratch
     picks = [int(u) for u in arrays[f"{key}/units"]] if f"{key}/units" in arrays else []
     bt = b.t()
     arms: dict = {"plain": partial(plain, a, sx, b, sw), "int_mm": partial(torch._int_mm, a, bt)}
+    yw = wcfg = None
+    if wg is not None:
+        yw = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
+        wcfg = wg["cfg"](m, n, c["k"])
+        arms["wgmma"] = partial(wg["fn"], a, sx, b, sw, yw, wcfg)
     calls: dict = {}
     for nm, lib in libs.items():
         if isinstance(lib, UN.Ref):
@@ -95,7 +130,9 @@ def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain, args, scratch
         else:
             calls[nm] = UN.H1uCall(lib, a, b, salt, roots, c["base"])
             arms[nm] = calls[nm].run
-            arms[f"plain+{nm}"] = partial(_serial, arms["plain"], calls[nm].run)
+            for bl in BASELINES:
+                if bl in arms:
+                    arms[f"{bl}+{nm}"] = partial(_serial, arms[bl], calls[nm].run)
     for fn in arms.values():
         fn()
     torch.cuda.synchronize()
@@ -113,6 +150,10 @@ def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain, args, scratch
             ms[k].append(e0.elapsed_time(e1))
     exact: dict = {}
     gates: dict = {}
+    if yw is not None:
+        yw.view(torch.int16).fill_(-23131)
+        arms["wgmma"]()
+        exact["wgmma_vs_plain"] = bool(torch.equal(arms["plain"]().view(torch.int16), yw.view(torch.int16)))
     if picks:
         want = arrays[f"{key}/receipts"]
         want_sc, want_sig = arrays[f"{key}/seed_c"].tobytes(), [r.tobytes() for r in arrays[f"{key}/sigma"]]
@@ -138,6 +179,13 @@ def bench_call(key: str, c: dict, arrays: dict, libs: dict, plain, args, scratch
            "gamma": {nm: round((med["plain"] + med[nm]) / med["plain"], 4) for nm in units_of},
            "gamma_serial": {nm: round(med[f"plain+{nm}"] / med["plain"], 4) for nm in units_of if f"plain+{nm}" in med},
            "exact": exact, "gates": gates}
+    if "wgmma" in med:
+        w = med["wgmma"]
+        rec["wgmma_cfg"] = str(wcfg)
+        rec["vs_wgmma"] = {"overhead": {nm: round(med[nm] / w, 4) for nm in units_of},
+                           "gamma": {nm: round((w + med[nm]) / w, 4) for nm in units_of},
+                           "gamma_serial": {nm: round(med[f"wgmma+{nm}"] / w, 4) for nm in units_of
+                                            if f"wgmma+{nm}" in med}}
     return rec
 
 
@@ -160,22 +208,29 @@ def totals(calls: list[dict], ms_: list[int], arms: list[str]) -> dict:
             head = rows["head"]["median_ms"].get(arm) if "head" in rows else None
             t[arm] = {"layer_ms": round(layer, 3),
                       "step_ms": round(S.LAYERS * layer + head, 2) if head is not None else None}
-        pl = t["plain"]
         for arm, v in t.items():
-            if arm in ("plain", "int_mm") or arm.startswith("plain+"):
+            if arm in (*BASELINES, "int_mm") or "+" in arm:
                 continue
-            v["layer_overhead"] = round(v["layer_ms"] / pl["layer_ms"], 4)
-            v["layer_gamma"] = round((pl["layer_ms"] + v["layer_ms"]) / pl["layer_ms"], 4)
-            if v["step_ms"] is not None and pl["step_ms"] is not None:
-                v["step_overhead"] = round(v["step_ms"] / pl["step_ms"], 4)
-                v["step_gamma"] = round((pl["step_ms"] + v["step_ms"]) / pl["step_ms"], 4)
-            ser = t.get(f"plain+{arm}")
-            if ser is not None:
-                v["layer_gamma_serial"] = round(ser["layer_ms"] / pl["layer_ms"], 4)
-                if ser["step_ms"] is not None and pl["step_ms"] is not None:
-                    v["step_gamma_serial"] = round(ser["step_ms"] / pl["step_ms"], 4)
+            v.update(_vs(v, t["plain"], t.get(f"plain+{arm}")))
+            if "wgmma" in t:
+                v["vs_wgmma"] = _vs(v, t["wgmma"], t.get(f"wgmma+{arm}"))
         out[str(m)] = t
     return out
+
+
+def _vs(v: dict, pl: dict, ser: dict | None) -> dict:
+    """A units arm's totals `v` against a plain arm's `pl` (and `ser`, the two one after the other): overhead and gamma
+    per layer and per step."""
+    r = {"layer_overhead": round(v["layer_ms"] / pl["layer_ms"], 4),
+         "layer_gamma": round((pl["layer_ms"] + v["layer_ms"]) / pl["layer_ms"], 4)}
+    if v["step_ms"] is not None and pl["step_ms"] is not None:
+        r["step_overhead"] = round(v["step_ms"] / pl["step_ms"], 4)
+        r["step_gamma"] = round((pl["step_ms"] + v["step_ms"]) / pl["step_ms"], 4)
+    if ser is not None:
+        r["layer_gamma_serial"] = round(ser["layer_ms"] / pl["layer_ms"], 4)
+        if ser["step_ms"] is not None and pl["step_ms"] is not None:
+            r["step_gamma_serial"] = round(ser["step_ms"] / pl["step_ms"], 4)
+    return r
 
 
 def main() -> int:
@@ -187,6 +242,7 @@ def main() -> int:
     ap.add_argument("--ref")
     ap.add_argument("--sm", action="store_true")
     ap.add_argument("--s8-simple")
+    ap.add_argument("--wgmma", metavar="DIR")
     ap.add_argument("--check")
     ap.add_argument("--ms", default=",".join(map(str, S.MS)))
     ap.add_argument("--linears", default=",".join(S.ORDER))
@@ -200,12 +256,18 @@ def main() -> int:
     doc_f, arrays = F.load(Path(args.fixtures))
     libs = libs_of(args.h1u, args.ref, args.sm)
     pname, plain = plain_of(args.s8_simple)
+    wg, wg_error = None, None
+    try:
+        wg = wgmma_of(args.wgmma)
+    except Exception as e:  # noqa: BLE001
+        wg_error = f"{type(e).__name__}: {e}"
     ms_ = [int(x) for x in args.ms.split(",")]
     lins = args.linears.split(",")
     doc: dict = {"schema": "j10r-sm90/bench/v1", "device": torch.cuda.get_device_name(0),
                  "sms": torch.cuda.get_device_properties(0).multi_processor_count, "torch": torch.__version__,
                  "plain": pname, "libs": {n: lib.path for n, lib in libs.items()},
                  "served_launch": {n: bool(getattr(lib, "sm", False)) for n, lib in libs.items()},
+                 "wgmma": wg["identity"] if wg else wg_error,
                  "reps": args.reps, "ref_reps": args.ref_reps, "layers": S.LAYERS,
                  "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "calls": []}
     if args.check and Path(args.check).exists():
@@ -216,7 +278,7 @@ def main() -> int:
             key = f"{lin}-{m}"
             c = doc_f["calls"].get(key) or S.call(lin, m)
             try:
-                r = bench_call(key, c, arrays, libs, plain, args, scratch)
+                r = bench_call(key, c, arrays, libs, plain, args, scratch, wg)
             except Exception as e:  # noqa: BLE001
                 import traceback
                 r = {"call": key, "error": "".join(traceback.format_exception(e))[-3000:]}
