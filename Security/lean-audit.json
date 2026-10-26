@@ -8122,6 +8122,12 @@
    "assumptions": [],
    "type_hash": "9feae5d9e2ff364afe60468502cf1a03c68b15c84d81616e07a03ee4b35a3f5d"
   },
+  "Nci.SecurityProofs.DampenerRemotePeriodStated": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.DampenerRemotePeriodStated : Nci.Guarantees.DampenerRemotePeriodStated"],
+   "assumptions": [],
+   "type_hash": "6e83c71de57b9b8745a86cb8820ae8d2d31164b3c06ce5fc269a9e995689a825"
+  },
   "Nci.SecurityProofs.DampenerThreaded": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.DampenerThreaded : Nci.Guarantees.DampenerThreaded"],
@@ -11767,7 +11773,9 @@
    "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk --ks-form's acceptance (Flock.PortRoots.check) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServed": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
-   "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance."
+   "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
+   "Nci.SecurityProofs.DampenerRemotePeriodStated": "frozen (no-function): It states no property: it reads Nci.Guarantees.DampenerRemotePeriod, so the lock records its text, and it leaves when DampenerRemotePeriod's own theorem is proved and listed.",
+   "Nci.Guarantees.DampenerRemotePeriod": "unstated: DampenerRemote over a monitoring period of T windows on live coins, each protocol's premise replaced by its own guarantee's per-window form (CircuitCredit's conclusion for PouwSound; HiddenWindow.drawMiss_le and EndToEndHiddenDrawn for SampledDetection; NciCheck.Properties.Throttled's conclusion, which DescThrottles gives on the check of record's verdicts, for the thread bound), with TerminalDetection kept as a named premise; stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under DampenerRemotePeriodStated, and its theorem Nci.SecurityProofs.DampenerRemotePeriod is not proved yet."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -17748,6 +17756,7 @@
     "Nci.SecurityProofs.CoveringBoundPriced",
     "Nci.SecurityProofs.CoveringBoundTwoCosts",
     "Nci.SecurityProofs.DampenerRemote",
+    "Nci.SecurityProofs.DampenerRemotePeriodStated",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
@@ -17843,6 +17852,7 @@
     "Nci.SecurityProofs.CoveringBoundPriced",
     "Nci.SecurityProofs.CoveringBoundTwoCosts",
     "Nci.SecurityProofs.DampenerRemote",
+    "Nci.SecurityProofs.DampenerRemotePeriodStated",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
@@ -20613,6 +20623,7 @@
    "guarantees": [
     "Nci.SecurityProofs.CertificateSlack",
     "Nci.SecurityProofs.DampenerRemote",
+    "Nci.SecurityProofs.DampenerRemotePeriodStated",
     "Nci.SecurityProofs.VerdictLag"
    ]
   },
@@ -20846,6 +20857,7 @@
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Nci.SecurityProofs.Dampener",
     "Nci.SecurityProofs.DampenerRemote",
+    "Nci.SecurityProofs.DampenerRemotePeriodStated",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.DampenerWindows"
@@ -21188,6 +21200,14 @@
     "Nci.SecurityProofs.VerdictLag"
    ]
   },
+  "Definitions.Nci.Guarantees.RemotePeriod": {
+   "digest": "75efe6a0d1c500dadbc6a9feedceb15cdba044ac880f2d9baf6a5ca13ebdc884",
+   "definitions": {
+    "Nci.Guarantees.DampenerRemotePeriod": "6b813f5ad2f9ac59983989dfb0781b0d21bc5407c1e7517965236d2d7b746411",
+    "Nci.Guarantees.DampenerRemotePeriodStated": "0c2d5664c8ab9c3776ae1dfd8f47d48e45f8463ac63c339715294ffb35e7db4f"
+   },
+   "guarantees": ["Nci.SecurityProofs.DampenerRemotePeriodStated"]
+  },
   "Definitions.Nci.Guarantees.Threads": {
    "digest": "1cbfaa21af8c99133f4ca64ccf1e7ccdf55c1f9ef89580e9f54118c3114b6306",
    "definitions": {
@@ -21335,6 +21355,7 @@
    "guarantees": [
     "Nci.SecurityProofs.CertificateSlack",
     "Nci.SecurityProofs.DampenerRemote",
+    "Nci.SecurityProofs.DampenerRemotePeriodStated",
     "Nci.SecurityProofs.VerdictLag"
    ]
   },
@@ -21413,6 +21434,7 @@
     "Nci.SecurityProofs.ActivationsReads",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.DampenerRemote",
+    "Nci.SecurityProofs.DampenerRemotePeriodStated",
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.FitBound",
