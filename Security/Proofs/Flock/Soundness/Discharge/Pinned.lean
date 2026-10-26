@@ -34,8 +34,8 @@ theorem mulVec_two (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2)) {
 
 /-- Over GF(2), `x = (α + x)(1 + x)` holds only at `x = 0` and `α = 0`. -/
 theorem pinned_rule {x α : ZMod 2} (h : (α + x) * (1 + x) = x) : x = 0 ∧ α = 0 := by
-  revert h
-  fin_cases x <;> fin_cases α <;> decide
+  have key : ∀ x α : ZMod 2, (α + x) * (1 + x) = x → x = 0 ∧ α = 0 := by decide
+  exact key x α h
 
 /-- **A pinned bit carries 0, and so does its linear form**, in every block of a satisfying witness whose forced-zero
 row carries 0. -/
@@ -44,7 +44,7 @@ theorem PinnedRow.block_eq {r zero : Fin (2 ^ S.kLog)} {a : Fin (2 ^ S.kLog) →
     S.block z o r = 0 ∧ dotProduct a (S.block z o) = 0 := by
   have hr := hz.1 o r
   have hp : dotProduct (fun j => if j = S.pin then (1 : ZMod 2) else 0) (S.block z o) = 1 := by
-    simpa [dotProduct, ite_mul] using hz.2 o
+    simpa [dotProduct, ite_mul] using hz.2.1 o
   rw [mulVec_two S.A₀ h.1, mulVec_two (a := fun j => if j = S.pin then (1 : ZMod 2) else 0) S.B₀ h.2, hp, hzero]
     at hr
   simp only [add_zero] at hr
