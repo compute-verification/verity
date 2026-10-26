@@ -21,6 +21,8 @@ leaf), and of its discharge from SHA-512 as a random oracle (R-ACCEL-3; ABSORB-T
   pre-commitment log.
 * `ExtractFails E A u`: on the stream `u`, some opening the prover can verify from its queries disagrees with the
   extractor run on its pre-commitment log.
+* `Consistent qry h u`: `u` is the answer stream the oracle `h` gives the querier `qry`, the bridge from a uniform
+  oracle `X → D` to the uniform stream.
 -/
 
 namespace Pouw.MerkleExtract
@@ -97,6 +99,13 @@ noncomputable def oracle [Inhabited D] (u : Fin q → D) (x : X) : D :=
 def pre (u : Fin q → D) : Set X := {x | ∃ i : Fin q, (i : ℕ) < τ ∧ A.qry i u = x}
 
 end Prover
+
+/-- **`u` is the answer stream the oracle `h` gives the querier `qry`**: each query's answer is `h` at that query. This
+is how a prover that reads a uniform oracle `h : X → D` only through its queries meets the lazy-sampling form: every
+`h` has such a stream, and each stream is the one of a `1/|D|^q` share of the oracles when the queries are adaptive
+and distinct (`Proofs.Pouw.MerkleExtract.card_consistent_le`). -/
+def Consistent {q : ℕ} (qry : Fin q → (Fin q → D) → X) (h : X → D) (u : Fin q → D) : Prop :=
+  ∀ i, u i = h (qry i u)
 
 open Classical in
 /-- **The extraction fails on the stream `u`**: some opening of some word verifies against the prover's root under the

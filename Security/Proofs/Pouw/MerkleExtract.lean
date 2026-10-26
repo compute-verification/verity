@@ -14,6 +14,10 @@ import Definitions.Pouw.MerkleExtract
   (`q (2τ + 1)`).
 * `extract_of_ro_roots`: the same for `R` roots over one stream, `(q² + ∑_w q (2τ_w + 1)) / |D|`, with one
   repeated-answer event for all the roots.
+* Lazy sampling (`exists_consistent`, `card_consistent_le`): every oracle `h : X → D` gives an adaptive querier an
+  answer stream, and a querier with distinct queries sees each stream on a `1/|D|^q` share of the oracles.
+* `card_fails_oracle_le`: `extract_of_ro_roots` over a uniform oracle `X → D` instead of the stream.
+* `opens_congr`: an opening's check reads the hash only at the points it hashes.
 -/
 
 namespace Pouw.MerkleExtract
@@ -332,5 +336,154 @@ theorem extract_of_ro_roots [Inhabited D] {q R : ℕ} {τ : Fin R → ℕ} (E : 
     _ = (q * q + ∑ w, q * (2 * τ w + 1)) * Fintype.card (Fin q → D) := by rw [add_mul, Finset.sum_mul]
 
 end RandomOracle
+
+/-! ### Lazy sampling: from a uniform oracle `X → D` to the uniform answer stream -/
+
+section LazySampling
+
+/-- The oracle's answers to the querier, iterated `n` times from `default`. -/
+def iterAns [Inhabited D] {q : ℕ} (qry : Fin q → (Fin q → D) → X) (h : X → D) : ℕ → Fin q → D
+  | 0 => fun _ => default
+  | n + 1 => fun i => h (qry i (iterAns qry h n))
+
+/-- Iterating once more changes none of the first `n` answers, as query `j` reads only the answers before it. -/
+theorem iterAns_succ [Inhabited D] {q : ℕ} (qry : Fin q → (Fin q → D) → X)
+    (hdep : ∀ i u u', (∀ j : Fin q, j < i → u j = u' j) → qry i u = qry i u') (h : X → D) :
+    ∀ n (j : Fin q), (j : ℕ) < n → iterAns qry h (n + 1) j = iterAns qry h n j := by
+  intro n
+  induction n with
+  | zero => intro j hj; exact absurd hj (Nat.not_lt_zero _)
+  | succ n ih =>
+    intro j hj
+    show h (qry j (iterAns qry h (n + 1))) = h (qry j (iterAns qry h n))
+    rw [hdep j (iterAns qry h (n + 1)) (iterAns qry h n) fun l hl => ih l (by rw [Fin.lt_def] at hl; omega)]
+
+/-- **Every oracle gives an adaptive querier an answer stream.** -/
+theorem exists_consistent [Inhabited D] {q : ℕ} (qry : Fin q → (Fin q → D) → X)
+    (hdep : ∀ i u u', (∀ j : Fin q, j < i → u j = u' j) → qry i u = qry i u') (h : X → D) :
+    ∃ u, Consistent qry h u :=
+  ⟨iterAns qry h q, fun i => (iterAns_succ qry hdep h q i i.isLt).symm⟩
+
+open Classical in
+/-- `h` with its values at the points `p i` replaced by `v i`. -/
+noncomputable def overwrite {q : ℕ} (p : Fin q → X) (h : X → D) (v : Fin q → D) : X → D :=
+  fun x => if hx : ∃ i, p i = x then v (Classical.choose hx) else h x
+
+theorem overwrite_at {q : ℕ} {p : Fin q → X} (hp : Function.Injective p) (h : X → D) (v : Fin q → D) (i : Fin q) :
+    overwrite p h v (p i) = v i := by
+  have hx : ∃ j, p j = p i := ⟨i, rfl⟩
+  simp only [overwrite, dif_pos hx]
+  rw [hp (Classical.choose_spec hx)]
+
+theorem overwrite_off {q : ℕ} (p : Fin q → X) (h : X → D) (v : Fin q → D) {x : X} (hx : ¬ ∃ i, p i = x) :
+    overwrite p h v x = h x := by
+  simp only [overwrite, dif_neg hx]
+
+theorem overwrite_overwrite {q : ℕ} {p : Fin q → X} (hp : Function.Injective p) (h : X → D) (v v' : Fin q → D) :
+    overwrite p (overwrite p h v) v' = overwrite p h v' := by
+  funext x
+  by_cases hx : ∃ i, p i = x
+  · obtain ⟨i, rfl⟩ := hx; rw [overwrite_at hp, overwrite_at hp]
+  · rw [overwrite_off p _ _ hx, overwrite_off p _ _ hx, overwrite_off p _ _ hx]
+
+theorem overwrite_self {q : ℕ} {p : Fin q → X} (hp : Function.Injective p) (h : X → D) :
+    overwrite p h (fun i => h (p i)) = h := by
+  funext x
+  by_cases hx : ∃ i, p i = x
+  · obtain ⟨i, rfl⟩ := hx; rw [overwrite_at hp]
+  · rw [overwrite_off p _ _ hx]
+
+variable [Fintype D]
+
+open Classical in
+/-- The oracles that answer `u i` at `q` distinct points `p i` are a `1/|D|^q` share of all oracles. -/
+theorem card_agree [Fintype X] [DecidableEq X] {q : ℕ} {p : Fin q → X} (hp : Function.Injective p)
+    (u : Fin q → D) :
+    (Finset.univ.filter fun h : X → D => ∀ i, h (p i) = u i).card * Fintype.card D ^ q = Fintype.card (X → D) := by
+  let e : {h : X → D // ∀ i, h (p i) = u i} × (Fin q → D) ≃ (X → D) :=
+    { toFun := fun hv => overwrite p hv.1.1 hv.2
+      invFun := fun g => (⟨overwrite p g u, overwrite_at hp g u⟩, fun i => g (p i))
+      left_inv := fun ⟨⟨h, hh⟩, v⟩ => by
+        have hu : overwrite p h u = h := by
+          conv_lhs => rw [show u = fun i => h (p i) from funext fun i => (hh i).symm]
+          exact overwrite_self hp h
+        simp only [overwrite_overwrite hp, hu, overwrite_at hp]
+      right_inv := fun g => by
+        simp only
+        rw [overwrite_overwrite hp, overwrite_self hp] }
+  rw [← Fintype.card_congr e, Fintype.card_prod, Fintype.card_subtype, Fintype.card_fun, Fintype.card_fin]
+
+open Classical in
+/-- **Lazy sampling.** Over a uniform oracle `h : X → D`, a querier with adaptive, distinct queries sees each answer
+stream on a `1/|D|^q` share of the oracles, so it sees a stream in `S` on at most an `|S|/|D|^q` share. -/
+theorem card_consistent_le [Fintype X] [DecidableEq X] {q : ℕ} (qry : Fin q → (Fin q → D) → X)
+    (hfresh : ∀ u (i j : Fin q), j < i → qry i u ≠ qry j u) (S : Finset (Fin q → D)) :
+    (Finset.univ.filter fun h : X → D => ∃ u ∈ S, Consistent qry h u).card * Fintype.card D ^ q ≤
+      S.card * Fintype.card (X → D) := by
+  have hinj : ∀ u, Function.Injective fun i => qry i u := fun u i j h => by
+    rcases lt_trichotomy i j with hij | hij | hij
+    · exact absurd h.symm (hfresh u j i hij)
+    · exact hij
+    · exact absurd h (hfresh u i j hij)
+  have hsub : (Finset.univ.filter fun h : X → D => ∃ u ∈ S, Consistent qry h u) ⊆
+      S.biUnion fun u => Finset.univ.filter fun h : X → D => ∀ i, h (qry i u) = u i := by
+    intro h hh
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hh
+    obtain ⟨u, hu, hc⟩ := hh
+    exact Finset.mem_biUnion.mpr ⟨u, hu, Finset.mem_filter.mpr ⟨Finset.mem_univ _, fun i => (hc i).symm⟩⟩
+  calc (Finset.univ.filter fun h : X → D => ∃ u ∈ S, Consistent qry h u).card * Fintype.card D ^ q
+      ≤ (∑ u ∈ S, (Finset.univ.filter fun h : X → D => ∀ i, h (qry i u) = u i).card) * Fintype.card D ^ q :=
+        Nat.mul_le_mul_right _ ((Finset.card_le_card hsub).trans Finset.card_biUnion_le)
+    _ = ∑ u ∈ S, (Finset.univ.filter fun h : X → D => ∀ i, h (qry i u) = u i).card * Fintype.card D ^ q :=
+        Finset.sum_mul _ _ _
+    _ = ∑ _u ∈ S, Fintype.card (X → D) := Finset.sum_congr rfl fun u _ => card_agree (hinj u) u
+    _ = S.card * Fintype.card (X → D) := by rw [Finset.sum_const, smul_eq_mul]
+
+open Classical in
+/-- **`extract_of_ro_roots` over a uniform oracle.** `R` roots over one querier `qry` (adaptive, distinct queries),
+root `w` sent after the first `τ w` answers: the oracles `h : X → D` on whose answer stream extraction fails at some
+root are at most a `(q² + ∑_w q (2 τ_w + 1)) / |D|` share of all oracles. -/
+theorem card_fails_oracle_le [DecidableEq D] [Fintype X] [DecidableEq X] [Inhabited D] {q R : ℕ} {τ : Fin R → ℕ}
+    (E : Enc X D W) (qry : Fin q → (Fin q → D) → X) (hfresh : ∀ u (i j : Fin q), j < i → qry i u ≠ qry j u)
+    (A : ∀ w, Prover X D q (τ w)) :
+    (Finset.univ.filter fun h : X → D =>
+        ∃ u, Consistent qry h u ∧ ∃ w, ExtractFails E (A w) u).card * Fintype.card D ≤
+      (q * q + ∑ w, q * (2 * τ w + 1)) * Fintype.card (X → D) := by
+  set S := Finset.univ.filter fun u => ∃ w, ExtractFails E (A w) u
+  have hsub : (Finset.univ.filter fun h : X → D => ∃ u, Consistent qry h u ∧ ∃ w, ExtractFails E (A w) u) ⊆
+      Finset.univ.filter fun h : X → D => ∃ u ∈ S, Consistent qry h u := by
+    intro h hh
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hh ⊢
+    obtain ⟨u, hc, hf⟩ := hh
+    exact ⟨u, by simpa [S] using hf, hc⟩
+  have hpos : 0 < Fintype.card D ^ q := pow_pos Fintype.card_pos q
+  have h1 := card_consistent_le qry hfresh S
+  have h2 := extract_of_ro_roots E A
+  rw [Fintype.card_fun, Fintype.card_fin] at h2
+  refine Nat.le_of_mul_le_mul_right ?_ hpos
+  calc (Finset.univ.filter fun h : X → D =>
+          ∃ u, Consistent qry h u ∧ ∃ w, ExtractFails E (A w) u).card * Fintype.card D * Fintype.card D ^ q
+      ≤ (Finset.univ.filter fun h : X → D => ∃ u ∈ S, Consistent qry h u).card * Fintype.card D ^ q *
+          Fintype.card D := by
+        rw [mul_right_comm]; exact Nat.mul_le_mul_right _ (Nat.mul_le_mul_right _ (Finset.card_le_card hsub))
+    _ ≤ S.card * Fintype.card (X → D) * Fintype.card D := Nat.mul_le_mul_right _ h1
+    _ = S.card * Fintype.card D * Fintype.card (X → D) := by ring
+    _ ≤ (q * q + ∑ w, q * (2 * τ w + 1)) * Fintype.card D ^ q * Fintype.card (X → D) :=
+        Nat.mul_le_mul_right _ h2
+    _ = (q * q + ∑ w, q * (2 * τ w + 1)) * Fintype.card (X → D) * Fintype.card D ^ q := by ring
+
+end LazySampling
+
+/-- An opening that verifies under `h` verifies under every `h'` that agrees with `h` on the points it hashes. -/
+theorem opens_congr {h h' : X → D} (E : Enc X D W) :
+    ∀ {d : D} {p : List (Bool × D × D)} {w : W}, (∀ y ∈ pts E p w, h y = h' y) → Opens h E d p w → Opens h' E d p w
+  | d, [], w, hag, hO => by
+    simp only [pts, List.mem_singleton, forall_eq] at hag
+    simp only [Opens] at hO ⊢
+    rw [← hag]; exact hO
+  | d, (b, s, c) :: p, w, hag, hO => by
+    simp only [pts, List.mem_cons, forall_eq_or_imp] at hag
+    simp only [Opens] at hO ⊢
+    exact ⟨hag.1 ▸ hO.1, opens_congr E hag.2 hO.2⟩
 
 end Pouw.MerkleExtract
