@@ -388,13 +388,13 @@ def world_macs(m: dict) -> tuple[dict, float, float, float, float]:
     return hist, m["static"] * WORLD_TOKENS, qk, pv, ix
 
 
-def static_pipes(card: str, model: str, budget: float, **kw) -> dict:
+def static_pipes(card: str, model: str, budget: float, max_tiles: int = 6, **kw) -> dict:
     """v2's static rounds with tiles, picked under overlapped accounting: MAC-weighted tensor, ALU without wraps, wraps,
     the tensor saving at A = B = 0, and the worst shape's pipe maximum."""
     tot = T = A = W = S = 0.0
     worst = (0.0, None)
     for K, N, reps in SHAPES[model]:
-        r = v2_pick(card, K, N, 16, budget, tile_set=range(1, 7), overlap=True, **kw)
+        r = v2_pick(card, K, N, 16, budget, tile_set=range(1, max_tiles + 1), overlap=True, **kw)
         w = K * N * reps
         tot, T, A, W, S = tot + w, T + w * r["T"], A + w * r["A_nw"], W + w * r["wrap"], S + w * r["saved"]
         if r["gamma_max"] > worst[0]:
@@ -402,12 +402,12 @@ def static_pipes(card: str, model: str, budget: float, **kw) -> dict:
     return {"T": T / tot, "A_nw": A / tot, "wrap": W / tot, "saved": S / tot, "worst": worst}
 
 
-def att_pipes(card: str, m: dict, hist: dict, word_bits: int = 16) -> tuple[float, float, float, float]:
+def att_pipes(card: str, m: dict, hist: dict, word_bits: int = 16, built: bool = False) -> tuple[float, float, float, float]:
     """ATT a credited PV and QKᵀ MAC (tensor, ALU without wraps), MAC-weighted over the attended keys, with v2's words
     and NF3's leaves. Tensor 2: the noised round and the plain stream that serves S and O; QKᵀ adds the two-pass
     softmax's S pass. PV words every min(n, L_unit) keys; QKᵀ one word a GQA cell (inner H_kv·d) or a head (d_qk)."""
     mac, sha, c_op, _ = V2_CARDS[card]
-    per_comp = ETA * mac / sha
+    per_comp = ETA * mac / (SHA_BUILT[card] if built else sha)
     C = per_comp * LEAF_BLOCKS * TREE / LEAF_DATA_BITS * word_bits
     bit = per_comp / 512
     g_heads = m["hq"] // m["hkv"]
@@ -431,7 +431,7 @@ def lookup_alu(card: str, hist: dict) -> float:
     return min(c_op * 8 / g * (1 + 2 ** g / (n / 2)) for g in range(2, LOOKUP_G_MAX + 1))
 
 
-def v2_world(budget: float = 0.01) -> list[dict]:
+def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6) -> list[dict]:
     """v2 static (tiles) plus ATT at the world model, the period's tensor and ALU pipes overlapped.
 
     Credit is priced at max(T, A without wraps); the honest period takes max(T, A). Where the period is tensor-bound the
@@ -444,8 +444,8 @@ def v2_world(budget: float = 0.01) -> list[dict]:
         for m in WORLD:
             hist, st, qk, pv, ix = world_macs(m)
             tot = st + qk + pv + ix
-            s = static_pipes(card, m["name"], budget)
-            pv_t, pv_a, qk_t, qk_a = att_pipes(card, m, hist)
+            s = static_pipes(card, m["name"], budget, max_tiles, built=built)
+            pv_t, pv_a, qk_t, qk_a = att_pipes(card, m, hist, built=built)
             T = st * s["T"] + pv * pv_t + qk * qk_t + ix
             A_nw = st * s["A_nw"] + pv * pv_a + qk * qk_a
             Wr = st * s["wrap"] + (pv + qk) * a_wrap
@@ -457,7 +457,7 @@ def v2_world(budget: float = 0.01) -> list[dict]:
             slack = max(0.0, T - A_nw)
             s1 = min(st * s["saved"], slack)
             s2 = min(pv - x, (slack - s1) / (1 + ell))
-            rows.append({"card": card, "model": m["name"], "gamma_add": g_add, "gamma": honest / tot,
+            rows.append({"card": card + (" built" if built else "") + (" t=1" if max_tiles == 1 else ""), "model": m["name"], "gamma_add": g_add, "gamma": honest / tot,
                          "T": T / tot, "A": (A_nw + Wr) / tot, "eps_alg": (s1 + s2) / credit,
                          "wrap_uncredited": (honest - credit) / honest, "lookup": x / pv,
                          "copy_share": (qk + pv) / tot, "uncredited": ix / tot, "worst": s["worst"],
@@ -468,11 +468,11 @@ def v2_world(budget: float = 0.01) -> list[dict]:
 def v2_world_print(budget: float = 0.01) -> None:
     print(f"\nv2 at the world model (static with tiles + ATT, 16-bit words, overlapped pipes, eps_alg budget {budget:.0%}"
           f" a shape)")
-    print(f"  {'card':13} {'model':16} {'g_ovl':>6} {'g_add':>6} {'T':>5} {'A':>5} {'eps_alg':>7} {'wraps':>6} "
+    print(f"  {'card':18} {'model':16} {'g_ovl':>6} {'g_add':>6} {'T':>5} {'A':>5} {'eps_alg':>7} {'wraps':>6} "
           f"{'lookup':>6} {'copy':>5} {'uncr':>5}  static, worst shape")
-    for r in v2_world(budget):
+    for r in v2_world(budget) + v2_world(budget, built=True) + v2_world(budget, max_tiles=1):
         g, (K, N, L, t) = r["worst"]
-        print(f"  {r['card']:13} {r['model']:16} {r['gamma']:6.2f} {r['gamma_add']:6.2f} {r['T']:5.2f} {r['A']:5.2f} "
+        print(f"  {r['card']:18} {r['model']:16} {r['gamma']:6.2f} {r['gamma_add']:6.2f} {r['T']:5.2f} {r['A']:5.2f} "
               f"{r['eps_alg']:7.2%} {r['wrap_uncredited']:6.1%} {r['lookup']:6.1%} {r['copy_share']:5.1%} "
               f"{r['uncredited']:5.2%}  {r['static_gamma']:.2f}, K {K} N {N} L {L} t {t}: {g:.2f}")
 
