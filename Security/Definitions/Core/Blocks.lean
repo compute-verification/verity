@@ -1,12 +1,12 @@
 import Definitions.Core.Circuit
-import Definitions.Core.Device
+import Definitions.Accounting.Device
 import Definitions.Core.Game
 
 /-!
 # Server-time blocks and the wipes between them (trusted)
 
 A server's life is cut into server-time blocks, each opened by a certified memory wipe: the device model
-(`Verity.Device`) extended by one thing, wipes. This module states what a block is, what crosses the boundary into it,
+(`Accounting.Device`) extended by one thing, wipes. This module states what a block is, what crosses the boundary into it,
 and what the wipe there bounds. It states no guarantee; a joint guarantee over a schedule of blocks reads these.
 
 * **A block** (`Block`) of the declared circuit `C` on the device: the window of ticks it runs, and the gates of `C` it
@@ -28,8 +28,8 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
   (`Wipe.start`) is a function of the device's state at the boundary, the seed and the spot reads.
 * **What block `b` may depend on** (`Wipe.Separates`): of the device's state at the boundary and the seed, only the
   state block `b` starts from; the spot reads are public. What the prover kept off the device (the egress, NVMe, the
-  network) can come back after the wipe over the side channels: `Device.cap` limits that per tick, and no wipe bounds
-  it.
+  network) can come back after the wipe over the side channels: `Accounting.Device.cap` limits that per tick, and no
+  wipe bounds it.
 * **The wipe's survivor bound** (`Wipe.SurvivorBound foreignBits ε`), the pair an accepted verdict of the deployed wipe
   publishes (`foreign_bits = ⌈fill/19⌉ + E` at `eps = 2^-128`): foreign content of at least `foreignBits` bits, plus the
   state the fill leaves out (`Wipe.unfilled`: the on-chip state and the store the fill doesn't reach), is read back from
@@ -37,7 +37,7 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
   at most `ε`.
 
 **One GPU, one store** (Daniel's rulings of 25 Oct): the device is one GPU, and its one store is the GPU's HBM
-(`Device.mem`, M). The model has no host store.
+(`Accounting.Device.mem`, M). The model has no host store.
 
 **The blocks are private.** The blocks' gate sets split the circuit's gates over time, as a partition does, and like a
 partition's they are private: a statement over a schedule reads `Blocks` as the prover's value, never as a public
@@ -52,8 +52,8 @@ open scoped ENNReal
 variable {ι : Type}
 
 /-- **The device's state**: its on-chip state, `chip` bits (S_chip), and its store, `mem` bits (M), the GPU's HBM. The
-model has no host store. -/
-structure Device.State (d : Device ι) where
+model has no host store. It is written `Device.State d`: `d` is an `Accounting.Device`, so `d.State` doesn't resolve. -/
+structure Device.State (d : Accounting.Device ι) where
   /-- the on-chip state: registers, shared memory, caches -/
   chip : Fin d.chip → Bool
   /-- the store: the device memory, the GPU's HBM -/
@@ -63,7 +63,7 @@ structure Device.State (d : Device ι) where
 and the gates of `C` it computes there. -/
 structure Block (C : Circuit) where
   /-- the ticks the block runs -/
-  win : Window
+  win : Accounting.Window
   /-- the gates of `C` whose values the block computes -/
   gates : Finset (Fin C.N)
 
@@ -101,11 +101,11 @@ end Blocks
 that opens the block, and the device's state, its store among it. The re-read value is the committed one
 (`s.carriedValue X b`) when the commitment made before the wipe binds it, which a joint guarantee states, not this
 type. -/
-structure Blocks.State {C : Circuit} {B : ℕ} (s : Blocks C B) (d : Device ι) (b : Fin B) where
+structure Blocks.State {C : Circuit} {B : ℕ} (s : Blocks C B) (d : Accounting.Device ι) (b : Fin B) where
   /-- the carried state's value, re-read after the wipe -/
   carried : s.Carried b
   /-- the device's state: its on-chip state and its store -/
-  device : d.State
+  device : Device.State d
 
 /-- **The wipe at boundary `b`** of the schedule `s` on the device `d`, the streamed-label wipe, with the seed drawn
 from `Ω` and the spot reads from `Ch`, each uniform once the device's state at the boundary is fixed: the device fills
@@ -120,28 +120,29 @@ time and reads the labels back under a deadline.
 * `after σ' ξ c`: the device's state when block `b` starts, from its state `σ'` when the fill ends, the egress `ξ` and
   the spot reads `c`. During the spot reads nothing enters the device but the spot reads and what the outside sends
   back, a function of the egress and the spot reads. -/
-structure Wipe (d : Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) (Ω Ch : Type) where
+structure Wipe (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) (Ω Ch : Type) where
   /-- the bits of the device's store the fill covers -/
   fill : ℕ
   fill_le : fill ≤ d.mem
   /-- the bits that leave the device during the wipe (`E`) -/
   egress : ℕ
   /-- the carried state's value, as the device holds it at the boundary -/
-  carry : d.State → s.Carried b
+  carry : Device.State d → s.Carried b
   /-- the device's state when the fill ends, and the egress -/
-  filled : d.State → Ω → d.State × (Fin egress → Bool)
+  filled : Device.State d → Ω → Device.State d × (Fin egress → Bool)
   /-- the memory challenger's verdict -/
-  accepts : d.State → Ω → Ch → Prop
+  accepts : Device.State d → Ω → Ch → Prop
   /-- the device's state when block `b` starts -/
-  after : d.State → (Fin egress → Bool) → Ch → d.State
+  after : Device.State d → (Fin egress → Bool) → Ch → Device.State d
 
 namespace Wipe
 
-variable {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {Ω Ch : Type} (w : Wipe d s b Ω Ch)
+variable {d : Accounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {Ω Ch : Type}
+  (w : Wipe d s b Ω Ch)
 
 /-- **The state block `b` starts from**, when the device's state at the boundary is `σ`, the seed `ω` and the spot reads
 `c`: the carried value it re-reads, and the device's state the wipe leaves. -/
-def start (σ : d.State) (ω : Ω) (c : Ch) : s.State d b :=
+def start (σ : Device.State d) (ω : Ω) (c : Ch) : s.State d b :=
   ⟨w.carry σ, w.after (w.filled σ ω).1 (w.filled σ ω).2 c⟩
 
 /-- The bits of the device's state the fill leaves out: its on-chip state and the store the fill doesn't reach. -/
@@ -154,7 +155,7 @@ state block `b` starts from. The spot reads are public. The seed reaches block `
 statement in which the seed is published later and reaches the device in `y` has to account for it there. This is the
 device's side: `y` is an argument, so what reaches the device after the wipe is not bounded here, including content the
 prover kept off the device (the egress among it) and sends back over a side channel. -/
-def Separates {Y Z : Type} (next : d.State → Ω → Ch → Y → Z) : Prop :=
+def Separates {Y Z : Type} (next : Device.State d → Ω → Ch → Y → Z) : Prop :=
   ∃ g : s.State d b → Ch → Y → Z, ∀ σ ω c y, next σ ω c y = g (w.start σ ω c) c y
 
 /-- **The wipe's survivor bound** at `foreignBits` and `ε`, the pair an accepted verdict of the deployed wipe publishes
@@ -176,7 +177,8 @@ memory-accounting's, in a package that sees both, and it has to account for the 
 published `eps` leaves out. -/
 def SurvivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (foreignBits : ℕ) (ε : ℝ≥0∞) : Prop :=
   ∀ S_φ : ℕ, foreignBits + w.unfilled ≤ S_φ →
-    ∀ (hold : (Fin S_φ → Bool) → d.State) (keep : d.State → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool),
+    ∀ (hold : (Fin S_φ → Bool) → Device.State d)
+      (keep : Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool),
       Game.value
         (fun x : (Fin S_φ → Bool) × Ω × Ch =>
           w.accepts (hold x.1) x.2.1 x.2.2 ∧

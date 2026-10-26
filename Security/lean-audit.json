@@ -2172,9 +2172,9 @@
  },
  "layers": {
   "Definitions.Core": {
-   "imports": ["Mathlib", "Definitions.Core"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Accounting.Device"],
    "except": [],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; the server-time blocks and their wipes (Definitions.Core.Blocks) sit on the device model, which is trusted text that imports only Mathlib"
   },
   "Definitions.Core.TC.Pipeline": {
    "imports": [],

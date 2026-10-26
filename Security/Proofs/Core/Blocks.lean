@@ -13,11 +13,11 @@ namespace Verity
 
 open scoped ENNReal
 
-variable {ι : Type} {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {Ω Ch : Type}
+variable {ι : Type} {d : Accounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {Ω Ch : Type}
 
 /-- The wipe that clears the device's state: the fill covers the whole store and leaves every bit of the device's state
 false, nothing leaves the device, the challenger always accepts, and the spot reads change nothing. -/
-def Wipe.blank (d : Device ι) (s : Blocks C B) (b : Fin B) (Ω Ch : Type) : Wipe d s b Ω Ch where
+def Wipe.blank (d : Accounting.Device ι) (s : Blocks C B) (b : Fin B) (Ω Ch : Type) : Wipe d s b Ω Ch where
   fill := d.mem
   fill_le := le_rfl
   egress := 0
