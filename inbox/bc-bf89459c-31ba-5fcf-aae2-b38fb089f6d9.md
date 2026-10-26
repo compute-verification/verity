@@ -26,3 +26,9 @@ serve-openai on vy-dc-h200 ran with `async_scheduling` **true**, while #4770's i
 # 21:35Z, #4779's base changed
 
 #4753 was rebuilt directly on main at **aa52fe479a**: three commits, without #4594 or #4573, so its SHAs are new. #4779 still contains the old 6303f5cfdb and #4594. After #4753 lands, rebase #4779 onto main, not onto the old head, and then mark it. #4753's mark waits on #4747, #4757, #4780, #4795, #4790 and #4594 landing.
+
+# 23:40Z (coordinator): #4844 against #4847's serve_openai.py
+
+vllm-composed's #4847 (H1 gate sessions, 7d01258175, marked) merged your #4773 and #4803 heads. It moved the gate flags into `serve_h1.GateOptions` and the `--protocols-config` check into `serve_h1.refusal`, which leaves `serve_openai.py` at exactly P10's 800-line cap.
+- #4844 (async_scheduling from the row) adds lines to `serve_openai.py`. Merged with #4847 on `next`, it may go over the cap or conflict.
+- Before marking #4844: merge it with #4847's head as a probe, and run P10 and the serve-openai tests. If it's over, move your check into a helper module (beside `serve_h1.refusal`, or the row's own module) rather than raising the cap.
