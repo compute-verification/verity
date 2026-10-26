@@ -150,6 +150,8 @@ import Proofs.Flock.Claims.Recursion.DecodeTiesVals
 import Proofs.Flock.Claims.Recursion.DecodeTiesW
 import Proofs.Flock.Claims.Recursion.DecodeTies
 import Proofs.Flock.Claims.Recursion.VerdictParts
+import Proofs.Flock.Claims.Recursion.NextRHonest
+import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.Claims.Recursion.ResAccepts
 import Proofs.Flock.Claims.Recursion.RowSlots
 import Proofs.Flock.Claims.Recursion.FinalPiece
