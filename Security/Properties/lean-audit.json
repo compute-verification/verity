@@ -127,6 +127,10 @@
    "owner": "@memory-accounting",
    "digest": "635c2edca25704b425275a4f2d3944bccd1dfc3878fc051e8b3700d198e7454d"
   },
+  "Pous.Period.RingDeviceAt": {
+   "owner": "@memory-accounting",
+   "digest": "87d161476d0c030f0ea03d2e74a6000290492c6e3d8e415189de12b6d5537ce7"
+  },
   "PousCheck.Properties.AcceptsDecodes": {
    "owner": "@memory-accounting",
    "digest": "f868d8718cc355d0ebe11ee22c08fcdabdfb34118763167a0ba646a7345ec31e"
