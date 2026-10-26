@@ -143,7 +143,7 @@ theorem pend_chFr (p : LigeritoProof) : ∀ (k msg : ℕ) (pre : List Frame), (c
   | k + 1, msg, pre, hX => by
     have e : pre ++ (kFr p.messages[msg]! ++ chFr p (msg + 1) (k + 1)) =
         (pre ++ kFr p.messages[msg]! ++ [.sq 2 2]) ++ (kFr p.messages[msg + 1]! ++ chFr p (msg + 1 + 1) k) := by
-      simp only [chFr, List.append_assoc, List.cons_append, List.singleton_append]
+      simp only [chFr, List.append_assoc, List.cons_append, List.nil_append]
     rw [e, pend_chFr p k (msg + 1) _ (pend_close _ (by simp [closes])), show msg + 1 + k = msg + (k + 1) by omega]
 
 /-- The sumcheck message the round absorbing the `ℓ`-th recursive cap carries. -/
@@ -177,7 +177,7 @@ theorem repFrames_capChunk (st : Setup) (sch : Flock.Schedule) (domain : ByteArr
         (List.range' 0 (sch.levels.size - 1)).flatMap (levelFr sch p.ligerito) with hb
     have hF : repFrames st sch domain n p T =
         a ++ capFr p.ligerito.recursiveCaps[0]! :: Frame.sq 2 (sch.n - sch.k0 + 1) :: b := by
-      simp only [ha, hZ, hb, repFrames, ligFrames, introFr, List.append_assoc, List.cons_append, List.singleton_append,
+      simp only [ha, hZ, hb, repFrames, ligFrames, introFr, List.append_assoc, List.cons_append, List.nil_append,
         Nat.zero_add]
     have hcnt : (chunks a).1.length =
         (3 + (st.m - 6)) + (3 + (st.fold.kLog - 6)) + (n + 1) + capRound sch.k0 (0 + 1) := by
@@ -231,7 +231,7 @@ theorem repFrames_capChunk (st : Setup) (sch : Flock.Schedule) (domain : ByteArr
           Frame.sq 2 ((sch.levels.getD (i + 1) default).cols + 1) :: b := by
       rw [repFrames, ligFrames, range'_split (show i < sch.levels.size - 1 by omega), List.flatMap_append,
         List.flatMap_cons, hL, hch]
-      simp only [ha, hZ, hb, introFr, List.append_assoc, List.cons_append, List.singleton_append]
+      simp only [ha, hZ, hb, introFr, List.append_assoc, List.cons_append, List.nil_append]
     have hcnt : (chunks a).1.length =
         (3 + (st.m - 6)) + (3 + (st.fold.kLog - 6)) + (n + 1) + capRound sch.k0 (i + 1 + 1) := by
       rw [chunks_length]
