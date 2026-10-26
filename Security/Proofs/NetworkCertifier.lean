@@ -43,14 +43,15 @@ the leak bound with it), `WindowCharge` (advice v1's whole-window charge counts,
 `SampledCharge` (the leak bound under a sampled audit: the faulty units' charge) or `Warden`
 (the warden's channel bound),
 and every lemma behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAccepted`, taken as a hypothesis until
-PRF-144 proves it (`NetTiming.sampledLeak`). `TapRows` bounds the leak at the network certifier's rows
-(`TapProof.sampledLeak_tap`): an accepted audit's extracted trace carries the network certifier's registered rows
-outside the faulty units, unless its openings collide with the network certifier's; `Period` counts with it. `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
+PRF-144 proves it (`NetTiming.sampledLeak`). `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection.
 `SampledAuditInstance` takes its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`, at the assembled records.
+`TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_tap`): an accepted audit's extracted
+trace carries the network certifier's registered rows outside the faulty units, unless its openings collide with the
+network certifier's; `Period` counts with it.
 -/
 
 namespace NetTiming.SecurityProofs
