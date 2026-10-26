@@ -361,7 +361,8 @@ each tensor from a block boundary, scales outside `W`), and decodes each layer's
 callable of the commitment, or `{"command": argv}`; install refuses without one), `p2_lib` (`libp2v1.so`'s directory, for
 weights on a GPU) and `experimental`. Each period's audit is the installed option's `leg(period_dir, node, out)`: the memory
 challenger at `period.json`'s `challenger_host` (`verity.core.protocols.pous.challenger_party`), the answer stating the bits it
-certifies (`period.certify`).
+certifies (`period.certify`). `tests/protocols/pous_gpu.sh` runs it on one H200 over Llama-3.2-1B int8's linears, timing the
+encode and a step's decode at use.
 
 **PoUW is not auditable yet.**
 
