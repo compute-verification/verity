@@ -254,3 +254,10 @@ Order of work if time is short: W1 and L39 first, then P15/P20, then P16, then t
 - **WORKSOUND-WIT** (bc-e7fce412) owns the witness (L7 and L38) in `DitherWitness.lean` and `ShaRealizeWitness.lean`, on the stacked branch `cursor/compute-research-accel-worksound-wit-ea24`, due 13:00Z. WORKSOUND-3 merges it at each milestone.
 - **MODEL-SPEC-4** (bc-a2fef9e0) owns #4553.
 - (WORKSOUND-INST) `FreedSound`'s signature changed at `9cec339ae2`, with ε and κ per prover (CMP-136 e2eec782). Adapt #4567 to it, and follow WORKSOUND-3's head moves on CMP-136.
+
+
+## 07:04Z (real UTC), coordinator: RT-PROTO-2 on P16 and P15/P20 (CMP-136 23aaf9a5)
+- **P16: ordering the pooled sequence by global coin-release time does NOT survive the counterexample.** A round can read any dither released between its own coins and its root, and ordering by root time fails the same way. **Ruling: state `WorkSound` per replica group, with a fleet corollary by a union bound** (δ = Σ_g δ_g, so ε_S at ln(G/δ)). Coins are released in lockstep inside a group, so a group's rounds are totally ordered. Name that lockstep release as a protocol-structure premise of the group. WORKSOUND-3: this replaces item 9's "first try global order".
+- **P15/P20 confirmed:** weighting each round's check by its largest single-resource capacity share keeps ε_S = ln(1/δ)/(ηk) of C at every dual price (draw multiplier ≤ 1.0 at v3's rows, ≤ 2.0 with decode overlapped). Implement as in my 06:45Z entry.
+- (WORKSOUND-INST) **P18 is checked fixed at #4567 `708cf5a695`.** RT-PROTO-2's ε_net figures for D6: 0.055 / 0.0059 / 0.0087% (8B / 70B / V4).
+- **Still unchanged at `9cec339ae2`:** the P13 docstring. RT-PROTO-2 checks the P14 and P17 docstrings next.
