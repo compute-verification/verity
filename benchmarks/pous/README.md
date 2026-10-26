@@ -84,7 +84,14 @@ Implementations:
     C*, negative blocks, and spot vectors at the real store's indices, with W and the staging buffers pinned by digest
     (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both. `store.py commit` is
     `setup.commit` of the real W, regenerated in this layout from the seeded generator (`verity_torch_loop.weights`),
-    with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it.
+    with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it. `store.py encode` draws the
+    salt from the auditor's coin and encodes C* on every GPU of a node (`pod.sh IMPL=p2-store ... -- encode ...`), as
+    canonical segment files a rerun resumes; `--segments LO:HI --order down` encodes a part and `finish` joins the
+    parts. `verify --decode` rereads a store and decodes it into the commitment, `spot` decodes random blocks against W
+    regenerated from the seed, and `tie` binds the store to the weights' registration digest. `p2_v1/parts/` moves
+    parts between machines without an agent VM: `part-out.sh` publishes a node's segments through its run's custody,
+    and `fetch-records.sh` fetches those records into another machine's store, checking every file against its
+    segment's digests (`join.py`).
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
   `p2-16448/v2`, whose ChaCha8 keys the spec does not allow (its F4 names counter-mode SHA-512). The registered P2 with the
