@@ -3,6 +3,7 @@ import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Claims.Recursion.NextRTables
 import Proofs.Flock.Claims.Complete.Shaped
+import Proofs.Flock.Claims.Recursion.NextRFits
 
 /-!
 # `ElemFramed` and `OpenedShaped` at the deployed last message `elemR`
@@ -21,7 +22,10 @@ hypothesis, at every witness and every decision `rdR` reads:
   `fast100` schedule, `m ≤ 35` and at most 2,048 extra claims (`fileBound_lt`, `tablesOk_of_read`). This holds for
   adversarial witnesses too: nothing here reads a witness's values, only `elemR`'s layout.
 
-`readsAt_elemR` is `RestRead.readsAt` at `elemR` with only `OpenedFit` left.
+`readsAt_elemR` is `RestRead.readsAt` at `elemR` with only `OpenedFit` left. `OpenedFit` follows from the rows'
+sizes (`openedFit_of`): the honest proof fits its own rows (`repFits`), and a fit lifts to any rows of the same byte
+sizes (`RestRead.FitsLift`), so it is enough that the opened rounds have an honest rep's sizes (`OpenedSized`).
+`readsAt_elemR'` takes those two.
 -/
 
 namespace RecDeploy.RestElem
@@ -403,5 +407,40 @@ theorem openedShaped_elemR : RestRead.OpenedShaped elemR := by
 (`OpenedFit elemR`): `ElemFramed` and `OpenedShaped` hold at `elemR` (`elemFramed_elemR`, `openedShaped_elemR`). -/
 theorem readsAt_elemR (hfit : RestRead.OpenedFit elemR) : RestRead.ReadsAt rdR finalR (restR elemR) :=
   RestRead.readsAt elemR elemFramed_elemR hfit openedShaped_elemR
+
+/-! ## `OpenedFit` from the rows' sizes -/
+
+/-- **The opened rounds have an honest rep's byte sizes**: at the same statements, witnesses and coins as
+`OpenedFit`, each rep's context is its frames' schedule (`SchedOf`), and some honest proof at it (`HonestRep`, its cap
+the context's) commits rows of the byte sizes of the rep's block of the opened rounds after the link. -/
+def OpenedSized (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) : Prop :=
+  ∀ x, DenseX x → ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), ws.length = nS x →
+    (∀ e ∈ (RestRead.layAt (restR elem)).allCalls x ws, FlockDeploy.sha512 e.1 = e.2) →
+    ∀ os last, finalR (RestRead.lastAt (restR elem) x ws) = some (os, last) → os.length + 1 = RestRead.kI x →
+      ∀ v, FlockDeploy.setupOf false (xIOf x) = some v → ∀ k < 2 * v.2.2.size,
+        FlockDeploy.SchedOf (FlockDeploy.repCtx v.2.1 v.2.2 (c 0) (RestRead.nodesR (os.headD []))
+            ((List.range (RestRead.kI x)).map c).tail.dropLast k) ∧
+          ∃ (p : Flock.Proof) (T : F128),
+            FlockDeploy.HonestRep (FlockDeploy.repCtx v.2.1 v.2.2 (c 0) (RestRead.nodesR (os.headD []))
+              ((List.range (RestRead.kI x)).map c).tail.dropLast k) p ∧
+            p.cap.toList = (FlockDeploy.repCtx v.2.1 v.2.2 (c 0) (RestRead.nodesR (os.headD []))
+              ((List.range (RestRead.kI x)).map c).tail.dropLast k).cap0 ∧
+            ((FlockDeploy.cutLens (FlockDeploy.repLens v.2.1 v.2.2) (os.tail.map RestRead.rowsR)).getD k []).map
+                (·.map ByteArray.size) =
+              (FlockDeploy.repRows (FlockDeploy.repCtx v.2.1 v.2.2 (c 0) (RestRead.nodesR (os.headD []))
+                ((List.range (RestRead.kI x)).map c).tail.dropLast k) p T).map (·.map ByteArray.size)
+
+/-- **Every rep's opened rounds fit where they have an honest rep's sizes**: the honest proof fits its own rows
+(`repFits`), and a fit lifts to rows of the same byte sizes (`FitsLift`). -/
+theorem openedFit_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (hL : RestRead.FitsLift) (hS : OpenedSized elem) : RestRead.OpenedFit elem := by
+  intro x hx c ws hl hT os last hf hos v hv k hk
+  obtain ⟨hsc, p, T, hp, hcap, hsz⟩ := hS x hx c ws hl hT os last hf hos v hv k hk
+  exact hL _ _ _ p T (FlockDeploy.repFits _ p T hsc hp hcap) hsz
+
+/-- **The last step reads at the deployed readers at `elemR`** wherever fits lift across byte sizes and the opened
+rounds have an honest rep's sizes. -/
+theorem readsAt_elemR' (hL : RestRead.FitsLift) (hS : OpenedSized elemR) : RestRead.ReadsAt rdR finalR (restR elemR) :=
+  readsAt_elemR (openedFit_of elemR hL hS)
 
 end RecDeploy.RestElem
