@@ -4,8 +4,10 @@ Three Lake packages, each on C-Flock's verifier and the core interface (`../inte
 their ported components' packages, with no Mathlib:
 
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
-  `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`); the
-  stub components (`Stubs.lean`); and the `#guard`s that pin the rule (`Guards.lean`).
+  `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`);
+  `registered id R s components`, the same after a registration check `R`, on the registration the component `s`
+  commits to (`Registered.lean`); both over blobs (`Blobs.lean`); the stub components (`Stubs.lean`); and the `#guard`s
+  that pin both rules (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): integrity, work, space, bandwidth and
   communication.
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): integrity and work.
@@ -36,6 +38,28 @@ component's `answer` on its case, then decides, reject first:
 On acceptance the product makes public each component's public outputs and keeps each one's profile, both as JSON objects
 keyed by the component's id. On rejection or undecided nothing is public.
 
+### A registration check
+
+`registered id R s components` checks a registration before composing, in its commit phase, and `registeredB` is the
+same over blobs. It is onsite's shape once NCI's check of record is a core protocol (`NciCheck.Protocol.protocol`,
+`verity/nci/v1`, #4616): `registeredB "verity/onsite/v0" NciCheck.Protocol.protocol
+SampledProofs.OneStageZk.protocol.id components`, whose registration is the one sampled proofs' one-stage audit commits
+to, one registration digest in both. NCI is a registration check, not a component (Daniel's ruling: onsite has six
+subprotocols, and NCI is none of them). Its formats are the product's with the registration's beside the components':
+
+| input | format |
+| --- | --- |
+| params | `{"components":[...],"registration":{"id":ID,"params":PARAMS}}` |
+| commitment | the product's 64 bytes, then the registration's digest; its own digest |
+| evidence | `{"components":[...],"registration":{"commitment":HEX,"evidence":HEX,"id":ID,"params":PARAMS}}` |
+
+It rejects when the registration isn't the registration check's or carries other params, when the registration check
+doesn't accept it, or when the commitment doesn't end in its digest, whatever the components answer. When the cases fit
+it rejects too when the committing component's case (the first under the id `s`) doesn't commit to that digest, again
+whatever the components answer (`mismatch`: `registration: R checked D, s committed D'`, `D'` hex or `no digest`).
+Otherwise it answers as the product of the components does under the commitment's first 64 bytes, and the registration
+adds nothing to what is public or kept.
+
 ## Components
 
 | component | onsite | remote | `Core.Protocol` | id |
@@ -52,8 +76,8 @@ replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with 
 a `[[require]]` of each product, keeping each list in the order of its ids (`ordered`, which each product's `#guard`
 checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
 own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's
-own difftest or its period hook. Every component of both products is ported; NCI and the trial's reconciling are not
-components yet.
+own difftest or its period hook. Every component of both products is ported; NCI is a registration check, not a component, and
+the trial's reconciling is not a component yet.
 
 A component that reads blobs (`Core.BlobProtocol`, the content-addressed files beside its three byte strings: integrity's
 proof files) makes the product one too: `productB` (`CoreComposition/Blobs.lean`) hands the caller's blobs to every
@@ -78,8 +102,8 @@ verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean
 Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or fails to decode
 (one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), every case hands
 the components the same blobs (integrity's circuit and public file), and the composition's inputs, its blobs or the case
-itself are often broken. Integrity accepts only on a session's proof, which no case carries (its cases are audits with
-no session, undecided when their draw drew nothing, and audits whose sessions' files are in no blob), so no product
+itself are often broken. Integrity accepts only on a session's proof, which no case carries (its cases are audits with no
+session, undecided when their draw drew nothing, and audits whose sessions' files are in no blob), so no product
 accepts in the difftest until a v2 case with a proof does. The port follows top's rule where the
 trial's differs, and the reference is changed to match (`verdict`; the trial's, reduced to answers, is `trial_verdict`):
 

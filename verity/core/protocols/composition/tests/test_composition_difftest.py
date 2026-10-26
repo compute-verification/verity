@@ -145,13 +145,16 @@ MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-
                            "params-extra-key", "case-extra-key", "case-missing-key", "bad-hex", "garbage-evidence",
                            "garbage-params", "not-a-case", "no-blobs", "blobs-not-hex", "blobs-not-list",
                            "blob-extra"] + ["binding", "binding-id"] * 5
+#: The breaks of the commitment alone, which leave every component's case standing.
+BINDING = ["binding", "binding-id", "commitment-size"]
 
 
 @st.composite
 def composite(draw, product: R.Product) -> dict:
     """One case of `product`: its components' cases (one time in six every one aimed at acceptance, one in six every one
-    but one that is aimed at undecided, so that a product of five reaches its binding breaks and its undecided verdict,
-    and each at any verdict otherwise), then at most one break of the composition's own inputs."""
+    but one that is aimed at undecided, so that a product of six reaches its binding breaks and its undecided verdict,
+    and each at any verdict otherwise), then at most one break of the composition's own inputs (half the time a break of
+    the commitment alone, `BINDING`, when every case stands)."""
     mode = draw(st.integers(0, 5))
     pending = draw(st.sampled_from([j for j, C in enumerate(product.components) if R.UNDECIDED in kinds(C)]))
     aims = [None if mode > 1 else R.UNDECIDED if mode == 1 and j == pending else R.ACCEPT
@@ -162,7 +165,7 @@ def composite(draw, product: R.Product) -> dict:
                for c in cases]
     commitment = R.bind(product.id, [(c["id"], c["digest"]) for c in cases])
     params: object = {"components": named}
-    m = draw(st.sampled_from(MUTATIONS))
+    m = draw(st.sampled_from(BINDING if mode <= 1 and draw(st.booleans()) else MUTATIONS))
     i = draw(st.integers(0, len(cases) - 1))
     which = named if m and m.endswith("-param") or m in ("swap-params", "repeat-param") else entries
     if m in ("drop-param", "drop-case"):
