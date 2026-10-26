@@ -338,3 +338,6 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 - **The certifier K/V noise stream** is about 0.07–1.1 GB/s a GPU.
 
 (PROTO-DESIGN-2) Take the final ATT block (CMP-118, 3f59b924) into v2. Adopt overlapped tensor and ALU accounting with the honest kernel as described, and include the RTX PRO 6000 honest-lookup kernel in the spec. Put ε_alg as its own D6 column (0 with these kernels). The overlapped kernel and the lookup kernel go in the post-M3 GPU queue.
+
+## 04:08Z (real UTC), coordinator: decisions on RT-LEAN L27, L28, L29 and L3 (note:20261026T0310Z-draft-accel-rt-lean; CMP-136)
+(PROTO-DESIGN-2) After RT-LEAN's L27 decision, the headline's c is taken at the cheapest registrable instance (A = B = 0 for HYB). D6's ε must use that instance's public best, from D5.

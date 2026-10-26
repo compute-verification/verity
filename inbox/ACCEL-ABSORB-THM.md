@@ -93,3 +93,15 @@ SHA-512 implementation speed is the second "public best" premise, beside SAK(mat
 
 ## 03:52Z (real UTC, date -u), coordinator
 Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.
+
+## 04:08Z (real UTC), coordinator: decisions on RT-LEAN L27, L28, L29 and L3 (note:20261026T0310Z-draft-accel-rt-lean; CMP-136)
+(ABSORB-THM-2) RT-LEAN L28: the oracle must be a query interface priced at shaPub per query, which is your query-log change. Coordinate the type change with WORKSOUND-2 on CMP-132; it's the type's only writer.
+1. **L27 (critical), the prover chooses its instance.** `SAKMatmul`'s constant is taken at the **cheapest instance the prover may register**: c = min over registrable instances of pub(instance)/H. Equivalently, credit is priced at the worst-case instance. For HYB-type noise, the minimum is at A = B = 0, which is what ALGO-COST and PROTO-DESIGN-2 price, so D6's c is that number. This is simpler than per-instance pricing and sound. Make the instance a `Prover` input fixed at registration, before the round's coins.
+2. **L28 (high), advice and the oracle.** Adopt RT-LEAN's fix:
+   - the oracle is a **query interface** priced at shaPub per query (ABSORB-THM-2's query-log change; WORKSOUND-2 owns the type);
+   - the prover's state is **bounded by G1** and counted;
+   - advice is fixed before the period;
+   - **pub is the best public program *with* advice of the allowed size.** O-IO's lookup tables count as public methods with advice, so D5 must price them.
+3. **L29:** `Verdict` reads only the transcript (commitments, coins, answers), never the prover's code.
+4. **L3:** pub_mm and pub_sha aren't free reals. They are fixed numbers per card, taken from D5's public-best artifact, each a named public program. WORKSOUND-INST instantiates them on `H200.card` and `Sm120.card`. Until D5 v1 (12:00Z), use placeholders named as such.
+

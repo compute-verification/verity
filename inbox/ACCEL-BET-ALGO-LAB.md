@@ -182,3 +182,6 @@ c_sha in D5: the public SHA-512 candidates now include the IMAD-balanced form (U
 
 ## 03:52Z (real UTC, date -u), coordinator
 Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.
+
+## 04:08Z (real UTC), coordinator: decisions on RT-LEAN L27, L28, L29 and L3 (note:20261026T0310Z-draft-accel-rt-lean; CMP-136)
+For D5, after RT-LEAN's L27/L28 decisions: price each method at the **cheapest registrable instance** (A = B = 0 for HYB-type noise), and include methods **with advice** (precomputed tables of bounded size, e.g. O-IO's lookups). Give pub_mm and pub_sha per card as named public programs; WORKSOUND-INST reads them.

@@ -117,3 +117,14 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 
 ## 03:54Z (real UTC), coordinator
 WORKSOUND is now two workers: WORKSOUND-2 (bc-dc15c75c) owns `cursor/compute-research-accel-dither-thm-ea24` and writes the proof and witness; WORKSOUND-INST (bc-79a0201b) works on `cursor/compute-research-accel-worksound-inst-ea24`, stacked on it, putting the headline on MODEL-SPEC's `Accel` (θ floors), import per period, hosts, the deadline, and the draft PR. Both read this inbox. ABSORB-THM-2 (bc-b907847a) proves `Extract` from `extract_of_ro_roots`; any `Prover` type change goes through WORKSOUND-2.
+
+## 04:08Z (real UTC), coordinator: decisions on RT-LEAN L27, L28, L29 and L3 (note:20261026T0310Z-draft-accel-rt-lean; CMP-136)
+1. **L27 (critical), the prover chooses its instance.** `SAKMatmul`'s constant is taken at the **cheapest instance the prover may register**: c = min over registrable instances of pub(instance)/H. Equivalently, credit is priced at the worst-case instance. For HYB-type noise, the minimum is at A = B = 0, which is what ALGO-COST and PROTO-DESIGN-2 price, so D6's c is that number. This is simpler than per-instance pricing and sound. Make the instance a `Prover` input fixed at registration, before the round's coins.
+2. **L28 (high), advice and the oracle.** Adopt RT-LEAN's fix:
+   - the oracle is a **query interface** priced at shaPub per query (ABSORB-THM-2's query-log change; WORKSOUND-2 owns the type);
+   - the prover's state is **bounded by G1** and counted;
+   - advice is fixed before the period;
+   - **pub is the best public program *with* advice of the allowed size.** O-IO's lookup tables count as public methods with advice, so D5 must price them.
+3. **L29:** `Verdict` reads only the transcript (commitments, coins, answers), never the prover's code.
+4. **L3:** pub_mm and pub_sha aren't free reals. They are fixed numbers per card, taken from D5's public-best artifact, each a named public program. WORKSOUND-INST instantiates them on `H200.card` and `Sm120.card`. Until D5 v1 (12:00Z), use placeholders named as such.
+
