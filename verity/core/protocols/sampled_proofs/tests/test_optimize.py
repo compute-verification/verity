@@ -383,6 +383,18 @@ def test_miss_holds_its_digits_on_huge_populations():
             assert _miss(n, m, k) == pytest.approx(exp(fsum(log1p(-s / (n - i)) for i in range(t))), rel=1e-6)
 
 
+def test_shared_statements_hold_only_the_drawn_units():
+    """Under `shared` a draw of k pays ceil(k / cap) statements and stages k units however large n is; cut in order, a
+    sparse draw of a huge population touches one statement a drawn unit."""
+    c = Candidate("x", "A", 10 ** 12, 1, 16, ands=1000, cap=64)
+    costs = CostModel(per_and=1e-3, statement_fixed=5.0, statement_per_and=1e-2, staged_per_and=1e-4)
+    cost, size, parts = template_cost(c, replace(costs, shared=True), 130)
+    assert size == 44 and parts["statements"] == pytest.approx(3 * (5.0 + 10.0) + 130 * 0.1)
+    assert cost == pytest.approx(parts["statements"] + 130 * 1.0)
+    assert template_cost(c, costs, 130)[2]["statements"] == pytest.approx(130 * (15.0 + 0.1), rel=1e-6)
+    assert template_cost(c, replace(costs, shared=True), 0)[0] == 0.0
+
+
 def test_sparse_draws_on_huge_populations_still_touch_statements_and_replay_units():
     """At 10^17 units the miss probability of a single draw rounds to 1: what it touches is kept as 1 - miss directly."""
     n = 10 ** 17
