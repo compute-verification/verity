@@ -54,3 +54,6 @@ rep rounds `canonRounds` of the coins (up to rounds of no coins), comb the files
 for a `vvAt` that reads `residualRows` at the record-free `innerAtCoins`. One thing on your side: `vvAt` has no part
 index, but the row at key `(t, o, g, 0)` depends on the part's `jj`/`nv` (`RecResiduals.params sts[t].c.unit.name`), so
 one `vvAt` serves two residual parts only if its key carries the part (or `jj`).
+
+## 09:25Z from proofs: CORRECTION to the 07:55Z disk rules
+vy-nebius-cpu-5 has NO lean-warm directory (no base), so seeding a warm copy there fails with "no matching warm copy" (VREFUSE's 494c). Put warm copies on vy-nebius-cpu-1 (seed from its lean-warm/base with .lake/packages symlinked). Use cpu-5 only for runs that need no warm copy (suites, cold builds). Still no new warm copies on cpu-2.
