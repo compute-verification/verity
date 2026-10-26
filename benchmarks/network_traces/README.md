@@ -5,6 +5,25 @@ The network certifier's measured runs and their zero-knowledge proofs: the certi
 `n2_advised_zk.py`), the scan's chained units (`scan_zk.py`), and the chain's run of record (`chain_record.sh`). Each
 driver's docstring says what it runs and what its verifier receives.
 
+## The demo's load
+
+The H200 demo serves CMP-95 interface 1's plain INT8 weights, generated from the public seed
+`verity/cmp92/h200/weights/v1`. They are relayed to the H200 once per serving session and committed as they cross
+(CMP-97 option (a)), through two gate verbs on vy-challenger-1:
+
+- `vy-challenger-gate weights-write [--shape h200|tiny]` writes the shape's weights stream onto the auditor's store disk
+  (`/var/lib/vy-challenger/store`) once. It keeps the stream only when its tensors' SHA-256 fold to the pin of
+  interface 1's manifest digests (`load_relay.STORE_DIGESTS`, from
+  art:a6775aeef1f6d11badf5a7a38460cff7d4d59f27e70dbc3bf8dd995fbb4c82da).
+- `vy-challenger-gate load-relay --peer vy-dc-h200-2 --port PORT --sink-port PORT --program SHA512 --minutes M` (with
+  `warden-rehearse`'s flags) is the warden's rehearsal with the load first. The store goes over 4 TCP streams, an SSH
+  tunnel each, to `load_relay.py sink` on the H200's loopback; each value is held to its digest and committed under the
+  reading program's domain as it crosses. The serving session's one signer then signs the load's 733 heads before its
+  first window, so one LMS key and one session carry the load and the windows. `load.json` (the registrations the
+  block record pins) and `load-relay.json` are public in the run's `out/`.
+- The witness, every row's salts (106.4 GB at H200), is the sink's `--witness` file (0600) on the prover's host,
+  vy-dc-h200-2. The certifier's host never writes a salt.
+
 ## The chain's run of record
 
 The run of record takes the network chain end to end on the gate's machines:

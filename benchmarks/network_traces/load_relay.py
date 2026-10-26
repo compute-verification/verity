@@ -34,7 +34,9 @@ The demo's load (CMP-97 option (a)) is the gate's (``vy-challenger-gate weights-
   carry the load and the windows' transfers; it writes ``load.json``, the client's kept registrations of the load
   that the block record pins (`blocks.pins`' ``registrations``), which `check_load` reads as the verifier does.
 
-* **The link** (``--format``):
+The commit itself (`relay`, which ``relay`` runs end to end with a key of its own):
+
+* **The format** (``--format``):
   - ``plain``: interface 1's weights stream, every tensor's bytes in manifest order (139,736,443,904 B at H200);
   - ``p2``: CMP-95 interface 2's store, C* in block order (``p2-16448/v4``: 1,038 segments of 65,536 blocks of 2,056
     bytes, 139,862,212,608 B; the segment files back to back), then every tensor the store doesn't hold (the scales,
