@@ -86,4 +86,4 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
   "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule", "Properties.RemoteAudit.Shared",
   "Properties.RemoteAudit.Live", "Properties.Composition", "Properties.Verity.Soundness",
-  "Properties.Verity.Game"]
+  "Properties.Verity.Game", "Properties.NetworkCertifier.Period", "Properties.Verity.Network"]
