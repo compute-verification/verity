@@ -15,11 +15,14 @@ template's under a stratified or work law; `audit.profile` as `Core.Integrity`, 
 draw (the records, a check on the registration, the draw) rejects with its codes. An audit that ended with no summary is
 the leg's error, not a verdict.
 
-The audit also writes sampled proofs' case for onsite (`a5.write_case`: ``{"commitment": hex(canon(registration
-record)), "evidence": hex(canon(evidence)), "params"}`` as `SampledProofs.OneStage` reads them), which the leg hands on as
-``out/sampled-proofs.case.json``, with whether `OneStage.check`'s Python on that case (``case-python.json``) gives the
-leg's verdict (``out/case-check.json``). Each window's audit listens on a block of ports no other audit of this process
-holds (`ports`), so windows audit at once.
+The audit also writes sampled proofs' case for onsite (`a5.write_case`), whose integrity component is the audit on the
+proofs themselves (``verity/sampled-proofs/one-stage/v2``, `SampledProofs.OneStageZk`): ``{"blobs", "commitment",
+"evidence", "params"}``, the evidence naming the session's files by SHA-512 in place of verdicts and ``blobs`` the paths
+of those files, which the leg hands on as ``out/sampled-proofs.case.json``. v2 verifies one table's ``--zk`` sessions, so
+an audit of several drawn members or of plain sessions has none (``case-check.json``'s ``v2_error``), and onsite
+rejects integrity there. The v1 case (``out/sampled-proofs.v1.case.json``) stays beside it, with whether `OneStage.check`'s
+Python on it (``case-python.json``) gives the leg's verdict (``out/case-check.json``). Each window's audit listens on a
+block of ports no other audit of this process holds (`ports`), so windows audit at once.
 """
 from __future__ import annotations
 
@@ -139,15 +142,23 @@ def ports():
 
 
 def case_check(work: Path, ans: Mapping[str, Any], out: Path) -> dict[str, Any] | None:
-    """The audit's case for onsite into ``out/sampled-proofs.case.json``, and whether `OneStage.check`'s Python on it gave
-    the leg's verdict (``out/case-check.json``); None when the audit wrote no case."""
-    case = work / "window" / "case.json"
+    """The audit's case for onsite, `SampledProofs.OneStageZk`'s (``window/case-v2.json``, its blobs the audit's files),
+    into ``out/sampled-proofs.case.json``, or why there is none (``v2_error``); the v1 case beside it
+    (``out/sampled-proofs.v1.case.json``), and whether `OneStage.check`'s Python on that gave the leg's verdict
+    (``out/case-check.json``). None when the audit wrote no case."""
+    window = work / "window"
+    case = window / "case.json"
     if not case.exists():
-        err = work / "window" / "case-error.txt"
+        err = window / "case-error.txt"
         return {"case": None, "error": err.read_text().strip()} if err.exists() else None
-    shutil.copy(case, out / "sampled-proofs.case.json")
-    py = json.loads((work / "window" / "case-python.json").read_text())
-    got = {"case": "sampled-proofs.case.json", "python": {k: py.get(k) for k in ("verdict", "reason")},
+    shutil.copy(case, out / "sampled-proofs.v1.case.json")
+    v2 = window / "case-v2.json"
+    if v2.exists():
+        shutil.copy(v2, out / "sampled-proofs.case.json")
+    v2_error = (window / "case-v2-error.txt").read_text().strip() if (window / "case-v2-error.txt").exists() else None
+    py = json.loads((window / "case-python.json").read_text())
+    got = {"case": "sampled-proofs.case.json" if v2.exists() else None, "v2_error": v2_error,
+           "v1_case": "sampled-proofs.v1.case.json", "python": {k: py.get(k) for k in ("verdict", "reason")},
            "leg": ans["verdict"], "agree": py.get("verdict") == ans["verdict"]
            and (ans["verdict"] != "accept" or (py.get("public") or {}).get("bound") == ans["public"]["bound"])}
     (out / "case-check.json").write_text(json.dumps(got, indent=1, sort_keys=True))
