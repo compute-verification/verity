@@ -1,6 +1,5 @@
 import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Audit.Periods
-import Proofs.Flock.Claims.Sampling.Draws
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
@@ -16,10 +15,12 @@ independent of the past. An adaptive adversary (`Horizon`) fixes period `t`'s wr
 * `choose_div_le_one_sub_pow`, `prod_choose_div_le_pow`: `C(N − w, kd)/C(N, kd) ≤ (1 − kd/N)^w`, so the product is
   at most `(1 − kd/N)^M` once `Σ_t w_t ≥ M`.
 * `horizon_escape`: with the set sizes adaptive too, `Pr[escape ∧ Σ_t |W_t| ≥ M] ≤ (1 − kd/N)^M`.
-* `horizon_escape_Pr`, `horizon_escape_log`: the same in `Claims.Pr`, and at `δ`: with `q = kd/N`, the total reaches
-  `ln(1/δ)/q` on an escape with probability at most `δ`.
-* `horizon_escape_adapted`, `horizon_escape_log_adapted`: the same for a wrong-set map on whole runs that doesn't look
-  ahead (`Periods.Predictable`), which is a `Horizon` (`Horizon.ofAdapted`).
+* `horizon_escape_adapted`: the same for a wrong-set map on whole runs that doesn't look ahead
+  (`Periods.Predictable`), which is a `Horizon` (`Horizon.ofAdapted`).
+
+Its forms in `Claims.Pr` (`horizon_escape_Pr`, `horizon_escape_log` at `δ`: with `q = kd/N`, the total reaches
+`ln(1/δ)/q` on an escape with probability at most `δ`, and `horizon_escape_log_adapted`) are in
+`Claims/Sampling/HorizonPr.lean`, outside the audit layer.
 
 Proof: these are the monitoring-period step (`Periods.lean`) at uniform `kd`-subset draws. Period `t`'s escape is
 adapted and its wrong set predictable (`Horizon.adapted_escapes`, `Horizon.predictable`), and given any history period
@@ -150,38 +151,6 @@ theorem horizon_escape {hk : kd ≤ N} {T : ℕ} (A : Horizon N kd hk T) (M : �
       rw [A.escape_update, subset_escape]
       exact choose_div_le_one_sub_pow hk (by simpa using Finset.card_le_univ (A.wrong ω t))) M
 
-/-- `horizon_escape` in `Claims.Pr`. -/
-theorem horizon_escape_Pr {hk : kd ≤ N} {T : ℕ} (A : Horizon N kd hk T) (M : ℕ) :
-    Claims.Pr (fun ω => A.Escapes ω ∧ M ≤ A.total ω) ≤ (1 - (kd : ℝ) / N) ^ M := by
-  have hle : (kd : ℝ≥0∞) / N ≤ 1 := ENNReal.div_le_of_le_mul (by rw [one_mul]; exact_mod_cast hk)
-  have hne : (1 - (kd : ℝ≥0∞) / N) ^ M ≠ ⊤ :=
-    ENNReal.pow_ne_top (ne_top_of_le_ne_top ENNReal.one_ne_top one_sub_div_le_one)
-  rw [Claims.Sampling.Pr_eq_toReal_prCoin]
-  refine (ENNReal.toReal_mono hne (horizon_escape A M)).trans_eq ?_
-  rw [ENNReal.toReal_pow, ENNReal.toReal_sub_of_le hle ENNReal.one_ne_top, ENNReal.toReal_one,
-    ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
-
-/-- **The horizon escape at `δ`.** With `q = kd/N`, an adaptive adversary escapes every period's draw with at least
-`ln(1/δ)/q` wrong units over the horizon with probability at most `δ`. -/
-theorem horizon_escape_log {hk : kd ≤ N} {T : ℕ} (A : Horizon N kd hk T) (hq : 0 < kd) {δ : ℝ} (hδ : 0 < δ) :
-    Claims.Pr (fun ω => A.Escapes ω ∧ Real.log (1 / δ) / ((kd : ℝ) / N) ≤ (A.total ω : ℝ)) ≤ δ := by
-  have hN : (0 : ℝ) < N := by exact_mod_cast hq.trans_le hk
-  have hq0 : (0 : ℝ) < (kd : ℝ) / N := div_pos (by exact_mod_cast hq) hN
-  have hq1 : (kd : ℝ) / N ≤ 1 := (div_le_one hN).2 (by exact_mod_cast hk)
-  set q : ℝ := (kd : ℝ) / N
-  set x : ℝ := Real.log (1 / δ) / q with hx
-  calc Claims.Pr (fun ω => A.Escapes ω ∧ x ≤ (A.total ω : ℝ))
-      ≤ Claims.Pr (fun ω => A.Escapes ω ∧ ⌈x⌉₊ ≤ A.total ω) :=
-        Claims.Pr_mono fun ω h => ⟨h.1, Nat.ceil_le.2 h.2⟩
-    _ ≤ (1 - q) ^ ⌈x⌉₊ := horizon_escape_Pr A _
-    _ ≤ Real.exp (-q) ^ ⌈x⌉₊ :=
-        pow_le_pow_left₀ (by linarith) (by linarith [Real.add_one_le_exp (-q)]) _
-    _ = Real.exp (-q * ⌈x⌉₊) := by
-        rw [← Real.exp_nat_mul, mul_comm]
-    _ ≤ Real.exp (-q * x) := Real.exp_le_exp.2 (mul_le_mul_of_nonpos_left (Nat.le_ceil x) (by linarith))
-    _ = δ := by
-        rw [hx, neg_mul, mul_div_cancel₀ _ hq0.ne', one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
-
 /-- `horizon_escape` for a wrong-set map on whole runs that doesn't look ahead. -/
 theorem horizon_escape_adapted {hk : kd ≤ N} {T : ℕ}
     (W : Fin T → (Fin T → (subset N kd hk).Ω) → Finset (Fin N))
@@ -189,17 +158,6 @@ theorem horizon_escape_adapted {hk : kd ≤ N} {T : ℕ}
     prCoin (fun ω => (∀ t, Disjoint (ω t).1 (W t ω)) ∧ M ≤ ∑ t, (W t ω).card) ≤
       (1 - (kd : ℝ≥0∞) / N) ^ M := by
   have h := horizon_escape (Horizon.ofAdapted W) M
-  simp only [Horizon.Escapes, Horizon.total, Horizon.wrong_ofAdapted hW] at h
-  exact h
-
-/-- `horizon_escape_log` for a wrong-set map on whole runs that doesn't look ahead. -/
-theorem horizon_escape_log_adapted {hk : kd ≤ N} {T : ℕ}
-    (W : Fin T → (Fin T → (subset N kd hk).Ω) → Finset (Fin N))
-    (hW : Periods.Predictable (Ω := fun _ => (subset N kd hk).Ω) W) (hq : 0 < kd) {δ : ℝ}
-    (hδ : 0 < δ) :
-    Claims.Pr (fun ω => (∀ t, Disjoint (ω t).1 (W t ω)) ∧
-      Real.log (1 / δ) / ((kd : ℝ) / N) ≤ ((∑ t, (W t ω).card : ℕ) : ℝ)) ≤ δ := by
-  have h := horizon_escape_log (Horizon.ofAdapted W) hq hδ
   simp only [Horizon.Escapes, Horizon.total, Horizon.wrong_ofAdapted hW] at h
   exact h
 
