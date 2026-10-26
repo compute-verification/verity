@@ -64,7 +64,6 @@ theorem ends_of_checkAccReads {i : RecVStar.Inner} {s : VStar.Stmt} {own : Array
     obtain ⟨_, h, -⟩ := FlockSoundness.Refine.ebind_ok h
     refine FlockC3.PubRows.rows_forIn_each _ ?_ _ h
     intro nm r hr
-    dsimp only at hr
     split at hr
     · rename_i p hf
       split at hr
@@ -82,9 +81,9 @@ theorem ends_of_checkAccReads {i : RecVStar.Inner} {s : VStar.Stmt} {own : Array
 /-- **A step adds one term**: `consTerm`'s component `k` is the running sum's plus the opening's terms. -/
 theorem fOf_consTerm (LANES : ℕ) (r a c : Array F128) (k : ℕ) :
     fOf (FlockVBridge.consTerm LANES r a c k) =
-      fOf a[k]! + ∑ l ∈ Finset.range LANES, fOf (c[k * LANES + l]! * r[l]!) := by
+      fOf a[k]! + ∑ l ∈ Finset.range LANES, fOf (getElem! c (k * LANES + l) * getElem! r l) := by
   simp only [FlockVBridge.consTerm]
-  exact FlockVBridge.fOf_foldl_add (fun l => c[k * LANES + l]! * r[l]!) LANES a[k]!
+  exact FlockVBridge.fOf_foldl_add (fun l => getElem! c (k * LANES + l) * getElem! r l) LANES a[k]!
 
 /-- **Two chains stepped alike from `base` differ by one constant**: wherever both take each of the `N` steps after
 `base` by one `consTerm` (one row, one `coef`), each of their first `N + 1` rows' component `k` is the other's plus
@@ -137,7 +136,6 @@ theorem chainHolds_off {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ �
   refine off_of_steps (A := A t) (B := B t) fun p hp => ?_
   obtain ⟨ℓ, hℓ, j, hj, he⟩ := pos_split (fun ℓ => ((Rows.schOf x t).levels.getD ℓ default).q)
     (Rows.schOf x t).levels.size p hp
-  dsimp only at hj he
   have hq : (⟨t, r, ℓ, j, key t r ℓ j⟩ : OpenPiece) ∈ Rows.rowDPieces key x := by
     simp only [Rows.rowDPieces, hv]
     rw [Rows.mem_rowDPiecesOf]
@@ -166,7 +164,8 @@ theorem el_four (a b c d : F128) :
     el #[a, b, c, d] 0 = a ∧ el #[a, b, c, d] 1 = b ∧ el #[a, b, c, d] 2 = c ∧ el #[a, b, c, d] 3 = d :=
   ⟨rfl, rfl, rfl, rfl⟩
 
-open Flock.RecAlgebra (el rounds) FlockDeploy (tabsOf) in
+open Flock.RecAlgebra (el rounds) in
+open FlockDeploy (tabsOf) in
 /-- **P3 from a chain at the copy's ends**: at a dense decision, a copy whose accumulator ports read a chain `W` that
 carries row D's running sums at its rep's ends (`D.accE` at `W`: `acc0` the run's first row, `acc1` its last) reads
 `elemReadC (Top.accRC rd key)` there plus one offset per component, `W`'s minus `chainC`'s at the run's start
