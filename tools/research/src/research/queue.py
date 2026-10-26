@@ -106,7 +106,11 @@ that conflicts costs one call).  So a new push moves its PR to the tip, a droppe
 merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
 runs doesn't change (`hold`): then every sync, drive's, `eject`'s or a hand one, leaves `next` as it is until that check ends.  A
 PR whose head contains another open PR's head goes in after it and waits while that one waits, unless it carries that one's
-change: the same owner, or that one's owner withdrew its mark (`Queue._carried`).  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
+change: the same owner, or that one's owner withdrew its mark (`Queue._carried`).  What a sync merges on top goes non-Lean first
+(drive.toml's `nonlean_first`, on by default: `Queue._nonlean_order`): each PR whose own change is no Lean change (`lean_change`
+on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
+change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
+Members the sync keeps never move for it.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`), with the gate's fix: each PR the sync merges is judged first, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`.
@@ -341,6 +345,9 @@ class DriveFlags:
     landing_gates: tuple[str, ...] = ()
     #: the most Lean checks of `land = "review"` running at once: a lower one and those stacked above it (`drive.lean_stack`)
     max_lean_checks: int = 2
+    #: what a sync merges onto `next` anyway goes non-Lean changes first (`Queue._nonlean_order`), so they don't wait above a
+    #: Lean change for its Lean check (Daniel, 26 Oct 06:04Z: "CI runs at breakneck speed")
+    nonlean_first: bool = True
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
@@ -380,10 +387,11 @@ class DriveFlags:
             got["marked_after"] = doc["marked_after"]
         if "defer" in doc:
             got["defer"] = names("defer")
-        if "regenerate_locks" in doc:
-            if not isinstance(doc["regenerate_locks"], bool):
-                raise bad("regenerate_locks", "true or false")
-            got["regenerate_locks"] = doc["regenerate_locks"]
+        for k in ("regenerate_locks", "nonlean_first"):
+            if k in doc:
+                if not isinstance(doc[k], bool):
+                    raise bad(k, "true or false")
+                got[k] = doc[k]
         if "first" in doc:
             if not (isinstance(doc["first"], list) and all(type(n) is int and n > 0 for n in doc["first"])):
                 raise bad("first", "a list of PR numbers, as [1858, 1860]")
@@ -451,10 +459,15 @@ GATE_TIMEOUT_S = 600
 GATE_FIX_LINES = 15
 
 
+def flags_at(repo: Path, ref: str) -> DriveFlags:
+    """drive.toml at ``ref``; the defaults when ``ref`` has none (QueueError when it can't be parsed)."""
+    r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
+    return DriveFlags.parse(r.stdout, f"{DRIVE_FLAGS} at {ref}") if r.returncode == 0 else DriveFlags()
+
+
 def gates_at(repo: Path, ref: str) -> tuple[str, ...]:
     """drive.toml's `landing_gates` at ``ref``; none when ``ref`` has no drive.toml (QueueError when it can't be parsed)."""
-    r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
-    return DriveFlags.parse(r.stdout, f"{DRIVE_FLAGS} at {ref}").landing_gates if r.returncode == 0 else ()
+    return flags_at(repo, ref).landing_gates
 
 
 def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, str]:
@@ -686,13 +699,17 @@ class Queue:
                  before_cutoff: Callable[[int, str], str | None] | None = None,
                  marked_by: Callable[[int, str], str | None] | None = None,
                  marked_at: Callable[[int, str], str | None] | None = None,
-                 prefetch: Callable[[list[tuple[int, str]]], None] | None = None):
+                 prefetch: Callable[[list[tuple[int, str]]], None] | None = None, nonlean_first: bool | None = None):
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
         self.before_cutoff, self.marked_by, self.marked_at, self.prefetch = before_cutoff, marked_by, marked_at, prefetch
         #: how many members at the bottom of `next` a running check covers (`Drive`): `first` goes above them, so no reorder
         #: takes a running check's commit off `next`
         self.hold = 0
+        #: whether a sync merges non-Lean changes first (`_nonlean_order`); None: drive.toml's `nonlean_first` at `main`
+        self.nonlean_first = nonlean_first
+        #: each (head, base)'s `lean_change`
+        self._lean_of: dict[tuple[str, str], bool] = {}
         #: members a running check covers that keep their place at the head it checks though their PR's head has moved
         #: (`Driver`; top, 17 Oct: a new head no longer cancels a running train, and its PR rejoins above once that train ends)
         self.frozen: set[int] = set()
@@ -918,6 +935,32 @@ class Queue:
         r = _git(self.workdir, "diff", "--name-only", f"refs/remotes/origin/main...refs/queue/pr/{n}", check=False)
         return r.returncode == 0 and (forces_cold(files := r.stdout.split()) or reruns_suites(files))
 
+    def _nonlean_order(self, tail: list[int], heads: dict[int, str], entries: dict[int, Entry]) -> list[int]:
+        """``tail``, the PRs a sync merges onto `next` anyway, at ``heads``: those whose own change is no Lean change (`_own_lean`)
+        and that contain no Lean change of ``tail`` first, then the rest, each part in ``tail``'s order (`first`'s, then
+        admission's).  A Lean change waits for a Lean check (`drive`'s review landing), and what sits above it waits with it.
+        Only the tail moves: a rebuild of what the sync keeps would take a running Lean check's commit off `next`."""
+        late: set[int] = set()
+        for n in tail:
+            if any(a in late for a in entries[n].after) or self._own_lean(heads[n], [heads.get(a, entries[a].pr.head)
+                                                                                      for a in entries[n].after]):
+                late.add(n)
+        return [n for n in tail if n not in late] + [n for n in tail if n in late]
+
+    def _own_lean(self, head: str, below: list[str]) -> bool:
+        """Whether ``head``'s own change is a Lean change (`lean_change`): against the head it is stacked on (of ``below``, the
+        open PRs' heads it contains, the one that contains the rest), else against its merge base with `main`."""
+        def within(a: str, b: str) -> bool:
+            return not _git(self.workdir, "merge-base", "--is-ancestor", a, b, check=False).returncode
+
+        base = next((b for b in below if all(within(a, b) for a in below)), None)
+        if base is None:
+            r = _git(self.workdir, "merge-base", "refs/remotes/origin/main", head, check=False)
+            base = r.stdout.strip() if r.returncode == 0 else "refs/remotes/origin/main"
+        if (head, base) not in self._lean_of:
+            self._lean_of[(head, base)] = lean_change(self.workdir, head, base)
+        return self._lean_of[(head, base)]
+
     # -- building `next`
 
     def _merge(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
@@ -1019,13 +1062,22 @@ class Queue:
         entries.update(waiting)
         order = self.order(chain, entries)
         frozen = {m.pr: m.head for m in chain if self._frozen(m, entries) or self._pending(m, entries)}
-        want = [(n, frozen.get(n, entries[n].pr.head)) for n in order]
-        k = next((i for i, (m, w) in enumerate(zip(chain, want)) if (m.pr, m.head) != w), min(len(chain), len(want)))
+        heads = {n: frozen.get(n, entries[n].pr.head) for n in order}
+
+        def kept(order: list[int]) -> int:
+            want = [(n, heads[n]) for n in order]
+            return next((i for i, (m, w) in enumerate(zip(chain, want)) if (m.pr, m.head) != w), min(len(chain), len(want)))
+
+        k = kept(order)
+        main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
+        nonlean = self.nonlean_first
+        if len(order) - k > 1 and (nonlean if nonlean is not None else flags_at(self.workdir, main).nonlean_first):
+            order = order[:k] + self._nonlean_order(order[k:], heads, entries)
+            k = kept(order)
         members = chain[:k]
         tip = members[-1].commit if members else _out(self.workdir, "rev-parse", "origin/main")
         dropped: set[int] = set()
         conflicts: dict[str, dict] = {}
-        main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
         gates = gates_at(self.workdir, main) if order[k:] else ()
         merged = False
         for n in order[k:]:
@@ -2618,7 +2670,7 @@ def main(argv: list[str]) -> int:
             flags = base.override(a)
             if not flags.on:
                 raise QueueError(f"drive needs a machine for the checks it launches: set `on` in {where}, or pass --on MACHINE")
-            q.first, a.marked_after = flags.first, flags.marked_after
+            q.first, q.nonlean_first, a.marked_after = flags.first, flags.nonlean_first, flags.marked_after
             labels.since = a.marked_after
             q.log(f"research queue drive: flags from {where}: {flags.line()}")
         if not a.marked_after:
