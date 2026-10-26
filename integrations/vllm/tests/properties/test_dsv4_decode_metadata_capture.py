@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from tests.properties import dsv4_decode_metadata_capture_gpu as X
-from verity_vllm.program.kernels import dsv4_decode_metadata_twin as T
+from verity.ml.definitions.numerics import dsv4_decode_metadata_twin as T
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 SMALL = {"swa": "swa-4096", "c128a": "c128-4096"}
