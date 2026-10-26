@@ -190,11 +190,13 @@ import Proofs.Flock.Claims.Recursion.KSFlockLinR
 import Proofs.Flock.Claims.Recursion.VerdictFramed
 import Proofs.Flock.Claims.Recursion.CapPieces
 import Proofs.Flock.Claims.Recursion.RestVerdictDraw
+import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
 import Proofs.Flock.Claims.Recursion.DeployedR
 import Proofs.Flock.Claims.Recursion.RestRead
 import Proofs.Flock.Claims.Recursion.RestReadR
 import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.DecompBDeployed
+import Proofs.Flock.Claims.Recursion.VerdictRowRDep
 import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
 import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 import Proofs.Flock.Claims.Recursion.RestReadsAt
@@ -230,6 +232,8 @@ import Proofs.Flock.Claims.DeployE
 import Proofs.Flock.Claims.DeployVK
 import Proofs.Flock.Claims.Recursion.FlockKSDeployK
 import Proofs.Flock.Claims.Recursion.PlainK
+import Proofs.Flock.Claims.Recursion.SlotsCalls
+import Proofs.Flock.Claims.Recursion.SlotsPorted
 import Proofs.Flock.Claims.DeployPlainCode
 import Proofs.Flock.Claims.DeployCode
 import Proofs.Flock.Claims.DeployTables
