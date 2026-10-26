@@ -127,6 +127,9 @@ def _abi(dll: ctypes.CDLL, path: Path) -> ctypes.CDLL:
         getattr(dll, f).restype = ctypes.c_int
     if hasattr(dll, "sxr_counts"):
         dll.sxr_counts.argtypes, dll.sxr_counts.restype = [vp, ctypes.c_int], None
+    if hasattr(dll, "sxr_graph_rekey"):
+        dll.sxr_graph_leaf_nodes.argtypes, dll.sxr_graph_leaf_nodes.restype = [vp, vp, u32], ctypes.c_int
+        dll.sxr_graph_rekey.argtypes, dll.sxr_graph_rekey.restype = [vp, vp, u32, vp], ctypes.c_int
     dll.path = path  # type: ignore[attr-defined]
     return dll
 
@@ -228,6 +231,7 @@ class Engine:
     """The engine's calls on ``device``: a CUDA device (torch tensors), or ``"host"`` for the host twin (numpy arrays)."""
 
     def __init__(self, device: Any = "cuda", arch: str | None = None, key: bytes = KEY, default: str = DEFAULT_VARIANT) -> None:
+        self._schemas: dict[str, tuple[Any, int]] = {}
         self.host = device == "host"
         if self.host:
             self.torch, self.device, self.lib = None, "host", host_lib()
@@ -383,10 +387,13 @@ class Engine:
         return LeafTable(d_rows, (d_dids, d_schema), G)
 
     def _schema(self, schema: str) -> tuple[Any, int]:
-        s = schema.encode()
-        if len(s) > MAX_SCHEMA:
-            raise ValueError(f"a schema is at most {MAX_SCHEMA} bytes")
-        return self._up(np.frombuffer(s.ljust(1, b"\0"), dtype=np.uint8)), len(s)
+        """The schema's bytes on the device, uploaded once."""
+        if schema not in self._schemas:
+            s = schema.encode()
+            if len(s) > MAX_SCHEMA:
+                raise ValueError(f"a schema is at most {MAX_SCHEMA} bytes")
+            self._schemas[schema] = self._up(np.frombuffer(s.ljust(1, b"\0"), dtype=np.uint8)), len(s)
+        return self._schemas[schema]
 
     def frame_table(self, dids: Any, rank0: int, n: int, schema: str = ROOT_SCHEMA) -> LeafTable:
         """n units' frame leaves in one domain (``dids``, one): unit j's is leaf (rank0 + j, rank0 + j, schema) over its root,
@@ -450,6 +457,25 @@ class Engine:
             a.frames, a.dest, a.units_out, a.units = self._ptr(frames.rows), self._ptr(dest), self._ptr(run), frames.G
         self._ok(self.lib.sxr_leaves(self._stream(), ctypes.byref(a)), "leaves")
         return out
+
+    def graph_leaf_nodes(self, graph: int, n: int) -> Any:
+        """The ``n`` leaf launches (``leaves``) of a CUDA graph captured from this engine's calls (a ``cudaGraph_t``), for
+        ``rekey``; refused if the graph holds another number of them."""
+        nodes = (ctypes.c_void_p * max(1, n))()
+        got = self.lib.sxr_graph_leaf_nodes(ctypes.c_void_p(graph), nodes, n)
+        if got < 0:
+            raise RuntimeError(f"graph leaf nodes: CUDA error {-got}")
+        if got != n:
+            raise RuntimeError(f"the graph holds {got} leaf launches, not {n}")
+        return nodes
+
+    def rekey(self, graph_exec: int, nodes: Any, n: int, key: bytes) -> None:
+        """The graph's instantiation (a ``cudaGraphExec_t``) to salt its ``n`` leaf launches ``nodes`` under ``key`` (32
+        bytes) from its next launch on, each launch's first nonce as captured."""
+        if len(key) != 32:
+            raise ValueError("a salt key is 32 bytes")
+        k = (ctypes.c_uint32 * 8)(*np.frombuffer(key, dtype="<u4").tolist())
+        self._ok(self.lib.sxr_graph_rekey(ctypes.c_void_p(graph_exec), nodes, n, k), "graph rekey")
 
     def u32s(self, a: Any) -> Any:
         """A uint32 array on the engine's device (int32 there): ``leaves``' ``dest``."""

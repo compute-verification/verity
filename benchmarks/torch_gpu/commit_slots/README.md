@@ -29,6 +29,9 @@ sc = G.StepCommitter(plan, step, slots, salt_key)
 sc.add(tensors)                                    # each group, in order; enqueued on a side stream, no host sync
 pending = sc.finish()                              # pending.result() -> S.StepCommit; pending.ready() polls
 
+# each add as one CUDA graph launch (same roots; one such step open on a plan at a time)
+sc = G.StepCommitter(plan, step, slots, salt_key, graphs=True)
+
 # several layers a launch: the same units, rows, digest and roots (the group's tensors are its layers', in order)
 plan = G.Plan(context, G.regroup(layout, 4))
 ```
@@ -189,9 +192,17 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   4 GiB take 1.318 s. Six sampled slots' roots equal the reference's, and the step root the reference's step tree. The
   host still spends about 1.07 s in a step's `add`s, with no upload or sync left in them: it waits on the launch queue
   (5,108 launches a step, 1,379 of them the fold's levels).
+- **Each add as one CUDA graph** (run r20261026-165818-b616, vy-dc-h200-3, `gpu.sh`'s tests and `step.py time --graphs
+  0 1`). Under nsys (run r20261026-164519-8119, `launches.py`), a step's 5,421 enqueue calls take a median 4.4 us until
+  about the 1,285th, and from there 517 of them block, 0.931 s together: each waits for room in the launch queue. With
+  `graphs=True`, circuits' layout at 4,096 slots enqueues a step in 0.012 s, against 0.887 s eager (1.059 s in 1 GiB
+  passes), and the step takes 1.313 s on the GPU, against 1.320 s; the first step, which captures each group's graph,
+  1.324 s. The 1 KiB-row variant: 0.018 s against 0.527 s, and 0.803 s against 0.807 s. Every step on graphs gives the
+  eager step's roots, under a second salt key too. The graphs' pool keeps a pass's temporaries reserved between steps
+  (0.57 GiB more reserved in 1 GiB passes).
 - **The commit on N of the 132 SMs** (`Plan(sms=N)`, the side stream on a green context of N SMs and the leaf kernel's
-  grid filling them; `overlap.py`'s `MODE:shared:STEPS:N`, shared rows at 4,096 slots, leaf kernel at 2 CTAs an SM;
-  runs r20261026-171704-923c and r20261026-173759-4d04, vy-dc-h200-3). Alone it takes 166 to 173 SM·s a step at every N
+  grid filling them; `overlap.py`'s `MODE:shared:STEPS:N`, eager, shared rows at 4,096 slots, leaf kernel at 2 CTAs an
+  SM; runs r20261026-171704-923c and r20261026-173759-4d04, vy-dc-h200-3). Alone it takes 166 to 173 SM·s a step at every N
   from 8 to 88 (20.73 s on 8 SMs, 4.18 on 40, 2.62 on 64), 176 on all 132, its roots the uncapped commit's. Beside the
   served step on every SM, the least overhead is the commit at high priority on 64 SMs: a step of 4.343 s, +1.046 s
   over serving alone (3.298 s in that run), 1.10 times CMP-149's 0.95 s, against +1.095 s for the uncapped commit at low
@@ -210,7 +221,9 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   only freeing it after the read (or reusing a ring of buffers) avoids them. The partitions themselves run at once
   (`green_probe.py`, runs r20261026-174052-c188 and r20261026-180440-47aa): the commit on 40 or 64 SMs and int8 GEMMs
   on the others overlap 0.91 to 0.93 (1 at once, 0 in turns), 0.88 to 0.90 coupled as today's loop couples them, and
-  0.08 sharing every SM in one context.
+  0.08 sharing every SM in one context. A plan on N SMs runs on graphs too: a graph captured on its green context's
+  stream keeps to those SMs when replayed, rekeyed with that context current (`SmPartition.current`; run
+  r20261026-181335-1b14, a `%smid` probe on 16 SMs).
 
 ## Files
 
@@ -221,7 +234,10 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   sampled slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8
   GEMMs; `step.py`: one step at a layout file (`slots._layout_json`'s form) timed by phase against the engine's peak,
   with its peak memory, the leaf kernel alone, a profile and sampled slots against the reference, and `export --shared`,
-  CIR-113's layout; `gpu.sh`: these, with the tests, under one GPU lease (its header has the `research run` line).
+  CIR-113's layout (`--row-bytes B` cuts its shared rows to B bytes), `count`, a layout's compressions a row-slot on the
+  host twin, and `time --graphs 0 1`, steps eager and on graphs with the host's enqueue time; `launches.py`: an nsys
+  report's enqueue calls a step (how long each held the thread, and from which call they block); `gpu.sh`: these, with
+  the tests, under one GPU lease (its header has the `research run` line; `STEP_WRAP` runs `step.py` under a profiler).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
   refusals, the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
   matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a
