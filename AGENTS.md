@@ -292,8 +292,8 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   red-team's, the vLLM coordinator's or a statement reviewer's (Daniel, 8 Oct).
 - Each tick, drive fast-forwards `main` to the top of the longest prefix of `next` whose every member has a land verdict and
   no hold. Before it lands, in minutes: the merge onto `next` is clean, and every `.py` file the landing leaves compiles
-  (drive ejects the PR that broke one). A PR that changes Lean (a `.lean` file of a package with a `lean-audit.json` lock, or
-  the lock) waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
+  (drive ejects the PR that broke one). A PR that changes a `lean-audit.json` lock, or Lean that runs as code (a `.lean`
+  file outside `Security/`), waits for its Lean check; Lean proofs alone land on the verdict (Daniel, 25 Oct 11:19 PM PDT): a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
   the reviewed prefix's top (`train.sh TOP MACHINES --deferred lean-audit`), and after a failure there on the PR's own commit;
   only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too. The top
   stops below a PR that came onto `next` in the same tick. While a check runs, a Lean change above it, reviewed or not, gets
@@ -533,7 +533,7 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   and never resumes a local worker a third time.
 - **Landing is drive's.** The worker that made a branch opens its PR (`research queue open --head BRANCH --sha SHA
   --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
-  research. A reviewer ci staffs writes its verdict, a PR that changes Lean waits for its Lean check, and the full check
+  research. A reviewer ci staffs writes its verdict, a lock or code Lean change waits for its Lean check, and the full check
   runs after landing and reverts a PR that breaks `main`; you hear back only if yours is held, ejected or reverted. Before
   marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on auto --cwd
   source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
