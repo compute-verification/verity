@@ -302,4 +302,35 @@ theorem Committed.unrolled_unit (hty : tags.typed = false) (h : Committed tags c
   · obtain ⟨-, -, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
     exact ⟨FlockSoundness.unrolled_unit h, unrolled_tmpl h, by rw [he]⟩
 
+/-- **The statement circuit is the committed one with other nets and no template**: every other field (ports, leaves,
+ranges, `units_per_vu`, the net indices) is the committed circuit's. -/
+theorem Committed.unrolled_eq (hty : tags.typed = false) (h : Committed tags cf tables c) :
+    ∃ nets, HmOut.unrolled c = { c with nets := nets, tmpl := none } := by
+  rcases h with h | h
+  · have hf := parse_tmpl_none hty h
+    refine ⟨c.nets, ?_⟩
+    rw [unrolled_flat hf]
+    cases c
+    simp only at hf
+    subst hf
+    rfl
+  · obtain ⟨-, -, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
+    exact ⟨_, he⟩
+
+/-- **A committed circuit is untyped and passes `HmRow.check` and `HmOut.checkRows`.** -/
+theorem Committed.check (hty : tags.typed = false) (h : Committed tags cf tables c) :
+    c.typed = none ∧ (∃ ls, HmRow.check c tags ls = .ok ()) ∧ HmOut.checkRows c = .ok () := by
+  rcases h with h | h
+  · obtain ⟨hp, hc⟩ := parse_untyped hty h
+    have P := parse_facts hp
+    exact ⟨P.typed, P.check, hc⟩
+  · obtain ⟨tu, c₀, P, hck, he, -, -⟩ := TmplValue.parseTmpl_facts h
+    obtain ⟨ls, hcheck⟩ := P.check
+    exact ⟨by rw [he]; exact P.typed, ⟨ls, by rw [he]; exact hcheck⟩, by rw [he]; exact hck⟩
+
+/-- **A flat session's circuit is `HmOut.parse`'s.** -/
+theorem SpecC.parse_flat (hi : tags.isTmpl = false) (s : SpecC tags cf pf coins tables draw st) :
+    HmOut.parse tags cf tables = .ok st.c :=
+  Or.elim s (fun s => by rw [← parseCommit_flat hi]; exact s.parse) (fun s => s.parse)
+
 end FlockSoundness.Discharge.Hidden

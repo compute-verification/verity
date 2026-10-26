@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 import Proofs.Flock.Soundness.Discharge.Zero.Stack
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 
 /-!
 # The committed circuit's keys from the statement circuit's (PRF-133, ASK-112 option A)
@@ -351,5 +352,49 @@ theorem outCol_commit (hty : tags.typed = false) (h : Committed tags cf tables c
   · have hf := parse_tmpl_none hty h
     rw [unrolled_flat hf, upos_flat hf]
   · exact outCol_tmpl h hi
+
+/-- **A committed circuit's message columns are in the block** (`Layout.msgCol_lt_of_parsePre`). -/
+theorem Committed.msgCol_lt (hty : tags.typed = false) (h : Committed tags cf tables cs) {g : ℕ} (hg : g < cs.g)
+    {p : ℕ} (hp : p < cs.ports.size) (byte b : ℕ) (hb : b < 8) : Typed.msgCol cs g p byte b < 2 ^ cs.kLog := by
+  rcases h with h | h
+  · exact Layout.msgCol_lt_of_parse (parse_untyped hty h).1 hg hp byte b hb
+  · obtain ⟨tu, c₀, h0, -, -, he⟩ := TmplValue.parseTmpl_cases h
+    rw [he] at hg hp ⊢
+    exact Layout.msgCol_lt_of_parsePre h0 (fun x hx => by
+      obtain rfl : x = ("unit", tu.net) := by simpa using hx
+      exact tu.netOK) hg hp byte b hb
+
+
+theorem foldl_add16 : ∀ (m s : ℕ), (List.replicate m 16).foldl (· + ·) s = s + 16 * m
+  | 0, s => by simp
+  | m + 1, s => by rw [List.replicate_succ, List.foldl_cons, foldl_add16 m (s + 16)]; omega
+
+/-- **A unit's committed output column is `upos` of its statement one**, at an output of 16-bit outputs. -/
+theorem outCol_commit16 (hty : tags.typed = false) (h : Committed tags cf tables cs) {j t : ℕ}
+    (h16 : ∀ b ∈ (cs.unit.outGroups.getD 0 default).bits.toList, b = 16)
+    (hj : j < (cs.unit.outGroups.getD 0 default).bits.size) (ht : t < 16) :
+    Layout.outCol cs j t = upos cs (Layout.outCol (HmOut.unrolled cs) j t) := by
+  rcases h with h | h
+  · have hf := parse_tmpl_none hty h
+    rw [unrolled_flat hf, upos_flat hf]
+  · refine outCol_tmpl h ?_
+    obtain ⟨n, pos, hsz, he, -, -, -, hB, hog, -, -, -⟩ := tmpl_unit_at h
+    have hU : ({ cs with nets := cs.nets.set! cs.unitNet ("unit", n), tmpl := none } : Circuit).unit = n := by
+      show ((cs.nets.set! cs.unitNet ("unit", n)).getD cs.unitNet default).2 = n
+      rw [getD_set_unit _ _ _ _ hsz, ite_eq_left rfl]
+    rw [he, hU]
+    have hne : 0 < n.outGroups.size := Nat.pos_of_ne_zero (FlockSoundness.Discharge.Layout.built_out hB).1
+    have e0 : n.outGroups.getD 0 default = n.outGroups[0] := by simp [Array.getD_eq_getD_getElem?, hne]
+    have e1 : cs.unit.outGroups.getD 0 default = Group.at pos n.outGroups[0] := by
+      rw [hog]; simp [Array.getD_eq_getD_getElem?, hne]
+    rw [e1] at h16 hj
+    rw [e0]
+    have hfit := ((FlockSoundness.Discharge.Layout.built_out hB).2 _ (Array.getElem_mem_toList hne)).2
+    have hr : n.outGroups[0].bits.toList = List.replicate n.outGroups[0].bits.size 16 :=
+      List.eq_replicate_iff.2 ⟨Array.length_toList, h16⟩
+    have hs : n.outGroups[0].bits.foldl (· + ·) 0 = 16 * n.outGroups[0].bits.size := by
+      rw [← Array.foldl_toList, hr, foldl_add16]; omega
+    change j < n.outGroups[0].bits.size at hj
+    omega
 
 end FlockSoundness.Discharge.Hidden
