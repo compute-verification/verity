@@ -1,7 +1,8 @@
 """The batch path at ALLP-IFACE's tiny shape on the CPU: kernels' per-slot commit (the host twin) gives the reference's roots,
 micro-batches and dropped tables change no root, rows at their own positions are the lockstep rows, a drawn slot opens by
-replaying its request alone, the network engine serves what lockstep serves, the torch softmax is the Definitions', the
-layout's unit map covers each unit's bytes, and a subcircuit joins the registration and the draw."""
+replaying its request alone, the network engine serves what lockstep serves, the torch softmax is the Definitions', the map
+is circuits' FAMILIES table at the frozen shape and each unit's commit unit is its output rows, and a subcircuit joins the
+registration and the draw."""
 from __future__ import annotations
 
 import shutil
@@ -11,11 +12,12 @@ import pytest
 import torch
 
 from e2e_h200 import attention as A
-from e2e_h200.commit import Committer, fixture_salt, fixture_secrets, tables
+from e2e_h200.commit import Committer, _layout, _slots, fixture_salt, fixture_secrets
 from e2e_h200.driver import Driver, Params
 from e2e_h200.engine import Engine
 from e2e_h200.opening import Openings, replay_slot
-from e2e_h200.shape import FROZEN, TINY
+from e2e_h200.plan import Map
+from e2e_h200.shape import FROZEN, MINI, TINY
 from e2e_h200.store import GeneratorStore
 from e2e_h200.units import Family, Replayer
 from e2e_h200.weights import Weights
@@ -76,19 +78,23 @@ def test_rows_at_their_own_positions_are_the_lockstep_rows(params, kept):
             assert np.array_equal(got[op], c[s]), (s, t, op)
 
 
-def test_a_drawn_slot_opens_by_replaying_its_request(params):
-    c = committer()
-    d = Driver(TINY, params, 3, c, keep=False, tamper=None)
+@pytest.mark.parametrize("shape", [TINY, MINI], ids=lambda s: s.name)
+def test_a_drawn_slot_opens_by_replaying_its_request(params, shape):
+    """A unit of every family, drawn from a slot replayed alone, opens against the step's root as its one commit unit."""
+    params = params if shape is TINY else Params(shape, GeneratorStore(Weights(shape)))
+    c = committer(shape)
+    d = Driver(shape, params, 3, c, keep=False, tamper=None)
     results = d.run(PROMPTS, STEPS)
-    op = replay_slot(TINY, params, c, results, PROMPTS, 1, STEPS - 1, "cpu")
+    op = replay_slot(shape, params, c, results, PROMPTS, 1, STEPS - 1, "cpu")
     assert all(op.roots_equal) and len(op.roots_equal) == STEPS
-    units = Replayer(TINY, params.store.weights, op.driver.steps, op.tokens).draw(STEPS - 1, 1, b"t")
+    units = Replayer(shape, params.store.weights, op.driver.steps, op.tokens).draw(STEPS - 1, 1, b"t")
     opn = Openings(c, results)
     assert opn.reference_equal(op, STEPS - 1)
     docs = [opn.open(op, STEPS - 1, u) for u in units]
-    assert units and all(u.ok for u in units) and all(x["verified"] for x in docs)
-    bad = Driver(TINY, params, 3, c, keep=False, tamper="l0.wv").run(PROMPTS, STEPS)
-    op = replay_slot(TINY, params, c, bad, PROMPTS, 1, STEPS - 1, "cpu")
+    assert {u.family for u in units} == set(Map(shape).units())
+    assert all(u.ok for u in units) and all(x["verified"] for x in docs)
+    bad = Driver(shape, params, 3, c, keep=False, tamper="l0.wv").run(PROMPTS, STEPS)
+    op = replay_slot(shape, params, c, bad, PROMPTS, 1, STEPS - 1, "cpu")
     assert not any(op.roots_equal)
     assert not Openings(c, bad).open(op, 0, units[0])["verified"]
 
@@ -123,28 +129,61 @@ def test_softmax_t_is_the_definitions():
         assert np.array_equal(p[b, :, :n], A.softmax(sw[b:b + 1, :, :n]).probs[0]) and not p[b, :, n:].any()
 
 
-def test_the_unit_map_covers_each_units_bytes():
-    c = committer(FROZEN)
-    S, lay = c.S, c.layout
-    flat = [t for g in tables(FROZEN) for t in g]
-    src = {}
-    for gi, g in enumerate(tables(FROZEN)):
-        i = 0
-        for t in g:
-            src[t.op] = (gi, i)
-            i += 2 if t.quant else 1
-    for op, lo, hi, scale in (("l3.wup", 2 * 40000, 2 * 40001, False), ("l3.down_quant", 0, FROZEN.mlp, True),
-                              ("l0.attn_quant", 0, FROZEN.width, True), ("head", 0, 2 * FROZEN.vocab, False),
-                              ("l51.scores", 2 * 255 * 32, 2 * 255 * 32 + 2, False), ("embed", 0, 2 * FROZEN.width, False)):
-        gi, s0 = src[op]
-        covered = set()
-        for u in c.units_of(op, lo, hi, scale):
-            assert lay.unit_base[gi] <= u < lay.unit_base[gi] + len(lay.groups[gi].units)
-            for row in lay.units[u]:
-                for p in row.parts:
-                    covered |= {(p.source - s0, o) for o in range(p.offset, p.offset + p.nbytes)}
-        assert {(0, o) for o in range(lo, hi)} <= covered and (not scale or (1, 0) in covered), op
-    assert len(flat) == 2 + 17 * FROZEN.layers + 3 and S.UNIT_MAX_BITS == 262_144
+#: circuits' FAMILIES table at the frozen shape (PRF-166 db928eb0): a slot's units by key, the embedding's and head's included
+FAMILIES = {
+    "EmbeddingCoordinate_v1{V=256}": 16_384,
+    "AllGather_v1{WORLD=128,N=1}": 40_066,
+    "RmsSumSqChunks_v1{C=4096,K=128}": 420,
+    "RmsNormOutSums_v1{C=128,S=128,G=2,N=16384,EPS=1e-05}": 13_440,
+    "RowAbsMax_v1{N=16384,RELU=false}": 157,
+    "QuantChunkS8_v1{N=8192,RELU=false}": 314,
+    "ScaledMmS8CoordinateRows_v1{K=16384,R=2,DOT=BlackwellS8ImmaDot32_v1}": 5_118_720,
+    "AllGather_v1{WORLD=64,N=1}": 13_416,
+    "QkSoftmaxRowPad_v1{T=32,D=64}": 13_312,
+    "PvRow_v1{T=32,K=32,D=64,DOT=HopperBF16WgmmaDot16_v1}": 13_312,
+    "AllGather_v1{WORLD=2,N=64}": 6_656,
+    "Bf16AddRow_v2{N=128}": 13_312,
+    "RowAbsMax_v1{N=16384,RELU=true}": 156,
+    "RowAbsMax_v1{N=16387,RELU=true}": 52,
+    "QuantChunkS8_v1{N=8192,RELU=true}": 416,
+    "ScaledMmS8CoordinateRows_v1{K=65536,R=8,DOT=BlackwellS8ImmaDot32_v1}": 851_968,
+    "Argmax_v2{V=256}": 1,
+}
+
+
+def test_the_map_is_circuits_families_table_at_the_frozen_shape():
+    m = Map(FROZEN)
+    got: dict[str, int] = {}
+    for g in m.groups():
+        for k, n in m.counts(g).items():
+            got[k] = got.get(k, 0) + n
+    assert got == FAMILIES
+    S, _ = _slots()
+    lay, _ = _layout(FROZEN)
+    assert lay.unit_count == sum(FAMILIES.values()) == 6_102_102 and lay.row_count == 6_102_832
+    assert max(u.bits for u in m.units().values()) <= S.UNIT_MAX_BITS
+
+
+@pytest.mark.parametrize("shape", [TINY, MINI, FROZEN], ids=lambda s: s.name)
+def test_each_units_commit_unit_is_its_output_rows(shape):
+    """Unit i of every family commits as one commit unit (`Committer.unit_of`) whose rows are its output bytes in its table's
+    row, and a quantizer chunk's the scale too; the layout's commit units are the map's units, in its order."""
+    S, _ = _slots()
+    lay, bases = _layout(shape)
+    m = Map(shape)
+    u0 = 0
+    for gi, entries in enumerate(m.groups()):
+        src = 0
+        for t, us in entries:
+            for u in us:
+                assert bases[u.name] == u0 and lay.unit_base[gi] <= u0
+                for i in sorted({0, u.count - 1}):
+                    rows = [[(p.source, p.offset, p.nbytes) for p in r.parts] for r in lay.units[u0 + i]]
+                    assert rows == [[(src, u.offset + i * u.stride, u.nbytes)]] + ([[(src + 1, 0, 4)]] if u.scale else []), \
+                        (u.name, i)
+                u0 += u.count
+            src += 2 if t.quant else 1
+    assert u0 == lay.unit_count
 
 
 class Toy:

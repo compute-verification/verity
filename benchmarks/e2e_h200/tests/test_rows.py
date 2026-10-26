@@ -5,6 +5,7 @@ is code 0 under a scale of 1."""
 from __future__ import annotations
 
 import numpy as np
+import pytest
 import torch
 
 from e2e_h200 import ops as O
@@ -59,6 +60,42 @@ def test_a_nan_in_a_quantized_row_agrees_with_the_definition():
         assert np.array_equal(q.codes.numpy().view(np.uint8), codes), relu
         assert codes[0, 3] == 0 and codes[1, 1] == 0
         assert codes.view(np.int8)[0].tolist() == ([2, 0, 127, 0, 0, 7, 0, 2] if relu else [2, -2, 127, 0, 0, 7, -128, 2])
+
+
+def test_rmsnorm_sums_in_the_maps_chunks_and_groups():
+    """Rows whose squares span 2^24 (where f32 sums round) at width 128 in chunks of 32 and two groups: the driver's words are
+    `RmsSumSqChunks_v1`'s and `RmsNormOutSums_v1`'s, and on the rows where one sequential sum gives other words, replay
+    gives the tree's."""
+    n, c, g = 128, 32, 2
+    rng = np.random.default_rng(3)
+    x = torch.from_numpy((rng.standard_normal((4096, n)) * np.exp2(rng.integers(-6, 6, (4096, n)))).astype(np.float32))
+    x = x.to(torch.bfloat16)
+    w = torch.from_numpy(rng.standard_normal(n).astype(np.float32)).to(torch.bfloat16)
+    eps = torch.tensor([U.EPS], dtype=torch.int32).view(torch.float32)[0]
+    h, sums = O.rmsnorm(x, w, eps, c, g)
+    words = lambda t: t.view(torch.int16).numpy().view(np.uint16)
+    rows = np.flatnonzero((words(O.rmsnorm(x, w, eps)[0]) != words(h)).any(1))
+    assert len(rows) > 0
+    xw, ww, hw, sw = words(x), words(w), words(h), sums.numpy().view(np.uint32)
+    for r in rows.tolist() + [0, 1]:
+        assert np.array_equal(U.sums_chunks(xw[r], c), sw[r])
+        for j in range(n // c):
+            s = slice(j * c, (j + 1) * c)
+            assert np.array_equal(U.norm_out_sums(xw[r, s], ww[s], sw[r], n, g), hw[r, s]), (r, j)
+
+
+@pytest.mark.parametrize("relu", [False, True])
+def test_a_wide_rows_amax_is_its_parts_and_their_combine(relu):
+    """`quantize` over parts of 64 writes each part's max |x| and the row's: `RowAbsMax_v1` on the parts, then on the last part
+    with the partials; a NaN in an early part, its own word with the sign cleared, is the row's (its scale 1)."""
+    x = bf16_words((np.random.default_rng(4).standard_normal(256) * 50).tolist())
+    x[70] = NEG_NAN
+    q = O.quantize(torch.from_numpy(x[None].view(np.int16)).view(torch.bfloat16), relu, 64)
+    amax = q.amax.numpy().view(np.uint16)[0]
+    parts = [U.row_abs_max(x[i * 64:(i + 1) * 64], relu) for i in range(3)]
+    assert amax[:3].tolist() == parts and parts[1] == NEG_NAN & 0x7FFF
+    assert amax[3] == U.row_abs_max(np.concatenate([x[192:], amax[:3]]), relu) == NEG_NAN & 0x7FFF
+    assert q.scale.view(torch.int32).tolist() == [0x3F800000]
 
 
 def test_a_softmax_row_with_a_nan_or_a_tie_takes_its_max_as_the_definition():
