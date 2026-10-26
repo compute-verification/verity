@@ -44,6 +44,8 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import importlib.machinery
+import importlib.util
 import json
 import secrets
 import subprocess
@@ -120,13 +122,35 @@ def _base(scheme: str) -> Any:
     return pous_schemes.get(scheme).params
 
 
+def _package(name: str, directory: Path) -> None:
+    """``directory`` as the package ``name``, loaded once from its files, so its modules import one another as they do in
+    their own tree while ``sys.path`` stays as it is."""
+    if name in sys.modules:
+        return
+    init = directory / "__init__.py"
+    if init.exists():
+        spec = importlib.util.spec_from_file_location(name, init, submodule_search_locations=[str(directory)])
+    else:
+        spec = importlib.machinery.ModuleSpec(name, None, is_package=True)
+        spec.submodule_search_locations = [str(directory)]
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        if spec.loader is not None:
+            spec.loader.exec_module(module)
+    except BaseException:
+        del sys.modules[name]
+        raise
+
+
 def _p2(module: str) -> Any:
-    """``store`` (`benchmarks/pous/p2_v1/store.py`) or ``stage`` (`benchmarks/torch_gpu/p2_stage/stage.py`), imported as
-    their own scripts import them, with their directory on the path."""
-    path, name = (config.P2_POUS, "p2_v1.store") if module == "store" else (config.P2_STAGE, "stage")
-    if str(path) not in sys.path:
-        sys.path.insert(0, str(path))
-    return importlib.import_module(name)
+    """``store`` (`benchmarks/pous/p2_v1/store.py`, as ``p2_v1.store``) or ``stage``
+    (`benchmarks/torch_gpu/p2_stage/stage.py`, as ``p2_stage.stage``)."""
+    _package("p2_v1", config.P2_POUS / "p2_v1")
+    if module == "store":
+        return importlib.import_module("p2_v1.store")
+    _package("p2_stage", config.P2_STAGE)
+    return importlib.import_module("p2_stage.stage")
 
 
 # --- the weights ------------------------------------------------------------------------------------------------------------
