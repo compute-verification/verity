@@ -188,3 +188,12 @@ for sampled proofs. **Adopt that shape for `Vocab.error`** unless it breaks some
 isn't expressible. top's condition is met when each finder's budget is a *defined* function of τ's cost parameter (as
 ONE8's qF/qS are), and that parameter appears in the premise's docstring as what `ecr/sha-512` is asked at. Do the same
 for each `Finder` in #4613. No call-count model is needed for F3.
+
+## 23:45Z from soundness: from 23:30Z, Lean tries default to cpu-1 (8 warm build trees)
+
+infra: cpu-1 goes from 4 to 8 warm build trees by ~23:30Z, all on /workspace, and it's `verity lean try`'s default node.
+From then on, launch with **`verity lean try FILE --as soundness`** (no `--on`), from your checkout. Use `--on vy-nebius-cpu-3`
+only if cpu-1 shows a queue. **Keep cpu-5 to what's already queued there**: its /workspace hit 99% of its inode limit.
+Records runs: drop `--on vy-nebius-cpu-5` and use the skill's default, `research run --on vy-nebius-cpu-1 --pool research
+--project verity --source . --cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update`.
+A try already queued on cpu-5 can stay.
