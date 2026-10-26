@@ -418,16 +418,26 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriod's sum"]}
 
 
+#: each reading of the scan's free inputs, as the report labels it
+READINGS = {"registered": "`prog` as registered today (the record's K)",
+            "anchors": "`prog` only at its anchored entries (conditional on the generator-form lowering, LEAN-49)"}
+
+
 def leak_markdown(doc: dict) -> str:
     d1, d2 = (f"{d:g}" for d in LEAK_DELTAS)
-    pct = lambda x: f"{100 * x:.3g}%" if x < 1 else f"{x:,.3g}×"
-    lines = ["| period | machines | `prog` | K pooled, δ = 1% | share | K pooled, δ = 1e-6 | share | K per period "
-             "| share | a link-window |", "|---|---|---|---|---|---|---|---|---|---|"]
-    for r in doc["rows"]:
-        lines.append(f"| {r['period']} | {r['machines']:,} | {r['prog']} | {r['pooled'][d1]:.4g} | "
-                     f"{pct(r['pooled_share'][d1])} | {r['pooled'][d2]:.4g} | {pct(r['pooled_share'][d2])} | "
-                     f"{r['per_period']:.4g} | {pct(r['per_period_share'])} | {r['per_link_window']:,.0f} |")
-    return "\n".join(lines) + "\n"
+    bits = lambda x: f"{x / 10 ** (e := math.floor(math.log10(x))):.3g}·10^{e}" if x >= 1e6 else f"{x:,.0f}"
+    share = lambda x: f"{100 * x:.3g}%" if x < 1 else f"{x:.3g}×" if x < 100 else f"{x:,.0f}×"
+    lines = []
+    for reading, title in READINGS.items():
+        lines += [f"**{title}**, bits, and the share of the weights:", "",
+                  "| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |",
+                  "|---|---|---|---|---|---|"]
+        lines += [f"| {r['period']} | {r['machines']:,} | {bits(r['pooled'][d1])} ({share(r['pooled_share'][d1])}) | "
+                  f"{bits(r['pooled'][d2])} ({share(r['pooled_share'][d2])}) | {bits(r['per_period'])} "
+                  f"({share(r['per_period_share'])}) | {r['per_link_window']:,.0f} |"
+                  for r in doc["rows"] if r["prog"] == reading]
+        lines.append("")
+    return "\n".join(lines)
 
 
 def merged_n2(paths: list[str] | None) -> dict | None:
