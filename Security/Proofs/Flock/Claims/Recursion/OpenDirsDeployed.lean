@@ -696,8 +696,9 @@ theorem dirsSideR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.lengt
     (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hP : ∀ x, (DR b elem IV).parse x = parse x) (hSh : ∀ f, shape f → Claims.Recursion.Form.Dense f)
     (hR : OpenLower.PiecesInRangeR pieces) (hset : ∀ xO, ∀ u ∈ resSetup xO, u ∈ b.setup xO)
-    (hI : ∀ s x c, InnerMR untr b s x c)
-    (hpos : ∀ s x c, DirsCoinR untr b pieces posAt Bd.DE.V.k s x c) :
+    (hI : ∀ s x c st0, parse x = some st0 → Claims.Recursion.Form.Dense st0.form → InnerMR untr b s x c)
+    (hpos : ∀ s x c st0, parse x = some st0 → Claims.Recursion.Form.Dense st0.form →
+      DirsCoinR untr b pieces posAt Bd.DE.V.k s x c) :
     DirsSideR b elem IV shape untr cmt Bd pieces posAt := by
   intro x st hx hf cs ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
   obtain ⟨hxp, -, -, -, -, -, hshow, -, hS⟩ := hst
@@ -788,9 +789,9 @@ theorem dirsSideR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.lengt
   have hnp : n ≤ sts[0].pub.n := by omega
   -- check 5's `dirs` rows are the statement's instances
   have hdrs : dr.size = n := drSize_staged hx' hd hr hss hsv hlev
-    (hI s x cs xO (And.intro hshow hS) i0 hins f _ inn hf' hinn) hrows
+    (hI s x cs st hx' hd xO (And.intro hshow hS) i0 hins f _ inn hf' hinn) hrows
   have hidx := CopySite.idx_staged hsu h0 hown hdv (by omega) (CopySite.labels_staged hS hsu h0)
-  have htie := hpos s x cs xO (And.intro hshow hS) i0 spec sts hsu h0 f inn hf' hinn r ss lv LANES HH n hr hss hsv
+  have htie := hpos s x cs st hx' hd xO (And.intro hshow hS) i0 spec sts hsu h0 f inn hf' hinn r ss lv LANES HH n hr hss hsv
     cr dr hrows q (by rw [← hxI]; exact hq) ho
   refine ⟨cc, i0, spec, sts, own, f, by rw [hr]; exact hpc, hdin, hsu, hown, hf', hset xO, by rw [e0']; exact hidx,
     by rw [e0']; exact hso, by rw [e0']; exact hop, by rw [e0']; exact hsp, ?_, by rw [e0']; omega, ?_⟩
