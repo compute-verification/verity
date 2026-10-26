@@ -2,9 +2,9 @@
 
 `word.check_query` cuts each Call into units on its own; a unit never crosses Calls (every value a Call reads or outputs is
 committed).  So a value computed in two Calls is computed in two units: a recompute, which fails the build.  This pass finds
-them over a Program's instance sequence (`program_view.iter_instance_rows`).  Values are compared structurally: the same
-primitive over the same operands, constants by value, an input leaf by its Program identity (`("p", param, leaf)` or
-`("n", call, leaf)`, a duplicate Call's output read as its first copy's).
+them over a Program's instance sequence (its rows, or a callable that yields them: `program_view.iter_instance_rows`).  Values
+are compared structurally: the same primitive over the same operands, constants by value, an input leaf by its Program identity
+(`("p", param, leaf)` or `("n", call, leaf)`, a duplicate Call's output read as its first copy's).
 
   1. Calls.  A Call with the spec, form and operand runs (adjacent runs merged) of an earlier Call computes every one of its
      gates again.  Calls that read no Program input (constants, or values computed from them) are structure, as in `word`.
@@ -35,7 +35,7 @@ from verity.ml.circuits.refs import Affine, Concat, Strided
 from verity.ml.circuits import cut as CUT
 
 from verity_vllm.query import call_scope as CS
-from verity_vllm.query.program_view import iter_instance_rows, spec_base, spec_statics
+from verity_vllm.query.call_scope import spec_base, spec_statics
 
 CHECK_ID = "cross-call/v1"
 
@@ -331,15 +331,16 @@ class _Ranges:
 
 
 def _rows_of(source: Any) -> Callable[[], Iterable[dict[str, Any]]]:
-    if isinstance(source, str):
-        return lambda: iter_instance_rows(source)
+    if callable(source):
+        return source
     rows = source["rows"] if isinstance(source, dict) else list(source)
     return lambda: sorted(rows, key=lambda r: int(r["i"]))
 
 
 def check_program(source: Any, *, strict: bool = True, specialize: Callable[[str, dict], Any] = CS.specialization,
                   max_gates: int = MAX_GATES, memo: dict | None = None, log=None) -> dict[str, Any]:
-    """Cross-Call recomputes in one Program: `source` = an instance sequence path (`instances.json.gz`), its document, or its rows.
+    """Cross-Call recomputes in one Program: `source` = a callable that yields an instance sequence's rows (each call from the
+    first; `program_view.iter_instance_rows` over `instances.json.gz`), its document, or its rows.
     Returns {"check", "ok", "calls", "structure_calls", "recomputes": [per (Definition, level): the Calls, the gates they compute
     again, how many earlier Calls computed them first, examples [copy, original] by name], "recomputed_gates", "refined",
     "unrefined"}; `strict` raises `RecomputeViolation` naming every one."""
@@ -606,16 +607,4 @@ def members_check(fn: Any, memo: dict | None = None) -> dict[str, Any]:
     return r
 
 
-def check_programs(paths: Iterable[str], *, strict: bool = True, log=None, **kw: Any) -> dict[str, Any]:
-    """`check_program` over several request Programs (one row), each on its own; the violations are named per Program."""
-    memo: dict = {}
-    per = {}
-    for p in paths:
-        per[p] = check_program(p, strict=False, memo=memo, log=log, **kw)
-    bad = {p: r for p, r in per.items() if not r["ok"]}
-    if strict and bad:
-        raise RecomputeViolation("; ".join(f"{p}: " + "; ".join(_name(a) for a in r["recomputes"][:6]) for p, r in list(bad.items())[:4]))
-    return {"check": CHECK_ID, "ok": not bad, "programs": per}
-
-
-__all__ = ["CHECK_ID", "RecomputeViolation", "Support", "analyze", "check_program", "check_programs", "members_check"]
+__all__ = ["CHECK_ID", "RecomputeViolation", "Support", "analyze", "check_program", "members_check"]

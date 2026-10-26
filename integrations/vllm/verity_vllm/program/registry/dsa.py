@@ -61,8 +61,6 @@ dtype, rotary_embedding/base.py:59-63).  `ks` is the key's f32 scale from its ca
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 
 from verity.ml.circuits.defs import bind, composite, primitive

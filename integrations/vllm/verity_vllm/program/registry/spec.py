@@ -29,7 +29,7 @@ from verity.ml.circuits.defs import Coll, bind, composite
 from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.b1 import (Attention, DotBf16, Embedding, Final, LayerPost, LayerPre, ZERO16, ZERO32, _lane, _scale_log2_bits, const, kv_type,
+from verity_vllm.program.registry.b1 import (Attention, DotBf16, Embedding, Final, LayerPost, LayerPre, ZERO16, ZERO32, _lane, scale_log2_bits, const, kv_type,
                  weights_type)
 from verity_vllm.program.registry.prims import A16, BF16, F32, I32
 
@@ -137,7 +137,7 @@ def AttnBlockN(B, S, q, k, v, m_prev, l_prev, o_prev):
         bmax = B.call(P.F32Max, bmax, s[c])
     m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
     m_use = B.call(P.GuardNegInfZero, m_new)
-    scale_log2 = B.call(const(32, _scale_log2_bits(D)))
+    scale_log2 = B.call(const(32, scale_log2_bits(D)))
     if not FIRST:
         scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use), scale_log2))
     max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)
