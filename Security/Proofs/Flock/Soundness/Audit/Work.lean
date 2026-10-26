@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.Audit.Stratified
 import Mathlib.Analysis.MeanInequalities
-import Models.Flock.Guarantees.Audit
+import Definitions.Flock.Guarantees.Audit
 
 /-!
 # The work law

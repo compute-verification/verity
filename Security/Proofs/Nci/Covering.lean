@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.Covering
+import Definitions.Nci.Guarantees.Covering
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Positivity

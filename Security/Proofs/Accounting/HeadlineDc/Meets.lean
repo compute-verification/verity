@@ -1,11 +1,11 @@
-import Models.Accounting.Guarantees.HeadlineDc
+import Definitions.Accounting.Guarantees.HeadlineDc
 import Proofs.Accounting.Headline.Encoding
 
 /-!
 # An honest play meets every premise of the five data-centre int8 headlines
 
 The non-vacuity witnesses of `Sm90SheetHeadline`, `Sm90MeasuredHeadline`, `Sm90MeasuredI3Headline`,
-`Sm100SheetHeadline` and `Sm100MeasuredHeadline` (`Models.Accounting.Guarantees.HeadlineDc`): on one-bit coins
+`Sm100SheetHeadline` and `Sm100MeasuredHeadline` (`Definitions.Accounting.Guarantees.HeadlineDc`): on one-bit coins
 (`Ω = Bool`) over the window's 48,000 rounds, one honest play meets every hypothesis of each statement at once and is
 accepted on every path (`sm90Sheet_meets`, `sm90Measured_meets`, `sm90MeasuredI3_meets`, `sm100Sheet_meets`,
 `sm100Measured_meets`).

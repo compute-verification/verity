@@ -1,5 +1,5 @@
 import Mathlib.Combinatorics.Enumerative.DoubleCounting
-import Models.Nci.Guarantees.CoverPartialSum
+import Definitions.Nci.Guarantees.CoverPartialSum
 import Proofs.Nci.Cover.FanOutRootCost
 import Proofs.Nci.Cover.FanOutValue
 

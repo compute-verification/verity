@@ -451,6 +451,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     pending: list[tuple[int, tuple, np.ndarray | None]] = []      # (row index, (V, S, words), observed masked row)
     reasons: list[str] = list(header_vs_manifest)
     tally = {"exact-match": 0, "mismatch": 0, "no-snapshot": 0, "skipped": 0}
+    rows_without_seed = 0             # skipped rows whose request record declares no seed: a FAIL, not an INCOMPLETE
     steps_seen = 0
     sampled_rows_total = 0            # [rev-pm M-0541 T1] every sampled row of the record counts; the verdict names k of n value-checked
     program_S = _program_splits(build_dir, workload)      # [T3] the Program's S per request (int or per-event schedule), if a Build is given
@@ -556,6 +557,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             if f is None or f["seed"] is None:
                 rec.update(status="skipped", why="request record has no declared seed")
                 tally["skipped"] += 1
+                rows_without_seed += 1
                 rows.append(rec)
                 reasons.append(f"step {step} row {row}: no declared seed for {rid!r}")
                 continue
@@ -664,7 +666,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     if checked == 0:
         verdict = "NOTHING-CHECKED"
     elif tally["mismatch"] or not device_ok or not masked_ok or not s_ok or header_vs_manifest or ref_check["disagreements"] or \
-            ledger["problems"] or any(r.get("status") == "skipped" and "declared seed" in str(r.get("why")) for r in rows):
+            ledger["problems"] or rows_without_seed:
         verdict = "FAIL"
     elif not complete:
         verdict = "INCOMPLETE"          # [rev-pm M-0541 T1] k of n value-checked is not a PASS (row_pod: anything but PASS fails the Match)

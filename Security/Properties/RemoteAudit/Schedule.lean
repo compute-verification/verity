@@ -16,7 +16,7 @@ prover committed before the session's first coin, and returns the schedule's bit
   passes and the same appends. A layout that follows a coin at a schedule the verifier counted is refused.
 
 They take no premise. The schedule's bits (`scheduleBits`) are one-to-one on well-formed schedules
-(`ScheduleCode.scheduleBits_injective` in `Properties.Proofs.RemoteAudit.Schedule`: LEB128 is prefix-free, and each
+(`ScheduleCode.scheduleBits_injective` in `Proofs.Properties.RemoteAudit.Schedule`: LEB128 is prefix-free, and each
 list comes after its length). What is left between the code and the model's layout (`Accounting.ScheduleDeterministic`,
 `Accounting.Assumptions.SteeredLayout`) is one `Prop`, `ScheduleLayoutGap`: that the model's layout of a pass is the
 verifier's position map of the session's appends and the plan the pass sent. Under it the check's acceptance at the

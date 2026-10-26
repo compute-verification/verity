@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.Info
+import Definitions.Nci.Guarantees.Info
 import Proofs.Nci.Support
 import Proofs.Nci.Threads
 

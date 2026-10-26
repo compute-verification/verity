@@ -19,7 +19,7 @@ leaves (`leaves`, as setup publishes them: `PublishesRoot`) have the document's 
 
 It takes the binding form: the conclusion holds, or the run hashed two distinct strings to one SHA-512 digest
 (`runStrings`: the inner nodes of the tree over `LEAVES.bin` the audit computes, and of the tree over `C*`'s leaves setup
-computes). Proved (`Properties.Proofs.Pous.TimedAudit`).
+computes). Proved (`Proofs.Properties.Pous.TimedAudit`).
 -/
 
 namespace PousCheck.Properties

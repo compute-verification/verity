@@ -1,5 +1,5 @@
 import Proofs.Accounting.TS.SessionSound
-import Models.Accounting.Assumptions.TS
+import Definitions.Accounting.Assumptions.TS
 
 /-!
 # Proof soundness at C-Flock sessions

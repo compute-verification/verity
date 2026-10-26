@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.TS
+import Definitions.Accounting.Guarantees.TS
 
 /-!
 # The tensor–scalar model's facet guarantees

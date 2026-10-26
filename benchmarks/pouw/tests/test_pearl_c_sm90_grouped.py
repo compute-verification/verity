@@ -19,8 +19,8 @@ torch = pytest.importorskip("torch")
 from verity.core.protocols.pouw.audit import weights_root  # noqa: E402
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.pouw.protocol import Matmul, Shape  # noqa: E402
-from verity_vllm.protocol_options import pouw_pearl_c_device as PPD  # noqa: E402
-from verity_vllm.protocol_options import pouw_pearl_c_grouped as PG  # noqa: E402
+from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
+from verity_vllm.protocols.pouw.pearl_c import grouped as PG  # noqa: E402
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SCHEME = "pearl-c-h100-v1-h3"
