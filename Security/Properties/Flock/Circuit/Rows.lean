@@ -1,3 +1,4 @@
+import Mathlib.Tactic.Ring
 import Properties.Flock.Circuit.Prog
 import Flock.Net
 
@@ -157,9 +158,6 @@ theorem built_rowOrder {net : Net} (h : Built net) :
       Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b :=
   let ⟨ra, rb, hco, ha, hb⟩ := built_checkOrder h
   ⟨ra, rb, checkOrder_ok hco, ha, hb⟩
-
-/-- **The parser orders every net it accepts**: the rows it stored as `A` and `B` have `RowOrder`,
-so #144's `Rows.topo` for a parsed net is an executable check, not a hypothesis. -/
 
 /-- **The rows of a net `Net.ofRows` built** (the parser's, or a typed class's), as the audit's `Rows`: its computed rows
 are `net.a.row r`, `net.b.row r` (`Rows.ofNet_a`, `Rows.ofNet_b`), and `topo` holds because `Net.ofRows` checked it
