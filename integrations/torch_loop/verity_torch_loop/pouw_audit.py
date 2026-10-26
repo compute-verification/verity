@@ -202,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
     RA.committed_activations = committed_activations
     RA.pinned = lambda doc: OP.held({"context": rec["window"]["context"], OP.KEY: doc})
     # the window's own values are its operands, which --registered pins (`operands.held`, under the window's context)
-    RA.window_pins = lambda w, circuit: {}
+    RA.window_pins = lambda w, circuit, resolve=None: ({}, {})
     out.mkdir(parents=True, exist_ok=True)
     (out / "operands.json").write_text(json.dumps(rec["window"].get(OP.KEY), sort_keys=True))
     rc = RA.main(["audit", "--window", str(wdir), "--law", f"{law['law']}:{law['k']}", "--circuit", a.circuit,
