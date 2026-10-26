@@ -23,9 +23,9 @@ causal prefill and prefill chunks, head dims 64 and 128, MHA, GQA and MQA over a
 - `fixture.py`: the cases and the buffers the kernels must leave, from the Definition's twin, held to its reference
   evaluator on a sample; the H200 model's whole decode step as per-sequence digests over `gen.py`'s inputs.
 - `run.py`: on the card, the identity check, every case under 0xA5 poison in each tiling at several launch shapes, a
-  no-launch control that must fail, the whole decode step also over its first 4,096 and 12,288 sequences (the skeleton's
+  no-launch control that must fail, the whole decode step also over its first 4,096 and 16,384 sequences (the skeleton's
   and the block's M), `attn.py`'s functions on every decode case, and diagnostic timing against SDPA and torch's matmuls
-  at the model's decode step for M = 4,096, 12,288 and 20,480.
+  at the model's decode step for M = 4,096, 16,384 and 20,480.
 - `session.sh`: the card's part as one run from the build's ship (sent as `ship.tar`), `run.py` under `gpu-lease 1`. The
   card's canary is `benchmarks/tc_probe`'s own run.
 

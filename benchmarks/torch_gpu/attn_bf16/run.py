@@ -13,7 +13,7 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
    warps, and all of them in one warp: each gives the tiles to other warps, for the same bytes.  A control arm fills the buffers and launches nothing,
    and must be rejected.  The inputs must come back unchanged.  A FULL case (<case>.full.npz) makes its inputs with gen.py, checks
    them against the fixture's digests (exit 5 if the generator disagrees), and compares each sequence's S and O digests:
-   first over its first FULL_B sequences each (the skeleton's M = 4,096 and the block's 12,288, cases <case>_m<B>: gen.py's
+   first over its first FULL_B sequences each (the skeleton's M = 4,096 and the block's 16,384, cases <case>_m<B>: gen.py's
    words depend only on the flat index, so they are the whole batch's first B), then over the whole batch.
 2. The torch functions (attn.py's qk and pv, attn_ref's and the skeleton's interface), on every decode case (one query a
    sequence) and FULL's batches: over the whole batch with its lens (S past a length must be the fill, -inf); again into
@@ -31,7 +31,7 @@ CUDA driver API (ctypes on libcuda.so.1; numpy for the buffers, torch only for t
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
-  python3 run.py CHECK [CASE ...]   (env: REPS=20, FULL_B=4096,12288, TIME_B=4096,12288,20480, TIME_H=256, TIME_HKV=1,
+  python3 run.py CHECK [CASE ...]   (env: REPS=20, FULL_B=4096,16384, TIME_B=4096,16384,20480, TIME_H=256, TIME_HKV=1,
                                      TIME_L=32, ATTN_EXPECT, ATTN_LIBCUDA, ATTN_ANY_GPU=1 skips the identity check for a
                                      dry run on another card)
 """
@@ -385,7 +385,7 @@ def api_case(path: str, Bp: int = 0) -> dict | None:
 
 def timing(cu: Cuda, funcs: dict, reps: int) -> list[dict]:
     """The H200 model's decode step for each batch of TIME_B: inputs drawn once at the largest and sliced to each."""
-    Bs = [int(b) for b in os.environ.get("TIME_B", "4096,12288,20480").split(",")]
+    Bs = [int(b) for b in os.environ.get("TIME_B", "4096,16384,20480").split(",")]
     H, Hkv, L = (int(os.environ.get(k, d)) for k, d in (("TIME_H", 256), ("TIME_HKV", 1), ("TIME_L", 32)))
     D, Bm = 64, max(Bs)
     rng = np.random.default_rng(0)
@@ -538,7 +538,7 @@ def main(argv: list[str]) -> int:
         cu("cuModuleGetFunction", C.byref(f), mod, name.encode())
         funcs[name] = f
     paths = [os.path.join(check, f"{n}.npz") for n in names] or sorted(glob.glob(os.path.join(check, "*.npz")))
-    prefixes = [int(b) for b in os.environ.get("FULL_B", "4096,12288").split(",") if b]
+    prefixes = [int(b) for b in os.environ.get("FULL_B", "4096,16384").split(",") if b]
     runs = [(p, B) for p in paths for B in ([*prefixes, 0] if p.endswith(".full.npz") else [0])]
     rows = []
     for p, B in runs:
