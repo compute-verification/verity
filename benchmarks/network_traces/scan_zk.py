@@ -277,9 +277,14 @@ def warden_run(run: Path) -> SimpleNamespace:
             raise SystemExit(f"--warden-run {run}: {side} link-window 0's record under cells.salts isn't the rows "
                              "whose root the warden signed")
         sides[side] = SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom)
-    failed = sum(f is not None for r in records[WS.FAILS] if r.window == 0 for row in r.grid for f in row)
+    failed = {r.window: n for r in records[WS.FAILS] if (n := sum(f is not None for row in r.grid for f in row))}
     if failed:
-        raise SystemExit(f"--warden-run {run}: the warden failed {failed} connections in link-window 0")
+        check = next((d / "check.json" for d in (run, run / "witness", run / "out") if (d / "check.json").is_file()),
+                     None)
+        named = [p for p in (json.loads(check.read_text()).get("problems") or []) if "failed closed" in p] if check else []
+        raise SystemExit(f"--warden-run {run}: void run: the warden failed connections closed, {sum(failed.values())} "
+                         f"fail cells in link-windows {sorted(failed)}"
+                         + (f" ({'; '.join(p.removeprefix('audit: ') for p in named)})" if named else ""))
     B, outputs = params.cell_bytes, {}
     for rec in sorted(records[WS.EGRESS], key=lambda r: r.window):
         for t, row in enumerate(WR.window_rows(rec, params)):

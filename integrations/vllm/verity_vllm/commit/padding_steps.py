@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from verity_vllm.commit.binding import HIDDEN_FAMILIES, coverage_check
-from verity_vllm.check.executed_prefix import executed_prefix_of_record, request_steps_of_record
+from verity_vllm.commit.executed_prefix import executed_prefix_of_record, request_steps_of_record
 from verity_vllm.commit import scheme
 from verity_vllm.commit.opened import ORDINAL_SEP
 from verity_vllm.records.declared_stop import DeclaredStop
