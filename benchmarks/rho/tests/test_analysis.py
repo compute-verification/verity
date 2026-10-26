@@ -1,7 +1,9 @@
+import json
 import math
+import sys
 
 import pytest
-from rho import analysis
+from rho import analysis, figures
 from rho.analysis import LO, crossing
 from rho.params import Param, Registry
 
@@ -147,3 +149,20 @@ def test_results_are_cached_per_registry_and_override():
     other = REG.override({})
     assert analysis.result(other, name) is not analysis.result(REG, name)
 
+
+def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import run
+
+    drawn = []
+    monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: drawn.append((out, targets)) or {})
+    monkeypatch.setenv("OUT", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", NAMES[0]])
+    run.main()
+    text = capsys.readouterr().out
+    assert text.startswith("# ρ") and "## Regions where ρ falls below target" in text and "**Corner:**" in text
+    assert (tmp_path / "rho.md").read_text() == text
+    record = json.loads((tmp_path / "rho.json").read_text(), parse_constant=lambda c: pytest.fail(f"JSON has {c}"))
+    assert set(record["scenarios"]) == {NAMES[0]}
+    assert {"corner", "lo_by_status", "attribution", "dangers", "rescues"} <= set(record["scenarios"][NAMES[0]])
+    assert drawn == [(tmp_path / "figures", [10.0])]

@@ -1,9 +1,11 @@
 """`verity bench rho`: ρ for every scenario, how it moves, and where it falls below a target.
 
-    uv run python benchmarks/rho/run.py [--scenario NAME ...] [--target 10 --target 100] [--set KEY=VALUE ...] [--out DIR]
+    uv run python benchmarks/rho/run.py [--scenario NAME ...] [--target 10 --target 100] [--set KEY=VALUE ...]
+                                        [--out DIR] [--figures DIR]
 
-Prints Markdown; with `--out` (or `$OUT`, as under `research run`) also writes `rho.md` and `rho.json` there. `--set`
-overrides any registry key for the whole run.
+Prints Markdown; with `--out` (or `$OUT`, as under `research run`) also writes `rho.md`, `rho.json` and the figures (in
+`figures/`) there. `--figures DIR` writes the figures (`rho/figures.py`, matplotlib) to DIR. `--set` overrides any
+registry key for the whole run.
 """
 
 from __future__ import annotations
@@ -18,8 +20,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from rho import analysis
+from rho.figures import jsonable
 from rho.params import Registry
-from rho.scenario import Estimate, Result, evaluate_named
+from rho.scenario import Estimate, Result
 
 
 def fmt(x: float) -> str:
@@ -36,14 +39,18 @@ def row(e: Estimate) -> dict:
             "terms": dict(s.terms) if s else {}}
 
 
-def scenario_md(r: Result) -> list[str]:
+def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Term]) -> list[str]:
     s = r.scenario
     c = s.context
     setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (dark share {c.fleet.dark:g}), policy "
                f"{c.policy.name} (Γ = {c.policy.gamma:.3g} FLOP, k = {c.policy.k:.3g} bit), {c.horizon.name}; target "
                f"{s.run.name} ({s.run.target(s.model):.3g} FLOP, {fmt(s.years(1.0))} years unencumbered).")
     out = [f"## {s.name}", "", setting, "",
-           f"**ρ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**: {fmt(s.years(r.lo))} to {fmt(s.years(r.hi))} years to the target.", ""]
+           f"**ρ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**: {fmt(s.years(r.lo))} to {fmt(s.years(r.hi))} years to the target.", "",
+           "Guaranteed ρ from only the bounds and cuts at least as strong as: "
+           + ", ".join(f"{st} {fmt(v)}" for st, v in by_status.items()) + ".", "",
+           "What sets ρ (each part's share of the adversary's rate `d + (1 − d) g`, and the most ρ can be while it "
+           "remains): " + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", ""]
     for f in r.families:
         out += [f"### {f.family} (m = {fmt(f.profile.efficiency)})", "",
                 "| argument | side | status | ρ | g | ρ in one declared block | binding cut |",
@@ -55,11 +62,49 @@ def scenario_md(r: Result) -> list[str]:
             else:
                 out.append(f"| {e.argument} | {e.side} | {e.status} | {fmt(d['rho'])} | {fmt(d['g'])} | "
                            f"{fmt(e.declared)} | {', '.join(f'{k}: {v}' for k, v in d['binding'].items())} |")
-        terms = f.combined.slowdown.terms
-        out += ["", "g's terms (lower bound): " + ", ".join(f"{k} {fmt(v)}" for k, v in terms.items() if v), ""]
+        terms_ = f.combined.slowdown.terms
+        out += ["", "g's terms (lower bound): " + ", ".join(f"{k} {fmt(v)}" for k, v in terms_.items() if v), ""]
         if f.contradictions:
             out += [f"**Contradiction:** {', '.join(f.contradictions)} exceed the best attack: a premise is false here.", ""]
     return out
+
+
+def crossings(ds: list[analysis.Danger]) -> str:
+    return "; ".join(f"`{d.key}` past {fmt(d.crossing)} (ρ {fmt(d.rho_worst)} at {fmt(d.worst)})" for d in ds)
+
+
+def regions_md(name: str, base: float, by_status: dict[str, float], corner: analysis.Corner,
+               dangers: dict[float, list[analysis.Danger]], rescues: dict[float, list[analysis.Danger]]) -> list[str]:
+    out = [f"### {name} (ρ = {fmt(base)} today)", ""]
+    if corner.path:
+        prev, steps, rest = base, [], 0
+        for k, v in corner.path:
+            if v < prev * (1 - 5e-3):
+                steps.append(f"`{k}` → {fmt(corner.values.get(k, math.nan))}: {fmt(v)}")
+            else:
+                rest += 1
+            prev = v
+        more = f", and {rest} more that each move it under 0.5%" if rest else ""
+        out.append(f"- **Corner:** ρ = {fmt(corner.rho)} with every ranged parameter at the worse end of its range "
+                   f"at once; one at a time, worst first: {', '.join(steps)}{more}"
+                   + ("." if corner.joint == corner.rho else f" (all at once: {fmt(corner.joint)})."))
+    else:
+        out.append("- **Corner:** no ranged parameter lowers ρ.")
+    for t in sorted(dangers):
+        if base >= t:
+            if dangers[t]:
+                found = f"falls below it within a plausible range: {crossings(dangers[t])}."
+            else:
+                found = ("no single parameter's plausible range takes it below; "
+                         + (f"the corner does (ρ {fmt(corner.rho)})." if corner.rho < t else "nor does the corner."))
+            weaker = [st for st, v in by_status.items() if v < t]
+            if weaker:
+                found += f" From only {weaker[-1]} or stronger bounds and cuts, ρ = {fmt(by_status[weaker[-1]])}."
+        else:
+            found = "already below it today; " + (f"lifted above it by: {crossings(rescues[t])}." if rescues[t]
+                                                  else "no single parameter's plausible range lifts it there.")
+        out.append(f"- **ρ = {fmt(t)}:** {found}")
+    return out + [""]
 
 
 def main() -> None:
@@ -67,46 +112,69 @@ def main() -> None:
     ap.add_argument("--scenario", action="append", help="scenario names (default: all)")
     ap.add_argument("--target", action="append", type=float, help="ρ targets for the danger scan (default: 10, 100)")
     ap.add_argument("--set", action="append", default=[], help="KEY=VALUE registry overrides")
-    ap.add_argument("--out", default=os.environ.get("OUT"))
+    ap.add_argument("--out", default=os.environ.get("OUT"), help="write rho.md, rho.json and figures/ here ($OUT)")
+    ap.add_argument("--figures", help="write the figures (PNG and the JSON they plot) here")
     args = ap.parse_args()
 
     reg = Registry.load()
     if args.set:
         reg = reg.override({k: json.loads(v) for k, v in (a.split("=", 1) for a in args.set)})
     names = args.scenario or reg.names("scenario")
-    targets = args.target or [10.0, 100.0]
+    targets = sorted(args.target or [10.0, 100.0])
 
-    md = ["# ρ", ""]
-    record: dict = {"scenarios": {}}
+    md: list[str] = []
+    summary = ["# ρ", "", "| scenario | ρ ∈ | from conditional or stronger bounds and cuts | set by | at the corner |",
+               "|---|---|---|---|---|"]
+    regions = ["## Regions where ρ falls below target", ""]
+    record: dict = {"targets": targets, "scenarios": {}}
     for name in names:
-        r = evaluate_named(reg, name)
-        md += scenario_md(r)
+        r = analysis.result(reg, name)
+        by_status = {st: analysis.at(reg, name, None, analysis.upto(st)) for st in analysis.STATUSES[:3]}
+        terms = analysis.attribution(r)
+        md += scenario_md(r, by_status, terms)
         swings = analysis.tornado(reg, name)
         md += ["Tornado (guaranteed ρ at each parameter's plausible ends):", "",
                "| parameter | low | high | ρ at low | ρ at high | decades |", "|---|---|---|---|---|---|"]
         md += [f"| {s.key} | {fmt(s.low)} | {fmt(s.high)} | {fmt(s.at_low)} | {fmt(s.at_high)} | {fmt(s.size)} |"
                for s in swings[:12]]
         md.append("")
-        dangers = {t: analysis.dangers(reg, name, t) for t in targets}
-        for t, ds in dangers.items():
-            if ds:
-                found = "; ".join(f"{d.key} past {fmt(d.crossing)} (ρ {fmt(d.rho_worst)} at {fmt(d.worst)})" for d in ds)
-                md += [f"Below ρ = {fmt(t)} within a plausible range: {found}", ""]
+        dangers = {t: analysis.dangers(reg, name, t, swings=swings) for t in targets}
+        rescues = {t: analysis.rescues(reg, name, t, swings=swings) for t in targets}
+        corner = analysis.corner(reg, name, swings=swings)
+        regions += regions_md(name, r.lo, by_status, corner, dangers, rescues)
+        summary.append(f"| {name} | [{fmt(r.lo)}, {fmt(r.hi)}] | {fmt(by_status['conditional'])} | "
+                       + (f"{terms[0].name} {terms[0].share:.0%}" if terms else "") + f" | {fmt(corner.rho)} |")
         record["scenarios"][name] = {
-            "lo": r.lo, "hi": r.hi, "years_lo": r.scenario.years(r.lo),
+            "lo": r.lo, "hi": r.hi, "years_lo": r.scenario.years(r.lo), "lo_by_status": by_status,
+            "attribution": [vars(t) for t in terms],
             "families": {f.family: {"lo": f.lo, "hi": f.hi, "contradictions": list(f.contradictions),
                                     "estimates": [row(e) for e in f.bounds + (f.combined,) + f.attacks]}
                          for f in r.families},
             "tornado": [vars(s) for s in swings],
             "dangers": {str(t): [vars(d) for d in ds] for t, ds in dangers.items()},
+            "rescues": {str(t): [vars(d) for d in ds] for t, ds in rescues.items()},
+            "corner": {"rho": corner.rho, "base": corner.base, "joint": corner.joint, "values": dict(corner.values),
+                       "path": corner.path},
         }
-    text = "\n".join(md)
+    text = "\n".join(summary + [""] + md + regions)
     print(text)
-    if args.out:
-        out = Path(args.out)
+    out = Path(args.out) if args.out else None
+    figures = Path(args.figures) if args.figures else (out / "figures" if out else None)
+    if figures:
+        try:
+            from rho.figures import render
+            written = render(reg, figures, names, targets)
+        except ImportError as e:
+            if args.figures:
+                raise
+            print(f"no figures ({e}): install matplotlib, or pass --figures DIR to fail on it", file=sys.stderr)
+        else:
+            record["figures"] = {k: [str(p) for p in v] for k, v in written.items()}
+            print(f"figures: {figures}", file=sys.stderr)
+    if out:
         out.mkdir(parents=True, exist_ok=True)
         (out / "rho.md").write_text(text + "\n")
-        (out / "rho.json").write_text(json.dumps(record, indent=1, default=str) + "\n")
+        (out / "rho.json").write_text(json.dumps(jsonable(record), indent=1, default=str) + "\n")
 
 
 if __name__ == "__main__":
