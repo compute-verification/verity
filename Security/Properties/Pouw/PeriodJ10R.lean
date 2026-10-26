@@ -61,12 +61,18 @@ the column's (`j10rNoise` from the unit's bases), so two tiles' games share coin
 game, and `CircuitCreditPeriod`'s rate reads them per tile, so the sharing changes the games the claims are of, not
 the claims' form. That they hold at those games is a claim instance of its own (a card).
 
-*ρ.* `ρ` is the live share: every tile's detected weight (`shareCone`, its late cone's share of the committed words)
-at most `1/(ρ·N_p)`. A call of slot `M` rows serving `m_s` of them at `R`-row tiles has `⌈m_s/R⌉` of its `M/R` row tiles
-live, the rest wordless. At the demo's shape (plain INT8 weights, every step serving the full batch, 16,384 rows for
-the block and 4,096 for the skeleton, each a whole number of slots) every call's slot is full, `m_s = M`, so with each
-unit's cone its own and every unit the same `R × C` words, `ρ = 1` and `Λ = j10rRate (k s_T) 1 = 8 + 8/k s_T`. Units
-of unequal words give `ρ = 1/(N_p · max_t shareCone t)`.
+*ρ.* `ρ` is a public bound on the live share: every tile's detected weight (`shareCone`, its late cone's share of the
+committed words) at most `1/(ρ·N_p)`. The population is the tile stratum as registered, of a fixed public size padded
+with wordless filler units, so `N_p` and the bound `ρ` are public and the batch `M` is not. A call of slot `M` rows
+serving `m_s` of them at `R`-row tiles has `⌈m_s/R⌉` of its `M/R` row tiles live, the rest wordless. At the demo's
+shape (plain INT8 weights, every step serving the full batch, 16,384 rows for the block and 4,096 for the skeleton,
+each a whole number of slots) every call's slot is full, `m_s = M`, so with each unit's cone its own and every unit
+the same `R × C` words, the live share is `N_live/N_p`: `ρ = 1` when the stratum carries no fillers, and then
+`Λ = j10rRate (k s_T) 1 = 8 + 8/k s_T`. Units of unequal words give `ρ = 1/(N_p · max_t shareCone t)`.
+
+*The unit.* The statement fixes no unit size: a unit is the `r × c` tile the layout names at its call's full `K`
+(`Place`), and `Cd`'s units are the stratum's. The demo's producer tiles 32 × 32 at `K` = 16,384 (Q, KV, O, up, head)
+and 65,536 (down); such a unit is past C-Flock's `2^27` until `h1zy` has J10-R lanes.
 
 *What it takes that the deployed path doesn't give*, each a named premise. `TileDrawIsCoin`: today `Credit.window`
 draws by its own work law (`Credit.law` over one stratum a `K` template, the period's committed `k`), not the sampling
