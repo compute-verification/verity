@@ -553,32 +553,51 @@ def eps_worksound(row: dict, delta: float, c_mm: float = C_MM, c_sha: float = C_
     return h_mm * (1 - c_mm + row["eps_alg"]) + h_sha * (1 - c_sha) + math.log(1 / delta) / (eta * K_DRAWS) + net
 
 
-def d6(budget: float = 0.0) -> None:
-    """D6's number table: v2 as frozen and P1 beside it, ε at δ 1% and 1e-6 (WORKSOUND's form, a lower bound until D5),
-    γ overlapped and additive, tensor utilization, coverage, and the world model in FLOP (V4 is the world's request)."""
-    print("\nD6 (pre-D5: c_mm = c_sha = 1 at the paper SHA-512 rate, so eps is a lower bound; CALIB's theta pending)")
-    print(f"  {'design, card':34} {'model':16} {'g_ovl':>6} {'g_add':>6} {'util':>5} {'eps 1%':>7} {'eps 1e-6':>8} "
-          f"{'eps 1e-6 if honest hashes at the built rate':>10}")
+PPL_H1 = {"Llama-3.1-8B": "+0.80%", "Llama-3.1-70B": "+1.77%", "DeepSeek-V4-Pro": "not run"}  # H1's (Qwen2.5-7B +0.51%)
+
+
+def d6(budget: float = 0.0, c_mm: dict | None = None, c_sha: dict | None = None) -> list[dict]:
+    """D6's number table, as markdown: v2 as frozen and P1 beside it, at the paper SHA-512 rate and at the built rate.
+
+    ε is WORKSOUND's form at δ 1% and 1e-6 with c_mm, c_sha per card (1 until D5 v1, so ε is a lower bound); at the
+    built rate c_sha is built/paper (credit priced at the deployed kernel). P1 on the RTX PRO 6000 takes P1_C_MM.
+    Then the world model (rule L2; V4 is the world's request): εC and the uncredited FLOP a week, a month and a year."""
+    c_mm, c_sha = c_mm or {}, c_sha or {}
     rows = (v2_world(budget, frozen=True) + v2_world(budget, built=True, frozen=True) + v2_world(budget, p1=True)
             + v2_world(budget, built=True, p1=True))
     for r in rows:
         r["wrap_share"] = r["A"] - r["gamma"] * (1 - r["wrap_uncredited"]) if r["A"] >= r["T"] else 0.0
         card = r["card"].split(" built")[0].split(" t=")[0].split(" P1")[0]
-        built = " built" in r["card"]
-        c_sha = SHA_BUILT[card] / V2_CARDS[card][1] if built else 1.0
-        c_mm = P1_C_MM[card] if " P1" in r["card"] else C_MM
-        r["eps"] = {d: eps_worksound(r, d, c_mm=c_mm, c_sha=c_sha) for d in (0.01, 1e-6)}
-        print(f"  {r['card']:34} {r['model']:16} {r['gamma']:6.2f} {r['gamma_add']:6.2f} {r['util']:5.1%} "
-              f"{r['eps'][0.01]:7.3%} {r['eps'][1e-6]:8.3%}" + (f"   (c_sha {c_sha:.3f})" if built else ""))
-    print("  world model (V4 rows), FLOP a window: eps C at delta 1% / 1e-6; credited, ATT copy, uncredited (indexer)")
+        r["base"] = card
+        r["design"] = "P1" if " P1" in r["card"] else "v2"
+        r["rate"] = "built" if " built" in r["card"] else "paper"
+        cs = c_sha.get(card, 1.0) * (SHA_BUILT[card] / V2_CARDS[card][1] if r["rate"] == "built" else 1.0)
+        cm = c_mm.get(card, 1.0) * (P1_C_MM[card] if r["design"] == "P1" else 1.0)
+        r["eps"] = {d: eps_worksound(r, d, c_mm=cm, c_sha=cs) for d in (0.01, 1e-6)}
+    print(f"\nD6 (c_mm {c_mm or 'pre-D5: 1'}, c_sha {c_sha or 'pre-D5: 1'}; eps is a lower bound until D5; theta: "
+          f"V2_CARDS, CALIB pending)")
+    print("| design, card, SHA-512 rate | γ overlapped 8B / 70B / V4 | γ additive | tensor util. | ε δ 1% (V4) | "
+          "ε δ 1e-6 (V4) | coverage | perplexity (H1's) |")
+    print("|---|---|---|---|---|---|---|---|")
+    groups = {}
     for r in rows:
-        if r["model"] != "DeepSeek-V4-Pro":
-            continue
-        cells = []
+        groups.setdefault((r["design"], r["base"], r["rate"]), []).append(r)
+    for (design, card, rate), g in groups.items():
+        rate_s = f"{(SHA_BUILT[card] if rate == 'built' else V2_CARDS[card][1]) / 1e9:.2f} G/s ({rate})"
+        v4 = g[-1]
+        print(f"| {design}, {card}, {rate_s} | " + " / ".join(f"{r['gamma']:.2f}" for r in g) + " | "
+              + " / ".join(f"{r['gamma_add']:.2f}" for r in g) + " | "
+              + " / ".join(f"{r['util']:.0%}" for r in g) + f" | {v4['eps'][0.01]:.3%} | {v4['eps'][1e-6]:.3%} | "
+              + " / ".join(f"{1 - r['uncredited']:.1%}" for r in g) + " | "
+              + " / ".join(PPL_H1[r["model"]] for r in g) + " |")
+    print("\n| design, card, rate | window | world FLOP | εC δ 1% | εC δ 1e-6 | credited | by ATT's copy | uncredited |")
+    print("|---|---|---|---|---|---|---|---|")
+    for (design, card, rate), g in groups.items():
+        v4 = g[-1]
         for w, F in WORLD_FLOP.items():
-            cells.append(f"{w} {r['eps'][0.01] * F:.2e} / {r['eps'][1e-6] * F:.2e}; cred {(1 - r['uncredited']) * F:.2e}"
-                         f", copy {r['copy_share'] * F:.2e}, uncr {r['uncredited'] * F:.2e}")
-        print(f"  {r['card']:34} " + " | ".join(cells))
+            print(f"| {design}, {card}, {rate} | {w} | {F:.2e} | {v4['eps'][0.01] * F:.1e} | {v4['eps'][1e-6] * F:.1e} "
+                  f"| {(1 - v4['uncredited']) * F:.2e} | {v4['copy_share'] * F:.1e} | {v4['uncredited'] * F:.1e} |")
+    return rows
 
 
 def v2_decode(budget: float = 0.0, frozen: bool = True) -> None:
