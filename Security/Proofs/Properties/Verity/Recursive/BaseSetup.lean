@@ -157,25 +157,37 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
     refine Classical.byContradiction fun hne => ?_
     simp [hne, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at hb
   simp only [hh, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at hb
-  obtain ⟨⟨spec', sts'⟩, hs, hb⟩ := bind_ok hb
-  dsimp only at hb
-  obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
-  obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hb)
-  have hs' : Flock.Stmt.setupTables
-      (Flock.Zk.tags (tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1)))) (Flock.Zk.maskLogOf circuitB) 1)
-      circuitB pubB (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) 1 [] draw partition program = .ok (spec', sts') := by
-    split at hs
+  have hstep : ∃ x : Flock.SessionSpec × Array Flock.Stmt,
+      Flock.Stmt.setupTables
+        (Flock.Zk.tags (tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1)))) (Flock.Zk.maskLogOf circuitB) 1)
+        circuitB pubB (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) 1 [] draw partition program = .ok x ∧
+      (∀ st ∈ x.2, Flock.checkRegistered st registered = .ok () ∧
+        SampledProofs.OneStageZk.checkIdentifier st = .ok ()) ∧
+      Flock.Registered.checkFull registered draw = .ok () ∧ (x.1, x.2) = (spec, sts) := by
+    split at hb
     · next hhid =>
+      obtain ⟨x, hs, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
+      refine ⟨x, ?_, fun st hst => (body_ok (A := fun st => Flock.checkRegistered st registered)
+        (B := SampledProofs.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
+        Except.ok.inj hb⟩
       rw [Flock.Stmt.setupTables_eq]
       simpa only [Flock.ProvedScope.circuitOf, hhid, ↓reduceIte] using hs
-    · exact hs
-  have heach := forIn_mem body_yield hloop
-  have hpt : ∀ st ∈ sts', Flock.checkRegistered st registered = .ok () ∧ FlockDeploy.noIdentifier st = .ok () :=
-    fun st hst =>
-      let h := body_ok.1 (heach st hst)
-      ⟨h.1, noIdentifier_of_check h.2⟩
-  refine ⟨by rw [htags]; exact hh, hsetup.trans hs', hpt, forIn_ok fun st hst => body_ok.2 (hpt st hst), ?_⟩
+    · obtain ⟨x, hs, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
+      exact ⟨x, hs, fun st hst => (body_ok (A := fun st => Flock.checkRegistered st registered)
+        (B := SampledProofs.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
+        Except.ok.inj hb⟩
+  obtain ⟨⟨spec', sts'⟩, hs, hpt, hfull, hx⟩ := hstep
+  simp only [Prod.mk.injEq] at hx
+  obtain ⟨rfl, rfl⟩ := hx
+  have hpt' : ∀ st ∈ sts', Flock.checkRegistered st registered = .ok () ∧
+      FlockDeploy.noIdentifier st = .ok () :=
+    fun st hst => ⟨(hpt st hst).1, noIdentifier_of_check (hpt st hst).2⟩
+  refine ⟨by rw [htags]; exact hh, hsetup.trans hs, hpt', forIn_ok fun st hst =>
+    (body_ok (A := fun st => Flock.checkRegistered st registered) (B := FlockDeploy.noIdentifier)).2 (hpt' st hst), ?_⟩
   rw [hdraw]
   exact hfull
 
