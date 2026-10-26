@@ -36,6 +36,7 @@ import Proofs.Nci.CoveringPriced
 import Proofs.Nci.CoveringPricedWitness
 import Proofs.Nci.Cover
 import Proofs.Nci.PartitionCovers
+import Proofs.Nci.CompliesCK
 
 /-!
 # Proofs of NCI's guarantees
