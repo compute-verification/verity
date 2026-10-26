@@ -19,7 +19,7 @@ added to the int32 accumulators, or the basis the linears' dots run in:
   requantized after the coins; `perm`: a fresh signed permutation (exact, so bit-identical to `rtn`).
 
 Metrics: perplexity on the ppl bench's pinned windows (WikiText-2 and C4 at 2048, `benchmarks/ppl/windows.py`), MMLU
-5-shot on a fixed subset (the first `--mmlu-per` test questions of each subject, HF `cais/mmlu`), and GSM8K 8-shot
+5-shot on a fixed subset (the first `--mmlu-per` test questions of each subject, MMLU's original release), and GSM8K 8-shot
 chain-of-thought (the first `--gsm8k-n` test problems, greedy, the standard 8 exemplars). Every result is a line of
 `results.jsonl` in `--out`, written as it lands. `--smoke` runs every arm on a few inputs of a small model and checks the
 harness's exactness first (the int8 dot against float64, the eager attention against the model's own)."""
@@ -27,11 +27,14 @@ harness's exactness first (the int8 dot against float64, the eager attention aga
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
+import io
 import json
 import math
 import re
 import sys
+import tarfile
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -289,6 +292,7 @@ def perplexity(model, wins: torch.Tensor) -> dict:
     return {"ppl": math.exp(nll / n), "tokens": n, "window_nll": per}
 
 
+MMLU_TAR = "https://people.eecs.berkeley.edu/~hendrycks/data.tar"
 MMLU_API = "https://datasets-server.huggingface.co/rows?dataset=cais/mmlu&config=all&split={split}&offset={off}&length=100"
 GSM8K_URL = "https://raw.githubusercontent.com/openai/grade-school-math/master/grade_school_math/data/test.jsonl"
 
@@ -306,16 +310,33 @@ def fetch(url: str, tries: int = 6) -> bytes:
 
 
 def mmlu_rows(split: str, data: Path) -> list[dict]:
+    """`split`'s questions as HF `cais/mmlu`'s `all` has them (subjects in name order, each in file order), from the
+    original release's one tar; its rows API, paged 100 at a time, is the fallback (it answers 429 to an unpaced pass)."""
     path = data / f"mmlu-{split}.json"
     if not path.exists():
-        rows, off = [], 0
-        while True:
-            page = json.loads(fetch(MMLU_API.format(split=split, off=off)))
-            got = [r["row"] for r in page["rows"]]
-            rows += got
-            off += len(got)
-            if not got or off >= page.get("num_rows_total", off):
-                break
+        try:
+            tar = data / "mmlu-data.tar"
+            if not tar.exists():
+                tar.write_bytes(fetch(MMLU_TAR))
+            rows = []
+            with tarfile.open(tar) as t:
+                for name in sorted(m.name for m in t.getmembers()
+                                   if m.name.startswith(f"data/{split}/") and m.name.endswith(f"_{split}.csv")):
+                    subject = Path(name).name[: -len(f"_{split}.csv")]
+                    for q, a_, b_, c_, d_, ans in csv.reader(io.TextIOWrapper(t.extractfile(name), encoding="utf-8")):
+                        rows.append({"question": q, "subject": subject, "choices": [a_, b_, c_, d_],
+                                     "answer": "ABCD".index(ans.strip())})
+        except Exception as e:  # noqa: BLE001
+            print(f"mmlu: the release tar failed ({e!r}); paging the rows API", file=sys.stderr)
+            rows, off = [], 0
+            while True:
+                page = json.loads(fetch(MMLU_API.format(split=split, off=off)))
+                got = [r["row"] for r in page["rows"]]
+                rows += got
+                off += len(got)
+                if not got or off >= page.get("num_rows_total", off):
+                    break
+                time.sleep(1)
         path.write_text(json.dumps(rows))
     return json.loads(path.read_text())
 
@@ -544,7 +565,12 @@ def main() -> int:
                 S.stats = None
                 emit(a.out, rec)
     if "mmlu" in evals:
-        test, dev = mmlu_rows("test", a.data), mmlu_rows("dev", a.data)
+        try:
+            test, dev = mmlu_rows("test", a.data), mmlu_rows("dev", a.data)
+        except Exception as e:  # noqa: BLE001
+            emit(a.out, {"kind": "error", "set": "mmlu", "error": repr(e)})
+            evals.remove("mmlu")
+    if "mmlu" in evals:
         prompts = mmlu_prompts(test, dev, 1 if a.smoke else a.mmlu_per)[: 8 if a.smoke else None]
         emit(a.out, {"kind": "data", "set": "mmlu", "test_sha256": sha256_file(a.data / "mmlu-test.json"),
                      "dev_sha256": sha256_file(a.data / "mmlu-dev.json"), "questions": len(prompts)})
@@ -554,7 +580,12 @@ def main() -> int:
             r = mmlu(model, tok, prompts, 8)
             emit(a.out, {"kind": "mmlu", "arm": arm.name, "seed": 0, **r, "seconds": round(time.time() - t0, 1)})
     if "gsm8k" in evals:
-        rows = gsm8k_rows(a.data)[: 4 if a.smoke else a.gsm8k_n]
+        try:
+            rows = gsm8k_rows(a.data)[: 4 if a.smoke else a.gsm8k_n]
+        except Exception as e:  # noqa: BLE001
+            emit(a.out, {"kind": "error", "set": "gsm8k", "error": repr(e)})
+            evals.remove("gsm8k")
+    if "gsm8k" in evals:
         emit(a.out, {"kind": "data", "set": "gsm8k", "sha256": sha256_file(a.data / "gsm8k-test.jsonl"),
                      "problems": len(rows)})
         for arm in gen_arms:
@@ -562,7 +593,8 @@ def main() -> int:
             t0 = time.time()
             r = gsm8k(model, tok, rows, 4 if a.smoke else 64, 64 if a.smoke else a.gsm8k_max_new)
             emit(a.out, {"kind": "gsm8k", "arm": arm.name, "seed": 0, **r, "seconds": round(time.time() - t0, 1)})
-    return 0
+    # 2: the harness held, but a task's data couldn't be fetched (its `error` line says which)
+    return 0 if evals == a.evals.split(",") else 2
 
 
 if __name__ == "__main__":

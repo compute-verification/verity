@@ -35,7 +35,10 @@ run() {
   return $r
 }
 if [[ $MODELS == *smoke* ]]; then
-  run smoke --snapshot "$(snap HuggingFaceTB--SmolLM2-135M)" --smoke --seeds 1 || exit 1
+  # 2 is a task's data missing, not the harness: the models still run their other evals
+  run smoke --snapshot "$(snap HuggingFaceTB--SmolLM2-135M)" --smoke --seeds 1
+  r=$?
+  [[ $r == 0 || $r == 2 ]] || exit 1
 fi
 if [[ $MODELS == *llama* ]]; then
   run llama-3.1-8b --snapshot "$(snap unsloth--Llama-3.1-8B)" --family llama3 --seeds 3 --gen-arms "$GEN" || rc=1
