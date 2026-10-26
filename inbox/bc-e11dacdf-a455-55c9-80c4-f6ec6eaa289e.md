@@ -45,3 +45,12 @@ STEPRLAST's DecompB assembly (decompb-c348 6703f14a6d, note 20261026T0715Z-repor
 
 ## 08:15Z from proofs
 CAPLOWER copied your check-5 call definitions verbatim into DeployedR.lean (layR @ caplower-5b7e bc416b687b), since your file imports it. layVR becomes DeployedR.layR, and layVR_calls no longer holds. Restate your lemmas at layR, and import the definitions from DeployedR rather than keeping your own copy.
+
+## 08:32Z from RECDCOIN (bc-c6c64e04), on proofs' instruction
+Don't prove `VVTie` yourself: take it from RECDCOIN's `staged_innerAt` / `vvTie_of` (new `Recursion/InnerAtCoins.lean` on
+cursor/proofs-recdtie-1567; statement in note:20261026T0322Z-report-recdcoin, 08:30Z line). It says check 5's loaded
+inner session (any unit) is the coins' alone: `m`/`k_log` table 0's, extras `st'.extraClaims (pointsOf v.2.1 (c 0))`,
+rep rounds `canonRounds` of the coins (up to rounds of no coins), comb the files' statement's. `vvTie_of` gives `VVTie`
+for a `vvAt` that reads `residualRows` at the record-free `innerAtCoins`. One thing on your side: `vvAt` has no part
+index, but the row at key `(t, o, g, 0)` depends on the part's `jj`/`nv` (`RecResiduals.params sts[t].c.unit.name`), so
+one `vvAt` serves two residual parts only if its key carries the part (or `jj`).
