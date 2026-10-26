@@ -157,14 +157,15 @@ def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB
     (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Json) (program : Option ByteArray)
     (registered : Option (Array Flock.Registered.Port)) : V (Flock.SessionSpec × Array Flock.Stmt) := do
   (if !tags.hm96Rows then throw s!"{tags.name}: not an hm96-sha512 row statement" else pure () : V Unit)
-  let (spec, sts) ← if tags.hiddenOutputs then
+  let r ← (if tags.hiddenOutputs then
       Flock.Stmt.setupTablesOf parsed tags circuitB pubB coins count tables draw partition program
-    else Flock.Stmt.setupTables tags circuitB pubB coins count tables draw partition program
-  for st in sts do
+    else Flock.Stmt.setupTables tags circuitB pubB coins count tables draw partition program :
+      V (Flock.SessionSpec × Array Flock.Stmt))
+  for st in r.2 do
     Flock.checkRegistered st registered
     checkIdentifier st
   Flock.Registered.checkFull registered draw
-  return (spec, sts)
+  return r
 
 /-- `flock-verify`'s `programDigest`: SHA-512 of the canonical descriptor without `annotations`. -/
 def programDigest (b : ByteArray) : Option String := do
