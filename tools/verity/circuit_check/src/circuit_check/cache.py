@@ -136,7 +136,8 @@ _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
 #: the checker's files that are no input of every target: each target holds its own parts of them
 TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
-#: the targets' measured peaks `cli.run` schedules by: no input of any target, since they decide only which targets run beside
+#: the targets' measured peaks `cli.run` schedules by, and beside them the catalog bindings' (by binding name) the circuit_check
+#: suite's build schedules by (`units.built_apart`): no input of any target, since they decide only which targets run beside
 #: which, and a target whose process the OOM killer took is never stored
 HEAVY = _HERE / "heavy.json"
 #: the failures `main` already has (`circuit_check.known`): no input of any target, since they decide only the run's summary
