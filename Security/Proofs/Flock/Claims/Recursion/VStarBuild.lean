@@ -1,5 +1,4 @@
 import Proofs.Flock.Claims.Recursion.VStarWit
-import Proofs.Flock.Claims.Recursion.SeqPrefix
 import Proofs.Flock.Claims.Recursion.SlotsCommit
 import VStar.In
 
@@ -9,13 +8,14 @@ import VStar.In
 The reference prover hands V\* part `s`'s session the outer witness `RefParts.wit` builds. Here it is a definition, the
 deployed builder `verity_flock.rec_vstage.stage` followed by `flock-circuit --zk`'s trace:
 
-* **What the inner prover records** (`InnerRec`): the row it commits at the round after each history (`words`), and
-  after the inner rounds the rest of what the stager reads (`rest`, a `VStar.In.Src`: the openings, the tops with their
-  salts, the running sums' salts, `κ`, `eq(α)`, the `v`s and the fresh salts).
-* **The inner prover** (`refPartsAt`'s `PI`): `RefParts.commit`'s, which sends at each round hm96's commit string of the
-  row's `sha512/row/v1` digest (`digestOf`) under the round's salt on its tape.
-* **The stager's inputs** (`srcOf`): `rest`, its message rounds the rows the inner prover committed, at the rounds the
-  rep streams commit them (`msgsOf`, `msgRound`), each under the salt it committed it under.
+* **What the inner prover records** (`InnerRec`): the rows it commits at the round after each history (`rows`: a
+  round's tops, then the row it absorbs), and after the inner rounds the rest of what the stager reads (`rest`, a
+  `VStar.In.Src`: the openings, the running sums' salts, `κ`, `eq(α)`, the `v`s and the fresh salts).
+* **The inner prover** (`InnerRec.P`): at each round, hm96's commit string of each row's `sha512/row/v1` digest
+  (`digestOf`) under that round's and row's salt on its tape, in order (`commitThen`).
+* **The stager's inputs** (`srcOf`): `rest`, its message rounds and tops the rows the inner prover committed
+  (`roundRows`): each absorbing round's last row at the rounds the rep streams commit them (`msgsOf`, `msgRound`), level
+  0's tops at round 0 and each later level's at the round committing it (`topsOf`), each under its salt.
 * **Each part's port inputs** (`VStar.In.partIn`, VREFUSE's, difftested against the stager's `inst.bin`), at the part's
   V\* statement and its circuit's program (`partAt`, `progOf`).
 * **The trace** (`vstarWit`): an assigner `A` on the part's circuit at those inputs. What the obligations read of the
@@ -28,7 +28,7 @@ statement and the rep streams' schedule off it. A deployed record over `refParts
 
 namespace RecDeploy.VStarBuild
 
-open Flock
+open _root_.Flock
 open Claims (Msg)
 open Claims.Recursion.VStarB (formBit readForms)
 
@@ -53,39 +53,72 @@ def digestOf (ws : Array ℕ) : Fin 64 → UInt8 := fun i => (FlockDeploy.sha512
 /-- A salt's bytes. -/
 def saltBytes (y : Salt) : ByteArray := ⟨Array.ofFn y⟩
 
-/-- **What the inner prover records**: the row it commits at the round after each history (`words`, u16 words), and
-after the inner rounds, the rest of what the stager reads (`rest`), whose message rounds `srcOf` replaces by the rows
-committed. -/
+/-- **What the inner prover records**: the rows it commits at the round after each history (`rows`, u16 words), in the
+order its message lays their commit strings (a round's tops, then the row it absorbs), and after the inner rounds the
+rest of what the stager reads (`rest`), whose message rounds and tops `srcOf` replaces by the rows committed. -/
 structure InnerRec where
   R : Type
   [ne : Nonempty R]
-  words : Claims.Flock.Wit → R → List (Msg × Msg) → Array ℕ
+  rows : Claims.Flock.Wit → R → List (Msg × Msg) → List (Array ℕ)
   rest : Claims.Flock.Wit → R → List (Msg × Msg) → _root_.VStar.In.Src
 
 attribute [instance] InnerRec.ne
 
-/-- **The message rounds' rows** (`VStar.In.Src.msgs`): round `k`'s, rep `r`'s, the row of inner round
-`msgRound rs r k + 1` (the link message is round `0`); an empty row where the schedule has none. -/
-def msgsOf (rs : Array RecVStar.SchedRound) (row : ℕ → _root_.VStar.In.Row) : Array (Array _root_.VStar.In.Row) :=
+/-- The inner prover's tape: `R`, and a salt for each round and each row of it. -/
+abbrev InnerRec.Tape (I : InnerRec) : Type := I.R × (ℕ → ℕ → Salt)
+
+/-- **The inner prover**: at each round, hm96's commit string of each row it commits there (`digestOf`), under that
+round's and row's salt, in order (`commitThen`). -/
+def InnerRec.P (I : InnerRec) (w : Claims.Flock.Wit) : Claims.Prover I.Tape :=
+  ⟨fun _ h ρ => commitThen (fun cs => .ret cs.flatten)
+    ((I.rows w ρ.1 h).mapIdx fun j ws => (digestOf ws, ρ.2 h.length j)) []⟩
+
+/-- **Inner round `i`'s rows** off the inner rounds `hist`: the rows committed at the history before it, each under its
+salt. -/
+def roundRows (I : InnerRec) (w : Claims.Flock.Wit) (ρ : I.Tape) (hist : List (Msg × Msg)) (i : ℕ) :
+    List _root_.VStar.In.Row :=
+  (I.rows w ρ.1 (hist.take i)).mapIdx fun j ws => ⟨ws, saltBytes (ρ.2 i j)⟩
+
+/-- **The message rounds' rows** (`VStar.In.Src.msgs`): round `k`'s, rep `r`'s, the last row of inner round
+`msgRound rs r k + 1` (the round's absorbed row, after its tops); an empty row where there is none. -/
+def msgsOf (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.VStar.In.Row) :
+    Array (Array _root_.VStar.In.Row) :=
   ((List.range (RecVStar.commitRounds rs).length).map fun k =>
     ((List.range 2).map fun r =>
-      ((msgRound rs r k).map fun j => row (j + 1)).getD ⟨#[], ByteArray.empty⟩).toArray).toArray
+      ((msgRound rs r k).bind fun j => (rr (j + 1)).getLast?).getD ⟨#[], ByteArray.empty⟩).toArray).toArray
+
+/-- A row's words as bytes, each word little-endian (`VStar.In.wordsOf`'s inverse). -/
+def wordsBytes (ws : Array ℕ) : ByteArray :=
+  ⟨ws.flatMap fun w => #[(w % 256).toUInt8, (w / 256 % 256).toUInt8]⟩
+
+/-- **The tops** (`VStar.In.Src.tops`), by rep and level, each node with its salt: level 0's, rep `rep`'s half of round
+`0`'s rows (RecCap's instances `rep · n + t`); each later level's, the schedule's next top (`topSizes`' order), at rep
+`rep`'s round committing it, the rows after the round's earlier tops. -/
+def topsOf (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.VStar.In.Row) :
+    Array (Array (Array (ByteArray × ByteArray))) :=
+  let node := fun (rw : _root_.VStar.In.Row) => (wordsBytes rw.words, rw.salt)
+  ((List.range 2).map fun rep =>
+    let n := (rr 0).length / 2
+    let later := (List.range rs.size).flatMap fun k =>
+      let sizes := (rs.getD k default).2.1.toList
+      (List.range sizes.length).map fun e =>
+        ((rr (rep * rs.size + k + 1)).drop (sizes.take e).sum).take (sizes.getD e 0)
+    ((((rr 0).drop (rep * n)).take n :: later).map fun l => (l.map node).toArray).toArray).toArray
 
 /-- **The stager's inputs** at the compiled statement `x`, off the inner witness `w`, the inner prover's tape `ρ` and the
-inner rounds `hist`: `rest`, with the message rounds the rows the inner prover committed, inner round `i`'s at the
-history before it under its salt `ρ.2 i`. None where `x` reads no schedule. -/
-def srcOf (I : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : I.R × (ℕ → Salt)) (hist : List (Msg × Msg)) :
+inner rounds `hist`: `rest`, with the message rounds and the tops the rows the inner prover committed (`roundRows`).
+None where `x` reads no schedule. -/
+def srcOf (I : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : I.Tape) (hist : List (Msg × Msg)) :
     Option _root_.VStar.In.Src := do
   let r ← readX x
   let rs ← repSched r.shape
-  pure { I.rest w ρ.1 hist with
-    msgs := msgsOf rs fun i => ⟨I.words w ρ.1 (hist.take i), saltBytes (ρ.2 i)⟩ }
+  pure { I.rest w ρ.1 hist with msgs := msgsOf rs (roundRows I w ρ hist), tops := topsOf rs (roundRows I w ρ hist) }
 
 /-- **The deployed outer witness builder**: part `s`'s port inputs (`VStar.In.partIn`, at its statement and its
 circuit's program) at the stager's inputs, assigned on its circuit by `A`; the empty witness where the statement has no
 such part or the stager refuses. -/
 def vstarWit (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I : InnerRec) (x : Msg)
-    (w : Claims.Flock.Wit) (ρ : I.R × (ℕ → Salt)) (hist : List (Msg × Msg)) (s : ℕ) : Claims.Flock.Wit :=
+    (w : Claims.Flock.Wit) (ρ : I.Tape) (hist : List (Msg × Msg)) (s : ℕ) : Claims.Flock.Wit :=
   match partAt x s, srcOf I x w ρ hist with
   | some (st, c), some src =>
     match _root_.VStar.In.partIn src (progOf c) st with
@@ -93,12 +126,13 @@ def vstarWit (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I : 
     | .error _ => ⟨[]⟩
   | _, _ => ⟨[]⟩
 
-/-- **The deployed reference prover's pieces at the compiled statement `x`**: `RefParts.commit`'s inner prover at the
-rows' digests, the running sums' digests as the staged values (`VStar.In.chainRows`), and `vstarWit` at `x`. -/
-def refPartsAt (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I : InnerRec) (x : Msg) : RefParts :=
-  RefParts.commit I.R (fun w ρ h => digestOf (I.words w ρ h))
-    (fun w ρ hist => (_root_.VStar.In.chainRows (I.rest w ρ.1 hist)).toList.map digestOf)
-    (vstarWit A I x)
+/-- **The deployed reference prover's pieces at the compiled statement `x`**: the inner prover `I.P`, the running sums'
+digests as the staged values (`VStar.In.chainRows`), and `vstarWit` at `x`. -/
+def refPartsAt (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I : InnerRec) (x : Msg) : RefParts where
+  TI := I.Tape
+  PI := I.P
+  digests w ρ hist := (_root_.VStar.In.chainRows (I.rest w ρ.1 hist)).toList.map digestOf
+  wit := vstarWit A I x
 
 /-! ## What the trace places -/
 
@@ -122,18 +156,10 @@ structure Places (c : Circuit) (pin : _root_.VStar.In.PartIn) (w : Claims.Flock.
 /-- **`vstarWit` is the assigner's trace at the part's port inputs**, where the part and the stager's inputs exist and
 the stager accepts. -/
 theorem vstarWit_eq {A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit} {I : InnerRec} {x : Msg}
-    {w : Claims.Flock.Wit} {ρ : I.R × (ℕ → Salt)} {hist : List (Msg × Msg)} {s : ℕ} {st : _root_.VStar.Stmt}
+    {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)} {s : ℕ} {st : _root_.VStar.Stmt}
     {c : Circuit} {src : _root_.VStar.In.Src} {pin : _root_.VStar.In.PartIn} (hp : partAt x s = some (st, c))
     (hs : srcOf I x w ρ hist = some src) (hi : _root_.VStar.In.partIn src (progOf c) st = .ok pin) :
     vstarWit A I x w ρ hist s = A c pin := by
   simp [vstarWit, hp, hs, hi]
-
-/-- **The inner prover's round message is the row's commit string**: at the history `h`, `refPartsAt`'s inner prover
-queries the salt's hash and sends the row's digest under the round's salt's mask, then that answer. -/
-theorem refPartsAt_PI (A : Circuit → _root_.VStar.In.PartIn → Claims.Flock.Wit) (I : InnerRec) (x : Msg)
-    (w : Claims.Flock.Wit) (xI : Msg) (h : List (Msg × Msg)) (ρ : I.R × (ℕ → Salt)) :
-    ((refPartsAt A I x).PI w).next xI h ρ =
-      .query (Claims.toMsg Hm96.Default512.saltPrefix ++ List.ofFn (ρ.2 h.length)) fun c =>
-        .ret (List.ofFn (fun i => digestOf (I.words w ρ.1 h) i ^^^ maskOf (ρ.2 h.length) i) ++ c) := rfl
 
 end RecDeploy.VStarBuild
