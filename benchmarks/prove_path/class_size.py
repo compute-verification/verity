@@ -1,13 +1,13 @@
 """The padded size of a window class's circuit (V3b), at a class too large to lower: its units, ANDs and m.
 
-`window_circuit.class_circuit` lowers the class Program once a request. At the class of record
+`window_circuit.class_circuit` lowers the class Program once a slot. At the class of record
 (`window_circuit.CLASS_OF_RECORD`: 8 slots, 1,024 prompt ids, 64 outputs, 1,087 positions a Program) a head reaches
 1,087 keys, past the `window_circuit.KEYS` one gather reads until `AttentionHead_v19` (#4263) binds, and a Program is
 some 46M units. So the size is a projection (`project`) from an exact
 lowering of one Program of the same registration at a small probe class:
 
 * every template but the heads and their key gathers is a fixed number of units a position (`TokenFeed_v1` a prompt
-  position), read off the probe, which is refused unless each divides evenly;
+  position, `SlotRow_v1` one a Program), read off the probe, which is refused unless each divides evenly;
 * the heads are v19's: a head over T keys is `AttnBlockFirst_v1{NVIS}` (its last NVIS = T - (nb - 1)·BN keys), nb - 1
   `AttnBlock_v5` and `AttnHeadEnd_v1`, nb = ceil(T / BN). Its keys and values reach it as an `AllGather_v1{BN, D}` row a
   full block, written once and read by every later position, and an `AllGather_v1{NVIS, D}` of its first block, none where
@@ -19,8 +19,8 @@ interpolated where only another binding was measured, and saying so), and m = ce
 k_log is its rows' (`rows_k`: C-Flock's composer gives each row a unit reads or writes an hm96 slot), so a unit past 256
 rows in and out, past a 2^27-bit block, is refused as C-Flock refuses it.
 
-    prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE [--class SLOTS,PROMPT,OUTPUTS] \\
-        [--probe 1,2,2]
+    prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
+        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe 1,2,2]
 """
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ from typing import Any
 
 HEAD = "AttentionHead_v18"
 FEED = "TokenFeed_v1"
+ROW = "SlotRow_v1"
 GATHER = "AllGather_v1"
 
 
@@ -88,6 +89,10 @@ def project(probe: Mapping[str, int], at: Any, cls: Any, heads: str = "v19") -> 
             out[lab.replace(f"NP={NP0}", f"NP={cls.prompt}")] += 1 if s["FIRST"] else cls.prompt - 1
             if n != (1 if s["FIRST"] else NP0 - 1):
                 raise ValueError(f"the probe has {n} {lab} units, not one a prompt position")
+        elif fam == ROW:
+            out[lab.replace(f"NP={NP0}", f"NP={cls.prompt}")] += 1
+            if n != 1:
+                raise ValueError(f"the probe has {n} {lab} units, not one a Program")
         elif n % P0:
             raise ValueError(f"the probe has {n} {lab} units, not a fixed count at each of its {P0} positions")
         elif n:
@@ -168,6 +173,11 @@ def measured(lab: str) -> tuple[int, int, str]:
     if fam == FEED and (k := next((k for most, k in FEED_K if s["NP"] <= most), None)) is not None:
         return 30 if s["FIRST"] else 62, k, "circuit-check r20261025-174007-faec; k_log " + COMPOSED + (
             "" if s["NP"] in dict(FEED_K) else ", an upper bound")
+    if fam == ROW and (k := next((k for most, k in FEED_K if s["NP"] <= most), None)) is not None:
+        return 0, k, ("a copy (circuit-check r20261026-172423-b1a4); k_log an estimate, not composed: TokenFeed_v1{NP, "
+                      "FIRST=true}'s, whose rows it holds but for one i32 more")
+    if lab == "SlotMask_v1{}":
+        return 32, 22, "circuit-check r20261026-172423-b1a4; k_log the least block, its 3 rows of one i32 each"
     raise ValueError(f"no measured ANDs or k_log for {lab} at Llama-3.2-1B: add its measurement to MEASURED")
 
 
