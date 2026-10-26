@@ -140,6 +140,7 @@ theorem parse_leaves_lt {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok 
       rw [Bool.or_eq_true, List.any_eq_true]
       refine Or.inr ⟨j, List.mem_range.2 hj', ?_⟩
       simp only [Bool.or_eq_true, decide_eq_true_eq]
+      try dsimp only at hn ⊢
       first | exact Or.inr (Or.inl (by omega)) | omega
 
 /-- **A public leaf is below the public input ports' words** (`parse_leaves_lt`, read through `getD`). -/
