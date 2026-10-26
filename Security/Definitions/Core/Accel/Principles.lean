@@ -5,7 +5,7 @@ import Definitions.Core.Accel.Sm120
 # P1 and P2 from the instruction set (trusted)
 
 The two data-flow principles that restrict an adversary, as properties of the instruction set's semantics. All but one
-are statements to prove (in `Proofs/Core/Accel`), not assumptions: they follow from `Isa`'s definitions.
+are statements, proved in `Proofs/Core/Accel`, not assumptions: they follow from `Isa`'s definitions.
 
 * **(P1) Exact products only through fixed operand formats.** An MMA reads each operand through its format's `bits`
   (`elem`), and its dot reads the operand pairs only through what one multiplier forms from a pair (`mulOut`): the
@@ -34,7 +34,7 @@ are statements to prove (in `Proofs/Core/Accel`), not assumptions: they follow f
 **The one named assumption** is `Assumptions.AccelProductForm`: the MMAs whose semantics no capture pins (`Open.dot`)
 have the captured ones' data flow, each output a function of its accumulator, its pairs' multiplier outputs and its
 block scales (`ProductForm`, in `Card`). Every captured dot has the form (`CapturedProductForm`), so for them it is a
-statement to prove.
+statement, proved (`H200.capturedProductForm`, `Sm120.capturedProductForm`).
 -/
 
 open scoped NNRat
@@ -46,7 +46,7 @@ open Verity.TC
 /-- The value of a term: `(-1)^negative · magnitude · 2^(exponent - 23)`. -/
 def termVal (t : Spec.Term) : ℚ := (if t.negative then -1 else 1) * t.magnitude * 2 ^ (t.exponent - 23)
 
-/-- Every dot a card's captures pin has the product form (to prove, for `H200.card` and `Sm120.card`). -/
+/-- Every dot a card's captures pin has the product form (proved for `H200.card` and `Sm120.card`). -/
 def CapturedProductForm (c : Card) : Prop :=
   ∀ fa fb sat k d, c.captured fa fb sat k = some d → ProductForm fa fb k d
 

@@ -66,12 +66,13 @@ Checked per card by a pair-swap capture: swap operand pairs whose `mulOut` agree
 outputs, and compare every output bit for bit. The captured dots have the form by their captures (H200:
 `HOPPER_SM90_S8_K32`, `HOPPER_BF16_M16N8K16`, the E4M3 and E5M2 K32 captures at a zero accumulator; RTX PRO 6000:
 the `BLACKWELL_SM120_*_M16N8K32` integer captures, BF16, and the E4M3 and E5M2 K32 captures at every accumulator;
-`Accel.CapturedProductForm`, to prove). The open dots it covers, each still to capture: on the H200 FP8 at a nonzero
-accumulator, mixed E4M3 × E5M2 `wgmma`, f16, tf32 and b1; on the RTX PRO 6000 the E2M1 K32 atom (its value captures
-agree with `Sm120.f8Pipeline` on finite accumulators and left NaN and infinite ones record-only), the block-scaled
-NVF4 and MXF4 (pinned in Python only), mixed f8f6f4 pairings, f16, tf32 and b1. The 2:4 sparse MMAs'
-dots (`x.dotSp`, no capture on either card) have the form over their `k/2` kept pairs: the metadata only routes each
-kept element of `A` to the element of `B` it names (`Accel.mmaSpEval`), and each such pair meets one multiplier. -/
+`Accel.CapturedProductForm`, proved: `Accel.H200.capturedProductForm`, `Accel.Sm120.capturedProductForm`). The open
+dots it covers, each still to capture: on the H200 FP8 at a nonzero accumulator, mixed E4M3 × E5M2 `wgmma`, f16, tf32
+and b1; on the RTX PRO 6000 the E2M1 K32 atom (its value captures agree with `Sm120.f8Pipeline` on finite
+accumulators and left NaN and infinite ones record-only), the block-scaled NVF4 and MXF4 (pinned in Python only),
+mixed f8f6f4 pairings, f16, tf32 and b1. The 2:4 sparse MMAs' dots (`x.dotSp`, no capture on either card) have the
+form over their `k/2` kept pairs: the metadata only routes each kept element of `A` to the element of `B` it names
+(`Accel.mmaSpEval`), and each such pair meets one multiplier. -/
 def AccelProductForm (x : Accel.Open) : Prop :=
   (∀ fa fb sat k, Accel.ProductForm fa fb k (x.dot fa fb sat k)) ∧
     ∀ fa fb sat k, Accel.ProductForm fa fb (k / 2) (x.dotSp fa fb sat k)

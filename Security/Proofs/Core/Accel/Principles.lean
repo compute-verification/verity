@@ -9,7 +9,8 @@ The integer path is exact on the s32 range, saturating or not (`p1Int`). P2's ha
 output reads only its own row, column and accumulator (`p2Local`; a sparse MMA's, its kept pairs, `p2LocalSp`), its
 outputs are distinct products' destinations (`p2Distinct`), an opcode writes no word but its outputs (`p2Frame`), and
 every opcode takes at least a lane's share of an issue slot (`p2Priced`). Each card refines its coarse `Device` (`H200.refines`, `Sm120.refines`). The integer
-path's dots have the product form (`intProductForm`, the integer half of `CapturedProductForm`).
+path's dots have the product form (`intProductForm`, the integer half of `CapturedProductForm`; the float half, the
+cards' `CapturedProductForm` and P1 on their captured float atoms are in `Float.lean`).
 -/
 
 open scoped NNRat
