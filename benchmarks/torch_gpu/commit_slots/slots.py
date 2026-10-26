@@ -25,10 +25,13 @@ from that slot's rows alone (a replay of its request), and :func:`verify_unit` c
 """
 from __future__ import annotations
 
+import argparse
+import json
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -41,9 +44,9 @@ from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree,
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
 from verity.ml.crypto.chacha20 import keystream
 
-__all__ = ["Group", "Layout", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot", "fresh_salt_key",
-           "h200_layout", "layout_digest", "open_unit", "random_outputs", "row_salts", "slot_domain", "slot_rows",
-           "step_domain", "unit_domain", "verify_unit"]
+__all__ = ["Group", "Layout", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot", "edge_layout", "fixture",
+           "fresh_salt_key", "h200_layout", "layout_digest", "open_unit", "random_outputs", "row_salts", "slot_domain",
+           "slot_rows", "step_domain", "step_tree", "unit_domain", "verify_unit"]
 
 LAYOUT_TAG = "verity/commit-slots/layout/v1"
 UNIT_TAG = "verity/commit-slots/unit/v1"
@@ -381,3 +384,92 @@ def random_outputs(layout: Layout, slots: int, rng: np.random.Generator, groups:
     """Uniform bytes for every tensor of the chosen groups (all by default), (slots, bytes) uint8 each."""
     chosen = range(len(layout.groups)) if groups is None else groups
     return [[rng.integers(0, 256, (slots, n), dtype=np.uint8) for n in layout.groups[i].sources] for i in chosen]
+
+
+def _rows(source: int, *sizes: int) -> tuple[Row, ...]:
+    return tuple(Row((Part(source, sum(sizes[:i]), n),)) for i, n in enumerate(sizes))
+
+
+def edge_layout() -> Layout:
+    """A small layout over SHA-512's block edges: rows of 1 to 240 bytes, a unit of 4 rows (no pad), one of 3 (a pad), one of 1,
+    a row of two parts (64 s8 codes, then their f32 scale) and one of 3 bytes; 5 units, so the slot tree pads 3."""
+    g0 = Group((961,), (_rows(0, 1, 111, 112, 113), tuple(Row((Part(0, 337 + a, n),)) for a, n in ((0, 127), (127, 128), (255, 129))),
+                        (Row((Part(0, 721, 240),)),)))
+    g1 = Group((64, 4), ((Row((Part(0, 0, 64), Part(1, 0, 4))),), (Row((Part(1, 1, 3),)),)))
+    return Layout("commit-slots/edge/v1", (g0, g1))
+
+
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "commit-slots-v1.json"
+
+
+def _layout_json(layout: Layout) -> dict[str, Any]:
+    return {"name": layout.name, "groups": [{"sources": list(g.sources), "units": [[[[p.source, p.offset, p.nbytes] for p in r.parts]
+                                                                                   for r in u] for u in g.units]}
+                                            for g in layout.groups]}
+
+
+def fixture() -> dict[str, Any]:
+    """The interface's fixture: :func:`edge_layout` at 3 slots under a public test context and salt key, every value a consumer
+    checks against (domain ids, each row's digest, salt and string in slot 0, every slot's unit roots and root, the step's root),
+    one unit's opening, and the frozen H200 layout's public numbers."""
+    layout, slots, step = edge_layout(), 3, 7
+    context = identity_digest_sha512("verity/commit-slots/fixture/context/v1", {"fixture": 1})
+    salt_key = bytes(range(32))
+    outputs = random_outputs(layout, slots, np.random.default_rng(20261026))
+    per_slot = []
+    for s in range(slots):
+        rows = slot_rows(layout, outputs, s)
+        sc = commit_slot(context, layout, salt_key, s, rows)
+        doc: dict[str, Any] = {"strings": [x.hex() for x in sc.strings], "unit_roots": [t.commitment.root.hex() for t in sc.units],
+                               "root": sc.root.hex()}
+        if s == 0:
+            salts = row_salts(salt_key, s, 0, len(rows))
+            doc["rows"] = [{"bytes": r.hex(), "bits": 8 * len(r), "x": sha512_row_v2_digest(r, 8 * len(r)).hex(),
+                            "salt": salts[SALT_BYTES * i:SALT_BYTES * (i + 1)].hex()} for i, r in enumerate(rows)]
+        per_slot.append(doc)
+    roots = [bytes.fromhex(d["root"]) for d in per_slot]
+    step_root = step_tree(context, layout, step, roots).root
+    slot, unit = 1, 1
+    rows1 = slot_rows(layout, outputs, slot)
+    opening = open_unit(context, layout, step, salt_key, roots, slot, unit, rows1)
+    b, n = layout.row_base[unit], len(layout.units[unit])
+    salts1 = row_salts(salt_key, slot, b, n)
+    h200 = h200_layout()
+    return {
+        "schema": "verity/commit-slots/fixture/v1",
+        "about": "CMP-95 item 3: a step's unit outputs as hm96-sha512/row/v2 rows under hiding leaves in frame-v3-sha512 trees, "
+                 "step tree over slot trees over unit trees over rows (benchmarks/torch_gpu/commit_slots/README.md). The context "
+                 "and salt key are public test values.",
+        "tags": {"layout": LAYOUT_TAG, "unit": UNIT_TAG, "slot": SLOT_TAG, "step": STEP_TAG, "row_schema": ROW_SCHEMA,
+                 "roots_schema": ROOTS_SCHEMA, "hm96": INST.name},
+        "context": context.hex(), "step": step, "slots": slots, "salt_key": salt_key.hex(),
+        "layout": _layout_json(layout), "layout_manifest": layout.manifest(), "layout_digest": layout_digest(layout).hex(),
+        "outputs": [[a.tobytes().hex() for a in tensors] for tensors in outputs],
+        "domains": {"units": [unit_domain(context, layout, u).domain_id.hex() for u in range(layout.unit_count)],
+                    "slot": slot_domain(context, layout).domain_id.hex(),
+                    "step": step_domain(context, layout, step, slots).domain_id.hex()},
+        "per_slot": per_slot,
+        "root": step_root.hex(),
+        "opening": {**opening.to_json(), "rows": [[r.hex(), salts1[SALT_BYTES * i:SALT_BYTES * (i + 1)].hex()]
+                                                  for i, r in enumerate(rows1[b:b + n])]},
+        "h200": {"name": h200.name, "layers": len(h200.groups), "units_per_layer": len(h200.groups[0].units),
+                 "unit_bits": [[r.bits for r in u] for u in h200.groups[0].units], "slot_bytes": h200.slot_bytes,
+                 "step_bytes_at_20480_slots": 20480 * h200.slot_bytes, "layout_digest": layout_digest(h200).hex()},
+    }
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    f = sub.add_parser("fixture", help="write the interface's fixture")
+    f.add_argument("--out", type=Path, default=FIXTURE)
+    a = ap.parse_args(argv)
+    if a.cmd == "fixture":
+        a.out.parent.mkdir(parents=True, exist_ok=True)
+        a.out.write_text(json.dumps(fixture(), indent=1) + "\n")
+        print(a.out)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
