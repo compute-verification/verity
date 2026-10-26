@@ -6,7 +6,7 @@ import Mathlib.Tactic.NormNum
 
 The integer path is exact on the s32 range, saturating or not (`p1Int`). P2's halves that need no capture: an MMA's
 output reads only its own row, column and accumulator (`p2Local`), its outputs are distinct products' destinations
-(`p2Distinct`), and every opcode takes at least a lane's share of an issue slot (`p2Priced`).
+(`p2Distinct`), an opcode writes no word but its outputs (`p2Frame`), and every opcode takes at least a lane's share of an issue slot (`p2Priced`).
 -/
 
 open scoped NNRat
@@ -37,5 +37,24 @@ theorem p2Priced : P2Priced := by
   | uni g => simpa [opUse] using h
   | copy s t n => cases s <;> cases t <;> simp [opUse, port]
   | atom s _ => cases s <;> simp [opUse, port]
+
+theorem p2Frame : P2Frame := by
+  intro ι m o src dst pred M l hl
+  simp only [Machine.execOp]
+  split
+  · rfl
+  · suffices ∀ (L : List (Fin (m.nOut o))) (M' : m.Mem), (L.foldl (fun M' i => (dst i).writeIn (m.outStore o i) M M'
+        (m.eval o (fun i => (src i).readIn (m.inStore o i) M) i)) M') l = M' l from this _ M
+    intro L
+    induction L with
+    | nil => intro M'; rfl
+    | cons i L ih =>
+      intro M'
+      rw [List.foldl_cons, ih]
+      simp only [Machine.Operand.writeIn]
+      have := hl i
+      cases hx : Machine.Operand.locIn (m.outStore o i) (dst i) M with
+      | none => rfl
+      | some l' => exact Function.update_of_ne (fun e => this (by rw [hx, e])) _ _
 
 end Verity.Accel
