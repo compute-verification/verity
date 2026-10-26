@@ -29,8 +29,8 @@
 #      isn't LMS at lms.DEPLOYED, H = 20)
 #      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
 #      an art: id, or a directory)
-#      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_JOBS (members proved at once, 2)  CR_N2_WINDOWS (n2_advised_zk.py's
-#      --windows)  CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the
+#      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_WINDOWS (n2_advised_zk.py's --windows)
+#      CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the
 #      advice doesn't bind, the advised unit on n2_advised_zk's simulated link, labelled a stand-in)
 #      CR_N2_ARGS (more n2_advised_zk.py arguments, e.g. "--draw 4", a sampled period on the verifier's own coins)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
@@ -40,15 +40,16 @@
 #      or required, and the report names what that path stubs, chain_record.STUBBED)
 #      CR_PATH=warden (above)  CR_EOS_IDS (the warden path's endpoint step: the model's EOS token ids, comma-separated,
 #      e.g. 128001 for Llama-3.2-1B; a warden run records none)  CR_TIE_WINDOWS (the tie's link-windows, the run's all
-#      by default)  CR_TIE_JOBS (members proved at once, 2)  CR_TIE_GPU=1 (the tie's prover on the GPU)
+#      by default)  CR_TIE_GPU=1 (the tie's prover on the GPU)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
 #      X.case.json beside it, a path or a name under inputs/) and CR_SERVER (the node the block ran on): network-period
 #      is built, and an accepted report whose answer is this chain's and network-period's own on its case also writes
 #      $OUT/report/block.json, the block record's certifier entry (chain_record.block_entry)
 #      CR_SCAN_ONLY=1 (the scan alone, its report given no N2 summary: "scan only, N2 not given"; the record's N2 runs
-#      in jobs of its own)  CR_SERIAL=1 (n2 then scan; at once by default)  CR_CACHE (the build cache; hidden_zk's by
-#      default)
+#      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
+# n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the firewall one at a time
+# (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
 # state or a gate run's witness/ (custody uploads all of $OUT; a warden run's witness is its lane key's only).
@@ -154,12 +155,12 @@ keep() {   # keep FROM TO: the public files and what the verifier received, neve
 n2() {
   export HONEST CLIENT BIN LEAN E2E N2OUT=$W/n2
   local advised="$PY benchmarks/network_traces/n2_advised_zk.py prove --bin $BIN --lean $LEAN --out $N2OUT \
-    --jobs ${CR_N2_JOBS:-2} ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS} ${CR_N2_ARGS:-}"
+    ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS} ${CR_N2_ARGS:-}"
   if [ -n "${CR_N2_CMD:-}" ]; then cmd=$CR_N2_CMD
   elif [ "${CR_PATH:-}" = warden ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --warden-run $WARDEN \
-    --bin $BIN --lean $LEAN --out $N2OUT --jobs ${CR_N2_JOBS:-2}"
+    --bin $BIN --lean $LEAN --out $N2OUT"
   elif [ "$PROFILE" != advice ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --run $HONEST --bin $BIN \
-    --lean $LEAN --out $N2OUT --jobs ${CR_N2_JOBS:-2} ${CR_N2_ROUNDS:+--rounds $CR_N2_ROUNDS}"
+    --lean $LEAN --out $N2OUT ${CR_N2_ROUNDS:+--rounds $CR_N2_ROUNDS}"
   elif [ "$BOUND" = 1 ]; then cmd="$advised --e2e $E2E ${CR_N2_WINDOWS:+--windows $CR_N2_WINDOWS}"
   else
     why="the run is on the advice profile, whose counts N2's advised unit decides on the endpoint's advice, and "
@@ -200,15 +201,13 @@ tie() {
   local k=${CR_TIE_WINDOWS:-$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["windows"])' \
     "$(find "$WARDEN" -name deployment.json -print -quit)")}
   local cmd="$PY benchmarks/network_traces/n2_tie_zk.py prove --class warden --warden-run $WARDEN --windows $k \
-    --bin $BIN --lean $LEAN --out $W/tie --jobs ${CR_TIE_JOBS:-2} ${CR_TIE_GPU:+--gpu}"
+    --bin $BIN --lean $LEAN --out $W/tie ${CR_TIE_GPU:+--gpu}"
   log "chain: tie: $cmd"
   bash -c "$cmd" > "$OUT/tie.log" 2>&1
   echo $? > "$W/tie.rc"; keep "$W/tie" "$OUT/tie"; log "chain: tie done, rc $(cat "$W/tie.rc")"
   [ "$(cat "$W/tie.rc")" = 0 ] || tail -n 1 "$OUT/tie.log" | cut -c1-600 > "$W/tie.why"
 }
-if [ -n "${CR_SCAN_ONLY:-}" ]; then scan
-elif [ -n "${CR_SERIAL:-}" ]; then n2; tie; scan
-else n2 & tie & scan & wait; fi
+if [ -n "${CR_SCAN_ONLY:-}" ]; then scan; else n2; tie; scan; fi
 
 # ---- the report --------------------------------------------------------------------------------------------------------
 "$PY" - "$OUT/job.json" "$W" <<EOF

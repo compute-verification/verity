@@ -8,7 +8,7 @@ decides nothing.
 
     python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
-      --lean flock-verify --out DIR [--jobs 4] [--debug-clear] [--dry]
+      --lean flock-verify --out DIR [--jobs 1] [--debug-clear] [--dry]
     python benchmarks/network_traces/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
 
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
@@ -33,7 +33,8 @@ decides nothing.
 * **A round** (`member`), per link-window in order: register, select, one live `prove --zk` session behind the firewall on
   the statement (the server serving the stream's draw), deliver, and the outcome of record. Per window: prove (the
   session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean
-  included). Then the link's network verdict (`LinkWindows.network_verdict`).
+  included). Then the link's network verdict (`LinkWindows.network_verdict`). The members' rounds run one after
+  another: outer proofs go through the firewall one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
 * **What the verifier receives**, per link-window, kept under ``<member>/verifier/`` (`RECEIVED`): the registration record
   (the salted root, nothing of the certificates) and the draw; the two certificates' public fields, from the certifier,
   the auditor's device; the declared clock syncs; from the prover, the statement's public file (its header and each row's
@@ -61,7 +62,6 @@ import socket
 import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
@@ -82,6 +82,8 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noq
 
 ENDS = ("egress", "ingress")
 ROUNDS = ("honest", "tampered", "extra", "late")
+#: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
+ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'Live coins only')"
 #: what the verifier receives per link-window, by file (`member`)
 RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
@@ -433,6 +435,13 @@ def firewall(M, sg: SimpleNamespace) -> dict:
                                                      "program_file": sg.program_file})}
 
 
+def one_session(jobs: int) -> None:
+    """A driver's ``--jobs``: 1, its members proved one after another, each session behind the firewall alone
+    (`ONE_SESSION`); any other count is refused before anything runs."""
+    if jobs != 1:
+        raise SystemExit(f"--jobs {jobs}: {ONE_SESSION}, so a prover runs one firewalled session at a time: --jobs 1")
+
+
 # --- the rounds -------------------------------------------------------------------------------------------------------
 
 def _certificate(c) -> dict:
@@ -645,8 +654,7 @@ def prove(a) -> int:
         res["received"] = _member_scan(M, sg, members[name], out / name)
         return name, res
 
-    with ThreadPoolExecutor(max_workers=a.jobs) as pool:
-        done = dict(pool.map(lambda kv: go(*kv), enumerate(members)))
+    done = dict(go(k, name) for k, name in enumerate(members))
     ok = True
     for name, res in done.items():
         rec = res["received"]
@@ -686,7 +694,8 @@ def main(argv=None) -> int:
     p.add_argument("--out", required=True)
     p.add_argument("--port", type=int, default=0,
                    help="member k's window j listens on PORT + 100k + j; 0 (the default): a free port for each session")
-    p.add_argument("--jobs", type=int, default=4, help="members proved at once")
+    p.add_argument("--jobs", type=int, default=1, help="1: the members proved one after another (ONE_SESSION); more "
+                                                       "is refused")
     p.add_argument("--debug-clear", action="store_true",
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
@@ -695,6 +704,7 @@ def main(argv=None) -> int:
         plan = virtual(a.out, a.requests, a.tokens)
         log(f"virtual: {plan['windows']} windows, served {plan['served']}, under {a.out}")
         return 0
+    one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
     if a.warden_run is not None and (a.extra or a.late):
         raise SystemExit("--extra and --late are certifier-serve's runs: a warden run's members are honest and "
