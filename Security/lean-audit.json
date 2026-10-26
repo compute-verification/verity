@@ -1895,6 +1895,14 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "NetTiming.NetworkPeriod.Bits": {
+   "owner": "@network-accounting",
+   "digest": "3846b63b980e6f38f1a413f35e976a77495c16c5d21e6d25c24a1f7bd67a03ea"
+  },
+  "NetTiming.ScopeAcc": {
+   "owner": "@network-accounting",
+   "digest": "821308a64d5196398ada88bfa7ad6b76b9ce025d2b6e50a102be1b7ee8f3d285"
   }
  },
  "meaning": [
@@ -2439,9 +2447,7 @@
     "Definitions.Accounting.Guarantees",
     "Definitions.Claims"
    ],
-   "except": [
-    "Definitions.Accounting.Guarantees.JointBridge.PeriodClaim"
-   ],
+   "except": ["Definitions.Accounting.Guarantees.JointBridge.PeriodClaim"],
    "why": "the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Definitions.Nci.Assumptions) as hypotheses; B1 is TT at the cost model of the actual circuit's provers; B2 and lemma M compose with PoUS's audit game (Definitions.Pous) and take P2's named assumption P2RingAuditSecure (Definitions.Pous.Assumptions.P2) as a hypothesis; a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and the named assumptions (PoUW's TT, resource accounting's own) as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Definitions.Pous.Assumptions.P2); the composed credit's binding lemma (Compose.BindingOfECR) prices a fork by the claims' expected-cost collision resistance (Definitions.Claims' ExpectedCR, Finder), as the claims state it",
    "sealed": true
   },
@@ -8704,7 +8710,10 @@
    "type_hash": "a04fb3c7473ce600dcf3b75eae2ce8f5c3f7126156b07cf9112a51776a52712f"
   },
   "NetTiming.SecurityProofs.PeriodClaimSound": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.PeriodClaimSound : NetTiming.Guarantees.PeriodClaimSound"],
+   "assumptions": [],
+   "type_hash": "cc98afbb742a9e3619f68c7a08fc0df33844c865526ea577a750c5bf1f699108"
   },
   "NetTiming.SecurityProofs.PeriodLeakAccepted": {
    "owner": "@network-accounting",
@@ -12909,7 +12918,8 @@
     "Accounting.SecurityProofs.RequirementStepsInner",
     "Accounting.SecurityProofs.RequirementStepsOuter",
     "Accounting.SecurityProofs.StackedRequirementRelay",
-    "Accounting.SecurityProofs.StackedRequirementSketchDeployed"
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "NetTiming.SecurityProofs.PeriodClaimSound"
    ]
   },
   "Definitions.Accounting.Filler": {
@@ -13718,6 +13728,13 @@
     "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "a814d6d909d86a3dc22a1c847b7837cdfd9c225975a50d9f069cc4def0ff36e1"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
+  },
+  "Definitions.Accounting.Guarantees.JointBridge.PeriodClaim": {
+   "digest": "89e1c0b32b7a9a81d38c18f13a1a364bf7b70ac8f37bf932113866867bbca9ac",
+   "definitions": {
+    "NetTiming.Guarantees.PeriodClaimSound": "af0847f7ce8725070ab6de6e37d3dc643db13db53083f7d91a31f05cb4336fb3"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.PeriodClaimSound"]
   },
   "Definitions.Accounting.Guarantees.JointPeriod": {
    "digest": "0b040bf0543c502206f56df368155b42518932ba96b305671c00e355eee93d49",
@@ -14671,7 +14688,8 @@
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
     "Accounting.SecurityProofs.RateOfAuditPartial",
-    "Accounting.SecurityProofs.RateOfAuditPartialPasses"
+    "Accounting.SecurityProofs.RateOfAuditPartialPasses",
+    "NetTiming.SecurityProofs.PeriodClaimSound"
    ]
   },
   "Definitions.Accounting.JointBlocks": {
@@ -14751,7 +14769,8 @@
     "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
-    "Accounting.SecurityProofs.JointPeriod"
+    "Accounting.SecurityProofs.JointPeriod",
+    "NetTiming.SecurityProofs.PeriodClaimSound"
    ]
   },
   "Definitions.Accounting.Memory": {
@@ -16914,6 +16933,7 @@
     "Hash.SecurityProofs.TreeBinding",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
     "NetTiming.SecurityProofs.HorizonWrongUnitsLe",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
@@ -17502,6 +17522,7 @@
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
@@ -17557,6 +17578,7 @@
     "NetTiming.SecurityProofs.EncardWardenDecodableLe",
     "NetTiming.SecurityProofs.EncardWardenViewsLe",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.WardenViewEqClientView",
     "Verity.SecurityProofs.AmpereStepComplete",
@@ -17707,6 +17729,7 @@
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
     "Verity.SecurityProofs.Compose",
@@ -18031,6 +18054,7 @@
     "Nci.SecurityProofs.Training",
     "Nci.SecurityProofs.UpdatedMatMul",
     "Nci.SecurityProofs.UpdatedMatMulReads",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore",
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
     "Verity.SecurityProofs.Compose",
@@ -21438,6 +21462,7 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
@@ -21650,8 +21675,36 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "NetTiming.SecurityProofs.PeriodLeakAccepted"
    ]
+  },
+  "Definitions.NetworkCertifier.PeriodClaim": {
+   "digest": "f0943be7a8ae72bd9043e0bda604b6a90c98336405ee7b44aa94843bf78c25aa",
+   "definitions": {
+    "NetTiming.NetworkPeriod": "5a4c3ce4f14da74b59c566332182c17e1fd5b00654169ad1519f46048f88988c",
+    "NetTiming.NetworkPeriod.Bits": "3846b63b980e6f38f1a413f35e976a77495c16c5d21e6d25c24a1f7bd67a03ea",
+    "NetTiming.NetworkPeriod.Cell": "320c5b24df119d9c061ab3ea109a8ff35b8718c8c019467eda3d56a29c90743b",
+    "NetTiming.NetworkPeriod.Dev": "c7e5f5f83cf5e9333b4d309ba7815e2fe7b01f9ea27e0582d21fc111d19aca88",
+    "NetTiming.NetworkPeriod.Pw": "3ca5f7ac0909efdf3111051fe5840a7364e444e54053f444aa71bacf857fe9be",
+    "NetTiming.NetworkPeriod.Srv": "fe634ca5cb71e4c54c2f113b73e225c3b38d731652af3289b3cf48063083ffda",
+    "NetTiming.NetworkPeriod.Ss": "aeee8d90093cebb2c0138d73ae4e6fc5df591445c441551bc599ee21749ca8ee",
+    "NetTiming.NetworkPeriod.arr": "f0273c37c3c501bdb6fa1d5d1a777ff0cccbe135967af9ef4dec84e496b807d1",
+    "NetTiming.NetworkPeriod.cap": "47e66fb311da624e11ccac7fe1587058d5d83c206ee13b7d2ed14da3516fae39",
+    "NetTiming.NetworkPeriod.commWithin": "692473e701a34a3f29cd906369ec65945a0fcfbeef0db0210d0acc5b2f07c66a",
+    "NetTiming.NetworkPeriod.count": "d8e20047dbf938fbeb0b665e979bda6af329b07ab724da624a6e0cf2593be4e3",
+    "NetTiming.NetworkPeriod.device": "1a995da69c18f9a8d4a90440650c4bb3462eb2f3ee654197e721ef3dc51b17e8",
+    "NetTiming.NetworkPeriod.fmt": "81f6f211adf3fa80e78ca7a8f4b9266832928fbc4f36d75ebd3bca0f40414d3c",
+    "NetTiming.NetworkPeriod.obs": "c5a03e19baaf3e7c3b20bf428350f33c697143151806e8d58b499b921ee44691",
+    "NetTiming.NetworkPeriod.run": "08729296918b6122133f9a15138bd40d358b4e8e2ee2f09fd83c3f969ffb7364",
+    "NetTiming.NetworkPeriod.stmt": "49702a471479e86031f6056854fdea84f0a6ad8df4d500d14380378d4382727c",
+    "NetTiming.NetworkPeriod.sw": "a5bbf161599df57d9db327b69a6b99660e122fe5c7ad3b7223f25ff3193dc7d5",
+    "NetTiming.NetworkPeriod.tops": "b9eebcc3d88ae4778fa8c750800c8b38030931cddf93a1c8f3ba7ed98a832263",
+    "NetTiming.NetworkPeriod.wit": "0bacb6dc3d7766530e5f23d1de96fd2151550517e8271c7fec17f81fd9f6f6c9",
+    "NetTiming.NetworkPeriod.β": "1f62b62364a4e886dee6a1ce50fd0475e68fa86a20d774ca7d1d8d2a0360eed6",
+    "NetTiming.NetworkPeriod.ρ": "a702ebdc696ca8215cea38394eff556440287dba38a072e003e4d979dead668d"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.PeriodClaimSound"]
   },
   "Definitions.NetworkCertifier.Run": {
    "digest": "662752b77833aff2fb80b4afc179edc1ce0e1e40405c3602f3b5ebd8cbc87085",
@@ -21719,6 +21772,7 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
@@ -21754,6 +21808,7 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
@@ -21775,6 +21830,7 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered"
@@ -21847,6 +21903,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "NetTiming.SecurityProofs.PeriodLeakAccepted"
    ]
   },
@@ -21861,6 +21918,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "NetTiming.SecurityProofs.PeriodLeakAccepted"
    ]
   },
@@ -21892,6 +21950,7 @@
     "NetTiming.SecurityProofs.EncardWardenDecodableLe",
     "NetTiming.SecurityProofs.EncardWardenViewsLe",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.WardenViewEqClientView"
    ]
@@ -23761,6 +23820,7 @@
     "Accounting.SecurityProofs.TileUnpredictableOfTT",
     "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut",
     "Accounting.SecurityProofs.pouwRow",
+    "NetTiming.SecurityProofs.PeriodClaimSound",
     "Pouw.NCP.GameProofs.gammaFromTTNCP",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
