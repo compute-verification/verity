@@ -1386,6 +1386,34 @@
    "owner": "@compute-accounting",
    "digest": "b55efab6f13247ad3c7970b4659b72724dddc239457c0e562c6ba1c697a9b5c2"
   },
+  "Nci.Ldl.Assumptions.ActivationRate": {
+   "owner": "@training",
+   "digest": "545d7ee1cdd8e3ed1f10b13a44bd7f2ccc3ab82a545cd837a10946a1437d1b3d"
+  },
+  "Nci.Ldl.Assumptions.EvaluatesBlocks": {
+   "owner": "@training",
+   "digest": "b760c4fc0855f482696a0664eb3e6adf0c8b68da7dbb9384c54e69e49649b495"
+  },
+  "Nci.Ldl.CKPartition": {
+   "owner": "@training",
+   "digest": "3d7b0910224d34fe886ee78be5ec5b263947f09a07ecadbffd2b639965dd2862"
+  },
+  "Nci.Ldl.Exact": {
+   "owner": "@training",
+   "digest": "1e4f8b3cad68b8b1574aa30ced75039aa51458562b76069251b42771b172398c"
+  },
+  "Nci.Ldl.Products.FanOut": {
+   "owner": "@training",
+   "digest": "4b99e578bc869e5b0f8e7ae426e169ca00096187dc48deef3ecf9e45cb926a6c"
+  },
+  "Nci.Ldl.ReadCap": {
+   "owner": "@training",
+   "digest": "dc4f188e7f069c705d437d426cb8590cf8dce1c8a077fd0605245aead3b834aa"
+  },
+  "Nci.Ldl.Registration.Consistent": {
+   "owner": "@training",
+   "digest": "cfe2768cfcfa9e2204f8d61aa2e83924bc37d4eff6124472a5ac2e264f28ec8a"
+  },
   "Nci.Small": {
    "owner": "@lean",
    "digest": "e26bc2309132d5947568f97a601841bafc0dbd669c72759ef80e422ae0f74fa7"
@@ -8299,6 +8327,24 @@
    "assumptions": [],
    "type_hash": "8cde8a03744aead7d37650a220d532f712e5bda0a694ddcc01fc4a95f6f2e08e"
   },
+  "Nci.Ldl.SecurityProofs.BlockDescription": {
+   "owner": "@training",
+   "signature": ["Nci.Ldl.SecurityProofs.BlockDescription : Nci.Ldl.Guarantees.BlockDescription"],
+   "assumptions": [],
+   "type_hash": "d1c71dbd142515141df808dd2abbc82cc1b3b9d503f612903796f3a855584c90"
+  },
+  "Nci.Ldl.SecurityProofs.Counting": {
+   "owner": "@training",
+   "signature": ["Nci.Ldl.SecurityProofs.Counting : Nci.Ldl.Guarantees.Counting"],
+   "assumptions": [],
+   "type_hash": "0e41f456944712df04e7f72687cc21961d41fca84227d6ffe55e42671b9835fb"
+  },
+  "Nci.Ldl.SecurityProofs.FanOutBound": {
+   "owner": "@training",
+   "signature": ["Nci.Ldl.SecurityProofs.FanOutBound : Nci.Ldl.Guarantees.FanOutBound"],
+   "assumptions": [],
+   "type_hash": "cbe091114f7d58bb20b6bfda7500d46b00512a6e5ac0977029fb70e0b4a46905"
+  },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ActivationsBoundOn : Nci.Guarantees.ActivationsBoundOn"],
@@ -12215,7 +12261,10 @@
    "Pous.SecurityProofs.ObligationDemoWide": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the demo's store (1038*2^16 blocks, 105 reads, the state at most S0 at each) by 1% + 2^-129 + 2^-130, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
    "Pous.SecurityProofs.ObligationDemo": "frozen (no-function): Arithmetic at the demo's numbers (1038·2^16 blocks of 16,448 bits, U = 139.64 GiB: S₀ = ⌊ρ·|C|⌋ and U − S₀ ≤ 0.1163·U) and ObligationOfStatic at that block count; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
+   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Nci.Ldl.SecurityProofs.BlockDescription": "frozen (no-function): It is about an arbitrary declaration, a registration of it (its registered values and a Verity.Partition into blocks) and a fixed decoder (Security/Definitions/Nci/Ldl.lean), under the named EvaluatesBlocks (Security/Definitions/Nci/Assumptions/Ldl.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Ldl.SecurityProofs.Counting": "frozen (no-function): It is stated over an arbitrary circuit, a Verity.Partition of it into blocks of exactly c gates and counting weights on its operation gates (Security/Definitions/Nci/Ldl.lean), and is a counting fact, not a Lean function's acceptance.",
+   "Nci.Ldl.SecurityProofs.FanOutBound": "frozen (no-function): It is about an arbitrary declaration, a (c,k)-partition of it, counted product occurrences with activation fan-out at most e and a fixed decoder (Security/Definitions/Nci/Ldl.lean), under the named EvaluatesBlocks and ActivationRate (Security/Definitions/Nci/Assumptions/Ldl.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -18882,6 +18931,9 @@
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
+    "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.Counting",
+    "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -18978,6 +19030,8 @@
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
+    "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -19301,6 +19355,9 @@
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
+    "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.Counting",
+    "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.ContainedFanOutOn",
@@ -21988,6 +22045,8 @@
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
+    "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -22241,6 +22300,14 @@
     "Nci.Assumptions.ReferenceLayered": "fc90804727140bffc77562fb496823d54ad4f5f38d71d67124219bf95f0459a5"
    },
    "guarantees": ["Nci.SecurityProofs.ReferenceThreaded", "Nci.SecurityProofs.ReferenceTraining"]
+  },
+  "Definitions.Nci.Assumptions.Ldl": {
+   "digest": "b8f07c106255f52731a8f34ff1eb09359980259b8dc298a85845e35e882db025",
+   "definitions": {
+    "Nci.Ldl.Assumptions.ActivationRate": "545d7ee1cdd8e3ed1f10b13a44bd7f2ccc3ab82a545cd837a10946a1437d1b3d",
+    "Nci.Ldl.Assumptions.EvaluatesBlocks": "b760c4fc0855f482696a0664eb3e6adf0c8b68da7dbb9384c54e69e49649b495"
+   },
+   "guarantees": ["Nci.Ldl.SecurityProofs.BlockDescription", "Nci.Ldl.SecurityProofs.FanOutBound"]
   },
   "Definitions.Nci.Assumptions.Packed": {
    "digest": "0e92201f09ca7dc081175cbcac6116af2c84cc5a0c82c296d9f52a67809c076d",
@@ -22808,6 +22875,19 @@
     "Nci.SecurityProofs.ThreadedOfLayered"
    ]
   },
+  "Definitions.Nci.Guarantees.Ldl": {
+   "digest": "1bf0a41e00d30c513184e404334391a23fdf592b84f556b702343ce7112cdbb4",
+   "definitions": {
+    "Nci.Ldl.Guarantees.BlockDescription": "dccf2ea2af37dcf7b6aef97c8b100ecff7a6f7095d0ec7cc2e153b61777e3968",
+    "Nci.Ldl.Guarantees.Counting": "ad03ea31ea21f0e489c0860b567bf59d0ab8ca3435c5321486a585a6775e9a84",
+    "Nci.Ldl.Guarantees.FanOutBound": "ee0978a22e21f240c2e6db730be048647031ff243ee2e9fb43da937806579318"
+   },
+   "guarantees": [
+    "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.Counting",
+    "Nci.Ldl.SecurityProofs.FanOutBound"
+   ]
+  },
   "Definitions.Nci.Guarantees.Packed": {
    "digest": "d0c30af618e04a869409fe110fb9dbd106bc232f33ba91b1ccc705a240deea16",
    "definitions": {
@@ -22933,6 +23013,32 @@
     "Nci.SecurityProofs.ReferenceThreaded",
     "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered"
+   ]
+  },
+  "Definitions.Nci.Ldl": {
+   "digest": "5108d33cb38cd23f8637606e96adfde5054a0c71c12ce109d6a96eef8eb45e6a",
+   "definitions": {
+    "Nci.Ldl.CKPartition": "3d7b0910224d34fe886ee78be5ec5b263947f09a07ecadbffd2b639965dd2862",
+    "Nci.Ldl.Decoder": "eec32b66db064e5ad49d36e7254ffe9c9eac43eb3603be9fc4b1d60fcc468f83",
+    "Nci.Ldl.Exact": "1e4f8b3cad68b8b1574aa30ced75039aa51458562b76069251b42771b172398c",
+    "Nci.Ldl.LDL": "138a7f47cd6b8b1513090ebabe26dffab24fd3ec620e24dcdd00badbd4e9d169",
+    "Nci.Ldl.Products": "5711bdd7ca199778d9e49c805dfdcd675c9233272d51897e2705d0032a4f163c",
+    "Nci.Ldl.Products.FanOut": "4b99e578bc869e5b0f8e7ae426e169ca00096187dc48deef3ecf9e45cb926a6c",
+    "Nci.Ldl.Products.J": "4a6b6bd96908d4fb02e68a95e707cc25bdcfb7044aa9df0b970aaf24b3f49267",
+    "Nci.Ldl.Products.act": "682e0acaab07b6192725b819276ebc3b88c7d4fadc026203da212a1d94cbbb32",
+    "Nci.Ldl.Products.acts": "5477f53ea9260cefd6772f7bd7299796ea8f45b4c11241252f7836a56365904e",
+    "Nci.Ldl.Products.inBlock": "d8396a2558211107151e1ee99131edc202ed8d43c94ab351bcf72805a0bbec11",
+    "Nci.Ldl.Products.rep": "516d6953d8e6138c3703186490e941bc62bfe989bf8e6e6fe54f907ad395d066",
+    "Nci.Ldl.ReadCap": "dc4f188e7f069c705d437d426cb8590cf8dce1c8a077fd0605245aead3b834aa",
+    "Nci.Ldl.Registration": "88057ecfc6688e631529bb6f5af65d4f676acbcbe77213adf6719afa76bc6e05",
+    "Nci.Ldl.Registration.Consistent": "cfe2768cfcfa9e2204f8d61aa2e83924bc37d4eff6124472a5ac2e264f28ec8a",
+    "Nci.Ldl.Registration.P": "7b900ced66112207200c315b4bf8982461bcc0111ea67c91970d2888ec2dc6eb",
+    "Nci.Ldl.Registration.val": "e479729d304367f4f37d420ae56c1b226737c4dc25a0ddf1643477dcfbecd320"
+   },
+   "guarantees": [
+    "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.Counting",
+    "Nci.Ldl.SecurityProofs.FanOutBound"
    ]
   },
   "Definitions.Nci.Links": {
