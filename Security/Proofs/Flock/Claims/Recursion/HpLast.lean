@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Recursion.VStarBuild
+import Proofs.Flock.Claims.Recursion.VStarTrace
 import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
 
 /-!
@@ -21,9 +21,10 @@ element-level last message's (`OpenRows.elemR`), then the trailer (`OpenRows.las
 * **An opening at a trace that places its port inputs** (`readSegs_openSegs`, `readSegs_vstarWit_open`): where the
   assigner's trace `A c pin` satisfies `Places` (the port lemma, a hypothesis here), the opening of port `nm` at
   instance `n` reads the stager's row there, its words' bits as bytes, and its salt (`portRow`).
-
-`Places` covers the port rows and salts, not the `rec-open` copies' columns `elemR` reads, so `finMsg`'s `encLast` part
-stays read off the trace.
+* **At the trace assigner** (`VStarTrace.A mask`, under `TraceOk`): `Places` and the row width are
+  `VStarTrace.placesR_assign`'s, so an opening is all of the row's words' bits and its salt (`readSegs_vstarWit_trace`),
+  and each `rec-open` copy column that is a port's bit (`portCol`) reads the stager's row bit there
+  (`colBits_trace`, `colBits_wOs`, `PlacesR.copies`), the columns `finMsg`'s `encLast` part reads (`OpenRows.proofR`).
 -/
 
 namespace RecDeploy.HpLast
@@ -161,5 +162,63 @@ theorem readSegs_vstarWit_open {A : Circuit → _root_.VStar.In.PartIn → Claim
       Claims.Recursion.VStar.bytesOf ((_root_.VStar.In.wordBits rw.words).take ps.length) ++ rw.salt.data.toList := by
   rw [vstarWit_eq hp hsrc hi]
   exact readSegs_openSegs hP hq hrw hps
+
+/-! ## At the trace assigner -/
+
+/-- **An opening at the deployed builder's witness, at the trace assigner**: where `TraceOk` holds of the part's circuit
+and port inputs, port `nm`'s opening at instance `n` is all of the stager's row's words' bits as bytes, then its salt. -/
+theorem readSegs_vstarWit_trace {mask : ℕ → ℕ → Bool} {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape}
+    {hist : List (Msg × Msg)} {s : ℕ} {st : _root_.VStar.Stmt} {c : Circuit} {src : _root_.VStar.In.Src}
+    {pin : _root_.VStar.In.PartIn} (hp : partAt x s = some (st, c)) (hsrc : srcOf I x w ρ hist = some src)
+    (hi : _root_.VStar.In.partIn src (progOf c) st = .ok pin) (h : VStarTrace.TraceOk c pin) {nm : String} {q n : ℕ}
+    {rw : _root_.VStar.In.Row} {ps : List ℕ} (hq : c.ports.findIdx? (·.name == nm) = some q)
+    (hrw : portRow pin nm n = some rw) (hps : rowHidden c nm n = some ps) :
+    readSegs (vstarWit (VStarTrace.A mask) I x w ρ hist s) (openSegs c nm q n) =
+      Claims.Recursion.VStar.bytesOf (_root_.VStar.In.wordBits rw.words) ++ rw.salt.data.toList := by
+  rw [readSegs_vstarWit_open hp hsrc hi (VStarTrace.places_assign h mask) hq hrw hps,
+    (VStarTrace.placesR_assign h mask).take_full hrw hps]
+
+/-- **A copy's column at the trace assigner**: where column `t` is bit `i` of port `nm`'s row (`portCol`), instance
+`n`'s copy reads that bit of the stager's row there (`PlacesR.copies`). -/
+theorem colBits_trace {mask : ℕ → ℕ → Bool} {c : Circuit} {pin : _root_.VStar.In.PartIn} (h : VStarTrace.TraceOk c pin)
+    {nm : String} {q n i t : ℕ} {rw : _root_.VStar.In.Row} (hq : c.ports.findIdx? (·.name == nm) = some q)
+    (hr : portRow pin nm n = some rw) (hi : i < 16 * rw.words.size) (hc : portCol c 0 q i = some t) :
+    OpenRows.colBits (VStarTrace.A mask c pin) c n t = (rw.words.getD (i / 16) 0).testBit (i % 16) := by
+  obtain ⟨hlt, hv⟩ := (VStarTrace.placesR_assign h mask).copies nm q n rw i t hq hr hi hc
+  unfold OpenRows.colBits OpenRows.colForm
+  rw [if_pos (Nat.le_of_lt hlt), VStarTrace.formBit_var]
+  exact hv
+
+/-- Part `s`'s circuit as the last message's pieces read it (`circOf`) is `partAt`'s. -/
+theorem circOf_partAt {x : Msg} {s : ℕ} {st : _root_.VStar.Stmt} {c : Circuit} {r : XR} (hr : readX x = some r)
+    (hp : partAt x s = some (st, c)) : OpenRows.circOf r s = c := by
+  unfold partAt at hp
+  rw [hr] at hp
+  cases hst : (RecVStar.statements r.shape).toOption.bind (·[s]?) with
+  | none => simp [hst] at hp
+  | some st' =>
+    cases hc' : r.w.parts[s]?.bind partCircuit with
+    | none => simp [hst, hc'] at hp
+    | some c' =>
+      simp [hst, hc'] at hp
+      obtain ⟨-, rfl⟩ := hp
+      simp [OpenRows.circOf, hc']
+
+/-- **The honest run's copy columns**: at part `s`, where `TraceOk` holds of its circuit and port inputs, column `t` of
+instance `n`'s copy off part `s`'s outer witness (`proofR`'s `wAt`, at `circOf`) is the stager's row bit that port
+column carries. -/
+theorem colBits_wOs {mask : ℕ → ℕ → Bool} {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape}
+    {hist : List (Msg × Msg)} {s : ℕ} {st : _root_.VStar.Stmt} {c : Circuit} {src : _root_.VStar.In.Src}
+    {pin : _root_.VStar.In.PartIn} {r : XR} (hr : readX x = some r) (hs : s < nS x)
+    (hp : partAt x s = some (st, c)) (hsrc : srcOf I x w ρ hist = some src)
+    (hi : _root_.VStar.In.partIn src (progOf c) st = .ok pin) (h : VStarTrace.TraceOk c pin) {nm : String}
+    {q n i t : ℕ} {rw : _root_.VStar.In.Row} (hq : c.ports.findIdx? (·.name == nm) = some q)
+    (hrw : portRow pin nm n = some rw) (hib : i < 16 * rw.words.size) (hc : portCol c 0 q i = some t) :
+    OpenRows.colBits (OpenRows.wAt (wOs (VStarTrace.A mask) I x w ρ hist) s) (OpenRows.circOf r s) n t =
+      (rw.words.getD (i / 16) 0).testBit (i % 16) := by
+  have hw : OpenRows.wAt (wOs (VStarTrace.A mask) I x w ρ hist) s = vstarWit (VStarTrace.A mask) I x w ρ hist s := by
+    simp [OpenRows.wAt, wOs, hs]
+  rw [hw, vstarWit_eq hp hsrc hi, circOf_partAt hr hp]
+  exact colBits_trace h hq hrw hib hc
 
 end RecDeploy.HpLast
