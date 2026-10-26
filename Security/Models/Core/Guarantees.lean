@@ -1,5 +1,6 @@
 import Models.Core.Guarantees.Circuit
 import Models.Core.Guarantees.Game
+import Models.Core.Guarantees.NaiveStrassen
 import Models.Core.Guarantees.PrivatePartition
 import Models.Core.Guarantees.TC
 
