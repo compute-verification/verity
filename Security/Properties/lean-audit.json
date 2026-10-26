@@ -466,6 +466,9 @@
    "assumptions": [],
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29"
   },
+  "Pous.EndToEnd.SecurityProofs.drawAtMost": {
+   "owner": "@memory-accounting"
+  },
   "Pous.EndToEnd.SecurityProofs.drawExact": {
    "owner": "@memory-accounting",
    "signature": ["Pous.EndToEnd.SecurityProofs.drawExact : Pous.EndToEnd.DrawExact"],
