@@ -346,23 +346,23 @@ theorem checkCircuit_ok {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : 
   cases h
   exact ⟨hs', hu, hp, hq⟩
 
-/-- **The holo check**: the parsed circuit's META `holo` is `holo` at a part's statement and `false` elsewhere. -/
+/-- **The holo check**: the parsed circuit's META `holo` is V*'s file's (`RecVStar.partHolo`). -/
 theorem checkHolo_ok {s : VStar.Stmt} {c : Flock.Circuit} {holo : Bool} (h : RecVStar.checkHolo s c holo = .ok ()) :
-    RecResiduals.holoOf c = .ok (holo && s matches .inner ..) := by
+    RecResiduals.holoOf c = .ok (RecVStar.partHolo s holo) := by
   unfold RecVStar.checkHolo at h
   obtain ⟨b, hb, h⟩ := ebind_ok h
-  try dsimp only at h
-  split at h
-  · cases h
-  · rename_i hn
-    simp only [bne_iff_ne, ne_eq, Classical.not_not] at hn
-    rw [hb, hn]
+  rw [hb]
+  by_cases he : b = RecVStar.partHolo s holo
+  · rw [he]
+  · have hne : (b != RecVStar.partHolo s holo) = true := bne_iff_ne.2 he
+    simp only [hne, ↓reduceIte] at h
+    first | cases h | simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq] at h
 
 /-- **The circuit's META `holo`, as the circuit check pins it**: `i`'s holo flag at a part's statement, `false`
-elsewhere. -/
+elsewhere (`RecVStar.partHolo`). -/
 theorem checkCircuit_holo {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : ℕ} {circuitB : ByteArray}
     {f : VStar.Bindings} {s : VStar.Stmt} (h : RecVStar.checkCircuit i j c n circuitB f = .ok s) :
-    RecResiduals.holoOf c = .ok (i.holo && s matches .inner ..) := by
+    RecResiduals.holoOf c = .ok (RecVStar.partHolo s i.holo) := by
   unfold RecVStar.checkCircuit at h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨_, -, h⟩ := ebind_ok h
@@ -378,7 +378,7 @@ check passes has no META `holo`. -/
 theorem checkCircuit_plain {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : ℕ} {circuitB : ByteArray}
     {f : VStar.Bindings} {s : VStar.Stmt} (h : RecVStar.checkCircuit i j c n circuitB f = .ok s)
     (hi : i.holo = false) : RecResiduals.holoOf c = .ok false := by
-  rw [checkCircuit_holo h, hi, Bool.false_and]
+  rw [checkCircuit_holo h, RecVStar.partHolo, hi, Bool.false_and]
 
 /-- **`checkStmt` at an inner shape, the verifier's own reads, statement `j` and bindings `f`**: the statement is set
 up under tags named V*'s `Tags.circuit` with no lookup table (refusals 5 and 6), and its circuit file is
