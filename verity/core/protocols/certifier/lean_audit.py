@@ -23,7 +23,8 @@ a window or a grid field outside its integer width, a frame of other than B byte
 `ValueError`, as does a call `audit.Audit` refuses; the exe missing, or `lake` to build it, raises `FileNotFoundError`. Nothing is computed in Python instead.
 `VERITY_NETWORK_RECORDS_EXE` names the executable, and then nothing but `verity` and the stdlib is needed besides it; by
 default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
-after a request starts its own executable at its first; `SERVER`'s is closed at exit.
+after a request starts its own executable at its first; `SERVER`'s is closed at exit. The same process answers
+`link-window` (`Server.call`), N2's verdict of record on one link-window's proof (`service.LinkWindows.verify`).
 
 `encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
 """
@@ -40,6 +41,7 @@ import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit
@@ -178,6 +180,11 @@ class Server:
     def verdicts(self, case: dict, fn: str = "verdicts") -> list[dict]:
         """Every link-window's verdict on `case` (`{"direction", "link", "verdict", "window"}`, in the audit's order) by
         `fn`, `verdicts` or `verdicts-no-grid`; `ValueError` when the Lean check refuses the case."""
+        return self.call(fn, case)["link_windows"]
+
+    def call(self, fn: str, case: dict) -> Any:
+        """`fn`'s output on `case` (`verdicts`, `verdicts-no-grid`, or `link-window`: `NetworkCheck.LinkWindow`'s verdict
+        of record on one link-window); `ValueError` when the Lean refuses the case."""
         self._own()
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
@@ -203,7 +210,7 @@ class Server:
             raise ValueError(f"outside the Lean audit's domain: {msg['reject']}")
         if "output" not in msg:
             raise RuntimeError(f"{self.exe} verdicts: {msg}")
-        return msg["output"]["link_windows"]
+        return msg["output"]
 
     def close(self) -> None:
         self._own()

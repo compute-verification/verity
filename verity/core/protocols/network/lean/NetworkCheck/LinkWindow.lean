@@ -58,7 +58,8 @@ structure End where
   grid : NetworkCheck.Params
   profile : Option (Array (Array Nat))
 
-/-- A certificate's public fields (`certificate.Certificate`), direction by its code. -/
+/-- A certificate's public fields (`certificate.Certificate`), direction by its code. The public row reads each
+certificate's signed digest from `Case.digests`, as the Python reads it from any object (`public_arguments`). -/
 structure Cert where
   keyId : ByteArray
   link : String
@@ -109,6 +110,8 @@ structure Case where
   output : Option Nat
   sessions : Array String
   certificates : Array (Option Cert)
+  /-- each certificate's signed digest as the public row reads it, whatever its other fields (empty for none) -/
+  digests : Array ByteArray
   syncs : Array Sync
   deltas : Array Nat
   rhos : Array (Nat × Nat)
@@ -206,6 +209,7 @@ def caseOf (j : Json) : V Case := do
          output := ← (opt j "output").mapM (asNat · "output"),
          sessions := ← (← arr j "sessions" "case").mapM (asStr · "sessions"),
          certificates := ← (← arr j "certificates" "case").mapM certOf,
+         digests := ← (← arr j "digests" "case").mapM (bytesOf · "digests"),
          syncs := ← (← arr j "syncs" "case").mapM syncOf, deltas, rhos, lms, key,
          session := ← bytesOf (← get j "session" "case") "session",
          egress := ← endOf (← get j "egress" "case") "egress", ingress := ← endOf (← get j "ingress" "case") "ingress",
@@ -277,9 +281,9 @@ grid and (with a profile) its row for the window, then on a served link the wind
 link its view. None where the unit takes no instance: not two certificates, a signed digest of another length, a window
 past an end's profile, no sync a served unit can hold, or no view. -/
 def pubRow (c : Case) : V (Option ByteArray) := do
-  let #[c0, c1] := c.certificates | return none
-  let digests := [c0, c1].map fun x => (x.map (·.digest)).getD ByteArray.empty
-  if digests.any (·.size ≠ 64) then return none
+  let #[d0, d1] := c.digests | return none
+  let digests := [d0, d1]
+  if c.certificates.size ≠ 2 ∨ digests.any (·.size ≠ 64) then return none
   let tail : Option ByteArray ← match c.kind with
     | .plain => pure (some ByteArray.empty)
     | .served => pure do
@@ -292,7 +296,7 @@ def pubRow (c : Case) : V (Option ByteArray) := do
   let some tail := tail | return none
   let dom ← domainId c
   let link := c.link.toUTF8
-  let mut row := digestRow digests[0]! ++ digestRow digests[1]!
+  let mut row := digestRow d0 ++ digestRow d1
   for d in [0, 1] do
     let e := if d = 0 then c.egress else c.ingress
     let profile ← match e.profile with
