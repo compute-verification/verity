@@ -18,7 +18,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, QKV_RMS_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_bias_role,
                                                                    gemm_pins_for, lookup_key)
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
-from verity_vllm.program.registry.dsa_norm import check_block
+from verity.ml.definitions.registry.dsa_norm import check_block
 
 
 # -- direct Triton launches -----------------------------------------------------------------------------------------------

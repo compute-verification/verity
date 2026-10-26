@@ -17,7 +17,7 @@ from verity_flock import gf2
 from verity_flock import ir_lower as IL
 
 CAPTURES = Path(__file__).resolve().parents[2] / "circuits" / "ops" / "tests" / "fixtures" / "tc-total-2026-09-07"
-#: the vLLM registry's _v1 (verity_vllm.program.registry.prims) restated as its body is, so this backend test needs no integration
+#: the vLLM registry's _v1 (verity.ml.definitions.registry.prims) restated as its body is, so this backend test needs no integration
 V1 = PrimitiveDefinition("AmpereBF16TcDot16", 1, P.AmpereBF16TcDot16.params, P.F32,
                          lambda acc, *ab: tc_dot_total(AMPERE_BF16_M16N8K16, acc, tuple(ab[:16]), tuple(ab[16:32])), register=False)
 V2 = P.AmpereBF16TcDot16

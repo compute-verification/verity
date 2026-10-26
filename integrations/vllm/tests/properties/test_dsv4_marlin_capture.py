@@ -17,7 +17,7 @@ import pytest
 import torch
 
 from tests.properties import dsv4_marlin_capture_gpu as X
-from verity_vllm.program.kernels import marlin_moe_rows as MR
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 E, K, N, SMS = 8, 256, 128, 3

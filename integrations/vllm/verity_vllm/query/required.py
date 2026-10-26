@@ -63,7 +63,7 @@ from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
-from verity_vllm.query import word as word_query
+from verity.ml.definitions import word as word_query
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER, collective_sites, norm_sites
 from verity_vllm.query.module_body import (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls,
                                            module_body_boundary)

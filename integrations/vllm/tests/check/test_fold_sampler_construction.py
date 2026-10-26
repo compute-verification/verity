@@ -24,9 +24,9 @@ from verity_vllm.observe.fold.patterns.sampling import SCRATCH_TOPP_SELECT, Toke
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.program import sampling_event as SE
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import sampling_vocab
-from verity_vllm.program.registry import dead_free, topp_words
+from verity.ml.definitions.registry import sampling as SM
+from verity.ml.definitions.registry import sampling_vocab
+from verity.ml.definitions.registry import dead_free, topp_words
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
 PLAIN, SHARED = "greedy-check-per-stage", "shared-greedy"
@@ -75,7 +75,7 @@ def _program_dir(tmp_path: Path, V: int, S: int | None) -> tuple[Path, str]:
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_vllm.program.frontend.rules.base import RuleSet
     from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     LP, STEPS = 3, 1
     C = dict(b1.B0_CONFIG, NL=1, V=V, MAX_POS=64)
     rules = RuleSet("default+stoch", list(DEFAULT_RULES.rules) + list(VLLM_SAMPLING_RULES), list(DEFAULT_RULES.families))

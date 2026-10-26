@@ -1,4 +1,4 @@
-"""[X-06] `verity_vllm.program.registry.sampling`: stochastic token select with seed / pos / temperature as OPERANDS.  CPU: agreement with the
+"""[X-06] `verity.ml.definitions.registry.sampling`: stochastic token select with seed / pos / temperature as OPERANDS.  CPU: agreement with the
 RTX-4090-validated static-seed composites (`GumbelArgmaxBf16_v1`, `GumbelArgmaxTempBf16_v1`), the kernel's early returns, masked lanes,
 and the plain-argmax limit.  The kernel correspondence itself is `registry/sampling_difftest.py` (G4, produce on the pod)."""
 from __future__ import annotations
@@ -8,8 +8,8 @@ import pytest
 
 from verity_vllm.properties.admission import evaluate_spec
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import sampling as S
-from verity_vllm.program.registry.sampling import (
+from verity.ml.definitions.registry import sampling as S
+from verity.ml.definitions.registry.sampling import (
     GumbelArgmaxBf16,
     GumbelArgmaxTempBf16,
 )
@@ -19,7 +19,7 @@ pytestmark = pytest.mark.filterwarnings("ignore")
 
 def _tables_ok() -> bool:
     try:
-        from verity_vllm.program.registry.prims import DivFullRcp
+        from verity.ml.definitions.registry.prims import DivFullRcp
         DivFullRcp.evaluate(S.f32_bits(0.8))
         return True
     except Exception:  # noqa: BLE001  (RmsUnresolved: MUFU tables not on this machine)
@@ -111,7 +111,7 @@ def test_masked_lanes_never_win_and_f32_entry_composes():
 
 @needs_tables
 def test_temperature_scale_early_returns_and_div_full():
-    from verity_vllm.program.registry.prims import DivFullRcp, DivFullScaleA, F32Mul
+    from verity.ml.definitions.registry.prims import DivFullRcp, DivFullScaleA, F32Mul
     x = _bf16_row(64, seed=5)
     xf = (x.astype(np.uint32) << 16)
     for t in (0.0, 1.0):

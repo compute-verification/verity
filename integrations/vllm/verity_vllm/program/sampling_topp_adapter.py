@@ -22,8 +22,8 @@ import struct
 
 import numpy as np
 
-from verity_vllm.program.registry.sampling_topp_difftest import spec
-from verity_vllm.program.registry.topp_geometry import splits_for
+from verity.ml.definitions.registry.sampling_topp_difftest import spec
+from verity.ml.definitions.registry.topp_geometry import splits_for
 
 SEMANTIC_ID = "sampling/GumbelTopPTokenSelect@v1"
 

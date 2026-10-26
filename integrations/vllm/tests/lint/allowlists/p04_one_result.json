@@ -54,6 +54,6 @@
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "reason-prefix", "symbol": "Vocabulary.to_json", "detail": "'...' in self.notes"},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg", "count": 3},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg.lower()"},
-    {"file": "verity_vllm/program/kernels/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3}
+    {"file": "verity/ml/definitions/numerics/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3}
   ]
 }

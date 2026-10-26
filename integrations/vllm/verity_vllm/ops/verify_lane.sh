@@ -81,7 +81,7 @@ EOF2
 log "sampling seed: $SEED"
 
 # 2. the lane's tests in the fresh checkout (laptop limits: pytest -x, 10 min cap)
-( cd "$WT" && timeout 600 "$PY" -m pytest tests/observe verity_vllm/program/registry/quarantine -q -p no:cacheprovider --junitxml="$RUN_DIR/tests.xml" 2>&1 | tail -3 | tee -a "$RUN_DIR/verify_lane.log" ) || log "pytest failed or timed out"
+( cd "$WT" && timeout 600 "$PY" -m pytest tests/observe verity_vllm/program/quarantine -q -p no:cacheprovider --junitxml="$RUN_DIR/tests.xml" 2>&1 | tail -3 | tee -a "$RUN_DIR/verify_lane.log" ) || log "pytest failed or timed out"
 "$PY" - "$RUN_DIR/tests.xml" "$RUN_DIR/tests.json" <<'EOF' || true
 import json, sys, xml.etree.ElementTree as ET
 try:
@@ -112,7 +112,7 @@ fi
 
 # 2b. quarantine purity/identity lint (from the CORE checkout's lint over the LANE's quarantine tree); the path from the
 # worktree's root on a line of its own, where a layout move rewrites it and move_check reads it
-QUARANTINE=integrations/vllm/verity_vllm/program/registry/quarantine
+QUARANTINE=integrations/vllm/verity_vllm/program/quarantine
 ( cd "$REPO" && "${PY%/*}/verity-vllm" quarantine-lint --root "$WT/$QUARANTINE" --out "$RUN_DIR/quarantine_lint.json" ) 2>&1 | tee -a "$RUN_DIR/verify_lane.log" || log "quarantine lint failed"
 
 # 3. holdouts (orchestrator-run) -> holdouts.json

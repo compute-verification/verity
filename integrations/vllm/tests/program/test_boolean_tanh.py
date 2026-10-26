@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.boolean_tanh`: RN32 tanh and Gemma-2's GeGLU by arithmetic are their word Definitions
+"""`verity.ml.definitions.registry.boolean_tanh`: RN32 tanh and Gemma-2's GeGLU by arithmetic are their word Definitions
 (`trace.word_of`) and compute the registered tables they replace. The activation inside `GeluTanhMulBf16_v4` is
 `gelu_tanh_bf16`'s word at every one of the 65,536 g (the words hash to the table's pin), and `GeluTanhMulBf16_v4` is
 `GeluTanhMulBf16_v1` on every gate word at six up words, every pair of special words and random and edge-product pairs;
@@ -31,10 +31,10 @@ from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import boolean_tanh as BT
-from verity_vllm.program.registry import dense as D
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry import tables as T
+from verity.ml.definitions.registry import boolean_tanh as BT
+from verity.ml.definitions.registry import dense as D
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import tables as T
 
 from tests.program.test_boolean_dense import SPECIALS, _agree, _bits, _edge_products
 
@@ -87,7 +87,7 @@ def test_the_ands_are_the_builders_live_ands(d) -> None:
 def test_the_word_views_and_the_boolean_versions() -> None:
     """Each names its word Definition, is the newest Boolean version of it (`program.boolean.boolean_version`, ahead of
     `boolean_dense`'s band `GeluTanhMulBf16_v2`), and holds no data (`operations.program_data`)."""
-    from verity_vllm.program.boolean import boolean_version
+    from verity.ml.definitions.boolean import boolean_version
 
     assert TR.word_of(bind(BT.TanhF32Rn)) is D.TanhF32Rn
     assert TR.word_of(bind(BT.GeluTanhMulBf16)) is D.GeluTanhMulBf16

@@ -5,7 +5,7 @@ For a sampled VU `V` (one Call of the Program) the check is
     F_V( tau(in(V)) ) == tau(out(V))      bit-for-bit,
 
 where `tau` reads the COMMITTED bytes of the Values the Program's dataflow names (the Call's `args`), and `F_V` is the
-registered relation of the Call's Definition evaluated by the registry's own reference (`verity_vllm.program.kernels.derived_rows`,
+registered relation of the Call's Definition evaluated by the registry's own reference (`verity.ml.definitions.numerics.derived_rows`,
 the same numpy models the Match stage's fold checks use).  Nothing here reads the collector's emissions to decide WHAT is
 required or WHERE an input lives: the population is the Program (its Calls, the instances.json.gz rows), the addresses are the required-value
 manifest's Value rule -- the v2 query's population the manifest of record was built from (`required.Population.members_of`) -- and the
@@ -70,7 +70,7 @@ from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.fork import WorkerDied
 from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class
 from verity_vllm.commit.opened import opened_in_children
-from verity_vllm.program.kernels.rows import EVALUATOR_PROVENANCE, EVALUATORS
+from verity.ml.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
@@ -167,7 +167,7 @@ _FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormTriton_v5": ("rms",), "RMS
 def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     """[rev-cb F-cb-44 second finding; MAN-06g] Build + dlopen every twin library the sample's families need in the PARENT before the fork:
     the children inherit the mapping and never race a first-use JIT build (a sibling used to dlopen the half-written .so -> 'file too
-    short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity_vllm.program.kernels._jit`); this makes the fast path
+    short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity.ml.definitions.numerics._jit`); this makes the fast path
     the only path.  Returns {library: path} for the record; a failure here is reported, not fatal (the children fall back to their own
     locked build)."""
     fams = {str(vu.get("spec") or "").split("{", 1)[0] for vu in picked}
@@ -177,7 +177,7 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
         out.update(getattr(ev, "prewarm", lambda _p: {})(picked))
     if "rms" in need:
         try:
-            from verity_vllm.program.kernels import prims_twins
+            from verity.ml.definitions.numerics import prims_twins
             rm, _t = prims_twins.rms_twin()
             rm.lib()
             out["rms_triton_model"] = str(rm.LIB)
@@ -185,7 +185,7 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
             out["rms_triton_model"] = f"prewarm failed: {type(e).__name__}: {str(e)[:120]}"
     if "fa2" in need:
         try:
-            from verity_vllm.program.kernels import prims_twins
+            from verity.ml.definitions.numerics import prims_twins
             _fa2_model, _tables = prims_twins.fa2_twin()
             out["fa2_mufu_tables"] = f"loaded ({type(_tables).__name__})"
         except Exception as e:  # noqa: BLE001

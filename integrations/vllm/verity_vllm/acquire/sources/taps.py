@@ -32,7 +32,7 @@ from verity_vllm.acquire.sources import (attention_source, call_boundary_source,
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.acquire.sources import moe_source
 from verity_vllm.config import option
-from verity_vllm.program.registry.topp_geometry import splits_for_v1
+from verity.ml.definitions.registry.topp_geometry import splits_for_v1
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP

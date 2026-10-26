@@ -37,8 +37,8 @@ from verity.ml.circuits.defs import bind
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
-from verity_vllm.program.encoding import definition_digest, encode_specialization, word_values
-from verity_vllm.query import word as word_query
+from verity.ml.definitions.encoding import definition_digest, encode_specialization, word_values
+from verity.ml.definitions import word as word_query
 from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
 
 SCHEMA = "vllm-program-graph/v1"
@@ -597,7 +597,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
                       "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
                       "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}
     g.setdefault("rules", {})["q_word_v1"] = (
-        "verity_vllm.query.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
+        "verity.ml.definitions.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
         "committed once at serving (the Call's inputs are committed; a program's values, its weights, constants and tables and a request's "
         "data and parameters, are registered or run inputs, committed under hiding leaves; only an operation's own constant bits and "
         "wiring are structure); outputs of <= X "
