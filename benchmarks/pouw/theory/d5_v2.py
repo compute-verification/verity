@@ -29,6 +29,12 @@ OPT_honest (the routes), eps_alg = 1 - OPT_honest / H (the deployed kernel's gap
   tensor pipe (and the port) has a price and the dense product runs on idle lanes, which the honest words can do too
   (eps_alg); nofold's "any prices" saving (saved/T) counts only the routes' tensor time, a smaller saving.
   `world_x` gives a world model's own QK^T (and V4's indexer) a credited MAC, the X its rounds bring themselves.
+- c_inc beside each served c: the round's makespan increment in the period, hull against the honest kernel family,
+  with the capacity rows kept (`increment`). Prices at a given mu have none, so where the duals leave a resource free
+  a route may run there past the period's slack; c_inc can't, and it doesn't depend on whose period's duals are used.
+  At X = 0 it is the job's makespan ratio; it falls smoothly in X where c steps.
+- pub(L') for PROTO-DESIGN-4 (`sweep`, 07:04Z): every static shape and a PV grid over L', each also at a fixed X of
+  1 MAC-time a credited MAC, so cells at different L' face the same period.
 
     ACCEL_SCORE_DIR=<dir holding nofold.py at bbe690dfe5> python benchmarks/pouw/theory/d5_v2.py [--out DIR] [--quick]
 
@@ -75,6 +81,7 @@ V3_STATIC = {
 }
 DESIGNS = ("CMP-118", "06:37Z", "L' 64")
 SENS = (0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 100.0)
+FIXED_X = (1.0,)
 X0_STEPS = 24
 
 
@@ -147,6 +154,18 @@ def period(card: pb.Card, j: dict, N: int, X: float, **kw) -> pb.Priced:
                             lookups=bool(kw.get("lookups", True)), extra_fixed=other_loads(card, X))
 
 
+def increment(card: pb.Card, j: dict, N: int, X: float, lookups: bool = True) -> dict:
+    """The round's makespan increment in the period (capacity rows kept): T(round + X) - T(X) for the hull and for the
+    honest kernel family, and their ratio c_inc. It is the round's cost at the duals averaged over its own addition, so
+    it needs no choice of whose period's duals, and no route runs on a resource past the period's slack."""
+    o = other_loads(card, X)
+    t0 = card.s8 * max(sum(x * o.get(r, 0.0) for r, x in w.items()) / cap for _, w, cap in pb._rows(card))
+    pub = period(card, j, N, X, lookups=lookups).c - t0
+    hon = pb.price_methods(card, j["methods"][:1], j["L"], N, pb.TOKENS, beside=False, items=(j["sha"],),
+                           extra_fixed=o).c - t0
+    return dict(c_inc=pub / hon, pub_inc=pub, H_inc=hon)
+
+
 def tensor_price(card: pb.Card, mu: dict) -> float:
     return mu.get("tensor", 0.0) + sum(mu.get(f"joint{i}", 0.0) * a for i, (a, _) in enumerate(card.facets))
 
@@ -187,8 +206,10 @@ def first_tensor_bound(card: pb.Card, j: dict, N: int, **kw) -> float:
     return hi
 
 
-def analyse(nf, card: str, K: int, N: int, t: int, Lp: int, pv: bool = False, sens=SENS, **kw) -> dict:
-    """One round: nofold's figures, the job-only and served-period prices, and the served sensitivity in X."""
+def analyse(nf, card: str, K: int, N: int, t: int, Lp: int, pv: bool = False, sens=SENS, fixed=FIXED_X,
+            **kw) -> dict:
+    """One round: nofold's figures, the job-only and served-period prices, the served sensitivity in X (round-times
+    past X0), and the period at fixed X (MAC-times of other tensor work a credited MAC, the same at every L')."""
     c = CARDS[card]
     r, j = job(nf, card, K, N, t, Lp, pv, **kw)
     lk = kw.get("schemes", True)
@@ -197,17 +218,24 @@ def analyse(nf, card: str, K: int, N: int, t: int, Lp: int, pv: bool = False, se
                any=r["saved"] / r["T"], lane=j["lane"], minT=dict(c=j["c"], c_opt=j["c_opt"], eps_alg=j["eps_alg"]),
                hull=[(m.label, sorted(k for it in m.items for k in it[2])) for m in j["methods"]],
                job=at_prices(c, j, N, j["route"].mu, lk), job_binding=j["route"].binding)
+    out["job"].update(c_inc=j["route"].c / j["honest"].c, pub_inc=j["route"].c, H_inc=j["honest"].c)
     x0 = first_tensor_bound(c, j, N, lookups=lk)
     p = period(c, j, N, x0 + 1e-4 * tc, lookups=lk)
-    out["served"] = dict(at_prices(c, j, N, p.mu, lk), X0=x0 / tc, X0_macs=x0, binding=p.binding)
+    out["served"] = dict(at_prices(c, j, N, p.mu, lk), **increment(c, j, N, x0 + 1e-4 * tc, lk), X0=x0 / tc,
+                         X0_macs=x0, binding=p.binding)
     rows = []
     for f in sens:
         p = period(c, j, N, x0 + f * tc, lookups=lk)
         a = at_prices(c, j, N, p.mu, lk)
-        rows.append(dict(X=x0 / tc + f, c=a["c"], c_mm=a["c_mm"], leak=a["leak"], eps_alg=a["eps_alg"],
-                         binding=p.binding, mix=a["mix"], routes=a["routes"]))
+        rows.append(dict(X=x0 / tc + f, c=a["c"], c_inc=increment(c, j, N, x0 + f * tc, lk)["c_inc"], c_mm=a["c_mm"],
+                         leak=a["leak"], eps_alg=a["eps_alg"], binding=p.binding, mix=a["mix"], routes=a["routes"]))
     out["sens"] = rows
     out["worst"] = min(rows + [dict(out["served"], X=out["served"]["X0"])], key=lambda x: x["c"])
+    out["fixed"] = {}
+    for X in fixed:
+        p = period(c, j, N, X, lookups=lk)
+        a = at_prices(c, j, N, p.mu, lk)
+        out["fixed"][X] = dict(c=a["c"], **increment(c, j, N, X, lk), binding=p.binding, mix=a["mix"])
     return out
 
 
@@ -311,6 +339,29 @@ def pool_map(fn, args: list, jobs: int) -> dict:
         return dict(p.imap_unordered(fn, args, chunksize=1))
 
 
+def _lite(a):
+    return a, analyse(NF, *a, sens=())
+
+
+def sweep(nf, quick: bool, jobs: int) -> dict:
+    """pub(L') for PROTO-DESIGN-4 (07:04Z): every static shape, and PV on a grid of n, at the card's t (1 where t·64 >
+    K), over every L' in LPS with t L' <= K."""
+    global NF
+    NF = nf
+    args = []
+    for card in CARDS:
+        shapes = sorted({(K, N) for sh in SHAPES.values() for K, N, _ in (sh[:1] if quick else sh)})
+        pvs = sorted({(n, dv) for n in (PV_GRID[::6] if quick else PV_GRID[::2]) for dv in set(PV_DV.values())})
+        for K, N, pv in [(K, N, False) for K, N in shapes] + [(n, dv, True) for n, dv in pvs]:
+            t = T_V3[card] if T_V3[card] * LPS[0] <= K else 1
+            args += [(card, K, N, t, Lp, pv) for Lp in LPS if t * Lp <= K][:4 if quick else None]
+    done = pool_map(_lite, args, jobs)
+    out = {}
+    for (card, K, N, t, Lp, pv), r in sorted(done.items()):
+        out.setdefault(card, {}).setdefault(f"{'PV n ' if pv else ''}{K}x{N}", []).append(r)
+    return out
+
+
 def rounds(nf, quick: bool, jobs: int) -> tuple[dict, dict]:
     """Every design's static and PV rounds: the picks, then each distinct round analysed once (in a pool)."""
     global NF
@@ -353,7 +404,8 @@ def weighted(rows: list, col: str) -> dict:
     def ratio(a, b):
         return tot(a) / tot(b)
 
-    return dict(c=ratio("pub", "H"), c_mm=mm_ratio(tot("pub_mm"), tot("H_mm"), tot("H")), leak=1 - ratio("pub", "opt"),
+    return dict(c=ratio("pub", "H"), c_inc=ratio("pub_inc", "H_inc"),
+                c_mm=mm_ratio(tot("pub_mm"), tot("H_mm"), tot("H")), leak=1 - ratio("pub", "opt"),
                 eps_alg=1 - ratio("opt", "H"), gamma=sum(r["w"] * r["gamma"] for r in rows) / W,
                 worst_c=min(r[col]["c"] for r in rows), any=sum(r["w"] * r["any"] for r in rows) / W)
 
@@ -516,6 +568,7 @@ def named(res: dict, design: str = "CMP-118") -> list:
 def run(nf, quick: bool = False, jobs: int = 1) -> dict:
     res = {}
     res["static"], res["pv"] = rounds(nf, quick, jobs)
+    res["sweep"] = sweep(nf, quick, jobs)
     res["matching"] = {}
     for card in CARDS:
         for model, shapes in SHAPES.items():
@@ -547,7 +600,8 @@ def report(res: dict) -> None:
                     s, j = weighted(rows, "served"), weighted(rows, "job")
                     if not s:
                         continue
-                    print(f"  {card:13} {model:16} served c {s['c']:.4f} c_mm {f4(s['c_mm'])} leak {pct(s['leak'])} "
+                    print(f"  {card:13} {model:16} served c {s['c']:.4f} (c_inc {s['c_inc']:.4f}) c_mm "
+                          f"{f4(s['c_mm'])} leak {pct(s['leak'])} "
                           f"eps_alg {pct(s['eps_alg'])} worst {s['worst_c']:.4f} | job c {j['c']:.4f} c_mm "
                           f"{f4(j['c_mm'])} leak {pct(j['leak'])} eps_alg {pct(j['eps_alg'])} | any-prices "
                           f"{pct(s['any'])} | γ {s['gamma']:.2f}")
@@ -558,16 +612,31 @@ def report(res: dict) -> None:
                               f"(c_mm {f4(sv['c_mm'])}, X0 {sv['X0']:.2f}, {'+'.join(sv['binding'])}; {mix}) "
                               f"worst {r['worst']['c']:.4f} at X {r['worst']['X']:.2f} | job {jb['c']:.4f} "
                               f"({'+'.join(r['job_binding'])}) | lane {r['lane']:.2f}")
-                        print("        X past X0 (round-times): " + "; ".join(
-                            f"{x['X'] - sv['X0']:g}: {x['c']:.3f} {'+'.join(x['binding'])}" for x in r["sens"]))
+                        print("        X past X0 (round-times): c (c_inc): " + "; ".join(
+                            f"{x['X'] - sv['X0']:g}: {x['c']:.3f} ({x['c_inc']:.3f}) {'+'.join(x['binding'])}"
+                            for x in r["sens"]))
                     if kind == "pv":
                         lo = min(rows, key=lambda r: r["served"]["c"])
                         print(f"      every n to {max(r['K'] for r in rows)}: least served c {lo['served']['c']:.4f} "
                               f"at n {lo['K']} (L' {lo['Lp']}), least job c {min(r['job']['c'] for r in rows):.4f}")
-                        cells = [f"{r['K']}:{r['t']}x{r['Lp']} {r['served']['c']:.3f}/{r['job']['c']:.3f}"
-                                 for r in rows]
+                        cells = [f"{r['K']}:{r['t']}x{r['Lp']} {r['served']['c']:.3f} ({r['served']['c_inc']:.3f})/"
+                                 f"{r['job']['c']:.3f}" for r in rows]
                         for i in range(0, len(cells), 8):
                             print("        " + "; ".join(cells[i:i + 8]))
+    print("\n== pub(L') for PROTO-DESIGN-4: per shape and L' (t), γ | job c | served c (c_inc) | at X = 1: c (c_inc); "
+          "pub and H at the served prices are in the JSON")
+    def cell(card, r):
+        t = "" if r["t"] == T_V3[card] else f" t{r['t']}"
+        s, x = r["served"], r["fixed"][FIXED_X[0]]
+        return (f"{r['Lp']}{t}: {r['gamma']:.2f} | {r['job']['c']:.3f} | {s['c']:.3f} ({s['c_inc']:.3f}) | "
+                f"{x['c']:.3f} ({x['c_inc']:.3f})")
+
+    for card, shapes in res["sweep"].items():
+        for shape, rows in shapes.items():
+            cells = [cell(card, r) for r in rows]
+            print(f"  {card:13} {shape:16} " + "; ".join(cells[:4]))
+            for i in range(4, len(cells), 4):
+                print(" " * 32 + "; ".join(cells[i:i + 4]))
     print("\n== X0 (MAC-times of other tensor work a credited MAC before the tensor pipe has a price), against a world "
           "model's own QK^T (+ indexer) a credited MAC")
     for design, cards in res["static"].items():

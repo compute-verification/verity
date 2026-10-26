@@ -47,6 +47,19 @@ def test_the_tensor_pipe_has_a_price_only_past_x0(name):
 
 
 @pytest.mark.parametrize("name", list(ROUNDS))
+def test_the_makespan_increment_spans_the_job_and_the_tensor_only_limit(name):
+    """c_inc is the job's makespan ratio with no other work, never above 1, and at 100 round-times of other tensor
+    work (idle lanes past any slack the round could use) it equals c at the period's duals."""
+    card, _, j = _job(name)
+    T = j["route"].c
+    assert D.increment(card, j, N, 0.0, False)["c_inc"] == pytest.approx(j["c"])
+    for X in (0.5 * T, 3 * T):
+        assert D.increment(card, j, N, X, False)["c_inc"] <= 1 + 1e-9
+    big = D.increment(card, j, N, 100 * T, False)["c_inc"]
+    assert big == pytest.approx(D.at_prices(card, j, N, D.period(card, j, N, 100 * T, lookups=False).mu, False)["c"])
+
+
+@pytest.mark.parametrize("name", list(ROUNDS))
 def test_served_prices_credit_less_than_the_job_alone_at_8b_qkv(name):
     card, _, j = _job(name)
     job, served = D.at_prices(card, j, N, j["route"].mu, False), _served(card, j)
@@ -61,7 +74,8 @@ def test_h200_job_only_prices_sit_on_the_lanes():
     a = D.at_prices(card, j, N, j["route"].mu, False)
     assert a["c"] == pytest.approx(1.0) and a["c_mm"] is None
     assert "tensor" not in j["route"].binding and "alu" in j["route"].binding
-    assert D.weighted([dict(w=1.0, job=a, gamma=1.0, any=0.0)], "job")["c_mm"] is None
+    row = dict(w=1.0, job=dict(a, pub_inc=j["route"].c, H_inc=j["honest"].c), gamma=1.0, any=0.0)
+    assert D.weighted([row], "job")["c_mm"] is None
 
 
 def test_rtx_public_best_saves_one_digit_of_the_peels():
