@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NET-68's scan composed at w63's class in zero knowledge (scan_zk.py) on a CPU machine, on hidden_zk's builds (its
+# NET-68's scan composed in zero knowledge (scan_zk.py, w63's class or SC_CLASS's) on a CPU machine, on hidden_zk's builds (its
 # job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the
 # sampled-proofs verifier built in the tree. From a clone, in a slot of network-accounting's pool:
 #   research run --on MACHINE --source . --project verity --as LANE --cwd clone --timeout 180m --env SC_MEM_GB=128 -- \
@@ -7,6 +7,8 @@
 #     bash benchmarks/network_traces/scan_zk.sh
 # env: SC_MEM_GB (what job.sh's stages may take, within the slot's)  SC_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  SC_DRY=1 (the run and the host's read of every round only)
+#      SC_CLASS=w63|test (`prove --class`: test is the certifier tests' class, a CPU window)  SC_GROUP=G (`prove
+#      --group G`: link-windows 0 … G − 1 in one registration)
 #      SC_WARDEN_RUN=DIR (a warden_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
 #      `warden_serve.py rehearse --fake --ids` at scan_zk's schedule, SC_REQUESTS requests at SC_RATE a second, and
 #      prove its run)  SC_DRAW=K (`prove --draw K`: Lean draw --stratified K on the verifier's coins)
@@ -57,8 +59,9 @@ if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first
     CH+=(--peer "$SC_PEER" --challenger-key "$SC_CHALLENGER_KEY" ${SC_GATE_KEY:+--gate-key "$SC_GATE_KEY"});;
   esac
 fi
-log "sczk: proving${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}"
+log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}"
 "$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" ${SC_DRY:+--dry} \
+  ${SC_CLASS:+--class "$SC_CLASS"} ${SC_GROUP:+--group "$SC_GROUP"} \
   ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} "${CH[@]}" 2>&1 \
   | tee -a "$OUT/sczk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}

@@ -59,7 +59,7 @@ def test_a_run_of_record_applies_its_flags_and_records_them(tmp_path, monkeypatc
     commit, shape = shapes[0], shapes[1]
     assert commit[0] == "--commit-weights" and "--wired" not in commit
     assert shape[shape.index("--law") + 1] == "work:64" and "--tie" in shape and shape[shape.index("--pouw") + 1] == "h1"
-    assert "--registered" in shape and "--wired" not in shape and relays[0][-1] == SHAPE
+    assert "--registered" in shape and "--wired" not in shape and relays[0][-2] == SHAPE
     assert [{k: v for k, v in x.items() if k not in ("shape", "cap")} for x in loops] == [
         {"tie": True, "pouw": "h1", "registered": True, "law": "work:64", "jobs": 1, "session_jobs": 1,
          "relay": {"h": 1}, "wired": False}] * 2
@@ -84,7 +84,7 @@ def test_the_wired_run_of_record_ties_the_wired_circuit_at_its_law_and_names_no_
     assert shapes[0][0] == "--commit-weights" and "--wired" in shapes[0]
     assert all({"--wired", "--registered", "--tie"} <= set(x["shape"]) for x in loops) and len(loops) == 2
     assert all(x["law"] == "work:14" and x["tie"] and x["wired"] and x["cap"] == 2 for x in loops)
-    assert relays[0][-1] == SHAPE and relays[0][-2] is True
+    assert relays[0][-2] == SHAPE and relays[0][-3] is True
     mode = json.loads((tmp_path / "out" / "mode.json").read_text())
     assert mode["of_record"] is True and "gap" not in mode and "companion" not in mode
     assert {k: mode["flags"][k] for k in ("wired", "registered", "tie", "pouw", "law", "tie_tamper", "certifier_tamper")} \

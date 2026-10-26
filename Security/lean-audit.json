@@ -1372,7 +1372,7 @@
   },
   "NetTiming.Layout.Fits": {
    "owner": "@network-accounting",
-   "digest": "b5c00d137d48ec2bef002d2c9fa7bb36d831f9c1f44a3af803e835a5b86f8ca3"
+   "digest": "3e19dedcd745f707786efa5ede31d98e6458c9a71ecea1999d70c3219b95b3eb"
   },
   "NetTiming.OccupancyReadsOwnBlock": {
    "owner": "@network-accounting",
@@ -2198,6 +2198,107 @@
    "except": [],
    "why": "the relation (relation.py) imports no proofs and nothing of the semantics: the two transcriptions are independent"
   },
+  "Definitions.Nci": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci"],
+   "except": [],
+   "why": "the policy is stated over core's model and imports no proofs"
+  },
+  "Definitions.Pouw": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
+   "except": ["Definitions.Pouw.PearlC.Defs"],
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
+  },
+  "Definitions.Pouw.Basic": {
+   "imports": ["Mathlib", "Definitions.Pouw.Basic"],
+   "except": [],
+   "why": "probability, integer matrices and oracle programs"
+  },
+  "Definitions.Pouw.PearlC.Defs": {
+   "imports": [
+    "Mathlib",
+    "Batteries",
+    "Definitions.Pouw.Fp8Atom.E4M3",
+    "Definitions.Pouw.Fp8Atom.Atom",
+    "Definitions.Pouw.Fp8Atom.Fp32"
+   ],
+   "except": [],
+   "why": "Pearl-C's Π, definitions only, over Fp8Atom's definitions: the game and the named assumption read it"
+  },
+  "Definitions.Pous": {
+   "imports": ["Mathlib", "Definitions.Pous"],
+   "except": [],
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Pous.Game": {
+   "imports": ["Mathlib", "Definitions.Pous.Game"],
+   "except": [],
+   "why": "the probability and oracle model"
+  },
+  "Definitions.Pous.Model": {
+   "imports": ["Mathlib", "Definitions.Pous.Game", "Definitions.Pous.Model"],
+   "except": [],
+   "why": "the models import the game and each other, not the parameters or a proof"
+  },
+  "Definitions.Pous.P2": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous.Game",
+    "Definitions.Pous.Model",
+    "Definitions.Pous.Accounting",
+    "Definitions.Pous.P2"
+   ],
+   "except": [],
+   "why": "P2's pins and its cost model read only the game, the models and the parameters"
+  },
+  "Definitions.NetworkCertifier": {
+   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.Claims"],
+   "except": [],
+   "why": "the protocol's definitions, and the statements under its Guarantees/, are trusted text: they import no assumption or proof, only Mathlib, one another and the claims' definitions (the sampled audit reads sampling's vocabulary)"
+  },
+  "Definitions.Accounting": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Pouw",
+    "Definitions.Pous.Game.Prob",
+    "Definitions.Pous.Model.Audit",
+    "Definitions.Pous.Model.SampledAudit",
+    "Definitions.Pous",
+    "Definitions.Accounting"
+   ],
+   "except": ["Definitions.Accounting.Bandwidth.Game"],
+   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth)"
+  },
+  "Definitions.Accounting.Bandwidth": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous.Game.Prob",
+    "Definitions.Accounting.Confidence",
+    "Definitions.Accounting.Bandwidth"
+   ],
+   "except": [],
+   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof; the chip's ports on a strategy's runs (Definitions.Accounting.Bandwidth.Causal) read the actual-circuit model's runs, links and ports (Definitions.Accounting.Confidence)"
+  },
+  "Definitions.Claims": {
+   "imports": ["Mathlib", "Definitions.Claims"],
+   "except": [],
+   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Hash": {
+   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash"],
+   "except": [],
+   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
+  },
+  "Definitions.Population": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
+   "except": [],
+   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
+  },
+  "Definitions.Flock": {
+   "imports": ["Mathlib", "Definitions.Flock"],
+   "except": [],
+   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof"
+  },
   "Definitions.Core.Assumptions": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Core.Assumptions"],
    "except": [],
@@ -2209,11 +2310,6 @@
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
    "sealed": true
-  },
-  "Definitions.Nci": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci"],
-   "except": [],
-   "why": "the policy is stated over core's model and imports no proofs"
   },
   "Definitions.Nci.Assumptions": {
    "imports": [
@@ -2259,27 +2355,6 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
    "sealed": true
   },
-  "Definitions.Pouw": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
-   "except": ["Definitions.Pouw.PearlC.Defs"],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
-  },
-  "Definitions.Pouw.Basic": {
-   "imports": ["Mathlib", "Definitions.Pouw.Basic"],
-   "except": [],
-   "why": "probability, integer matrices and oracle programs"
-  },
-  "Definitions.Pouw.PearlC.Defs": {
-   "imports": [
-    "Mathlib",
-    "Batteries",
-    "Definitions.Pouw.Fp8Atom.E4M3",
-    "Definitions.Pouw.Fp8Atom.Atom",
-    "Definitions.Pouw.Fp8Atom.Fp32"
-   ],
-   "except": [],
-   "why": "Pearl-C's Π, definitions only, over Fp8Atom's definitions: the game and the named assumption read it"
-  },
   "Definitions.Pous.Assumptions": {
    "imports": ["Mathlib", "Definitions.Pous", "Definitions.Pous.Assumptions"],
    "except": [],
@@ -2317,37 +2392,6 @@
    "except": [],
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
-  "Definitions.Pous": {
-   "imports": ["Mathlib", "Definitions.Pous"],
-   "except": [],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
-  },
-  "Definitions.Pous.Game": {
-   "imports": ["Mathlib", "Definitions.Pous.Game"],
-   "except": [],
-   "why": "the probability and oracle model"
-  },
-  "Definitions.Pous.Model": {
-   "imports": ["Mathlib", "Definitions.Pous.Game", "Definitions.Pous.Model"],
-   "except": [],
-   "why": "the models import the game and each other, not the parameters or a proof"
-  },
-  "Definitions.Pous.P2": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Pous.Game",
-    "Definitions.Pous.Model",
-    "Definitions.Pous.Accounting",
-    "Definitions.Pous.P2"
-   ],
-   "except": [],
-   "why": "P2's pins and its cost model read only the game, the models and the parameters"
-  },
-  "Definitions.NetworkCertifier": {
-   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.Claims"],
-   "except": [],
-   "why": "the protocol's definitions, and the statements under its Guarantees/, are trusted text: they import no assumption or proof, only Mathlib, one another and the claims' definitions (the sampled audit reads sampling's vocabulary)"
-  },
   "Definitions.NetworkCertifier.Assumptions": {
    "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.NetworkCertifier.Assumptions"],
    "except": [],
@@ -2372,20 +2416,6 @@
    "why": "a guarantee is a Prop over Mathlib, never over a proof",
    "sealed": true
   },
-  "Definitions.Accounting": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Core",
-    "Definitions.Pouw",
-    "Definitions.Pous.Game.Prob",
-    "Definitions.Pous.Model.Audit",
-    "Definitions.Pous.Model.SampledAudit",
-    "Definitions.Pous",
-    "Definitions.Accounting"
-   ],
-   "except": ["Definitions.Accounting.Bandwidth.Game"],
-   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth)"
-  },
   "Definitions.Accounting.Guarantees": {
    "imports": [
     "Mathlib",
@@ -2407,16 +2437,6 @@
    "why": "the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Definitions.Nci.Assumptions) as hypotheses; B1 is TT at the cost model of the actual circuit's provers; B2 and lemma M compose with PoUS's audit game (Definitions.Pous) and take P2's named assumption P2RingAuditSecure (Definitions.Pous.Assumptions.P2) as a hypothesis; a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and the named assumptions (PoUW's TT, resource accounting's own) as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Definitions.Pous.Assumptions.P2); the composed credit's binding lemma (Compose.BindingOfECR) prices a fork by the claims' expected-cost collision resistance (Definitions.Claims' ExpectedCR, Finder), as the claims state it",
    "sealed": true
   },
-  "Definitions.Accounting.Bandwidth": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Pous.Game.Prob",
-    "Definitions.Accounting.Confidence",
-    "Definitions.Accounting.Bandwidth"
-   ],
-   "except": [],
-   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof; the chip's ports on a strategy's runs (Definitions.Accounting.Bandwidth.Causal) read the actual-circuit model's runs, links and ports (Definitions.Accounting.Confidence)"
-  },
   "Definitions.Accounting.Guarantees.Bandwidth": {
    "imports": [
     "Mathlib",
@@ -2433,26 +2453,11 @@
    "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof",
    "sealed": true
   },
-  "Definitions.Claims": {
-   "imports": ["Mathlib", "Definitions.Claims"],
-   "except": [],
-   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof"
-  },
-  "Definitions.Hash": {
-   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash"],
-   "except": [],
-   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
-  },
   "Definitions.Hash.Guarantees": {
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash", "Definitions.Hash.Guarantees"],
    "except": [],
    "why": "a guarantee is stated over the hash area's definitions, never over a proof",
    "sealed": true
-  },
-  "Definitions.Population": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
-   "except": [],
-   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
   },
   "Definitions.Nci.Guarantees.FitRate": {
    "imports": [
@@ -2465,11 +2470,6 @@
    ],
    "except": [],
    "why": "the fit bound on a run is stated over NCI's window premises and the actual circuit's windows (Definitions.Accounting), never over a proof"
-  },
-  "Definitions.Flock": {
-   "imports": ["Mathlib", "Definitions.Flock"],
-   "except": [],
-   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof"
   }
  },
  "reads_exempt": {
@@ -8605,11 +8605,23 @@
    "assumptions": [],
    "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
   },
+  "NetTiming.SecurityProofs.HorizonLeakAccepted": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.HorizonLeakAccepted : NetTiming.Guarantees.HorizonLeakAccepted"],
+   "assumptions": [],
+   "type_hash": "42d2a4cd8f85bfae4af68ef6494ced78b576913d56207b74ad57533b9beafae2"
+  },
   "NetTiming.SecurityProofs.HorizonWrongUnitsLe": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe"],
    "assumptions": [],
    "type_hash": "a04fb3c7473ce600dcf3b75eae2ce8f5c3f7126156b07cf9112a51776a52712f"
+  },
+  "NetTiming.SecurityProofs.PeriodLeakAccepted": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted"],
+   "assumptions": [],
+   "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "owner": "@proofs",
@@ -11603,8 +11615,11 @@
    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole": "frozen (no-function): It bounds AccSeqsWithin with each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder), the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes no assumption about the charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.PeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes the sampled leak bound at the network certifier's rows (NetTiming.TapProof.sampledLeak_tap: RLeakTap, the observations the network certifier registers at the transfer gates under the statement's roots, TapOpens, with Claims.Sampling.KS and Commitment.Binds at each deployment) with the read-back of its record (tap_cells_read), over the network certifier's code (tapCode: the active warden's code wardenCode and the record of its cells, in any record format TapRecord whose cells read back) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the network certifier's code, not runs of the network check's code or of a compiled warden program, and, where the network certifier registers its observations at every window (TapOpens, an antecedent), it counts the secrets whose every window meets its good event (WindowGood: RLeakTap at the extracted witness and the registration's values at the prover's registered inputs), with each window's failure bounded on its own (Btap the collisions with the network certifier's openings) and no union over the monitoring period's live coins yet.",
    "NetTiming.SecurityProofs.SampledLeakAccepted": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS at each deployment), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_reg's statement, which charges the free inputs outside each statement's registered inputs (freeInputs \\ reg, at AsReg), since RAcc pins the inputs to the trace's committed values.",
    "NetTiming.SecurityProofs.SampledAuditAccepted": "frozen (no-function): It is stated over a sampling deployment's knowledge soundness (Claims.Sampling.KS, its one hypothesis) and the circuit's Program (circuitProgram), not runs of the network check's code: it carries an accepted sampled audit to RAcc delta (the faulty set in M_delta, none of it drawn all, and Accepted with the faulty units' committed gates as advice), the runs EncardAccSeqsSampledLe counts.",
+   "NetTiming.SecurityProofs.HorizonLeakAccepted": "frozen (obligation,no-function,world-unlisted): It is conditional on two per-window inputs taken as plain hypotheses over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each window's acceptance event and the faulty set W_i of its witness read only from earlier windows' coins: the conditional escape (hesc, Pr_x[acc_i] ≤ C(n_i − |W_i|, kd_i)/C(n_i, kd_i) + e_i given the earlier coins, which Flock.Guarantees.SampledKSLive would give at each window's history) and the leak relation at that same faulty set (hleak, Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i, which the live SampledLeakAccepted, P2, would give), neither discharged. With the network certifier's code (tapCode: wardenCode and the record of its cells, in any record format TapRecord whose cells read back, tap_cells_read) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), it bounds Pr[every window accepts ∧ ¬HorizonGood] by δ + Σ e_i + Σ e'_i at Fmax ≥ ln(1/δ)/q and counts the secrets meeting HorizonGood at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ reg_i) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code, and it is not the deployed system's bound over a monitoring period until both inputs are discharged.",
+   "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract horizon of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the horizon, with A3 and KS at the deployment) is not stated here.",
    "Flock.SecurityProofs.IntegrityPeriod": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizon": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityPeriodLog": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
@@ -11615,7 +11630,6 @@
    "Accounting.SecurityProofs.JointHorizon": "frozen (no-function): Like JointPeriod, over a horizon of periods on one coin space: each period's five per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksAbstract": "frozen (no-function): Like JointHorizon, over a horizon of blocks on one coin space with extra events: each block's five per-period guarantees and each extra event's bound are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.BandwidthOfAuditPerRun": "frozen (no-function,hash): It is BandwidthOfAudit at the coins drawn: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the per-run bandwidth guarantee (BandwidthSoundPerRun) of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
-   "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract horizon of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the horizon, with A3 and KS at the deployment) is not stated here.",
    "Flock.SecurityProofs.SampledKSLiveStated": "frozen (no-function): It states no property of the verifier: it reads SampledKSLive (Security/Proofs/Flock/Bridge/Statement.lean), so the lock records its text, and it leaves when a guarantee proves SampledKSLive at the deployed sampled verifier.",
    "NetTiming.SecurityProofs.SampledLeakRegistered": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS and Commitment.Binds at each deployment, and the registration's openings RegOpens), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_registered's statement with sampledLeak_reg's count, at the registered inputs' registration values (AsReg at regVal) rather than the trace's, a disagreement being a collision Breg finds.",
    "Flock.SecurityProofs.SampledKSLiveV2": "frozen (no-function): the network certifier chain's theorem, proved; it reads SampledKSLiveV2 (Security/Proofs/Flock/Bridge/Canon.lean), the row/v2 sampled statement at the constants and canonAt, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
@@ -16722,7 +16736,9 @@
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
+    "NetTiming.SecurityProofs.HorizonLeakAccepted",
     "NetTiming.SecurityProofs.HorizonWrongUnitsLe",
+    "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
@@ -17308,6 +17324,8 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
+    "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered"
@@ -17360,6 +17378,8 @@
    "guarantees": [
     "NetTiming.SecurityProofs.EncardWardenDecodableLe",
     "NetTiming.SecurityProofs.EncardWardenViewsLe",
+    "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.WardenViewEqClientView",
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
@@ -21158,6 +21178,8 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
     "NetTiming.SecurityProofs.ExpectedRowCausal",
+    "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered"
@@ -21264,6 +21286,20 @@
    },
    "guarantees": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe"]
   },
+  "Definitions.NetworkCertifier.Guarantees.HorizonLeak": {
+   "digest": "94c69266c346900794fca3758bc2d449fb7fa7fc19c2dcaf75c6b301627c839e",
+   "definitions": {
+    "NetTiming.Guarantees.HorizonLeakAccepted": "a5c07c2f7a131884153c6ccd3997402c4e7012630e9ba975ee224fc272c45cb6"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted"]
+  },
+  "Definitions.NetworkCertifier.Guarantees.Period": {
+   "digest": "77e7212a7b73c432df775e98ee123c66d9daf0ff17100eeb0f253909f4b1aff4",
+   "definitions": {
+    "NetTiming.Guarantees.PeriodLeakAccepted": "26d88ed4b56eb9b0bb996edc95d9f60d3dc450a1fc296b384469ea6b8d6d35bd"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
+  },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
    "digest": "011843baa3d4e1e3587bd9a91e9f5c488c455b5f39760438f4b3ed1dcc1120b5",
    "definitions": {
@@ -21323,6 +21359,14 @@
     "NetTiming.SecurityProofs.EncardChargedLeWhole"
    ]
   },
+  "Definitions.NetworkCertifier.HorizonLeak": {
+   "digest": "caf5439ea62839f4aa91729b68e108a9a2a78dd7e8b15dcd715267ccde274ce4",
+   "definitions": {
+    "NetTiming.HorizonGood": "02d9ffc2d30f8fb6b0e65148b87fa60ae38082f531c46a3bcae4ec2899e3f33c",
+    "NetTiming.LeakAt": "3d737de560945cd2649337c797f651708f56168fbad583d57d11bc0fd455d635"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted"]
+  },
   "Definitions.NetworkCertifier.Ingress": {
    "digest": "3c3f9fa4cf192807b611a03f6164a25f5407f9f252110a4c4f827b0107065ffc",
    "definitions": {
@@ -21338,6 +21382,14 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
    ]
+  },
+  "Definitions.NetworkCertifier.Period": {
+   "digest": "d1aa7cb0fcb087bfd57b7f28613bca116b96d51d473d1cfbb3b802df0049ec45",
+   "definitions": {
+    "NetTiming.SameRegistration": "bad84087de868525ff0dd57bf0577eb11ea9a58b2a9ff421255df8c030ac6b3c",
+    "NetTiming.WindowGood": "029cb86efe5a052130398a39360f2934a811c592f63eae24e339c04459ef6dac"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Run": {
    "digest": "662752b77833aff2fb80b4afc179edc1ce0e1e40405c3602f3b5ebd8cbc87085",
@@ -21403,13 +21455,15 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
+    "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered"
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
-   "digest": "81e07e6aaeb0f50bfbd88dccd0606a1da2273d906bdfff776e1bd9f0d1d5cb41",
+   "digest": "bec268592083d2d0ae02caeacbf9e32919cbb31b37986f78cbaa9535d7417aba",
    "definitions": {
     "NetTiming.Carries": "e7ac004752a175d793960824660f46b99d8fe3911fef93379ad2e7665d073f86",
     "NetTiming.Covered": "ccee422986c657af27297ae2bc6396a375226194e77cac80a7e44f9a70e4814c",
@@ -21417,7 +21471,7 @@
     "NetTiming.FaultyGate": "4f48cf5bca92bba73ee756048da872f5f53491ed43fbc79654bdcb5264cc7f62",
     "NetTiming.KSAccepted": "db54ee54c4ea0bae4d062f50d980afb70ba3adbff86ba9df979b2b3e5bc5731c",
     "NetTiming.Layout": "26a9ae100864386a6350d51b5b6511ead4b61a09a5355752b75f28b2f03e9181",
-    "NetTiming.Layout.Fits": "b5c00d137d48ec2bef002d2c9fa7bb36d831f9c1f44a3af803e835a5b86f8ca3",
+    "NetTiming.Layout.Fits": "3e19dedcd745f707786efa5ede31d98e6458c9a71ecea1999d70c3219b95b3eb",
     "NetTiming.Layout.egress": "a0e95168b97f01529a65a69348753486689a46062a932d1f2dbbd90c62369a03",
     "NetTiming.Layout.ingress": "1447b138bfb81ed0a928b0541b290f051e19d9e543e1eb3a2789041608cb6a45",
     "NetTiming.Layout.inputOf": "7a78045a4090690a8548b0d4877ead2d00470b9b2a523ac287fbc6476c5c6cba",
@@ -21435,6 +21489,8 @@
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
+    "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered"
@@ -21453,6 +21509,8 @@
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
+    "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered"
    ]
@@ -21513,6 +21571,26 @@
     "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
   },
+  "Definitions.NetworkCertifier.Tap": {
+   "digest": "676f6c792c2a4062eb135ff930509cda2c78ac0321a01c1a20603e2e39e81181",
+   "definitions": {
+    "NetTiming.TapRecord": "c5cddcdc452c903011fe46b319759549d0c439321722db0e2596e960f904d02f",
+    "NetTiming.TapRecord.record": "a89a64449e10fb21db550c50134329e7153d12fff8381c7f12ea84af14d24b32",
+    "NetTiming.tapCode": "e7fe36224fc6527ffca6264f8c5174f7242c48e3acd1586ce3c7b1cb5bcbbc0f"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted", "NetTiming.SecurityProofs.PeriodLeakAccepted"]
+  },
+  "Definitions.NetworkCertifier.TapRows": {
+   "digest": "a985c4aedaa389e00ad4324f88bf6dbff823799ec65ac26b4f5ecbd5c0d5cc1d",
+   "definitions": {
+    "NetTiming.Btap": "7400b8f4e5a1baa2cb0cabdbc411a28b72aeea870594b5a1b7e72022862d4252",
+    "NetTiming.RLeakTap": "9e15ffeb7a21d4a525ba290cae7624de19665e2b58eabafc1cc82f1e67c426f1",
+    "NetTiming.TapOpens": "f52e47f14856886b6b20628dbb35196a48a4a0251fb37a8a57943e221576cdbc",
+    "NetTiming.tapLog": "30f489572c14b138976b71ae3ea3edb0fbcce6abf73a6f251593790fcd02d233",
+    "NetTiming.tapVal": "820beef45fb779042d495c23e9f9c0fc0d2cd98f2ef0a17beaed6f9e7c550aa8"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
+  },
   "Definitions.NetworkCertifier.Warden": {
    "digest": "44483d6d7b90ee894c8893c859b277c18696789fc671a62a68405cfb2d0a9a17",
    "definitions": {
@@ -21539,6 +21617,8 @@
    "guarantees": [
     "NetTiming.SecurityProofs.EncardWardenDecodableLe",
     "NetTiming.SecurityProofs.EncardWardenViewsLe",
+    "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.WardenViewEqClientView"
    ]
   },

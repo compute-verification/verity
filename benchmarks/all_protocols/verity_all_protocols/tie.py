@@ -110,13 +110,14 @@ def pin(record: Mapping[str, Any], key: PublicKey, session: bytes, *, out_shape:
 
 
 def relay(scratch: Path, tokens: Sequence[int], steps: int, periods: int, tools: Mapping[str, str], tampered: bool,
-          out_shape: Mapping[str, Any] | OC.OutShape) -> dict[str, Any]:
+          out_shape: Mapping[str, Any] | OC.OutShape, out: Path | None = None) -> dict[str, Any]:
     """The communication leg's session relayed before the loop serves (`relay`, in its scratch directory, where the leg
     finds it), the network certifier committing each link-window's output at ``out_shape``; ``tampered``: some period's
-    output is the tampered relay's, which must be ``byte``'s."""
+    output is the tampered relay's, which must be ``byte``'s. A relay step that fails copies its log into the runner's
+    ``out``'s session directory, which outlives the scratch (the leg's `failed`)."""
     leg = load("certifier")
     rec = leg.relay(scratch / leg.SESSION, list(tokens), steps, _loop().H, periods, tools,
-                    out_shape=shape(out_shape).doc())
+                    out_shape=shape(out_shape).doc(), keep=None if out is None else out / leg.SESSION)
     if tampered and rec["tamper"] != "byte":
         raise ValueError(f"--tie-tamper ties a period to the CERTIFIER_TAMPER=byte relay, not {rec['tamper']!r}")
     return rec
