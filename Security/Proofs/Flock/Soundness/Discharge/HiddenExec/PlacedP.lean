@@ -215,12 +215,12 @@ theorem SitesHP.aliased_keyProgP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h :
       (Fin.cast (si.acc S R u h).nbl_eq.symm (si.o S R u h)) (si.hvu S R u h) := by
   have hc := (si.acc S R u h).c_eq (hparse S R u h)
   have hq := (si.acc S R u h).pi_eq (hparse S R u h) hpi
-  have e := congrArg Rows.nIn (SitesHP.rowsOf_keyProgP hU hparse S R u h)
+  have e := congrArg Rows.nIn (SitesHP.rowsOf_keyProgP (pi := pi) hU hparse S R u h)
   refine (si.acc S R u h).aliased_of_key _ _ (si.hvu S R u h) ?_
   intro x x' hw hx hx'
-  have hw' := ((Placed.wire_cast (SitesHP.rowsOf_keyProgP hU hparse S R u h)
+  have hw' := ((Placed.wire_cast (SitesHP.rowsOf_keyProgP (pi := pi) hU hparse S R u h)
     (Const.Prog.instC (Placed.keyProgP c pi hU n) outs u) x).symm.trans hw).trans
-    (Placed.wire_cast (SitesHP.rowsOf_keyProgP hU hparse S R u h)
+    (Placed.wire_cast (SitesHP.rowsOf_keyProgP (pi := pi) hU hparse S R u h)
       (Const.Prog.instC (Placed.keyProgP c pi hU n) outs u) x')
   have hk := Placed.keyProgP_wire_key hU outs u _ _ (lt_of_lt_of_eq hx e.symm) (lt_of_lt_of_eq hx' e.symm) hw'
   exact (congrArg₂ (fun d q => Aliased.srcKeyP d q x.val = Aliased.srcKeyP d q x'.val) hc hq).mpr hk
@@ -229,7 +229,7 @@ theorem SitesHP.aliased_keyProgP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h :
 and the parse alone: each drawn unit placed at its template instance in its table's accepted statement, its instance the
 program's own (`Const.Prog.instC`), aliased (`SitesHP.aliased_keyProgP`). -/
 noncomputable def SitesHP.progPlaces_keyProgP : ProgPlaces (Placed.keyProgP c pi hU n) outs plan tab :=
-  si.progPlaces_of_layout (SitesHP.rowsOf_keyProgP hU hparse) outs (Const.Prog.instC _ outs)
+  si.progPlaces_of_layout (SitesHP.rowsOf_keyProgP (pi := pi) hU hparse) outs (Const.Prog.instC _ outs)
     (SitesHP.aliased_keyProgP hU hparse hpi outs)
 
 /-- `progPlaces_keyProgP`'s instance is the program's own. -/
