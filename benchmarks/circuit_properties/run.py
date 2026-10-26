@@ -6,8 +6,9 @@ For each configuration in `references.configs()`, one b1 layer at T positions on
 (`measure.measure`) under `references.GEMM_PRODUCTS`, and so is the Boolean GEMM `Gemm_v3{K=32,N=4}`. Beside each layer's
 a_out, a_in and |𝒥| per position: rho's `fanout`, `legs` and active layer products, as recorded for the model in
 benchmarks/rho/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
-config's own matrices (q, k, v, o, gate, up, down) otherwise and always. Writes DIR/properties.json (DIR defaults to
-$OUT) and prints one line per circuit.
+config's own matrices (q, k, v, o, gate, up, down) otherwise and always. Each circuit's products are also checked
+whole-in-block (`measure.whole`) under two partitions: one block per root activation, and the gates cut in half. Writes
+DIR/properties.json (DIR defaults to $OUT) and prints one line per circuit.
 """
 
 from __future__ import annotations
@@ -24,8 +25,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "rho"))
 
-from circuit_properties import references as R  # noqa: E402
-from circuit_properties.measure import describe, measure  # noqa: E402
+from circuit_properties import references as R
+from circuit_properties.measure import Blocks, describe, measure, whole
 
 
 def rho_shapes(name: str, C: dict) -> dict:
@@ -52,6 +53,12 @@ def row(name: str, program, source: str, T: int, rho: dict | None) -> dict:
     out = {"circuit": name, "source": source, "positions": T, "program_fn": program.fn.id[:120],
            "seconds": round(time.time() - t, 2), **m.as_dict(), "a_out_at": describe(program, m.a_out_gate)}
     out["products_per_position"] = m.products // T
+    out["whole"] = {}
+    for part, blocks in (("by_root_activation", Blocks.by_root(program)),
+                         ("halves", Blocks([(0, 0), (program.gates // 2, 1)]))):
+        w = whole(program, R.GEMM_PRODUCTS, blocks)
+        out["whole"][part] = {"per_block": {str(b): c for b, c in w.per_block.items()}, "split": w.split,
+                              "split_at": [describe(program, g) for g, _ in w.split_examples[:2]]}
     if rho is not None:
         out["rho"] = rho
         cmp = {}
@@ -84,7 +91,8 @@ def main() -> int:
         r["maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6, 2)
         rows.append(r)
         print(json.dumps({k: r[k] for k in ("circuit", "gates", "products_per_position", "s_x", "a_out", "a_in", "agrees",
-                                            "seconds", "build_seconds", "maxrss_gb")}), flush=True)
+                                            "seconds", "build_seconds", "maxrss_gb")}
+                         | {"split": {p: v["split"] for p, v in r["whole"].items()}}), flush=True)
     if a.out:
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "properties.json").write_text(json.dumps(rows, indent=1, default=str) + "\n")

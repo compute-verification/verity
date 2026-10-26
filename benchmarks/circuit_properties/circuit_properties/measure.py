@@ -31,7 +31,16 @@ from dataclasses import dataclass, field
 from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity.ml.circuits.layout import Circuit
 
-from .ops import Designation, OpShape, Site, _bits, is_constant, member_refs, op_shape, param_bases
+from .ops import (
+    Designation,
+    OpShape,
+    Site,
+    _bits,
+    is_constant,
+    member_refs,
+    op_shape,
+    param_bases,
+)
 
 
 class Ambiguous(ValueError):
@@ -258,7 +267,7 @@ class Measurer:
         for k, node in enumerate(fn.body.nodes):
             child = self.child(node, ctx)
             if child is None:
-                site, matched = self.site_of(node.fn, ctx)
+                _site, matched = self.site_of(node.fn, ctx)
                 if matched:
                     S.excluded[node.fn.id] += node.n if node.form in ("batch", "scan") else 1
                 continue
@@ -466,7 +475,7 @@ class Blocks:
         self.starts, self.ids = starts, ids
 
     @classmethod
-    def from_owner(cls, owner) -> "Blocks":
+    def from_owner(cls, owner) -> Blocks:
         """From each gate's block (None for a gate in no block)."""
         runs, prev = [], _MIXED
         for g, b in enumerate(owner):
@@ -474,6 +483,12 @@ class Blocks:
                 runs.append((g, b))
                 prev = b
         return cls(runs)
+
+    @classmethod
+    def by_root(cls, program) -> Blocks:
+        """One block per activation of the root's body, named by its annotation (else its index)."""
+        body = program.root.body
+        return cls([(body.offsets[k], node.name or k) for k, node in enumerate(body.nodes)])
 
     def of(self, g: int):
         return self.ids[bisect_right(self.starts, g) - 1]

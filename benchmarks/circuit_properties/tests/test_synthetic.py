@@ -6,13 +6,12 @@ from __future__ import annotations
 import random
 
 import pytest
-
+import synthetic as SY
 from circuit_properties import flat
 from circuit_properties.measure import Ambiguous, Blocks, measure, whole
 from circuit_properties.ops import Designation, NotSeparable, Site, op_shape
-from verity.ml.circuits.defs import bind
 
-import synthetic as SY
+from verity.ml.circuits.defs import bind
 
 
 def test_op_shape_by_hand():

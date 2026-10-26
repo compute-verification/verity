@@ -125,7 +125,7 @@ def properties(program, designation: Designation, ex: Explicit | None = None) ->
             if r:
                 reach[g] = r
         for o in e.outputs:
-            c = bin(reach.get(o, 0)).count("1") if e.lo <= o < e.hi else 0
+            c = reach.get(o, 0).bit_count() if e.lo <= o < e.hi else 0
             per_entry.setdefault(e.id, []).append(c)
     hit = [c for cs in per_entry.values() for c in cs if c]
     return Properties(len(ex.products), min((len(p.gates) for p in ex.products), default=None), a_out,

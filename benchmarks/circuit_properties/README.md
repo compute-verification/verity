@@ -29,6 +29,8 @@ fan-in is read at. `references.GEMM_PRODUCTS` is the GEMMs' products: each lane 
 - a_in: over the returned leaves of every entry activation, the counted products inside it with a gate of m(p) the leaf
   is reached from; the least over leaves some product reaches.
 - `whole(program, designation, Blocks)`: the products whose m(p) lies inside one block, per block, and those split.
+  `Blocks(runs)` is a partition as runs of gate indices (`Blocks.from_owner` from each gate's block, `Blocks.by_root`
+  one block per root activation).
 
 `measure` computes all of them hierarchically, once per Definition, so a served layer of 10^10 to 10^12 gates measures
 in seconds. `flat` computes them gate by gate from the definitions; the tests hold the two equal on synthetic circuits
@@ -55,4 +57,5 @@ optimizer) circuit.
     uv run --extra torch-cpu benchmarks/circuit_properties/run.py [--models NAME,...] [--T T] [--out DIR]
 
 measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/rho's `fanout`, `legs` and layer products
-(its `models.toml` row, and `derived_fanout` / `derived_legs` of the config's matrices), writing `properties.json`.
+(its `models.toml` row, and `derived_fanout` / `derived_legs` of the config's matrices), checks whole-in-block under
+`Blocks.by_root` and a cut at the middle gate, and writes `properties.json`.

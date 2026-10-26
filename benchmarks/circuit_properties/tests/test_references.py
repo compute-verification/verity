@@ -4,8 +4,8 @@ layer (SmolLM2-135M's) against the shapes its GEMMs read."""
 from __future__ import annotations
 
 import pytest
-
-from circuit_properties import flat, references as R
+from circuit_properties import flat
+from circuit_properties import references as R
 from circuit_properties.measure import Blocks, measure, whole
 from circuit_properties.ops import op_shape
 
@@ -53,15 +53,21 @@ def test_boolean_gemm_partitions(gemm):
 @pytest.mark.slow
 def test_tiny_layer_matches_flat():
     """b1's layer at tiny shapes (3.9e6 gates), gate by gate: about 40 s of layout lookups. It is the one test holding the
-    summaries to the definitions through a served layer's wiring (σ's replayed references, the norm's and RoPE's outputs,
-    LayerPre's tuple, the residual), which the synthetic circuits only imitate."""
+    summaries and whole-in-block to the definitions through a served layer's wiring (σ's replayed references, the norm's
+    and RoPE's outputs, LayerPre's tuple, the residual), which the synthetic circuits only imitate."""
     from verity.ml.definitions.registry import b1
     C = dict(b1.B0_CONFIG, H=16, NH=1, KVH=1, D=16, I=16, QKV=48, GU=32, V=64, NL=1)
     p = R.layer(C, 1)
-    m, f = measure(p, R.GEMM_PRODUCTS), flat.properties(p, R.GEMM_PRODUCTS)
+    ex = flat.explicit(p, R.GEMM_PRODUCTS)
+    m, f = measure(p, R.GEMM_PRODUCTS), flat.properties(p, R.GEMM_PRODUCTS, ex)
     assert (m.products, m.a_out, m.a_in) == (16 * (48 + 16 + 32) + 16 * 16, 48, 16)
     assert (f.products, f.s_x, f.a_out, f.a_out_values, f.activation_values, f.constant_leaves, f.a_in) == \
         (m.products, m.s_x, m.a_out, m.a_out_values, m.activation_values, m.constant_leaves, m.a_in)
+    for blocks in (Blocks.by_root(p), Blocks([(0, 0), (p.gates // 2, 1)])):
+        w = whole(p, R.GEMM_PRODUCTS, blocks)
+        per, split = flat.whole(p, R.GEMM_PRODUCTS, [blocks.of(g) for g in range(p.gates)], ex)
+        assert (w.per_block, w.split) == (dict(per), split)
+        assert w.whole + w.split == m.products
 
 
 @pytest.mark.slow

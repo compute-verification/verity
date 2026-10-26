@@ -9,13 +9,13 @@ output of a linear map, K/N MulLanes steps from a zero accumulator.
 
 from __future__ import annotations
 
+from circuit_properties.ops import Designation, Site
+
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, broadcast, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
-
-from circuit_properties.ops import Designation, Site
 
 BIT = BL.BIT
 LANE = Array(2, BIT)
