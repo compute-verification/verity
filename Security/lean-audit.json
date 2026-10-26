@@ -35263,11 +35263,11 @@
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Flock.EndToEnd.Blocks.Statement": {
-   "digest": "87c9fa33e4fda8cc4ad16be39ddd2d197416b348a83b963c77a38af6c6687176",
+   "digest": "0db39cc5d1067db06d6a56b50536076b626caed822b100a0feaa51661259608c",
    "definitions": {
-    "Flock.Guarantees.IntegrityBlock": "8f0e571e56b26ac4c49e46aa5981641b823e9e0527dea8a91bad7a381854b6b0",
-    "Flock.Guarantees.IntegrityBlocks": "8e2311e17d4534b46932d7676f3efb9a27775c0865b3805bc1750d5ac5ed991f",
-    "Flock.Guarantees.IntegrityHorizonBlocks": "dced380f5ba9889237038c33de380e29d31a34d15b2e0283ffeb6fba0b6627d3",
+    "Flock.Guarantees.IntegrityBlock": "bf0e6f951502c90ee6a3650cd43027776a573bf4077a055f7741055e89a54b70",
+    "Flock.Guarantees.IntegrityBlocks": "d4d683b0613ffa3ff35721011e2d76ead508dd735f5265498bbc654c2ac8b4c6",
+    "Flock.Guarantees.IntegrityHorizonBlocks": "f156d6e1787e6c38dbd4c04518b9278064585f7b83480c344d1d620b83e2b50d",
     "Flock.Guarantees.ServerBlocks": "2bdc4119b6d361e7b9db427f1b32a2d8eaf08caf15141e5a56c206f0124af2fe",
     "Flock.Guarantees.ServerBlocks.B": "f23a3b2c1c8872071c32d29c689897b1bd9afe004cd2d42cedac8ee04360c990",
     "Flock.Guarantees.ServerBlocks.BlockEscapes": "8315a8d605d7bf0d51e5d9e5a2f246590ae7c4a163a9b0daddea3e3e50c6d3c7",
