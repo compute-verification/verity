@@ -35,8 +35,10 @@ Lean, by running the deployed verifier on the honest deployed fixture. No collis
 `WitSatisfies`), the fitted rows (`RowsFit`), the tape exception (`hTops`), the stager's checks at each part's statement
 (`StmtFits`, so the stager accepts by `hok_of_fits`) and the shared rows' widths (`hWd`).
 
-`Ir` is any inner prover: no Lean `InnerRec` is the deployed reference inner prover yet (its `rest` is the stager's
-inputs, which `rec_vstage`, `rec_vstar` and `verifier_rows` build). `StmtFits` reads `Ir.rest`'s openings and tops.
+`Ir` is not fixed in Lean: the theorem holds for every inner prover `Ir` with `IrShaped Ir`, the facts of `Ir.rest` (the
+stager's inputs, which the deployed builder's `rec_vstage`, `rec_vstar` and `verifier_rows` build) the stager's checks
+read. Both `HonestRunAccepted` and `IrShaped` are witnessed outside Lean at the deployed builder: by the fixture's runs,
+and by a Python `IrShaped` check in the deployed V\* difftest.
 `bringsAt_deployedB`: the brings here are `RecursiveKS`'s `deployedB` at `bringsAt mask Ir b0 x`.
 -/
 
@@ -65,6 +67,12 @@ theorem lt_nS_of_partAt {x : Msg} {s : ℕ} {sv : _root_.VStar.Stmt} {c : Circui
     simp [partAt, hr, hn] at h
 
 /-! ## The run and its named premises -/
+
+/-- **The inner prover's stager inputs have the deployed builder's shape**: the facts of `Ir.rest` the stager's checks
+read (`StmtFits`'s openings). Witnessed outside Lean at the deployed builder, by a Python check in the deployed V\*
+difftest. Placeholder until LOWOPEN states it: it says nothing yet, and `honest_half`'s `StmtFits` premise still carries
+these facts. -/
+def IrShaped (_Ir : InnerRec) : Prop := True
 
 section Premises
 
@@ -121,10 +129,12 @@ def NoCollAt (w : Claims.Flock.Wit) (ω : Tape (bLAt mask Ir b0 x aux nOf hd rec
 end Premises
 
 /-- **If the verifier accepts the reference prover's run (witnessed by the fixture), every V\* part accepts**, at
-`RecursiveKSAt`'s record: the honest half of its non-vacuity. At the deployed brings at `x` under `deployedB`
-(`bringsAt_deployedB`), V\*'s layout of record `layR elemR` and the deployed bound record, where the compiled verifier
-accepts the reference prover's run and the inner verifier its inner proof (`HonestRunAccepted`, witnessed outside Lean
-by running the deployed verifier on the honest deployed fixture), each part `s < nS x`'s circuit accepts.
+`RecursiveKSAt`'s record: the honest half of its non-vacuity. For every inner prover `Ir` with `IrShaped Ir`, at the
+deployed brings at `x` under `deployedB` (`bringsAt_deployedB`), V\*'s layout of record `layR elemR` and the deployed
+bound record, where the compiled verifier accepts the reference prover's run and the inner verifier its inner proof
+(`HonestRunAccepted`), each part `s < nS x`'s circuit accepts. Both `HonestRunAccepted` and `IrShaped` are witnessed
+outside Lean at the deployed builder: by the honest deployed fixture's runs, and by a Python `IrShaped` check in the
+deployed V\* difftest.
 
 Besides that premise it takes: the builder's facts (`NumsFixed`, `StagedSetsUp`, `WitSatisfies`); no collision among
 each part's recorded calls (`NoCollAt`, SHA-512's collision event); the fitted rows (`RowsFit`); the tape exception
@@ -139,6 +149,7 @@ theorem honest_half (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) 
     let bL := bLAt mask Ir b0 x aux nOf hd recRest
     let I := IAt decI
     let D := DAt mask Ir b0 x aux nOf hd recRest
+    IrShaped Ir →
     NumsFixed bL.st → StagedSetsUp FlockDeploy.sha512 I.V bL → WitSatisfies FlockDeploy.sha512 I.V bL →
     ∀ {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt} (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
     HonestRunAccepted mask Ir b0 x aux nOf hd recRest decI w st ω r →
@@ -156,7 +167,7 @@ theorem honest_half (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) 
     ∀ s < nS x,
       Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
         Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s x (Claims.coinSeq r) ms := by
-  intro bR L bL I D hN hS hW w st ω r hRun hnc hist ms hfit hTops hFits hWd s hs
+  intro bR L bL I D _hIr hN hS hW w st ω r hRun hnc hist ms hfit hTops hFits hWd s hs
   obtain ⟨hR, hx, hf, hacc, hI⟩ := hRun
   obtain ⟨xr, hxr⟩ := readX_of_lt_nS hs
   have hk : I.V.k (xIOf x) = RestRead.kI x := rfl
