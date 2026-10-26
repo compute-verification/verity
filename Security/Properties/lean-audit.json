@@ -8220,9 +8220,9 @@
    ]
   },
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld": {
-   "digest": "02b28929a7688f2ad46fa2f359e1bf292db7321b38e83bad85cd5342bc768369",
+   "digest": "2431f67192ec9aeed8eb95afa893ce2cda9bb7d99463effc9ce6de2b47c6741f",
    "definitions": {
-    "Accounting.Bridge.SpaceOfPeriodHeld": "0c7d1bd605bacf9a14a8a9d22ea5373354cdacef27a8fef98b734fd28872c3ec"
+    "Accounting.Bridge.SpaceOfPeriodHeld": "6f72f13bd33100e3a6710b3e391cab399ac55709a4e5ec77b940407bba97600c"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld"]
   },
