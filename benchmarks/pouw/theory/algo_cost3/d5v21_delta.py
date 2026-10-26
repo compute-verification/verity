@@ -4,9 +4,10 @@ Reads both reports' text and JSON (`d5_v2.py > OUT.txt`, `--out DIR` writes `d5_
 the report, how many lines moved on each card (with the H200's largest numeric change, which should be 0), every
 per-model summary line whose figures moved (served c, c_inc, c_mm, leak, worst, job c, any-prices, γ: v2 → v2.1),
 the pub(L′) table's served c and c at X = 1 per card (cells moved, largest move), P-HYB3's rows, the hashing rows, and
-the named programs that moved.
+the named programs that moved. `--rounds D6VSD5.json` (`d6_vs_d5.py` run with PUBLIC_BEST_DIR at v2.1) adds A31's
+per-round table at X = 1 on v2.1's menu.
 
-    python3 d5v21_delta.py V2.txt V21.txt V2.json V21.json [OUT.json]
+    python3 d5v21_delta.py V2.txt V21.txt V2.json V21.json [OUT.json] [--rounds D6VSD5.json]
 """
 import json
 import re
@@ -131,9 +132,35 @@ def main():
     moved = [k for k in jo if k != "inputs" and h200(jo[k]) != h200(jn[k])]
     res["json_h200_moved"] = moved
     print(f"\n== JSON sections whose H200 (or card-free) entries moved: {moved or 'none'}")
-    if len(sys.argv) > 5:
+    if "--rounds" in sys.argv:
+        res["rounds"] = rounds(jo, jn, json.loads(Path(sys.argv[sys.argv.index("--rounds") + 1]).read_text()))
+    if len(sys.argv) > 5 and not sys.argv[5].startswith("--"):
         Path(sys.argv[5]).write_text(json.dumps(res, indent=1))
     print("DONE")
+
+
+def rounds(jo: dict, jn: dict, d6: dict) -> list[dict]:
+    """A31's per-round table on v2.1: D5's own `fixed` reading at X = 1 (1 − c, each round alone, from its L′ sweep at
+    D6's L′) beside D6's per-round leak at x = 1 in `d6_vs_d5.py`'s step a (D6's job LPs, v3.1's picks), and v2's."""
+    def d5(j, card, K, N, Lp):
+        r = next(r for r in j["sweep"][card][f"{K}x{N}"] if r["Lp"] == Lp)
+        return 1 - r["fixed"]["1.0"]["c"]
+
+    print("\n== v3.1's static rounds at X = 1: D5 v2.1's own leak | D6's per round on v2.1's menu | D5 v2's")
+    out, worst = [], 0.0
+    for key, v in d6.items():
+        design, card, model, x = key.split(" | ")
+        if design != "v3.1" or x != "1.0":
+            continue
+        for r in v["rounds"]:
+            d5n, d5o = d5(jn, card, r["K"], r["N"], r["Lp"]), d5(jo, card, r["K"], r["N"], r["Lp"])
+            worst = max(worst, abs(d5n - r["leak"]))
+            out.append({"card": card, "model": model, "K": r["K"], "N": r["N"], "Lp": r["Lp"], "d5_v21": d5n,
+                        "d6_v21": r["leak"], "d5_v2": d5o})
+            print(f"  {card} {model} {r['K']}x{r['N']} L′ {r['Lp']}: {100 * d5n:.4f}% | {100 * r['leak']:.4f}% | "
+                  f"{100 * d5o:.4f}%")
+    print(f"  {len(out)} rounds, largest |D5 v2.1 − D6| {worst:.2e}")
+    return out
 
 
 if __name__ == "__main__":
