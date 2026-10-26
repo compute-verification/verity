@@ -25,7 +25,7 @@ def portReadsB (net : Net) : Bool :=
 /-- No output port is pinned (META `pinned_outputs`, `HmRow.pinnedCount`): a form no soundness theorem covers yet. -/
 def unpinned (c : Circuit) : Bool := HmRow.pinnedCount c.metaJ == 0
 
-def pinnedWhy : String := "pinned outputs (META pinned_outputs): a form no soundness theorem covers yet"
+def pinnedWhy : String := HmRow.pinnedWhy
 
 /-- Every row is an unsegmented `sha512/row/v1` row: `16 · words` bits in at least one chunk. -/
 def v1Rows (c : Circuit) : Bool :=
