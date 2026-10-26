@@ -25,9 +25,14 @@ of slot 0, then of slot 1 and so on, each allocation's slots side by side in its
   ``path`` an `Opening` at the hidden key ``tok``, pinned by its verdict ``o1``. Its ``tok`` is its position's feed.
 - `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, n = ``grain.gemm_words`` // K output columns a slice, each reading
   its weight rows from the weights record (`Read`) and its ``x`` whole.
-- `RoPE_v1{NHEADS, D}` and `Attention_v18{T, NH, KVH, D}` are their heads (`RoPEHead_v1{D}`, `AttentionHead_v18{T}`).
-  A head's keys and values are one row of an `AllGather_v1{T, D}` over every key position's row (T at most `KEYS`), each
-  position's row gathered first when it spans several writers (the K and V slices).
+- `RoPE_v1{NHEADS, D}` is its heads (`RoPEHead_v1{D}`), each reading its slice of ``x``.
+- `Attention_v18{T, NH, KVH, D, BN, ...}` is `Attention_v19`'s cut (#4263, CIR-96): each head's Calls (`AttentionHead_v19`'s
+  body, read once a T) are its units, its first visited key block `AttnBlockFirst_v1{D, NVIS}` (keys (nb - 1)·BN ... T - 1,
+  nb = ⌈T / BN⌉), each full block below it `AttnBlock_v5` and its end `AttnHeadEnd_v1{D}`, one unit a head a Call, each
+  block's running state its predecessor's rows. A block's keys and values are one row a KV group, which its group's heads
+  read: one key's own row (RoPE's, or its value's GEMM slices gathered once, at its position), a full block's
+  `AllGather_v1{BN, D}` (made once, when the block fills, and read by every later position) or the first block's
+  `AllGather_v1{NVIS, D}`. A layer's cache is refused unless it is the keys its earlier positions' nodes read and one more.
 - `TokenSelect_v4{V}` is its function at ``grain.select`` logits a chunk (its body's own form at another C): chunks
   `TokenSelectChunk_v2{C}`, each reading its C logits through one gather, and `TokenSelectCombine_v2{V, C}` over them:
   ``best`` through one gather of the chunks' maxima, ``idx`` cut a row a chunk, and ``x0`` (``logits[0]``) from one
@@ -37,9 +42,10 @@ of slot 0, then of slot 1 and so on, each allocation's slots side by side in its
 A reader port that reads several writers' rows is cut (`interface.Layout.cut`), one cut per template and port: the cut ``d``
 divides every use's row count, leaves its reader at most ``grain.rows`` rows in and out, and makes the fewest gather units,
 a use's rows gathered ``m / d`` at a time by `AllGather_v1` units (whose ``parts`` are cut a row a part, so a gather of
-``m / d`` parts holds ``m / d + 1`` rows with its output). Every wire and read is stated per node as a pattern and
-`interface.coalesce`d, and each allocation's slots sit side by side in its template, so the slots' copies of a pattern are
-one and the circuit's description grows with the class Program's nodes, not its slots or units.
+``m / d`` parts holds ``m / d + 1`` rows with its output). Every wire and read is stated per node as a pattern (a node's
+heads, KV groups and slices as digits of one) and `interface.coalesce`d, and each allocation's slots sit side by side in its
+template, so the slots' copies of a pattern are one and the circuit's description grows with the class Program's nodes, not
+its slots or units; so does the lowering's own state (a node's output rows are runs, a gather is keyed by its rows' runs).
 
 The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the
 blocks' slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the
@@ -66,9 +72,11 @@ from typing import Any
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Refs, runs
+from verity.ml.circuits.types import Tuple
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.b1_tp2 import AllGather
+from verity.ml.definitions.registry.dead_free import AttentionV19
 from verity.ml.windows import interface as IF
 
 from .build import Unexpressible
@@ -134,11 +142,6 @@ class WindowClass:
 CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)
 
 
-#: the most keys an attention head reads through one `AllGather_v1{T, D}`, until v19's per-key-block cut is wired
-#: (`AttentionHead_v19`, CIR-96)
-KEYS = 136
-
-
 @dataclass(frozen=True)
 class Grain:
     """The units' size (CIR-95's at Llama-3.2-1B by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
@@ -154,7 +157,7 @@ class Grain:
 _GRAIN = Grain()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Row:
     """One unit's output row: template ``tid``'s unit ``unit``, its output ``out`` of ``words`` u16 words."""
     tid: str
@@ -163,16 +166,42 @@ class Row:
     words: int
 
 
-@dataclass
+@dataclass(slots=True)
 class _Feed:
-    """Units ``[at, at + count)`` of template ``tid`` all read port ``port`` as ``rows``, in order, at their (slot, step)
-    ``label``."""
+    """Units ``[at, at + count)`` of template ``tid`` read port ``port`` as ``rows``, in order, at their (slot, step)
+    ``label``: each unit the same rows, or under ``lead`` (digits ``(radix, step)`` of the reader units, slowest first, the
+    radices' product ``count``) unit ``at + i`` each row's writer unit plus ``i``'s digits times their steps."""
     tid: str
     port: str
     at: int
     count: int
     rows: tuple[Row, ...]
     label: tuple[int, int]
+    lead: tuple[tuple[int, int], ...] = ()
+
+
+def _runs_of(rows: Sequence[Row]) -> list[tuple[int, int, int]]:
+    """``rows`` as runs ``(first, length, unit step)``, each of one writer's output at a constant unit step."""
+    out, j = [], 0
+    while j < len(rows):
+        k = j + 1
+        while k < len(rows) and (rows[k].tid, rows[k].out) == (rows[j].tid, rows[j].out) and \
+                rows[k].unit - rows[k - 1].unit == rows[j + 1].unit - rows[j].unit:
+            k += 1
+        out.append((j, k - j, rows[j + 1].unit - rows[j].unit if k > j + 1 else 0))
+        j = k
+    return out
+
+
+def _step(rowss: Sequence[Sequence[Row]]) -> int | None:
+    """The unit step σ with ``rowss[i]`` each of ``rowss[0]``'s rows σ·i units on, None where there is none."""
+    r0 = rowss[0]
+    s = rowss[1][0].unit - r0[0].unit if len(rowss) > 1 and rowss[1] else 0
+    for i, rs in enumerate(rowss):
+        if len(rs) != len(r0) or any((a.tid, a.out, a.words, a.unit + s * i) != (b.tid, b.out, b.words, b.unit)
+                                     for a, b in zip(r0, rs)):
+            return None
+    return s
 
 
 @dataclass
@@ -190,10 +219,12 @@ class _Builder:
     roots: list[IF.TableRead] = field(default_factory=list)
     openings: list[IF.Opening] = field(default_factory=list)
     ingress: list[IF.Ingress] = field(default_factory=list)
-    gathered: dict[tuple[Row, ...], Row] = field(default_factory=dict)
+    gathered: dict[tuple[tuple[str, str, int, int, int], ...], Row] = field(default_factory=dict)
     #: the (slot, step) the next units are of, and each template's runs of units by theirs, ``(at, count, slot, step)``
     label: tuple[int, int] | None = None
     spans: dict[str, list[tuple[int, int, int, int]]] = field(default_factory=dict)
+    #: each attention Definition's head plan (`_Program._plan`), read once whatever its slots and layers
+    plans: dict[str, list[tuple[Any, list[tuple[str, tuple[Any, ...]]]]]] = field(default_factory=dict)
 
     def unit(self, fn: Any, count: int = 1) -> tuple[str, int]:
         """``count`` new units of ``fn`` at the current label: its descriptor id and the first one's index. Every slot makes
@@ -212,45 +243,63 @@ class _Builder:
         self.spans.setdefault(tid, []).append((at, count, *self.label))
         return tid, at
 
-    def feed(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row]) -> None:
+    def feed(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
+             lead: tuple[tuple[int, int], ...] = ()) -> None:
         if not rows:
             raise Unexpressible(f"{tid} {port}: reads no unit's rows")
-        self.feeds.append(_Feed(tid, port, at, count, tuple(rows), self.label))
+        if lead and math.prod(r for r, _ in lead) != count:
+            raise ValueError(f"{tid} {port}: reader digits {lead} for {count} units")
+        self.feeds.append(_Feed(tid, port, at, count, tuple(rows), self.label, lead))
 
-    def gather(self, rows: Sequence[Row]) -> Row:
-        """One row holding ``rows`` in order: the row itself, or an `AllGather_v1{len(rows), w}` unit's (one a row sequence)."""
-        rows = tuple(rows)
-        if len(rows) == 1:
-            return rows[0]
-        if rows in self.gathered:
-            return self.gathered[rows]
+    def _gatherer(self, rows: Sequence[Row]) -> Any:
         w = {r.words for r in rows}
         if len(w) != 1 or len(rows) >= self.grain.rows:
             raise Unexpressible(f"a gather of {len(rows)} rows of {sorted(w)} words: rows of one width, at most "
                                 f"{self.grain.rows - 1} (with its output, a unit's {self.grain.rows} rows)")
-        tid, u = self.unit(bind(AllGather, WORLD=len(rows), N=w.pop()))
+        return bind(AllGather, WORLD=len(rows), N=w.pop())
+
+    def gather(self, rows: Sequence[Row]) -> Row:
+        """One row holding ``rows`` in order: the row itself, or an `AllGather_v1{len(rows), w}` unit's (one a row sequence,
+        keyed by its runs)."""
+        rows = tuple(rows)
+        if len(rows) == 1:
+            return rows[0]
+        key = tuple((rows[j].tid, rows[j].out, rows[j].unit, n, s) for j, n, s in _runs_of(rows))
+        if key in self.gathered:
+            return self.gathered[key]
+        tid, u = self.unit(self._gatherer(rows))
         self.cuts.setdefault(tid, {})["parts"] = len(rows)
         self._wire(tid, "parts", u, 1, rows)
-        out = self.gathered[rows] = Row(tid, u, "o0", len(rows) * rows[0].words)
+        out = self.gathered[key] = Row(tid, u, "o0", len(rows) * rows[0].words)
         return out
+
+    def gathers(self, rowss: Sequence[Sequence[Row]]) -> tuple[Row, ...]:
+        """One row a group of ``rowss`` (a KV group's rows of a key or a block): a group's one row as it is, else one
+        `AllGather_v1` unit a group, allocated together and wired as one pattern where each group's rows are the first's
+        shifted (`_step`), never shared."""
+        if all(len(rs) == 1 for rs in rowss):
+            return tuple(rs[0] for rs in rowss)
+        if (s := _step(rowss)) is None:
+            return tuple(self.gather(rs) for rs in rowss)
+        rows, n = rowss[0], len(rowss)
+        tid, u = self.unit(self._gatherer(rows), n)
+        self.cuts.setdefault(tid, {})["parts"] = len(rows)
+        self._wire(tid, "parts", u, n, rows, ((n, s),))
+        return tuple(Row(tid, u + i, "o0", len(rows) * rows[0].words) for i in range(n))
 
     def read(self, tid: str, port: str, at: int, radix: Sequence[int], base: int, step: Sequence[int]) -> None:
         self.reads.append(IF.Read(tid, port, WEIGHTS, at=at, radix=tuple(radix), base=base, step=tuple(step)))
 
-    def _wire(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row]) -> None:
-        """Units ``[at, at + count)`` read ``rows`` as their port's rows ``0 .. len(rows) - 1``: one pattern per run of rows from
-        one writer's output at a constant unit step."""
-        j = 0
-        while j < len(rows):
-            k = j + 1
-            while k < len(rows) and (rows[k].tid, rows[k].out) == (rows[j].tid, rows[j].out) and \
-                    rows[k].unit - rows[k - 1].unit == rows[j + 1].unit - rows[j].unit:
-                k += 1
-            C, r = k - j, rows[j]
-            digits = ([(count, 0)] if count > 1 else []) + ([(C, rows[j + 1].unit - r.unit)] if C > 1 else []) or [(1, 0)]
+    def _wire(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
+              lead: tuple[tuple[int, int], ...] = ()) -> None:
+        """Units ``[at, at + count)`` read ``rows`` (each shifted by ``lead``'s digits, `_Feed`) as their port's rows
+        ``0 .. len(rows) - 1``: one pattern per run of rows from one writer's output at a constant unit step."""
+        lead_ = [d for d in (lead or ((count, 0),)) if d[0] > 1]
+        for j, C, unit_step in _runs_of(rows):
+            r = rows[j]
+            digits = lead_ + ([(C, unit_step)] if C > 1 else []) or [(1, 0)]
             self.wires.append(IF.Wire(tid, port, r.tid, r.out, at=at, radix=tuple(a for a, _ in digits), base=r.unit,
                                       step=tuple(s for _, s in digits), cut=(j, C) if len(rows) > 1 else (0, 1)))
-            j = k
 
     def settle(self) -> None:
         """Each feed's port cut (`_cut`) within the rows its reader has left, its rows gathered to the cut's (at its reader's
@@ -267,7 +316,10 @@ class _Builder:
         for f in self.feeds:
             d = self.cuts.get(f.tid, {}).get(f.port, 1)
             g, self.label = len(f.rows) // d, f.label
-            self._wire(f.tid, f.port, f.at, f.count, [self.gather(f.rows[i * g:(i + 1) * g]) for i in range(d)])
+            if g > 1 and any(s for _, s in f.lead):
+                raise Unexpressible(f"{f.tid} {f.port}: units each reading their own {len(f.rows)} rows through a cut of {d}, "
+                                    "a gather a unit")
+            self._wire(f.tid, f.port, f.at, f.count, [self.gather(f.rows[i * g:(i + 1) * g]) for i in range(d)], f.lead)
         for tid, fn in self.fns.items():
             if (n := _rows(fn, self.cuts.get(tid))) > self.grain.rows:
                 raise Unexpressible(f"{fn.id}: {n} rows in and out under its cuts {self.cuts.get(tid)}, past a unit's "
@@ -279,6 +331,17 @@ def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
     (`interface.unit_rows`)."""
     lay = IF.layout(fn)
     return len(lay.cut(cuts)) + len(lay.outs)
+
+
+def _field(fn: Any, lo: int, hi: int) -> tuple[str, int]:
+    """The output row of ``fn`` (its name and words) whose return leaves are exactly [lo, hi), refused where none is."""
+    ret = fn.signature()[1]
+    starts = [ret.field_offset(k) for k in range(len(ret.fields))] if isinstance(ret, Tuple) else [0]
+    starts.append(ret.leaves)
+    k = starts.index(lo) if lo in starts[:-1] else None
+    if k is None or starts[k + 1] != hi:
+        raise Unexpressible(f"{fn.id}: its return leaves [{lo}, {hi}) are not one of its output rows")
+    return IF.layout(fn).outs[k]
 
 
 def _cut(key: tuple[str, str], uses: dict[int, int], room: int, most: int) -> int:
@@ -293,9 +356,19 @@ def _cut(key: tuple[str, str], uses: dict[int, int], room: int, most: int) -> in
     return min(ok, key=lambda d: (sum(n * d for m, n in uses.items() if m > d), -d))
 
 
+@dataclass
+class _Keys:
+    """A layer's keys (or values) as its attention nodes read them: ``segs`` the word runs its positions so far are, ``rows``
+    each position's row a KV group, and ``blocks`` each full key block's gather a group."""
+    segs: list[tuple[str, Any, int, int]] = field(default_factory=list)
+    rows: list[tuple[Row, ...]] = field(default_factory=list)
+    blocks: dict[int, tuple[Row, ...]] = field(default_factory=dict)
+
+
 class _Program:
     """Slot ``slot``'s class Program lowered into ``b``'s units, its ingress row the system's ingress at the slot's anchor
-    (`WindowClass.anchor`): each node's output as the rows that hold it."""
+    (`WindowClass.anchor`): each node's output as the rows that hold it, ``(lo, hi, row)`` its words [lo, hi) as ``row`` and
+    the units after it, (hi - lo) / ``row.words`` rows of one output at consecutive units."""
 
     def __init__(self, b: _Builder, fn: Any, cls: WindowClass, name: str, slot: int) -> None:
         self.b, self.fn, self.cls, self.name, self.slot_index = b, fn, cls, name, slot
@@ -318,6 +391,7 @@ class _Program:
         self.outs: dict[int, list[tuple[int, int, Row]]] = {}
         self.words: dict[int, int] = {}
         self.gemms: dict[int, tuple[Any, tuple[Row, ...], int]] = {}
+        self.keys: dict[tuple[str, tuple[str, Any, int, int]], _Keys] = {}
         self.position = 0
         self.slot: Row | None = None
         self.occ: Row | None = None
@@ -348,10 +422,32 @@ class _Program:
             for a, b, r in self.outs[j]:
                 if b <= lo or a >= hi:
                     continue
-                if a < lo or b > hi:
-                    raise Unexpressible(f"{self.name}: node {j}'s words [{lo}, {hi}) cut its row {r} at [{a}, {b})")
-                out.append(r)
+                w = r.words
+                i0, i1 = (max(a, lo) - a) // w, -(-(min(b, hi) - a) // w)
+                if a + i0 * w < lo or a + i1 * w > hi:
+                    k = i0 if a + i0 * w < lo else i1 - 1
+                    raise Unexpressible(f"{self.name}: node {j}'s words [{lo}, {hi}) cut its row "
+                                        f"{Row(r.tid, r.unit + k, r.out, w)} at [{a + k * w}, {a + (k + 1) * w})")
+                out += [r] if b - a == w else [Row(r.tid, r.unit + i, r.out, w) for i in range(i0, i1)]
         return tuple(out)
+
+    def _split(self, refs: Refs, n: int) -> list[tuple[Row, ...]]:
+        """The rows each of ``refs``'s ``n`` equal word ranges reads (a node's heads or KV groups), refused where a row
+        crosses from one range into the next."""
+        rows = self.rows(refs)
+        w, rest = divmod(sum(r.words for r in rows), n)
+        out: list[tuple[Row, ...]] = []
+        cur: list[Row] = []
+        at = 0
+        for r in rows:
+            if rest or at % w + r.words > w:
+                raise Unexpressible(f"{self.name}: row {r} crosses from one of {n} ranges of {w} words into the next")
+            cur.append(r)
+            at += r.words
+            if at % w == 0:
+                out.append(tuple(cur))
+                cur = []
+        return out
 
     def weight(self, refs: Refs, words: int) -> int:
         """The first word of the one run of the weights record ``refs`` read, ``words`` long."""
@@ -448,44 +544,126 @@ class _Program:
             tid, u = self.b.unit(bind(node.fn.defn, **{**b, "N": m}), count)
             self.b.feed(tid, "x", u, count, xs)
             self.b.read(tid, "w", u, (count,), lo + s0 * K, (m * K,))
-            pieces += [(s0 + i * m, s0 + (i + 1) * m, Row(tid, u + i, "o0", m)) for i in range(count)]
+            pieces.append((s0, s0 + count * m, Row(tid, u, "o0", m)))
         self.outs[j] = pieces
         self.gemms[j] = (node.fn, xs, lo)
 
-    def _heads(self, node: Any, family: str, count: int) -> Any:
-        nodes = node.fn.body.nodes
-        fn = nodes[0].fn
-        if fn.name != family or any(m.form != "batch" or descriptor_id(m.fn) != descriptor_id(fn) for m in nodes) \
+    def _heads(self, fn: Any, family: str, count: int) -> Any:
+        nodes = fn.body.nodes
+        head = nodes[0].fn
+        if head.name != family or any(m.form != "batch" or descriptor_id(m.fn) != descriptor_id(head) for m in nodes) \
                 or sum(m.n for m in nodes) != count:
-            raise Unexpressible(f"{node.fn.id}: its body is not {count} heads of one {family} Definition")
-        return fn
+            raise Unexpressible(f"{fn.id}: its body is not {count} heads of one {family} Definition")
+        return head
+
+    def _each(self, tid: str, port: str, at: int, rowss: Sequence[tuple[Row, ...]], rep: int = 1) -> None:
+        """Units ``at + g·rep`` to ``at + (g + 1)·rep - 1`` read ``rowss[g]``: one feed where each group's rows are the first's
+        shifted (`_step`), else a feed a group."""
+        if (s := _step(rowss)) is None:
+            for g, rows in enumerate(rowss):
+                self.b.feed(tid, port, at + g * rep, rep, rows)
+        else:
+            self.b.feed(tid, port, at, len(rowss) * rep, rowss[0], ((len(rowss), s), (rep, 0)))
 
     def _RoPE(self, j: int, node: Any) -> None:
         H, D = node.fn.bindings["NHEADS"], node.fn.bindings["D"]
-        head = self._heads(node, "RoPEHead", H)
+        head = self._heads(node.fn, "RoPEHead", H)
         x, cs = node.args
         tid, u = self.b.unit(head, H)
-        for h in range(H):
-            self.b.feed(tid, "x", u + h, 1, self.rows(x.refs.slice(h * D, (h + 1) * D)))
+        self._each(tid, "x", u, self._split(x.refs, H))
         self.b.read(tid, "cs", u, (H,), self.weight(cs.refs, D), (0,))
-        self.outs[j] = [(h * D, (h + 1) * D, Row(tid, u + h, "o0", D)) for h in range(H)]
+        self.outs[j] = [(0, H * D, Row(tid, u, "o0", D))]
+
+    def _plan(self, fn: Any, NH: int) -> list[tuple[Any, list[tuple[str, tuple[str, tuple[Any, ...]]]]]]:
+        """``fn``'s heads as `Attention_v19`'s, read once a Definition (`_Builder.plans`): each Call of `AttentionHead_v19`'s
+        body in order with what each of its ports reads, ``("q", ())``, ``("k" | "v", (a, b))`` (keys [a, b)) or
+        ``("state", (i, out, words))`` (Call i's output row ``out``), the last Call's ``o0`` the head's output."""
+        key = descriptor_id(fn)
+        if key in self.b.plans:
+            return self.b.plans[key]
+        try:
+            head = self._heads(bind(AttentionV19, **fn.bindings), "AttentionHead", NH)
+            body = head.body
+        except (TypeError, ValueError, KeyError) as e:
+            raise Unexpressible(f"{fn.id}: its heads are not `AttentionHead_v19`'s ({e})") from None
+        params, D = [p for p, _ in head.signature()[0]], fn.bindings["D"]
+        plan = []
+        for i, n in enumerate(body.nodes):
+            ports = []
+            for (port, _), a in zip(IF.layout(n.fn).rows, n.args):
+                (space, idx, lo, hi), *more = runs(a.refs)
+                name = params[idx] if space == "p" else None
+                if more or n.form != "call":
+                    src = None
+                elif name == "q" and (lo, hi) == (0, D):
+                    src = ("q", ())
+                elif name in ("k", "v") and lo % D == hi % D == 0:
+                    src = (name, (lo // D, hi // D))
+                elif space == "n" and 0 <= idx < i:
+                    src = ("state", (idx, *_field(body.nodes[idx].fn, lo, hi)))
+                else:
+                    src = None
+                if src is None:
+                    raise Unexpressible(f"{head.id}: Call {i} ({n.fn.id}) reads {runs(a.refs)} as {port}, not a head's query, "
+                                        "a key range or an earlier Call's output row")
+                ports.append((port, src))
+            plan.append((n.fn, ports))
+        last = body.nodes[-1].fn
+        if runs(body.ret) != [("n", len(body.nodes) - 1, 0, last.signature()[1].leaves)] or \
+                IF.layout(last).outs != (("o0", D),):
+            raise Unexpressible(f"{head.id}: its output is not its last Call's one row of {D} words")
+        self.b.plans[key] = plan
+        return plan
+
+    def _cache(self, port: str, c: Any, T: int, KVH: int) -> _Keys:
+        """The layer's ``port`` (keys or values) at T keys: its earlier nodes' T - 1 and position T - 1's row a KV group
+        (`_Builder.gathers`), refused unless ``c`` is those T - 1 and one more."""
+        segs = self.segments(c.refs)
+        ks = self.keys.setdefault((port, segs[0]), _Keys())
+        if len(ks.rows) != T - 1 or segs[:len(ks.segs)] != ks.segs:
+            raise Unexpressible(f"{self.name}: an attention's {port} of {T} keys is not its layer's {len(ks.rows)} earlier keys "
+                                "and one more")
+        n = c.refs.count // T
+        ks.rows.append(self.b.gathers(self._split(c.refs.slice((T - 1) * n, T * n), KVH)))
+        ks.segs = segs
+        return ks
+
+    def _block(self, ks: _Keys, a: int, b: int, BN: int) -> tuple[Row, ...]:
+        """Keys [a, b)'s row a KV group: one key's own, a full block's gathers (made when it fills, then every later
+        position's) or the first block's own."""
+        if b - a == 1:
+            return ks.rows[a]
+        full = b - a == BN and a % BN == 0
+        if full and a // BN in ks.blocks:
+            return ks.blocks[a // BN]
+        rows = self.b.gathers([tuple(r[g] for r in ks.rows[a:b]) for g in range(len(ks.rows[a]))])
+        if full:
+            ks.blocks[a // BN] = rows
+        return rows
 
     def _Attention(self, j: int, node: Any) -> None:
         s = node.fn.bindings
-        T, NH, KVH, D = s["T"], s["NH"], s["KVH"], s["D"]
-        if T > KEYS:
-            raise Unexpressible(f"{node.fn.id}: a head of {T} keys, past the {KEYS} one `AllGather_v1` reads until v19's "
-                                "per-key-block cut is wired")
-        head = self._heads(node, "AttentionHead", NH)
+        if node.fn.version not in (18, 19):
+            raise Unexpressible(f"{node.fn.id}: the window's lowering cuts `Attention_v18`'s heads as v19's, not "
+                                f"v{node.fn.version}'s")
+        T, NH, KVH, D, BN = s["T"], s["NH"], s["KVH"], s["D"], s["BN"]
+        plan = self._plan(node.fn, NH)
         q, kc, vc = node.args
-        tid, u = self.b.unit(head, NH)
-        for h in range(NH):
-            g = h // (NH // KVH)
-            self.b.feed(tid, "q", u + h, 1, self.rows(q.refs.slice(h * D, (h + 1) * D)))
-            for port, c in (("k", kc), ("v", vc)):
-                keys = [self.b.gather(self.rows(c.refs.slice((t * KVH + g) * D, (t * KVH + g + 1) * D))) for t in range(T)]
-                self.b.feed(tid, port, u + h, 1, (self.b.gather(keys),))
-        self.outs[j] = [(h * D, (h + 1) * D, Row(tid, u + h, "o0", D)) for h in range(NH)]
+        keys = {"k": self._cache("k", kc, T, KVH), "v": self._cache("v", vc, T, KVH)}
+        qs = self._split(q.refs, NH)
+        calls: list[tuple[str, int]] = []
+        for fn, ports in plan:
+            tid, u = self.b.unit(fn, NH)
+            for port, (kind, x) in ports:
+                if kind == "q":
+                    self._each(tid, port, u, qs)
+                elif kind == "state":
+                    ctid, cu = calls[x[0]]
+                    self.b.feed(tid, port, u, NH, (Row(ctid, cu, x[1], x[2]),), ((NH, 1),))
+                else:
+                    self._each(tid, port, u, [(r,) for r in self._block(keys[kind], *x, BN)], NH // KVH)
+            calls.append((tid, u))
+        self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
 
     def _TokenSelect(self, j: int, node: Any) -> None:
         V = node.fn.bindings["V"]
