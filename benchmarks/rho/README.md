@@ -8,7 +8,8 @@ measured), at some choice of every parameter, and of seeing how it moves.
 ~~~sh
 uv run python benchmarks/rho/run.py                                  # every scenario: ρ's bracket, its terms, tornado, dangers
 uv run python benchmarks/rho/run.py --scenario onsite-h200-kimi --set regime.onsite.residual_bits=4e10
-verity bench rho                                                      # the same, as a runner
+uv run python benchmarks/rho/run.py --figures /tmp/rho-figs             # and the figures (matplotlib)
+verity bench rho                                                      # the same, as a runner (with $OUT: rho.md, rho.json, figures/)
 ~~~
 
 ## The shape
@@ -31,9 +32,9 @@ picks its algorithm, so the scenario's ρ is the least over the families it may 
 
 Read a result as: `ρ ∈ [lo, hi]`, with `g` beside it and the **monitored share** `(1 − d) g / (d + (1 − d) g)` (the
 part of the adversary's training done on monitored compute: the protocols do their job for an algorithm when it is
-small, `g ≪ d`). Its **ladder** gives `lo` admitting bounds by status: proved, proved under named premises
-(`conditional`), and with drafts. Its **operating points** (`operating.py`) turn ρ into time: an optimizer step or a
-pretraining run, and exfiltrating a reference through side channels.
+small, `g ≪ d`). `analysis.upto(status)` gives `lo` from only the bounds and cuts at least as strong as a status:
+proved, proved under named premises (`conditional`), or with drafts. Its **operating points** (`operating.py`) turn ρ
+into time: an optimizer step or a pretraining run, and exfiltrating a reference through side channels.
 
 ## The hierarchy
 
@@ -74,7 +75,8 @@ implementation (or different numbers in `data/`), never an edit to the layers ar
 | regimes | `regimes.py` | `Regime.partition(Context) → Partition`, with `Policy` (Γ, k) | unmonitored, remote, onsite | what the protocols certify, and how |
 | params | `params.py` | `Registry`: dotted keys over `data/*.toml`, `override`, `fields` | — | every number, with `low`/`high`, `source`, `status` |
 | scenario | `scenario.py` | `build`, `evaluate → Result` (per family: each bound, all bounds at once, each attack) | `data/scenarios.toml` | a choice per layer |
-| analysis | `analysis.py` | `sweep`, `tornado`, `threshold`, `dangers`, `phase` over any keys | — | — |
+| analysis | `analysis.py` | over any keys: `sweep`, `tornado`, `threshold`, `dangers` and `rescues`, `corner` (every range at its worse end), `margins`, `phase` and `frontier`, `attribution` (what sets ρ), `upto(status)` | — | — |
+| figures | `figures.py` | `render`: each class's per-block ρ against k, brackets by status, ρ against d, phase maps, tornado, vulnerability, corner (PNG plus the JSON plotted) | — | — |
 | Lean status | `lean.py` | `status(name)`, `weakest(cites)` from the locks | — | — |
 | operating points | `operating.py` | `work`, `exfil`, `points`: ρ as time at the registry's `work.*` and `exfil.*` references | — | a reference |
 

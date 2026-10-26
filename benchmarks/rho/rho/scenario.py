@@ -13,8 +13,7 @@ adversary picks its family, so the scenario's ρ lies in `[min_A lo_A, min_A hi_
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from rho import hardware, instances, lean, regimes
 from rho.attacks import ATTACKS
@@ -82,10 +81,6 @@ class Estimate:
         return self.slowdown.rho if self.slowdown else math.nan
 
 
-#: The statuses a bound can have, strongest first; a ladder step admits its own and every stronger one.
-LADDER = ("proved", "conditional", "draft")
-
-
 @dataclass(frozen=True)
 class FamilyResult:
     family: str
@@ -93,9 +88,6 @@ class FamilyResult:
     bounds: tuple[Estimate, ...]
     combined: Estimate
     attacks: tuple[Estimate, ...]
-    #: the guaranteed slowdown admitting bounds up to each status (`LADDER`): what is proved, what is proved under
-    #: named premises, and what a draft adds
-    ladder: Mapping[str, Estimate] = field(default_factory=dict)
 
     @property
     def lo(self) -> float:
@@ -168,10 +160,8 @@ def evaluate(s: Scenario) -> Result:
         p = fam.profile(s.model, s.run)
         bounds = [_estimate(b, p, partition, block) for b in s.bounds]
         combined = _combine(s.bounds, bounds, p, partition, block)
-        ladder = {step: _combine(s.bounds, [(e, a) if e.status in LADDER[:i + 1] else (e, None) for e, a in bounds],
-                                 p, partition, block) for i, step in enumerate(LADDER)}
         out.append(FamilyResult(fam.name, p, tuple(e for e, _ in bounds), combined,
-                                tuple(_estimate(a, p, partition, block)[0] for a in s.attacks), ladder))
+                                tuple(_estimate(a, p, partition, block)[0] for a in s.attacks)))
     return Result(s, tuple(out))
 
 

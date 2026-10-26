@@ -1,7 +1,7 @@
 import math
 
 import pytest
-from rho import classes, lean
+from rho import analysis, classes, lean
 from rho.attacks import ATTACKS
 from rho.classes import CLASSES
 from rho.params import Registry
@@ -48,7 +48,7 @@ def test_every_lean_citation_is_in_a_lock():
 
 @pytest.mark.parametrize("name", REG.names("scenario"))
 def test_admitting_weaker_statuses_never_lowers_the_guarantee(name):
-    for f in evaluate_named(REG, name).families:
-        rhos = [f.ladder[s].rho for s in ("proved", "conditional", "draft")]
-        assert rhos == sorted(rhos) and math.isclose(rhos[-1], f.lo)
-        assert 0 <= f.combined.slowdown.monitored <= 1
+    r = evaluate_named(REG, name)
+    rhos = [analysis.upto(s)(r) for s in ("proved", "conditional", "draft", "absent")]
+    assert rhos == sorted(rhos) and math.isclose(rhos[-1], r.lo)
+    assert all(0 <= f.combined.slowdown.monitored <= 1 for f in r.families)

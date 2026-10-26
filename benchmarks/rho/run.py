@@ -19,10 +19,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from rho import analysis
+from rho import analysis, operating
 from rho.figures import jsonable
 from rho.params import Registry
-from rho.scenario import Estimate, Result
+from rho.scenario import YEAR, Estimate, Result, Scenario
 
 
 def fmt(x: float) -> str:
@@ -39,18 +39,44 @@ def row(e: Estimate) -> dict:
             "terms": dict(s.terms) if s else {}}
 
 
-def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Term]) -> list[str]:
+def when(s: Scenario, rho: float) -> str:
+    return operating.human(s.years(rho) * YEAR)
+
+
+def monitored(r: Result) -> float:
+    """The share of the adversary's training done on monitored compute, for the family the adversary picks."""
+    best = min(r.families, key=lambda f: f.lo, default=None)
+    return best.combined.slowdown.monitored if best and best.combined.slowdown else math.nan
+
+
+def operating_md(points: list[operating.Point]) -> list[str]:
+    out = []
+    for kind, head in (("work", "work"), ("exfil", "exfiltration through side channels")):
+        rows = [p for p in points if p.kind == kind]
+        if rows:
+            cols = list(rows[0].seconds)
+            out += [f"Operating points, {head}:", "", "| reference | " + " | ".join(cols) + " |",
+                    "|---|" + "---|" * len(cols)]
+            out += [f"| {p.name} | " + " | ".join(operating.human(p.seconds[c]) for c in cols) + " |" for p in rows]
+            out.append("")
+    return out
+
+
+def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Term],
+                points: list[operating.Point]) -> list[str]:
     s = r.scenario
     c = s.context
     setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (dark share {c.fleet.dark:g}), policy "
                f"{c.policy.name} (Γ = {c.policy.gamma:.3g} FLOP, k = {c.policy.k:.3g} bit), {c.horizon.name}; target "
-               f"{s.run.name} ({s.run.target(s.model):.3g} FLOP, {fmt(s.years(1.0))} years unencumbered).")
+               f"{s.run.name} ({s.run.target(s.model):.3g} FLOP, {when(s, 1.0)} unencumbered).")
     out = [f"## {s.name}", "", setting, "",
-           f"**ρ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**: {fmt(s.years(r.lo))} to {fmt(s.years(r.hi))} years to the target.", "",
+           f"**ρ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**: {when(s, r.lo)} to {when(s, r.hi)} to the target.", "",
            "Guaranteed ρ from only the bounds and cuts at least as strong as: "
            + ", ".join(f"{st} {fmt(v)}" for st, v in by_status.items()) + ".", "",
            "What sets ρ (each part's share of the adversary's rate `d + (1 − d) g`, and the most ρ can be while it "
-           "remains): " + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", ""]
+           "remains): " + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
+           f"The adversary does {monitored(r):.1%} of its training on monitored compute.", ""]
+    out += operating_md(points)
     for f in r.families:
         out += [f"### {f.family} (m = {fmt(f.profile.efficiency)})", "",
                 "| argument | side | status | ρ | g | ρ in one declared block | binding cut |",
@@ -123,15 +149,16 @@ def main() -> None:
     targets = sorted(args.target or [10.0, 100.0])
 
     md: list[str] = []
-    summary = ["# ρ", "", "| scenario | ρ ∈ | from conditional or stronger bounds and cuts | set by | at the corner |",
-               "|---|---|---|---|---|"]
+    summary = ["# ρ", "", "| scenario | ρ ∈ | from conditional or stronger bounds and cuts | on monitored compute | "
+               "set by | at the corner |", "|---|---|---|---|---|---|"]
     regions = ["## Regions where ρ falls below target", ""]
     record: dict = {"targets": targets, "scenarios": {}}
     for name in names:
         r = analysis.result(reg, name)
         by_status = {st: analysis.at(reg, name, None, analysis.upto(st)) for st in analysis.STATUSES[:3]}
         terms = analysis.attribution(r)
-        md += scenario_md(r, by_status, terms)
+        points = operating.points(reg, r)
+        md += scenario_md(r, by_status, terms, points)
         swings = analysis.tornado(reg, name)
         md += ["Tornado (guaranteed ρ at each parameter's plausible ends):", "",
                "| parameter | low | high | ρ at low | ρ at high | decades |", "|---|---|---|---|---|---|"]
@@ -143,10 +170,12 @@ def main() -> None:
         corner = analysis.corner(reg, name, swings=swings)
         regions += regions_md(name, r.lo, by_status, corner, dangers, rescues)
         summary.append(f"| {name} | [{fmt(r.lo)}, {fmt(r.hi)}] | {fmt(by_status['conditional'])} | "
-                       + (f"{terms[0].name} {terms[0].share:.0%}" if terms else "") + f" | {fmt(corner.rho)} |")
+                       f"{monitored(r):.1%} | " + (f"{terms[0].name} {terms[0].share:.0%}" if terms else "")
+                       + f" | {fmt(corner.rho)} |")
         record["scenarios"][name] = {
             "lo": r.lo, "hi": r.hi, "years_lo": r.scenario.years(r.lo), "lo_by_status": by_status,
-            "attribution": [vars(t) for t in terms],
+            "attribution": [vars(t) for t in terms], "monitored": monitored(r),
+            "operating": [{"name": p.name, "kind": p.kind, "seconds": dict(p.seconds)} for p in points],
             "families": {f.family: {"lo": f.lo, "hi": f.hi, "contradictions": list(f.contradictions),
                                     "estimates": [row(e) for e in f.bounds + (f.combined,) + f.attacks]}
                          for f in r.families},
