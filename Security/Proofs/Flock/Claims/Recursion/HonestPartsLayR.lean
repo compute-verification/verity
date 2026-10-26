@@ -89,12 +89,10 @@ theorem runVstar_getD_staged {W : Type} (H : Msg → Msg) (I : Claims.Recursion.
     (hs : s < nS x) :
     (Claims.Recursion.runVstar H (deployRec I.V ivScope b) I P x ω r).getD s [] =
       staged b.st x ((Claims.run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x)) s := by
-  obtain ⟨_, i, spec, sts, he, hsu, -⟩ := stagedPart_run H I.V b.st x P ω r hacc hs
+  obtain ⟨_, i, spec, sts, -, hsu, -⟩ := stagedPart_run H I.V b.st x P ω r hacc hs
   show (vstar b.st x ((Claims.run H P (V I.V b.st) x ω r).msgs.take (I.V.k (xIOf x) + kS x))).getD s [] = _
   rw [vstar_getD _ _ _ hs]
-  refine vstarAt_staged hN ?_
-  rw [he, hsu]
-  rfl
+  exact vstarAt_staged hN (by rw [hsu]; rfl)
 
 /-- **Part `s`'s circuit accepts on the honest outer run, at the layout of record** (non-vacuity of `RecursiveKSAt`'s
 `DecompB` premise, the parts' half). At the deployed recursive record over `DeployedR.layR elem` with the coin server's
