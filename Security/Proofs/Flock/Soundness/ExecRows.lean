@@ -652,7 +652,8 @@ theorem stackPlaceAt_comp (i : Fin (R.stack k).nComp) :
   · rw [dif_neg hj]
     have hl : stackLocal R k ((R.stack k).comp i).val = R.nIn + (i.val % (R.nComp + 1) - 1) := by
       rw [hc, stackLocal, if_neg h1, Nat.add_sub_cancel_left, if_neg hj]
-    simp only [posInAt, hcp, hl, Rows.comp]
+    simp only [posInAt, hcp, hl]
+    rfl
 
 /-- **An instance's rows placed in a statement through `pos`**: `placement_stack` with copy `u`'s column `c` at
 `base u + pos c`. -/
