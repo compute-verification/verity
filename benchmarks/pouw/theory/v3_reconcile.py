@@ -507,12 +507,16 @@ def served(co: Codes, out: dict) -> None:
                       + " ".join(f"{lk:6.2%}" for lk in rnd))
 
 
-def v2(co: Codes, out: dict) -> None:
-    """D5 v2 (`d5_v2.py` beside --d5's public_best.py) at CMP-118's static caps, its own job (fast schemes, lookups):
-    the X at which the tensor pipe gets a price in the hull's period (D5 v2's X0) and in the honest menu's
-    (PROTO-DESIGN-4's mu°), c = pub/H at each period's duals just past its X0, the world model's own beside load in
-    nofold's period (QKᵀ at 1 + SOFTMAX_PASS, the indexer) against D5 v2's `world_x`, D5 v2's c_inc at X = 1 against
-    the same makespans taken here, and pub_sha as named against the LP's."""
+def v2(co: Codes, out: dict, scales=(("D5's schedule", None), ("U13 one-lane", 35.4))) -> None:
+    """D5 v2 (`d5_v2.py` beside --d5's public_best.py) at CMP-118's static caps, its own job (fast schemes, lookups),
+    against the same LPs solved here. For each dual price mu of a period's rows (summing to 1 over the capacities),
+    weak duality gives pub(mu) <= T_hull and H(mu) <= T_H, with equality at each LP's own duals, so in the job
+    c(mu°) <= T_hull / T_H <= c(mu_hull): the honest menu's duals (PROTO-DESIGN-4's mu°) and the hull's bracket the
+    makespan ratio. Per shape: X0 (MAC-times of other s8 MMA a credited MAC before the tensor pipe has a price) in each
+    period; the job's c at both ends and its makespan ratio; the served c at both ends just past each X0; c_inc at
+    X = 1 (D5 v2's | here); D5 v2's own X0, job c and served c beside. Then the world's own beside load in nofold's
+    period (QKᵀ at 1 + SOFTMAX_PASS, the indexer) against `world_x`, and pub_sha as named against the LP's. On the
+    H200 the job is also priced with in-model SHA-512 at U13's 35.4 SM-clocks."""
     nf = co.nf["v3"]
     saved = sys.modules.get("public_best")
     sys.modules["public_best"] = co.d5
@@ -522,49 +526,66 @@ def v2(co: Codes, out: dict) -> None:
         sys.modules["public_best"] = saved
     pb = co.d5
 
-    def honest(c, j, N, X):
-        return pb.price_methods(c, j["methods"][:1], j["L"], N, pb.TOKENS, beside=True, items=(j["sha"],),
-                                lookups=True, extra_fixed=D.other_loads(c, X))
+    def lp(c, j, N, X, honest, beside=True):
+        ms = j["methods"][:1] if honest else j["methods"]
+        return pb.price_methods(c, ms, j["L"], N, pb.TOKENS, beside=beside, items=(j["sha"],), lookups=True,
+                                extra_fixed=D.other_loads(c, X))
 
-    def x0_honest(c, j, N):
-        lo, hi = 0.0, 8.0 * j["route"].c
-        if D.tensor_price(c, honest(c, j, N, 0.0).mu) > 1e-12:
+    def x0(c, j, N, honest):
+        def priced(X):
+            return D.tensor_price(c, lp(c, j, N, X, honest).mu) > 1e-12
+        if priced(0.0):
             return 0.0
+        lo, hi = 0.0, j["route"].c
+        while not priced(hi):
+            lo, hi = hi, 2 * hi
         for _ in range(30):
             mid = (lo + hi) / 2
-            lo, hi = (mid, hi) if D.tensor_price(c, honest(c, j, N, mid).mu) <= 1e-12 else (lo, mid)
+            lo, hi = (mid, hi) if not priced(mid) else (lo, mid)
         return hi
 
-    wx = D.world_x(nf)
-    print("\n== D5 v2 at CMP-118's caps: X0 (MAC-times of other s8 MMA a credited MAC) in the hull's period and the "
-          "honest menu's; c = pub/H at each period's duals just past its X0; c_inc at X = 1, D5 v2's | here")
+    def c_at(c, j, N, X, honest):
+        return D.at_prices(c, j, N, lp(c, j, N, X, honest).mu, True)["c"]
+
+    best = D.sha_rows()
+    print("\n== D5 v2 at CMP-118's caps against the LPs here. job: c at mu° / makespan ratio / c at the hull's duals; "
+          "served: X0 and c just past it, honest period (mu°) | hull's period; c_inc at X = 1, D5 v2's | here; "
+          "D5 v2's own X0, job c, served c")
     for card, c in D.CARDS.items():
         for model, shapes in D.SHAPES.items():
-            own = wx.get(model)
-            if own:
-                x_nf, x_d5 = own["qk"] * (1 + nf.SOFTMAX_PASS) + own["indexer"], own["qk"] + own["indexer"]
-                print(f"  {card:13} {model:16} own beside load: nofold's period {x_nf:.4f}, D5 v2's world_x {x_d5:.4f}")
             for K, N, _ in shapes:
                 t, Lp = D.T_V3[card], D.V3_STATIC[card][K, N]
-                _, j = D.job(nf, card, K, N, t, Lp)
-                eps = 1e-4 * j["route"].c
-                xh, xo = D.first_tensor_bound(c, j, N, lookups=True), x0_honest(c, j, N)
-                c_hull = D.at_prices(c, j, N, D.period(c, j, N, xh + eps).mu, True)["c"]
-                c_hon = D.at_prices(c, j, N, honest(c, j, N, xo + eps).mu, True)["c"]
-                c_hon_h = D.at_prices(c, j, N, honest(c, j, N, xh + eps).mu, True)["c"]
-                inc = D.increment(c, j, N, 1.0, True)
-                o = D.other_loads(c, 1.0)
-                t0 = c.s8 * max(sum(a * o.get(r, 0.0) for r, a in wt.items()) / cp for _, wt, cp in pb._rows(c))
-                kw = dict(items=(j["sha"],), lookups=True, extra_fixed=o)
-                mine = ((pb.price_methods(c, j["methods"], j["L"], N, pb.TOKENS, beside=True, **kw).c - t0)
-                        / (pb.price_methods(c, j["methods"][:1], j["L"], N, pb.TOKENS, beside=False, **kw).c - t0))
-                out["v2"].append(dict(card=card, model=model, K=K, N=N, t=t, Lp=Lp, x0_hull=xh, x0_honest=xo,
-                                      c_hull=c_hull, c_honest=c_hon, c_honest_at_hull_x0=c_hon_h,
-                                      c_inc_d5=inc["c_inc"], c_inc=mine))
-                print(f"  {card:13} {model:16} {K:5}x{N:<6} L′ {Lp:4}: X0 hull {xh:.4f} honest {xo:.4f} | c "
-                      f"hull's duals {c_hull:.4f} mu° {c_hon:.4f} (at the hull's X0 {c_hon_h:.4f}) | c_inc(1) "
-                      f"{inc['c_inc']:.4f} | {mine:.4f}")
-    for card, s in D.sha_rows().items():
+                for tag, clocks in scales if card == "H200" else scales[:1]:
+                    sc = 1.0 if clocks is None else clocks / best[card]["d5_best"][1]
+                    _, j = D.job(nf, card, K, N, t, Lp, sha_scale=sc)
+                    eps = 1e-4 * j["route"].c
+                    T_hull, T_H = j["route"].c, lp(c, j, N, 0.0, True, beside=False).c
+                    job = (c_at(c, j, N, 0.0, True), T_hull / T_H, c_at(c, j, N, 0.0, False))
+                    xo, xh = x0(c, j, N, True), x0(c, j, N, False)
+                    served = (c_at(c, j, N, xo + eps, True), c_at(c, j, N, xh + eps, False))
+                    row = dict(card=card, model=model, K=K, N=N, t=t, Lp=Lp, sha=tag, job=job, x0=(xo, xh),
+                               served=served)
+                    if clocks is None:
+                        a = D.analyse(nf, card, K, N, t, Lp, sens=(), fixed=(1.0,))
+                        o = D.other_loads(c, 1.0)
+                        t0 = c.s8 * max(sum(w * o.get(r, 0.0) for r, w in wt.items()) / cp
+                                        for _, wt, cp in pb._rows(c))
+                        inc = (lp(c, j, N, 1.0, False).c - t0) / (lp(c, j, N, 1.0, True, beside=False).c - t0)
+                        row.update(c_inc=(a["fixed"][1.0]["c_inc"], inc), d5=(a["served"]["X0_macs"], a["job"]["c"],
+                                                                             a["served"]["c"]))
+                        tail = (f" | c_inc(1) {row['c_inc'][0]:.4f} | {inc:.4f} | D5 v2: X0 {row['d5'][0]:.4f} job "
+                                f"{row['d5'][1]:.4f} served {row['d5'][2]:.4f}")
+                    else:
+                        tail = ""
+                    out["v2"].append(row)
+                    print(f"  {card:13} {model:16} {K:5}x{N:<6} L′ {Lp:4} {tag:14}: job {job[0]:.4f} / {job[1]:.4f} / "
+                          f"{job[2]:.4f} | served X0 {xo:.4f} c {served[0]:.4f} | X0 {xh:.4f} c {served[1]:.4f}"
+                          + tail)
+    for model, own in D.world_x(nf).items():
+        x_nf, x_d5 = own["qk"] * (1 + nf.SOFTMAX_PASS) + own["indexer"], own["qk"] + own["indexer"]
+        print(f"  {model:16} own beside load a credited MAC: nofold's period {x_nf:.4f}, D5 v2's world_x {x_d5:.4f}")
+        out["v2"].append(dict(model=model, beside_nofold=x_nf, beside_world_x=x_d5))
+    for card, s in best.items():
         print(f"  pub_sha.{card.replace(' ', '')}: named {s['model']} SM-clocks; the LP's schedule {s['d5_best'][0]} "
               f"{s['d5_best'][1]:.2f}")
         out["v2"].append(dict(card=card, pub_sha_named=s["model"], pub_sha_lp=s["d5_best"][1]))
