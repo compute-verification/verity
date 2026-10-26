@@ -103,12 +103,25 @@ theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × Byt
 theorem domOf_eq_of_collides_false {c : Circuit} {pub : Public} {nl : Nat} (h : collides c pub nl = false)
     {q q' : Nat} (hlt : q' < q) (hq : q < c.ports.size) (he : rootOf c pub nl q' = rootOf c pub nl q) :
     domOf c q' = domOf c q := by
-  unfold collides collidesWith collidesIn at h
-  simp only [List.any_eq_false, List.mem_range, Bool.and_eq_true, decide_eq_true_eq, not_and] at h
   have hq' : q' < c.ports.size := Nat.lt_trans hlt hq
-  have := h q hq q' hlt
-  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range, hq, hq', ↓reduceIte,
-    Option.map_some, Option.getD_some] at this
-  exact Classical.byContradiction fun hd => this he hd
+  have get : ∀ i, i < c.ports.size →
+      ((Array.range c.ports.size).map (rootWith Sha512.hash c pub nl)).getD i ByteArray.empty = rootOf c pub nl i := by
+    intro i hi
+    have hs : i < ((Array.range c.ports.size).map (rootWith Sha512.hash c pub nl)).size := by simpa using hi
+    first
+      | (unfold Array.getD; rw [dif_pos hs]; simp [rootOf])
+      | simp [Array.getD_eq_getD_getElem?, hi, rootOf]
+      | simp [hi, rootOf]
+  refine Classical.byContradiction fun hd => ?_
+  have hx : collides c pub nl = true := by
+    unfold collides collidesWith collidesIn
+    rw [List.any_eq_true]
+    refine ⟨q, List.mem_range.2 hq, ?_⟩
+    rw [List.any_eq_true]
+    refine ⟨q', List.mem_range.2 hlt, ?_⟩
+    rw [get q' hq', get q hq, he]
+    simp [hd]
+  rw [hx] at h
+  cases h
 
 end Flock.PortRoots
