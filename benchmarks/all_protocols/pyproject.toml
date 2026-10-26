@@ -1,0 +1,18 @@
+# `verity bench all-protocols` (run.sh, verity_all_protocols). Not a package: its tests run in the workspace environment, with
+# this directory on their path.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `verity`: the legs' protocols, the core answer's decoder (`pouw.core_check`) and onsite's component list
+# (`CoreOnsite.lean`); `legs`: the leg files the table loads, kept as an input when a lane's leg tests make it a nested
+# suite; `integrations/torch_loop`: the loop each period serves; `benchmarks/prove_path/records_audit.py`,
+# `benchmarks/one_stage` and `verity_numerical.bench`: the integrity leg's audit, which the opt-in end-to-end test runs.
+inputs = ["verity", "benchmarks/all_protocols/legs", "integrations/torch_loop", "benchmarks/prove_path/records_audit.py",
+          "benchmarks/one_stage", "benchmarks/census/deployments.json",
+          "benchmarks/numerical/python/verity_numerical/__init__.py",
+          "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
+          "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
+          "benchmarks/numerical/python/verity_numerical/bench/templates.py"]

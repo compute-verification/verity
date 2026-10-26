@@ -3380,9 +3380,10 @@ using JcSmem = WarpSmemX;
 using JcSmem = WarpSmem;
 #endif
 
-// unit gu of h1umjc's order, under RC
+// unit gu of h1umjc's order, under RC (and H1U_JRY's digits, as h1umjc reads them)
+template <class Sm>
 __device__ __forceinline__ void h1umjc_one(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
-                                           const uint8_t* __restrict__ live, u32 gu, WarpSmem& S) {
+                                           const uint8_t* __restrict__ live, u32 gu, Sm& S) {
   u32 lo = 0, hi = ncalls;
   while (hi - lo > 1) {
     const u32 mid = (lo + hi) >> 1;
@@ -3392,11 +3393,11 @@ __device__ __forceinline__ void h1umjc_one(const UCallR* __restrict__ calls, u32
   const UCallR c = calls[lo];
   const u32 u = jswz_unit(c, gu - c.u0, M);
   if (c.md == 3)
-    h1u_unit<3, false, false, false, false, false, true, true>(jap_a(c, M, true), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
-                                                               OneOut{}, u, S);
+    h1u_unit<3, false, false, false, false, false, true, true, (bool)H1U_JRY>(
+        jap_a(c, M, true), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u, S);
   else
-    h1u_unit<2, false, false, false, false, false, true, true>(jap_a(c, M, true), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws,
-                                                               OneOut{}, u, S);
+    h1u_unit<2, false, false, false, false, false, true, true, (bool)H1U_JRY>(
+        jap_a(c, M, true), c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u, S);
 }
 
 #if H1U_JM2
@@ -3692,7 +3693,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc_sm(const UCallR* 
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
   if (!sm_keep<CAP, H1U_JCTA != 0>(smid, q, den, cap, next)) return;
-  __shared__ WarpSmem smem[JM2_SM * WARPS];
+  __shared__ JcSmem smem[JM2_SM * WARPS];
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = jm2_items(calls[ncalls].u0, M);
   if constexpr (H1U_JCTA) {
     __shared__ u32 claim;
@@ -3804,8 +3805,8 @@ extern "C" int kh_units_multi_j10rc(const void* calls, unsigned ncalls, unsigned
   return cudaGetLastError() == cudaSuccess ? 0 : 3;
 }
 
-// kh_units_multi_j10rc's blocks, then its units on q / den of the SMs (h1umjc_sm; kh_units_multi_j10r_sm's grid and
-// counter): the blocks' launches take any SM, as kh_units_multi_j10r_sm's rows do
+// kh_units_multi_j10rc's blocks (and H1U_JRY's digits), then its units on q / den of the SMs (h1umjc_sm;
+// kh_units_multi_j10r_sm's grid and counter): the blocks' launches take any SM, as kh_units_multi_j10r_sm's rows do
 extern "C" int kh_units_multi_j10rc_sm(const void* calls, unsigned ncalls, unsigned units, unsigned M, const void* live,
                                        unsigned q, unsigned den, void* next, void* stream) {
   if (!ncalls || ncalls > 65535 || M % 32 || !q || q > den || den > SMQ_DEN_MAX || !next) return 2;
@@ -3818,6 +3819,10 @@ extern "C" int kh_units_multi_j10rc_sm(const void* calls, unsigned ncalls, unsig
   cudaStream_t s = (cudaStream_t)stream;
   jr_rows(calls, ncalls, M, live, 1, s);
   h1jr_cols<<<dim3(H1U_JCOLX, ncalls), 256, 0, s>>>((const UCallR*)calls, M);
+#if H1U_JRY
+  h1jr_ady<<<dim3((M / 32 + JWARPS - 1) / JWARPS, ncalls), 32 * JWARPS, 0, s>>>((const UCallR*)calls, M,
+                                                                              (const uint8_t*)live);
+#endif
   if (cudaMemsetAsync(next, 0, sizeof(u32), s) != cudaSuccess) return 3;
   h1umjc_sm<false><<<2u * (unsigned)per * (unsigned)sms, 32 * WARPS, 0, s>>>((const UCallR*)calls, ncalls, M,
                                                                             (const uint8_t*)live, q, den, (u32*)next, 0);

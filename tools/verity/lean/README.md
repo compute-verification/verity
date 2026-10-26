@@ -2,8 +2,8 @@
 
 One audit for every Lake package (`python tools/verity/lean/check.py --all --build`), which `check` runs on the packages whose inputs
 changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_audit.py` (the lean-audit step: which
-packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, and a lane's fast path to its
-records) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
+packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, a lane's fast path to its
+records, and its edit loop, `--try`) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
 toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
 `Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
@@ -37,6 +37,13 @@ python tools/verity/lean/check.py --lift LIFTS.json PKG  write each guarantee {"
 python tools/verity/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
+
+A lane's edit loop is `verity lean try FILE [--on NODE]`: through `research run` (default vy-nebius-cpu-1's `research` pool) it runs
+`lean_changed.py --try FILE` on this checkout, its uncommitted edits included, which takes one of the node's `build` Lean slots and
+that slot's tree, the one `--records` keeps warm, syncs the closure of the package that owns FILE and its dependencies there, runs
+`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`, and prints Lean's output with the
+run's wall time, exiting with lean's status. It never runs this audit and never writes a record: `--records PKG --update` is for the
+lock and the mark only (`lean_changed.py`'s docstring).
 
 ## What it checks
 
@@ -245,7 +252,13 @@ installs it first, so a machine without elan works), must pass clean and fail on
   acceptance holds under no hypothesis of its own (`A → accepts` is not one), and a premise's head is its body's (`∀ j,
   P j` is headed by `P`). A `Prop` field of a structure under `meaning` that an input ranges over, or that an input
   returns (a family `Vs : Fin S → VStmt`, through reducible abbreviations), is a hypothesis, its
-  own `Nonempty` among them. A guarantee under `frozen` (with why it doesn't fit yet) is
+  own `Nonempty` among them. A statement that fits written in another order fits as written: outside a probability
+  statement, its binders are also read reordered, its acceptances and premises with every binder they mention first and
+  the rest after, so a hypothesis on a binder no acceptance reads is the conclusion's (`∀ x w, Q x w → accepts x → P w`
+  is `∀ x, accepts x → ∀ w, Q x w → P w`), when it mentions a binder its conclusion reads and no kept binder mentions its
+  proof; an input with a `Prop` field never moves. A hypothesis equating one field of two inputs its acceptance reads
+  (`c.root = c'.root`, `Facts.lean`'s `shares`), whose proof nothing mentions, is allowed: it is the field bound once
+  (`⟨s, e, fs, r⟩` and `⟨s', e', fs', r⟩`). A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` component) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
@@ -411,6 +424,9 @@ old way: take either side and run `check.py --update` on the merged tree.
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the
 other side's new guarantee reads it) fails there. `merge.py --normalize FILE` recomputes a record's digests without a build.
+The fast path (`lean_changed.py --records`) takes such a candidate as it is: after a merge of `main` that takes every Lean
+input of a package it changes whole from main's side and its lock from `merge.py`, on top of a commit whose records passed, it runs
+nothing for that package (`merged`), and neither does it on inputs whose records already passed on that node (`kept`).
 
 ## Noticing when a dependency proves what we assume: `upstream.py`
 
