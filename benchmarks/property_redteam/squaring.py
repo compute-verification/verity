@@ -380,6 +380,35 @@ def budgeted(C: list[Gate], *, fixed: bool = False) -> int:
     return sum(units(C, i, fixed=fixed, dyn=dyn) for i in range(len(C)))
 
 
+def two_valued(iv: Iv) -> bool:
+    """An interval of at most two values, `hi ≤ lo + 1`."""
+    return iv[1] <= iv[0] + 1
+
+
+def thin_lanes(C: list[Gate], i: int, *, dyn: list[bool] | None = None, ivs: list[Iv] | None = None) -> int:
+    """`thinLanes`: the lanes of an s8-family step whose two multiplicands are both dynamic and one of which is derived
+    to hold at most two values. Such a lane is a selection, which the repriced property charges a compare-select unit."""
+    g = C[i]
+    if g.op.kind != "mma":
+        return 0
+    dyn = dynamic(C) if dyn is None else dyn
+    ivs = intervals(C) if ivs is None else ivs
+    k = g.op.k
+    pairs = zip(g.args[1:1 + k], g.args[1 + k:1 + 2 * k])
+    return sum(1 for a, b in pairs if dyn[a] and dyn[b] and (two_valued(ivs[a]) or two_valued(ivs[b])))
+
+
+def thin(C: list[Gate]) -> int:
+    """`thin`: the circuit's thin lanes."""
+    dyn, ivs = dynamic(C), intervals(C)
+    return sum(thin_lanes(C, i, dyn=dyn, ivs=ivs) for i in range(len(C)))
+
+
+def capped(C: list[Gate]) -> int:
+    """`capped`: the budgeted units (the count on main, `fixed=True`) and the thin lanes, what the property's caps bound."""
+    return budgeted(C, fixed=True) + thin(C)
+
+
 # ---- a builder that keeps intervals, dynamic and the gather dedup incrementally (O(1) a gate) ----------------------------
 
 
@@ -393,6 +422,7 @@ class Builder:
         self.dyn: list[bool] = []
         self._lean: list[int] = []  # each gate's Lean units
         self._fixed: list[int] = []
+        self._thin = 0
         self._gmax: dict[tuple[int, bool], int] = {}  # (index gate, kind) -> max pre-#2420 indexBits so far
         self._gmaxf: dict[tuple[int, bool], int] = {}
         self._consts: dict[int, int] = {}
@@ -419,6 +449,8 @@ class Builder:
                 fixed = max(0, ibf - self._gmaxf.get(key, 0)) + (1 if col_dyn else 0)
                 self._gmax[key] = max(self._gmax.get(key, 0), ib)
                 self._gmaxf[key] = max(self._gmaxf.get(key, 0), ibf)
+        elif op.kind == "mma":
+            self._thin += thin_lanes(self.gates, i, dyn=self.dyn, ivs=self.ivs)
         self._lean.append(lean)
         self._fixed.append(fixed)
         return i
@@ -468,6 +500,15 @@ class Builder:
     @property
     def fixed_units(self) -> int:
         return sum(self._fixed)
+
+    @property
+    def thin(self) -> int:
+        return self._thin
+
+    @property
+    def capped_units(self) -> int:
+        """The repriced count: the budgeted units on main and the thin lanes."""
+        return self.fixed_units + self._thin
 
     def evaluate(self, x: dict[int, int]) -> tuple[list[int], bool, bool]:
         """Run on input `x`: the gates' values, and whether the window (`InWindow`) and `DeclaredHold` hold."""

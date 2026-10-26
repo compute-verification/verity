@@ -1,15 +1,22 @@
-"""The falsification test of `Accounting.Assumptions.EncodeChainHardness` (Security/Definitions/Accounting/Assumptions/
-EncodeChain.lean): every known construction of a squaring mod p1024 in the circuit model costs at least the conjectured
-`e = L − d(ε)` budgeted units, `L = n/8` and `d(ε) = d₀ + log₂(1/ε)/8` with `d₀ = 4`, at every `ε ≥ 2^−64`.
+"""The falsification tests of `Accounting.Assumptions.SquaringFloor` and `ChainSum` (Security/Definitions/Accounting/
+Assumptions/SquaringChain.lean), which replace the falsified `EncodeChainHardness` (EncodeChain.lean, refuted by
+`Accounting.SecurityProofs.Gates.EncodeChainRefuted`): every known construction of a squaring mod p1024 in the repriced
+circuit model costs at least `e = L − d(ε)` capped units, `L = n/8` and `d(ε) = d₀ + log₂(1/ε)/8` with `d₀ = 4`, at every
+`ε ≥ 2^−64` (`test_squaring_floor_known_constructions`), and chained squarings cost their sum
+(`test_chain_sum_known_chains`).
 
 A squaring here is the step an exponentiation chain repeats: 128 s8 limbs in, 128 s8 limbs out, congruent to the square
 mod p. Products are free (s8-family steps from `C = 0`, their operands proven bytes by their producers' declared
-intervals), and so are integer affine maps with constant coefficients. Every other gate is budgeted, one unit each,
-reading at most `B = 128` operand bits, the declared bits of its operands (`OperandBits`). An s8 operand comes straight
-from a budgeted gate declared in `[−128, 127]`, since interval analysis proves no affine map of a wide value narrow.
-Each construction is run on seeded inputs and checked against `pow(a, 2, p)` on every input (`ε = 1`, so `e = L − d₀`);
-a cheaper one, added here, fails the test and falsifies the conjecture at `e`. It is also the test of the per-squaring
-statement `Accounting.Guarantees.Gates.Renormalization` at `c = 0`: its outputs are limbs congruent to the square.
+intervals) unless a lane is thin, both multiplicands run-time and one of them two-valued, which costs a compare-select
+unit; integer affine maps with constant coefficients are free. Every other gate is budgeted, one unit each, reading at
+most `B = 128` operand bits, the declared bits of its operands (`OperandBits`). The capped units are the budgeted units
+and the thin lanes. An s8 operand comes straight from a budgeted gate declared in `[−128, 127]`, since interval analysis
+proves no affine map of a wide value narrow, so no lane here is thin. Each construction is run on seeded inputs and
+checked against `pow(a, 2, p)` on every input (`ε = 1`, so `e = L − d₀`); a cheaper one, added here, fails the test and
+falsifies `SquaringFloor` at `e`. It is also the test of the per-squaring statement
+`Accounting.Guarantees.Gates.Renormalization` at `c = 0`: its outputs are limbs congruent to the square. The bitwise
+codec, which refuted `EncodeChainHardness`, pays a thin lane an AND (`benchmarks/property_redteam/tests/
+test_bitwise_codec.py`).
 
 `Renormalization` has a floor on `ε` because circuits with no budgeted gate refute it below one: on the `a` whose
 squares' column sums don't carry, the column sums (s8-family steps, folded mod `p`) are the square's bytes. The red
@@ -43,6 +50,7 @@ D0 = 4
 FLOOR = 64
 HEADLINE = 40
 LOOKAHEAD = 3
+SQUARINGS = ((P + 1) // 4).bit_length() - 1
 
 
 def e_per_squaring(log2_inv_eps: int) -> int:
@@ -59,11 +67,16 @@ Val = tuple[int, int, int]
 
 
 class Ckt:
-    """Counts a construction's budgeted gates and checks the model's window on each value it makes. A value is
-    `(v, lo, hi)`: its value and its declared (or, for a free gate, derived) interval."""
+    """Counts a construction's budgeted gates and thin lanes, and checks the model's window on each value it makes. A
+    value is `(v, lo, hi)`: its value and its declared (or, for a free gate, derived) interval."""
 
     def __init__(self) -> None:
         self.budgeted = 0
+        self.thin = 0
+
+    @property
+    def capped(self) -> int:
+        return self.budgeted + self.thin
 
     def gate(self, f, *operands: Val, lo: int, hi: int) -> Val:
         assert all(o[1] <= o[0] <= o[2] for o in operands)
@@ -88,12 +101,18 @@ def value(limbs: list[int]) -> int:
     return sum(d << (8 * m) for m, d in enumerate(limbs))
 
 
-def folded_columns(d: list[int]) -> list[Val]:
-    """The square's column sums (s8-family coordinates), folded mod p by the affine map `2^1024 ≡ c`, with the
-    intervals interval analysis derives for them from s8 operands."""
+def thin(iv: tuple[int, int]) -> bool:
+    """Whether a run-time multiplicand of interval `iv` makes its lane thin: at most two values."""
+    return iv[1] <= iv[0] + 1
+
+
+def folded_columns(ckt: Ckt, d: list[int], iv: tuple[int, int] = (-128, 127)) -> list[Val]:
+    """The square's column sums (s8-family coordinates over the run-time limbs `d`, each declared in `iv`), folded mod
+    p by the affine map `2^1024 ≡ c`, with the intervals interval analysis derives for them from s8 operands."""
     cols = []
     for m in range(2 * N_LIMBS):
         idx = range(max(0, m - N_LIMBS + 1), min(m, N_LIMBS - 1) + 1)
+        ckt.thin += len(idx) if thin(iv) else 0
         v = family([d[i] for i in idx], [d[m - i] for i in idx]) if len(idx) else 0
         cols.append((v, -128 * 127 * len(idx), 128 * 128 * len(idx)))
     return [tuple(a + F.c * b for a, b in zip(cols[m], cols[m + N_LIMBS])) for m in range(N_LIMBS)]
@@ -127,12 +146,14 @@ def lookahead(ckt: Ckt, f: list[Val]) -> tuple[list[Val], Val]:
 
 
 def square(carry_pass, d: list[int]) -> tuple[list[int], int]:
+    """One squaring of the s8 limbs `d` (a coin's, or the last squaring's budgeted outputs): its limbs and capped units."""
     ckt = Ckt()
-    out, c = carry_pass(ckt, folded_columns(d))
+    out, c = carry_pass(ckt, folded_columns(ckt, d))
     out[0] = tuple(a + F.c * b for a, b in zip(out[0], c))
     out, c = carry_pass(ckt, out)
     assert c[0] == 0
-    return [v for v, _, _ in out], ckt.budgeted
+    assert all((lo, hi) == (-128, 127) for _, lo, hi in out) and ckt.thin == 0
+    return [v for v, _, _ in out], ckt.capped
 
 
 def signed_limbs(a: int) -> list[int]:
@@ -144,7 +165,7 @@ def signed_limbs(a: int) -> list[int]:
     return out
 
 
-def test_encode_chain_hardness_known_constructions() -> None:
+def test_squaring_floor_known_constructions() -> None:
     rng = random.Random(20261017)
     for carry_pass in (ripple, lookahead):
         costs = set()
@@ -157,7 +178,36 @@ def test_encode_chain_hardness_known_constructions() -> None:
         assert min(costs) >= e_per_squaring(0), (carry_pass.__name__, min(costs))
 
 
-def test_encode_chain_hardness_e_at_p1024_k3() -> None:
+def test_squaring_floor_thin_operands() -> None:
+    """The thin-lane rule on the column sums: run-time limbs of a byte's interval leave every lane free, and two-valued
+    ones (bits) make every lane of the square thin, `L²` of them."""
+    for iv, want in (((-128, 127), 0), ((0, 255), 0), ((0, 2), 0), ((0, 1), N_LIMBS ** 2), ((5, 6), N_LIMBS ** 2)):
+        ckt = Ckt()
+        folded_columns(ckt, [0] * N_LIMBS, iv)
+        assert (ckt.thin, ckt.budgeted) == (want, 0), iv
+
+
+def test_chain_sum_known_chains() -> None:
+    """The byte-limb chain: each squaring's limbs are the next one's operands, and the chain costs the sum of its
+    squarings, none shared, right on every input tried. At `k = 3` a word's `3 · 1021` squarings then cost at least
+    `E = 3 · 1021 · e` at the headline `ε = 2^−40` and at `2^−20`."""
+    rng = random.Random(20261026)
+    chain = 64
+    for carry_pass in (ripple, lookahead):
+        for _ in range(2):
+            a = rng.randrange(P // 4)
+            d, costs = signed_limbs(a), []
+            for _ in range(chain):
+                d, cost = square(carry_pass, d)
+                costs.append(cost)
+            assert value(d) % P == pow(a, 2 ** chain, P), carry_pass.__name__
+            assert len(set(costs)) == 1 and costs[0] >= e_per_squaring(0), (carry_pass.__name__, costs[0])
+            per_word = codec.DEFAULT.rounds * SQUARINGS * costs[0]
+            for log2_inv_eps in (HEADLINE, 20):
+                assert per_word >= codec.DEFAULT.rounds * SQUARINGS * e_per_squaring(log2_inv_eps)
+
+
+def test_chain_sum_e_at_p1024_k3() -> None:
     squarings = ((P + 1) // 4).bit_length() - 1
     assert squarings == 1021
     assert codec.DEFAULT.encode_squarings == F.block_words * 3 * squarings

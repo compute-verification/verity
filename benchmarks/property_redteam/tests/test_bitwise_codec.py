@@ -1,6 +1,7 @@
-"""The bit-level codec (`bitwise_codec.py`): a block of codec words for 8 units a key byte under Model.lean's count on
-main, right on every draw tried, `Proven`, with no budgeted gate and no run input: the counterexample to
-`EncodeChainHardness` at every `E ≥ 1`."""
+"""The bit-level codec (`bitwise_codec.py`): a block of codec words for 8 units a key byte under Model.lean's budgeted
+count, right on every draw tried, `Proven`, with no budgeted gate and no run input: the counterexample to
+`EncodeChainHardness` at every `E ≥ 1`. Under the repriced count (`capped`: the budgeted units and the thin lanes) each
+of its ANDs on two run-time bits costs a unit, and its words cost what `SquaringFloor` and `ChainSum` price."""
 
 from __future__ import annotations
 
@@ -97,6 +98,38 @@ def test_the_conjecture_fails_at_p1024():
     assert units == 5120
     for E, q in ((364_497, 1), (24_504, 1), (1, units + 1)):
         assert not q * E * (n - 1) <= units * (n - 1)
+
+
+def test_repricing_charges_each_and():
+    """Each AND (a `k = 1` s8-family step) on two run-time bits is a thin lane, by the builder's running count and by
+    `thin` itself, so the block's capped units grow with its words, no longer `8·(k + 2)·n/8` for any number of them."""
+    n, c, k = 8, 5, 3
+    one, _, _ = BC.encode_block(n, c, k, [1])
+    gates, dyn = one.gates, S.dynamic(one.gates)
+    ands = [g for g in gates if g.op.kind == "mma"]
+    assert all(g.op.k == 1 and g.lo >= 0 and g.hi <= 1 for g in ands)
+    assert one.thin == S.thin(gates) == sum(1 for g in ands if dyn[g.args[1]] and dyn[g.args[2]]) > 0
+    assert one.capped_units == S.capped(gates) == 8 * (k + 2) * (n // 8) + one.thin
+    eight, _, _ = BC.encode_block(n, c, k, [1, 2, 3, 7, 100, 200, 249, 250])
+    assert eight.fixed_units == one.fixed_units and eight.thin >= 8 * one.thin
+
+
+def test_repriced_squaring_pays_its_partial_products():
+    """A bitwise squaring (`Field.mul` of a word by itself, double-and-add) pays at least `n²` thin lanes at three toy
+    fields: its `n(n − 1)/2` distinct partial-product ANDs and its adders' carries. At p1024 the partial products alone
+    are 523,776 a squaring, far above `SquaringFloor`'s `e = 119`, so the counterexample to `EncodeChainHardness` pays
+    more than `ChainSum`'s `E = 3 · 1021 · 119` a word."""
+    for n, c in ((8, 5), (16, 17), (32, 5)):
+        b = S.Builder()
+        B = BC.Bits(b)
+        F = BC.Field(B, n, c)
+        xs = [bit for l in range(n // 8) for bit in B.byte_bits(b.inp(("a", l), 0, 255, binding="coin"))]
+        before = b.thin
+        F.mul(xs, xs)
+        assert b.thin - before >= n * n, (n, b.thin - before)
+    partial, e = 1024 * 1023 // 2, S.e_per_squaring(40)
+    assert e == 119 and partial == 523_776
+    assert 3 * S.SQUARINGS * partial > 3 * S.SQUARINGS * e == 364_497
 
 
 @pytest.mark.slow
