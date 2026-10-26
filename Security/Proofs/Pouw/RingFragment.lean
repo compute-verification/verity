@@ -111,6 +111,57 @@ noncomputable def deliveries (P : SlpG V R N) (F : Flow N) : ℕ :=
 /-- The program's products. -/
 def products (P : SlpG V R N) : ℕ := (univ.filter fun j => P.isProd j = true).card
 
+/-- What linear slot `j` reads from products. -/
+def prodPart (P : SlpG V R N) (j : Fin N) (z : V → R) : R :=
+  ∑ k : Fin j.val, if P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = true then
+    P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩ else 0
+
+/-- **One accumulator step**: a linear slot with no delivery reads its products, at most one linear slot (the
+accumulator it updates in place, unique by `Flow.WF`) and its offset. -/
+theorem val_step (P : SlpG V R N) (F : Flow N) (hF : F.WF P) (j : Fin N) (hj : P.isProd j = false)
+    (hnd : ∀ k : Fin j.val, P.lin j k ≠ 0 → F.free ⟨k.val, k.isLt.trans j.isLt⟩ = some j) (z : V → R) :
+    (∃ k : Fin j.val, P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = false ∧ P.lin j k ≠ 0 ∧
+      P.val z j = P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩ + prodPart P j z + (P.off j).eval z) ∨
+    P.val z j = prodPart P j z + (P.off j).eval z := by
+  classical
+  have hnp : ¬P.isProd j = true := by simp [hj]
+  have hv : P.val z j =
+      (∑ k : Fin j.val, P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩) + (P.off j).eval z := by
+    rw [SlpG.val, ite_eq_right hnp]
+  have hsplit : (∑ k : Fin j.val, P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩) =
+      (∑ k : Fin j.val, if P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = true then 0 else
+        P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩) + prodPart P j z := by
+    rw [prodPart, ← Finset.sum_add_distrib]
+    refine Finset.sum_congr rfl fun k _ => ?_
+    split_ifs <;> simp
+  rw [hv, hsplit]
+  by_cases hex : ∃ k : Fin j.val, P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = false ∧ P.lin j k ≠ 0
+  · obtain ⟨k, hk, hl⟩ := hex
+    left
+    refine ⟨k, hk, hl, ?_⟩
+    have hk2 : ¬P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = true := by simp [hk]
+    rw [Finset.sum_eq_single k, ite_eq_right hk2]
+    · intro k' _ hk'
+      split_ifs with hp
+      · rfl
+      · by_cases hl' : P.lin j k' = 0
+        · simp [hl']
+        · exfalso
+          apply hk'
+          have e := hF.2 j _ _ (hnd k hl) (hnd k' hl') hk (by simpa using hp)
+          exact Fin.ext (congrArg Fin.val e).symm
+    · intro h
+      exact absurd (Finset.mem_univ k) h
+  · right
+    rw [Finset.sum_eq_zero, zero_add]
+    intro k _
+    split_ifs with hp
+    · rfl
+    · have hl : P.lin j k = 0 := by
+        by_contra hl
+        exact hex ⟨k, by simpa using hp, hl⟩
+      simp [hl]
+
 end Flow
 
 section Ops
@@ -527,6 +578,38 @@ theorem word_injOn (hR : PrefixDiffRank) (φ : R →+* ZMod 2) (w : Fin np → R
       rw [← hc U hU, ← hc' U hU, h]
       simp [BitAff.eval]
   rw [Finset.card_empty, mul_zero] at hle
+  omega
+
+/-- **A walk that starts its chain owns `L` products** (`theoremK`): if a certified block's word is `S`'s products
+plus a bit-affine word, `S` has at least `L` products. -/
+theorem own_card_ge_start (hR : PrefixDiffRank) (φ : R →+* ZMod 2) (w : Fin np → R) (p₀ : Fin np)
+    (hp₀ : φ (w p₀) = 1) (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) {N : ℕ}
+    (P : SlpG (DBits n L np B n') R N) (word : DCells n n' B → Fin N) {e : DCells n n' B}
+    (he : Certified pc vq w P word e) {ι : Type} (S : Finset ι) (lam : ι → R)
+    (A Bo : ι → BitAff (DBits n L np B n') R) (r : BitAff (DBits n L np B n') R)
+    (hval : ∀ z, P.val z (word e) = ∑ k ∈ S, lam k * ((A k).eval z * (Bo k).eval z) + r.eval z) :
+    L ≤ S.card := by
+  have hle := theoremK φ S lam A Bo r (dPrefix pc vq w e.1 e.2.1 e.2.2.val) fun U hU =>
+    (he U hU).symm.trans (hval _)
+  have := (hR φ w p₀ hp₀ pc vq).1 e
+  omega
+
+/-- **A walk between certified blocks owns `L` products** (`theoremK` with a scale): if a certified block's word is
+`c` times another certified block's word plus `S`'s products plus a bit-affine word, `S` has at least `L` products. -/
+theorem own_card_ge_step (hR : PrefixDiffRank) (φ : R →+* ZMod 2) (w : Fin np → R) (p₀ : Fin np)
+    (hp₀ : φ (w p₀) = 1) (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) {N : ℕ}
+    (P : SlpG (DBits n L np B n') R N) (word : DCells n n' B → Fin N) {e e' : DCells n n' B} (hne : e ≠ e')
+    (he : Certified pc vq w P word e) (he' : Certified pc vq w P word e') (c : R) {ι : Type} (S : Finset ι)
+    (lam : ι → R) (A Bo : ι → BitAff (DBits n L np B n') R) (r : BitAff (DBits n L np B n') R)
+    (hval : ∀ z, P.val z (word e) =
+      c * P.val z (word e') + ∑ k ∈ S, lam k * ((A k).eval z * (Bo k).eval z) + r.eval z) :
+    L ≤ S.card := by
+  have hle := theoremK φ S lam A Bo r
+    (fun z => dPrefix pc vq w e.1 e.2.1 e.2.2.val z - c * dPrefix pc vq w e'.1 e'.2.1 e'.2.2.val z)
+    fun U hU => by
+      rw [← he U hU, ← he' U hU, hval]
+      ring
+  have := (hR φ w p₀ hp₀ pc vq).2 e e' hne c
   omega
 
 /-- **The split from its owners**: if the certified cell-blocks in `A` each own `L` products, pairwise disjoint, and
