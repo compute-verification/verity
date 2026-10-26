@@ -11,7 +11,8 @@ N2's planned profile, each period's requests one group in a link-window of its o
 loop's W8A8 MLP, each step's 256 output bytes as hex text). Beside the honest run, the same plan with the shim's
 `CERTIFIER_TAMPER` (``extra`` by default: one event more after window 0's first response). The client keeps and verifies
 each window's certificates and salted clock certificates. Then N2's verdict of record on every link-window of both runs,
-each proved ``--zk`` behind the Lean firewall (`n2_zk.py prove`): its exit and leak scan are in ``summary.json``
+each proved ``--zk`` behind the Lean firewall one session at a time (`n2_zk.py prove --jobs 1`,
+`n2_zk.ONE_SESSION`): its exit and leak scan are in ``summary.json``
 (`n2_report`), and a leak, a scan whose control missed a planted piece, or a nonzero exit refuses the session
 (`n2_refusal`). The session is one LMS key (height `CERTIFIER_HEIGHT`) and one certifier session per run, its leaf state
 kept across both. Its records (heads and salts, syncs, request and response records, the shim's events, the plan's
@@ -374,7 +375,7 @@ def _session(period_dir: Path, s: Path) -> dict[str, Any]:
     try:
         n2 = [sys.executable, str(TRACES / "n2_zk.py"), "prove", "--run", str(s / "rehearsal" / "honest"),
               "--rounds", ",".join(strategies), "--bin", tools["flock-circuit"], "--lean", tools["flock-verify"],
-              "--out", str(scratch / "n2zk"), "--jobs", str(len(strategies))]
+              "--out", str(scratch / "n2zk"), "--jobs", "1"]
         if tamper in ("extra", "late"):
             n2 += [f"--{tamper}", str(s / "rehearsal" / tamper)]
         n2_rc = _run(n2, s / "n2zk.log", {**env, "FC_FIREWALL_LEAN": tools["flock-firewall"]})

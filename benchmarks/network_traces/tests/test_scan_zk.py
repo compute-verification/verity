@@ -129,7 +129,8 @@ def test_the_members_are_the_programs_ranges(G):
 
 def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run") -> Path:
     """The synthetic run's records published as warden_serve's `Publisher` publishes a served run's (each record, its
-    certificate, its rows' registration and salts), under a warden key of its own, beside its `deployment.json`."""
+    certificate, its rows' registration and salts, and each window's empty fails record), under a warden key of its
+    own, beside its `deployment.json`."""
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, setup.windows)
     out.mkdir(parents=True)
@@ -138,7 +139,9 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run") -> Path:
     pub = WS.Publisher(out, sz.Issuer(signer, sz.SESSION), setup.params)
     for rec in (*served.ingress, *served.egress):
         pub.keep(rec, setup.params.grid)
-    (out / "fails.records").touch()
+    for w in range(setup.windows):
+        pub.keep(WS.Record(WS.FAILS, w, ((None,) * setup.params.lanes,) * setup.params.window, WS.Status()),
+                 setup.params.fails_grid)
     dep = WS.deployment_record(setup.params, signer.public_key(), sz.SESSION, origin_unix=0.0, windows=setup.windows,
                                listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=0.025, run_id=bytes(32))
     (out / "deployment.json").write_text(json.dumps(dep))

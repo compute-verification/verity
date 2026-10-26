@@ -257,7 +257,8 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   service: the service has no public kind for them), the declared syncs, and from the prover the statement's public
   file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
   ``wit``'s salt. The outcome passes the registered root as the session's. A proof after `proof_deadline` is the
-  service's `late`. The verdict reads no frames, so its claim is counts only: the egress head's counts are the
+  service's `late`. On a plain or served link the verdict of record is the Lean's (`NetworkCheck.LinkWindow`,
+  `service.OF_RECORD`), with the Python beside it as the reference; the README has the gap list and the replay. The verdict reads no frames, so its claim is counts only: the egress head's counts are the
   profile's (and the ingress head's, where that end declares one), which puts the link's timing at the profile. The
   egress grid is the head's counts filled with its frames in order, and the head's digest binds both, so the frames
   are the rest of the grid, and nothing in this protocol holds them: until N3 is a proof-service unit with Selection
@@ -290,6 +291,10 @@ only: the record leaves (0, 1), each certified record whole, are committed but n
 the certificates' signatures are checked on the host from their public fields, not in the proof. One clock per
 spatial unit across links is not checked (each registration is one link-window, alone), and the frames' consistency
 with the served computation is left to N3.
+
+## A warden link (`service.WardenProfile`)
+
+[protocol/warden-link.md](protocol/warden-link.md).
 
 ## A period, as onsite's communication component (`verity/certifier/v0`)
 
