@@ -41,8 +41,10 @@ and the stream's registrations built from the stream's outcomes of record alone 
   (its lanes from the advice and the release) and each ``o0`` row read. Per window: prove (the session's wall time,
   the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean included).
 * **What the verifier receives** is `RECEIVED` per window and the advice (``advice.json``), scanned for every piece of
-  the windows' held cells and their salts but those the public circuit or an empty slot holds; the prover's instance
-  files, which hold the cells, are the control.
+  the windows' held cells and their salts but those the public circuit or an empty slot holds, and a member fails on a
+  piece `leak_scan.scan` reads as ``leaked``, not on a find it reads as structured (across the format's fields, or
+  bytes the statement fixes), the rule every zero-knowledge driver's scan follows; the prover's instance files, which
+  hold the cells, are the control.
 """
 from __future__ import annotations
 
@@ -63,6 +65,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
+import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
 from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import io_request as Q, service as SVC  # noqa: E402
@@ -539,7 +542,18 @@ def _member_scan(M, sg, rd, out: Path) -> dict:
         for x in rd.windows:
             f.write((x.statement.dir / f"inst-{T}.bin").read_bytes())
     got = M.a8.received(out / "verifier", control, blobs, held)
-    return {**got, "public_pieces": excluded, "files": len(got["files"])}
+    return {**got, **LS.scan(got, blobs, out / "verifier"), "public_pieces": excluded, "files": len(got["files"])}
+
+
+def _member_ok(name: str, res: dict, rd) -> bool:
+    """Whether member `name`'s run is what `EXPECT` says: every window's verdict its reference's, the tie's on the link
+    under its advice with one registration per window, no witness piece `leak_scan.scan` reads as leaked in what the
+    verifier received, and the control holding every held cell."""
+    rec = res["received"]
+    return (all(r["as_expected"] for r in res["windows"]) and tuple(res["tie"]["accepted"]) == EXPECT[name]
+            and res["tie"]["advice"] == AD.digest(rd.advice) and res["tie"]["link"] == LINK
+            and len(res["tie"]["registrations"]) == len(rd.windows)
+            and not rec["leaked"] and rec["control"]["holds_all"])
 
 
 def prove(a) -> int:
@@ -599,16 +613,14 @@ def prove(a) -> int:
     ok = True
     for name, res in done.items():
         rec = res["received"]
-        good = (all(r["as_expected"] for r in res["windows"]) and tuple(res["tie"]["accepted"]) == EXPECT[name]
-                and res["tie"]["advice"] == AD.digest(rounds[name].advice) and res["tie"]["link"] == LINK
-                and len(res["tie"]["registrations"]) == len(rounds[name].windows)
-                and not rec["verifier_found"] and rec["control"]["holds_all"])
+        good = _member_ok(name, res, rounds[name])
         ok &= good
         summary["members"][name].update(res, ok=good)
         log(f"member {name}: tie {res['tie']['accepted']}, windows {[int(r['accepted']) for r in res['windows']]}, "
             f"verifier received {rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
             f"{rec['verifier_found'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} public pieces "
-            f"left out), control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+            f"left out), leaked {rec['leaked'] or 'none'}, structured {rec['structured'] or 'none'}, "
+            f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
     summary["tie"] = {name: res["tie"]["accepted"] for name, res in done.items()}
     costs = [r for res in done.values() for r in res["windows"]]
     summary["per_window"] = {

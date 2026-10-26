@@ -7,6 +7,8 @@ slot. Nothing here lowers or proves (`n2_tie_zk.prove` does, on a node)."""
 from __future__ import annotations
 
 import importlib.util
+import json
+import struct
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -85,3 +87,61 @@ def test_the_scan_looks_for_held_cells_and_salts_alone():
     cells = [row[i:i + tz.B] for x in rd.windows for row in x.cells.rows for i in range(0, len(row), tz.B)]
     assert sorted(blobs[k] for k in held) == sorted(c for c in cells if c != bytes(tz.B))
     assert held and sum(1 for k in blobs if k.startswith("salt")) == len(rd.windows) * tz.T
+
+
+def _a8():
+    """`a8`'s scan as `_member_scan` calls it: 16-byte pieces found raw or as hex, per file the verifier received, and
+    the control holding the held ones."""
+    def needles(p):
+        return {f: k for k, x in p.items() for f in (x, x.hex().encode(), x.hex().upper().encode())}
+
+    def find(data, t):
+        return {k: 1 for nd, k in t.items() if nd in data}
+
+    def received(vdir, control, blobs, held):
+        files = {f.name: {"bytes": f.stat().st_size, "found": find(f.read_bytes(), needles(blobs))}
+                 for f in sorted(vdir.iterdir())}
+        ctl = find(control.read_bytes(), needles(blobs))
+        return {"blobs": len(blobs), "files": files, "verifier_bytes": sum(x["bytes"] for x in files.values()),
+                "verifier_found": sorted({k for x in files.values() for k in x["found"]}),
+                "control": {"blobs_found": len(ctl), "holds_all": held <= set(ctl)}}
+
+    return SimpleNamespace(PIECE=16, needles=needles, find=find, received=received)
+
+
+def test_a_member_fails_on_what_the_scan_reads_as_leaked_not_on_a_find_across_the_formats_fields(tmp_path):
+    """A held cell's piece the verifier received across two elements of a round message (the format's structure, as
+    d951's cell headers lay in its proof streams) is found raw but read structured, and the member stays as expected;
+    inside one element it is leaked, and the member fails."""
+    tie = _tie()
+    link, adv, _, _ = tz.members()["honest"]
+    rd = tz.link_windows(tie, link, adv)
+    for x in rd.windows:
+        x.statement = SimpleNamespace(dir=tmp_path / f"w{x.window}")
+        x.statement.dir.mkdir()
+        (x.statement.dir / f"inst-{tz.T}.bin").write_bytes(b"".join(x.rows))
+    sg = SimpleNamespace(circuit=tmp_path / "circuit.txt")
+    sg.circuit.write_text("circuit")
+    M = SimpleNamespace(a8=_a8())
+    blobs, held = tz.blobs_of(rd)
+    pieces, held_pieces, _ = tz.Z.public_pieces(M.a8, blobs, held, sg.circuit.read_bytes() + bytes(tz.B))
+    key = next(k for k in sorted(held_pieces) if len(set(pieces[k])) > 2)
+    piece = pieces[key]
+    res = {"windows": [{"as_expected": True}] * len(rd.windows),
+           "tie": {"accepted": list(tz.EXPECT["honest"]), "advice": tz.AD.digest(rd.advice), "link": tz.LINK,
+                   "registrations": [{}] * len(rd.windows)}}
+
+    def member(body: bytes, out):
+        vdir = out / "verifier"
+        vdir.mkdir(parents=True)
+        msg = bytes([3, 2]) + bytes(6) + struct.pack("<Q", len(body) // 16) + body
+        streams = [{"label": "flock-circuit/fast100x2/rep0", "rounds": [{"msg": msg.hex()}]}]
+        (vdir / "s-session.json").write_text(json.dumps({"coin_tree": {"key": "00" * 16}, "streams": streams}))
+        rec = tz._member_scan(M, sg, rd, out)
+        return rec, tz._member_ok("honest", {**res, "received": rec}, rd)
+
+    rec, ok = member(bytes(range(100, 115)) + piece + b"\x01", tmp_path / "across")
+    assert rec["verifier_found"] == [key] and rec["structured"] == {key: "across"} and not rec["leaked"]
+    assert rec["control"]["holds_all"] and ok
+    rec, ok = member(bytes(range(100, 116)) + piece, tmp_path / "inside")
+    assert rec["verifier_found"] == rec["leaked"] == [key] and not rec["structured"] and not ok
