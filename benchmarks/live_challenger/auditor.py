@@ -9,12 +9,12 @@ first coin.
     vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
     vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
     vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra|drop|token]
-                                          [--requests N] [--tokens N]
+                                          [--requests N] [--tokens N] [--height H]
                                           ([--in-flight N] [--profile planned|served] [--temperature T] [--top-p P]
                                            | --traffic varied [--rate R] [--prompt-range LO:HI] [--seed S]
                                              [--eos-ids ID,...] [--compact B])
-    vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T]
-                                       [--top-p P]
+    vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--height H]
+                                       [--temperature T] [--top-p P] [--scan [--prompts [--window-per-group]] < PROMPTS]
     vy-challenger-gate status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN
 
 - **Who reaches it.** Every key in `research`'s authorized_keys on the host is forced to `vy-challenger-gate` (`command=`),
@@ -110,7 +110,7 @@ first coin.
   together and `--tokens` 16 to 64 tokens out of each, each recorded and passed on only when given
   (`certifier_serve.py`'s 4 and 64 otherwise), `--profile planned|served` N2's profile, planned by default: the planned
   egress occupancy, or NET-54's served profile, whose egress counts derive from the ingress head's, and the sampling
-  below). With `--traffic varied` (recorded only then) the rehearsal runs `certifier_serve.py`'s varied plan:
+  and the keys' height below). With `--traffic varied` (recorded only then) the rehearsal runs `certifier_serve.py`'s varied plan:
   Poisson arrivals of varied prompts as id requests, each ending at the model's EOS or its `max_tokens` (1 to
   `--tokens`, the cap), and the responses written as id events (each sampled token's id), N2 on the advice profile;
   its own flags are `--rate` arrivals a second (above 0, at most 8), `--prompt-range LO:HI` (1 to 2048 tokens),
@@ -136,15 +136,29 @@ first coin.
   client ──cells──▶ warden (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`, `--port` and
   `--minutes` as a certifier rehearsal's (it takes no `--tamper`: the warden is the device, with no shim to tamper),
   `--requests` 4 to 400 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
-  passed on only when given (`warden_serve.py`'s 256 otherwise). The traffic
+  passed on only when given (`warden_serve.py`'s 256 otherwise), and the sampling and the key's height below. The traffic
   is the gate's (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`), so a request whose `--minutes` is under
-  `warden_minutes` of its requests is refused, with the least that fits. Its request carries `device: warden`; it
+  `warden_minutes` of its requests and height is refused, with the least that fits. With `--scan` (recorded only then)
+  it is the scan's rehearsal, the warden run `scan_zk.py prove --warden-run` reads from its `fetch`: the schedule is
+  scan_zk's (`SCAN_SCHEDULE`, `scan_zk.py schedule`'s flags; the gate's otherwise `warden_serve.py`'s default, which
+  the scan's class doesn't serve) and the traffic the same arrivals of warden-form id requests (`rehearse --ids`, at
+  the sampling below), so the endpoint must answer each id-form (`io_tie.id_event`s, then `io_tie.TRAILER`): the
+  warden frames what the server sends, and the check and the scan refuse a response that isn't by name. A scan
+  rehearsal's `--prompts` sends the caller's own requests instead (a period's of a loop, say): the gate reads them off
+  its stdin (`warden_prompts`: at most `WARDEN_PROMPTS_BYTES` of JSON, `WARDEN_PROMPTS` prompts of `WARDEN_PROMPT_IDS`
+  token ids each, below 2^17, the scan's IDB), writes them to `witness/prompts.json` alone (the request records their
+  count and ids), and `rehearse --prompts` sends request j the (j mod n)-th of the n with exactly `--tokens`
+  (`WARDEN_PROMPT_TOKENS`, the scan's 64 by default), `--requests` (`WARDEN_PROMPT_REQUESTS`) the prompts' count by
+  default. `--window-per-group` (at most the scan's 4 lanes of prompts) sends them a group at a time, group g's half a
+  bucket into link-window g·G (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows
+  g·G … (g+1)·G − 1, which `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its
+  groups. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and
   the check, all the prover's. Its unit publishes to `out/` only what isn't: `deployment.json` (the warden's key,
-  session and schedule), `cells.jsonl` (each link-window's registration, `warden_rows`, and its cost) and
-  `certificates.jsonl` (the certificates alone).
+  session and schedule), `cells.jsonl` (each link-window's registration, `warden_rows`, and its cost),
+  `certificates.jsonl` (the certificates alone) and a `--window-per-group` run's `groups.json`.
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
   `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
@@ -154,6 +168,13 @@ first coin.
   generation config (a committing LLAMA32_1B's: temperature 0.6, top_p 0.9) to a request that omits them. The gate
   takes a top_p below 1, which tonight the compile unit refuses (CIR-87: the seeded top-p sampler's split count reads
   the live row count).
+- **A rehearsal's keys** (`--height`, both verbs): LMS (N = 64, W = 1) at a tree height within `REHEARSAL_HEIGHT`, the
+  deployed key's (`lms.DEPLOYED`, 20) by default, so that a rehearsal signs as the deployed device does unless its
+  request says otherwise; recorded in every request and passed on every one. `certifier_serve.load_key` makes each
+  key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
+  a certifier rehearsal makes two keys (the certifier's and the challenger's) and a warden rehearsal one, which
+  `warden_minutes` counts. The rehearsal draws each serve's session itself (32 fresh random bytes, `--session`), as
+  the challenger it plays: the challenger here draws none, since a rehearsal is none of its windows.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, `end`'s, and `serve.py`'s record and close,
 `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`, which
@@ -194,6 +215,7 @@ from verity.core.protocols.sampled_proofs.challenger import (LEDGER_ROLE as ROLE
                                                              circuit_of as _circuit_of, extends, lane_of, leaf_of,
                                                              ledger_message as entry_message, ledger_text, pin_line,
                                                              pins_reason, pins_seal, root_of, verify_ledger, verify_periods)
+from verity.ml.crypto import lms  # noqa: E402
 
 ZERO = "0" * 128
 PORTS = range(7811, 7900)
@@ -232,14 +254,39 @@ CERTIFIER_VARIED = (("--tokens", "tokens"), ("--rate", "rate"), ("--prompt-range
 #: a rehearsal's `--temperature` bounds; `--top-p` is above 0 and at most 1, and each is a plain decimal (`DECIMAL`)
 TEMPERATURE = (0.0, 2.0)
 DECIMAL = r"[0-9](\.[0-9]{1,4})?"
+#: a rehearsal's `--height` bounds, the LMS keys' tree height: at most the deployed key's, which is the default
+REHEARSAL_HEIGHT = (10, lms.DEPLOYED.H)
+#: the one-time keys a second `certifier_serve.load_key` makes in its eight processes (16384 in 4.1 s on four cores)
+KEYGEN_LEAVES_S = 4096
 WARDEN_REQUESTS = (4, 400)
 WARDEN_TOKENS = (16, 256)
 #: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
 #: `WARDEN_RATE` a second drawn from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
 WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
+#: a scan rehearsal's (`--scan`) schedule, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`), the only one
+#: `scan_zk.py prove --warden-run` takes, as `warden_serve.py`'s flags
+SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "21", "--lanes", "4",
+                 "--queue", "4", "--window", "32", "--ingress-cells", "47", "--ingress-buckets", "12",
+                 "--egress-cells", "65")
+#: the scan's schedule by flag, which `--window-per-group` sizes a group's link-windows on (`scan_group_windows`)
+SCAN = {f: int(v) for f, v in zip(SCAN_SCHEDULE[::2], SCAN_SCHEDULE[1::2])}
+#: a scan rehearsal's `--prompts`, read off the gate's stdin: at most `WARDEN_PROMPTS_BYTES` of JSON, an array of
+#: `WARDEN_PROMPTS` prompts, each of `WARDEN_PROMPT_IDS` token ids below 2^`WARDEN_PROMPT_ID_BITS` (the scan's IDB);
+#: then `--requests` and `--tokens` (each request's exact count, at most the scan's egress cells but the trailer's)
+#: take `WARDEN_PROMPT_REQUESTS` and `WARDEN_PROMPT_TOKENS`
+WARDEN_PROMPTS_BYTES = 1 << 20
+WARDEN_PROMPTS = (1, 400)
+WARDEN_PROMPT_IDS = (1, 2048)
+WARDEN_PROMPT_ID_BITS = 17
+WARDEN_PROMPT_REQUESTS = (1, 400)
+WARDEN_PROMPT_TOKENS = (1, SCAN["--egress-cells"] - 1)
+#: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
+PROMPTS = "prompts.json"
 #: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`); everything else
-#: `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's own lane alone
-WARDEN_PUBLIC = ("deployment.json", "cells.jsonl")
+#: `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's own lane alone.
+#: `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the request's
+#: public counts and the scan's schedule alone
+WARDEN_PUBLIC = ("deployment.json", "cells.jsonl", "groups.json")
 WITNESS = "witness"
 TUNNEL_SSH = ["ssh", "-N", "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes", "-o", "ServerAliveInterval=15"]
 READ_ONLY = "-"
@@ -840,8 +887,8 @@ def gate_fetch(session: str, host: Host) -> bytes:
 
 def parse_certifier(argv: list[str], host: Host) -> dict:
     """A certifier rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run, the
-    tampering shim if any, how many requests the plan sends, how many tokens each when given, and the sampling
-    (`sampling`); on fixed traffic how many in flight when given and N2's profile, on varied traffic (`--traffic
+    tampering shim if any, how many requests the plan sends, how many tokens each when given, the keys' height and the
+    sampling (`sampling`); on fixed traffic how many in flight when given and N2's profile, on varied traffic (`--traffic
     varied`, recorded only then) its rate, prompts' lengths, seed and EOS ids when given (`parse_varied`)."""
     p = argparse.ArgumentParser(prog="vy-challenger-gate certifier-rehearse", exit_on_error=False, add_help=False,
                                 allow_abbrev=False)
@@ -868,7 +915,8 @@ def parse_certifier(argv: list[str], host: Host) -> dict:
         raise Refused(f"--tamper {a.tamper!r}: one of {list(TAMPERS)}, or none for an honest shim")
     if a.traffic not in CERTIFIER_TRAFFIC:
         raise Refused(f"--traffic {a.traffic!r}: one of {list(CERTIFIER_TRAFFIC)}")
-    req = {"peer": a.peer, "port": port, "minutes": minutes, "tamper": a.tamper, "requests": requests}
+    req = {"peer": a.peer, "port": port, "minutes": minutes, "tamper": a.tamper, "requests": requests,
+           "height": a.height}
     if a.traffic == "varied":
         return req | {"traffic": "varied"} | a.sampling | given | parse_varied(a, minutes, requests)
     if (flag := next((f for f, k in CERTIFIER_VARIED[1:] if getattr(a, k) is not None), None)) is not None:
@@ -926,13 +974,15 @@ def parse_varied(a: argparse.Namespace, minutes: int, requests: int) -> dict:
 
 
 def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host) -> argparse.Namespace:
-    """A rehearsal verb's arguments, with the two every rehearsal takes, `--temperature` and `--top-p` (`a.sampling`),
-    refused (with the verb's usage) when they don't parse, `--peer` isn't a peer or the sampling is out of its bounds."""
+    """A rehearsal verb's arguments, with the three every rehearsal takes, `--temperature` and `--top-p`
+    (`a.sampling`) and `--height` (`a.height`, the deployed key's by default), refused (with the verb's usage) when they
+    don't parse, `--peer` isn't a peer or the sampling or the height is out of its bounds."""
     def refuse(why: object) -> None:
         raise Refused(f"{p.prog.split()[-1]}: {why}; {' '.join(p.format_usage().split())}")
 
     p.add_argument("--temperature", default="0")
     p.add_argument("--top-p", default="1")
+    p.add_argument("--height", default=str(REHEARSAL_HEIGHT[1]))
     p.error = refuse
     try:
         a = p.parse_args(argv)
@@ -941,6 +991,7 @@ def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host) ->
     if a.peer not in peers(host):
         raise Refused(f"--peer {a.peer!r}: one of {peers(host)} (/etc/vy/peers)")
     a.sampling = sampling(a.temperature, a.top_p)
+    a.height = bounded("--height", a.height, *REHEARSAL_HEIGHT)
     return a
 
 
@@ -960,40 +1011,112 @@ def sampling_argv(req: dict) -> list[str]:
     return ["--temperature", str(req.get("temperature", 0.0)), "--top-p", str(req.get("top_p", 1.0))]
 
 
+def height_argv(req: dict) -> list[str]:
+    """A rehearsal's `--height`, always given, the deployed key's for a request written before the gate took it."""
+    return ["--height", str(req.get("height", REHEARSAL_HEIGHT[1]))]
+
+
 def bounded(flag: str, v: str, lo: int, hi: int) -> int:
     if not re.fullmatch(r"[1-9][0-9]{0,4}", v) or not lo <= int(v) <= hi:
         raise Refused(f"{flag} {v!r}: {lo} to {hi}")
     return int(v)
 
 
-def warden_minutes(requests: int) -> int:
+def warden_minutes(requests: int, height: int = REHEARSAL_HEIGHT[1]) -> int:
     """The fewest minutes a warden rehearsal of `requests` requests takes: its traffic's last arrival (1/`WARDEN_RATE`
-    seconds a request), the tail, the rest of the 60-second window it ends in, the key and the check."""
-    return -(-(round(requests / WARDEN_RATE) + 3 * WARDEN_TAIL_S) // 60)
+    seconds a request), the tail, the rest of the 60-second window it ends in and the check, and its key at `height`
+    (2^height one-time keys at `KEYGEN_LEAVES_S` a second)."""
+    return _minutes(round(requests / WARDEN_RATE), height)
+
+
+def _minutes(arrivals_s: int, height: int) -> int:
+    return -(-(arrivals_s + 3 * WARDEN_TAIL_S + 2 ** height // KEYGEN_LEAVES_S) // 60)
+
+
+def scan_group_windows(tokens: int) -> int:
+    """The link-windows a `--window-per-group` group takes at the scan's schedule, each request answered by at most
+    `tokens` id events (`warden_serve.group_windows`, which `test_warden_serve` holds this to)."""
+    return -(-(SCAN["--delay"] + tokens // SCAN["--slots"] + 3) // SCAN["--window"])
+
+
+def warden_group_minutes(groups: int, tokens: int, height: int = REHEARSAL_HEIGHT[1]) -> int:
+    """`warden_minutes` of a `--window-per-group` run: its `groups` groups' windows in place of the arrivals."""
+    return _minutes(-(-groups * scan_group_windows(tokens) * SCAN["--window"] * SCAN["--bucket-ms"] // 1000), height)
 
 
 def parse_warden(argv: list[str], host: Host) -> dict:
     """A warden rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run (at least
-    `warden_minutes` of its requests), how many requests its traffic sends, when given the most tokens a request asks
-    for (`warden_serve.py`'s 256 otherwise), and the sampling (`sampling`)."""
+    `warden_minutes` of its requests and height), how many requests its traffic sends, when given the most tokens a
+    request asks for (`warden_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic), the sampling
+    (`sampling`) and the key's height. `--prompts` (with `--scan`) marks the request's prompts as the gate's stdin,
+    and `--window-per-group` (with `--prompts`) sends them a group a link-window's span; `warden_prompts` reads them
+    and checks what depends on them."""
     p = argparse.ArgumentParser(prog="vy-challenger-gate warden-rehearse", exit_on_error=False, add_help=False,
                                 allow_abbrev=False)
     p.add_argument("--peer", required=True)
     p.add_argument("--port", required=True)
     p.add_argument("--minutes", required=True)
-    p.add_argument("--requests", default="100")
+    p.add_argument("--requests", default=None)
     p.add_argument("--tokens", default=None)
+    p.add_argument("--scan", action="store_true")
+    p.add_argument("--prompts", action="store_true")
+    p.add_argument("--window-per-group", action="store_true")
     a = _parse_rehearsal(p, argv, host)
     port = bounded("--port", a.port, 1024, 65535)
     minutes = bounded("--minutes", a.minutes, *CERTIFIER_MINUTES)
-    requests = bounded("--requests", a.requests, *WARDEN_REQUESTS)
-    given = {} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_TOKENS)}
-    if minutes < (least := warden_minutes(requests)):
+    if a.prompts and not a.scan:
+        raise Refused("--prompts: the scan's id requests' prompts, with --scan")
+    if a.window_per_group and not a.prompts:
+        raise Refused("--window-per-group: groups of the --prompts")
+    if a.prompts:
+        return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "height": a.height,
+                "requests": None if a.requests is None else bounded("--requests", a.requests, *WARDEN_PROMPT_REQUESTS),
+                **({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_PROMPT_TOKENS)}),
+                "scan": True, "prompts": True, **({"window_per_group": True} if a.window_per_group else {})} | a.sampling
+    requests = bounded("--requests", a.requests or "100", *WARDEN_REQUESTS)
+    given = ({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_TOKENS)}) | \
+        ({"scan": True} if a.scan else {})
+    if minutes < (least := warden_minutes(requests, a.height)):
         raise Refused(f"--minutes {minutes}: {requests} requests take {least} minutes (arrivals at {WARDEN_RATE} a "
-                      f"second, a {WARDEN_TAIL_S} s tail, the window they end in and the check): give --minutes "
-                      f"{least} or more, or fewer --requests")
-    return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "requests": requests} | \
-        a.sampling | given
+                      f"second, a {WARDEN_TAIL_S} s tail, the window they end in, the check and the key at height "
+                      f"{a.height}): give --minutes {least} or more, or fewer --requests")
+    return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "requests": requests,
+            "height": a.height} | a.sampling | given
+
+
+def warden_prompts(req: dict, data: bytes) -> bytes:
+    """A `--prompts` request's prompts, off the gate's stdin (`data`: at most `WARDEN_PROMPTS_BYTES`, of which the gate
+    reads one byte more): JSON, an array of `WARDEN_PROMPTS` prompts, each an array of `WARDEN_PROMPT_IDS` token ids
+    below 2^`WARDEN_PROMPT_ID_BITS`, and under `--window-per-group` at most the scan's lanes of them (one group).
+    Completes the request: `requests` the prompts' count when not given, and `prompts` their count and ids alone (the
+    ids are the prover's, `witness/` only); refused when `--minutes` is under `warden_group_minutes` of its groups
+    (`warden_minutes` of its requests otherwise). Returns the prompts' canonical bytes, the witness's `PROMPTS`."""
+    if len(data) > WARDEN_PROMPTS_BYTES:
+        raise Refused(f"--prompts: over {WARDEN_PROMPTS_BYTES} bytes on stdin")
+    try:
+        prompts = json.loads(data)
+    except ValueError:
+        prompts = None
+    (lo, hi), (ilo, ihi) = WARDEN_PROMPTS, WARDEN_PROMPT_IDS
+    if not (isinstance(prompts, list) and lo <= len(prompts) <= hi
+            and all(isinstance(p, list) and ilo <= len(p) <= ihi for p in prompts)
+            and all(type(t) is int and 0 <= t < 1 << WARDEN_PROMPT_ID_BITS for p in prompts for t in p)):
+        raise Refused(f"--prompts: stdin is a JSON array of {lo} to {hi} prompts, each an array of {ilo} to {ihi} "
+                      f"token ids below 2^{WARDEN_PROMPT_ID_BITS}")
+    n = len(prompts)
+    if req.get("window_per_group") and n > SCAN["--lanes"]:
+        raise Refused(f"--window-per-group: {n} prompts, past a group's {SCAN['--lanes']} (the scan's lanes)")
+    requests = req["requests"] or n
+    tokens, height, minutes = req.get("tokens", WARDEN_PROMPT_TOKENS[1]), req["height"], req["minutes"]
+    if req.get("window_per_group"):
+        least, what = warden_group_minutes(-(-requests // n), tokens, height), f"{-(-requests // n)} groups"
+    else:
+        least, what = warden_minutes(requests, height), f"{requests} requests"
+    if minutes < least:
+        raise Refused(f"--minutes {minutes}: {what} take {least} minutes (with the check and the key at height "
+                      f"{height}): give --minutes {least} or more, or fewer --requests")
+    req.update(requests=requests, prompts={"count": n, "ids": sum(map(len, prompts))})
+    return json.dumps(prompts, separators=(",", ":")).encode()
 
 
 #: each rehearsal verb's request parser
@@ -1007,11 +1130,14 @@ def certifier_runs(host: Host) -> list[str]:
 
 def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token: str, start: Callable[[str], None],
                    own: Callable[[Path], None], active: Callable[[str], bool],
-                   parse: Callable[[list[str], Host], dict] = parse_certifier) -> dict:
+                   parse: Callable[[list[str], Host], dict] = parse_certifier,
+                   read: Callable[[int], bytes] = lambda n: b"") -> dict:
     """Validate a rehearsal's request (`parse`: the certifier's or the warden's), refused while another of either runs
     (under the gate's lock), and `start` its unit, which runs `certifier-run` as `auditor`. Returns at once: `status
-    RUN` follows it."""
+    RUN` follows it. A warden `--prompts` request's prompts are `read` off stdin (`warden_prompts`) and written to the
+    run's `witness/` (0700, the file 0600, both `auditor`'s), never to its request."""
     req = parse(argv, host)
+    prompts = warden_prompts(req, read(WARDEN_PROMPTS_BYTES + 1)) if req.get("prompts") else None
     with locked(host.root / "gate.lock"):
         if (running := next((r for r in certifier_runs(host) if active(r)), None)) is not None:
             raise Refused(f"rehearsal {running} still runs: one at a time, a certifier's or a warden's "
@@ -1024,6 +1150,13 @@ def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token
         d.mkdir(mode=0o755)
         req.update(run=run, by=by, requested_utc=utc(now))
         (d / "request.json").write_text(json.dumps(req, indent=1, sort_keys=True) + "\n")
+        if prompts is not None:
+            (d / WITNESS).mkdir(mode=0o700)
+            fd = os.open(d / WITNESS / PROMPTS, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as f:
+                f.write(prompts)
+            own(d / WITNESS / PROMPTS)
+            own(d / WITNESS)
         own(d)
         start(run)
     return req | {"unit": f"vy-certifier@{run}.service"}
@@ -1067,7 +1200,7 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "[--traffic varied [--rate R] [--prompt-range LO:HI] [--seed S] [--eos-ids ID,...] [--compact B]: "
          "no --in-flight, --profile or sampling] "
          "| warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T] "
-         "[--top-p P] (a lane's own gate key, or vy-admin) "
+         "[--top-p P] [--scan [--prompts [--window-per-group]]: the prompts on stdin] (a lane's own gate key, or vy-admin) "
          "| status SESSION|RUN | ledger | pins | models | pubkey | fetch SESSION|RUN")
 
 
@@ -1175,7 +1308,8 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
             doc = gate_certifier(rest, host, by=by, now=now, token=hooks.get("token") or secrets.token_hex(2),
                                  start=hooks.get("start_certifier") or start_certifier_unit,
                                  own=hooks.get("own") or own_by_auditor,
-                                 active=hooks.get("certifier_active") or certifier_unit_active, parse=REHEARSALS[verb])
+                                 active=hooks.get("certifier_active") or certifier_unit_active, parse=REHEARSALS[verb],
+                                 read=hooks.get("read") or sys.stdin.buffer.read)
         elif verb == "models" and not rest:
             return 0, host.models.read_bytes() if host.models.exists() else b""
         elif verb == "status" and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
@@ -1485,7 +1619,8 @@ def tunnel_up(tunnel: subprocess.Popen, port: int, seconds: float = 60.0) -> boo
 def certifier_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list[str]:
     """`certifier_serve.py rehearse` of the request, the endpoint at `url` (the tunnel's local end): the honest shim, or
     the request's tamper, with N2 on the request's profile (planned for a request written before it had one), the
-    request's in-flight count and tokens only when it has them, and its sampling always (`sampling_argv`). A varied
+    request's in-flight count and tokens only when it has them, and its keys' height (`height_argv`) and sampling
+    (`sampling_argv`) always. A varied
     request's (`--traffic varied`) passes its varied flags instead when it has them, and its run as `--name`, so each
     request's `user` upstream, `RUN.j`, is no other run's."""
     varied = req.get("traffic") == "varied"
@@ -1494,8 +1629,8 @@ def certifier_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list
     traffic = ["--traffic", "varied", "--name", req["run"]] if varied else \
         ["--profile", req.get("profile", CERTIFIER_PROFILES[0])]
     return [sys.executable, str(tree / "benchmarks" / "network_traces" / "certifier_serve.py"), "rehearse",
-            "--upstream", url, "--out", str(out), "--requests", str(req["requests"]), *given, *sampling_argv(req),
-            *traffic, "--strategies", req["tamper"] or "honest"]
+            "--upstream", url, "--out", str(out), *height_argv(req), "--requests", str(req["requests"]), *given,
+            *sampling_argv(req), *traffic, "--strategies", req["tamper"] or "honest"]
 
 
 def _flag_value(v: object) -> str:
@@ -1513,14 +1648,20 @@ def certifier_env(tree: Path = TREE) -> dict[str, str]:
 
 def warden_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list[str]:
     """`warden_serve.py rehearse` of the request: the warden and its client here, the warden's upstream the endpoint
-    at `url` (the tunnel's local end), the request's number of requests on the gate's traffic (`WARDEN_RATE`,
-    `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`), and the most tokens a request asks for only when
-    the request has it."""
+    at `url` (the tunnel's local end), its key at the request's height (`height_argv`), the request's number of
+    requests on the gate's traffic (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`),
+    for a scan rehearsal id requests (`--ids`) at the scan's schedule (`SCAN_SCHEDULE`), of its prompts (`--prompts`,
+    the gate's `PROMPTS` in `out`, the witness) and in groups (`--window-per-group`) when the request says so, and the
+    most tokens a request asks for only when the request has it."""
+    scan = ["--ids", *SCAN_SCHEDULE] if req.get("scan") else []
+    prompts = ["--prompts", str(out / PROMPTS)] if req.get("prompts") else []
+    grouped = ["--window-per-group"] if req.get("window_per_group") else []
     given = ["--max-tokens", str(req["tokens"])] if "tokens" in req else []
     return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "rehearse",
-            "--upstream", url.removeprefix("http://"), "--out", str(out), "--requests", str(req["requests"]),
+            "--upstream", url.removeprefix("http://"), "--out", str(out), *height_argv(req),
+            "--requests", str(req["requests"]),
             "--rate", str(WARDEN_RATE), "--seed", str(WARDEN_SEED), "--tail", str(WARDEN_TAIL_S), *sampling_argv(req),
-            *given]
+            *scan, *prompts, *grouped, *given]
 
 
 #: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: none is a cell's content or a
@@ -1579,7 +1720,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     work = out
     if warden:
         work = d / WITNESS
-        work.mkdir(mode=0o700)
+        work.mkdir(mode=0o700, exist_ok=True)
     sys.path.insert(0, str(HERE))
     import serve
     local = free_local_port()
