@@ -141,9 +141,9 @@ def qk_parts(m, card, n, form):
 
 def psym_parts(card):
     """O-IO's P-SYM (formula until its spec is out): the useful product untouched, plus a PRF-uniform twin of inner n
-    credited 1:1, its PRG on SHA-512 and its words at SEG-COINS's two a cell."""
+    credited 1:1, its PRG on SHA-512 and its words at SEG-COINS's two a cell; uniform operands, so no wraps."""
     prg = PSYM_PRG * card.mt_comp / (CARDS["H200"][0] / 4.79e9)
-    return 2.0, card.wrap + (prg + 2 * card.C) / PSYM_N
+    return 2.0, (prg + 2 * card.C) / PSYM_N
 
 
 def decode_gamma(m, card, g_cb, noise_stream=2.0):
