@@ -35,7 +35,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # commits them into its origin so the queue's clone runs the `lean-audit` record driver it configures. tools/verity/check/suites.py:
 # test_queue commits it into its origin, so the preflight's tests select suites by its own `touched`.
 # tools/verity/check/gates/markdown_caps.py and tests/test_repository.py: test_queue commits them into its origin, so its sync
-# runs the Markdown caps' landing gate on the caps it reads.
+# runs the Markdown caps' landing gate on the caps it reads. tools/verity/check/pins.py: test_queue commits it into its origin, so
+# the sync's pin rebuild (`repinned`) reads the real `PINS`.
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "archive/direct", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
           "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "benchmarks/tc_probe",
           "pyproject.toml", "tools/config/pyproject.toml", "verity/ml/flock/pyproject.toml", "archive/gkr/pyproject.toml", "benchmarks/numerical/pyproject.toml",
