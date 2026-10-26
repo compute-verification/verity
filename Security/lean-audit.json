@@ -14504,9 +14504,9 @@
    ]
   },
   "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted": {
-   "digest": "603ad473301f0a8069f8685f0e8ff710252a536e50ba863e537324755f281e27",
+   "digest": "a062cbfdb3532370a5d037719f78a8fe5431f2adbc93f1ee591c398aab607d49",
    "definitions": {
-    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted": "99f116cc9c9128a098f46a74c85bf546ae7df85cf8b8a01399c0174e2d90eedc",
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted": "99f75268772d264d1c899fa35cabda81fe688a609f69d9edc3ce0e2c103e4736",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.Tape": "03029516e24d80d57711c1303c7efe0b1bb73c7589c6d4dd19a15eb283b4d2ef",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.prover": "b85eaa01c3acedd19f54e649c6b2b22ba8026b67d14c3748b955bc6efc7b2819",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.stmt": "b60c9e38b436f38e92bf5938feb92288011d20db87604d9c7338df82800b214c",
@@ -17307,6 +17307,7 @@
     "Verity.Assumptions.TrustedHost": "205602db201f6c4f8976260053ef011cade6a4e53347a14486e1c87075c91ca3"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.EncardWardenDecodableLe",
     "NetTiming.SecurityProofs.EncardWardenViewsLe",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
@@ -21425,7 +21426,11 @@
     "NetTiming.TapRecord.record": "a89a64449e10fb21db550c50134329e7153d12fff8381c7f12ea84af14d24b32",
     "NetTiming.tapCode": "e7fe36224fc6527ffca6264f8c5174f7242c48e3acd1586ce3c7b1cb5bcbbc0f"
    },
-   "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted", "NetTiming.SecurityProofs.PeriodLeakAccepted"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
+    "NetTiming.SecurityProofs.HorizonLeakAccepted",
+    "NetTiming.SecurityProofs.PeriodLeakAccepted"
+   ]
   },
   "Definitions.NetworkCertifier.TapRows": {
    "digest": "a985c4aedaa389e00ad4324f88bf6dbff823799ec65ac26b4f5ecbd5c0d5cc1d",
@@ -21465,6 +21470,7 @@
     "NetTiming.wardenLane": "589292a58aa331c6b10ec7993a4d55215213036b1b0a7f560deac23b35bc65c6"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.EncardWardenDecodableLe",
     "NetTiming.SecurityProofs.EncardWardenViewsLe",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
