@@ -1,0 +1,9 @@
+# Brief: ONE3P, v2's accept gives AcceptsZK (ONE-3p), Linear PRF-206
+
+**Due:** statement on PRF-206 by Mon 26 Oct 22:00Z (sooner is better: post it the moment it's fixed); marked by **Tue 27 Oct 12:00Z**. Dates are ceilings (Daniel, 11:22 AM PDT: "move as fast as possible").
+
+The target is `Verity.Soundness` (plan: `~/.research/notes/lanes/proofs/20261026T0332Z-report-onethm.md`, ONE-3 and ONE-8; read it). #4637 (`cursor/proofs-one3-e991`, marked at 3e30f440f9) adds `verity/sampled-proofs/one-stage/v2` (`SampledProofs/OneStageZk.lean`), which runs `Flock.Witness.setupOf` and `acceptsZKRAt` itself on blobs (`CoreProtocol/Blobs.lean`). ONE3B (bc-d89c8b57, branch `cursor/soundness-one3b-*`) switches onsite and remote to v2.
+
+**Deliverable:** a property in a new file under `Security/Properties/SampledProofs/` (read `Security/Properties/SampledProofs.lean`'s `acceptMeans` first): v2's accept implies, for each drawn session, `AcceptsZK` (`Flock.Zk.verify`'s event, the one `SampledKSLive*` is stated over) on that session's circuit, public file and proofs, with the circuit's digest equal to the params' `program_sha512`. Add the corollary through `Properties.Composition.acceptMeans` (#4605, `cursor/proofs-onethm-477b`): onsite's accept gives it too, once ONE3B's wiring lands (state it against `Core.Onsite.protocol` with the v2 component; a hypothesis naming ONE3B's component list is fine until it lands). ONE8 (PRF-205) composes this with `SampledKSLiveV4`: post your names on PRF-206 early. Commit-then-coin (decision 1, Daniel approved): params and commitment fixed before coins; don't read the evidence's own draw as the coins.
+
+**Paths:** a new file in `Security/Properties/` is fine (lean's tree); `verity/core/service/sampled_proofs` is proofs': read only. **Base:** create your branch from `origin/cursor/proofs-one3-e991` and merge `origin/cursor/proofs-onethm-477b` (#4605). **Topic:** `one3p`.
