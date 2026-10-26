@@ -10,6 +10,7 @@ import Definitions.Core.Scalar
 import Definitions.Core.Prims
 import Definitions.Core.TC
 import Definitions.Core.Fp32
+import Definitions.Core.Formalism
 
 /-!
 # Core's protocol: the model every protocol states its guarantees in

@@ -2,6 +2,7 @@ import Definitions.Core.Guarantees.Circuit
 import Definitions.Core.Guarantees.Game
 import Definitions.Core.Guarantees.PrivatePartition
 import Definitions.Core.Guarantees.TC
+import Definitions.Core.Guarantees.Formalism
 
 /-!
 # Core's guarantees
