@@ -9063,9 +9063,9 @@
    ]
   },
   "Properties.Pous.Obligation": {
-   "digest": "3265080fad9766762f4c4bd2cbef919a69e8805eacfd89a4c1af0eff3723787f",
+   "digest": "de695d952b3690175329628784cf1395fdfec84ff28cb545aa7794124f072698",
    "definitions": {
-    "Pous.Period.ObligationHeld": "0d8f193959a9b72c1fabbbc804393faffd29389eba2615fb953bb05685a87d58"
+    "Pous.Period.ObligationHeld": "d8e5066ec89def8976edd5eb0a0a8fcce595cda2dabf757cd48b10ebe8651ba8"
    },
    "guarantees": ["Pous.Period.SecurityProofs.obligationHeld"]
   },
