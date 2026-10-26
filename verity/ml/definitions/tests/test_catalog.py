@@ -17,7 +17,7 @@ from verity.ml.definitions.registry import catalog
 
 REPO = Path(__file__).resolve().parents[4]
 
-COUNT = 1256
+COUNT = 1258
 
 
 def test_the_catalog_loads_every_definition_and_no_other():
