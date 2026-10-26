@@ -12,12 +12,15 @@ SHA-512 schedule θ admits (U13; ALGO-COST-3's A27b: R-hi on sm_120, unmeasured)
 v3's own picks stay as adopted (measured schedules).
 
     PUBLIC_BEST_DIR=<checkout of cursor/compute-research-accel-bet-algo-lab-ea24 at 34866fd9f8 or later, which has
-    d5_v2.py>/benchmarks/pouw/theory python3 benchmarks/pouw/accel_score/d6.py [--json OUT]
+    d5_v2.py>/benchmarks/pouw/theory python3 benchmarks/pouw/accel_score/d6.py [--json OUT] [--pickle OUT]
+
+--from PKL prints the report from a build's pickle (--pickle) without rebuilding.
 """
 import contextlib
 import io
 import json
 import math
+import pickle
 import sys
 from pathlib import Path
 
@@ -703,7 +706,9 @@ def report(D: dict) -> str:
              "C, and P16's groups are C's GPUs at the card's FP8 rate over 8 (not a census). εC is ε times the claim "
              "beside it: ε is a share of the claim at every dual (P20), at 8-GPU groups, with ε_net's MACs each at the "
              "dearest credited round's price at that table's μ over the period's mean. (D6 v0 and v0.1 printed εC "
-             "as ε times C, too large by the credited share; corrected here.)\n")
+             "as ε times C, too large by the credited share; corrected here.) Credit at a period's duals adds up only "
+             "if everything credited in the period is priced at those duals (ALGO-COST-3's A30b); D6 credits one "
+             "workload a card in one LP, with the beside work uncredited, so it holds here.\n")
     L.append("**Model units at μ°, the cards' headline.** Credited is honest device time at pub(μ°), the honest served "
              "period's duals, as FP8 FLOP-equivalents of that time (share × C).\n")
     L.append("| card, model | window | C (FP8 FLOP) | credited (FLOP-eq.) | εC δ 1% | εC δ 1e-6 | "
@@ -836,7 +841,9 @@ def report(D: dict) -> str:
              "factor moved to x's (beside work overlaps the credited rounds, whose OPT* price at the period's duals "
              "is at least the period time they add); the value test stays at x = 0. `v3.1, RTX PRO 6000 PV L′ 64` is "
              "PB5's case: v3.1's static picks and the RTX PRO 6000's PV at L′ 64 wherever its round's γ ≤ 10 (else "
-             "v3.1's pick).\n")
+             "v3.1's pick). At small x the routes' figure at μ° is mostly μ°'s duality gap in the hull's LP, not "
+             "makespan the routes save (ALGO-COST-3's A30a: OPT(μ) − pub(μ) = S + gap_hull(μ) − gap_OPT(μ), "
+             "gap_OPT(μ°) = 0); PB4's table below gives S.\n")
     B = D["beside"]
     names = list(dict.fromkeys(k[0] for k in B))
     L.append("| picks, card | " + " | ".join(f"x = {x:g}" for x in BESIDE) + " |")
@@ -1005,7 +1012,10 @@ def jsonable(x):
 
 
 if __name__ == "__main__":
-    D = build()
+    arg = {k: sys.argv[sys.argv.index(k) + 1] for k in ("--json", "--pickle", "--from") if k in sys.argv}
+    D = pickle.loads(Path(arg["--from"]).read_bytes()) if "--from" in arg else build()
+    if "--pickle" in arg:
+        Path(arg["--pickle"]).write_bytes(pickle.dumps(D))
+    if "--json" in arg:
+        Path(arg["--json"]).write_text(json.dumps(jsonable(D), indent=1, default=str))
     print(report(D))
-    if "--json" in sys.argv:
-        Path(sys.argv[sys.argv.index("--json") + 1]).write_text(json.dumps(jsonable(D), indent=1, default=str))
