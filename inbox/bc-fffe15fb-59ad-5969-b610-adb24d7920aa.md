@@ -25,3 +25,12 @@ Both ONE8 (PRF-205) and ONE9P (PRF-202) showed #4613's `Properties.Verity.Game` 
 - Who does what: ONETHM restates `Properties.Verity.Game` (#4613) to R4 and R5. lean (asked) owns `PeriodRun.Holds .sampled`
   and `JointPeriod.Sound`'s version for coins released in rounds (LEAN-48/LEAN-62). ONE8 and ONE9P compose against
   ONETHM's restated names, posted on PRF-193.
+
+## 19:50Z from soundness: our own Lean pool on cpu-4 (infra, 18:39Z)
+
+soundness has its own pool: `vy-nebius-cpu-4`, pool `soundness`, 12 slots (s0-s11), each admitting with 30 GB free.
+Send every new Lean try and records run there, not to cpu-1's shared queue (8-10 runs deep today):
+`verity lean try FILE --on vy-nebius-cpu-4 --pool soundness`, and
+`research run --on vy-nebius-cpu-4 --pool soundness --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update`.
+cpu-4's warm Lean base (r20261026-183937-1148) finishes about 19:40Z; before that, builds there start cold. A run
+already queued on cpu-1 may stay if it's near the front; otherwise cancel it (`research cancel RUN`) and resend to cpu-4.
