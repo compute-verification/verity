@@ -36,7 +36,8 @@ statements hold at every pair of weights. `ε_ks` is the sampling block's knowle
 `zk_session_soundH_custody`'s at every sampling block: A3 (`uniform/io-getrandombytes`) for its draw bytes,
 `live-verifier` (`StratifiedBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at the
 strategy each sampling block is played with (in a period, at every strategy it is played with on some run,
-`Stratified.Plays`), stated flat. `JointStratifiedStated` records both statements' text until each is proved.
+`Stratified.Plays`), stated flat. Their proofs are `Flock.SecurityProofs.JointStratified` and
+`Flock.SecurityProofs.JointStratifiedHorizon` (`Joint/Bound.lean`).
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
@@ -285,11 +286,5 @@ def JointStratifiedHorizon : Prop :=
         (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
     value (fun l => (∀ r ∈ l, r.accepted) ∧ ¬ Stratified.Within W δ ands bits l) (Stratified.run W T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).epsKs + (W t).link)
-
-/-- **The joint stratified bounds are stated**: the pair of `JointStratified` and `JointStratifiedHorizon`, equal to
-itself, so the lock records their text and every definition they read until each is proved. -/
-def JointStratifiedStated : Prop :=
-  let s := (JointStratified, JointStratifiedHorizon)
-  s = s
 
 end Flock.Guarantees
