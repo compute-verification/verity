@@ -643,7 +643,8 @@ theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {
       simp [hv] at h
 
 /-- A statement with an own port under its V\* statement's name is a rec-residuals, rec-sparse or rec-opening unit. -/
-theorem params_of_own {tags : Tags} {c : Circuit} (P : FlockSoundness.ParseFacts tags c) {sv : VStar.Stmt}
+theorem params_of_own {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : FlockSoundness.ParseFactsU tags pre c)
+    {sv : VStar.Stmt}
     (hn : c.unit.name = sv.name) (hp : RecVStar.checkPart sv c = .ok ()) {q : String × String × Array (Option ℕ)}
     (hq : q ∈ RecVStar.ownPorts sv) :
     (RecResiduals.params c.unit.name).isSome ∨ (RecSparse.params c.unit.name).isSome ∨
@@ -944,7 +945,7 @@ theorem heldRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   have hpr := Flock.Readable.array_forM_ok (RecIns.setup_pubRows hset) 0 h0'
   have hreg := RecIns.setup_registered hset sts[0] (Array.getElem_mem h0')
   rw [← e0] at hcoin hpr hreg
-  obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+  obtain ⟨_, _, P⟩ := Flock.Readable.parseFactsU_of_parse hx ht hpi h0
   obtain ⟨hn, hpt, -⟩ := htab 0 h0
   obtain ⟨own, hown⟩ := Option.isSome_iff_exists.1 (registered_of_coins hcoin (params_of_own P hn hpt hq))
   obtain ⟨xr, hxr, hinner, -⟩ := insO_staged hins

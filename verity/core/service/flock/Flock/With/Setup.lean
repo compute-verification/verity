@@ -721,6 +721,8 @@ def parseTmplWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : Li
   let c ← HmRow.parseWith hs tags bytes tables (pre := #[("unit", tu.net)])
   if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
     throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
+  if HmOut.recUnit tu.net.name then
+    throw s!"circuit: a templated statement's unit {tu.net.name} is a recursion unit, which is read flat"
   checkRows c
   return { c with tmpl := some tu }
 

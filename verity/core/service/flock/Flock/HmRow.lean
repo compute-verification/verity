@@ -1693,6 +1693,13 @@ net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `
 `CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). META is read off its own
 line first (`metaOf`), so the file's lines are split once, by `HmRow.parse`. A file that carries a unit's or a root's rows
 itself is refused: none of the nets `HmRow.parse` read after `pre` is named `unit` or `root`. -/
+/-- **A recursion unit's name** (`RecOpen.params`, `RecOpen.stackedParams`, `RecResiduals.params`, `RecSparse.params`,
+`RecOpening.params`): `parseTmpl` refuses a template whose unit carries one, since the recursion's claims read such a
+unit as a flat net. -/
+def recUnit (name : String) : Bool :=
+  (RecOpen.params name).isSome || (RecOpen.stackedParams name).isSome || (RecResiduals.params name).isSome ||
+    (RecSparse.params name).isSome || (RecOpening.params name).isSome
+
 def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let mj ← metaOf bytes
   let ctx := "templated statement META"
@@ -1703,6 +1710,8 @@ def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteAr
   let c ← HmRow.parse tags bytes tables (pre := #[("unit", tu.net)])
   if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
     throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
+  if recUnit tu.net.name then
+    throw s!"circuit: a templated statement's unit {tu.net.name} is a recursion unit, which is read flat"
   checkRows c
   return { c with tmpl := some tu }
 
