@@ -400,6 +400,32 @@ def test_a_worktree_git_wont_remove_decides_no_verdict_and_goes_by_hand(linted, 
     assert len(linted.git("worktree", "list").splitlines()) == 1
 
 
+def test_a_worktree_that_leaves_files_behind_decides_no_verdict(linted, monkeypatch, tmp_path):
+    """ci's review of #4852: when git won't remove the worktree and the removal by hand leaves a file, the scratch directory's own
+    cleanup raised on 3.12, past `main`'s `GitError`, and the gate exited 1 naming no failure."""
+    linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
+                                                       P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
+    run = subprocess.run
+    monkeypatch.setattr(G.subprocess, "run", lambda args, *a, **k: subprocess.CompletedProcess(args, 1)
+                        if list(args[:3]) == ["git", "worktree", "remove"] else run(args, *a, **k))
+
+    def stubborn(path, ignore_errors=False, onerror=None, *, onexc=None, dir_fd=None):
+        """`shutil.rmtree` on a directory a file it can't delete keeps: its error goes to `onexc`, as shutil's does"""
+        try:
+            raise OSError(39, "Directory not empty", str(path))
+        except OSError as e:
+            if onexc is not None:
+                onexc(os.rmdir, str(path), e)
+            elif not ignore_errors:
+                raise
+
+    monkeypatch.setattr(G.tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(G.shutil, "rmtree", stubborn)
+    monkeypatch.setattr(G.tempfile, "_rmtree", stubborn)
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
+
+
 def test_a_retired_entry_passes_once_the_base_lint_agrees_it_is_gone(linted):
     linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
                                                        P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
