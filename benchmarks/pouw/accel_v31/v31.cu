@@ -51,6 +51,7 @@
 
 #include "../commit_gpu/commit_gpu.cuh"
 #include "../gpu_kit/bench.cuh"
+#ifdef V31_CUTLASS
 #include "../harness/native/cutlass_api.h"
 #else
 struct phc_prepared {   // no CUTLASS: Cut never finds a kernel
