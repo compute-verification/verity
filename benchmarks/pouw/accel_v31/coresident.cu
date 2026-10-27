@@ -9,7 +9,8 @@
 //   NM     consumer warpgroups: 1 (a 64 x BN tile) or 2 (128 x BN, gemm_r5's)
 //   FORM   n128: one m64n128k32 a k32 atom (BN 128); alt: gemm_r5's 128 x 256 tile, two m64n128k32 an atom into
 //          accumulators 0..63 and 64..127 in turn (imma_atom<256, true>); chain: the same eight MMAs a k-tile, the four
-//          into 0..63 first, then the four into 64..127; n256: one m64n256k32 an atom (the probe's)
+//          into 0..63 first, then the four into 64..127 (no n256: ptxas sizes a m64n256k32 by the launch's registers, 128
+//          at 512 threads, whatever setmaxnreg gives the consumers)
 //   flags  res: the operands resident in one stage of shared memory, the consumers free-running (no barriers);
 //          bar: the producer warp hands the stages over on gemm_r5's full and empty mbarriers, loading nothing;
 //          load: the producer loads each k-tile with TMA from A (M x K) and B (N x K), tiles in gemm_r5's static
@@ -54,7 +55,7 @@ using u64 = unsigned long long;
 using u32 = uint32_t;
 using wgp::BK;
 
-enum Form { N128 = 0, ALT = 1, CHAIN = 2, N256 = 3 };
+enum Form { N128 = 0, ALT = 1, CHAIN = 2 };
 enum Flag { BAR = 1, LOAD = 2, EPI = 4 };
 constexpr int STAGES = 4;
 constexpr double BAR_RATE = 0.018029;   // compressions a SM-clock: 4.355e9 / (132 x 1830e6)
@@ -189,9 +190,6 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
     } else if constexpr (FORM == ALT) {
 #pragma unroll
       for (int i = 0; i < 4; i++) wgp::imma_atom<256, true>(d, a0 + 32 * i, b0 + 32 * i, i > 0 || sd);
-    } else if constexpr (FORM == N256) {
-#pragma unroll
-      for (int i = 0; i < 4; i++) wgp::imma<256>(d, wgp::desc_sw128(a0 + 32 * i), wgp::desc_sw128(b0 + 32 * i), i > 0 || sd);
     } else {
 #pragma unroll
       for (int i = 0; i < 4; i++) wgp::imma<128>(d, wgp::desc_sw128(a0 + 32 * i), wgp::desc_sw128(b0 + 32 * i), i > 0 || sd);
@@ -247,8 +245,7 @@ struct Cfg {
   {NAME, NM, FORM, FL, Y, HR, NWG, smem_bytes<NM, FORM, FL>(), Shape<NM, FORM>::MACS, cta<NM, FORM, FL, Y, HR, NWG>}
 // The consumers' register budget Y and, for each, the tiles and CTA sizes it fits, the hash warps at the registers left:
 // res, the operands resident (the ceiling), and le, TMA loads and the epilogue (the served call's parts). gemm_r5 is
-// y160_m2_alt_w4 (HR 96, 7 hash warps beside the producer). n256 is resident only: with the epilogue ptxas places its
-// m64n256k32 at the launch's 128 registers, not the consumers' Y.
+// y160_m2_alt_w4 (HR 96, 7 hash warps beside the producer).
 #define BOTH(NAME, NM, FORM, Y, HR, NWG) CFG(NAME "_res", NM, FORM, 0, Y, HR, NWG), CFG(NAME "_le", NM, FORM, LOAD | EPI, Y, HR, NWG)
 static const Cfg CFGS[] = {
     BOTH("y232_m1_alt_w4", 1, ALT, 232, 88, 4),  BOTH("y232_m1_alt_w5", 1, ALT, 232, 64, 5),
@@ -256,8 +253,7 @@ static const Cfg CFGS[] = {
     BOTH("y176_m1_alt_w5", 1, ALT, 176, 80, 5),  BOTH("y160_m2_alt_w4", 2, ALT, 160, 96, 4),
     BOTH("y160_m2_alt_w5", 2, ALT, 160, 64, 5),  BOTH("y128_m2_n128_w4", 2, N128, 128, 128, 4),
     BOTH("y128_m2_n128_w5", 2, N128, 128, 80, 5), BOTH("y128_m2_n128_w6", 2, N128, 128, 64, 6),
-    BOTH("y104_m2_n128_w6", 2, N128, 104, 72, 6), CFG("y160_m2_n256_w4_res", 2, N256, 0, 160, 96, 4),
-    CFG("y232_m1_n256_w4_res", 1, N256, 0, 232, 88, 4),
+    BOTH("y104_m2_n128_w6", 2, N128, 104, 72, 6),
 };
 
 static CUtensorMap tmap(const void* ptr, int depth, int rows, int box_rows) {
