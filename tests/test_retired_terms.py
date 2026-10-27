@@ -13,6 +13,10 @@ The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (`
 "block" is reserved for parts of circuits, the subprotocols go by their names, and "leg" is retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
+
+``DOC_TERMS`` also holds the overhead lower bound's retired words, each with what replaced it (`GLOSSARY.md`,
+Older names). "Slack" stays out of it, since the word keeps other senses (a tick's slack, AuditRO's slack,
+the Slack app); "dark" alone is in it, since no maintained doc uses the word in another sense.
 """
 from __future__ import annotations
 
@@ -34,13 +38,35 @@ DOC_TERMS = {
     "wrong unit, incorrect unit": "faulty proof block",
     "isolation unit, IU": "isolation block",
     "replay unit": "replay block",
-    "physical block": "server-time block",
+    "physical block, serving block, server-time block, server-window": "server block",
+    "certified block": "inference block",
     "thread block": "CTA",
     "KV block": "KV page",
     "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
+    "exclusion bound": "overhead lower bound (the result) or server-block yield (the per-block step)",
+    "window cap, per-block cap, per-block limit": "server-block yield",
+    "physical class": "feasible set",
+    "monitored class, training class, restricted class": "admissible set (a premise set with the yield it gives is a "
+                                                         "pricing argument)",
+    "work requirement": "necessary subcomputation",
+    "reference construction": "reference training algorithm",
+    "dark, dark compute, dark fleet, dark leaves": "unregistered hardware",
+    "monitored compute": "registered hardware",
+    "declared compute, accounted compute, certified work": "verified compute",
+    "undeclared compute, unaccounted compute, skippable work, uncertified capacity, uncertified share": "free compute",
+    "unregistered input bits": "fresh input bits",
+    "registered computation": "the declared circuit (registered programs on committed inputs)",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
-_DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
+_DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?"
+                       rf"|(?:physical|thread|KV|serving|certified|server{_SPACE}time){_SPACE}blocks?"
+                       rf"|server{_SPACE}windows?|exclusion{_SPACE}bounds?|window{_SPACE}caps?"
+                       rf"|per{_SPACE}block{_SPACE}(?:caps?|limits?)"
+                       rf"|(?:physical|monitored|training|restricted){_SPACE}class(?:es)?|work{_SPACE}requirements?"
+                       rf"|reference{_SPACE}constructions?|dark{_SPACE}(?:compute|fleets?|leaves)|dark"
+                       rf"|(?:monitored|(?:un)?declared|(?:un)?accounted){_SPACE}compute"
+                       rf"|(?:skippable|certified){_SPACE}work|uncertified{_SPACE}(?:capacit(?:y|ies)|shares?)"
+                       rf"|unregistered{_SPACE}input{_SPACE}bits?|registered{_SPACE}computations?"
                        rf"|legs?)\b)|\bIUs?\b")
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
@@ -58,7 +84,6 @@ ALLOWED: dict[str, str] = {
 PENDING: dict[str, str] = {
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
-    "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
     "examples/h200/interfaces/verity_e2e_demo/report.py": "#4691 adds a line",
     "examples/h200/README.md": "#4680 rewrites its lines",
     "benchmarks/network_traces/chain_record.py": "#4575 rewrites its lines",
@@ -178,6 +203,16 @@ def test_the_doc_scan_reads_each_form():
         "b.md": 'The `legs/pous.py` file and `wipe_period.leg(dir)`; ``a `leg` key``; "leg" is retired.\n'
                 "```sh\nLEGS=A,B ./run.sh  # each leg\n```\n~~~\na leg\n~~~\nA thread block after the fences.\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
+        "d.md": "An exclusion bound on a serving\nblock, a server-time block and a server-window; a certified block.\n"
+                "Uncertified capacity, the per-block cap, a window cap, the physical class and a training class.\n"
+                "A work requirement, a dark fleet, a reference construction; not uncertified blocks, window capacity.\n",
+        "e.md": "Dark compute, the dark leaves; monitored compute, declared compute and undeclared compute.\n"
+                "Accounted compute, unaccounted\ncompute, skippable work, certified work; unregistered input bits.\n"
+                "It went dark. Not the monitoring period, a declared circuit, accounted for, certified ingress,\n"
+                "registered input bits, a tick's slack or Slack.\n",
+        "f.md": "A per-block limit, two per-block\nlimits; the registered computation and registered computations.\n"
+                "Not a per-block error, per-block keys, a window limit, registered programs or the computation\n"
+                "registered.\n",
         "benchmarks/numerical/CHANGELOG.md": "a leg",
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
@@ -185,4 +220,13 @@ def test_the_doc_scan_reads_each_form():
     assert doc_offenders(list(docs), read=docs.__getitem__) == [(GLOSSARY, 2, "leg"),
         ("a.md", 1, "wrong unit"), ("a.md", 1, "Isolation-Units"), ("a.md", 1, "replay unit"), ("a.md", 2, "IU"),
         ("a.md", 2, "IUs"), ("a.md", 2, "KV block"), ("a.md", 3, "legs"), ("a.md", 3, "leg"), ("a.md", 3, "leg"),
-        ("b.md", 8, "thread block")]
+        ("b.md", 8, "thread block"), ("d.md", 1, "exclusion bound"), ("d.md", 1, "serving block"),
+        ("d.md", 2, "server-time block"), ("d.md", 2, "server-window"), ("d.md", 2, "certified block"),
+        ("d.md", 3, "Uncertified capacity"), ("d.md", 3, "per-block cap"), ("d.md", 3, "window cap"),
+        ("d.md", 3, "physical class"), ("d.md", 3, "training class"), ("d.md", 4, "work requirement"),
+        ("d.md", 4, "dark fleet"), ("d.md", 4, "reference construction"), ("e.md", 1, "Dark compute"),
+        ("e.md", 1, "dark leaves"), ("e.md", 1, "monitored compute"), ("e.md", 1, "declared compute"),
+        ("e.md", 1, "undeclared compute"), ("e.md", 2, "Accounted compute"), ("e.md", 2, "unaccounted compute"),
+        ("e.md", 3, "skippable work"), ("e.md", 3, "certified work"), ("e.md", 3, "unregistered input bits"),
+        ("e.md", 4, "dark"), ("f.md", 1, "per-block limit"), ("f.md", 1, "per-block limits"),
+        ("f.md", 2, "registered computation"), ("f.md", 2, "registered computations")]

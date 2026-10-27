@@ -200,7 +200,7 @@ theorem Windows : Guarantees.Actual.Windows := by
   obtain ⟨hgates, hsize, hreads⟩ := hP i k
   have e : min ((k : ℕ) * ω) t = k * ω := min_eq_left (mul_lt_of_lt_ceil hω k.2).le
   have hst : A.stateIn (X i) (k * ω) univ ≤ M (X i) :=
-    stateIn_le_of_memoryAt A (memoryAt_of_memory A hM Set.univ) ⟨i, rfl⟩ (Set.mem_univ _) _
+    (stateIn_le_state A _ _ _).trans (hM _ ⟨i, rfl⟩ _)
   refine ⟨hgates.trans ?_, hsize.trans ?_, (InferenceOnly.SecurityProofs.novelReads_le_readsIn _ _).trans (hreads.trans ?_)⟩
   · show A.region (X i) (Set.Ico (min ((k : ℕ) * ω) t) (min (((k : ℕ) + 1) * ω) t)) = _
     rw [e]

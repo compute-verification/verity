@@ -1,6 +1,7 @@
 import Proofs.Accounting.Defs
 import Proofs.Accounting.Memory
 import Proofs.Accounting.Device
+import Proofs.Accounting.Adversary
 import Proofs.Accounting.Gates
 import Proofs.Accounting.FillerLuck
 import Proofs.Accounting.Headline
@@ -97,5 +98,9 @@ import Proofs.Accounting.Compose
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest
 import Proofs.Accounting.Served
+import Proofs.Accounting.ServingBlocks
+import Proofs.Accounting.ServingBlocks.Witnesses
+import Proofs.Accounting.ServingBlocks.Straddle
+import Proofs.Accounting.ServingBlocks.Straddle.Witnesses
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

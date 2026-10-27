@@ -12,7 +12,7 @@ population `n` (the public file's `pub.n`) give the key program `keyProg D.unrol
 (`keyCircuit`, `keyPartition`) the session's game and V3 are stated over. Here that circuit is core's:
 
 * `Verity.Circuit.ofAudit C`: a game circuit (`FlockSoundness.Audit.Circuit`) as core's (`Verity.Circuit`), through the
-  Boolean profile (`Verity.Boolean.Circuit.toCircuit`): the same gates, one bit each. `Verity.Partition.ofAudit P` is
+  Boolean profile (`FlockSoundness.Audit.Circuit.toCircuit`): the same gates, one bit each. `Verity.Partition.ofAudit P` is
   the same partition, and `Verity.Circuit.ofBits xs` a transcript of bits. `Verity.Partition.wrong_ofAudit`: the wrong
   units are the same, so every statement about the game's wrong units is one about core's.
 * `circuitOf D hU n := .ofAudit (keyCircuit D hU n)` and `partsOf D hU n := .ofAudit (keyPartition D hU n)`: the
@@ -33,7 +33,7 @@ open Claims.Sampling
 /-! ## A game circuit as core's -/
 
 /-- A game gate as the Boolean profile's: the same gate. -/
-def coreOp {N : ℕ} : FlockSoundness.Audit.Op N → Verity.Boolean.Op N
+def coreOp {N : ℕ} : FlockSoundness.Audit.Op N → FlockSoundness.Audit.Op N
   | .input => .input
   | .and a b => .and a b
   | .xor a b => .xor a b
@@ -51,7 +51,7 @@ theorem apply_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) (v : Fin N → Bo
   cases o <;> rfl
 
 /-- A game circuit as a Boolean circuit: the same gates and outputs. -/
-def coreBool (C : FlockSoundness.Audit.Circuit) : Verity.Boolean.Circuit where
+def coreBool (C : FlockSoundness.Audit.Circuit) : FlockSoundness.Audit.Circuit where
   N := C.N
   op g := coreOp (C.op g)
   topo g a ha := C.topo g a (by rwa [args_coreOp] at ha)
@@ -71,10 +71,10 @@ abbrev Circuit.ofAudit (C : FlockSoundness.Audit.Circuit) : Circuit where
   isInput g := (coreOp (C.op g)).isInput
   reads g := (coreOp (C.op g)).args.toFinset
   reads_lt g a ha := C.topo g a (by rwa [List.mem_toFinset, args_coreOp] at ha)
-  input_reads g h := by simp [Verity.Boolean.Op.args_of_isInput h]
+  input_reads g h := by simp [FlockSoundness.Audit.Op.args_of_isInput h]
   op g v := BitVec.ofBool ((coreOp (C.op g)).apply fun a => (v a).getLsbD 0)
   op_congr g v v' h := by
-    rw [Verity.Boolean.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
+    rw [FlockSoundness.Audit.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
   outputs := C.outputs
 
 section OfAudit

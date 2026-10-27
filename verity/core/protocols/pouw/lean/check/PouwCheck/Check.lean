@@ -12,7 +12,7 @@ import PouwCheck.WindowSalt
 `registered` holds the registration to PoUW's rule: a served window in the verifier's context registering exactly
 `window.REGISTERED` (a registration of `window.LEGACY_REGISTERED`, made before the fixed-length rule, is not of record),
 its `length` item a fixed-length window's at the verifier's max_tokens (`window.length_problem`: no EOS-keyed row, each
-slot served its max_tokens; Daniel, 19 Oct, ASK-39), a work level whose tiles lie in the declared range, each item the verifier's own at that level, the
+slot served its max_tokens), a work level whose tiles lie in the declared range, each item the verifier's own at that level, the
 population N = point(level + 1), the law subset:K′ with K′ the window's exact `k_prime`, and the check's query and
 scheme. `outcome` then holds the service's answer to it: one-stage's, for this registration's digest, and on acceptance
 a profile and draw of the registered partition's N units drawn subset:K′ at the window's δ, and a live window's salt its

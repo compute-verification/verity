@@ -56,12 +56,6 @@ standing = "contested"
 beyond = "contested"
 credible_bits = { value = inf, unit = "bit", source = "contested at every k: an exact block codes an activation in 0.87-0.94 bits given theta (replay-consistent exact blocks on Qwen2.5-1.5B), below f = 4", status = "measured" }
 
-[premise.activation-reads]
-lean = "InferenceOnly.Cover.Assumptions.ActivationReads"
-standing = "contested"
-beyond = "refuted"
-credible_bits = { value = 4e9, unit = "bit", source = "a block holding Kimi K2's embedding and dense layer 0 updates computes their outputs from token ids (cheap inputs, measured); contested below at f = 4 (exact blocks on Qwen2.5-1.5B)", status = "derived" }
-
 [premise.activation-chained]
 lean = "InferenceOnly.Assumptions.ActivationChained"
 standing = "supported"
@@ -80,12 +74,6 @@ standing = "supported"
 beyond = "supported"
 credible_bits = { value = inf, unit = "bit", source = "InferenceOnly.Cover.MulBlocks.Upstream docstring: a structural property of the training circuit; the depth D it needs at k is classes.upstream_share", status = "derived" }
 
-[premise.cube-wide]
-lean = "InferenceOnly.Cover.Cube.Wide"
-standing = "supported"
-beyond = "supported"
-credible_bits = { value = inf, unit = "bit", source = "InferenceOnly.Cover.Cube.Wide: the accumulation entries' width, a property of the recipe's shapes", status = "derived" }
-
 [premise.baseline-registered]
 lean = "InferenceOnly.Assumptions.BaselineRegistered"
 standing = "supported"
@@ -102,7 +90,19 @@ credible_bits = { value = inf, unit = "bit", source = "InferenceOnly.Guarantees.
 lean = "draft:E1-activation-rate"
 standing = "assumed"
 beyond = "contested"
-credible_bits = { value = 1.1e9, unit = "bit", source = "E1 P0: past one step's data a block replays the step and with it the activations; the cheap-input prefix below is classes.expensive_share", status = "derived" }
+credible_bits = { value = 1.1e9, unit = "bit", source = "E1 P0: past one step's data a block replays the step and with it the activations; the cheap-input prefix below is classes.expensive_share; past one layer's update a block holding whole layers computes their activations from its entries (attacks.HeldLayers), so the classes citing it give no cap there (classes.unheld_share)", status = "derived" }
+
+[premise.held-rate]
+lean = "InferenceOnly.Ldl.Assumptions.HeldRate"
+standing = "assumed"
+beyond = "contested"
+credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: its held-weight side is UpdateHardness's b, which one step's data replays from the registered weights (E1 P0); its entry side is beta_x d, premise.e1-activation-rate's price of a token's crossing, which no construction has undercut", status = "derived" }
+
+[premise.evaluates-blocks]
+lean = "InferenceOnly.Ldl.Assumptions.EvaluatesBlocks"
+standing = "supported"
+beyond = "supported"
+credible_bits = { value = inf, unit = "bit", source = "InferenceOnly.Ldl.Assumptions.EvaluatesBlocks: a capability of the decoder the bound fixes (it evaluates a block from its index and unregistered input bits), not a property of the data", status = "derived" }
 
 [premise.e1-h-gamma]
 lean = "draft:E1-H-gamma"
