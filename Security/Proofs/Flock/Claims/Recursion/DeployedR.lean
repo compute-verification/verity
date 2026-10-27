@@ -15,7 +15,7 @@ V\*'s bound layout `layR elem` (`layoutBTops (finOpen (restR elem))` with the ou
 * **The columns** are the reader's, the trimmed plain record's at `rdR` (`deployPlainTrimR rel rdR`), as
   `RecursiveKSAt` reads them: `bdR` is `RecDeploy.bdR rdR wER finalR wR`.
 
-* **The weights** (ASK-72): `DE`'s is the deployed plain record's (`wER`), `γ`'s at `IVStar` its cover (`wR`,
+* **The weights**: `DE`'s is the deployed plain record's (`wER`), `γ`'s at `IVStar` its cover (`wR`,
   `wCover`). **The join** is `FlockDeploy.joinR`, the rows' digest input `rowInDeployed`.
 * **The element-level last message** (`rdR`): tag `1`, the statement (length-prefixed), then each rep's proof's
   openings, the fields no frame reads (`readRep`'s `q`, all that `absorbedFrom` keeps of it): the initial level's,
@@ -56,10 +56,10 @@ open Lean (Json)
 
 /-! ## The weights and the join -/
 
-/-- **`DE`'s weight** (ASK-72): the deployed plain record's. -/
+/-- **`DE`'s weight**: the deployed plain record's. -/
 noncomputable def wER : Msg → ℝ := (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).weight
 
-/-- **`γ`'s weight at `IVStar`** (ASK-72): `wCover` of the deployed plain record's. -/
+/-- **`γ`'s weight at `IVStar`**: `wCover` of the deployed plain record's. -/
 noncomputable def wR : Msg → ℝ := wCover _root_.Flock.Readable.relation
 
 /-! ## The element-level last message (`rdR`) -/

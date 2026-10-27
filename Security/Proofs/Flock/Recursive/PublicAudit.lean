@@ -99,7 +99,7 @@ no registration rows (`nr = 0`) and the public circuit `P` as the simulator's `p
 `2 n_r·δ_{K*}` is zero, the bound is `ε_V(δ_{K*}) + n_h·δ_{K*}`, and the simulator reads `P`, the schedule's transcript
 and the owed outputs.
 
-**A nearly empty event** (vacuity sweep, 16 Oct, LEAN-19): (i)'s event asks that the inner statement have no witness (`¬
+**A nearly empty event**: (i)'s event asks that the inner statement have no witness (`¬
 holds`, with `holds` = `∃ z, Satisfies z`). The inner statement pins each row only by its hm96 commit string `b ‖ c`,
 with the salt a free witness wire, so a commitment to a wrong row under a fresh salt also opens to the right row except
 with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, on
