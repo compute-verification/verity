@@ -5,7 +5,7 @@ margin, with each arm's gates.  An arm whose gates failed contributes no number 
 
     python benchmarks/pous/side_by_side.py BAND.json P2.json --out SIDE.json [--markdown SIDE.md]
 
-Under `research run`, `result.json` carries both arms' rows, `band_*` and `p2_*`, and validation passes only if both arms did.
+With `RESEARCH_RUN_DIR` set, `result.json` carries both arms' rows, `band_*` and `p2_*`, and validation passes only if both arms did.
 """
 from __future__ import annotations
 

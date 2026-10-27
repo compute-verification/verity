@@ -39,12 +39,10 @@ numpy reference, and `driver.py validate` checks the device kernel against that 
 separation table (cheater/honest time ratio per `R`, `f`), and the recommended `(R, T)` for which `f ≥ 5%` host-resident
 is distinguishable from fully device-resident with margin.
 
-## Running (node 1, through the research queue)
+## Running (a GPU node)
 
 ```bash
-cd /workspace && uv run research run --queue --on vy-nebius-1 --source . --project verity --gpus 1 --cpus 8 --max-min 12 \
-  --preemptible --cwd source --declared-output 'out/*' -- \
-  bash -lc 'export TRITON_CACHE_DIR=/workspace/jobs/hbm-triton-cache; O=/workspace/jobs/hbm-out; \
+bash -lc 'export TRITON_CACHE_DIR=/workspace/jobs/hbm-triton-cache; O=/workspace/jobs/hbm-out; \
     cd benchmarks/pous/hbm_audit; PY=/workspace/jobs/venv312/bin/python; \
     "$PY" driver.py validate --out "$O"; "$PY" driver.py honest --out "$O" --c-gib 1,4,8,16 --r-lo 10 --r-hi 16 --trials 150; \
     "$PY" driver.py cheater --out "$O" --cheater-c-gib 8 --r-lo 10 --r-hi 16 --fracs 0.0,0.01,0.05,0.10,0.50,1.0'

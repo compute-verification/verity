@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # part-out.sh LO HI: hard-link segments [LO, HI) of this machine's mem69-v2 store (seg/, rows/) and its setup.json into
-# $OUT/part, so the run's custody publishes them in its run record (a node run holds no key for `research data put`).
+# $OUT/part, so the run's custody publishes them in its run record (a node run holds no key to put them in the store itself).
 # Keep a part under 4 GiB (26 segments), since custody uploads don't resume; the record's art is in the run's `.custody`.
-#   research run --on NODE --cwd source -- [env CHECK_SLOTS=... python3 tools/verity/check/slot.py --by LANE --] \
-#     bash benchmarks/pous/p2_v1/parts/part-out.sh LO HI
+#   OUT=DIR bash benchmarks/pous/p2_v1/parts/part-out.sh LO HI
 set -euo pipefail
 LO=$1 HI=$2
 ST=${ST:-/workspace/research/pous-store/mem69-v2}

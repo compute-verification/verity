@@ -11,9 +11,9 @@ Measuring:
 
 - `lat.cu`: `lat serve` (the responder), `lat probe` (the challenger) and `lat load` (a serving-like load). Build lines are
   in its header; the challenger also builds with `g++` alone, so it runs on a machine without CUDA.
-- `job.py`: one `research run` on vy-nebius-2 with two GPUs from the queue: the responder on the job's first GPU, then per
-  condition (`quiet`, `hbm`, `pcie`, `vllm`, its docstring) challengers on this node, on vy-nebius-cpu-1 and on
-  vy-nebius-1.
+- `job.py`: one job on a GPU node with two GPUs: the responder on the job's first GPU, then per
+  condition (`quiet`, `hbm`, `pcie`, `vllm`, its docstring) challengers on this node, on a CPU node and on
+  a second GPU node.
 - `vllm_load.py`: vLLM generation as the `vllm` condition's load, with the node's vLLM venv.
 - `net.py`: the network path alone (host-memory answers and pings, no GPU), in variants and as concurrent series on
   three paths.
@@ -39,22 +39,19 @@ hellos until a ping comes back; nothing in the security group changes.
 
 ## Running it
 
-Each job runs on vy-nebius-2 from a pushed commit and writes everything to `$OUT`. It reaches vy-nebius-cpu-1 and
-vy-nebius-1 as `research` with `~/.ssh/vy-cluster` (`job.py`'s `REMOTES`), and builds `lat` there with `g++` in a
+Each job runs on a GPU node from a pushed commit and writes everything to `$OUT`. It reaches the CPU node and the
+second GPU node over ssh (`job.py`'s `SSH` and `REMOTES`), and builds `lat` there with `g++` in a
 `mktemp -d` directory. `job.py` builds with `/usr/local/cuda`'s nvcc for sm_120, and its `vllm` condition needs the
 node's vLLM venv and model snapshot (`VENV`, `MODEL`). The load takes the declared CPU count (`OMP_NUM_THREADS`) less
 the responder's and the local challenger's cores.
 
 ~~~sh
-research run --on vy-nebius-2 --cwd source --env OMP_NUM_THREADS=16 -- \
-  gpu-lease 2 --wait --max-min 42 --mem-gb 96 --preemptible -- python3 benchmarks/pous/lateness/job.py
-research run --on vy-nebius-2 --cwd source --env OMP_NUM_THREADS=4 -- python3 benchmarks/pous/lateness/net.py
-research run --on vy-nebius-2 --cwd source --env OMP_NUM_THREADS=2 -- \
-  python3 benchmarks/pous/lateness/irqpin.py --ops 2 --dgram 1422 --seconds 150
+OUT=DIR OMP_NUM_THREADS=16 gpu-lease 2 --wait --max-min 42 --mem-gb 96 --preemptible -- python3 benchmarks/pous/lateness/job.py
+OUT=DIR OMP_NUM_THREADS=4 python3 benchmarks/pous/lateness/net.py
+OUT=DIR OMP_NUM_THREADS=2 python3 benchmarks/pous/lateness/irqpin.py --ops 2 --dgram 1422 --seconds 150
 ~~~
 
-To analyze a run, fetch its `out/` from its run record (`research data show RUN --json` names the `run_record`
-artifact; `research data fetch ART --path 'out/*' --to D`) and keep each tree under its run id, since `analyze.py`
+To analyze runs, keep each run's `out/` tree under its run id, since `analyze.py`
 names cells by the tree's directory: `python analyze.py runs/RUN ... --json gpu-runs.json`.
 
 ## Wire format (UDP, little-endian)
