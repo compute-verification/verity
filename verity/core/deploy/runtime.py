@@ -84,6 +84,11 @@ def _plain(outcome: Finish) -> dict[str, Any]:
     return {"outcome": outcome.outcome, "refused": outcome.refused}
 
 
+def _refused(name: str, **detail: Any) -> Finish:
+    """A refusal the runtime makes: its name public, its detail private, since it may quote what a party holds."""
+    return Finish(detail, name, kind="private")
+
+
 class Host:
     """One party as the runtime runs it. `transmit(endpoint, frame)` puts a frame on the wire; in a replay it is a no-op."""
 
@@ -132,7 +137,7 @@ class Host:
             try:
                 out = hs.on(raw)
             except Refused as e:
-                self._end(Finish({"channel": channel, "detail": e.detail}, e.name))
+                self._end(_refused(e.name, channel=channel, detail=e.detail))
                 return
             for f in out:
                 self._handshake_out(ep, f)
@@ -148,7 +153,7 @@ class Host:
             msg = ep.accepts.decode(raw)
         except Refused as e:
             ep.closed = True
-            refused = Finish({"channel": channel, "detail": e.detail}, e.name)
+            refused = _refused(e.name, channel=channel, detail=e.detail)
             self._act(lambda: self.party.on(Received(channel, Message("Refused", {"name": e.name,
                                                                                  "detail": e.detail[:1024]}))), refused)
             if self.finished is None:
@@ -163,7 +168,7 @@ class Host:
         ep.closed = True
         self.transcript.append("event", channel, "structure", RUNTIME.encode(msg))
         if not self.started:
-            self._end(Finish({"channel": channel, "detail": f"{channel} closed before {self.name} started"}, "closed"))
+            self._end(_refused("closed", channel=channel, detail=f"{channel} closed before {self.name} started"))
             return
         self._act(lambda: self.party.on(Received(channel, msg)))
 
@@ -179,7 +184,7 @@ class Host:
             raise
         except Exception as e:  # noqa: BLE001
             if self.finished is None:
-                self._end(refused or Finish({"error": f"{type(e).__name__}: {e}"}, "party-died"))
+                self._end(refused or _refused("party-died", error=f"{type(e).__name__}: {e}"))
 
     def _do(self, a: Action) -> None:
         if isinstance(a, Timer):
@@ -188,14 +193,13 @@ class Host:
             ep = self.endpoints.get(a.channel)
             m = a.message
             if ep is None or m.type not in ep.sends.types:
-                self._end(Finish({"channel": a.channel, "type": m.type,
-                                  "detail": f"{self.name} sent {m.type} on {a.channel}, which its manifest doesn't "
-                                            "declare"}, "undeclared"))
+                self._end(_refused("undeclared", channel=a.channel, type=m.type,
+                                   detail=f"{self.name} sent {m.type} on {a.channel}, which its manifest doesn't declare"))
                 return
             try:
                 f = ep.sends.encode(m)
             except Refused as e:
-                self._end(Finish({"channel": a.channel, "detail": e.detail}, e.name))
+                self._end(_refused(e.name, channel=a.channel, detail=e.detail))
                 return
             self.transcript.append("out", a.channel, ep.sends.kind(m.type, m.version), f)
             self.transmit(ep, f)
@@ -207,8 +211,10 @@ class Host:
             raise TypeError(f"{a!r} is not an action")
 
     def _end(self, f: Finish) -> None:
-        data = canonical(_plain(f))
-        self.transcript.append("finish", "", f.kind if f.refused is None else "output", data)
+        """The party's finish: a refusal's name is public, what it says is of the kind the party gave it."""
+        if f.refused is not None:
+            self.transcript.append("record", "", "output", canonical({"refused": f.refused}))
+        self.transcript.append("finish", "", f.kind, canonical(_plain(f)))
         self.finished = f
         self.on_finish(self)
 
@@ -378,17 +384,19 @@ class Runtime:
                 for name in sorted(self.hosts):
                     h = self.hosts[name]
                     if h.finished is None:
-                        h._end(Finish({"detail": f"{name} waits on a message nothing can send"}, "stalled"))
+                        h._end(_refused("stalled", detail=f"{name} waits on a message nothing can send"))
         except Diverged as e:
             for name in sorted(self.hosts):
                 h = self.hosts[name]
                 if h.finished is None:
-                    h._end(Finish({"detail": str(e)}, "divergence"))
+                    h._end(_refused("divergence", detail=str(e)))
 
 
 def _describe(e: Entry) -> str:
     what = e.dir
-    if e.dir in ("in", "out", "event"):
+    if e.elided:
+        what += " (a frame kept as its digest)"
+    elif e.dir in ("in", "out", "event"):
         try:
             head = parse(split(e.data)[0])
             what += f" {head.get('type')}" if isinstance(head, dict) else ""
@@ -414,7 +422,7 @@ def replay(protocol: ProtocolDef, name: str, party: Party, recorded: Transcript,
         made = [e for e in new if not e.dir.startswith("handshake")]
         for k in range(j, len(made)):
             a, b = (old[k] if k < len(old) else None), made[k]
-            if a is None or (a.dir, a.channel, a.kind, a.data) != (b.dir, b.channel, b.kind, b.data):
+            if a is None or (a.dir, a.channel, a.kind, a.elided, a.data) != (b.dir, b.channel, b.kind, b.elided, b.data):
                 why = (f"entry {k}: recorded {'nothing' if a is None else _describe(a)}, replayed {_describe(b)}")
                 break
         else:
@@ -422,6 +430,9 @@ def replay(protocol: ProtocolDef, name: str, party: Party, recorded: Transcript,
             if j == len(old):
                 break
             nxt = old[j]
+            if nxt.elided and nxt.dir in ("in", "event"):
+                raise Refused("elided", f"entry {j} of {name}'s transcript keeps only its frame's digest, which a replay "
+                                        "can't feed")
             if nxt.dir == "in":
                 host.receive(nxt.channel, nxt.data)
             elif nxt.dir == "event":

@@ -4,9 +4,11 @@ A transcript is one party's view of one run, append-only: its start (its name an
 (`in`) and sent (`out`) in the order it saw them, with its channel and kind, what the runtime told it (`event`: a channel
 closed), what it recorded (`record`) and how it finished (`finish`); the handshakes' frames are `handshake-in` and
 `handshake-out`, of kind `structure`. Each entry is itself a wire frame, its head `{"type": "Entry", "v": 1, "n", "dir",
-"channel", "kind"}` and its body the frame or the canonical JSON it holds, so a transcript's bytes are canonical and its
-digest names it. The record is its public projection (`public`): the entries of the four public kinds, private ones never.
-A run's record is its parties' projections, in the order of their names (`record`).
+"channel", "kind", "elided"}` and its body the frame or the canonical JSON it holds, so a transcript's bytes are
+canonical and its digest names it. A frame past the transcript's bound (`keep`, 64 KiB unless given) is kept as its
+SHA-512, `elided`: a fill of gigabytes is a digest a frame, which a replay compares and can't feed. The record is its
+public projection (`public`): the entries of the four public kinds, private ones never. A run's record is its parties'
+projections, in the order of their names (`record`).
 """
 
 from __future__ import annotations
@@ -18,12 +20,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
-from verity.core.wire import KINDS, NAME, PUBLIC, Body, Int, Message, Refused, Registry, Schema, Str, frames
+from verity.core.wire import KINDS, NAME, PUBLIC, Body, Bool, Int, Message, Refused, Registry, Schema, Str, frames
 
 DIRS = ("start", "in", "out", "event", "record", "finish", "handshake-in", "handshake-out", "party")
 ENTRY = Schema("Entry", 1, "structure", {"n": Int(), "dir": Str(16, "|".join(DIRS)), "channel": Str(64),
-                                         "kind": Str(16, "|".join(KINDS))}, Body(max=(1 << 32) - 1))
+                                         "kind": Str(16, "|".join(KINDS)), "elided": Bool()}, Body(max=(1 << 32) - 1))
 REGISTRY = Registry([ENTRY])
+KEEP = 1 << 16
+"""The largest frame a transcript keeps whole by default; past it, its SHA-512."""
 
 
 @dataclass(frozen=True)
@@ -33,24 +37,29 @@ class Entry:
     channel: str
     kind: str
     data: bytes
+    elided: bool = False
 
     def frame(self) -> bytes:
-        return REGISTRY.encode(Message("Entry", {"n": self.n, "dir": self.dir, "channel": self.channel, "kind": self.kind},
-                                       self.data))
+        return REGISTRY.encode(Message("Entry", {"n": self.n, "dir": self.dir, "channel": self.channel, "kind": self.kind,
+                                                 "elided": self.elided}, self.data))
 
     @classmethod
     def of(cls, frame: bytes) -> Entry:
         m = REGISTRY.decode(frame)
-        return cls(m.fields["n"], m.fields["dir"], m.fields["channel"], m.fields["kind"], m.body)
+        return cls(m.fields["n"], m.fields["dir"], m.fields["channel"], m.fields["kind"], m.body, m.fields["elided"])
+
+    def holds(self, data: bytes) -> bool:
+        """Whether this entry is of `data`: the bytes, or their SHA-512 when elided."""
+        return self.data == (hashlib.sha512(data).digest() if self.elided else bytes(data))
 
 
 class Transcript:
     """One party's transcript: `append` only. With `path`, each entry is also appended to that file as it is made."""
 
-    def __init__(self, party: str, path: str | os.PathLike | None = None) -> None:
+    def __init__(self, party: str, path: str | os.PathLike | None = None, keep: int = KEEP) -> None:
         if not NAME.fullmatch(party):
             raise ValueError(f"a party's name is a name, not {party!r}")
-        self.party = party
+        self.party, self.keep = party, keep
         self._entries: list[Entry] = []
         self._file: BinaryIO | None = None
         if path is not None:
@@ -58,7 +67,8 @@ class Transcript:
             self._file = open(path, "xb")  # noqa: SIM115 - held open while the run appends
 
     def append(self, dir: str, channel: str, kind: str, data: bytes) -> Entry:
-        e = Entry(len(self._entries), dir, channel, kind, bytes(data))
+        big = len(data) > self.keep
+        e = Entry(len(self._entries), dir, channel, kind, hashlib.sha512(data).digest() if big else bytes(data), big)
         f = e.frame()
         self._entries.append(e)
         if self._file is not None:

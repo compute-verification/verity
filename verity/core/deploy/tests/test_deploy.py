@@ -11,6 +11,7 @@ import pytest
 
 import deploy_example as X
 from verity.core.deploy import manifest as M
+from verity.core.deploy.channels import Playback
 from verity.core.deploy.runtime import run
 from verity.core.deploy.transcript import Transcript
 from verity.core.wire import PUBLIC, REFUSALS, Refused, handshake
@@ -153,6 +154,23 @@ def test_the_record_is_the_public_projection(tmp_path):
     assert {e.kind for e in t.public()} <= PUBLIC
     nonce = next(e.data for e in t if e.dir == "in" and e.channel == "coins")
     assert nonce[-32:] in r.record()
+
+
+def test_a_frame_past_the_transcripts_bound_is_kept_as_its_digest():
+    t = Transcript("challenger", keep=8)
+    e = t.append("out", "responder", "private", b"x" * 9)
+    assert (e.elided, len(e.data), e.holds(b"x" * 9), e.holds(b"y" * 9)) == (True, 64, True, False)
+    assert Transcript.of("challenger", t.to_bytes()).entries == t.entries
+    with pytest.raises(Refused) as err:
+        Playback(t, "responder")
+    assert err.value.name == "elided"
+
+
+def test_a_refusal_is_public_by_name_and_private_in_detail():
+    r = simulated(None, X.protocol(responder=X.DyingResponder))
+    public = r.transcripts["responder"].public()
+    assert [e.data for e in public if e.dir == "record"] == [b'{"refused":"party-died"}']
+    assert b"fell over" not in r.record() and b"fell over" in r.transcripts["responder"].to_bytes()
 
 
 SITE = {"machine": [{"name": "auditor-box", "owner": "auditor", "provides": ["clock", "coins"]},

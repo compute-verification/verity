@@ -226,16 +226,19 @@ class TcpListen:
 class Playback:
     """The transcript reader: `recorded`'s side of its channel `channel` (its peer's name), played back. Its `out` frames
     arrive here in order; each frame sent here must be its next `in` frame, else `send` raises `Refused('divergence')`.
-    The recorded handshake is not played: the live party's end runs none."""
+    The recorded handshake is not played: the live party's end runs none. A transcript that kept only the digest of a
+    frame it sent on the channel can't play it (`Refused('elided')`)."""
 
     def __init__(self, recorded: Transcript, channel: str) -> None:
         self.recorded, self.channel = recorded.party, channel
         self.entries = [e for e in recorded.on(channel) if e.dir in ("in", "out")]
+        if any(e.elided and e.dir == "out" for e in self.entries):
+            raise Refused("elided", f"{self.recorded}'s transcript keeps only the digest of a frame it sent on {channel}")
         self.i = 0
 
     def send(self, frame: bytes) -> None:
         e = self.entries[self.i] if self.i < len(self.entries) else None
-        if e is None or e.dir != "in" or e.data != bytes(frame):
+        if e is None or e.dir != "in" or not e.holds(frame):
             had = "nothing more" if e is None else f"{'sent' if e.dir == 'out' else 'received'} entry {e.n}"
             raise Refused("divergence", f"{self.recorded}'s transcript has {had} on {self.channel} where its peer now sends "
                                         f"{len(frame)} other bytes")
