@@ -1,4 +1,4 @@
-"""`verity-bench breakdown` (`verity_bench.breakdown`) on fake engines whose arms report memory accounting's spans the
+"""`verity-bench breakdown` (`verity_bench.breakdown`) on fake engines whose arms report the bandwidth audit's spans the
 way `bench_arm`'s extras do: the rows sum to the spans arms' audit-over-plain, each row is the part it names, the view
 reads local results or the store's newest passing run that times every arm, and no gate or ratio reads a span."""
 from __future__ import annotations

@@ -68,20 +68,20 @@ first coin.
   release), the leaf the challenger's record was signed at (`record_leaf`), its commitment root (`commitment`) and how
   many hellos serve.py refused before it accepted one (`refused_hellos`, each in `out/hellos.jsonl`, which `files` seals). A session with an `open` and no `end` never
   ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
-- **The coins' path** (PRF-207; Daniel, 26 Oct: the device that runs a server's network certifier produces its live
-  coins). `serve.py` listens on this host's 127.0.0.1 at the open's port and opens no tunnel of its own. That port is
-  one of the peer's certifier coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, infra's,
-  within 7811..7899), which carries it to the same port of the peer's loopback, where the prover's client connects; a
-  reserve for a peer with no such line is refused. The certifier on this host owns that link and counts it
-  (network-accounting, NET-84): it re-clocks the stream and exempts only frames that open against the session's
-  committed coin root. The hop from the certifier to the server crosses the prover's NIC, so it is the certifier's
-  counted ingress, not a path this side trusts. The challenger side rests on two premises, which no `Security/`
-  guarantee reads yet:
-  - `CoinsConfidential`: every coin travels from the challenger to the certifier only inside auditor-trusted hosts
-    (`trusted-nebius-host`), here one device, vy-challenger-1, which runs both; no prover-controlled host reads a coin
-    before the certifier admits it at the boundary.
-  - `OneClock`: the challenger's release times and the certifier's ingress ticks are read on one clock, this host's.
-    Were they two devices, the offset between their clocks would have to stay within 1.03 s (RT-POOL G).
+- **The coins' path**: the device that runs a server's network certifier produces its live coins. `serve.py` listens
+  on this host's 127.0.0.1 at the open's port and opens no tunnel of its own. That port is one of the peer's certifier
+  coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, infra's, within 7811..7899), which
+  carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
+  such line is refused. The certifier on this host owns that link and counts it (`coin_link.py`,
+  `verity.core.protocols.certifier.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
+  (`coin_link_argv`, `stop_link`), and a link that refuses to start, doesn't listen within `START_SECONDS` (it is
+  killed: `first_line`) or ends first (its tunnel did) ends the session (`watch_link`). It listens on another port of this host's loopback, opens `ssh -N -R` from the peer's port to it,
+  straight to the peer's own sshd, relays each connection to serve.py re-cut into cells and re-clocked on its grids,
+  exempts only the coin openings that open against the session's committed coin root, counts everything else, and
+  writes `coin-link.json`, which the `end` entry's `files` seals. The hop from the certifier to the server crosses the
+  prover's NIC, so it is the certifier's counted ingress, not a path this side trusts. The challenger side rests on the
+  premises `CoinsConfidential` (the stream reaches the certifier only on auditor hosts, here this one) and `OneClock`
+  (one clock for both, this host's), stated in `verity/core/protocols/sampled_proofs/README.md`.
 
   `serve.py --peer`, its own `ssh -R` to the peer, which the prover's sshd decrypts, is the development path alone
   (`run.sh`), and it refuses a window's session (`--root`).
@@ -147,7 +147,8 @@ first coin.
   (1 to 8: the plan's margin over the probed rates and latencies, 2 otherwise; an endpoint that slows under a load its
   probes didn't meet needs more), each recorded and passed on only when given (`parse_varied`). `--prompts` sends the
   caller's own prompts in place of `--prompt-range`'s chat turns: the gate reads them off its stdin as a scan
-  rehearsal's (`certifier_prompts`), writes them to `witness/prompts.json` (the request records their count and ids),
+  rehearsal's, each of up to 2048 ids (`certifier_prompts`), writes them to `witness/prompts.json` (the request records
+  their count and ids),
   and request j sends the (j mod n)-th of the n at the same seed's arrivals and `max_tokens`; the plan and the
   certified I/O in `out/` carry them, as they carry every varied request's prompt. It takes no `--in-flight`,
   `--profile`, `--temperature` or `--top-p` (its requests are greedy, each with a seed of its own), nor a `--minutes`
@@ -169,7 +170,7 @@ first coin.
   rehearse`, with the warden and its client here and the server the peer's endpoint, reached through the same tunnel:
   client ──cells──▶ warden (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`, `--port` and
   `--minutes` as a certifier rehearsal's (it takes no `--tamper`: the warden is the device, with no shim to tamper),
-  `--requests` 4 to 400 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
+  `--requests` 4 to 1700 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
   passed on only when given (`warden_serve.py`'s 256 otherwise), and the sampling and the key's height below. The traffic
   is the gate's (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`), so a request whose `--minutes` is under
   `warden_minutes` of its requests and height is refused, with the least that fits. With `--scan` (recorded only then)
@@ -180,7 +181,7 @@ first coin.
   warden frames what the server sends, and the check and the scan refuse a response that isn't by name. A scan
   rehearsal's `--prompts` sends the caller's own requests instead (a period's of a loop, say): the gate reads them off
   its stdin (`warden_prompts`: at most `WARDEN_PROMPTS_BYTES` of JSON, `WARDEN_PROMPTS` prompts of `WARDEN_PROMPT_IDS`
-  token ids each, below 2^17, the scan's IDB), writes them to `witness/prompts.json` alone (the request records their
+  token ids each, at most the scan's KI of 1024 and below 2^17, its IDB), writes them to `witness/prompts.json` alone (the request records their
   count and ids), and `rehearse --prompts` sends request j the (j mod n)-th of the n with exactly `--tokens`
   (`WARDEN_PROMPT_TOKENS`, the scan's 64 by default), `--requests` (`WARDEN_PROMPT_REQUESTS`) the prompts' count by
   default. `--window-per-group` (at most the scan's 4 lanes of prompts) sends them a group at a time, group g's half a
@@ -229,7 +230,10 @@ first coin.
   request says otherwise; recorded in every request and passed on every one. `certifier_serve.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
   a certifier rehearsal makes two keys (the certifier's and the challenger's) and a warden rehearsal one, which
-  `warden_minutes` counts. The rehearsal draws each serve's session itself (32 fresh random bytes, `--session`), as
+  `warden_minutes` counts. A warden rehearsal's key signs `WARDEN_WINDOW_LEAVES` one-time signatures a link-window,
+  after a load's heads, and its signer refuses every window past its 2^H: so a request whose `warden_windows` its
+  height can't sign is refused, with the least height that can (`warden_height`; the gate's most requests at the
+  scan's schedule take 13). The rehearsal draws each serve's session itself (32 fresh random bytes, `--session`), as
   the challenger it plays: the challenger here draws none, since a rehearsal is none of its windows.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, `end`'s, and `serve.py`'s record and close,
@@ -254,8 +258,9 @@ import signal
 import subprocess
 import sys
 import tarfile
+import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -320,7 +325,17 @@ DECIMAL = r"[0-9](\.[0-9]{1,4})?"
 REHEARSAL_HEIGHT = (10, lms.DEPLOYED.H)
 #: the one-time keys a second `certifier_serve.load_key` makes in its eight processes (16384 in 4.1 s on four cores)
 KEYGEN_LEAVES_S = 4096
-WARDEN_REQUESTS = (4, 400)
+#: a warden rehearsal's `--requests` (and a scan rehearsal's on its own `--prompts`, `WARDEN_PROMPT_REQUESTS`): 1700 at
+#: `WARDEN_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s link-windows, past the 745 that
+#: memory-accounting's whole-node wipe needs (H200-GATE, 27 Oct)
+WARDEN_REQUESTS = (4, 1700)
+#: the one-time signatures a warden rehearsal's key gives a link-window: a certificate for each of its three links'
+#: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
+#: (`warden_serve.Publisher.keep` and `attest`)
+WARDEN_WINDOW_LEAVES = 5
+#: a warden rehearsal's link-window without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
+#: buckets of 100 ms)
+WARDEN_WINDOW_MS = 60_000
 WARDEN_TOKENS = (16, 256)
 #: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
 #: `WARDEN_RATE` a second drawn from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
@@ -335,12 +350,13 @@ SCAN = {f: int(v) for f, v in zip(SCAN_SCHEDULE[::2], SCAN_SCHEDULE[1::2])}
 #: a scan rehearsal's `--prompts`, read off the gate's stdin: at most `WARDEN_PROMPTS_BYTES` of JSON, an array of
 #: `WARDEN_PROMPTS` prompts, each of `WARDEN_PROMPT_IDS` token ids below 2^`WARDEN_PROMPT_ID_BITS` (the scan's IDB);
 #: then `--requests` and `--tokens` (each request's exact count, at most the scan's egress cells but the trailer's)
-#: take `WARDEN_PROMPT_REQUESTS` and `WARDEN_PROMPT_TOKENS`
+#: take `WARDEN_PROMPT_REQUESTS` and `WARDEN_PROMPT_TOKENS`. A prompt is at most the scan's KI ids (`scan_zk.CLASS`),
+#: since the scan refuses a request of more and the gate refuses it at input instead
 WARDEN_PROMPTS_BYTES = 1 << 20
 WARDEN_PROMPTS = (1, 400)
-WARDEN_PROMPT_IDS = (1, 2048)
+WARDEN_PROMPT_IDS = (1, 1024)
 WARDEN_PROMPT_ID_BITS = 17
-WARDEN_PROMPT_REQUESTS = (1, 400)
+WARDEN_PROMPT_REQUESTS = (1, WARDEN_REQUESTS[1])
 WARDEN_PROMPT_TOKENS = (1, SCAN["--egress-cells"] - 1)
 #: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
@@ -364,7 +380,13 @@ READ_ONLY = "-"
 HOST_ACCOUNTS = ("root", "vy-admin", "research", "auditor")
 SECRET = "secret"
 OPEN_REQUEST = "open.json"
-OUT_FILES = ("record.json", "key.json", "releases.jsonl", "hellos.jsonl", "challenger.json", "address.json", "serve.log")
+OUT_FILES = ("record.json", "key.json", "releases.jsonl", "hellos.jsonl", "challenger.json", "address.json", "serve.log",
+             "coin-link.json", "coin-link.log")
+#: how long serve.py has, once started, to sign its record (`await_commitment`), and the coin link to listen
+START_SECONDS = 60.0
+#: how long the coin link has, once told to stop, to run to the end of its link-window (D7's T·τ, 60 s) and write its
+#: record, before it is killed
+LINK_STOP_SECONDS = 90.0
 
 
 class Refused(Exception):
@@ -780,7 +802,7 @@ def peers(host: Host) -> list[str]:
 def coin_ports(host: Host, peer: str) -> range:
     """The ports of `peer`'s certifier coin link: its line `PEER LO-HI` (or `PEER PORT`) of /etc/vy/coin-ports
     (`Host.coin_ports`), ports within `PORTS` of this host's loopback that the link carries to the same ports of the
-    peer's loopback; or Refused, since a window's coins reach its peer through that link alone (PRF-207)."""
+    peer's loopback; or Refused, since a window's coins reach its peer through that link alone (`CoinsConfidential`)."""
     try:
         lines = host.coin_ports.read_text().splitlines()
     except FileNotFoundError:
@@ -792,8 +814,8 @@ def coin_ports(host: Host, peer: str) -> range:
             if PORTS.start <= lo <= hi < PORTS.stop:
                 return range(lo, hi + 1)
     raise Refused(f"--peer {peer!r} has no certifier coin link: a window's coins reach its peer only through the link of "
-                  f"the certifier on this host, never ssh -R (PRF-207); infra lists its ports as `{peer} LO-HI`, within "
-                  f"{PORTS.start}..{PORTS.stop - 1}, in {host.coin_ports}")
+                  f"the certifier on this host, never ssh -R (CoinsConfidential); infra lists its ports as "
+                  f"`{peer} LO-HI`, within {PORTS.start}..{PORTS.stop - 1}, in {host.coin_ports}")
 
 
 def parse_reserve(argv: list[str], host: Host, *, admin: bool = False) -> dict:
@@ -1169,6 +1191,36 @@ def _minutes(arrivals_s: int, height: int) -> int:
     return -(-(arrivals_s + 3 * WARDEN_TAIL_S + 2 ** height // KEYGEN_LEAVES_S) // 60)
 
 
+def warden_windows(requests: int, scan: bool = True) -> int:
+    """The most link-windows a warden rehearsal of `requests` requests runs (`warden_serve.rehearse` counts its
+    traffic's last arrival and tail): `warden_minutes`'s arrivals and three tails, in link-windows of the scan's
+    schedule with `scan` and of `WARDEN_WINDOW_MS` otherwise."""
+    window_ms = SCAN["--window"] * SCAN["--bucket-ms"] if scan else WARDEN_WINDOW_MS
+    return -(-(round(requests / WARDEN_RATE) + 3 * WARDEN_TAIL_S) * 1000 // window_ms)
+
+
+def warden_height(windows: int, heads: int = 0) -> int:
+    """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's) and then
+    `windows` link-windows at `WARDEN_WINDOW_LEAVES` each."""
+    return max(REHEARSAL_HEIGHT[0], (heads + WARDEN_WINDOW_LEAVES * windows - 1).bit_length())
+
+
+def load_heads(shape: str) -> int:
+    """The heads a load of `shape` signs before the rehearsal's first window: one a value (`load_relay.manifest`)."""
+    lr = _load_relay()
+    return len(lr.manifest(lr.SHAPES[shape]))
+
+
+def warden_key(windows: int, height: int, what: str, heads: int = 0) -> None:
+    """Refuses a warden rehearsal whose key at `height` can't sign its `windows` link-windows after a load's `heads`,
+    with the least height that can (`warden_height`)."""
+    if height < (least := warden_height(windows, heads)):
+        load = f" after the load's {heads} heads" if heads else ""
+        raise Refused(f"--height {height}: {what} take {windows} link-windows, "
+                      f"{heads + WARDEN_WINDOW_LEAVES * windows} one-time signatures ({WARDEN_WINDOW_LEAVES} a "
+                      f"window{load}), past the key's {1 << height}: give --height {least} or more, or fewer --requests")
+
+
 def scan_group_windows(tokens: int) -> int:
     """The link-windows a `--window-per-group` group takes at the scan's schedule, each request answered by at most
     `tokens` id events (`warden_serve.group_windows`, which `test_warden_serve` holds this to)."""
@@ -1229,6 +1281,8 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
         raise Refused(f"--minutes {minutes}: {requests} requests take {least} minutes (arrivals at {WARDEN_RATE} a "
                       f"second, a {WARDEN_TAIL_S} s tail, the window they end in, the check and the key at height "
                       f"{a.height}){_after_load(spent)}: give --minutes {least + spent} or more, or fewer --requests")
+    warden_key(warden_windows(requests, a.scan), a.height, f"{requests} requests",
+               load_heads(loaded["load"]["shape"]) if load else 0)
     return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "requests": requests,
             "height": a.height} | a.sampling | given | loaded
 
@@ -1298,17 +1352,17 @@ def parse_weights(argv: list[str], host: Host) -> dict:
     return {"device": "weights", "shape": a.shape, "minutes": WEIGHTS_MINUTES}
 
 
-def prompts_of(data: bytes) -> list[list[int]]:
+def prompts_of(data: bytes, ids: tuple[int, int] = WARDEN_PROMPT_IDS) -> list[list[int]]:
     """A `--prompts` request's prompts, off the gate's stdin (`data`: at most `WARDEN_PROMPTS_BYTES`, of which the gate
-    reads one byte more): JSON, an array of `WARDEN_PROMPTS` prompts, each an array of `WARDEN_PROMPT_IDS` token ids
-    below 2^`WARDEN_PROMPT_ID_BITS`."""
+    reads one byte more): JSON, an array of `WARDEN_PROMPTS` prompts, each an array of `ids` token ids (a scan
+    rehearsal's `WARDEN_PROMPT_IDS`) below 2^`WARDEN_PROMPT_ID_BITS`."""
     if len(data) > WARDEN_PROMPTS_BYTES:
         raise Refused(f"--prompts: over {WARDEN_PROMPTS_BYTES} bytes on stdin")
     try:
         prompts = json.loads(data)
     except ValueError:
         prompts = None
-    (lo, hi), (ilo, ihi) = WARDEN_PROMPTS, WARDEN_PROMPT_IDS
+    (lo, hi), (ilo, ihi) = WARDEN_PROMPTS, ids
     if not (isinstance(prompts, list) and lo <= len(prompts) <= hi
             and all(isinstance(p, list) and ilo <= len(p) <= ihi for p in prompts)
             and all(type(t) is int and 0 <= t < 1 << WARDEN_PROMPT_ID_BITS for p in prompts for t in p)):
@@ -1332,20 +1386,24 @@ def warden_prompts(req: dict, data: bytes) -> bytes:
     spent = req.get("load", {}).get("minutes", 0)
     if req.get("window_per_group"):
         least, what = warden_group_minutes(-(-requests // n), tokens, height), f"{-(-requests // n)} groups"
+        windows = -(-requests // n) * scan_group_windows(tokens)
     else:
         least, what = warden_minutes(requests, height), f"{requests} requests"
+        windows = warden_windows(requests)
     if minutes - spent < least:
         raise Refused(f"--minutes {minutes}: {what} take {least} minutes (with the check and the key at height "
                       f"{height}){_after_load(spent)}: give --minutes {least + spent} or more, or fewer --requests")
+    warden_key(windows, height, what, load_heads(req["load"]["shape"]) if "load" in req else 0)
     req.update(requests=requests, prompts={"count": n, "ids": sum(map(len, prompts))})
     return json.dumps(prompts, separators=(",", ":")).encode()
 
 
 def certifier_prompts(req: dict, data: bytes) -> bytes:
-    """A varied certifier rehearsal's `--prompts` (`prompts_of`): request j sends the (j mod n)-th of the n
-    (`certifier_serve.py rehearse --prompts-file`), at the same seed's arrivals and `max_tokens`. The request records
-    their count and ids alone. Returns the prompts' canonical bytes, the witness's `PROMPTS`."""
-    prompts = prompts_of(data)
+    """A varied certifier rehearsal's `--prompts` (`prompts_of`, each of `CERTIFIER_PROMPTS` ids, the varied plan's
+    prompt lengths: no scan reads them): request j sends the (j mod n)-th of the n (`certifier_serve.py rehearse
+    --prompts-file`), at the same seed's arrivals and `max_tokens`. The request records their count and ids alone.
+    Returns the prompts' canonical bytes, the witness's `PROMPTS`."""
+    prompts = prompts_of(data, CERTIFIER_PROMPTS)
     req["prompts"] = {"count": len(prompts), "ids": sum(map(len, prompts))}
     return json.dumps(prompts, separators=(",", ":")).encode()
 
@@ -1746,6 +1804,51 @@ def serve_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> 
             *(["--withhold"] if open_body.get("withheld") is True else [])]
 
 
+def coin_link_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> list[str]:
+    """The session's coin link (`coin_link.py`): from the open's port on its peer to serve.py's on this host, for one
+    minute more than the window's, at D7's parameters."""
+    return [sys.executable, "-I", str(tree / "benchmarks" / "live_challenger" / "coin_link.py"),
+            "--out", str(host.sessions / session / "out"), "--port", str(open_body["port"]), "--peer", open_body["peer"],
+            "--peers", str(host.peers), "--minutes", str(open_body["minutes"] + 1)]
+
+
+def stop_link(proc: subprocess.Popen, seconds: float = LINK_STOP_SECONDS) -> int:
+    """Stop the coin link: SIGTERM, on which it runs to the end of its link-window, writes its record and closes its
+    tunnel; past `seconds`, SIGKILL to its process group, tunnel included."""
+    try:
+        if proc.poll() is None:
+            proc.send_signal(signal.SIGTERM)
+        return proc.wait(seconds)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        return proc.wait()
+
+
+def first_line(proc: subprocess.Popen, seconds: float) -> bytes | None:
+    """`proc`'s first line of output (empty if it exited first), or None if it printed none within `seconds`, in which
+    case its process group is killed."""
+    got: list[bytes] = []
+    reader = threading.Thread(target=lambda: got.append(proc.stdout.readline()), daemon=True)
+    reader.start()
+    reader.join(seconds)
+    if got:
+        return got[0]
+    with suppress(ProcessLookupError):
+        os.killpg(proc.pid, signal.SIGKILL)
+    reader.join()
+    return None
+
+
+def watch_link(link: subprocess.Popen, serve: subprocess.Popen, served: threading.Event, ended: list[str]) -> None:
+    """Wait for the coin link. Should it exit before `served` is set (its tunnel ended), stop serve.py, since no coin
+    can reach the peer any more, and say so in `ended`."""
+    rc = link.wait()
+    if not served.is_set():
+        ended.append(f"the coin link ended first (exit {rc}; coin-link.log), so no coin could reach the peer")
+        with suppress(ProcessLookupError):
+            os.killpg(serve.pid, signal.SIGTERM)
+
+
 def record_of(out: Path):
     """The challenger record the session signed in `out` (`remote.RECORD`), with its JSON; (None, None) until it has one."""
     from verity.core.protocols.sampled_proofs import challenger as C
@@ -1763,7 +1866,8 @@ def commitment_of(out: Path) -> str | None:
     return None if record is None else record.commitment.root.hex()
 
 
-def await_commitment(host: Host, session: str, active: Callable[[str], bool], seconds: float = 60.0) -> str | None:
+def await_commitment(host: Host, session: str, active: Callable[[str], bool],
+                     seconds: float = START_SECONDS) -> str | None:
     """The session's commitment root once serve.py has signed its record (before it listens), or None if its unit stopped
     first or `seconds` passed."""
     deadline = time.monotonic() + seconds
@@ -1788,29 +1892,58 @@ def released_of(out: Path) -> tuple[dict[str, int] | None, int | None]:
 
 
 def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], datetime], argv: list[str] | None = None,
-        wait: Callable[[subprocess.Popen, float], int] | None = None) -> dict:
-    """Serve the admitted session (serve.py, which takes `sign.lock` for each of its signatures), then append its `end`
-    entry and delete its secret. Its client closed it when serve.py exited 0 and its signed close (`challenger.json`)
-    says so (`ended` null)."""
+        wait: Callable[[subprocess.Popen, float], int] | None = None, link: list[str] | None = None) -> dict:
+    """Serve the admitted session (serve.py, which takes `sign.lock` for each of its signatures) through its coin link,
+    started once serve.py listens and stopped once it exits (a link that refuses to start, doesn't listen within
+    `START_SECONDS` or ends first ends the session: `first_line`, `watch_link`), then append its `end` entry and delete
+    its secret. Its
+    client closed it when serve.py exited 0 and its signed close (`challenger.json`) says so (`ended` null). The link is
+    `coin_link_argv`'s; a caller that brings its own serve.py (`argv`: a local gate's, a test's) brings its own `link`,
+    None for none, its client then reaching serve.py's port itself."""
     I, sign, _ = signer
     s = sessions_of(read_ledger(host.ledger)).get(session, {})
     if "open" not in s or "end" in s:
         raise Refused(f"session {session} has no open entry, or has ended: nothing to serve")
     body = s["open"]["body"]
     out = host.sessions / session / "out"
-    rc, why = 2, None
+    rc, why, link_ended = 2, None, []
     if body["pinned"] != pinned:
         why = f"admitted at {body['pinned']}, but this tree is {pinned}: the pin moved, so the session doesn't run"
     else:
+        if argv is None:
+            argv, link = serve_argv(host, session, body), coin_link_argv(host, session, body)
         out.mkdir(mode=0o755, exist_ok=True)
         with open(out / "serve.log", "wb") as log:
-            proc = subprocess.Popen(argv or serve_argv(host, session, body), stdout=subprocess.PIPE, stderr=log,
-                                    stdin=subprocess.DEVNULL, start_new_session=True)
+            proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=log, stdin=subprocess.DEVNULL,
+                                    start_new_session=True)
             first = proc.stdout.readline()
         with open(out / "stdout.log", "wb") as f:
             f.write(first)
-        rc = (wait or _wait)(proc, body["minutes"] * 60)
+        linked, watcher, served = None, None, threading.Event()
+        if link is not None and first.startswith(b"listening "):
+            with open(out / "coin-link.log", "wb") as log:
+                linked = subprocess.Popen(link, stdout=subprocess.PIPE, stderr=log, stdin=subprocess.DEVNULL,
+                                          start_new_session=True)
+                listening = first_line(linked, START_SECONDS)
+                log.write(listening or b"")
+            if listening is None:
+                why = (f"the coin link didn't listen within {START_SECONDS:g} s, so it was killed and no coin could reach "
+                       f"the peer (coin-link.log)")
+                os.killpg(proc.pid, signal.SIGTERM)
+            elif listening.startswith(b"listening "):
+                watcher = threading.Thread(target=watch_link, args=(linked, proc, served, link_ended), daemon=True)
+                watcher.start()
+            else:
+                why = f"the coin link didn't start (exit {linked.wait()}; coin-link.log), so no coin could reach the peer"
+                os.killpg(proc.pid, signal.SIGTERM)
+        rc = (wait or _wait)(proc, body["minutes"] * 60) if why is None else proc.wait()
+        served.set()
         proc.stdout.close()
+        if linked is not None:
+            stop_link(linked)
+            linked.stdout.close()
+        if watcher is not None:
+            watcher.join()
     (host.sessions / session / SECRET).unlink(missing_ok=True)
     summary = {}
     try:
@@ -1824,6 +1957,7 @@ def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], date
     hellos = (out / "hellos.jsonl").read_text().count("\n") if (out / "hellos.jsonl").is_file() else 0
     complete = released is not None and all(released.get(label) == n for label, n in body["families"])
     closed = rc == 0 and "ended" in summary and summary["ended"] is None
+    why = why or (None if closed else next(iter(link_ended), None))
     end = {"rc": rc, "closed": closed,
            "ended": why or summary.get("ended") or ("closed by the client" if closed else f"serve.py exited {rc}"),
            "files": files, "released": released,
