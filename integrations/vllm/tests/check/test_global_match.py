@@ -1609,7 +1609,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert _check(res, "G6")["lag"]["agree"] is False and res["lag"]["record_attests"] == 0 and res["lag"]["declared"] == 1
     # the EOS-stopped request itself is not established under the disagreement: named per request, its EOS evidence not accepted
     assert any("r1: EOS stop at engine step 1 on a record whose attested scheduler (async_scheduling=False (RunHeader.profile.engine_kwargs)) is not the "
-               "Program's declared LAG 1: the 1 post-EOS row(s) are not accepted as the declared lag (R17-1)" in p for p in pr), pr
+               "Program's declared LAG 1: the 1 post-EOS row(s) are not accepted as the declared lag" in p for p in pr), pr
     assert _r(res, "r1")["eos_verified"] is False and "eos_lag_rows_accepted" not in _r(res, "r1")
     # ... and the reverse: a LAG-0 Program on a record attesting True (a lag-1 trace) fails by name too, with the lag row named as execution past EOS
     gpr, oracler = assemble([R0, R1_LAG], tmp_path / "lag0_program_on_lag1_record", lag=0)
@@ -1627,7 +1627,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert res["verdict"] == "FAIL" and {"G1", "G6"} <= set(res["failed_checks"])
     pr = _check(res, "G6")["problems"]
     assert any("the Program is specialized for LAG 1" in p and "but the record does not attest async_scheduling (not attested; RunHeader.profile.engine_kwargs / "
-               "RunHeader.engine_kwargs / capture/versions.json)" in p and "refuse by name (R17-1)" in p for p in pr), pr
+               "RunHeader.engine_kwargs / capture/versions.json)" in p and "refuse by name" in p for p in pr), pr
     assert _check(res, "G6")["lag"]["record_attests"] is None and _check(res, "G6")["lag"]["declared"] == 1
     gp0, oracle0 = assemble([R0, R1_EOS], tmp_path / "lag0_unattested", lag=0)
     _set_async_scheduling(oracle0, None)

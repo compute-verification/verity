@@ -124,7 +124,7 @@ def _plain(x: Any) -> Any:
 
 def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, int, int], np.ndarray | None]) -> None:
     """Read every weight field the sample consumes into the provider's cache in the PARENT (the children must not touch the model) --
-    INCLUDING the weights of the interior producers a VU composes (the pre-bias Gemm under a BiasAdd, MAN-07): [measured on
+    INCLUDING the weights of the interior producers a VU composes (the pre-bias Gemm under a BiasAdd): [measured on
     a Qwen2.5 L40S B1 record] the BiasAdd VUs' own args name only the bias slice, the composed Gemm's qkv weight was first read
     in a forked child -> AcceleratorError 'CUDA initialization error' -> every BiasAdd stratum 'not evaluated' -> partial -> FAIL closed."""
     seen: set[str] = set()
@@ -726,7 +726,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
             # how the committed store was read: the collector's retention and the evaluator that ran (forked pool / serial)
             "evaluator": {"retention": retention, "workers_requested": workers_requested, "workers": int(workers),
                           "mode": "forked pool" if int(workers) > 1 else "serial (parent process)", "note": pool_note,
-                          "prewarmed_libraries": prewarmed,               # [MAN-06g] twin .so's dlopen'ed in the parent before the fork
+                          "prewarmed_libraries": prewarmed,               # twin .so's dlopen'ed in the parent before the fork
                           # gc.freeze before the fork: the children's collections never traverse the
                           # inherited C2 heap (otherwise a 72 GB-per-child COW); {} when no pool was forked
                           "fork": dict(_FORK_STATS) if int(workers) > 1 else {}, **({"memory": memory} if memory else {})},
@@ -760,8 +760,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
             # Not-evaluable families BY NAME WITH COUNTS + reason (footnoted on the row; bounds the claim)
             "unreplayable": [{"family": f, "n": int(not_ev_fam[f]),
                               "why": NOT_YET.get(f.split(" (")[0], "structure / interior: no identity" if "(structure" in f
-                                                 else ("interior producer: composed into its consumer's VU (MAN-07)" if "(interior" in f
-                                                       else ("MoE plane row -> plane slice mapping failed (MAN-06f v3): see population.not_evaluable" if "(plane mapping failed)" in f
+                                                 else ("interior producer: composed into its consumer's VU" if "(interior" in f
+                                                       else ("MoE plane row -> plane slice mapping failed: see population.not_evaluable" if "(plane mapping failed)" in f
                                                              else "no registered evaluator")))}
                              for f in sorted(not_ev_fam)],
             "weights": (wc if wc is not None else {"equal": None, "note": "by reference, unverified at replay (no weights check supplied)"}),

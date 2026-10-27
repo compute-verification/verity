@@ -2,7 +2,7 @@
 
 A Commit's `weights` registration hashes whatever model the committer served; comparing it with the live parameters re-registered at
 replay (O5) is self-consistency, not authentication: a served model that differs from the checkpoint in one element (a flipped weight)
-replays bit-exactly against itself.  DECISIONS-2 §4 requires the registered inputs to be authenticated by their CANONICAL reference; for the
+replays bit-exactly against itself.  C2 requires the registered inputs to be authenticated by their CANONICAL reference; for the
 weights that reference is the CHECKPOINT OF RECORD -- the safetensors shards whose sha256 `manifests/checkpoints.json` pins --
 not the live engine.
 
@@ -725,8 +725,8 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
             "unresolved": list(record.get("unresolved") or []), "shards": ck.get("shards"),
             "all_shards_pinned": ck.get("all_shards_pinned"), "shards_ok": bool(shards_ok),
             "method": "sha256(served parameter bytes) == sha256(checkpoint-composed tensor of record) per Program weight field, shards pinned by "
-                      "manifests/checkpoints.json sha256, record bound to the Program of record (MAN-09 + W1/W2); engine constants: kv scales "
-                      "== f32 1.0 under kv_cache_dtype auto, rotary table within analytic.check_cos_sin's bound (MAN-09c)",
+                      "manifests/checkpoints.json sha256, record bound to the Program of record; engine constants: kv scales "
+                      "== f32 1.0 under kv_cache_dtype auto, rotary table within analytic.check_cos_sin's bound",
             "why": why}
 
 

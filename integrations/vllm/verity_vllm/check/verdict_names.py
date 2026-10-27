@@ -21,7 +21,7 @@ GROUPS: dict[str, dict[str, Any]] = {
                   "sampled id to the next step's input id (C2 ordered boundary linkage)."),
         "compat": ["boundary_linkage", "linkage"]},
     "checkpoint_binding": {
-        "claim": ("Every served parameter the Program names equals, by digest, the checkpoint-composed tensor of record (MAN-09), "
+        "claim": ("Every served parameter the Program names equals, by digest, the checkpoint-composed tensor of record, "
                   "with the shards pinned by their manifest sha256."),
         "compat": ["weights_pin"]},
     "execution_extent": {

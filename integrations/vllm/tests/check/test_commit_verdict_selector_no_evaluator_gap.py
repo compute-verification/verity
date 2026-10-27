@@ -138,7 +138,7 @@ def test_earlier_fails_lead_the_plane_fed_fail_first():
     k_06f = "fed by moe_block_stream planes (SiluMul_v1@experts): row -> plane mapping not in this replay (MAN-06f, v2)"
     sr = {**SR_STOCH, "population": {**SR_STOCH["population"], "not_evaluable": {K_ROPE: 9184, k_06f: 64, K_SEL: 32}}}
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": sr, "oracle_compare": OC_STOCH}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs (MAN-06f)"), why
+    assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs"), why
     # the weights pin FAIL (earlier in the verdict) is unchanged
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": SR_STOCH, "oracle_compare": OC_STOCH,
                               "weights_pin": {"result": False, "why": "1 served weight(s) differ from the checkpoint of record: x"}}, True, min_openings=64)
@@ -153,4 +153,4 @@ def test_a_selector_family_alias_is_read_by_the_token_select_rule_not_by_a_list(
     assert not ok and "32 selector output VUs (GumbelTokenSelect_v1 x32)" in why, why
     sr2 = {**SR_STOCH, "population": {**SR_STOCH["population"], "not_evaluable": {K_ROPE: 9184, "no registered evaluator for Gemm_v2": 7}}}
     note, fail = _complete_replay_population_gap(sr2, None)
-    assert fail is not None and "selector" not in fail and "F-r16-20" not in fail   # the Hopper gate (test_commit_verdict_hopper_no_evaluator_gap.py)
+    assert fail is not None and "selector" not in fail   # the Hopper gate (test_commit_verdict_hopper_no_evaluator_gap.py)

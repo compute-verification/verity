@@ -181,7 +181,7 @@ def _lag_rule(c: NamedCheck, gp: dict, facts: dict, driver: ServedTokens | None)
     if lag_declared and rec_lag is None:
         c.fail(f"the Program is specialized for LAG {decl_lag} (async_scheduling={bool(decl_lag)}: {decl_src}) but the record does not attest "
                f"async_scheduling ({rec_lag_src}; RunHeader.profile.engine_kwargs / RunHeader.engine_kwargs / capture/versions.json): the "
-               f"declared scheduler cannot be checked against the record, refuse by name (R17-1)")
+               f"declared scheduler cannot be checked against the record, refuse by name")
     # the lag G6 CONSUMES: the Program's declaration (None = it declares none: no rule to apply; every EOS stop then fails by name below)
     eos_lag = decl_lag if lag_declared else None
     eos_lag_src = (f"Program lag {decl_lag} ({decl_src}); record attests {rec_lag_src}" if lag_declared
@@ -310,7 +310,7 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
             # read as the declared lag when the record does not attest the Program's scheduler -- the request is not established (no
             # downstream state, stoch's scheduled live included, is built on it)
             c.fail(f"{rid}: EOS stop at engine step {served[first_eos][0]} on a record whose attested scheduler ({rec_lag_src}) is not the "
-                   f"Program's declared LAG {decl_lag}: the {lag_rows} post-EOS row(s) are not accepted as the declared lag (R17-1)")
+                   f"Program's declared LAG {decl_lag}: the {lag_rows} post-EOS row(s) are not accepted as the declared lag")
     # the driver's own claims for the two lengths (tokens.json: served = len(generated_token_ids), executed = served + the
     # record's lag on an EOS stop) must be what the record's rows show -- a claim beside the rows, named when it disagrees
     for _k, _claim, _v in (("served_output_len", None if tr is None else tr.served_output_len, a_r),

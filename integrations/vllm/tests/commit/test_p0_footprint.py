@@ -176,7 +176,7 @@ def test_e2e_windowed_roots(tmp_path: Path):
         # a MECHANISM fixture has no Build (no Programs), so C2 of record cannot run: the ONLY verdict failure this test accepts is
         # the verdict naming exactly that ('sampled replay None -- not run'; commit_delta exits 3 on it); every other check (bindings,
         # openings, bounded staging, replay openings, admission) must hold -- the workload's Commit of record runs the full verdict with Programs.
-        _c2_only = str(v.get("first_fail_reason") or "").startswith("C2 of record not established (DECISIONS-2 §4): sampled replay None -- not run")
+        _c2_only = str(v.get("first_fail_reason") or "").startswith("C2 of record not established: sampled replay None -- not run")
         assert v["commit_pass"] is True or _c2_only, f"{name}: exit {p.returncode}: {v.get('first_fail_reason') or v.get('commit_fail_reason')}"
         assert p.returncode == 0 or (p.returncode == 3 and _c2_only), f"{name}: exit {p.returncode}\n{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
         rows = [json.loads(l) for l in (tmp_path / name / "runs.jsonl").read_text().splitlines()]

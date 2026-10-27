@@ -114,7 +114,7 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
                               "async_scheduling": (tok.get("lag") or {}).get("async_scheduling") if isinstance(tok.get("lag"), dict) else None,
                               "tokens_equal": eq, "tokens_equal_rule": ("full generated_token_ids list" if served_tokens is not None else "length + last token"),
                               "requests_n": len(by_rid),
-                              # a_r AS THE MATCH RECORD SERVED IT, per request (the fact reqval's not-executed class reads)
+                              # a_r AS THE MATCH RECORD SERVED IT, per request (the fact the not-executed class reads)
                               "served_by_request": {r: len(e.get("generated_token_ids") or []) for r, e in by_rid.items()},
                               "executed_by_request": {r: e.get("executed_prefix_len") for r, e in by_rid.items()}}
         res["tokens_equal"] = all(v is True for v in eq.values()) if eq else None

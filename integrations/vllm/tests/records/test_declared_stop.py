@@ -26,7 +26,7 @@ DATA = Path(__file__).parent / "data"
 REAL = DATA / "global_program.json"
 #: sha256 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced), computed
 #: with G6 on the parsed JSON before it read the record
-OUTCOMES_SHA256 = "8389e230d1d61e60af820960622319c29ec02fc96a3c458331772440c30de702"
+OUTCOMES_SHA256 = "1a920268eff23cacdd3b4b51bec598d9070633c029861bca65ebdbf202cfe75a"
 REQUIRED = ("stop_rule.eos_token_ids", "lag.value")
 #: The global Program's two blocks as `pipeline.global_program` writes them (the real record's, with the toy's EOS id and the LAG to declare)
 GP01_SOURCE = {"generation_config.json": [T.EOS], "config.json": [T.EOS]}

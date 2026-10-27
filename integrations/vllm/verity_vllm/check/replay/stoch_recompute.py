@@ -255,7 +255,7 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
                                          f"async_scheduling) is unattested: the lag slot cannot be judged"}
     if A is not None and int(A) not in (0, 1):
         return None, info | {"unjudged": f"scheduler profile A = {A} is not an admitted profile (LAG in (0, 1)); the recurrence refuses it"}
-    # served[:cap]: the recurrence runs over the C slots (pad's expected_draw_positions does the same); draws past C are EXTRA positions for
+    # served[:cap]: the recurrence runs over the C slots (`expected_draw_positions` does the same); draws past C are EXTRA positions for
     # the comparison to name, never a reason to stop judging.  A = 0 when no EOS is served before the cap: the lag term is
     # then never reached, so the profile does not matter.
     slots = CT.recurrence([None if y is None else int(y) for y in served[:cap]], cap=cap, A=int(A) if A is not None else 0, eos=eos_ids)

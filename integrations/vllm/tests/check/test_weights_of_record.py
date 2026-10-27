@@ -1,4 +1,4 @@
-"""MAN-09: the weights of record are derived from the PINNED CHECKPOINT BYTES, never from the live
+"""The weights of record are derived from the PINNED CHECKPOINT BYTES, never from the live
 engine; a served model that differs from the checkpoint in ONE element fails the Commit by name."""
 from __future__ import annotations
 
@@ -656,9 +656,9 @@ def test_verdict_requires_the_pin_on_a_row_record_and_fails_by_name():
         ok, why = commit_verdict({**base, **b, "weights_pin": bad}, True, min_openings=64)
         assert not ok and why.startswith("weights of record:") and "model.layers.5.mlp.down_proj.weight" in why
     ok, why = commit_verdict({**base, "binding": bnd}, True, min_openings=64)
-    assert not ok and why.startswith("weights unpinned (MAN-09)") and "not run" in why
+    assert not ok and why.startswith("weights unpinned: ") and "not run" in why
     ok, why = commit_verdict({**base, "binding": bnd, "weights_pin": {"result": None, "why": "weights of record not derived: FileNotFoundError(...)"}}, True, min_openings=64)
-    assert not ok and why.startswith("weights unpinned (MAN-09)") and "not derived" in why
+    assert not ok and why.startswith("weights unpinned: ") and "not derived" in why
     # a legacy record (no binding block) without a pin keeps the legacy rule
     assert commit_verdict(base, True, min_openings=64) == (True, "PASS")
 
@@ -810,7 +810,7 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
 
 def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_git_tree(tmp_path):
     """derived.code names the code that ran the derivation.  The release tree on a pod has NO .git (ship.sh writes
-    EXPORT.json with the shipped commit): the int-1 wave-1 records carried code null (exec r16_0413).  Now: EXPORT.json's commit first
+    EXPORT.json with the shipped commit): the first pod records carried code null.  Now: EXPORT.json's commit first
     (code_source 'EXPORT.json', the dirty-patch digest named when present), git HEAD in a git tree, null only when neither exists."""
     root = os.path.abspath(os.path.join(os.path.dirname(WR.__file__), "..", ".."))
     exp = os.path.join(root, "EXPORT.json")
