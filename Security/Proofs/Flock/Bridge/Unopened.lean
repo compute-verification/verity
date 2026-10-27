@@ -4,7 +4,7 @@ import Proofs.Flock.Bridge.CircuitOf
 /-!
 # A unit with a committed value unopened is faulty
 
-`card_wrong_le_faulty` (ONE-7) bounds the units wrong in the values a witness opens by the faulty ones. Sampled
+`card_wrong_le_faulty` bounds the units wrong in the values a witness opens by the faulty ones. Sampled
 proofs' claim (`Accounting.unbound`) also counts a unit one of whose committed values (an input it reads from outside,
 or a value it computes and another unit reads or the circuit returns) the commitment doesn't open; these are faulty
 too, since a proof unit that is correct on its committed values reads and returns them all.

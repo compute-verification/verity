@@ -14,26 +14,25 @@ on the strategy.
 
 `SampledDeploy` holds, for files that parse (`Vocab.parsed`), the session's setting at the parse (`A`, with its named
 assumptions A3 and `RecordCustodyZKJ`), the session's strategy the play induces (`τOf`) and what the play's collision
-is read off (`col`, ONE-4's `findBreak` at a `.collision` witness); the facts relating them that no lemma gives yet,
+is read off (`col`, `findBreak` at a `.collision` witness); the facts relating them that no lemma gives yet,
 each its owner's:
 
 * `accept_le`: outside the collision (`ColEvent col`) and the vocabulary's forgery (`Vocab.Forges .sampled`), the
-  verdict at most as likely as the session's acceptance (ONE-3t's
-  `acc_of_accepts` and a decode of `ComponentAccepts`; ONE-4's coupling of the device's releases to the session's
+  verdict at most as likely as the session's acceptance
+  (`acc_of_accepts` and a decode of `ComponentAccepts`; the coupling of the device's releases to the session's
   coins and `DrawnByDevice`);
 * `finder_ge`: the replay finder of `col` (`Vocab.replayFinder`) outputs a collision at most `kMax θ` times as often
   as the vocabulary's sampled finder (`SampledDeploy.finder_ge_of`, where that finder is the uniform mixture of
   C-Flock's finders with the replay finder in its spare slot), so `break_le` follows (`break_le_of`) at the additive
   loss (`loss_ge`: `kMax θ · x ≤ loss x`, stated here once until `Vocab` carries it); the forgery is the vocabulary's
   own term (`Vocab.forges`), never reduced to a collision;
-* `unbound_le`: the unbound units at most the session's faulty ones (`LiveAt.faultyE`; `place`'s openings bridge,
-  ONE-7);
-* `cr`: the vocabulary's finder premise gives C-Flock's (C-Flock's finders as one `Claims.Finder`, ONE19);
+* `unbound_le`: the unbound units at most the session's faulty ones (`LiveAt.faultyE`; `place`'s openings bridge);
+* `cr`: the vocabulary's finder premise gives C-Flock's (C-Flock's finders as one `Claims.Finder`);
 
 the deployment's constants (`k = kDep`, `M = R_w = 2^192`, `ρ = 1/2`, `v ≤ 2^80`, at most `2^40` committed wires),
 `t'` the strategy's declared cost; and what the product publishes: `ε ≥ 0` and `δ` at least the miss plus `2^-100` at
 costs up to `2^80`, `⊤` above. From these `SampledDeploy.sampledIn` builds the coupling `SampledIn` at every strategy:
-`units_eq` is ONE78's `unitsOfFile_eq`, `hε` is `LiveAt.sound_honest` at `K₀ = ⌊ε n⌋ + 1`, and `delta_le` is ONE19's
+`units_eq` is `unitsOfFile_eq`, `hε` is `LiveAt.sound_honest` at `K₀ = ⌊ε n⌋ + 1`, and `delta_le` is
 `deltaPub_le_deployed`. Files that don't parse have no units, and files that fail the commit phase's check no verdict.
 -/
 
@@ -115,9 +114,9 @@ noncomputable abbrev _root_.Flock.Guarantees.LiveAt.valE {n : ℕ} {D : Flock.De
     (Flock.Bridge.stmtOf A.P A.κ kd desc q A.roots)
 
 /-- **`unbound_le` from the extractor and the openings.** Where the vocabulary's extractor is the transcript of the
-values the session's extractor opens (`hX`, ONE-8's `extract`), and the vocabulary's openings are openings `O` of the
+values the session's extractor opens (`hX`, the vocabulary's `extract`), and the vocabulary's openings are openings `O` of the
 parse's circuit (`hO`) that hold wherever that witness opens a value other than a constant (`hopen`) and at the
-constants (`hconst`) (`place`'s openings bridge, ONE-7's), the unbound units are at most the session's faulty ones
+constants (`hconst`) (`place`'s openings bridge), the unbound units are at most the session's faulty ones
 (`Flock.Bridge.card_unbound_le_faulty`). -/
 theorem unbound_le_of {V : Vocab d α} (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
     {r : Flock.Bridge.Parsed} (hr : V.parsed F = some r) {kd K₀ : ℕ} {desc : Claims.Msg}
@@ -161,7 +160,7 @@ theorem transcriptAt_heq {o : Option Flock.Bridge.Parsed}
   subst h
   rfl
 
-/-- **The deployment's extractor** (ONE-8's `extract`), from the vocabulary's reading of the files (`read`), its rounds,
+/-- **The deployment's extractor** (`Vocab.extract`), from the vocabulary's reading of the files (`read`), its rounds,
 the device's signer and its `ε`, and C-Flock's session at each parse (`A`, `τOf`, `q`, as `SampledDeploy` holds them): at files that parse
 to `r`, the transcript of the values the session's extractor opens at the strategy the play induces (`LiveAt.valE` at
 `τOf σ`); the empty transcript at files that don't parse. Its type is `Vocab.extract`'s, so a vocabulary can take it as
@@ -182,7 +181,7 @@ noncomputable def extractDep (read : ByteArray → FileRead) (rounds : ByteArray
 
 /-- **`unbound_le` at the deployment's extractor.** Where the vocabulary's extractor is `extractDep` at the session
 (`hext`) and its openings are openings `O` of the parse's circuit that hold wherever the session's witness opens a
-value other than a constant and at the constants (`place`'s openings bridge, ONE-7's: `hO`, `hopen`, `hconst`), the
+value other than a constant and at the constants (`place`'s openings bridge: `hO`, `hopen`, `hconst`), the
 unbound units are at most the session's faulty ones: `SampledDeploy.unbound_le`, with `extract`'s half proved. -/
 theorem unbound_le_of_extract {V : Vocab d α} (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
     (q : ByteArray → Claims.Sampling.Query)
@@ -295,7 +294,7 @@ noncomputable def sampledIn (Dp : SampledDeploy V) (θ F c : ByteArray) (σ : Ga
 
 end SampledDeploy
 
-/-- **Sampled proofs' target at the deployment** (`Vocab.SampledProofsSound`, ONE-8), with no hypothesis on the
+/-- **Sampled proofs' target at the deployment** (`Vocab.SampledProofsSound`), with no hypothesis on the
 strategy: at every vocabulary whose sampled proofs' fields are the deployment's (`SampledDeploy`), at every `θ`, `F`,
 `c` and strategy, sampled proofs' verdict accepts while more than an `ε` share of the units are unbound in the
 extractor's transcript with probability at most `Vocab.error .sampled`: `δ`, the collision finder's loss, and the LMS
