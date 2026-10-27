@@ -1,7 +1,7 @@
 # E2E demo interfaces
 
 The interfaces between the six subprotocols of the one-H200 E2E demo: the drawn-unit replay bundle and the block record.
-Not a package: run the modules with this directory on `PYTHONPATH` (the suite's `pyproject.toml` sets it, with `integrations/torch_loop`).
+Not a package: run the modules with this directory on `PYTHONPATH` (the suite's `pyproject.toml` sets it).
 
 ## The drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`)
 
@@ -15,7 +15,7 @@ order, each row's u16 words little-endian then its 192-byte salt.
 
 The step commitment is kernels' commit call (`verity/commit-slots/v1`): a step tree over slot trees over
 unit trees over rows, only each unit's outputs committed. An output row opens in its unit's own commitment unit. An input
-row opens where its producer committed it, and names the producer's coordinates (the torch loop's `x` and `sx` open at
+row opens where its producer committed it, and names the producer's coordinates (the fixture's `x` and `sx` open at
 their layer's input quantizer). The bundle adds a block tree over each server-time block's step roots.
 The bundle builds its step commitments with kernels' CPU reference, `benchmarks/torch_gpu/commit_slots/slots.py`,
 imported from the tree. The suite pins the SHA-512 of their fixture, `commit-slots-v1.json` at the commit `REFERENCE`
@@ -29,13 +29,16 @@ registration, `check` refuses a draw whose law isn't the registered one (fixed b
 pick it), a subset draw of other than its k units, and a `draw.record` that isn't a draw of the bundle's units under
 that law over the registered population (Lean's `flock-verify draw --registration F` refuses to draw one).
 
-    python -m verity_e2e_demo.replay_bundle fixture --out DIR --scratch "$(mktemp -d)"
-    python -m verity_e2e_demo.replay_bundle check DIR/drawn-unit-bundle.json [--registration SCRATCH/registration.json]
+    python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.json [--registration tests/fixtures/drawn-unit-registration.json]
 
-The fixture (`fixture` writes it as `drawn-unit-bundle.{json,bin}`) is the torch loop's window (two requests, one step,
-both linears, width 128: 512 units, registered `subset:4`) with four drawn units, its weights registered as core's registered values and its step
-committed under test salt keys, its target the RTX PRO 6000's. It is built in seconds, so it isn't tracked: the suite
-builds it and pins its SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows.
+`build` writes a bundle from a window and the prover's step records, given where each port's row is in the step layout
+(`locate`), a unit's coordinates (`coords`) and its registered reads (`reads`). The fixture,
+`tests/fixtures/drawn-unit-bundle.{json,bin}` with its window's registration, is four drawn units of a W8A8 MLP's window
+(two requests, one step, both linears, width 128: 512 units, registered `subset:4`), its weights registered as core's
+registered values and its step committed under test salt keys, its target the RTX PRO 6000's. The suite pins its
+SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows. The
+window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is in the evidence store
+(its `BUNDLE_WINDOW`).
 
 ## The block record (`verity/block-record/v1`)
 
