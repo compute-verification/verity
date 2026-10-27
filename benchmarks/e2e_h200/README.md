@@ -72,5 +72,5 @@ PYTHONPATH=benchmarks/e2e_h200:integrations/torch_loop python -m e2e_h200.weight
 ~~~
 
 Exit 0: every drawn unit replays to its committed word, every opened slot to its committed root and every subcircuit's own
-check holds; 3: one doesn't; 4: a leg's fixture check fails; 5: ``--weights-file`` isn't its manifest's W (a tensor's
+check holds; 3: one doesn't; 4: a subprotocol's fixture check fails; 5: ``--weights-file`` isn't its manifest's W (a tensor's
 sha256, its size or its model), refused before the first step.
