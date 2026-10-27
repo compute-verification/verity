@@ -35,10 +35,11 @@ class Clock:
 
 
 def _in_process() -> tuple[period.Period, run.Point, run.Setup, list[bytes], bytes]:
-    """`period.run` in one process under a test signer: its period, point, published setup, `C*`'s blocks and table."""
+    """`period.run` in one process under a test signer at the small point: its period, point, published setup, `C*`'s
+    blocks and table."""
+    point = period.point_for(len(STORE), period.W, period.C0)
     p = period.run("n0", STORE, COINS, signer=ts.TestSigner(b"in process", 2), log=ts.session_log(), clock=Clock(),
-                   schemes=ts.SCHEMES, protocol=TEST_ID)
-    point = period.point_for(len(STORE))
+                   point=point, schemes=ts.SCHEMES, protocol=TEST_ID)
     published = run.Setup.from_json(json.loads(bytes.fromhex(p.case["commitment"])))
     _, _, encoded = period.setup_inputs(p.setup_case)
     blocks = [b for seg in encoded for b in seg]
