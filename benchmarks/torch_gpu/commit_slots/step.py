@@ -427,7 +427,7 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
                           "idle_s": round(r["gpu_s"] - busy, 4), "launches": sum(k["launches"] for k in kernels),
                           "pageable_uploads": sum(k["launches"] for k in kernels if "Pageable -> Device" in k["kernel"]),
                           "kernels": kernels[:25]}
-    except Exception as e:   # a profiler the node lacks costs only this part
+    except Exception as e:  # noqa: BLE001  (a profiler the node lacks costs only this part)
         doc["profile"] = {"error": repr(e)}
     save("profile")
 

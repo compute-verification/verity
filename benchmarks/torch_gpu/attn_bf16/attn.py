@@ -257,7 +257,6 @@ def qk(q, k, lens=None, *, out=None, fill: int = NEG_INF, warps: int | None = No
 def pv(p, v, lens=None, *, out=None, kpv: int = PAD_K, warps: int | None = None, check_lens: bool = True,
        path: str = "fast"):
     """O (B, H, D) = p (B, H, T) times v (B, T, D) or (B, Hkv, T, D), PV's K = max(kpv, pad16(lens)); see the module."""
-    import torch
 
     p, v = _words(p, "p", False), _kv4(_words(v, "v", False))
     if p.dim() != 3 or v.dim() != 4 or v.shape[0] != p.shape[0] or v.shape[2] != p.shape[2]:

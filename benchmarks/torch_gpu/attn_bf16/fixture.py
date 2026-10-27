@@ -52,7 +52,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gen  # noqa: E402
+import gen
 
 POISON = 0xA5A5
 SPECIALS = gen.SPECIALS

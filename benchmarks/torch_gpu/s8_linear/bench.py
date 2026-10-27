@@ -88,7 +88,7 @@ def bandwidth(clock, reps: int) -> dict:
     med, us, meta = kbench.timed(fns, reps, clock, 1)
     doc = {"read_gbs": BW_BYTES / med["read"] / 1e3, "copy_gbs": 2 * BW_BYTES / med["copy"] / 1e3, "us": med,
            "sm_clock_mhz": meta["clocks"]}
-    del src, dst, out
+    src = dst = out = None
     torch.cuda.empty_cache()
     return doc
 
