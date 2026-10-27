@@ -243,24 +243,3 @@ RELATION_IDS = {
                           "t+1 <= 4096, finite operands), else RelationError('unresolved: ...')."),
 }
 RELATIONS: dict[str, Any] = {rid: fn for rid, (_, fn, _) in RELATION_IDS.items()}
-
-
-def register_with_w2(R: Any, replace: bool = False) -> list[str]:
-    """Fill W2's slots in ``R`` (``verity_vllm.program.relations``, which calls this when it loads); returns the ids
-    registered."""
-    done = []
-    for rid, (op_type, fn, doc) in RELATION_IDS.items():
-        existing = R.REGISTRY.get(rid)
-        if existing is not None and existing.implemented and not replace:
-            continue
-
-        def _wrap(inst, inputs, _fn=fn):
-            try:
-                return _fn(inst, inputs)
-            except GemmRelationError as error:
-                raise R.RelationError(str(error)) from error
-
-        R.register(rid, klass=R.INDEPENDENT, op_type=op_type, includes_full_op=True, version=MODEL_VERSION, doc=doc, owner="W11", replace=replace)(_wrap)
-        done.append(rid)
-    return done
-

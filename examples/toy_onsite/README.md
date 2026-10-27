@@ -12,8 +12,8 @@ S1's run of record (below) is the one run that counts. It is compute-accounting'
 The workload is `integrations/torch_loop`: a two-layer W8A8 MLP on CPU, its weights seeded, one run serving `--windows N`
 windows. Every party runs on one CPU machine (`vy-nebius-cpu-4` for the run of record): the loop, each leg's prover and
 verifier (C-Flock `--zk` behind the Lean firewall), and the network certifier's session, which runs beside the server and
-not on an auditor's machine (the certifier leg's `stubbed` says so). `example.toml` puts the example at level 0 (moved) on
-the ladder (`examples/README.md`).
+not on an auditor's machine (the certifier leg's `stubbed` says so). The example's rung on the ladder and the runs behind
+it are `example.toml`'s (`examples/README.md`).
 
 ## What runs
 

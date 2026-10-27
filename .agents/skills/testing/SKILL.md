@@ -23,7 +23,7 @@ Suites run remotely, never on an agent VM (AGENTS.md "Tests"): `research run --o
 slots on vy-nebius-2, the GPU node, only when no pool slot fits it (`research/auto.py`; it says which). Give it `--cwd source`, so the job runs in the shipped tree rather than
 its run directory, and `uv sync` that tree first: `suites.py` refuses another checkout's environment. It returns
 once the job starts, and `research status RUN` checks back on it. `--wait` blocks until the job ends, so give it only
-to a run that ends within about 20 minutes (AGENTS.md "Lanes": no step waits long).
+to a run that ends within about 20 minutes (AGENTS.md "Tests": no tool call blocks more than 20 minutes).
 
 ~~~sh
 R="research run --on auto --cwd source -- bash -lc"
@@ -36,6 +36,11 @@ $R "$S --changed $(git rev-parse origin/main) --quick"   # only the suites your 
 $R "$S --fresh"                 # ignore the cache
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
+
+To record a check of your clean commit as an Attempt, the whole check or some of its steps (`--deferred lean-agreement`),
+launch `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research [--deferred STEP,...]` from
+your checkout. It starts its own `research run` in a slot of that lane pool (the CPU nodes' check slots take train checks only),
+so inside a `research run` it is refused, naming this command.
 
 Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
 `cd verity/ml/flock && uv run pytest tests/test_layouts.py -k typed`. It doesn't cache and doesn't load the read guard. The shell
