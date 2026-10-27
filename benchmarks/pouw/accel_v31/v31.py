@@ -48,6 +48,7 @@ mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments 
                                                 `v31 fill-bench` (served: O committed; else the filler's)
     python3 v31.py fill-sample DIR              a fill-bench shape's two sampled tiles against the no-fold reference
     python3 v31.py fill-table BENCH.jsonl ...   the no-fold call's gamma over cuBLASLt and CUTLASS, and where its time goes
+    python3 v31.py contend-table CONTEND.jsonl  `v31 contend`'s rows: what each filler mix and cuBLASLt's GEMM cost each other
 
 Dither's no-fold call (CMP-172, circuit/dither.py on #4974 at 1a428ae983), served or the filler's, is `Fill` below: its
 reference and verifier here, its GPU prover v31.cu's Fill, and its per-call binding v31lib.py.
@@ -968,6 +969,24 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_contend_table(a: argparse.Namespace) -> int:
+    """`v31 contend`'s JSON lines: cuBLASLt's GEMM beside a filler kernel (cpb 128-thread CTAs an SM of one instruction
+    mix), each one's slowdown over its time alone (s_g, s_f) and share = 1/s_g + 1/s_f: 1 when the two time-share the
+    SM, 2 when each runs as if alone."""
+    print("| shape | m x N x K | filler | CTAs an SM | regs | GEMM alone ms | GEMM beside ms | s_g | filler alone ms | "
+          "filler beside ms | s_f | share | valid |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    for path in a.files:
+        for line in Path(path).read_text().splitlines():
+            if not (line.startswith("{") and '"contend": true' in line):
+                continue
+            r = json.loads(line)
+            print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['mode']} | {r['cpb']} | {r['regs']} | "
+                  f"{r['g0']:.3f} | {r['g1']:.3f} | {r['s_g']:.3f} | {r['f0']:.2f} | {r['f1']:.2f} | {r['s_f']:.3f} | "
+                  f"{r['share']:.3f} | {'yes' if r['valid'] else 'no'} |")
+    return 0
+
+
 # ---------------------------------------------------------------------------------------------------------- operands
 def operands(sh: Shape, rng: np.random.Generator, kind: str = "llm") -> tuple[np.ndarray, np.ndarray]:
     """int8 operands. ``llm``: rows quantized to +-127 by their absolute maximum, activations from a Student t (heavy tails,
@@ -1340,10 +1359,12 @@ def main(argv: list[str]) -> int:
     p.add_argument("dir")
     p = sub.add_parser("fill-table")
     p.add_argument("files", nargs="+")
+    p = sub.add_parser("contend-table")
+    p.add_argument("files", nargs="+")
     a = ap.parse_args(argv[1:])
     return {"cpu-run": cmd_cpu_run, "gpu-prep": cmd_gpu_prep, "gpu-check": cmd_gpu_check, "gpu-sample": cmd_gpu_sample,
             "params": cmd_params, "table": cmd_table, "timeline": cmd_timeline, "fill-params": cmd_fill_params,
-            "fill-sample": cmd_fill_sample, "fill-table": cmd_fill_table}[a.cmd](a)
+            "fill-sample": cmd_fill_sample, "fill-table": cmd_fill_table, "contend-table": cmd_contend_table}[a.cmd](a)
 
 
 if __name__ == "__main__":

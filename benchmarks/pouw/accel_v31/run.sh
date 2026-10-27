@@ -32,11 +32,14 @@
 # implied: dither.Shape(o=True); its params named served-*).
 # FILL_NSYS=1 adds, before the bench, Nsight Systems on `v31 fill-once` (OVL_CALLS overlapped calls after two serial ones)
 # for each variant, L and shape: out/nsys-TAG-L-SHAPE.nsys-rep, its kernel trace and `v31.py timeline`'s .timeline.md.
+# MODE=contend: no gates; `v31 contend` (cuBLASLt's GEMM beside a filler kernel issuing SHA-512 on registers, integer ALU,
+# FP32 FMA or nothing, at 1 to 3 CTAs an SM: what each costs the other) over CONTEND_SHAPES (default 8B O, 8B gate-up and
+# 70B O at m 16384), REPS each; out/contend.jsonl and `v31.py contend-table`'s table.md.
 # FILL_PROF=1 adds, before the bench, Nsight Compute (--set full) on `v31 fill-once`'s serial call for each variant, L and
 # shape: the first PROF_COUNT (default 3) launches matching PROF_KERNELS (default cuBLASLt's GEMM, salt_persist and
 # leaf_persist), each alone: out/ncu-TAG-L-SHAPE.ncu-rep and its details and raw pages as CSV (pipes, issue, stalls).
 #
-# HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
+# HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill|contend (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 5), wcw (256), ccta (1), pf (0), diag (0), sched (0), copies (2), lstr (0)
 # (v31.cu's Knobs), nreg (the GEMM's register cap) and rot (sha512.cuh's SHA_ROT, the sigmas rotating on the FMA pipe),
@@ -229,6 +232,19 @@ if [ "$MODE" = fill ]; then
   cat "$O/rc.txt"
   cat "$O/verdicts.txt" 2>/dev/null
   cat "$O/table.md" 2>/dev/null
+  ! grep -qv ' rc 0$' "$O/rc.txt"
+  exit
+fi
+if [ "$MODE" = contend ]; then
+  export SHAPES=${CONTEND_SHAPES:-"8B-o:16384:4096:4096 8B-up:16384:28672:4096 70B-o:16384:8192:8192"} REPS
+  # shellcheck disable=SC2016,SC2086
+  $LEASE bash -c '
+    "$W/v31" contend "$REPS" $SHAPES > "$O/contend.jsonl" 2> "$O/contend.err"
+    echo "contend rc $?" >> "$O/rc.txt"'
+  echo "lease contend rc $?" >> "$O/rc.txt"
+  $PY $D/v31.py contend-table "$O/contend.jsonl" > "$O/table.md" 2>> "$O/table.err"
+  echo "contend-table rc $?" >> "$O/rc.txt"
+  cat "$O/rc.txt" "$O/table.md"
   ! grep -qv ' rc 0$' "$O/rc.txt"
   exit
 fi

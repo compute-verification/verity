@@ -32,6 +32,7 @@
 //                                         commit's parts; cutlass: CUTLASS's fastest int8 GEMM, the second baseline,
 //                                         under -DV31_CUTLASS), one JSON line a shape
 //   v31 once PDIR LP T ROW name:M:N:K     one shape's call twice, nothing timed or checked (under a profiler)
+//   v31 contend REPS name:M:N:K...        cuBLASLt's GEMM beside a filler kernel of one instruction mix (cmd_contend)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1
 //        [-DV31_CUTLASS cutlass_2x.o] v31.cu -lcuda -lcublasLt (run.sh builds the harness's cutlass_2x.cu)
 #include <cublasLt.h>
@@ -2971,6 +2972,157 @@ void v31_destroy(void* h) {
 }
 }   // extern "C"
 #else
+// ---------------------------------------------------------------- contention probe
+// What the commit's hashing costs cuBLASLt's GEMM when the two share the SMs: a filler kernel of cpb 128-thread CTAs an SM
+// (the leaf kernels' shape and register cap) issuing one instruction mix beside the GEMM. sha: SHA-512 compressions on
+// registers (the leaf hash without its loads); alu: funnel shifts, LOP3 and adds; fma: FP32 FMA; sleep: resident, issuing
+// almost nothing.
+template <int MODE>
+__global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB) filler_kernel(u64 iters, u64* sink) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  u64 acc = 0;
+  if constexpr (MODE == 0) {
+    u64 st[8], w[16];
+#pragma unroll
+    for (int i = 0; i < 8; i++) st[i] = t * 0x9e3779b97f4a7c15ull + i;
+#pragma unroll
+    for (int i = 0; i < 16; i++) w[i] = t ^ (0x5851f42d4c957f2dull * (i + 1));
+    for (u64 r = 0; r < iters; r++) {
+      sha::compress(st, w);
+      w[0] ^= st[0];
+    }
+    acc = st[0] ^ st[7];
+  } else if constexpr (MODE == 1) {
+    u32 x[8];
+#pragma unroll
+    for (int i = 0; i < 8; i++) x[i] = (u32)t * (2 * i + 1) + i;
+    for (u64 r = 0; r < iters; r++)
+#pragma unroll
+      for (int j = 0; j < 16; j++)
+#pragma unroll
+        for (int i = 0; i < 8; i++)
+          x[i] = (__funnelshift_r(x[i], x[(i + 1) & 7], 13 + i) ^ (x[(i + 2) & 7] & x[(i + 3) & 7])) + x[(i + 5) & 7];
+    acc = x[0] ^ x[3] ^ x[7];
+  } else if constexpr (MODE == 2) {
+    float f[8];
+#pragma unroll
+    for (int i = 0; i < 8; i++) f[i] = (float)(t & 1023) * 1e-3f + (float)i;
+    for (u64 r = 0; r < iters; r++)
+#pragma unroll
+      for (int j = 0; j < 16; j++)
+#pragma unroll
+        for (int i = 0; i < 8; i++) f[i] = fmaf(f[i], 0.999f, f[(i + 1) & 7]);
+    acc = __float_as_uint(f[0] + f[3] + f[7]);
+  } else {
+    for (u64 r = 0; r < iters; r++) __nanosleep(1000);
+  }
+  if (acc == 0x5eed5eedull) sink[0] = acc;
+}
+
+// v31 contend REPS name:M:N:K...: per shape, cuBLASLt's GEMM (cuBLASLt's pick for the served call's D, autotuned as
+// lt_setup does) beside each filler mix at cpb 1, 2 and 3. g0, f0: the GEMM's and the filler's times alone; g1: the
+// GEMM's beside a filler that outlasts it; f1: the filler's beside GEMMs that outlast it (the filler on the commit's
+// high-priority stream, launched second). s_g = g1 / g0, s_f = f1 / f0, share = 1 / s_g + 1 / s_f: 1 when the two
+// time-share the SM, 2 when each runs as if alone. Medians over REPS; valid is false when a run's outlasting failed.
+static int cmd_contend(int reps, const std::vector<std::string>& shapes) {
+  cudaDeviceProp prop;
+  CK(cudaGetDeviceProperties(&prop, 0));
+  const int nsm = prop.multiProcessorCount;
+  int plo, phi;
+  CK(cudaDeviceGetStreamPriorityRange(&plo, &phi));
+  cudaStream_t sg, sf;
+  CK(cudaStreamCreateWithPriority(&sg, cudaStreamNonBlocking, plo));
+  CK(cudaStreamCreateWithPriority(&sf, cudaStreamNonBlocking, phi));
+  u64* sink;
+  CK(cudaMalloc(&sink, 64));
+  cudaEvent_t g0e, g1e, f0e, f1e;
+  for (cudaEvent_t* e : {&g0e, &g1e, &f0e, &f1e}) CK(cudaEventCreate(e));
+  auto ms = [](cudaEvent_t a, cudaEvent_t b) {
+    float v;
+    CK(cudaEventElapsedTime(&v, a, b));
+    return (double)v;
+  };
+  using FK = void (*)(u64, u64*);
+  const FK fk[4] = {filler_kernel<0>, filler_kernel<1>, filler_kernel<2>, filler_kernel<3>};
+  const char* fname[4] = {"sha", "alu", "fma", "sleep"};
+  const u64 it0[4] = {16, 64, 64, 64};
+  for (const std::string& sh : shapes) {
+    char name[64];
+    int m, n, k;
+    if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) != 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
+    int8_t *A, *B;
+    int* D;
+    CK(cudaMalloc(&A, (size_t)m * k));
+    CK(cudaMalloc(&B, (size_t)n * k));
+    CK(cudaMalloc(&D, (size_t)m * n * 4));
+    gen_kernel<<<m, 256, 0, sg>>>(A, k, 1u, true);
+    gen_kernel<<<n, 256, 0, sg>>>(B, k, 2u, false);
+    Lt lt{};
+    lt_setup(lt, m, n, k, A, B, D, sg);
+    auto gemms = [&](int r) {
+      CK(cudaEventRecord(g0e, sg));
+      for (int i = 0; i < r; i++) lt_run(lt, A, B, D, sg);
+      CK(cudaEventRecord(g1e, sg));
+    };
+    auto fill = [&](int f, int cpb, u64 iters) {
+      CK(cudaEventRecord(f0e, sf));
+      fk[f]<<<nsm * cpb, SMALL_THREADS, 0, sf>>>(iters, sink);
+      CK(cudaEventRecord(f1e, sf));
+    };
+    gemms(3);
+    CK(cudaDeviceSynchronize());
+    std::vector<double> gv;
+    for (int r = 0; r < reps; r++) {
+      gemms(4);
+      CK(cudaDeviceSynchronize());
+      gv.push_back(ms(g0e, g1e) / 4);
+    }
+    const double g0 = gk::median(gv);
+    const int R = std::max(2, (int)std::ceil(20.0 / g0));
+    for (int f = 0; f < 4; f++) {
+      cudaFuncAttributes fa;
+      CK(cudaFuncGetAttributes(&fa, (const void*)fk[f]));
+      for (int cpb = 1; cpb <= 3; cpb++) {
+        fill(f, cpb, it0[f]);
+        CK(cudaDeviceSynchronize());
+        const u64 iters = std::max<u64>(1, (u64)((double)it0[f] * 3.0 * R * g0 / std::max(ms(f0e, f1e), 1e-3)));
+        std::vector<double> f0v, g1v, f1v;
+        bool valid = true;
+        for (int r = 0; r < reps; r++) {
+          fill(f, cpb, iters);
+          CK(cudaDeviceSynchronize());
+          f0v.push_back(ms(f0e, f1e));
+          fill(f, cpb, iters);
+          gemms(R);
+          CK(cudaDeviceSynchronize());
+          g1v.push_back(ms(g0e, g1e) / R);
+          valid = valid && ms(g1e, f1e) > 0;
+          const double fa_ms = f0v.back();
+          gemms(std::max(2, (int)std::ceil(4.0 * fa_ms / g0)));
+          fill(f, cpb, iters);
+          CK(cudaDeviceSynchronize());
+          f1v.push_back(ms(f0e, f1e));
+          valid = valid && ms(f1e, g1e) > 0;
+        }
+        const double f0 = gk::median(f0v), g1 = gk::median(g1v), f1 = gk::median(f1v), sg_ = g1 / g0, sf_ = f1 / f0;
+        printf("{\"contend\": true, \"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"gpu\": \"%s\", \"sms\": %d, "
+               "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d}, \"mode\": \"%s\", \"cpb\": %d, \"regs\": %d, "
+               "\"iters\": %llu, \"R\": %d, \"g0\": %.6f, \"g1\": %.6f, \"f0\": %.6f, \"f1\": %.6f, \"s_g\": %.4f, "
+               "\"s_f\": %.4f, \"share\": %.4f, \"valid\": %s}\n",
+               name, m, n, k, prop.name, nsm, lt.algo_id, lt.tile, lt.stages, fname[f], cpb, fa.numRegs,
+               (unsigned long long)iters, R, g0, g1, f0, f1, sg_, sf_, 1 / sg_ + 1 / sf_, valid ? "true" : "false");
+        fflush(stdout);
+      }
+    }
+    lt_free(lt);
+    CK(cudaFree(A));
+    CK(cudaFree(B));
+    CK(cudaFree(D));
+  }
+  CK(cudaGetLastError());
+  return 0;
+}
+
 int main(int argc, char** argv) {
   if (argc >= 9 && !strcmp(argv[1], "fill-bench"))
     return cmd_fill_bench(atoi(argv[2]), argv[3], argv[4], atoi(argv[5]), atoi(argv[6]), atoi(argv[7]),
@@ -2983,6 +3135,8 @@ int main(int argc, char** argv) {
   if (argc >= 9 && !strcmp(argv[1], "bench"))
     return cmd_bench(atoi(argv[2]), argv[3], argv[4], atoi(argv[5]), atoi(argv[6]), atoi(argv[7]),
                      std::vector<std::string>(argv + 8, argv + argc));
+  if (argc >= 4 && !strcmp(argv[1], "contend"))
+    return cmd_contend(atoi(argv[2]), std::vector<std::string>(argv + 3, argv + argc));
   if (argc >= 2 && !strcmp(argv[1], "attrs")) {
     kernel_attrs(stdout);
     printf("\n");
@@ -2990,7 +3144,7 @@ int main(int argc, char** argv) {
   }
   fprintf(stderr, "usage: v31 gate DIR M N K LP T ROW CHEAT | bench REPS OUT PDIR LP T ROW name:M:N:K... | once PDIR LP T ROW "
                   "name:M:N:K | fill-bench REPS OUT PDIR LP L ROW name:M:N:K... (L 0: K) | fill-once PDIR LP L ROW name:M:N:K "
-                  "| attrs\n");
+                  "| contend REPS name:M:N:K... | attrs\n");
   return 2;
 }
 #endif
