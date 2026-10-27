@@ -535,4 +535,36 @@ theorem commitDep_accepts {C : FlockSoundness.Audit.Circuit} {rows : Fin C.N →
     (by simpa [SamplingDeploy.rowBits] using hw) (saltOf o) (saltOf_length (log2ceil_pos hnl) hpath) r.leaf _ hopen
   rwa [hleaves] at ha
 
+/-- **A value the witness opens has an opening that passes**: at its position, of its value. -/
+theorem val_opens {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool} {s : Claims.Sampling.Stmt}
+    {w : Claims.Sampling.Wit} {i : ℕ} {b : Bool} (h : w.val H Cm s i = some b) :
+    ∃ o : Opening Bool, o.pos = i ∧ o.val = b ∧ Cm.Opens H s.roots o = true := by
+  obtain ⟨o, hf, rfl⟩ := Option.map_eq_some_iff.mp h
+  have := List.find?_some hf
+  simp only [Bool.and_eq_true, beq_iff_eq] at this
+  exact ⟨o, this.1, rfl, this.2⟩
+
+/-! ## The constants -/
+
+theorem constsOf_eq_parsed (r : Flock.Bridge.Parsed)
+    (g : Fin (FlockSoundness.Discharge.Layout.keyN r.D.unroll r.hU r.n)) :
+    constsOf r.D.unroll r.hU r.n g = Verity.parsedConsts (some r) g := by
+  simp only [constsOf, Verity.parsedConsts, Fin.ext_iff, FlockSoundness.Discharge.Layout.oneG,
+    FlockSoundness.Discharge.Layout.zeroG, Fin.coe_castLE]
+
+/-- **`hconst` at the parse**: where the lowered program places a constant `b` at a wire, the parse's constants
+(`FileRead.consts`' `parsedConsts`) hold `b` there, and so does the transcript at any values. -/
+theorem hconst_parsed {r : Flock.Bridge.Parsed} {kd K₀ : ℕ} {desc : Claims.Msg}
+    (A : Flock.Guarantees.LiveAt r.n r.D r.hU kd K₀ desc) (val : ℕ → Option Bool) (g : Fin A.Cc.N) (b : Bool)
+    (h : (progOf A.Cc A.κ).gates[posOf A.Cc g]? = some (.const b)) :
+    Verity.parsedConsts (some r) g = some b ∧
+      ∀ i : Fin ((circuitOf r.D r.hU r.n).w g), (transcriptOf r.D r.hU r.n A.κ val g).getLsbD i.val = b := by
+  obtain ⟨a, ha, hin, hk⟩ := const_pos h
+  obtain rfl := posOf_injective ha
+  refine ⟨(constsOf_eq_parsed r g).symm.trans hk, fun i => ?_⟩
+  have hi : i.val = 0 := by have := i.2; simp [circuitOf_eq, Verity.Circuit.ofAudit] at this; omega
+  show (BitVec.ofBool (openedOf A.Cc A.κ val g)).getLsbD i.val = b
+  rw [openedOf_const val hin hk, hi]
+  simp
+
 end Flock.Bridge.Openings
