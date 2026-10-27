@@ -34,7 +34,6 @@ def _law(why: str) -> str:
 @pytest.fixture(scope="module")
 def verdicts(tmp_path_factory):
     """Each draw's verdict by name, without `--zk` and with it, the two runs side by side."""
-    pytest.importorskip("verity_numerical")
     s = R.stage(tmp_path_factory.mktemp("registered"))
     public = R._stage(s, "honest")
     d = tmp_path_factory.mktemp("laws")
