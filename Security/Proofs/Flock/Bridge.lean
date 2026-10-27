@@ -10,6 +10,7 @@ import Proofs.Flock.Bridge.EndToEndHiddenC
 import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.Refused
 import Proofs.Flock.Bridge.ScopeGate
+import Proofs.Flock.Bridge.ScopeGateSanity
 import Proofs.Flock.Bridge.KSLive
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
