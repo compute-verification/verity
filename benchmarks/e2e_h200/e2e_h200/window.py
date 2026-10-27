@@ -12,7 +12,8 @@ counterpart of the toy's ``torch_loop_window`` (`verity_e2e_demo.replay_bundle`)
 - kept: K and V (``wk`` and ``wv``), a slot's one row each, since their positions are read at later steps.
 
 At the frozen shape and 1 KiB it is 21,857 rows a slot under ``layout_digest`` `FROZEN_DIGEST` (art:16f2faa0…), and its
-writers (`writers`) are art:8ce57586…'s.
+writers (`writers`) are art:8ce57586…'s. Under the ``residual`` fusion (`plan.FUSIONS`) the projections' rows go: 18,529
+rows and 24,008,260 B a slot, 1,099 writers (art:1fe9f909…).
 
 **The reads.** `Window.locate` gives a proof block's input port as `Piece`\\ s, its bytes theirs in order:
 
