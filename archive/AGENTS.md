@@ -31,7 +31,7 @@ authentication  included | excluded
 
 Never compare across `proof_class`, and never compare two numbers that were
 not measured **at the same batch size, on the same hardware, at the same
-soundness target** (`contract.IDENTITY_FIELDS`; `benchmarks/judge.py` refuses
+soundness target** (`contract.IDENTITY_FIELDS`; `archive/shared/judge.py` refuses
 otherwise). The decision workload is B=4096 K=1536 proof units of one input set on
 one machine at 2^-128; the canonical comparison is the three frozen tables
 below. Transition-unit and small-B numbers are diagnostics of a

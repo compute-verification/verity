@@ -1482,6 +1482,16 @@
         "benchmarks/one_stage/llama1b_tp1_commit.sh": "examples/vllm/commit.sh",
         "benchmarks/one_stage/llama1b_serve_seal.sh": "examples/vllm/serve.sh"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/all_protocols/": "examples/toy_onsite/",
+        "benchmarks/e2e_h200/": "examples/h200/",
+        "benchmarks/e2e_demo/": "examples/h200/interfaces/",
+        "benchmarks/pouw/e2e_120/": "examples/pouw_window/",
+        "benchmarks/judge.py": "archive/shared/judge.py",
+        "benchmarks/latency_compare.py": "archive/shared/latency_compare.py"
+      }
     }
   ]
 }

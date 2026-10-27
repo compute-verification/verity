@@ -1,5 +1,5 @@
 """The serving loop as network's demo endpoint's engine (NET-77, #4467): ``demo_endpoint.py --engine
-e2e_h200.engine:FACTORY`` with ``benchmarks/e2e_h200`` on ``PYTHONPATH``. A FACTORY (`tiny`, `small`, `frozen`) is called
+e2e_h200.engine:FACTORY`` with ``examples/h200`` on ``PYTHONPATH``. A FACTORY (`tiny`, `small`, `frozen`) is called
 with ``seed`` (0: ALLP-IFACE's test seed) and returns an `Engine`; the device is ``$E2E_H200_DEVICE`` (default cuda when
 there is one), the commit backend ``$E2E_H200_COMMIT`` (default slots) and the generator's processes ``$E2E_H200_WORKERS``.
 ``$E2E_H200_WEIGHTS_FILE`` serves W from that file (`store.FileStore`: every tensor's sha256 checked against the manifest

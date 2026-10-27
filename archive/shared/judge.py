@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Judge two recorded runs: refuse unless they are the same campaign number; otherwise ratios and fingerprint deltas.
 
-    uv run python benchmarks/judge.py BASELINE CANDIDATE [--allow FIELD ...] [--runs-dir DIR] [--json]
+    uv run python archive/shared/judge.py BASELINE CANDIDATE [--allow FIELD ...] [--runs-dir DIR] [--json]
 
 ``BASELINE`` and ``CANDIDATE`` are run ids (or unique prefixes) under ``~/.research/runs`` (``$RESEARCH_RUNS`` or
 ``--runs-dir``), or directories holding a ``result.json``.
@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 for candidate, module in ((REPO, "verity"), (REPO / "benchmarks" / "numerical" / "python", "verity_numerical")):
     try:
         __import__(module)

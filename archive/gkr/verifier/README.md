@@ -104,5 +104,5 @@ src/pins.rs        the circuit pin: pins.txt parsed, a statement directory's cir
 src/main.rs        verify / negatives / mutate / circuit-digest
 pins.txt           the approved circuit sets, one per line: relation, steps, three SHA-256, the generator
 tests/cli.rs       the pin at the command line (refusal before the proof is read, exit codes, circuit-digest)
-e2e.py             the A-GPU envelope with this verifier for benchmarks/latency_compare.py
+e2e.py             the A-GPU envelope with this verifier for archive/shared/latency_compare.py
 ~~~

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """The latency table for two (or more) result envelopes that carry ``rounds.sequential_depth``.
 
-    uv run python benchmarks/latency_compare.py RUN_A RUN_B [RUN_C ...] [--bw-gbps 25] [--capacity-gb 256] [--strict] [--json]
+    uv run python archive/shared/latency_compare.py RUN_A RUN_B [RUN_C ...] [--bw-gbps 25] [--capacity-gb 256] [--strict] [--json]
 
 ``RUN`` is a run id (or unique prefix) under ``~/.research/runs`` (``$RESEARCH_RUNS``), or a directory with a
-``result.json`` (``benchmarks/judge.py`` conventions).  For every envelope: prover compute (``t.total``), verifier
+``result.json`` (``archive/shared/judge.py`` conventions).  For every envelope: prover compute (``t.total``), verifier
 compute, the measured depth, bytes, memory per batch; then the end-to-end wall time per batch at the contract's RTT sweep
 from the model ``prove + verify + depth x RTT + bytes / bw`` (``verity_numerical.bench.latency``) beside the envelope's
 own ``t.e2e.rtt_<x>ms`` (measured at the run's emulated RTT, predicted at the others -- the fingerprint's ``latency``
@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 for candidate, module in ((REPO, "verity"), (REPO / "benchmarks" / "numerical" / "python", "verity_numerical")):
     try:
         __import__(module)

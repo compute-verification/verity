@@ -20,7 +20,7 @@ own: accepted, its failure, or undecided while a window is unverified; on accept
 receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `BLOCK_BYTES` block each, at
 `eps = (2^24 + S)/2^64` for S the draws, as the Lean's `certify` computes them.
 
-`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records. The
+`leg(period_dir, node, out)` is `examples/toy_onsite`' leg for bandwidth: the store is the period's records. The
 verifier and its challenger are a party of their own (`verifier_party`) on `period.json`'s `challenger_host`, with coins
 fresh from that host's OS, and the prover runs on the node. `trusted-host`'s premise, that they run on a machine
 the prover doesn't control, holds only when the challenger host isn't the node, and the leg says which
@@ -291,7 +291,7 @@ def records(period_dir: str | os.PathLike, skip: tuple[str, ...] = ("answers",))
 
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """Bandwidth's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): the session on the
+    """Bandwidth's leg of `examples/toy_onsite` (`leg(period_dir, node, out) -> answer`): the session on the
     period's records, the verifier and its challenger a party of their own on `period.json`'s `challenger_host`
     (`verifier_party.Party.of`; on this node by default, as a process of its own, with its own coins) and the prover
     here. With `remote-audit-protocol` among the period's tools the Lean answers (the verifier of record) and must agree

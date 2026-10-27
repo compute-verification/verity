@@ -2,7 +2,7 @@
 
 Joins the a-gpu prover record (``gpu.run prove --json``: ``prover_s``, ``sequential_depth``, ``slots``, ``proof_bytes``,
 ``peak_mem_bytes``) with the Rust verifier's record (``verity-gkr-verify verify --json``: ``verify_seconds``,
-``bytes_read``) into a ``result.json`` envelope that ``benchmarks/latency_compare.py`` consumes (``t.total``,
+``bytes_read``) into a ``result.json`` envelope that ``archive/shared/latency_compare.py`` consumes (``t.total``,
 ``verifier.seconds``, ``rounds.sequential_depth``, ``rounds.protocol``, ``transcript.bytes``, ``mem.peak_device_bytes``),
 and prints the serial e2e at the contract's RTTs from ``verity_numerical.bench.latency`` (prove + verify + depth x RTT +
 bytes / bw) plus the verifier's own share and ``overhead`` (seconds per VU over the native reference).

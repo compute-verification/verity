@@ -55,7 +55,7 @@ KEY_COUNTS = {
         "the population tests' stand-in key count: a position alone, whose population keeps it",
     "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
-    "benchmarks/e2e_h200/e2e_h200/program.py::program":
+    "examples/h200/e2e_h200/program.py::program":
         "the toy's served step: its key count n and position p, run inputs with no coin",
 }
 WINDOWS = {

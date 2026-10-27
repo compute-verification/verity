@@ -111,7 +111,7 @@ what the network certifier relayed:
 
 ~~~sh
 research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 --store-read -- \
-  bash benchmarks/all_protocols/run.sh --of-record --wired --windows 2 --tie-tamper 0
+  bash examples/toy_onsite/run.sh --of-record --wired --windows 2 --tie-tamper 0
 ~~~
 
 `--of-record` sets the flags three lanes' work needs:

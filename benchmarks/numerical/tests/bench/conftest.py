@@ -13,7 +13,7 @@ from verity_numerical.bench import contract
 
 REPO = Path(__file__).resolve().parents[4]
 VECTOR_RUN = REPO / "archive" / "sp1" / "benchmarks" / "dot_product" / "vector_run.py"
-JUDGE = REPO / "benchmarks" / "judge.py"
+JUDGE = REPO / "archive" / "shared" / "judge.py"
 
 CONFORMING_FINGERPRINT: dict[str, Any] = {
     "profile": contract.PROFILE,

@@ -51,7 +51,7 @@ POS_SHIFT = 40
 #: kernels' sm_90a h1u builds (`benchmarks/torch_gpu/j10r_sm90/job.sh`'s arms), each a CUDA backend
 BUILDS = ("kraqwxsc", "kraq")
 TEMPLATE = "PouwH1Tile_v6{R=32, C=32, K} (J10-R, whole K a unit)"
-J10R_SM90 = Path(__file__).resolve().parents[2] / "torch_gpu" / "j10r_sm90"
+J10R_SM90 = Path(__file__).resolve().parents[3] / "benchmarks" / "torch_gpu" / "j10r_sm90"
 
 CREDIT = {
     "status": "blocked",

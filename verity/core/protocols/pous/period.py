@@ -24,7 +24,7 @@ Encoding is the cost: two 16,448-bit roots a block, about 3.7 s a block on one c
 (r20261025-202504-23f6), so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `encode` splits it
 over processes. An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
 
-`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's store up once at
+`leg(period_dir, node, out)` is `examples/toy_onsite`' leg for space: by default it sets the node's store up once at
 `certified_point` and audits it every period, the coins fresh from the OS. The memory challenger is a party of its own
 (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed parameters
 (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the node.
@@ -409,7 +409,7 @@ CPUs each may run on (`setup_store`; `challenger`, from `challenger_party.main`)
 
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`). By default the node's store is
+    """Space's leg of `examples/toy_onsite` (`leg(period_dir, node, out) -> answer`). By default the node's store is
     set up once, at the smallest point P2's proved family certifies (`certified_point`): `W` is the node's records at its
     first period, encoded in up to `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period
     audits it with fresh coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With

@@ -2,7 +2,7 @@
 into the device's memory (Demo A; ``--weights staged`` is M4's decode-to-staging path), every op's output committed per step,
 drawn units replayed bit for bit, each leg run or named, and the replay bundle and block record written to ``--out``.
 
-    python benchmarks/e2e_h200/run.py --out OUT [--shape tiny|small|slice|h200] [--seed test|demo|TEXT] [--batch B]
+    python examples/h200/run.py --out OUT [--shape tiny|small|slice|h200] [--seed test|demo|TEXT] [--batch B]
         [--steps T] [--prompt-bytes P] [--requests N --generate G --admit A] [--device cpu|cuda] [--weights resident|staged] [--micro-batch M]
         [--store generator|p2-encode|p2:PATH | --weights-file W --weights-manifest M] [--workers N] [--commit slots|reference|host|device] [--salt-keys fresh|fixture]
         [--open K] [--draw K] [--replay-step S] [--attention attn_ref|numpy] [--subcircuit MODULE:FACTORY ...]

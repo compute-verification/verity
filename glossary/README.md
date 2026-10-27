@@ -54,7 +54,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "physical block" (#4732) | server-time block |
 | "isolation unit" (IU) | isolation block |
 | "replay unit" (RU) | replay block |
-| "leg"; "integrity", "work", "space" and "communication" naming subprotocols; `benchmarks/all_protocols/legs/` (`subprotocols/` after Demo B), the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
+| "leg"; "integrity", "work", "space" and "communication" naming subprotocols; `examples/toy_onsite/legs/` (`subprotocols/` after Demo B), the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | serving block, serving-block bound |
 | "work", "FLOPs", "pricing" for how much a circuit computes; PoUW's and ACCEL's docs until CMP-158, W_cert, the Lean's `WorkSound` and `CircuitWork*` names; "κ/2" | size (gate count); U/s_× |

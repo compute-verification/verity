@@ -10,7 +10,7 @@
 # with CERTIFIER_TAMPER=byte), which checks them (--check) before anything builds; ALLP_FLOCK_WORK=DIR keeps M0's build
 # across runs. S1's run of record, the one way a run of it counts (README), every layer chained and the output tied:
 #   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 --store-read -- \
-#     bash benchmarks/all_protocols/run.sh --of-record --wired --windows 2 --tie-tamper 0
+#     bash examples/toy_onsite/run.sh --of-record --wired --windows 2 --tie-tamper 0
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
@@ -19,7 +19,7 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 PY=$REPO/.venv/bin/python
-RUNNER="env PYTHONPATH=$REPO/benchmarks/all_protocols:$REPO/integrations/torch_loop $PY -m verity_all_protocols.runner"
+RUNNER="env PYTHONPATH=$REPO/examples/toy_onsite:$REPO/integrations/torch_loop $PY -m verity_all_protocols.runner"
 $RUNNER --out $O --tools /dev/null --check "$@" | tee $O/mode-check.json || exit 4
 (cd verity/core/service/flock && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!

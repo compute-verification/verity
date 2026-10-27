@@ -58,11 +58,11 @@ ALLOWED: dict[str, str] = {
 
 PENDING: dict[str, str] = {
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
-    "benchmarks/all_protocols/README.md": "#4644 adds lines",
+    "examples/toy_onsite/README.md": "#4644 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
-    "benchmarks/e2e_demo/README.md": "#4719 rewrites its lines",
-    "benchmarks/e2e_demo/verity_e2e_demo/report.py": "#4691 adds a line",
-    "benchmarks/e2e_h200/README.md": "#4680 rewrites its lines",
+    "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
+    "examples/h200/interfaces/verity_e2e_demo/report.py": "#4691 adds a line",
+    "examples/h200/README.md": "#4680 rewrites its lines",
     "benchmarks/network_traces/chain_record.py": "#4575 rewrites its lines",
     "benchmarks/network_traces/transfer_zk.py": "#4441 adds it",
     "benchmarks/network_traces/transfer_zk.sh": "#4441 adds it",
