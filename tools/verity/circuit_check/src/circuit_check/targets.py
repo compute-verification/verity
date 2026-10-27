@@ -874,6 +874,13 @@ def suite() -> dict[str, Any]:
 
 
 _SIDECARS: dict[Path, tuple[dict[str, Any], list[tuple[str, Any, list[dict]]]]] = {}
+_DROPPED: dict[Path, dict[str, Any]] = {}
+
+
+def sidecar_dropped(path: str) -> dict[str, Any]:
+    """What ``path``'s bindings reach of its module that `sidecar_targets` doesn't keep (`select`), by id."""
+    sidecar_targets(path)
+    return _DROPPED.get(Path(path).resolve(), {})
 
 
 def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, list[dict]]]]:
@@ -902,7 +909,9 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
     for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
         _produce((f"{prefix}_model_roots:{label}",), lambda make=make: [(lambda fn: (fn.body, fn)[1])(make())], by_unit)
     reached = reachable(r for _units, roots in by_unit for r in roots)
-    out = select({fid: fn for fid, fn in reached.items() if SC.owner(fn) == mod})
+    owned = {fid: fn for fid, fn in reached.items() if SC.owner(fn) == mod}
+    out = select(owned)
+    _DROPPED[p] = {fid: fn for fid, fn in owned.items() if fid not in out}
     for units, roots in by_unit:
         if units[0] == f"{prefix}_pouw_roots":
             out.update({fn.id: fn for fn in roots})
@@ -925,5 +934,5 @@ __all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "REACHED", "RE
            "TABLE_PROBES", "TINY", "binding_files", "binding_roots", "boolean_call_candidates", "boolean_call_families",
            "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units", "certified_boolean_calls",
            "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call", "kind_of", "load_registries",
-           "pouw_bindings", "reachable", "root_functions", "select", "sidecar_targets", "subcircuit", "suite", "table_probe",
-           "template_params", "templates", "word_call_families"]
+           "pouw_bindings", "reachable", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "subcircuit", "suite",
+           "table_probe", "template_params", "templates", "word_call_families"]

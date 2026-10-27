@@ -14,8 +14,9 @@ nodes, each callee read by its signature alone):
     stable            two builds of it give one entry: ``by-calls/unstable``
     its callees       each distinct callee specialization relies on one target of its family's sidecar at that sidecar's own
                       small bindings (`targets.sidecar_targets`): the one that agrees with it in every static that is not a
-                      number, differing in the fewest numbers, then of the fewest gates; none: ``by-calls/unbound``.  A
-                      static-free callee is its own target, a catalog root.
+                      number, differing in the fewest numbers, then of the fewest gates; none: ``by-calls/unbound``, which
+                      names a binding that agrees but `targets.select` drops (over `targets.MAX_GATES` and not its family's
+                      smallest there).  A static-free callee is its own target, a catalog root.
 
 The entry says ``"mode": "by-calls"`` and has no gate count.  Its ``by_calls`` lists each callee with the target it relies on,
 and ``entry_sha512``, the digest of the root's own entry, which is not the whole Program's `codec.program_digest`: that needs
@@ -174,6 +175,12 @@ def _family_targets(c: Any) -> tuple[str | None, dict[str, Any]]:
     return SC.rel(p), TG.sidecar_targets(str(p))[0]
 
 
+def _family_dropped(c: Any) -> dict[str, Any]:
+    """What the binding file of ``c``'s module reaches of that module that its targets don't keep (`targets.sidecar_dropped`)."""
+    p = SC.discover().get(SC.owner(c) or "", {}).get("py")
+    return {} if p is None else TG.sidecar_dropped(str(p))
+
+
 def relied(c: Any) -> dict:
     """The target callee ``c`` relies on (the module's docstring): ``binding`` (its id, or None), ``sidecar``, ``sizes`` (the
     statics in which it differs from ``c``), or ``why`` none is."""
@@ -195,6 +202,11 @@ def relied(c: Any) -> dict:
     if best is None:
         why = f"{sidecar} binds no target of {fam}" + (f" that agrees with it in {', '.join(near[2])} (nearest: {near[1]})"
                                                         if near else "")
+        dropped = sorted(f.id for f in _family_dropped(c).values()
+                         if isinstance(f, SpecializedDefinition) and TG.family(f) == fam and not differs(c.bindings, f.bindings)[0])
+        if dropped:
+            why += (f"; it binds {', '.join(dropped[:3])}, which `targets.select` drops: over MAX_GATES ({TG.MAX_GATES}) and "
+                    f"not the smallest {fam} it binds. Bind one of at most MAX_GATES gates")
         return {"binding": None, "sidecar": sidecar, "why": why}
     return {"binding": best[1], "sidecar": sidecar, "sizes": best[2]}
 

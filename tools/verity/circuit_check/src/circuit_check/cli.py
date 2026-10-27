@@ -175,7 +175,9 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
             continue
         try:
             relied = BC.relied_targets(_info(t)["roots"][0])
-        except Exception:  # noqa: BLE001  (the root's own check names what its callees lack)
+        except Exception as e:  # noqa: BLE001  (the root's own check fails by name on what raised here)
+            print(f"circuit-check: {t[1]}: the targets its callees rely on aren't added ({type(e).__name__}: {str(e)[:200]})",
+                  file=sys.stderr)
             continue
         for fn in relied:
             if fn.id not in labels:
