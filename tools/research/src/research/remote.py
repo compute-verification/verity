@@ -1745,7 +1745,7 @@ def _runner_env(req: dict[str, Any], runs_root: Path, src_dir: str | None, remot
         env["CUDA_VISIBLE_DEVICES"] = ""
         remote["gpus"] = f"none: {DIRECT_GPUS_FILE} says every GPU is Kueue's (CUDA_VISIBLE_DEVICES='')"
     elif _lease_owns_every_gpu() and not req.get(QUEUE_WRAP):
-        # whatever its --env says: a job that opened CUDA outside the lease took GPUs the lease then handed to others (INF-55)
+        # whatever its --env says: a job that opened CUDA outside the lease took GPUs the lease then handed to others
         env["CUDA_VISIBLE_DEVICES"] = ""
         remote["gpus"] = (f"{gpus} through `gpu-lease {gpus} --wait` (CUDA_VISIBLE_DEVICES names them)" if gpus else
                           f"none: gpu-lease hands out every GPU here ({GPU_LEASE_HOST_FILE}), so CUDA_VISIBLE_DEVICES=''; declare "
