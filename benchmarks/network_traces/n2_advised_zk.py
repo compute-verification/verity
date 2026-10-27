@@ -533,8 +533,8 @@ class Challenger:
     (`coins.coins_reason`, with `a5_coins.negatives` refused the same way)."""
 
     def __init__(self, a, rounds: dict, dest: Path) -> None:
-        if str(HERE.parent / "one_stage") not in sys.path:
-            sys.path.append(str(HERE.parent / "one_stage"))
+        if str(HERE.parents[1] / "benchmarks" / "one_stage") not in sys.path:
+            sys.path.append(str(HERE.parents[1] / "benchmarks" / "one_stage"))
         import a5_coins as AC
 
         self.AC, self.names, self.source = AC, list(rounds), a.challenger

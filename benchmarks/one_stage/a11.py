@@ -53,7 +53,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "served_units"))
+sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "served_units"))
 sys.setrecursionlimit(100000)
 
 import a0  # noqa: E402

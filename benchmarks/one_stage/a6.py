@@ -37,7 +37,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "served_units"))
+sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "served_units"))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402

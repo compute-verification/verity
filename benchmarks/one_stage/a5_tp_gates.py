@@ -74,7 +74,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "network_traces"))
+sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
 
 from a5_warden import composer as row_composer, free_ports, refusal  # noqa: E402
 from warden_zk import WardenRowIdentity  # noqa: E402

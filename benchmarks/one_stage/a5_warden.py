@@ -73,7 +73,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "network_traces"))
+sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
 
 import warden_serve as ws  # noqa: E402
 from warden_zk import WardenRowIdentity, flip  # noqa: E402

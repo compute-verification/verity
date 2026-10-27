@@ -24,7 +24,7 @@ from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier a
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "network_traces" / "tests"))
+sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces" / "tests"))
 import a5_warden as AW  # noqa: E402
 import test_warden_serve as tws  # noqa: E402
 
