@@ -89,7 +89,7 @@ PROTOCOLS = (
     # The width spec's b1, b8 and b32 on an RTX PRO 6000, then the -h200 spec's on an H200 and the -b200 spec's on a B200.
     Protocol("Commit", (), "commit@compiled", None,
              record=("r20261024-172755-61f0", "r20261024-172748-dd9d", "r20261024-172623-d8fe",
-                     "r20261027-052910-4bcb", "r20261027-051642-8a98", "r20261027-051645-575b",
+                     "r20261027-095337-40f1", "r20261027-095351-7f90", "r20261027-095354-9af9",
                      "r20261027-061530-0f1c", "r20261027-061540-c4f3", "r20261027-061543-2056")),
     # The served spec's b8 and b32, then the H1 spec's.
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
