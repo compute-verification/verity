@@ -4,8 +4,8 @@ The measuring side of `verity/core/protocols/pouw`: Pearl-C's kernels on the RTX
 harness, the served vLLM path and its audits, and the CPU accounting. How a kernel is designed, gated, timed and landed is
 the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 
-Compute accounting's standards are in `machine_model/README.md`: the design registry (one file a design under decision
-79's names, Dither-1S, Dither-2S and Dither-C, which `eps_budget.py` prices and `machine-model eps` reads), the ε
+Compute accounting's standards are in `machine_model/README.md`: the design registry (one file a design: Dither-1S,
+Dither-2S and Dither-C, which `eps_budget.py` prices and `machine-model eps` reads), the ε
 vocabulary, how a facet is measured (gates, noise, margins, clocks, row status), and the per-device data layout.
 
 `uv run python benchmarks/pouw/contents.py` prints what is here as a table: each directory or file, the hardware it runs
@@ -36,7 +36,5 @@ directory's `*.sh` builds and runs it through `research run`, and each `*ref.py`
 `contents.py kernels` lists each kernel with its files and the files it includes, one entry a file in
 `contents/kernels/`.
 
-`edited_gemm/egemm_ref.py` imports the E2E slice's `derive.py` from `e2e_slice/` beside it (the slice's receipt and noise
-derivation, as cursor/egemm-ea24 has it);
-`edited_gemm/receipt_folds_r9.py` is P2-FF r9's reference as recorded (art:91c156a1…), held by its sha256, so leave it
-unedited.
+`edited_gemm/egemm_ref.py` imports the E2E slice's receipt and noise derivation, `e2e_slice/derive.py`, beside it;
+`edited_gemm/receipt_folds_r9.py` is a recorded reference held by its sha256, so leave it unedited.

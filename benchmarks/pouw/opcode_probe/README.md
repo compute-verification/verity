@@ -1,7 +1,7 @@
 # opcode_probe: an instruction's rate as a price row, gated first
 
 A probe times one instruction class in one loop on sm_120 and writes its price row in the machine model's census schema
-(RS-W′'s `machine_model`, branch `cursor/machine-model-ea24`). Every probe's SASS passes `../gpu_kit/sass_gate.py`
+(`../machine_model/`). Every probe's SASS passes `../gpu_kit/sass_gate.py`
 before anything is timed, and a probe that doesn't pass writes no row. A probe declared known-invalid must be refused,
 by the check it names, or nothing is timed at all.
 
@@ -12,11 +12,11 @@ by the check it names, or nothing is timed at all.
 | `rows.py` | The census line (`kind,row,rate,noise,cycles,u,since,until,runs`), machine_model's `u_of`, and MACs a word |
 | `run.sh` | The job: build and gate outside the lease, then gate and time under one `gpu-lease` |
 | `isa_accept.sh` | CPU only: a one-instruction PTX kernel for each form A7's menu has no verdict for (add with an immediate, f32x2 FMA, f64 MMA, s4 and b1 MMA, `kind::f8f6f4` at each type, tcgen05, redux, 64-bit XOR, add and shift, `mad.wide.u32`), assembled by ptxas for a target; whether ptxas accepts it and the SASS it becomes |
-| `probes/lm.cu` | LDSM and STSM by register count, LDS.128, STS.128, and the two known-invalid round-7 forms |
+| `probes/lm.cu` | LDSM and STSM by register count, LDS.128, STS.128, and the two known-invalid forms below |
 | `probes/issue.cu` | IMMA alone, and k_spec/k_mixu: DADD, DFMA or RED.64 beside IMMA (joint points, no census line) |
 | `probes/atom.cu` | ATOMS, ATOMG, REDG and ATOM.E, 32- and 64-bit (ATOME64: generic EXCH.64 and CAS.64 to shared); each global form on 16 SMs (its row) and on every SM (L2red) |
 | `probes/cl.cu` | DSMEM atomics and reductions in a 2-CTA cluster, to the own CTA (ATOME32; ATOME64's EXCH.64 and CAS.64, and the known-invalid red.add.u64) and the peer (joint) |
-| `probes/mma.cu` | IMMA s8, QMMA E4M3, OMMA MXFP4 and NVFP4, dense and 2:4-sparse, at unit scales, and a `_data` probe a format on the sweep's drawn operands and mix scales (a data-dependent-clock check; joint points, no census line; fp_exact, removed, art:f0b36e66…, read them) |
+| `probes/mma.cu` | IMMA s8, QMMA E4M3, OMMA MXFP4 and NVFP4, dense and 2:4-sparse, at unit scales, and a `_data` probe a format on the sweep's drawn operands and mix scales (a data-dependent-clock check; joint points, no census line) |
 | `probes/a2u.cu` | A2u at saturated issue: uniform.cu's uniform chains beside an issue-bound vector stream (2 IMMA with 64 FFMA, 16 LOP3 and 16 IMAD a loop, or with 16, 40 and 40) at 8 warps a SMSP, where ptxas moves one chain pair of three or four to the uniform datapath, each beside a 2-pair control with the same lane instructions and none uniform, up to 128 uniform instructions a loop, more than the stream's idle slots (joint points, no census line) |
 | `probes/mma_types.cu` | `kind::f8f6f4` QMMA at each of E4M3, E5M2, E3M2, E2M3 and E2M1, which `loads.py` prices as one class, and the f64 DMMA, which it doesn't price, each beside the IMMA s8 reference (joint points, no census line) |
 | `probes/frontier.cu` | EPS1's joint frontiers: IMMA beside IMAD, HFMA2, LOP3 and SHFL.BFLY at 2 to 128 ops per 8 IMMA in one stream, warp-specialized points, each op alone (joint points, no census line) |
@@ -116,11 +116,11 @@ over the block's `clock64` cycles from `OP_BEGIN` to `OP_END`; the median block,
 
 ## The known-invalid probes
 
-- `bad_ldsm_merged`: round 7's LDSM loop (r20261016-112703-0297), one address set every iteration and no
+- `bad_ldsm_merged`: an LDSM loop with one address set every iteration and no
   `#pragma unroll 1`. ptxas unrolled it, so the gate refuses it by `loops`: 3 loops between the clock reads, 1 declared.
-- `bad_stsm_conflict`: round 7's STSM addresses, a 128-B lane stride, so each 8-row phase lands on 4 banks. The gate
+- `bad_stsm_conflict`: STSM addresses at a 128-B lane stride, so each 8-row phase lands on 4 banks. The gate
   refuses it by `smem`: 32 of 32 accesses conflict, 8-way.
-- `dsm_red_add64_self`: VF3h's ROW_ATOME64 form (r20261016-145213-5ed0), `red.shared::cluster.add.u64` at the own rank.
+- `dsm_red_add64_self`: VF3h's ROW_ATOME64 form, `red.shared::cluster.add.u64` at the own rank.
   Every 64-bit ATOM.E but EXCH and CAS carries a QSPC + ATOMS.CAST.SPIN.64 fallback loop, so the gate refuses it by
   `loops`: 8 loops nested in the timed loop. ATOME64 is timed by its EXCH.64 and CAS.64 forms.
 
