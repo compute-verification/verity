@@ -746,8 +746,14 @@ def test_each_pass_is_seeded_by_the_chain_from_its_windows_coin(store) -> None:
     forged = dataclasses.replace(first, coin=bytes([first.coin[0] ^ 1]) + first.coin[1:])
     assert (coins.coin_reason(c.commitment, forged, coins.CHALLENGE, 0)
             == "coin does not open against the epoch's coin commitment")
-    with pytest.raises(ValueError, match="does not open"):
+    with pytest.raises(ValueError, match="sent again, another coin"):
         prover.run(forged, 0, store.registration.digest)
+    fresh = audit.Prover(store, None, entropy=Entropy(b"fresh"))
+    fresh.run(forged, 0, store.registration.digest)
+    with pytest.raises(ValueError, match="does not open"):
+        fresh.end(c.commitment, (forged,))
+    with pytest.raises(ValueError, match="is not the one opened"):
+        fresh.end(c.commitment, (first,))
     with pytest.raises(ValueError, match="openings coin"):
         prover.run(c.openings(0, first.after), 0, store.registration.digest)
     with pytest.raises(ValueError, match="already open"):
