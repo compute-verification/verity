@@ -96,7 +96,7 @@ MAX_SLOTS = 160
 # grow), so the parts of a shape whose residuals each fit MAX_SLOTS are unchanged, and the bound reaches only residuals
 # MAX_SLOTS refuses. The widest, the batched T, reads 172 slots at 16 claims (llama32-1b/b1/i256's 2^29 bucket), 194 at 18
 # and 215 at 20, beside hm96's 2^23 (32 slots of 2^18), a 2^23 unit (32) and the mask (one): 191 fill a 2^26 block, so past
-# it a lone part's block is 2^27 = circuit.K_MAX, which holds 447 (runs r20261010-212155-f5ab, r20261010-223054-2894: 172 at
+# it a lone part's block is 2^27 = circuit.K_MAX, which holds 447 (172 at
 # k_log 26, 194 to 215 at 27). 21 claims' 226 refuse
 MAX_LONE_SLOTS = 223
 

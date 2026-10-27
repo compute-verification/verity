@@ -34,7 +34,7 @@ consistency terms, and V*'s algebra (`verity_flock.rec_residuals`) reads a rep's
 the verifier's (`coefficients`: the final check's κ at the rep's coins times the level's eq(α)[j],
 `verity_flock.rec_algebra.verifier_rows`).
 
-**The claims** (`note:proofs/20261010T1820Z-draft-c3-claim-layout`). Beside ``rec-acc``, under the same program string and its
+**The claims.** Beside ``rec-acc``, under the same program string and its
 own salts, the prover registers each rep's `rec_sparse.RecSparse` claim as the value ``rec-claim`` (`CLAIM_VALUE`), row r rep
 r's (one element, 64 words): RecSparse's instance r reads row r, and the registered opening (`rec_residuals.stage_opening`)
 reads row 0 as ``claim0`` and row 1 as ``claim1``, so the two statements open one root's cells.
