@@ -1,5 +1,5 @@
 """`move-check`: certify that BASE..HEAD is a pure move, so the lander may schedule it first in a quiet window, alone in its
-train (Daniel, 4 Oct). It relaxes no gate: a certified move still goes through `check`.
+train. It relaxes no gate: a certified move still goes through `check`.
 
     uv run python tools/verity/check/move_check.py BASE HEAD [--map OLD=NEW ...] [--json]
 

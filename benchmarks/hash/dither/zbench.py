@@ -29,12 +29,10 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"))
 import commit as CM
 import serve as SV
 from dither_a import UNIT, Y_KIND, ZY_KIND, y_bytes, y_fields, zy_bytes, zy_count, zy_fields

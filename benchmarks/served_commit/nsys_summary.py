@@ -37,7 +37,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("db")
     ap.add_argument("--json")
-    ap.add_argument("--run", default="run:served-commit-prof")
+    ap.add_argument("--run", default="run:served-commit-rows")
     ap.add_argument("--each", action="store_true", help="every run range of the arm, not only the last: per run its step count, "
                     "prefill_mean and decode_mean on one line, and the full summaries as a JSON list")
     a = ap.parse_args()
