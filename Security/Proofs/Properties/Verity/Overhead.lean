@@ -382,12 +382,17 @@ theorem inWindow_one (V : Vocab d α) (a : Audit) (x : Unit) (ws : List (Window 
     (g : Fin ((oneDeployment V a).run x ws).A.N) :
     InWindow (oneDeployment V a).X (oneDeployment V a).win (oneDeployment V a).ω ((oneDeployment V a).run x ws).A 0
       g := by
-  refine ⟨Finset.mem_univ _, ?_, ?_⟩ <;> simp [oneDeployment, oneRun, oneCircuit, Fin.val_eq_zero]
+  have hj : (((oneDeployment V a).win 0).2 : ℕ) = 0 := Fin.val_eq_zero (((oneDeployment V a).win 0).2 : Fin 1)
+  have ht : ((oneDeployment V a).run x ws).A.t g = 0 := rfl
+  have hω : (oneDeployment V a).ω = 2 := rfl
+  refine ⟨Finset.mem_univ _, ?_, ?_⟩
+  · simp [hj, ht]
+  · simp [hj, ht, hω]
 
 theorem oneServerTime_le (V : Vocab d α) (a : Audit) (x : Unit) (ws : List (Window V × Outcome)) :
     serverTime (oneDeployment V a).X ((oneDeployment V a).run x ws).A ≤ 1 :=
   calc serverTime (oneDeployment V a).X ((oneDeployment V a).run x ws).A ≤ ∑ _s : Unit, 1 :=
-        Finset.sum_le_sum fun _ _ => Finset.sup_le fun _ _ => by simp [oneDeployment, oneRun, oneCircuit]
+        Finset.sum_le_sum fun _ _ => Finset.sup_le fun _ _ => le_of_eq rfl
     _ = 1 := by simp
 
 theorem oneMin (V : Vocab d α) (a : Audit) :
@@ -401,8 +406,7 @@ theorem oneMin (V : Vocab d α) (a : Audit) :
 
 /-- The run succeeds when its gate holds `1`. -/
 theorem oneSucceeds : Succeeds (oneRun true) (fun _ => ((), 0, 0)) {y : Fin 1 → List Bool | y 0 = [true]} :=
-  ⟨fun _ => [true], Set.mem_setOf.2 rfl, fun _ => ⟨⟨0, Nat.one_pos⟩, rfl,
-    by first | decide | (show Actual.bits 1 1 = [true]; simp [Actual.bits, List.ofFn_succ])⟩⟩
+  ⟨fun _ => [true], Set.mem_setOf.2 rfl, fun _ => ⟨⟨0, Nat.one_pos⟩, rfl, by show Actual.bits 1 1 = [true]; decide⟩⟩
 
 /-- And only then. -/
 theorem eq_true_of_succeeds {b : Bool} {pos : Fin 1 → Unit × ℕ × ℕ}
@@ -411,7 +415,7 @@ theorem eq_true_of_succeeds {b : Bool} {pos : Fin 1 → Unit × ℕ × ℕ}
   obtain ⟨g, -, hg⟩ := hr 0
   cases b
   · have : Actual.bits 1 0 = [true] := hg.trans hy
-    exact absurd this (by first | decide | simp [Actual.bits, List.ofFn_succ])
+    exact absurd this (by decide)
   · rfl
 
 end Overhead
@@ -444,7 +448,8 @@ theorem overheadFor (acc : Sent → Prop) : OverheadFor acc := by
       hCap x ws i _ (hentry i) (hacc _ (hmem i)).2 (hclean i) (hPhys x ws)
     have hN : N ≤ (D.prods x ws).J.card := not_lt.1 fun h => hcov ⟨hsucc, h⟩
     exact absurd (minServerTime_le D x ws q qD N hω hq hcap (hDark x ws) hN) (not_le.2 hlt)
-  refine (prob_mono' hin).trans ((prob_or_le' (V := V) (G := G) (τ := τ) _ _).trans ?_)
+  refine (prob_mono' (V := V) (G := G) (B := B) (τ := τ) hin).trans
+    ((prob_or_le' (V := V) (G := G) (B := B) (τ := τ) _ _).trans ?_)
   refine (add_le_add le_rfl (prob_or_le' (V := V) (G := G) (τ := τ) _ _)).trans ?_
   rw [← add_assoc]
   refine add_le_add (add_le_add ((prob_exists_le' (V := V) (G := G) (τ := τ) (κ := Fin B) _).trans
