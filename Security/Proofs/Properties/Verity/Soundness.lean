@@ -129,6 +129,38 @@ theorem soundness_of_subprotocols_nontrivial {ι α : Type} [Fintype α] {d : De
     (fun _ _ => ⟨trivial, hreg, a, hfail _⟩) σ
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
+/-- An event no play after `θ`, `F` and `c` meets has probability zero. -/
+theorem prob_play_eq_zero (ns : List ℕ) (θ F c : ByteArray) (p : Outcome → Prop)
+    (hp : ∀ log e, ¬ p ⟨θ, F, c, log, e⟩) (σ : Game.Strategy (play ns θ F c)) : Game.prob p (play ns θ F c) σ = 0 := by
+  refine (Game.prob_bind_of_const (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Outcome)) p
+    (fun _ => False) (fun log t => ?_) (releases ns) σ).trans (Game.prob_false _ _)
+  simp [Game.prob, hp]
+
+/-- **One subprotocol's failing instance is the theorem's**: at files that pass the commit phase's check, a strategy at
+which subprotocol `a`'s claim fails with probability above the errors summed makes the conclusion fail for a verifier
+that accepts everything. So the one model-level failing instance (ONE19's, through that subprotocol's `_nontrivial`)
+gives the theorem's, with no instance of its own. -/
+theorem soundness_of_subprotocols_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
+    (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hreg : V.Registered θ F) (a : Audit)
+    (hlt : ∑ b, V.error b θ F c σ < Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ) :
+    ¬ V.SoundnessFor fun _ => True := by
+  intro h
+  have hz : Game.prob (fun o => ¬ V.Registered o.params o.file) (V.game θ F c) σ = 0 :=
+    prob_play_eq_zero (V.rounds θ) θ F c _ (fun _ _ hn => hn hreg) σ
+  have hle : Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ ≤
+      Game.prob (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c σ a o)
+        (V.game θ F c) σ :=
+    calc Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ
+        ≤ Game.prob (fun o => ((fun _ => True) o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c σ a o) ∨
+            ¬ V.Registered o.params o.file) (V.game θ F c) σ :=
+          Game.prob_mono (fun o ho => by
+            by_cases hr : V.Registered o.params o.file
+            · exact Or.inl ⟨trivial, hr, a, ho⟩
+            · exact Or.inr hr) _ σ
+      _ ≤ _ := Game.prob_or_le _ _ _ σ
+      _ = _ := by rw [hz, add_zero]
+  exact lt_irrefl _ ((hle.trans (h θ F c σ)).trans_lt hlt)
+
 namespace Vocab
 
 variable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
