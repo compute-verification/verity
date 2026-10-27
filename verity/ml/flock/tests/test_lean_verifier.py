@@ -677,7 +677,7 @@ def _qword_vector_file():
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vector_file() is None,
-                    reason="no Lean toolchain or no qword_vectors.json in core (PR #111)")
+                    reason="no Lean toolchain or no qword_vectors.json in core")
 def test_qword_cuts_agree_with_core_verify(tmp_path):
     """Every Call's cut on its whole graph (`qword-program --cuts`: the partition invariant and the width rule), against core's
     `partition_object.verify`: its pinned cut refusals, and each of its programs at several (X, W), under `Q_word` v1 and v2

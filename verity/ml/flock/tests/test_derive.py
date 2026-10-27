@@ -221,7 +221,7 @@ def _small_tables():
             ("random-20", 8, 5, 31, words(8, lambda i: rng.getrandbits(20)))]
 
 
-#: `rows_sha512` per small table in #202's `lookup_v2_vectors.json` (at `10d8e46b`): the verifier lane's `Flock.Lookup.rowsDigest`
+#: `rows_sha512` per small table in `lookup_v2_vectors.json` (at `10d8e46b`): the verifier's `Flock.Lookup.rowsDigest`
 LEAN_ROWS = {
     "full-8": "02199433a3386f563cd5656b18df015b5b4632478140036f1e3f57625922b051686b530a57c71faf07989e0f63094e8fa386b50c373ef01a3fccfbe5c2627ae1",
     "low5-const-high": "de1c49c45b82cfa80bd8aafa3c288d3326fefb1dbf5d84a249bb5121c7222d9561a2d3646d0cca9f3e035a95ec0bcbac3089c19711c6e1e076cc4425d0f6d195",
