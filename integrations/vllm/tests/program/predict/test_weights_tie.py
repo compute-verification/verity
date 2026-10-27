@@ -1,9 +1,9 @@
 """verity_vllm.program.predict.weights_tie at TINY: the verifier's tie of the pinned checkpoint X is X's public bytes (each
 shard's header state and SHA-512, each other width's field SHA-512, the embedding table's after its tag) and reads every row
 of every rooted weight parameter once, the table's as row-seg rows, and making it commits no weight; the honest committer's
-registration is `weights_registration`'s, its units are their Definitions' and its ends' digests are the verifier's, so
-the audit's pins hold and the verifier pins the roots; a committer serving another checkpoint's words as X's ends at
-another digest, and forging the end's digest makes the end unit's outputs not its Definition's; the verifier pins nothing
+registration is `weights_registration`'s, its units are their Definitions' and its last units' digests are the verifier's,
+so the audit's pins hold and the verifier pins the roots; a committer serving another checkpoint's words as X's ends at
+another digest, and forging the last units' digests makes their outputs not their Definition's; the verifier pins nothing
 on an audit that didn't accept the verifier's own tie; and a shard the tie can't read is refused by name."""
 from __future__ import annotations
 
@@ -39,11 +39,11 @@ EMBED = "model.embed_tokens.weight"
 
 
 def _ends_of(win: IF.Window) -> list[str]:
-    return [descriptor_id(fn) for fn, _ in win.circuit.templates if descriptor_id(fn).startswith("Sha512StreamEnd")]
+    return [descriptor_id(fn) for fn, _ in win.circuit.templates if descriptor_id(fn).startswith("Sha512StreamLast")]
 
 
 def _ends(win: IF.Window) -> dict[str, list[int]]:
-    """Each end unit's recorded digest row (its ``o0`` words), by the supplied value its read names."""
+    """Each last unit's recorded digest row (its ``o0`` words), by the supplied value its read names."""
     ends = _ends_of(win)
     rows = {t: np.concatenate([b.words[-1] for b in win._recorded[t]]) for t in ends}
     return {r.param: rows[r.reader][r.at].tolist() for r in win.circuit.reads if r.reader in ends and r.port == "o0"}
@@ -90,10 +90,11 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     128) through every tensor's rows in file order to its SHA-512, one for the embedding's other width (TINY's tied LM
     head reads it @512 and ``x0`` @64: @512 is the shard's, sorted first), from the IV over the tensor's bytes to their
     SHA-512, and one for its table @64, from the IV over the tag and the tensor's bytes; each rooted parameter's every row
-    read once, the rotary table (no root) none. Its templates: the shard's rows at its one phase (each row whole blocks),
-    its end, the field's rows and end, and the table's rows (one byte pending) and end, whose ``data`` alone is a row-seg
-    port. The verifier makes the tie, its circuit's digest and its audit inputs without committing a weight (`weight_value`
-    and the H1 committer refuse here), and its shape entries are the weights record's, which names no root."""
+    read once, the rotary table (no root) none. Its templates: the shard's rows at its one phase (each row whole blocks)
+    and its last row, the field's rows and last row, and the table's rows (one byte pending) and last row, whose ``data``
+    alone are row-seg ports. The verifier makes the tie, its circuit's digest and its audit inputs without committing a
+    weight (`weight_value` and the H1 committer refuse here), and its shape entries are the weights record's, which names
+    no root."""
     reg, (d, man) = S._registered(), x
     registration = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
     record = WW.weights_record(reg, d, man, grain=GRAIN)
@@ -118,13 +119,15 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     assert read == Counter((p, j) for p, e in t.entries.items() for j in range(e["leaves"]))
     assert list(t.unrooted) == list(registration["unrooted"]) and not set(t.unrooted) & set(t.entries)
     h = base % 128
+    tag = len(WT.TABLE_TAG)
     assert [(descriptor_id(fn), n) for fn, n in t.circuit().templates] == [
-        (descriptor_id(fn), n) for fn, n in ((SS.row(h, 512), 176), (SS.row(h, 64), 5), (SS.end(len(shard)), 1),
-                                             (SS.row(0, 64), 256), (SS.end(len(embed)), 1),
-                                             (SS.row(len(WT.TABLE_TAG), 64), 256), (SS.end(len(tagged)), 1))]
-    assert IF.seg_ports(t.circuit().registered) == {descriptor_id(SS.row(len(WT.TABLE_TAG), 64)): {"data"}}
+        (descriptor_id(fn), n) for fn, n in ((SS.row(h, 512), 176), (SS.row(h, 64), 4), (SS.last(h, 64, len(shard)), 1),
+                                             (SS.row(0, 64), 255), (SS.last(0, 64, len(embed)), 1),
+                                             (SS.row(tag, 64), 255), (SS.last(tag, 64, len(tagged)), 1))]
+    assert IF.seg_ports(t.circuit().registered) == {
+        descriptor_id(fn): {"data"} for fn in (SS.row(tag, 64), SS.last(tag, 64, len(tagged)))}
     got = WT.audit_inputs(registration, record, t, LAW, CAP)
-    assert got["outputs"] == [[0, 696]] and got["units"] == 696 and got["run"] == t.run
+    assert got["outputs"] == [[0, 693]] and got["units"] == 693 and got["run"] == t.run
     assert got["registered"][0] == {"program": registration["program"], "values": registration["values"]}
     assert set(got["registered"][1]["values"]) == {n for c in t.chains for n in c.supplied()}
     assert got["circuit"] == t.digest(LAW, CAP) != WT.tie(reg, d, man, grain=GRAIN, run_id="other").digest(LAW, CAP)
@@ -132,8 +135,8 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
 
 def test_the_honest_registration_is_accepted(x, tmp_path):
     """The committer's registration of X is `weights_registration`'s (one key, one checkpoint, one registration), every
-    unit of its tie window is its Definition's on its inputs, and each end's digest is the verifier's, so the end's read of
-    it opens the supplied root. Written, its registration records each weight's registered root, the verifier's window from
+    unit of its tie window is its Definition's on its inputs, and each last unit's digest is the verifier's, so its read
+    opens the supplied root. Written, its registration records each weight's registered root, the verifier's window from
     its records alone is the tie's (one circuit digest), and the verifier pins the roots on an accepting audit of it."""
     reg, (d, man) = S._registered(), x
     registration, t, win = WT.commit(reg, KEY, d, man, law=LAW, cap=CAP, grain=GRAIN)
@@ -158,8 +161,9 @@ def test_the_honest_registration_is_accepted(x, tmp_path):
 
 def test_another_checkpoints_words_are_refused(x, tmp_path):
     """A committer serving checkpoint Y's words as X's registers their roots (each another), and its honest units hash
-    them from X's header to another digest than X's: each end's digest read opens no supplied root, and every other read
-    opens. Forging each end's digest to X's opens every read and makes the end units' outputs not their Definitions'. The
+    them from X's header to another digest than X's: each last unit's digest read opens no supplied root, and every other
+    read opens. Forging each last unit's digest to X's opens every read and makes those units' outputs not their
+    Definitions'. The
     verifier pins nothing on an audit that refused (nor on a forged arm's), nor on one of another run, nor one that left a
     unit unproved or held another root."""
     reg, (d, man) = S._registered(), x
@@ -255,16 +259,22 @@ def _rewrite(d: str, man: str, tensors: dict, *, gap: str | None = None, tail: b
     ("tail", "bytes [{at}, {end}) after its last tensor"),
     ("cast", "its field is '1:1' (cast 'F32->bf16 (RNE)'"),
     ("unpinned", "the checkpoint is not of record"),
+    ("narrow", "{p}: its rows are 64 bytes; C-Flock proves a unit only with a row of at least 112 bytes"),
 ])
 def test_a_shard_the_tie_cant_read_is_refused_by_name(x, change, why):
     """A tensor no registered parameter holds, bytes between two tensors or after the last, a tensor the served model
-    casts (a norm stored F32, served bf16: its rows are other bytes than the shard's) and a shard the manifest doesn't pin
-    are each refused by name."""
+    casts (a norm stored F32, served bf16: its rows are other bytes than the shard's), a shard the manifest doesn't pin and
+    a parameter of rows of 32 words (no row a unit C-Flock proves) are each refused by name."""
     reg, (d, man) = S._registered(), x
     ck = WR.CheckpointIndex(d, verify_shards=False)
     tensors = {n: (ck.dtype(n), ck.array(n)) for n in sorted(ck.tensors, key=lambda n: ck.tensors[n][3])}
-    norm = "model.norm.weight"
-    if change == "extra":
+    norm, kw = "model.norm.weight", {}
+    if change == "narrow":
+        kw["record"] = rec = WW.weights_record(reg, d, man, grain=GRAIN)
+        p, e = min((p, e) for p, e in rec["registered_entries"].items() if e["words"] == 512)
+        e["words"], e["leaves"] = 32, e["leaves"] * 16
+        why = why.format(p=p)
+    elif change == "extra":
         _rewrite(d, man, {**tensors, "model.extra.weight": ("BF16", np.zeros(64, np.uint16))})
     elif change == "gap":
         _rewrite(d, man, tensors, gap=norm)
@@ -277,8 +287,8 @@ def test_a_shard_the_tie_cant_read_is_refused_by_name(x, change, why):
     elif change == "cast":
         f32 = (tensors[norm][1].astype(np.uint32) << 16).view(np.float32)
         _rewrite(d, man, {**tensors, norm: ("F32", f32)})
-    else:
+    elif change == "unpinned":
         p = Path(d) / "model.safetensors"
         p.write_bytes(p.read_bytes()[:-1] + bytes([p.read_bytes()[-1] ^ 1]))
     with pytest.raises(ValueError, match=re.escape(why)):
-        WT.tie(reg, d, man, grain=GRAIN)
+        WT.tie(reg, d, man, grain=GRAIN, **kw)

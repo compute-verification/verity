@@ -4,8 +4,8 @@ safetensors shard's byte order to the shard's SHA-512).
 
     Sha512StreamRow_v1{H, W}
         (cv: Digest, [carry: Array<C(H), Half>,] data: Array<W, Half>) -> Tuple<Digest, Array<C(H'), Half>>, or Digest if H' = 0
-    Sha512StreamEnd_v1{LEN}
-        (cv: Digest[, carry: Array<C(H), Half>]) -> Digest, H = LEN mod 128
+    Sha512StreamLast_v1{H, W, LEN}
+        (cv: Digest, [carry: Array<C(H), Half>,] data: Array<W, Half>) -> Digest, LEN mod 128 = H'
         Digest = Array<8, Array<64, Value<1>>>, Half = Array<16, Value<1>>, C(h) = ceil(h / 2);
         0 <= H < 128, W >= 1, H' = (H + 2 W) mod 128, 0 <= LEN < 2^64
 
@@ -15,12 +15,15 @@ little-endian 16-bit element is stored, an odd h's last word's high byte zero (a
 
 **A Row** appends its row's 2 W bytes (``data``, each word's low byte then its high byte: the row's elements as a safetensors
 file holds them) and compresses every block that completes, floor((H + 2 W) / 128) of them; the state it returns is the next
-Row's. **The End** compresses the pending bytes and the padding of a LEN-byte message (`sha512.pad_tail`), one block or two
-(H >= 112): its Digest is SHA-512 of the stream, the digest's bytes its words big-endian (`sha512.words_be`).
+Row's. **The Last** appends a stream's last row the same way and then ends it: the bytes left pending and the padding of a
+LEN-byte message (`sha512.pad_tail`), one block or two (H' >= 112). Its Digest is SHA-512 of the stream, the digest's bytes
+its words big-endian (`sha512.words_be`). The end is the last row's unit rather than one of its own because C-Flock proves a
+unit only with a row that compresses before its last block (at least 112 bytes), and a stream's state alone, a 64-byte
+chaining value and fewer than 128 pending bytes, need not have one.
 
 Each compression is a call of `lms.Sha512Compress_v1`, one traced circuit for every block, so a binding costs no trace of its
 own; the bodies only lay the bytes out (and write the padding's constant bits). **Cost:** 57,947 ANDs a compression
-(`Sha512Compress_v1`, its whole message private): a Row floor((H + 2 W) / 128) of them, the End one or two.
+(`Sha512Compress_v1`, its whole message private): a Row floor((H + 2 W) / 128) of them, the Last one or two more.
 """
 from __future__ import annotations
 
@@ -35,8 +38,8 @@ from verity.ml.circuits.types import Array, Tuple
 from .lms import Sha512Compress
 from .sha512 import IV, compress_ref, pad_tail, words_be
 
-__all__ = ["HALF", "Sha512StreamEnd", "Sha512StreamRow", "carry_words", "end", "end_reference", "row", "row_reference",
-           "state", "state_bits"]
+__all__ = ["HALF", "Sha512StreamLast", "Sha512StreamRow", "carry_words", "end_reference", "last", "last_reference", "row",
+           "row_reference", "state", "state_bits"]
 
 BIT = BL.BIT
 WORD = Array(64, BIT)
@@ -84,12 +87,17 @@ def row_reference(cv: Sequence[int], pending: bytes, data: Sequence[int]) -> tup
 
 
 def end_reference(cv: Sequence[int], pending: bytes, length: int) -> bytes:
-    """`Sha512StreamEnd_v1{LEN = length}`'s reference: the stream's SHA-512, its pending bytes ``length mod 128`` of them."""
+    """A ``length``-byte stream's SHA-512 from its state, its pending bytes ``length mod 128`` of them."""
     if _int("LEN", length, 0, 1 << 64) % BLOCK != len(pending):
         raise ValueError(f"a {length}-byte stream ends with {length % BLOCK} pending bytes, not {len(pending)}")
     cv, rest = state(bytes(pending) + pad_tail(length), cv)
     assert not rest
     return b"".join(v.to_bytes(8, "big") for v in cv)
+
+
+def last_reference(cv: Sequence[int], pending: bytes, data: Sequence[int], length: int) -> bytes:
+    """`Sha512StreamLast_v1{H = len(pending), W = len(data), LEN = length}`'s reference: the stream's SHA-512 after the row."""
+    return end_reference(*row_reference(cv, pending, data), length)
 
 
 def state_bits(cv: Sequence[int], pending: bytes) -> list[list[int]]:
@@ -147,29 +155,33 @@ Sha512StreamRow = CompositeDefinition(
         "left pending, an odd count's last high byte zero")
 
 
-def _sig_end(S):
-    h = _int("LEN", S.LEN, 0, 1 << 64) % BLOCK
-    return (("cv", DIGEST), *((("carry", _carry(h)),) if h else ())), DIGEST
+def _sig_last(S):
+    params, _ = _sig_row(S)
+    if _int("LEN", S.LEN, 0, 1 << 64) % BLOCK != (S.H + 2 * S.W) % BLOCK:
+        raise ValueError(f"a {S.LEN}-byte stream ends with {S.LEN % BLOCK} pending bytes, not the {(S.H + 2 * S.W) % BLOCK} "
+                         f"a row of {S.W} words leaves after {S.H}")
+    return params, DIGEST
 
 
-def _end_body(B, S, cv, *carry):
-    h = S.LEN % BLOCK
+def _last_body(B, S, cv, *rest):
+    carry = _bytes(_refs(rest[0]))[:S.H] if S.H else []
     bit = [B.call(BL.constant(b)).refs[0] for b in (0, 1)]
     pad = [[bit[(v >> j) & 1] for j in range(8)] for v in pad_tail(S.LEN)]
-    out, left = _compress(B, _refs(cv), (_bytes(_refs(carry[0]))[:h] if h else []) + pad)
+    out, left = _compress(B, _refs(cv), carry + _bytes(_refs(rest[-1])) + pad)
     assert not left
     return Coll(DIGEST, TR._refs(out))
 
 
-Sha512StreamEnd = CompositeDefinition(
-    "Sha512StreamEnd", 1, ("LEN",), _sig_end, _end_body, conformance="exact-model-tested",
-    doc="The SHA-512 of a LEN-byte stream from its state (cv, carry) with LEN mod 128 pending bytes: the pending bytes and the "
-        "padding of a LEN-byte message compressed (Sha512Compress_v1), the digest's bytes its words big-endian")
+Sha512StreamLast = CompositeDefinition(
+    "Sha512StreamLast", 1, ("H", "W", "LEN"), _sig_last, _last_body, conformance="exact-model-tested",
+    doc="The SHA-512 of a LEN-byte stream whose last row is W 16-bit words (each its low byte, then its high byte), from the "
+        "state (cv, carry) with H pending bytes before it: the pending bytes, the row's and the padding of a LEN-byte message "
+        "compressed (Sha512Compress_v1), the digest's bytes its words big-endian")
 
 
 def row(H: int, W: int):
     return bind(Sha512StreamRow, H=H, W=W)
 
 
-def end(LEN: int):
-    return bind(Sha512StreamEnd, LEN=LEN)
+def last(H: int, W: int, LEN: int):
+    return bind(Sha512StreamLast, H=H, W=W, LEN=LEN)

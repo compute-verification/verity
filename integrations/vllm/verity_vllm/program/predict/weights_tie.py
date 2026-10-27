@@ -8,21 +8,23 @@ shard's byte order (`gates.sha512_stream`). The shard's header is public, so the
 after it (a supplied value: its chaining value and its pending bytes). Each tensor after it is rows of one registered weight
 parameter, and each row is a `Sha512StreamRow_v1` unit whose ``data`` port is a registered read of that row (opened against
 the registered root at its public position, in-circuit, by the Lean verifier's registered reads) and whose state is wired
-from the unit before. The shard's `Sha512StreamEnd_v1` unit's digest is a registered read of the verifier's own SHA-512 of
-the shard file, whose SHA-256 the checkpoints manifest pins. A field read at several widths (the tied embedding's table, LM
-head and ``x0`` rows) is one tensor of the shard: its first parameter is the shard's (by name, an embedding's table after
-every other), and each other one is a chain of its own, from SHA-512's IV over the field's bytes to the verifier's SHA-512
-of them. An embedding's table (`window_builder.table_param`) is a declared table (`interface.Table`), its rows
-``hm96-sha512/row-seg/v1`` leaves its reads open as such (`interface.seg_ports`); a template's port has one row schema, so
-a table's own chain hashes `TABLE_TAG` before the field's bytes, and its rows pend an odd count of bytes where a shard's
-(after a header safetensors aligns to 8 bytes) and every other chain's pend an even count: they are templates of their own.
-Under a ``work`` law with every unit in the output class (`Tie.outputs`), every unit is proved.
+from the unit before. The shard's last row is a `Sha512StreamLast_v1` unit, which also ends the stream: its digest is a
+registered read of the verifier's own SHA-512 of the shard file, whose SHA-256 the checkpoints manifest pins. A field read
+at several widths (the tied embedding's table, LM head and ``x0`` rows) is one tensor of the shard: its first parameter is
+the shard's (by name, an embedding's table after every other), and each other one is a chain of its own, from SHA-512's IV
+over the field's bytes to the verifier's SHA-512 of them. An embedding's table (`window_builder.table_param`) is a declared
+table (`interface.Table`), its rows ``hm96-sha512/row-seg/v1`` leaves its reads open as such (`interface.seg_ports`); a
+template's port has one row schema, so a table's own chain hashes `TABLE_TAG` before the field's bytes, and its rows pend an
+odd count of bytes where a shard's (after a header safetensors aligns to 8 bytes) and every other chain's pend an even
+count: they are templates of their own. Under a ``work`` law with every unit in the output class (`Tie.outputs`), every unit is proved.
 
 Public: the layout (the shards, their headers and tensor offsets, each parameter's rows and width), the digests and the
 registered roots. Private: the rows, their salts and every state but the first. Refused by name: a cast or a composition
 whose rows aren't its source tensors' bytes in order (1:1, fused along dim 0 and tied are), a row straddling two tensors, a
-tensor two parameters split, bytes between or after the tensors, a tensor no registered parameter holds, a checkpoint not of
-record or of another model, and a template whose port would read a table's rows and another parameter's.
+tensor two parameters split, a row of fewer than 56 words (C-Flock proves a unit only with a row of at least 112 bytes, one
+that compresses before its last block), a shard of no tensor, bytes between or after the tensors, a tensor no registered
+parameter holds, a checkpoint not of record or of another model, and a template whose port would read a table's rows and
+another parameter's.
 
     verity-vllm weights-tie commit --phi PHI --checkpoint-dir X [--manifest M] --key-file K --registration-out REG \\
         --out DIR [--law work:1] [--cap 16] [--run-id ID] [--grain 512,9,64] [--served-dir Y --served-manifest MY [--forge-digest]]
@@ -33,7 +35,7 @@ record or of another model, and a template whose port would read a table's rows 
 
 ``commit``: the committer's registration (its key in ``--key-file``, made 0600 when absent and never printed) and its tie
 window, written by core's registrar. ``--served-dir``: a committer serving another checkpoint's words as X's (the refused
-arm), its registration committing them; ``--forge-digest``: its end units' digests forged to X's. ``verify``: the verifier's
+arm), its registration committing them; ``--forge-digest``: its last units' digests forged to X's. ``verify``: the verifier's
 tie of X (``DIR/tie.json``: its circuit's SHA-512, run root and units) and the records audit's ``--registered`` file
 (``DIR/registered.json``: the registration's entries, held to the verifier's weights record, and the supplied values) and
 ``--outputs`` file (``DIR/outputs.json``: every unit). ``pins``: the registration's roots, written only once that audit's
@@ -137,29 +139,29 @@ class Tie:
         return hashlib.sha512(json.dumps({"tie": TIE_TAG, "program": self.program, "model": self.model, "grain": self.grain,
                                           "shards": self.shards, "id": self.run_id}, sort_keys=True).encode()).hexdigest()
 
-    def _plan(self) -> tuple[list[tuple[Any, int]], list[list[tuple[Any, str, int, int, str | None, int | None]]]]:
+    def _plan(self) -> tuple[list[tuple[Any, int]], list[list[tuple[Any, str, int, int, str, int]]]]:
         """The templates ``(Definition, units)`` in first use, and per chain its units ``(Definition, template id, index,
-        pending bytes, parameter, row)`` in stream order, its end's parameter and row None."""
+        pending bytes, parameter, row)`` in stream order, its last a `Sha512StreamLast_v1`."""
         fns: dict[str, Any] = {}
         count: dict[str, int] = {}
         plan = []
         for c in self.chains:
             h, steps = len(c.pending), []
-            for p, j in (*c.rows, (None, None)):
-                fn = SS.end(c.length) if p is None else SS.row(h, self.entries[p]["words"])
+            for k, (p, j) in enumerate(c.rows):
+                w = self.entries[p]["words"]
+                fn = SS.last(h, w, c.length) if k == len(c.rows) - 1 else SS.row(h, w)
                 tid = IF.descriptor_id(fn)
                 fns.setdefault(tid, fn)
                 count[tid] = count.get(tid, 0) + 1
                 steps.append((fn, tid, count[tid] - 1, h, p, j))
-                if p is not None:
-                    h = (h + 2 * self.entries[p]["words"]) % SS.BLOCK
+                h = (h + 2 * w) % SS.BLOCK
             plan.append(steps)
         return [(fns[t], count[t]) for t in fns], plan
 
     def circuit(self) -> IF.Circuit:
         """The tie's circuit: each chain's first unit reads its start state, every other unit's state is wired from the unit
-        before (``cv`` from ``o0``, ``carry`` from ``o1``), each row unit's ``data`` reads its row of its parameter, and the
-        end's ``o0`` reads the chain's digest; the patterns coalesced to their runs. An embedding's table is declared a table
+        before (``cv`` from ``o0``, ``carry`` from ``o1``), each unit's ``data`` reads its row of its parameter, and the last
+        unit's ``o0`` reads the chain's digest; the patterns coalesced to their runs. An embedding's table is declared a table
         of its parameter's every row, so its reads are row-seg rows (`interface.seg_ports`)."""
         templates, plan = self._plan()
         wires, reads = [], []
@@ -174,11 +176,9 @@ class Tie:
                     wires.append(IF.Wire(tid, "cv", prev[0], "o0", i, (1,), prev[1], (0,)))
                     if h:
                         wires.append(IF.Wire(tid, "carry", prev[0], "o1", i, (1,), prev[1], (0,)))
-                if p is None:
-                    reads.append(IF.Read(tid, "o0", f"{c.name}/sha512", i, (1,), 0, (0,)))
-                else:
-                    reads.append(IF.Read(tid, "data", p, i, (1,), int(j) * self.entries[p]["words"], (0,)))
+                reads.append(IF.Read(tid, "data", p, i, (1,), int(j) * self.entries[p]["words"], (0,)))
                 prev = (tid, i)
+            reads.append(IF.Read(prev[0], "o0", f"{c.name}/sha512", prev[1], (1,), 0, (0,)))
         params = {**{p: e["leaves"] * e["words"] for p, e in self.entries.items()},
                   **{n: len(row) for c in self.chains for n, row in c.supplied().items()}}
         tables = tuple(IF.Table(p, p, 0, e["words"], e["leaves"]) for p, e in self.entries.items() if _table(p))
@@ -206,7 +206,7 @@ class Tie:
         return hashlib.sha512(IF.circuit_bytes(self.window(law, cap).circuit_record())).hexdigest()
 
     def units(self) -> int:
-        return sum(len(c.rows) + 1 for c in self.chains)
+        return sum(len(c.rows) for c in self.chains)
 
     def outputs(self) -> list[list[int]]:
         """The output class the audit proves whole: every unit, since a unit left unproved breaks its chain."""
@@ -215,20 +215,19 @@ class Tie:
     def record(self, win: IF.Window, rows: dict[str, np.ndarray], forge_digest: bool = False) -> None:
         """Record every unit into ``win``, each row unit's data its parameter's row of ``rows`` (by parameter, ``(leaves,
         words)`` u16) and its states as `sha512_stream` computes them, each template's units at once. ``forge_digest``: each
-        end's digest the chain's, whatever its rows hash to (a forger's, which its end unit's proof refuses)."""
+        last unit's digest the chain's, whatever its rows hash to (a forger's, which that unit's proof refuses)."""
         templates, plan = self._plan()
         got: dict[str, tuple[list, list]] = {IF.descriptor_id(fn): ([], []) for fn, _ in templates}
         for c, steps in zip(self.chains, plan):
             cv, pend = list(c.cv), c.pending
-            for _fn, tid, _i, h, p, j in steps:
-                ins = [np.array(cv, np.uint64), *([np.array(SS.carry_words(pend), np.uint16)] if h else [])]
-                if p is None:
+            for k, (_fn, tid, _i, h, p, j) in enumerate(steps):
+                data = np.asarray(rows[p][j], np.uint16)
+                ins = [np.array(cv, np.uint64), *([np.array(SS.carry_words(pend), np.uint16)] if h else []), data]
+                cv, pend = SS.row_reference(cv, pend, data.tolist())
+                if k == len(steps) - 1:
                     d = c.digest if forge_digest else SS.end_reference(cv, pend, c.length)
                     outs = [np.frombuffer(d, ">u8").astype(np.uint64)]
                 else:
-                    data = np.asarray(rows[p][j], np.uint16)
-                    cv, pend = SS.row_reference(cv, pend, data.tolist())
-                    ins.append(data)
                     outs = [np.array(cv, np.uint64), *([np.array(SS.carry_words(pend), np.uint16)] if pend else [])]
                 got[tid][0].append(ins)
                 got[tid][1].append(outs)
@@ -263,6 +262,9 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
             raise ValueError(f"{p}: its field is {f.get('rule')!r} (cast {f.get('cast')!r}, shard {f.get('shard')!r}); a tie "
                              "reads a field whose rows are its source tensors' bytes in order (1:1, fused along dim 0 or "
                              "tied), uncast and unsharded")
+        if row < 112:
+            raise ValueError(f"{p}: its rows are {row} bytes; C-Flock proves a unit only with a row of at least 112 bytes "
+                             "(one that compresses before its last block), so a tie reads rows of at least 56 words")
         for s in srcs:
             n = ck.tensors[s][4] - ck.tensors[s][3]
             if at % row or n % row:
@@ -292,6 +294,8 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
             p, j0 = claimed[name]
             rows += [(p, j0 + k) for k in range((hi - lo) // (2 * entries[p]["words"]))]
             at = hi
+        if not rows:
+            raise ValueError(f"{fn}: no tensor; a shard's chain ends on its last row")
         sha256, sha512 = _digests(path)
         if os.path.getsize(path) != at:
             raise ValueError(f"{fn}: bytes [{at}, {os.path.getsize(path)}) after its last tensor")
@@ -316,7 +320,7 @@ def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifes
     weight parameter's `window_weights.weight_value`, the roots `weights_registration` registers) and its tie window of X,
     every unit recorded: -> (the registration, the tie, the window, to close and write). ``served``: the words it serves
     by field (`window_weights.record_words`' form; default X's own), which the registration commits, so a committer serving
-    another checkpoint's words as X's (the refused arm) registers their roots; ``forge_digest``: its ends' digests X's."""
+    another checkpoint's words as X's (the refused arm) registers their roots; ``forge_digest``: its last units' digests X's."""
     t = tie(registered, checkpoint_dir, checkpoints_manifest, run_id=run_id, grain=grain, kv_cache_dtype=kv_cache_dtype)
     words = served if served is not None else WW.record_words(registered, checkpoint_dir, checkpoints_manifest, kv_cache_dtype)
     values = {p: v for p, v in WW.weight_values(registered, words, key, grain, keep_rows=True).items() if p in t.entries}
@@ -408,7 +412,7 @@ class CommitOptions:
     served_dir: str | None = option("--served-dir", default=None, help="serve this checkpoint's words as X's (the refused arm)")
     served_manifest: str | None = option("--served-manifest", default=None)
     forge_digest: bool = option("--forge-digest", default=False, action="store_true",
-                                help="the end units' digests forged to X's (with --served-dir)")
+                                help="the last units' digests forged to X's (with --served-dir)")
 
 
 @dataclass(frozen=True, kw_only=True)

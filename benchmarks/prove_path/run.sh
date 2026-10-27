@@ -71,8 +71,8 @@
 #     SHA-512, the run root, the registered entries and its supplied values, every unit as the output class), audits the
 #     window against it under PP_LAW (default work:1) in
 #     members of PP_TORCH_LOOP_CAP units (default 16), and pins the roots only on an accepting audit. Two refused arms: a
-#     committer serving checkpoint Y's words as X's (its ends' digest reads open no root), and the same with its ends'
-#     digests forged to X's (its end units aren't their Definition's); each must be refused, and pin nothing.
+#     committer serving checkpoint Y's words as X's (its last units' digest reads open no root), and the same with those
+#     digests forged to X's (those units aren't their Definition's); each must be refused, and pin nothing.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
