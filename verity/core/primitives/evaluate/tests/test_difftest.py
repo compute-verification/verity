@@ -1604,7 +1604,8 @@ def _test_mufu_literals(*names: str) -> dict:
     ns: dict = {}
     for node in ast.parse(TEST_MUFU.read_text()).body:
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and getattr(node.targets[0], "id", None) in names:
-            ns[node.targets[0].id] = eval(compile(ast.Expression(node.value), str(TEST_MUFU), "eval"), {"__builtins__": {}}, ns)
+            code = compile(ast.Expression(node.value), str(TEST_MUFU), "eval")
+            ns[node.targets[0].id] = eval(code, {"__builtins__": {}}, ns)  # noqa: S307 -- no builtins; literal_eval refuses F32_EDGES + [...]
     return ns
 
 
@@ -1697,7 +1698,10 @@ def test_mufu_words_out_of_range_are_refused(server):
 
 # ---- E4: the correctly rounded transcendentals of the reference kinds: exp, erf and tanh at 100 digits -------------------
 
-_f32w = lambda v: struct.unpack("<I", struct.pack("<f", v))[0]
+def _f32w(v):
+    return struct.unpack("<I", struct.pack("<f", v))[0]
+
+
 #: the words where the rules change (exp's early exits at 89 and -105, its last finite word 0x42B17217 and its last nonzero
 #: one, erf's 4.2 and tanh's 9.2) and the words about one, two, 2^-12 and 2^-24, with their neighbours, both signs; the
 #: sixteenths below 12; and 8192 seeded words of magnitude below 16
@@ -1934,7 +1938,9 @@ def _lazy_rows(fn: PrimitiveDefinition, rng: random.Random) -> list[tuple]:
     leaf = tc
     while isinstance(leaf, Array):
         leaf = leaf.elem
-    col = lambda: tuple(rng.getrandbits(leaf.w) for _ in range(tc.leaves))
+
+    def col():
+        return tuple(rng.getrandbits(leaf.w) for _ in range(tc.leaves))
     idx = _TOKENS if fn.id.startswith("Gather") else (0, 1, 31, 32, 63, 64, 127, 0xFFFF, rng.getrandbits(ti.w))
     return [(i, col()) for i in idx for _ in range(2)]
 

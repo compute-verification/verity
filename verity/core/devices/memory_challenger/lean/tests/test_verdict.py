@@ -8,7 +8,6 @@ from __future__ import annotations
 import dataclasses
 import importlib.util
 import shutil
-from pathlib import Path
 
 import pytest
 from hypothesis import strategies as st
