@@ -9,17 +9,20 @@
 #   4. gpu      under one `gpu-lease 1` of at most LEASE_MIN minutes: per statement, a loopback --zk session set (a verifier
 #               process on VCPUS cores, WARM + RUNS prover sessions with --gpu on the rest), sampling the GPU's utilization,
 #               memory and, where dcgmi runs, its tensor-pipe and SM activity
+#               and with NSYS=1, a last session set (WARM=0, RUNS=2) of the first statement under Nsight Systems' CUDA trace: its
+#               kernel and memcpy time summaries in out/nsys (the GPU's busy time, not its utilization counter's)
 #   5. cpu      per statement of CPU_STATEMENTS, the same session set without --gpu (the CPU prover), no lease
 # out/summary.json: per statement and mode, the median timed session's prove time, its phases, GPU busy share and peaks.
 # env: STATEMENTS="4096:1 4096:8 14336:1"  CPU_STATEMENTS="4096:1"  ROWS=8  WARM=1  RUNS=3  VCPUS=4  LEASE_MIN=20  SM=90
-#      CUDA_TK=/usr/local/cuda-13.0  FLOCK_WORK (default: a directory under /workspace/tmp, kept between steps)  STEPS="build stage sanity gpu cpu"
+#      CUDA_TK (default: verity/ml/flock/pod/cuda-13.3.sh's)  NSYS=1  FLOCK_WORK (default: a directory under /workspace/tmp, kept between steps)  STEPS="build stage sanity gpu cpu"
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/flock-s8-block}/out; mkdir -p $O
 FW=${FLOCK_WORK:-/workspace/tmp/flock-s8-block}; mkdir -p $FW || exit 1
 STATEMENTS=${STATEMENTS:-"4096:1 4096:8 14336:1"}; CPU_STATEMENTS=${CPU_STATEMENTS:-"4096:1"}; ROWS=${ROWS:-8}
 SANITY=${SANITY:-1}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS)); SM=${SM:-90}; STEPS=${STEPS:-"build stage sanity gpu cpu"}
-export CUDA_TK=${CUDA_TK:-/usr/local/cuda-13.0}
+export FLOCK_WORK=$FW
+. verity/ml/flock/pod/cuda-13.3.sh
 export PATH=$CUDA_TK/bin:$HOME/.cargo/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
 export FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))'); NC=$(echo $CPUS | tr , '\n' | wc -l)
@@ -80,7 +83,7 @@ gpu_sample() {
 session() {
   local k n r name mode=$2 G=; read -r k n r name <<< "$(spec $1)"
   local d=$FW/data/$name o=$O/$2/$name
-  [ $mode = gpu ] && G=--gpu
+  case $mode in gpu*) G=--gpu ;; esac
   mkdir -p $o; rm -rf $d/sessions-$mode
   local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1)
   taskset -c $VCPU $B serve --zk --listen 127.0.0.1:$PORT --out $d/sessions-$mode --instances $d/pub-$n.bin --circuit $d/circuit.txt \
@@ -88,7 +91,7 @@ session() {
   local SP=$!
   wait_serving $o/serve.log $SP || { tail -20 $o/serve.log; return 1; }
   gpu_sample $o & local GS=$!
-  RAYON_NUM_THREADS=$((NC - VC)) FC_VERIFY_AHEAD=$NS taskset -c $PCPU /usr/bin/time -v -o $o/time-prove.txt $B prove --zk $G \
+  RAYON_NUM_THREADS=$((NC - VC)) FC_VERIFY_AHEAD=$NS taskset -c $PCPU /usr/bin/time -v -o $o/time-prove.txt ${WRAP:-} $B prove --zk $G \
     --verifier 127.0.0.1:$PORT --instances $d/inst-$n.bin --circuit $d/circuit.txt --warm $WARM --runs $RUNS \
     2> $o/prove.err | stamp > $o/prove.tsv
   echo "prove $name $mode exit ${PIPESTATUS[0]}"
@@ -101,14 +104,29 @@ if has sanity; then
   echo "== sanity $(date -u +%T)"
   session 64:2 cpu || exit 1
 fi
+NR=$FW/nsys-root; NSB=$NR/opt/nvidia/nsight-systems/2026.1.3/bin/nsys
+if has gpu && [ "${NSYS:-0}" = 1 ] && [ ! -x $NSB ]; then
+  mkdir -p $NR/debs && (cd $NR/debs && { apt-get download nsight-systems-2026.1.3 2>/dev/null || curl -fsSLO \
+    https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/nsight-systems-2026.1.3_2026.1.3.425-1_amd64.deb; }) \
+    && for f in $NR/debs/*.deb; do dpkg-deb -x $f $NR; done
+  [ -x $NSB ] || { echo "nsys unpack failed: NSYS=0"; NSYS=0; }
+fi
 if has gpu; then
   echo "== gpu $(date -u +%T)"
   export -f session spec gpu_sample free_port wait_serving stamp
-  export B O FW PCPU VCPU NC VC NS WARM RUNS STATEMENTS SANITY ROWS
+  export B O FW PCPU VCPU NC VC NS WARM RUNS STATEMENTS SANITY ROWS NSB NSYS
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-flock-s8-block} gpu-lease 1 --wait --max-min ${LEASE_MIN:-20} -- bash -c '
     nvidia-smi -L > $O/lease-gpu.txt
     [ "${SANITY:-1}" = 1 ] && session 64:2 gpu
-    for kn in $STATEMENTS; do session $kn gpu; done'
+    for kn in $STATEMENTS; do session $kn gpu; done
+    if [ "${NSYS:-0}" = 1 ]; then
+      mkdir -p $O/nsys
+      WARM=0 RUNS=2 NS=2 WRAP="$NSB profile -t cuda --sample=none --cpuctxsw=none -o $O/nsys/prove-%p" session ${STATEMENTS%% *} gpu-nsys
+    fi'
+  if [ "${NSYS:-0}" = 1 ]; then
+    for f in $O/nsys/*.nsys-rep; do $NSB stats -q -r cuda_gpu_kern_sum,cuda_gpu_mem_time_sum -f csv -o ${f%.nsys-rep} $f > /dev/null; done
+    rm -f $O/nsys/*.nsys-rep $O/nsys/*.sqlite
+  fi
 fi
 if has cpu; then
   echo "== cpu $(date -u +%T)"

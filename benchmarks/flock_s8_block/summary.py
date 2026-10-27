@@ -106,10 +106,25 @@ def main(out: Path) -> dict:
         res["statements"][st.name] = {"definition": rec.get("definition"), "ands": rec.get("ands"), "in_bits": rec.get("in_bits"),
                                       "out_bits": rec.get("out_bits"), "stage": rec.get("stage"), "sizes": text(st / "sizes.txt"),
                                       "stage_process": time_v(st / "time-stage.txt")}
-    for mode in ("gpu", "cpu"):
+    for mode in ("gpu", "cpu", "gpu-nsys"):
         for d in sorted((out / mode).glob("k*-n*")):
             res["statements"].setdefault(d.name, {})[mode] = session_set(d)
+    res["nsys"] = {f.name: nsys_total_s(f) for f in sorted((out / "nsys").glob("*.csv"))}
     return res
+
+
+def nsys_total_s(p: Path) -> dict:
+    """An `nsys stats` CSV's total time (s) and its five largest rows by time."""
+    lines = text(p).splitlines()
+    head = next((i for i, l in enumerate(lines) if l.startswith('"Time') or l.startswith("Time")), None)
+    if head is None:
+        return {"raw": text(p)[:500]}
+    import csv
+    rows = list(csv.DictReader(lines[head:]))
+    total = sum(float(r.get("Total Time (ns)") or 0) for r in rows) / 1e9
+    top = sorted(rows, key=lambda r: -float(r.get("Total Time (ns)") or 0))[:5]
+    return {"total_s": round(total, 4), "top": [{k: r.get(k) for k in ("Name", "Operation", "Instances", "Count", "Total Time (ns)")
+                                                 if r.get(k) is not None} for r in top]}
 
 
 if __name__ == "__main__":
