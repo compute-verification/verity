@@ -13,9 +13,8 @@ for each sampling block in order, a record `rec i τ b` of the strategy `τ` tha
 sampling block's output `b`. A record may read the strategy: C-Flock's wrong units are those of the transcript the
 prover is committed to at registration, which is a function of its strategy (`Flock.Guarantees.SamplingBlock.wrongSet`).
 An event of the period is a predicate on that list, and its probability is `value` of the run, which has no prover
-message left, so `value` is the exact probability over the verifier's coins. `periodRunH` is the same run whose
-records also read the records before them: a sampling block that reads carried state is recorded against what the
-sampling blocks before it committed.
+message left, so `value` is the exact probability over the verifier's coins. `compTo` is the period played up to one
+sampling block, then any game at the strategy that plays it there.
 
 `PeriodGood G good i T s` says every sampling block's strategy, on every run of the period, satisfies `good`: it is how
 a per-session hypothesis about the prover (such as `cr/sha-512` for its knowledge finders) is taken at exactly the
@@ -59,14 +58,33 @@ def periodRun {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → S
   | i, T + 1, s => runBind (fun _ => periodG G (i + 1) T)
       (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·)) (G i) s
 
-/-- **A period's run whose records read the history**: as `periodRun`, with sampling block `i`'s record
-`rec i h τ b` also reading `h`, the records of the sampling blocks before it, in order. -/
-def periodRunH {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → List ρ → Strategy (G i) → β i → ρ) :
-    List ρ → (i T : ℕ) → Strategy (periodG G i T) → Game (List ρ)
-  | _, _, 0, _ => .ret []
-  | h, i, T + 1, s => runBind (fun _ => periodG G (i + 1) T)
-      (fun b s' => (periodRunH G rec (h ++ [rec i h (Strategy.ofBind _ (G i) s) b]) (i + 1) T s').map
-        (rec i h (Strategy.ofBind _ (G i) s) b :: ·)) (G i) s
+/-- The strategy `runBind f k g s` is played by: `ks a s'` at each end `a` of `g`. -/
+def runBindStrat (f : α → Game δ) (k : (a : α) → Strategy (f a) → Game γ)
+    (ks : (a : α) → (s' : Strategy (f a)) → Strategy (k a s')) :
+    (g : Game α) → (s : Strategy (g.bind f)) → Strategy (runBind f k g s)
+  | .ret a, s => ks a s
+  | .send _ kk, s => runBindStrat f k ks (kk s.1) s.2
+  | @Game.coin _ _ _ _ kk, s => fun c => runBindStrat f k ks (kk c) (s c)
+
+/-- **A period up to sampling block `i + d`, then `K`**: sampling blocks `i, …, i + d − 1` played by `s`, then the game
+`K (i + d) τ`, with `τ` the strategy `s` leaves for sampling block `i + d`. A finder that reads one sampling block of a
+period plays the sampling blocks before it this way, on fresh coins. -/
+def compTo (G : (i : ℕ) → Game (β i)) (K : (j : ℕ) → Strategy (G j) → Game γ) :
+    (d i T : ℕ) → d < T → Strategy (periodG G i T) → Game γ
+  | _, _, 0, h, _ => absurd h (Nat.not_lt_zero _)
+  | 0, i, _ + 1, _, s => K i (Strategy.ofBind _ (G i) s)
+  | d + 1, i, T + 1, h, s => runBind (fun _ => periodG G (i + 1) T)
+      (fun _ s' => compTo G K d (i + 1) T (Nat.lt_of_succ_lt_succ h) s') (G i) s
+
+/-- The strategy `compTo` is played by: `s` up to sampling block `i + d`, then `KS`. -/
+def compStrat (G : (i : ℕ) → Game (β i)) (K : (j : ℕ) → Strategy (G j) → Game γ)
+    (KS : (j : ℕ) → (τ : Strategy (G j)) → Strategy (K j τ)) :
+    (d i T : ℕ) → (h : d < T) → (s : Strategy (periodG G i T)) → Strategy (compTo G K d i T h s)
+  | _, _, 0, h, _ => absurd h (Nat.not_lt_zero _)
+  | 0, i, _ + 1, _, s => KS i (Strategy.ofBind _ (G i) s)
+  | d + 1, i, T + 1, h, s => runBindStrat (fun _ => periodG G (i + 1) T)
+      (fun _ s' => compTo G K d (i + 1) T (Nat.lt_of_succ_lt_succ h) s')
+      (fun _ s' => compStrat G K KS d (i + 1) T (Nat.lt_of_succ_lt_succ h) s') (G i) s
 
 /-- **Every sampling block's strategy satisfies `good`**: sampling block `i`'s strategy, and on every run, every later
 sampling block's. -/
