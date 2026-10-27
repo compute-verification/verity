@@ -97,7 +97,8 @@ theorem atanh2_hi (a b : ℕ) (hb : 0 < b) (h3 : 3 * a ≤ b) :
       rw [← pow_mul, ← pow_add]
       congr 1
       ring
-    have h0 : 0 ≤ ((a : ℝ) / b) ^ (2 * TERMS + 1) * (((a : ℝ) / b) ^ 2) ^ n := by positivity
+    have h0 : 0 ≤ ((a : ℝ) / b) ^ (2 * TERMS + 1) * (((a : ℝ) / b) ^ 2) ^ n :=
+      mul_nonneg (pow_nonneg hx0 _) (pow_nonneg (sq_nonneg _) _)
     rw [hp, mul_assoc _ (((a : ℝ) / b) ^ (2 * TERMS + 1))]
     exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_left hd (by norm_num)) h0
   have hle := hasSum_le htail hT hg
@@ -210,7 +211,8 @@ theorem pooledCount_ge (q δ : Ratio) (hq : 0 < q.num) (hqd : 0 < q.den) (hδ : 
   refine le_trans ?_ (cdiv_ge_real _ _ (Nat.mul_pos hq (Nat.two_pow_pos _)))
   push_cast
   calc Real.log ((δ.den : ℝ) / δ.num) / ((q.num : ℝ) / q.den)
-      = Real.log ((δ.den : ℝ) / δ.num) * ((q.den : ℝ) / q.num) := by ring
+      = Real.log ((δ.den : ℝ) / δ.num) * ((q.den : ℝ) / q.num) := by
+        rw [div_div_eq_mul_div, mul_div_assoc]
     _ ≤ ((Pooled.ln ⟨δ.den, δ.num⟩).2 : ℝ) / 2 ^ PREC * ((q.den : ℝ) / q.num) :=
         mul_le_mul_of_nonneg_right hb (by positivity)
     _ = _ := by ring
@@ -230,13 +232,13 @@ theorem least_spec (ok : ℕ → Bool) : ∀ fuel lo hi, least ok fuel lo hi = h
     split_ifs with h1 h2
     · exact Or.inl rfl
     · rcases least_spec ok fuel lo ((lo + hi) / 2) with h | h
-      · exact Or.inr (h ▸ h2)
+      · exact Or.inr (by rw [h]; exact h2)
       · exact Or.inr h
     · exact least_spec ok fuel _ hi
 
 theorem foldl_choose (n : ℕ) :
     ∀ k, (List.range k).foldl (fun c i => c * (n - i) / (i + 1)) 1 = n.choose k
-  | 0 => rfl
+  | 0 => by simp
   | k + 1 => by
     rw [List.range_succ, List.foldl_append, foldl_choose n k]
     simp only [List.foldl_cons, List.foldl_nil]
@@ -257,7 +259,9 @@ theorem integrityPeriodCovers : IntegrityPeriodCovers := by
     (fuel (n + 1)) 0 (n + 1) with h | h
   · rw [h] at hK
     omega
-  · simp only [decide_eq_true_eq, choose_eq] at h
+  · generalize least (fun k => decide (Pooled.choose (n - k) kd * e.den ≤ e.num * Pooled.choose n kd))
+      (fuel (n + 1)) 0 (n + 1) = t at h hK ⊢
+    simp only [decide_eq_true_eq, choose_eq] at h
     rcases Nat.eq_zero_or_pos (n.choose kd) with h0 | h0
     · rw [h0, Nat.cast_zero, div_zero]
       positivity
