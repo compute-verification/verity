@@ -19,6 +19,8 @@ COUNT += 6  # the step's blocks: `torch_attention`'s 2, `torch_loss`'s 2 rows, `
 
 COUNT += 1  # `torch_embedding`'s forward, `EmbeddingTorch_v1`
 
+COUNT += 11  # `torch_embedding`'s EmbeddingBackwardTied_v2, the ids sorted once, and its 10 parts
+
 COUNT += 10  # `torch_clip`'s, clip_grad_norm_ on bf16 grads
 
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
@@ -28,8 +30,6 @@ COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiL
 COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1
 
 COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1
-
-COUNT += 11  # `torch_embedding`'s EmbeddingBackwardTied_v2, the ids sorted once, and its 10 parts
 
 
 def test_the_catalog_loads_every_definition_and_no_other():
