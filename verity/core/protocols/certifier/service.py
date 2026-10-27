@@ -48,7 +48,8 @@ rejected link-window shows only the service's `reject`: the violation's kind sta
 window's T counts, the frames that end's record holds in each bucket, as the Program and the placement fix them. An end
 whose rows the Program reads rather than predicts, such as requests from outside, has none. The profile is fixed before
 the run and bound by the spec's context, and nothing declared at run time sets it. So a port-window it leaves empty
-needs no content check: a head with frames where the profile says 0 fails N2's count check. An end without a profile has no such backing, since its occupancy is its record's own.
+needs no content check: a head with frames where the profile says 0 fails N2's count check. An end without a profile
+has no such backing, since its occupancy is its record's own.
 
 **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v5{EGRESS, INGRESS}: each end's head check,
 `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are those statics), a Boolean Definition over its
