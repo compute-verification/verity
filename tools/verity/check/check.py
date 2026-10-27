@@ -925,8 +925,8 @@ def record(argv: list[str]) -> int:
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
     gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`) waits for a slot of that
-    machine's NAME pool instead of its merge-check slots (`pool_env`)."""
-    on = base = pool = None
+    machine's NAME pool instead of its merge-check slots (`pool_env`); `--timeout S` is the run's (`research run --timeout`, custody 24 h)."""
+    on = base = pool = timeout = None
     agreement = priority = False
     rest = []
     it = iter(argv)
@@ -941,10 +941,12 @@ def record(argv: list[str]) -> int:
             agreement = True
         elif x == "--priority":
             priority = True
+        elif x == "--timeout":
+            timeout = next(it)
         else:
             rest.append(x)
     try:
-        pooled = pool_env(pool, on, priority)
+        pooled = pool_env(pool, on, priority) + (["--timeout", timeout, "--custody-ttl", "24h"] if timeout else [])
     except ValueError as e:
         print(f"check: --pool {e}", file=sys.stderr)
         return 2
