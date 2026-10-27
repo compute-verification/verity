@@ -84,7 +84,7 @@ def test_a_jrc_build_is_sized_by_its_rows_and_columns_under_rc_and_by_its_rows_o
 
 
 def test_builds_from_before_the_flags_query_are_sized_by_what_they_export():
-    """A build without kh_j10r_flags: H1U_JW's (KP2-DEC's patched builds, and the fold before the query) by its
+    """A build without kh_j10r_flags: H1U_JW's (patched builds, and the fold before the query) by its
     kh_j10r_jw_bytes, one from before H1U_JW by its rows, and an H1U_JRC build's rc workspace by kh_j10r_ws_bytes."""
     m, n, k = 4096, 65536, 16384
     old_jw = _build(jw=True, query=False)

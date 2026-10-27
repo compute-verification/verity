@@ -1,4 +1,4 @@
-"""The `dither-1s-hbp` arm's gate: `dither_one.check` with z held to today's A B^T (CA's peel, 11:02Z), for hb_one's
+"""The `dither-1s-hbp` arm's gate: `dither_one.check` with z held to today's A B^T (the peel), for hb_one's
 peeled unit (h1u.cu's kh_one_peel: z = O' - sum_d 128^d D_d + 256 (X WB^T + xa B^T) - (X c^T + b B^T) = A B^T, xa where
 the int8 X = A + b wraps). `llm.dither_mod` for that arm, so sbench runs this module's `check` on the gate, control,
 fault, fault_wb and fault_xa captures and `gate_verdict` over them; `install()` (before the engine is built) makes the
@@ -10,16 +10,16 @@ h1o_ref; 0xA5 over every buffer read. Changed, all against A B^T by torch's int8
 h1o_ref's v3 z:
   * gate: z on every slot row of every call (rows >= m and dead row tiles are A = 0, so z = 0); y equal to today's
     (int8_ops.scaled_mm's body, the exact arm's) on every call, required; three units on the CPU: the kernel's z = A B^T, the
-    receipt = CA's definition's (`dither_one.h1v3_unit`) and CA's own code's (`h1v3_itself`, H1V3's h1tile.reference),
-    and CA's z peeled on the CPU from its own noise (`peel_cpu`) = A B^T, where the literal peel z - b B^T - A c^T - b c^T
+    receipt = H1V3's Definition's (`dither_one.h1v3_unit`) and its own code's (`h1v3_itself`, H1V3's h1tile.reference),
+    and v3's z peeled on the CPU from its own noise (`peel_cpu`) = A B^T, where the literal peel z - b B^T - A c^T - b c^T
     is reported (it misses the wrap term 256 xa (B + c)^T); and the kernel's z and receipt equal H1V3 with the peel's
     h1tile.reference(stream=True) itself (this source's, PouwH1Tile_v4 ungated, unless HB_H1V3_PEEL_TREE names another:
-    z = A B^T is v3's definition), with no CPU peel; both CA checks are required;
+    z = A B^T is v3's definition), with no CPU peel; both H1V3 checks are required;
   * fault: z off A B^T by 2^FAULT_SHIFT at unit 0's cell (0, 0) of every call and nowhere else, that unit's receipt off
     h1r's and no other, y = dequant of that z and moved there;
   * fault_wb: every receipt unmoved, z off A B^T only in column 0 of unit 0, by `dither_one.wb_fault_expected` on
     CPU_CALLS and by multiples of 256 elsewhere, y = dequant of that z;
-  * fault_xa (CA's flipped-xa fault, 12:03Z): every receipt unmoved, z off A B^T only in row 0 of unit 0, by
+  * fault_xa (the flipped-xa fault): every receipt unmoved, z off A B^T only in row 0 of unit 0, by
     `xa_fault_expected` on CPU_CALLS and by multiples of 256 elsewhere, y = dequant of that z.
 """
 from __future__ import annotations
@@ -67,7 +67,7 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
 
 
 def h1v3_peeled(units: list[dict]) -> dict:
-    """`dither_one.h1v3_itself` on the peeled H1V3 tree: CA's own h1tile.reference(stream=True), whose z is A B^T. The tree
+    """`dither_one.h1v3_itself` on the peeled H1V3 tree: its own h1tile.reference(stream=True), whose z is A B^T. The tree
     is this source's own (PouwH1Tile_v4, ungated) unless HB_H1V3_PEEL_TREE names another (hb_served.sh's H1V3_PEEL_SHA)."""
     tree = os.environ.get("HB_H1V3_PEEL_TREE") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__)))))
@@ -91,8 +91,8 @@ def _s32(v: np.ndarray) -> np.ndarray:
 
 def peel_cpu(z_v3: np.ndarray, a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int,
              roots: tuple[bytes, bytes]) -> dict:
-    """CA's v3 z of one unit (s32 [32, 32]) peeled with its own noise (h1tile.noise): exact = z - X c^T - b B^T + 256 xa
-    B^T, literal = z - b B^T - A c^T - b c^T (CA's 11:02Z formula, which takes z for (A + b)(B + c)^T), xa = [A = 127 and
+    """v3's z of one unit (s32 [32, 32]) peeled with its own noise (h1tile.noise): exact = z - X c^T - b B^T + 256 xa
+    B^T, literal = z - b B^T - A c^T - b c^T (the peel as first written, which takes z for (A + b)(B + c)^T), xa = [A = 127 and
     b = 1]."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     from verity.core.protocols.pouw.circuit import seeds as SD

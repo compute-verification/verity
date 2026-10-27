@@ -66,7 +66,8 @@ session: the record under its key, the close signed under it, the log the one th
 session its client closed; then the roots it received (`released_roots_of`).  A session that ends unclosed is no window's.
 
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
-auditor (infra's `benchmarks/live_challenger/auditor.py` on the challenger's host) appends a signed entry, under the
+auditor (`benchmarks/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
+entry, under the
 challenger's key, when a lane reserves a window (its request, start and expiry), when it opens the reserved session for
 the window's root, before its first coin, and when the session ends; a window gets one session.  A lane's period is two
 more entries, its `period-open` and `period-close`:
@@ -83,9 +84,11 @@ more entries, its `period-open` and `period-close`:
 
 each line as the auditor writes it (`ledger_text`).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
-deployment; `key_of_record` reads infra's published pin), and refuses any open or period-open naming another key's
+deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
+key's
 SHA-512 before it checks a signature, so a ledger signed under its own key can't pin itself.  Then the ledger is
-infra's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's host runs too): each
+the operator's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's host runs
+too): each
 entry chained and signed at strictly increasing leaves of the key (a ledger restored with its key's state forks at a
 reused leaf), a reserve first in its session and expiring its minutes after its start, one open a root and a session,
 binding its session's reserve and carrying its request after the first reserve, one end a session after its open, each
@@ -115,7 +118,8 @@ auditor writes it (`pin_line`):
     open    = body {..., pinned, pins: {lines, sha512}}        the pins log as it stood when the gate admitted the open
 
 and each open seals the log as it stood (`pins_seal`), under the open's signature.  The session counts only when the
-verifier's copy of the log (infra's published one, any extension of it) begins with the sealed lines and one of them
+verifier's copy of the log (the operator's published one, any extension of it) begins with the sealed lines and one of
+them
 pins the open's commit (`pins_reason`), and that commit is on main's first-parent line in the verifier's own copy of it
 (`first_parent_reason`; the auditor's ``git rev-list --first-parent origin/main``, an argument, never the host's or the
 prover's word).  Ancestry is not enough: main lands each change as a merge, so a branch commit merged into main is in
@@ -481,7 +485,8 @@ class ChallengerKey:
 
 def key_of_record(doc: Any) -> ChallengerKey:
     """The challenger key a published key record pins (`KEY_RECORD_SCHEMA`, the store artifact the auditor's operator
-    labels ``challenger-key current``; the caller reads only one infra published): its `W`, `H` and public key, refused
+    labels ``challenger-key current``; the caller reads only one the operator published): its `W`, `H` and public key,
+    refused
     (`CoinError`) unless the record is of that form and the public key's SHA-512 is the one it names."""
     if not (isinstance(doc, dict) and doc.get("schema") == KEY_RECORD_SCHEMA and _digest_hex(doc.get("pubkey_sha512"))
             and _hex(doc.get("pubkey")) is not None):
@@ -788,7 +793,8 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
     minutes and before its period's close; one `end` a session, after its `open`, and a v2 end's `record_leaf` between its
     session's open and end and no entry's or other record's; periods as `verify_periods` checks them. Returns root ->
     {"reserve" (None for a one-step open), "open", "end" or None}: S is the open's `session`, R its root; raises
-    ValueError at the first entry that fails. It reads one head: a verifier takes infra's newest published head, and refuses
+    ValueError at the first entry that fails. It reads one head: a verifier takes the operator's newest published head,
+    and refuses
     two that don't `extend` one another."""
     return _verify(lines, I, verify)[0]
 
@@ -1100,7 +1106,8 @@ def _audited(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> tu
 
 
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
-    """The auditor's ledger as infra published it: every head of `heads` (each its lines; None when the verifier has none)
+    """The auditor's ledger as the auditor host's operator published it: every head of `heads` (each its lines; None
+    when the verifier has none)
     checked under the pinned key `key` (`audited_session`'s check of a ledger), any two extending one another, and of them
     the longest.  Raises `CoinError` naming why (and which head, when there are several), so a ledger forked, cut or
     rewritten between two publications is refused whichever head a verifier is shown."""
@@ -1287,7 +1294,8 @@ def first_parent_reason(session: str, pinned: Any, main: Any) -> str | None:
 
 def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main: Any, verify: Verify) -> Audited:
     """`audited_session`, from main's code: the window's session as the auditor's ledger names it, when the host's pins
-    log `pins` (its lines; infra's published one) records the open's pin (`pins_reason`) and the verifier's own copy of
+    log `pins` (its lines; the auditor host's operator's published one) records the open's pin (`pins_reason`) and the
+    verifier's own copy of
     main's first-parent history `main` holds it (`first_parent_reason`).  Raises `CoinError` naming why, so a session
     the host ran from any other tree fails closed.  For PoUW this is what makes a credited window's coins come from a
     session the auditor opened on a commit main's check passed; `pouw.credit` layers on it that the pin is recent and no

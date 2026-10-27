@@ -80,20 +80,15 @@ Mode 3 is the balanced schedule: `0033` takes S0 and S1 off the ALU. Two of the 
 mad.wide with a 64-bit addend becomes a mul.wide and an IADD3, so an add can't leave the ALU that way, and a mad.hi's
 addend costs two moves. `rotr3` uses neither.
 
-Against hashcat (HASH-24, `hashcat.sh`, run r20261027-044217-d499; one lease on vy-dc-h200, the SM clock locked, which
-`-lgc 1980,1980` puts at 1,830 MHz under load), no public SHA-512 compression is faster. hashcat v7.1.2's full-digest
-kernels (`-m 1700`/`1710` pure, 252 and 254 registers, 11,052 SASS instructions a candidate) run 0.762x the default
-compression (4.355 G/s, 3,661 instructions). Its optimized kernel (`-O`, 4.995 G/s at `-w 4`) runs the same rounds in
-3,206 instructions, because it is a cracker: W7..W14 are zero at compile time, the IV is constant, there is no
-feed-forward, and it reads only digest words d and h, so the last three rounds are dead. Our compression in that shape
-(`hashcat_forms` skip, straight-line, whole waves) runs 5.048 G/s, 1.010x it. At its best CTA size our honest
-compression is 0.882x `-O`.
+`hashcat.sh` holds the default compression against hashcat's SHA-512 kernels in one lease at one locked SM clock, and
+`hashcat_summary.py`'s `VERDICT overall` line says whether any of them is faster. hashcat's full-digest kernels
+(`-m 1700`/`1710` pure) compute what a commitment needs. Its optimized kernel (`-O`) is a cracker's: W7..W14 are zero
+at compile time, the IV is constant, there is no feed-forward, and it reads only digest words d and h, so its last three
+rounds are dead. `hashcat_forms` times our compression in that shape (`skip`, straight-line, whole waves), so the two
+are compared like for like.
 
-A commit can take the zero-word shortcut where a whole block is padding: a row whose length n has n mod 128 = 0 or n mod
-128 >= 112 ends with such a block. On circuits' 1 KiB layout (21,022 of a slot's 21,857 rows), run r20261027-042951-efff
-timed base and port on one card at 1,980 MHz. The step went from 0.4617 s to 0.4529 s (0.981x) and the row kernel from
-0.2063 s to 0.1981 s. 1 KiB rows alone went from 4.43 to 4.71 G blocks/s, which is the default compression's raw rate
-per SM-clock.
+A commit can take the zero-word shortcut where a whole chunk is padding: a row whose length n has n mod 128 = 0 or
+n mod 128 >= 112 ends with such a chunk, as 21,022 of a slot's 21,857 rows do on circuits' 1 KiB layout.
 
 ## Files
 
@@ -106,14 +101,14 @@ per SM-clock.
 - `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the frozen H200 shape.
 - `sass.py`: opcode counts per variant.
 - `sass_count.py`: one kernel's SASS counts per main-loop iteration, by opcode and issue pipe (`ruler.sh`'s pipe mix).
-- `gpu.sh`: one leased GPU session.
+- `gpu.sh`: one leased GPU run.
 - `ruler.sh`, `as_commit_gpu.cuh`: the variants on commit_gpu's ruler (`commit_gpu sha`, gated by `reference.py check`)
   against its default build, with each build's SASS pipe mix, SM clock and ncu's pipe utilization.
 - `hashcat.sh`, `hashcat_forms.cu`, `hashcat_summary.py`: hashcat's SHA-512 kernels (`-m 1700`, `-m 1710`, optimized and
   pure, built from source in scratch) against the default compression in one lease at one locked SM clock, in
   compressions a second, with both sides' SASS pipe mix; `hashcat_forms` times our compression in hashcat's shapes
   (constant IV, zero words, only two digest words read) to attribute the difference, and at each CTA size in whole
-  waves (HASH-24).
+  waves.
 - `tests/`: the host twin always, every variant on a CUDA device.
 
 ```bash

@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("check", help="an ended window's manifest against the challenger's own run")
     c.add_argument("--manifest", required=True)
-    c.add_argument("--challenger-out", required=True, help="the session as infra's gate publishes it, or its out/")
+    c.add_argument("--challenger-out", required=True, help="the session as the challenger's gate publishes it, or its out/")
     c.add_argument("--ledger", action="append", required=True, help="a head of the auditor's ledger, once for each")
     c.add_argument("--pins", type=Path, required=True, help="the challenger host's pins log as infra published it, a "
                    "line a pin (its `challenger-pins head` label)")
