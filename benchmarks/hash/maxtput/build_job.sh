@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # A Build of record for a model that has none (Llama-3.1-8B on the RTX PRO 6000): circuits' served-match alone, as their Build
 # job (r20261018-211943-d337's served_job.sh, MODE=match+commit) runs it, without the commit stage. Through `research run --cwd source`
-# on one GPU, with the match workload sent as inputs/match.json (circuits' llama_match.json). Writes out/build.json (what
-# launch.sh's PIN_ART_RTX names: this run's art, path out/build.json), match.json and the compile records.
+# on one GPU, with the match workload sent as inputs/match.json (circuits' llama_match.json). Writes out/build.json (a pin
+# names it as this run's art, path out/build.json), match.json and the compile records.
 #
 # Env: CASE (LLAMA31_8B), CKPT_REPO (unsloth--Llama-3.1-8B), CKPT_REV, VERITY_BENCH_VENV, NATIVE_COLLECT_BUILD, HF_HOME, MATCH_EXTRA.
 set -uo pipefail

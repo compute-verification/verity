@@ -154,7 +154,7 @@ def KPrimeExactAtEquality : Prop := (kPrime 1 (1 / 512) 7 8 1).toOption = some 3
 
 /-! ## What is public -/
 
-/-- `PUBLIC` is the draft's six items and the rows' fixed length (Daniel, 19 Oct, ASK-39), each of one of the four kinds
+/-- `PUBLIC` is the draft's six items and the rows' fixed length, each of one of the four kinds
 a protocol may make public, and a registration carries the ones that do not come from the outcome. -/
 def PublicItems : Prop :=
   publicItems.map (·.item) = ["verdict", "work", "check", "sampling", "length", "drawn", "root_W"] ∧
