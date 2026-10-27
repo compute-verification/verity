@@ -1379,7 +1379,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     ``pins.jsonl``, the gate's ``pins``; none refuses every challenge phase: `pouw_h1_challenger.pins_head`) and `main` the
     auditor's own first-parent history of main (none refuses every challenge phase, as `challenger.pinned_session` refuses
     it). With `window_file` (the window's ``{root}``) `directory` is
-    the challenger run's ``out/`` (``research fetch RUN --all``), as the challenge phase the longest of the heads, each extending
+    the challenger run's ``out/``, fetched whole, as the challenge phase the longest of the heads, each extending
     the others, opens and ends for the window (`trusted_rounds_reason`); without it the ledger is read as the newest that
     the others extend (`Ledger.load`, core's check), the window held to the challenge phase it opened for its Commit's root
     (`session_reason`), `directory` being that challenge phase's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
