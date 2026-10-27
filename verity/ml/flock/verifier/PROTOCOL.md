@@ -431,7 +431,8 @@ nonce. The server answers with the root and the session tree's hm96 key, drawn a
 revealed before that answer. `Flock.CoinTree` checks the record; the openings need no check, since
 the commitment protects the prover (§7 of the spec).
 - **`Hello`.** `coins` is `{"block", "nonce", "rounds_log", "scheme", "streams"}`. The verifier's own `Hello` (`helloOf`
-  with `Coins.tree`) leaves the nonce empty.
+  with `Coins.tree`) leaves the nonce empty. Its `rounds_log` is the statement's: setup sizes the tree to the most rounds
+  any table's rep draws (`Coins.sized`, `zkRounds`).
 - **R7** (`CoinTree.checkHello`). The received `coins.nonce` must be 64 lowercase hex digits. The verifier's
   `Hello` with it, serialized canonically, must equal the received string byte for byte.
 - **The record's `coin_tree`** (`CoinTree.checkRecord`).

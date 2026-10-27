@@ -203,7 +203,7 @@ theorem setupH_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     (∃ pop, HmRow.loadPublic tags st.c pf = .ok pop ∧ ∀ d, draw = some d → HmRow.drawn st.c pop d = .ok st.pub) ∧
       HmRow.checkPublic st.c st.pub = .ok () ∧ st.n = st.pub.n ∧
       st.sigma = Sha512.hash (tags.sigmaTag.toUTF8 ++ st.c.sha ++ st.digest ++ st.pub.sha) ∧
-      Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello := by
+      Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) (coins.sized st.zkRounds) = .ok st.hello := by
   cases draw <;> unfold Stmt.setupH at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
     repeat' walk_step
   all_goals
@@ -221,7 +221,8 @@ theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
     (∃ c pop, HmRow.loadPublic tags c pf = .ok pop ∧ ∀ d, draw = some d → HmRow.drawn c pop d = .ok st.pub) ∧
       (∀ d, st.pub.header.getObjVal? "unit_draw" = .ok d →
         ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧ u.proved.size = st.n) ∧
-      0 < st.sigma.size ∧ Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello := by
+      0 < st.sigma.size ∧
+        Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) (coins.sized st.zkRounds) = .ok st.hello := by
   rcases Bool.eq_false_or_eq_true tags.hiddenOutputs with hh | hh
   · rw [HiddenExec.setupOne_hidden hh] at h
     have S := Hidden.setupHidden_spec' h
@@ -333,10 +334,10 @@ theorem ofHello_none_of (S : Claims.JsonSpec printJ Flock.canon) {L : List (Stri
 
 /-- **The plain verifier's hello names no coin tree**: at the OS's coins or a seed's, `CoinTree.ofHello` reads none. -/
 theorem ofHello_helloOf (S : Claims.JsonSpec printJ Flock.canon) {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
-    {coins : Coins} {hello : String} (hc : coins = .os ∨ coins = .seed)
-    (h : Flock.helloOf tags sigma mPts coins = .ok hello) : CoinTree.ofHello hello = none := by
+    {coins : Coins} {r : ℕ} {hello : String} (hc : coins = .os ∨ coins = .seed)
+    (h : Flock.helloOf tags sigma mPts (coins.sized r) = .ok hello) : CoinTree.ofHello hello = none := by
   unfold Flock.helloOf at h
-  rcases hc with rfl | rfl <;> dsimp only at h <;> repeat' split at h
+  rcases hc with rfl | rfl <;> dsimp only [Coins.sized] at h <;> repeat' split at h
   all_goals
     refine ofHello_none_of S (by simp) ?hg ?hc h
     case hc => first | (left; simp; done) | (right; exact ⟨tags.coinScheme, by simp⟩)

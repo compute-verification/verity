@@ -115,7 +115,7 @@ private theorem setupH_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
     (∃ pop, HmRow.loadPublic tags st.c pf = .ok pop ∧ ∀ d, draw = some d → HmRow.drawn st.c pop d = .ok st.pub) ∧
       HmRow.checkPublic st.c st.pub = .ok () ∧ st.n = st.pub.n ∧
       st.sigma = Sha512.hash (tags.sigmaTag.toUTF8 ++ st.c.sha ++ st.digest ++ st.pub.sha) ∧
-      Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello := by
+      Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) (coins.sized st.zkRounds) = .ok st.hello := by
   cases draw <;> unfold Stmt.setupH at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
     repeat' walk_step
   all_goals
@@ -133,7 +133,8 @@ private theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
     (∃ c pop, HmRow.loadPublic tags c pf = .ok pop ∧ ∀ d, draw = some d → HmRow.drawn c pop d = .ok st.pub) ∧
       (∀ d, st.pub.header.getObjVal? "unit_draw" = .ok d →
         ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧ u.proved.size = st.n) ∧
-      0 < st.sigma.size ∧ Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello := by
+      0 < st.sigma.size ∧
+        Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) (coins.sized st.zkRounds) = .ok st.hello := by
   rcases Bool.eq_false_or_eq_true tags.hiddenOutputs with hh | hh
   · rw [FlockSoundness.Discharge.HiddenExec.setupOne_hidden hh] at h
     have S := FlockSoundness.Discharge.Hidden.setupHidden_spec' h
@@ -333,6 +334,7 @@ theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpe
   have hco : s.read.coins = .tree (Zk.coinSpec (s.read.I.tags.tableNames s.read.I.count)) := by
     simp [Readable.Read.coins, hzk, FlockSoundness.Discharge.ZkExec.zkCoins]
   rw [hco] at hhello
+  simp only [Coins.sized] at hhello
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 hdr
   have hu := unitDraw_of S hl (hd d hdd)
   have hU : spec.unitDraw = some d := by

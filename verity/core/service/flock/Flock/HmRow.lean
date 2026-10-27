@@ -1584,7 +1584,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
     for (i, cc) in d do h := pushLe32 (pushLe32 h i) cc
   let digest := Sha512.hash h
   let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
-  let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
+  let hello ← helloOf tags sigma (PT_LOCAL + nbl) (coins.sized (zkRounds m c.kLog regions.size))
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
@@ -2222,7 +2222,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
     for (i, cc) in d do h := pushLe32 (pushLe32 h i) cc
   let digest := Sha512.hash h
   let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
-  let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
+  let hello ← helloOf tags sigma (PT_LOCAL + nbl) (coins.sized (zkRounds m c.kLog regions.size))
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
@@ -2310,7 +2310,7 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   if sts.any (·.mPts != mPts) then throw "tables: the tables' link points have different lengths"
   let sigma := Sha512.hash (sts.foldl (fun h st => h ++ st.sigma) (pushLe64 tt.sigmaTag.toUTF8 count))
   let names := tags.tableNames count
-  let hello ← helloOf tags sigma mPts coins names
+  let hello ← helloOf tags sigma mPts (coins.sized (sts.foldl (fun r st => max r st.zkRounds) 0)) names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
             unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
 
@@ -2374,7 +2374,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
     for (i, cc) in d do h := pushLe32 (pushLe32 h i) cc
   let digest := Sha512.hash h
   let sigma := Sha512.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
-  let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
+  let hello ← helloOf tags sigma (PT_LOCAL + nbl) (coins.sized (zkRounds m c.kLog regions.size))
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
@@ -2461,7 +2461,7 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
   if sts.any (·.mPts != mPts) then throw "tables: the tables' link points have different lengths"
   let sigma := Sha512.hash (sts.foldl (fun h st => h ++ st.sigma) (pushLe64 tt.sigmaTag.toUTF8 count))
   let names := tags.tableNames count
-  let hello ← helloOf tags sigma mPts coins names
+  let hello ← helloOf tags sigma mPts (coins.sized (sts.foldl (fun r st => max r st.zkRounds) 0)) names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
             unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
 

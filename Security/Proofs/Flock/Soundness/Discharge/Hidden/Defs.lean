@@ -101,7 +101,7 @@ structure Spec (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List 
   regions : HmOut.regions st.c st.pub = .ok st.regions
   inRange : checkInRange st.c.kLog st.regions.size (PT_LOCAL + st.nbl) = .ok ()
   sigma : st.sigma = Sha512.hash (tags.sigmaTag.toUTF8 ++ st.c.sha ++ st.digest ++ st.pub.sha)
-  hello : helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello
+  hello : helloOf tags st.sigma (PT_LOCAL + st.nbl) (coins.sized st.zkRounds) = .ok st.hello
 
 /-! ## The frozen statements -/
 

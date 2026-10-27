@@ -151,8 +151,12 @@ coins.
     prover could have drawn itself. The step is statistical only (no hash property, no `hash-derived-key`, no CRS):
     the key is fresh for each session.
   - *N* counts every leaf committed under the session's key, opened or not: `|streams| · 2^rounds_log`
-    (`CoinTree::build`; the `SHA-512(PAD)` padding is no leaf). flock-circuit's schedule (`coin_spec_of`) has the
-    session's stream plus two reps per table at `rounds_log = 9`: `N = (1 + 2J)·512`, so `N·2^-256 < 2^-245` at J = 1.
+    (`CoinTree::build`; the `SHA-512(PAD)` padding is no leaf). The schedule is the statement's (`Flock.zkRounds`,
+    `Coins.sized`; flock-circuit's `coin_spec_of`): the session's stream plus two reps per table, at `rounds_log` the
+    ceiling of `log₂` of the most rounds any table's rep draws, so `N = (1 + 2J)·2^rounds_log`. The largest schedule the
+    verifier admits is `rounds_log = 12` (`k_log ≤ 27`, `m ≤ 35`, at most 1024 regions: `Stmt.checkInRange`) at
+    `J = Tags.MAX_TABLES = 64`: `N ≤ 129·2^12 < 2^19`, so `N·2^-256 < 2^-237`. A RoPE rep draws about 100 rounds
+    (`rounds_log = 7`): `N·2^-256 < 2^-247` at J = 1.
   - *What the bound needs.* The salts are uniform and independent, one per leaf, never reused. The key is independent
     of the salts, drawn after the prover's nonce, and never reused across sessions. Both come from `/dev/urandom`, which
     is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the draw at `Hello`. The

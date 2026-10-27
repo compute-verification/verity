@@ -422,8 +422,10 @@ against every committed coin sequence: the prover must also refuse a zerocheck o
 **The coin commitment** (`src/coin_tree.rs`, the keyed coin tree `coin-tree/hm96-sha512/v2`,
 `SessionConfig::coin_tree`; the verifier's side is `verity/ml/flock/verifier/PROTOCOL.md` §7.4).
 - The schedule is pinned in `Hello` (`coins: {block, nonce, rounds_log, scheme, streams}`): streams `session`,
-  `circuit/rep0`, `circuit/rep1`; `2^9` rounds per stream; blocks of 512 coins. A RoPE rep uses 100 rounds and at most
-  277 coins in one (level 0's queries); the session stream's round 0 is the two link points.
+  `circuit/rep0`, `circuit/rep1`; blocks of 512 coins. The rounds per stream are the statement's, `2^⌈log₂ R⌉` for the
+  most any table's rep draws, `R = m + k_log + k_0 + 11 L + 2·|regions| + 8` over fast100's `L + 1` levels (Lean's
+  `Flock.zkRounds`; `coin_spec_of`): a RoPE rep draws about 100 (`2^7`), at most 277 coins in one (level 0's queries); the
+  session stream's round 0 is the two link points.
 - The tree is keyed to the session: the prover's `Hello` carries a fresh 32-byte nonce `ν`, and every SHA-512 input of
   the tree is prefixed by it, `H_ν(m) = SHA-512(ν ‖ m)`.
 - At `Hello` the verifier draws a fresh 256-byte hm96 key `K` for this session's tree (never reused, never revealed

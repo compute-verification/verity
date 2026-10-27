@@ -588,12 +588,22 @@ fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     .map_err(|e| e.chars().take(200).collect::<String>())
 }
 
+/// The rounds of a `--zk` rep's coin stream (Lean's `Flock.zkRounds`): the masked zerocheck and lincheck's `m + k_log − 6`,
+/// the ring switch's one a claim and its batching coin (two, and one a region at each of the two link points), Ligerito's
+/// `k_0 + 11 R + 7` over its `R + 1` levels, and the inner proof's 4.
+fn zk_rounds(st: &Stmt) -> usize {
+    let lc = params(st.m, LigeritoProfile::Fast100).ligerito_prover_config().expect("Ligerito config");
+    st.m + st.c.k_log - 6 + 3 + 2 * st.regions.len() + lc.initial_k + 11 * lc.recursive_steps + 7 + 4
+}
+
 /// M2's committed coin schedule: the session's stream (the link points), then every table's two reps, in table order (a
-/// subtree per table and rep); 512 rounds of at most 512 coins each (a RoPE rep uses 100 rounds, at most 218 coins in one).
-fn coin_spec_of(tables: &[String]) -> flock_live::coin_tree::Spec {
+/// subtree per table and rep); `2^⌈log₂ R⌉` rounds a stream for the most `R` any table's rep draws ([`zk_rounds`], about
+/// 100 for a RoPE rep), of at most 512 coins each (at most 277 in one).
+fn coin_spec_of(tabs: &[(&str, &Stmt, &Instances)]) -> flock_live::coin_tree::Spec {
     use flock_live::coin_tree::{SESSION, Spec};
-    let streams = std::iter::once(SESSION.to_string()).chain(tables.iter().flat_map(|t| [rep_stream(t, 0), rep_stream(t, 1)])).collect();
-    Spec { streams, rounds_log: 9, block: 512 }
+    let streams = std::iter::once(SESSION.to_string()).chain(tabs.iter().flat_map(|(t, ..)| [rep_stream(t, 0), rep_stream(t, 1)])).collect();
+    let rounds = tabs.iter().map(|(_, st, _)| zk_rounds(st)).max().unwrap_or(0);
+    Spec { streams, rounds_log: rounds.next_power_of_two().trailing_zeros() as usize, block: 512 }
 }
 
 /// A test harness's fixed verifier coins: M0's step-0 seed, or under M2 the committed schedule's random tape.
@@ -626,7 +636,7 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
     cfg.link = Some(LinkSpec { sigma: session_sigma(tabs).to_vec(), m: st.m_pts, points: 2 });
     // M2 (--zk): every coin committed at Hello and opened round by round; M0: the step-0 seed, or OS coins (seed_coins)
     if is_zk(st) {
-        cfg.coin_tree = Some(coin_spec_of(&tabs.iter().map(|t| t.0.to_string()).collect::<Vec<_>>()));
+        cfg.coin_tree = Some(coin_spec_of(tabs));
     } else {
         cfg.coin_seed = seed_coins();
     }
@@ -2651,7 +2661,7 @@ fn complete(view: &View) -> bool {
 /// each opening checked against V*'s commitment as the prover checks it; and the link points.
 fn extracted(tabs: &Tables, view: &View) -> Result<(Vec<Vec<F128>>, Vec<Vec<Vec<F128>>>), String> {
     use flock_live::coin_tree::{KEY_BYTES, Rules, check, hello_nonce};
-    let (spec, streams, m_pts) = (coin_spec_of(&tabs.names()), tabs.streams(), tabs.list[0].st.m_pts);
+    let (spec, streams, m_pts) = (coin_spec_of(&tabs.parts()), tabs.streams(), tabs.list[0].st.m_pts);
     let mut tree: Option<([u8; 64], Rules)> = None;
     let (mut points, mut reps): (Vec<Vec<F128>>, Vec<Vec<Vec<F128>>>) = (Vec::new(), vec![Vec::new(); streams.len()]);
     for (req, resp) in view {
@@ -2719,7 +2729,7 @@ fn rewind(tabs: &Tables, v: impl Transport + 'static, hello: &str, points: &[Vec
         }
         sims.push((bincode::serialize(&(&c, &pr, &inner)).unwrap(), merkle_digest_bytes(&c.cap).to_vec(), rec.rounds));
     }
-    let t: SharedTransport = shared(flock_live::coin_tree::Checked::new(v, coin_spec_of(&tabs.names())));
+    let t: SharedTransport = shared(flock_live::coin_tree::Checked::new(v));
     macro_rules! expect {
         ($req:expr, $ok:pat) => {
             match call(&t, $req)? {
@@ -3411,7 +3421,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     // M2: every coin the verifier sends is checked against its step-0 commitment before the prover uses it; under the
     // firewall the Lean session loop checks them (`flock-firewall session`), and only the coins come back
     let t: SharedTransport = if is_zk(st) && !plan.lean_session {
-        shared(flock_live::coin_tree::Checked::new(SharedCall(t), coin_spec_of(&names)))
+        shared(flock_live::coin_tree::Checked::new(SharedCall(t)))
     } else {
         t
     };

@@ -8,6 +8,7 @@ import Flock.RowLeaf
 import Flock.Piop
 import Flock.Merkle
 import Flock.Record
+import Flock.Schedule
 import Flock.TmplSplit
 
 namespace Flock
@@ -175,6 +176,24 @@ inductive Coins where
   | tree (spec : CoinTree.Spec)
   deriving BEq, Inhabited
 
+/-- The rounds of a `--zk` rep's stream (`Zk.verifyRep`'s coin draws) for a table of `m` variables, `kLog` and `regions`
+regions: the masked zerocheck and lincheck's `m + kLog − 6`, the ring switch's one a claim and its batching coin (the two of
+`abcClaims`, and one a region at each of the two link points, `extraClaims`), Ligerito's `k_0 + 11 R + 7` over `fast100`'s
+`R + 1` levels, and the inner proof's 4. -/
+def zkRounds (m kLog regions : Nat) : Nat :=
+  let lig := match fast100 m with
+    | some s => s.k0 + 11 * (s.levels.size - 1) + 7
+    | none => 0
+  m + kLog - 6 + (3 + 2 * regions) + lig + 4
+
+/-- `coins` for tables whose rep streams take at most `rounds` rounds: a keyed coin tree commits `2^⌈log₂ rounds⌉` rounds a
+stream, whatever its spec had; other coins are as they are. -/
+def Coins.sized (coins : Coins) (rounds : Nat) : Coins :=
+  match coins with
+  | .tree s => .tree { s with roundsLog := rounds.nextPowerOfTwo.log2 }
+  | .os => .os
+  | .seed => .seed
+
 /-- The tags a session on `coins` is verified under: on `os` coins, a statement whose prover names its coin mode
 (`Tags.liveOs`) binds the live-OS identity (`Tags.liveOsIdentity`) in its statement digest; otherwise the tags as they are. -/
 def Tags.withCoins (t : Tags) (coins : Coins) : Tags :=
@@ -239,10 +258,13 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
     for (i, cc) in d do h := pushLe32 (pushLe32 h i) cc
   let digest := Sha256.hash h
   let sigma := Sha256.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
-  let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
+  let hello ← helloOf tags sigma (PT_LOCAL + nbl) (coins.sized (zkRounds m c.kLog regions.size))
   return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello, merkle }
 
 namespace Stmt
+
+/-- The rounds of a `--zk` rep's stream of the statement (`zkRounds`). -/
+def zkRounds (st : Stmt) : Nat := Flock.zkRounds st.m st.c.kLog st.regions.size
 
 /-- A one-table session of the statement. -/
 def spec (st : Stmt) : SessionSpec :=

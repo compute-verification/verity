@@ -194,6 +194,20 @@ pub fn hello_nonce(hello: &str) -> Result<[u8; NONCE_BYTES], String> {
     Ok(out)
 }
 
+/// The committed schedule the prover's `Hello` pins (`coins`: the scheme, `streams`, `rounds_log`, `block`), as the Lean
+/// firewall reads it (`CoinTree.ofHello`): the statement's, so a drawn statement's schedule is the one it sends.
+pub fn hello_spec(hello: &str) -> Result<Spec, String> {
+    let v: serde_json::Value = serde_json::from_str(hello).map_err(|e| format!("Hello is not JSON: {e}"))?;
+    let c = &v["coins"];
+    if c["scheme"].as_str() != Some(SCHEME) {
+        return Err(format!("Hello's coins are not {SCHEME}"));
+    }
+    let streams = c["streams"].as_array().and_then(|s| s.iter().map(|x| x.as_str().map(String::from)).collect::<Option<Vec<_>>>())
+        .ok_or("Hello's coins carry no stream list (coins.streams)")?;
+    let n = |k: &str| c[k].as_u64().map(|x| x as usize).ok_or(format!("Hello's coins carry no {k}"));
+    Ok(Spec { streams, rounds_log: n("rounds_log")?, block: n("block")? })
+}
+
 /// The session stream's coin count from the prover's `Hello`: the link points, `link.points · link.m` (the server's `Commit`
 /// opens exactly these), 0 without a link.
 pub fn hello_links(hello: &str) -> usize {
@@ -375,8 +389,8 @@ pub fn check(spec: &Spec, rules: &Rules, root: &[u8; 64], stream: usize, round: 
     Ok(coins)
 }
 
-/// The prover's transport under a committed coin schedule: takes its own nonce and the link points' count from the `Hello`
-/// it sends and the root and session key from `Hello`'s answer (exactly 20 words, the key's bit 2047 zero), and checks every
+/// The prover's transport under a committed coin schedule: takes its own nonce, the schedule and the link points' count from
+/// the `Hello` it sends and the root and session key from `Hello`'s answer (exactly 20 words, the key's bit 2047 zero), and checks every
 /// coin the verifier sends (the link points, every round) against them before handing it on, stripped of its opening.
 /// Anything else stops the prover there (a refusal), before it answers anything that depends on it. A firewalled session's
 /// coin check of record is the Lean session loop's instead (`Flock.Firewall.Session`), which owns its connection.
@@ -393,7 +407,8 @@ pub struct Checked<T: Transport> {
 }
 
 impl<T: Transport> Checked<T> {
-    pub fn new(inner: T, spec: Spec) -> Self {
+    pub fn new(inner: T) -> Self {
+        let spec = Spec { streams: Vec::new(), rounds_log: 0, block: 0 };
         Checked { inner, spec, nonce: None, links: 0, rules: None, root: None, rounds: Default::default(), opened: Default::default() }
     }
     pub fn root(&self) -> Option<[u8; 64]> {
@@ -420,8 +435,8 @@ impl<T: Transport> Transport for Checked<T> {
     fn call(&mut self, req: Req) -> Result<Resp, String> {
         let what = match &req {
             Req::Hello(h) => {
-                match hello_nonce(h) {
-                    Ok(n) => self.nonce = Some(n),
+                match hello_nonce(h).and_then(|n| Ok((n, hello_spec(h)?))) {
+                    Ok((n, s)) => (self.nonce, self.spec) = (Some(n), s),
                     Err(e) => return Ok(Resp::Refused(format!("PROVER-STOPPED: {e}"))),
                 }
                 self.links = hello_links(h);
@@ -625,7 +640,7 @@ mod tests {
     fn the_prover_refuses_a_malformed_answer_or_its_own_nonceless_hello() {
         let t = CoinTree::draw(spec_spec(), &NONCE, &mut spec_tape());
         let refused = |words: Vec<F128>, nonce: Option<&str>| -> (bool, bool) {
-            let mut c = Checked::new(Answers(words, false), spec_spec());
+            let mut c = Checked::new(Answers(words, false));
             let r = c.call(Req::Hello(hello(nonce))).unwrap();
             (matches!(r, Resp::Refused(ref e) if e.starts_with("PROVER-STOPPED")), c.inner.1)
         };
@@ -665,7 +680,7 @@ mod tests {
         let mut script = std::collections::VecDeque::from([c.answer.clone().map_or(Resp::Ok, Resp::Coins)]);
         script.extend(c.opens.iter().map(|(_, _, w)| Resp::Coins(w.clone())));
         let left = script.len();
-        let mut ch = Checked::new(Script(script), spec_spec());
+        let mut ch = Checked::new(Script(script));
         let mut steps = vec![json!({"hello": c.hello})];
         let r = ch.call(Req::Hello(c.hello.clone())).unwrap();
         if let (true, Some(w)) = (ch.inner.0.len() < left, &c.answer) {

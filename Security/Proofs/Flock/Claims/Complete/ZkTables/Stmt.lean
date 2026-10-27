@@ -350,7 +350,8 @@ theorem setupTables_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
     spec.unitDraw = draw ∧ spec.sigma.size = 64 ∧
       (∀ d, draw = some d → ∃ D, Draw.UnitDraw.ofJson d = .ok D ∧
         ((∃ k, D.law = .subset k) ∨ ∃ K st, D.law = .stratified K st) ∧ spec.instances = D.units.size) ∧
-      Flock.helloOf tags spec.sigma spec.mPts coins (tags.tableNames count) = .ok spec.hello := by
+      Flock.helloOf tags spec.sigma spec.mPts (coins.sized (sts.foldl (fun r st => max r st.zkRounds) 0))
+        (tags.tableNames count) = .ok spec.hello := by
   unfold Stmt.setupTables at h
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp0 at h
   replace h : jp0 () = .ok (spec, sts) := by
@@ -441,6 +442,7 @@ theorem Case.stmtAt (S : JsonSpec) (c : Case H rel) (hc : 1 < c.sts.size) : Stmt
   have hco : c.s.read.coins = .tree (Zk.coinSpec (c.s.read.I.tags.tableNames c.s.read.I.count)) := by
     simp [Readable.Read.coins, hzk, FlockSoundness.Discharge.ZkExec.zkCoins]
   rw [hco] at hh
+  simp only [Coins.sized] at hh
   obtain ⟨m, kvs, hp, hm, hkv, hmg, hg⟩ := hello_ok S hh
   refine ⟨by rw [hsig]; omega, ?_, hu, m, kvs, hp, hm, hkv, hmg, hg⟩
   unfold DrawOk

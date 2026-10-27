@@ -45,7 +45,7 @@ structure SpecP (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List
   regions : ∃ ro ri, HmOut.regions st.c st.pub = .ok ro ∧ HmIn.regions st.c pi st.pub = .ok ri ∧ st.regions = ro ++ ri
   inRange : checkInRange st.c.kLog st.regions.size (PT_LOCAL + st.nbl) = .ok ()
   sigma : st.sigma = Sha512.hash (tags.sigmaTag.toUTF8 ++ st.c.sha ++ st.digest ++ st.pub.sha)
-  hello : helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello
+  hello : helloOf tags st.sigma (PT_LOCAL + st.nbl) (coins.sized st.zkRounds) = .ok st.hello
 
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Json} {program own : Option ByteArray} {st : Stmt}

@@ -166,6 +166,7 @@ theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
     simp only [Readable.Read.coins, hz, ite_true]
     exact ⟨_, rfl⟩
   rw [hcs] at hhello
+  simp only [Coins.sized] at hhello
   refine ⟨by rw [hspec]; exact hsig, ?_, by rw [hU, hdd], by rw [hspec]; exact helloZk_of S hhello⟩
   unfold DrawOk
   rw [hU]

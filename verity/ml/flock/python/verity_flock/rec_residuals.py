@@ -83,8 +83,8 @@ V_VALUE = "rec-v"
 # the META key that says the statement is over a holo shape's parts (`rec_algebra.Shape.holo`), written only when true: the
 # unit's name does not say, and the verifier (`Flock.RecResiduals.HOLO_KEY`) builds the one net it selects, absent meaning plain
 HOLO_KEY = "holo"
-# a part's regions, at most: each region is two claims, each claim a round of the rep's coin stream, and a rep's other rounds
-# (about 107 to 122 at m = 29 to 32) must fit beside them in --zk's committed schedule of 512 (`coin_spec_of`)
+# a part's regions, at most: --zk's committed schedule grows with them (two rounds a region, `Flock.zkRounds`), and the
+# slot budget below assumes its hm96 slots at most this many
 MAX_REGIONS = 64
 # a part's sha512x3 slots per instance, at most (`slots`): 160 slots of 2^18 bits (2^25.32) beside its hm96 slots' 2^24 (at
 # most MAX_REGIONS) leave room for a 2^22 unit in a 2^26 block (for a 2^23 unit, as at 12 claims, 159 do), below
