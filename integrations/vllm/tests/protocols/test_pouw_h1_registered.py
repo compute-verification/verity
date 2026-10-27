@@ -50,6 +50,12 @@ def test_a_value_is_what_core_commits(n, w, binding):
     ps = [n - 1, 0, n // 2]
     (rows, salts, head), want = got.statement(ps), ref.statement(ps)
     assert (rows, salts, head) == want
+    assert got.salts.at(ps) == b"".join(want[1]) and got.rows.at(ps).tolist() == [list(r) for r in want[0]]
+    for bad in ([n], [-1]):
+        with pytest.raises(IndexError):
+            got.salts.at(bad)
+        with pytest.raises(IndexError):
+            got.rows.at(bad)
     assert all(G.verify_read(got.domain, ref.root, p, got.bcs[p], got.path(p), G.SCHEMA_V2) for p in range(n))
 
 
@@ -91,6 +97,8 @@ def test_a_windows_rows_arent_kept_unless_asked():
     assert got.entry() == ref.entry() and got.levels == ref.levels and len(got.rows) == 3
     with pytest.raises(LookupError, match="rebuilds"):
         got.rows[0]
+    with pytest.raises(LookupError, match="rebuilds"):
+        got.rows.at([0])
     with pytest.raises(LookupError):
         got.statement([0])
     assert got.salts[-1] == ref.salts[2] and got.salts[1:] == list(ref.salts[1:])
