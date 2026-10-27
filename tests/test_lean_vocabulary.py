@@ -18,8 +18,15 @@ Each hit is one of:
   (read from its `Field := X` lines), one per protocol by design.
 - **known**: everything else, listed in ``KNOWN`` as ``"path::Qualified.Name": "reason (owner)"``, where the reason is
   "duplicate of X: becomes …" or "homonym, what it is: rename …", and the owner is the registry's owner of the path
-  (`.agents/skills/using-slack/registry.json`). ``KNOWN`` only shrinks: an unlisted hit fails, and so does an entry, a
-  mirror or a canonical that is no longer a hit.
+  (`.agents/skills/using-slack/registry.json`).
+
+An unlisted hit fails, and so does a canonical that is no longer a hit. A ``KNOWN`` line or ``MIRRORS`` entry that no
+longer matches a hit (its declaration went, or became a canonical, a mirror or exempt) is stale, and doesn't fail, so a
+change that removes a duplicate needn't touch this file. `python tests/test_lean_vocabulary.py` lists the stale entries
+under "stale (delete with --prune)", and `python tests/test_lean_vocabulary.py --prune` rewrites ``KNOWN`` without its
+stale lines (a stale ``MIRRORS`` entry is deleted by hand). ``KNOWN`` only shrinks, by count: it holds at most
+``KNOWN_MAX`` lines. A new line needs lean's review and raises ``KNOWN_MAX`` in the same change; lowering it is welcome in
+any change.
 
 The scan reads every tracked `.py` and `.lean` file (`git ls-files`, so `.lake`, `.venv` and build trees are never read)
 except:
@@ -35,6 +42,7 @@ import functools
 import json
 import re
 import subprocess
+import sys
 import tomllib
 from collections import defaultdict
 from dataclasses import dataclass
@@ -361,8 +369,11 @@ def slots(s: Scan) -> set[str]:
     return {k for path, _field, name, scopes, opens in s.fields if (k := resolve(name, path, scopes, opens, s))}
 
 
+#: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; lower it whenever ``KNOWN`` shrinks.
+KNOWN_MAX = 385
+
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
-#: Delete a line when its declaration goes; never add one for new code (read the canonical, or rename).
+#: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
 KNOWN: dict[str, str] = {
     # Security/Definitions/
     "Security/Definitions/Accounting/Bandwidth/Game.lean::Bandwidth.Device":
@@ -1082,12 +1093,34 @@ def classify(s: Scan) -> dict[str, tuple[str, Hit, str]]:
     """Each hit's key: ``(concept, hit, status)``, the status what the guard makes of it (this module's docstring), or
     ``unlisted``."""
     canonical, protocol, out = {k for keys in CANONICAL.values() for k in keys}, slots(s), {}
+    keys = {h.key for defs in s.hits.values() for h in defs}
     for concept, defs in s.hits.items():
         for h in defs:
-            out[h.key] = (concept, h, "canonical" if h.key in canonical else "mirror" if h.key in MIRRORS
+            out[h.key] = (concept, h, "canonical" if h.key in canonical
+                          else "mirror" if MIRRORS.get(h.key, ("",))[0] in keys
                           else "reads the canonical" if reads_canonical(h, set(CANONICAL.get(concept, ())), s)
                           else "a protocol's slot" if h.key in protocol else "known" if h.key in KNOWN else "unlisted")
     return out
+
+
+def stale(found: dict[str, tuple[str, Hit, str]]) -> tuple[list[str], list[str]]:
+    """The ``KNOWN`` lines and the ``MIRRORS`` entries that no longer match a hit of `found` (``classify``'s)."""
+    return ([k for k in KNOWN if k not in found or found[k][2] != "known"],
+            [py for py, (lean, _, _) in MIRRORS.items() if py not in found or lean not in found])
+
+
+_ENTRY = re.compile(r'^    "([^"\n]+)":(?: "[^\n]*",| *\n        "[^\n]*",)\n', re.M)
+_EMPTY_HEADING = re.compile(r"^    # [^\n]*\n(?=    # |\Z)", re.M)
+_KNOWN_OPEN, _KNOWN_CLOSE = "\nKNOWN: dict[str, str] = {\n", "\n}\n"
+
+
+def pruned(source: str, drop: set[str]) -> str:
+    """`source`, this module's text, with the ``KNOWN`` lines of the keys in `drop` deleted, and the headings they leave
+    empty."""
+    head, _, rest = source.partition(_KNOWN_OPEN)
+    block, _, tail = rest.partition(_KNOWN_CLOSE)
+    block = _ENTRY.sub(lambda m: "" if m.group(1) in drop else m.group(0), block + "\n")
+    return head + _KNOWN_OPEN + _EMPTY_HEADING.sub("", block) + _KNOWN_CLOSE.lstrip("\n") + tail
 
 
 def _read(concept: str) -> str:
@@ -1101,26 +1134,25 @@ def test_every_hit_is_canonical_or_listed():
     assert len(found) >= 300, f"the scan found only {len(found)} declarations of the concepts: has the tree moved?"
     unlisted = [f"{k} (line {h.line}) declares {concept} again: read {_read(concept)}, or rename it if it is another thing"
                 for k, (concept, h, status) in sorted(found.items()) if status == "unlisted"]
-    assert not unlisted, (f"declarations of a concept that are not its canonical object ({FIX}); KNOWN never grows:\n  "
+    assert not unlisted, (f"declarations of a concept that are not its canonical object ({FIX}):\n  "
                           + "\n  ".join(unlisted))
 
 
-def test_known_only_shrinks():
-    found = classify(_scanned())
-    stale = [f'{k}: {"no longer a declaration of its concept" if k not in found else "now " + found[k][2]}'
-             for k in KNOWN if k not in found or found[k][2] != "known"]
-    assert not stale, "KNOWN entries the guard no longer needs; delete their lines:\n  " + "\n  ".join(stale)
+def test_known_shrinks_by_count():
+    assert len(KNOWN) <= KNOWN_MAX, (f"KNOWN has {len(KNOWN)} lines, above KNOWN_MAX = {KNOWN_MAX}: rename or read the "
+                                     "canonical; a new KNOWN line needs lean's review, and raises KNOWN_MAX in the same PR")
 
 
 def test_known_reasons_name_their_owner():
+    """Every line's reason has the form; a line that still matches a hit names its path's owner."""
     from research.slack import owner
-    registry = json.loads((ROOT / REGISTRY).read_text())
+    registry, found = json.loads((ROOT / REGISTRY).read_text()), classify(_scanned())
     bad = []
     for k, why in KNOWN.items():
         m, own = _REASON.match(why), owner(registry, k.partition("::")[0])
         if not m:
             bad.append(f'{k}: the reason is "duplicate of X: becomes …" or "homonym, what it is: rename …", then "({own})"')
-        elif m.group(1) != own:
+        elif k in found and found[k][2] == "known" and m.group(1) != own:
             bad.append(f"{k}: owned by {own} ({REGISTRY}), not {m.group(1)}")
     assert not bad, "\n  ".join(["KNOWN reasons:"] + bad)
 
@@ -1156,8 +1188,8 @@ def test_mirrors_name_their_port():
     for py, (lean, port, why) in MIRRORS.items():
         if _world(py.partition("::")[0]) != "py" or _world(lean.partition("::")[0]) != "code":
             bad.append(f"{py}: a mirror is a Python class held to a code-Lean declaration")
-        elif py not in concept_of or concept_of.get(lean) != concept_of[py]:
-            bad.append(f"{py}: it and {lean} are no longer declarations of one concept; delete the entry or fix its keys")
+        elif py in concept_of and lean in concept_of and concept_of[lean] != concept_of[py]:
+            bad.append(f"{py}: it and {lean} declare different concepts; fix the entry's keys")
         if port not in exes:
             bad.append(f"{py}: {port!r} is no `[[lean_exe]]` of a tracked lakefile.toml; name the port that tests the pair")
         if not why:
@@ -1232,6 +1264,36 @@ def test_readings_and_slots_are_exempt():
     assert slots(s) == {f"{pouw}::Pouw.Registration"}
 
 
+def test_prune_deletes_stale_lines():
+    src = ('x = 1\nKNOWN: dict[str, str] = {\n    # a/\n    "a::A": "homonym, a: rename (o)",\n    # b/\n'
+           '    "b::B":\n        "homonym, b: rename (o)",\n    "b::C": "homonym, c: rename (o)",\n}\n\ny = 2\n')
+    assert pruned(src, set()) == src
+    assert pruned(src, {"a::A", "b::B"}) == ('x = 1\nKNOWN: dict[str, str] = {\n    # b/\n'
+                                             '    "b::C": "homonym, c: rename (o)",\n}\n\ny = 2\n')
+
+
+def test_prune_reads_every_known_line():
+    """`--prune` finds each ``KNOWN`` line in this file as written, so it can delete any of them."""
+    block = Path(__file__).read_text(encoding="utf-8").partition(_KNOWN_OPEN)[2].partition(_KNOWN_CLOSE)[0] + "\n"
+    assert [m.group(1) for m in _ENTRY.finditer(block)] == list(KNOWN), (
+        'each KNOWN line is `    "key": "reason",`, or the key alone with the reason on the next line, indented 8')
+
+
 if __name__ == "__main__":
-    for key, (concept, h, status) in sorted(classify(scan()).items(), key=lambda e: (e[1][0], e[0])):
+    found = classify(scan())
+    known, mirrors = stale(found)
+    if sys.argv[1:] == ["--prune"]:
+        path = Path(__file__).resolve()
+        path.write_text(pruned(path.read_text(encoding="utf-8"), set(known)), encoding="utf-8")
+        print(f"deleted {len(known)} stale KNOWN lines: KNOWN has {len(KNOWN) - len(known)}, KNOWN_MAX is {KNOWN_MAX} "
+              "(lower it to match)" + "".join(f"\nstale MIRRORS entry, delete by hand: {py}" for py in mirrors))
+        sys.exit()
+    if sys.argv[1:]:
+        sys.exit("usage: python tests/test_lean_vocabulary.py [--prune]")
+    for key, (concept, h, status) in sorted(found.items(), key=lambda e: (e[1][0], e[0])):
         print(f"{concept:<18} {status:<20} {key}:{h.line}" + (f"  {KNOWN[key]}" if key in KNOWN else ""))
+    print(f"\nKNOWN: {len(KNOWN)} lines, KNOWN_MAX {KNOWN_MAX}\nstale (delete with --prune):")
+    for k in known:
+        print(f"  {k}: " + ("no longer declared" if k not in found else f"now {found[k][2]}"))
+    for py in mirrors:
+        print(f"  MIRRORS {py}: no longer a pair of hits (delete by hand)")
