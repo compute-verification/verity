@@ -26,7 +26,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # torch_loop_stub.py serves the toy's model. chain_record writes the block record's certifier entry by
 # block_certifier's block_leg, which test_block_certifier holds to the block record's schema, `block_record` and its
 # period-0 fixture, and test_chain_record to the schema on certifier/v0 cases from period_case (the period check's
-# Python mirror, with verity_difftest's decoders), which also re-decides them.
+# Python mirror, with verity_difftest's decoders, and its pinned slot entry's fixture), which also re-decides them.
 # demo_stub's endpoint records are read as the warden path's endpoint step reads them: `verity-vllm advice` (with the
 # step trace and the records it imports) and network-e2e's chain.
 inputs = ["integrations/vllm/workloads", "integrations/vllm/verity_vllm/__init__.py",
@@ -45,4 +45,5 @@ inputs = ["integrations/vllm/workloads", "integrations/vllm/verity_vllm/__init__
           "benchmarks/e2e_demo/verity_e2e_demo/schemas/block-record.v1.schema.json",
           "benchmarks/e2e_demo/verity_e2e_demo/block_record.py",
           "benchmarks/e2e_demo/tests/fixtures/block-record-r2-period0.json",
-          "verity/core/protocols/network/tests/period_case.py", "verity/core/difftest/python/verity_difftest"]
+          "verity/core/protocols/network/tests/period_case.py",
+          "verity/core/protocols/network/tests/fixtures/slot_entry.json", "verity/core/difftest/python/verity_difftest"]

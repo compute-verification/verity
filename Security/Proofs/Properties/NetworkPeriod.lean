@@ -251,9 +251,9 @@ theorem rowsProgWired : RowsProgWired := by
     · assumption
     · cases h0
 
-/-- A compute audit whose Program has one `SlotEntry_v1` template of one member, and the schedule of one slot a
-window (one lane, T = 1, `every` 1). -/
-def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1)]⟩
+/-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
+digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
+def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
 
 def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
 
@@ -279,6 +279,27 @@ theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   have hw : wired #[] slotSchedule #[] tiedWindow = true :=
     h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
   rw [tiedWindow_unwired] at hw
+  cases hw
+
+/-- `slotAudit` with its template's body another than every pinned one: a template under `SlotEntry_v1`'s name and
+descriptor id, one member a slot, whose closure digest is none of `slotEntryPins`. -/
+def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")]⟩
+
+/-- A renamed body is no slot entries: the link-window `slotAudit` wires is unwired when its audit's template has
+another body, with its port, root, domain and members unchanged. -/
+theorem renamedAudit_unwired : wired #[renamedAudit] slotSchedule #[slotReg] tiedWindow = false := by
+  decide +kernel
+
+/-- **No period check that accepts every period has `RowsProgWired`'s property at a renamed body** (its nontrivial
+lemma at the pin): such a check accepts a rows-form period whose scan's `prog` is at the root and domain of an audit's
+`SlotEntry_v1` template's entries port, one member a slot, whose body is none of the pinned Definitions'. -/
+theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
+  intro h
+  let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
+    .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
+  have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedWindow = true :=
+    h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
+  rw [renamedAudit_unwired] at hw
   cases hw
 
 /-! ## The rows form accepts no period of a link-window -/

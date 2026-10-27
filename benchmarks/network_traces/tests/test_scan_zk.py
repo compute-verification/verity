@@ -414,8 +414,10 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     ``SlotEntry_v1{…}/c0/o0`` is the scan's ``scan/prog`` root and domain, and its answer), the registration, and its
     answer, three records' certificates (requests, responses, fails: its own) and two row registrations, each named by
     the registration's roots. The period's mirror reads the block's `SlotEntry_v1` template's entries off its
-    descriptor and refuses the honest case at the state tie alone (`period_case.UNTIED`, the rows form's last refusal),
-    and without it accepts it, its scan's terms read off the test class's own templates with no free inputs; it
+    descriptor, a stand-in whose closure digest is no pinned Definition's (`period_case.SLOT_ENTRY_PINS`), and refuses
+    the honest case at the wiring (`period_case.UNWIRED`); with that digest pinned, at the state tie alone
+    (`period_case.UNTIED`, the rows form's last refusal), and without that too it accepts it, its scan's terms read off
+    the test class's own templates with no free inputs; it
     refuses the forged case (a certificate's signature changed) at the certificates, the tampered case (another
     Program's registration) at the registration, the chain case (the round's registration of the Program) at its
     refusal, a block whose entries are at another root by name, and one whose root is at its o1, no `SlotEntry_v1`
@@ -478,7 +480,10 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
                                                                   WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
     assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
-    assert PC.params(p).audits[0].entries == ((sz.PA.template_id(defs["block"]), E),) and E == T // cls.EVERY * cls.NR
+    key = sz.PA.template_id(defs["block"])
+    digest = PC.slot_entry_digest(encode_program(block), key)
+    assert PC.params(p).audits[0].entries == ((key, E, digest),) and E == T // cls.EVERY * cls.NR
+    assert digest not in PC.SLOT_ENTRY_PINS
     assert p["scan"] == json.loads((scan / "joint" / "program.json").read_text())
     assert json.loads(bytes.fromhex(case["commitment"])) == {"audits": [audit["registration"]], "windows": [reg]}
     ev = json.loads(bytes.fromhex(case["evidence"]))
@@ -493,8 +498,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     bits = {tp: dict(ins + outs) for tp, (ins, outs) in ports.items()}
     assert PC.params(p).scan == PC.Scan(T, 0, 16 + bits["first"]["o1"] + bits["first"]["o2"], 16 + bits["egress"]["o1"])
     out = PC.reference(case)
-    assert (out["verdict"], out["reason"]) == ("reject", PC.UNTIED), out
+    assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), out
     with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
+        out = PC.reference(case)
+        assert (out["verdict"], out["reason"]) == ("reject", PC.UNTIED), out
         mp.setattr(PC, "_untied", lambda p: None)
         out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out

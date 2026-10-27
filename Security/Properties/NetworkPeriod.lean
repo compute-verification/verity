@@ -88,8 +88,9 @@ def RowsTiedDrawnOf (chk : Params → Commitment → Evidence → Core.Outcome P
 /-- **The rows form accepts no link-window whose scan's `prog` is not a compute audit's slot entries.** If the check
 accepts a period in the rows form, each link-window's scan's registration has its `scan/prog` entry at the root and
 domain of an audit's entries port, `<descriptor id>/c0/o0` of a template node of that audit's own Program calling
-`SlotEntry_v1` with one member a slot of the window (`wired`), so each slot's entry, read bit included, is one its
-Program computed. -/
+`SlotEntry_v1`, a Definition the check pins by its closure digest (`slotEntryPins`, so a template under that name with
+another body is refused), with one member a slot of the window (`wired`), so each slot's entry, read bit included, is
+one its Program computed. -/
 def RowsProgWired : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →

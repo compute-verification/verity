@@ -182,9 +182,9 @@ def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
     """The scan reads each slot's entry, read bit included, from the `SlotEntry_v1` unit of that slot's Program, so the
     rows form refuses, in Lean and in the mirror and by name, each way a tied link-window's wiring can fail
     (`PC.UNWIRES`): the audit's entry at an output port (another unit's `o<j>`, or the slot entries' chunk's `o1`), at
-    the entries port of a `SlotEntry_v1` template the audit's Program doesn't have, or that template one member off a
-    slot each; and a mirror that skips the wiring refuses only at the state tie (`PC.UNTIED`) what Lean refuses at the
-    wiring."""
+    the entries port of a `SlotEntry_v1` template the audit's Program doesn't have, that template one member off a
+    slot each, or that template under the slot entry's name and descriptor id with another body; and a mirror that
+    skips the wiring refuses only at the state tie (`PC.UNTIED`) what Lean refuses at the wiring."""
     unwire = PC.UNWIRES
     for u in unwire:
         monkeypatch.setattr(PC, "UNWIRES", (u,))
@@ -200,6 +200,28 @@ def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
         assert reference(case)["reason"] == PC.UNTIED, (n, reference(case))
         verdict, out = D.replay(PORT, case, server)
         assert verdict == REJECT and PC.UNWIRED in json.loads(out)["reason"], (n, out)
+
+
+def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkeypatch):
+    """`wired` pins the slot entry's Definition by its closure digest (`PC.SLOT_ENTRY_PINS`, Lean's `slotEntryPins`):
+    the cases' template (`PC.slot_entry`, `io_shell.SlotEntry_v1` at its smallest circuit-check row) has the first, and
+    a template under its name and descriptor id (`PC.SLOT_KEY`) with another body (`PC.RENAMED_SLOT_ENTRY`) has none,
+    so Lean and the mirror refuse its link-window at the wiring, Lean by the pin; and a mirror that pins that digest
+    too refuses it only at the state tie (`PC.UNTIED`)."""
+    good = json.loads(PC.audit_descriptor(((1, 2),), (2,)))
+    bad = json.loads(PC.audit_descriptor(((1, 2),), (2,), True))
+    assert good["definitions"][PC.SLOT_KEY]["id"] == bad["definitions"][PC.SLOT_KEY]["id"] == PC.SLOT_ENTRY
+    assert PC.slot_entry_digest(good, PC.SLOT_KEY) == PC.SLOT_ENTRY_PINS[0]
+    assert (other := PC.slot_entry_digest(bad, PC.SLOT_KEY)) not in PC.SLOT_ENTRY_PINS
+    monkeypatch.setattr(PC, "UNWIRES", ("body",))
+    for n in range(3):
+        case = build("rows-prog-unwired", n, small=n % 2 == 0)
+        assert PC.UNWIRED in reference(case)["reason"], (n, reference(case))
+        verdict, out = D.replay(PORT, case, server)
+        assert verdict == REJECT and "whose template is a pinned SlotEntry_v1" in json.loads(out)["reason"], (n, out)
+        with monkeypatch.context() as mp:
+            mp.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, other))
+            assert reference(case)["reason"] == PC.UNTIED, (n, reference(case))
 
 
 def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server, monkeypatch):

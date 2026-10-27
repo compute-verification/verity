@@ -135,8 +135,10 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   for it;
 * in the rows form, link-window `w`'s scan's Programs' row is a compute audit's slot entries (`wired`): its `scan/prog`
   entry names the root and domain of the entries port `<descriptor id>/c0/o0` in the `roots` of an audit's
-  registration, where the descriptor id is a template node's of that audit's own Program calling `SlotEntry_v1` with
-  one member a slot of the window (T / `every` · `lanes`), so each due, occupied slot's entry, read bit included, is
+  registration, where the descriptor id is a template node's of that audit's own Program calling `SlotEntry_v1`, a
+  Definition the check pins by closure digest (`slotEntryPins`: a template under that name with another body is
+  refused), with one member a slot of the window (T / `every` · `lanes`), so each due, occupied slot's entry, read bit
+  included, is
   the one its Program computed, not the prover's word, which with read 1 and no outputs would pass for a request no
   Program reads (`Properties.NetworkPeriod.RowsProgWired`);
 * in the rows form, the period, if it has a link-window (`untied`): a slot's Program reads the requests from its own
@@ -228,14 +230,15 @@ def cellHeader : Nat := 9
 
 /-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
 gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
-templates (`entries`: each root template node calling a `SlotEntry_v1` Definition, by its descriptor id and members). -/
+templates (`entries`: each root template node calling a `SlotEntry_v1` Definition, by its descriptor id, members and
+closure digest, `slotEntryDigest`). -/
 structure Audit where
   free : Nat
   steps : Nat
   program : String
   units : Nat
   bits : Nat
-  entries : Array (String × Nat)
+  entries : Array (String × Nat × String)
 
 /-- The network certifier's schedule when it functions as an active warden (`warden.WardenParams`). -/
 structure Schedule where
@@ -477,12 +480,82 @@ def ingressTemplates : List (Flock.Program.Node × Flock.Program.Defn) →
 entry the scan's ingress reads at that slot (its `o0`). -/
 def slotEntryId : String := "SlotEntry_v1"
 
+/-- A Definition's descriptor entry `e` with the descriptor's interning resolved (`callees`, `types`): each node's
+callee id (`fn`), output type (`out`) and argument types inline, as `annotations.definition_digest` hashes it, so one
+Definition has one entry in any Program. -/
+def resolvedEntry (callees types : Array Json) (e : Json) : Json :=
+  let set := fun (j : Json) (k : String) (v : Json) => match j with
+    | .obj kvs => Json.obj (kvs.insert k v)
+    | j => j
+  let at_ := fun (xs : Array Json) (i : Json) => match i.getNat? with
+    | .ok i => xs.getD i .null
+    | .error _ => .null
+  match e.getObjValD "form", e.getObjValD "body" with
+  | .str "composite", body => match body.getObjValD "nodes" with
+    | .arr nodes => set e "body" (set body "nodes" (.arr (nodes.map fun n =>
+        let args := match n.getObjValD "args" with
+          | .arr xs => Json.arr (xs.map fun a => set a "type" (at_ types (a.getObjValD "type")))
+          | x => x
+        set (set (set n "fn" (at_ callees (n.getObjValD "fn"))) "out" (at_ types (n.getObjValD "out"))) "args" args)))
+    | _ => e
+  | _, _ => e
+
+/-- `annotations.definition_digest`: the SHA-512, in hex, of a Definition's canonical `resolvedEntry`. -/
+def definitionDigest (callees types : Array Json) (e : Json) : V String := do
+  pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (resolvedEntry callees types e)).toUTF8))
+
+/-- The closure digest of Definition `key` of the Program whose descriptor is `j`: the SHA-512, in hex, of the
+canonical JSON object that maps each Definition `key` reaches (itself, its nodes' callees, theirs, …), by descriptor
+id, to its `definitionDigest`. It digests the template's whole body, so another Definition under its id has another
+digest. -/
+def slotEntryDigest (j : Json) (key : String) : V String := do
+  let defs := j.getObjValD "definitions"
+  let tab := fun (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
+  let (callees, types) := (tab "callees", tab "types")
+  let nodesOf := fun (e : Json) => match (e.getObjValD "body").getObjValD "nodes" with | .arr xs => xs | _ => #[]
+  let fuel := match defs with
+    | .obj kvs => kvs.foldl (fun n _ e => n + (nodesOf e).size) 1
+    | _ => 1
+  let mut seen : Array (String × Json) := #[]
+  let mut todo : List String := [key]
+  for _ in [0:fuel] do
+    match todo with
+    | [] => break
+    | k :: rest =>
+      todo := rest
+      if seen.any (·.1 == k) then continue
+      let e := defs.getObjValD k
+      if let .null := e then throw s!"program: {key} reaches {k}, no Definition of its descriptor"
+      seen := seen.push (k, .str (← definitionDigest callees types e))
+      if e.getObjValD "form" == .str "composite" then
+        for n in nodesOf e do
+          match (n.getObjValD "fn").getNat?.toOption.bind (callees[·]?) with
+          | some (.str c) => todo := c :: todo
+          | _ => throw s!"program: {k}: a node's callee is outside callees"
+  unless todo.isEmpty do throw s!"program: {key}'s callees outrun its descriptor's nodes"
+  pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (Json.mkObj seen.toList)).toUTF8))
+
+/-- The slot entry's Definitions the check takes, by closure digest (`slotEntryDigest`): `io_shell.SlotEntry_v1` at
+its circuit-check rows, `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`
+(a Llama-3 tokenizer's 17-bit ids and end-of-text id), in that order. A template under `SlotEntry_v1`'s name with
+another body has neither digest, so its entries are no slot entries (`wired`); a new binding or body of `SlotEntry_v1`
+is pinned here. -/
+def slotEntryPins : List String :=
+  ["0763102b5fd38583279471486ff8ce51b9caae1bc5dece3d7712ddcec456f1bb\
+    4e543343ed1399c0665043402d7100173a270cb6a8cc541b60bcdd29b37d7d0a",
+   "662360bfd2b31949f09447a32dec775c3e2e26e2d9132af8898609475e75a753\
+    4cb522ce4f794bc5fcce71a7f09ec5a2170e0b2406339cc4d9268ea8487e3361"]
+
+#guard slotEntryPins.all (·.length == 128)
+
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
-template is refused. Its slot entries' templates are its root's template nodes whose Definition is `SlotEntry_v1`. -/
+template is refused. Its slot entries' templates are its root's template nodes whose Definition is `SlotEntry_v1`, each
+with its closure digest (`slotEntryDigest`). -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
   exactly a ["free", "program", "steps"] ctx
-  let prog ← match Flock.Program.decode (← Flock.canon (← Flock.J.get a "program" ctx)).toUTF8 with
+  let pj ← Flock.J.get a "program" ctx
+  let prog ← match Flock.Program.decode (← Flock.canon pj).toUTF8 with
     | .ok prog => pure prog
     | .error e => throw s!"{ctx}: program: {e}"
   let some root := prog.defs[prog.root]? | throw s!"{ctx}: program: no root"
@@ -490,9 +563,11 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
     | some d => if d.prim then none else some (x.members, bitsOf d.ret)
     | none => none
   if templates.isEmpty then throw s!"{ctx}: program: no template"
-  let entries := root.body.nodes.filterMap fun x => match prog.defs[x.fn]? with
+  let slots := root.body.nodes.filterMap fun x => match prog.defs[x.fn]? with
     | some d => if !d.prim && d.id == slotEntryId then some (d.key, x.members) else none
     | none => none
+  let entries ← slots.mapM fun (k, n) => do
+    pure (k, n, ← (slotEntryDigest pj k).mapError (s!"{ctx}: " ++ ·))
   pure { free := ← Flock.J.nat a "free" ctx, steps := ← Flock.J.nat a "steps" ctx, program := Flock.hexOf prog.sha512,
          units := templates.foldl (· + ·.1) 0, bits := templates.foldl (fun b t => max b t.2) 0, entries }
 
@@ -860,16 +935,18 @@ def progTied (audits : Array Registration) (reg : Registration) : Bool := !(tied
 
 /-- The scan's Programs' row is a compute audit's slot entries: the root and domain of the scan's registration's
 `scan/prog` entry (`progName`) are those of an audit's entries port (`entriesPort`) of a `SlotEntry_v1` template of
-that audit's own Program (`Audit.entries`) with one member a slot of the window (`Schedule.windowPrograms`), so bucket
-`t`'s port `prog<j>`, which reads slot `j · (T / every) + ⌊t / every⌋`'s entry (`scanOf`), reads the entry that slot's
-Program computed, read bit included. One-stage binds the rest: a reused value is its port's leaves, one chunk's, and an
-audit's roots are the ports its Program's layout derives. -/
+that audit's own Program (`Audit.entries`) that is a pinned Definition (its closure digest one of `slotEntryPins`, so
+its whole body is `io_shell.SlotEntry_v1`'s), with one member a slot of the window (`Schedule.windowPrograms`), so
+bucket `t`'s port `prog<j>`, which reads slot `j · (T / every) + ⌊t / every⌋`'s entry (`scanOf`), reads the entry that
+slot's Program computed, read bit included. One-stage binds the rest: a reused value is its port's leaves, one chunk's,
+and an audit's roots are the ports its Program's layout derives. -/
 def wired (audits : Array Audit) (s : Schedule) (regs : Array Registration) (reg : Registration) : Bool :=
   let entries := fun (j : Json) (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   let prog := (entries reg.record "roots").filter (named "port" progName) ++
     (entries reg.record "registered").filter (named "value" progName)
-  (audits.zip regs).any fun (a, r) => a.entries.any fun (k, n) => n == s.windowPrograms &&
+  (audits.zip regs).any fun (a, r) => a.entries.any fun (k, n, d) => n == s.windowPrograms &&
+    slotEntryPins.contains d &&
     prog.any fun e => match e.getObjValD "root", e.getObjValD "domain" with
       | .str root, .str dom => (entries r.record "roots").any fun o =>
           named "port" (entriesPort k) o && named "root" root o && named "domain" dom o
@@ -948,7 +1025,8 @@ def wiredCheck (p : Params) (s : Schedule) (audits : Array Registration) (w : Na
   if wired p.audits s audits reg then none else
     some (.reject, s!"window {w}: the scan's prog is no compute audit's slot entries: its {progName} entry's root and \
       domain are no audit's {slotEntryId} entries port (<descriptor id>/c0/o0) of {s.windowPrograms} members, one a \
-      slot, so a due, occupied slot's read bit is the prover's word: reuse that port as the scan's prog")
+      slot, whose template is a pinned {slotEntryId} (its closure digest one of slotEntryPins), so a due, occupied \
+      slot's read bit is the prover's word: reuse that port of the pinned template as the scan's prog")
 
 /-- The rows form's wiring findings, one a link-window, in order (`wiredCheck`); none in the clock form. -/
 def wiredChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with

@@ -20,10 +20,10 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
   certifier didn't sign.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
   ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
-  answer accepts, at the state tie alone (the mirror's ``UNTIED`` in its reason and in Lean's). The block round's o0
-  is a `SlotEntry_v1` stand-in's entries, so the scan's `prog` is wired, and the rows form refuses every link-window
-  until a slot's Program's `SCAN_STATE` is tied to the scan's state: the honest case passes every other check and is
-  refused there. ``DIR`` gets each case's files and ``period.json``, each case's answers.
+  answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's). The block round's o0 is a
+  `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`slotEntryPins`: the scan's
+  `prog` must be `io_shell.SlotEntry_v1`'s own entries), so the honest case passes every check before the wiring and
+  is refused there. ``DIR`` gets each case's files and ``period.json``, each case's answers.
 """
 from __future__ import annotations
 
@@ -131,8 +131,8 @@ def main(argv=None) -> int:
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
-        why = m.UNTIED if not round_ and scan_said == {"accept"} else None
-        want = "reject" + (" at the state tie" if why else "")
+        why = m.UNWIRED if not round_ and scan_said == {"accept"} else None
+        want = "reject" + (" at the wiring" if why else "")
         good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
                 and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
         ok &= good
