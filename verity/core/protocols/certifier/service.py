@@ -138,9 +138,8 @@ responses of any length, batched and timed as serving chose, carried across wind
 each window's request frames) states what serving chose, the profile's public framing says where each request ends on
 the ingress link (`advised.ends`, which refuses a link without the tie of its requests to the certified ingress,
 `advised.IoTieVerdict`, which the verifier takes only from its own tie source, `ties`: `tie_service.Ties`, from the
-IoTieRequest proofs it verified, refusing every window of a size class with no pinned IoTieRequest digest, the served
-one among them), and its unit is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: the checks above, and one
-gate naming
+IoTieRequest proofs it verified, refusing every window of a size class with no pinned IoTieRequest digest), and its
+unit is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: the checks above, and one gate naming
 `advised.NetworkAdvisedCounts_v1` and its pinned circuit digest (`advised.gate`, pinned in
 `advised.circuit-check.json`), in its verdict bit, which holds the egress head's counts to the advice's releases and
 the ingress head's counts to the advice (`advised`'s docstring has the fields it reads, the soundness argument and the
@@ -149,16 +148,16 @@ premises). Its public inputs, in the ``pub`` row, are the window's view of the a
 syncs the certifier ran; the heads' counts stay witness. Its public items are `PUBLIC_ADVISED`. Its
 verifier of record takes the delivered advice (`verify(advice=…)`) and the tie only from its own tie source
 (`LinkWindows.ties`, `advised.TieSource`: `advised.IoTieVerdict`, IoTieRequest's verdict from proofs it verified,
-naming the link and its ingress registrations), never beside the advice; nothing in this package is a source until
-IoTieRequest runs in the proof service, so every advised link is refused until then. Every floor is under the sync the
-certifier ran, which the verifier takes only from its own clock source (`LinkWindows.clock_source`: the certifier's
-salted clock certificates, each opened under the link's key and session, `advised.SignedClocks`; the openings are
-witness, the verifier's own read, never a public answer), since a δ below the traffic's
-loosens the floor (REDTEAM phase 11), and a window whose declared sync is another, or outside Σ_sync, is refused alone;
-without a clock source, every advised link is refused too. It refuses a window without an advice or one whose view
-`advised.view` refuses, and reports the advice it read as a third public output, `advice` (`advised.digest`); the
-network verdict refuses a window that names another advice than the first accepted window's, so every window's counts
-are one advice's. The in-the-clear check runs `advised_check` too.
+naming the link and its ingress registrations), never beside the advice. That source is `tie_service.Ties`, on the
+ingress tie's stream of record (IoTieRequest in the proof service), and without one (`ties` None) every advised link
+is refused. Every floor is under the sync the certifier ran, which the verifier takes only from its own clock source
+(`LinkWindows.clock_source`: the certifier's salted clock certificates, each opened under the link's key and session,
+`advised.SignedClocks`; the openings are witness, the verifier's own read, never a public answer), since a δ below the
+traffic's loosens the floor (REDTEAM phase 11), and a window whose declared sync is another, or outside Σ_sync, is
+refused alone; without a clock source, every advised link is refused too. It refuses a window without an advice or one
+whose view `advised.view` refuses, and reports the advice it read as a third public output, `advice`
+(`advised.digest`); the network verdict refuses a window that names another advice than the first accepted window's,
+so every window's counts are one advice's. The in-the-clear check runs `advised_check` too.
 
 **A warden link** (`LinkWindows(warden=WardenProfile(…))`) is the active warden's (`warden.Warden`) own two records
 of each link-window: its responses on egress and its requests on ingress, on its one grid, certified under its
@@ -201,8 +200,8 @@ Lean takes as an input rather than checks:
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
   findings and pins to but doesn't derive.
 The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
-ingress tie's verifier, is not ported and stays Python. Every recorded proving run of N2 replays through both to the
-verdict it recorded (`benchmarks/network_traces/n2_lean_replay.py`), and the properties of the Lean's verdict are
+ingress tie's verifier, is not ported and stays Python. Every proving run of N2 recorded before the switch replayed
+through both to the verdict it recorded (the runs the README cites), and the properties of the Lean's verdict are
 `Security/Properties/NetworkCertifier/LinkWindow.lean`.
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the

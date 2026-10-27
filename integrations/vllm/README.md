@@ -58,8 +58,9 @@ Imports point down `pipeline` > `check` | `properties` > `acquire` > `observe` |
 
 ## Python API
 
-Outside code imports only `verity_vllm`, `verity_vllm.engine.spec` and `verity_vllm.engine.handle`, each only its `__all__`
-(`tests/test_vllm_public_api.py`). `verity_vllm.LLM` is a pinned vLLM engine, constructed and called like `vllm.LLM`:
+Outside code imports only `verity_vllm`, `verity_vllm.engine.spec`, `verity_vllm.engine.handle`,
+`verity_vllm.engine.served_seed` and `verity_vllm.program.predict.window_weights`, each only its `__all__`, and the modules
+still on its `KNOWN` list (`tests/test_vllm_public_api.py`). `verity_vllm.LLM` is a pinned vLLM engine, constructed and called like `vllm.LLM`:
 
 ~~~python
 from vllm import SamplingParams
