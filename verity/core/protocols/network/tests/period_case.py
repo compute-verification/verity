@@ -1339,7 +1339,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     least_audits = 1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
     n_windows = r.randint(least_windows, least_windows if small else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
-    n_audits = max(n_audits, n_windows) if rows else n_audits
+    # a rows link-window's own audit, and at times one no link-window ties, which may leave units undrawn
+    n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1))) if rows else n_audits
     first = r.choice([0, 0, r.randrange(1, 6)])
     if rows:
         sched = bound = _small_schedule(r, small)
