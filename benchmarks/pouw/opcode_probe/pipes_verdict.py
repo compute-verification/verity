@@ -18,7 +18,7 @@ PARTNERS = {"LOP3.LUT": "lop3", "MUFU.EX2": "mufu"}
 OFF_PIPE = {"FADD"}
 ON_ALU = ("plop3", "sgxt", "bmsk")
 ON_XU = ("i2f_f2i", "i2f16_f2i16", "f2f64", "frnd")
-ON_FMA = ("iadd", "iadd64", "iabs")
+ON_FMA = ("iadd64", "iabs")
 
 
 def _split(row: dict) -> tuple[dict[str, float], float]:

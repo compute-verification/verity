@@ -383,8 +383,7 @@ def _pipes_rows(**over: dict[str, float]) -> dict[str, dict]:
         "mix_f2f64_mufu": {"F2F.F64.F32": 0.125, "F2F.F32.F64": 0.125, "MUFU.EX2": 0.25},
         "frnd": {"FRND.FLOOR": 0.5, "FADD": 0.5}, "mix_frnd_mufu": {"FRND.FLOOR": 0.25, "FADD": 0.25, "MUFU.EX2": 0.25},
         "bar_or": {"BAR.RED.OR*": 0.05}, "mix_bar_or_lop3": {"BAR.RED.OR*": 0.04, "LOP3.LUT": 1.9},
-        "iadd": {"IADD": 4.0}, "mix_iadd_lop3": {"IADD": 2.0, "LOP3.LUT": 2.0},
-        "iadd64": {"IADD.64": 2.0}, "mix_iadd64_lop3": {"IADD.64": 1.0, "LOP3.LUT": 1.0},
+        "iadd64": {"IADD.64": 4.0}, "mix_iadd64_lop3": {"IADD.64": 2.0, "LOP3.LUT": 2.0},
         "iabs": {"IABS": 2.0}, "mix_iabs_lop3": {"IABS": 1.0, "LOP3.LUT": 1.0},
     } | over
     return {n: {"probe": n, "binary": "pipes", "rates": {f"0:{k}": v for k, v in r.items()}} for n, r in rates.items()}
@@ -397,7 +396,7 @@ def test_pipes_verdict_holds_each_pipe_to_its_rho(tmp_path, capsys):
     assert held, lines
     assert "FRND.FLOOR 0.5000 alone, 0.2500 + 0.2500 = 0.5000 beside MUFU" in lines
     assert "BAR.RED.OR 0.0500 alone; LOP3 + BAR/2 = 1.9000 + 0.0400/2 = 1.9200" in lines
-    assert "IADD 4.0000 alone, 4.0000 with LOP3 (beside alu)" in lines
+    assert "IADD.64 4.0000 alone, 4.0000 with LOP3 (beside alu)" in lines
     held, lines = pipes_verdict.verdict(_pipes_rows(i2f_f2i={"I2F.U32.RP": 1.0, "F2I.FTZ.U32.TRUNC.NTZ": 1.0}))
     assert not held and lines[0] == "I2F.U32.RP+F2I.FTZ.U32.TRUNC.NTZ alone 2.0000 > sfu's 0.5"
     rows = tmp_path / "rows.jsonl"
