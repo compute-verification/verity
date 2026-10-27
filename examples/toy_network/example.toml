@@ -13,6 +13,6 @@ challenger = "local"
 certifier = "local"   # the network certifier
 
 [evidence]
-# `verity run` of a configuration `verity config new` wrote, two periods on vy-nebius-cpu-4, both accepted
-# (README.md): at 757f6e4d67, and at dd9b43a64f
-runs = ["r20261027-023857-d6ef", "r20261027-010850-30d7"]
+# `verity run` of a configuration `verity config new` wrote, two periods on vy-nebius-cpu-4 at fc8938eb47, both
+# accepted (README.md)
+runs = ["r20261027-064850-9e47"]

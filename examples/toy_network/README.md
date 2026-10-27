@@ -51,6 +51,19 @@ prints `ok` and the configuration's hash. The first party that needs the tools b
 `null` when it had none), and one `VERDICT` line a period, also written to `STATE/record/verdicts.jsonl`. It exits 0
 when every period accepts, 1 when one rejects, and 2 otherwise.
 
+Run `r20261027-064850-9e47` ran these commands from a clean clone of fc8938eb47, with `--periods 2`, on vy-nebius-cpu-4
+(192 cores). `verity run` took 5441 s, and both periods accept:
+
+~~~text
+PARTY {"exit": 0, "party": "network-certifier"}
+PARTY {"party": "challenger", "refused": null}
+PARTY {"party": "firewall", "refused": null}
+PARTY {"party": "verifier", "refused": null}
+PARTY {"party": "workers", "refused": null}
+VERDICT {"block": 0, "coins": "simulated", "components": {"certifier": "accept", "sampled-proofs": "accept"}, "product": "verity/product/v0", "reason": null, "registration": "a32f4b31592a91c4c9e47e8f7c4150c9cccc246ce0cafa60757eb998f05e6d712ee6de744a47eb3f75007e29eadb33b2be17c840c2838d4f3e5c39f50dfe8181", "run": "r20261027-064850-9e47", "simulated": ["challenger shares local with the developer's firewall, workers: Faithful and Secret unmet"], "verdict": "accept"}
+VERDICT {"block": 1, "coins": "simulated", "components": {"certifier": "accept", "sampled-proofs": "accept"}, "product": "verity/product/v0", "reason": null, "registration": "293481f5a4062f05ab4439ca62637b8f16516472c32b6f9b7cf312e62a5d4190abf0d7faff463c2a015099f47c990b97f71ae567b4464616f0cb3361e6cbb89a", "run": "r20261027-064850-9e47", "simulated": ["challenger shares local with the developer's firewall, workers: Faithful and Secret unmet"], "verdict": "accept"}
+~~~
+
 ## Parties on different machines
 
 `--machine NAME`, or `--party ROLE`, runs only the parties placed there. The challenger, the firewall and the workers
