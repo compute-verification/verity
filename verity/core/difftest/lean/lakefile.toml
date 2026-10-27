@@ -15,6 +15,9 @@ path = "../../service/flock"
 [[lean_lib]]
 name = "Difftest"
 
+[[lean_lib]]
+name = "FlockJsonDifftest"
+
 [[lean_exe]]
 name = "difftest-example"
 root = "DifftestExample"
