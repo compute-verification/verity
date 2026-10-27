@@ -403,7 +403,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
-        "forged": ("reject", "window 0: certificates"), "tampered": ("reject", "window 0: registration"),
+        "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
+                   "connection)"), "tampered": ("reject", "window 0: registration"),
         "chain": ("reject", "window 0: service: the scan's chain round refused: {'x': 'y'}")}
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
