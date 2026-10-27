@@ -1,9 +1,9 @@
-import NciCheck.Baseline
+import InferenceOnlyCheck.Baseline
 
 /-!
 # What θ's provenance check's acceptance means
 
-`NciCheck.Baseline.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Baseline.lean`) is the NCI check of
+`InferenceOnlyCheck.Baseline.evaluate` (`verity/core/protocols/inference_only/lean/InferenceOnlyCheck/Baseline.lean`) is the NCI check of
 record: the policy check, then each θ entry's provenance against the trusted input, the service's registration log, the
 run's own record and the program function's parameters. `Nci.Assumptions.BaselineRegistered`
 (`Definitions/Nci/Assumptions/Baseline.lean`, [BASELINE-REGISTERED]) states what θ must hold: registered public data,
@@ -22,15 +22,15 @@ the auditor knows which log is the deployment's, and how the reference circuit `
 `theta-width` (the cited value's dimensions give the parameter's gates) is checked but not stated here: under the
 binding premise equal roots already give equal rows.
 
-Proved as `NciCheck.Properties.SecurityProofs.BaselineProvenance : NciCheck.Properties.BaselineProvenance` in
+Proved as `InferenceOnlyCheck.Properties.SecurityProofs.BaselineProvenance : InferenceOnlyCheck.Properties.BaselineProvenance` in
 `Proofs.Properties.Nci.Baseline`.
 -/
 
-namespace NciCheck.Properties
+namespace InferenceOnlyCheck.Properties
 
 open Lean (Json)
 open Flock.Program (Prog Ty)
-open NciCheck.Baseline (getD strAt digest lastWith ownersOf)
+open InferenceOnlyCheck.Baseline (getD strAt digest lastWith ownersOf)
 
 /-- `log` is a registration log in R6's chain, oldest first: every record has a digest, the first record's `previous` is
 `null` (it opens the deployment), and each later record's `previous` is the digest of the record before it. -/
@@ -76,8 +76,8 @@ def ProvenanceHeld (j tr : Json) : Prop :=
       ∀ t < i.theta.size, HeldAtStart j i P log run ps t
 
 /-- **θ holds what the deployment's first record registers.** On every instance `j` and trusted input `tr` that
-`NciCheck.Baseline.evaluate` accepts, `ProvenanceHeld j tr`. -/
+`InferenceOnlyCheck.Baseline.evaluate` accepts, `ProvenanceHeld j tr`. -/
 def BaselineProvenance : Prop :=
   ∀ (j tr out : Json), Baseline.evaluate j tr = .ok out → ProvenanceHeld j tr
 
-end NciCheck.Properties
+end InferenceOnlyCheck.Properties

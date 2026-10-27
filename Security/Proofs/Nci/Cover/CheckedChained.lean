@@ -6,13 +6,13 @@ import Proofs.Nci.Cover.Chained
 
 `CoverTrainedChained` is `Nci.Cover.Guarantees.CoverTrainingChained`'s conclusion on a verdict, at `Γ = gamma` and
 `α = num / den`, as `CoverTrained` (`Proofs.Nci.Cover.Checked`) is `CoverTraining`'s. `coverTrainedChained` proves it of
-every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's compliance (`Witnesses`), and
-`CheckedCoverTrainingChained` states it of every verdict of the check of record, `NciCheck.Baseline.evaluate`, on every
+every verdict of the gate-level check `InferenceOnlyCheck.evaluate`, from the verdict's compliance (`Witnesses`), and
+`CheckedCoverTrainingChained` states it of every verdict of the check of record, `InferenceOnlyCheck.Baseline.evaluate`, on every
 expansion of the instance, and `checkedCoverTrainingChained` proves it from `SecurityProofs.DescAgrees`. It is stated
 here in `Proofs/`, so it is no guarantee.
 -/
 
-namespace NciCheck.Properties.SecurityProofs
+namespace InferenceOnlyCheck.Properties.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog)
@@ -60,4 +60,4 @@ theorem checkedCoverTrainingChained_of_descAgrees (h : Properties.DescAgrees) : 
 theorem checkedCoverTrainingChained : CheckedCoverTrainingChained :=
   checkedCoverTrainingChained_of_descAgrees DescAgrees
 
-end NciCheck.Properties.SecurityProofs
+end InferenceOnlyCheck.Properties.SecurityProofs

@@ -1,4 +1,4 @@
-"""``nci_glm.py measure``: the NCI check (`nci-check --policy`, `NciCheck.Desc`) on GLM-5.3's registered Programs, the B1
+"""``nci_glm.py measure``: the NCI check (`inference-only-check --policy`, `InferenceOnlyCheck.Desc`) on GLM-5.3's registered Programs, the B1
 Build's workload Program of each TP rank, and on Programs derived from them for the divisions the registered ones can't
 express (README.md).
 
@@ -9,14 +9,14 @@ express (README.md).
 
 `--rank` names each rank's workload descriptor (`build/rank<r>/build_workload/descriptor.json.gz` of the Build), in rank
 order, and `--pins` the Build's meta (`rank_workload_digests`), which each must match. `--check-mem-gb` caps each
-`nci-check`'s address space, so one that outgrows its share fails rather than the node. The cases:
+`inference-only-check`'s address space, so one that outgrows its share fails rather than the node. The cases:
 
   registered  each rank's Program as registered, whose root is its inputs and one Call, the request: θ its weights
               (`annotations["theta"]`), then θ empty, one IU (the Call)
   rank        rank 0's Program with its weights' input nodes bound at registration (`RegisteredInput<w>_v1`) and
               nothing else changed: θ the weights, one IU (the request, its peers' partials read as inputs)
   slice       Definitions of rank 0 as Programs (`slice`), their weight parameters registered, one IU per Call and one
-              in all: `--policy`, the reference (`nci_reference.check_desc`) and `--policy --unrolled` on the instance
+              in all: `--policy`, the reference (`inference_only_reference.check_desc`) and `--policy --unrolled` on the instance
               expanded gate by gate must agree
   node        the eight ranks' requests joined into one Definition called once by a root of input nodes, each collective
               reading the other ranks' partials where it read its `peers_*` inputs (the TP exchange inside the node),
@@ -28,11 +28,11 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
               at A (`GAMMA`, `ALPHA`), its neighbours and C (`ALPHA_C` at `GAMMA` and `GAMMA_C`). Given its
               registration, the node is held to it before any check (it is the program of the record `--node-trusted`
               cites as the run's own, `run`, and `--node-provenance` has one entry per θ node, each citing the log's
-              first record), and the check of record runs too, at A (`nci-check INSTANCE TRUSTED`,
-              `NciCheck.Baseline`: the policy check, then θ's provenance against the registration log).
+              first record), and the check of record runs too, at A (`inference-only-check INSTANCE TRUSTED`,
+              `InferenceOnlyCheck.Baseline`: the policy check, then θ's provenance against the registration log).
               `--node-points` picks some of `NODE_POINTS`
 
-A finer division of a whole session (per engine step, per layer, per Call) is not checked: `NciCheck.Desc` holds every
+A finer division of a whole session (per engine step, per layer, per Call) is not checked: `InferenceOnlyCheck.Desc` holds every
 read of a root node as pieces of gates, and on GLM-5.3 a Call's output is mostly one piece per leaf (the 6,144 outputs of
 `Fp8GroupQuantUe8m0_v1{K=6144,G=128}` are 6,192 pieces), about 10^9 pieces per rank. Inside one Call they are resolved
 and dropped, which is why the IUs here are Calls.
@@ -420,7 +420,7 @@ def join(srcs: list[Source], bodies: list[dict], colls: list[list[int]]) -> dict
 
 
 class Runs:
-    """Instances written to scratch and checked by `nci-check` on a pool; rows and IUs collected into `out`."""
+    """Instances written to scratch and checked by `inference-only-check` on a pool; rows and IUs collected into `out`."""
 
     def __init__(self, args) -> None:
         self.args, self.out = args, Path(args.out)
@@ -430,7 +430,7 @@ class Runs:
         self.rows: list[dict] = []
 
     def submit(self, path: Path, row: dict, unrolled: bool = False, trusted: Path | None = None) -> None:
-        """`nci-check --policy` on the instance `path`, or with `trusted` the check of record against it."""
+        """`inference-only-check --policy` on the instance `path`, or with `trusted` the check of record against it."""
         argv = [str(self.args.exe), *([str(path), str(trusted)] if trusted else
                                       ["--policy", *(["--unrolled"] if unrolled else []), str(path)])]
         if self.args.check_mem_gb:
@@ -475,7 +475,7 @@ def summary(v: dict | None) -> dict:
 
 def write_instance(path: Path, ptext: str, theta: list, owner: list, gamma: int, alpha: tuple[int, int],
                    provenance: list | None = None) -> Path:
-    """`NciCheck.Desc`'s instance, `ptext` the program as a JSON string; with `provenance`, `NciCheck.Baseline`'s."""
+    """`InferenceOnlyCheck.Desc`'s instance, `ptext` the program as a JSON string; with `provenance`, `InferenceOnlyCheck.Baseline`'s."""
     with open(path, "w") as f:
         f.write(f'{{"alpha":[{alpha[0]},{alpha[1]}],"gamma":{gamma},"owner":')
         f.write(json.dumps(owner, separators=(",", ":")))

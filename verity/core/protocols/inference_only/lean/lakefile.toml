@@ -1,12 +1,12 @@
-# The NCI policy's check, the verifier's side: given a declaration (a descriptor v1 Program and its baseline θ) and a
+# The inference-only policy's check, the verifier's side: given a declaration (a descriptor v1 Program and its baseline θ) and a
 # declared division into isolation units, decide `Nci.Complies Γ α` for that division (`Security/Definitions/Nci.lean`).
 # It reads the Program with C-Flock's decoder (`Flock.Program`), required by path, and imports nothing else but Lean core:
-# no Mathlib and nothing of Security. The difftest holds it to the Python reference in `scripts/nci_reference.py`.
-# `nci-check` runs `NciCheck.Desc`, the check at the size of the description, then θ's provenance (`NciCheck.Baseline`),
-# and `nci-check --unrolled` the reference.
-name = "nci_check"
-defaultTargets = ["NciCheck", "nci-difftest", "nci-desc-difftest", "nci-desc-liveness", "nci-desc-fuzz", "nci-baseline-difftest",
-  "nci-check"]
+# no Mathlib and nothing of Security. The difftest holds it to the Python reference in `scripts/inference_only_reference.py`.
+# `inference-only-check` runs `InferenceOnlyCheck.Desc`, the check at the size of the description, then θ's provenance (`InferenceOnlyCheck.Baseline`),
+# and `inference-only-check --unrolled` the reference.
+name = "inference_only_check"
+defaultTargets = ["InferenceOnlyCheck", "inference-only-difftest", "inference-only-desc-difftest", "inference-only-desc-liveness", "inference-only-desc-fuzz", "inference-only-baseline-difftest",
+  "inference-only-check"]
 
 [leanOptions]
 autoImplicit = false
@@ -17,28 +17,28 @@ name = "flock_verifier"
 path = "../../../service/flock"
 
 [[lean_lib]]
-name = "NciCheck"
+name = "InferenceOnlyCheck"
 
 [[lean_exe]]
-name = "nci-difftest"
-root = "NciCheck.DifftestMain"
+name = "inference-only-difftest"
+root = "InferenceOnlyCheck.DifftestMain"
 
 [[lean_exe]]
-name = "nci-desc-difftest"
-root = "NciCheck.DescDifftestMain"
+name = "inference-only-desc-difftest"
+root = "InferenceOnlyCheck.DescDifftestMain"
 
 [[lean_exe]]
-name = "nci-desc-liveness"
-root = "NciCheck.DescLivenessMain"
+name = "inference-only-desc-liveness"
+root = "InferenceOnlyCheck.DescLivenessMain"
 
 [[lean_exe]]
-name = "nci-desc-fuzz"
-root = "NciCheck.DescFuzzMain"
+name = "inference-only-desc-fuzz"
+root = "InferenceOnlyCheck.DescFuzzMain"
 
 [[lean_exe]]
-name = "nci-baseline-difftest"
-root = "NciCheck.BaselineDifftestMain"
+name = "inference-only-baseline-difftest"
+root = "InferenceOnlyCheck.BaselineDifftestMain"
 
 [[lean_exe]]
-name = "nci-check"
-root = "NciCheck.CheckMain"
+name = "inference-only-check"
+root = "InferenceOnlyCheck.CheckMain"

@@ -8,7 +8,7 @@ a composite among them, and each such composite's nodes name only parameters and
 stop at the first violation, so each level is a `for` loop whose state carries an optional verdict (`forIn_all`).
 -/
 
-namespace NciCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
 /-- The references `Prog.orderViolation` checks of a part, by collection and index. -/
@@ -240,4 +240,4 @@ theorem order_closed (P : Prog) (h : P.orderViolation = none) :
     obtain ⟨j, hj, e⟩ := hf k hk
     have := hseen j (by omega); rwa [e] at this
 
-end NciCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk

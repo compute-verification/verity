@@ -26,7 +26,7 @@ gates `S` read from outside `S` (`c.D.into M.S`: a dark gate of `c`, or an input
 only when it is in `c`'s baseline. A dark value, or a novel input of `c`, that `d` listed in `θ` would be read for free,
 and an IU could then thread `c`'s counted multiplications on it without paying for the read.
 
-The NCI check (`NciCheck.Baseline`) enforces the provenance form: each `θ` entry cites the first record of the
+The NCI check (`InferenceOnlyCheck.Baseline`) enforces the provenance form: each `θ` entry cites the first record of the
 deployment's registration log (`theta-record-unknown`, `theta-not-at-deployment-start`), which is at or before every run's
 own record, and the root that record registers the value under (`theta-root`), of the `registered` kind only
 (`theta-provenance`), and the run's own record holds the entry's parameter to that root (`theta-unbound`). What stays a

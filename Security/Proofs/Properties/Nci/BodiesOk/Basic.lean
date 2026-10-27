@@ -8,7 +8,7 @@ What the decoder's spec (`Proofs.Properties.Nci.BodiesOk.Decode`) reads off `Flo
 invariants of `for` loops in `Id`, `Except` and the decoder's `StateT` monad, index by index.
 -/
 
-namespace NciCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 
 open Flock.Program
 
@@ -282,4 +282,4 @@ theorem toStream_array {α : Type} (a : Array α) :
   show (a.toSubarray 0 a.size).array = a ∧ (a.toSubarray 0 a.size).start = 0 ∧ (a.toSubarray 0 a.size).stop = a.size
   simp [Array.start_toSubarray, Array.stop_toSubarray, Array.array_toSubarray]
 
-end NciCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk

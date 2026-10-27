@@ -26,9 +26,9 @@ is the total width of the distinct gates its segments name, wherever no gate is 
   grid whose rows (or columns) are runs as one periodic interval (`grid`), else row by row (`one_spec`).
 -/
 
-namespace NciCheck.Properties.SecurityProofs.Width
+namespace InferenceOnlyCheck.Properties.SecurityProofs.Width
 
-open NciCheck.Desc
+open InferenceOnlyCheck.Desc
 
 /-- The gates of intervals `(lo, hi, w)`: `[lo, hi)` each. -/
 def ivGates (L : List (ℕ × ℕ × ℕ)) : Finset ℕ := (L.flatMap fun x => List.range' x.1 (x.2.1 - x.1)).toFinset
@@ -372,7 +372,7 @@ theorem widthIn_eq (W : ℕ → ℕ) (ivs : Array (ℕ × ℕ × ℕ)) (frames :
       · rintro ⟨m, hm, b, hb, rfl⟩; exact ⟨m, hm, b, hb, rfl⟩
       · rintro ⟨m, hm, b, hb, rfl⟩; exact ⟨m, hm, b, hb, rfl⟩
     have hag' := agree_frame.1 hag
-    rw [hE, NciCheck.Properties.SecurityProofs.Desc.sum_copies (ivGates x.res.toList) x.lo x.period x.span x.cnt
+    rw [hE, InferenceOnlyCheck.Properties.SecurityProofs.Desc.sum_copies (ivGates x.res.toList) x.lo x.period x.span x.cnt
       (fun b hb => by obtain ⟨y, hy, -, h2⟩ := mem_ivGates.1 hb; have := hres y hy; omega) hsp W
       (fun m hm b hb => by
         obtain ⟨y, hy, h1, h2⟩ := mem_ivGates.1 hb
@@ -1456,4 +1456,4 @@ theorem novelWidthExact_of_pis (hP : PisExact) : NovelWidthExact :=
 /-- **`novelWidth` is the width of the union.** -/
 theorem novelWidthExact : NovelWidthExact := novelWidthExact_of_pis pisExact
 
-end NciCheck.Properties.SecurityProofs.Width
+end InferenceOnlyCheck.Properties.SecurityProofs.Width

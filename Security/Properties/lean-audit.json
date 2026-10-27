@@ -280,9 +280,9 @@
   "Definitions.Nci",
   "Definitions.Nci.Assumptions.Threads",
   "Definitions.Nci.Assumptions.Baseline",
-  "NciCheck.Check",
-  "NciCheck.Baseline",
-  "NciCheck.Desc",
+  "InferenceOnlyCheck.Check",
+  "InferenceOnlyCheck.Baseline",
+  "InferenceOnlyCheck.Desc",
   "Flock",
   "Properties.CertifierDevice",
   "CertifierDevice",
@@ -352,8 +352,8 @@
     "Definitions.Nci",
     "Definitions.Nci.Assumptions.Threads",
     "Definitions.Nci.Assumptions.Baseline",
-    "NciCheck.Check",
-    "NciCheck.Baseline",
+    "InferenceOnlyCheck.Check",
+    "InferenceOnlyCheck.Baseline",
     "Properties.Nci"
    ],
    "except": [],
@@ -366,14 +366,14 @@
     "Definitions.Nci",
     "Definitions.Nci.Assumptions.Baseline",
     "Definitions.Nci.Assumptions.Cover",
-    "NciCheck.Check",
-    "NciCheck.Baseline",
-    "NciCheck.Desc",
+    "InferenceOnlyCheck.Check",
+    "InferenceOnlyCheck.Baseline",
+    "InferenceOnlyCheck.Desc",
     "Properties.Nci",
     "Properties.NciDesc"
    ],
    "except": [],
-   "why": "the description-sized check's properties are stated over the code they are about (NciCheck.Desc, and NciCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.Nci.Assumptions), never over a proof",
+   "why": "the description-sized check's properties are stated over the code they are about (InferenceOnlyCheck.Desc, and InferenceOnlyCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.Nci.Assumptions), never over a proof",
    "sealed": true
   },
   "Properties.CertifierDevice": {
@@ -2448,32 +2448,32 @@
     "function": "MemoryChallenger.verdict",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.AcceptsExactly": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.CheckAccepts": {
-    "function": "NciCheck.check",
+   "InferenceOnlyCheck.Properties.SecurityProofs.CheckAccepts": {
+    "function": "InferenceOnlyCheck.check",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.CheckRefuses": {
-    "function": "NciCheck.check",
+   "InferenceOnlyCheck.Properties.SecurityProofs.CheckRefuses": {
+    "function": "InferenceOnlyCheck.check",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.Decodes": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.Decodes": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.RejectsExactly": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.Reports": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.Reports": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.Witnesses": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.Witnesses": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
    "PousCheck.Properties.SecurityProofs.deployed": {
@@ -3314,20 +3314,20 @@
     "function": "SampledProofs.Fleet.run",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.Throttles": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.Throttles": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.ThrottlesDark": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.ThrottlesSlots": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
@@ -3406,8 +3406,8 @@
     "function": "RemoteAudit.Schedule.check",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.BaselineProvenance": {
-    "function": "NciCheck.Baseline.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.BaselineProvenance": {
+    "function": "InferenceOnlyCheck.Baseline.evaluate",
     "outcome": "accept"
    },
    "Properties.RemoteAudit.liveIsRun": {
@@ -3458,36 +3458,36 @@
     "function": "PouwCheck.liveSaltCheck",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesSlots": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescAgrees": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescAgrees": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescThrottlesDark": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDark": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescReports": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescReports": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescWitnesses": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescThrottles": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottles": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": {
-    "function": "NciCheck.Baseline.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.CheckedCoverTraining": {
+    "function": "InferenceOnlyCheck.Baseline.evaluate",
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Shared.acceptedDrawsOpenable": {

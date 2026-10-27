@@ -16,7 +16,7 @@ resolve (`operands_prim`) in every activation `Prog.gate`'s walk reaches (`reach
 `Walk.OperandsResolve` from `Resolve.BodiesOk`.
 -/
 
-namespace NciCheck.Properties.SecurityProofs.OperandsResolve
+namespace InferenceOnlyCheck.Properties.SecurityProofs.OperandsResolve
 
 open Flock.Program
 
@@ -460,4 +460,4 @@ theorem operandsResolve_of (hB : Resolve.BodiesOk) : Walk.OperandsResolve := by
   rw [hops]
   exact fun h => by cases h
 
-end NciCheck.Properties.SecurityProofs.OperandsResolve
+end InferenceOnlyCheck.Properties.SecurityProofs.OperandsResolve

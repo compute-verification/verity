@@ -8,7 +8,7 @@ import Proofs.Properties.Nci.BodiesOk.Composite
 root is one of them (`getDef`'s index), a composite without parameters (`decode`'s check, `CalleeOk`).
 -/
 
-namespace NciCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.types Desc.callees
   Desc.ddefs liftV at_ paramsOf buildNode natJ? from Flock.Program
@@ -118,4 +118,4 @@ theorem decode_root (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
   rw [((hok P.root hr).1.2 hp).1]
   exact hp0
 
-end NciCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk

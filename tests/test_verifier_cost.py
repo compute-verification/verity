@@ -7,7 +7,7 @@ array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.m
 the tests a templated unit unrolled (`Tmpl.unroll`, `Tmpl.unrollAt`, `Tmpl.unitFull`, `Tmpl.posMap`, `Tmpl.foldRef`):
 a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`). The fix is in the
 scan's failure message: summarize once per specialized Definition and multiply through batch members and scan
-iterations, as `NciCheck.Desc` does (its docstring), so a Definition's summary serves every activation of it.
+iterations, as `InferenceOnlyCheck.Desc` does (its docstring), so a Definition's summary serves every activation of it.
 
 What may stay is listed in ``ALLOWED``, one line of reason each: the gate-by-gate references a description-sized
 verifier is difftested against, and the walks still open. An entry that no longer matches anything fails too.
@@ -20,15 +20,15 @@ import re
 from test_repository import ROOT, _tracked
 
 ALLOWED: dict[str, str] = {
-    "verity/core/protocols/inference_only/lean/NciCheck/Check.lean":
-        "NciCheck.check, the gate-by-gate reference NciCheck.Desc is difftested against (runs NciCheck.DescDifftestMain); "
-        "`nci-check` runs it only with --unrolled",
+    "verity/core/protocols/inference_only/lean/InferenceOnlyCheck/Check.lean":
+        "InferenceOnlyCheck.check, the gate-by-gate reference InferenceOnlyCheck.Desc is difftested against (runs "
+        "InferenceOnlyCheck.DescDifftestMain); `inference-only-check` runs it only with --unrolled",
     "verity/core/service/flock/Flock/Extract.lean":
-        "open (PRF-72): Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
+        "open: Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled; no served window names Q_word (they name "
         "template queries, which read the root body only)",
     "verity/core/service/flock/Flock/Qcall.lean":
-        "open (PRF-72): Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
+        "open: Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled (its reads deduplicated in linear time, "
         "dedupReads, proved equal to the quadratic loop it replaced: gates_ref); no served window names Q_call",
     "verity/core/service/sampled_proofs/SampledProofs/PartitionRef.lean":
@@ -48,8 +48,8 @@ ALLOWED: dict[str, str] = {
 
 FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "
        "\"Design rules\"): summarize once per specialized Definition and multiply through batch members and scan "
-       "iterations, as NciCheck.Desc does; a gate-by-gate reference a difftest holds the verifier to goes in ALLOWED "
-       "with its reason")
+       "iterations, as InferenceOnlyCheck.Desc does; a gate-by-gate reference a difftest holds the verifier to goes in "
+       "ALLOWED with its reason")
 
 #: `/- … -/` and `-- …`, blanked so that line numbers stay
 COMMENT = re.compile(r"/-.*?-/|--[^\n]*", re.S)

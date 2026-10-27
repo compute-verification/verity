@@ -1,15 +1,15 @@
-import NciCheck.Desc
+import InferenceOnlyCheck.Desc
 import Mathlib.Tactic
 
 /-!
 # The description-sized NCI check against the unrolled one
 
-`NciCheck.Desc.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Desc.lean`) computes per IU its size and
-its novel reads from one summary per Definition, where `NciCheck.evaluate` walks the circuit gate by gate. What is
+`InferenceOnlyCheck.Desc.evaluate` (`verity/core/protocols/inference_only/lean/InferenceOnlyCheck/Desc.lean`) computes per IU its size and
+its novel reads from one summary per Definition, where `InferenceOnlyCheck.evaluate` walks the circuit gate by gate. What is
 proved here is the summaries' arithmetic, each step stated against the function that computes it:
 
 * `sizes_eq_count`: an IU's size as `Desc.sizes` sums it, root node by root node, is the number of gates the expanded
-  division puts in it (each gate in its root node's IU), which is what `NciCheck.tally` counts gate by gate
+  division puts in it (each gate in its root node's IU), which is what `InferenceOnlyCheck.tally` counts gate by gate
   (`sizes_eq_tally` in `Proofs.Properties.Nci`).
 * `affine_resolves`: the batch fast path's gate for leaf `e` of a batch output (`Piece.affine`) is the gate §7's
   resolution reaches member by member (`Flock.Program.resolveStep`: member `e / L`, its return leaf `e % L`).
@@ -18,13 +18,13 @@ proved here is the summaries' arithmetic, each step stated against the function 
 
 Not proved here: that `analyze`'s reads per root node are the unrolled operands outside it (what `Prog.gate` returns,
 through §7's resolution; open as `Novel.ReadsExact`). That `novelWidth` is the width of the union of the gates it is
-given is proved in `Width` (`novelWidthExact`). The difftest holds the open one (`runs` `NciCheck.DescDifftestMain` in
+given is proved in `Width` (`novelWidthExact`). The difftest holds the open one (`runs` `InferenceOnlyCheck.DescDifftestMain` in
 the package's `lean-audit.json`: 3,993 declarations, the description-sized check against the unrolled one).
 -/
 
-namespace NciCheck.Properties.SecurityProofs.Desc
+namespace InferenceOnlyCheck.Properties.SecurityProofs.Desc
 
-open NciCheck.Desc
+open InferenceOnlyCheck.Desc
 
 /-! ## Sizes -/
 
@@ -148,4 +148,4 @@ theorem sum_copies (S : Finset ℕ) (lo period span cnt : ℕ) (hS : ∀ x ∈ S
   rw [Finset.sum_image fun x _ y _ h => by simpa using h]
   exact Finset.sum_congr rfl fun x hx => hw m (Finset.mem_range.1 hm) x hx
 
-end NciCheck.Properties.SecurityProofs.Desc
+end InferenceOnlyCheck.Properties.SecurityProofs.Desc

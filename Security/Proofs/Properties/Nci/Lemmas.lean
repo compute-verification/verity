@@ -2,7 +2,7 @@ import Properties.Nci
 import Mathlib.Tactic
 
 /-!
-# Lemmas about `NciCheck`'s functions
+# Lemmas about `InferenceOnlyCheck`'s functions
 
 Each step of the check, characterized: the folds over a range in `Except`, `gateOf` and `circuitOf`, `thetaStep`,
 `ownerOf` and `divisionOf`, `tally` and `ius`, `failure`, `parse` and `evaluate`.
@@ -11,7 +11,7 @@ Each step of the check, characterized: the folds over a range in `Except`, `gate
 set_option linter.unusedSimpArgs false
 set_option linter.unnecessarySeqFocus false
 
-namespace NciCheck.Properties.SecurityProofs
+namespace InferenceOnlyCheck.Properties.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog)
@@ -1395,4 +1395,4 @@ theorem evaluate_error (j : Json) (k : String) : evaluate j = .error k ↔ parse
   simp only [h1, h2, h3, h4]; simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
   simp [h2, h3, h4]
 
-end NciCheck.Properties.SecurityProofs
+end InferenceOnlyCheck.Properties.SecurityProofs

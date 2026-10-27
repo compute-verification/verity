@@ -1,15 +1,15 @@
 import Definitions.Nci
-import NciCheck.Check
+import InferenceOnlyCheck.Check
 
 /-!
 # The NCI check's properties, stated against the Lean function
 
-`NciCheck.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`, package `nci_check`) is
+`InferenceOnlyCheck.evaluate` (`verity/core/protocols/inference_only/lean/InferenceOnlyCheck/Check.lean`, package `inference_only_check`) is
 the verifier's check of a declared division against the NCI policy, `Nci.Complies Γ α` (`Definitions/Nci.lean`), and
-`NciCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving the fix for some codes).
+`InferenceOnlyCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving the fix for some codes).
 θ, the baseline, holds only input gates bound at registration (`IsRegistered`): one bound per run is refused. The difftest holds it to the Python reference on
 random instances; the statements here say what it computes on every instance. Each is a named `Prop`, proved as
-`NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Proofs.Properties.Nci`, and a guarantee of this
+`InferenceOnlyCheck.Properties.SecurityProofs.X : InferenceOnlyCheck.Properties.X` in `Proofs.Properties.Nci`, and a guarantee of this
 package (`lean-audit.json`).
 
 Each statement has one shape (the lean-proofs skill, "One shape"): for every instance, if the check gives a verdict (or
@@ -24,7 +24,7 @@ and gives a verdict on every well-formed instance, are completeness, in `Proofs.
   then `Prog.gate` per gate), never over the check's own state, but for one: whether a reference reads a leaf at
   another width (`Reinterprets`), which is the check's width analysis.
 * `AcceptsExactly`: `evaluate j` gives a verdict only when `WellFormed j`.
-* `CheckRefuses`, `CheckAccepts`: the same of `NciCheck.check`, whose `error` field is the refusal's code and which has
+* `CheckRefuses`, `CheckAccepts`: the same of `InferenceOnlyCheck.check`, whose `error` field is the refusal's code and which has
   none on a verdict.
 
 **A verdict is the definition's.** The decoded Program is the definition's circuit as the check's docstring maps
@@ -46,7 +46,7 @@ No statement takes an assumption. What is not proved about the decoder (its `Pro
 the statements read the decoder only through what it returns.
 -/
 
-namespace NciCheck.Properties
+namespace InferenceOnlyCheck.Properties
 
 open Lean (Json toJson)
 open Flock.Program (Prog)
@@ -98,11 +98,11 @@ def IsRegistered (P : Prog) (g : ℕ) : Prop :=
     (Flock.Program.inputId? (P.defs[p]!).key).map (·.1) = some Flock.Program.REGISTRATION
 
 /-- A reference of `P` reads a leaf at another width than it was committed with, or one the width analysis can't
-decide within its bound (`NciCheck.Widths.reinterpretation`; descriptor v1's `E_REINTERPRET`, which the Python codec
+decide within its bound (`InferenceOnlyCheck.Widths.reinterpretation`; descriptor v1's `E_REINTERPRET`, which the Python codec
 refuses as it decodes and C-Flock's decoder doesn't look for). Stated through the check's own analysis: that it finds
 exactly the references the codec refuses is the difftest's, not yet a proof. -/
 def Reinterprets (P : Prog) : Prop :=
-  NciCheck.Widths.reinterpretation P ≠ none
+  InferenceOnlyCheck.Widths.reinterpretation P ≠ none
 
 /-! ## θ and the owners -/
 
@@ -260,4 +260,4 @@ def Witnessed (j out : Json) : Prop :=
 def Witnesses : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → Witnessed j out
 
-end NciCheck.Properties
+end InferenceOnlyCheck.Properties

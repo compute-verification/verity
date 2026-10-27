@@ -1,25 +1,25 @@
-"""The NCI policy's check of a declared division, straight from the definitions: the reference `NciCheck.check` is held to.
+"""The inference-only policy's check of a declared division, straight from the definitions: the reference `InferenceOnlyCheck.check` is held to.
 
     check(instance) -> {"gates", "ius", "complies", "failure"} | {"error": code}
 
 `Nci.Complies Γ α` (`Security/Definitions/Nci.lean`): the computed gates of `D` divide into isolation units of at most `Γ`
 gates, each with `novelReads R = width(into(R) \\ θ) ≤ α · size R`, where `into(R)` is the gates outside `R` with a wire
-into `R` (`Security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones `NciCheck.Check`'s
+into `R` (`Security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones `InferenceOnlyCheck.Check`'s
 docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program (`verity.ml.circuits`),
 gate `g` of width `Value<w>` bits, an input gate when its primitive is an input (`program.is_input`, with no operands),
 reading the gates its operands name; θ is a list of ids of input gates bound at registration (`program.is_registered`;
 one bound per run is refused, `theta-not-registered`); the division is one owner per gate, `"input"` or an IU index.
 A primitive is taken as the descriptor declares it, as C-Flock's decoder takes it, so no registry is needed.
 
-    check_desc(instance) -> the same, for `NciCheck.Desc`'s instance: θ and the owners per root node
+    check_desc(instance) -> the same, for `InferenceOnlyCheck.Desc`'s instance: θ and the owners per root node
 
-`check_desc` refuses as `NciCheck.Desc` does, in its order, and otherwise is `check` on the instance expanded gate by gate
+`check_desc` refuses as `InferenceOnlyCheck.Desc` does, in its order, and otherwise is `check` on the instance expanded gate by gate
 (`expand`), so the two checks are held to one reference.
 
-    check_baseline(instance, trusted) -> the same, then θ's provenance (`NciCheck.Baseline`)
+    check_baseline(instance, trusted) -> the same, then θ's provenance (`InferenceOnlyCheck.Baseline`)
 
 `check_baseline` is `check_desc` followed by the check of each θ entry's `provenance` against the trusted input (the
-deployment's registration log, the run's own record and the program function's parameters), with `NciCheck.Baseline`'s
+deployment's registration log, the run's own record and the program function's parameters), with `InferenceOnlyCheck.Baseline`'s
 codes in its order; `check_baseline_unrolled` is `check` followed by the same, on an instance expanded by
 `expand_baseline`. θ holds registered public data only: an entry of any kind but `registered`, an earlier run's `output`
 among them, is refused `theta-provenance`. One log is one deployment, and every entry cites its first record, the first
@@ -49,7 +49,7 @@ def _nat(x) -> bool:
 
 
 def _unevaluated(*_a):
-    raise NotImplementedError("the NCI check evaluates no gate")
+    raise NotImplementedError("the inference-only check evaluates no gate")
 
 
 def declared(desc: dict) -> Registry:
@@ -158,7 +158,7 @@ FUEL = 2 ** 62
 
 
 def walk_bound(program) -> int:
-    """`NciCheck.Desc.walkBound`: `(A + 1) · (H + 2)` for the root's activations `A` (its own and each composite node
+    """`InferenceOnlyCheck.Desc.walkBound`: `(A + 1) · (H + 2)` for the root's activations `A` (its own and each composite node
     member's, once per Definition and multiplied through batches and scans) and the depth `H` they nest to."""
     from verity.ml.circuits.parts import n_members
     memo: dict[int, tuple[int, int]] = {}
@@ -175,8 +175,8 @@ def walk_bound(program) -> int:
 
 
 def expand(inst) -> dict:
-    """An instance of `NciCheck.Desc` (θ and the owners per root node) as `check` reads one: θ every gate of its nodes,
-    and each gate the owner of its root node. The instance is well-formed as `NciCheck.Desc` reads it."""
+    """An instance of `InferenceOnlyCheck.Desc` (θ and the owners per root node) as `check` reads one: θ every gate of its nodes,
+    and each gate the owner of its root node. The instance is well-formed as `InferenceOnlyCheck.Desc` reads it."""
     _, _, spans = root_nodes(inst["program"])
     theta = [g for k in inst["theta"] for g in range(*spans[k])]
     owner = [inst["owner"][k] for k, (lo, hi) in enumerate(spans) for _ in range(lo, hi)]
@@ -184,7 +184,7 @@ def expand(inst) -> dict:
 
 
 def evaluate_desc(inst) -> dict:
-    """`NciCheck.Desc.evaluate`: its refusals in its order, then `evaluate` on the expansion."""
+    """`InferenceOnlyCheck.Desc.evaluate`: its refusals in its order, then `evaluate` on the expansion."""
     if not (isinstance(inst, dict) and all(k in inst for k in FIELDS) and isinstance(inst["program"], str)
             and isinstance(inst["theta"], list) and isinstance(inst["owner"], list)):
         raise Malformed("instance")
@@ -241,7 +241,7 @@ def check_desc(inst) -> dict:
         return {"error": e.code}
 
 
-# θ's provenance (`NciCheck.Baseline`): after the policy check, each θ entry against the trusted input
+# θ's provenance (`InferenceOnlyCheck.Baseline`): after the policy check, each θ entry against the trusted input
 
 REGISTRATION_V1 = "verity/registration/v1"
 REGISTRATION_V2 = "verity/registration/v2"
@@ -373,13 +373,13 @@ def provenance(inst, tr, node) -> None:
 
 
 def _node_of(offs: list[int], g: int) -> int:
-    """The root node holding gate g (`NciCheck.Desc.nodeOf`)."""
+    """The root node holding gate g (`InferenceOnlyCheck.Desc.nodeOf`)."""
     import bisect
     return bisect.bisect_right(offs, g) - 1
 
 
 def check_baseline(inst, tr) -> dict:
-    """`NciCheck.Baseline.check`: `check_desc`, then θ's provenance; the verdict is the policy check's."""
+    """`InferenceOnlyCheck.Baseline.check`: `check_desc`, then θ's provenance; the verdict is the policy check's."""
     out = check_desc(inst)
     if "error" in out:
         return out
@@ -391,7 +391,7 @@ def check_baseline(inst, tr) -> dict:
 
 
 def check_baseline_unrolled(inst, tr) -> dict:
-    """`NciCheck.Baseline.checkUnrolled`: `check`, then θ's provenance, gate g of θ in the root node holding it."""
+    """`InferenceOnlyCheck.Baseline.checkUnrolled`: `check`, then θ's provenance, gate g of θ in the root node holding it."""
     out = check(inst)
     if "error" in out:
         return out

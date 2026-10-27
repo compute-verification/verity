@@ -1,11 +1,11 @@
-"""The difftest of the NCI policy's Lean check against its Python reference: the Python half.
+"""The difftest of the inference-only policy's Lean check against its Python reference: the Python half.
 
 `verity/core/protocols/inference_only/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions,
 335 whose references name leaves of other widths than their types give them (`E_REINTERPRET`) or are their well-typed
 neighbours, and two pinned ones (θ with an input bound per run, refused, and θ the registered input, accepted), and
-`scripts/nci_reference.py`'s results on each (per IU its size and novel reads, the verdict and the first failing IU, or
+`scripts/inference_only_reference.py`'s results on each (per IU its size and novel reads, the verdict and the first failing IU, or
 the first malformation's code). `check` runs the Lean half in its Lean audit (`runs` in that package's
-`lean-audit.json`): `NciCheck/DifftestMain.lean` checks every instance with `NciCheck.check` and fails on any difference.
+`lean-audit.json`): `InferenceOnlyCheck/DifftestMain.lean` checks every instance with `InferenceOnlyCheck.check` and fails on any difference.
 The audit checks the data against the record's SHA-256, and its pass is cached on the Lean package's files alone, so the
 test here is what says the data is still what the generator and the reference write: a change to either changes the
 data, fails this test, and `audit.py --update` records the new data, which makes `check` run the Lean half on it. The
@@ -37,7 +37,7 @@ def _load(name: str):
 
 vectors = _load("difftest_vectors")
 reference = vectors.reference
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.DifftestMain"]
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.DifftestMain"]
 
 
 @pytest.mark.slow
@@ -95,7 +95,7 @@ def test_the_reference_on_a_declaration_worked_by_hand():
 
 def test_the_pinned_instances_get_their_results():
     """The data's last two lines: θ holding b, bound per run, is refused (`theta-not-registered`), and θ of the
-    registered a alone gets its verdict. The difftest holds `NciCheck.check` to these results."""
+    registered a alone gets its verdict. The difftest holds `InferenceOnlyCheck.check` to these results."""
     pins = vectors.pinned()
     assert [p["theta_kind"] for p in pins] == ["all", "registered"]
     for p in pins:

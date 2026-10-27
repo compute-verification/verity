@@ -25,7 +25,7 @@ from `Resolve.BodiesOk`) and `OperandsEarlier` (every operand the walk locates i
 `descAgrees_of_gaps` gives `DescAgrees` from those two and `NovelExact`.
 -/
 
-namespace NciCheck.Properties.SecurityProofs.Walk
+namespace InferenceOnlyCheck.Properties.SecurityProofs.Walk
 
 open Flock.Program (Prog Seq Part parsePartsIn)
 
@@ -1020,4 +1020,4 @@ theorem descAgrees_of_gaps (hO : OperandsResolve) (hE : OperandsEarlier) (hN : N
     Properties.DescAgrees :=
   descAgrees_of (gatesLocated_of hO hE) hN
 
-end NciCheck.Properties.SecurityProofs.Walk
+end InferenceOnlyCheck.Properties.SecurityProofs.Walk

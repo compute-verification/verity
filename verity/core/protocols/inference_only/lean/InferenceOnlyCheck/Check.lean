@@ -2,7 +2,7 @@ import Std.Data.HashSet
 import Flock.Program
 
 /-!
-# The NCI policy's check of a declared division
+# The inference-only policy's check of a declared division
 
 `Nci.Complies Γ α` (`Security/Definitions/Nci.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates divide
 into isolation units (IUs) of at most `Γ` gates, each reading at most `α` bits of novel information per gate:
@@ -46,7 +46,7 @@ then gate by gate `owner-entry`: neither `"input"` nor a natural, `input-in-iu`,
 (`fixOf`), or for a `program` refusal of a reinterpretation, where (`refusalOf`).
 -/
 
-namespace NciCheck
+namespace InferenceOnlyCheck
 
 open Lean (Json toJson)
 
@@ -532,4 +532,4 @@ def check (j : Json) : Json :=
   | .ok r => r
   | .error code => refusalOf j code
 
-end NciCheck
+end InferenceOnlyCheck

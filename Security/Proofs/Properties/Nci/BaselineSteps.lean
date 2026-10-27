@@ -3,7 +3,7 @@ import Properties.Nci.Baseline
 /-!
 # θ's provenance check, step by step
 
-What each step of `NciCheck.Baseline.evaluate` establishes when it returns: the trusted input's reading (`trustedOf_ok`:
+What each step of `InferenceOnlyCheck.Baseline.evaluate` establishes when it returns: the trusted input's reading (`trustedOf_ok`:
 the log in R6's chain, each record's digest, the run's record and the parameters), the provenance's (`provenanceOf_ok`),
 one θ entry's checks (`entryStep_ok`), and the loop over θ (`provenance_ok`). `Proofs.Properties.Nci.Baseline` joins them
 with the policy check's θ fold into `BaselineProvenance`.
@@ -12,11 +12,11 @@ The check compares fields with strings through `strOf?`, never with `Json`'s `==
 is then what these lemmas read. This module imports no Mathlib.
 -/
 
-namespace NciCheck.Properties.SecurityProofs.BaselineSteps
+namespace InferenceOnlyCheck.Properties.SecurityProofs.BaselineSteps
 
 open Lean (Json)
 open Flock.Program (Ty)
-open NciCheck.Baseline
+open InferenceOnlyCheck.Baseline
 
 /-- `mapM` in `Except`, entry by entry. -/
 theorem list_mapM_ok_get {α β ε : Type} [Inhabited α] [Inhabited β] (f : α → Except ε β) :
@@ -382,4 +382,4 @@ theorem provenanceHeld_of (j tr out : Json) (h : Baseline.evaluate j tr = .ok ou
   exact ⟨prov, ps[t]!.registration, ps[t]!.value, ps[t]!.root, hprovj, hpsz, fk, freg, fval, froot, by omega,
     by rw [← h0r]; exact hdg 0 (by omega), ⟨e, he, her⟩, k, p, own, hk, hown, hp, hprog, e', he', her'⟩
 
-end NciCheck.Properties.SecurityProofs.BaselineSteps
+end InferenceOnlyCheck.Properties.SecurityProofs.BaselineSteps

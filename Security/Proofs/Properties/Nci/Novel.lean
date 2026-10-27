@@ -6,7 +6,7 @@ import Proofs.Properties.Nci.Width
 
 Toward `NovelExact`. A segment names gates with their widths (`Width.segGates`). `Desc.intoOf`
 collects, per IU, the segments its root nodes read whose first piece is in a root node of another IU and outside θ's
-nodes (`intoOf_spec`), and `NciCheck.ius` sums the widths of the gates outside an IU that its gates read, θ's taken out
+nodes (`intoOf_spec`), and `InferenceOnlyCheck.ius` sums the widths of the gates outside an IU that its gates read, θ's taken out
 (`ius_snd`, `hashSet_fold_sum'`), and `Desc.novelWidth` sums the widths of the distinct gates of those segments
 (`Width.novelWidthExact`). So `NovelExact` holds wherever one smaller statement does, a named `Prop` here
 (`novelExact_of`): `ReadsExact`, that on a Program `Desc.evaluate` reads, the segments `Desc.analyze` gives a root node
@@ -17,14 +17,14 @@ segment's first piece. `readsExact` (`Proofs.Properties.Nci.Agrees`) proves it.
 `descAgrees_of_readsExact` (`Proofs.Properties.Nci.Agrees`) from it alone, the other two proved.
 -/
 
-namespace NciCheck.Properties.SecurityProofs.Novel
+namespace InferenceOnlyCheck.Properties.SecurityProofs.Novel
 
 open DescAgree
 open Flock.Program (Prog)
 open Width (pieceGates piecesGates segGates segsGates dedup_sum)
 
 /-- **`analyze`'s reads are the unrolled operands outside each root node.** On a Program `Desc.evaluate` reads,
-with `NciCheck.circuitOf`'s circuit `c`: every gate a segment of root node `k`'s reads names (one of positive count) is a
+with `InferenceOnlyCheck.circuitOf`'s circuit `c`: every gate a segment of root node `k`'s reads names (one of positive count) is a
 gate `a` of width `c.w[a]` in the root node `Desc.nodeOf` finds for the segment's first piece; and those gates are
 exactly the gates outside node `k` that its gates read. -/
 def ReadsExact : Prop :=
@@ -228,7 +228,7 @@ theorem segGates_ps {s : Desc.Seg} {x : ℤ × ℕ} (h : x ∈ segGates s) : ∃
 
 /-- **`NovelExact`, from `analyze`'s reads and `novelWidth`'s union**: the segments `intoOf` collects for an IU name, with
 their widths, the gates outside it that its gates read, θ's taken out, each once; `novelWidth` sums their widths, and so
-does `NciCheck.ius`. -/
+does `InferenceOnlyCheck.ius`. -/
 theorem novelExact_of (hR : ReadsExact) : NovelExact := by
   intro bytes P reads mask own c dv hdec hov hlo hin hwk han hc hms hos hdsz hmask hown hdiv hn u hu
   obtain ⟨-, h0, hK, hmono⟩ := rootLaidOut_spec P hlo
@@ -335,4 +335,4 @@ theorem descAgrees_of_open (hO : Walk.OperandsResolve) (hB : Resolve.BodiesOk) (
     Properties.DescAgrees :=
   Walk.descAgrees_of_gaps hO (Resolve.operandsEarlier_of hB) (novelExact_of hR)
 
-end NciCheck.Properties.SecurityProofs.Novel
+end InferenceOnlyCheck.Properties.SecurityProofs.Novel

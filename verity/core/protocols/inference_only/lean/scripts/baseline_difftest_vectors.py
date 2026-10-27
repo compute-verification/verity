@@ -1,13 +1,13 @@
 """The provenance check's difftest data: declarations with θ, θ's provenance and the service's trusted input, for
-`NciCheck/BaselineDifftestMain.lean`.
+`InferenceOnlyCheck/BaselineDifftestMain.lean`.
 
     python scripts/baseline_difftest_vectors.py <verity checkout> --out DIR [--count N]
 
 Writes three files under `DIR/baseline_difftest/`, one line per case: `cases.jsonl`, `{"instance", "trusted"}` as
-`NciCheck.Baseline.check` reads them (`NciCheck.Baseline`'s docstring); `expanded.jsonl`, the same case expanded gate by
-gate (`nci_reference.expand_baseline`) as `NciCheck.Baseline.checkUnrolled` reads it, or `null` where the policy check
-refuses the instance or its provenance is not one entry per θ entry; and `python.jsonl`, `nci_reference.check_baseline`'s
-results. The Lean audit runs `NciCheck/BaselineDifftestMain.lean` on the three (`runs` in `lean-audit.json`).
+`InferenceOnlyCheck.Baseline.check` reads them (`InferenceOnlyCheck.Baseline`'s docstring); `expanded.jsonl`, the same case expanded gate by
+gate (`inference_only_reference.expand_baseline`) as `InferenceOnlyCheck.Baseline.checkUnrolled` reads it, or `null` where the policy check
+refuses the instance or its provenance is not one entry per θ entry; and `python.jsonl`, `inference_only_reference.check_baseline`'s
+results. The Lean audit runs `InferenceOnlyCheck/BaselineDifftestMain.lean` on the three (`runs` in `lean-audit.json`).
 
 Case `seed`'s declaration, for the first `COUNT`, is one of `difftest_vectors`' shapes with each parameter bound at
 registration with probability 0.6, divided into one IU, with `Γ` and `α` large enough that the policy check gives a
@@ -101,7 +101,7 @@ def build(rng, text: str, params: list, theta_pick, bad: str | None, run_at: int
     """A case on the declaration `text`: θ the registered input nodes `theta_pick` chooses, its provenance and the trusted
     input, the run's own record at position `run_at` of the log (0 to 3 at random when None), broken as `bad` names
     (None: not broken; "output": one entry a port of the log's first record under the cited root and the run's rows, in
-    the `output` form the check took until 21 Oct). Returns the case with what it was made from."""
+    the `output` form the check no longer takes). Returns the case with what it was made from."""
     desc = json.loads(text)
     program = codec.decode_program(desc, reference.declared(desc))
     typed = [(n, type_from_json(t)) for n, t in params]

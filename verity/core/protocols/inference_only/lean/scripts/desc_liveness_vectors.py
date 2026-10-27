@@ -1,14 +1,14 @@
-"""The liveness cases of the description-sized check, for `NciCheck/DescLivenessMain.lean`.
+"""The liveness cases of the description-sized check, for `InferenceOnlyCheck/DescLivenessMain.lean`.
 
     python scripts/desc_liveness_vectors.py <verity checkout> --out DIR
 
 Writes `DIR/desc_liveness/cases.jsonl`, one case per line: `{"id", "mode", "small", "big"}`, two instances of
-`NciCheck.Desc` (θ and the owners per root node) on one Program shape, with `n` (a scan's iterations, a batch's members)
-small and past anything walked one by one (2^22 to 2^52). `NciCheck/DescLivenessMain.lean` fails unless
-`NciCheck.Desc.check` gives on `small` what `NciCheck.check` gives on it expanded gate by gate, and on `big` a verdict
+`InferenceOnlyCheck.Desc` (θ and the owners per root node) on one Program shape, with `n` (a scan's iterations, a batch's members)
+small and past anything walked one by one (2^22 to 2^52). `InferenceOnlyCheck/DescLivenessMain.lean` fails unless
+`InferenceOnlyCheck.Desc.check` gives on `small` what `InferenceOnlyCheck.check` gives on it expanded gate by gate, and on `big` a verdict
 equal to `small`'s (`mode` `same`) or with the same novel reads per IU (`novel`, where the gates grow with `n`).
 
-The shapes are the fuzzer's, on which `NciCheck.Desc` once
+The shapes are the fuzzer's, on which `InferenceOnlyCheck.Desc` once
 overflowed its stack, ran for a time linear in `n` or ran out of memory, and the closed forms that replaced those walks:
 
 * `passscan`: a gate reading the carry of a scan of `n` iterations of a step that passes its carry through (training's

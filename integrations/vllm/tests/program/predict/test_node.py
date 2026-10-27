@@ -4,7 +4,7 @@ Each rank's run of the node's body is its rank Program's body node for node, eve
 parameters or of the rank's own nodes, except that a peer Input's leaf is a node of the peer rank: every rank's collective k reads
 one operand where its rank Program reads its peers, each rank's rows its own (its other operands, a fused norm's residual and
 weight, stay its own). So no peer Input is left, and an isolation block over the node reads only its prompt besides
-θ (`nci_reference.check_desc`, `NciCheck.Desc`'s reference)."""
+θ (`inference_only_reference.check_desc`, `InferenceOnlyCheck.Desc`'s reference)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from verity_vllm.program.predict.phi import Phi
 from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
 
 _spec = importlib.util.spec_from_file_location(
-    "nci_reference", Path(__file__).resolve().parents[5] / "verity/core/protocols/inference_only/lean/scripts/nci_reference.py")
+    "inference_only_reference", Path(__file__).resolve().parents[5] / "verity/core/protocols/inference_only/lean/scripts/inference_only_reference.py")
 NCI = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(NCI)
 
@@ -94,7 +94,7 @@ def test_tp2_node_is_its_ranks_joined_at_their_collectives(wrapper, shape):
 
 @pytest.mark.parametrize("wrapper,shape", [("step", {"M": 1, "pos0": 8}), ("request", {"LP": 4, "T": 2})])
 def test_the_root_is_the_input_nodes_and_one_call_of_the_body(wrapper, shape):
-    """`NciCheck.Desc` keeps a root node's reads as pieces of gates, so the body is one Definition the root calls once: the root
+    """`InferenceOnlyCheck.Desc` keeps a root node's reads as pieces of gates, so the body is one Definition the root calls once: the root
     is the parameters' input nodes, in order, then that Call, and the descriptor holds the body's nodes in its callee."""
     node = build_node_program(_phi(TINY, tp={"world": 2, "rank": 0}), wrapper, **shape)
     lowered = sum(len(RL.lower(t)) for _, t in node.program.fn.signature()[0])

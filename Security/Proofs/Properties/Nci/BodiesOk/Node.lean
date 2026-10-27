@@ -8,7 +8,7 @@ the callee's parameters. `buildNode_spec` reads off what it accepted: per form, 
 callee's parameters, the batch axes and scan `xs` all of length `n`, and the output type it computed.
 -/
 
-namespace NciCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 
 open Flock.Program
 open private buildNode from Flock.Program
@@ -508,4 +508,4 @@ theorem cover_of_nodeOk (c : Defn) (nd : Node) (hn : NodeOk c nd) (hp : c.prim =
           _ = t := by rw [e1, Nat.mul_comm]; exact e2
   · exact absurd (hco (.inr rfl)) (by simp [hp])
 
-end NciCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk

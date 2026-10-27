@@ -8,6 +8,6 @@
    "inherited": false,
    "dir": "../../../service/flock",
    "configFile": "lakefile.toml"}],
- "name": "nci_check",
+ "name": "inference_only_check",
  "lakeDir": ".lake",
  "fixedToolchain": false}

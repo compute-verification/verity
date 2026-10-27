@@ -16,7 +16,7 @@ decoder reads them (`rank<r>.schedule`), then each rank's weights, one parameter
 rank's samples, rank-major: each rank samples from the same gathered logits and feeds its own sample to its next forward.
 
 The body is one Definition (`NodeResult.node_fn`), and the Program's function (`Node`, bound to it) calls it once, so the root is
-the parameters' input nodes and one Call. `NciCheck.Desc` summarizes a Definition once and keeps a root node's reads as pieces of
+the parameters' input nodes and one Call. `InferenceOnlyCheck.Desc` summarizes a Definition once and keeps a root node's reads as pieces of
 gates, so it reads the node through that Call; a root holding the body's ~10⁷ nodes itself would be ~10¹⁰ pieces on GLM-5.3 B1.
 `NodeResult.spans` says which rank emitted each run of the body's nodes.
 """

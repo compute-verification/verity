@@ -7,16 +7,16 @@ import Proofs.Nci.Cover.Training
 # A verdict of compliance carries the cover theorem's factor
 
 `CoverTrained` and `CheckedCoverTraining` are stated in `Properties.NciDesc.Cover`. `coverTrained` proves `CoverTrained`
-of every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's compliance (`Witnesses`) and
+of every verdict of the gate-level check `InferenceOnlyCheck.evaluate`, from the verdict's compliance (`Witnesses`) and
 `CoverTraining`.
 
-The check of record is `NciCheck.Baseline.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's provenance.
+The check of record is `InferenceOnlyCheck.Baseline.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's provenance.
 Its verdict is `Desc.evaluate`'s (`baseline_desc`), and `Properties.DescAgrees` makes that the gate-level check's on every
 expansion of the instance, gate by gate, so `checkedCoverTraining_of_descAgrees` proves `CheckedCoverTraining` from it,
 and `SecurityProofs.CheckedCoverTraining` from `SecurityProofs.DescAgrees`.
 -/
 
-namespace NciCheck.Properties.SecurityProofs
+namespace InferenceOnlyCheck.Properties.SecurityProofs
 
 open Lean (Json)
 
@@ -46,4 +46,4 @@ circuit the declaration contains, under the cover theorem's premises on its bit 
 theorem CheckedCoverTraining : Properties.CheckedCoverTraining :=
   checkedCoverTraining_of_descAgrees DescAgrees
 
-end NciCheck.Properties.SecurityProofs
+end InferenceOnlyCheck.Properties.SecurityProofs

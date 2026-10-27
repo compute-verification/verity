@@ -38,13 +38,13 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   an operator at its `budget`-th failure, not its first (`budget ≥ 1`); it ends the operator's registrations, not its
   hardware's use; and nothing states the verdict's time `Δ` after the detected block.
 * **NCI** (in place of `Complies` and `ThreadedThrottled`'s premises): each declared run `i` meets
-  `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ α Λ_i size(d_i)`, which
-  `NciCheck.Properties.DescThrottles` gives for every declaration a verdict of compliance of the check of record lays
-  out (`NciCheck.Baseline.evaluate`, whose verdict is `Desc.evaluate`'s), at `Γ = gamma` and `α = num/den`, under
+  `InferenceOnlyCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ α Λ_i size(d_i)`, which
+  `InferenceOnlyCheck.Properties.DescThrottles` gives for every declaration a verdict of compliance of the check of record lays
+  out (`InferenceOnlyCheck.Baseline.evaluate`, whose verdict is `Desc.evaluate`'s), at `Γ = gamma` and `α = num/den`, under
   `BaselineRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs the
   code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
   guarantee yet: it rests on `Novel.ReadsExact`, through `DescAgrees`. The cover theorem's factor on the same verdicts,
-  `NciCheck.Properties.CheckedCoverTraining`, would replace `ρ_T = b_a/(αΛ)` by its own.
+  `InferenceOnlyCheck.Properties.CheckedCoverTraining`, would replace `ρ_T = b_a/(αΛ)` by its own.
 
 Every other premise is `DampenerRemote`'s: the model's accounting of the four sources of counted multiplications, the
 capacities `C` and `U` (`s = U/(C + U)`), and the hardware's rate `Φ` per identity. The developer's identities `I`

@@ -1,11 +1,11 @@
-import NciCheck.Desc
+import InferenceOnlyCheck.Desc
 import Std.Data.HashSet
 
 /-!
 # The desc fuzzer: the statements behind `DescAgrees`, decided on generated Programs
 
-`NciCheck.Properties.DescAgrees` (`Desc.check` agrees with the unrolled `NciCheck.evaluate`) follows from three open
-statements in `Security/Properties/Proofs/Nci/` (`Novel.descAgrees_of_open`). Each is a `∀` over Programs that pass
+`InferenceOnlyCheck.Properties.DescAgrees` (`Desc.check` agrees with the unrolled `InferenceOnlyCheck.evaluate`) follows from three open
+statements in `Security/Proofs/Properties/Nci/` (`Novel.descAgrees_of_open`). Each is a `∀` over Programs that pass
 `Desc.evaluate`'s refusals: `decode`, `orderViolation = none`, `Desc.rootLaidOut`, `Desc.inputsAtRoot`,
 `Desc.walkable` and `Desc.analyze`. On one such Program each conclusion is decidable, and `check` decides it:
 
@@ -19,22 +19,22 @@ statements in `Security/Properties/Proofs/Nci/` (`Novel.descAgrees_of_open`). Ea
 * `s2`, `Resolve.BodiesOk`: every Definition a `Good` activation runs (the root, and each composite callee of a node with
   members, `goodDefs`) is `BodyOk`: `RefOk` for every argument and return reference, `UpOk`, `DownOk`, and `OpOk` for a
   primitive callee.
-* `s3`, `Novel.ReadsExact`: on `NciCheck.circuitOf`'s circuit `c`, every gate a segment of `Desc.analyze`'s reads of root
+* `s3`, `Novel.ReadsExact`: on `InferenceOnlyCheck.circuitOf`'s circuit `c`, every gate a segment of `Desc.analyze`'s reads of root
   node `k` names (of positive count) is a natural `a` of width `c.w[a]` in the root node `Desc.nodeOf` finds for the
   segment's first piece (clause a), and those gates are exactly the gates outside node `k` that its gates read (clause b).
   `circuitOf` runs only where `s1prim`'s walk resolved every operand under the step cap, so it never runs `Steps.FUEL`
   steps.
 * `agree`, `DescAgrees` itself, on instances of the Program (`instanceOf`) and on any its line gives (`θ`, owners, `Γ`
   and `α` chosen with the Program, as the shared family chooses its IUs): wherever `Desc.evaluate` gives a verdict,
-  `NciCheck.evaluate` gives the same one on the instance expanded gate by gate (`expand`, `NciDesc.Expands`).
+  `InferenceOnlyCheck.evaluate` gives the same one on the instance expanded gate by gate (`expand`, `NciDesc.Expands`).
 
 Each `∀` over members, leaves or references enumerates all of them up to `Caps.enum`, else endpoints (every bound in
 `UpOk`, `DownOk` and `OpOk` is monotone in the member and the leaf, or periodic in a leaf block shorter than the
-sample). `scripts/desc_fuzz_programs.py` writes the Programs and `NciCheck/DescFuzzMain.lean` fails unless no statement
+sample). `scripts/desc_fuzz_programs.py` writes the Programs and `InferenceOnlyCheck/DescFuzzMain.lean` fails unless no statement
 fails on any of them. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
 
-namespace NciCheck.DescFuzz
+namespace InferenceOnlyCheck.DescFuzz
 
 open Lean (Json toJson)
 open Flock.Program
@@ -340,7 +340,7 @@ def agrees (P : Prog) (text : String) (n : Nat) (given : Array Json := #[]) : Na
     | .error _ => pure ()
     | .ok out =>
       verdicts := verdicts + 1
-      let un := match NciCheck.evaluate (expand P j) with
+      let un := match InferenceOnlyCheck.evaluate (expand P j) with
         | .ok x => x
         | .error e => Json.mkObj [("refused", Json.str e)]
       if un != out then
@@ -402,12 +402,12 @@ def failing (r : Json) : List String :=
 /-- Whether `check` decided statement `s`: it holds or fails, neither skipped nor refused a precondition. -/
 def decided (r : Json) (s : String) : Bool := ((r.getObjValD s).getObjVal? "fail").isOk
 
-/-- `lake env lean --run NciCheck/DescFuzzMain.lean PROGRAMS N`: `PROGRAMS` has `N` lines, `{"id", "family",
+/-- `lake env lean --run InferenceOnlyCheck/DescFuzzMain.lean PROGRAMS N`: `PROGRAMS` has `N` lines, `{"id", "family",
 "program", "agree"}` each, and `"instances"` on some (`agree`: how many instances of its own `agrees` checks, beside
 `instances`, each `{"theta", "owner", "gamma", "alpha"}`; every instance costs two decodes of the Program), and the run
 fails unless no statement fails on any of them and each statement is decided on some. -/
 def main (args : List String) : IO UInt32 := do
-  let [progs, n] := args | IO.eprintln "usage: NciCheck/DescFuzzMain.lean PROGRAMS N"; return 2
+  let [progs, n] := args | IO.eprintln "usage: InferenceOnlyCheck/DescFuzzMain.lean PROGRAMS N"; return 2
   let lines := ((← IO.FS.readFile progs).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   if n.toNat? != some lines.size then
     IO.eprintln s!"desc fuzz: {lines.size} programs, not {n}"
@@ -450,4 +450,4 @@ def main (args : List String) : IO UInt32 := do
     return 1
   return 0
 
-end NciCheck.DescFuzz
+end InferenceOnlyCheck.DescFuzz

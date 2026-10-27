@@ -1,15 +1,14 @@
-"""The desc fuzzer's data: generated descriptor v1 Programs for `NciCheck/DescFuzzMain.lean`.
+"""The desc fuzzer's data: generated descriptor v1 Programs for `InferenceOnlyCheck/DescFuzzMain.lean`.
 
     python scripts/desc_fuzz_programs.py <verity checkout> --out DIR
 
 Writes `DIR/desc_fuzz/programs.jsonl`, one `{"id", "family", "program", "agree"}` object per line, from fixed seeds
 (`FAMILIES`), with `"instances"` (IU assignments, each `{"theta", "owner", "gamma", "alpha"}`) on the shared families'
-(`agree`: how many instances of its own `NciCheck.DescFuzz.agrees` checks beside them).
-The Lean audit runs `NciCheck/DescFuzzMain.lean` on it (`runs` in `lean-audit.json`, which pins its SHA-256), which
-decides the statements behind `DescAgrees` on each Program (`NciCheck.DescFuzz`'s docstring) and fails if one fails;
-`verity/core/protocols/network/tests/test_nci_desc_fuzz.py` checks that this script still writes it. The search itself,
-at millions of Programs, is the lane's (`verity/core/protocols/inference_only/fuzz/`); this is a seeded sample of it at a size
-the audit runs on every change to the package.
+(`agree`: how many instances of its own `InferenceOnlyCheck.DescFuzz.agrees` checks beside them).
+The Lean audit runs `InferenceOnlyCheck/DescFuzzMain.lean` on it (`runs` in `lean-audit.json`, which pins its SHA-256), which
+decides the statements behind `DescAgrees` on each Program (`InferenceOnlyCheck.DescFuzz`'s docstring) and fails if one fails;
+`verity/core/protocols/network/tests/test_inference_only_desc_fuzz.py` checks that this script still writes it. The search itself runs
+at millions of Programs; this is a seeded sample of it at a size the audit runs on every change to the package.
 
 `random` writes descriptor v1 JSON directly, not through `verity.ml.circuits`' Builder, so that every reference form the
 decoder reads appears (affine, strided with negative and zero strides, explicit, concat, alias) and so that shapes the
@@ -25,10 +24,10 @@ refuses most of them, and the rest are what it lets through.
 `hand` writes the worked shapes: the Programs on which `Walk.OperandsResolve` fails as stated (a composite node's
 argument that its callee never reads names a scan of no iterations, at the root, in a callee, and as a scan's shared
 argument), each with the variant its callee reads, and gates reading the carry of a scan of 2^4 to 2^14 pass-through
-iterations. `seeds` and `shared` are the lane's shared-members family (`fuzz/gen/shared.py`, ported as it is): whole
+iterations. `seeds` and `shared` are the shared-members family: whole
 members of a batch returning leaves of arguments they share, each another root node's output, read by a gate.
 `desc_difftest_vectors.shared()`'s six declarations first (`shared-seed`, each with its two instances), which
-`NciCheck.Desc` once attributed to their first piece's node alone, then `decl` on parameters drawn at random
+`InferenceOnlyCheck.Desc` once attributed to their first piece's node alone, then `decl` on parameters drawn at random
 (`draw`): two or three shared arguments, each made by a root node of its own (a primitive on an input, a call of a
 composite of two gates, one member of a batch of primitives, or the input itself, registered or bound per run); the
 members' return, each argument's leaves in any order and repeated, now and then with a gate of the member's own; two to
@@ -730,7 +729,7 @@ def hand() -> list[dict]:
     return out
 
 
-# --- batch members returning leaves of shared arguments (the lane's `fuzz/gen/shared.py`) -----------------------------
+# --- batch members returning leaves of shared arguments -------------------------------------------------------------
 
 ASSIGNMENTS = 12
 NAMES = ("a", "b", "c")

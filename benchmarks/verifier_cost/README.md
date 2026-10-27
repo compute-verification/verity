@@ -1,18 +1,18 @@
 # verifier_cost
 
 A verifier of record's time against the size of the description it reads and against the size of the circuit that
-description unrolls to. The rule it measures (AGENTS.md "Design rules", Daniel, 18 Oct): a verifier's cost is
+description unrolls to. The rule it measures (AGENTS.md "Design rules"): a verifier's cost is
 O(circuit description), never O(unrolled circuit).
 
 The workload is Serve_v1 (`benchmarks/network_sim/workload/served.py`) at a ladder of configs up to B0 (`Config.b0()`,
 30 layers), word-level and on bits. On bits it is `lift.on_bits`: every Definition Serve_v1 reaches, lifted to bits all
 the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says why). Two verifiers are measured:
 
-* `measure`, the NCI check: `nci-check --policy` (`NciCheck.Desc`, one summary per Definition) on an instance whose θ is
+* `measure`, the inference-only check: `inference-only-check --policy` (`InferenceOnlyCheck.Desc`, one summary per Definition) on an instance whose θ is
   the registered inputs and whose isolation blocks are the root's Calls, one each. `--policy` leaves out θ's provenance
-  (`NciCheck.Baseline`), which reads the registration log and adds work in θ's length and the log's. Where the unrolled
+  (`InferenceOnlyCheck.Baseline`), which reads the registration log and adds work in θ's length and the log's. Where the unrolled
   circuit is small enough (`--unrolled-max`), the instance expanded gate by gate also goes through
-  `nci-check --policy --unrolled` (`NciCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
+  `inference-only-check --policy --unrolled` (`InferenceOnlyCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
 * `partition`, the one-stage verifier's partition: `sampled-proofs-difftest`'s `partition` (`Partition.units`, `strata`,
   the expanded law and the digest, as the verifier of record computes them) on Serve_v1 under the template query of its
   Calls (`Q_template_instances`), under `Q_word` v1 and `Q_call` v1 at `X = 16` where its Calls' distinct Definitions are
@@ -28,22 +28,22 @@ verity bench verifier_cost store RUN                     # its results.json or p
 verity bench verifier_cost plot ART --to PNG             # from the store
 ~~~
 
-`nci_glm.sh` runs `nci-check --policy` on GLM-5.3's registered Programs: the eight per-rank workload Programs of the B1
+`nci_glm.sh` runs `inference-only-check --policy` on GLM-5.3's registered Programs: the eight per-rank workload Programs of the B1
 Build (vLLM, TP8 on 8×H200, a 256-token prompt and 32 sampled tokens), each checked against the Build's pinned
-digest. A registered Program's root is its inputs and one Call, the request, so the only division `NciCheck.Desc` can
+digest. A registered Program's root is its inputs and one Call, the request, so the only division `InferenceOnlyCheck.Desc` can
 check on it is that one isolation block; and its weights are bound per run (`Input<w>_v1`), so θ can't hold them
 (`theta-not-registered`). `nci_glm.py` (its docstring has the cases) derives Programs with the same computed gates and
 wires: rank 0's with its weights bound at registration (θ), one isolation block per rank; and the eight ranks' requests joined into
 one Definition the node's root calls once, each collective reading the other ranks' partials where it read its
 `peers_*` inputs, one isolation block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
 α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
-per layer, per Call) are out of `NciCheck.Desc`'s reach at this size: it holds each root node's reads as pieces of
+per layer, per Call) are out of `InferenceOnlyCheck.Desc`'s reach at this size: it holds each root node's reads as pieces of
 gates, about one per leaf on GLM-5.3, so only a Call's internal reads stay small. Three of rank 0's Definitions (the
 router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in all through `--policy`,
 `--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json` (`verity/nci-glm/v1`) has a row
 per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict summarised, wall seconds and
 peak RSS; `$OUT/ius/` has each verdict's isolation blocks. A rank's check takes about 21 minutes and 7 GB, the node's (a 2.2 GB
-descriptor) about 2.6 hours and 50 GB, and the whole run about 3 hours (r20261023-064803-3874).
+descriptor) about 2.6 hours and 50 GB, and the whole run about 3 hours.
 
 ~~~sh
 research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --to B1 \
@@ -65,16 +65,16 @@ research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-
 - **The isolation block.** One isolation block holds every root node that isn't an input, which is the whole node's session (the demo's
   division).
 - **The checks**, in the order they start (`NODE_POINTS`):
-  - given the registration, the check of record (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), at A: the
+  - given the registration, the check of record (`inference-only-check INSTANCE TRUSTED`, `InferenceOnlyCheck.Baseline`), at A: the
     policy check, then θ's provenance against the registration log;
   - `--policy` at A (Γ = 2^44, α = 2^-25);
   - at C (α = 2^-28) with Γ = 2^44 and with Γ = 2^52;
   - at A's four neighbours.
-- **Each `nci-check`** decodes the whole descriptor (about 50 GB resident for a whole-node session).
+- **Each `inference-only-check`** decodes the whole descriptor (about 50 GB resident for a whole-node session).
   `--check-mem-gb` caps each one's address space, which runs about 15 GB above its resident peak, so a check that
   outgrows its share of the run's `--mem-gb` fails rather than the node. A dry run on a root `Desc` can't read ends
   there.
-- **The root must be inputs and one Call.** `NciCheck.Desc` can't hold a session laid out as the root's own nodes
+- **The root must be inputs and one Call.** `InferenceOnlyCheck.Desc` can't hold a session laid out as the root's own nodes
   (`root_calls` in `results.json` counts them), for the reason above.
 
 ~~~sh
@@ -83,7 +83,7 @@ research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-
   -- bash benchmarks/verifier_cost/nci_glm.sh --case registered-node --node-digest HEX --jobs 2
 ~~~
 
-`flock_read.sh K...` measures C-Flock's Lean verifier (`flock-verify verify --zk`) on #3002's H1 tile unit, step by step:
+`flock_read.sh K...` measures C-Flock's Lean verifier (`flock-verify verify --zk`) on the H1 tile unit, step by step:
 `flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `benchmarks/pouw/h1_prove/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
 file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
 `Sparse.ofRows` and row checks), the class digest, `HmOut.parse`, `Stmt.setupHiddenOf` and one lincheck fold. Per K,
@@ -108,7 +108,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
   bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
 ~~~
 
-`flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`, PRF-133): `flock_read.py --circuit-only`
+`flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
 builds the circuit, `python -m verity_flock.tmpl` writes its unit's templated form (Definitions read off the flat unit's
 repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
 against the circuit's flat unit byte for byte. Per K, `$OUT` gets emit-K.json (the levels, Definitions, rows and bytes),

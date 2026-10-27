@@ -20,8 +20,8 @@ gate is one of its gates (`locW_lt`), so shifted to a member's first gate it is 
 (`nodeGates_of_inNode`): with the decoder's facts, `RootOneNode` holds (`BodiesOk.rootOneNode`).
 -/
 
-namespace NciCheck.Properties.SecurityProofs.ReadsExact
-open NciCheck.Desc (Piece Seg PS Tgt)
+namespace InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact
+open InferenceOnlyCheck.Desc (Piece Seg PS Tgt)
 open Flock.Program (Prog)
 open DescAgree (nodeCount rootOffs)
 
@@ -1768,4 +1768,4 @@ theorem rootOneNode_of
   exact ⟨fun q hq _ => nodeGates_of_inNode P hl hk (hN.1 q hq),
     fun h1 h2 _ => nodeGates_of_inNode P hl hk (hN.2 h1 h2)⟩
 
-end NciCheck.Properties.SecurityProofs.ReadsExact
+end InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact

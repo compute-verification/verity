@@ -19,7 +19,7 @@ resolution reads through each node are in range, which `Flock.Program.decode` an
 `operandsEarlier_of` gives `Walk.OperandsEarlier` from it.
 -/
 
-namespace NciCheck.Properties.SecurityProofs.Resolve
+namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
 
 open Flock.Program
 
@@ -582,4 +582,4 @@ theorem operandsEarlier_of (hB : BodiesOk) : Walk.OperandsEarlier := by
     omega
   exact gate_operands_lt P ⟨hr, hrp⟩ (hB bytes P hdec hov hlo hin hwk han) hlay hx a ha
 
-end NciCheck.Properties.SecurityProofs.Resolve
+end InferenceOnlyCheck.Properties.SecurityProofs.Resolve

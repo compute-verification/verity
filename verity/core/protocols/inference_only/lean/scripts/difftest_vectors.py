@@ -1,24 +1,24 @@
 """The difftest's data: random declarations and divisions, and the Python reference's results on each, for
-`NciCheck/DifftestMain.lean`.
+`InferenceOnlyCheck/DifftestMain.lean`.
 
     python scripts/difftest_vectors.py <verity checkout> --out DIR [--count N]
 
-Writes `DIR/difftest/instances.jsonl` (N random instances, then `pinned()`'s), one instance per line as `NciCheck.check`
-reads it (`NciCheck.Check`'s docstring: `program`, `theta`, `owner`, `gamma`, `alpha`), and `DIR/difftest/python.jsonl`,
+Writes `DIR/difftest/instances.jsonl` (N random instances, then `pinned()`'s), one instance per line as `InferenceOnlyCheck.check`
+reads it (`InferenceOnlyCheck.Check`'s docstring: `program`, `theta`, `owner`, `gamma`, `alpha`), and `DIR/difftest/python.jsonl`,
 the same line's results from
-`scripts/nci_reference.py`. The Lean audit runs `NciCheck/DifftestMain.lean` on both files (`runs` in `lean-audit.json`,
-which pins their SHA-256), and `verity/core/protocols/network/tests/test_nci_lean_difftest.py` checks that this script
+`scripts/inference_only_reference.py`. The Lean audit runs `InferenceOnlyCheck/DifftestMain.lean` on both files (`runs` in `lean-audit.json`,
+which pins their SHA-256), and `verity/core/protocols/network/tests/test_inference_only_lean_difftest.py` checks that this script
 still writes them.
 
 A declaration is a descriptor v1 Program built with `verity.ml.circuits` in one of five shapes: a random DAG, a chain, a
-reduction tree, a chain of matrix-vector products (the NCI draft's updated multiplications: products and their sums),
+reduction tree, a chain of matrix-vector products (the updated multiplications of a training step: products and their sums),
 and a nested one whose gates sit in calls, batches (of a primitive and of a composite) and a scan. Its parameters are
 values and arrays of widths from 1 to 32 bits, some bound at registration, and its primitives take one to four values
 or an array. θ is empty, every input (refused, `theta-not-registered`, where one is bound per run), the registered
 inputs, or a random set of them. A division is one IU, one IU per gate, runs of consecutive gates or a random
 assignment, numbered in a random order; `Γ` is at, below or above the division's largest IU, and `α` at, just below or
-just above its largest NCI, written reduced or not. About a third of the instances are malformed, each in one way the
-check refuses (every code of `NciCheck.Check`). Then come `mistyped_vectors.cases()`'s (`mistyped()`): references
+just above its largest novel reads per gate, written reduced or not. About a third of the instances are malformed, each in one way the
+check refuses (every code of `InferenceOnlyCheck.Check`). Then come `mistyped_vectors.cases()`'s (`mistyped()`): references
 that name leaves of other widths than their types give them, which the codec and the check refuse as `program`, and
 their well-typed neighbours. The data ends with `pinned()`'s two instances on the declaration worked by hand (`hand()`):
 θ every input, which the check must refuse, and θ the registered input, which it must accept.
@@ -47,7 +47,7 @@ def _load(name: str):
     return module
 
 
-reference = _load("nci_reference")
+reference = _load("inference_only_reference")
 
 COUNT = 4000
 WIDTHS = [1, 2, 3, 8, 16, 32]
@@ -405,7 +405,7 @@ def pinned() -> list[dict]:
     """The two instances the data ends with, on `hand()` divided as {c}, {d, e}, with the result each must get (`expect`):
     θ every input (`theta_kind` "all"), which holds b, bound per run, so it is refused; and θ the registered input
     alone, which saves IU 1 a's 8 bits and gets a verdict. Gate ids are root node ids here, so each is an instance of
-    `NciCheck.Desc` too."""
+    `InferenceOnlyCheck.Desc` too."""
     base = {"program": hand(), "owner": ["input", "input", 0, 1, 1], "gamma": 2, "alpha": [16, 1]}
     return [
         {"instance": base | {"theta": [0, 1]}, "theta_kind": "all", "expect": {"error": "theta-not-registered"}},
@@ -416,7 +416,7 @@ def pinned() -> list[dict]:
 
 @functools.cache
 def mistyped() -> list[dict]:
-    """`mistyped_vectors.cases()` as `check` reads them: gate by gate (`nci_reference.expand`) where the Program decodes,
+    """`mistyped_vectors.cases()` as `check` reads them: gate by gate (`inference_only_reference.expand`) where the Program decodes,
     else as they are, since a Program the decoder refuses is refused before θ and the owners are read."""
     desc = _load("desc_difftest_vectors")
     out = []

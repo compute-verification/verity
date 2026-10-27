@@ -30,7 +30,7 @@ name = "pouw_commit"
 path = "../../verity/core/protocols/pouw/lean/commit"
 
 [[require]]
-name = "nci_check"
+name = "inference_only_check"
 path = "../../verity/core/protocols/inference_only/lean"
 
 [[require]]

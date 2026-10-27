@@ -8,7 +8,7 @@ below leaf 0 (`parsePartsIn_nonneg`), given none of an argument an alias may nam
 same predicate (`partNonneg_iff`).
 -/
 
-namespace NciCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
 /-- A part's references never step below leaf 0: a strided part's pattern (`parsePartsIn` checks its corners). -/
@@ -167,4 +167,4 @@ theorem parsePartsIn_nonneg (leaves : Bool → Nat → Option Nat) (args : Nat �
     exact parsePartsIn_nonneg_step leaves args hargs n _
       (fun x ps hx => ih x ps (by delta Flock.Program.parsePartsIn; exact hx)) j ps h
 
-end NciCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk

@@ -10,7 +10,7 @@ earlier Definition as `NodeOk` says (`buildNode_spec`), and every reference of i
 of a node's declared output (`Walk.parsePartsIn_valid`). `decode_spec` proves it by induction on the fuel.
 -/
 
-namespace NciCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc liftV at_ paramsOf
   from Flock.Program
@@ -268,4 +268,4 @@ theorem statFns_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : StatSpec (n
       obtain ⟨h1, h2, -⟩ := hg _ _ _ _ _ ha hs
       exact ⟨h1, h2⟩
 
-end NciCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk

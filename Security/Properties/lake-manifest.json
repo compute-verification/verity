@@ -38,7 +38,7 @@
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
-   "name": "nci_check",
+   "name": "inference_only_check",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
    "dir": "../../verity/core/protocols/inference_only/lean",

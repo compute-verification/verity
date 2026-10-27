@@ -3,8 +3,8 @@ the size of the circuit that description unrolls to (README.md).
 
   measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       Serve_v1 at each config, word-level and on bits (`lift.on_bits`), as an NCI instance (θ its registered inputs, one
-      IU per Call), checked by `nci-check --policy` (`NciCheck.Desc`) and, where the unrolled circuit has at most GATES
-      gates, by `nci-check --policy --unrolled` (`NciCheck.check`) on the instance expanded gate by gate;
+      IU per Call), checked by `inference-only-check --policy` (`InferenceOnlyCheck.Desc`) and, where the unrolled circuit has at most GATES
+      gates, by `inference-only-check --policy --unrolled` (`InferenceOnlyCheck.check`) on the instance expanded gate by gate;
       DIR/results.json.
   partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
       the one-stage verifier's partition (`sampled-proofs-difftest`'s `partition`: `Partition.units`, `strata`, the law
@@ -34,7 +34,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 NCI = ROOT / "verity/core/protocols/inference_only/lean"
-EXE = NCI / ".lake/build/bin/nci-check"
+EXE = NCI / ".lake/build/bin/inference-only-check"
 SCHEMA = "verity/verifier-cost/v1"
 
 sys.path.insert(0, str(HERE))
@@ -55,7 +55,7 @@ BOOLEAN = ("tiny", "tiny-2", "small", "mid", "b0-1", "b0")
 
 
 def _reference():
-    spec = importlib.util.spec_from_file_location("nci_reference", NCI / "scripts/nci_reference.py")
+    spec = importlib.util.spec_from_file_location("inference_only_reference", NCI / "scripts/inference_only_reference.py")
     ref = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ref)
     return ref
@@ -89,7 +89,7 @@ def program(name: str, ir: str) -> str:
 
 
 def instance(ref, text: str) -> tuple[dict, dict]:
-    """`NciCheck.Desc`'s instance (θ the registered inputs, one IU per Call, a gate-less node in none) and the
+    """`InferenceOnlyCheck.Desc`'s instance (θ the registered inputs, one IU per Call, a gate-less node in none) and the
     description's sizes."""
     inp, reg, spans = ref.root_nodes(text)
     desc = json.loads(text)
@@ -181,7 +181,7 @@ def measure(args) -> int:
                                  | {"desc_s": round(row["desc"]["seconds"], 3),
                                     "unrolled_s": row["unrolled"].get("seconds"), "agrees": row["unrolled"].get("agrees")}),
                       flush=True)
-    result = {"schema": SCHEMA, "verifier": "nci-check", "workload": "Serve_v1", "repeat": args.repeat,
+    result = {"schema": SCHEMA, "verifier": "inference-only-check", "workload": "Serve_v1", "repeat": args.repeat,
               "unrolled_max": args.unrolled_max, "rows": rows}
     (out / "results.json").write_text(json.dumps(result, indent=1) + "\n")
     bad = [r["config"] + "/" + r["ir"] for r in rows
@@ -312,11 +312,11 @@ def plot(args) -> int:
                                 label=f"{query}, {'population program' if shape == 'population' else 'Serve_v1'}, {ir}")
                 continue
             rs = sorted((r for r in res["rows"] if r["ir"] == ir), key=lambda r: r[x])
-            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"NciCheck.Desc, {ir}")
+            ax.plot([r[x] for r in rs], [r["desc"]["seconds"] for r in rs], marker=marker, label=f"InferenceOnlyCheck.Desc, {ir}")
             us = [r for r in rs if "seconds" in r["unrolled"]]
             if us:
                 ax.plot([r[x] for r in us], [r["unrolled"]["seconds"] for r in us], marker=marker, linestyle="--",
-                        label=f"NciCheck.check (unrolled), {ir}")
+                        label=f"InferenceOnlyCheck.check (unrolled), {ir}")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlabel(label)

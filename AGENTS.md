@@ -88,7 +88,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
-  (`NciCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
+  (`InferenceOnlyCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
   (the walks still open are its `ALLOWED`), and `benchmarks/verifier_cost/` measures it.
 - **Auditor-trusted devices.** The network certifiers and memory challengers sign what they see; what they sign is
   witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the prover doesn't

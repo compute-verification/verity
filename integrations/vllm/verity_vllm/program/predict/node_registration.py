@@ -24,7 +24,7 @@ manifest's (`checkpoint_index.shard_pin`), else refused; without it no shard is 
 
 One spawned process per rank (`--workers` at a time) opens and commits its tensors one at a time, so it holds a tensor, not the
 rank's weights (95 GB a GLM-5.3 B1 rank), and another reads the descriptor before them. Under --out: `record.json` (the
-registration record), `trusted.json` (nci-check's trusted input), `provenance.json` (the instance's θ provenance) and
+registration record), `trusted.json` (inference-only-check's trusted input), `provenance.json` (the instance's θ provenance) and
 `registration.json` (digests, the checkpoint's pin, per-rank counts and timings).
 Under --salts: each value's row salts, `<value>.salts`, the prover's, which nothing public carries, so --salts is refused inside
 --out. Exit 0 written, 2 refused.

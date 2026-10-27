@@ -112,7 +112,7 @@ theorem proved_asc {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson
   · exact hu
   · refine asc_of_pairwise ?_
     have hs : ((D.units ++ D.closure).qsort (· < ·)).toList.Pairwise (· ≤ ·) :=
-      NciCheck.Properties.SecurityProofs.ReadsExact.qsort_sorted id (D.units ++ D.closure)
+      InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact.qsort_sorted id (D.units ++ D.closure)
     have hnd : (D.units ++ D.closure).toList.Nodup := by
       rw [Array.toList_append]
       show List.Pairwise (fun a b => a ≠ b) (D.units.toList ++ D.closure.toList)

@@ -1,11 +1,11 @@
-"""The desc fuzzer's run (`NciCheck.DescFuzzMain`): the Python half.
+"""The desc fuzzer's run (`InferenceOnlyCheck.DescFuzzMain`): the Python half.
 
-`verity/core/protocols/inference_only/lean/scripts/desc_fuzz_programs.py` writes the 1,330 Programs `NciCheck/DescFuzzMain.lean`
+`verity/core/protocols/inference_only/lean/scripts/desc_fuzz_programs.py` writes the 1,330 Programs `InferenceOnlyCheck/DescFuzzMain.lean`
 decides the statements behind `DescAgrees` on (`runs` in that package's `lean-audit.json`), which the Lean audit runs and
 caches on the Lean package's files alone, against the data's SHA-256 in the record. So the first test is what says the
-data is still what the generator writes. The second, that it holds the shape #4066 fixed: one gate reading, through one
+data is still what the generator writes. The second, that it holds the shared-members shape: one gate reading, through one
 reference to one root node, whole batch members returning leaves of arguments they share, each another root node's
-output, which `NciCheck.Desc` once attributed to the copy's first piece's node alone.
+output, which `InferenceOnlyCheck.Desc` once attributed to the copy's first piece's node alone.
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ def _load(name: str):
 
 
 fuzz = _load("desc_fuzz_programs")
-reference = _load("nci_reference")
-RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.DescFuzzMain"]
+reference = _load("inference_only_reference")
+RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["InferenceOnlyCheck.DescFuzzMain"]
 
 
 def test_the_data_is_what_the_audit_pins(tmp_path):

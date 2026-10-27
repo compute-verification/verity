@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# nci_glm.py on a CPU node: build nci-check, then check GLM-5.3's Programs into $OUT, the instances in a scratch
+# nci_glm.py on a CPU node: build inference-only-check, then check GLM-5.3's Programs into $OUT, the instances in a scratch
 # directory. Run from a clone (the build writes .lake), with what the cases read sent beside it (README.md): the Build's
 # eight workload descriptors and its meta, or the registered node's descriptor and its registration (`registered-node`):
 #   research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
@@ -24,5 +24,5 @@ if [ -e "$IN/glm53-b1-node.descriptor.json.gz" ]; then
   done
 fi
 uv sync -q --all-packages --extra torch-cpu
-(cd verity/core/protocols/inference_only/lean && lake build nci-check) > "$O/build.log" 2>&1 || { tail -40 "$O/build.log" >&2; exit 1; }
+(cd verity/core/protocols/inference_only/lean && lake build inference-only-check) > "$O/build.log" 2>&1 || { tail -40 "$O/build.log" >&2; exit 1; }
 uv run python benchmarks/verifier_cost/nci_glm.py measure --out "$O" --scratch "$d" "${a[@]}" "$@"

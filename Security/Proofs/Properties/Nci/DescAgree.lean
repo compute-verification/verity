@@ -2,7 +2,7 @@ import Proofs.Properties.Nci
 import Properties.NciDesc
 
 /-!
-# `NciCheck.Desc.evaluate` agrees with `NciCheck.evaluate`
+# `InferenceOnlyCheck.Desc.evaluate` agrees with `InferenceOnlyCheck.evaluate`
 
 `descAgrees_of` proves `Properties.DescAgrees` from two statements about the decoder and the description-sized analysis,
 each a named `Prop` here, both proved: the first by `Walk.gatesLocated_of`, from `Resolve.bodiesOk`, and the second by
@@ -10,9 +10,9 @@ each a named `Prop` here, both proved: the first by `Walk.gatesLocated_of`, from
 
 * `GatesLocated`: on a Program the decoder returns and `Desc.evaluate` reads (topological by `Prog.orderViolation`, its
   root laid out, its input nodes the root's, `Desc.walkable`, and `Desc.analyze` resolving its references), every gate of
-  the canonical layout is located and reads only earlier gates (`GateOk`), so `NciCheck.circuitOf` lays it out.
+  the canonical layout is located and reads only earlier gates (`GateOk`), so `InferenceOnlyCheck.circuitOf` lays it out.
 * `NovelExact`: on such a Program, for a division whose IUs are unions of root nodes, the novel reads `Desc.novelWidth`
-  counts per IU, from what `Desc.analyze` resolves each root node to read, are `NciCheck.ius`'s, gate by gate.
+  counts per IU, from what `Desc.analyze` resolves each root node to read, are `InferenceOnlyCheck.ius`'s, gate by gate.
 
 The rest is proved: `Desc.evaluate`'s refusals and folds (`descEvaluate_ok`, `nodeThetaFold_ok`, `nodeOwnerFold_ok`),
 the root's layout (`rootLaidOut_spec`, `node_unique`, `node_exists`), that a root node's gates are input gates exactly
@@ -21,7 +21,7 @@ expansion, and that on each the unrolled check accepts θ and the owners, counts
 (`sizes_eq_tally`).
 -/
 
-namespace NciCheck.Properties.SecurityProofs.DescAgree
+namespace InferenceOnlyCheck.Properties.SecurityProofs.DescAgree
 
 open Lean (Json toJson)
 open Flock.Program (Prog)
@@ -541,7 +541,7 @@ def GatesLocated : Prop :=
 
 /-- **The novel reads by node are the gates'.** On such a Program, and a division `dv` of its layout whose IUs are
 unions of root nodes (root node `k`'s gates all in `own[k]`, θ every gate of the nodes `mask` marks, input nodes, in no
-IU), `Desc.novelWidth` of what `Desc.intoOf` collects per IU from `Desc.analyze`'s reads is `NciCheck.ius`'s novel
+IU), `Desc.novelWidth` of what `Desc.intoOf` collects per IU from `Desc.analyze`'s reads is `InferenceOnlyCheck.ius`'s novel
 reads. -/
 def NovelExact : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (mask : Array Bool) (own : Array (Option ℕ))
@@ -775,4 +775,4 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
     rw [this]
     exact ⟨Iff.rfl, rfl⟩
 
-end NciCheck.Properties.SecurityProofs
+end InferenceOnlyCheck.Properties.SecurityProofs

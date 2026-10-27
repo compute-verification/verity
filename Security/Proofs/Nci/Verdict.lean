@@ -5,12 +5,12 @@ import Proofs.Nci.Threads
 /-!
 # A verdict of compliance carries the thread bound, proved
 
-Each statement of `Properties.Nci.Threads`, from the verdict's compliance (`NciCheck.Properties.SecurityProofs.Witnesses`)
+Each statement of `Properties.Nci.Threads`, from the verdict's compliance (`InferenceOnlyCheck.Properties.SecurityProofs.Witnesses`)
 and the thread bound's proof (`Nci.SecurityProofs.ThreadedThrottled`, `ThreadedThrottledDark` and their `Slots` forms, in
 `Proofs.Nci.Threads`), at `α = num / den`.
 -/
 
-namespace NciCheck.Properties.SecurityProofs
+namespace InferenceOnlyCheck.Properties.SecurityProofs
 
 /-- `num / den` of naturals is nonnegative. -/
 theorem num_div_den_nonneg (i : Instance) : (0 : ℝ) ≤ (i.num : ℝ) / i.den :=
@@ -45,4 +45,4 @@ theorem ThrottlesDarkSlots : Properties.ThrottlesDarkSlots :=
     Nci.SecurityProofs.ThreadedThrottledDarkSlots i.gamma ((i.num : ℝ) / i.den) b_w b_a c d T σ dd e M
       (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hT hW
 
-end NciCheck.Properties.SecurityProofs
+end InferenceOnlyCheck.Properties.SecurityProofs

@@ -1,23 +1,23 @@
-import NciCheck.Desc
-import NciCheck.DescDifftest
+import InferenceOnlyCheck.Desc
+import InferenceOnlyCheck.DescDifftest
 
 /-!
 # The liveness cases of the description-sized check
 
-`scripts/desc_liveness_vectors.py` writes Program shapes on which `NciCheck.Desc` once walked a scan's iterations or a
-batch's members one by one (PRF-151: a stack overflow, a time and a memory linear in them), each at a small `n` and at an
-`n` of `2^22` to `2^52`. `NciCheck/DescLivenessMain.lean` fails unless, on every case, `NciCheck.Desc.check` gives on the
-small instance what `NciCheck.check` gives on it expanded gate by gate (`expand`), and on the big one a verdict that is
+`scripts/desc_liveness_vectors.py` writes Program shapes on which `InferenceOnlyCheck.Desc` once walked a scan's iterations or a
+batch's members one by one (a stack overflow, a time and a memory linear in them), each at a small `n` and at an
+`n` of `2^22` to `2^52`. `InferenceOnlyCheck/DescLivenessMain.lean` fails unless, on every case, `InferenceOnlyCheck.Desc.check` gives on the
+small instance what `InferenceOnlyCheck.check` gives on it expanded gate by gate (`expand`), and on the big one a verdict that is
 the small one's (`same`) or has its novel reads per IU (`novel`, where the gates grow with `n`). That it finishes is the
-point: the big instances are past anything `NciCheck.Desc` walks one by one (`NciCheck.Desc.WALK`). The Lean audit runs it
+point: the big instances are past anything `InferenceOnlyCheck.Desc` walks one by one (`InferenceOnlyCheck.Desc.WALK`). The Lean audit runs it
 (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
 
-namespace NciCheck.DescLiveness
+namespace InferenceOnlyCheck.DescLiveness
 
 open Lean (Json toJson)
 
-/-- `j`, an instance of `NciCheck.Desc` (θ and the owners per root node), expanded gate by gate as `NciCheck.check`
+/-- `j`, an instance of `InferenceOnlyCheck.Desc` (θ and the owners per root node), expanded gate by gate as `InferenceOnlyCheck.check`
 reads it: θ its nodes' gates, and each gate's owner its root node's. -/
 def expand (j : Json) : Except String Json := do
   let i ← parse j
@@ -43,7 +43,7 @@ def differences (c : Json) : List String :=
   let big := c.getObjValD "big"
   let d := Desc.check small
   let unrolled := match expand small with
-    | .ok x => DescDifftest.compare 0 "NciCheck.check" d (check x)
+    | .ok x => DescDifftest.compare 0 "InferenceOnlyCheck.check" d (check x)
     | .error e => [s!"the expansion fails: {e}"]
   let verdict := if (d.getObjValD "error").isNull then [] else [s!"small: refused, {d.compress}"]
   let b := Desc.check big
@@ -55,9 +55,9 @@ def differences (c : Json) : List String :=
     | m => [s!"mode {m.compress}"]
   (unrolled ++ verdict ++ same).map (s!"case {id}: " ++ ·)
 
-/-- `lake env lean --run NciCheck/DescLivenessMain.lean CASES N`: fails unless the file has `N` cases and none differs. -/
+/-- `lake env lean --run InferenceOnlyCheck/DescLivenessMain.lean CASES N`: fails unless the file has `N` cases and none differs. -/
 def main (args : List String) : IO UInt32 := do
-  let [path, n] := args | IO.eprintln "usage: NciCheck/DescLivenessMain.lean CASES N"; return 2
+  let [path, n] := args | IO.eprintln "usage: InferenceOnlyCheck/DescLivenessMain.lean CASES N"; return 2
   let lines := ((← IO.FS.readFile path).splitOn "\n").filter (! ·.isEmpty) |>.toArray
   if n.toNat? != some lines.size then
     IO.eprintln s!"desc liveness: {lines.size} cases, not {n}"
@@ -69,4 +69,4 @@ def main (args : List String) : IO UInt32 := do
   IO.println s!"desc liveness: {lines.size} cases checked, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
-end NciCheck.DescLiveness
+end InferenceOnlyCheck.DescLiveness

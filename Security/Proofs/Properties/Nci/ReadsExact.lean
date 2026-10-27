@@ -105,9 +105,9 @@ segment is `SegNodes`, its gates of their widths, each piece's in one root node 
 one (`RootNodes`, `rootGates_of`).
 -/
 
-namespace NciCheck.Properties.SecurityProofs.ReadsExact
+namespace InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact
 
-open NciCheck.Desc (Piece Seg PS Tgt)
+open InferenceOnlyCheck.Desc (Piece Seg PS Tgt)
 
 theorem flatMap_range_length {α : Type} (f : Nat → List α) (L : Nat) (hf : ∀ r, (f r).length = L) :
     ∀ n, ((List.range n).flatMap f).length = n * L
@@ -12935,4 +12935,4 @@ theorem rootNodes_of
   obtain ⟨hRF, hWF⟩ := hF bytes P hd ho hw
   exact ⟨rootW_circuit P memo c hm hc hRF hWF hn hs, hO bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs⟩
 
-end NciCheck.Properties.SecurityProofs.ReadsExact
+end InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact

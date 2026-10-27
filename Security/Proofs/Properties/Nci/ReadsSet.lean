@@ -49,8 +49,8 @@ composite but the root (`usedExact_reached`), and `RootSet` wherever every refer
 read by a member and every node calling a composite is shaped as `CompShape` says (`rootSet_of`).
 -/
 
-namespace NciCheck.Properties.SecurityProofs.ReadsExact
-open NciCheck.Desc (Piece Seg PS Tgt)
+namespace InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact
+open InferenceOnlyCheck.Desc (Piece Seg PS Tgt)
 open Flock.Program (Prog)
 open DescAgree (nodeCount rootOffs)
 
@@ -3722,4 +3722,4 @@ theorem rootSet_of
       (hCov bytes P hd P.root hF'.1 k hk node hgk hp) a
     simpa using this
 
-end NciCheck.Properties.SecurityProofs.ReadsExact
+end InferenceOnlyCheck.Properties.SecurityProofs.ReadsExact

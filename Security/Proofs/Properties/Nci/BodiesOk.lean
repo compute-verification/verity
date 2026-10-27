@@ -13,7 +13,7 @@ Definitions holding the root and closed under calls whose nodes name only parame
 `RefOk` (`body_ok`).
 -/
 
-namespace NciCheck.Properties.SecurityProofs.BodiesOk
+namespace InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 
 /-- Every activation `Good` reaches runs a composite of a call-closed set holding the root. -/
@@ -67,9 +67,9 @@ theorem body_ok (P : Prog) (hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]!
     exact ⟨hp1, fun h => ⟨hord h, (hp2 h).2⟩⟩
   · exact hret t ht
 
-end NciCheck.Properties.SecurityProofs.BodiesOk
+end InferenceOnlyCheck.Properties.SecurityProofs.BodiesOk
 
-namespace NciCheck.Properties.SecurityProofs.Resolve
+namespace InferenceOnlyCheck.Properties.SecurityProofs.Resolve
 open Flock.Program BodiesOk
 
 /-- **Every body resolution reaches holds its references in range.** -/
@@ -81,4 +81,4 @@ theorem bodiesOk : BodiesOk := by
   obtain ⟨hSd, hpd⟩ := good_closed P S hS0 hroot (fun d hd hp => (hS d hd hp).2) sc hg
   exact body_ok P hok sc.d (hS sc.d hSd hpd).1
 
-end NciCheck.Properties.SecurityProofs.Resolve
+end InferenceOnlyCheck.Properties.SecurityProofs.Resolve

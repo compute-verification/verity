@@ -11,11 +11,11 @@ thread bounds from `Throttles` and its forms, which `Proofs.Nci.DescVerdict` (pa
 `DescReports` and `DescWitnesses` are the guarantees, from `SecurityProofs.DescAgrees` (`Proofs.Properties.Nci.Agrees`).
 -/
 
-namespace NciCheck.Properties.SecurityProofs
+namespace InferenceOnlyCheck.Properties.SecurityProofs
 
 open Lean (Json)
 
-/-- **A property of every verdict of `NciCheck.evaluate` holds of every verdict of `NciCheck.Desc.evaluate`, on each
+/-- **A property of every verdict of `InferenceOnlyCheck.evaluate` holds of every verdict of `InferenceOnlyCheck.Desc.evaluate`, on each
 expansion**, given `DescAgrees`. -/
 theorem onExpansions_of (h : Properties.DescAgrees) {Q : Json → Json → Prop}
     (hQ : ∀ j out, evaluate j = .ok out → Q j out) {j out : Json} (hev : Desc.evaluate j = .ok out) :
@@ -55,4 +55,4 @@ theorem descThrottlesDarkSlots_of (h : Properties.DescAgrees) (hT : Properties.T
     Properties.DescThrottlesDarkSlots :=
   fun _ _ hev => onExpansions_of h hT hev
 
-end NciCheck.Properties.SecurityProofs
+end InferenceOnlyCheck.Properties.SecurityProofs

@@ -1,13 +1,13 @@
 """The description-sized check's difftest data: `difftest_vectors.py`'s declarations, divided into IUs of root nodes, for
-`NciCheck/DescDifftestMain.lean`.
+`InferenceOnlyCheck/DescDifftestMain.lean`.
 
     python scripts/desc_difftest_vectors.py <verity checkout> --out DIR [--count N]
 
-Writes three files under `DIR/desc_difftest/`, one line per instance: `instances.jsonl`, as `NciCheck.Desc.check` reads
-it (`NciCheck.Desc`'s docstring: θ and the owners per root node); `expanded.jsonl`, the same instance expanded gate by
-gate as `NciCheck.check` reads it (`nci_reference.expand`), or `null` where `NciCheck.Desc` refuses it; and `python.jsonl`,
-`nci_reference.check_desc`'s results. The Lean audit runs `NciCheck/DescDifftestMain.lean` on the three (`runs` in
-`lean-audit.json`), which fails unless `NciCheck.Desc.check` gives Python's result on every line and `NciCheck.check`'s on
+Writes three files under `DIR/desc_difftest/`, one line per instance: `instances.jsonl`, as `InferenceOnlyCheck.Desc.check` reads
+it (`InferenceOnlyCheck.Desc`'s docstring: θ and the owners per root node); `expanded.jsonl`, the same instance expanded gate by
+gate as `InferenceOnlyCheck.check` reads it (`inference_only_reference.expand`), or `null` where `InferenceOnlyCheck.Desc` refuses it; and `python.jsonl`,
+`inference_only_reference.check_desc`'s results. The Lean audit runs `InferenceOnlyCheck/DescDifftestMain.lean` on the three (`runs` in
+`lean-audit.json`), which fails unless `InferenceOnlyCheck.Desc.check` gives Python's result on every line and `InferenceOnlyCheck.check`'s on
 every expansion: the description-sized check against the unrolled one, on the same declarations.
 
 Instance `seed`'s program, for the first `COUNT`, is one of `difftest_vectors.program`'s or (a quarter of them) one read
@@ -15,7 +15,7 @@ across its arrays' rows (`transposed`), then each distinct descriptor
 the circuits fixtures hold (`verity/ml/circuits/tests/*_vectors.json`: pass-throughs, scans with carries, batches of
 composites, root batches and scans) for `PER_FIXTURE` instances each, then six on a composite keyed with an input id
 (`decoys`), which is no input node, then two on a gate reading a nested scan's carry (`walks`), one past
-`NciCheck.Desc.walkBound`'s limit, then four on a scan of no iterations (`empties`), three of them refused, its carry a
+`InferenceOnlyCheck.Desc.walkBound`'s limit, then four on a scan of no iterations (`empties`), three of them refused, its carry a
 value, read or not, then twelve on whole members of a batch returning leaves of two arguments they share, each another
 node's (`shared`), then `mistyped_vectors.cases()`'s (`mistyped`: references that name leaves of other widths than
 their types give them, which both sides refuse as `program`, and their well-typed neighbours), then
@@ -23,8 +23,8 @@ their types give them, which both sides refuse as `program`, and their well-type
 input, refused, and θ the registered one, accepted). θ is no input node, every one (refused, `theta-not-registered`,
 where one is bound per run), the registered ones or a random set of them. A division puts every Call in one IU, each in
 its own, runs of consecutive Calls or a random assignment, and a Call without gates in any IU or none. `Γ` and `α` are
-set as `difftest_vectors` sets them, at, below or above the division's largest IU and NCI. About a third of the
-instances are malformed, each in one way `NciCheck.Desc` refuses.
+set as `difftest_vectors` sets them, at, below or above the division's largest IU and novel reads per gate. About a third of the
+instances are malformed, each in one way `InferenceOnlyCheck.Desc` refuses.
 """
 from __future__ import annotations
 
@@ -200,7 +200,7 @@ def decoys() -> list[dict]:
 def walk(n: int) -> str:
     """A declaration whose one gate reads the carry of a scan of `n` iterations, each a scan of `n` identity steps: no
     other gate, and about `n²` activations, so as many steps to locate the gate's operand. At `n = 2^32` that is past
-    what `Prog.gate` walks (`Steps.FUEL`), and `NciCheck.Desc` refuses it (`walkBound`)."""
+    what `Prog.gate` walks (`Steps.FUEL`), and `InferenceOnlyCheck.Desc` refuses it (`walkBound`)."""
     w = 8
     op = vectors.prim((w,), w)
     ret = Tuple(Value(w), Tuple())
@@ -217,7 +217,7 @@ WALKS = (3, 2 ** 32)
 
 
 def walks() -> list[dict]:
-    """Instances on `walk`'s declarations, θ their registered inputs (none) and the Call in IU 0: one `NciCheck.Desc`
+    """Instances on `walk`'s declarations, θ their registered inputs (none) and the Call in IU 0: one `InferenceOnlyCheck.Desc`
     gives a verdict on, and one past `walkBound`'s limit, which it refuses."""
     out = []
     for n in WALKS:
@@ -232,7 +232,7 @@ def walks() -> list[dict]:
 def empty(kind: str) -> str:
     """A declaration whose root holds a scan of no iterations: its carry a value no gate reads (`unread`), one passed
     to a Call whose callee reads none of it (`passed`), or one a primitive reads (`read`); or its carry empty (`bare`).
-    `Flock.Program.resolve` can't resolve the carry, and `NciCheck.Desc` refuses the first three (`resolvable`) and
+    `Flock.Program.resolve` can't resolve the carry, and `InferenceOnlyCheck.Desc` refuses the first three (`resolvable`) and
     gives a verdict on the fourth."""
     w = 8
     op = vectors.prim((w, w), w)
@@ -426,7 +426,7 @@ def _break(rng, inst: dict, bad: str, inp: list[bool], reg: list[bool], spans: l
 
 
 def expanded(inst: dict, result: dict):
-    """The instance gate by gate, where `NciCheck.Desc` gives a verdict."""
+    """The instance gate by gate, where `InferenceOnlyCheck.Desc` gives a verdict."""
     return None if "error" in result else reference.expand(inst)
 
 

@@ -5,7 +5,7 @@ import Definitions.Nci.Assumptions.Threads
 /-!
 # A verdict of compliance carries the thread bound
 
-`Witnesses` (`Properties.Nci`) says that a verdict of `NciCheck.evaluate` whose `complies` is `true` means every
+`Witnesses` (`Properties.Nci`) says that a verdict of `InferenceOnlyCheck.evaluate` whose `complies` is `true` means every
 declaration the Program lays out, with the baseline `theta` names, complies with `Nci.Complies Γ (num / den)`. The thread
 bounds, `Nci.Guarantees.ThreadedThrottled`, `ThreadedThrottledDark` and their `Slots` forms
 (`Definitions/Nci/Guarantees/Threads.lean`), bound a complying declaration that contains a reference circuit. The statements
@@ -22,11 +22,11 @@ circuit `c` it contains, under the bound's premises.
   (`WeightsIncompressibleSlots`).
 
 The bounds' `0 ≤ α` is no premise here: `num / den` of naturals is nonnegative. Each statement is proved as
-`NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Proofs.Nci.Verdict` (package `security_proofs`), from
+`InferenceOnlyCheck.Properties.SecurityProofs.X : InferenceOnlyCheck.Properties.X` in `Proofs.Nci.Verdict` (package `security_proofs`), from
 `Witnesses` and the bound's proof: a property whose proof needs `security_proofs` is stated here and proved there.
 -/
 
-namespace NciCheck.Properties
+namespace InferenceOnlyCheck.Properties
 
 open Lean (Json)
 open Flock.Program (Prog)
@@ -118,4 +118,4 @@ weights are incompressible per parameter slot of a slot map `σ` and its baselin
 def ThrottlesDarkSlots : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledDarkSlots j out
 
-end NciCheck.Properties
+end InferenceOnlyCheck.Properties

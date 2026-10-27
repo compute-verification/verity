@@ -1,4 +1,4 @@
-"""The registration log NCI's full check reads (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), for a Program whose θ is
+"""The registration log NCI's full check reads (`inference-only-check INSTANCE TRUSTED`, `InferenceOnlyCheck.Baseline`), for a Program whose θ is
 registered (`RegisteredInput<w>_v1`, `WorkloadProgram(theta_registered=True)`).
 
     write(program_digest, params, theta, values, window) -> {"record", "digest", "trusted", "provenance", "salts"}
@@ -10,7 +10,7 @@ process per rank of a node Program: `predict.node_registration`), and `write` co
 * **The record.** One `verity/registration/v2` record, `previous` null, whose `registered` list has one value per parameter
   that holds a θ node, named as the parameter, its rows committed under hiding leaves (`commit.registered_rows`, R7's
   format). One log is one deployment and θ is what its first record registers, so this record opens the log and is the
-  run's own: the deployment's first run. Its keys are the ones nci-check reads (`program`, `registered`, `previous`) with
+  run's own: the deployment's first run. Its keys are the ones inference-only-check reads (`program`, `registered`, `previous`) with
   `protocol`, `window` and `roots`, as NCI's difftest vectors write them. It carries none of the one-stage draw's fields
   (query, partition, population, law, scheme, leaf layer, anchors): it registers θ, and no draw follows it.
 * **`provenance`**: the instance's, one `{"kind": "registered", "registration", "value", "root"}` per θ node, in θ's order.
@@ -20,7 +20,7 @@ process per rank of a node Program: `predict.node_registration`), and `write` co
 `params` are the Program function's parameters in order (§5.1: the root starts with each parameter's input nodes, in
 parameter order), `theta` the root input nodes `annotations["theta"]` names, and `values(name)` a θ parameter's leaves in
 its leaf order. A θ parameter is one leaf width (`registered.width`) or it is refused: its rows' `word_bits` is the width of
-every θ node in it (nci-check's `theta-width`).
+every θ node in it (inference-only-check's `theta-width`).
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ from verity_vllm.commit import registered_rows as RR
 
 
 def lower(t: Type) -> list[tuple[int, int]]:
-    """The input nodes a parameter of type `t` lowers to, `(width, leaves)` each (PROTOCOL.md §5.1, as nci-check lowers
+    """The input nodes a parameter of type `t` lowers to, `(width, leaves)` each (PROTOCOL.md §5.1, as inference-only-check lowers
     `params`)."""
     ws = t.width_set()
     if len(ws) == 1:
@@ -71,7 +71,7 @@ def word_bits(t: Type) -> int:
 
 def record(program_digest: str, params: Sequence[tuple[str, Type]], theta: Sequence[int],
            entries: Mapping[str, Mapping[str, Any]], window: Mapping[str, Any]) -> dict[str, Any]:
-    """The record of θ's `entries` (θ parameter -> its `registered_rows.commit` entry), its digest, nci-check's trusted input and
+    """The record of θ's `entries` (θ parameter -> its `registered_rows.commit` entry), its digest, inference-only-check's trusted input and
     the instance's `provenance`: refused unless there is one entry per θ parameter, each of its parameter's leaves and width."""
     nodes = theta_parameters(params, theta)
     types = dict(params)
@@ -95,7 +95,7 @@ def record(program_digest: str, params: Sequence[tuple[str, Type]], theta: Seque
 
 def write(program_digest: str, params: Sequence[tuple[str, Type]], theta: Sequence[int],
           values: Callable[[str], np.ndarray], window: Mapping[str, Any]) -> dict[str, Any]:
-    """The record, its digest, nci-check's trusted input and the instance's `provenance`, and the prover's salts."""
+    """The record, its digest, inference-only-check's trusted input and the instance's `provenance`, and the prover's salts."""
     types = dict(params)
     entries, salts = {}, {}
     for name in dict.fromkeys(n for n, _w in theta_parameters(params, theta).values()):

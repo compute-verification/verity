@@ -1,16 +1,16 @@
 {
- "roots": ["NciCheck"],
+ "roots": ["InferenceOnlyCheck"],
  "exempt": {
-  "NciCheck.CheckMain": "the nci-check exe: reads an instance file and the service's trusted input and prints NciCheck.Baseline.check (or, with --unrolled, NciCheck.Baseline.checkUnrolled) on them, or with --policy NciCheck.Desc.check (NciCheck.check) on the instance alone; IO around the audited check, not a proof",
-  "NciCheck.DescDifftestMain": "the description-sized check's difftest, under `runs`: compiled evaluation of NciCheck.DescDifftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of NciCheck.Difftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.DescLivenessMain": "the description-sized check's liveness test, under `runs`: compiled evaluation of NciCheck.DescLiveness.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.DescFuzzMain": "the description-sized check's fuzz run, under `runs`: compiled evaluation of NciCheck.DescFuzz.main, audited under NciCheck, a test and not a proof"
+  "InferenceOnlyCheck.CheckMain": "the inference-only-check exe: reads an instance file and the service's trusted input and prints InferenceOnlyCheck.Baseline.check (or, with --unrolled, InferenceOnlyCheck.Baseline.checkUnrolled) on them, or with --policy InferenceOnlyCheck.Desc.check (InferenceOnlyCheck.check) on the instance alone; IO around the audited check, not a proof",
+  "InferenceOnlyCheck.DescDifftestMain": "the description-sized check's difftest, under `runs`: compiled evaluation of InferenceOnlyCheck.DescDifftest.main, audited under InferenceOnlyCheck, a test and not a proof",
+  "InferenceOnlyCheck.DifftestMain": "the difftest against the Python reference, under `runs`: compiled evaluation of InferenceOnlyCheck.Difftest.main, audited under InferenceOnlyCheck, a test and not a proof",
+  "InferenceOnlyCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of InferenceOnlyCheck.BaselineDifftest.main, audited under InferenceOnlyCheck, a test and not a proof",
+  "InferenceOnlyCheck.DescLivenessMain": "the description-sized check's liveness test, under `runs`: compiled evaluation of InferenceOnlyCheck.DescLiveness.main, audited under InferenceOnlyCheck, a test and not a proof",
+  "InferenceOnlyCheck.DescFuzzMain": "the description-sized check's fuzz run, under `runs`: compiled evaluation of InferenceOnlyCheck.DescFuzz.main, audited under InferenceOnlyCheck, a test and not a proof"
  },
  "runs": {
-  "NciCheck.DescDifftestMain": {
-   "why": "4,009 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by NciCheck.Desc.resolvable, 12 on whole members of a batch returning leaves of two arguments they share, each another node's, and 335 whose references name leaves of other widths than their types give them, E_REINTERPRET, which both sides refuse, or are their well-typed neighbours: the shapes on which PRF-151's first liveness test gave NciCheck mistyped Programs, arrays of up to 2^20 (V8, V16) pairs read whole, by leaf, shifted and as quads and 300 random declarations with one reference moved, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+  "InferenceOnlyCheck.DescDifftestMain": {
+   "why": "4,009 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past InferenceOnlyCheck.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by InferenceOnlyCheck.Desc.resolvable, 12 on whole members of a batch returning leaves of two arguments they share, each another node's, and 335 whose references name leaves of other widths than their types give them, E_REINTERPRET, which both sides refuse, or are their well-typed neighbours: the shapes on which the first liveness test gave InferenceOnlyCheck mistyped Programs, arrays of up to 2^20 (V8, V16) pairs read whole, by leaf, shifted and as quads and 300 random declarations with one reference moved, then the unrolled difftest's two pinned ones) on which InferenceOnlyCheck.Desc.check gives what scripts/inference_only_reference.py's check_desc computes, and, on each one it gives a verdict on, what InferenceOnlyCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
    "args": [
     "{desc_difftest/instances.jsonl}",
     "{desc_difftest/expanded.jsonl}",
@@ -24,8 +24,8 @@
    },
    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
-  "NciCheck.DifftestMain": {
-   "why": "4,000 random declarations and divisions, the description-sized difftest's 335 on E_REINTERPRET (references naming leaves of other widths than their types give them, which both sides refuse as program, and their well-typed neighbours, expanded gate by gate where the Program decodes), and two pinned ones (θ with an input bound per run, refused theta-not-registered, and θ the registered input, accepted), on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
+  "InferenceOnlyCheck.DifftestMain": {
+   "why": "4,000 random declarations and divisions, the description-sized difftest's 335 on E_REINTERPRET (references naming leaves of other widths than their types give them, which both sides refuse as program, and their well-typed neighbours, expanded gate by gate where the Program decodes), and two pinned ones (θ with an input bound per run, refused theta-not-registered, and θ the registered input, accepted), on which InferenceOnlyCheck.check gives what scripts/inference_only_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4337"],
    "data": {
     "difftest/instances.jsonl": "a29efe48563e56c3a83587c9f2ab3519332f1919a9c236178564b7deb17f1fb4",
@@ -33,8 +33,8 @@
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
-  "NciCheck.BaselineDifftestMain": {
-   "why": "1,213 declarations with θ, θ's provenance and the service's trusted input (the deployment's registration log in R6's chain, the run's digest and its parameters): 1,200 random, just under half of them broken in one way, and 13 pinned on a declaration worked by hand (two accepted, citing the log's first record from the deployment's first run and from its third, one negative per refusal code, theta-not-at-deployment-start citing a record registered mid-deployment, an entry of the output kind θ no longer takes, refused theta-provenance as any unknown kind is, theta-not-registered, and two of a field of another JSON type than the string or null the check compares it with: the cited entry's root a number, refused theta-root, and a record's previous neither its predecessor's digest nor null, refused trusted), on which NciCheck.Baseline.check gives what scripts/nci_reference.py's check_baseline computes, and, on each one the policy check gives a verdict on, what NciCheck.Baseline.checkUnrolled gives on the case expanded gate by gate",
+  "InferenceOnlyCheck.BaselineDifftestMain": {
+   "why": "1,213 declarations with θ, θ's provenance and the service's trusted input (the deployment's registration log in R6's chain, the run's digest and its parameters): 1,200 random, just under half of them broken in one way, and 13 pinned on a declaration worked by hand (two accepted, citing the log's first record from the deployment's first run and from its third, one negative per refusal code, theta-not-at-deployment-start citing a record registered mid-deployment, an entry of the output kind θ no longer takes, refused theta-provenance as any unknown kind is, theta-not-registered, and two of a field of another JSON type than the string or null the check compares it with: the cited entry's root a number, refused theta-root, and a record's previous neither its predecessor's digest nor null, refused trusted), on which InferenceOnlyCheck.Baseline.check gives what scripts/inference_only_reference.py's check_baseline computes, and, on each one the policy check gives a verdict on, what InferenceOnlyCheck.Baseline.checkUnrolled gives on the case expanded gate by gate",
    "args": [
     "{baseline_difftest/cases.jsonl}",
     "{baseline_difftest/expanded.jsonl}",
@@ -48,16 +48,16 @@
    },
    "generate": ["python3", "scripts/baseline_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
-  "NciCheck.DescLivenessMain": {
-   "why": "13 descriptions naming 2^22 to 2^52 + 1 scan iterations or batch members, past what NciCheck.Desc walks one by one (NciCheck.Desc.WALK): a scan of pass-through iterations a gate reads and one nothing reads, a batch returning its shared input read whole, by a gate and through a mapped argument, scans swapping their carry an odd and an even number of times, carries leaving through an xs row, and gates reading a carry or part of an xs row; on each one NciCheck.Desc.check gives a verdict, the one it gives on the same description at a small count (the novel reads for a description whose reads grow with it), which NciCheck.check gives on that one expanded gate by gate",
+  "InferenceOnlyCheck.DescLivenessMain": {
+   "why": "13 descriptions naming 2^22 to 2^52 + 1 scan iterations or batch members, past what InferenceOnlyCheck.Desc walks one by one (InferenceOnlyCheck.Desc.WALK): a scan of pass-through iterations a gate reads and one nothing reads, a batch returning its shared input read whole, by a gate and through a mapped argument, scans swapping their carry an odd and an even number of times, carries leaving through an xs row, and gates reading a carry or part of an xs row; on each one InferenceOnlyCheck.Desc.check gives a verdict, the one it gives on the same description at a small count (the novel reads for a description whose reads grow with it), which InferenceOnlyCheck.check gives on that one expanded gate by gate",
    "args": ["{desc_liveness/cases.jsonl}", "13"],
    "data": {
     "desc_liveness/cases.jsonl": "481b3a6d30e820f52e496e918a7a6653b4f2bcd903f75cd1f24f5332cd5e18a2"
    },
    "generate": ["python3", "scripts/desc_liveness_vectors.py", "{repo}", "--out", "{out}"]
   },
-  "NciCheck.DescFuzzMain": {
-   "why": "1,330 descriptor v1 Programs from fixed seeds: the 14 worked by hand; the lane's shared-members family (fuzz/gen/shared.py): the 6 declarations of the desc difftest's shared members (whole members of a batch returning leaves of arguments they share, each another root node's output, which NciCheck.Desc read as its first piece's node's alone before Seg.split) and 263 drawn after them (200 seeds and 63 mutants: two or three shared arguments, each a gate, a call, a batch member or the input itself; two to four members, with a mapped argument or none; their leaves in any order, with the member's own gate; read whole, by a run of members or a run cut inside them, directly or through composites), each with its IU assignments (1 to 12, 1,670 in all); 789 random (600 and 189), 183 of segment copies (150 and 33), 23 chains (20 and 3) and 52 big (40 and 12). On each one past NciCheck.Desc.evaluate's refusals NciCheck.DescFuzz.check decides the statements behind DescAgrees: OperandsResolve on primitive nodes, BodiesOk and ReadsExact, and DescAgrees itself, NciCheck.Desc.evaluate against NciCheck.evaluate on the instance expanded gate by gate, on the line's IU assignments and 4 instances of its own on each worked and seed one, 1 on the rest. About 60 s on one core, 15 s on four; NciCheck.Desc without Seg.split fails it on 122 of them, every one shared, in ReadsExact and DescAgrees",
+  "InferenceOnlyCheck.DescFuzzMain": {
+   "why": "1,330 descriptor v1 Programs from fixed seeds: the 14 worked by hand; the shared-members family: the 6 declarations of the desc difftest's shared members (whole members of a batch returning leaves of arguments they share, each another root node's output, which InferenceOnlyCheck.Desc read as its first piece's node's alone before Seg.split) and 263 drawn after them (200 seeds and 63 mutants: two or three shared arguments, each a gate, a call, a batch member or the input itself; two to four members, with a mapped argument or none; their leaves in any order, with the member's own gate; read whole, by a run of members or a run cut inside them, directly or through composites), each with its IU assignments (1 to 12, 1,670 in all); 789 random (600 and 189), 183 of segment copies (150 and 33), 23 chains (20 and 3) and 52 big (40 and 12). On each one past InferenceOnlyCheck.Desc.evaluate's refusals InferenceOnlyCheck.DescFuzz.check decides the statements behind DescAgrees: OperandsResolve on primitive nodes, BodiesOk and ReadsExact, and DescAgrees itself, InferenceOnlyCheck.Desc.evaluate against InferenceOnlyCheck.evaluate on the instance expanded gate by gate, on the line's IU assignments and 4 instances of its own on each worked and seed one, 1 on the rest. About 60 s on one core, 15 s on four; InferenceOnlyCheck.Desc without Seg.split fails it on 122 of them, every one shared, in ReadsExact and DescAgrees",
    "args": ["{desc_fuzz/programs.jsonl}", "1330"],
    "data": {
     "desc_fuzz/programs.jsonl": "e8ae76049303e94b60e0aecf2a817afde9824ade5e3493a536817f1db1de7f02"
@@ -66,20 +66,20 @@
   }
  },
  "layers": {
-  "NciCheck.Check": {
+  "InferenceOnlyCheck.Check": {
    "imports": ["Std", "Flock.Program"],
    "except": [],
-   "why": "the check is code: Lean core and C-Flock's program decoder only, no Mathlib and nothing of Security (the coordinator's ruling for this port)"
+   "why": "the check is code: Lean core and C-Flock's program decoder only, no Mathlib and nothing of Security"
   },
-  "NciCheck.Desc": {
-   "imports": ["Std", "Flock.Program", "NciCheck.Check"],
+  "InferenceOnlyCheck.Desc": {
+   "imports": ["Std", "Flock.Program", "InferenceOnlyCheck.Check"],
    "except": [],
-   "why": "the description-sized check is code, as NciCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
+   "why": "the description-sized check is code, as InferenceOnlyCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
   },
-  "NciCheck.Baseline": {
-   "imports": ["Std", "Flock.Program", "NciCheck.Check", "NciCheck.Desc"],
+  "InferenceOnlyCheck.Baseline": {
+   "imports": ["Std", "Flock.Program", "InferenceOnlyCheck.Check", "InferenceOnlyCheck.Desc"],
    "except": [],
-   "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports) and the policy check it runs first"
+   "why": "θ's provenance check is code, as InferenceOnlyCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports) and the policy check it runs first"
   }
  },
  "guarantees": {},
