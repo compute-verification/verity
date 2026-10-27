@@ -11,6 +11,8 @@ run's readers take, so a run under it names the recorded vllm-v1 run it serves a
 stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port the certifier's
 served-rows tie reads) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
 the weights. The port is the step's one copy of its ids (`single_ids`): the embedding's own input isn't committed beside it.
+It writes the engine's rotary table to ``OUT/private/cos_sin_cache.npy`` (`m1_capture.dump_cos_sin`), which no record copies:
+the words the committer's weights registration roots it at (``prove_path.py weights-registration``) before the first request.
 
 With ``seal`` (`seal_window`, which `serve_commit.CommitWindows` calls at each close), each closed window is sealed as a
 deferred Commit's row dir, ``windows/w<k>/``, the way a declared Commit with ``--replay-deferred`` seals its run
@@ -270,6 +272,10 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
         com.window_ring = com.enable_windows(com.arena_sizing_record)     # windowed staging's ring replaces the per-step blocks
     if opts.seal:
         com.register_weights()           # the weights tree every sealed window's bundle carries (hashed as VERITY_WEIGHTS_HASH says)
+    from verity_vllm.pipeline.m1_capture import dump_cos_sin
+
+    (private := Path(opts.out) / "private").mkdir(exist_ok=True)
+    dump_cos_sin(llm, private)
     return com
 
 

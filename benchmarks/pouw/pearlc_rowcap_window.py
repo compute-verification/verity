@@ -15,9 +15,8 @@ on all 64 x 6,144 words, spot-checked against `pearl_c_debit.word_debit`).  Ever
   (64·W columns) is at most ρ of that row's credit there;
 * ``draw-W``: the audit tile is the window itself, 64 x 64·W, with the tile-wide and row caps over it; a 64 x 64 tile
   counts as accepted when its window is;
-* ``served``: the scheme's own rule, its row cap `PearlC.row_cap_at(256)` per 64 x 64 tile (4ρ since Daniel's card
-  a6872606, option (a)), with the rows an honest prover gives up to pass it (``served_rows_over``) and the debit share of
-  the tiles it accepts.
+* ``served``: the scheme's own rule, its row cap `PearlC.row_cap_at(256)` per 64 x 64 tile (4ρ), with the
+  rows an honest prover gives up to pass it (``served_rows_over``) and the debit share of the tiles it accepts.
 
 ``window-96`` and ``draw-96`` are the row's whole n.  For ``window-W`` the adversary's best concentration is measured too:
 within each window, the 64 columns with the most debit packed into one tile (a weight order the prover may choose), which

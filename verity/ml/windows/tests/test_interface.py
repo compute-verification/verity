@@ -91,7 +91,7 @@ def test_a_units_rows_are_its_definitions_bit_rows():
 
 
 def test_a_boolean_definitions_rows_are_its_ports_words():
-    """A Boolean-profile Definition (every leaf one bit, as network-accounting's egress units) has the bit rows of its
+    """A Boolean-profile Definition (every leaf one bit, as the network certifier's egress units) has the bit rows of its
     `boolean.word_type` view; a port whose words aren't whole u16 words of one width is still refused."""
     bit = Value(1)
 
@@ -460,6 +460,45 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
             sliced(wires=(replace(c.wires[0], **edit),))
     with pytest.raises(ValueError, match="both fill rows"):
         sliced(wires=(*c.wires, I.Wire(GID, "x", G8ID, "o0", at=2, radix=(1,), base=0, step=(0,), cut=(1, 1))))
+
+
+def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
+    """A template passes with the k_log its rows alone need, and is refused, its message naming it, its cuts, its rows and
+    the fix, when its rows are more than C-Flock's composer takes, none is past 111 bytes, or they alone need a C-Flock block
+    past 2^27 bits."""
+    assert I.check_proof_block(GEMM) == I.check_proof_block(GEMM, {"x": 2}) == 21
+    wide = bind(G.Gemm, K=16, N=256, **G.GEMM_AMPERE)
+    with pytest.raises(ValueError, match=re.escape(f"{descriptor_id(wide)} cut {{'w': 256}}: x 32 B, w 256 rows of 32 B, "
+                                                   "o0 512 B: 258 rows, past a proof block's 256")):
+        I.check_proof_block(wide, {"w": 256})
+    with pytest.raises(ValueError, match=f"{re.escape(GID)} cut .*: no row past 111 B.*bind the Definition larger"):
+        I.check_proof_block(GEMM, {"w": 16})
+    with pytest.raises(ValueError, match=r"need a C-Flock block of 2\^28 bits, past 2\^27: bind the Definition smaller"):
+        I.check_proof_block(bind(G.Gemm, K=2048, N=48, **G.GEMM_AMPERE))
+
+
+def test_the_proof_block_limits_are_c_flocks_composers():
+    """`check_proof_block`'s sizes are C-Flock's composer's, and `rows_k_log` is the k_log its ranges give a unit's rows,
+    holding every gate range's k_log at or above it: a row has a compression before its last block exactly past
+    ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit C-Flock block room."""
+    from verity_flock import circuit as FC
+
+    assert (I.K_MAX, I.SLOT_LOG, I.PER_SLOT, I.MASK_LOG) == (FC.K_MAX, FC.SHA_LOG, FC.PER_SLOT, FC.MASK_LOG)
+    assert FC.HM_LOG == FC.SHA_LOG and FC._ranges([("mask", FC.MASK_LOG, 1, {})])[1] == I.K_MIN
+    assert all((FC.Port("r", b // 2, 8 * b).comps > 0) == (b > I.LAST_BLOCK_BYTES) for b in range(2, 2048, 2))
+    rng = np.random.default_rng(0)
+    for n in (*range(1, 10), 16, 17, 100, 255, 256, 257):
+        for _ in range(4):
+            rb = [int(b) for b in 2 * rng.integers(1, rng.choice([56, 1 << 9, 1 << 17]), n)]
+            ports = [FC.Port(f"r{j}", b // 2, 8 * b) for j, b in enumerate(rb)]
+            if (n_sha := FC._row_slots(ports)[0]) == 0:
+                continue
+            rows = [("unit", FC.SHA_LOG, n_sha, {"packed": True}), ("unit", FC.HM_LOG, FC._pow2(n), {}),
+                    ("mask", FC.MASK_LOG, 1, {})]
+            assert I.rows_k_log(rb) == FC._ranges(rows)[1], rb
+            gates = ("unit", int(rng.integers(7, 26)), int(rng.integers(1, 64)), {"packed": bool(rng.integers(2))})
+            assert I.rows_k_log(rb) <= FC._ranges([*rows, gates])[1]
+    assert I.rows_k_log([112] * I.MAX_ROWS) == I.K_MAX < I.rows_k_log([112] * (I.MAX_ROWS + 1))
 
 
 def sliced_values(seed: int = 0) -> tuple[list[np.ndarray], ...]:

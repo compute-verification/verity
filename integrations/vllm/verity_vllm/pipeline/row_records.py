@@ -109,8 +109,7 @@ def composed_ok(rank_dir: str) -> bool:
 
 
 #: a request derive's peak host memory: a base, a term per Call and attention's term per layer x tokens^2 (every attention Call
-#: lists each earlier key and value row), fit over the 89 request derives of the 2026-09-29 epoch's stored Builds (#11, #57, #67,
-#: #68, #74, #75: within 5% on the large ones), with Calls bounded by the most Calls per (token, layer) measured (54: Qwen3-4B-FP8,
+#: lists each earlier key and value row), fit over 89 request derives of six stored Builds (within 5% on the large ones), with Calls bounded by the most Calls per (token, layer) measured (54: Qwen3-4B-FP8,
 #: Qwen3-30B-A3B) and a 1.2 margin
 DERIVE_BASE_BYTES = 2000 << 20
 DERIVE_BYTES_PER_CALL = 6950
@@ -118,21 +117,21 @@ DERIVE_BYTES_PER_LAYER_TOKEN2 = 362
 DERIVE_CALLS_PER_TOKEN_LAYER = 60
 DERIVE_MARGIN = 1.2
 #: a TP rank's GP-01 compose (`global-program`) peaks above its rank's largest request derive while it decodes that descriptor:
-#: fitted on one Build only, Qwen3-235B-A22B TP8 with one shape (LP256 T31, run r20261003-070729-359b): 20.8 GiB per compose
+#: fitted on one Build only, Qwen3-235B-A22B TP8 with one shape (LP256 T31): 20.8 GiB per compose
 #: against 14.1 GiB per derive (1.48x); a compose's planned peak is this multiple of its largest shape's `derive_bytes`
 COMPOSE_PEAK_RATIO = 1.5
 #: ... or, as the requests grow, this multiple of all its shapes' `derive_bytes`, the larger: a compose holds every request's Program.
-#: GLM-5.3 TP8 (78 layers), I256 mixed arrivals: B32 composed at 128.8 GiB a rank against 207.6 GiB summed (0.62x, r20261018-005907-aca0),
-#: B8 past 32.2 GiB against 62.7 GiB (0.51x, OOM-killed at its scope's cap, r20261018-074029-94eb)
+#: GLM-5.3 TP8 (78 layers), I256 mixed arrivals: B32 composed at 128.8 GiB a rank against 207.6 GiB summed (0.62x), B8 past 32.2 GiB
+#: against 62.7 GiB (0.51x, OOM-killed at its scope's cap)
 COMPOSE_SUM_RATIO = 0.7
 #: a TP row's required-value manifest (`manifest build-global`): the word check, then one component per rank x declared request.
-#: GLM-5.3 TP8 B8 I256 at 2 processes (r20261020-084508-06dd): the word check 4,738 s, each of the 64 components 356-409 s.  The
+#: GLM-5.3 TP8 B8 I256 at 2 processes: the word check 4,738 s, each of the 64 components 356-409 s.  The
 #: limit gives the word check 3x and each component 1,200 s as if one process built them all
 MANIFEST_BASE_S = 4 * 3600
 MANIFEST_COMPONENT_S = 1200
-#: a TP rank's fold Match legs (`tp-fold-match`) as multiples of its request Programs' summed `derive_bytes`: GLM-5.3 TP8 B8 I256
-#: (62.4 GiB summed) ran GM-01 with the shared X-09 at 339 GiB and the fold near 40 GB (r20261019-162751-9b01), each leg in at most
-#: about 2 h; a leg's limit is 350 s a GiB (3x that), at least 7200 s
+#: a TP rank's fold Match parts (`tp-fold-match`) as multiples of its request Programs' summed `derive_bytes`: GLM-5.3 TP8 B8 I256
+#: (62.4 GiB summed) ran GM-01 with the shared X-09 at 339 GiB and the fold near 40 GB, each part in at most about 2 h; a part's
+#: limit is 350 s a GiB (3x that), at least 7200 s
 FOLD_GM_SUM_RATIO = 5.5
 FOLD_SUM_RATIO = 0.6
 FOLD_LEG_S_PER_GIB = 350

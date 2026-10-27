@@ -77,7 +77,7 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
   gates complete at most U/s_× counted operations, s_× the fewest gates of a counted operation in the same count; this
   replaces κ/2.
 - **Credit** is a statement about values. An accepted run credits a size S, and its guarantee is
-  Pr[accept ∧ the AND gates whose committed values are right number fewer than (1 − ε_skip)·S] ≤ δ_coin + δ_crypto. It
+  Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤ δ_coin + δ_crypto. It
   needs no algorithmic premise: SAK (`SAKResidual`) is a premise of exclusion only. For the served PoUW, the
   one computational premise left is `SharedNoiseLucks` (the fold receipts' detection) until it moves to Dither's no-fold
   receipt, which takes none. The
