@@ -24,7 +24,7 @@ weights `2^(−charge)` come to at most 1, and at most `2^c` streams are charged
 
 **Scope.** `EncardChargedLe` and its bound: decision-only windows, a window sending its four counts as 0
 (`ChargeCount_v1`'s scope). Which slots ask (`en`) is not charged because it is not advice: the compile slice, its charge included, is proved on every advised window and never sampled, so `en` is pinned
-by that slice's scan. The carry across windows is chained from the book's priors (#3801, `charge_chain.check_chain`).
+by that slice's scan. The carry across windows is chained from the book's priors (`charge_chain.check_chain`).
 
 **What is left, the one hypothesis.** That `ChargeCount_v1`'s circuit computes `AdviceV1.window`. It is not proved in
 Lean: circuit-check holds the circuit to the Python reference (`arith_encode.py`'s `reference_charge`), and the Lean
