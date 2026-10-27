@@ -141,11 +141,13 @@ theorem card_freshHit_le {α : Type} :
           have := hcalls H h1; rwa [h1 x hx] at this
         have hsub : (univ.filter fun H : Q → R => (∀ y ∈ seen, H y = ρ y) ∧ FreshHit H seen (query x k)) ⊆
             univ.filter fun H : Q → R => (∀ y ∈ seen ++ [x], H y = ρ y) ∧ FreshHit H (seen ++ [x]) (k (ρ x)) := by
-          rw [Finset.subset_iff]; intro H
-          simp only [Finset.mem_filter, Finset.mem_univ, true_and, FreshHit]
-          rintro ⟨hH, (⟨hn, -⟩ | hf)⟩
+          rw [Finset.subset_iff]; intro H hH
+          rw [Finset.mem_filter] at hH ⊢
+          obtain ⟨-, hH, hf⟩ := hH
+          simp only [FreshHit] at hf
+          rcases hf with ⟨hn, -⟩ | hf
           · exact absurd hx hn
-          · exact ⟨(hagree H).2 hH, by rwa [hH x hx] at hf⟩
+          · exact ⟨Finset.mem_univ _, (hagree H).2 hH, by rwa [hH x hx] at hf⟩
         rw [← hAA]
         calc 2 * Fintype.card R *
               (univ.filter fun H : Q → R => (∀ y ∈ seen, H y = ρ y) ∧ FreshHit H seen (query x k)).card
@@ -172,11 +174,14 @@ theorem card_freshHit_le {α : Type} :
           (∀ y ∈ seen, H y = ρ y) ∧ FreshHit H (seen ++ [x]) (k (H x))
         have hsub : (univ.filter fun H : Q → R => (∀ y ∈ seen, H y = ρ y) ∧ FreshHit H seen (query x k)) ⊆
             E1 ∪ E2 := by
-          rw [Finset.subset_iff]; intro H
-          simp only [Finset.mem_filter, Finset.mem_univ, true_and, FreshHit, Finset.mem_union, E1, E2]
-          rintro ⟨hH, (⟨-, h⟩ | hf)⟩
-          · exact Or.inl ⟨hH, h⟩
-          · exact Or.inr ⟨hH, hf⟩
+          rw [Finset.subset_iff]; intro H hH
+          rw [Finset.mem_filter] at hH
+          obtain ⟨-, hH, hf⟩ := hH
+          simp only [FreshHit] at hf
+          rw [Finset.mem_union, Finset.mem_filter, Finset.mem_filter]
+          rcases hf with ⟨-, h⟩ | hf
+          · exact Or.inl ⟨Finset.mem_univ _, hH, h⟩
+          · exact Or.inr ⟨Finset.mem_univ _, hH, hf⟩
         -- the first query is a fresh hit on at most `m` of the `|R|` fibers
         have h1 : Fintype.card R * E1.card ≤ seen.length * A.card := by
           let img := (seen.map ρ).toFinset
@@ -192,8 +197,7 @@ theorem card_freshHit_le {α : Type} :
                 obtain ⟨y, hy, hy'⟩ := List.mem_map.1 (List.mem_toFinset.1 hr)
                 exact ⟨y, hy, (hH y hy).trans hy'⟩
             · intro H hH
-              simp only [Finset.mem_filter, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq,
-                E1] at hH
+              simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq, E1] at hH
               obtain ⟨hH, y, hy, hy'⟩ := hH
               exact List.mem_toFinset.2 (List.mem_map.2 ⟨y, hy, (hH y hy).symm.trans hy'⟩)
           rw [hE1, Finset.mul_sum]
@@ -260,7 +264,7 @@ theorem pr_collides_le {α : Type} (t : QTree Q R α) (q : ℕ) (ht : ∀ H, t.c
   rcases Nat.eq_zero_or_pos (Fintype.card R) with hR | hR
   · rw [pr_eq_zero fun H ⟨x, _, _⟩ => absurd hR (Fintype.card_pos_iff.2 ⟨H x⟩).ne']
     simp [hR]
-  haveI : Nonempty R := Fintype.card_pos_iff.1 hR
+  have : Nonempty R := Fintype.card_pos_iff.1 hR
   have hc := card_freshHit_le q t [] (fun _ => Classical.arbitrary R) fun H _ => ht H
   have e1 : (univ.filter fun H : Q → R => (∀ y ∈ ([] : List Q), H y = Classical.arbitrary R) ∧ FreshHit H [] t) =
       univ.filter fun H => FreshHit H [] t := by ext H; simp
@@ -296,7 +300,7 @@ theorem pr_collides_le {α : Type} (t : QTree Q R α) (q : ℕ) (ht : ∀ H, t.c
 
 /-- **The birthday bound for the finder `B^A`**: over the uniform oracle and salt, the finder built from `A` collides
 on its log with probability at most `q_A(q_A − 1)/(2|R|)`, at `q_A = A.queries U`. -/
-theorem pr_finder_collides_le [Fintype S] {CM : CostModel Q R S} (hQ : CM.Queries) (A : Adversary CM) (U : Workload) :
+theorem pr_finder_collides_le {S : Type} [Fintype S] {CM : CostModel Q R S} (hQ : CM.Queries) (A : Adversary CM) (U : Workload) :
     pr (fun x : (Q → R) × S => Collides x.1 (finderQueries hQ A U x.1 x.2)) ≤
       (A.queries U : ℝ) * (A.queries U - 1) / (2 * Fintype.card R) := by
   classical
