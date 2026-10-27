@@ -9,8 +9,8 @@ import Proofs.Flock.Soundness.Refine.Walk
 # The compiled component's refusals, as `acc_of_accepts` reads them (ONE-9p, G's `Refusals`)
 
 `Verity.Recursive.Refusals` is what `acc_of_accepts` reads of the compiled component beyond its setups: Flock's own
-checks on the inner statement (`InnerOkAt`), plain SHA-512 leaves refused under `--zk` at the parts' statement, and the
-files the parts' statements encode short enough for their length words. Each is the compiled component's own refusal:
+checks on the inner statement (`InnerOkAt`) and the files the parts' statements encode short enough for their length
+words. Each is the compiled component's own refusal:
 
 * **`innerOkAt_of_compiled`.** The compiled `innerHeld` runs `innerOk`: Flock's plain setup of the inner statement on its
   circuit, public file and draw, at the verifier's partition and program and `--stratified` at the population they give
@@ -18,8 +18,8 @@ files the parts' statements encode short enough for their length words. Each is 
   the component's inputs (`Names`), the inner statement `x` carries reads as those inputs (`ins_inner`), so the model's
   setup is the compiled one step for step (`setup_inner`), its scope check is the compiled one, it carries the draw, and
   at one table the session's draw is the draw (`RecDeploy.drawTiedS`). That is the model's `innerOk`.
-* **`plain_of_compiled`.** The parts' statement `verity/flock-circuit` has no plain leaves: each part's verdict refuses
-  them, so an accepted session with a part shows it.
+* **`plain_of_compiled`**, beside `Refusals`. The parts' statement `verity/flock-circuit` has no plain leaves: each
+  part's verdict refuses them, so an accepted session with a part shows it.
 * **The sizes.** The compiled component refuses a staged public file, inner record, coin server's transcript or staged
   rows file of `2 ^ 56` bytes or more (`fits`), so each file the blobs show is under `2 ^ 64` bytes (`record_of_compiled`,
   `transcript_of_compiled`, `rows_of_compiled`). `x`'s length is no input of the compiled component, since `Names` pins
@@ -295,7 +295,7 @@ theorem innerOkAt_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.On
 
 /-! ## Plain leaves -/
 
-/-- **`Refusals.plain`: the parts' statement has no plain SHA-512 leaves** where the compiled component accepts a
+/-- **The parts' statement has no plain SHA-512 leaves** where the compiled component accepts a
 session with a part: that part's verdict passed `need (!tags0.plainLeaves)`. `plainLeaves` compares `Json` (a
 `partial` `BEq`), so no computation settles it. -/
 theorem plain_of_compiled {p : VStar.Recursive.Params} {c : SampledProofs.OneStage.Commitment}
