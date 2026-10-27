@@ -770,7 +770,7 @@ def pinsReason (session : String) (opened pins : Json) : Option String := Id.run
     | return some (s!"the auditor's ledger's open of session {session} seals no pins log (pins: " ++
         "{lines, sha512}): open the window on a host whose gate seals its pins log in each open")
   if ls.size < n then
-    return some s!"the host's pins log has {ls.size} lines, fewer than the {n} the open of session {session} sealed: take infra's newest published pins log"
+    return some s!"the host's pins log has {ls.size} lines, fewer than the {n} the open of session {session} sealed: take the auditor host's operator's newest published pins log"
   let lines := (ls.extract 0 n).toList.map strOf
   unless getD sj "sha512" == Json.str (logDigest lines) do
     return some s!"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were edited or rewritten"
