@@ -90,6 +90,7 @@ PENDING: dict[str, str] = {
     "Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md": "#5345, #5471 and #5483 rewrite its lines",
     "Security/Proofs/Flock/Soundness/assumption-notes/lock-listed-premises.md": "#5345 rewrites its lines",
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
+    "benchmarks/README.md": "#5522 adds it",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
     "benchmarks/network_traces/README.md": "#5339 and #5458 rewrite its lines",
     "benchmarks/network_traces/chain_record.py": "#4575 rewrites its lines",
