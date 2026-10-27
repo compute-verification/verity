@@ -142,7 +142,6 @@ theorem WindowBound_nontrivial : Flock.Guarantees.WindowBound_nontrivial := by
   have hfit : Flock.Guarantees.WindowToy.member.base + Flock.Guarantees.WindowToy.member.size ≤ 3 := by decide
   refine ⟨by decide, hfit, ?_, ?_, ?_, ?_⟩
   · intro o h
-    unfold Flock.Guarantees.WindowToy.E at h
     exact card_pos.1 (by omega)
   · intro κ hκ h1 hk1 ctx hctx τ
     rw [prob_audit, avg]

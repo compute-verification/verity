@@ -224,7 +224,8 @@ window's event, probability `1/2`, is above the composed bound `0`. -/
 def WindowBound_nontrivial : Prop :=
   (∀ s, WindowToy.k s ≤ (Law.stratum WindowToy.strata s).card) ∧
   WindowToy.member.base + WindowToy.member.size ≤ 3 ∧
-  (∀ o, WindowToy.E o → (WindowToy.member.share o.2.1).Nonempty) ∧
+  (∀ o : Unit × Finset (Fin 3) × Unit, (WindowToy.member.share o.2.1).card = 2 →
+    (WindowToy.member.share o.2.1).Nonempty) ∧
   (∀ κ (hκ : κ ≤ WindowToy.member.size), 1 ≤ κ → κ ≤ WindowToy.k 0 →
     ∀ ctx : Finset (Fin 3), Disjoint ctx WindowToy.member.range →
     ∀ τ : Strategy (audit (Law.subset WindowToy.member.size κ hκ) Unit
