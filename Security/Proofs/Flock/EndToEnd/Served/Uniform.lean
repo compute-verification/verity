@@ -30,7 +30,7 @@ reads of the first have it read as many of the second. -/
 theorem used_congr (s : Flock.Draw.Stratum) (a b : ByteArray) (hsz : a.size = b.size)
     (hpre : a.extract 0 (used s a) = b.extract 0 (used s a)) : used s b = used s a := by
   by_cases ha : ∃ j, Draws s a j
-  · have hua : used s a = Nat.find ha * s.need := by unfold used; rw [dif_pos ha]
+  · have hua : used s a = Nat.find ha * s.need := by unfold used; rw [dite_eq_left ha]
     have hd := draws_congr s a b hsz _ hpre
     have hb : Draws s b (Nat.find ha) := (hd _ (by rw [hua])).1 (Nat.find_spec ha)
     have hex : ∃ j, Draws s b j := ⟨_, hb⟩
@@ -40,14 +40,14 @@ theorem used_congr (s : Flock.Draw.Stratum) (a b : ByteArray) (hsz : a.size = b.
       rw [hua]; exact Nat.mul_le_mul_right _ hi.le
     rw [hua]
     unfold used
-    rw [dif_pos hex, hfind]
-  · have hua : used s a = a.size := by unfold used; rw [dif_neg ha]
+    rw [dite_eq_left hex, hfind]
+  · have hua : used s a = a.size := by unfold used; rw [dite_eq_right ha]
     have hb : ¬ ∃ j, Draws s b j := by
       rintro ⟨j, hj⟩
       exact ha ⟨j, (draws_congr s a b hsz _ hpre j (by rw [hua, hsz]; exact hj.2.1)).2 hj⟩
     rw [hua]
     unfold used
-    rw [dif_neg hb, hsz]
+    rw [dite_eq_right hb, hsz]
 
 theorem starts_mono (strata : Array Flock.Draw.Stratum) (src : ByteArray) {i i' : ℕ} (h : i ≤ i') :
     starts strata src i ≤ starts strata src i' := by
@@ -71,7 +71,7 @@ bytes of `pad i` the segment displaced. -/
 noncomputable def rest (c : Fin L → Fin 256) (pad : Pads m L) : Fin L → Fin 256 := fun j =>
   if h : ∃ i : Fin m, starts (Array.ofFn St) (Law.streamOf c) i ≤ j.val ∧
       j.val < starts (Array.ofFn St) (Law.streamOf c) (i.val + 1) then
-    byteAt (pad (Classical.choose h)) (j.val - starts (Array.ofFn St) (Law.streamOf c) (Classical.choose h))
+    byteAt (pad (Classical.choose h)) (j.val - starts (Array.ofFn St) (Law.streamOf c) (Classical.choose h).val)
   else c j
 
 theorem rest_in (c : Fin L → Fin 256) (pad : Pads m L) (j : Fin L) (i : Fin m)
@@ -81,31 +81,37 @@ theorem rest_in (c : Fin L → Fin 256) (pad : Pads m L) (j : Fin L) (i : Fin m)
       j.val < starts (Array.ofFn St) (Law.streamOf c) (i.val + 1) := ⟨i, hi⟩
   have e : Classical.choose hex = i := Fin.ext (seg_unique _ _ (Classical.choose_spec hex) hi)
   unfold rest
-  rw [dif_pos hex, e]
+  rw [dite_eq_left hex, e]
 
 theorem rest_out (c : Fin L → Fin 256) (pad : Pads m L) (j : Fin L)
     (h : ¬ ∃ i : Fin m, starts (Array.ofFn St) (Law.streamOf c) i ≤ j.val ∧
       j.val < starts (Array.ofFn St) (Law.streamOf c) (i.val + 1)) :
     rest St c pad j = c j := by
   unfold rest
-  rw [dif_neg h]
+  rw [dite_eq_right h]
 
 theorem byteAt_lt {L : ℕ} (c : Fin L → Fin 256) (j : ℕ) (h : j < L) : byteAt c j = c ⟨j, h⟩ := by
-  unfold byteAt; rw [dif_pos h]
+  unfold byteAt; rw [dite_eq_left h]
 
 /-- **A tape gives back its stratum's read**: stratum `i` reads as many bytes of its tape, up to the coins' end past
 its start, as of the coins. -/
 theorem tapes_seg (c : Fin L → Fin 256) (pad : Pads m L) (i : Fin m) :
     used (Array.ofFn St)[i.val]! ((Law.streamOf (tapes St c pad i)).extract 0
       (L - starts (Array.ofFn St) (Law.streamOf c) i)) = seg (Array.ofFn St) (Law.streamOf c) i := by
-  have hs := starts_le (Array.ofFn St) (Law.streamOf c) (i.val + 1)
-  rw [starts_succ, size_streamOf] at hs
-  unfold seg
+  have hs0 := starts_le (Array.ofFn St) (Law.streamOf c) (i.val + 1)
+  rw [starts_succ] at hs0
+  have hs : starts (Array.ofFn St) (Law.streamOf c) i + seg (Array.ofFn St) (Law.streamOf c) i ≤ L := by
+    have h := hs0
+    rw [size_streamOf] at h
+    exact h
+  have hsd : seg (Array.ofFn St) (Law.streamOf c) i = used (Array.ofFn St)[i.val]!
+      ((Law.streamOf c).extract (starts (Array.ofFn St) (Law.streamOf c) i) (Law.streamOf c).size) := rfl
+  rw [hsd]
   refine used_congr _ _ _ ?_ ?_
   · rw [size_extract_from, ByteArray.size_extract, size_streamOf, size_streamOf]
     omega
-  · rw [extract_from _ _ _ (by rw [size_streamOf]; exact hs), ByteArray.extract_extract, Nat.zero_add,
-      Nat.zero_add, Nat.min_eq_left (by omega)]
+  · rw [extract_from _ _ _ (by rw [← hsd]; exact hs0), ByteArray.extract_extract, Nat.zero_add,
+      Nat.zero_add, Nat.min_eq_left (by omega), ← hsd]
     exact (tapes_extract St c pad i).symm
 
 /-- **The tapes and the bytes they leave out determine the coins and the spare bytes.** -/
@@ -142,7 +148,7 @@ theorem served_inj (c c' : Fin L → Fin 256) (pad pad' : Pads m L) (ht : tapes 
       have e1 := congrFun (congrFun ht i) ⟨_, hx⟩
       unfold tapes at e1
       dsimp only at e1
-      rw [if_pos (by omega), if_pos (by rw [← hseg i, ← hS i.val i.isLt.le]; omega)] at e1
+      rw [ite_eq_left (by omega), ite_eq_left (by rw [← hseg i]; omega)] at e1
       rw [← hS i.val i.isLt.le, Nat.add_sub_cancel' hi1, byteAt_lt c _ j.isLt, byteAt_lt c' _ j.isLt] at e1
       exact e1
     · have hj' : ¬ ∃ i : Fin m, starts (Array.ofFn St) (Law.streamOf c') i ≤ j.val ∧
@@ -154,16 +160,24 @@ theorem served_inj (c c' : Fin L → Fin 256) (pad pad' : Pads m L) (ht : tapes 
   · by_cases hx : x.val < seg (Array.ofFn St) (Law.streamOf c) i
     · have hj : starts (Array.ofFn St) (Law.streamOf c) i + x.val < L := by have := hle c i; omega
       have e1 := congrFun hr ⟨_, hj⟩
-      rw [rest_in St c pad _ i ⟨Nat.le_add_right _ _, by rw [starts_succ]; omega⟩,
-        rest_in St c' pad' _ i ⟨by rw [← hS i.val i.isLt.le]; exact Nat.le_add_right _ _,
-          by rw [← hS (i.val + 1) i.isLt, starts_succ]; omega⟩] at e1
+      rw [rest_in St c pad _ i ⟨Nat.le_add_right _ _, by
+          show starts (Array.ofFn St) (Law.streamOf c) i + x.val < starts (Array.ofFn St) (Law.streamOf c) (i.val + 1)
+          rw [starts_succ]; omega⟩,
+        rest_in St c' pad' _ i ⟨by rw [← hS i.val i.isLt.le]; exact Nat.le_add_right _ _, by
+          show starts (Array.ofFn St) (Law.streamOf c) i + x.val < starts (Array.ofFn St) (Law.streamOf c') (i.val + 1)
+          rw [← hS (i.val + 1) i.isLt, starts_succ]; omega⟩] at e1
       dsimp only at e1
       rw [← hS i.val i.isLt.le, Nat.add_sub_cancel_left, byteAt_lt _ _ x.isLt, byteAt_lt _ _ x.isLt] at e1
       exact e1
     · have e1 := congrFun (congrFun ht i) x
       unfold tapes at e1
-      rw [if_neg hx, if_neg (by rw [← hseg i]; exact hx)] at e1
+      rw [ite_eq_right hx, ite_eq_right (by rw [← hseg i]; exact hx)] at e1
       exact e1
+
+theorem avg_fst {C D : Type} [Fintype C] [Fintype D] [Nonempty D] (f : C → ℝ≥0∞) :
+    avg (fun q : C × D => f q.1) = avg f := by
+  rw [avg_prod]
+  exact congrArg avg (funext fun c => avg_const (f c))
 
 /-- **The served tapes are uniform on uniform coins and spare bytes.** -/
 theorem tapes_uniform (E : ((i : Fin m) → Fin L → Fin 256) → Prop) :
@@ -180,8 +194,7 @@ theorem tapes_uniform (E : ((i : Fin m) → Fin L → Fin 256) → Prop) :
   have h := avg_equiv (Equiv.ofBijective e hbij)
     (fun q : Pads m L × (Fin L → Fin 256) => if E q.1 then (1 : ℝ≥0∞) else 0)
   refine h.trans ?_
-  rw [avg_prod]
-  simp only [avg_const]
+  exact avg_fst (fun q => if E q then (1 : ℝ≥0∞) else 0)
 
 theorem avg_sum_mul {Ω C : Type} [Fintype Ω] [Fintype C] (a : C → ℝ≥0∞) (g : C → Ω → ℝ≥0∞) :
     avg (fun ω => ∑ c, a c * g c ω) = ∑ c, a c * avg (g c) := by
@@ -198,8 +211,8 @@ theorem avg_fiber {Ω C : Type} [Fintype Ω] [Fintype C] (g : Ω → C) (F : C �
   congr 1
   funext ω
   rw [Finset.sum_eq_single (g ω)]
-  · rw [if_pos rfl, mul_one]
-  · intro b _ hb; rw [if_neg (fun h => hb h.symm), mul_zero]
+  · rw [ite_eq_left rfl, mul_one]
+  · intro b _ hb; rw [ite_eq_right (fun h => hb h.symm), mul_zero]
   · intro h; exact absurd (Finset.mem_univ _) h
 
 /-- A source uniform for every event is uniform for every average. -/

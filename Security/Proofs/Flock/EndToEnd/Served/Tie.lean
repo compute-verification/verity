@@ -18,6 +18,7 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 
 namespace FlockSoundness.Audit.Served
 
+open Classical
 open SampledProofs Properties.SampledProofs.SecurityProofs
 
 theorem used_le (s : Flock.Draw.Stratum) (a : ByteArray) : used s a ≤ a.size := by
@@ -42,7 +43,7 @@ theorem used_of_stopsAt (s : Flock.Draw.Stratum) (src : ByteArray) (p j : ℕ) (
   have hd : Draws s (src.extract p src.size) j := ⟨hj, by omega, by rw [extract_from src p _ hle, hrun]; rfl⟩
   have hex : ∃ j, Draws s (src.extract p src.size) j := ⟨j, hd⟩
   unfold used
-  rw [dif_pos hex]
+  rw [dite_eq_left hex]
   congr 1
   rw [Nat.find_eq_iff]
   refine ⟨hd, fun i hi hdi => ?_⟩
@@ -132,7 +133,7 @@ theorem sim_take (need : ℕ) : Sim src T i base (Draw.take src need) (Law.tapeG
     obtain ⟨hb, hq, hTs, he⟩ := hag
     show (if pos i + need ≤ (T i).size then
       some ((T i).extract (pos i) (pos i + need), Function.update pos i (pos i + need)) else none) = _
-    rw [if_pos (by omega)]
+    rw [ite_eq_left (by omega)]
     have hpi : pos i = p - base := by omega
     have hx := congrArg (fun a : ByteArray => a.extract (p - base) (p + need - base)) he
     simp only [ByteArray.extract_extract, Nat.zero_add] at hx
@@ -277,7 +278,8 @@ theorem stratified_sim (strata : Array Flock.Draw.Stratum) (src : ByteArray) (T 
         have hnext : starts strata src i + j * strata[i]!.need = starts strata src (i + 1) := by
           rw [starts_succ, hseg]
         rw [hnext] at hl
-        obtain ⟨hr, pos₁, hpos₁⟩ := ih (i + 1) (by omega) _ _
+        obtain ⟨hr, pos₁, hpos₁⟩ := ih (i + 1) (by omega) _
+          (Function.update pos i (starts strata src i + j * strata[i]!.need - starts strata src i))
           (fun x hx => by rw [Function.update_of_ne (by omega)]; exact hpos x (by omega)) r out' p₁ hl
         refine ⟨hr, pos₁, ?_⟩
         rw [List.range'_succ, List.forIn_cons, StateT.run_bind, StateT.run_bind, hm]
@@ -325,7 +327,8 @@ theorem tapes_extract {m L : ℕ} (St : Fin m → Flock.Draw.Stratum) (c : Fin L
     congr 1
     show (if (0 + k) < seg (Array.ofFn St) (Law.streamOf c) i then
       byteAt c (starts (Array.ofFn St) (Law.streamOf c) i + (0 + k)) else pad i ⟨0 + k, _⟩) = _
-    rw [if_pos (by omega), byteAt, dif_pos (by omega)]
+    rw [ite_eq_left (by omega), byteAt, dite_eq_left (by omega)]
+    exact congrArg c (Fin.ext (by simp))
 
 /-- **The served draw is the live draw on the served tapes**: a stratified draw by `drawUnits` on the coins `c` that
 ends with `units` is `Law.runOS`'s draw of `units` on `tapes St c pad`, whatever the spare bytes `pad`. -/
