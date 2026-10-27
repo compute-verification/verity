@@ -65,6 +65,7 @@ from verity.ml.circuits.ops.mufu import DivFullRcp
 from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import sparse_mla as M
 from verity.ml.definitions.registry.prims import BF16, F32
@@ -82,7 +83,7 @@ BLOCK_N, MAX_SPLIT_BATCH = 64, 992
 _CONF = ("model-untested: read from vllm-flash-attn 506341a1's FA3 split path, combine kernel and their SASS (the module "
          "docstring's files) at hdim 64 / hdimv 512; tests/properties/glm53_fa3_split_capture_gpu.py is its hardware check")
 _LG2_CONF = ("model-untested on cc 9.0: fit to cc 12.0's lg2.approx.ftz.f32 (every mantissa at [1, 2) and 2^20 random words, run "
-             "r20261004-060203-ba52, 0 mismatches); total on encodings, `mufu_lg2_undetermined` names the words the measurement "
+             f"{EVIDENCE['cc12_difftest']['run']}, 0 mismatches); total on encodings, `mufu_lg2_undetermined` names the words the measurement "
              "leaves open; tests/properties/glm53_fa3_split_capture_gpu.py measures cc 9.0")
 
 
