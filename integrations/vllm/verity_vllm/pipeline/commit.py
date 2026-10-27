@@ -300,7 +300,7 @@ def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, 
     the required population must be placed on the axis the record is written on.  It is USED only when every declared request was
     observed, each ran a contiguous run of steps (no preemption) of exactly its expected count; otherwise the declaration stands and coverage
     fails by name.  [F-moe-r17-03] `caps` = the EXPECTED steps per request = its executed prefix of record (the cap on a length stop,
-    served + LAG on an EOS stop -- executed_prefix.executed_prefix_of_record)."""
+    served + LAG on an EOS stop -- executed_prefix.executed_prefix_of_record), no longer the bare cap."""
     observed: dict[str, int] = {}
     steps_of: dict[str, list[int]] = {}
     for st in sorted(request_rows or {}):
