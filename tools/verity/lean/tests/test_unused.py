@@ -159,6 +159,36 @@ def test_a_module_a_lean_comment_outside_cites_is_kept(stand_in):
     assert got["kept"]["Prune.B.Group"].startswith("cited: ") and got["unused"] == ["Prune.A.Side", "Prune.B.Old"]
 
 
+def test_a_constant_named_outside_keeps_its_module(stand_in):
+    pkg, policy, used, test = stand_in
+    (pkg / path_of("Prune.A.Side")).write_text("import Prune.A.Base\n\nnamespace Pool.Lemmas\n\n"
+                                               "theorem side : base = 1 := rfl\n\nend Pool.Lemmas\n")
+    spec = pkg.parent / "spec" / "Spec.lean"
+    spec.parent.mkdir()
+    for text, cited in (("/-! The bound rests on `Pool.Lemmas.side`. -/\ndef bound : Nat := 1\n", True),
+                        ("namespace Pool\n\n/-- By `Lemmas.side`. -/\ndef bound : Nat := 1\n\nend Pool\n", True),
+                        ("open Pool.Lemmas in\n/-- By `side`. -/\ndef bound : Nat := 1\n", True),
+                        ("/-! `Lemmas.side` and `side`, outside its namespace. -/\ndef bound : Nat := 1\n", False)):
+        spec.write_text(text)
+        got = U.decide(pkg, policy, used, [test, U.rel(spec)], [])
+        assert (got["kept"].get("Prune.A.Side") == f"cited: a Lean comment of {U.rel(spec)} cites it") == cited, text
+    doc = pkg.parent / "tests" / "test_doc.py"
+    doc.write_text('"""The bound `Pool.Lemmas.side` gives."""\n')
+    assert U.decide(pkg, policy, used, [test, U.rel(doc)], [])["kept"]["Prune.A.Side"] == f"named: {U.rel(doc)}"
+
+
+def test_declared_reads_names_off_namespaces():
+    src = ("namespace A.B\nsection S\ntheorem x : True := trivial\nend S\n@[simp] private lemma hidden : True := trivial\n"
+           "protected noncomputable def y := 1\ninstance : Inhabited Nat := ⟨0⟩\n"
+           "instance (priority := low) named : Inhabited Nat := ⟨0⟩\nend A.B\nnamespace C\nnamespace D\n"
+           "theorem _root_.Top.z : True := trivial\nstructure S where\n  f : Nat\nend C.D\nmutual\n"
+           "def m1 : Nat → Nat | 0 => 0 | n + 1 => m2 n\ndef m2 : Nat → Nat | 0 => 0 | n + 1 => m1 n\nend\n"
+           "theorem w : True := trivial\n")
+    assert U.declared(src) == {"A.B.x", "A.B.y", "A.B.named", "Top.z", "C.D.S", "m1", "m2", "w"}
+    assert U.opened("namespace A.B\nopen C D.E in\ndef x := 1\nend A.B\n") == {
+        "A", "A.B", "C", "D.E", "in", "A.C", "A.D.E", "A.in", "A.B.C", "A.B.D.E", "A.B.in"}
+
+
 def test_syntax_nobody_writes_and_a_local_one_keep_nothing(stand_in):
     pkg, policy, used, test = stand_in
     (pkg / path_of("Prune.A.Main")).write_text(SOURCES["Prune.A.Main"].replace("⟪base⟫", "base"))

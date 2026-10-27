@@ -20,7 +20,9 @@ A module of PKG is kept, with the first reason that holds:
   atom or name a module importing it uses, or one whose atoms can't be read off its source;
 - `named`: a tracked file other than PKG's Lean sources names it, by its path (from the root, or from the source directory
   as `Proofs/A/B.lean`, quoted parts joined by `/` read as one; a path without `.lean` only where no directory has it: a
-  directory's path names no module), its module name, or a constant's name one component under it
+  directory's path names no module), its module name, a constant's name one component under it, or one of its
+  constants' full names (read off its source's `namespace`s; a Lean file's names read relative to the namespaces it is in
+  and opens too) or a name under one
   (the move maps of `tools/move/`, `archive/` and the store's `moves.json` aside; a document's mention reads nothing, and
   is listed as `docs`; a Lean file's other than its `import`s is `cited`, below). A module named so must still build, and
   what it needs for that is what its declarations use (`refs`, below), its imports being rewritten as `--delete` does; a
@@ -92,6 +94,19 @@ SYNTAX = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|protected
 ATTRIBUTE = re.compile(r"(?m)^[ \t]*attribute[ \t]*\[(?![ \t]*(?:local|scoped)\b)")
 #: a qualified name in a lock's text
 QUALIFIED = re.compile(r"[^\W\d][\w'!?₀-₉]*(?:\.[^\W\d][\w'!?₀-₉]*)+")
+#: a qualified name written anywhere, not the tail of a longer one
+NAME = re.compile(r"(?<![\w.'])[^\W\d][\w'!?₀-₉]*(?:\.[^\W\d][\w'!?₀-₉]*)+")
+#: a name, qualified or not, not the tail of a longer one
+NAME_OR_WORD = re.compile(r"(?<![\w.'])[^\W\d][\w'!?₀-₉]*(?:\.[^\W\d][\w'!?₀-₉]*)*")
+#: an `open` command's namespaces (and the words of its `hiding`, `renaming` or `in`, which name none)
+OPEN = re.compile(r"(?m)^[ \t]*open[ \t]+(?:scoped[ \t]+)?([^\n(]*)")
+#: a declaration (comments blanked): its modifiers and its name as written
+DECL = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*((?:(?:private|protected|noncomputable|partial|unsafe|nonrec|public)[ \t]+)*)"
+                  r"(?:theorem|lemma|def|abbrev|instance|structure|class(?:[ \t]+inductive)?|inductive|opaque|axiom"
+                  r"|irreducible_def)[ \t]+(?:\([^)\n]*\)[ \t]+)?([^\W\d][\w'!?₀-₉.]*)")
+#: a scope's command: `namespace A.B`, `section`, `mutual` or the `end` of one
+SCOPE = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:public|private|noncomputable)[ \t]+)*(namespace|section|mutual|end)\b"
+                   r"[ \t]*([^\s]*)")
 STRING = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 #: tracked files whose mentions of a module don't read it: the layout moves' maps, and what `archive/` froze
 NOT_READERS = ("tools/move/", "archive/", "tools/research/src/research/store/moves.json")
@@ -177,6 +192,41 @@ def source_imports(text: str) -> list[str]:
     return [m.group(2) for m in IMPORT.finditer(C.strip_comments(text))]
 
 
+def scoped(stripped: str):
+    """Each line of a Lean source (comments blanked) that opens or closes no scope, with the namespace it is in."""
+    scopes: list[tuple[bool, list[str]]] = []
+    for line in stripped.splitlines():
+        if s := SCOPE.match(line):
+            kind, name = s.groups()
+            if kind != "end":
+                scopes.append((kind == "namespace", name.split(".") if name else []))
+            elif scopes:
+                namespace, got = scopes.pop()
+                while namespace and len(got) < len(name.split(".")) and scopes and scopes[-1][0]:
+                    got = scopes.pop()[1] + got
+            continue
+        yield line, [part for namespace, parts in scopes if namespace for part in parts]
+
+
+def declared(stripped: str) -> set[str]:
+    """The full names of a module's declarations that another file can name (``stripped``: its source, comments blanked),
+    read off its `namespace`s; a `private` one, an anonymous instance and a structure's fields and constructors aside."""
+    names: set[str] = set()
+    for line, within in scoped(stripped):
+        if (d := DECL.match(line)) and "private" not in d.group(1).split():
+            n = d.group(2).rstrip(".")
+            names.add(n.removeprefix("_root_.") if n.startswith("_root_.") else ".".join([*within, n]))
+    return names
+
+
+def opened(stripped: str) -> set[str]:
+    """The namespaces a Lean file's names may be written relative to: each it is in (and those enclosing it) and each it
+    `open`s, as written and under the namespaces it is in."""
+    spaces = {".".join(within[:k]) for _, within in scoped(stripped) for k in range(1, len(within) + 1)}
+    opens = {w for m in OPEN.finditer(stripped) for w in m.group(1).split() if NAME_OR_WORD.fullmatch(w)}
+    return spaces | opens | {f"{s}.{o}" for s in spaces for o in opens}
+
+
 def closure(start: set[str], graph: dict[str, list[str]], within: set[str]) -> set[str]:
     """``start`` and every module of ``within`` it imports, transitively."""
     seen, stack = set(), list(start)
@@ -197,13 +247,16 @@ def atoms(decl: str) -> set[str]:
     return got
 
 
-def references(files: list[str], pkg: str, mods: dict[str, str]) -> dict[str, list[tuple[str, bool]]]:
+def references(files: list[str], pkg: str, mods: dict[str, str],
+               consts: dict[str, set[str]] | None = None) -> dict[str, list[tuple[str, bool]]]:
     """{module of PKG: [(file, whether it reads what the module imports)]}, for each tracked file outside PKG's tree (and
     `NOT_READERS`) naming the module's file (from the root, or from the source directory, `Proofs/A/B.lean`; a path joined
     from quoted parts, `"Proofs" / "A"`, is read as one; a path without `.lean` names it only where no directory has that
-    path), or its     module name or a constant one component under it; a Lean file outside PKG names only what it imports.
+    path), its module name, a constant one component under it, or one of its constants by full name (``consts``: each
+    name's modules), or a name under one; a Lean file outside PKG names only what it imports.
     The mentions that read nothing are under the key `(docs, module)` for a document's, which a deletion edits, and
     `(cited, module)` for a Lean comment's, whose flag says whether it names the module itself rather than a constant."""
+    consts = consts or {}
     by_path = {f"{pkg}/{r}": m for m, r in mods.items()}
     by_src = {m.replace(".", "/") + ".lean": m for m in mods}
     src = next(((ROOT / pkg / r).parents[m.count(".")] for m, r in mods.items()), ROOT / pkg)
@@ -214,8 +267,9 @@ def references(files: list[str], pkg: str, mods: dict[str, str]) -> dict[str, li
     paths = re.compile(re.escape(pkg) + r"/[\w./-]*\w")
     local = re.compile(r"(?<![\w./-])(?:" + either + r")/[\w./-]*\w")
 
-    def mentioned(text: str) -> dict[str, bool]:
-        """{module: whether the text names the module itself (its path or name), not only a constant under it}"""
+    def mentioned(text: str, within: set[str] = frozenset()) -> dict[str, bool]:
+        """{module: whether the text names the module itself (its path or name), not only a constant under it}; a name
+        may be written relative to a namespace of ``within``"""
         hit: dict[str, bool] = {}
         for found, table, base in ((paths, by_path, ROOT), (local, by_src, src)):
             for p in found.finditer(text):
@@ -229,6 +283,12 @@ def references(files: list[str], pkg: str, mods: dict[str, str]) -> dict[str, li
                 hit[x] = True
             elif x.rsplit(".", 1)[1][:1].islower() and (x := x.rsplit(".", 1)[0]) in mods:
                 hit.setdefault(x, False)
+        for x in (NAME_OR_WORD if within else NAME).findall(text) if consts else ():
+            for full in (x, *(f"{w}.{x}" for w in within)):
+                parts = full.split(".")
+                if n := next((n for k in range(len(parts), 1, -1) if (n := ".".join(parts[:k])) in consts), None):
+                    for m in consts[n]:
+                        hit.setdefault(m, False)
         return hit
 
     for f in files:
@@ -240,13 +300,13 @@ def references(files: list[str], pkg: str, mods: dict[str, str]) -> dict[str, li
             text = JOINED.sub("/", (ROOT / f).read_text(errors="replace"))
         except OSError:
             continue
-        if pkg not in text and not any(t + "." in text or t + "/" in text for t in tops):
+        if not consts and pkg not in text and not any(t + "." in text or t + "/" in text for t in tops):
             continue
         if f.endswith(".lean"):
             imported = {i for i in source_imports(text) if i in mods}
             for m in imported:
                 out[m].append((f, True))
-            for m, whole in mentioned(text).items():
+            for m, whole in mentioned(text, opened(C.strip_comments(text)) if consts else frozenset()).items():
                 if m not in imported:
                     out[("cited", m)].append((f, whole))
             continue
@@ -413,7 +473,11 @@ def decide(pkg: Path, policy: dict, used: dict, files: list[str], frozen: list[s
         if users:
             keep(m, f"syntax: declares {', '.join(sorted({k for k, _ in decls}))} ({', '.join(sorted(words)[:4])}), used by "
                     f"{users[0]}" + (f" and {len(users) - 1} more" if len(users) > 1 else ""))
-    refs = references(files, p, mods)
+    consts: dict[str, set[str]] = collections.defaultdict(set)
+    for m in scope:
+        for n in declared(stripped[m]):
+            consts[n].add(m)
+    refs = references(files, p, mods, consts)
     for m in sorted(k for k in refs if isinstance(k, str)):
         by = sorted(refs[m])
         keep(m, f"named: {by[0][0]}" + (f" and {len(by) - 1} more" if len(by) > 1 else ""))
