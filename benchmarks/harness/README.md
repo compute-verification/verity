@@ -103,7 +103,7 @@ pin's BF16 base.
      GPU and overrides.
    - `arm-closing`: after an engine's warm-up and timed runs, before it closes, the runner reads the arm's own gate again
      (in `blocks`, one per engine lifetime, with its `cycle`), so an arm that judges every run it saw judges those too.
-2. **Resident interleaving, else alternating blocks.** When every arm's engine fits on the GPU at once (`resident`), each
+2. **Resident interleaving, else `blocks`.** When every arm's engine fits on the GPU at once (`resident`), each
    point is warmed per arm (discarded), then each rep runs every arm once. The baseline alternates between the first
    and last slot (`interleave_order`). An arm that needs its own engine lifetime makes the whole run `blocks`: each arm
    gets its own engine for two cycles, the second in reverse arm order, with discarded warm-ups per point in each. The
@@ -117,7 +117,7 @@ pin's BF16 base.
 3. **Measured, not estimated.** A timed rep synchronizes the device around the run and reads the engine's own request
    and step timings (`engine.arrivals.run_requests_arrivals` with `request_timing` and `step_timing`).
 4. **An arm's run is its own.** Around every run (gate, warm-up or timed), the runner calls an experimental arm's
-   `begin_run(target)` before the clock starts and `end_run(target)` inside the timed window, so the work an arm finishes
+   `begin_run(target)` before the clock starts and `end_run(target)` inside the timed run, so the work an arm finishes
    at the end of a run (the Commit's hashing backlog, a commitment's last roots) is in the run's time. `target.phase`
    (`gate`, `warmup` or `measure`), `target.point` (the sweep point's id) and `target.tokens` (the prompt and output tokens
    it serves) describe the run `begin_run` opens. `extras(target)`, read after a timed run, reports that run.
@@ -211,19 +211,22 @@ baseline.
 ## The served table
 
 `verity-bench served-table` (`verity_bench.served_table`) renders each protocol's served overhead on Llama-3.1-8B from
-the store, never from numbers in code. It has four sections.
+the store, never from numbers or ids in code. A record is named by a store label: a run labelled `run_of_record=NAME`
+(`research data label RUN run_of_record NAME --by benchmarks`) is one of record NAME's runs, and an art so labelled names
+its runs in its `runs` meta (a list, or a map from point to run). A record's runs are in the order they were labelled,
+and a target's latest label names its record. The command first pulls the remote's labels. It has four sections.
 
-- **PoUW's run of record** is its live rows (`LIVE`: device, run, PoUW arm, control). Each row is read from the
+- **PoUW's run of record** is its live rows: the entries (device, run, PoUW arm, control, and `out` where the run's
+  records aren't under `out/`) of the `runs` meta of an art of record `LIVE`. Each row is read from the
   `summary.json` and `stop.json` in the run's record: the arm's median decode step at batch 32 over its control's
   (the int8-exact engine without PoUW) in the same run. That ratio is per step, so it sits in its own section, apart
   from the per-token ratios over stock FP8. A row stands only when every gate the run records passed: the device gate,
   the tokens at the gate and at every timed rep, and a live window at the run's end on off-node coins. A run that fails
   one is passed over and listed with why.
 - **The served rows** (`PROTOCOLS`), each on its device (the GPU its run's engines saw, the result's `identity.gpu`: the
-  RTX PRO 6000's, and the Commit's on an H200 and a B200 too), each come from a protocol's run of record or, without one, from
-  the newest passing run. A run of record (`Protocol.record`) is named by run id, or by an `art:` id whose `runs` meta
-  lists the runs (a list, or a map from point to run). It is read by id, from the remote where this machine lacks it,
-  and every point of each run is a row. Without a record, each point of each spec takes the newest passing
+  RTX PRO 6000's, and the Commit's on an H200 and a B200 too), each come from a protocol's run of record
+  (`Protocol.record`) or, without one, from the newest passing run. A run of record is read by id, from the remote where
+  this machine lacks it, and every point of each run is a row. Without a record, each point of each spec takes the newest passing
   `vllm_bench_point` attempt whose `spec` and `point` params name it (the resume lookup's rule, without its one-commit
   identity), so a newer passing run supersedes an older one; the command first pulls the remote's attempts started
   since the oldest such spec was added, the same pull as `check`'s. A result labelled `superseded_by`, an invalid
@@ -232,12 +235,12 @@ the store, never from numbers in code. It has four sections.
   an eager stock, over that.
 - **The conversion factors** (`stock-fp8@compiled` over batch-invariant eager `stock-fp8`, `FACTORS`) are rendered the
   same way.
-- **Where the bandwidth audit's time goes** (`BREAKDOWNS`: a protocol and a record, as above) is the bandwidth
+- **Where the bandwidth audit's time goes** (`BREAKDOWNS`: a protocol and its record) is the bandwidth
   breakdown's rows (below) at each point of the record's runs, in ms an output token and not a ratio, beside the
   protocol's run of record.
 
-The caveat column is the newest `label` and `note` on the result's artifact, its run and the record art that named it,
-read through from the remote (and a live run's `row` label).
+The caveat column is the newest `label` and `note` on the result's artifact, its run and the record art that named it
+(and a live run's `row` label).
 
 ## The bandwidth breakdown
 

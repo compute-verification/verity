@@ -1,5 +1,5 @@
 """H1 + fx1 receipts beside vLLM's GEMM, not useful-work credit: a padded H1 + fx1 window (`eps1-sm120-h1fx1`) on vLLM's
-int8-exact row, one process on one GPU, in the static form (Daniel, 20:52Z): the window's tiles, rows and positions are a
+int8-exact row, one process on one GPU, in the static form: the window's tiles, rows and positions are a
 fixed function of public parameters alone.
 
 The receipts bind extra work beside cuBLASLt's served y, not the served kernel's.  vllm's PoUW option
