@@ -27,6 +27,7 @@
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
+  "Properties.SampledProofs.SizeClasses",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
@@ -430,8 +431,13 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw"],
+   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.SizeClasses"],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.SampledProofs.SizeClasses": {
+   "imports": ["Definitions.Claims.Sampling", "SampledProofs.Partition"],
+   "except": [],
+   "why": "the verifier's size classes (`SampledProofs.Partition`) are stated equal to the claims' (`Definitions.Claims.Sampling`), never a proof"
   },
   "Properties.CertifierNetwork": {
    "imports": [
@@ -2376,6 +2382,9 @@
    "assumptions": [],
    "type_hash": "82f731f8e60afaa767b56880491e41c6465a0158b3520999c7e4c6fb29546c8a"
   },
+  "Properties.SampledProofs.SecurityProofs.sizeClassesAgree": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.SecurityProofs.drawMisses": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.SecurityProofs.drawMisses : Properties.SampledProofs.DrawMisses"],
@@ -3249,6 +3258,10 @@
    "Properties.SampledProofs.SecurityProofs.drawMisses": {
     "function": "SampledProofs.Slots.select",
     "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.sizeClassesAgree": {
+    "function": ["SampledProofs.Partition.sizeClassMax", "SampledProofs.Partition.sizeClasses"],
+    "outcome": "none"
    },
    "Properties.Requirement.topological": {
     "function": "CircuitRequirement.Instance.topological",

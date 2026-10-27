@@ -36,6 +36,7 @@
   "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.SampledProofs",
   "Proofs.Properties.SampledProofs.Halt",
+  "Proofs.Properties.SampledProofs.SizeClasses",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.Run",
