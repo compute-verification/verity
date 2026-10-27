@@ -796,7 +796,7 @@ def test_lifted_width_summary_is_the_true_width_rule_r17_6b():
     assert not r["active_reference_rule_on_lifted_width_ok"]  # the 32-bit rule on the true width fails BY DESIGN — reported, never the verdict
     assert r["kind"] == L.USE_KIND_LIFTED == "vu-partition-lifted" and r["rules_version"] == L.LIFTED_RULES_VERSION == "lifted-v1"
     # the constant's status is a STATEMENT, never a bare number: accepted by revb (M-0042 B1) on the first real-row use document, the coord ruling
-    # on the value itself still pending -- both named in the string (was "PROPOSED" before 18:00Z 2026-09-20)
+    # on the value itself still pending -- both named in the string
     assert r["w_max_lifted"] == L.W_MAX_LIFTED == 64 and r["w_max_active_reference"] == L.W_MAX == 32
     assert r["w_max_lifted_status"] == L.W_MAX_LIFTED_STATUS and "accepted-revb-M-0042" in r["w_max_lifted_status"] and "pending" in r["w_max_lifted_status"]
     assert L.lifted_width_summary([32, 1])["ok"] and L.lifted_width_summary([32, 1])["w_out_lifted"] == 35  # no payload rule: 35 <= 64

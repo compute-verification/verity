@@ -202,7 +202,7 @@ def moe_expert_fp8_dot(profile):
 def moe_expert_fp8_launch_dot(profile, bm: int, bn: int, warps: int, swap: bool):
     """The registered e4m3 k32 step of one block-FP8 fused-MoE launch.
 
-    A tuned cc 9.0 launch is tile-dependent: use `fp8_moe.sm90_dot`, the Triton 3.7.1 lowering rule pinned by #1944.  Other
+    A tuned cc 9.0 launch is tile-dependent: use `fp8_moe.sm90_dot`, the Triton 3.7.1 lowering rule.  Other
     registered targets and batch-invariant cc 9.0 launches use their target-wide `GemmTarget.fp8_moe_dot`.
     """
     target_dot = moe_expert_fp8_dot(profile)
