@@ -968,14 +968,20 @@ def _tiny_checkpoint(d: Path, model: str, revision: str) -> Path:
     return man
 
 
-def test_a_served_runs_weights_of_record_is_the_pin_its_registrations_record(tmp_path, capsys):
+def test_a_served_runs_weights_of_record_is_the_pins_its_registrations_record(tmp_path, capsys, monkeypatch):
     """``weights-record``: the served run's weights of record (`window_circuit.weights_record` under the φ its window circuit
-    lowers under), composed from the checkpoint's pinned shards, written to ``--out``, with its pin ``weights=ROOT``, the
-    root `verity-vllm advice --weights-of-record` records in each window's registration. A checkpoint the manifest pins as
-    another model than the run served, or a shard other than the one it pins, is refused by name, its record still written."""
+    lowers under, here at a grain TINY lowers at), composed from the checkpoint's pinned shards, written to ``--out``, with a
+    root of record for each weight parameter but the rotary table's, the roots `verity-vllm advice --weights-of-record`
+    records in each window's registration and ``window-circuit --pins`` takes. A checkpoint the manifest pins as another
+    model than the run served, or a shard other than the one it pins, is refused by name, its record still written."""
+    import functools
+
     from verity_vllm.pipeline import advice as ADV
     from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict.window_builder import Grain
 
+    grain = Grain(gemm_words=512, rows=9, select=64)
+    monkeypatch.setattr(WC, "weights_record", functools.partial(WC.weights_record, grain=grain))
     run, hf = tmp_path / "serve", tmp_path / "tiny.json"
     run.mkdir()
     serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": 7,
@@ -990,10 +996,12 @@ def test_a_served_runs_weights_of_record_is_the_pin_its_registrations_record(tmp
     assert PP.main(argv) == 0
     rec, said = json.loads(out.read_text()), json.loads(capsys.readouterr().out)
     assert (rec["of_record"], rec["n_fields"], said["fields"]) == (True, 23, 23)
-    assert said["pin"] == f"{WC.WEIGHTS}={rec['root_of_record']}"
-    assert ADV.registered_weights(rec, serve) == {WC.WEIGHTS: rec["root_of_record"]}
+    assert said["roots"] == len(rec["registered_roots"]) == 15
+    assert said["unrooted"] == sorted(rec["unrooted"]) and all("rotary_emb" in p for p in said["unrooted"])
+    assert ADV.registered_weights(rec, serve) == rec["registered_roots"]
+    assert PP.pins_of((), [str(out)]) == rec["registered_roots"]
     registered = PP.registered_of_serve(serve, str(hf), None, PP.CAP_BITS)
-    assert WC.weights_record(registered, str(tmp_path / "ck" / "snap"), str(man))["root_of_record"] == rec["root_of_record"]
+    assert WC.weights_record(registered, str(tmp_path / "ck" / "snap"), str(man))["registered_roots"] == rec["registered_roots"]
     (run / "serve.json").write_text(json.dumps({**serve, "model": "org/other"}))
     assert PP.main(argv) == PP.REFUSED
     assert "and the run served org/other@" in capsys.readouterr().err
@@ -1004,7 +1012,10 @@ def test_a_served_runs_weights_of_record_is_the_pin_its_registrations_record(tmp
     shard.write_bytes(bytes(body))
     assert PP.main(argv) == PP.REFUSED
     assert re.search(r"of record False: .* \(shards pinned: False\); the record is ", capsys.readouterr().err)
-    assert json.loads(out.read_text())["root_of_record"] != rec["root_of_record"]
+    new = json.loads(out.read_text())
+    assert new["root_of_record"] != rec["root_of_record"]
+    changed = [p for p, r in rec["registered_roots"].items() if new["registered_roots"][p] != r]
+    assert len(changed) == 1 and "layers.1.post_attention_layernorm" in changed[0]
 
 
 def test_the_transfer_gates_of_a_served_model_are_its_compiler_of_records():

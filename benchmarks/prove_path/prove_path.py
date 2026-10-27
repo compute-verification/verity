@@ -75,8 +75,9 @@ Two kinds of committed run:
   (`I2Compiler.digest`), the name and digest ``verity-vllm advice --compiler-name N --compiler-digest D`` then registers the
   window's advice under.
 * **weights-record**: a served run's weights of record (`weights_record_of_serve`), the record ``verity-vllm advice
-  --weights-of-record`` records in each window's registration, and its pin ``weights=ROOT``, the one ``window-circuit
-  --pin`` and ``records_audit.py count --pin`` take: the verifier derives it from its own copy of the checkpoint.
+  --weights-of-record`` records in each window's registration, its ``registered_roots`` (one a weight parameter) the pins
+  ``window-circuit --pins`` and ``records_audit.py count --pins`` take: the verifier derives them from its own copy of
+  the checkpoint.
 * **serve-standin**: a served run's dir laid out from a single-GPU Commit of record (one window, ``w0``, under the record's run
   root; the declared run's advice committed under the served compiler), a stand-in for serve-openai's until its sealed windows.
 * **circuit**: a served window's registered compiler as a command (`circuit_of_advice`), what ``records_audit.py audit``'s
@@ -1181,10 +1182,12 @@ def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_
 def weights_record_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's weights of record (`window_circuit.weights_record` under the φ its window circuit lowers under,
     `registered_of_serve`), composed from ``--checkpoint-dir``'s shards as ``--checkpoints`` pins them (default the tree's
-    ``manifests/checkpoints.json``), written to ``--out``. Its root of record is the verifier's pin for ``weights``, fixed
-    before the run from the verifier's own copy of the checkpoint, and the record is what the server's ``verity-vllm advice
-    --weights-of-record`` records in each window's registration. Refused (ValueError) as that registration refuses it
-    (`advice.registered_weights`): a record not of record, or of another model than ``serve.json``'s. -> the pin."""
+    ``manifests/checkpoints.json``), written to ``--out``. Its roots of record (``registered_roots``, one a weight parameter
+    the window circuit registers) are the verifier's pins (``window-circuit --pins``), fixed before the run from the
+    verifier's own copy of the checkpoint, and the record is what the server's ``verity-vllm advice --weights-of-record``
+    records in each window's registration. Refused (ValueError) as that registration refuses it
+    (`advice.registered_weights`): a record not of record, or of another model than ``serve.json``'s. -> how many roots
+    it pins, and the weight parameters it leaves free (``unrooted``)."""
     from verity_vllm.pipeline.advice import registered_weights
     from verity_vllm.program.predict.window_circuit import weights_record
 
@@ -1192,11 +1195,11 @@ def weights_record_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     rec = weights_record(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), a.checkpoint_dir, a.checkpoints)
     Path(a.out).write_text(json.dumps(rec, indent=1) + "\n")
     try:
-        (name, root), = registered_weights(rec, serve).items()
+        roots = registered_weights(rec, serve)
     except ValueError as e:
         why = "" if rec["of_record"] else f" ({rec['why'] or 'shards pinned: ' + str(rec['checkpoint']['all_shards_pinned'])})"
         raise ValueError(f"{e}{why}; the record is {a.out}") from None
-    return {"pin": f"{name}={root}", "fields": rec["n_fields"], "out": a.out}
+    return {"roots": len(roots), "unrooted": sorted(rec["unrooted"]), "fields": rec["n_fields"], "out": a.out}
 
 
 def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
@@ -1383,7 +1386,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--transfer-gate", action="append", default=[], help="a template the compiler lists as holding transfer gates "
                    "(repeatable; the model's of record, GATES_OF_RECORD, whatever it says: another list is refused)")
     p = sub.add_parser("weights-record", help="a served run's weights of record: what verity-vllm advice --weights-of-record "
-                       "takes, and the verifier's pin for weights")
+                       "takes, and the verifier's pins for its weights (window-circuit --pins)")
     for flag in ("--serve-run", "--checkpoint-dir", "--out"):
         p.add_argument(flag, required=True)
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards (default the tree's manifests/checkpoints.json)")

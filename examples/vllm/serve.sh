@@ -6,8 +6,9 @@
 # idle), `verity-vllm advice` per closed window under PROVE-PATH's registered compiler for a served run (`prove_path.py compiler
 # --serve-run`: the server's, listing its model's transfer gates of record, the one serve_check holds each registration to),
 # a registered cap (--cap) and the served weights' record (`prove_path.py weights-record`, from the checkpoint's pinned shards:
-# each window's registration records its root, so the window circuit's weight reads count registered at the verifier's pin;
-# without it, which steps.txt says, they count free), then each window's request Programs and
+# each window's registration records its roots, one a weight parameter, so the window circuit's weight reads count registered
+# at the verifier's pins, `window-circuit --pins weights_of_record.json`; without it, which steps.txt says, they count free),
+# then each window's request Programs and
 # manifest.json into its row dir (`tools/advice_compile.py RUN --window K`), and the row dir opened as PROVE-PATH opens it
 # (`deferred_rows.of_record`, `opening.CommittedStore`) with what the row's Programs read looked up (identities.txt). The
 # endpoint serves until UNTIL (UTC HH:MM) or `touch $D/stop`, or until its filesystem has under DISK_FLOOR_GB free (default 300,
@@ -66,7 +67,7 @@ weights_args() {    # DIR FILE: `verity-vllm advice`'s --weights-of-record for t
   (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py weights-record --serve-run "$1" --checkpoint-dir "$CKPT" --out "$2") \
     >> "$OUT/weights_of_record.txt" 2>&1 && echo "--weights-of-record $2"
 }
-no_weights() { echo "NO WEIGHTS OF RECORD for $1 (weights_of_record.txt): no window registers a weights root, so every weight read counts free" | tee -a "$OUT/steps.txt"; }
+no_weights() { echo "NO WEIGHTS OF RECORD for $1 (weights_of_record.txt): no window registers a weight's root, so every weight read counts free" | tee -a "$OUT/steps.txt"; }
 
 if [ -n "${READVICE:-}" ]; then     # a served dir's advice again (every closed window), then WINDOW's Programs and manifest.json
   K=${WINDOW:-5}
@@ -123,7 +124,7 @@ cp "$D/weights_of_record.json" "$OUT/" 2>/dev/null
 
 # Each window's advice committed once, at serve time, as its windows.jsonl line lands: `advice --window K` into advice/.w<K>,
 # moved to advice/w<K>, and advice/windows.json the union of every window's index (committed and refused), its registration
-# recording the weights' root of record (`--weights-of-record`, `prove_path.py weights-record`).
+# recording each weight's root of record (`--weights-of-record`, `prove_path.py weights-record`).
 closed() { "$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl" 2>/dev/null; }
 advice_pass() {
   for k in $(closed); do
