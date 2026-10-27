@@ -1,10 +1,10 @@
 import Proofs.Accounting.TS.Session.Guarantees
 
 /-!
-# #2855's served layer is sound through its C-Flock sessions (the proof)
+# The served layer is sound through its C-Flock sessions (the proof)
 
-`Accounting.SecurityProofs.TS.SessionSoundAt` is #2909's `soundAt_of_sessions` on #2855's layer `pf`, with
-`ServedRootsLinked`'s event as the event off the sessions' bad events. It needs neither `RelOfRows` nor
+`Accounting.SecurityProofs.TS.SessionSoundAt` is `Flock.SoundAtBridge.soundAt_of_sessions` on the served layer `pf`,
+with `ServedRootsLinked`'s event as the event off the sessions' bad events. It needs neither `RelOfRows` nor
 `OpenedPlurAt` on every path: the named premises state them only on the accepted sessions whose drawn units are right,
 and every other unsound proof is `RowsSession.BadU`.
 

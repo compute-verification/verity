@@ -153,7 +153,7 @@ def test_without_config_drive_takes_its_flags_as_before(world, driven, monkeypat
 
 
 def test_the_deleted_train_flags_parse_and_are_ignored_with_a_note(world, driven, monkeypatch, capsys):
-    """Drive's own args on the control pod pass `--max-running 10`: refusing it would stop drive the moment #5070 lands."""
+    """Drive's own args on the control pod may still pass `--max-running 10`: refusing it would stop drive."""
     rules = world.tmp / "rules.toml"
     rules.write_text('hold_label = "hold"\nmarked_after = "2026-10-12T06:00:00Z"\n')
     monkeypatch.chdir(world.dev)
@@ -189,7 +189,7 @@ def test_config_refusals_name_the_fix(world, driven, monkeypatch, capsys):
 
 
 def test_the_gates_are_read_whatever_other_keys_drive_toml_holds(tmp_path):
-    """CI-185: a branch's older queue.py reads main's drive.toml for the preflight's gates; a key added since doesn't stop it."""
+    """A branch's older queue.py reads main's drive.toml for the preflight's gates; a key added since doesn't stop it."""
     from research.queue import gates_at
 
     _git(tmp_path, "init", "-q", "-b", "main")
