@@ -46,7 +46,6 @@ from dataclasses import asdict, dataclass, field
 from functools import cached_property
 from typing import Any
 
-from verity.core.protocols.certifier.active import precise_sleep
 from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, row_count
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.core.protocols.sampled_proofs.remote import HEADER, MAX_HEAD
@@ -235,7 +234,7 @@ class CoinLink:
 
     def __init__(self, params: CoinLinkParams, commitment: LiveCommitment,
                  connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
-                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], Awaitable[None]] = precise_sleep,
+                 clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
                  slack: float = 0.025, buckets: int | None = None, backlog: int = BACKLOG,
                  publish: Callable[[Record, GridParams], None] | None = None) -> None:
         self.params, self.connect = params, connect
