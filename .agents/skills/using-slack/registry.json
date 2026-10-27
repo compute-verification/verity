@@ -578,7 +578,8 @@
       "usergroup": "S0C954BELSW",
       "owns": [
         "integrations/vllm/",
-        "examples/vllm/"
+        "examples/vllm/",
+        "ruff.toml"
       ],
       "linear": "VLLM",
       "branch_suffixes": [

@@ -5,10 +5,13 @@ entry merge even when the entries sit on neighbouring lines.
 
 An allowlist's entries are merged by key, `(file, kind, symbol, detail)` as `_ratchet.load_allowlist` reads them, and the keep
 map's `modules` by module: an entry either side added, changed (its `count`) or removed takes that side's change, and one both
-sides set to different values, or that one side removed and the other changed, refuses the merge.  Entries keep OURS' order,
-with THEIRS' additions after them.  Exit 0: merged, written to OURS in the file's own format.  Exit 1: refused, the entries
-named on stderr and OURS left as it was, which git reports as a conflict.  A merged list is a candidate: the lints judge it on
-the merged tree, so an entry kept wrongly fails as stale and one dropped wrongly as a new violation.
+sides set to different values, or that one side removed and the other changed, refuses the merge.  The repository's ruff list
+(`tests/lint/allowlists/repo_ruff.json`, `.gitattributes` names this driver for it too) counts findings per `(file, rule)`, an
+entry `{file, rule, count}`, and allows more than a tree finds: a count both sides changed takes the larger (a removed entry
+counts 0), which allows at least what either side's tree finds.  Entries keep OURS' order, with THEIRS' additions after them.
+Exit 0: merged, written to OURS in the file's own format.  Exit 1: refused, the entries named on stderr and OURS left as it
+was, which git reports as a conflict.  A merged list is a candidate: the lints judge it on the merged tree, so an entry kept
+wrongly fails as stale and one dropped wrongly as a new violation.
 """
 from __future__ import annotations
 
@@ -17,19 +20,33 @@ import sys
 from pathlib import Path
 
 KEY = ("file", "kind", "symbol", "detail")
+#: the repository ruff list's key: its entries count findings per (file, rule)
+COUNTED = ("file", "rule")
 MISSING = object()
 
 
-def one(label: str, o, a, b, why: list[str]):
+def one(label: str, o, a, b, why: list[str], counted: bool = False):
     if a == b:
         return a
     if a == o:
         return b
     if b == o:
         return a
+    if counted:
+        return {**(b if a is MISSING else a), "count": max(0 if x is MISSING else x["count"] for x in (a, b))}
     why.append(f"{label}: " + ("removed on one side and changed on the other" if MISSING in (a, b) else
                                "added on both sides, differently" if o is MISSING else "changed on both sides, differently"))
     return a
+
+
+def entry_key(e) -> tuple | None:
+    """An entry's key: ``KEY``'s fields, or ``COUNTED``'s for a count per (file, rule); None for neither."""
+    if isinstance(e, dict) and all(isinstance(e.get(f), str) for f in KEY):
+        return tuple(e[f] for f in KEY)
+    if isinstance(e, dict) and set(e) == {*COUNTED, "count"} and all(isinstance(e[f], str) for f in COUNTED) \
+            and isinstance(e["count"], int):
+        return tuple(e[f] for f in COUNTED)
+    return None
 
 
 def entries(side: str, value) -> dict:
@@ -40,19 +57,18 @@ def entries(side: str, value) -> dict:
         raise ValueError(f"{side}: `entries` is not a list")
     out = {}
     for e in value:
-        if not (isinstance(e, dict) and all(isinstance(e.get(f), str) for f in KEY)):
+        if (k := entry_key(e)) is None:
             raise ValueError(f"{side}: malformed entry {e}")
-        k = tuple(e[f] for f in KEY)
         if k in out:
             raise ValueError(f"{side}: duplicate entry {e}")
         out[k] = e
     return out
 
 
-def by_key(o: dict, a: dict, b: dict, label, why: list[str]) -> dict:
+def by_key(o: dict, a: dict, b: dict, label, why: list[str], counted=lambda k: False) -> dict:
     out = {}
     for k in list(a) + [k for k in b if k not in a]:
-        v = one(label(k), o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING), why)
+        v = one(label(k), o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING), why, counted(k))
         if v is not MISSING:
             out[k] = v
     return out
@@ -66,7 +82,8 @@ def merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
         o, a, b = (d.get(f, MISSING) for d in (base, ours, theirs))
         if f == "entries" and MISSING not in (a, b):
             m = by_key(entries("base", o), entries("ours", a), entries("theirs", b),
-                       lambda k: f"{k[0]} [{k[1]}] {k[2]}: {k[3]}", why)
+                       lambda k: f"{k[0]} [{k[1]}]" + (f" {k[2]}: {k[3]}" if len(k) == len(KEY) else ""), why,
+                       counted=lambda k: len(k) == len(COUNTED))
             out[f] = list(m.values())
         elif f == "modules" and all(isinstance(x, dict) for x in (a, b)) and (o is MISSING or isinstance(o, dict)):
             out[f] = by_key({} if o is MISSING else o, a, b, lambda k: f"modules.{k}", why)

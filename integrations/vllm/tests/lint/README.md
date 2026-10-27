@@ -30,7 +30,7 @@ failure message carries its fix.
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which
- says which rules it selects and why, keyed like the rules' violations. The formatter stays off. A PR that fixes or adds a
+ extends the root `ruff.toml` (the rules every package selects, and why), keyed like the rules' violations. The formatter stays off. A PR that fixes or adds a
  ruff finding in `integrations/vllm` (a stale `noqa` deleted is one) edits `ruff.json` in the same PR.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
  the same change. An entry allowing more than is found fails as stale: delete it or lower its count. So an allowlist
@@ -43,11 +43,24 @@ package, P07's) is held by its total instead: a key may rise, or a new one appea
 at least as much, so a move from one package to another passes, but the kind's total may not grow (the vLLM coordinator,
 26 Oct). P10's count is a size, not a number of findings, so it is never pooled. A change to a lint's own code or thresholds is judged
 like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
-lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml` and the root `dev` group's
-ruff pin, so the gate reruns it with the base's config at the base's pin. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
+lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
+extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds
+the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
+tracked file outside this lint's and `archive/`), except that it counts findings per (file, rule), an entry
+`{"file", "rule", "count"}` pooled by rule, and a count above what a tree finds doesn't fail: its list may hold the findings of
+PRs queued on `next` that a tree doesn't have yet, and `python3 tests/lint/test_repo_ruff.py --prune` lowers what a tree no
+longer finds. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `tools/verity/check/drive.toml`'s `landing_gates` names
 it, so the merge queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).
+It lints the PR's own Python too (the vLLM coordinator, 26 Oct 22:45Z: drive lands before the suites run): ruff, under `main`'s
+root `ruff.toml`, on each `*.py` file the PR adds or modifies outside this lint's files and `archive/`, before and after, and
+a PR whose (file, rule) count grows is refused, naming each new finding `file:line RULE message`. Fix the code; the list
+never takes a new finding. (file, rule) is the repository lint's key too, so a finding moved to another function passes both.
+A renamed file keeps its findings, but the repository lint reads no history, so its entries move with it
+(`python3 tests/lint/test_repo_ruff.py --move OLD NEW`, in the same change): a rename that leaves them behind is refused,
+naming each entry and that command. A file the PR doesn't touch is never linted. If ruff can't run where drive runs the
+gate, the gate can't judge, and the sync leaves the PR out.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too** (the vLLM coordinator, 25 Oct 11:20Z). In `integrations/vllm`, a change may add no more

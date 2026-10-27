@@ -3,7 +3,13 @@ merge bases, when it has several), each queue merge on its own, no ratchet growi
 between its keys keeps; the other entries by number, per ratchet, or by an entry's count, P10's sizes among them), a new,
 moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
 loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
-ruff lint rerun with the base's config and pin (a loosened config, lint or pin fails), the `noqa` count (no change adds more
+ruff lint rerun with the base's config and pin (a loosened config, lint or pin fails), the repository's ruff lint beside it
+(`tests/lint`: its list, a count per (file, rule) pooled by rule, held like the integration's, and a change to the root config
+both ruff lints read reruns both), the source lint (the top change's Python under the root config: a new finding is refused by
+name, a fixed one passes, one moved to another function passes it and the repository's lint, a rename keeps its findings once
+its entry moves with it and is refused naming the entry when it doesn't, a file the change doesn't touch is never linted, nor
+a member below the top), where ruff comes from (this
+Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
 (a revert, a pure move the base's move_check certifies), and its command line."""
 from __future__ import annotations
@@ -26,6 +32,8 @@ _spec.loader.exec_module(G)
 P01 = "integrations/vllm/tests/lint/allowlists/p01_core.json"
 P02 = "integrations/vllm/tests/lint/allowlists/p02_more.json"
 LINT = "integrations/vllm/tests/lint/test_p01_core.py"
+REPO_RUFF_LINT = "tests/lint/test_repo_ruff.py"
+REPO_RUFF_JSON = "tests/lint/allowlists/repo_ruff.json"
 #: a stand-in for move_check: certified when every change is a 100% rename
 MOVE_CHECK = """\
 import subprocess, sys
@@ -373,6 +381,16 @@ def test_what_is_a_ratchet_lint_code_and_a_slug():
     assert G.lint_selection([LINT, "integrations/vllm/tests/lint/_ratchet.py"]) is None
 
 
+def test_the_repositorys_lints_are_a_second_lint_directory():
+    assert G.is_ratchet(REPO_RUFF_JSON) and G.is_lint_code(REPO_RUFF_LINT)
+    assert not any(map(G.is_ratchet, ["tests/fixtures/x.json", "tests/allowlists/x.json"]))
+    assert not any(map(G.is_lint_code, ["tests/test_repository.py", "tests/lint/README.md"]))
+    assert G.lint_selection([REPO_RUFF_JSON, P02], G.REPO_LINT) == ["repo_ruff"] and G.lint_selection([REPO_RUFF_JSON]) == []
+    assert G.lint_selection(["tests/lint/_shared.py"], G.REPO_LINT) is None and G.lint_selection(["tests/lint/_shared.py"]) == []
+    assert (G.lint_selection([G.REPO_RUFF_CONFIG]), G.lint_selection([G.REPO_RUFF_CONFIG], G.REPO_LINT)) == (["ruff"], ["repo_ruff"])
+    assert (G.lint_selection([G.RUFF_CONFIG]), G.lint_selection([G.RUFF_CONFIG], G.REPO_LINT)) == (["ruff"], [])
+
+
 def test_a_revert_and_a_pure_move_are_exempt(linted):
     linted.commit('Revert "Queue: #9 retire B"', {"integrations/vllm/verity_vllm/c.py": "C = 'BAD'\n",
                                                   P01: _allowlist(*(_entry(f"verity_vllm/{f}.py", f) for f in "abc"))})
@@ -442,7 +460,8 @@ def test_a_worktree_that_leaves_files_behind_decides_no_verdict(linted, monkeypa
 
     monkeypatch.setattr(G.tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(G.shutil, "rmtree", stubborn)
-    monkeypatch.setattr(G.tempfile, "_rmtree", stubborn)
+    # 3.12's TemporaryDirectory cleans up through shutil.rmtree; a module-level tempfile._rmtree exists only on later Pythons
+    monkeypatch.setattr(G.tempfile, "_rmtree", stubborn, raising=False)
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
 
@@ -574,17 +593,212 @@ def test_tightening_ruff_passes_once_its_findings_are_fixed_and_a_kept_pin_is_no
     assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.PYPROJECT], ["ruff"]), c["why"]
 
 
-def test_the_ruff_lint_runs_on_this_python_when_its_ruff_is_the_pin_else_on_one_uv_makes(ruffed, monkeypatch):
+@pytest.fixture(autouse=True)
+def _ruff_looked_up_afresh():
+    """``ruff_python`` remembers what it found for the gate's one run; each test is a run."""
+    G.ruff_python.cache_clear()
+
+
+def test_ruff_runs_on_this_python_with_the_pin_else_from_uvs_cache_else_the_index_else_the_gate_cannot_judge(ruffed,
+                                                                                                           monkeypatch):
     here = [sys.executable, "-I"]
     assert G.ruff_pin("main") == ruffed.pin and G.ruff_pin(ruffed.git("rev-parse", "main~1")) is None
     assert G.python_for(None, None) == here and G.python_for("ruff==0.0.1", ["core"]) == here
     assert G.python_for(ruffed.pin, ["ruff"]) == here
+    uv, pin = ["/opt/uv", "run", "--no-project", "--quiet", "--python", sys.executable], ["--with", "ruff==0.0.1", "--", "python", "-I"]
+    cached, fetched = [*uv, "--offline", *pin], [*uv, *pin]
     monkeypatch.setattr(G.shutil, "which", lambda name: f"/opt/{name}")
-    assert G.python_for("ruff==0.0.1", None) == ["/opt/uv", "run", "--no-project", "--quiet", "--python", sys.executable,
-                                                 "--with", "ruff==0.0.1", "--", "python", "-I"]
+    for has in (cached, fetched):
+        G.ruff_python.cache_clear()
+        tried = []
+        monkeypatch.setattr(G, "has_ruff", lambda python, pin, exact: tried.append(list(python)) or list(python) == has)
+        assert G.python_for("ruff==0.0.1", None) == has
+        assert tried == [here, cached, fetched][:tried.index(has) + 1]
+    G.ruff_python.cache_clear()
+    monkeypatch.setattr(G, "has_ruff", lambda python, pin, exact: False)
+    fix = f"`uv pip install --python {sys.executable} --break-system-packages ruff==0.0.1`"
+    with pytest.raises(G.GitError, match=r"neither .* nor `uv run --with` \(from uv's cache, then the index\)") as e:
+        G.python_for("ruff==0.0.1", ["repo_ruff"])
+    assert fix in str(e.value)
     monkeypatch.setattr(G.shutil, "which", lambda name: None)
-    with pytest.raises(G.GitError, match="no `uv` to provide it"):
-        G.python_for("ruff==0.0.1", ["ruff"])
+    with pytest.raises(G.GitError, match="no `uv` to provide it") as e:
+        G.python_for("ruff==0.0.1", ["core", "ruff"])
+    assert fix in str(e.value)
+
+
+TOOLS_F401 = {"file": "tools/a.py", "rule": "F401", "count": 1}
+BOTH_FOUND = ["ruff: verity_vllm/a.py:1 [F401] <module>: `os` imported but unused",
+              "repo_ruff: tools/a.py [F401]: 1 found, 0 allowed", "repo_ruff: tools/a.py:1 `os` imported but unused"]
+
+
+@pytest.fixture
+def both_ruffed(ruffed) -> Repo:
+    """``ruffed`` with the repository's real ruff lint too, the root config selecting pyflakes and the integration's extending
+    it: tools/a.py's unused import is the root lint's one finding, which repo_ruff.json allows."""
+    ruffed.git("checkout", "-q", "main")
+    ruffed.commit("repo ruff", {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text(),
+                                G.REPO_RUFF_CONFIG: RUFF_TOML, G.RUFF_CONFIG: 'extend = "../../ruff.toml"\n',
+                                REPO_RUFF_JSON: _allowlist(TOOLS_F401), "tools/a.py": "import os\nA = 1\n"})
+    ruffed.git("checkout", "-q", "-B", "pr")
+    return ruffed
+
+
+def test_the_repositorys_ruff_list_may_not_grow(both_ruffed):
+    """Its entries are counts per (file, rule), pooled by rule: a new pair's count grows its rule's total."""
+    b401 = {**TOOLS_F401, "file": "tools/b.py"}
+    both_ruffed.commit("a new finding, allowed", {"tools/b.py": "import sys\n", REPO_RUFF_JSON: _allowlist(TOOLS_F401, b401)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["touched"]) == ("failed", 4, 5, [REPO_RUFF_JSON]), c["why"]
+    assert c["why"].startswith(f"grows {REPO_RUFF_JSON} F401 1 -> 2 in total"), c["why"]
+    assert c["fix"] == [f"{REPO_RUFF_JSON}: {G.key(b401)} 0 -> 1"]
+
+
+@pytest.mark.parametrize("loosen", [
+    {G.REPO_RUFF_CONFIG: RUFF_TOML + 'ignore = ["F401"]\n'},
+    {G.REPO_RUFF_CONFIG: 'extend-exclude = ["tools", "verity_vllm"]\n' + RUFF_TOML},
+    {G.REPO_RUFF_CONFIG: None},
+    {REPO_RUFF_LINT: (SCRIPT.parents[3] / REPO_RUFF_LINT).read_text().replace('"archive/")', '"archive/", "tools/")')},
+], ids=["ignore", "exclude", "deleted", "lint-code"])
+def test_loosening_the_root_config_or_lint_fails_naming_what_both_base_ruff_lints_find(both_ruffed, loosen):
+    both_ruffed.commit("loosens ruff and drops both entries", {RUFF_JSON: _allowlist(), REPO_RUFF_JSON: _allowlist(), **loosen})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["fix"]) == ("failed", ["ruff", "repo_ruff"], BOTH_FOUND), c["why"]
+
+
+def test_a_root_config_change_reruns_both_ruff_lints_and_passes_when_they_find_nothing_new(both_ruffed):
+    both_ruffed.commit("a comment", {G.REPO_RUFF_CONFIG: "# the rules\n" + RUFF_TOML})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.REPO_RUFF_CONFIG], ["ruff", "repo_ruff"]), c["why"]
+
+
+def test_a_new_ruff_finding_in_a_changed_file_is_refused_naming_it(both_ruffed):
+    head = both_ruffed.commit("a second unused import in a.py, and a new file with one", {
+        "tools/a.py": "import os\nimport sys\nA = 1\n", "tools/c.py": "import re\n"})
+    doc = G.gate("main", "pr")
+    [c] = doc["changes"]
+    assert (c["verdict"], c["touched"], c["linted"]) == ("failed", [], ["tools/a.py", "tools/c.py"])
+    assert c["why"].startswith("adds 2 ruff finding(s) to the Python it changes, under the base's root ruff.toml "
+                               "(tools/a.py F401 1 -> 2; tools/c.py F401 0 -> 1): fix the code"), c["why"]
+    assert "--write" not in c["why"]
+    assert c["fix"] == ["tools/a.py:2 F401 `sys` imported but unused", "tools/c.py:1 F401 `re` imported but unused"]
+    assert doc["failures"] == [{"commit": head, "pr": None, "why": c["why"], "fix": c["fix"]}]
+
+
+def test_a_fixed_ruff_finding_passes_and_does_not_pay_for_another_rule(both_ruffed):
+    both_ruffed.commit("fixes a.py's unused import", {"tools/a.py": "A = 1\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["linted"], c["why"]) == ("passed", ["tools/a.py"],
+                                                     "ruff finds nothing new in the 1 Python file(s) it changes")
+    both_ruffed.commit("and reads an undefined name", {"tools/a.py": "A = B\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["tools/a.py:1 F821 Undefined name `B`"])
+
+
+def _repo_lint(repo: Repo) -> str | None:
+    """the repository's ruff lint, as the root suite runs it after landing, on ``repo``'s checkout: its failure, or None"""
+    r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); import test_repo_ruff as T; "
+                        "T.test_no_new_findings()"], cwd=repo.root, capture_output=True, text=True)
+    return None if r.returncode == 0 else r.stderr
+
+
+def _move_entries(repo: Repo, old: str, new: str) -> str:
+    """``--move``, the fix the gate names: the list with ``old``'s entries under ``new``"""
+    subprocess.run([sys.executable, REPO_RUFF_LINT, "--move", old, new], cwd=repo.root, check=True, capture_output=True)
+    return (repo.root / REPO_RUFF_JSON).read_text()
+
+
+def test_a_finding_moved_to_another_function_in_its_file_passes_the_gate_and_the_repository_lint(both_ruffed):
+    """Both count per (file, rule), so a refactor that moves an allowed finding into a new function changes neither."""
+    both_ruffed.git("checkout", "-q", "main")
+    d841 = {"file": "tools/d.py", "rule": "F841", "count": 1}
+    both_ruffed.commit("d.py, whose unused local the list allows", {"tools/d.py": "def f():\n    x = 1\n",
+                                                                    REPO_RUFF_JSON: _allowlist(TOOLS_F401, d841)})
+    both_ruffed.git("checkout", "-q", "-B", "pr")
+    both_ruffed.commit("the unused local moves to a new function", {
+        "tools/d.py": "def f():\n    return g()\n\n\ndef g():\n    x = 1\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["linted"]) == ("passed", ["tools/d.py"]), c["why"]
+    assert _repo_lint(both_ruffed) is None
+
+
+def test_a_rename_that_moves_its_entry_passes_the_gate_and_the_repository_lint_and_a_copy_is_new(both_ruffed):
+    """``--move`` carries the entry; the gate pools it within its rule, the base's lint agrees, and the source lint sees the
+    renamed file's finding covered at its new path."""
+    both_ruffed.commit("moves a.py, with a line more", {"tools/a.py": None, "tools/sub/a.py": "import os\nA = 1\nB = 2\n"})
+    both_ruffed.commit("its entry", {REPO_RUFF_JSON: _move_entries(both_ruffed, "tools/a.py", "tools/sub/a.py")})
+    assert '{"file": "tools/sub/a.py", "rule": "F401", "count": 1}' in (both_ruffed.root / REPO_RUFF_JSON).read_text()
+    assert both_ruffed.git("diff", "--name-status", "-M", "main", "pr", "--", "tools").startswith("R")
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"], c["linted"]) == ("passed", [REPO_RUFF_JSON], ["repo_ruff"],
+                                                                     ["tools/sub/a.py"]), c["why"]
+    assert _repo_lint(both_ruffed) is None
+    both_ruffed.git("checkout", "-q", "-b", "copy", "main")
+    both_ruffed.commit("copies a.py", {"tools/sub/a.py": "import os\nA = 1\nB = 2\n"})
+    [c] = G.gate("main", "copy")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["tools/sub/a.py:1 F401 `os` imported but unused"])
+
+
+def test_a_rename_that_leaves_its_entry_behind_is_refused_naming_the_entry_to_move_even_as_a_pure_move(both_ruffed):
+    """The repository's lint reads no history, so it would fail after landing; the gate refuses it at the mark instead."""
+    both_ruffed.commit("moves a.py as it is", {"tools/a.py": None, "tools/sub/a.py": "import os\nA = 1\n"})
+    assert G.is_pure_move(G.changes("main", "pr")[0], "main")
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed", c["why"]
+    assert c["why"].startswith(f"renames Python whose findings {REPO_RUFF_JSON} allows at the old path, and leaves 1 entry "
+                               f"behind"), c["why"]
+    assert c["fix"] == [f'{REPO_RUFF_JSON}: move {{"file": "tools/a.py", "rule": "F401", "count": 1}} to "tools/sub/a.py", as '
+                        f"the change moves the file (`python3 {REPO_RUFF_LINT} --move tools/a.py tools/sub/a.py`)"]
+    assert "tools/sub/a.py [F401]: 1 found, 0 allowed" in (_repo_lint(both_ruffed) or "")
+    both_ruffed.commit("its entry", {REPO_RUFF_JSON: _move_entries(both_ruffed, "tools/a.py", "tools/sub/a.py")})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("passed", []), c["why"]
+    assert _repo_lint(both_ruffed) is None
+
+
+def test_a_file_the_change_does_not_touch_is_never_linted(both_ruffed, monkeypatch):
+    """a.py's finding is untouched; the integration's file, the archive's and a deleted one are left to others."""
+    seen, real = [], G.ruff_findings
+    monkeypatch.setattr(G, "ruff_findings", lambda ruff, config, files: seen.append(sorted(files)) or real(ruff, config, files))
+    both_ruffed.git("checkout", "-q", "main")
+    both_ruffed.commit("archive", {"archive/old.py": "X = 1\n"})
+    both_ruffed.git("checkout", "-q", "-B", "pr")
+    both_ruffed.commit("a clean file, and others the lint doesn't hold", {
+        "tools/c.py": "C = 1\n", "integrations/vllm/verity_vllm/c.py": "import os\n", "archive/x.py": "import os\n",
+        "archive/old.py": None, "tools/notes.md": "import os\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["linted"]) == ("passed", ["tools/c.py"]), c["why"]
+    assert seen == [[], ["tools/c.py"]]
+    both_ruffed.git("checkout", "-q", "-b", "docs", "main")
+    seen.clear()
+    both_ruffed.commit("docs only", {"tools/notes.md": "x\n"})
+    assert [(c["verdict"], c["linted"]) for c in G.gate("main", "docs")["changes"]] == [("untouched", [])] and seen == []
+
+
+def test_only_the_top_change_is_linted_as_each_member_below_was_at_its_own_merge(both_ruffed, verdict_cache):
+    """The lint isn't cached: #1's verdict kept from below the top doesn't spare it the lint at the top."""
+    base = both_ruffed.git("rev-parse", "main")
+    one = both_ruffed.commit("one: an unused import", {"tools/b.py": "import sys\n"})
+    both_ruffed.git("checkout", "-q", "-b", "two", base)
+    two = both_ruffed.commit("two: clean", {"tools/c.py": "C = 1\n"})
+    both_ruffed.git("checkout", "-q", "-b", "next", base)
+    m1 = both_ruffed.queue(1, "one", one)
+    assert _verdicts(G.gate("main", "next")) == [("#1", "failed")]
+    both_ruffed.queue(2, "two", two)
+    doc = G.gate("main", "next")
+    assert [(c["name"], c["verdict"], c["linted"]) for c in doc["changes"]] == [("#1", "untouched", None),
+                                                                                ("#2", "passed", ["tools/c.py"])]
+    assert list(verdict_cache.glob("*.json")) and _verdicts(G.gate("main", m1)) == [("#1", "failed")]
+
+
+def test_with_no_ruff_to_run_the_gate_cannot_judge_and_names_the_hosts_fix(both_ruffed, monkeypatch, capsys):
+    both_ruffed.commit("docs only", {"tools/notes.md": "x\n"})
+    monkeypatch.setattr(G, "has_ruff", lambda python, pin, exact: False)
+    monkeypatch.setattr(G.shutil, "which", lambda name: None)
+    assert G.main(["main", "pr", "--json"]) == 0
+    both_ruffed.commit("a clean file", {"tools/c.py": "C = 1\n"})
+    assert G.main(["main", "pr", "--json"]) == 2
+    err = capsys.readouterr().err
+    assert "there is no `uv` to provide it" in err and f"--break-system-packages {both_ruffed.pin}`" in err, err
 
 
 A_PY = "integrations/vllm/verity_vllm/a.py"
