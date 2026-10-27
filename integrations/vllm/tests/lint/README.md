@@ -88,6 +88,13 @@ raise a key, in any file, up to what its lint, as the PR's base has it, finds th
 its base's findings adds none, so one left behind by PRs that were on `next` before its lint landed catches up, while growth
 past the base's findings is refused as before (27 Oct 06:20Z, CI-198). A lint that comes to count more lands in two steps,
 since its base's lint bounds the catch-up: first the gate's count, then the list.
+It holds lane text the same way, in every area, this integration's included: `tests/lint/test_repo_lane_text.py` counts, in
+the prose of each file it reads (comments and docstrings in code, Lean comments, every Markdown file; never a string literal
+or a data file), dated attributions and ISO dates, `note:` ids, Notion URLs, Linear ids, PR numbers, agent ids, Slack
+timestamps and worker codenames (board ids, rounds, lanes, handles), against `tests/lint/allowlists/repo_lane_text.json`.
+AGENTS.md, ARCHITECTURE.md, GLOSSARY.md and the skills hold none. The gate refuses a PR that adds one to a file it changes,
+naming each, with where the text goes: history to git, work to Linear, rulings to Notion, results to the store. It takes
+over P11's docstring patterns (board ids, lane tags, rounds and dates) for the whole tree.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too** (the vLLM coordinator, 25 Oct 11:20Z). In `integrations/vllm`, a change may add no more
