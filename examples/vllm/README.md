@@ -25,7 +25,9 @@ Verity to vLLM is `integrations/vllm/`, and the audit is `benchmarks/prove_path/
 ## Commands
 
 From the tree root, each a `research run` on its party's node (the scripts' headers list every variable). There is no
-`run.sh` yet, so `verity example vllm` runs none of them.
+`run.sh` yet, so `verity example vllm` runs none of them: they run on three nodes, and the audit takes the serve run's `art:`
+ids, so a wrapper would be more than their commands. `example.toml` puts the example at level 1 (runs) on the ladder
+(`examples/README.md`): level 2 needs the Lean verifier on an auditor host, off the nodes the prover runs.
 
 1. `commit.sh`, once per row: the row's Build and Match of record and a Commit that seals its replay bundle, the row dir
    kept on the node and put in the evidence store. The current one is run `r20261024-055630-5377`, `serve.sh`'s default

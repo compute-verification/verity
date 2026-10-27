@@ -39,10 +39,10 @@ def _says(ex: E.Example, *words: str) -> None:
 
 
 def test_a_document_fault_is_named():
-    ex = E.Example("toy-onsite", {"protocol": ["pous"], "workload": "torch", "level": 6, "placement": {"warden": "laptop"},
+    ex = E.Example("toy-onsite", {"protocol": ["pous"], "workload": "torch", "level": 6, "placement": {"relay": "laptop"},
                                   "evidence": {"run": []}, "extra": 1})
     _says(ex, "rename the directory", "unknown keys ['extra']", "a list of two or more", "workload 'torch'", "level 6",
-          "'warden'", "warden = 'laptop'", "unknown evidence ['run']")
+          "'relay'", "relay = 'laptop'", "unknown evidence ['run']")
     _says(_ex(0, runs=["r2026-1"]), "'r2026-1' is neither a run id")
 
 
