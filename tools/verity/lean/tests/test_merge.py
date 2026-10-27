@@ -80,7 +80,7 @@ def test_a_hand_written_section_one_side_extends_is_kept():
     merged, why = M.merge(base, ours, theirs)
     assert why == [] and merged["meaning"] == ["P", "P.More"] and "P.v" in merged["guarantees"]
     both, why = M.merge(base, ours, base | {"meaning": ["P", "P.Other"]})
-    assert why == [] and set(both["meaning"]) == {"P", "P.More", "P.Other"}, "two sides that each extend it merge (#2600)"
+    assert why == [] and set(both["meaning"]) == {"P", "P.More", "P.Other"}, "two sides that each extend it merge"
 
 
 def test_a_derived_record_both_sides_changed_merges_as_ours_and_the_merged_build_regenerates_it():
@@ -185,7 +185,7 @@ def test_a_module_one_side_stops_reading_merges_as_the_union_and_one_left_unread
 
 
 def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merges_and_regenerates():
-    """LEAN-60 (#4656) records a digest for every premise, so two PRs that each change a premise's definition clash on it:
+    """The lock records a digest for every premise, so two PRs that each change a premise's definition clash on it:
     ours' digest is the candidate, and an entry one side dropped while the other changed it stays until the merged build
     says no guarantee reads it (`assumptions.unread`)."""
     base = record(t=thm([F, G]))
@@ -437,7 +437,7 @@ def test_a_lakefile_root_or_require_one_side_removed_stays_removed_where_the_oth
 
 
 def test_a_root_or_require_one_side_removed_stays_removed_where_git_merges_the_other_side_s_move_cleanly(tmp_path):
-    """ci's case against ef47f3bd (#4814): roots A..H, ours removes B, theirs moves B after D.  Git merges that without a
+    """Roots A..H, ours removes B, theirs moves B after D.  Git merges that without a
     conflict, to [A, C, D, B, E, F, G, H]; the whole merged file is held to `kept`, so B stays removed.  Requires alike."""
     import tomllib
     roots = lambda *ms: 'name = "p"\n\n[[lean_lib]]\nname = "P"\nroots = [' + ",\n  ".join(f'"{m}"' for m in ms) + "]\n"

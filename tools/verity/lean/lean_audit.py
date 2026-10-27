@@ -156,6 +156,7 @@ NOT_READ = {
     "lean_changed.py": "check's lean-changed step and the Lean fast path, which run beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
     "run_daily.py": "the build cache's daily publish",
+    "survey.py": "the Lean read as text (its map, its form, its trusted size), run by hand",
     "tool.py": "the store's declarations of the scheduled runs",
     "unused.py": "a lane's list of the modules no guarantee uses, and their deletion (LEAN-73)",
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
@@ -536,7 +537,7 @@ def prune(pkg: Path) -> int:
 #: than the ~30 packages, every check evicted some and rebuilt them cold (r20261026-040757-de32: Flock's build alone 1,094 s)
 BUILDS_KEPT = 48
 #: the kept dependency trees (one per manifest and toolchain, `deps_key`) a node holds before its least recently used go:
-#: Security/Proofs' is about 35k files, and vy-nebius-2 held 24 (806k inodes) on 18 Oct (infra, LEAN-29)
+#: Security/Proofs' is about 35k files, and 24 of them held 806k inodes on one node
 DEPS_KEPT = 8
 #: the replay cache's entries a node keeps, last used first (a replay touches each entry it reuses): one per module and key,
 #: about 3k a version of the tree plus some 8k of Mathlib's and ArkLib's that every replay reuses, each a few hundred bytes;
