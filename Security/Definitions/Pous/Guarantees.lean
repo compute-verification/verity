@@ -189,7 +189,8 @@ requirement at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`, both with the impl
 (`dom salt`). One advice string covers the whole store. `2^64` is where `u64(s)` stops being injective, and the domains
 must be injective across segments: with a shared domain every `N ≥ 2` breaks (`shared_domain_breaks_fam`).
 At `N = 448` this is `BandMultiMeets14`, and at `N = 1` its global layout is `BandChainMeets64`. Red team: GO (the
-POUS store's `docs/lean-trusted-layer-review.md` §58). Proof: the POUS store's
+POUS store's `docs/lean-trusted-layer-review.md` §58 and
+`internal/p3-instantiation/band-family-pin-redteam-verdict.md`). Proof: the POUS store's
 `lean/submissions/band-multi/BandMultiFamilyFinal.lean`, `PousBandMulti.band_meets_family_final` (graded:
 `band-multi/family-pin/GRADE.txt`); here `Pous.SecurityProofs.BandMultiMeetsFamily`.
 
