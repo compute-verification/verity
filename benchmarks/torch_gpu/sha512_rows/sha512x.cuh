@@ -19,11 +19,20 @@
 #include <cstdint>
 #include <cstring>
 
+// a host build's own definitions stand (hash_host.cpp's __constant__ is static const)
 #ifndef __CUDACC__
+#ifndef __host__
 #define __host__
+#endif
+#ifndef __device__
 #define __device__
+#endif
+#ifndef __forceinline__
 #define __forceinline__ inline
+#endif
+#ifndef __constant__
 #define __constant__
+#endif
 #endif
 
 #define SX_HD __host__ __device__ __forceinline__
@@ -51,9 +60,9 @@ using u32 = uint32_t;
       0x113f9804bef90daeull, 0x1b710b35131c471bull, 0x28db77f523047d84ull, 0x32caab7b40c72493ull, 0x3c9ebe0a15c9bebcull,   \
       0x431d67c49c100d4cull, 0x4cc5d4becb3e42b6ull, 0x597f299cfc657e2aull, 0x5fcb6fab3ad6faecull, 0x6c44198c4a475817ull
 
+// SX_K_LIST stays defined for a constexpr copy, whose round constants are immediates (dither's h1sha.cuh)
 __constant__ u64 K_DEV[80] = {SX_K_LIST};
 static const u64 K_HOST[80] = {SX_K_LIST};
-#undef SX_K_LIST
 
 __constant__ u32 POW2[33] = {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u, 1u << 10, 1u << 11, 1u << 12, 1u << 13,
                              1u << 14, 1u << 15, 1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22,
@@ -66,7 +75,13 @@ SX_HD const u64* kconst() {
 #endif
 }
 
-SX_HD void iv(u64* st) {
+// a 64-bit unsigned word type: uint64_t, or unsigned long long where a caller's arrays are that
+template <class W>
+constexpr bool word64 = sizeof(W) == 8 && W(0) < W(-1);
+
+template <class W>
+SX_HD void iv(W* st) {
+  static_assert(word64<W>, "64-bit unsigned words");
   st[0] = 0x6a09e667f3bcc908ull; st[1] = 0xbb67ae8584caa73bull; st[2] = 0x3c6ef372fe94f82bull; st[3] = 0xa54ff53a5f1d36f1ull;
   st[4] = 0x510e527fade682d1ull; st[5] = 0x9b05688c2b3e6c1full; st[6] = 0x1f83d9abfb41bd6bull; st[7] = 0x5be0cd19137e2179ull;
 }
@@ -160,8 +175,9 @@ template <int M> SX_HD u64 s1(u64 w) { return rotr<M, 19>(w) ^ rotr<M, 61>(w) ^ 
 SX_HD u64 ch(u64 e, u64 f, u64 g) { return g ^ (e & (f ^ g)); }
 SX_HD u64 maj(u64 a, u64 b, u64 c) { return (a & b) | (c & (a | b)); }
 
-template <int V, int ROLL>
-SX_HD void compress(u64* st, u64* W) {
+template <int V, int ROLL, class Word>
+SX_HD void compress(Word* st, Word* W) {
+  static_assert(word64<Word>, "64-bit unsigned words");
   constexpr int M0 = V & 3, M1 = (V >> 2) & 3, m0 = (V >> 4) & 3, m1 = (V >> 6) & 3;
   const u64* K = kconst();
   u64 a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
