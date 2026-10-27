@@ -1,7 +1,8 @@
 import Proofs.Properties.Verity.SampledAccept
+import Proofs.Properties.Verity.PlayDevice
 
 /-!
-# `PlayCoupling.prob_le` by driving the play through the live audit (ONE-8's `accept_le`, PRF-205)
+# `PlayCoupling.prob_le` by driving the play through the live audit (`SampledDeploy.accept_le`'s reduction)
 
 The reduction runs a strategy of the play against the live audit (`Exec.auditLive` over `Composed.liveOfZJ`), one
 release of the challenger device at a time (`Game.dom_reach`). It reads each release's bytes for what the release is to
@@ -324,7 +325,7 @@ def Block.rels (k : Block m) : List (ByteArray × (Fin m → Bool)) := (k.b, k.x
 def Block.bits (k : Block m) : List (Fin m → Bool) := k.x :: k.rest.map Prod.snd
 
 /-- Every release of the block answers bytes tagged `tg`, and it has one release per chunk of `sp`. -/
-def Block.Fits {Y : Type} (k : Block m) (tg : Tag) (sp : Split Y m) : Prop :=
+def Block.Fits {Yd : Type} (k : Block m) (tg : Tag) (sp : Split Yd m) : Prop :=
   (∀ z ∈ k.rels, tagOf z.1 = some tg) ∧ k.rest.length = sp.rest.length
 
 /-- The draw's block, before the session: the reduction reaches the session at the draw it reads back to. -/
@@ -481,18 +482,17 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι α : Type} [Fintype α] {d : Device ι}
 
-/-- The release the device records for the bytes `b` and the coins `l`, with what `sign` signs for them. -/
-def releaseOf (sign : ByteArray → List Bool → ByteArray × ByteArray) (b : ByteArray) (l : List Bool) : Release :=
-  ⟨b, l, (sign b l).1, (sign b l).2⟩
+/-- The release the device records for the bytes `b` and the coins `l`. -/
+def releaseOf (b : ByteArray) (l : List Bool) : Release := ⟨b, l⟩
 
 /-- **The device's releases, then `k`, are rounds of released bits** (`Game.roundsThen`), each recorded as its
 release. -/
-theorem releases_bind {β : Type} (sign : ByteArray → List Bool → ByteArray × ByteArray) :
+theorem releases_bind {β : Type} :
     ∀ (ns : List ℕ) (k : List Release → Game β),
-      (releases sign ns).bind k = Game.roundsThen (releaseOf sign) k ns
+      (releases ns).bind k = Game.roundsThen releaseOf k ns
   | [], _ => rfl
   | n :: ns, k => by
-    show Game.send _ (fun b => Game.coin _ fun x => ((releases sign ns).map _).bind k) = _
+    show Game.send _ (fun b => Game.coin _ fun x => ((releases ns).map _).bind k) = _
     unfold Game.roundsThen
     congr 1
     funext b
@@ -500,7 +500,7 @@ theorem releases_bind {β : Type} (sign : ByteArray → List Bool → ByteArray 
     funext x
     rw [Game.map, Game.bind_assoc]
     simp only [Game.bind_ret]
-    exact releases_bind sign ns _
+    exact releases_bind ns _
 
 /-- **The play dominated by the live audit**: the play at `σ`, in the event `P`, is dominated by the live audit, its
 draw from the operating system's bytes `src` (A3), wherever every outcome in `P` has its releases bring the reduction
@@ -514,10 +514,11 @@ theorem dominated_of_drive {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
     (tagOf : ByteArray → Option Game.LiveDrive.Tag) (spΩ : Game.Split ((i : Fin mL) → Fin (Lb i) → Fin 256) m)
     (spP : Game.Split (Fin 2 → Fin mPts → 𝔽) m) (spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m)
     (rootOf : ByteArray → Array ByteArray) (bytesOf : ByteArray → ByteArray) (pfOf : ByteArray × Array ByteArray → Array ByteArray)
-    (hok : ∀ hs e, P ⟨θ, F, c, hs.map (Game.recOf (releaseOf (V.sign θ))), e.1, e.2⟩ →
-      ∃ x rB pts N' rs, Game.LiveDrive.reached (q := fun o => ZkExec.LiveAcceptsZK I o) Game.LiveDrive.nOfJ
+    (hok : ∀ hs e, P ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
+      ∃ x rB pts N' rs, Game.LiveDrive.reached
+          (q := fun o : Reg × Finset (Fin n) × Exec.Transcript => ZkExec.LiveAcceptsZK I o) Game.LiveDrive.nOfJ
           Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) (fun x => (planZ (Game.LiveDrive.drawOS law pop x) R₀).length)
-          mPts N (fun x rB pts rs pf => (R₀, Game.LiveDrive.drawOS law pop x,
+          mPts N (fun x rB pts rs pf => (R₀, Game.LiveDrive.drawOS (n := n) law pop x,
             wr (Game.LiveDrive.drawOS law pop x) R₀ ⟨rB, pts, rs, pf⟩)) src m (uniform_of_A3 hA3) tagOf spΩ spP spR
           rootOf bytesOf hs = .at (.rnds x rB pts N' rs) ∧
         ZkExec.AcceptsZK I (wr (Game.LiveDrive.drawOS law pop x) R₀ ⟨rB, pts, rs, pfOf e⟩)) :
@@ -526,7 +527,7 @@ theorem dominated_of_drive {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
         (Composed.liveOfZJ dg planZ N wr))) := by
   rw [Game.LiveDrive.toVerity_auditLive]
   refine Game.dom_send_right R₀ (Game.Dominated.of_eq
-    (releases_bind (V.sign θ) (V.rounds θ) fun log => Game.send (ByteArray × Array ByteArray) fun eb =>
+    (releases_bind (V.rounds θ) fun log => Game.send (ByteArray × Array ByteArray) fun eb =>
       Game.ret (⟨θ, F, c, log, eb.1, eb.2⟩ : Outcome)) ?_)
   exact Game.LiveDrive.dom_live Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) _ mPts N _ src m
     (uniform_of_A3 hA3) tagOf spΩ spP spR rootOf bytesOf _ _ pfOf hok (V.rounds θ) _
@@ -545,8 +546,8 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
     (tagOf : ByteArray → Option Game.LiveDrive.Tag) (spΩ : Game.Split ((i : Fin mL) → Fin (Lb i) → Fin 256) m)
     (spP : Game.Split (Fin 2 → Fin mPts → 𝔽) m) (spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m)
     (rootOf : ByteArray → Array ByteArray) (bytesOf : ByteArray → ByteArray) (pfOf : ByteArray × Array ByteArray → Array ByteArray)
-    (hcanon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf (releaseOf (V.sign θ))), e.1, e.2⟩ →
-      ¬ Brk ⟨θ, F, c, hs.map (Game.recOf (releaseOf (V.sign θ))), e.1, e.2⟩ →
+    (hcanon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
+      ¬ Brk ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
       ∃ (kd kp : Game.LiveDrive.Block m) (rds : List (Game.LiveDrive.RoundBlock m)),
         hs.filter (Game.LiveDrive.Tagged m tagOf) =
             (kd.rels ++ kp.rels ++ rds.flatMap fun r => r.k.rels).map (Game.LiveDrive.rel m) ∧
@@ -554,7 +555,7 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
           (∀ r ∈ rds, r.Fits Game.LiveDrive.nOfJ Game.LiveDrive.mkJ
             (fun x => (planZ (Game.LiveDrive.drawOS law pop x) R₀).length) m tagOf spR bytesOf
             (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits))) ∧
-          proj ⟨θ, F, c, hs.map (Game.recOf (releaseOf (V.sign θ))), e.1, e.2⟩ =
+          proj ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ =
             wr (Game.LiveDrive.drawOS law pop (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits))) R₀
               ⟨rootOf kp.b, spP.e (Game.LiveDrive.decChunks m _ kp.bits),
                 Game.LiveDrive.roundsOf Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg)
@@ -594,8 +595,8 @@ structure Drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.gam
   rootOf : ByteArray → Array ByteArray
   bytesOf : ByteArray → ByteArray
   pfOf : ByteArray × Array ByteArray → Array ByteArray
-  canon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf (releaseOf (V.sign θ))), e.1, e.2⟩ →
-    ¬ Brk ⟨θ, F, c, hs.map (Game.recOf (releaseOf (V.sign θ))), e.1, e.2⟩ →
+  canon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
+    ¬ Brk ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
     ∃ (kd' kp : Game.LiveDrive.Block m) (rds : List (Game.LiveDrive.RoundBlock m)),
       hs.filter (Game.LiveDrive.Tagged m tagOf) =
           (kd'.rels ++ kp.rels ++ rds.flatMap fun r => r.k.rels).map (Game.LiveDrive.rel m) ∧
@@ -603,7 +604,7 @@ structure Drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.gam
         (∀ r ∈ rds, r.Fits Game.LiveDrive.nOfJ Game.LiveDrive.mkJ
           (fun x => (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀ (Game.LiveDrive.drawOS (.subset kd) n x) R₀).length)
           m tagOf spR bytesOf (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits))) ∧
-        proj ⟨θ, F, c, hs.map (Game.recOf (releaseOf (V.sign θ))), e.1, e.2⟩ =
+        proj ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ =
           A.wr (Game.LiveDrive.drawOS (.subset kd) n (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits))) R₀
             ⟨rootOf kp.b, spP.e (Game.LiveDrive.decChunks m _ kp.bits),
               Game.LiveDrive.roundsOf Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ A.dg)

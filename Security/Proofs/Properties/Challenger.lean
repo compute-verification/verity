@@ -11,7 +11,8 @@ the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the r
 proved about `check` (`acceptMeans_iff`) hold of what it accepts.
 `verifies_iff`: the reader's LMS check is `LmsVerifies`; `keyOfParams_eq_some`: the key v2's compiled check reads from
 the registered parameters; `verifies_registered`: under that key, the check accepts exactly what `LmsVerifies` accepts
-at `lmsKey (keyOfParams ps)`.
+at `lmsKey (keyOfParams ps)`. `runsWhy_none`: a log whose labels `runsWhy` passes decomposes, group by group, into
+its uses' runs, and `Session.runs_of_runsWhy` states that as `Session.Runs`.
 -/
 
 namespace Properties.Challenger
@@ -80,9 +81,9 @@ theorem drawnByDevice_nontrivial : ¬ DrawnByDeviceAt (fun _ _ _ _ _ => .ok Byte
 
 /-- `RoundsByDevice`'s statement is not trivially true: a reader that accepts every record fails it, since the empty
 device's ledger opens no session and an empty list of uses has no use whose record could carry a break. -/
-theorem roundsByDevice_nontrivial : ¬ RoundsByDeviceAt (fun _ _ _ _ _ => .ok []) := by
+theorem roundsByDevice_nontrivial : ¬ RoundsByDeviceAt (fun _ _ _ _ _ _ => .ok []) := by
   intro h
-  rcases h ⟨fun _ => [], fun _ => []⟩ ⟨Lms.deployed, ByteArray.empty⟩ "" [] [] Lean.Json.null [] rfl with
+  rcases h ⟨fun _ => [], fun _ => []⟩ ⟨Lms.deployed, ByteArray.empty⟩ "" [] [] [] Lean.Json.null [] rfl with
     ⟨s, hs, -⟩ | ⟨i, u, hu, -⟩
   · simp at hs
   · simp at hu
@@ -143,5 +144,78 @@ theorem verifies_registered {ps : List Core.Composition.Named} {k : SampledProof
       MemoryChallenger.Properties.LmsVerifies (lmsKey (keyOfParams ps)).1 (lmsKey (keyOfParams ps)).2 m sig := by
   rw [h]
   exact verifies_iff k m sig
+
+theorem findIdx?_split {α : Type} [Inhabited α] {p : α → Bool} {xs : List α} {i : Nat} (hi : xs.findIdx? p = some i) :
+    ∃ pre post u, xs = pre ++ u :: post ∧ p u = true ∧ (∀ x ∈ pre, p x = false) ∧ xs.getD i default = u ∧
+      xs.eraseIdx i = pre ++ post := by
+  obtain ⟨hlt, hp, hpre⟩ := List.findIdx?_eq_some_iff_getElem.1 hi
+  refine ⟨xs.take i, xs.drop (i + 1), xs[i], ?_, hp, ?_, ?_, List.eraseIdx_eq_take_drop_succ xs i⟩
+  · rw [List.getElem_cons_drop, List.take_append_drop]
+  · intro x hx
+    obtain ⟨j, hj, rfl⟩ := List.mem_iff_getElem.1 hx
+    have hji : j < i := by simp at hj; omega
+    simpa [List.getElem_take] using hpre j hji
+  · simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hlt]
+
+open SampledProofs.Challenger in
+/-- **`runsReason` passes exactly a run decomposition**: when the walk finds no reason, the labels `ls` are some order
+`vs` of the uses `pending`, each family's in `pending`'s order, each use its family once a coin. -/
+theorem runsReason_none : ∀ (f : Nat) (pending : List Use) (ls : List String), runsReason f pending ls = none →
+    ∃ vs : List Use, (∀ ℓ, vs.filter (·.label == ℓ) = pending.filter (·.label == ℓ)) ∧
+      ls = vs.flatMap fun u => List.replicate u.coins u.label
+  | _, [], [], _ => ⟨[], fun _ => rfl, rfl⟩
+  | _, _ :: _, [], h => by simp [runsReason] at h
+  | 0, _, _ :: _, h => by simp [runsReason] at h
+  | f + 1, pending, l :: ls, h => by
+    simp only [runsReason] at h
+    cases hi : pending.findIdx? (·.label == l) with
+    | none => simp [hi] at h
+    | some i =>
+      obtain ⟨pre, post, u, hsplit, hu, hpre, hget, herase⟩ := findIdx?_split hi
+      simp only [hi, hget] at h
+      split at h
+      · rename_i hc
+        obtain ⟨vs, hvs, hls⟩ := runsReason_none f _ _ h
+        have hul : u.label = l := by simpa using hu
+        have hn : u.coins ≤ ls.length + 1 := by simp at hc; exact hc.1
+        have htake : (l :: ls).take u.coins = List.replicate u.coins l := by
+          rw [List.eq_replicate_iff]
+          refine ⟨by simp; omega, fun b hb => ?_⟩
+          simp at hc
+          exact hc.2 b hb
+        refine ⟨u :: vs, fun ℓ => ?_, ?_⟩
+        · rw [hsplit, List.filter_append, List.filter_cons, List.filter_cons, hvs ℓ, herase, List.filter_append]
+          by_cases hl : l = ℓ
+          · subst hl
+            have : pre.filter (·.label == l) = [] := List.filter_eq_nil_iff.2 fun x hx => by simp [hpre x hx]
+            simp [hul, this]
+          · simp [hul, hl]
+        · rw [← List.take_append_drop u.coins (l :: ls), htake, hls]
+          simp [hul]
+      · simp at h
+
+open SampledProofs.Challenger in
+/-- **A log `runsWhy` passes releases each group's uses one run each**: for every group `g`, the labels restricted to
+`g`'s families decompose as `Session.Runs` states. -/
+theorem runsWhy_none {us : List Use} {groups : List (List String)} {labels : List String}
+    (h : runsWhy us groups labels = none) : ∀ g ∈ groups, ∃ vs : List Use,
+      (∀ ℓ, vs.filter (·.label == ℓ) = us.filter fun u => u.label == ℓ && g.contains ℓ && u.coins != 0) ∧
+        labels.filter g.contains = vs.flatMap fun u => List.replicate u.coins u.label := by
+  intro g hg
+  obtain ⟨vs, hvs, hls⟩ := runsReason_none _ _ _ (List.findSome?_eq_none_iff.1 h g hg)
+  refine ⟨vs, fun ℓ => ?_, hls⟩
+  rw [hvs ℓ, List.filter_filter]
+  refine List.filter_congr fun u _ => ?_
+  by_cases hl : u.label = ℓ
+  · simp [hl]
+  · have : (u.label == ℓ) = false := by simpa using hl
+    simp [this]
+
+/-- **The refusal's guarantee on a session's log**: a session whose log's labels `runsWhy` passes releases each group's
+uses one run each (`Session.Runs`), the conjunct `RoundsByDevice` states of the session behind an accepted read. -/
+theorem Session.runs_of_runsWhy {s : Session} {us : List SampledProofs.Challenger.Use} {groups : List (List String)}
+    (h : SampledProofs.Challenger.runsWhy us groups (SampledProofs.Challenger.receivedOrder s.log) = none) :
+    ∀ g ∈ groups, s.Runs g us :=
+  runsWhy_none h
 
 end Properties.Challenger
