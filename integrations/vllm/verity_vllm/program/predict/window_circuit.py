@@ -32,9 +32,8 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   ``domain`` are the embedding table's (a `Table` over the weights record, read by `TableRead`), its ``row``, ``salt`` and
   ``path`` an `Opening` at the hidden key ``tok``, pinned by its verdict ``o1``. Its ``tok`` is its position's feed.
 - `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, each reading its weight rows from the weights record (`Read`) and
-  its ``x`` as its writers' rows, n = ``grain.gemm_words`` // K output columns a slice, halved while an earlier node reads
-  a slice's template's ``x`` as another number of rows (a port is cut one way, so the attention's output projection, its
-  ``x`` a row a head, is narrower than the QKV projection at its K).
+  its ``x`` as its writers' rows, n = ``grain.gemm_words`` // K columns, halved while an earlier node reads that slice
+  template's ``x`` at another row count (a port is cut one way, and o_proj's ``x`` is a row a head).
 - An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit, and its product `ScaledMmS8_v1{K, N}`,
   ⌈N / n⌉ slices `ScaledMmS8_v1{K, n}` at the same weight words a slice (n = ``grain.gemm_words`` // (K / 2): an s8 weight row
   is K / 2 words), each reading its s8 weight rows and their f32 row scales from the weights record and the quantizer's codes
@@ -105,6 +104,7 @@ from __future__ import annotations
 import bisect
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from itertools import accumulate
 from typing import Any
 
 from verity.ml.circuits.codec import descriptor_id
@@ -395,11 +395,8 @@ class _Program:
                 self.b.read(tid, p, u, (1,), self.weight(arg.refs, words), (0,))
             else:
                 self.b.feed(tid, p, u, 1, self.rows(arg.refs))
-        at, pieces = 0, []
-        for o, words in lay.outs:
-            pieces.append((at, at + words, Row(tid, u, o, words)))
-            at += words
-        self.outs[j] = pieces
+        ends = list(accumulate((w for _, w in lay.outs), initial=0))
+        self.outs[j] = [(a, e, Row(tid, u, o, w)) for (o, w), a, e in zip(lay.outs, ends, ends[1:])]
 
     _RMSNormTriton = _RMSNormFusedCuda = _Int8RowQuant = _one
 
@@ -721,8 +718,10 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
     return lower(registered, cls, programs, grain, name).circuit
 
 
-def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN, name: str = NAME) -> Lowered:
-    """`class_circuit`'s circuit with its lowering (`Lowered`)."""
+def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN, name: str = NAME,
+          wired: bool = True) -> Lowered:
+    """`class_circuit`'s circuit with its lowering (`Lowered`); unless ``wired``, its units and registered reads alone, no
+    wire or cut, whatever `settle` would refuse (the weights a registration commits, `window_weights`)."""
     programs = cls.slots if programs is None else programs
     if not 1 <= programs <= cls.slots:
         raise Unexpressible(f"{programs} Programs in a window of a class of {cls.slots} slots")
@@ -739,7 +738,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     for r in progs:
         if r.position != cls.positions:
             raise Unexpressible(f"{r.name}: {r.position} positions, not its class's {cls.positions}")
-    b.settle()
+    if wired:
+        b.settle()
     roots = _runs(b.roots, lambda x: (x.reader, x.port, x.table, x.of), lambda x: x.at, lambda x: x.units,
                   lambda x, n: IF.TableRead(x.reader, x.port, x.table, x.of, x.at, n))
     openings = _runs(b.openings, lambda x: (x.reader, x.table, x.key, x.ports, x.verdict), lambda x: x.at, lambda x: x.units,
