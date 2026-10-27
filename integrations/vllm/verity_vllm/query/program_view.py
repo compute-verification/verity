@@ -713,7 +713,7 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
     if isinstance(desc, str):
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
             desc = json.load(f)
-    from verity.ml.circuits.codec import decode_program, descriptor_id, program_digest
+    from verity.ml.circuits.codec import decode_program, descriptor_id
     from verity.ml.circuits.refs import runs
     if registry is None:
         registry, _errors = _registry()
@@ -740,4 +740,5 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
         b.add(i, descriptor_id(n.fn), n.form, hints.get(k, getattr(n, "name", "") or ""), ports_of_type(n.out),
               ([remap(r) for r in runs(a.refs)] for a in n.args))
     outs = b.outputs([remap(r) for r in runs(body.ret)])
+    from verity.ml.circuits.codec import program_digest
     return b.view(outs, program_digest(desc), "descriptor")
