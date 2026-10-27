@@ -18,7 +18,7 @@ import Proofs.NetworkCertifier.Assumptions.SampledCode
 * `PeriodLeakAccepted_nontrivial`: the per-window bound fails at the accepting verifier `tapD` at SHA-512
   (`tapD_bound_fails`).
 * `HorizonLeakAccepted_honest`: its premises on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`) and
-  sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone, since the witnesses rule
+  sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone: the witnesses rule
   reads a statement that is one definition applied by unfolding it once, and `fits` is a field.
 * `HorizonLeakAccepted_nontrivial`: its bound fails at an audit that always accepts (`horizon_bound_fails`). There its
   conditional escape (`hesc`) holds only at `q = 0`, which its `hF` refuses at `δ < 1`.
