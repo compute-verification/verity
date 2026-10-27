@@ -2,19 +2,19 @@
 // (benchmarks/torch_gpu/s8_linear/s8_wgmma.cu: persistent, warp-specialized, TMA with SWIZZLE_128B, wgmma m64nNk32
 // .s32.s8.s8, 128 x BN tiles of two consumer warpgroups) with the receipt's values, bit for bit gemm_kernel<true>'s:
 //   T_s     after the main k-tile that ends segment s, each cell's low 16 bits of X W'^T over the first s L inner indices,
-//           to the words buffer in v31's layout ([128 x 128 tile][s][cell], u16)
+//           to the prefix-sum buffer in v31's layout ([128 x 128 tile][s][cell], u16)
 //   O       T_S + 256 dO - Z_X U^T - V Y_W^T mod 2^32, row-major s32
 // The peel's tail rows P_A, P_B (form_a_kernel's and form_b_kernel's, tail segments of L') go through the same accumulator,
 // ahead of the main k-tiles, in Horner order: the tail segments of the top digit D first (from zero), then acc *= 128 and
 // digit D - 1's, ..., acc *= -128 after digit 1, then the shift-0 tail segments (-Z_0 U^T and -V Y_0^T), so acc holds the tail
-// tau = -Z_X U^T - V Y_W^T when the main k-tiles start and tau + T_S after them. Each segment's word is the low half of
+// tau = -Z_X U^T - V Y_W^T when the main k-tiles start and tau + T_S after them. Each segment's prefix sum is the low half of
 // acc - tau: tau's low halves are kept (CM 0: packed in 64 registers a thread at BN 256; CM 1: in an L2-resident scratch
 // slot of the CTA's, read back at each segment end), so a tail costs (dz + dy) L' inner indices on the tensor cores and
 // no second accumulator. The tail's step order and events are a table in shared memory, built once a CTA.
 // RP, the register plan (below): 0 is wgmma.linear's, 3 leaves room for one of the commit's CTAs beside each GEMM CTA.
 //   mode 0  the plain product X W'^T to O (the bench's `plain` arm)
 //   mode 1  the protocol's GEMM (diag 1: no segment stores, 2: no tail, 4: no dO read; timing only)
-//   mode 2  wgmma.linear itself on A, B: bf16(RN(RN(f32(acc) s_a) s_w)) words, the `wgl` arm, gamma's baseline
+//   mode 2  wgmma.linear itself on A, B: bf16(RN(RN(f32(acc) s_a) s_w)) values, the `wgl` arm, gamma's baseline
 // Integer wgmma accumulates mod 2^32 (no .satfinite), as the receipt's O is taken.
 #pragma once
 #include <cuda.h>
@@ -28,7 +28,7 @@ namespace wgp {
 
 #define WGD __device__ __forceinline__
 
-// TW: v31's word tile; MAX_TT: the tail's k-tiles a table holds ((dz + dy) L' / BK, 48 at L' 1024 and dz = dy = 3, and
+// TW: v31's prefix-sum tile; MAX_TT: the tail's k-tiles a table holds ((dz + dy) L' / BK, 48 at L' 1024 and dz = dy = 3, and
 // KQ more)
 constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW = 128, MAX_TT = 1024;
 // The register plans (RP). An SM's registers are four files of 16,384, one a sub-partition, and a CTA's warps are dealt to
@@ -71,8 +71,8 @@ struct alignas(128) Args {
   const int *lA, *cA;         // wrap 7: X's wraps a row (form_a's list: k << 1 | negative) and their count, for w_X B~^T
   const int16_t* bt;          // wrap 7: B~^T (K x N), form_b's
   int capA;
-  int* O;                     // mode 0, 1: s32 cells; mode 2: bf16 words
-  uint32_t* cbuf;             // CM 1: a slot of TM x BN / 2 words a CTA
+  int* O;                     // mode 0, 1: s32 cells; mode 2: bf16 values
+  uint32_t* cbuf;             // CM 1: a slot of TM x BN / 2 u32s a CTA
   const float *sa, *sw;       // mode 2's scales
   // a CTA's first tile is blockIdx.x, its next ones gridDim.x + a claim on tctr less tbase (null: every gridDim.x-th);
   // launches that share tctr run in one stream's order, and each advances it by its tiles (v31.cu's Ring, gctr)
@@ -377,7 +377,7 @@ template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const A
   uint32_t ph = 0;
   int32_t d[NA];
   uint32_t cp[CM == 0 ? NA / 2 : 1];
-  uint32_t* const cs = CM == 1 ? p.cbuf + (size_t)blockIdx.x * (TM * BN / 2) + tid : nullptr;   // the thread's tau words
+  uint32_t* const cs = CM == 1 ? p.cbuf + (size_t)blockIdx.x * (TM * BN / 2) + tid : nullptr;   // the thread's packed tau halves
   const bool segs = proto && !(p.diag & 1);
   const int kpl = p.L / BK;
   int cg = 0;   // the steps consumed (RP 3's producer's reference)
@@ -435,8 +435,8 @@ template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const A
           else cs[j * (NWG * 128)] = w;
         }
       } else {
-        // T_s: the low halves of acc - tau, a pair of columns a 32-bit store, into the 128 x 128 word tiles the tile covers
-        // (S segments apart). Column 8 j + cq is word tile j / 16's column 8 (j % 16) + cq, so every address is one of two
+        // T_s: the low halves of acc - tau, a pair of columns a 32-bit store, into the 128 x 128 prefix-sum tiles the tile covers
+        // (S segments apart). Column 8 j + cq is prefix-sum tile j / 16's column 8 (j % 16) + cq, so every address is one of two
         // bases plus a constant (cq is even, so the halving distributes).
         uint32_t* const w0 = reinterpret_cast<uint32_t*>(p.words) +
                              ((((size_t)tm * (N / TW) + (size_t)tn * (BN / TW)) * p.S + (seg - 1)) * (TW * TW) +
@@ -464,7 +464,7 @@ template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const A
     acc_fence<NA>(d);
     if (pend >= 0 && lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
     pump(cg);
-    if (!p.O) {   // the words alone (a served call's segments 1 .. S - 1)
+    if (!p.O) {   // the prefix sums alone (a served call's segments 1 .. S - 1)
       post();
       continue;
     }

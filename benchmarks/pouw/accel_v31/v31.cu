@@ -1498,7 +1498,7 @@ DEV u32 hash_blocks(u64* x, const Src& src, u32 lb, u32 b0, bool pf, const Stop&
 // RP 4's hasher (wg_proto.cuh's H) on a served call's O rows: row j of commit tile ct is leaf ct lpt + wrows + j. Its
 // chaining value goes to xd[pos] and flag[pos] = epoch << 10 | the SHA-512 chunks hashed (all of them, or as many as the
 // hash warp did before the consumers were done); FusedRow takes the leaf phase on from there, and hashes from the first
-// chunk whatever carries another epoch (the words rows, a forged copy). A visit hashes at most budget chunks on from the row's
+// chunk whatever carries another epoch (the prefix-sum rows, a forged copy). A visit hashes at most budget chunks on from the row's
 // own flag (chunk, V31_HCHUNK: the hash warps' visits a row, 0 a row whole in one)
 constexpr u32 FUSED_EPOCHS = 1u << 22;
 struct FusedLeaves {
@@ -2225,7 +2225,7 @@ struct Ctx {
     else if (cm) wgp::gemm<128, 1><<<wgrid, T0, S128, st>>>(g);
     else wgp::gemm<128, 0><<<wgrid, T0, S128, st>>>(g);
   }
-  // wgmma.linear on A and B (bf16 words into O[b]): the plain GEMM a served call runs, gamma's denominator, always on
+  // wgmma.linear on A and B (bf16 values into O[b]): the plain GEMM a served call runs, gamma's denominator, always on
   // RP 0's registers (wgmma.linear's own) and CM 1's kernel, which holds no tail registers (mode 2 has no tail) and spills none
   void wgl(cudaStream_t st, int b) {
     wgp::Args g = wa_wgl;
@@ -2380,7 +2380,7 @@ struct Fill {
   int ocap = 0;
   // V31_GEMM 1 (served): D = a' b'^T on wg_proto.cuh's plain GEMM (mode 0, static schedule) in place of cuBLASLt; V31_RP 4
   // hashes its O rows in the GEMM's producer warpgroup, digests to xd[copy] flagged with the launch's epoch xep[copy];
-  // wgw (V31_WGW, default 1): the words segments on the wg protocol GEMM too, in place of gemm_kernel<true>
+  // wgw (V31_WGW, default 1): the prefix-sum segments on the wg protocol GEMM too, in place of gemm_kernel<true>
   bool wg = false, wgw = false;
   int wbn = 0, wgrid = 0, hchunk = 0;
   u64* xd[2] = {nullptr, nullptr};
@@ -2557,7 +2557,7 @@ struct Fill {
     wa_plain = wg_args(Ap, Bp, 0);
     wa_plain.hall = env_int("V31_HALL", 0);
     wgw = wg && Wn > 0 && env_int("V31_WGW", 1) != 0;
-    if (wgw) {   // T_1 .. T_W: mode 1 with no tail and no O over k < W L, gemm_kernel<true>'s words bit for bit
+    if (wgw) {   // T_1 .. T_W: mode 1 with no tail and no O over k < W L, gemm_kernel<true>'s prefix sums bit for bit
       wa_words = wg_args(X, W, 1);
       wa_words.K = Wn * L;
       wa_words.L = L;
@@ -2582,7 +2582,7 @@ struct Fill {
 #endif
   }
 #ifdef V31_WG
-  // mode 0: a b^T (s32) into O; mode 2: wgmma.linear's bf16 words (s_a = s_w = 1/127), gamma's baseline
+  // mode 0: a b^T (s32) into O; mode 2: wgmma.linear's bf16 values (s_a = s_w = 1/127), gamma's baseline
   wgp::Args wg_args(const int8_t* a, const int8_t* b, int mode) const {
     wgp::Args g{};
     g.a = tmap(a, k, m, wgp::TM);
@@ -3339,7 +3339,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
       arms.push_back({"ovl_pad", [&](cudaStream_t s, int r) { ovl(s, r, nullptr, true); }});
     }
 #ifdef V31_WG
-    // wgmma.linear on A and B (bf16 words into D2, after CUTLASS's check of it)
+    // wgmma.linear on A and B (bf16 values into D2, after CUTLASS's check of it)
     wgp::Args gw{};
     if (served) {
       gw = f.wg_args(A, f.B, 2);
