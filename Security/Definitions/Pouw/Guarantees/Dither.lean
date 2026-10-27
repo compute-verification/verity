@@ -107,6 +107,12 @@ Open (stated so the red team can aim at them):
 * a block's costs and public bests are per sampling block, fixed before the period, and hold at every instance of
   `Reg w`: an instance the prover adapts to the earlier coins gets the cheapest registrable instance's `pub`. A
   registered cost `W_reg` that is itself a budget read off the committed instances (RT-POOL RP11) is not stated;
+* `noFoldRound`'s word isn't protocol v3.2's proof block (RT-POOL RP18): its word is a 32-bit prefix sum of the noised
+  product (`Word`) with `s` cells checked, while a v3.2 proof block checks one segment's `T_s − T_{s−1}` mod `2^16`
+  of the wrapped operands' product, and the last segment's also `O` mod `2^32` and its binding identity. So the
+  detection rate's `p`, and which committed values are words, differ, and `WorkSoundNoFold` is not v3.2's statement.
+  Until it is restated at v3.2's words, ACCEL's PROTOCOL.md prices `η` at the measured `p ≤ 2.8e-5` and POOL-THM's
+  `ζ` at `2^-16`;
 * `G` is any accelerator here. The card instance reads it as MODEL-SPEC's machine at a card's θ with its floors
   (RT-LEAN L4, L9; RT-MODEL M12), prices an exchanged bit at `β = n_max H_mac` with the certifier streaming the
   dither bits and counting `K = E_in + E_out` (RT-PROTO P2, which holds only while the dither bits stay streamed), and

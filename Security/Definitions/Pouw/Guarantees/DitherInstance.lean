@@ -44,8 +44,9 @@ with its dual price `μ` at the sampling blocks' honest use: with `WorkSound`'s 
   (`W_b ≤ W_mac · macs b`, `W_b = W_mm + W_sha + W_ans`: an outside machine that returns the root saves the block's
   hashing too, RT-PROTO-2 P18). A bit across the boundary carries the coin of at most `n_max` MACs when the
   challenger issues the dither bits as a signed coin stream (RT-PROTO P2, the coordinator's 06:20Z decision;
-  `n_max = N` for a static call, `d_v` for PV). The counts exclude the challenger's signed coin stream, and the caps
-  are set at served traffic (P18). Without a streamed side, about 1 kbit carries a whole sampling block, and
+  `n_max = N` for a static call, `d_v` for PV). The counts exclude the challenger's coin stream and nothing else, as
+  `CertifierSeesImports` defines it (RT-POOL RP5), a replica on several nodes has one pair of counts (RP9), and the
+  caps are set at served traffic (P18). Without a streamed side, about 1 kbit carries a whole sampling block, and
   `OutsourceWithinEgress` at this `β` is false;
 * the deadlines from the auditor's clocks (`Timed`, RT-PROTO P5, RT-PROTO-2 P13 and P25), in each sampling block's
   commit, challenge and response phases:

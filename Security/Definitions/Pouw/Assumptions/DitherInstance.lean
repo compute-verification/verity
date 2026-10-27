@@ -30,11 +30,27 @@ namespace Pouw.Assumptions
 open Pouw.Dither
 
 /-- `pouw-certifier-sees-imports` (proposed; class L, the auditor's devices, trust base item 3; RT-PROTO P2, RT-LEAN
-L32, CMP-154). **The network certifier counts every exchanged bit**: it watches the replica's boundary, every link of
-the period's devices, on a machine the prover doesn't control, so the bits a prover's sampling blocks' work and
-answers exchange with outside machines (`Prover.ext`, in either direction, other than the challenger's signed coin
-stream) are at most the bits it signs as entering (`cin`) and leaving (`cout`) the devices, as the verdict reads them
-from its readings `dev`. -/
+L32, RT-POOL RP5, RP9, CMP-154). **The network certifier counts every exchanged bit**: it watches the replica's
+boundary, every link of the period's devices, on a machine the prover doesn't control, so the bits a prover's sampling
+blocks' work and answers exchange with outside machines (`Prover.ext`, in either direction, other than the
+challenger's coin stream) are at most the bits it signs as entering (`cin`) and leaving (`cout`) the devices, as the
+verdict reads them from its readings `dev`.
+
+**The coin stream is the coins and nothing else** (RT-POOL RP5), the one thing `Accel.ext` leaves out: a sampling
+block's dither and check coins are its `Draw` and `Chk`, inputs of its programs, not exchanged bits.
+* Under the MVP the challenger is the replica's certifier device (Daniel, 26 Oct; `CoinsConfidential`), which makes
+  each coin at the boundary, so no bit that crosses a link from outside is left out.
+* A challenger on a device of its own is left out message by message: only a coin message that verifies under its key
+  and carries its expected (period, replica, sampling block, kind, sequence number), once, at its expected length.
+  Every other byte counts: a malformed, unverifiable, duplicate, replayed or late message as entering, and the
+  stream's reverse traffic (acknowledgements, flow control) as leaving. A stream told apart by its addresses or headers
+  would let forged packets on it carry imports uncounted.
+
+**A replica on several nodes has one boundary** (RT-POOL RP9): a certifier on each node's links, the traffic between
+its nodes carried certifier to certifier on the auditor's private links, never through the prover's network, and one
+count `cin`, `cout` that the replica's certifiers keep together. Everything else crossing between its nodes counts.
+Its cards are one pool (`poolCard`), so the traffic between them is the devices' own and not exchanged. Counting it
+would fail honest replicas, and leaving it out by address would let an outside machine join as a node. -/
 def CertifierSeesImports (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (dev : Readings G P k Obs)
     (cin cout : Obs → ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.ext o x ≤ cin (dev A o x) + cout (dev A o x)

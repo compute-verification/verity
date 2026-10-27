@@ -305,9 +305,10 @@ section Certifier
 /-- **The verdict with the network certifier's counts** (RT-PROTO P2, RT-LEAN L32): the service's verdict, and the
 certifier's signed counts of the bits into (`cin`) and out of (`cout`) the period's devices, as the verdict reads them
 from the devices' readings, are within the caps `E_in` and `E_out`, fixed before the period at served traffic; a
-period past either is refused. The counts exclude the challenger's signed coin stream, which the certifier sees cross
-the boundary (RT-PROTO-2 P18, RT-POOL RP27): the dither coin is the sampling block's `Draw`, an input of its programs,
-not an exchanged bit (`Accel.ext`). -/
+period past either is refused. The counts exclude the challenger's coin stream and nothing else, as
+`Assumptions.CertifierSeesImports` defines it (RT-PROTO-2 P18, RT-POOL RP5, RP27): the dither coin is the sampling
+block's `Draw`, an input of its programs, not an exchanged bit (`Accel.ext`). A replica on several nodes has one pair
+of counts, its certifiers' together (RT-POOL RP9). -/
 def Counted {P : RoundProto} {k : ℕ} {Obs : Type} (verdict : Verdict P k Obs) (cin cout : Obs → ℝ)
     (Ein Eout : ℝ) : Verdict P k Obs :=
   fun o x tr ob => verdict o x tr ob ∧ cin ob ≤ Ein ∧ cout ob ≤ Eout

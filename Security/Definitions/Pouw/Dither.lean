@@ -64,8 +64,8 @@ structure Accel where
   /-- A run's wall time, seconds. -/
   wall : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
   /-- The bits a run exchanges with machines outside the period's devices, in either direction (what the network
-  certifier counts, into and out of the devices), other than the challenger's signed coin stream (RT-PROTO-2 P18,
-  RT-POOL RP27). -/
+  certifier counts, into and out of the devices), other than the challenger's coin stream, which
+  `Assumptions.CertifierSeesImports` defines exactly (RT-PROTO-2 P18, RT-POOL RP5, RP27). -/
   ext : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
   /-- The oracle calls a run makes: SHA-512 evaluations through the machine's oracle-call step. -/
   calls : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
@@ -158,7 +158,8 @@ structure RoundProto where
 
 attribute [instance] RoundProto.instDraw RoundProto.instChk RoundProto.instOrc
 
-/-- A word: integers mod `2^32`. -/
+/-- A word: integers mod `2^32`. Protocol v3.2's proof block checks a 16-bit `T_s` instead (RT-POOL RP18,
+`Guarantees.Dither.WorkSound`'s Open). -/
 abbrev Word : Type := ZMod (2 ^ 32)
 
 /-- **The no-fold protocol's knobs** (PROTO-DESIGN, R-ACCEL-2): `A` is `n × m`, `B` is `m × n'` with `m = nb · L`,

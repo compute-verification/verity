@@ -154,8 +154,9 @@ def ProofSystemSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set
 /-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-host`). **An accepted
 period exchanged at most `K` bits**: the network certifier sits on the period's devices' links, on a machine the
 prover doesn't control, and signs the bits that cross them in either direction (its readings `dev`); the period's
-verdict reads its signed count and refuses a period past `K`. The challenger's signed coin stream isn't counted
-(RT-PROTO-2 P18). Open (RT-PROTO P2, O-IO): the per-period form from the certifier's counts with `n_max · E_out`. -/
+verdict reads its signed count and refuses a period past `K`. The challenger's coin stream isn't counted, and nothing
+else is left out (`CertifierSeesImports`, RT-PROTO-2 P18, RT-POOL RP5). Open (RT-PROTO P2, O-IO): the per-period form
+from the certifier's counts with `n_max · E_out`. -/
 def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
     (dev : Readings G P k Obs) (K : ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x → A.ext o x ≤ K
