@@ -1,4 +1,4 @@
-import Definitions.Core.CreditSize
+import Definitions.Core.Formalism
 import Properties.Pouw.PeriodJ10R
 
 /-!
@@ -7,21 +7,21 @@ import Properties.Pouw.PeriodJ10R
 `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` is stated in words: except with probability
 `δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at least `(1 − ε(j))₊` of the live words of the windows
 before the first refusal. `RightValues` states that bound in AND gates of the registered declared circuit under its
-pinned lowering (`Verity.creditSize lower D`, Daniel, 26 Oct, tentative): except with probability δ_coin + δ_crypto,
+pinned lowering (`Verity.creditSize lower D`): except with probability δ_coin + δ_crypto,
 an accepted period's right values cover at least `(1 − ε_skip)₊·S` AND gates. It is the values guarantee, "declared
 size, values certified".
 
-*Not a compute claim.* Right values aren't work (RT-UNITS-3's U1 and U5): one cheap faulty value upstream can make its
+*Not a compute claim.* Right values aren't work: one cheap faulty value upstream can make its
 whole cone right, and values that read no live coin can be replayed. So this says which of the declared circuit's
-values are certified, never what the prover spent. The served PoUW's compute guarantee is `ServedWork` (WORK-H1),
+values are certified, never what the prover spent. A compute guarantee for the served PoUW is a separate statement,
 which adds SAK to H1.
 
 * `BlockMap`: the public map from words to gates. Proof block `t`'s gates in `lower D`, the registered declaration `D`
-  under the lowering `lower` pinned at registration (the record carries its digest, U8), and word `i`'s bits there,
+  under the lowering `lower` pinned at registration (the record carries its digest), and word `i`'s bits there,
   which are outputs of its block. Each unit is one instance of its `K`'s `PouwH1WindowTile_v1{UNIT=…,K=…}`
   (`Credit.layoutOf`), and its proof block is that instance's gates.
 * `BlockMap.size`: block `t`'s credit size, the AND count (`Verity.Circuit.andSize`) of its gates outside `ledger`,
-  the gates of `lower D` another protocol already credits (sampled proofs certify the served GEMMs too; U7). One
+  the gates of `lower D` another protocol already credits (sampled proofs certify the served GEMMs too). One
   ledger, so no gate is counted twice, and the blocks' sizes sum to at most the credit `Verity.creditSize lower D`
   (`Proofs.Pouw.ServedValues`' `sum_size_le_creditSize`).
 * `liveSize`, `creditedSize`: the credited size `S`, the size of each live block of credited words over the windows
@@ -29,7 +29,8 @@ which adds SAK to H1.
   registration, the live tiles and the verdict.
 * `rightSize`: the size of the blocks the run computed with their late cones, `DrawnLayer.Good`: the blocks whose
   values are right. E1(c) (`accounting-ts-unit-fixed`) says a good block's words are its own right values: its unit
-  and every unit that writes it a value after its coin are computed, none skipped and guessed.
+  and every unit that writes it a value after its coin are computed, none skipped and guessed. "Right" is the
+  accounting model's `DrawnLayer.Good`: nothing yet ties it to the committed values `Credit.window` checks.
 * `sizePerWord`, `epsSkip`, `creditFloor`: the most size a credited word carries, `σ = max_t size_t / words_t` over the
   blocks of credited words. Then `ε_skip = σ·ε(j)·N_live/S`, and the right values must cover `(1 − ε_skip)₊·S` AND
   gates. When every block of credited words carries the same size per word, `S = σ·N_live` and `ε_skip = ε(j)`.
@@ -39,12 +40,12 @@ which adds SAK to H1.
 *No algorithmic premise.* Being about values, it takes no SAK and no premise beyond H1's: `TileDrawIsCoin` (the draw),
 `TileServiceSound` (the proof service's soundness, open), `RegisteredBeforeDraw`, `SaltIsLiveCoin` and
 `SharedNoiseLucks`, with the structure H1 reads (`Scope`, the live share `ρ`, the game and its prefix, the binding at
-`δ_bind`). `SharedNoiseLucks` is its one computational premise: the fold receipts' detection, which R-ACCEL-6 says is
-to be proved in the slot's model or designed away by the no-fold receipt, not assumed. It drops H1's `UnitFixed` (and
+`δ_bind`). `SharedNoiseLucks` is its one computational premise: the fold receipts' detection, which is to be
+proved in the slot's model or designed away by the no-fold receipt, not assumed. It drops H1's `UnitFixed` (and
 the play's `folded` words): it reads the right blocks themselves, not the play's abstract `fixed` count.
 
 Its `δ_s` is δ_coin and its `n·(δ_bind + δ_ks)` is δ_crypto. `BlockMap` is a named map from words to gates of the
-registered circuit, the unit the PoUW component's `Holds` is restated in (LEAN-62).
+registered circuit, the unit the PoUW component's `Holds` is restated in.
 -/
 
 namespace Properties.Pouw.ServedValues
@@ -126,10 +127,10 @@ refusal (`creditedSize`) and `ε_skip = σ·ε(j)·N_live/S` (`epsSkip`, at H1's
 (`DrawnLayer.Good` under `periodMode`) when the run computed it and every block that writes it a value after its coin.
 E1(c) (`accounting-ts-unit-fixed`) reads that as its words being its own right values.
 
-It is a statement about values, not a compute claim: right values aren't work (RT-UNITS-3's U1 and U5). It needs no
+It is a statement about values, not a compute claim: right values aren't work. It needs no
 algorithmic premise, only H1's. `TileDrawIsCoin`, `TileServiceSound`, `RegisteredBeforeDraw` and `SaltIsLiveCoin` are
 about the draw, the service and the salt. `SharedNoiseLucks` is the one computational premise: the fold receipts'
-detection, which R-ACCEL-6 says is to be proved or designed away by the no-fold receipt. -/
+detection, which is to be proved or designed away by the no-fold receipt. -/
 def RightValues : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)

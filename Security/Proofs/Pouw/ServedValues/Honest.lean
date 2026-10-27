@@ -1,16 +1,16 @@
-import Definitions.Core.Boolean
+import Proofs.Core.AndSize
 import Proofs.Pouw.ServedValues
 import Proofs.Pouw.PeriodJ10R.Honest
 
 /-!
 # `RightValues` at an honest period, and against a verifier that accepts everything
 
-LEAN-66's two witnesses of `Properties.Pouw.ServedValues.RightValues`, on `Proofs.Pouw.PeriodJ10R.Honest`'s J10-R
+The two witnesses of `Properties.Pouw.ServedValues.RightValues`, on `Proofs.Pouw.PeriodJ10R.Honest`'s J10-R
 period. Its declared circuit has `N = N_p` committed words of no operands, one a block. The honest registered
 declaration (`andDecl N`) is a Boolean circuit of two input gates and `N` output gates, each the AND of the two
 (`andCircuit N`), and its lowering is itself (`Verity.Declaration.D`). The honest map (`blocks N`) has block `t` AND
 gate `t + 2` and word `t` its one bit. No other protocol credits a gate (the ledger is empty), so each block's credit
-size is `1` (`isAnd_of_and`: C-Flock's `and a b` of two distinct gates is an AND gate).
+size is `1` (`Verity.SecurityProofs.ToCircuitAnd`: C-Flock's `and a b` of two distinct gates is an AND gate).
 
 * `right_values_honest`: the honest period meets every premise of `RightValues`, `j10r_meets`' without
   `UnitFixed`, so the guarantee's bound holds there. The premises are conditional on `Credit.window`'s verdict on the
@@ -26,78 +26,8 @@ open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Proper
 open Properties.Pouw.ServedValues.SecurityProofs Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposePeriod
-open Verity.Circuit (bitZ)
 
 /-! ## The declared Boolean circuit and its blocks -/
-
-/-- Gate `x`'s value at `a`'s bit `p` and `b`'s bit `q`, and `0` elsewhere. -/
-def twoBits {n : ℕ} (a b : Fin n) (p q : Bool) (x : Fin n) : BitVec 1 :=
-  if x = a then BitVec.ofBool p else if x = b then BitVec.ofBool q else 0
-
-theorem twoBits_left {n : ℕ} (a b : Fin n) (p q : Bool) : twoBits a b p q a = BitVec.ofBool p := if_pos rfl
-
-theorem twoBits_right {n : ℕ} {a b : Fin n} (hab : a ≠ b) (p q : Bool) : twoBits a b p q b = BitVec.ofBool q := by
-  rw [twoBits, if_neg hab.symm, if_pos rfl]
-
-theorem twoBits_other {n : ℕ} {a b x : Fin n} (ha : x ≠ a) (hb : x ≠ b) (p q : Bool) : twoBits a b p q x = 0 := by
-  rw [twoBits, if_neg ha, if_neg hb]
-
-theorem bitZ_ofBool (p : Bool) : bitZ (BitVec.ofBool p) = if p then 1 else 0 := by
-  cases p <;> decide
-
-/-- **C-Flock's `and a b` of two distinct gates is an AND gate**: its bit at the four values of `a` and `b` sums to
-`1`, and every affine function's to `0`. -/
-theorem isAnd_of_and (B : Verity.Boolean.Circuit) {g a b : Fin B.N} (hg : B.op g = .and a b) (hab : a ≠ b) :
-    B.toCircuit.IsAnd g := by
-  refine ⟨by simp [Verity.Boolean.Circuit.toCircuit, hg, Verity.Boolean.Op.isInput], ?_⟩
-  rintro ⟨S, c, -, h⟩
-  have key : ∀ p q, bitZ (BitVec.ofBool (p && q)) =
-      c + ∑ x ∈ S, bitZ (twoBits a b p q x) := by
-    intro p q
-    have hpq := h (twoBits a b p q)
-    have hop : B.toCircuit.op g (twoBits a b p q) = BitVec.ofBool (p && q) := by
-      show BitVec.ofBool ((B.op g).apply fun x => (twoBits a b p q x).getLsbD 0) = _
-      rw [hg]
-      show BitVec.ofBool ((twoBits a b p q a).getLsbD 0 && (twoBits a b p q b).getLsbD 0) = _
-      rw [twoBits_left, twoBits_right hab]
-      cases p <;> cases q <;> decide
-    rw [hop] at hpq
-    exact hpq
-  have hsum : ∀ x, bitZ (twoBits a b true true x) + bitZ (twoBits a b true false x) +
-      bitZ (twoBits a b false true x) + bitZ (twoBits a b false false x) = 0 := by
-    intro x
-    by_cases hxa : x = a
-    · rw [hxa, twoBits_left, twoBits_left, twoBits_left, twoBits_left]
-      decide
-    · by_cases hxb : x = b
-      · rw [hxb, twoBits_right hab, twoBits_right hab, twoBits_right hab, twoBits_right hab]
-        decide
-      · rw [twoBits_other hxa hxb, twoBits_other hxa hxb, twoBits_other hxa hxb, twoBits_other hxa hxb]
-        decide
-  have hc : ∀ c : ZMod 2, c + c = 0 := by decide
-  have h1 : (1 : ZMod 2) = c + ∑ x ∈ S, bitZ (twoBits a b true true x) := by
-    rw [← key true true]; decide
-  have h2 : (0 : ZMod 2) = c + ∑ x ∈ S, bitZ (twoBits a b true false x) := by
-    rw [← key true false]; decide
-  have h3 : (0 : ZMod 2) = c + ∑ x ∈ S, bitZ (twoBits a b false true x) := by
-    rw [← key false true]; decide
-  have h4 : (0 : ZMod 2) = c + ∑ x ∈ S, bitZ (twoBits a b false false x) := by
-    rw [← key false false]; decide
-  have hS : ∑ x ∈ S, (bitZ (twoBits a b true true x) + bitZ (twoBits a b true false x) +
-      bitZ (twoBits a b false true x) + bitZ (twoBits a b false false x)) = 0 :=
-    Finset.sum_eq_zero fun x _ => hsum x
-  rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_add_distrib] at hS
-  have h10 : (1 : ZMod 2) = 0 := by
-    calc (1 : ZMod 2) = 1 + 0 + 0 + 0 := by decide
-      _ = (c + ∑ x ∈ S, bitZ (twoBits a b true true x)) +
-          (c + ∑ x ∈ S, bitZ (twoBits a b true false x)) +
-          (c + ∑ x ∈ S, bitZ (twoBits a b false true x)) +
-          (c + ∑ x ∈ S, bitZ (twoBits a b false false x)) := by rw [← h1, ← h2, ← h3, ← h4]
-      _ = (c + c) + (c + c) + (∑ x ∈ S, bitZ (twoBits a b true true x) +
-          ∑ x ∈ S, bitZ (twoBits a b true false x) + ∑ x ∈ S, bitZ (twoBits a b false true x) +
-          ∑ x ∈ S, bitZ (twoBits a b false false x)) := by ring
-      _ = 0 := by rw [hc, hS]; decide
-  exact absurd h10 (by decide)
 
 /-- The first input gate. -/
 def in0 {N : ℕ} : Fin (N + 2) := ⟨0, by omega⟩
@@ -106,13 +36,13 @@ def in0 {N : ℕ} : Fin (N + 2) := ⟨0, by omega⟩
 def in1 {N : ℕ} : Fin (N + 2) := ⟨1, by omega⟩
 
 /-- Two input gates, then `N` AND gates of the two, every one an output. -/
-def andCircuit (N : ℕ) : Verity.Boolean.Circuit where
+def andCircuit (N : ℕ) : FlockSoundness.Audit.Circuit where
   N := N + 2
   op g := if g.val < 2 then .input else .and in0 in1
   topo g a h := by
     by_cases hg : g.val < 2
-    · simp [hg, Verity.Boolean.Op.args] at h
-    · simp only [hg, if_false, Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at h
+    · simp [hg, FlockSoundness.Audit.Op.args] at h
+    · simp only [hg, if_false, FlockSoundness.Audit.Op.args, List.mem_cons, List.not_mem_nil, or_false] at h
       rcases h with rfl | rfl
       · exact Fin.lt_def.mpr (show 0 < g.val by omega)
       · exact Fin.lt_def.mpr (show 1 < g.val by omega)
@@ -131,7 +61,8 @@ theorem op_gateOf {N : ℕ} (t : Fin N) : (andCircuit N).op (gateOf t) = .and in
   · rfl
 
 theorem isAnd_gateOf {N : ℕ} (t : Fin N) : (andDecl N).D.IsAnd (gateOf t) :=
-  isAnd_of_and (andCircuit N) (op_gateOf t) fun h => absurd (congrArg Fin.val h) (by simp [in0, in1])
+  (Verity.SecurityProofs.ToCircuitAnd (andCircuit N) (gateOf t)).2.1 in0 in1 (op_gateOf t)
+    fun h => absurd (congrArg Fin.val h) (by simp [in0, in1])
 
 theorem gateOf_output {N : ℕ} (t : Fin N) : gateOf t ∈ (andDecl N).D.outputs :=
   Finset.mem_filter.mpr ⟨Finset.mem_univ _, show 2 ≤ t.val + 2 by omega⟩
