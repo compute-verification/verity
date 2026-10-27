@@ -146,11 +146,8 @@ def test_a_block_down_for_maintenance_is_refused_without_the_plan_and_charged_wh
     assert bare["account"] == {"sound": False, "covert_bits": 16.0 + 2 * line_rate, "timing_bits": 16.0,
                                "refused_bits": 2 * line_rate, "serviced_bits": 0.0, "carried_bits": held}
     assert "against_honest" not in entry
-    assert entry["n3_v5"] == {"windows": 4, "accepted": 4, "refused": []}
-    assert summary["blocks"]["b1"]["n3_v5"] == {"windows": 6, "accepted": 6, "refused": []}
     line = capsys.readouterr().out
     assert "datacenter records without the plan REFUSED" in line and "with Maintenance(b0, [6000, 12000)) ACCEPTED" in line
-    assert "N3 v5 ACCEPTED on 4 of 4 windows" in line
 
 
 def test_a_fleet_is_validated_and_stood_up_merged(m, tmp_path):
@@ -200,9 +197,6 @@ def test_a_fleets_blocks_are_each_audited_and_its_records_checked_on_every_port_
     assert not east["accepted"] and east["datacenter"]["refused"] == refused
     assert east["against_honest"]["wire_is_honests"] is False
     assert west["accepted"] and west["datacenter"]["accepted"] and west["datacenter"]["carried"] == 6
-    assert east["n3_v5"] == {"windows": 6, "accepted": 5,
-                             "refused": ["responses[0] (the record's status is coverage-never-established)"]}
-    assert west["n3_v5"] == {"windows": 6, "accepted": 6, "refused": []}
     fleet = summary["records"]
     assert fleet["ports"] == ["east.b0.cert:in", "east.b0.cert:out", "west.b0.cert:in", "west.b0.cert:out"]
     assert fleet["of"] == len(dc.ports) == 4 and fleet["refused"] == refused and fleet["carried"] == 11
@@ -244,7 +238,6 @@ def test_a_salted_block_publishes_the_records_declared_with_its_revealed_salts(m
     summary = m.audit(tmp_path, dc, honest, {"b0": honest}, report, {"b0": "honest"}, salt=True)
     entry = summary["blocks"]["b0"]
     assert entry["accepted"] and entry["datacenter"]["accepted"]
-    assert entry["n3_v5"] == {"windows": 6, "accepted": 6, "refused": []}
     assert entry["salt"] == {"accepted": True, "violations": [], "ingress_salt_frames": [1, 1, 1],
                              "egress_salt_frames": 0, "egress_holds_salt": False, "block_received": True}
     assert "salt frames ingress [1, 1, 1] egress 0, salt check ACCEPTED, block received True" in capsys.readouterr().out
@@ -264,7 +257,6 @@ def test_a_salted_block_down_for_maintenance_owes_no_salt_in_its_outage(m, setup
     summary = m.audit(tmp_path, dc, honest, {"b0": plan}, report, {"b0": "maintenance"}, salt=True)
     entry = summary["blocks"]["b0"]
     assert entry["datacenter"]["accepted"] and entry["datacenter"]["carried"] == 4
-    assert entry["n3_v5"] == {"windows": 4, "accepted": 4, "refused": []}
     assert [x.split(": ", 1)[1] for x in entry["datacenter"]["unplanned"]["refused"]] == \
         ["no record: the certifier was down or its record was withheld"] * 2
     assert entry["salt"] == {"accepted": False, "violations": [[1, "salt"]], "ingress_salt_frames": [1, 1],

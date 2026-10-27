@@ -1,6 +1,6 @@
 """[R17 fp8, F-fp8-PLANKEY] The collector's plan key binds the step GEOMETRY, not only (ntok, nreq).
 
-The B8 mixed 1024/128 bounded record run (cp-h100, 2026-09-21 01:28Z) failed closed at steps 35 and 80: both ntok 4 / nreq 4, the same
+The B8 mixed 1024/128 bounded record run failed closed at steps 35 and 80: both ntok 4 / nreq 4, the same
 four live requests 45 decode positions apart, 78,892,288 vs 87,297,280 staged bytes -- the FA3 hidden M1 plane is sized by KV length.
 A plan keyed by counts alone made the second step a hit-plan step with the wrong plan; bounded, there is no host copy to re-hash from.
 """
