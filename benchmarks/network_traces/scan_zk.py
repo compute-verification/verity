@@ -1055,7 +1055,8 @@ def v2_group(M, a, pg: SimpleNamespace, rec: dict, law: dict, want: dict, leaf_l
              members: list[dict], sdirs: dict[str, Path], sessions: list[str], given: dict) -> dict:
     """One-stage v2's group form on the round (`proofs.check_v2_group`, `SampledProofs.OneStageZk.checkGroup`): v1's
     parameters (the round's Program, query, law, ports, leaf layer and partition object) and the audit record's
-    evidence (`given`: its instances, served units and session roots), its verdicts replaced by each member's files,
+    evidence (`given`: its instances, served units and session roots; its statement's timings, floats canonical JSON
+    has no form for, as strings, `replay.strings`), its verdicts replaced by each member's files,
     every member in the Program's order with the auditor's circuit (its pin) and the verifier's own registered file, a
     member with no unit drawn its public file alone. -> the outcome line, or a None verdict and why there is none (the
     stream refused or holds the outcome)."""
@@ -1066,7 +1067,7 @@ def v2_group(M, a, pg: SimpleNamespace, rec: dict, law: dict, want: dict, leaf_l
         return {"verdict": None, "reason": f"no audit record to check: {result.get('outcome')}"}
     params = RP.params(pg.program, pg.query, law, want, leaf_layer, str(Fraction(a.delta).limit_denominator(10**12)),
                        partition=json.loads(pg.partition_file.read_text()))
-    evidence = RP.evidence(result, sessions=sessions, **given)
+    evidence = RP.strings(RP.evidence(result, sessions=sessions, **given))
     ms = [PF.Member(m["name"], PF.Proof(m["dir"] / "circuit.txt", m["dir"] / f"pub-{m['n']}.bin", tuple(
         f.parent for f in sorted((sdirs[m["name"]] / "sessions").glob("*/session.json"))) if m["name"] in sdirs else ()),
         m["pin"], json.loads(m["registered_file"].read_text())) for m in members]
