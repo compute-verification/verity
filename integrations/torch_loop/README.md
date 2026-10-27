@@ -69,7 +69,7 @@ committed row longer than one SHA-512 block.
   (`records_audit.py --registered PIN`) and adds an arm serving other weights, which Lean's registered reads refuse
   (r20261025-220011-057f). `PP_TORCH_LOOP_WIRED=1` audits the wired circuit under `stratified:3` (a unit of every template),
   with an arm whose quantize units' codes are tampered.
-- The demo's seeded weights (CMP-95 interface 1) are `benchmarks/e2e_h200/e2e_h200/served_weights.py`.
+- The demo's seeded weights (CMP-95 interface 1) are `examples/h200/e2e_h200/served_weights.py`.
 
 ## The demo of record
 
