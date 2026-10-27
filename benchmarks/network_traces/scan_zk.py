@@ -102,7 +102,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
 * **What the verifier receives** is scanned for every piece of every unit's rows, inputs and outputs, and every salt
   but ``o0``'s, which the prover sends so the verifier opens each unit's output (`a8.received`), less the pieces public
   anyway (the circuits, zeros, the window's pads and `END` cells) and the sparse pieces (at most one nonzero byte); the
-  prover's instance file, which holds them all, is the control.
+  prover's instance file, which holds them all, is the control. The instance holds each row's u16 words followed by
+  the next row's, so a row's zero-padded last chunk isn't one the control holds; its last 16 bytes, which cover the
+  same tail, are (`leak_scan.public_pieces`' ``fields``).
 """
 from __future__ import annotations
 
@@ -1374,7 +1376,7 @@ def prove(a) -> int:
                 summary["answers"] = answers(at, out, res, Fraction(a.delta), results.get("block"))
                 log(f"answers: link-windows {at.windows}, each {summary['answers']}")
             blobs, held = blobs_of(members)
-            blobs, held, public = LS.public_pieces(M.a8, blobs, held, known(members, at))
+            blobs, held, public = LS.public_pieces(M.a8, blobs, held, known(members, at), fields=True)
             blobs, held, nsparse = sparse(blobs, held)
             inst = out / name / "instances.bin"
             inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
