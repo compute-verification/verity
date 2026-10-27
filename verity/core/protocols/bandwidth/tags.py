@@ -43,7 +43,7 @@ from verity.ml.randomness import frame
 TAG_DOMAIN = b"verity/bandwidth/tag/v1\0"
 LEAF_DOMAIN = b"verity/bandwidth/tag-leaf/v1\0"
 SEED_BYTES = 32
-DIGEST_BYTES = 64
+DIGEST_BYTES = hashlib.sha512().digest_size
 MERSENNE31 = (1 << 31) - 1
 
 
@@ -122,7 +122,7 @@ class Blake3Tag:
 @dataclass(frozen=True, slots=True)
 class RandomOracleTag:
     name: str = "ro-sha512/v1"
-    tag_bytes: int = 64
+    tag_bytes: int = DIGEST_BYTES
     per_leaf: int = 1
     certified: bool = True
 
@@ -142,7 +142,7 @@ class RandomOracleTag:
             raise ValueError("a block has at least one byte")
 
     def guess(self, block_bytes: int) -> Fraction:
-        return Fraction(1, 1 << 512)
+        return Fraction(1, 1 << 8 * DIGEST_BYTES)
 
     def info_bits(self, block_bytes: int) -> int:
         return 8 * block_bytes

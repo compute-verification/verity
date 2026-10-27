@@ -78,6 +78,7 @@ from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, primitive
 from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from . import compile as C
 from . import seeds as SD
@@ -110,7 +111,7 @@ H1_ROWS = C.RowNoise(a=(0, 1), b=(U_BITS, 1))
 #: a lane's fold keys: duo's y_0..7, z_0..7, one block
 KEY_BITS = 512
 #: the salt port's bytes, a SHA-512 digest
-SALT_BYTES = 64
+SALT_BYTES = DIGEST_BYTES["sha512"]
 
 
 @dataclass(frozen=True)

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import gc
+import hashlib
 import json
 import statistics
 import time
@@ -44,7 +45,7 @@ ARMS = {"rows": (256, False), "rows-4k": (4096, False), "rows-layer": (256, True
 #: the logits, and the sampler where the runner has one as a module (the sampled ids come from the committer's `runner.sample` wrap either way)
 UNIT_MODULES = ("model.embed_tokens", "model.norm", "logits_processor", "runner.sampler")
 UNIT_REQUIRED = UNIT_MODULES[:3]
-ROOT_BYTES = 64
+ROOT_BYTES = hashlib.sha512().digest_size
 
 
 def requests_at(wl: dict[str, Any], batch: int, rotate: int) -> list[dict[str, Any]]:

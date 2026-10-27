@@ -17,6 +17,7 @@ import hashlib
 from typing import Any
 
 from verity.ml.circuits.codec import canonical_json, jcs_domain_error
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from .audit import Epoch
 from .protocol import DomainError, PoUWScheme
@@ -25,7 +26,7 @@ from .schemes import SCHEMES
 FORMAT = "verity/pouw/identifier/v1"
 SALT_BYTES = 32
 #: a certified epoch's salt (`audit.Epoch.certified`)
-CERTIFIED_SALT_BYTES = 64
+CERTIFIED_SALT_BYTES = DIGEST_BYTES["sha512"]
 
 
 def workload_json(epoch: Epoch) -> dict[str, Any]:

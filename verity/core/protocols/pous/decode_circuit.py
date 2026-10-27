@@ -48,6 +48,7 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.commitments.gates.sha512 import IV, pad_tail
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from .answer_circuit import PousSha512Compress, compress, from_words
 from .circuit import PousModSquare, _check, _traced_body, bits, column_sum
@@ -175,8 +176,9 @@ def _ctr_sig(S):
 
 
 def _ctr_body(B, S, cv, *rest):
-    out = [B.call(bind(PousSha512CtrChunk, L=S.L, D=S.D, I=i), cv, *rest).refs for i in range(-(-S.NB // 64))]
-    return Coll(bits(512 * len(out)), concat(out))[0:8 * S.NB]
+    n = DIGEST_BYTES["sha512"]
+    out = [B.call(bind(PousSha512CtrChunk, L=S.L, D=S.D, I=i), cv, *rest).refs for i in range(-(-S.NB // n))]
+    return Coll(bits(8 * n * len(out)), concat(out))[0:8 * S.NB]
 
 
 PousSha512Ctr = CompositeDefinition(

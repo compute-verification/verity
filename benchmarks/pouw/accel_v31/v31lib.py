@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import dataclasses
+import hashlib
 import json
 import os
 import subprocess
@@ -58,7 +59,7 @@ import v31
 
 HERE = Path(__file__).resolve().parent
 
-SEED_BYTES = 64 * len(v31.FILL_STREAMS)
+SEED_BYTES = hashlib.sha512().digest_size * len(v31.FILL_STREAMS)
 
 
 def build_lib(out: str, gencode: str = "arch=compute_120a,code=sm_120a", nvcc: str = "nvcc") -> str:

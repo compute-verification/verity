@@ -66,6 +66,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, Sp
 from verity.ml.circuits.program import REGISTRATION, Program, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat, runs
 from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from .. import grind as GR
 from ..protocol import DomainError
@@ -933,7 +934,7 @@ def _check_roots(roots: Sequence[tuple[bytes, bytes]], n: int) -> None:
 
 
 def _check_salt(salt: bytes) -> None:
-    if not isinstance(salt, (bytes, bytearray)) or len(salt) != 64:
+    if not isinstance(salt, (bytes, bytearray)) or len(salt) != DIGEST_BYTES["sha512"]:
         raise ValueError(f"`{SALT}` is the epoch's 64-byte salt")
 
 

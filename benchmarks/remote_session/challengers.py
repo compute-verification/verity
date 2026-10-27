@@ -45,6 +45,7 @@ from typing import Callable, Sequence
 from verity.core.protocols.remote_bandwidth import audit, coins
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.crypto import lms
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -57,7 +58,7 @@ coin link to the host: the verifier's own port is none of them."""
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
     """`challenger.Verify`: LMS over SHA-512 at the key's (64, W, H)."""
-    p = lms.Params(64, key.W, key.H)
+    p = lms.Params(DIGEST_BYTES["sha512"], key.W, key.H)
     try:
         return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
     except ValueError:
