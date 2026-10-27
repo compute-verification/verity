@@ -825,6 +825,29 @@ def test_a_marked_fix_holds_the_culprits_revert_while_it_stays_marked(world, mon
     assert _git(world.origin, "rev-parse", "main^") == tip and any("#2 reverted on `main`" in p for p in h.posts), h.posts
 
 
+def test_a_landed_fix_holds_the_culprits_revert_until_a_run_of_a_main_with_it_is_red_again(world, monkeypatch, tmp_path):
+    """27 Oct 02:07Z: drive told memory-accounting to revert #4798 by hand 19 min after its fix #4902 ('fixes suite
+    benchmarks/pous (#4798)') landed, since a fix counted only while it was an open PR.  A fix that landed after the red tip
+    holds the revert, by its merge's title; once a run of a `main` with it is red again, it no longer does."""
+    from research.drive import FIX_WINDOW_S
+
+    h, tip = _red_landing(world, monkeypatch, tmp_path)
+    world.gh.put(9, world.change({"elsewhere.txt": "9\n"}))
+    world.gh.prs[9] = Q.PR(9, world.gh.prs[9].head, "fixes suite pkg", "Lane `lane-9`.")
+    h.review(9)
+    assert h.tick().startswith("landed #9"), world.logs
+    fixed = _main(world)
+    del world.gh.prs[9]                                                  # landed: no open PR holds the revert any more
+    h.clock += FIX_WINDOW_S + 1
+    h.tick()
+    assert _main(world) == fixed and any("a fix is marked, #9, landed at" in x for x in world.logs), world.logs
+    h.run_state[f"r-post-{len(h.posted) - 1}"] = ("done", 1, None)
+    h.evidence = [_failed_run(tmp_path / "again", "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
+    h.tick()
+    assert any("#2 reverted on `main`" in p for p in h.posts), (h.posts, world.logs)
+
+
 def test_an_unrelated_pr_that_names_the_red_suite_holds_no_revert(world, monkeypatch, tmp_path):
     """26 Oct, top's review of #4737: counting any ready PR whose body names the suite let a suite called `research` be held
     for good by whatever PR mentions research.  Neither the name nor `suite research` without `fixes` holds the revert."""
