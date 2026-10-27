@@ -96,11 +96,11 @@ def bindMessage (id : String) (digests : List (String × ByteArray)) : ByteArray
   id.toUTF8 ++ ByteArray.mk #[0] ++ ("{\"components\":[" ++ ",".intercalate (digests.map fun (i, d) =>
     "{\"commitment\":" ++ Flock.canonStr (Flock.hexOf d) ++ ",\"id\":" ++ Flock.canonStr i ++ "}") ++ "]}").toUTF8
 
-/-- **Equal compositions' commitments bind equal digests, or SHA-512 collides on their two messages**: if `bind` of one
-id over the digests `ds` and over `ds'` agree, then `ds = ds'`, or the two messages it hashed (`bindMessage`) differ and
+/-- **Equal compositions' commitments bind equal digests, or SHA-512 collides on their two messages**: `bind` of one
+id over the digests `ds` and over `ds'` differ, or `ds = ds'`, or the two messages it hashed (`bindMessage`) differ and
 have one compiled SHA-512. A finder that holds both lists outputs that pair. -/
 def BindCollision : Prop :=
-  ∀ (id : String) (ds ds' : List (String × ByteArray)), bind id ds = bind id ds' →
+  ∀ (id : String) (ds ds' : List (String × ByteArray)), bind id ds ≠ bind id ds' ∨
     ds = ds' ∨ (bindMessage id ds ≠ bindMessage id ds' ∧
       Flock.Sha512.hash (bindMessage id ds) = Flock.Sha512.hash (bindMessage id ds'))
 

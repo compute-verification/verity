@@ -291,15 +291,18 @@ theorem msg_inj (id : String) {B B' : String}
 end BindInj
 
 theorem bindCollision : BindCollision := by
-  intro id ds ds' e
-  by_cases hd : ds = ds'
-  · exact Or.inl hd
-  · refine Or.inr ⟨fun hm => hd ?_, e⟩
-    unfold bindMessage at hm
-    refine BindInj.body_inj Flock.canonStr Flock.hexOf
-      (fun _ _ _ _ h => Properties.Pouw.LiveSalt.Canon.canonStr_split h) (fun a b h => ?_) (BindInj.msg_inj id hm)
-    have e := FlockComplete.JsonRT.unhex_hexOf a
-    rw [h, FlockComplete.JsonRT.unhex_hexOf] at e
-    exact (Except.ok.inj e).symm
+  intro id ds ds'
+  by_cases e : bind id ds = bind id ds'
+  · refine Or.inr ?_
+    by_cases hd : ds = ds'
+    · exact Or.inl hd
+    · refine Or.inr ⟨fun hm => hd ?_, e⟩
+      unfold bindMessage at hm
+      refine BindInj.body_inj Flock.canonStr Flock.hexOf
+        (fun _ _ _ _ h => Properties.Pouw.LiveSalt.Canon.canonStr_split h) (fun a b h => ?_) (BindInj.msg_inj id hm)
+      have e := FlockComplete.JsonRT.unhex_hexOf a
+      rw [h, FlockComplete.JsonRT.unhex_hexOf] at e
+      exact (Except.ok.inj e).symm
+  · exact Or.inl e
 
 end Properties.Composition
