@@ -3,12 +3,14 @@
 the compiled verifier accepted: `IrShaped` and `honest_half`'s `hTops` by `vstar-difftest`'s ``ir_shaped`` on the
 stager's inputs at the run (`test_vstar_in_difftest`'s ``src``, read from the run's inner session), and
 `HonestWitSatisfies` by ``vstar-trace --sat`` on every V* part's verifier files at its session's draw
-(`test_vstar_trace_difftest`'s check). Skips unless ``VERITY_VSTAR_OUTER`` names such a tree."""
+(`test_vstar_trace_difftest`'s check), and `NoCollAt` by ``vstar-trace --nocoll`` over every part's hm96 calls and its
+setup's SHA-512 inputs. Skips unless ``VERITY_VSTAR_OUTER`` names such a tree."""
 
 from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -109,3 +111,32 @@ def test_the_deployed_runs_parts_satisfy(lean):
         checked[nm] = {k: r[k] for k in ("m", "k_log", "blocks", "regions", "region_bits")}
     print(json.dumps({"satisfied": checked}))
     assert all(any(c.startswith(k) for c in checked) for k in ("L", "cap", "alg-")), checked
+
+
+def nocoll(lean: Path, parts: dict[str, Path], *extra: str) -> list[dict]:
+    """``vstar-trace --nocoll`` over ``parts``: a line a part, then the line over all of them."""
+    argv = [str(lean), "--nocoll", *extra,
+            *(f"{nm}={d}={OUTER / 'v-sess' / nm / 'session.json'}" for nm, d in parts.items())]
+    p = subprocess.run(argv, capture_output=True, text=True, check=False)
+    assert p.returncode == 0, p.stderr[-2000:]
+    return [json.loads(line) for line in p.stdout.splitlines()]
+
+
+@pytest.mark.slow
+def test_the_deployed_runs_calls_have_no_collision(lean):
+    """`RecDeploy.NoCollAt` at a deployed run (``VERITY_VSTAR_OUTER``): at every V* part, and over all of them, no SHA-512
+    output has two different inputs among the hm96 calls its trace computes (each row's digest the chain's last
+    compression) and the SHA-512 inputs its setup hashes at its session's draw. Not vacuous: a planted pair (a recorded
+    output under an input one byte longer) is found."""
+    parts = outer_parts(OUTER)
+    *each, total = nocoll(lean, parts)
+    for r in [*each, total]:
+        print(json.dumps({"nocoll": r}), flush=True)
+    assert [r["part"] for r in each] == list(parts), each
+    assert all(r["coll"] is False and r["chain_bad"] == 0 and r["hm96_calls"] > 0 and r["setup_calls"] > 0 and r["drawn"]
+               for r in each), each
+    assert total["ok"] is True and total["coll"] is False and total["calls"] == sum(r["calls"] for r in each), total
+    small = min(parts, key=lambda nm: (parts[nm] / "inst.bin").stat().st_size)
+    *_, planted = nocoll(lean, {small: parts[small]}, "--plant")
+    print(json.dumps({"nocoll_planted": planted}), flush=True)
+    assert planted["ok"] is False and planted["coll"] is True and planted["first_coll"] is not None, planted

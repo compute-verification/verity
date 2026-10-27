@@ -1,6 +1,8 @@
 import VStar.Trace
 import Flock.ProvedScope
 import Flock.RecCoins
+import Flock.With.Setup
+import Flock.With.Log
 
 /-!
 # `vstar-trace`: the trace assigner's side of its difftest
@@ -15,6 +17,10 @@ deployed prover assigns; `tests/test_vstar_trace_difftest.py` holds the two equa
 `vstar-trace --sat --circuit F --public F --instances F [--partition F] [--program F]` checks that trace against the
 table `verify --zk` sets up on the verifier's files (`TablesSat`, below), the witness run `HonestWitSatisfies` cites;
 `--session F` sets it up at the draw `verify` reads from that session's record (`RecCoins.recordDraw`).
+
+`vstar-trace --nocoll [--plant] NAME=DIR=SESSION ...` checks `RecDeploy.NoCollAt` at each part and over all of them:
+no SHA-512 output with two different inputs among the hm96 calls the part's trace computes and the SHA-512 inputs its
+setup hashes (`partCalls`); `--plant` adds one such pair, the control.
 -/
 
 namespace VStar.TraceCli
@@ -283,10 +289,126 @@ def sat (args : List String) : IO UInt32 := do
      ("region_bad", (bad.region : Json)), ("first", first), ("ms", (((← IO.monoMsNow) - t0 : Nat) : Json))])))
   return 0
 
+/-! ## `--nocoll`: no SHA-512 digest with two inputs (`RecDeploy.NoCollAt`) -/
+
+/-- SHA-512's chaining words as its digest's bytes (big-endian). -/
+def beBytes (ws : Array UInt64) : ByteArray :=
+  ⟨ws.flatMap fun w => (Array.range 8).map fun j => (w >>> (8 * (7 - j)).toUInt64).toUInt8⟩
+
+/-- Instance `i`'s port-`p` hm96 calls as its slots compute them: the salt's `SHA-512(saltPrefix ‖ y)` and the row's
+`SHA-512(prefix ‖ row)` (`HmRow.prefixOf`, the message `Trace.chain` compresses), with whether the row's digest is the
+chain's last compression, the one the port's `hm96` slot computes. -/
+def hmCallsAt (c : Circuit) (pin : In.PartIn) (p i : Nat) : Array (ByteArray × ByteArray) × Bool :=
+  let port := c.ports.getD p default
+  let (msg, cvs) := Trace.chain c pin p i
+  let rowIn := HmRow.prefixOf port ++ msg.extract 0 port.bytes
+  let d := Sha512.hash rowIn
+  let sIn := Hm96.Default512.saltPrefix ++ (Trace.portIn c pin p i).2
+  (#[(sIn, Sha512.hash sIn), (rowIn, d)], (beBytes (Sha512.compress cvs.back! msg (128 * port.chunks))).data == d.data)
+
+/-- `(input, output)` pairs by output (hex): `findColl`'s search, the first output with two different inputs kept. -/
+structure Calls where
+  calls : Nat := 0
+  byOut : Std.HashMap String ByteArray := {}
+  others : Nat := 0
+  coll : Option (String × Nat × Nat) := none
+
+def Calls.add (s : Calls) (u d : ByteArray) : Calls :=
+  let k := hexOf d
+  let s := { s with calls := s.calls + 1 }
+  match s.byOut[k]? with
+  | none => { s with byOut := s.byOut.insert k u }
+  | some u' => if u'.data == u.data then s else { s with others := s.others + 1, coll := s.coll <|> some (k, u'.size, u.size) }
+
+def Calls.json (s : Calls) : List (String × Json) :=
+  [("calls", (s.calls : Json)), ("distinct_digests", (s.byOut.size : Json)),
+   ("distinct_inputs", ((s.byOut.size + s.others : Nat) : Json)), ("coll", Json.bool s.coll.isSome),
+   ("first_coll", match s.coll with
+     | some (k, a, b) => Json.mkObj [("digest", (k : Json)), ("sizes", Json.arr #[(a : Json), (b : Json)])]
+     | none => Json.null)]
+
+def nocollUsage : String :=
+  "usage: vstar-trace --nocoll [--plant] NAME=DIR=SESSION ...  (DIR: circuit.txt, pub.bin, inst.bin, partition.json, program.json)"
+
+/-- One part's calls: every hm96 salt and row call its circuit computes at its trace's rows (every port of every
+instance, padding ones included, a superset of the calls `layR` records there), then every SHA-512 input
+`flock-verify`'s setup hashes at the part's statement and session's draw (`Stmt.setupTablesWith` under the logging
+oracle, `vcallsAt`'s `D.setup`). -/
+def partCalls (dir session : String) : IO (Except String (Array (ByteArray × ByteArray) × List (String × Json))) := do
+  let cb ← IO.FS.readBinFile s!"{dir}/circuit.txt"
+  let pb ← IO.FS.readBinFile s!"{dir}/pub.bin"
+  let ib ← IO.FS.readBinFile s!"{dir}/inst.bin"
+  let program ← IO.FS.readBinFile s!"{dir}/program.json"
+  let some partition := (Json.parse (← IO.FS.readFile s!"{dir}/partition.json")).toOption
+    | return .error "partition.json: not JSON"
+  let draw := RecCoins.recordDraw (← IO.FS.readFile session)
+  let coins := Coins.tree (Zk.coinSpec (Tags.circuit.tableNames 1))
+  let tags := Zk.tags (Tags.circuit.withCoins coins) (Zk.maskLogOf cb) 1
+  let t0 ← IO.monoMsNow
+  let (res, log) := (Flock.Stmt.setupTablesWith (Flock.Hashes.logged Sha512.hash) tags cb pb coins 1 [] draw (some partition)
+    (some program)).go #[]
+  let t1 ← IO.monoMsNow
+  let sts ← match res with
+    | .ok (_, sts) => pure sts
+    | .error e => return .error s!"setup: {e}"
+  if sts.size != 1 then return .error s!"setup: {sts.size} tables"
+  let c ← match ProvedScope.circuitOf Tags.circuit cb [] with
+    | .ok c => pure c
+    | .error e => return .error s!"circuit: {e}"
+  let pin ← match partInOf c ib with
+    | .ok p => pure p
+    | .error e => return .error e
+  if !Trace.supported c then return .error "the circuit is outside what the trace assigner mirrors"
+  let n := 2 ^ (Trace.m c pin - c.kLog) * c.g
+  let mut out : Array (ByteArray × ByteArray) := #[]
+  let mut chainBad := 0
+  for i in [0:n] do
+    for p in [0:c.ports.size] do
+      let (cs, ok) := hmCallsAt c pin p i
+      out := out ++ cs
+      unless ok do chainBad := chainBad + 1
+  let hm := out.size
+  out := out ++ log.map fun u => (u, Sha512.hash u)
+  pure (.ok (out, [("instances", (Trace.count pin : Json)), ("slots", (n : Json)), ("ports", (c.ports.size : Json)),
+    ("hm96_calls", (hm : Json)), ("setup_calls", (log.size : Json)), ("chain_bad", (chainBad : Json)),
+    ("drawn", Json.bool draw.isSome), ("setup_ms", ((t1 - t0 : Nat) : Json))]))
+
+/-- `--nocoll`: per part, and over all the parts together, no output of SHA-512 with two different inputs among
+`partCalls`. `--plant` adds to the first part one call with a recorded output and an input one byte longer: the
+control, which must be found. -/
+def nocoll (args : List String) : IO UInt32 := do
+  let plant := args.contains "--plant"
+  let parts := args.filter fun a => !a.startsWith "--"
+  if parts.isEmpty then IO.eprintln nocollUsage; return 1
+  let mut all : Calls := {}
+  let mut ok := true
+  let mut first := true
+  for a in parts do
+    let (nm, dir, session) ← match a.splitOn "=" with
+      | [nm, d, s] => pure (nm, d, s)
+      | _ => IO.eprintln nocollUsage; return 1
+    let (cs, info) ← match ← partCalls dir session with
+      | .ok r => pure r
+      | .error e => IO.eprintln s!"{nm}: {e}"; return 2
+    let cs := if plant && first then match cs[0]? with
+      | some (u, d) => cs.push (u.push 0, d)
+      | none => cs
+      else cs
+    first := false
+    let one := cs.foldl (fun s (u, d) => s.add u d) ({} : Calls)
+    all := cs.foldl (fun s (u, d) => s.add u d) all
+    let bad := info.any fun (k, v) => k == "chain_bad" && v != (0 : Json)
+    ok := ok && one.coll.isNone && !bad
+    IO.println (Json.compress (Json.mkObj ([("part", (nm : Json))] ++ one.json ++ info)))
+  ok := ok && all.coll.isNone
+  IO.println (Json.compress (Json.mkObj ([("part", Json.str "all"), ("ok", Json.bool ok), ("planted", Json.bool plant)] ++ all.json)))
+  return 0
+
 end VStar.TraceCli
 
 def main (args : List String) : IO UInt32 :=
   match args with
   | "--sat" :: rest => VStar.TraceCli.sat rest
+  | "--nocoll" :: rest => VStar.TraceCli.nocoll rest
   | [c, i] => VStar.TraceCli.run c i
   | _ => do IO.eprintln s!"usage: vstar-trace CIRCUIT INST\n       {VStar.TraceCli.satUsage}"; return 1
