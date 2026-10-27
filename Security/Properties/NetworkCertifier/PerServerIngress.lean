@@ -311,8 +311,8 @@ averaged over the tape. At most `Σ_i ε_i` where every tape's error at window `
 noncomputable def periodErr {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     [Zero Col] (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (δ : ℝ) (decode : List (ℕ × Col) → List T)
     (ops : Stmt → List (Opening Bool)) {n : ℕ} {kw : Fin n → ℕ} {Ω : Type} [Fintype Ω]
-    (xw : (i : Fin n) → WindowTape Coin kw Ω i → Claims.Msg) (P : (i : Fin n) → Claims.Prover (WindowTape Coin kw Ω i)) :
-    ℝ :=
+    (xw : (i : Fin n) → WindowTape Coin kw Ω i → Claims.Msg)
+    (P : (i : Fin n) → Claims.Prover (WindowTape Coin kw Ω i)) : ℝ :=
   ∑ i, Claims.Ex fun t : WindowTape Coin kw Ω i => windowErr H D δ decode ops (xw i t) ((P i).comap fun _ => t)
 
 /-- **`chk`'s acceptance is sound for the period's ingress**: over the period's coins, `chk` accepts the commitment
