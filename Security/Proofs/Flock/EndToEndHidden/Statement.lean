@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 import Proofs.Flock.Soundness.Assumptions.Files
+import Proofs.Flock.Bridge.RowsC
 import Flock.Desc
 
 /-!
@@ -33,19 +34,23 @@ open scoped ENNReal
 
 open Classical in
 /-- **C-Flock's one-stage audit under hidden outputs, at the model level.** `EndToEndHidden`'s count curve over the
-values the verifier parses rather than its files: at the hidden-output tables of any statement (`planZHJ dj y₀`, at a
-reference setup `y₀` of table 0), for any partition `P` of a circuit into `n` units whose units read only their own
-gates and input gates, any decoder the tables lower soundly to (`LoweringSoundZK`), any value binding `vb` of `P`'s
-committed wires, any law `L` over the units and any prover `σ` of the audit game,
+values the verifier parses rather than its files, at the registrant's rows: at the hidden-output tables of any statement
+(`planZHJ dj y₀`, at a reference setup `y₀` of table 0), for any partition `P` of a circuit into `n` units whose units
+read only their own gates and input gates, any decoder the tables lower soundly to (`LoweringSoundZK`), any value
+binding `vb` of `P`'s committed wires whose openings in every satisfying witness are canonical at `canon`
+(`OpeningsCanon`), any set `isRead` of registered reads with the registrant's opening `wo` at each, any law `L` over the
+units and any prover `σ` of the audit game,
 $$\Pr[\text{the session accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
-  \mathrm{miss}_L(K_0) + \varepsilon_{ks} + \delta_{link},$$
-with "wrong" `EndToEndHidden`'s (`wrongRegZ`, in the committed transcript fixed at registration, `XplurZC`) and `ε_ks`,
-`δ_link` its additive terms (`ksAvgPrZ`, `linkPrZC`), each a fixed finder's probability of outputting a SHA-512
-collision.
+  \mathrm{miss}_L(K_0) + \varepsilon_{ks} + (\delta_{link} + \delta_{rows}),$$
+with a unit wrong, in the committed transcript fixed at registration (`XplurZC`), when it is wrong on the registration
+with canonical openings (`wrongRegZc`) or carries, on a committed wire at a registered read, a bit other than the
+registrant's row's (`rowsWrongZ`), and `ε_ks`, `δ_link`, `δ_rows` its additive terms (`ksAvgPrZ`, `linkPrZC`,
+`rowsPrZC`), each a fixed finder's probability of outputting a SHA-512 collision.
 
-It reads no file and takes no named assumption. `EndToEndHidden` is this statement at the deployed files
-(`Assumptions.Flock.DeployedFilesHJ`), the key program's partition, the binding of the public file's rows and the live
-session, which A3 and `live-verifier` tie to the audit game. -/
+It reads no file and takes no named assumption. `EndToEndHidden` is this statement with no registered read and every
+opening canonical, where "wrong" contains `EndToEndHidden`'s (`wrongRegZ_subset_wrongRegZc`) and `δ_rows = 0`
+(`rowsPrZC_noReads`), at the deployed files (`Assumptions.Flock.DeployedFilesHJ`), the key program's partition, the
+binding of the public file's rows and the live session, which A3 and `live-verifier` tie to the audit game. -/
 def EndToEndHiddenModel : Prop :=
   ∀ (n : ℕ) (Reg : Type) (I : Inputs) (mPts : ℕ)
     -- the hidden-output tables: the draw file at each draw, and table 0's reference setup
@@ -57,6 +62,9 @@ def EndToEndHiddenModel : Prop :=
     (Dh : Type) (Hc : List UInt8 → Dh) (vb : ValueBindingZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) decode Hc)
     (_hlow : Discharge.ZkSession.LoweringSoundZK execArith P (planZHJ dj y₀) (tabZHJ dj y₀) decode)
     (_hown : ∀ u, P.ReadsOwn u)
+    -- the canonical openings, and the registered reads with the registrant's openings
+    (canon : Fin C.N → vb.Opening → Prop) (_hcan : OpeningsCanon execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb canon)
+    (isRead : vb.Pos → Prop) (wo : vb.Pos → vb.Opening)
     -- the law
     (L : Law n)
     -- the count curve's parameters
@@ -65,11 +73,14 @@ def EndToEndHiddenModel : Prop :=
     -- the prover
     (σ : Strategy (audit L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)))),
     prob (fun o => o.1 = true ∧
-        K₀ ≤ (wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
-          (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
+        K₀ ≤ (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb canon (reg σ)
+            (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw) ∪
+          rowsWrongZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb isRead wo
+            (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (audit L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀))) σ ≤
       L.miss K₀ + ksAvgPrZ execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) +
-        linkPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb k Rw M ρ (reg σ) (cont σ)
+        (linkPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb k Rw M ρ (reg σ) (cont σ) +
+          rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb isRead wo k ρ (reg σ) (cont σ))
 
 open Classical in
 /-- **C-Flock's one-stage audit, end to end, under hidden outputs.** As in `EndToEnd`, over a statement whose outputs

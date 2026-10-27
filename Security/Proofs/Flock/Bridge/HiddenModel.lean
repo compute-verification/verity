@@ -33,16 +33,21 @@ def EndToEndHiddenModelAll : Prop :=
     (Dh : Type) (Hc : List UInt8 → Dh) (vb : ValueBindingZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) decode Hc)
     (_hlow : Discharge.ZkSession.LoweringSoundZK execArith P (planZHJ dj y₀) (tabZHJ dj y₀) decode)
     (_hown : ∀ u, P.ReadsOwn u)
+    (canon : Fin C.N → vb.Opening → Prop) (_hcan : OpeningsCanon execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb canon)
+    (isRead : vb.Pos → Prop) (wo : vb.Pos → vb.Opening)
     (L : Law n)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (K₀ : ℕ)
     (σ : Strategy (audit L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)))),
     prob (fun _ => True ∧
-        K₀ ≤ (wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
-          (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
+        K₀ ≤ (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb canon (reg σ)
+            (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw) ∪
+          rowsWrongZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb isRead wo
+            (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (audit L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀))) σ ≤
       L.miss K₀ + ksAvgPrZ execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) +
-        linkPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb k Rw M ρ (reg σ) (cont σ)
+        (linkPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb k Rw M ρ (reg σ) (cont σ) +
+          rowsPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb isRead wo k ρ (reg σ) (cont σ))
 
 end Flock.Guarantees
 

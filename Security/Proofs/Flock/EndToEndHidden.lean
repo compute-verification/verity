@@ -3,10 +3,11 @@ import Proofs.Flock.EndToEndHidden.Statement
 /-!
 # Proof of C-Flock's end-to-end guarantee under hidden outputs
 
-`Flock.SecurityProofs.EndToEndHiddenModel : Flock.Guarantees.EndToEndHiddenModel` is `ZkLink.zk_flock_countPr_reg` at
-the hidden-output tables, its knowledge term at the finders' collision probabilities (`ksAvgZC_le_pr`).
+`Flock.SecurityProofs.EndToEndHiddenModel : Flock.Guarantees.EndToEndHiddenModel` is `ZkLink.zk_flock_countPr_rowsC`
+at the hidden-output tables, its knowledge term at the finders' collision probabilities (`ksAvgZC_le_pr`).
 `Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden` is its corollary (`EndToEndHidden_of_model`):
-the model at the key program's partition and the public file's rows, through the live session
+the model with no registered read (`EndToEndHiddenModel_noReads`) at the key program's partition and the public file's
+rows, through the live session
 (`zk_headline_exec_tables`), with its miss term in closed form (`Audit.Law.subset_miss`), and its knowledge and link
 terms the finders' collision probabilities (`ksAvgPrZ`, `linkPrZC`).
 `Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn` is
@@ -25,10 +26,40 @@ open FlockSoundness.Discharge FlockSoundness.Discharge.ZkLink FlockSoundness.Dis
   FlockSoundness.Discharge.ZkHidden in
 /-- **C-Flock's one-stage audit under hidden outputs, at the model level.** -/
 theorem EndToEndHiddenModel : Flock.Guarantees.EndToEndHiddenModel := by
-  intro n Reg I mPts dj S₀ d₀ y₀ C P decode Dh Hc vb hlow hown L k Rw M hk hRw hM ρ hρ hr K₀ σ
-  exact (zk_flock_countPr_reg execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb hlow hown hRw hM hρ hr
-    (jointZC_ksBound execArith execArith_correct hs512 (planZHJ dj y₀) hk) K₀ σ).trans
+  intro n Reg I mPts dj S₀ d₀ y₀ C P decode Dh Hc vb hlow hown canon hcan isRead wo L k Rw M hk hRw hM ρ hρ hr K₀ σ
+  exact (zk_flock_countPr_rowsC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb canon isRead wo hlow hown hcan
+    hRw hM hρ hr (jointZC_ksBound execArith execArith_correct hs512 (planZHJ dj y₀) hk) K₀ σ).trans
     (add_le_add (add_le_add le_rfl (ksAvgZC_le_pr execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ))) le_rfl)
+
+open FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec FlockSoundness.Refine
+  FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
+  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden in
+open Classical in
+/-- **`EndToEndHiddenModel` with no registered read**: with every opening canonical and no registered read, a unit
+wrong on the registration (`wrongRegZ`) is wrong in the model (`wrongRegZ_subset_wrongRegZc`) and `δ_rows = 0`
+(`rowsPrZC_noReads`), so the count curve at `wrongRegZ` has the bound `miss + ε_ks + δ_link`. -/
+theorem EndToEndHiddenModel_noReads (hm : Flock.Guarantees.EndToEndHiddenModel) (n : ℕ) (Reg : Type) (I : Inputs)
+    (mPts : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
+    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (C : FlockSoundness.Audit.Circuit) (P : FlockSoundness.Audit.Partition C n)
+    (decode : ZkSession.DecoderZK (C := C) (planZHJ (Reg := Reg) dj y₀) (tabZHJ dj y₀))
+    (Dh : Type) (Hc : List UInt8 → Dh) (vb : ValueBindingZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) decode Hc)
+    (hlow : ZkSession.LoweringSoundZK execArith P (planZHJ dj y₀) (tabZHJ dj y₀) decode)
+    (hown : ∀ u, P.ReadsOwn u) (L : Law n)
+    (k Rw M : ℕ) (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) (ρ : ℝ) (hρ : ρ < 1)
+    (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (K₀ : ℕ)
+    (σ : Strategy (audit L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)))) :
+    prob (fun o => o.1 = true ∧
+        K₀ ≤ (wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+          (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
+        (audit L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀))) σ ≤
+      L.miss K₀ + ksAvgPrZ execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) +
+        linkPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb k Rw M ρ (reg σ) (cont σ) := by
+  have h := hm n Reg I mPts dj S₀ d₀ y₀ C P decode Dh Hc vb hlow hown (fun _ _ => True)
+    (fun _ _ _ _ _ _ _ _ => trivial) (fun _ => False) (fun _ => default) L k Rw M hk hRw hM ρ hρ hr K₀ σ
+  rw [rowsPrZC_noReads, add_zero] at h
+  refine le_trans (Game.prob_mono (fun o ho => ⟨ho.1, ho.2.trans (Finset.card_le_card ?_)⟩) _ _) h
+  exact (wrongRegZ_subset_wrongRegZc execArith P _ _ vb _ _ _).trans Finset.subset_union_left
 
 open FlockSoundness.Discharge FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden in
@@ -44,7 +75,7 @@ theorem EndToEndHidden_of_model (hm : Flock.Guarantees.EndToEndHiddenModel) : Fl
     (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
       (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
         fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ _ _
-    ((hm n Reg I _ dj S₀ d₀ y₀ _ P _ _ _ vb
+    ((EndToEndHiddenModel_noReads hm n Reg I _ dj S₀ d₀ y₀ _ P _ _ _ vb
       (ZkSession.loweringSoundZK_of_place execArith _ (planZHJ dj y₀) (tabZHJ dj y₀) (placeZHJ dj y₀ ht hc hscope hU))
       (Layout.keyProg_readsOwn D.unroll hU n _) L k Rw M hk hRw hM ρ hρ hr K₀ σ).trans
       (add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀) le_rfl) le_rfl))
