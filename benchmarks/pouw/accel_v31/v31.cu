@@ -1899,7 +1899,8 @@ static std::string env_str(const char* name, const char* dflt) {
 // so no wrap kernel runs and no dO is read), V31_WCW its columns a CTA (256 where N allows, or 128; 1 to 4);
 // V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small);
 // V31_PF: each row's next 128-byte block prefetched as its compression starts (0 none, 1 into L1, 2 into L2); V31_DIAG 1:
-// the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl). Under -DV31_WG (sm_90a):
+// the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl, Fill::pend's 1 and 2).
+// Under -DV31_WG (sm_90a):
 // V31_GEMM 1, the protocol's and the plain GEMM on warpgroup MMAs (wg_proto.cuh, the bench's wgl arm wgmma.linear itself),
 // V31_WGBN its tiles' columns (256 where N allows, or 128), V31_CM where it keeps the tail's low halves (0 registers, 1 an
 // L2 scratch slot a CTA), V31_WGG its raster's tile rows a group, V31_RP 3 the register plan that leaves room for a
@@ -2329,7 +2330,8 @@ struct Fill {
   Lanes pl;
   Knobs kn;
   u64 calls = 0;         // calls issued; call c's values are in copy c & 1
-  int pend = -1;         // V31_SCHED 1: the copy whose commit waits for the next call's form
+  int pend = -1;         // V31_SCHED 1: the copy whose commit waits for the next call's form; 2: a call's GEMM waits for
+                         // the previous call's commit (its coins and form don't), so the two never share the SMs
   u64 wseed[3][8] = {};  // the d_B, U and P seeds W' was formed from
   bool wformed = false;
   u64* ksw[2] = {nullptr, nullptr};   // pinned: Ks as C.ks, C.ks_m8 (a copy each, for the async copy)
@@ -2646,6 +2648,7 @@ struct Fill {
         pend = -1;
       }
     }
+    if (kn.sched == 2 && calls) CK(cudaStreamWaitEvent(s0, ev_done[b ^ 1]));
     gemm(s0, b);
     if (ch.kind == 2 || ch.kind == 3) {
       const int stride = std::max(1, (int)std::lround(1.0 / ch.frac));
