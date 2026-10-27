@@ -33,7 +33,7 @@ their frames back to back, then the replies in order, the wire and the release l
 raises `CoinError` on a refusal, a broken stream, or an opening that isn't the coin asked for opened against the
 commitment after `after` (`live_reason`), and refuses every coin after.  A client whose session the gate has just opened
 connects with `connect_when_listening`: until the session's tunnel listens, the connection is refused before any hello,
-so it is tried again, up to `TUNNEL_WAIT_S`; nothing else is retried.
+so it is tried again, up to `TUNNEL_WAIT_S`, then refused; nothing else is retried.
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
 bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head infra published
@@ -396,16 +396,17 @@ def connect_when_listening(address: str, secret: bytes | None, connect: Callable
                            wait_s: float = TUNNEL_WAIT_S, clock: Callable[[], float] = time.monotonic,
                            sleep: Callable[[float], None] = time.sleep) -> Any:
     """The session's client at `address` once something listens there. A refused connection sends no hello and opens no
-    coin, so it is tried again every half second for up to `wait_s`; any other failure raises at once.  `connect` is
-    `RemoteChallenger.connect` by default, read at the call."""
+    coin, so it is tried again every half second for up to `wait_s`, then refused (`CoinError`); any other failure raises
+    at once.  `connect` is `RemoteChallenger.connect` by default, read at the call."""
     connect = connect or RemoteChallenger.connect
     deadline = clock() + wait_s
     while True:
         try:
             return connect(address, secret)
-        except ConnectionRefusedError:
+        except ConnectionRefusedError as e:
             if clock() >= deadline:
-                raise
+                raise CoinError(f"nothing listened at {address} within {wait_s} s of the session's open (its tunnel never "
+                                "came up); no hello was sent and no coin opened") from e
             sleep(0.5)
 
 

@@ -1129,8 +1129,13 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
             raise ConnectionRefusedError(at)
         return reached(at, secret)
     monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(connect))
+    now = [0.0]
+
+    def wait(s):
+        waits.append(s)
+        now[0] += s
     client, c, opening, salt, carried = PHW.open_session("pouw:test", gate, sid, root, 2, at="vy-challenger-1:1",
-                                                         wait=waits.append)
+                                                         wait=wait, clock=lambda: now[0])
     client.close()
     r = PS.epoch_open_root(root, 2)
     assert host.ended() is None and c == host.challenger.commitment and Wd.salt_epoch_reason(c) is None
@@ -1150,6 +1155,32 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
                          root, at=AUDITOR, wait=waits.append)
     assert h1.ended() is None and R.released_roots(h1.directory / R.RELEASES, h1.challenger.commitment) == {
         Wd.SALT: (), Wd.DRAW: (), Wd.ROUND: ()}
+
+
+def test_a_session_whose_tunnel_never_listens_is_refused_by_name_once_its_wait_is_over(monkeypatch):
+    """`pouw_h1_window.opened` on the injected clock: a session the gate opened whose port refuses every connection is
+    tried every half second until `remote.TUNNEL_WAIT_S` has passed, then refused (`CoinError`, naming the address)
+    with no hello sent and no coin opened."""
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    sid, root, tries, waits, now = CH.session_id(1), PS.epoch_open_root(bytes(range(64)), 0), [], [], [0.0]
+
+    def gate(session, r):
+        return {"session": session, "seq": 0, "root": r, "commitment": "c0" * 64, "port": 7811, "secret": "ab" * 32}
+
+    def refused(cls, at, secret=None):
+        tries.append((at, secret))
+        raise ConnectionRefusedError(at)
+
+    def wait(s):
+        waits.append(s)
+        now[0] += s
+    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(refused))
+    with pytest.raises(CoinError, match=f"pouw:test: nothing listened at vy-challenger-1:7811 within {R.TUNNEL_WAIT_S} s"):
+        PHW.opened("pouw:test", "vy-challenger-1:1", 0, gate, sid, root, "salt epoch 0's root", wait,
+                   Wd.salt_epoch_reason, lambda: now[0])
+    assert waits == [0.5] * (2 * R.TUNNEL_WAIT_S)
+    assert tries == [("vy-challenger-1:7811", bytes.fromhex("ab" * 32))] * (2 * R.TUNNEL_WAIT_S + 1)
 
 
 def test_a_session_the_ledger_opened_without_a_reserve_salts_no_window(tmp_path, monkeypatch):

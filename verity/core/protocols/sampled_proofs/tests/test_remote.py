@@ -1450,7 +1450,7 @@ def test_a_session_that_never_listens_raises_once_its_wait_is_over():
     def refused(address, secret):
         raise ConnectionRefusedError(111, "Connection refused")
 
-    with pytest.raises(ConnectionRefusedError):
+    with pytest.raises(C.CoinError, match="nothing listened"):
         R.connect_when_listening("127.0.0.1:7811", None, refused, 2, clock, sleep)
     assert slept == [0.5] * 4
 
