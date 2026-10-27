@@ -571,9 +571,8 @@ theorem lineHeldAtComponent_bites : ∃ (node : Node) (r : Record) (sm : RemoteA
   have h0 : (({ Toy.steady with mem := fun _ t => if t < 10 then Finset.univ else ∅ } : Trace Unit).read () 0).card
       = 1 := read_full _ () 0 rfl rfl (by show 10 * 0 < 10 * (0 + 1); omega)
       (Finset.eq_univ_of_forall fun j => Finset.mem_union_left _ (by
-        first
-          | simp [Toy.steady]
-          | (dsimp only; rw [if_pos (by decide)]; exact Finset.mem_univ j)))
+        simp [Toy.steady]
+        exact Finset.mem_univ j))
   have hp : ∀ p, 1 ≤ p →
       ({ Toy.steady with mem := fun _ t => if t < 10 then Finset.univ else ∅ } : Trace Unit).read () p = ∅ :=
     fun p hp => read_absent _ () p fun t h1 _ => by
