@@ -7,7 +7,9 @@ each checked here:
   free while the request is unfinished), `max_tokens` and `seed` (u32), `temperature` and `top_p` (10^7 values each),
   `model` and `user` (a quote, up to 62 printable ASCII characters but `"` and `\\`, a quote, spaces), and its prompt ids,
   at most K0 in its first cell and K in each other of its C cells, each below 2^IDB. Each count is the field's check in
-  `io_request` (`_u32`, `_ratio`, `_name`) or the scan's (`step`), tried at its edges.
+  `io_request` (`_u32`, `_ratio`, `_name`) or the scan's (`step`), tried at its edges. The bound doesn't read the
+  class's KI, past which the scan refuses a prompt: every toy class here sets KI to every id its cells hold
+  (`toy_class`), so that check never binds, and a smaller KI only refuses more.
 * **A bucket's bits** (`bucket_bits`): each slot's block is absent, or d ≤ r data cells then PADs, r + 2 cases.
 * **A window's requests** (`window_requests`): a slot is held D + 1 buckets from its admission, so a T-bucket window
   from the empty state admits at most ⌈T/(D+1)⌉ a slot.
@@ -22,6 +24,7 @@ least 387 bytes (the request's head and one prompt field), so the enumeration re
 per-field tests their contents."""
 from __future__ import annotations
 
+import dataclasses
 import itertools
 
 import pytest
@@ -47,8 +50,14 @@ NAME_BITS = (sum(len(NAME_CHARS) ** k for k in range(ID_NAME_BYTES - 1)) - 1).bi
 HEAD_BITS = 32 + 32 + IS.RATIO_BITS + IS.RATIO_BITS + 32 + 2 * NAME_BITS
 ORDINAL_BITS = 32
 #: w63 (`benchmarks/network_traces/scan_zk.py`'s `W63`): its class and its 32-bucket link-window
-W63 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64)
+W63 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64, KI=1024)
 W63_T = 32
+
+
+def toy_class(**kw) -> IS.Class:
+    """The class `kw` names with KI every prompt id its C cells hold (`prompt_room`), so the scan's KI never binds."""
+    c = IS.Class(**kw, KI=1)
+    return dataclasses.replace(c, KI=c.prompt_room)
 
 
 def clog2(n: int) -> int:
@@ -95,12 +104,16 @@ def test_field_counts():
     """Each head field's check admits exactly the values its bits count: a u32 in ten characters (spaces, then its
     digits), a ratio in eight (a digit, `.`, six digits), a name a quote, up to 62 of the 93 characters, a quote and
     spaces."""
-    u32 = lambda v: b"%10d" % v
+    def u32(v: int) -> bytes:
+        return b"%10d" % v
+
     assert Q._u32(u32(0)) and Q._u32(u32(2**32 - 1)) and not Q._u32(b"4294967296")
     assert not Q._u32(b"0000000001") and not Q._u32(b"     1   2") and not Q._u32(b"          ")
     assert Q._ratio(b"0.000000") and Q._ratio(b"9.999999") and not Q._ratio(b"10.00000") and not Q._ratio(b" 1.00000")
     assert len(NAME_CHARS) == 93
-    name = lambda s: (b'"' + s + b'"').ljust(ID_NAME_BYTES)
+    def name(s: bytes) -> bytes:
+        return (b'"' + s + b'"').ljust(ID_NAME_BYTES)
+
     assert Q._name(name(b"")) and Q._name(name(bytes(NAME_CHARS[:62]))) and Q._name(name(b"a  "))
     assert not Q._name(name(bytes(NAME_CHARS[:63])[:63]))
     for c in NAME_CHARS:
@@ -142,7 +155,7 @@ def _one(cls: IS.Class, cells, q: int) -> list[bytes]:
     return rows
 
 
-CLS = IS.Class(B=B, r=2, lanes=1, C=3, IDB=17, EVERY=1, WITHIN=1, D=1, KO=1)
+CLS = toy_class(B=B, r=2, lanes=1, C=3, IDB=17, EVERY=1, WITHIN=1, D=1, KO=1)
 
 
 def test_request_fields_free():
@@ -174,8 +187,10 @@ def test_unfinished_content_length_free():
 
 def test_ordinals_free_above_last():
     """A new connection's ordinal is any u32 above `last`: its 32 bits."""
-    cls = IS.Class(B=B, r=1, lanes=2, C=3, IDB=17, EVERY=1, WITHIN=1, D=1, KO=1)
-    one = lambda q: _row(cls, [_cells(cls, _req(cls, [0]), q)])
+    cls = toy_class(B=B, r=1, lanes=2, C=3, IDB=17, EVERY=1, WITHIN=1, D=1, KO=1)
+    def one(q: int) -> bytes:
+        return _row(cls, [_cells(cls, _req(cls, [0]), q)])
+
     gap = _row(cls, [])
     assert _scan(cls, [_row(cls, [_cells(cls, _req(cls, [0]), q) for q in (7, 2**32 - 1)])]) is not None
     assert _scan(cls, [one(7), gap, one(8)]) is not None
@@ -183,9 +198,9 @@ def test_ordinals_free_above_last():
 
 
 #: toy classes and their windows: one lane of one slot, one lane of two, two lanes of one
-TOYS = ((IS.Class(B=B, r=1, lanes=1, C=2, IDB=1, EVERY=1, WITHIN=1, D=1, KO=1), 5, (1, 2, 3, 5)),
-        (IS.Class(B=B, r=2, lanes=1, C=2, IDB=1, EVERY=2, WITHIN=1, D=2, KO=1), 4, (1, 2, 3)),
-        (IS.Class(B=B, r=1, lanes=2, C=2, IDB=1, EVERY=1, WITHIN=1, D=1, KO=1), 3, (1, 2, 3, 4)))
+TOYS = ((toy_class(B=B, r=1, lanes=1, C=2, IDB=1, EVERY=1, WITHIN=1, D=1, KO=1), 5, (1, 2, 3, 5)),
+        (toy_class(B=B, r=2, lanes=1, C=2, IDB=1, EVERY=2, WITHIN=1, D=2, KO=1), 4, (1, 2, 3)),
+        (toy_class(B=B, r=1, lanes=2, C=2, IDB=1, EVERY=1, WITHIN=1, D=1, KO=1), 3, (1, 2, 3, 4)))
 
 
 def _alphabet(cls: IS.Class, ordinals) -> tuple[list[bytes], set[bytes]]:
@@ -257,7 +272,7 @@ def test_window_enumeration(toy):
 
 
 def _forged(cls: IS.Class, t: int, ordinal: int) -> list[IS.State]:
-    """The faulty unit's S_t, as the scan's structure sees it: `last` 0, each slot free, or live on `ordinal` with an
+    """The faulty proof block's S_t, as the scan's structure sees it: `last` 0, each slot free, or live on `ordinal` with an
     unfinished request at no cells, held or not, or done and held."""
     now = t + 1
     kinds = [IS.Slot(), IS.Slot(live=1, q=ordinal, left=2**31, admitted=now),
@@ -271,8 +286,8 @@ def _forged(cls: IS.Class, t: int, ordinal: int) -> list[IS.State]:
     return out
 
 
-#: one lane of one slot at D = 3 and T = 8, where a faulty unit's forged state reaches ⌈T/(D+1)⌉ + 2
-FAULTY = (IS.Class(B=B, r=1, lanes=1, C=2, IDB=1, EVERY=1, WITHIN=1, D=3, KO=1), 8, (1, 2, 3, 5))
+#: one lane of one slot at D = 3 and T = 8, where a faulty proof block's forged state reaches ⌈T/(D+1)⌉ + 2
+FAULTY = (toy_class(B=B, r=1, lanes=1, C=2, IDB=1, EVERY=1, WITHIN=1, D=3, KO=1), 8, (1, 2, 3, 5))
 
 
 @pytest.mark.parametrize("toy", [TOYS[0], FAULTY], ids=["toy0", "tight"])
