@@ -372,11 +372,26 @@ def test_build_check_holds_each_arch_to_its_kernels():
     assert problems == ["kernels the check doesn't know: ['units_sweep_words']"]
 
 
+def test_build_check_takes_sm_120a_constants_and_integer_division():
+    """sm_120a's ptxas loads constants with HFMA2 (no .MMA) and computes units_relu's unrolled trip count by the
+    compiler's integer division (the SASS of r20261027-020639-df6d); neither touches an integer kernel's values."""
+    bodies = dict(BODIES, units_argmax=["HFMA2 R16, -RZ, RZ, 0, 0", "HFMA2 R5, -RZ, RZ, 1.875, 1.1920928955078125e-07",
+                                        "SEL R3, R1, R2, P0"],
+                  units_relu=["I2F.U32.RP R0, R2", "MUFU.RCP R0, R0", "F2I.FTZ.U32.TRUNC.NTZ R9, R8", "I2F.U64.RP R4, R2",
+                              "MUFU.RCP R4, R4", "F2I.U64.TRUNC R6, R4", "HFMA2 R8, -RZ, RZ, 0, 0", *BODIES["units_relu"]])
+    funcs, problems = build_check.check(ptxas(), sass(bodies))
+    assert problems == []
+    assert funcs["units_argmax"]["float"] == {} and funcs["units_relu"]["float"]["MUFU.RCP"] == 2
+
+
 @pytest.mark.parametrize("edit, why", [
     (lambda b: b["units_rmsnorm"].append("MUFU.EX2 R9, R8"), "MUFU.EX2 outside"),
     (lambda b: b["units_quant"].append("MUFU.SQRT R9, R8"), "MUFU forms other than"),
     (lambda b: b["units_argmax"].append("FADD R9, R8, R7"), "integer kernel"),
     (lambda b: b["units_relu"].append("I2F.RP R9, R8"), "integer kernel"),
+    (lambda b: b["units_relu"].append("MUFU.RSQ R9, R8"), "integer kernel"),
+    (lambda b: b["units_argmax"].append("HFMA2 R9, -RZ, RZ, R8"), "integer kernel"),
+    (lambda b: b["units_argmax"].append("HFMA2.MMA R9, -RZ, RZ, R8.H0_H0, 0"), "integer kernel"),
     (lambda b: b["units_softmax"].remove("MUFU.EX2 R2, R1"), "no MUFU.EX2"),
     (lambda b: b["units_quant"].append("STL [R1], R2"), "local memory"),
     (lambda b: b["units_rmsnorm"].append("HMMA.16816.F32.BF16 R4, R8, R12, R4"), "tensor-core"),

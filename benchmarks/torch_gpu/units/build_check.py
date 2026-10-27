@@ -8,8 +8,9 @@ reasons on stderr):
 - any tensor-core instruction;
 - MUFU.EX2 outside units_softmax and the sweep kernels, or none in units_softmax;
 - any MUFU but EX2, RCP and RSQ (RCP and RSQ are div.rn's and sqrt.rn's sequences, and the sm_120a sweep's bare RSQ);
-- any floating-point instruction in the integer kernels (units_argmax, units_relu), but HFMA2.MMA of -RZ and RZ, the
-  compiler's way of loading a constant.
+- any floating-point instruction in the integer kernels (units_argmax, units_relu), but HFMA2 of -RZ, RZ and two
+  immediates (HFMA2.MMA on sm_90a), the compiler's way of loading a constant, and the compiler's unsigned integer
+  division (`DIVISION`), exact by its correction steps, which sm_120a's ptxas uses for units_relu's unrolled trip count.
 Each kernel's registers and its floating-point opcodes with their counts are recorded.
 
   python3 build_check.py PTXAS_TXT SASS_TXT OUT_JSON [ARCH]   (ARCH sm_90a or sm_120a, default sm_90a)
@@ -31,7 +32,9 @@ MUFU_OK = {"EX2", "RCP", "RSQ"}
 MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 FLOAT = re.compile(r"\b(FADD|FMUL|FFMA|FMNMX|FSETP|FSET|FSEL|FCHK|FRND|FSWZADD|MUFU|F2F|F2I|I2F|F2IP|I2FP|DADD|DMUL|DFMA|"
                    r"DSETP|DMNMX|HADD2|HMUL2|HFMA2|HMNMX2|HSETP2|HSET2|F2FP)(\.[\w.]+)?\b")
-CONSTANT = re.compile(r"\bHFMA2\.MMA R\d+, -RZ, RZ\b")
+IMM = r"[-+]?[\d.]+(?:e[-+]?\d+)?"
+CONSTANT = re.compile(rf"\bHFMA2(\.MMA)? R\d+, -RZ, RZ, {IMM}, {IMM}\s*;")
+DIVISION = {"I2F.U32.RP", "I2F.U64.RP", "MUFU.RCP", "F2I.FTZ.U32.TRUNC.NTZ", "F2I.U64.TRUNC"}
 
 
 def check(ptxas: str, sass: str, arch: str = "sm_90a") -> tuple[dict, list[str]]:
@@ -84,8 +87,9 @@ def check(ptxas: str, sass: str, arch: str = "sm_90a") -> tuple[dict, list[str]]
             problems.append(f"{name}: MUFU.EX2 outside {list(EX2)}")
         if name == "units_softmax" and "EX2" not in mufu:
             problems.append(f"{name}: no MUFU.EX2")
-        if name in INTEGER and r["float"]:
-            problems.append(f"{name}: floating-point instructions in an integer kernel: {r['float']}")
+        other = {op: n for op, n in r["float"].items() if op not in DIVISION}
+        if name in INTEGER and other:
+            problems.append(f"{name}: floating-point instructions in an integer kernel: {other}")
     extra = sorted(set(funcs) - set(kernels))
     if extra:
         problems.append(f"kernels the check doesn't know: {extra}")
