@@ -278,6 +278,12 @@ kv_a_proj_with_mqa, the shared experts' gate and up with every routed expert's g
 calibration token chose is not smoothed. It is the V4 proxy's model: `scale_error` scales the error of the chain after
 it by a factor per matmul, so its matmuls carry the per-matmul error another model's shapes would.
 
+`error_probe.py measure` gives those factors' inputs: an arm's relative error per linear class on synthetic operands of
+each model's (k, n), and per attention shape (whole, Q K^T alone, P V alone) over a grid of logit spreads and sink
+logits. `error_probe.py factors PROBE.json --fit RESULTS.json --spec specs/NAME.toml` fits the attention grid to a
+V2-Lite run's measured `attn_rel_err_w0`, checks the fit's context scaling on Llama-3.1-8B (2K fitted, 8K predicted
+against H1's measured errors), and writes the V4-scaled arm.
+
 The engine (`engine.py`, tonight's layer-wise evaluation) reads one layer's weights at a time from the safetensors with
 its own reader. Every stream of every window, the reference, calibration and each (arm, seed), goes through that layer
 before the next is read. So a model of any size fits one GPU, every arm shares one pass over the weights, and
