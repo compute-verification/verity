@@ -44,11 +44,11 @@ constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW =
 //         commit's compressions run on the ALU while the consumers wait on their MMAs. No back-pressure: when the
 //         consumers are done (static schedule, every gridDim.x-th tile) a hash warp stops between two chunks, keeping
 //         its rows' chaining values, and the leaf phase hashes on from there (H's flags)
-//   RP 5  ping-pong (CUTLASS's sm_90 KernelTmaWarpSpecializedPingpong; body_pp): RP 0's registers, but each consumer
+//   RP 6  ping-pong (CUTLASS's sm_90 KernelTmaWarpSpecializedPingpong; body_pp): RP 0's registers, but each consumer
 //         warpgroup owns a whole 128 x 128 tile (two m64n128k32 atoms a k32 step, 128 accumulators a thread) and the CTA's
 //         tiles go to the two in turn, so while one runs a tile's mainloop on the tensor pipe the other stores its last
 //         tile and hashes O rows (H) on the ALU, in the accumulators' registers. Mode 0 only (a served call's D)
-//   RP 6  RP 5 with warps 9 to 11 hashing too, at RP 4's 104 (the consumers at 200)
+//   RP 7  RP 6 with warps 9 to 11 hashing too, at RP 4's 104 (the consumers at 200)
 // (384 threads at 136 can't be built: wgmma n256 needs a launch budget of 154, ptxas C7602, whatever setmaxnreg raises it
 // to. 288 threads at 168, one producer warp, puts 3 warps and 16,128 registers on sub-partition 0, and the commit's CTAs
 // never land beside it.)
@@ -86,7 +86,7 @@ struct alignas(128) Args {
   unsigned tbase;
   int M, N, K, L, S, lp, dz, dy, TT, group, mode, diag, KQ;
   int hall;                   // RP 4: the hash warps hash every row, past the consumers' end (timing their own rate)
-  int ppm;                    // RP 5, 6: a consumer starts no SHA-512 chunk once the other's mainloop has ppm k-tiles left
+  int ppm;                    // RP 6, 7: a consumer starts no SHA-512 chunk once the other's mainloop has ppm k-tiles left
 };
 
 WGD uint32_t smem_at(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
@@ -539,7 +539,7 @@ template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const A
   }
 }
 
-// RP 5 and 6's hashing: the CTA's O rows in batches of 32 (a row a lane) in its tiles' order, Lg = h.lpt() a 128 x 128
+// RP 6 and 7's hashing: the CTA's O rows in batches of 32 (a row a lane) in its tiles' order, Lg = h.lpt() a 128 x 128
 // tile, a batch claimed (ctl[2], the next one) by whichever warp comes first once every tile it reads is posted (ctl[w]:
 // warpgroup w's warps' posts; tile i is warpgroup i % 2's (i / 2)-th). A warp keeps its batch until it's hashed whole,
 // on from its rows' chaining values (H's flags) across its own mainloops; it starts no SHA-512 chunk once stop() holds,
@@ -581,13 +581,13 @@ WGD void pp_hash(const Args& p, const H& h, uint32_t* ctl, int& cur, int ntile, 
   }
 }
 
-// RP 5 and 6 (above): 128 x 128 tiles, the CTA's i-th (static schedule) warpgroup i % 2's, the ring's k-tiles in the
+// RP 6 and 7 (above): 128 x 128 tiles, the CTA's i-th (static schedule) warpgroup i % 2's, the ring's k-tiles in the
 // tiles' order (k-tile g = i KT + k is stage g % STAGES's (g / STAGES)-th fill, its empty barrier one warpgroup's 4 warps).
 // ctl[3 + w]: the k-tiles warpgroup w has issued (g + 1), so a consumer whose next tile starts at g0 hashes until the two
 // have issued g0 - ppm and starts its mainloop at g0 (with no tile left, the CTA's last: the tensor pipe is never kept
-// waiting past a chunk), and RP 6's hash warps until both mainloops end. H NoHash: the ping-pong GEMM alone.
+// waiting past a chunk), and RP 7's hash warps until both mainloops end. H NoHash: the ping-pong GEMM alone.
 template <int RP, class H> __device__ void body_pp(const Args& p, const H& h) {
-  static_assert(RP == 5 || RP == 6, "the ping-pong plans");
+  static_assert(RP == 6 || RP == 7, "the ping-pong plans");
   using T = Tile<128>;
   constexpr int BN = 128, STAGES = T::STAGES;
   constexpr bool HASH = !std::is_same<H, NoHash>::value;
@@ -607,7 +607,7 @@ template <int RP, class H> __device__ void body_pp(const Args& p, const H& h) {
   __syncthreads();
 
   if (wg == 2) {
-    if constexpr (RP == 6) regs_dec<104>();
+    if constexpr (RP == 7) regs_dec<104>();
     else regs_dec<40>();
     if (tid == 256) {
       wgp::tma_prefetch(&p.a);
@@ -626,7 +626,7 @@ template <int RP, class H> __device__ void body_pp(const Args& p, const H& h) {
           if (++s == STAGES) { s = 0; ph ^= 1; }
         }
       }
-    } else if constexpr (RP == 6 && HASH) {
+    } else if constexpr (RP == 7 && HASH) {
       if (tid >= 256 + 32) {
         int cur = -1;
         pp_hash(p, h, ctl, cur, ntile, tiles_m, tiles_n, [&]() { return issued() >= gend; }, true);
@@ -634,7 +634,7 @@ template <int RP, class H> __device__ void body_pp(const Args& p, const H& h) {
     }
     asm volatile("exit;");
   }
-  if constexpr (RP == 6) regs_inc<200>();
+  if constexpr (RP == 7) regs_inc<200>();
   else regs_inc<232>();
   const int w = wg, x = tid % 128, lane = tid % 32;
   int32_t d[128];
@@ -712,9 +712,9 @@ __global__ void __launch_bounds__(threads<4>(), 1) gemm_r4(const __grid_constant
   body<BN, 1, 4, H>(p, h);
 #endif
 }
-// RP 5, 6: the ping-pong GEMM (mode 0), 128 x 128 tiles, hashing O rows with h between its warpgroups' mainloops
+// RP 6, 7: the ping-pong GEMM (mode 0), 128 x 128 tiles, hashing O rows with h between its warpgroups' mainloops
 template <int RP, class H>
-__global__ void __launch_bounds__(threads<5>(), 1) gemm_pp(const __grid_constant__ Args p, const __grid_constant__ H h) {
+__global__ void __launch_bounds__(threads<6>(), 1) gemm_pp(const __grid_constant__ Args p, const __grid_constant__ H h) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
   body_pp<RP, H>(p, h);
 #endif

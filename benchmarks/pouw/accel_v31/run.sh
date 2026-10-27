@@ -33,7 +33,7 @@
 # CUTLASS; fill-sample on each shape's sampled tiles; fill-table. VARIANTS here default to "row=1024,cprio=hi,sched=1
 # row=8192,cprio=hi,sched=1" (row: the leaf row, dither.Shape.row); served=1 benches the served call (O committed, T_S
 # implied: dither.Shape(o=True); its params named served-*); with gemm=1 (a -DV31_WG build) its D comes from wg_proto.cuh's
-# GEMM, rp=4 hashing its O rows in the GEMM's producer warpgroup, rp=5 (6) between the ping-pong GEMM's mainloops (and in
+# GEMM, rp=4 hashing its O rows in the GEMM's producer warpgroup, rp=6 (7) between the ping-pong GEMM's mainloops (and in
 # its producer warpgroup), and the bench adds wgmma.linear's arm (wgl).
 # FILL_GATE_KNOBS=1 runs the gates (and FILL_DITHER's recheck) under the first variant's knobs (else v31.cu's defaults). FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself; the tree must have
 # circuit/dither.py). FILL_NSYS=1 adds, before the bench, Nsight Systems on `v31 fill-once` (OVL_CALLS overlapped calls

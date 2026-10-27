@@ -415,12 +415,12 @@ def test_fill_table(tmp_path, capsys):
     fused = dict(served, arms=dict(served_arms, wgl={"ms": 2.5, "mhz": 1980}), gamma_ovl_w_wgl=1.25 * 2.0 / 2.5, wg=1, rp=4,
                  wbn=256, fused_leaves=3 * 28672, o_leaves=4 * 28672, fused_blocks=(3 * 129 + 40) * 28672, row_blocks=129)
     no_row = dict(fused, fused_leaves=0, fused_blocks=129 * 28672, lminb=4, sahead=1)
-    pp, pp0 = dict(no_row, rp=5, ppm=8, pph=1), dict(no_row, rp=5, ppm=0, pph=0)
+    pp, pp0 = dict(no_row, rp=6, ppm=8, pph=1), dict(no_row, rp=6, ppm=0, pph=0)
     (tmp_path / "b.jsonl").write_text("x\n" + "\n".join(json.dumps(x) for x in (line, later, served, fused, no_row, pp, pp0))
                                       + "\n")
     assert v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")]) == 0
     row, row2, row3, row4, row5, row6, row7 = capsys.readouterr().out.splitlines()[-7:]
-    assert "| served r16384 hi k1 s1 wg256 rp5 m4 sa pm8 |" in row6 and "| served r16384 hi k1 s1 wg256 rp5 m4 sa ph0 |" in row7
+    assert "| served r16384 hi k1 s1 wg256 rp6 m4 sa pm8 |" in row6 and "| served r16384 hi k1 s1 wg256 rp6 m4 sa ph0 |" in row7
     assert row.endswith("| - | - | - |") and row3.endswith("| - | - | - |")
     assert "| served r16384 hi k1 s1 wg256 rp4 |" in row4 and row4.endswith("| 2.500 | 1.000 | 75.0% / 82.8% |")
     assert row5.endswith("| 0.0% / 25.0% |") and "| served r16384 hi k1 s1 wg256 rp4 m4 sa |" in row5

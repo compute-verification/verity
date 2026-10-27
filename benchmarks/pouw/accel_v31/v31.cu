@@ -1934,8 +1934,8 @@ static std::string env_str(const char* name, const char* dflt) {
 // D = a' b'^T on the plain wg GEMM (static schedule), V31_RP 4 hashing the O rows in the GEMM's producer warpgroup
 // (gemm_r4, FusedLeaves; V31_HALL 1: every row there, past the consumers' end, timing the hash warps alone; V31_HCHUNK
 // C > 0: the hash warps' passes over the posted rows, C chunks of each a visit, in place of each row whole in turn;
-// V31_RP 5 the ping-pong GEMM (gemm_pp, 128 x 128 tiles a consumer warpgroup), each warpgroup hashing O rows while the
-// other runs its mainloop, and 6 the same with warps 9 to 11 hashing too; V31_PPM, the k-tiles left in the other's
+// V31_RP 6 the ping-pong GEMM (gemm_pp, 128 x 128 tiles a consumer warpgroup), each warpgroup hashing O rows while the
+// other runs its mainloop, and 7 the same with warps 9 to 11 hashing too; V31_PPM, the k-tiles left in the other's
 // mainloop at which a consumer starts no more chunks; V31_PPH 0, the ping-pong GEMM without the hashing;
 // V31_WGW 0: the prefix-sum segments on gemm_kernel<true> rather than the wg protocol GEMM).
 // A Fill's commit: V31_LMINB 4, its leaf phase's CTAs at 128 registers (leaf_persist's MINB; 5, the default, 96 with spills
@@ -2386,11 +2386,12 @@ struct Fill {
   uint8_t* obuf = nullptr;
   int ocap = 0;
   // V31_GEMM 1 (served): D = a' b'^T on wg_proto.cuh's plain GEMM (mode 0, static schedule) in place of cuBLASLt; V31_RP 4
-  // hashes its O rows in the GEMM's producer warpgroup, V31_RP 5 and 6 between the ping-pong GEMM's mainloops (128 x 128
+  // hashes its O rows in the GEMM's producer warpgroup, V31_RP 6 and 7 between the ping-pong GEMM's mainloops (128 x 128
   // tiles), digests to xd[copy] flagged with the launch's epoch xep[copy];
   // wgw (V31_WGW, default 1): the prefix-sum segments on the wg protocol GEMM too, in place of gemm_kernel<true>
   bool wg = false, wgw = false;
   int wbn = 0, wgrid = 0, hchunk = 0, ppgrid = 0;
+  bool pp() const { return kn.rp == 6 || kn.rp == 7; }
   u64* xd[2] = {nullptr, nullptr};
   u32* xf[2] = {nullptr, nullptr};
   u32 xep[2] = {0, 0}, xctr = 0;
@@ -2553,8 +2554,8 @@ struct Fill {
   // served: the wg GEMMs' arguments (wgmma.linear, the bench's baseline, in any -DV31_WG build), and V31_GEMM 1's D
   void wg_setup() {
 #ifdef V31_WG
-    if (kn.gemm && kn.rp != 0 && kn.rp != 4 && kn.rp != 5 && kn.rp != 6) {
-      fprintf(stderr, "a served call's V31_RP is 0, 4, 5 or 6\n");
+    if (kn.gemm && kn.rp != 0 && kn.rp != 4 && kn.rp != 6 && kn.rp != 7) {
+      fprintf(stderr, "a served call's V31_RP is 0, 4, 6 or 7\n");
       exit(2);
     }
     wg = kn.gemm != 0;
@@ -2567,7 +2568,7 @@ struct Fill {
     CK(cudaMemcpy(wsw, hw.data(), 4 * (size_t)n, cudaMemcpyHostToDevice));
     wa_plain = wg_args(Ap, Bp, 0);
     wa_plain.hall = env_int("V31_HALL", 0);
-    if (kn.rp >= 5) {   // the ping-pong GEMM's 128 x 128 tiles (wbn stays the wgl arm's)
+    if (pp()) {   // the ping-pong GEMM's 128 x 128 tiles (wbn stays the wgl arm's)
       wa_plain.b = tmap(Bp, k, n, 128);
       wa_plain.ppm = kn.ppm;
       ppgrid = std::min((m / wgp::TM) * (n / 128), nsm);
@@ -2580,7 +2581,7 @@ struct Fill {
       wa_words.S = Wn;
     }
     hchunk = std::max(0, env_int("V31_HCHUNK", 0));
-    if (wg && (kn.rp == 4 || (kn.rp >= 5 && kn.pph)))
+    if (wg && (kn.rp == 4 || (pp() && kn.pph)))
       for (int b = 0; b < 2; b++) {
         xd[b] = dalloc<u64>(8 * (size_t)leaves);
         xf[b] = dalloc<u32>((size_t)leaves);
@@ -2588,8 +2589,8 @@ struct Fill {
       }
     const void* ks[] = {(const void*)wgp::gemm<256, 1>, (const void*)wgp::gemm<128, 1>,
                         (const void*)wgp::gemm_r4<256, FusedLeaves>, (const void*)wgp::gemm_r4<128, FusedLeaves>,
-                        (const void*)wgp::gemm_pp<5, FusedLeaves>, (const void*)wgp::gemm_pp<6, FusedLeaves>,
-                        (const void*)wgp::gemm_pp<5, wgp::NoHash>};
+                        (const void*)wgp::gemm_pp<6, FusedLeaves>, (const void*)wgp::gemm_pp<7, FusedLeaves>,
+                        (const void*)wgp::gemm_pp<6, wgp::NoHash>};
     const int sm[] = {wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM, wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM,
                       wgp::Tile<128>::SMEM, wgp::Tile<128>::SMEM, wgp::Tile<128>::SMEM};
     for (int i = 0; i < 7; i++) {
@@ -2619,12 +2620,12 @@ struct Fill {
     else if (wbn == 256) wgp::gemm<256, 1><<<wgrid, T, sm, st>>>(g);
     else wgp::gemm<128, 1><<<wgrid, T, sm, st>>>(g);
   }
-  // RP 5 or 6's ping-pong GEMM, hashing with h (null: V31_PPH 0, the GEMM alone)
+  // RP 6 or 7's ping-pong GEMM, hashing with h (null: V31_PPH 0, the GEMM alone)
   void wg_pp(cudaStream_t st, const wgp::Args& g, const FusedLeaves* h) {
-    constexpr int T = wgp::threads<5>(), sm = wgp::Tile<128>::SMEM;
-    if (!h) wgp::gemm_pp<5, wgp::NoHash><<<ppgrid, T, sm, st>>>(g, wgp::NoHash{});
-    else if (kn.rp == 6) wgp::gemm_pp<6, FusedLeaves><<<ppgrid, T, sm, st>>>(g, *h);
-    else wgp::gemm_pp<5, FusedLeaves><<<ppgrid, T, sm, st>>>(g, *h);
+    constexpr int T = wgp::threads<6>(), sm = wgp::Tile<128>::SMEM;
+    if (!h) wgp::gemm_pp<6, wgp::NoHash><<<ppgrid, T, sm, st>>>(g, wgp::NoHash{});
+    else if (kn.rp == 7) wgp::gemm_pp<7, FusedLeaves><<<ppgrid, T, sm, st>>>(g, *h);
+    else wgp::gemm_pp<6, FusedLeaves><<<ppgrid, T, sm, st>>>(g, *h);
   }
   FusedLeaves fused_leaves(int b) const {
     return FusedLeaves{servedrow(b), xd[b], xf[b], xep[b], (u32)(65536 / row), (u32)hchunk};
@@ -2646,12 +2647,12 @@ struct Fill {
     if (o && wg) {
       wgp::Args g = wa_plain;
       g.O = D[b];
-      if (kn.rp == 4 || (kn.rp >= 5 && xd[b])) {
+      if (kn.rp == 4 || (pp() && xd[b])) {
         xep[b] = epoch(st);
         const FusedLeaves h = fused_leaves(b);
         if (kn.rp == 4) wg_run(st, g, &h);
         else wg_pp(st, g, &h);
-      } else if (kn.rp >= 5) {
+      } else if (pp()) {
         wg_pp(st, g, nullptr);
       } else {
         wg_run(st, g);
@@ -2891,9 +2892,9 @@ static void kernel_attrs(FILE* f) {
                       {"wg_256_r3", (const void*)wgp::gemm_r3<256>}, {"wg_128_r3", (const void*)wgp::gemm_r3<128>},
                       {"wg_256_r4", (const void*)wgp::gemm_r4<256, FusedLeaves>},
                       {"wg_128_r4", (const void*)wgp::gemm_r4<128, FusedLeaves>},
-                      {"wg_128_pp5", (const void*)wgp::gemm_pp<5, FusedLeaves>},
                       {"wg_128_pp6", (const void*)wgp::gemm_pp<6, FusedLeaves>},
-                      {"wg_128_pp5_nohash", (const void*)wgp::gemm_pp<5, wgp::NoHash>},
+                      {"wg_128_pp7", (const void*)wgp::gemm_pp<7, FusedLeaves>},
+                      {"wg_128_pp6_nohash", (const void*)wgp::gemm_pp<6, wgp::NoHash>},
                       {"leaf_persist_fused", (const void*)leaf_persist<FusedRow>},
                       {"leaf_persist_fused_m4", (const void*)leaf_persist<FusedRow, 4>},
                       {"leaf_persist_served_m4", (const void*)leaf_persist<ServedRow, 4>}};
