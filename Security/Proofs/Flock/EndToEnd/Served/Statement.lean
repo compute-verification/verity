@@ -120,9 +120,9 @@ end Served
 The law is one stratum of the units `[0, 2)`, one of them drawn (`Served.honestSt`, `K = 1`, `pop = 2`, read as
 `n = 2` units). The challenger's coins are every `honestLc`-byte string (`Ωc`, nonempty, `coins = id`), with
 `honestLc = 2 · 1 · width 2 + 64 ≥ 1`. A3 holds at its coins, and on the coins all `0` the served stratified draw
-(`SampledProofs.Draw.drawUnits`) ends, having drawn its units. It is a one-stratum miniature of the draw of run
-r20261024-192635-9c4d, accepted: `stratified:1` over 3744 units in three templates, drawn by `service.Stream` from the
-Lean verifier's `IO.getRandomBytes` after the registration (note:20261024T1015Z-report-sparse-mla-window). -/
+(`SampledProofs.Draw.drawUnits`) ends, having drawn its units. It is a one-stratum miniature of the deployed draw:
+`stratified:1` over the units of three templates, drawn by `service.Stream` from the Lean verifier's
+`IO.getRandomBytes` after the registration. -/
 def ServedDraw_honest : Prop :=
   0 < Served.honestLc ∧
   Assumptions.UniformRandomBytes (fun _ : Fin 1 => Served.honestLc)
@@ -142,8 +142,8 @@ def ServedDraw_nontrivial : Prop :=
 
 /-- **`JointServed`'s honest lemma**: at the honest challenger, whose coins are every `Lc`-byte string (`Ωc`, nonempty,
 `coins = id`) of any nonzero length, A3 at the coins holds, and so A3 at every served sampling block's tapes, which
-`JointStratified` takes. The challenger is run r20261024-192635-9c4d's: `service.Stream` reading the Lean verifier's
-`IO.getRandomBytes` after the registration (note:20261024T1015Z-report-sparse-mla-window). -/
+`JointStratified` takes. The challenger is the deployed one: `service.Stream` reading the Lean verifier's
+`IO.getRandomBytes` after the registration. -/
 def JointServed_honest : Prop :=
   ∀ (w : StratifiedBlock) (Lc : ℕ), 0 < Lc →
     Assumptions.UniformRandomBytes (fun _ : Fin 1 => Lc) (fun (c : Fin Lc → Fin 256) _ => c) ∧
