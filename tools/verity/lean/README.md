@@ -42,12 +42,10 @@ python tools/verity/lean/conventions.py [--json F] [PKG...]  the Lean's form cou
 python tools/verity/lean/map.py [--moves MAP.toml]       packages, areas by tree, the area graph, module sizes; no build
 ~~~
 
-A lane's edit loop is `verity lean try FILE [--on NODE]`: through `research run` (default vy-nebius-cpu-1's `research` pool) it runs
-`lean_changed.py --try FILE` on this checkout, its uncommitted edits included, which takes one of the node's `build` Lean slots and
-that slot's tree, the one `--records` keeps warm, syncs the closure of the package that owns FILE and its dependencies there, runs
-`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`, and prints Lean's output with the
-run's wall time, exiting with lean's status. It never runs this audit and never writes a record: `--records PKG --update` is for the
-lock and the mark only (`lean_changed.py`'s docstring).
+A lane's edit loop is `verity lean try FILE [--on NODE]`: `lean_changed.py --try FILE` on this checkout, uncommitted edits included,
+through `research run` on the warm tree of a node's `build` Lean slot. It builds only what changed among FILE's imports, then runs
+`lake env lean FILE` and exits with its status. It never runs this audit and never writes a record: `--records PKG --update` is for
+the lock and the mark only (`lean_changed.py`'s docstring).
 
 ## What it checks
 
