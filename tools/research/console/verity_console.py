@@ -555,7 +555,7 @@ def uc_hour(t: float) -> str:
 
 # ---------------------------------------------------------------------------------------------------------------- held idle (infra/*)
 
-IDLE_READINGS = Path("/workspace/usage/held-idle-hourly.jsonl")  # one line per completed UTC hour, node and lane; infra's relay alerts on it
+IDLE_READINGS = Path("/workspace/usage/held-idle-hourly.jsonl")  # one line per completed UTC hour, node and lane, which the held-idle alert reads
 IDLE_TARGETS = {("node 1", "circuits"): 40.0}  # held idle %, at most: circuits' Commits on node 1
 POOL_UNLEASED = "lease pool, not leased"  # cluster.usage.POOL_UNLEASED
 N1_LANES = [(re.compile(p), lane) for p, lane in (
@@ -947,13 +947,13 @@ def idle_panel(readings: list[dict], now: datetime) -> dict:
                      note="Held idle %: a lane's measured held GPU-hours with utilization 0 (cluster.usage). Node 1: lanes by "
                           "job name; a pool's lease is held for its time, busy by its GPU's DCGM reading, unmeasured without one; "
                           "the pool holder outside a lease is 'lease pool, not leased'. Node 2: by coordinator id; timed-window "
-                          "samples are unmeasured. Change: points against the hour before; infra alerts a lane above target that "
+                          "samples are unmeasured. Change: points against the hour before; the alert rings a lane above target that "
                           "improves by under 5 points. Phases: node 1 circuits' Commit leases' timelines. Newest first."))
 
 
 # ---------------------------------------------------------------------------------------------------------------- pool (infra/*)
 
-POOL = Path("/workspace/usage/infra-pool.json")  # infra's file: node 2 (and later node 1), every 5 minutes, written atomically
+POOL = Path("/workspace/usage/infra-pool.json")  # node 2's publish_pool.py, node 1's half merged in; pool_n1.py's while node 2 pauses
 POOL_HISTORY = HERE / "pool-history.jsonl"      # this script's own 24 h of pool samples, one line a run
 USEFUL_TARGET = 85  # useful GPU busy on both nodes, %
 WATERMARK_GPU_H = 12
@@ -965,7 +965,7 @@ def pct(v):
 
 
 def n1_from_prom(summary: dict, util_rows: list, gpu_rows: list, now: datetime) -> dict:
-    """Node 1 in the pool file's shape, from this script's own Prometheus reading, until infra's file carries n1."""
+    """Node 1 in the pool file's shape, from this script's own Prometheus reading, until the pool file carries n1."""
     recent = [r for r in util_rows if r[0] >= iso(now - timedelta(hours=1))]
     last = util_rows[-1] if util_rows else None
     mean = lambda j, rows: (sum(r[j] for r in rows if r[j] is not None) / max(1, sum(r[j] is not None for r in rows)) / 100) if rows else None  # noqa: E731
@@ -977,7 +977,7 @@ def n1_from_prom(summary: dict, util_rows: list, gpu_rows: list, now: datetime) 
 
 
 def held_idle(node: dict):
-    """Held-idle share: infra's field when present, else GPUs with a holder and no work in the last 5 minutes."""
+    """Held-idle share: the pool file's field when present, else GPUs with a holder and no work in the last 5 minutes."""
     if isinstance(node.get("held_idle_1h"), (int, float)):
         return node["held_idle_1h"]
     if isinstance(node.get("gpu_held_1h"), (int, float)) and isinstance(node.get("gpu_busy_1h"), (int, float)):
@@ -998,7 +998,7 @@ def pool_panels(pool: dict, n1: dict | None, now: datetime, errors: list, minute
     if "n1" not in nodes and n1:
         nodes["n1"] = n1
     gen = pool.get("generated_at") or iso(now)
-    src = f"infra's {POOL} (generated {gen}) and vy-nebius-1's Prometheus"
+    src = f"{POOL} (generated {gen}) and vy-nebius-1's Prometheus"
     names = {"n1": "node 1", "n2": "node 2"}
     order = [k for k in ("n1", "n2") if k in nodes]
     out = []
@@ -1015,8 +1015,8 @@ def pool_panels(pool: dict, n1: dict | None, now: datetime, errors: list, minute
     out.append(panel("pool-busy", "Both nodes, last hour: useful work, other busy, held idle", "bar", ["node", "useful", "busy, not useful", "held idle"],
                      busy_rows, producer="infra", unit="%", target=USEFUL_TARGET, target_label="useful GPU target", stacked=True,
                      updated_at=iso(now), source=src,
-                     note="GPU: useful busy (busy times infra's useful share), busy on filler, and held idle (memory held or a lease, no work). "
-                          "CPU: busy. Node 1's useful share is its busy share until infra's file carries n1."))
+                     note="GPU: useful busy (busy times the pool file's useful share), busy on filler, and held idle (memory held or a lease, no work). "
+                          "CPU: busy. Node 1's useful share is its busy share until the pool file carries n1."))
 
     hist = []
     if POOL_HISTORY.exists():
@@ -1035,7 +1035,7 @@ def pool_panels(pool: dict, n1: dict | None, now: datetime, errors: list, minute
              [pct((h.get(k) or {}).get("cpu")) for k in ("n1", "n2")] for h in hist]
     out.append(panel("pool-utilization", "Useful and raw GPU busy, and CPU busy, both nodes, last 24 hours", "line", cols, urows,
                      producer="infra", unit="%", target=USEFUL_TARGET, target_label="useful GPU target", updated_at=iso(now), source=src,
-                     note="One point per 5-minute run, each over the hour before it. Useful: infra's useful GPU busy. Raw: the share of "
+                     note="One point per 5-minute run, each over the hour before it. Useful: the pool file's useful GPU busy. Raw: the share of "
                           "readings with utilization above 0 (node 1: DCGM every 60 s; node 2: POUS's sampler every 10 s), the same "
                           "rule on both nodes. History starts when this panel did."))
 
