@@ -41,6 +41,13 @@ open RecDeploy
 open FlockDeploy (jsonOf)
 open Lean (Json)
 
+/-- The coins the compiled part's session is set up on: the `--zk` keyed coin tree of one table. -/
+def partCoins (tags0 : Tags) : Coins := .tree (Zk.coinSpec (tags0.tableNames 1))
+
+/-- The tags the compiled part's session is set up under: `--zk`'s, at the part circuit's mask log and one table. -/
+def partTags (tags0 : Tags) (circuitB : ByteArray) : Tags :=
+  Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1
+
 /-- **The inner statement `ri` is the inner session the component holds**, and `w`'s inner shape and registration
 are the component's. -/
 structure InnerNames (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) (bs : Core.Blobs) (w : RecX)
@@ -99,8 +106,9 @@ def Names (p : VStar.Recursive.Params) (e : VStar.Recursive.Evidence) (bs : Core
       PartNames po pp bs j q
 
 /-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`: Flock's plain setup with the draw, partition
-and program, its scope check, a draw, the header's draw at one table): the hypothesis piece B reads, which the
-compiled `innerHeld`'s acceptance gives (`RefusalsOf.innerOkAt_of_compiled`). -/
+and program, its scope check, a draw, the header's draw at one table), which piece B reads. The compiled `innerHeld`
+runs them as `VStar.Recursive.innerOk`, at `--stratified` the population the verifier's partition and program give
+(`InnerNames.stratified`), so its acceptance gives it (`RefusalsOf.innerOkAt_of_compiled`). -/
 def InnerOkAt (x : Msg) : Prop := ∀ w, decodeX x = some w → innerOk w.inner = .ok ()
 
 /-- **The model's reading of `x`** at the component's inner session: the verifier's own partition, its inner shape as

@@ -109,7 +109,7 @@ These points change what a guarantee says or rests on, so they are claims, and t
    audit's `audit_influence`. It is a new statement, and it rests on the verifier's coins (A3,
    `uniform/io-getrandombytes`) and the proof system's knowledge soundness, besides what the certifier's bounds rest
    on.
-2. **The tie's weight.** `audit_influence` prices a wrong unit by the width it adds to a separator, its exits. That is
+2. **The tie's weight.** `audit_influence` prices a faulty proof block by the width it adds to a separator, its exits. That is
    right for a step unit and wrong for a tie unit, whose exit is one bit while it frees a whole frame. Either the tie is
    `All`, or the network term weights each tie unit by its frame's free bits. `io_tie`'s design is the second: K
    draws a link-window, with N3 on `All`, leave ε·N·log2 V bits at δ (844 kbit a link-day at its served numbers), a

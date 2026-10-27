@@ -1,0 +1,14 @@
+# Layer 3, the exclusion: the elementary uncertified cap q_U(U) = omega_max U / s_times (rho/classes.py Structure), what
+# an uncertified or a dark gate holds under a bound. A scenario picks one by `structure` (default: reference).
+
+# s_times at the reference's gates per counted product, 2G / kappa of the adversary's family (831 gates at
+# units.gates_per_flop 250 and family.full's kappa 0.602), so it moves with both: the reference's average where the
+# bound needs the structural minimum, and valid only under draft:no-straddle. A measured minimum replaces it in gates.
+[structure.reference]
+s_times = { value = "reference", unit = "gate", source = "the reference's gates per counted product, 2G / kappa, standing in for the fewest gates in any counted operation's subcircuit until a measurement program (another worker's) supplies that minimum", status = "assumed" }
+omega_max = { value = 1, source = "a counted product's weight (rho/theorem.py: every counted product weighs 1)", status = "declared" }
+
+# The elementary cap: one counted operation per gate, at most (each charged to its output gate, so none straddles).
+[structure.elementary]
+s_times = { value = 1, unit = "gate", source = "a counted operation has at least one gate, its output", status = "derived" }
+omega_max = { value = 1, source = "as structure.reference", status = "declared" }

@@ -6,8 +6,9 @@ import NetworkCheck.LinkWindow
 The property of `NetworkCheck.LinkWindow.verdict`, the verdict of record on one link-window of N2 (`service.OF_RECORD`
 in `verity/core/protocols/certifier/service.py`), stated against its functions as they run: for every case, if the
 verdict accepts, the link-window's unit was proved, its rows opened to an output word of 3, both certificates are the
-certifier's, its declared sync is one of Σ_sync, and its public outputs are verdict 1 and deadline 1.
-`Proofs.Properties.NetworkCertifier.LinkWindow` proves it.
+certifier's, its declared sync is one of Σ_sync (on a warden link, which declares none, nothing is asked of the syncs,
+and the public row its ``pub`` commitment opens to holds both ends' grids at the warden's parameters digest), and its
+public outputs are verdict 1 and deadline 1. `Proofs.Properties.NetworkCertifier.LinkWindow` proves it.
 
 The predicates below say what the findings, the public file's row commitments, the certificates and the sync are, in the
 verdict's own terms. The public row (`pubRow`), the commitments' parse (`commitments`), the LMS verifier and the
@@ -52,9 +53,12 @@ def WindowCertificate (c : Case) (d : Nat) (x : Cert) : Prop :=
 def WindowCertified (c : Case) : Prop :=
   c.certificates.size = 2 ∧ ∀ d < 2, ∃ x, c.certificates[d]? = some (some x) ∧ WindowCertificate c d x
 
-/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ equal to one of the rhos. -/
+/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ equal to one of the rhos. A warden
+link declares no sync, so nothing is asked of the syncs there. -/
 def WindowSynced (c : Case) : Prop :=
-  ∃ s, c.syncs[c.window]? = some s ∧ s.delta ∈ c.deltas ∧ ∃ r ∈ c.rhos, s.num * r.2 = r.1 * s.den
+  match c.kind with
+  | .warden _ => True
+  | _ => ∃ s, c.syncs[c.window]? = some s ∧ s.delta ∈ c.deltas ∧ ∃ r ∈ c.rhos, s.num * r.2 = r.1 * s.den
 
 /-- An accepted link-window's public outputs: `verdict` 1 and `deadline` 1, and on an advised link the advice it read. -/
 def acceptedOutputs (c : Case) : Json :=
@@ -72,8 +76,8 @@ the accept bit (`verdictDigest`). -/
 def WindowVerdict (c : Case) : Prop :=
   ∃ v, verdict c = .ok v ∧ v.outputs = acceptedOutputs c ∧ verdictDigest c true v.outputs = .ok v.digest
 
-/-- **An accepted link-window is proved, opened to the word 3, certified on both ends and synced within Σ_sync, and its
-public outputs are verdict 1 and deadline 1.** -/
+/-- **An accepted link-window is proved, opened to the word 3, certified on both ends and synced within Σ_sync (on a
+warden link, no sync asked), and its public outputs are verdict 1 and deadline 1.** -/
 def LinkWindowAcceptMeans : Prop :=
   ∀ c : Case, (verdict c).map Verdict.accepted = .ok true → WindowAccepted c ∧ WindowVerdict c
 

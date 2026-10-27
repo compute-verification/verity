@@ -22,7 +22,7 @@ and batch, under continuous batching with staggered arrivals, greedy and seeded 
   summarized by `nsys_summary.py`, and with `PIN_BUILD` under a Build of record's compile artifact (`served-pin` seeds one
   fresh Inductor dir for every arm and checks it after); `gather_bench.py` times the
   gather kernel alone; `gpu_tests.sh` runs the committer's GPU byte-identity tests on a node; `granularity.py` lists, from
-  a Build's request Programs, the Call boundaries a per-block or per-layer proof unit would keep, with their bytes and
+  a Build's request Programs, the Call boundaries a per-block or per-layer proof block would keep, with their bytes and
   hashing time (an estimate; no scheme).
 - The specs: `benchmarks/specs/qwen3-8b-bf16-h200-served.toml` (the default) and
   `benchmarks/specs/llama32-1b-bf16-h200-served.toml`, each on the sweep `benchmarks/specs/served.toml` (B1, B8, B32 and

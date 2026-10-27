@@ -40,6 +40,7 @@ class Engine:
     kv_cache_memory_bytes: int | None = None
     enable_chunked_prefill: bool | None = None
     enable_prefix_caching: bool | None = None
+    async_scheduling: bool | None = None
     enforce_eager: bool | None = None
     execution: str | None = None
     dtype: str | None = None

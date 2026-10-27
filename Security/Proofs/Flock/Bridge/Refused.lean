@@ -8,12 +8,13 @@ import Flock.PortRoots
 (`Bridge.RowsOk`, which the scope check `scopeOkH` already gives: `Bridge.rowsOk_of_scopeOkH`), each of its own name
 (`Registered.dupName`), no two ports' registered roots one root under different domains (`PortRoots.rootsColl = none`),
 and the registration's population the game's `n` units in order (`Bridge.PopMatches`).
-The verifiers of record now refuse every file that fails the last three: `verify --zk --ks-form` runs `Flock.PortRoots.check`
-last in its verdict (`Main.verifyCmd`), and the sampled-proofs run refuses the registration (`SampledProofs.Run.run`,
+The verifiers of record now refuse every file that fails the last three: `verify --zk` runs `Flock.PortRoots.check`
+last in its verdict (`Main.verifyCmd`, with or without `--ks-form`, the check's old flag), and the sampled-proofs run
+refuses the registration (`SampledProofs.Run.run`,
 `population-order`, `SampledProofs.Slots.popOk`). So the guarantee reads them off acceptance.
 
-* `Bridge.LiveAcceptsKS I o`: `verify --zk --ks-form` accepts: the live audit's transcript (`LiveAcceptsZK`), and the
-  files pass `Flock.PortRoots.check`.
+* `Bridge.LiveAcceptsKS I o`: `verify --zk` accepts: the live audit's transcript (`LiveAcceptsZK`), and the files pass
+  `Flock.PortRoots.check`, whose roots are framed at each port's schema, as `Bridge.rootsOf`'s.
 * `Bridge.RunPopOk desc qr n`: the descriptor parses and its population under the query is `n` units in order
   (`Slots.popOk`), which the run checks at registration.
 * `rowsOk_of_scopeOkH`, `rootsColl_none_of_collides_false`, `popMatches_of_popOk`: the checks give V2's hypotheses. The
@@ -27,28 +28,18 @@ namespace Flock.Bridge
 
 open Properties.NetworkCertifier.Bytes (bs_inj)
 
-/-- At a `Flock.PortRoots.rowsV2` file every port's leaf schema is row/v2. -/
-theorem schemaOf_of_rowsV2 {c : Flock.Circuit} (hv2 : Flock.PortRoots.rowsV2 c = true) {q : ℕ}
-    (hq : q < c.ports.size) : schemaOf c q = Flock.HmRow.ROW_SCHEMA_V2 := by
-  simp only [Flock.PortRoots.rowsV2, Array.all_eq_true, Bool.and_eq_true, Option.isNone_iff_eq_none] at hv2
-  obtain ⟨h1, h2⟩ := hv2 q hq
-  simp [schemaOf, hq, Flock.Registered.portSchema, h1, h2]
-
-/-- **No colliding pair in the verifier's roots fixes each root's domain**: at a `rowsV2` file the roots
-`Flock.PortRoots.collides` computes are `rootsOf`'s. -/
+/-- **No colliding pair in the verifier's roots fixes each root's domain**: the roots `Flock.PortRoots.collides`
+computes, each port's at its schema, are `rootsOf`'s. -/
 theorem fixes_of_collides_false {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ}
-    (hv2 : Flock.PortRoots.rowsV2 c = true) (h : Flock.PortRoots.collides c pub nl = false) :
-    PortRoots.RootFixesDomain c pub nl := by
+    (h : Flock.PortRoots.collides c pub nl = false) : PortRoots.RootFixesDomain c pub nl := by
   intro q q' hlt hq he
   rw [PortRoots.rootsOf_getD c pub nl (hlt.trans hq), PortRoots.rootsOf_getD c pub nl hq] at he
-  simp only [Flock.Bridge.PortRoots.leaves, schemaOf_of_rowsV2 hv2 hq, schemaOf_of_rowsV2 hv2 (hlt.trans hq)] at he
   exact Flock.PortRoots.domOf_eq_of_collides_false h hlt hq (bs_inj he)
 
-/-- **The verifier's roots check is V2's port-roots guard** at a `rowsV2` file. -/
+/-- **The verifier's roots check is V2's port-roots guard.** -/
 theorem rootsColl_none_of_collides_false {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ}
-    (hv2 : Flock.PortRoots.rowsV2 c = true) (h : Flock.PortRoots.collides c pub nl = false) :
-    PortRoots.rootsColl c pub nl = none :=
-  PortRoots.rootsColl_none_iff.2 (fixes_of_collides_false hv2 h)
+    (h : Flock.PortRoots.collides c pub nl = false) : PortRoots.rootsColl c pub nl = none :=
+  PortRoots.rootsColl_none_iff.2 (fixes_of_collides_false h)
 
 /-- **The run's population check is `PopMatches`.** -/
 theorem popMatches_of_popOk {desc : Claims.Msg} {qr : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
@@ -60,8 +51,8 @@ theorem popMatches_of_popOk {desc : Claims.Msg} {qr : Lean.Json} {n : ℕ} {p : 
   exact h
 
 open FlockSoundness.Discharge.ZkExec in
-/-- **`verify --zk --ks-form` accepts, files and transcript**: the live audit's transcript (`LiveAcceptsZK`), and the
-files' rows, names and roots (`Flock.PortRoots.check`, the last refusal of `verify --zk --ks-form`'s verdict). -/
+/-- **`verify --zk` accepts, files and transcript**: the live audit's transcript (`LiveAcceptsZK`), and the files' rows,
+names and roots (`Flock.PortRoots.check`, the last refusal of `verify --zk`'s verdict). -/
 def LiveAcceptsKS {n : ℕ} {Reg : Type} (I : FlockSoundness.Discharge.Exec.Inputs)
     (o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript) : Prop :=
   LiveAcceptsZK I o ∧ Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok ()
@@ -83,8 +74,9 @@ open scoped ENNReal
 
 open Classical in
 /-- **`SampledKSLiveV2` with its file preconditions read off acceptance**: `SampledKSLiveV2`'s bound on the event that
-`verify --zk --ks-form` accepts the transcript and the files (`Bridge.LiveAcceptsKS`: their ports unsegmented row/v2 rows of
-distinct names, and no two registered roots one root under different domains, at the public file's population), the
+`verify --zk` accepts the transcript and the files (`Bridge.LiveAcceptsKS`: their ports row/v1, row/v2 or row-seg/v1 rows
+of distinct names, and no two registered roots, each framed at its port's schema, one root under different domains, at
+the public file's population), the
 sampled-proofs run passes the registration's population (`Bridge.RunPopOk`: the descriptor `desc` and the query `qr`
 give the game's `n` units in order), and the claims relation fails. It has none of V2's hypotheses `RowsOk`,
 `dupName = none`, `rootsColl = none` and `PopMatches`; the game's `n` is the public file's population (`pub.n = n`).
@@ -164,10 +156,10 @@ theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
   by_cases hc : Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
       Bridge.RunPopOk desc qr n
   · obtain ⟨hck, p, hp, hpo⟩ := hc
-    obtain ⟨hv2, hdup, hcoll⟩ := Flock.PortRoots.check_ok hck (Flock.Desc.parse_flat hD) hpub
+    obtain ⟨_, hdup, hcoll⟩ := Flock.PortRoots.check_ok hck (Flock.Desc.parse_flat hD) hpub
     have hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none := by
       rw [← hn]
-      exact Bridge.rootsColl_none_of_collides_false hv2 hcoll
+      exact Bridge.rootsColl_none_of_collides_false hcoll
     exact (prob_mono (fun o ho => ⟨ho.1.1.1, ho.2⟩) _ τ).trans
       (h n Reg I ht D hD hU pub hpub hpt hscope (Bridge.rowsOk_of_scopeOkH hscope) hdup hroots desc qr
         (Bridge.popMatches_of_popOk hp hpo) kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM

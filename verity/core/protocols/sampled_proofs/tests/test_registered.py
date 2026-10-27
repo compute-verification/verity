@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import tracemalloc
 
 import pytest
 
@@ -14,7 +15,7 @@ from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import coll_concat
+from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
 from verity.ml.circuits.types import Array, Value
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registered as G, registration as R
 
@@ -1086,3 +1087,76 @@ def test_pouw_roots_reads_an_arow_row_table_root():
     assert [list(r) for r in roots.rows] == [G.bytes_leaves(bytes.fromhex("5e" * 64) + w.root, 32)] * 2
     assert R.check(rec, **check).ok
     assert R.check(record("5f" * 64, roots)[0], **check).codes == ("R7-supplied",)
+
+
+class _Program:
+    """A stand-in with what `parameter_gates` and `shape` read: a parameter `W` of `n` 16-bit leaves over `refs`."""
+
+    def __init__(self, refs, n: int | None = None) -> None:
+        params = [("x", Value(8)), ("W", Array(len(refs) if n is None else n, Value(16)))]
+        self.fn = type("Fn", (), {"signature": staticmethod(lambda: (params, Value(8)))})()
+        self._refs = refs
+
+    def input_coll(self, i: int):
+        return type("Coll", (), {"refs": self._refs})() if i == 1 else None
+
+
+def _gates_by_list(program, value: str) -> range:
+    """`parameter_gates` as it was, one Python int per leaf: the oracle the run scan must equal."""
+    names = [name for name, _ in program.fn.signature()[0]]
+    if value not in names:
+        raise ValueError(f"{value!r} is not a parameter of the program ({names})")
+    gates = [ref[2] for ref in program.input_coll(names.index(value)).refs]
+    if not gates or gates != list(range(gates[0], gates[0] + len(gates))):
+        raise ValueError(f"parameter {value!r}: its gates are not one interval")
+    return range(gates[0], gates[0] + len(gates))
+
+
+def _outcome(f, program, value):
+    try:
+        return f(program, value)
+    except ValueError as e:
+        return str(e)
+
+
+@pytest.mark.parametrize("refs", [
+    Affine("g", 0, 7, 12),
+    Concat([Affine("g", 0, 3, 4), Affine("g", 0, 7, 5)]),
+    Concat([Affine("g", 0, 3, 4), Explicit((("g", 0, 7), ("g", 0, 8))), Strided("g", 0, 9, 2, 2, 1, 6)]),
+    Strided("g", 0, 9, 3, 3, 1, 9),
+    Explicit((("g", 0, 4), ("g", 0, 5), ("g", 0, 6))),
+    Concat([Affine("g", 0, 3, 4), Affine("h", 0, 7, 2)]),
+    Concat([Affine("g", 0, 3, 4), Affine("g", 1, 7, 2)]),
+    Concat([Affine("g", 0, 3, 4), Affine("g", 0, 8, 2)]),
+    Concat([Affine("g", 0, 7, 2), Affine("g", 0, 3, 4)]),
+    Concat([Affine("g", 0, 3, 4), Affine("g", 0, 6, 2)]),
+    Explicit((("g", 0, 4), ("g", 0, 6), ("g", 0, 5))),
+    Explicit((("g", 0, 4), ("g", 0, 4))),
+    Strided("g", 0, 9, 3, 1, 3, 9),
+    Strided("g", 0, 5, 1, 0, 0, 3),
+    Strided("g", 0, 9, 2, 3, 1, 6),
+    Explicit(()),
+], ids=["affine", "two-runs", "mixed", "strided-contiguous", "explicit", "other-space-contiguous",
+        "other-idx-contiguous", "gap", "out-of-order", "overlap", "explicit-swap", "repeat", "transpose", "broadcast",
+        "strided-gaps", "empty"])
+def test_parameter_gates_reads_runs_as_the_leaf_list_did(refs):
+    """The run scan returns the range, or refuses with the message, that the per-leaf list did, on every refs form; the
+    list read only each ref's leaf, so a run in another space or idx that continues the interval is accepted by both."""
+    prog = _Program(refs)
+    assert _outcome(G.parameter_gates, prog, "W") == _outcome(_gates_by_list, prog, "W")
+    assert _outcome(G.parameter_gates, prog, "V") == _outcome(_gates_by_list, prog, "V")
+
+
+def test_parameter_gates_of_an_h200_weight_is_its_range_in_constant_memory():
+    """A weight tensor's parameter at H200 width (2^30 leaves, one `Affine`) is its range and its rows without a Python int
+    per leaf: the per-leaf list held ~2 x 43 GB here and was OOM-killed (PRF-208)."""
+    n = 1 << 30
+    prog = _Program(Affine("g", 0, 5, n), n)
+    tracemalloc.start()
+    try:
+        gates, rows = G.parameter_gates(prog, "W"), G.shape(prog, "W", 1024)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert gates == range(5, 5 + n) and rows == n // 1024
+    assert peak < 1 << 16, peak

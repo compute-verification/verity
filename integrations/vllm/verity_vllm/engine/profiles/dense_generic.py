@@ -108,3 +108,22 @@ def find_hf_config(role: str) -> tuple[Path, str, dict[str, Any] | None] | None:
             if snap.exists():
                 return snap, "hf_home:snapshot", entry
     return None
+
+
+def pinned_hf_config(repo: str, revision: str) -> Path | None:
+    """The config.json of record of the checkpoint the manifests pin at ``repo``@``revision``: `find_hf_config` of its role, its
+    sha256 held to the pin's ``config_sha256``, so a prover and a verifier read the same bytes wherever they run. None when no
+    manifest pins it; a ValueError when it is pinned and no source has its config, or one has another config."""
+    if not MANIFEST.exists():
+        return None
+    entry = next((e for e in checkpoint_entries(MANIFEST) if e.get("repo") == repo and str(e.get("revision")) == str(revision)), None)
+    if entry is None:
+        return None
+    found = find_hf_config(str(entry.get("role")))
+    if found is None:
+        raise ValueError(f"{repo}@{revision} (role {entry.get('role')}) is pinned, and no source has its config.json "
+                         f"(profiles/hf_configs/{entry.get('role')}.config.json, its local_path, the hub cache)")
+    if entry.get("config_sha256") and _sha256(found[0]) != entry["config_sha256"]:
+        raise ValueError(f"{found[0]} sha256 {_sha256(found[0])[:12]} != {repo}@{revision}'s pinned config_sha256 "
+                         f"{entry['config_sha256'][:12]}")
+    return found[0]

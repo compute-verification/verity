@@ -12,7 +12,7 @@
   `CoreOnsite.lean` as written;
 * windows audited at once each get their report, and the monitoring-period report over all of them leads the line;
 * under ``--pouw h1`` PoUW's audit of the H1 window runs before the legs, on the window's own PoUW circuit;
-* the network certifier's K over a week, a month and a year with the faulty units paid for once
+* the network certifier's K over a week, a month and a year with the faulty proof blocks paid for once
   (`HorizonLeakAccepted`), each window's K beside it;
 * the loop's window keeps only its public files, and its circuit is the one registered before it ran (slow).
 """
@@ -173,7 +173,7 @@ def test_onsite_reads_the_blobs_a_case_names(tmp_path):
     case = {"commitment": "01", "evidence": "02", "params": {"k": 1}}
     every = {e.name: fake("accept", case) for e in T.TABLE}
     every["integrity"] = fake("accept", case | {"blobs": [str(tmp_path / "circuit.txt"), str(tmp_path / "pub.bin")]})
-    r = decide(tmp_path, **every, onsite=EVERY_PORT, exe=str(exe))
+    r = decide(tmp_path, **every, onsite=C.onsite_components(), exe=str(exe))
     assert r["composed"]["verdict"] == "accept"
     got = json.loads((tmp_path / "seen.json").read_text())
     assert got["blobs"] == [b"circuit".hex(), b"public".hex()]

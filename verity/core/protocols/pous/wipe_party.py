@@ -8,14 +8,16 @@ and the prover answers with the batch's labels, 64 bytes an index (the challenge
 session, after its last batch or a late or wrong one. The challenger draws the labels' secret, the session id and its coins on its own host, claims the
 id in its own session log, and signs under its own key with the egress its host was given (`--egress-bits`, the network
 certifier's count over the session; `UNCOUNTED`, which bounds nothing, when it has none): never a count the prover
-sends. A prover that leaves before the session ends leaves it unsigned. The side reports `{"commitment", "ended",
+sends. It times the number of reads its own command names (`--reads`, `READS` by default), which the commitment
+publishes and the certificate is computed at: a request that names `k` is refused, so the prover never chooses it. A
+prover that leaves before the session ends leaves it unsigned. The side reports `{"commitment", "ended",
 "host", "public_key", "reads", "signed", "window"}`, `signed` null when unsigned, and `window` the session's `t0` (the
 prover connected) and `t1` (the session signed, or ended unsigned) on the challenger host's real-time clock: the
 interval a network certifier counts the session's egress over.
 
-`python -m verity.core.protocols.pous.wipe_party --device DIR [--listen HOST:PORT] [--egress-bits N] [--streamer
-build|PATH [--threads T]]` is the challenger's side (`main`): it reads the request `{"k", "labels", "limit_ns", "node",
-"tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
+`python -m verity.core.protocols.pous.wipe_party --device DIR [--listen HOST:PORT] [--reads K] [--egress-bits N]
+[--streamer build|PATH [--threads T]]` is the challenger's side (`main`): it reads the request `{"labels", "limit_ns",
+"node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
 With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
 report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `session(party, request, prover)` is
 the leg's side: it starts the challenger's side with `party.command`, connects to `party.address` (by default the port
@@ -48,6 +50,9 @@ CHUNK = 1 << 14
 """Labels a fill frame: 1 MiB."""
 UNCOUNTED = sw.EGRESS_MAX_UNITS * sw.EGRESS_UNIT_BITS
 """The egress a session signs when no network certifier counted it: saturated, so it bounds nothing."""
+READS = 2152
+"""The timed spot reads a challenger runs when its command doesn't name them (`--reads`)."""
+REQUEST_KEYS = {"labels", "limit_ns", "node", "tiers"}
 
 
 def _read(f: BinaryIO, n: int) -> bytes:
@@ -57,20 +62,24 @@ def _read(f: BinaryIO, n: int) -> bytes:
     return b
 
 
-def params_of(request: Mapping[str, Any]) -> sw.WipeParams:
-    return sw.WipeParams(request["labels"], request["k"], 1, request["limit_ns"],
-                         tuple((t, b) for t, b in request["tiers"]))
+def params_of(request: Mapping[str, Any], reads: int = READS) -> sw.WipeParams:
+    """The session's parameters: the prover's request (`REQUEST_KEYS`: its node, fill, deadline and declared tiers) and
+    the challenger's own `reads`."""
+    if set(request) != REQUEST_KEYS:
+        raise ValueError(f"a wipe request is {sorted(REQUEST_KEYS)}, not {sorted(request)}: the challenger chooses the "
+                         "reads (--reads), never the prover")
+    return sw.WipeParams(request["labels"], reads, 1, request["limit_ns"], tuple((t, b) for t, b in request["tiers"]))
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, egress_bits: int,
-          clock: Callable[[], int] = time.perf_counter_ns, chunk: int = CHUNK,
+          reads: int = READS, clock: Callable[[], int] = time.perf_counter_ns, chunk: int = CHUNK,
           fill: Callable[[bytes, int], Any] | None = None) -> sw.Challenger:
     """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id drawn here, the
     fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
-    `wipe_stream`), each batch revealed and its answers read on `clock`, the session signed by `signer` with
+    `wipe_stream`), `reads` batches revealed and their answers read on `clock`, the session signed by `signer` with
     `egress_bits` once it ends. A prover that closes first leaves it unsigned."""
-    c = sw.Challenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32), params_of(request),
-                      signer, log=log, clock=clock)
+    c = sw.Challenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
+                      params_of(request, reads), signer, log=log, clock=clock)
     try:
         if fill is not None:
             f.flush()
@@ -219,7 +228,7 @@ def placement(node: str, host: str, *, verifier: str | None = None, store: Mappi
 def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:
     if not params.covered:
         raise ValueError("the wipe's party reveals one index a batch, the reveal the guarantee covers")
-    return {"k": params.k, "labels": params.labels, "limit_ns": params.limit_ns, "node": node,
+    return {"labels": params.labels, "limit_ns": params.limit_ns, "node": node,
             "tiers": [[t, b] for t, b in params.tiers]}
 
 
@@ -255,6 +264,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
     ap.add_argument("--device", required=True, help="the challenger's key and session log (`period.challenger`)")
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
+    ap.add_argument("--reads", type=int, default=READS,
+                    help=f"the timed spot reads, which the certificate is computed at (default {READS})")
     ap.add_argument("--egress-bits", type=int, default=UNCOUNTED,
                     help="the network certifier's egress count over the session, in bits (default: uncounted)")
     ap.add_argument("--streamer", help="stream the fill natively (`wipe_stream`): a built wipe_stream, or `build` to "
@@ -262,6 +273,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--threads", type=int, help="the streamer's threads (default: every CPU of this host)")
     a = ap.parse_args(argv)
     request = json.loads(sys.stdin.readline())
+    params_of(request, a.reads)
     device = Path(a.device)
     streamer, extra = None, {}
     if a.streamer:
@@ -285,14 +297,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             with conn.makefile("rwb") as f:
                 c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), egress_bits=a.egress_bits,
-                          fill=None if streamer is None else native)
+                          reads=a.reads, fill=None if streamer is None else native)
             t1 = time.time_ns()
     print(json.dumps(report(c, signer.public_key, (t0, t1)) | extra, sort_keys=True), flush=True)
     return 0
 
 
-__all__ = ["CHUNK", "PREMISE", "UNCOUNTED", "Party", "answer", "commitment_of", "link", "main", "params_of", "placement",
-           "report", "request_of", "serve", "session", "signed_of", "utc"]
+__all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "UNCOUNTED", "Party", "answer", "commitment_of", "link", "main",
+           "params_of", "placement", "report", "request_of", "serve", "session", "signed_of", "utc"]
 
 if __name__ == "__main__":
     sys.exit(main())
