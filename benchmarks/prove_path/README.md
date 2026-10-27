@@ -387,3 +387,17 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
 - **The advice** is I1's canonical encoding. A declared run's comes from its workload (`advice_windows.advice_of_workload`), a
   served run's from ADVICE-SRC's step trace.
 - **The opening** is the named gap above. `run.sh` keeps neither the advice nor its opening in `$OUT`.
+
+## The class circuit's size and its window's commit
+
+`class_size.py` sizes a class circuit in ANDs and C-Flock blocks, and `class_rows.py` counts its rows by what fills them and
+their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` (VLLM-128) prices a
+window's commit from that census, or from a probe projected to a class (`--project 8,1024,64`, which reproduces the exact
+census unit for unit), against CMP-149's target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a
+compression) and in seconds (the window's rows on the GPU's hashing rates, the registration on the CPU's, which
+`--measure-cpu` measures). It covers each lever alone and the plan stacked, the pad pass at three traffics, the
+registration's bytes and files, and totals over a week, a month and a year:
+
+~~~text
+python window_cost.py PROBE.json --target h200 --project 8,1024,64 [--measure-cpu SCRATCH] [--out FILE]
+~~~
