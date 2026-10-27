@@ -73,6 +73,9 @@ RECORD, KEY, RELEASES, CLOSE, HELLOS = Ch.RECORD_FILE, "key.json", Ch.LOG_FILE, 
 ROOT_BYTES = 64
 HEADER = struct.Struct(">II")
 MAX_HEAD = 1 << 20
+MAX_OPENING = 1 << 13
+"""What a withheld session's release (`RemoteChallenger.close`) may add to `MAX_HEAD` for each coin it was given: one
+full opening's JSON, its path included (about 130 bytes a level)."""
 MAX_BATCH = 64
 """The most coins `RemoteChallenger.open_many` asks for at once: its frames (about 200 bytes each) are written before
 any reply is read, so they must fit the stream's send buffer while the challenger writes its replies back."""
@@ -109,10 +112,10 @@ class _Wire:
             out += chunk
         return bytes(out)
 
-    def recv(self) -> dict:
+    def recv(self, limit: int = MAX_HEAD) -> dict:
         nh, nb = HEADER.unpack(self._exact(HEADER.size))
-        if nh > MAX_HEAD or nb:
-            raise CoinError(f"a frame is a head of at most {MAX_HEAD} bytes and no body, not {nh} + {nb}")
+        if nh > limit or nb:
+            raise CoinError(f"a frame is a head of at most {limit} bytes and no body, not {nh} + {nb}")
         try:
             head = json.loads(self._exact(nh), object_pairs_hook=_unique)
         except CoinError:
@@ -392,13 +395,13 @@ class RemoteChallenger:
         except OSError as e:
             raise self._end(f"the stream broke ({e})") from e
 
-    def _reply(self, kind: str, read: Callable[[Any], Any]) -> Any:
+    def _reply(self, kind: str, read: Callable[[Any], Any], limit: int = MAX_HEAD) -> Any:
         """The reply of `kind`, read with `read`; a hello's (`commitment`) may be a withheld session's `layout` instead."""
-        return self._answer({kind: read, **({"layout": _layout_of} if kind == "commitment" else {})})[1]
+        return self._answer({kind: read, **({"layout": _layout_of} if kind == "commitment" else {})}, limit)[1]
 
-    def _answer(self, reads: dict[str, Callable[[Any], Any]]) -> tuple[str, Any]:
+    def _answer(self, reads: dict[str, Callable[[Any], Any]], limit: int = MAX_HEAD) -> tuple[str, Any]:
         try:
-            reply = self._wire.recv()
+            reply = self._wire.recv(limit)
         except CoinError as e:
             raise self._end(str(e)) from e
         except OSError as e:
@@ -415,9 +418,9 @@ class RemoteChallenger:
         except CoinError as e:
             raise self._end(f"the challenger's {kind} is malformed: {e}") from e
 
-    def _ask(self, head: dict, kind: str, read: Callable[[Any], Any]) -> Any:
+    def _ask(self, head: dict, kind: str, read: Callable[[Any], Any], limit: int = MAX_HEAD) -> Any:
         self._send(head)
-        return self._reply(kind, read)
+        return self._reply(kind, read, limit)
 
     def open(self, label: str, index: int, after: bytes) -> LiveOpening:
         return self.open_many([(label, index, after)])[0]
@@ -456,12 +459,14 @@ class RemoteChallenger:
     def close(self) -> None:
         """End the session: the challenger closes it, and the stream closes.  On a withheld session the challenger then
         releases its commitment and the coins' full openings: each must be the coin it gave, in order, opening against
-        that commitment after the root it followed, else `close` raises."""
+        that commitment after the root it followed, else `close` raises.  The release is one frame, of at most
+        `MAX_OPENING` bytes more than `MAX_HEAD` for each coin given."""
         if not self.withheld:
             self._ask({"type": "close"}, "closed", lambda _: None)
             self._end("the client closed the session")
             return
-        commitment, openings = self._ask({"type": "close"}, "released", _released_of)
+        commitment, openings = self._ask({"type": "close"}, "released", _released_of,
+                                         MAX_HEAD + len(self._given) * MAX_OPENING)
         self._end("the client closed the session")
         if (commitment.scheme, commitment.epoch, commitment.families) != self._layout:
             raise CoinError("the challenger's released commitment is not the layout its hello answered")
@@ -571,6 +576,6 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
     return Ch.session_named(audited, key, session_files(d), verify)
 
 
-__all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
+__all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "MAX_OPENING", "RECORD", "RELEASES", "ROOT_BYTES",
            "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
            "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]

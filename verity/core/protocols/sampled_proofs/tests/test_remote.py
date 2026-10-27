@@ -554,6 +554,29 @@ def test_a_withheld_session_releases_only_raw_coins_until_its_signed_close(tmp_p
     assert got is not None
 
 
+def test_a_withheld_sessions_release_past_one_frames_limit_still_closes(tmp_path, signer):
+    """A withheld session that gave more coins than one `MAX_HEAD` frame of full openings holds (a v2 window's rounds:
+    hundreds of coins of a 2^13-coin family) still closes: its release may be `MAX_OPENING` bytes a coin larger, so the
+    client reads it and the challenger's close and the client's agree."""
+    families = [("rounds", 1 << 13)]
+    ch = C.LiveChallenger(SCHEME, 0, families, entropy("host"))
+    session = R.open_session(ch, pinned_key(), HOST, signer, tmp_path, "s-1", withhold=True)
+    a, b = socket.socketpair()
+    ended: list[str | None] = []
+    t = threading.Thread(target=lambda: ended.append(R.serve(a, session, itertools.count().__next__)))
+    t.start()
+    client = R.RemoteChallenger(b)
+    n = 800
+    for i in range(0, n, R.MAX_BATCH):
+        client.open_many([("rounds", j, hashlib.sha512(b"%d" % j).digest()) for j in range(i, min(n, i + R.MAX_BATCH))])
+    client.close()
+    t.join()
+    a.close()
+    assert ended == [None] and json.loads((tmp_path / R.CLOSE).read_text())["ended"] is None
+    assert len(json.dumps([o.to_json() for o in client.opened.values()])) > R.MAX_HEAD
+    assert client.commitment == ch.commitment and len(client.opened) == n
+
+
 def _scripted(n: int, answer):
     """A client over a socketpair to a server that sends the challenger's commitment, reads `n` open frames and only
     then answers them with the frames `answer(openings)` gives, the honest openings in the order asked: so the client
