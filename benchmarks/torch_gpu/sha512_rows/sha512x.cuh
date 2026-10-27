@@ -14,9 +14,8 @@
 // multiply back into a shift. On the host every V is the plain function.
 //
 // ROLL = 1 runs rounds 16..79 as a loop of 16-round bodies (a quarter of the code: a lone warp otherwise waits on
-// instruction fetch), 0 straight-line, and 2 all 80 rounds as one loop of 16-round bodies that move the state each round,
-// the schedule step skipped in the first pass: benchmarks/codec_tensor/sha512.cuh's sha512_compress, statement for
-// statement, about two thirds of ROLL 1's code.
+// instruction fetch), 0 straight-line, 2 all 80 rounds as codec_tensor/sha512.cuh's sha512_compress, statement for
+// statement: two thirds of ROLL 1's SASS, faster than it in dither's h1c and h1r, slower in its h1u.
 #pragma once
 #include <cstdint>
 #include <cstring>
@@ -61,14 +60,19 @@ using u32 = uint32_t;
       0xd186b8c721c0c207ull, 0xeada7dd6cde0eb1eull, 0xf57d4f7fee6ed178ull, 0x06f067aa72176fbaull, 0x0a637dc5a2c898a6ull,   \
       0x113f9804bef90daeull, 0x1b710b35131c471bull, 0x28db77f523047d84ull, 0x32caab7b40c72493ull, 0x3c9ebe0a15c9bebcull,   \
       0x431d67c49c100d4cull, 0x4cc5d4becb3e42b6ull, 0x597f299cfc657e2aull, 0x5fcb6fab3ad6faecull, 0x6c44198c4a475817ull
+#define SX_IV_LIST                                                                                                         \
+  0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull, 0xa54ff53a5f1d36f1ull, 0x510e527fade682d1ull,       \
+      0x9b05688c2b3e6c1full, 0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull
 
-// SX_K_LIST stays defined for a constexpr copy, whose round constants are immediates (dither's h1sha.cuh)
+// the lists stay defined for a constexpr copy, whose constants are immediates (dither's h1sha.cuh)
 __constant__ u64 K_DEV[80] = {SX_K_LIST};
 static const u64 K_HOST[80] = {SX_K_LIST};
 
 __constant__ u32 POW2[33] = {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u, 1u << 10, 1u << 11, 1u << 12, 1u << 13,
                              1u << 14, 1u << 15, 1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22,
                              1u << 23, 1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31, 0u};
+// the IV as constant operands, where iv's immediates would take registers (dither's h1c, h1r and h1noise, j10r_ref)
+__constant__ u64 IV_DEV[8] = {SX_IV_LIST};
 SX_HD const u64* kconst() {
 #ifdef __CUDA_ARCH__
   return K_DEV;
@@ -78,11 +82,9 @@ SX_HD const u64* kconst() {
 }
 
 // a 64-bit unsigned word type: uint64_t, or unsigned long long where a caller's arrays are that
-template <class W>
-constexpr bool word64 = sizeof(W) == 8 && W(0) < W(-1);
+template <class W> constexpr bool word64 = sizeof(W) == 8 && W(0) < W(-1);
 
-template <class W>
-SX_HD void iv(W* st) {
+template <class W> SX_HD void iv(W* st) {
   static_assert(word64<W>, "64-bit unsigned words");
   st[0] = 0x6a09e667f3bcc908ull; st[1] = 0xbb67ae8584caa73bull; st[2] = 0x3c6ef372fe94f82bull; st[3] = 0xa54ff53a5f1d36f1ull;
   st[4] = 0x510e527fade682d1ull; st[5] = 0x9b05688c2b3e6c1full; st[6] = 0x1f83d9abfb41bd6bull; st[7] = 0x5be0cd19137e2179ull;
@@ -202,8 +204,6 @@ SX_HD void compress(Word* st, Word* W) {
   SX_ROUND(b, c, d, e, f, g, h, a, K[(tk) + 7] + wf((tw) + 7))
 #define SX_RAW(j) W[(j)]
   if constexpr (ROLL == 2) {
-    // kept beside ROLL 1 because the two compile to different SASS and each is faster somewhere: dither's h1c and h1r
-    // run up to 2.5% slower on ROLL 1 (and on ROLL 1's rounds at this loop's code size), its h1u 3.5% faster
 #ifdef __CUDA_ARCH__
 #pragma unroll 1
 #endif

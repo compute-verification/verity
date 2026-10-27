@@ -158,7 +158,8 @@ struct Hs {
   u64 tot;
 };
 __device__ __forceinline__ void hs_init(Hs& s) {
-  sx::iv(s.h);
+#pragma unroll
+  for (int j = 0; j < 8; ++j) s.h[j] = sx::IV_DEV[j];
 #pragma unroll
   for (int j = 0; j < 16; ++j) s.w[j] = 0;
   s.n = 0;
@@ -475,7 +476,8 @@ struct Hb {
   u64 tot;
 };
 __device__ __forceinline__ void hb_init(Hb& s, uint8_t* b) {
-  sx::iv(s.h);
+#pragma unroll
+  for (int j = 0; j < 8; ++j) s.h[j] = sx::IV_DEV[j];
   s.b = b;
   s.n = 0;
   s.tot = 0;

@@ -12,6 +12,7 @@ typedef unsigned int u32;
 constexpr u64 TAG0 = 0x7665726974792f70ULL, TAG1 = 0x6f75772f6e6f6973ULL, TAG2 = 0x652f763100000000ULL;
 
 __device__ constexpr u64 KC[80] = {SX_K_LIST};
+__device__ constexpr u64 IVC[8] = {SX_IV_LIST};
 
 __device__ __forceinline__ u64 rotr(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
 
@@ -135,7 +136,8 @@ __device__ __forceinline__ void noise_mid(const u64* seed, NoiseMid& m) {
     m.c[i - 16] = x;
   }
   u64 v[8];
-  sx::iv(v);
+#pragma unroll
+  for (int j = 0; j < 8; ++j) v[j] = IVC[j];
 #pragma unroll
   for (int r = 0; r < 11; ++r) RND(r, w[r]);
 #pragma unroll
@@ -166,10 +168,8 @@ __device__ __forceinline__ void noise_block(const NoiseMid& m, u64 t, u64 s[8]) 
 #pragma unroll
   for (int r = 11; r < 80; ++r) RND(r, W[r]);
   // after 80 rounds the names are back in place: v[0] is a
-  u64 iv[8];
-  sx::iv(iv);
 #pragma unroll
-  for (int q = 0; q < 8; ++q) s[q] = iv[q] + v[q];
+  for (int q = 0; q < 8; ++q) s[q] = IVC[q] + v[q];
 }
 
 // blocks ta and tb of one stream (noise_block's of each), their two compressions' rounds interleaved: two independent
@@ -213,18 +213,17 @@ __device__ __forceinline__ void noise_block2(const NoiseMid& m, u64 ta, u64 tb, 
     RNDV(va, r, WA[r]);
     RNDV(vb, r, WB[r]);
   }
-  u64 iv[8];
-  sx::iv(iv);
 #pragma unroll
   for (int q = 0; q < 8; ++q) {
-    sa[q] = iv[q] + va[q];
-    sb[q] = iv[q] + vb[q];
+    sa[q] = IVC[q] + va[q];
+    sb[q] = IVC[q] + vb[q];
   }
 }
 
 // a whole message's digest from its 64-bit words (len16 x 16 of them, padding included), the rolled compression
 __device__ __forceinline__ void sha512_words(const u64* msg, int blocks, u64 s[8]) {
-  sx::iv(s);
+#pragma unroll
+  for (int j = 0; j < 8; ++j) s[j] = IVC[j];
 #pragma unroll 1
   for (int b = 0; b < blocks; ++b) {
     u64 w[16];

@@ -95,7 +95,8 @@ __device__ __forceinline__ void nblock(const u64* sd, u64 t, u64 nt0, u64 nt1, u
   w[13] = 0;
   w[14] = 0;
   w[15] = 96 * 8;
-  sx::iv(s);
+#pragma unroll
+  for (int j = 0; j < 8; ++j) s[j] = sx::IV_DEV[j];
   sx::compress<0, 2>(s, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
@@ -136,7 +137,8 @@ __device__ __forceinline__ void unit_seed(const H1Call& C, u64 p, const u64* __r
   for (int j = 0; j < 8; ++j) w[4 + j] = salt[j] ^ p;
 #pragma unroll
   for (int j = 0; j < 4; ++j) w[12 + j] = C.roots[j] ^ p;
-  sx::iv(s);
+#pragma unroll
+  for (int j = 0; j < 8; ++j) s[j] = sx::IV_DEV[j];
   sx::compress<0, 2>(s, w);
 #pragma unroll
   for (int j = 0; j < 4; ++j) w[j] = C.roots[4 + j] ^ p;
@@ -206,7 +208,8 @@ __device__ __forceinline__ void sha_round(u64 v[8], u64 k, u64 w) {
 
 // a noise chunk's state after rounds 0 .. 10, which read only the tag and the seed (words 0 .. 10): one a unit
 __device__ __forceinline__ void noise_mid(const u64* sd, u64 nt0, u64 nt1, u64 nt2, u64 mid[8]) {
-  sx::iv(mid);
+#pragma unroll
+  for (int j = 0; j < 8; ++j) mid[j] = sx::IV_DEV[j];
   sha_round(mid, sx::K_DEV[0], nt0);
   sha_round(mid, sx::K_DEV[1], nt1);
   sha_round(mid, sx::K_DEV[2], nt2);
@@ -241,11 +244,9 @@ __device__ __forceinline__ void nblock_mid(const u64* mid, const u64* sd, u64 t,
       sha_round(v, sx::K_DEV[r + j], w[j]);
     }
   }
-  u64 iv[8];
-  sx::iv(iv);
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
-    const u64 x = iv[j] + v[j];
+    const u64 x = sx::IV_DEV[j] + v[j];
     h[2 * j] = (u32)(x >> 32);
     h[2 * j + 1] = (u32)x;
   }
