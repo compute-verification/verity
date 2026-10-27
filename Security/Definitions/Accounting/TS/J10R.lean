@@ -19,8 +19,9 @@ scheme replaces.
   `first` on.
 - `rowAt s k first`, `colAt s k first`: a row's (dither bits, digit coins) and a column's (coin bits, `U` as int8 codes,
   `u129`) from block `first` of `s`'s stream. Their widths are functions of `K` alone (`rb k`, `cb k`).
-- `Layout r c k`: a tile or a call. `row i = i RB`, `col j = r RB + j CB`; `noise s L` is today's noise of a unit
-  (`h1tile.noise`) and, at a call's layout, the call-scale noise.
+- `NoiseLayout r c k`: where a tile's or a call's noise blocks sit (`h1tile.Layout`). `row i = i RB`,
+  `col j = r RB + j CB`; `noise s L` is today's noise of a unit (`h1tile.noise`) and, at a call's layout, the
+  call-scale noise.
 - `unitBlocks M k R C I J`: unit `(I, J)`'s public block bases in a call of `M` rows at `R × C` tiles, call row `R I`'s
   first block and call column `C J`'s; `j10rNoise s L b` the unit's noise from bases `b`, `unitNoise` with
   `s = callSeed salt call rootA rootB`, `unitKeys` its fold keys, σ_R at its own position.
@@ -109,58 +110,58 @@ def colAt (s : List ℕ) (k first : ℕ) : List ℕ × List ℕ :=
   let z := stream s first (colBits k)
   (z.take k, (List.range 32).map fun t => u129 (value ((z.drop (k + 8 * t)).take 8)))
 
-/-- An `r × c` tile, or a call, at contraction `k`. -/
-structure Layout where
+/-- Where the noise blocks of an `r × c` tile, or of a call, sit at contraction `k`. -/
+structure NoiseLayout where
   r : ℕ
   c : ℕ
   k : ℕ
 
-namespace Layout
+namespace NoiseLayout
 
 /-- Row `i`'s first block. -/
-def row (L : Layout) (i : ℕ) : ℕ := i * rb L.k
+def row (L : NoiseLayout) (i : ℕ) : ℕ := i * rb L.k
 
 /-- Column `j`'s first block, after every row's. -/
-def col (L : Layout) (j : ℕ) : ℕ := L.r * rb L.k + j * cb L.k
+def col (L : NoiseLayout) (j : ℕ) : ℕ := L.r * rb L.k + j * cb L.k
 
 /-- The lanes, `r/4 · c/8`, a key block each. -/
-def lanes (L : Layout) : ℕ := L.r / 4 * (L.c / 8)
+def lanes (L : NoiseLayout) : ℕ := L.r / 4 * (L.c / 8)
 
 /-- The noise blocks: the rows' and the columns'. -/
-def blocks (L : Layout) : ℕ := L.r * rb L.k + L.c * cb L.k
+def blocks (L : NoiseLayout) : ℕ := L.r * rb L.k + L.c * cb L.k
 
-end Layout
+end NoiseLayout
 
 /-- The noise of layout `L` from seed `s`, rows then columns: today's unit noise (`h1tile.noise`) at a unit's layout, the
 call-scale noise at a call's. -/
-def noise (s : List ℕ) (L : Layout) : List (List ℕ × List (List ℕ)) × List (List ℕ × List ℕ) :=
+def noise (s : List ℕ) (L : NoiseLayout) : List (List ℕ × List (List ℕ)) × List (List ℕ × List ℕ) :=
   ((List.range L.r).map fun i => rowAt s L.k (L.row i), (List.range L.c).map fun j => colAt s L.k (L.col j))
 
 /-- **Unit `(I, J)`'s public block bases** in a call of `M` rows at `R × C` tiles and contraction `k`: the first block of
 call row `R I` and of call column `C J` in the call-scale layout (`h1tile.j10r_blocks`). -/
-def unitBlocks (M k R C I J : ℕ) : ℕ × ℕ := ((Layout.mk M C k).row (R * I), (Layout.mk M C k).col (C * J))
+def unitBlocks (M k R C I J : ℕ) : ℕ × ℕ := ((NoiseLayout.mk M C k).row (R * I), (NoiseLayout.mk M C k).col (C * J))
 
 /-- A unit's noise from seed `s` at bases `b`: row `i` from block `b.1 + i RB`, column `j` from `b.2 + j CB`. -/
-def j10rNoise (s : List ℕ) (L : Layout) (b : ℕ × ℕ) : List (List ℕ × List (List ℕ)) × List (List ℕ × List ℕ) :=
+def j10rNoise (s : List ℕ) (L : NoiseLayout) (b : ℕ × ℕ) : List (List ℕ × List (List ℕ)) × List (List ℕ × List ℕ) :=
   ((List.range L.r).map fun i => rowAt s L.k (b.1 + i * rb L.k), (List.range L.c).map fun j => colAt s L.k (b.2 + j * cb L.k))
 
 /-- Each lane's 16 fold keys from seed `sigma`: lane `ln`'s block, as 32-bit words. -/
-def foldKeys (sigma : List ℕ) (L : Layout) : List (List ℕ) :=
+def foldKeys (sigma : List ℕ) (L : NoiseLayout) : List (List ℕ) :=
   (List.range L.lanes).map fun ln =>
     let z := stream sigma ln 512
     (List.range 16).map fun w => value ((z.drop (32 * w)).take 32)
 
 /-- **A unit's noise under J10-R**: seed_c of its call (first unit at `call`) at its bases `b`. No seed is an input. -/
-def unitNoise (salt rootA rootB : List ℕ) (call : ℕ) (L : Layout) (b : ℕ × ℕ) :
+def unitNoise (salt rootA rootB : List ℕ) (call : ℕ) (L : NoiseLayout) (b : ℕ × ℕ) :
     List (List ℕ × List (List ℕ)) × List (List ℕ × List ℕ) :=
   j10rNoise (callSeed salt call rootA rootB) L b
 
 /-- A unit's fold keys under J10-R, as today: σ_R at its own position `pos`. -/
-def unitKeys (salt rootA rootB : List ℕ) (pos : ℕ) (L : Layout) : List (List ℕ) :=
+def unitKeys (salt rootA rootB : List ℕ) (pos : ℕ) (L : NoiseLayout) : List (List ℕ) :=
   foldKeys (receiptSeed salt pos rootA rootB) L
 
 /-- SHA-512 compressions of today's unit: its noise blocks, a key block a lane, and its two seeds of two each. -/
-def unitCompressions (L : Layout) : ℕ := L.blocks + L.lanes + 4
+def unitCompressions (L : NoiseLayout) : ℕ := L.blocks + L.lanes + 4
 
 /-- The units of an `M × N` call at `R × C` tiles. -/
 def units (M N R C : ℕ) : ℕ := M / R * (N / C)
@@ -168,6 +169,6 @@ def units (M N R C : ℕ) : ℕ := M / R * (N / C)
 /-- J10-R's SHA-512 compressions over the call's `units` when each block is derived once a call: the call's blocks and
 seed_c's two, and each unit's σ_R (two) and its lanes' key blocks. A unit's share is this over `units M N R C`. -/
 def callCompressionsNum (M N k R C : ℕ) : ℕ :=
-  (Layout.mk M N k).blocks + 2 + units M N R C * (2 + (Layout.mk R C k).lanes)
+  (NoiseLayout.mk M N k).blocks + 2 + units M N R C * (2 + (NoiseLayout.mk R C k).lanes)
 
 end Accounting.TS.J10R
