@@ -12,8 +12,8 @@ groups and checked by its ``check_shared`` with every producer's output (`check_
 - folded: each quantizer chunk's codes and its table's f32 scale, one row of two parts;
 - kept: K and V (``wk`` and ``wv``), a slot's one row each, since their positions are read at later steps.
 
-At the frozen shape and 1 KiB it is 21,857 rows a slot under ``layout_digest`` `FROZEN_DIGEST`, its Layout JSON is
-art:16f2faa0…'s file (``json_digest`` `FROZEN_JSON_DIGEST`), and its writers (`writers`) are art:8ce57586…'s.
+At the frozen shape and 1 KiB it is 21,857 rows a slot (`FROZEN_ROWS`) under ``layout_digest`` `FROZEN_DIGEST` and
+``json_digest`` `FROZEN_JSON_DIGEST`; `writers` gives its producers' window rules.
 
 **The reads.** `Window.locate` gives a proof block's input port as `Piece`\\ s, its bytes theirs in order:
 

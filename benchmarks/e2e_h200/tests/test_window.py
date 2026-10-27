@@ -1,6 +1,6 @@
 """The H200 window writer (`window`, CIR-115).
 
-- At the frozen shape, FAMILIES' shared-row layout and its writers are circuits' artifacts, and `commitments.layout`'s
+- At the frozen shape, FAMILIES' shared-row layout and its writers are the pinned ones, and `commitments.layout`'s
   shared-row check refuses a layout that isn't one.
 - Every read a proof block's ports make lies in rows its producers wrote, and K and V are read at the steps that wrote them.
 - A linear's weight reads are whole rows of the weights' registration (CMP-160).
