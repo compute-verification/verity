@@ -75,6 +75,22 @@
    "owner": "@compute-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
   },
+  "Accounting.Assumptions.Parties.Confined": {
+   "owner": "@memory-accounting",
+   "digest": "4baa7d4cf7feea9d9b3aa14840b4567972a9b07482305a4d7da4c843b404949b"
+  },
+  "Accounting.Assumptions.Parties.Faithful": {
+   "owner": "@memory-accounting",
+   "digest": "a55fd7568be21fc26d7215347fde10b58ec3a85fd8bdc9486d40494c4c2b0851"
+  },
+  "Accounting.Assumptions.Parties.Secret": {
+   "owner": "@memory-accounting",
+   "digest": "b30ca1da8b01036e855776b3312b906339c106c4321bce2f51729133210a9781"
+  },
+  "Accounting.Assumptions.Parties.WitnessPathPrivate": {
+   "owner": "@memory-accounting",
+   "digest": "95b15bbd9de1d0f6541b0df00c336a62ff80b53330fb7cdcb768e6f2dfd5a74f"
+  },
   "Accounting.Assumptions.SketchHashBudget": {
    "owner": "@compute-accounting",
    "digest": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77"
@@ -242,22 +258,6 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
-  },
-  "Accounting.Assumptions.Parties.Confined": {
-   "owner": "@memory-accounting",
-   "digest": "4baa7d4cf7feea9d9b3aa14840b4567972a9b07482305a4d7da4c843b404949b"
-  },
-  "Accounting.Assumptions.Parties.Faithful": {
-   "owner": "@memory-accounting",
-   "digest": "a55fd7568be21fc26d7215347fde10b58ec3a85fd8bdc9486d40494c4c2b0851"
-  },
-  "Accounting.Assumptions.Parties.Secret": {
-   "owner": "@memory-accounting",
-   "digest": "b30ca1da8b01036e855776b3312b906339c106c4321bce2f51729133210a9781"
-  },
-  "Accounting.Assumptions.Parties.WitnessPathPrivate": {
-   "owner": "@memory-accounting",
-   "digest": "95b15bbd9de1d0f6541b0df00c336a62ff80b53330fb7cdcb768e6f2dfd5a74f"
   }
  },
  "meaning": [
