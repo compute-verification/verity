@@ -16,9 +16,9 @@ COUNT = 1261
 
 COUNT += 26  # the training kernels: `torch_attention`'s 7, `torch_loss`'s 13 and `torch_embedding`'s 6
 
-COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
-
 COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2` (CIR-107), a line of its own
+
+COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
 
 
 def test_the_catalog_loads_every_definition_and_no_other():
