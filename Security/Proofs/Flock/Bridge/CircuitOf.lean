@@ -4,6 +4,7 @@ import Proofs.Flock.Bridge.Count
 import Proofs.Flock.Bridge.Statement
 import Proofs.Flock.Soundness.Discharge.Layout.Outs
 import Properties.Flock.Circuit.CircuitOf
+import Properties.Flock.Circuit.Transcript
 
 /-!
 # The parsed circuit file as core's circuit, and the sampling relation as its wrong units
@@ -11,7 +12,9 @@ import Properties.Flock.Circuit.CircuitOf
 The definitions are `Properties.Flock.Circuit.CircuitOf`'s: `Verity.Circuit.ofAudit` and `Verity.Partition.ofAudit` (a
 game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (the key program of the parsed file
 `keyProg D.unroll hU n` as core's circuit and its `n` units), and `circuitOfFile tags cf tables pf`, `unitsOfFile` and
-`partsOfFile` (the same at the committed circuit and public files, through `parsedOf`). Here are their lemmas:
+`partsOfFile` (the same at the committed circuit and public files, through `parsedOf`); and
+`Properties.Flock.Circuit.Transcript`'s: `Verity.Circuit.ofBits`, `openedOf` and `transcriptOf`. Here are their
+lemmas:
 
 * `Verity.Circuit.ofAudit_eq_toCircuit`: `Circuit.ofAudit C` is the Boolean profile's circuit of `C`
   (`Verity.Boolean.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
@@ -70,9 +73,6 @@ theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Transcript) :
     (Circuit.ofAudit C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) :=
   congrArg BitVec.ofBool (apply_coreOp _ _)
 
-/-- A transcript of bits as core's. -/
-def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Transcript := fun g => BitVec.ofBool (xs g)
-
 variable {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
 
 theorem Partition.ofAudit_unit : (Partition.ofAudit P).unit = P.unit := rfl
@@ -120,12 +120,6 @@ namespace Flock.Bridge
 open Claims.Sampling
 
 /-! ## A unit that is not faulty is correct on its openings -/
-
-/-- **The wire values a witness opens**: an input the constants `κ` fix, its constant; every other wire, the value
-opened at its position (`posOf`), `false` where none is. -/
-def openedOf (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (val : ℕ → Option Bool) (g : Fin C.N) :
-    Bool :=
-  if (C.op g).isInput then (κ g).getD ((val (posOf C g)).getD false) else (val (posOf C g)).getD false
 
 section Opened
 
@@ -287,11 +281,6 @@ theorem card_wrong_lt_of_relS {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
 end Opened
 
 /-! ## The parsed file's circuit -/
-
-/-- **The transcript the witness opens**, at `circuitOf`'s wires: `openedOf`'s bits. -/
-noncomputable def transcriptOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
-    (κ : Fin (keyCircuit D hU n).N → Option Bool) (val : ℕ → Option Bool) : (circuitOf D hU n).Transcript :=
-  Verity.Circuit.ofBits (openedOf (keyCircuit D hU n) κ val)
 
 section Parsed
 
