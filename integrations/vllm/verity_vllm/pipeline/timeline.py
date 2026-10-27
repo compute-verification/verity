@@ -1,4 +1,4 @@
-"""Automatic stage telemetry for the sweep runner (BRIEF §5 / §10).
+"""Automatic stage telemetry for the sweep runner.
 
 One append-only JSONL file per row attempt (`<row>/timeline.jsonl`, path in `VERITY_TIMELINE`): every process the runner starts
 (row_pod.sh itself, commit_delta, m1_capture, run_config's stages) appends `start` / `end` events with a wall-clock timestamp
@@ -7,13 +7,13 @@ One append-only JSONL file per row attempt (`<row>/timeline.jsonl`, path in `VER
     {"t": 1789875600.123, "utc": "...", "proc": "commit_delta", "pid": 123, "stage": "engine.build", "ev": "end", "s": 41.2,
      "hot": false, "engine_reused": false, "restart_reason": "fresh process", ...}
 
-Fields every runner log must carry (BRIEF §10): hot/cold process (`hot`), engine reused or restarted (`engine_reused`) + reason
+Fields every runner log must carry: hot/cold process (`hot`), engine reused or restarted (`engine_reused`) + reason
 (`restart_reason`), compile/warmup time (`prep.*` stages), workload/Commit time (`work.*`), offline validation time (`validate.*`).
 
     verity-vllm timeline report <timeline.jsonl> [--json out.json] [--md out.md]
     verity-vllm timeline mark <timeline.jsonl> <proc> <stage> <start|end|mark> [k=v ...]
 
-`report` folds the events into the BRIEF §5 table (process/model startup · preparation · workload · validation · closure) from the
+`report` folds the events into the stage table (process/model startup · preparation · workload · validation · closure) from the
 stage-name prefixes below, counts engine starts vs reuses and lists the restart reasons.  Overlapping spans are NOT summed into
 elapsed time: every category reports both its summed span time and the union of its spans.
 """
@@ -35,7 +35,7 @@ from verity_vllm.config import option
 
 SCHEMA = "verity-sweep/timeline/v1"
 
-# BRIEF §5 categories <- stage-name prefixes (first match wins; the row-level `row`/`stage.*` wrappers are the envelope, not a category)
+# stage categories <- stage-name prefixes (first match wins; the row-level `row`/`stage.*` wrappers are the envelope, not a category)
 CATEGORIES: list[tuple[str, tuple[str, ...]]] = [
     ("startup", ("engine.build", "engine.load", "process.start", "startup.")),
     ("preparation", ("prep.", "warmup.", "compile.", "graph.", "committer.setup", "ext.", "native.")),
@@ -159,7 +159,7 @@ def last_attempt(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], in
 
 
 def report(events: list[dict[str, Any]], *, attempt: str = "last") -> dict[str, Any]:
-    """Pair start/end events per (proc, pid, stage) into spans; fold into the BRIEF §5 categories; count engine starts/reuses.
+    """Pair start/end events per (proc, pid, stage) into spans; fold into the stage categories; count engine starts/reuses.
     `attempt="last"` (default) reports the last row attempt in an append-only file; `"all"` folds every attempt together."""
     attempts_seen = 1
     if attempt == "last":
@@ -229,7 +229,7 @@ def report_md(rep: dict[str, Any], title: str = "") -> str:
              + (f"attempt {rep.get('attempt')} of {rep.get('attempts_in_file')} in the file · " if rep.get('attempts_in_file', 1) > 1 else "") +
              f"engine starts **{rep['engine']['starts']}** (build s {[round(x, 1) for x in rep['engine']['build_s']]}) · engine reuses **{rep['engine']['reuses']}** · "
              f"restart reasons {rep['engine']['restart_reasons']} · hot {rep['engine']['hot_values']}", "",
-             "| BRIEF §5 stage | spans | summed s | union s | share of elapsed | finest stages (s) |", "|---|---:|---:|---:|---:|---|"]
+             "| stage | spans | summed s | union s | share of elapsed | finest stages (s) |", "|---|---:|---:|---:|---:|---|"]
     el = rep.get("elapsed_s") or 0
     for k, c in rep["categories"].items():
         st = ", ".join(f"{n} {v:.1f}" for n, v in sorted(c["stages"].items(), key=lambda kv: -kv[1])[:8])
@@ -371,7 +371,7 @@ class MarkOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class ReportOptions:
-    "fold a timeline into the BRIEF §5 table"
+    "fold a timeline into the stage table"
 
     path: str = option("path")
     json: str | None = option("--json", default=None)

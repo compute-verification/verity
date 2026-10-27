@@ -1494,7 +1494,7 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
             "passed": [x for x in g if x is not None]}
 
 
-#: where ADV-SPEC's advice v0 sits in the tree once it lands (PR #3499)
+#: advice v0's module (`verity.core.protocols.certifier.advice`)
 V0_PATH = Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "certifier" / "advice.py"
 
 

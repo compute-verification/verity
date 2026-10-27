@@ -95,7 +95,7 @@ adds nothing to what is public or kept.
 
 `uv run tools/verity/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
-`tests/reference.py`: the trial's composition rule (vendored, with its source files named), over the harness's framing
+`tests/reference.py`: the trial's composition rule, onsite's and remote's over their components' statements, over the harness's framing
 of the core interface (`verity_difftest.protocol.answer`), and
 each component's own Python (PoUW's `core_check.case`, and for its period `period_check.case`; for sampled proofs, v2's
 framing over sampled proofs' one-stage difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2 decides
