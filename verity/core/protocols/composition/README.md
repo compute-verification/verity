@@ -49,7 +49,7 @@ component accepts its own case, and the commitment is `bind` of the components' 
 | PoUW (its window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | sampled proofs (the one-stage audit) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
-| the remote bandwidth audit (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
+| the remote bandwidth audit (its session) | yes | | `Poub.Protocol.protocol` (`poub`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
 
 Until its port lands, a component is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port
 replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package

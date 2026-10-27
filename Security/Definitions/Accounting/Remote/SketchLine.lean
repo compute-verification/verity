@@ -5,7 +5,7 @@ import Definitions.Accounting.Remote.Sketch
 /-!
 # The memory line's coins as a sketch outcome (trusted)
 
-The memory line (`Properties.RemoteAudit.Line.LineHeld`) is a statement over a session's coins
+The memory line (`Properties.Poub.Line.LineHeld`) is a statement over a session's coins
 `Accounting.Remote.Draw.Coins n κ X`: the other coins `X` (the prover's, the world's, every window's challenge) and each
 window's openings coin, all uniform. The receipts' sketch bound (`Accounting.Guarantees.Remote.SketchBoundDeployed`) is
 a statement over a session's outcomes `Accounting.Remote.Sketch.Outcome β Hs N m`: the prover's own coins, the

@@ -42,9 +42,9 @@ KV-credited session meets `G` when it is paced. Pass `j` of window `w` certifies
 the layout may follow inputs chosen after those coins: it reads `y` only through the `a`-bit summary `steer c y`
 (`Accounting.Assumptions.SteeredLayout`). That holds of every layout at `a = |Y|`; what makes `a` small is the schedule
 check at a cap fixed before the coins. `SteeredLayout` fixes one `a` at every coin, and
-`Properties.RemoteAudit.steered_of_checked` gives it at `a = a₀ + 1` when, at every prefix and every append coin, the
+`Properties.Poub.steered_of_checked` gives it at `a = a₀ + 1` when, at every prefix and every append coin, the
 check accepts a schedule of at most `a₀` bits holding the plan the pass sent, under the named gap
-`Properties.RemoteAudit.ScheduleLayoutGap` (the model's layout of a pass is the verifier's positions of the session's
+`Properties.Poub.ScheduleLayoutGap` (the model's layout of a pass is the verifier's positions of the session's
 appends and the plan the pass sent). So `a₀` is the steering cap the prover commits before the first coin
 (`audit.Params.schedule_cap`, credited as `audit.Ledger.steering`), over which the check refuses a schedule, not
 the bits of the one schedule a session published: a prover whose schedule is 200 bits on most coins and 300 where it
@@ -52,7 +52,7 @@ steers would meet `SteeredLayout` only at 301 (which the
 committed cap fixes). `Properties.DeclaredCircuit.ScheduledRequirement` is `G` with `SteeredLayout` so discharged, on
 the sessions the check accepts at every pass, with `2^(a + (cap + 1))` in the query term
 (`Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement`). A layout that follows a
-coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so
+coin at a counted schedule is refused (`Properties.Poub.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so
 `a` does not collapse to `|Y|`. Each append has its own coin, uniform and independent of the others', so a re-key,
 which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window
 `joined x t` it joined (`RateSketch.LifetimeCapped`, the remote audit's `lifetime`). The remote audit's `L` is a life

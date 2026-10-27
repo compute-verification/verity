@@ -1,4 +1,4 @@
-"""The remote audit's verifier of record, the Lean process `remote-audit-verifier` (`RemoteAudit.Verifier`, in
+"""The remote audit's verifier of record, the Lean process `poub-verifier` (`Poub.Verifier`, in
 verity/core/protocols/remote_bandwidth/lean), as `verifier.py` runs it beside `audit.Session`: one request a JSON line
 on its stdin (an openings frame's bytes right after its line), each answered by one line on its stdout; a window's
 check runs on the process's threads and its verdict comes on a line of its own, handed to `done` as it arrives.
@@ -26,11 +26,11 @@ from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "verity/core/protocols/remote_bandwidth/lean"
-EXE = "remote-audit-verifier"
+EXE = "poub-verifier"
 REFUSED = {"refused": True}
 BUILD_LOCK = ROOT / "verity/core/difftest/lean/.lake/harness-build.lock"
 """`verity_difftest.BUILD_LOCK`: Lake builds the package's path requires in place, so a build here and the difftest's
-build of `remote-audit-difftest` (a suite beside this one) take turns."""
+build of `poub-difftest` (a suite beside this one) take turns."""
 
 
 class LeanError(RuntimeError):
@@ -39,10 +39,10 @@ class LeanError(RuntimeError):
 
 @functools.cache
 def build(package: Path = PACKAGE) -> Path:
-    """`lake build remote-audit-verifier` in the remote audit's Lake package, once a process, and the executable's
+    """`lake build poub-verifier` in the remote audit's Lake package, once a process, and the executable's
     path."""
     if shutil.which("lake") is None:
-        raise LeanError("lake is not on the PATH, so remote-audit-verifier cannot be built: put elan's bin on the PATH "
+        raise LeanError("lake is not on the PATH, so poub-verifier cannot be built: put elan's bin on the PATH "
                         "(tools/verity/lean/setup.sh), or pass --lean-exe")
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
@@ -54,7 +54,7 @@ def build(package: Path = PACKAGE) -> Path:
 
 
 class Lean:
-    """One `remote-audit-verifier` process, its requests taken in the order they are made and written on a thread of
+    """One `poub-verifier` process, its requests taken in the order they are made and written on a thread of
     their own, so that whoever makes one never waits on the pipe: `send` hands a request over and has `answered` called
     with its answer on the reader's thread, and `call` waits for the answer and returns it (`LeanError` for an error).
     `done({"done": id, "accepted": bool})` is called on the reader's thread as each window's check ends, and

@@ -12,7 +12,7 @@ the session's record of computation off the node (`Accounting.Remote.Held.Outsid
 
 * `NoOutsideCompute O` (statement C in full; the trace's `Identity` is its links clause): on every accepting outcome,
   no device outside the node computes on a registered block or a receipt during a credited pass. It is a premise of the
-  memory line (`Properties.RemoteAudit.Line.LineHeld`), and the line says it is conditional on it until certifiers
+  memory line (`Properties.Poub.Line.LineHeld`), and the line says it is conditional on it until certifiers
   cover the gate node's boundary and certify that nothing but the verifier's messages entered the node over the
   credited span. What grounds it for a session run inside the provider's lockdown of the node is
   `ProviderLockdown`, under `trusted-host`, which says what the lockdown covers and what it doesn't.

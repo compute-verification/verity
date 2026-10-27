@@ -7,7 +7,7 @@ import Proofs.Accounting.RemoteHeld.OverTime
 `[e_0, s_C)`. Its argument bounds the absent ticks over `[s_0, s_C)`, so it bounds what was held over `[u, s_C)` for any
 `u` in `[s_0, e_0]`: `heldOverWindow_of`, the same argument with `u` for `e_0`, at one outcome and with the paced
 session's facts given there rather than through `Paced` and `Covers`. The memory line's stretches after the first start
-at their first group's coin `s_lo`, before their paced session's `e_lo` (`Properties.RemoteAudit.Line.LineHeld`).
+at their first group's coin `s_lo`, before their paced session's `e_lo` (`Properties.Poub.Line.LineHeld`).
 -/
 
 namespace Accounting.SecurityProofs.Remote

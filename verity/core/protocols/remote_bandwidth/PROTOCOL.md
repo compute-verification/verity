@@ -15,8 +15,8 @@ and where the sketch's bound is read) and `p2.py` (the audit over PoUS's P2 stor
 pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
 checks are the specification of what each zero-knowledge proof block proves on the deployed path (§8). The verifier's
-definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
-`RemoteAudit.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
+definition is Lean code, `lean/` (`Poub`: `verifyWindow`, a window's draw and its openings' checks, and
+`Poub.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
 `lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the verifier of
 record, and `audit.py` is the reference that runs beside it (`README.md`). Both refuse a registration that binds PoUW's
 tiles.
@@ -227,7 +227,7 @@ the store's shape and the key (`expected_root`). A hello is refused before the r
 than the arenas, its layout isn't the store's regions, or its payload root isn't that root (`Binding.hold`). The
 verifier's record keeps the binding: the model's name and `checkpoint_sha512`, the store's shape, both roots and
 `bound`. A period's circuit is this tree's git hash, so the circuit a period signs commits to this code. The binding's
-decision is also Lean (`lean/RemoteAudit/Store.lean`), and reading the files is Python only (§8).
+decision is also Lean (`lean/Poub/Store.lean`), and reading the files is Python only (§8).
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT`. The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
@@ -583,7 +583,7 @@ What each kind rests on:
   enters before the sketch, \(e = E_j \oplus \text{spread}(z)\), as §8's third rule requires, and XOR with a fixed \(z\)
   permutes each sector, so each sector's fiber is the same. But `RateAuditSketch`'s digest is of the tile alone, so that
   form needs it restated over the block and \(z\) together, and it is not part of the stated guarantee. The verifier's
-  registry (`RemoteAudit.Registry.register`, and `audit.Registry.register` beside it) refuses such a registration until
+  registry (`Poub.Registry.register`, and `audit.Registry.register` beside it) refuses such a registration until
   its definition covers it.
 
 **Where sketch-sha512's bound is read** (`timing.sketch_reading`, `timing.sketch_failure`, pinned by
@@ -934,7 +934,7 @@ pace naming `in_flight`) window \(t\)'s boundary message is due once \(t\) has i
 \(\max(b_{t-1} + k A, D_{t-1})\), and is refused before any of them arrived; a root of \(t\) after it is out of turn
 (`order`). So every coin leaves after the root before it, which the challenger's signed log shows
 (`coins.released_reason`) and a record naming \(f = 1\) holds (`Record`), and the honest prover waits a round trip on
-each coin. The Lean is `RemoteAudit.Flight`, which is the session at \(f = 2\) (`Flight.run_two`).
+each coin. The Lean is `Poub.Flight`, which is the session at \(f = 2\) (`Flight.run_two`).
 
 Each root's arrival on the verifier's clock is in the record (`WindowRecord.arrived_ns`), so the record bounds when
 each group's reads were: after its challenge left at \(s_g = b_{g-1}\), and before
@@ -1127,7 +1127,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     as before, each pass still starts after the root before it and sends its root once its receipts are made (§5),
     and the verifier sees the same messages, so what it accepts is unchanged.
 - **The schedule check.** Credit after the seed waits on it (`schedule.py`, of record in
-  `lean/RemoteAudit/Schedule.lean`, held by the difftest). Before the session's first coin the prover commits a cap
+  `lean/Poub/Schedule.lean`, held by the difftest). Before the session's first coin the prover commits a cap
   \(a\) on its schedule's bits, with the session's parameters (`Params.schedule_cap`; none, the default, and nothing
   after the seed is credited). After the session it publishes the schedule: when each appended block is written and
   freed, which registered blocks are freed and when, and each pass's step. The verifier refuses a schedule over the
@@ -1136,8 +1136,8 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   (`Session.scheduled`, a `Scheduled` verdict carrying the cap; `Ledger.steering` is the cap). `ledger` credits
   nothing after the seed without a `Scheduled` of the same session. So a credited plan is the verifier's own function
   of a schedule of at most \(a\) bits, and a plan that follows a coin at that schedule is refused: the `a` of the
-  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, under
-  `Properties.RemoteAudit.ScheduleLayoutGap`), never the coins' bits for free. The cap, not the published schedule's
+  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.Poub.steered_of_checked`, under
+  `Properties.Poub.ScheduleLayoutGap`), never the coins' bits for free. The cap, not the published schedule's
   own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a schedule's length can follow
   the coins. A prover that publishes a 200-bit schedule on most coins and a 300-bit one where it steers takes up to
   \(2^{200} + 2^{300}\) layouts, so only \(a = 301\) holds of it, and its 200-bit sessions credited at 200 would
@@ -1341,10 +1341,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   cut fixes the roots; the deployed prover may compute them from the coin commitment, so that is the gap
   `binding-split` (below).
   `pooled` is computed in exact rationals in the verifier's Lean
-  (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
-  certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`
+  (`lean/Poub/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
+  certified rational root, and `Properties.Poub.PooledCovers` proves its W at least the bound `PooledDraw`
   reads (the greedy by \(U_t/s_t\) is the fractional knapsack's optimum); the memory line reads that W from the
-  record's windows (`Properties.RemoteAudit.LineCoversSession`). What this code supplies is the schedule (each
+  record's windows (`Properties.Poub.LineCoversSession`). What this code supplies is the schedule (each
   window's challenge released at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile
   a receipt under a registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and
   the profile at δ.
@@ -1368,7 +1368,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   (`Committed.play`, which gives the prover the commitment from the start) and a statement that the play fixes each
   window's receipts by its cut, which is what closes the gap. The same view may also let `PooledDraw` drop the
   hiding terms, which is for its statement to show.
-- **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/RemoteAudit/Store.lean`
+- **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/Poub/Store.lean`
   and held to the Python by a difftest (`lean/tests/test_binding.py`), refusals compared word for word: the pin from
   its file's bytes (`pinOf`, `modelPin`), `checkpoint_sha512`, the payload salts, the expected payload root from the
   weights blocks' digests (`expectedRoot`) and `Binding.hold`'s decision (`hold`). Reading the files stays Python only:
@@ -1615,7 +1615,7 @@ nothing (`append`).
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
 - Not yet built: the Lean session over a P2 store (the Lean ports here are the registration digest, the partials,
-  the unit receipt and the opening check, `lean/RemoteAudit/P2.lean`), the registry's one live registration a node for
+  the unit receipt and the opening check, `lean/Poub/P2.lean`), the registry's one live registration a node for
   P2, and the zero-knowledge opening unit of a P2 unit (§8).
 
 ## Appendix A. Live coins, and why the protocol doesn't use them

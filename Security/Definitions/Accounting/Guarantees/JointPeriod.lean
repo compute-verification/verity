@@ -19,7 +19,7 @@ protocol's audit:
   prefix, at `δ_s + n·(δ_bind + δ_ks)`; as device-model work, through a credit of words as work;
 * PoUB: `Bandwidth.Guarantees.AuditRO`, the device's ingress, at `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`;
 * PoUS: `Pous.Guarantees.ContinuousAudit`, the freed share of memory over the period's challenges, at
-  `βe + n·(β + 1)·π`, or the remote audit's memory line (`Properties.RemoteAudit.Line.LineHeld`);
+  `βe + n·(β + 1)·π`, or the remote audit's memory line (`Properties.Poub.Line.LineHeld`);
 * the network certifier: the leak through the network certifiers over a period of sampled audits, each window at
   `δ + ε_ks + ε_bind`, whose count of secrets gives `K`;
 * sampled proofs: the sampled audit's live knowledge soundness, at `δ + ε_ks + δ_link`, read as a bound on the

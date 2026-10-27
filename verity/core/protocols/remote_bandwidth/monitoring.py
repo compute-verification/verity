@@ -1,6 +1,6 @@
 """The remote bandwidth audit over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
-answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + S/2^64 (δ₀ the
+answer as `Poub.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + S/2^64 (δ₀ the
 openings' pooled bound's δ, 2^-40, and S the session's draws).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
@@ -83,7 +83,7 @@ def per_window(t: int, windows: Sequence[tuple[int, int]], delta: Fraction) -> d
 
 
 def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment: str | None = None) -> dict[str, Any]:
-    """The monitoring-period result of one session's core answer (`RemoteAudit.Protocol`'s) when every one of `machines`
+    """The monitoring-period result of one session's core answer (`Poub.Protocol`'s) when every one of `machines`
     runs such a session every `window_s` seconds."""
     head = {"format": FORMAT, "deployment": {"id": deployment, "machines": machines, "window_s": window_s},
             "deltas": [str(d) for d in DELTAS], "statement": STATEMENT, "except_also": EXCEPT,

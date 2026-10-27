@@ -118,7 +118,7 @@ class Recorded:
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
 SAMPLED_PROOFS = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
-#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
+#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `Poub.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 BANDWIDTH = Recorded("verity/remote-bandwidth/v0")
 

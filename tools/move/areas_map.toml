@@ -6,7 +6,7 @@
 # - `Properties.{CertifierDevice,CertifierNetwork,NetworkCertifier,NetworkRecords}` become
 #   `Properties.NetworkCertifier.{Device,DeviceOutput,Check,Records}`;
 # - `Properties.NciDesc` becomes `Properties.Nci.Desc`, `Properties.Identity` `Properties.Hash.Identity`,
-#   `Properties.Evaluate` `Properties.Core.Evaluate`, `Properties.RemoteAudit` `Properties.Accounting.Remote`;
+#   `Properties.Evaluate` `Properties.Core.Evaluate`, `Properties.Poub` `Properties.Accounting.Remote`;
 # - `Definitions.Population` and `Proofs.Population` become `Definitions.SampledProofs` and `Proofs.SampledProofs`.
 # Module names only: declarations and namespaces keep their names, so no guarantee changes. Six statement modules share
 # their name with their namespace (`namespace Properties.CertifierDevice`), so [keep] holds a namespace where it is one: on
@@ -21,7 +21,7 @@
 "Properties/NciDesc" = "Properties/Nci/Desc"
 "Properties/Identity" = "Properties/Hash/Identity"
 "Properties/Evaluate" = "Properties/Core/Evaluate"
-"Properties/RemoteAudit" = "Properties/Accounting/Remote"
+"Properties/Poub" = "Properties/Accounting/Remote"
 "Properties.CertifierDevice" = "Properties.NetworkCertifier.Device"
 "Properties.CertifierNetwork" = "Properties.NetworkCertifier.DeviceOutput"
 "Properties.NetworkCertifier" = "Properties.NetworkCertifier.Check"
@@ -29,7 +29,7 @@
 "Properties.NciDesc" = "Properties.Nci.Desc"
 "Properties.Identity" = "Properties.Hash.Identity"
 "Properties.Evaluate" = "Properties.Core.Evaluate"
-"Properties.RemoteAudit" = "Properties.Accounting.Remote"
+"Properties.Poub" = "Properties.Accounting.Remote"
 "Definitions/Population" = "Definitions/SampledProofs"
 "Proofs/Population" = "Proofs/SampledProofs"
 "Definitions.Population" = "Definitions.SampledProofs"
@@ -45,9 +45,9 @@ exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/f
 [keep]
 # A namespace where it is one: a namespace line, and a declaration's name under one of the six namespaces a statement module
 # shares (not `Proofs.Properties.*`, which are modules, nor `Runs`, a module under `Properties.CertifierNetwork`). The modules
-# under `Properties.RemoteAudit` share their names with namespaces and declarations (`Line`, `Line.Record`), so one of them
+# under `Properties.Poub` share their names with namespaces and declarations (`Line`, `Line.Record`), so one of them
 # is a module only where a whole import line or a quoted string names it.
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
             '(?m)^[ \t]*(?:namespace|end|open|export)[ \t].*$',
-            '(?<!Proofs\.)(?:(?<!import )(?<!")|(?!Properties\.RemoteAudit\.(?:Coins|Pooled|Schedule|Line(?:\.Premises|\.Record)?)(?:["\s]|$)))Properties\.(?:CertifierDevice|CertifierNetwork|NetworkCertifier|NetworkRecords|Identity|RemoteAudit)\.(?!Runs\b)[\w«]']
+            '(?<!Proofs\.)(?:(?<!import )(?<!")|(?!Properties\.Poub\.(?:Coins|Pooled|Schedule|Line(?:\.Premises|\.Record)?)(?:["\s]|$)))Properties\.(?:CertifierDevice|CertifierNetwork|NetworkCertifier|NetworkRecords|Identity|Poub)\.(?!Runs\b)[\w«]']
 strings = []

@@ -2,8 +2,8 @@
 (time-held and link-charged, each read held over time and at the passes, exact) with its groups' times read from what
 the auditor's host signed rather than from the verifier's stamps.
 
-**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
-`RemoteAudit.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `RemoteAudit.Pooled` over the
+**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`poub-verifier`'s `line_record` request,
+`Poub.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `Poub.Pooled` over the
 record's draws) computes each session's line off its record from
 the inputs `verifier.recorded_inputs` reads, and `remote_bandwidth.line` computes it beside it from the same JSON
 (`line.line_of_record`):
@@ -1154,7 +1154,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="compute each line in the Lean verifier, held exactly to line.py's (the line of record), or in "
                          "line.py alone (a reading, not of record)")
     ap.add_argument("--lean-exe", type=Path, metavar="PATH",
-                    help="the remote-audit-verifier executable (default: `lake build` it in the remote audit's package)")
+                    help="the poub-verifier executable (default: `lake build` it in the remote audit's package)")
     ap.add_argument("--boundary", type=Path, metavar="FILE",
                     help="the network certifiers' records of the gate node's boundary links (`read_boundary`): refuse "
                          "a session's credit when they show ingress other than the verifier's messages over its span "

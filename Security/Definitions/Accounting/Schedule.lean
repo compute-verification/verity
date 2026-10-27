@@ -12,13 +12,13 @@ is the plan of one of fewer than `2^(a+1)` schedules. `a` is one number for ever
 the prover commits before the coins, which the verifier holds the schedule to, and never `|Y|` for free. The bits of
 the one schedule published after the coins are not such an `a`, since their length can follow the coins.
 
-The code's check is `RemoteAudit.Schedule.check`
-(`verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Schedule.lean`): it refuses a session whose passes' plans
+The code's check is `Poub.Schedule.check`
+(`verity/core/protocols/remote_bandwidth/lean/Poub/Schedule.lean`): it refuses a session whose passes' plans
 are not its published schedule's (`Schedule.plan`) or whose schedule is over the committed cap, and returns the
 schedule's bits.
-`Properties.RemoteAudit.scheduleDeterministic_of_checked` derives `ScheduleDeterministic` from its acceptance, and
-`Properties.RemoteAudit.steered_of_scheduleDeterministic` derives `SteeredLayout` at `a + 1` bits from it
-(`Security/Proofs/Properties/RemoteAudit/Schedule.lean`, which also holds a layout that is `SteeredLayout` at one bit
+`Properties.Poub.scheduleDeterministic_of_checked` derives `ScheduleDeterministic` from its acceptance, and
+`Properties.Poub.steered_of_scheduleDeterministic` derives `SteeredLayout` at `a + 1` bits from it
+(`Security/Proofs/Properties/Poub/Schedule.lean`, which also holds a layout that is `SteeredLayout` at one bit
 and not `ScheduleDeterministic` at any `a`).
 -/
 

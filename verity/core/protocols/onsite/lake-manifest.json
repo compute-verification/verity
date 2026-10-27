@@ -3,7 +3,7 @@
  "packages":
  [{"type": "path",
    "scope": "",
-   "name": "remote_audit",
+   "name": "poub",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
    "dir": "../remote_bandwidth/lean",

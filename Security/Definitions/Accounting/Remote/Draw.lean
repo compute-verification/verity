@@ -11,7 +11,7 @@ The draw `audit.pooled` reads, as the verifier runs it. A session has `n` window
 `U_t ≤ m` receipts and their roots, which fix which of them are correct unless an opening collides (`Receipts`). Then
 the challenger releases window `t`'s
 openings coin, live, to the verifier and the prover, and the verifier opens `s'_t = min(s_t, U_t)` distinct receipts of
-the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openings")` under the key
+the `U_t` (`Poub.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openings")` under the key
 `derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})` (`verity/ml/randomness`), a partial Fisher–Yates whose step
 `i` swaps position `i` with position `i + Key.uniform(U_t − i)`, read from the keyed SHA-512 stream at
 `("s", "openings", i)`. `Key.uniform(N)` is exact rejection sampling: it reads `w`-bit big-endian words,
@@ -70,7 +70,7 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   it.
 * `Receipts`: **the receipts as the window's roots hold them.** Window `t` registers its receipts as
   `hm96-sha512/row/v2` leaves, 16 receipts a leaf, in frame-v3-sha512 trees, and sends their roots before its coin is
-  released (`RemoteAudit.verifyWindow`). `opened t ω p` is the opening the prover presents for receipt `p` when the
+  released (`Poub.verifyWindow`). `opened t ω p` is the opening the prover presents for receipt `p` when the
   window opens it. `Shows D prf rest t p ω v`: the window opens `p` at `ω` and the verifier accepts the presented
   opening, of row `v`, at the receipt's root and rank as that run has them. `held D prf rest t ω p` is **the row the
   root holds for it**, a definition, not the prover's: the plurality of the rows `p` shows over window `t`'s

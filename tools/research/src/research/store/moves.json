@@ -1516,6 +1516,16 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "Security/Proofs/Properties/RemoteAudit.lean": "Security/Proofs/Properties/Poub.lean",
+        "Security/Proofs/Properties/RemoteAudit/": "Security/Proofs/Properties/Poub/",
+        "Security/Properties/RemoteAudit.lean": "Security/Properties/Poub.lean",
+        "Security/Properties/RemoteAudit/": "Security/Properties/Poub/",
+        "verity/core/protocols/remote_bandwidth/lean/RemoteAudit.lean": "verity/core/protocols/remote_bandwidth/lean/Poub.lean",
+        "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/": "verity/core/protocols/remote_bandwidth/lean/Poub/"
+      }
     }
   ]
 }

@@ -1,5 +1,5 @@
-"""`audit.Registry` held to the verifier's registry in Lean (`RemoteAudit.Registry`, the definition, served by
-`remote-audit-difftest`): at most one live registration a node, a second refused and counted, sessions over the live
+"""`audit.Registry` held to the verifier's registry in Lean (`Poub.Registry`, the definition, served by
+`poub-difftest`): at most one live registration a node, a second refused and counted, sessions over the live
 one as its k-th, their events, `close` counting each session as it stands, R (`drawn`), and `registry/v0` written and
 read back. Drawn cases are calls over a few nodes from an empty registry or one read back, with now and then a field
 either side refuses; recorded ones run a recorded session (`ra_cases.SCENARIOS`) through the registry, so that `close`

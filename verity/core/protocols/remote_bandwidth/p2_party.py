@@ -28,7 +28,7 @@ auditor's gate starts over ssh with its `--device` directory (`benchmarks/live_v
 `prove(reader, writer, prover)` is the prover's: it answers each message with `prover`'s `hold`, `run` and `open` until
 the answer, which it returns.
 
-No Lean replays a P2 session yet (`RemoteAudit.P2` checks one opening); the verdict here is the Python session's.
+No Lean replays a P2 session yet (`Poub.P2` checks one opening); the verdict here is the Python session's.
 """
 
 from __future__ import annotations

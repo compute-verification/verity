@@ -9,7 +9,7 @@ verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a ses
 
 * `Live`: window `t`'s size and correct receipts are fixed before its openings coin is released, by the other coins and
   the earlier windows' openings coins, never by its own or a later one. The verifier releases the coin after the
-  window's roots arrived (`RemoteAudit.verifyWindow`), and a receipt is correct when the row its root holds
+  window's roots arrived (`Poub.verifyWindow`), and a receipt is correct when the row its root holds
   (`Receipts.held`, the plurality of what the receipt shows over the window's continuations, read only off what
   precedes the coin) is: the roots bind the receipts only up to a collision, which is `Refused`'s and the guarantees'
   binding term (`Receipts.binding`), not this premise. The guarantees take it of the
@@ -18,7 +18,7 @@ verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a ses
   commitment's bits is not `Live` (red team RD-12). What the commitment reveals is the guarantees' hiding term
   (`Committed.hide`), not this premise.
 * `Refused`: the verifier refuses a window one of whose opened receipts is wrong as presented
-  (`RemoteAudit.checkOpening`): on an accepted session each receipt a window's draw opens is correct, or moved
+  (`Poub.checkOpening`): on an accepted session each receipt a window's draw opens is correct, or moved
   (`Receipts.Moved`: accepted at its root and rank with a row other than the one the root holds). The guarantees
   charge a move as `Receipts.binding`, which `ReceiptsBindingOfFork` bounds by two runs from the window's cut that
   hash a SHA-512 collision (`Hash.Guarantees.RowBinding`) or split the receipt's roots.

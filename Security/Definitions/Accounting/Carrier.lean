@@ -54,7 +54,7 @@ layout puts at positions of appends after the registration, and `Chip.rebuildsIn
 sectors in a set of tiles. The stacking premise charges carriers with the rebuilds of appended tiles only.
 
 **The lifetime cap.** The remote audit refuses a plan holding a block of an append that joined a window `L` or more
-before (its `lifetime`; `Properties.RemoteAudit.LifetimeCapped`). An append joins the window being filled at the first
+before (its `lifetime`; `Properties.Poub.LifetimeCapped`). An append joins the window being filled at the first
 pass after it, so its coin was drawn after every pass of the windows before. `LifetimeCapped layout joined L` is the
 game's form: at the session's coins, every pass whose layout holds a block of append `t` is in a window from `joined t`
 to `joined t + L − 1`. The game draws every append's coin with the codec, so `joined` is the game's only record of when.
