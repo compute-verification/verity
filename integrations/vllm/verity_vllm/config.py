@@ -400,7 +400,7 @@ def row_path(row: str) -> str:
     return os.path.relpath(row_file(row), ROOT)
 
 #: How a row's requests are done: at their public cap (``sampling.ignore_eos``: every request runs its ``max_tokens`` steps), or at an
-#: EOS the model samples before it.  A row of record is done only at its public cap (Daniel, ASK-39, 18 Oct), so its served length is
+#: EOS the model samples before it.  A row of record is done only at its public cap, so its served length is
 #: public; the EOS a request samples there is a value, which decides no step.
 DONE_SOURCES = ("public-cap", "eos-token")
 

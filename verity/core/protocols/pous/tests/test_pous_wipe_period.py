@@ -275,7 +275,7 @@ def test_what_the_bound_does_not_cover() -> None:
     assert [u["tier"] for u in whole if u["tier"] == "gpu-hbm"] == []
     host = W.undeclared("host-dram", 100)
     assert host[0]["tier"] == "host-dram" and host[0]["bytes"] == gpu[1]["bytes"] - 100
-    counted = WP.link("relay", "n0", "outside", "eth1", mbps=10_000, counted_by="network certifier (NET-78)")
+    counted = WP.link("relay", "n0", "outside", "eth1", mbps=10_000, counted_by="network certifier")
     where = WP.placement("n0", "n0", simulated=True, links=[counted, WP.link("control", "n0", "outside", "eth0")],
                          undeclared=gpu[:1])
     gaps = W.uncertified(where, None)

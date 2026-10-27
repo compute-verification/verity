@@ -2,7 +2,7 @@
 over loopback TCP, and each refused op (a second open while one is open, a root opened twice, a finish with nothing
 open, a malformed root, an unknown op) reaches the verifier as a `CoinError` naming its reason; `Host` serves it on a
 thread from `start` until `stop`. The host is a stand-in for `a5_coins.Local` (no serve.py), so only the wire is
-tested; the session itself runs in all_protocols' opt-in end to end."""
+tested."""
 
 from __future__ import annotations
 

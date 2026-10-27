@@ -4,14 +4,14 @@
 #   cpu    build, then fixtures.py expected into $OUT/fixtures (uv sync first; FIX_ARGS, JOBS default 30)
 #   gpu    (vy-dc-h200-3) check.py, then bench.py, on the files sent (LIBS, default $RESEARCH_RUN_DIR/inputs):
 #          expected.npz and fixtures.json, j10r_ref.so as the fallback, every h1u_*.so as an h1u build (and its _sm
-#          launch), and s8_linear's build.sh, s8_wgmma.cu, s8_acc.h, sass_gate.py, wgmma.py and configs.py (#4520's) as
+#          launch), and s8_linear's build.sh, s8_wgmma.cu, s8_acc.h, sass_gate.py, wgmma.py and configs.py as
 #          the bench's wgmma arm, built here by that build.sh (its plain arm is this tree's s8_linear/int_mm.py). Fixtures not
 #          sent are computed here, the fallback not sent is built here (BUILD_REF=0: not) and with no h1u_*.so sent
 #          h1u_build makes the arms H1U_ARMS names from this tree (BUILD_H1U=0: not), all before the lease, as are the
 #          operands, in a scratch directory removed at exit.
 #
 #   research run --on vy-nebius-cpu-4 --as LANE --project verity --source . --cwd source -- \
-#     env CHECK_SLOTS=/workspace/research/locks/kernels/slots python3 tools/verity/check/slot.py --by kernels -- \
+#     env CHECK_SLOTS=/workspace/research/locks/kernels/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/torch_gpu/j10r_sm90/job.sh cpu
 #   research run --on vy-dc-h200-3 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
 #     --env GPU_LEASE_WHO=LANE --send CPU_RUN/out/fixtures/expected.npz --send .../fixtures.json \
@@ -51,7 +51,7 @@ build() {
 H1U_BASE=-DH1U_KSPLIT=4,-DH1K_AUTO=1,-DH1K_RONLY=1
 H1U_A=$H1U_BASE,-DH1U_JCTA=1,-DH1U_WARPS=4,-DH1U_JX=1,-DH1U_JBW=1
 H1U_Q=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1
-# HASH-21's kr, kra and kraq, then HASH-22's kraq4 (JCS 4) and kraqwxsc (JW, JWS and JPC, with JXS)
+# kr, kra and kraq, then the fastest exact arms without and with JW: kraq4 (JCS 4) and kraqwxsc (JW, JWS and JPC, with JXS)
 H1U_DEFAULT="kr=$H1U_BASE kra=$H1U_A kraq=$H1U_Q,-DH1U_JCS=2 kraq4=$H1U_Q,-DH1U_JCS=4
   kraqwxsc=$H1U_Q,-DH1U_JW=1,-DH1U_JXS=1,-DH1U_JWS=1,-DH1U_JPC=1"
 h1u_build() {

@@ -34,7 +34,7 @@ from verity_vllm.records import workload as WL
 from verity.ml.definitions.registry import b1
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
-#: workload 101's Build (run r20260928-160311-303b): `build_request/` (the derived request Program) and
+#: workload 101's Build: `build_request/` (the derived request Program) and
 #: `build_workload/` (the workload Program GP-01 composed)
 BUILD_101 = "art:2d65d5d7bdc21af3df01c041272e5a72b40a86bc74cc09075c7e726cc01f1fd0"
 #: the workload's manifest command (`row_stages.required_manifest`): every tap policy on, the word check at its default 16/32

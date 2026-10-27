@@ -5,7 +5,7 @@ import Proofs.Flock.Recursive.Registrants
 
 Obligation: `VBridge` is a fact about our own code (V*'s circuits and the verifier), not about the world, so it is an
 obligation, not a premise. VBridge G (`Proofs.Flock.VBridge`) discharges it, and it stays a hypothesis of
-`RecursiveSound`, and so in this module, only until that lands.
+`RecursiveRanRegistered`, and so in this module, only until that lands.
 
 In the recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`), the developer's firewall sends the auditor a salted
 SHA-512 commitment to each inner round message, relays the auditor's live coin for the round, and afterwards proves, in

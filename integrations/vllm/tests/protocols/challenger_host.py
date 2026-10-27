@@ -9,8 +9,7 @@ pins log (`PINS`, one pin of `PINNED`, every open's ``pinned``) in its opens as 
 and writes it as infra publishes it (``pins.jsonl``, the gate's ``pins``), so `challenger.pinned_session` holds each
 session to it, and to the verifier's copy of main's first-parent history `MAIN`, which holds `PINNED`. Each holds a
 `Registry`, infra's model registry in this process, whose registration a period opened with ``model`` signs (the gate's
-``period-open --model``) and whose key `Gate.model_key` hands the lane (``model-key``). #2643's
-`tests/check/challenger_host.py`, over any challenger."""
+``period-open --model``) and whose key `Gate.model_key` hands the lane (``model-key``), over any challenger."""
 from __future__ import annotations
 
 import functools
