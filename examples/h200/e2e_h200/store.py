@@ -1,7 +1,7 @@
 """The weights' store and its decode call: the stand-in for memory-accounting's layout and decode call, on
 the conventions of P2's staging decode (`benchmarks/torch_gpu/p2_stage`).
 
-**Layout.** W is ALLP-IFACE's weights stream (`weights.Weights.stream`: every tensor's little-endian bytes, s8 codes, f32
+**Layout.** W is the seeded weights stream (`weights.Weights.stream`: every tensor's little-endian bytes, s8 codes, f32
 scales and bf16 gains and embeddings, at `Tensor.offset`). Block j of the store carries W bytes
 [2054 j, 2054 j + 2054) as bytes 2 .. 2055 of its big-endian 2,056-byte row, P2 v4 (`p2-16448/v4`,
 `verity.core.protocols.pous.schemes.p2`) at the registered point, keys from `sha512_keys` under `expand_prefix(salt)`; the

@@ -1,4 +1,4 @@
-"""The skeleton at ALLP-IFACE's tiny shape and at MINI (every level of circuits' FAMILIES map) on the CPU: every unit of a step
+"""The skeleton at the tiny shape and at MINI (every level of circuits' FAMILIES map) on the CPU: every unit of a step
 replays bit for bit, the driver's rows equal the replay lane's independent `cpu_step`, a tampered table doesn't replay, the commit backends agree, the store's layout stages
 every tensor, and `run.py` writes its record and bundle."""
 from __future__ import annotations
