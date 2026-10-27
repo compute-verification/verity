@@ -72,3 +72,6 @@ Daniel made the deslop refactor top priority. Every PR of ours must add no inter
 ## New slots, and resend what waits (21:35Z)
 infra opened slots at 21:30Z: vy-nebius-cpu-6 (192 cores, idle, Lean `build 6` warm trees, `soundness` pool s0-s5) and vy-nebius-cpu-2 (`soundness` s0-s5, `build 6`). A waiting run never moves by itself. Cancel each of your runs still waiting for a slot (`research cancel RUN --reason … --by soundness`), and resend the same command with `--on vy-nebius-cpu-6` or `--on vy-nebius-cpu-2`, `CHECK_SLOTS=/workspace/research/locks/soundness/slots` and `--cwd clone`. Don't send runs to vy-nebius-1, cpu-1, cpu-3 or cpu-5 (CPU-bound or backed up), and don't use `--on auto` (it doesn't know cpu-2 or cpu-6 yet).
 Two demos (Daniel, 2:25 PM PDT): a PR titled "two demos" whose records passed at its own head lands on its land verdict, with no pre-landing Lean check. Run records for two-demos PRs first.
+
+## Records runs go to cpu-6 (21:55Z)
+Send records runs to vy-nebius-cpu-6 only. cpu-2 is low on inodes, and infra asks for no new records runs there until its cleanup lands. cpu-2's soundness pool is fine for short tries and suites. Leave runs already started on cpu-2 alone.
