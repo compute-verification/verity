@@ -26,10 +26,7 @@
 #include <cstdint>
 #include <cuda_runtime.h>
 
-namespace sh {
-typedef unsigned long long u64;
-#include "../../codec_tensor/sha512.cuh"
-}  // namespace sh
+#include "../../torch_gpu/sha512_rows/sha512x.cuh"
 typedef unsigned long long u64;
 typedef unsigned int u32;
 
@@ -98,9 +95,8 @@ __device__ __forceinline__ void nblock(const u64* sd, u64 t, u64 nt0, u64 nt1, u
   w[13] = 0;
   w[14] = 0;
   w[15] = 96 * 8;
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s[j] = sh::kSha512Iv[j];
-  sh::sha512_compress(s, w);
+  sx::iv(s);
+  sx::compress<0, 1>(s, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
     h[2 * j] = (u32)(s[j] >> 32);
@@ -140,9 +136,8 @@ __device__ __forceinline__ void unit_seed(const H1Call& C, u64 p, const u64* __r
   for (int j = 0; j < 8; ++j) w[4 + j] = salt[j] ^ p;
 #pragma unroll
   for (int j = 0; j < 4; ++j) w[12 + j] = C.roots[j] ^ p;
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s[j] = sh::kSha512Iv[j];
-  sh::sha512_compress(s, w);
+  sx::iv(s);
+  sx::compress<0, 1>(s, w);
 #pragma unroll
   for (int j = 0; j < 4; ++j) w[j] = C.roots[4 + j] ^ p;
 #pragma unroll
@@ -151,7 +146,7 @@ __device__ __forceinline__ void unit_seed(const H1Call& C, u64 p, const u64* __r
   w[13] = 0;
   w[14] = 0;
   w[15] = 224 * 8;
-  sh::sha512_compress(s, w);
+  sx::compress<0, 1>(s, w);
 }
 
 // the seeds of every live unit: seeds[(seed0 + u) * 2 + kind] (8 words), kind 0 seed_j, 1 σ_R
@@ -197,8 +192,8 @@ constexpr int NZ = 17;  // shared noise stride in words: lane l's word s16 in ba
 
 __device__ __forceinline__ void sha_round(u64 v[8], u64 k, u64 w) {
   const u64 a = v[0], b = v[1], c = v[2], e = v[4], f = v[5], g = v[6];
-  const u64 t1 = v[7] + (sh::rotr64(e, 14) ^ sh::rotr64(e, 18) ^ sh::rotr64(e, 41)) + ((e & f) ^ (~e & g)) + k + w;
-  const u64 t2 = (sh::rotr64(a, 28) ^ sh::rotr64(a, 34) ^ sh::rotr64(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+  const u64 t1 = v[7] + (sx::rotr<0, 14>(e) ^ sx::rotr<0, 18>(e) ^ sx::rotr<0, 41>(e)) + ((e & f) ^ (~e & g)) + k + w;
+  const u64 t2 = (sx::rotr<0, 28>(a) ^ sx::rotr<0, 34>(a) ^ sx::rotr<0, 39>(a)) + ((a & b) ^ (a & c) ^ (b & c));
   v[7] = g;
   v[6] = f;
   v[5] = e;
@@ -211,13 +206,12 @@ __device__ __forceinline__ void sha_round(u64 v[8], u64 k, u64 w) {
 
 // a noise block's state after rounds 0 .. 10, which read only the tag and the seed (words 0 .. 10): one a unit
 __device__ __forceinline__ void noise_mid(const u64* sd, u64 nt0, u64 nt1, u64 nt2, u64 mid[8]) {
+  sx::iv(mid);
+  sha_round(mid, sx::K_DEV[0], nt0);
+  sha_round(mid, sx::K_DEV[1], nt1);
+  sha_round(mid, sx::K_DEV[2], nt2);
 #pragma unroll
-  for (int j = 0; j < 8; ++j) mid[j] = sh::kSha512Iv[j];
-  sha_round(mid, sh::kSha512K[0], nt0);
-  sha_round(mid, sh::kSha512K[1], nt1);
-  sha_round(mid, sh::kSha512K[2], nt2);
-#pragma unroll
-  for (int j = 0; j < 8; ++j) sha_round(mid, sh::kSha512K[3 + j], sd[j]);
+  for (int j = 0; j < 8; ++j) sha_round(mid, sx::K_DEV[3 + j], sd[j]);
 }
 
 // `nblock` from the unit's midstate: rounds 11 .. 79 only
@@ -236,20 +230,22 @@ __device__ __forceinline__ void nblock_mid(const u64* mid, const u64* sd, u64 t,
 #pragma unroll
   for (int j = 0; j < 8; ++j) v[j] = mid[j];
 #pragma unroll
-  for (int j = 11; j < 16; ++j) sha_round(v, sh::kSha512K[j], w[j]);
+  for (int j = 11; j < 16; ++j) sha_round(v, sx::K_DEV[j], w[j]);
 #pragma unroll 1
   for (int r = 16; r < 80; r += 16) {
 #pragma unroll
     for (int j = 0; j < 16; ++j) {
       const u64 w15 = w[(j + 1) & 15], w2 = w[(j + 14) & 15];
-      w[j] += (sh::rotr64(w15, 1) ^ sh::rotr64(w15, 8) ^ (w15 >> 7)) + w[(j + 9) & 15] +
-              (sh::rotr64(w2, 19) ^ sh::rotr64(w2, 61) ^ (w2 >> 6));
-      sha_round(v, sh::kSha512K[r + j], w[j]);
+      w[j] += (sx::rotr<0, 1>(w15) ^ sx::rotr<0, 8>(w15) ^ (w15 >> 7)) + w[(j + 9) & 15] +
+              (sx::rotr<0, 19>(w2) ^ sx::rotr<0, 61>(w2) ^ (w2 >> 6));
+      sha_round(v, sx::K_DEV[r + j], w[j]);
     }
   }
+  u64 iv[8];
+  sx::iv(iv);
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
-    const u64 x = sh::kSha512Iv[j] + v[j];
+    const u64 x = iv[j] + v[j];
     h[2 * j] = (u32)(x >> 32);
     h[2 * j + 1] = (u32)x;
   }

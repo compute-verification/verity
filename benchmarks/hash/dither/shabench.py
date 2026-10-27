@@ -16,7 +16,8 @@ from pathlib import Path
 
 import torch
 
-VARIANTS = {0: "sha512.cuh (unroll 1, K by index)", 1: "fully unrolled", 2: "fully unrolled, 32-bit halves",
+VARIANTS = {0: "sx::compress<0, 1> (unroll 1, K by index)", 1: "sx::compress<0, 0> (fully unrolled)",
+            2: "fully unrolled, 32-bit halves",
             3: "V2, 2 Sigma rotations on IMAD", 4: "V2, 4 Sigma rotations on IMAD", 5: "V2, 6 Sigma rotations on IMAD",
             6: "V2, 4 Sigma and 2 sigma rotations on IMAD", 7: "V2, 2 Sigma rotations on mad.lo/mad.hi",
             8: "V2, 4 Sigma rotations on mad.lo/mad.hi", 9: "V2, 6 Sigma rotations on mad.lo/mad.hi",

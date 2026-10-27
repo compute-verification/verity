@@ -1,7 +1,7 @@
 // One SHA-512 compression's latency on one SM, the A table's critical path (h1c_a_call2_k is 27 of them in sequence at
 // K 4096): each lane runs N compressions, each one's state the next one's input, its message independent of the state (as
 // a segment's bytes are), and lane 0 of each warp reads clock64 around the chain.  One block a launch.  Forms:
-//   0  sh::sha512_compress, the schedule inline (h1c's hb_block, form 0's compression), on `warps` warps
+//   0  sx::compress<0, 1> (sha512_rows' sha512x.cuh), the schedule inline (h1c's hb_block, form 0's compression), on `warps` warps
 //   1  h1c.cu's ap_cmp and ap_serve as h1c_a_call2_k runs them: consumer warps 0 and 1, producer warps 2 and 3
 //   2  form 1 with the consumer's half inlined (no call: the message and state stay in registers)
 //   3  form 2 with the round reassociated: e' = (d + h + kw) + S1(e) + Ch, a' = (h + kw) + S1(e) + Ch + S0(a) + Maj,
@@ -11,8 +11,8 @@
 #include "h1c.cu"
 
 namespace lat {
-__device__ __forceinline__ u64 S1(u64 e) { return sh::rotr64(e, 14) ^ sh::rotr64(e, 18) ^ sh::rotr64(e, 41); }
-__device__ __forceinline__ u64 S0(u64 a) { return sh::rotr64(a, 28) ^ sh::rotr64(a, 34) ^ sh::rotr64(a, 39); }
+__device__ __forceinline__ u64 S1(u64 e) { return sx::rotr<0, 14>(e) ^ sx::rotr<0, 18>(e) ^ sx::rotr<0, 41>(e); }
+__device__ __forceinline__ u64 S0(u64 a) { return sx::rotr<0, 28>(a) ^ sx::rotr<0, 34>(a) ^ sx::rotr<0, 39>(a); }
 __device__ __forceinline__ u64 add_fma(u64 x, u64 y, u32 one) {  // x + y on IMAD.WIDE and IMAD (the FMA pipe)
   u64 r;
   asm("{\n\t.reg .u32 xl, xh, rl, rh;\n\t"
@@ -55,7 +55,7 @@ __device__ __forceinline__ void cmp_in(u64 hs[8], const u64 w[16], u32 one) {
 #pragma unroll
   for (int t = 0; t < 16; ++t) {
     x[32 * (80 + t)] = w[t];
-    x[32 * t] = sh::kSha512K[t] + w[t];
+    x[32 * t] = sx::K_DEV[t] + w[t];
   }
   if (lane == 0) base[96 * 32] = 0;
   ap_arrive(bar, 64);
@@ -94,8 +94,9 @@ __global__ void __launch_bounds__(128) shalat_k(int n, u32 one, long long* cyc, 
     return;
   }
   u64 hs[8];
+  sx::iv(hs);
 #pragma unroll
-  for (int i = 0; i < 8; ++i) hs[i] = sh::kSha512Iv[i] ^ (u64)lane;
+  for (int i = 0; i < 8; ++i) hs[i] ^= (u64)lane;
   __syncwarp();
   long long c0 = clock64();
   u64 t0;
@@ -104,7 +105,7 @@ __global__ void __launch_bounds__(128) shalat_k(int n, u32 one, long long* cyc, 
     u64 w[16];
     lat::message(w, lane, it);
     if constexpr (F == 0) {
-      sh::sha512_compress(hs, w);
+      sx::compress<0, 1>(hs, w);
     } else if constexpr (F == 1) {
       u64 t[8];
 #pragma unroll
