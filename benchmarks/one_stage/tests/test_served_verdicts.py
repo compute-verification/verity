@@ -16,7 +16,7 @@ import shlex
 import subprocess
 import sys
 import tarfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import jsonschema
@@ -395,7 +395,7 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     (tmp_path / "pins.jsonl").write_text(A.pin_line("c" * 40, "d" * 40, "2026-10-27T09:00:00Z") + "\n")
     host = A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
     signer = A.key_signer(host, lms.Params(64, 4, 5), workers=1)
-    now = datetime(2026, 10, 27, 19, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 10, 27, 19, 0, tzinfo=UTC)
     hooks = dict(now=now, token="ab12", own=lambda d: None, start=lambda s: None, active=lambda s: False,
                  secret=bytes(32), ready=lambda s: None,
                  period=lambda args: A.period(host, args, signer=signer, pinned="c" * 40, now=now, active=lambda s: False))

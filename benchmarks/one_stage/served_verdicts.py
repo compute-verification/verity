@@ -53,8 +53,8 @@ checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``-
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
 is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`). Credit reads the
 declared Program serve-openai wrote (``h1/window-program.json.gz``), the period ``period open`` opened, and, when given,
-the drawn calls' statements (``--statements``, H1_STATEMENTS) and the window's live evidence (``--live-evidence``,
-H1_LIVE_EVIDENCE, ``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`).
+the drawn calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
+``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`).
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
@@ -322,12 +322,13 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
 def _gate_json(gate: str, argv: Sequence[str]) -> dict[str, Any]:
     """The gate's JSON answer to `argv`; RuntimeError naming what it said when it refuses."""
     raw = _gate_out(gate, *argv)
+    said = raw.decode(errors="replace").strip()[-600:]
     try:
         answer = json.loads(raw)
-    except ValueError:
-        answer = None
+    except ValueError as e:
+        raise RuntimeError(f"the gate's answer to {argv[0]} is not JSON ({e}): {said}") from None
     if not isinstance(answer, dict) or "refused" in answer:
-        raise RuntimeError(f"the gate refused {argv[0]}: {raw.decode(errors='replace').strip()[-600:]}")
+        raise RuntimeError(f"the gate refused {argv[0]}: {said}")
     return answer
 
 
@@ -536,7 +537,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     pe = sub.add_parser("period")
     pe.add_argument("verb", choices=("open", "close"))
     pe.add_argument("serve_dir", type=Path)
-    pe.add_argument("--gate", default=os.environ.get("H1_GATE"))
+    pe.add_argument("--gate")
     pe.add_argument("--name")
     pe.add_argument("--circuits", type=Path)
     pe.add_argument("--slots", type=int)
@@ -557,8 +558,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     o.add_argument("--key-sha512", default=os.environ.get("H1_KEY_SHA512"))
     o.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
     o.add_argument("--python", default=os.environ.get("PY") or sys.executable)
-    o.add_argument("--statements", type=Path, default=os.environ.get("H1_STATEMENTS") or None)
-    o.add_argument("--live-evidence", type=Path, default=os.environ.get("H1_LIVE_EVIDENCE") or None)
+    o.add_argument("--statements", type=Path)
+    o.add_argument("--live-evidence", type=Path)
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
@@ -590,7 +591,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd == "period":
         try:
             if not a.gate:
-                raise ValueError("no gate command (--gate, H1_GATE)")
+                raise ValueError("no gate command (--gate)")
             if a.verb == "close":
                 doc = period_close(a.serve_dir, a.gate)
                 print(f"PERIOD closed {doc['name']}: {json.dumps(doc['close'], sort_keys=True)[:600]}", flush=True)
