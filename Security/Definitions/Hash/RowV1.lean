@@ -10,8 +10,9 @@ words (`Row`), its bytes as `sha512/row-seg/v1` packs them (`RowSeg.packBits`, e
     P(w)   = ("verity/sha512-row/v1\0" ‖ u8 1 ‖ u8 16 ‖ u32be w)   zero-padded to 128 bytes
     digest = G(P(w) ‖ row bytes)
 
-at role 1 and 16-bit words, C-Flock's. The one message the digest hashes (`RowV1.hashed`) fixes the row's bytes, so a row
-of whole words (`RowLeaf.Format.fits`).
+at role 1 and 16-bit words, C-Flock's. The one message the digest hashes (`RowV1.hashed`) fixes the row's bytes, and the
+bytes fix the row only when it is whole words (`RowLeaf.Format.fits`): a 17-bit row and an 18-bit one ending in 0 share
+them.
 -/
 
 namespace Hash.RowV1
