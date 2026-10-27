@@ -147,6 +147,36 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
         assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
 
 
+def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server, monkeypatch):
+    """The egress renders the outputs of the audit the scan's `prog` is tied to, so the bits the prover chose of that
+    audit's inputs are the link-window's: over honest rows periods, each scan's `free` is the parameters' `free` of the
+    audits whose registration holds its `prog`'s root (the scan's own is 0), some of them nonzero, and Lean's public is
+    the mirror's; and a mirror that drops the tied term accepts with a smaller K than Lean's."""
+    charged = []
+    for n in range(8):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        c, out = json.loads(bytes.fromhex(case["commitment"])), reference(case)
+        assert out["verdict"] == ACCEPT, (n, out)
+        for reg, t in zip(c["windows"], out["public"]["scans"]):
+            (root,) = {e["root"] for e in reg.get("roots", []) + reg.get("registered", [])
+                       if PC.PROG in (e.get("port"), e.get("value"))}
+            want = sum(a["free"] for a, r in zip(case["params"]["audits"], c["audits"])
+                       if any(o.get("root") == root for o in r["roots"]))
+            assert t["free"] == want, (n, t, want)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+        if any(t["free"] for t in out["public"]["scans"]):
+            charged.append(case)
+    assert charged
+    monkeypatch.setattr(PC, "_tied_audits", lambda audits, reg: [])
+    monkeypatch.setattr(PC, "_prog_tied", lambda audits, reg: True)
+    for case in charged[:2]:
+        with pytest.raises(D.Mismatch) as x:
+            D.replay(PORT, case, server)
+        lean, python = (json.loads(o[1])["public"] for o in (x.value.lean, x.value.python))
+        assert lean["K"] - python["K"] == sum(t["free"] for t in lean["scans"]) > 0, (lean, python)
+
+
 def test_an_output_port_is_a_units_past_o0():
     """`output_port` is Lean's `outputPort` on its `#guard`s: a unit's port `o<j>`, j ≥ 1 in ASCII digits without a
     leading zero."""
@@ -328,20 +358,25 @@ def test_the_bound_counts_what_it_says():
 
 def test_the_rows_forms_bound_counts_what_it_says():
     """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): 7 cells on one connection and 2 on another, 5
-    bits for the schedules and 5 again for the fail cells, an audit in no term, and over 1 link-window one scan of 20
-    units (T = 10) drawn at δ = 1/15 with at most 3 wrong (1351 sets), 1,120 free inputs, instances committing 300 and
-    512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no faulty term; and eps over the scans' δ
-    alone."""
+    bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 link-window
+    one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 wrong (1351 sets), 1,120 free inputs, instances
+    committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no faulty term; at w63's
+    class with the egress tie (T = 32, every unit drawn), K the toy block's free inputs, 32 · 4,496 = 143,872 bits; and
+    eps over the scans' δ alone."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
-    out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [Facts(20, 5, Fraction(1, 15), 3)])
+    out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0)])
     (scan,) = out["scans"]
     assert at_most(20, 3) == 1351 and clog2(1351) == 11
     assert (out["schedules"], out["cells"], scan["free"], scan["faulty_sets"], scan["faulty_bits"], scan["jitter"],
             out["K"]) == (5, 5, 1120, 11, 3 * 512, 10, 5 + 5 + (1120 + 11 + 3 * 512 + 10))
     assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
     drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
-    assert public(drawn, [], [Facts(8, 8, Fraction(1, 100), 0)])["K"] == 0
+    assert public(drawn, [], [(Facts(8, 8, Fraction(1, 100), 0), 0)])["K"] == 0
+    w63 = dataclasses.replace(p, audits=(PC.Audit(32 * 4496, 0, "", 32, 4496),), cells=(), jitter=1,
+                              scan=PC.Scan(32, 0, 300, 512))
+    tied = public(w63, [Facts(32, 32, Fraction(1, 100), 0)], [(Facts(64, 64, Fraction(1, 100), 0), 32 * 4496)])
+    assert (tied["scans"][0]["free"], tied["K"]) == (143872, 143872)
     two = dataclasses.replace(p, cells=(), windows=2, scan=PC.Scan(0, 0, 0, 0))
     assert public(two, [Facts(1, 1, Fraction(1, 10), 0)],
-                  [Facts(1, 1, Fraction(1, 15), 0)] * 2)["eps"] == "2/15"
+                  [(Facts(1, 1, Fraction(1, 15), 0), 0)] * 2)["eps"] == "2/15"

@@ -131,8 +131,9 @@ class Params:
 
 @dataclasses.dataclass(frozen=True)
 class Scan:
-    """`Scan`: the scan's monitoring period (T), its free inputs (none: its `prog` is a compute audit's output,
-    `_prog_tied`), and the bits one ingress and one egress instance commit."""
+    """`Scan`: the scan's monitoring period (T), its own free inputs (none: its `prog` is a compute audit's output,
+    `_prog_tied`, whose free inputs a link-window's term counts, `_tied_audits`), and the bits one ingress and one
+    egress instance commit."""
     steps: int
     free: int
     ingress: int
@@ -648,19 +649,25 @@ def output_port(port) -> bool:
     return parts[-1][:1] == "o" and j != "" and all("0" <= c <= "9" for c in j) and j[0] != "0"
 
 
-def _prog_tied(audits: list[Registration], reg: Registration) -> bool:
-    """`progTied`: the scan's registration has a `scan/prog` entry (`PROG`) whose root and domain are an output port's
-    entry's (`output_port`) in the `roots` of an audit's registration."""
+def _tied_audits(audits: list[Registration], reg: Registration) -> list[int]:
+    """`tiedAudits`: the audits, by index, whose registration's `roots` has an output port's entry (`output_port`) at
+    the root and domain of the scan's registration's `scan/prog` entry (`PROG`)."""
     def entries(j: dict, k: str) -> list[dict]:
         v = j.get(k)
         return [e for e in v if isinstance(e, dict)] if isinstance(v, list) else []
 
     prog = [e for e in entries(reg.record, "roots") if e.get("port") == PROG] + \
         [e for e in entries(reg.record, "registered") if e.get("value") == PROG]
-    return any(isinstance(e.get("root"), str) and isinstance(e.get("domain"), str)
-               and any(output_port(o.get("port")) and o.get("root") == e["root"] and o.get("domain") == e["domain"]
-                       for a in audits for o in entries(a.record, "roots"))
-               for e in prog)
+    return [i for i, a in enumerate(audits)
+            if any(isinstance(e.get("root"), str) and isinstance(e.get("domain"), str)
+                   and any(output_port(o.get("port")) and o.get("root") == e["root"] and o.get("domain") == e["domain"]
+                           for o in entries(a.record, "roots"))
+                   for e in prog)]
+
+
+def _prog_tied(audits: list[Registration], reg: Registration) -> bool:
+    """`progTied`: some audit is tied to the scan's `prog` (`_tied_audits`)."""
+    return bool(_tied_audits(audits, reg))
 
 
 def records(link: str) -> tuple[tuple[str, Direction], ...]:
@@ -668,7 +675,10 @@ def records(link: str) -> tuple[tuple[str, Direction], ...]:
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
 
 
-def _rows_window_check(p: Params, audits: list[Registration], w: int, reg: Registration, x: Window) -> Facts:
+def _rows_window_check(p: Params, audits: list[Registration], w: int, reg: Registration,
+                       x: Window) -> tuple[Facts, int]:
+    """`rowsWindowCheck`: on acceptance the scan's facts and its tied audits' free inputs, the parameters' `free` of
+    each audit its `prog` is an output of (`_tied_audits`)."""
     what = f"window {w}"
     if x.registrations is None:
         raise Finding(REJECT, f"{what}: a clock certificate, not registrations")
@@ -690,7 +700,7 @@ def _rows_window_check(p: Params, audits: list[Registration], w: int, reg: Regis
     f = _facts(what, prof, pub)
     if f.units != 2 * p.schedule.window:
         raise Finding(REJECT, f"{what}: profile: {f.units} units, not the scan's 2T")
-    return f
+    return f, sum(p.audits[i].free for i in _tied_audits(audits, reg))
 
 
 def _facts(what: str, prof: dict, pub) -> Facts:
@@ -744,9 +754,10 @@ def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int) -> dict:
                              "free": free, "jitter": clog2(jitter ** steps)}
 
 
-def public(p: Params, facts: list[Facts], scans: list[Facts] | None = None) -> dict:
+def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int]] | None = None) -> dict:
     """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
-    link-windows' scans (`scans`, None in the clock form), where the compute audits are in no term."""
+    link-windows' scans (`scans`, each its facts and its tied audits' free inputs; None in the clock form), where a
+    compute audit's own terms are in none and a tied audit's free inputs are in its link-window's `free`."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
@@ -754,7 +765,7 @@ def public(p: Params, facts: list[Facts], scans: list[Facts] | None = None) -> d
         out = {"audits": units}
     else:
         s = p.scan
-        units = [_terms(s.free, s.steps, max(s.ingress, s.egress), f, p.jitter) for f in scans]
+        units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter) for f, tied in scans]
         schedules = cells
         out = {"audits": [_facts_json(f) for f in facts], "scans": units}
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] for t in units)
@@ -783,7 +794,7 @@ def check(p: Params, c: Commitment, e) -> tuple:
                 scans.append(_rows_window_check(p, c.audits, p.first + i, reg, x))
         except Finding as f:
             findings.append(f)
-    if any(f.delta != scans[0].delta for f in scans):
+    if any(f.delta != scans[0][0].delta for f, _ in scans):
         findings.append(Finding(REJECT, "a scan's δ is not the period's"))
     for i, (audit, reg, a) in enumerate(zip(p.audits, c.audits, audits)):
         try:

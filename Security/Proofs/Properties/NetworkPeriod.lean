@@ -34,9 +34,9 @@ theorem capsTerm_ofFn {m : ℕ} (caps : Fin m → ℕ) : capsTerm (Array.ofFn ca
   exact foldl_ofFn _
 
 theorem K_ofFn (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ)
-    (w : Fin n → Facts) :
-    (rowsTerms facts scan (Array.ofFn w) (Array.ofFn caps) jitter windows).K =
-      (∑ j, clog2 (caps j + 1)) + (∑ j, clog2 (caps j + 1)) + ∑ i, (scan.terms (w i) jitter).bits := by
+    (w : Fin n → Facts) (tied : Fin n → ℕ) :
+    (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i)) (Array.ofFn caps) jitter windows).K =
+      (∑ j, clog2 (caps j + 1)) + (∑ j, clog2 (caps j + 1)) + ∑ i, (scan.terms (w i) (tied i) jitter).bits := by
   simp only [Public.K, rowsTerms, capsTerm_ofFn, Array.map_ofFn]
   rw [foldl_ofFn]
   rfl
@@ -67,7 +67,7 @@ theorem clockKBoundsCount : ClockKBoundsCount := by
   exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
 theorem rowsKBoundsCount : RowsKBoundsCount := by
-  intro facts scan jitter windows m n caps w
+  intro facts scan jitter windows m n caps w tied
   rw [K_ofFn, pow_add, pow_add, mul_assoc]
   refine Nat.mul_le_mul (caps_le caps) (Nat.mul_le_mul (caps_le caps) ?_)
   rw [← Finset.prod_pow_eq_pow_sum]
