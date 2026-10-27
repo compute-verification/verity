@@ -1,8 +1,9 @@
 """vLLM adapter (runtime side): load a workload, and drive its requests through a built engine.
 
-The engine is built in `engine.build`, the capture and its run header are in `engine.capture`, the run's profile manifest and
-versions in `engine.run_facts`, and code identity in `engine.code_identity`; the stages reach all of them through this module's
-names.  `load_workload` and what it calls stay in this file: tests execute them from its source, without importing torch.
+The engine is built in `engine.build`, the run's profile manifest and versions in `engine.run_facts`, and code identity in
+`engine.code_identity`; the stages reach all of them through this module's names.  The capture and its run header are
+`observe.capture`'s, above the engine, and its callers import them from there.  `load_workload` and what it calls stay in this
+file: tests execute them from its source, without importing torch.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from verity_vllm.engine import static_schedule
 from verity_vllm.config import RowEngine
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.engine.arrivals import run_requests_arrivals  # [coverage D87] step-indexed arrivals (torch-free module, unit-tested)
-from verity_vllm.observe import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
+from verity_vllm.engine import chunks as _chunks  # [chunked 2026-09-17] prefill-chunk / token-step attribution (torch-free, unit-tested)
 from verity_vllm.engine.build import (CASE, EXECUTION_ENFORCE_EAGER, Engine, build_engine, case_of, compilation_facts,  # noqa: F401
                                       effective_execution_doc, engine_kwargs_for, execution_label_of, observed_flash_attn_version,
                                       parse_engine_args, parse_target_arg, prepare_compiled_process_cache, resolved_async_scheduling,
@@ -27,8 +28,6 @@ from verity_vllm.engine.code_identity import (_VERITY_INDUCTOR_DIR_MARK, CUBIN_C
                                               loaded_code_objects, loaded_code_objects_delta)
 from verity_vllm.engine.run_facts import (ACCEPTED, ACCEPTED_PROFILE_ID, ACCEPTED_RECORD, host_doc, model_config_subset,  # noqa: F401
                                           profile_manifest, versions_doc)
-from verity_vllm.engine.pinned import PinnedArena, spanned_bytes, storage_bytes_view  # noqa: F401
-from verity_vllm.engine.capture import SCHEMA, Capture, ObserverConfig, RunHeader, make_header  # noqa: F401
 
 
 def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:

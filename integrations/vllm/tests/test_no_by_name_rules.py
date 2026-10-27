@@ -57,6 +57,8 @@ SKIP_DIRS = frozenset({"tests", "__pycache__", "kernels", "numerics"}); SKIP_FIL
 #: program/kernels/ (`numerics/` in `verity.ml.definitions`), and its modules that stay in the package, skipped wherever they go
 SKIP_FILES |= {"relations.py", "sampling_rng.py", "libdevice_sampling.py", "rmsnorm_fused_sweep.py", "gemm_target_correspondence.py",
                "compiled_relations.py", "compiled_norm_literal.py"}
+#: engine_profile.py's `CASES`, which moved here with 11 of its 13 by-name rules: skipped by path, as its old file is by name
+SKIP_PATHS = frozenset({"verity_vllm/engine/profiles/cases.py"})
 ALLOWLIST = HERE / "by_name_allowlist.json"
 KINDS = ("model-name", "path-predicate", "table")
 
@@ -272,7 +274,8 @@ def iter_files() -> list[Path]:
     for base, top in SCAN:
         for dirpath, dirnames, filenames in os.walk(base / top):
             dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
-            out.extend(Path(dirpath) / fn for fn in sorted(filenames) if fn.endswith(".py") and not fn.startswith("test_") and fn not in SKIP_FILES)
+            out.extend(Path(dirpath) / fn for fn in sorted(filenames) if fn.endswith(".py") and not fn.startswith("test_") and fn not in SKIP_FILES
+                       and (Path(dirpath) / fn).relative_to(base).as_posix() not in SKIP_PATHS)
     return out
 
 

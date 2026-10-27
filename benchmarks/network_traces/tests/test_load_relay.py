@@ -1,12 +1,12 @@
 """load_relay's streamed, multi-process commit of the weights' load against its references: the manifest and generator
 are CMP-95 interface 1's (its fixture's TINY manifest, tensor digests and entries, and at H200 its stream's length, head
 and every tensor's first and last rows); the relayed roots are interface 1's fixture roots under its salts, for its
-reader named by digest, whose domains are the verifier's (``tok`` (H, V) in row/v2, a scale 32-bit leaves), over one process
-and several, whatever the reads' sizes, and `Registered.commit`'s under the certifier's own salts (the witness it
-writes) and the verifier's domain, pads, many chunks a value and both widths and row formats included; a P2 link
-(interface 2's layout over a
-small field, so that the test encodes its own store) decodes to the same roots, and a block that isn't a codeword, a
-nonzero byte past a store tensor's end and a short link are refused; at H200 the store's layout is interface 2's; and
+reader named by digest, whose domains are the verifier's (``tok`` (H, V) in row/v2, every tensor 16-bit leaves, an f32
+scale two, at H200 a linear's row the 8,192 codes of a FAMILIES ``wrow`` part), over one process and several, whatever
+the reads' sizes, and `Registered.commit`'s under the certifier's own salts (the witness it writes) and the verifier's
+domain, pads, many chunks a value and both row formats included; a P2 link (interface 2's layout over a small field,
+so that the test encodes its own store) decodes to the same roots, and a block that isn't a codeword, a nonzero byte
+past a store tensor's end and a short link are refused; at H200 the store's layout is interface 2's; and
 the command signs one load head a value, each registration read by the verifier for the load it expects.
 
 The gate's load: the store's pins are interface 1's H200 manifest digests (vendored) and its generator's TINY ones under
@@ -62,8 +62,9 @@ interface_1_domain = LR.verifier_domain(FIXTURE["program"])
 
 
 def leaves(v, data: bytes) -> list[list[int]]:
-    """`data`'s rows of `v` as `Registered.commit` takes them: each row's leaves of `v.word_bits`."""
-    cut = memoryview(data).cast("H" if v.word_bits == 16 else "I")
+    """`data`'s rows of `v` as `Registered.commit` takes them: each row's 16-bit leaves (`v.word_bits`), little-endian, so
+    an f32 scale's low half first."""
+    cut = memoryview(data).cast("H")
     return [list(cut[v.reg_words * r:v.reg_words * (r + 1)]) for r in range(len(data) // v.row_bytes)]
 
 
@@ -91,6 +92,11 @@ def test_the_manifest_and_generator_are_interface_1s():
     assert hashlib.sha256(json.dumps(rows, separators=(",", ":")).encode()).hexdigest() == want["rows_sha256"]
     assert [r for r in rows if r[0] in {x[0] for x in want["rows"]}] == want["rows"]
     assert all(v.leaves & (v.leaves - 1) == 0 for v in h200), "at H200 no tree has a pad"
+    by = {v.name: v for v in h200}
+    assert {v.word_bits for v in h200} == {16} and sum(v.kind == "scale" for v in h200) == 313
+    assert (by["l0.wup"].reg_words, by["l0.wup"].leaves) == (4096, 65536 * 2)
+    assert (by["l0.wup.scale"].reg_words, by["l0.wup.scale"].leaves) == (2, 65536)
+    assert sum(v.leaves for v in h200) == 25_284_864
 
 
 @pytest.mark.parametrize("workers,read", [(1, 1 << 23), (3, 1000), (2, 7)])
@@ -105,7 +111,7 @@ def test_the_relayed_roots_are_interface_1s_registration(workers, read):
 
 def odd_values() -> tuple:
     """Values whose rows are no power of two, of several widths, so their trees have pads, in chunks of a few rows: one
-    of 32-bit leaves (``f``, a scale's) and one of row-seg rows longer than a segment (``g``)."""
+    of f32 scales (``f``, two 16-bit leaves a row) and one of row-seg rows longer than a segment (``g``)."""
     out, at = [], 0
     for name, rows, words, kind, schema in (("a", 5, 3, "s8", G.SCHEMA_V2), ("b", 1, 128, "s8", G.SCHEMA_V2),
                                             ("c", 37, 2, "s8", G.SCHEMA_V2), ("d", 64, 1, "gain", G.SCHEMA_V2),

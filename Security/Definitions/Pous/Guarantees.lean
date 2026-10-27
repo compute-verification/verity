@@ -18,6 +18,7 @@ import Definitions.Pous.Model.BandChain
 import Definitions.Pous.Model.Pebbling
 import Definitions.Pous.Model.SampledAudit
 import Definitions.Pous.Guarantees.P2
+import Definitions.Pous.Guarantees.Obligation
 import Definitions.Pous.Guarantees.SecureErasure
 import Definitions.Pous.Guarantees.StreamedWipe
 import Definitions.Pous.Model.BandGraph

@@ -210,7 +210,7 @@ def test_the_verdict_names_the_prescribed_input_through_the_boundary_linkage_pat
     lk = _lk(store, wreq, {"r0": {"derived": NSM}})
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
-            "binding": {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}},
+            "binding": {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}},
             "weights_pin": {"result": True, "compared": 98, "mismatched": [], "missing": []},
             "sampled_replay": {"result": True, "grade": "complete", "why": None}, "boundary_linkage": lk}
     ok, why = commit_verdict(base, True, min_openings=64)

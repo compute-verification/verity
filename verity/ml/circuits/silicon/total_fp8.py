@@ -24,12 +24,8 @@ E4M3 can encode:
 On finite operands this is :func:`verity.ml.circuits.silicon.silicon.tc_dot` on the same pipeline.  The special-value rules and
 the *pipeline parameters* (groups, adder width, exponent floor -- in particular the behaviour with a NON-ZERO
 accumulator, which Hawkeye did not validate and which every k32 step after the first of a K=1536..8960 chain
-exercises) are what the campaign under ``gpu/tc-fp8/`` measured on the device (record:
-``docs/data/tc-fp8-2026-09-08/``).  The registry primitive that wraps it
+exercises) are what a hardware campaign measured on the device.  The registry primitive that wraps it
 (``verity.ml.circuits.ops.prims.HopperE4m3QgmmaDot32``) carries the campaign's outcome in its conformance status.
-
-Promoted verbatim from ``veritor`` ``src/veritor/core/silicon_total_fp8.py`` (commit 0903f60d6, release
-``r18-int-3``); only the import paths changed.
 
 E5M2 (:func:`tc_dot_total_e5m2`) differs only in its operand classes: it is IEEE-like, so exponent field 31 is an
 infinity (fraction 0) or a NaN, and the product rules are BF16's (:func:`~verity.ml.circuits.silicon.total.bf16_product_total`):
@@ -137,8 +133,7 @@ def tc_dot_total_e5m2(pipeline: Pipeline, acc_bits: int, a: Sequence[int], b: Se
 
 
 #: One accumulator coordinate of ``wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3`` (SASS
-#: ``QGMMA.64x64x32.F32.E4M3.E4M3``), PINNED on an H100 80GB HBM3 (driver 580.126.09) by lane QZ's campaign
-#: ``gpu/tc-fp8/campaign.py`` + ``conformance.py`` on 2026-09-08 (record ``docs/data/tc-fp8-2026-09-08/``):
+#: ``QGMMA.64x64x32.F32.E4M3.E4M3``), PINNED on an H100 80GB HBM3 (driver 580.126.09) by a hardware campaign:
 #: 16 case families (L6's, with E4M3 operand classes and FP32 accumulator classes incl. subnormal / huge / ±inf /
 #: NaN accumulators), 35,289 tiles x 3 repetitions (every tile bit-identical across repetitions), 144,543,744 output
 #: words compared against this total function -- **0 mismatches**.  The fit grid over groups x width x floor
@@ -183,12 +178,10 @@ MMAV2_E4M3_K_ORDER: tuple[int, ...] = tuple(in_mmav2_e4m3_k_order(range(32)))
 #: joining the first and the first's result the second, each through ``HMMA.16816.F32``'s 26-bit truncating adder, floor ``-133``
 #: (unobservable on E4M3 operands, like every floor at or below ``-126``).  Carrying a group's result to the next unpacked is the
 #: same word as packing it to FP32 between the two mma (a group result is an FP32 value or a sticky infinity).  Measured: the f16
-#: HMMA with zero accumulators is this pipeline per group (lane tc-probe-fp8, H100, runs r20260922-184111-671e and
-#: r20260922-184835-4b95: ptxas's own sm_90 lowering of ``mma.sync.m16n8k32`` FP8 to two HMMA.16816.F32 over the same k halves
-#: from +0 plus FADDs, 25,040,128 words each, 0 mismatches), the bf16 HMMA with nonzero accumulators is (runs
-#: r20260922-185339-e337, r20260926-023321-ecb5), and the chained f16 pair with its nonzero accumulator is, inside vLLM's
+#: HMMA with zero accumulators is this pipeline per group (on the H100: ptxas's own sm_90 lowering of ``mma.sync.m16n8k32`` FP8 to two HMMA.16816.F32 over the same k halves
+#: from +0 plus FADDs, 25,040,128 words each, 0 mismatches), the bf16 HMMA with nonzero accumulators is, and the chained f16 pair with its nonzero accumulator is, inside vLLM's
 #: ``fused_moe_kernel`` at GLM-5.3's MMAv2 tiles on the H200 (``integrations/vllm/tests/properties/glm53_block_fp8_capture_gpu.py``,
-#: run r20261017-125608-3071: 638,976 words, 0 mismatches, on an operand probe that adder widths 24, 25, 27 and 28 and the other
+#: 638,976 words, 0 mismatches, on an operand probe that adder widths 24, 25, 27 and 28 and the other
 #: k orders each miss).
 HOPPER_E4M3_MMAV2_K32 = Pipeline(
     name="hopper_e4m3_mmav2_k32",

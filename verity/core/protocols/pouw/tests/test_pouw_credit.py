@@ -1,4 +1,4 @@
-"""`credit.py`'s rules on a served window and its period (RT4-INT-32, -34 and -42; PRF-132): each mutation of
+"""`credit.py`'s rules on a served window and its period: each mutation of
 `pouw_credit_cases` is refused by the rule it aims at, its message naming the fix, and the honest windows and periods are
 accepted. The drawn units are the draw coin's over the window's own layout, read from the descriptor of the circuit the
 period committed (`credit.layout_of`), whose strata are the compiled `h1window.program`'s, and the weights a window
@@ -84,6 +84,10 @@ DRAWN_EXPECT = {
     "uncalled": ("layout", "is never called"), "slot": ("layout", "(h1window.slot)"),
     "kn": ("layout", "n whole blocks of the tile's"), "blocks": ("layout", "is read by some call of K"),
     "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
+}
+WINDOW_DRAWN_EXPECT = {
+    "coin-form": ("coin", "the draw coin: " + Ch.OPENING_FORM), "args-form": ("draw", Cr.DRAW_ARGS),
+    "descriptor-hex": ("layout", Cr.DESCRIPTOR_HEX), "k-form": ("budget", Cr.K_FORM), "k-past-units": ("budget", FEWER),
 }
 OUTCOME_EXPECT = {
     "missing": ("missing", "Prove and verify every drawn unit"), "failed": ("failed", "refuses the whole window"),
@@ -216,6 +220,7 @@ def _credited(name: str, seed: int):
 def test_every_mutation_is_aimed():
     assert set(CREDIT_EXPECT) == set(cases.CREDIT_NAMES)
     assert set(DRAWN_EXPECT) == set(cases.DRAWN_NAMES) - {"budget"}
+    assert set(WINDOW_DRAWN_EXPECT) == set(cases.WINDOW_DRAWN_NAMES)
     assert set(OUTCOME_EXPECT) == set(cases.OUTCOME_NAMES)
     assert set(WINDOW_EXPECT) == set(cases.WINDOW_NAMES) - {"j10r"}
     assert set(PERIOD_EXPECT) == set(cases.PERIOD_NAMES)
@@ -342,6 +347,36 @@ def _served(d: dict) -> list[int]:
 def _drawn(name: str, seed: int):
     d = cases.drawn_instance(random.Random(f"{name}/{seed}"), name)
     return Cr.drawn(*(d[k] for k in cases.DRAWN_KEYS))
+
+
+def _window_drawn(name: str, seed: int):
+    d = cases.window_drawn_instance(random.Random(f"{name}/{seed}"), name)
+    if not (type(d["descriptor"]) is str and Cr._HEX.fullmatch(d["descriptor"])):
+        return d, (None, ("layout", Cr.DESCRIPTOR_HEX))
+    lay, why = Cr.layout_of(bytes.fromhex(d["descriptor"]))
+    assert why is None, why
+    ss, why = Cr.strata(lay)
+    assert why is None, why
+    return d, Cr._window_drawn(d["window"], d["draw"], ss, d["k"])
+
+
+@pytest.mark.parametrize("name", sorted(WINDOW_DRAWN_EXPECT))
+def test_window_drawn_mutation(name):
+    code, part = WINDOW_DRAWN_EXPECT[name]
+    for seed in range(5):
+        _d, (got, refused) = _window_drawn(name, seed)
+        assert got is None and refused[0] == code and part in refused[1], (seed, refused)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_the_window_draw_is_its_coins(seed):
+    """`credit._window_drawn` draws the units `credit.drawn` does at the draw coin it opens, the window's root as the
+    stream, the draw's root as the registration and its receipts, over the strata of the descriptor's layout."""
+    d, (got, refused) = _window_drawn("honest", seed)
+    lay, _ = Cr.layout_of(bytes.fromhex(d["descriptor"]))
+    want, why = Cr.drawn(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
+                         {"receipts": d["draw"]["receipts"]}, lay, d["k"])
+    assert refused is None and why is None and got == want
 
 
 def _outcome(name: str, seed: int):
@@ -673,7 +708,7 @@ def test_a_glm_window_at_k_6144_registers_its_b_rows_as_2_chunk_leaves_each_past
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_an_expert_call_whose_rows_the_commit_lacks_refuses(seed):
-    """VLLM-80 (ROOTS1 for MoE): a served MoE window lays out its routed experts' calls as H1 names them
+    """A served MoE window lays out its routed experts' calls as H1 names them
     (``prefix.expert.projection``), each expert's down at the intermediate width K, which only expert calls have. With
     every table the Commit's, the window is credited; with the Commit record lacking one round's A table of that K,
     whose calls are expert calls only, `_arow` refuses the window before any proof is read (``commit-missing-expert``)."""
@@ -917,7 +952,7 @@ def test_a_window_proving_another_circuit_refuses_the_period(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_window_whose_session_ran_a_branch_commit_refuses_the_period(seed):
-    """CMP-74: a window whose session ran a commit the host's pins log records but that is off main's first-parent line
+    """A window whose session ran a commit the host's pins log records but that is off main's first-parent line
     (a branch commit merged into main) counts toward no period (`challenger.credited_session`, the pin before the
     circuit), so its period earns nothing; the same period, with that commit on the verifier's copy of main, earns."""
     d = cases.period_instance(random.Random(f"branch-pin/{seed}"), "branch-pin")

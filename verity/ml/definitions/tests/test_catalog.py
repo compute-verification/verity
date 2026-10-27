@@ -1,13 +1,8 @@
-"""`catalog.load()` registers exactly the Definitions and primitives the registry held when it moved into
-`verity.ml.definitions` (circuits' condition on the move, CIR-93): a module that stops importing or registering, or one
-that registers more, changes the count and fails here.  Change `COUNT` in the change that adds or removes a Definition.
+"""`catalog.load()` registers exactly `COUNT` Definitions and primitives: a module that stops importing or registering, or
+one that registers more, changes the count and fails here.  Change `COUNT` in the change that adds or removes a Definition.
 
-The count is the registry's own: 1,287 on main before the move less PoUW's circuit (the 47 `Ncp*` and `Pouw*` Definitions
-`verity.core.protocols.pouw.circuit` registers), which `pouw_rows` stopped importing once `NcpDequant` moved to
-`verity.ml.circuits.ops.ncp`, 1,242 since `AttentionHead_v18` and `Attention_v18` (bcf1e1aade), 1,250 since
-`AttentionHead_v19`, `Attention_v19`, `AttnBlockFirst_v1` and `AttnHeadEnd_v1` (d37b243ac6) and ops' `GemmCoordinatePad_v1`,
-`_v2`, `ScaledMmS8CoordinateRows_v1` and `_v2` (fa7065c758), and 1,256 since ops' `F32ToS8RniSat_v1`, `_v2`, `U32Hi16_v1`
-and `_v2` (#4433) and `PvRow_v1` and `_v2` (#4556)."""
+The count is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definitions `verity.core.protocols.pouw.circuit`
+registers) is not in it."""
 from __future__ import annotations
 
 import sys
@@ -17,7 +12,11 @@ from verity.ml.definitions.registry import catalog
 
 REPO = Path(__file__).resolve().parents[4]
 
-COUNT = 1256
+COUNT = 1261
+
+COUNT += 26  # the training kernels: `torch_attention`'s 7, `torch_loss`'s 13 and `torch_embedding`'s 6
+
+COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
 
 
 def test_the_catalog_loads_every_definition_and_no_other():

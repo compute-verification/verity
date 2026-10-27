@@ -26,7 +26,8 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.core.protocols.pous import memory_challenger as mc
-from verity.core.protocols.pous import run
+from verity.core.protocols.pous import period, run
+from verity.core.protocols.pous import setup as pous_setup
 from verity.core.protocols.pous.schemes import p2 as P2
 from verity.core.protocols.pous.verifier import VerifierKey
 
@@ -60,6 +61,8 @@ class Run:
     session: M.Session
     schemes: tuple[str, ...]
     session_id: bytes
+    setup_of: dict | None = None
+    """The setup protocol's case that published `setup`, for a run over an honest setup's `C*` (`runs(stores=...)`)."""
 
     @property
     def digests(self) -> bytes:
@@ -71,7 +74,7 @@ class Run:
                           "k": self.point.k, "limit_ns": self.point.limit_ns},
                 "schemes": list(self.schemes), "trusted": [t.hex() for t in self.session.trusted],
                 "setup": self.setup.to_json(), "digests": self.digests.hex(), "session": session_of(self.session).to_json(),
-                "session_id": self.session_id.hex()}
+                "session_id": self.session_id.hex()} | ({"setup_of": self.setup_of} if self.setup_of else {})
 
 
 def session_of(s: M.Session) -> run.Session:
@@ -84,18 +87,32 @@ def rows_of(q: P2.P2Params, tag: int) -> tuple[bytes, ...]:
 
 
 @st.composite
-def runs(draw, signer: M.AtLeaf | None = None) -> Run:
+def runs(draw, signer: M.AtLeaf | None = None, stores: st.SearchStrategy | None = None) -> Run:
     """An honest run: a setup at a drawn reduced point, the memory challenger's session over its `C*` (some rounds late, some
-    answers tampered) at the point's `k`, a limit within the point's, bound to the setup's root, under the designated id."""
-    w, c0 = draw(st.sampled_from(WIDTHS))
-    q = P2.P2Params(w, c0, draw(st.integers(1, 4)), draw(st.integers(1, 3)))
+    answers tampered) at the point's `k`, a limit within the point's, bound to the setup's root, under the designated id.
+    With `stores`, a strategy of honest setups `(q, W, salt, C*)`, the setup is one it draws and `C*` its encoding, which
+    the setup protocol accepts (the run's `setup_of`); else `C*` is labels of no setup."""
+    stored = draw(stores) if stores is not None else None
+    if stored is None:
+        w, c0 = draw(st.sampled_from(WIDTHS))
+        q = P2.P2Params(w, c0, draw(st.integers(1, 4)), draw(st.integers(1, 3)))
+    else:
+        q = stored[0]
     k, limit = draw(st.integers(1, 4)), draw(st.integers(2, 10 ** 6))
     point = run.Point(q, k, limit)
     tag = draw(st.integers(0, 3))
-    salt = hashlib.sha512(b"run salt %d" % tag).digest()[:run.SALT_BYTES]
-    rows = rows_of(q, tag)
+    if stored is None:
+        salt = hashlib.sha512(b"run salt %d" % tag).digest()[:run.SALT_BYTES]
+        blocks = tuple(M.block(tag * 1000 + i, q.block_bytes) for i in range(q.blocks))
+        commitment, setup_of = hashlib.sha512(b"W %d" % tag).digest(), None
+    else:
+        _, w_bytes, salt, encoded = stored
+        blocks = tuple(b for seg in encoded for b in seg)
+        commitment = pous_setup.commit(q, w_bytes)
+        setup_of = period.setup_case(q, commitment, salt, encoded)
+    rows = tuple(mc.block_digest(b) for b in blocks)
     root = VerifierKey.from_row_digests(q, salt, list(rows)).root
-    setup = run.Setup(q.blocks, hashlib.sha512(b"W %d" % tag).digest(), root, salt)
+    setup = run.Setup(q.blocks, commitment, root, salt)
     if signer is None:
         height = draw(st.integers(1, 2))
         signer = M.test_signer(draw(st.sampled_from(M.SECRETS)), height, draw(st.integers(0, 2 ** height - 1)))
@@ -112,10 +129,11 @@ def runs(draw, signer: M.AtLeaf | None = None) -> Run:
         j = len(c.rounds)
         i = c.challenge()
         clock.now += spends[j]
-        b = M.block(tag * 1000 + i, q.block_bytes)
+        b = blocks[i]
         c.receive(b[:-1] + bytes([b[-1] ^ 1]) if j in tampered else b)
     s = M.Session(c.close(), c.commitment, c.openings(), rows, (signer.public_key,), signer)
-    return Run(point, setup, s, draw(st.sampled_from([(signer.scheme,), (signer.scheme, mc.LMS), (mc.LMS,)])), session_id)
+    return Run(point, setup, s, draw(st.sampled_from([(signer.scheme,), (signer.scheme, mc.LMS), (mc.LMS,)])), session_id,
+               setup_of)
 
 
 def _published(r: Run, **edits) -> Run:
@@ -137,7 +155,7 @@ def _rows(r: Run, rows) -> Run:
 
 
 def _other_geometry(r: Run, x: int) -> Run:
-    """The same blocks at another width (the table's leaves and root unchanged), or in another split into segments."""
+    """The same labels at another width (the table's leaves and root unchanged), or in another split into segments."""
     q = r.point.params
     w, c0 = WIDTHS[(WIDTHS.index((q.w, q.c0)) + 1 + x % 2) % len(WIDTHS)]
     if x % 3 == 0 and q.blocks > 1:
@@ -275,14 +293,15 @@ def _any(edits: list) -> st.SearchStrategy:
     return st.integers(0, 2 ** 32).map(lambda i: edits[i % len(edits)])
 
 
-def documents() -> st.SearchStrategy:
-    """Honest runs, runs under one run edit or session edit, and runs under one JSON edit."""
-    xs = st.integers(0, 2 ** 16)
-    honest = st.builds(Run.doc, runs())
-    edited = st.builds(lambda r, m, x: m(r, x).doc(), runs(), _any(RUN_MUTATIONS), xs)
-    session_edited = st.builds(lambda r, m, x: dataclasses.replace(r, session=m(r.session, x)).doc(), runs(),
+def documents(rs: st.SearchStrategy | None = None) -> st.SearchStrategy:
+    """Honest runs (from `rs`, `runs()` by default), runs under one run edit or session edit, and runs under one JSON
+    edit."""
+    xs, rs = st.integers(0, 2 ** 16), runs() if rs is None else rs
+    honest = st.builds(Run.doc, rs)
+    edited = st.builds(lambda r, m, x: m(r, x).doc(), rs, _any(RUN_MUTATIONS), xs)
+    session_edited = st.builds(lambda r, m, x: dataclasses.replace(r, session=m(r.session, x)).doc(), rs,
                                _any(SESSION_MUTATIONS), xs)
-    malformed = st.builds(lambda r, m, x: m(r.doc(), x), runs(), _any(JSON_MUTATIONS), xs)
+    malformed = st.builds(lambda r, m, x: m(r.doc(), x), rs, _any(JSON_MUTATIONS), xs)
     return st.one_of(honest, edited, edited, session_edited, session_edited, malformed)
 
 
@@ -315,7 +334,7 @@ def test_named_runs_agree(server):
 
 
 def _named(signer: M.AtLeaf) -> Run:
-    """A run of 3 rounds over two segments of 4 blocks of 8 bytes, every answer on time and right."""
+    """A run of 3 rounds over two segments of 4 labels of 8 bytes, every answer on time and right."""
     q = P2.P2Params(64, 189, 4, 2)
     point = run.Point(q, 3, 1_000)
     salt = hashlib.sha512(b"named salt").digest()[:run.SALT_BYTES]
@@ -335,7 +354,7 @@ def _named(signer: M.AtLeaf) -> Run:
 
 def _deployed_run(tmp: Path, tampered: int | None = None) -> tuple[Path, Path, Path, run.Setup, bytes, run.Session, bytes]:
     """A run at the deployed point signed at leaf 0 of a key at S1's deployed parameters (`mc_cases.deployed_signer`, a
-    sparse tree), written as `pous-run` reads it, round `tampered`'s answer not its block. The rows the rounds don't name
+    sparse tree), written as `pous-run` reads it, round `tampered`'s answer not its label. The rows the rounds don't name
     are digests of nothing in particular. Last, the signer's public key."""
     d = run.DEPLOYED
     q = d.params
@@ -385,7 +404,7 @@ def _python_outcome(trusted: tuple[bytes, ...], setup: run.Setup, digests: bytes
 def test_the_deployed_check_agrees_from_its_files(tmp_path):
     """`pous-run`'s four files and the designated id at the deployed point (`2^19` rows, `k = 105`, S1's LMS at its deployed
     parameters): `PousCheck.Run.check` and `run.check` accept the honest run and refuse, for the same reason, the run one of
-    whose answers is not its block, the honest run under another designated id and the honest run against a verifier's list
+    whose answers is not its label, the honest run under another designated id and the honest run against a verifier's list
     that holds another key only; `pous-run` refuses an id that is not lowercase hex and a session that carries keys of its
     own. What `test_run_agrees` can't: that `check` itself, not `checkAt` at a drawn point, is the deployed point under
     `SCHEMES`, in Lean."""
