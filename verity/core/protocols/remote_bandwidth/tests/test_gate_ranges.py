@@ -10,7 +10,7 @@ truncation (the evaluator of record, `dsv4_qnorm_insert.f32_to_u32_rz_byte`, is 
 import), and property/v1's rules where `verity.ml.circuits.stacking` exists. An f32 is its encoding read as s32.
 
 `Accounting.Gates.exp2Lut127` (Ranges.lean), the table `Exp2Lut127Range` and `LutPvWindow` are over, is held to vLLM's
-LUT softmax table on all 256 entries: `fixtures/exp2_lut127.json` pins `engine.int8_attention.LUT` as #2455's head
+LUT softmax table on all 256 entries: `fixtures/exp2_lut127.json` pins `engine.int8_attention.LUT` as vLLM
 writes it, and its words' sha256 is the one `verity_flock.tail_pieces.EXP2_LUT127_SHA256` pins there.
 """
 
@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[5]
 LEAN_GATES = ROOT / "Security" / "Proofs" / "Accounting" / "Gates.lean"
 LEAN_RANGES = ROOT / "Security" / "Definitions" / "Accounting" / "Gates" / "Ranges.lean"
 LUT_FIXTURE = Path(__file__).parent / "fixtures" / "exp2_lut127.json"
-#: `tail_pieces.EXP2_LUT127_SHA256` at #2455's head: the sha256 of the table's 256 little-endian u32 words
+#: `tail_pieces.EXP2_LUT127_SHA256`: the sha256 of the table's 256 little-endian u32 words
 EXP2_LUT127_SHA256 = "6eb8e9b3478db58b4e5a711f31968394f7e93fa4e1df2e0d801eab92a5f66f84"
 M32 = 0xFFFFFFFF
 

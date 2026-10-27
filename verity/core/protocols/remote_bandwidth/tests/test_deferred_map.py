@@ -1,6 +1,6 @@
 """memory-map/v1 under deferred residency against the map that writes each block at the step that completed it: vllm's
-rules for moving one to the other (`deferred`, its compare.py in run r20261018-070848-81e2, the Store's map against
-circuits' oracle), on hand histories and on seeded ones.  The moved map is
+rules for moving one to the other (`deferred`, the Store's map against circuits'
+oracle), on hand histories and on seeded ones.  The moved map is
 one `Replay` accepts, every index the oracle wrote is written once or withdrawn once, a block is withdrawn exactly
 when its last structural reader is at or before the line its encode landed in, each written block is in the plans of
 the passes after that line through its last structural reader, and a session the moved map drives is accepted."""
