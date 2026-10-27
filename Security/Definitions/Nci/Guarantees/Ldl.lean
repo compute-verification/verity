@@ -14,8 +14,9 @@ The working draft's Lemma 1, Theorem 3 and Corollary 4b, on core's circuit and `
 * `PairBound`: with each (weight, entry) pair counted once and `HeldRate`, `ρ ≥ 4 c β_w β_e M / (T₀ h²)`,
   `h = k' + ℓ`.
 
-`ρ = |C| / T₀` is written out: `|C|` is `size computed`, the number of operation gates, and `T₀ > 0` the size of the
-reference circuit. The statements are about an arbitrary circuit, not the NCI check's code.
+The overhead `|C| / T₀` is written out: `|C|` is `size computed`, the number of operation gates, and `T₀ > 0` a
+reference construction's size, which bounds the threshold. The statements are about an arbitrary circuit, not the NCI
+check's code.
 -/
 
 namespace Nci.Ldl.Guarantees
@@ -37,7 +38,7 @@ def BlockDescription : Prop :=
 
 /-- **Theorem 3 (counting)**: let `P` have exactly `c` operation gates per block, and give each gate `v` of a set `V`
 of operation gates a counting weight `ω v`. If `q > 0` and every block's counted weight `Σ_{v ∈ V ∩ I} ω v` is at most
-`q`, then `|C| ≥ (c / q) Σ_{v ∈ V} ω v`, and for a reference size `T₀ > 0`, `ρ = |C| / T₀ ≥ (c / (T₀ q)) Σ_{v ∈ V} ω v`.
+`q`, then `|C| ≥ (c / q) Σ_{v ∈ V} ω v`, and for a reference size `T₀ > 0`, the overhead `|C| / T₀ ≥ (c / (T₀ q)) Σ_{v ∈ V} ω v`.
 
 Each gate of `V` lies in one block, so `Σ_{v ∈ V} ω v ≤ q B`, and `|C| = c B`. The weights need not be nonnegative. -/
 def Counting : Prop :=
@@ -50,7 +51,7 @@ def Counting : Prop :=
 read by at most `e` of them. Let the run `X = eval inp` take the registered values. If the decoder evaluates blocks for
 the activation tuples `a` within `t` at overhead `aBlk` (`EvaluatesBlocks`, Lemma 1's allowance) and they meet
 `ActivationRate β Λ t`, `LDL_{t,R}(a_I) ≥ β |V_I| − Λ` with `β > 0`, then for `h = k + ⌈log₂ B⌉ + aBlk + Λ` and a
-reference size `T₀ > 0`, `ρ = |C| / T₀ ≥ c β M / (T₀ e h)`.
+reference size `T₀ > 0`, the overhead `|C| / T₀ ≥ c β M / (T₀ e h)`.
 
 Lemma 1 gives `β |V_I| − Λ ≤ k'`, so `|V_I| ≤ h / β`; fan-out gives `|𝓙_I| ≤ e |V_I| ≤ e h / β`; Theorem 3 with unit
 weights on the representatives gives the bound. No weight-price premise is used, nor that a product's multiplication

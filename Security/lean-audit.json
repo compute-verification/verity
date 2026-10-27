@@ -1390,6 +1390,18 @@
    "owner": "@compute-accounting",
    "digest": "b55efab6f13247ad3c7970b4659b72724dddc239457c0e562c6ba1c697a9b5c2"
   },
+  "Nci.Hardness.Assumptions.Priced": {
+   "owner": "@training",
+   "digest": "9409f3e9c6c26d44debd2391892667d5686e513aa88912df41e745c306c28117"
+  },
+  "Nci.Hardness.Operations.FanOut": {
+   "owner": "@training",
+   "digest": "d78b49227d9fef098183ec5c2932f4fb0f5dfcbd93fdc7834c619c26f17a83ef"
+  },
+  "Nci.Hardness.Operations.WholeIn": {
+   "owner": "@training",
+   "digest": "5fa256312ae0311e66ddb813f308676a226c9b010413cc902f1bf6a5f09568e5"
+  },
   "Nci.Ldl.Assumptions.ActivationRate": {
    "owner": "@training",
    "digest": "545d7ee1cdd8e3ed1f10b13a44bd7f2ccc3ab82a545cd837a10946a1437d1b3d"
@@ -8350,11 +8362,88 @@
    "assumptions": [],
    "type_hash": "8cde8a03744aead7d37650a220d532f712e5bda0a694ddcc01fc4a95f6f2e08e"
   },
+  "Nci.Hardness.SecurityProofs.FanOutBlockCap": {
+   "owner": "@training",
+   "signature": ["Nci.Hardness.SecurityProofs.FanOutBlockCap : Nci.Hardness.Guarantees.FanOutBlockCap"],
+   "assumptions": [],
+   "type_hash": "c803e3c49e45f066ffe8e4af0ac982b92599d628deabdc823275a2dfa8679899"
+  },
+  "Nci.Hardness.SecurityProofs.FanOutBlockCap_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Hardness.SecurityProofs.FanOutBlockCap_honest : Nci.Hardness.Guarantees.FanOutBlockCap_honest"],
+   "assumptions": [],
+   "type_hash": "c2611d15989a8abbfcdac1ce58b755d44669622f97c0a932d4d6de50f5ed4046"
+  },
+  "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial": {
+   "owner": "@training",
+   "signature": [
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial : Nci.Hardness.Guarantees.FanOutBlockCap_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "1a51ef8b51da5b0164cc781fb5786b0db8cd9193345144bec411d3263df26122"
+  },
+  "Nci.Hardness.SecurityProofs.FanOutBoundPriced": {
+   "owner": "@training",
+   "signature": ["Nci.Hardness.SecurityProofs.FanOutBoundPriced : Nci.Hardness.Guarantees.FanOutBoundPriced"],
+   "assumptions": [],
+   "type_hash": "e6ef8b7fb701d320377e5b7aaad6e1401b84ba067af647829933660d6789a32b"
+  },
+  "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest": {
+   "owner": "@training",
+   "signature": [
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest : Nci.Hardness.Guarantees.FanOutBoundPriced_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "fe8d6035b52ba72a048bdcb5070f382c5cd26539ad574cb312ee44bf8820ccbd"
+  },
+  "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial": {
+   "owner": "@training",
+   "signature": [
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial : Nci.Hardness.Guarantees.FanOutBoundPriced_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "1127e4fa79055afa6ffeab32154ecf50e5fe4fb2e51245dbffd2ab45c131231e"
+  },
+  "Nci.Hardness.SecurityProofs.PricedOfActivationRate": {
+   "owner": "@training",
+   "signature": ["Nci.Hardness.SecurityProofs.PricedOfActivationRate : Nci.Hardness.Guarantees.PricedOfActivationRate"],
+   "assumptions": [],
+   "type_hash": "e59dfc57a8e4da1ee1b1fd2935a70e70aa1466d0a2ab14b85ecd1ad898d62ad7"
+  },
+  "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest": {
+   "owner": "@training",
+   "signature": [
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest : Nci.Hardness.Guarantees.PricedOfActivationRate_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "7d34b267a6416549f368fb3d6640194194a0e224a7dbfab287ca24f3da0caee1"
+  },
+  "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial": {
+   "owner": "@training",
+   "signature": [
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial :",
+    "  Nci.Hardness.Guarantees.PricedOfActivationRate_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "ad4414676156185b1fbc2c7c9aec32d17513c974fa51c9f21046766941f7aa24"
+  },
   "Nci.Ldl.SecurityProofs.BlockDescription": {
    "owner": "@training",
    "signature": ["Nci.Ldl.SecurityProofs.BlockDescription : Nci.Ldl.Guarantees.BlockDescription"],
    "assumptions": [],
    "type_hash": "d1c71dbd142515141df808dd2abbc82cc1b3b9d503f612903796f3a855584c90"
+  },
+  "Nci.Ldl.SecurityProofs.BlockDescription_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Ldl.SecurityProofs.BlockDescription_honest : Nci.Ldl.Guarantees.BlockDescription_honest"],
+   "assumptions": [],
+   "type_hash": "59e794bdb98284b5b0550b048034220359274fad857b68a3f6ca1b5f527691fb"
+  },
+  "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Ldl.SecurityProofs.BlockDescription_nontrivial : Nci.Ldl.Guarantees.BlockDescription_nontrivial"],
+   "assumptions": [],
+   "type_hash": "82cc12aa64566abfa29575908486ea4e3f7356d3270687f6c92a0b0c53c77eda"
   },
   "Nci.Ldl.SecurityProofs.Counting": {
    "owner": "@training",
@@ -8362,11 +8451,35 @@
    "assumptions": [],
    "type_hash": "0e41f456944712df04e7f72687cc21961d41fca84227d6ffe55e42671b9835fb"
   },
+  "Nci.Ldl.SecurityProofs.Counting_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Ldl.SecurityProofs.Counting_honest : Nci.Ldl.Guarantees.Counting_honest"],
+   "assumptions": [],
+   "type_hash": "c1d9acd99f90180be1dc359a965a1c86a5ad66540f37fcf77897c7fb79156979"
+  },
+  "Nci.Ldl.SecurityProofs.Counting_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Ldl.SecurityProofs.Counting_nontrivial : Nci.Ldl.Guarantees.Counting_nontrivial"],
+   "assumptions": [],
+   "type_hash": "fe5187a73e6b2ac7e5b8bebe13922af9b89bb6e75f60dac03062f99c30d28525"
+  },
   "Nci.Ldl.SecurityProofs.FanOutBound": {
    "owner": "@training",
    "signature": ["Nci.Ldl.SecurityProofs.FanOutBound : Nci.Ldl.Guarantees.FanOutBound"],
    "assumptions": [],
    "type_hash": "cbe091114f7d58bb20b6bfda7500d46b00512a6e5ac0977029fb70e0b4a46905"
+  },
+  "Nci.Ldl.SecurityProofs.FanOutBound_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Ldl.SecurityProofs.FanOutBound_honest : Nci.Ldl.Guarantees.FanOutBound_honest"],
+   "assumptions": [],
+   "type_hash": "e8744861a38fdb9b1cb6c8be7907ef5488466914bdb403aacbe404bd5729048b"
+  },
+  "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Ldl.SecurityProofs.FanOutBound_nontrivial : Nci.Ldl.Guarantees.FanOutBound_nontrivial"],
+   "assumptions": [],
+   "type_hash": "34fad08a16ceabe7a13ebf23acc2cf8449ae3ec9cda710def752e631b7a8876e"
   },
   "Nci.Ldl.SecurityProofs.PairBound": {
    "owner": "@training",
@@ -12506,7 +12619,22 @@
    "Flock.SecurityProofs.ServedDraw_honest": "lemma: ServedDraw's honest lemma, its hypotheses at one stratum of 2 units with 1 drawn and coins every 2*1*width 2+64-byte string (A3 by Equiv.funUnique), the served draw computed to end on the coins all 0; a miniature of the deployed stratified:1 draw, not a property of a Lean function.",
    "Flock.SecurityProofs.ServedDraw_nontrivial": "lemma: ServedDraw's nontrivial lemma, its conclusion false at the honest instance when a check accepting every units array replaces the served draw (the live draw is one set at an outcome, not both #[] and #[0]'s); not a property of a Lean function.",
    "Flock.SecurityProofs.JointServed_honest": "lemma: JointServed's honest lemma, A3 at the honest challenger's coins (every Lc-byte string, Lc > 0) and so at every served sampling block's tapes; not a property of a Lean function.",
-   "Flock.SecurityProofs.JointServed_nontrivial": "lemma: JointServed's nontrivial lemma, its bound false at a served sampling block whose wrong units are outside the budget and whose errors sum below 1 when a verifier accepting everything replaces flock-verify (the event is certain); not a property of a Lean function."
+   "Flock.SecurityProofs.JointServed_nontrivial": "lemma: JointServed's nontrivial lemma, its bound false at a served sampling block whose wrong units are outside the budget and whose errors sum below 1 when a verifier accepting everything replaces flock-verify (the event is certain); not a property of a Lean function.",
+   "Nci.Hardness.SecurityProofs.FanOutBlockCap": "frozen (no-function): It is about an arbitrary declaration and counted products each reading one activation occurrence, with activation fan-out at most e (Security/Definitions/Nci/Hardness.lean), under the named Priced (Security/Definitions/Nci/Assumptions/Hardness.lean), and caps the products computed whole in any set of at most c gates reading at most k unregistered inputs: a per-block cap, not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Hardness.SecurityProofs.FanOutBlockCap_honest": "lemma: the honest lemma of Nci.Hardness.SecurityProofs.FanOutBlockCap: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial": "lemma: the nontrivial lemma of Nci.Hardness.SecurityProofs.FanOutBlockCap: a conjunction at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with the price β = 2: Operations.FanOut and β > 0 hold, ¬ Priced, and ¬ (the per-block cap at the block {1}); not a Lean function's acceptance.",
+   "Nci.Hardness.SecurityProofs.FanOutBoundPriced": "frozen (no-function): It is about an arbitrary declaration, a (c,k)-partition of it and counted products each reading one activation occurrence, whole in a block, with activation fan-out at most e (Security/Definitions/Nci/Hardness.lean), under the named Priced (Security/Definitions/Nci/Assumptions/Hardness.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest": "lemma: the honest lemma of Nci.Hardness.SecurityProofs.FanOutBoundPriced: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial": "lemma: the nontrivial lemma of Nci.Hardness.SecurityProofs.FanOutBoundPriced: a conjunction at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with the price β = 2 and T₀ = 1: CKPartition, Operations.WholeIn, Operations.FanOut and β, T₀ > 0 hold, ¬ Priced, and ¬ (c β M / (T₀ e (k + Λ)) ≤ |C| / T₀); not a Lean function's acceptance.",
+   "Nci.Hardness.SecurityProofs.PricedOfActivationRate": "frozen (no-function): It is about an arbitrary declaration, a registration of it, counted products and a fixed decoder (Security/Definitions/Nci/Ldl.lean, Security/Definitions/Nci/Hardness.lean), under the named EvaluatesBlocks and ActivationRate (Security/Definitions/Nci/Assumptions/Ldl.lean), and concludes the Priced inequality at the registered blocks: a relation between premises, not a Lean function's acceptance.",
+   "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest": "lemma: the honest lemma of Nci.Hardness.SecurityProofs.PricedOfActivationRate: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial": "lemma: the nontrivial lemma of Nci.Hardness.SecurityProofs.PricedOfActivationRate: a conjunction at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with the rate β = 2: the representatives, β ≥ 0, the registration and EvaluatesBlocks hold, ¬ ActivationRate, and ¬ (Priced's inequality at the block); not a Lean function's acceptance.",
+   "Nci.Ldl.SecurityProofs.BlockDescription_honest": "lemma: the honest lemma of Nci.Ldl.SecurityProofs.BlockDescription: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial": "lemma: the nontrivial lemma of Nci.Ldl.SecurityProofs.BlockDescription: a conjunction at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with the read cap k = 0: the registration and EvaluatesBlocks hold, ¬ ReadCap, and ¬ (LDL of the activation tuple ≤ k + ⌈log₂ B⌉ + aBlk); not a Lean function's acceptance.",
+   "Nci.Ldl.SecurityProofs.Counting_honest": "lemma: the honest lemma of Nci.Ldl.SecurityProofs.Counting: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Ldl.SecurityProofs.Counting_nontrivial": "lemma: the nontrivial lemma of Nci.Ldl.SecurityProofs.Counting: a conjunction at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with weight 2 on the product's gate and q = T₀ = 1: Exact, V ⊆ computed and q, T₀ > 0 hold, ¬ the per-block weight cap, and ¬ (both of its counting inequalities); not a Lean function's acceptance.",
+   "Nci.Ldl.SecurityProofs.FanOutBound_honest": "lemma: the honest lemma of Nci.Ldl.SecurityProofs.FanOutBound: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial": "lemma: the nontrivial lemma of Nci.Ldl.SecurityProofs.FanOutBound: a conjunction at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with the rate β = 2 and T₀ = 1: CKPartition, the registration, Products.FanOut, β, T₀ > 0 and EvaluatesBlocks hold, ¬ ActivationRate, and ¬ (c β M / (T₀ e h) ≤ |C| / T₀); not a Lean function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -19067,9 +19195,24 @@
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial",
     "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.BlockDescription_honest",
+    "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial",
     "Nci.Ldl.SecurityProofs.Counting",
+    "Nci.Ldl.SecurityProofs.Counting_honest",
+    "Nci.Ldl.SecurityProofs.Counting_nontrivial",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.FanOutBound_honest",
+    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
     "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
@@ -19167,8 +19310,21 @@
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial",
     "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.BlockDescription_honest",
+    "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.FanOutBound_honest",
+    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
     "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
@@ -19683,9 +19839,21 @@
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial",
     "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.BlockDescription_honest",
+    "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial",
     "Nci.Ldl.SecurityProofs.Counting",
+    "Nci.Ldl.SecurityProofs.Counting_honest",
+    "Nci.Ldl.SecurityProofs.Counting_nontrivial",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.FanOutBound_honest",
+    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
     "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
@@ -22482,8 +22650,18 @@
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial",
     "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.BlockDescription_honest",
+    "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.FanOutBound_honest",
+    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
     "Nci.Ldl.SecurityProofs.PairBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
@@ -22721,6 +22899,20 @@
     "Nci.SecurityProofs.ThreadedReadsInfoFmt2"
    ]
   },
+  "Definitions.Nci.Assumptions.Hardness": {
+   "digest": "327b636adb64288ee518e7c1b2f7e790471c0ad60157e8bc306fdedf9b6149e5",
+   "definitions": {
+    "Nci.Hardness.Assumptions.Priced": "9409f3e9c6c26d44debd2391892667d5686e513aa88912df41e745c306c28117"
+   },
+   "guarantees": [
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial"
+   ]
+  },
   "Definitions.Nci.Assumptions.Info": {
    "digest": "00bdbe965111c5d8b58cba8d227486e05eb84da8d908fcde9586ce5ff5e4b421",
    "definitions": {
@@ -22747,8 +22939,15 @@
     "Nci.Ldl.Assumptions.HeldRate": "ffd64517cc4d94d5f880e9eb9ef96f35f081ddd9814060645b8847529fa9a43c"
    },
    "guarantees": [
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial",
     "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.BlockDescription_honest",
+    "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.FanOutBound_honest",
+    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
     "Nci.Ldl.SecurityProofs.PairBound"
    ]
   },
@@ -23288,6 +23487,38 @@
     "Nci.SecurityProofs.ThreadedReadsInfoFmt2"
    ]
   },
+  "Definitions.Nci.Guarantees.Hardness": {
+   "digest": "b7f5b1f759e422f14c7f108385d221dcf580c38cf4ce467ce574f22cbbc25088",
+   "definitions": {
+    "Nci.Hardness.Guarantees.FanOutBlockCap": "58bcbf167f66fa1679fd49f3347cedfcf2eb4d936c5ae9131015d5746d5edfd8",
+    "Nci.Hardness.Guarantees.FanOutBoundPriced": "fc837f7984525d1615fed4ed9dbd056fb945f00b2cc36f4c95e3b2f1f1f02d47",
+    "Nci.Hardness.Guarantees.PricedOfActivationRate": "c84899df7e6dd7d58a387fc8778979937ffca9c111d14c0fca59c1f1eb0bb195"
+   },
+   "guarantees": [
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate"
+   ]
+  },
+  "Definitions.Nci.Guarantees.Hardness.Witnesses": {
+   "digest": "3ee7efd4164166b399aff009c0e855b731d83ee48437b57c223a89315923fe9e",
+   "definitions": {
+    "Nci.Hardness.Guarantees.FanOutBlockCap_honest": "84f01cc43193bb4080b5505978dad26c6a20feaddc0f9ca6a5c8dcd4ad7717a0",
+    "Nci.Hardness.Guarantees.FanOutBlockCap_nontrivial": "d78a1c9a05b56933bcffbcb3db31702792776a923001c370fd08afdf1a9fa672",
+    "Nci.Hardness.Guarantees.FanOutBoundPriced_honest": "c0d036ab97d7368c402e32ffeef2a84121ed1820daecb7fa39bf4bbbac2c8c26",
+    "Nci.Hardness.Guarantees.FanOutBoundPriced_nontrivial": "8c35c9326d30874add84eae5ebe21d101078870a805dbefd67953c3c104620a5",
+    "Nci.Hardness.Guarantees.PricedOfActivationRate_honest": "c09a57b3861b00f5dbb666b86b907436f817fe8eb98ca0ec4d062f8fdcef999d",
+    "Nci.Hardness.Guarantees.PricedOfActivationRate_nontrivial": "4f8222da320305a3b20aeb1299b77550f7b739d06433cd1f60bc38ed6d01a782"
+   },
+   "guarantees": [
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial"
+   ]
+  },
   "Definitions.Nci.Guarantees.Info": {
    "digest": "88194ec7e2fce7b6006af38386697feeaa1485ed6b2da82b548bbd01386e9f5a",
    "definitions": {
@@ -23331,6 +23562,25 @@
     "Nci.Ldl.SecurityProofs.Counting",
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.Ldl.SecurityProofs.PairBound"
+   ]
+  },
+  "Definitions.Nci.Guarantees.Ldl.Witnesses": {
+   "digest": "567dc79b66359bc8622dccf5c84bfaab7adc9d84a09951e39f936e95b3e36caa",
+   "definitions": {
+    "Nci.Ldl.Guarantees.BlockDescription_honest": "c736f601d1a4075ae708db6a7b1c5e1811ec917c2acea46aebb62d6eccbba2b8",
+    "Nci.Ldl.Guarantees.BlockDescription_nontrivial": "cd173ba105e05c187b8a581d507294d7c2715f84d45ddccb406de11b195627fb",
+    "Nci.Ldl.Guarantees.Counting_honest": "e0fc416bad46f8884bcc9b58dfaedb59b69e26204273f22e2ca6bdb7ad6dc205",
+    "Nci.Ldl.Guarantees.Counting_nontrivial": "f58344bf84463aa9fc5dd7944d91d8f18388c9acdfd5ae2594b729a0e36a1ab4",
+    "Nci.Ldl.Guarantees.FanOutBound_honest": "24b09231ca53ededbd0ec4d1fdd2c8e988c79fb8ded4748c2c468976496d2410",
+    "Nci.Ldl.Guarantees.FanOutBound_nontrivial": "e881de88ad7a4b63b5f2f6811e7ae4e202d05b621650e1c19a1dcec3f0b5799c"
+   },
+   "guarantees": [
+    "Nci.Ldl.SecurityProofs.BlockDescription_honest",
+    "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial",
+    "Nci.Ldl.SecurityProofs.Counting_honest",
+    "Nci.Ldl.SecurityProofs.Counting_nontrivial",
+    "Nci.Ldl.SecurityProofs.FanOutBound_honest",
+    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial"
    ]
   },
   "Definitions.Nci.Guarantees.Packed": {
@@ -23425,6 +23675,30 @@
     "Nci.SecurityProofs.IncompressibleThreadedThrottledOn"
    ]
   },
+  "Definitions.Nci.Hardness": {
+   "digest": "5ed68a40c2c26737408db481c3cf6d94d07b981fc37fab2ed1f6e63a3454edc8",
+   "definitions": {
+    "Nci.Hardness.Operations": "55f9a7f5a3ddd836bba1bb4054a480e7ae708fbf2046d389ab29b2f566442a0c",
+    "Nci.Hardness.Operations.FanOut": "d78b49227d9fef098183ec5c2932f4fb0f5dfcbd93fdc7834c619c26f17a83ef",
+    "Nci.Hardness.Operations.J": "f25b79c3129c2d2ca13f2ce487277fb2df40bb9ce2f47e2225a2835edb006d0c",
+    "Nci.Hardness.Operations.WholeIn": "5fa256312ae0311e66ddb813f308676a226c9b010413cc902f1bf6a5f09568e5",
+    "Nci.Hardness.Operations.gates": "9db4f7630edeb94c29f95c2ed811e8387383314533536903cdbc32d96a19a53b",
+    "Nci.Hardness.Operations.ofActs": "57fefac55681dd455448c011b7e8ea7675ec48dd0ff5ca8cca78de5a9209f25f",
+    "Nci.Hardness.Operations.operands": "2de7f6a05e4e324f4728eee77e00b37545360338ffbf597d446aaf450e6f4351",
+    "Nci.Hardness.Operations.ops": "c3d21adf9bf8e723ffa1237ba2425a30727445bec22d269e157aefe2642c59c2",
+    "Nci.Hardness.Operations.whole": "5cd82b5863285017660b5d649ea93fef0e92d20cc2e1ec830d983b05d657442b"
+   },
+   "guarantees": [
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial"
+   ]
+  },
   "Definitions.Nci.Info": {
    "digest": "8fb3a35e7925ba55540307fa339b42bb6815b9a48b751456a64f404a260a9898",
    "definitions": {
@@ -23481,10 +23755,53 @@
     "Nci.Ldl.Registration.val": "e479729d304367f4f37d420ae56c1b226737c4dc25a0ddf1643477dcfbecd320"
    },
    "guarantees": [
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial",
     "Nci.Ldl.SecurityProofs.BlockDescription",
+    "Nci.Ldl.SecurityProofs.BlockDescription_honest",
+    "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial",
     "Nci.Ldl.SecurityProofs.Counting",
+    "Nci.Ldl.SecurityProofs.Counting_honest",
+    "Nci.Ldl.SecurityProofs.Counting_nontrivial",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Ldl.SecurityProofs.FanOutBound_honest",
+    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial",
     "Nci.Ldl.SecurityProofs.PairBound"
+   ]
+  },
+  "Definitions.Nci.Ldl.Instances": {
+   "digest": "75c83a34be22158ab00e94e356cfd749cd2ff74ce64150bd7b493367c447d7ac",
+   "definitions": {
+    "Nci.Ldl.Honest.C": "5050e8e79c69873a2b7ea512c3ed2bf9ace9365a11ffcf70ffe99d97946eb379",
+    "Nci.Ldl.Honest.D": "e972774e4515b4515fa6eea45045f7769438f2cf3e518ce0172341c174bccc0f",
+    "Nci.Ldl.Honest.M": "7f5b5b2e4ce756106f5825dc60884c0bfc6ee4571a4c420ffe38a76ce4c28d80",
+    "Nci.Ldl.Honest.O": "98b0d64ac95950eba0c858e6a7f6c1b76f0ca934a1f0395b0a29ceb748d74b59",
+    "Nci.Ldl.Honest.P": "b99303046b8485fbeacc77d2a3bdc6da5cb40b8918559a69c827f8958dfac948",
+    "Nci.Ldl.Honest.R": "84eeb4ecd0673639c1cb70706d6ef8b578a4ba895708ec43fbf0c87b073a8a30",
+    "Nci.Ldl.Honest.a": "05e247b8d684c92ad7d514a8b508ae4402888a45aab6d021e4c8c6300051c573",
+    "Nci.Ldl.Honest.d": "23fe2e0f2ede91353ea7fe6da47173e9e563d7e6caab094ab43b06a175fc8c84",
+    "Nci.Ldl.Honest.gates": "93c3e956bcd55ea2534ba8b55dcc239762459484363f978a48e295b77ff0cb89",
+    "Nci.Ldl.Honest.inp": "68284220ba5ade3a76a4ccff7d125bf2fd07b04f949547f0ecbeb02e937f1a53"
+   },
+   "guarantees": [
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest",
+    "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest",
+    "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial",
+    "Nci.Ldl.SecurityProofs.BlockDescription_honest",
+    "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial",
+    "Nci.Ldl.SecurityProofs.Counting_honest",
+    "Nci.Ldl.SecurityProofs.Counting_nontrivial",
+    "Nci.Ldl.SecurityProofs.FanOutBound_honest",
+    "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial"
    ]
   },
   "Definitions.Nci.Links": {
