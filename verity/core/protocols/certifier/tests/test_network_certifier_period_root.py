@@ -10,8 +10,8 @@ from fractions import Fraction
 import pytest
 
 from verity.core import attest
-from verity.core.protocols.certifier.certificate import (SALT_BYTES, Direction, Issuer, certificate_digest,
-                                                         certificate_message, clock_commitment)
+from verity.core.protocols.certifier.certificate import (SALT_BYTES, Direction, Issuer, SignerRefused,
+                                                         certificate_digest, certificate_message, clock_commitment)
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill
 from verity.core.protocols.certifier.period_root import PARTY, PeriodIssuer, refusal
 from verity.core.protocols.certifier.schedule import ClockSync
@@ -199,6 +199,17 @@ def test_a_period_starts_where_its_attachment_does_and_closes_early_on_a_later_p
     [closed] = issuer.closed
     assert closed.period == 0 and closed.records == tuple(e.record for e in first.entries)
     assert check(device, closed, [first, later], first=10) is None
+
+
+def test_an_attachment_is_started_once_on_the_party_key(device, key):
+    """A second issuer of the attachment, such as a restarted certifier, is refused before it signs, so no period of the
+    attachment gets two roots; another attachment starts."""
+    PeriodIssuer(key, ATTACHMENT, LINK, M)
+    with pytest.raises(SignerRefused, match="already started"):
+        PeriodIssuer(device.party(DEPLOYMENT, PARTY), ATTACHMENT, LINK, M)
+    issuer = PeriodIssuer(key, OTHER_ATTACHMENT, LINK, M, coins=coins())
+    certify(issuer, 0)
+    assert issuer.live(0) is not None
 
 
 def test_a_period_issuer_is_one_attachments_of_one_period_length():

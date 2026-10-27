@@ -134,7 +134,8 @@ class PeriodIssuer:
     """The certifier's signing step on device-attest, in place of `certificate.Issuer` (the module docstring): the
     link-windows ``first``, ``first + 1``, … of ``attachment`` on ``link``, in certification periods of ``windows``
     link-windows, under the party key ``key``. Each record's and each clock's salt is fresh bytes of ``coins``, as
-    `Issuer`'s are."""
+    `Issuer`'s are. On an `lms.PartyKey` it first records the attachment as started on the lower key's leaf state, and
+    raises `SignerRefused` when the state has started it already."""
 
     key: PartyKey
     attachment: bytes
@@ -150,6 +151,15 @@ class PeriodIssuer:
             raise ValueError(f"a certification period is at least one link-window, not {self.windows!r}")
         if len(self.attachment) != lms.SESSION_BYTES:
             raise ValueError(f"an attachment is {lms.SESSION_BYTES} bytes, not {len(self.attachment)}")
+        if isinstance(self.key, lms.PartyKey):
+            # As `Issuer` starts its session: no second issuer (a restarted certifier among them) signs a second root
+            # for one of the attachment's periods, of which the prover would pick one.
+            try:
+                with lms.LeafState(self.key.directory / lms.LOWER_STATE, self.key.lower, self.key.params.H,
+                                   wait=True) as state:
+                    state.start(bytes(self.attachment))
+            except lms.StateError as e:
+                raise SignerRefused(str(e)) from None
         self._signer = _Records(bytes(self.key.lower[:16]), bytes(self.attachment))
         self._issuer = Issuer(self._signer, bytes(self.attachment), coins=self.coins)
         self._pending: dict[int, list[Entry]] = {}
