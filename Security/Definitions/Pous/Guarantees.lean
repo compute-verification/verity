@@ -221,8 +221,7 @@ def ChainDenseMeets64 : Prop :=
 
 /-! ### The band at `D = 2`, `D = 1` and `D = 0` rounds
 
-Added on 3 Oct 2026, approved by Daniel (3 Oct 2026, 05:27Z; `D = 0` approved 3 Oct 2026). Each
-statement is a band pin above with only the round budget `D`, the challenge count `k` and the
+Each statement is a band pin above with only the round budget `D`, the challenge count `k` and the
 bound on the in-degree `d` changed; the model, the scope and `d ≥ D` (`BandGapAttack`) are as there (`D = 0` puts no
 bound on `d`, since the responder makes no `Π₂` call). The proofs are
 `Security/Proofs/Pous/Chain/FamilyRounds.lean`'s (`Pous.BandMulti.Rounds`): `Family.lean`'s certificate with `D`
@@ -261,9 +260,8 @@ def BandMultiMeetsFamilyD1 : Prop :=
 
 /-- **Unconditional: the band store at `D = 0` rounds and `k = 89`, at every segment count from 1 to 2^64.**
 `BandMultiMeetsFamily` at `D = 0` and `k = 89`, for every `d` with no bound on the in-degree: at `D = 0` the responder
-makes no `Π₂` call and answers from its state alone, so the band needs no bound on `d`. Both domain layouts. Approved
-by Daniel (3 Oct 2026). Proof: `Pous.BandMulti.Rounds.band_meets_family_d0`; here
-`Pous.SecurityProofs.BandMultiMeetsFamilyD0`.
+makes no `Π₂` call and answers from its state alone, so the band needs no bound on `d`. Both domain layouts. Proof:
+`Pous.BandMulti.Rounds.band_meets_family_d0`; here `Pous.SecurityProofs.BandMultiMeetsFamilyD0`.
 
 Frozen (no-function, hash): a `Meets` in an ideal model, which no Lean function computes. -/
 def BandMultiMeetsFamilyD0 : Prop :=
@@ -414,8 +412,7 @@ def ChainDenseMeets111 : Prop :=
 
 /-! ### The band with grace `t` (`Definitions.Pous.Model.Graded`, `Definitions.Pous.Accounting.GradedMeets`)
 
-Added on 3 Oct 2026 (PR #905). The game's requirements on the protocol are in
-`Security/Definitions/Pous/Model/Graded.lean`. -/
+The game's requirements on the protocol are in `Security/Definitions/Pous/Model/Graded.lean`. -/
 
 /-- **Unconditional: the band store with up to `t` late answers, at every segment count from 1 to 2^64.** For every `N`
 with `1 ≤ N ≤ 2^64`, every `d ≥ 5`, every hard bound `(D_late, Q_late)` with `5 ≤ D_late ≤ d`, `D_late ≤ 12` and
@@ -433,8 +430,8 @@ the window, so it is bounded by the memory challenger's limit on the audit's dur
 requires, `1,505` call-times. `D_late ≤ d` is the band's cliff applied to `Δ_late`; at the deployed `d = 12` both caps
 on `D_late` are `Δ_late + RTT < 13 × 241.5 µs ≈ 3.14 ms`. That window argument and its wall-clock reading count whole
 `Π₂` calls, so they hold in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover re-encodes
-nothing, rebuilding any label from 1.53% of `C` in 481 Keccak-f, less than one call (red team, 4 Oct 2026,
-art:7617c8017e80). The statement itself is about the ideal model and is unaffected. Proof:
+nothing, rebuilding any label from 1.53% of `C` in 481 Keccak-f, less than one call, as the
+red team showed. The statement itself is about the ideal model and is unaffected. Proof:
 `PousGraded.band_graded_meets_family` (`Security/Proofs/Pous/Graded/Band.lean`); here
 `Pous.SecurityProofs.BandGradedMeetsFamily`.
 
@@ -511,7 +508,7 @@ audit only if the memory challenger aborts, without accepting, every audit that 
 row answers at its deadline, that leaves its 242 gaps `1,505 − 1,479 = 26` call-times (≈ 6.3 ms). The bound rests on the
 cap, which is the proof's reach, not on `R(d)`, which exceeds it. The milliseconds read call-times as whole `Π₂` calls
 of at least 241.5 µs, which holds in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a prover
-answers from 1.53% of `C` in 481 Keccak-f without re-encoding anything (red team, 4 Oct 2026, art:7617c8017e80).
+answers from 1.53% of `C` in 481 Keccak-f without re-encoding anything, as the red team showed.
 
 **What it does not exclude.** It excludes only re-encoding a whole segment from `W` with no state about `Π₂`. Within the
 cap, `W` alone rebuilds a segment's first 253 labels (49%) at `d = 5` and its first 121 (24%) at `d = 12`. `d`
