@@ -72,8 +72,7 @@ renderer switch counts it.
 
 A workload is a served configuration: today the vLLM regression rows that record a replay partition. Its `template_mix`
 counts the proof blocks per family (`vu_family`) and bound parameters (`replay_partition.strata`), the complete counts of
-the run. This is the mix that weights backend overheads into a per-workload headline (the renderer's "Workload headline",
-`verity_numerical.bench.headline`). Every family maps to a census
+the run. This is the mix that weights backend overheads into a per-workload headline (the frozen tables' "Workload headline"). Every family maps to a census
 subcircuit template bound from its IR Definition, with the number of the template's subcircuits one proof block holds (`subcircuits_per_vu`):
 - `Gemm_v1` and `Gemm_v2` are N `gemm-coordinate`, on Ampere-class mma or Hopper wgmma;
 - `Attention_v3`, `Attention_v2` and `Attention_v4` are NH `attention-head` (FA2, or FA3; `Attention_v4` is FA3 under its per-iteration `Check_inf` construction, whose `MASKED_FROM` names the first masked key block);

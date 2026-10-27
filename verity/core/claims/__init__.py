@@ -6,7 +6,7 @@ Id format (shared with the docs site's assumptions registry): an assumption over
 composing a :data:`PROPERTIES` entry with an :data:`INSTANCES` entry -- ``cr/sha-512`` is collision resistance of SHA-512,
 labelled ``CR · SHA-512``, and an algebraic instance makes it ``algebraic``; every other claim is a bare kebab-case id
 (``logup``, ``live-verifier``) in :data:`ENTRIES`, and never contains ``/``.  This module is the source of the ids a render
-cites; ``bench.views --format entities`` carries each cited entry, which is what the site imports.  :func:`get` resolves either.  Only what a render cites is here; a new claim is a new
+cites.  :func:`get` resolves either.  Only what a render cites is here; a new claim is a new
 entry, and an id, once cited, is never renamed.  Stdlib only; imports no other core module.
 """
 

@@ -1,9 +1,15 @@
 # benchmarks/numerical
 
-Frozen: kept, still in the tables, not developed. The exception is the bench spine `verity_numerical.bench` (the result
-contract, workloads, lowerings, the tables and their views), which C-Flock, `circuit-check` and the table renderers read,
+Frozen: kept, not developed. The exception is the bench spine `verity_numerical.bench` (the result contract, workloads,
+lowerings, the cell checks and `bench.interaction`, a result's interaction time), which C-Flock and `circuit-check` read,
 and `bench.unit_costs`, the per-unit-type cost inventory (gates, nonzeros, sampled units, work weight) over the census
 workloads.
+
+The canonical tables, their drill-downs and views are evidence, not code. Their final render is
+`art:607c4bd1c7d80a861e70545bbc78aecde068576f0e20d570ffab2d35181ac358` (`tables`, `drilldown` and `views`, each as `.md`
+and `.json`, with the docs site's last entities JSON and the last parity report), over the cells of the
+`dataset-snapshot/v1` `art:4e132904a89b5f8c766bccb1bdbb20742be82b69bae274393b03d0351e0d42d3`. The renderers are in Git
+history.
 
 Campaign-side numerical work for `verity.ml.circuits.targets.target.FIRST`. `verity_numerical.reference`
 is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2. The archived systems' exporter,
