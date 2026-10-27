@@ -24,6 +24,10 @@ SECTIONS = ["# Demo A: one H200, one block", "## 1. Ran and proved, on one H200,
             "## Sources"]
 
 
+def _draft(*a, **k) -> str:
+    return D.render(*a, draft=True, **k)
+
+
 def _load(name: str) -> dict:
     return json.loads((FIXTURES / f"{name}.json").read_text())
 
@@ -33,7 +37,7 @@ def _m(**values) -> dict:
 
 
 def test_iface_b_records_render_with_placeholders() -> None:
-    out = D.render([_load("block-record-r2-period0"), _load("block-record-r1-window10")])
+    out = _draft([_load("block-record-r2-period0"), _load("block-record-r1-window10")])
     assert [line for line in out.splitlines() if line.startswith("#")] == SECTIONS
     template = D.TEMPLATE.read_text()
     for name in D.MEASURED:
@@ -63,13 +67,13 @@ def test_the_retired_words_are_refused(word: str) -> None:
         D.vocabulary(f"PoUW's {word} accepted")
     doc = {**_m(), "caveats": [f"the certifier {word} was stubbed"]}
     with pytest.raises(ValueError, match=f"says {word!r}"):
-        D.render([_load("block-record-r2-period0")], doc)
+        _draft([_load("block-record-r2-period0")], doc)
 
 
 def test_the_word_leg_in_a_source_is_refused() -> None:
     doc = {"format": D.MEASUREMENTS, "values": {"ZK_SESSIONS": {"value": 3, "source": "the leg's sessions"}}}
     with pytest.raises(ValueError, match="says 'leg'"):
-        D.render([_load("block-record-r2-period0")], doc)
+        _draft([_load("block-record-r2-period0")], doc)
 
 
 @pytest.mark.parametrize(("doc", "why"), [
@@ -83,13 +87,23 @@ def test_the_word_leg_in_a_source_is_refused() -> None:
 ])
 def test_a_measurement_it_may_not_hold_is_refused(doc: dict, why: str) -> None:
     with pytest.raises(ValueError, match=why):
-        D.render([_load("block-record-r2-period0")], doc)
+        _draft([_load("block-record-r2-period0")], doc)
+
+
+PLANNER_RUN = "r20261027-032427-c117"
+
+
+def _planned(**kw) -> dict:
+    return {"PLANNER": {"value": f"`demo_a.py` @ 3b0c90de27, run {PLANNER_RUN}", "source": f"run {PLANNER_RUN}"},
+            "H_POOLED": {"value": 3_126_434, "source": f"run {PLANNER_RUN} › free_compute"},
+            "B_POOLED": {"value": 177_688, "source": f"run {PLANNER_RUN} › leak"}} | kw
 
 
 def _costed() -> dict:
     doc = _m(PROVING_GPU_S=5400, BLOCK_GPU_S=60, H_A=10, BLOCK_ANDS=1000, PLANNER_PREDICTED_S=6000,
              BLOCK_OUTPUT_BITS=100, PROVE_S_PER_AND=1e-6)
     doc["values"]["WORLD_GATES_YEAR"] = {"value": 4.7e31, "source": "test", "label": "world-inference-2027"}
+    doc["values"] |= _planned()
     doc["subcircuits"] = [
         {"name": "a", "units": 1000, "ands_per_unit": 20000, "out_bits": 16, "fixed_s": 36, "source": "test"},
         {"name": "b", "units": 250, "ands_per_unit": 500, "out_bits": 16, "fixed_s": 72, "source": "test"}]
@@ -97,7 +111,7 @@ def _costed() -> dict:
 
 
 def test_derived_figures_follow_their_inputs() -> None:
-    out = D.render([_load("block-record-r2-period0")], _costed())
+    out = _draft([_load("block-record-r2-period0")], _costed())
     assert "proving this block cost 90× the block's own GPU time" in out
     assert "at most 10 of the block's 1,000 ANDs (1%)" in out
     assert "actual / predicted = 0.9" in out
@@ -107,47 +121,79 @@ def test_derived_figures_follow_their_inputs() -> None:
     assert "across 2 subcircuits" in out
 
 
-def test_part_3s_h_and_b_are_the_planners_at_one_week() -> None:
-    out = D.render([_load("block-record-r2-period0")], _costed())
-    assert "budget 6,048 GPU-s = 1% of a one-week sampling block (604,800 H200-s" in out
-    assert "a: n 10,080,000, 20,000 ANDs, 16 output bits, fixed 36 GPU-s, k 296,953" in out
+def test_part_3s_h_and_b_are_one_recorded_run_of_proofs_planner() -> None:
+    out = _draft([_load("block-record-r2-period0")], _costed())
+    assert f"H and B are proofs' planner's (`demo_a.py` @ 3b0c90de27, run {PLANNER_RUN})" in out
     assert "in its\nAND-weighted form: a unit's cost is its circuit size, so the detection budget is counted in AND gates." in out
-    doc = _costed()
-    del doc["values"]["PROVE_S_PER_AND"]
-    unmeasured = D.render([_load("block-record-r2-period0")], doc)
-    assert "| week | 100,000 | ⟨H_POOLED⟩ | ⟨H_WORLD_SHARE_WEEK⟩ | ⟨H_SHARE_WEEK⟩ | ⟨B_POOLED⟩ |" in unmeasured
-    with pytest.raises(ValueError, match="⟨H_POOLED⟩ is derived"):
-        D.render([_load("block-record-r2-period0")], _m(H_POOLED=500))
+    assert f"| ⟨H_POOLED⟩ | 3,126,434 | run {PLANNER_RUN} › free_compute |" in out
+    for values, why in (({"H_POOLED": {"value": 500, "source": f"run {PLANNER_RUN}"}}, "filled together"),
+                        (_planned(B_POOLED={"value": 1, "source": "the planner"}), "filled together"),
+                        (_planned(B_POOLED={"value": 1, "source": "run r20261027-000000-0000"}), "filled together")):
+        with pytest.raises(ValueError, match=why):
+            _draft([_load("block-record-r2-period0")], {"format": D.MEASUREMENTS, "values": values})
+
+
+def test_a_report_with_an_unfilled_number_is_refused() -> None:
+    """A rendered report never carries a placeholder: only a draft shows ⟨NAME⟩, and `main` renders no draft."""
+    doc = {**_proved(), "values": _planned(JOINT_LOCKED={"value": True, "source": "LEAN-56"}) | _noise()}
+    doc["sections"][0]["serve_noise"] = True
+    out = D.render([], doc)
+    assert out.splitlines()[0] == D.M3_STATUS and not re.search(r"⟨[A-Z][A-Z0-9_]*⟩", out.split("## Sources")[0])
+    assert f"a one-week sampling block of one H200\nhas at most H = 3,126,434 faulty AND gates and B = 177,688" in out
+    for name in ("H_POOLED", "SERVE_NOISE_S"):
+        partial = copy.deepcopy(doc)
+        del partial["values"][name]
+        if name == "H_POOLED":
+            del partial["values"]["B_POOLED"], partial["values"]["PLANNER"]
+        with pytest.raises(ValueError, match=f"unfilled number.*⟨{name}⟩"):
+            D.render([], partial)
+        assert f"⟨{name}⟩" in _draft([], partial)
+    with pytest.raises(ValueError, match="unfilled number"):
+        D.render([_load("block-record-r2-period0")])
+
+
+def test_part_1_states_the_guarantee_the_draw_certifies() -> None:
+    doc = {**_proved(), "values": _planned(JOINT_LOCKED={"value": True, "source": "LEAN-56"})}
+    doc["proved"]["rows"] = [{"what": "the guarantee at δ = 1%: wrong proof blocks at most", "value": 1_367_366_590,
+                              "unit": "of 3,124,276,224 proof blocks (43.77%)", "run": "r20261027-013000-abcd",
+                              "verdict": "W at δ = 10⁻²: 1,367,366,590 of 3,124,276,224 proof blocks (43.77%)",
+                              "target": {"none": "weak at an 8-block draw"}}]
+    part1 = D.render([], doc).split("## 2. ")[0]
+    assert ("- **the guarantee at δ = 1%: wrong proof blocks at most:** 1,367,366,590 of 3,124,276,224 proof blocks "
+            "(43.77%) (no target (weak at an 8-block draw)). Run r20261027-013000-abcd.") in part1
+    doc["proved"]["rows"][0]["run"] = "proofs"
+    with pytest.raises(ValueError, match="has no run id"):
+        D.render([], doc)
 
 
 def test_the_world_figure_carries_its_census_label() -> None:
     doc = _m(WORLD_GATES_YEAR=4.7e31)
     with pytest.raises(ValueError, match="world-inference-2027"):
-        D.render([_load("block-record-r2-period0")], doc)
-    assert "compute, ⟨WORLD_GATES_YEAR⟩ AND gates a year" in D.render([_load("block-record-r2-period0")])
+        _draft([_load("block-record-r2-period0")], doc)
+    assert "compute, ⟨WORLD_GATES_YEAR⟩ AND gates a year" in _draft([_load("block-record-r2-period0")])
 
 
 def test_part_3_is_circuit_size_in_gates_with_no_flop_or_price() -> None:
     part3 = D.TEMPLATE.read_text().split("## 3.")[1].split("## What")[0]
     assert "counted in AND gates" in part3 and not re.search(r"FLOP|\$|price|pricing|cost of", part3, re.I)
     assert not [n for n in (*D.MEASURED, *D.DERIVED) if "FLOP" in n]
-    out = D.render([_load("block-record-r2-period0")], _costed()).split("## 3.")[1].split("## What")[0]
+    out = _draft([_load("block-record-r2-period0")], _costed()).split("## 3.")[1].split("## What")[0]
     assert "FLOP" not in out and "| H faulty AND gates | share of the world's AND gates |" in out
 
 
 def test_a_stub_caveat_drops_once_the_measurements_show_it_fixed() -> None:
     rec = _load("block-record-r2-period0")
-    out = D.render([rec])
+    out = _draft([rec])
     assert "(#4405, #4426)" in out and "(NET-80)" in out and "ReLU and per-row quantize are not proved units" in out
     assert "This block drew k = 2, not M3's handful of 8 (PRF-171)." in out
     assert "run on the prover's node for the demo" in out
     assert "(RT-LEAN L22)" in out
-    fixed = D.render([rec], {**_m(), "fixed": {"pouw-live-salt": "run r1", "torch-loop-wiring": "run r2"}})
+    fixed = _draft([rec], {**_m(), "fixed": {"pouw-live-salt": "run r1", "torch-loop-wiring": "run r2"}})
     assert "(#4405, #4426)" not in fixed and "(NET-80)" in fixed and "ReLU and per-row" not in fixed
     assert "(RT-LEAN L22)" in fixed
-    assert "(RT-LEAN L22)" not in D.render([rec], {**_m(), "fixed": {"pouw-salt-order": "run r3"}})
+    assert "(RT-LEAN L22)" not in _draft([rec], {**_m(), "fixed": {"pouw-salt-order": "run r3"}})
     with pytest.raises(ValueError, match="fixed 'salt'"):
-        D.render([rec], {**_m(), "fixed": {"salt": "run r1"}})
+        _draft([rec], {**_m(), "fixed": {"salt": "run r1"}})
 
 
 def test_the_three_landed_fixes_drop_their_caveats_cleanly() -> None:
@@ -155,7 +201,7 @@ def test_the_three_landed_fixes_drop_their_caveats_cleanly() -> None:
     landed = {"certifier-output-tie": "#4575, e2e r20261026-063606-3381",
               "torch-loop-wiring": "#4558 (25e140abcd), e2e r20261026-070934-56b3",
               "pouw-salt-order": "#4573, carried by #4594"}
-    caveats = D.render([rec], {**_m(), "fixed": landed}).split("## What the demo didn't show")[1].split("## Sources")[0]
+    caveats = _draft([rec], {**_m(), "fixed": landed}).split("## What the demo didn't show")[1].split("## Sources")[0]
     assert "(NET-80)" not in caveats and "ReLU and per-row" not in caveats and "(RT-LEAN L22)" not in caveats
     assert "(#4405, #4426)" in caveats and "\n\n\n" not in caveats
     assert all(line.startswith(("- ", "  ")) for line in caveats.strip().splitlines())
@@ -168,37 +214,37 @@ def _failure(unit: int, **kw) -> dict:
 
 def test_a_visible_failure_is_named_beside_the_verdict_and_fails_the_block() -> None:
     rec = _load("block-record-r2-period0")
-    out = D.render([rec], {**_m(), "visible_failures": [_failure(4093), _failure(77, slot=3)]})
+    out = _draft([rec], {**_m(), "visible_failures": [_failure(4093), _failure(77, slot=3)]})
     part1 = out.split("## 2.")[0]
     assert "**fail (2 drawn units not proved: visible failures, no redraw)**" in part1
     assert ("| PouwH1Tile_v1 | 4,093 | 12 | 7 | a PoUW tile lane: no proving Definition | r20261026-120000-aaaa |"
             in part1)
     assert "| fail (2 drawn units not proved: visible failures, no redraw) |" in out.split("## 1.")[0]
     assert "| ⟨VISIBLE_FAILURES⟩ | 2 | r20261026-120000-aaaa |" in out
-    none = D.render([rec], {**_m(), "visible_failures": []})
+    none = _draft([rec], {**_m(), "visible_failures": []})
     assert "None: every drawn unit was proved." in none and "the network certifier: **accept**." in none
-    unsaid = D.render([rec])
+    unsaid = _draft([rec])
     assert "\n⟨VISIBLE_FAILURES⟩\n" in unsaid and "| ⟨VISIBLE_FAILURES⟩ | unfilled |" in unsaid
     with pytest.raises(ValueError, match="needs subcircuit, unit, step, slot, why, source"):
-        D.render([rec], {**_m(), "visible_failures": [_failure(1, source="")]})
+        _draft([rec], {**_m(), "visible_failures": [_failure(1, source="")]})
 
 
 @pytest.mark.parametrize("name", ["AllGather_v1", "Gather_v1{N=8}"])
 def test_a_gather_is_no_subcircuit(name: str) -> None:
     doc = {**_m(), "subcircuits": [{"name": name, "units": 64, "source": "test"}]}
     with pytest.raises(ValueError, match="plain wire reference"):
-        D.render([_load("block-record-r2-period0")], doc)
+        _draft([_load("block-record-r2-period0")], doc)
 
 
 def test_the_bound_cites_the_joint_statement_only_when_locked() -> None:
     rec = _load("block-record-r2-period0")
-    locked = D.render([rec], _m(JOINT_LOCKED=True)).split("## Sources")[0]
+    locked = _draft([rec], _m(JOINT_LOCKED=True)).split("## Sources")[0]
     assert "By LEAN-56's `Flock.Guarantees.JointStratified` (locked):" in locked
     assert "by LEAN-56's `JointStratifiedHorizon` (locked)" in locked and "unlocked" not in locked
-    unlocked = D.render([rec], _m(JOINT_LOCKED=False))
+    unlocked = _draft([rec], _m(JOINT_LOCKED=False))
     assert "By #4358's per-subcircuit bound, the joint figure unlocked:" in unlocked
     assert "by #4358's `Flock.Guarantees.IntegrityHorizon` per subcircuit, the joint figure unlocked" in unlocked
-    assert "By ⟨BOUND_CITATION⟩:" in D.render([rec])
+    assert "By ⟨BOUND_CITATION⟩:" in _draft([rec])
 
 
 def test_demo_a_composes_its_three_protocols() -> None:
@@ -211,14 +257,14 @@ def test_demo_a_composes_its_three_protocols() -> None:
     absent["legs"]["certifier"] = None
     assert D.demo_a_verdict(absent) == "pending: no network certifier on the block's server"
     with pytest.raises(ValueError, match="block record r20261025-210358-993e"):
-        D.render([rejected])
+        _draft([rejected])
 
 
 def test_the_pytorch_dry_run_renders_labelled() -> None:
     rec = _load("block-record-b71a-w30")
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert R.check(rec) == {}
-    out = D.render([rec], _load("demo-a-dry-run.measurements"), record_label="PyTorch dry run")
+    out = _draft([rec], _load("demo-a-dry-run.measurements"), record_label="PyTorch dry run")
     assert out.splitlines()[2].startswith("> The PyTorch dry run's numbers are not marked in place")
     assert "sampled proofs, PoUW and the network certifier: **accept**." in out.replace("\n", " ")
     assert "k = 64 units, drawn uniformly over the whole partition (1,024 units across 1 subcircuits" in out.replace(
@@ -246,34 +292,34 @@ def _fallback(**row) -> dict:
 
 
 def test_the_fallback_starts_with_its_status_and_needs_no_block_record() -> None:
-    out = D.render([], _fallback())
+    out = _draft([], _fallback())
     assert out.splitlines()[0] == "M3 fallback: live-drawn, opened, replayed (Python); not proved in C-Flock"
     assert "## 1. Commit overhead" in out and "ratio 0.446×, **met**). Run r20261026-191502-b4da." in out
     assert "None: every number above met its target." in out and "⟨H_POOLED⟩" in out
     with pytest.raises(ValueError, match="need a status"):
-        D.render([], {**_fallback(), "status": ""})
+        _draft([], {**_fallback(), "status": ""})
 
 
 def test_a_missed_target_is_a_visible_failure() -> None:
-    out = D.render([], _fallback(value=1.046)).split("## Visible failures")[1]
+    out = _draft([], _fallback(value=1.046)).split("## Visible failures")[1]
     assert "**commit overhead at 4,096 slots**: 1.046 s against target ≤ 0.95 s (ratio 1.1×). Run r20261026-191502-b4da." in out
-    done = D.render([], _fallback(what="S1 on main", value="open", unit=None, target={"op": "==", "value": "merged"}))
+    done = _draft([], _fallback(what="S1 on main", value="open", unit=None, target={"op": "==", "value": "merged"}))
     assert "**S1 on main**: open against target = merged. Run" in done
 
 
 @pytest.mark.parametrize("field", ["run", "verdict", "target"])
 def test_a_row_without_its_run_verdict_or_target_is_refused(field: str) -> None:
     with pytest.raises(ValueError, match=f"names no {field}"):
-        D.render([], _fallback(**{field: ""}))
+        _draft([], _fallback(**{field: ""}))
     with pytest.raises(ValueError, match="has no run id"):
-        D.render([], _fallback(run="PR #4768"))
+        _draft([], _fallback(run="PR #4768"))
 
 
 def test_old_names_inside_a_quoted_verdict_line_are_kept() -> None:
-    out = D.render([], _fallback(verdict="Integrity Work Space Comm: reject at window 0"))
+    out = _draft([], _fallback(verdict="Integrity Work Space Comm: reject at window 0"))
     assert "`Integrity Work Space Comm: reject at window 0`" in out
     with pytest.raises(ValueError, match="says 'integrity'"):
-        D.render([], _fallback(what="integrity bound"))
+        _draft([], _fallback(what="integrity bound"))
 
 
 def _proved(accepted=(True,) * 8, drawn=tuple(range(101, 109)), ok=True, refused=3, lines=None) -> dict:
@@ -285,7 +331,7 @@ def _proved(accepted=(True,) * 8, drawn=tuple(range(101, 109)), ok=True, refused
 
 
 def test_m3_drops_the_fallback_line_only_when_all_eight_are_proved_and_accepted() -> None:
-    out = D.render([], _proved())
+    out = _draft([], _proved())
     assert out.splitlines()[0] == D.M3_STATUS and "fallback" not in out.lower()
     assert "## 1. M3 proper: the drawn H200 proof blocks proved in C-Flock" in out and "## 2. Commit overhead" in out
     assert "**drawn proof block 108: proved in C-Flock --zk behind the firewall, verified by M0 and Lean:** accepted" in out
@@ -295,7 +341,7 @@ def test_m3_drops_the_fallback_line_only_when_all_eight_are_proved_and_accepted(
 @pytest.mark.parametrize("kw", [{"accepted": (True,) * 7 + (False,)}, {"drawn": tuple(range(101, 108))},
                                 {"ok": False}, {"refused": 2}])
 def test_m3_stays_the_fallback_until_then(kw: dict) -> None:
-    out = D.render([], _proved(**kw))
+    out = _draft([], _proved(**kw))
     assert out.splitlines()[0] == D.FALLBACK_STATUS
     assert "None: every number above met its target." not in out.split("## Visible failures")[1]
 
@@ -303,7 +349,7 @@ def test_m3_stays_the_fallback_until_then(kw: dict) -> None:
 def test_a_drawn_proof_block_with_no_verdict_line_is_a_visible_failure() -> None:
     doc = _proved()
     doc["proved"]["lines"] = [x for x in doc["proved"]["lines"] if '"block": 104' not in x]
-    out = D.render([], doc)
+    out = _draft([], doc)
     assert out.splitlines()[0] == D.FALLBACK_STATUS
     assert ("**drawn proof block 104: proved in C-Flock --zk behind the firewall, verified by M0 and Lean**: no VERDICT "
             "line against target = accepted. Run r20261027-013000-abcd.") in out.split("## Visible failures")[1]
@@ -311,13 +357,13 @@ def test_a_drawn_proof_block_with_no_verdict_line_is_a_visible_failure() -> None
 
 def test_proved_refuses_another_status_and_an_undrawn_block() -> None:
     with pytest.raises(ValueError, match="the status is"):
-        D.render([], {**_proved(), "status": D.M3_STATUS})
+        _draft([], {**_proved(), "status": D.M3_STATUS})
     doc = _proved()
     doc["proved"]["lines"].insert(0, 'VERDICT {"block": 999, "accepted": true}')
     with pytest.raises(ValueError, match="block 999, which the coin didn't draw"):
-        D.render([], doc)
+        _draft([], doc)
     with pytest.raises(ValueError, match="needs its run id"):
-        D.render([], {**_proved(), "proved": {"run": "DRAWPROVE", "drawn": [1], "lines": []}})
+        _draft([], {**_proved(), "proved": {"run": "DRAWPROVE", "drawn": [1], "lines": []}})
 
 
 NOISE = {"SERVE_NOISE_S": (8.5, "kraqwxsc r20261026-113133-5cb4 against r20261026-120015-3773"),
@@ -344,18 +390,18 @@ def test_per_call_noise_is_seconds_a_step_with_both_ratios_never_gamma_step_alon
     doc = _proved()
     doc["values"] = _noise()
     doc["sections"][0]["serve_noise"] = True
-    out = D.render([], doc)
+    out = _draft([], doc)
     part2 = out.split("## 2. Commit overhead")[1].split("\n## ")[0]
     assert f"- {NOISE_LINE}" in part2 and "| ⟨SERVE_NOISE_RATIO_4562⟩ | 3.2 |" in out
-    demo = D.render([_load("block-record-r2-period0")], {"format": D.MEASUREMENTS, "values": _noise()})
+    demo = _draft([_load("block-record-r2-period0")], {"format": D.MEASUREMENTS, "values": _noise()})
     assert " ".join(NOISE_LINE.split()) in " ".join(demo.split())
-    assert "⟨SERVE_NOISE_RATIO_4562⟩× against #4562's ⟨SERVE_STEP_4562_S⟩ s" in D.render([_load("block-record-r2-period0")])
+    assert "⟨SERVE_NOISE_RATIO_4562⟩× against #4562's ⟨SERVE_STEP_4562_S⟩ s" in _draft([_load("block-record-r2-period0")])
 
 
 def test_a_row_stating_per_call_noise_alone_is_refused() -> None:
     for what in ("per-call noise's γ_step", "gamma_step at batch 4,096"):
         with pytest.raises(ValueError, match="states per-call noise on its own"):
-            D.render([], _fallback(what=what, value=1.115, unit="×", target={"none": "a ratio"}))
+            _draft([], _fallback(what=what, value=1.115, unit="×", target={"none": "a ratio"}))
     doc = {"format": D.MEASUREMENTS, "values": {**_noise(), "SERVE_NOISE_S": {"value": 8.5, "source": "kraqwxsc"}}}
     with pytest.raises(ValueError, match="names its two runs"):
-        D.render([_load("block-record-r2-period0")], doc)
+        _draft([_load("block-record-r2-period0")], doc)

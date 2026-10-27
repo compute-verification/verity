@@ -69,7 +69,7 @@ per ⟨BLOCK_GPU_S⟩ H200-seconds). Output bits are the block's ⟨BLOCK_OUTPUT
 
 ⟨PERIODS⟩
 
-H and B are the planner's (⟨PLANNER⟩) at 1% of a one-week sampling block with part 2's measured costs, in its
+H and B are proofs' planner's (⟨PLANNER⟩), its plan of record at 1% of a one-week sampling block, in its
 AND-weighted form: a unit's cost is its circuit size, so the detection budget is counted in AND gates.
 
 H and B are pooled totals over the period, by ⟨HORIZON_CITATION⟩, each except with probability

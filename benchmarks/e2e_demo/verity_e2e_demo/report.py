@@ -10,8 +10,8 @@ inputs, which leave Markdown out, cover it), filled from one of three places, ea
 * `MEASURED`: the measurements file (``verity/demo-a-measurements/v1``), each value with the run or field it came from;
 * `DERIVED`: a formula over the other two, filled once all its inputs are.
 
-A name with no value renders as ``⟨NAME⟩``, and the closing table says what fills it, so a missing input never shows as
-a number. A value may carry a ``label`` (``PyTorch dry run``, ``HASH-20 bench``), printed beside it wherever it appears,
+A name with no value renders as ``⟨NAME⟩`` only in a draft (``render(..., draft=True)``, never ``main``), the closing
+table saying what fills it; a report is refused while any number is unfilled, naming each. A value may carry a ``label`` (``PyTorch dry run``, ``HASH-20 bench``), printed beside it wherever it appears,
 for a number that is not the demo block's own; ``--record-label`` labels every number read from the block records,
 once at the top and in the sources table.
 
@@ -25,9 +25,10 @@ else #4358's per-subcircuit bound, with the joint figure labelled unlocked.
 **The draw** is a handful (Daniel, 25 Oct 7:34 PM PDT): k = `HANDFUL` units drawn uniformly over the whole partition by
 the live coins (PRF-171), never sized to a proving budget; a block that drew another k says so in the caveats.
 
-**Part 3's H and B** are the planner's (`planned`): `sampled_proofs.optimize.for_budget` at 1% of a one-week sampling
-block, each subcircuit's units scaled from the demo block's, priced at part 2's measured costs, in the planner's
-AND-weighted form (a unit's cost is its ANDs). They stay ``⟨H_POOLED⟩`` and ``⟨B_POOLED⟩`` until every cost is measured.
+**Part 3's H and B** are proofs' planner's (PRF-166, ``benchmarks/sampling_plan/demo_a.py``), read from a recorded run
+of it: `sampled_proofs.optimize.for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, its plan of
+record's ``free_compute`` and ``leak`` at δ = 1%. ``H_POOLED``, ``B_POOLED`` and ``PLANNER`` (the planner, its commit and
+its run) are filled together, each source naming the run.
 Part 3 is circuit size, counted in AND gates, with no FLOP figure or price (Daniel, 26 Oct, TOP-95): each share is
 stated against the world's compute in AND gates (``WORLD_GATES_YEAR``, the adversary's resources) with the
 deployment's beside it.
@@ -52,8 +53,9 @@ measurement text included.
 and no block record is needed. Each section row is one number with its run, its own verdict line quoted and its target
 (``{"op": "<=", "value": 0.95}``, or ``{"none": "why"}``); `render` computes its ratio and whether it met the target,
 and lists every miss under visible failures (top's row 68). ``proved`` is DRAWPROVE's run of record (PRF-172):
-``{"run", "drawn": [the coin's indices], "lines": [its output's VERDICT and PROVEBUNDLE lines, verbatim], "text"}``,
-rendered as the first section, one row per drawn proof block. The first line is `M3_STATUS` only when all `HANDFUL`
+``{"run", "drawn": [the coin's indices], "lines": [its output's VERDICT and PROVEBUNDLE lines, verbatim], "text",
+"rows"}``, rendered as the first section, one row per drawn proof block, then ``rows`` (section rows: the guarantee the
+draw certifies). The first line is `M3_STATUS` only when all `HANDFUL`
 drawn proof blocks have a VERDICT line that says accepted (C-Flock ``--zk``, M0 and Lean) and the final PROVEBUNDLE
 line is ok with every negative refused; until then it is `FALLBACK_STATUS` (the file's ``status``, which may say
 nothing else), and each block not accepted is a visible failure.
@@ -80,18 +82,15 @@ The measurements file::
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
-from math import floor, log2
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.sampled_proofs import optimize
 from verity_e2e_demo import block_record
 
 TEMPLATE = Path(__file__).parent / "demo_a.template"
@@ -231,7 +230,15 @@ MEASURED: dict[str, str] = {
     "ROW_SLOT_NS_B1024": "the same run: nanoseconds a step per row-slot",
     "STEP_S_KERNELS": "kernels' faster step at batch 512: seconds a step",
     "WORLD_GATES_YEAR": f"the world's compute, AND gates a year, labelled {WORLD_LABEL} (census entry pending, CMP-133)",
+    "PLANNER": "proofs' planner (PRF-166, `benchmarks/sampling_plan/demo_a.py`) at its commit, and the recorded run of it "
+               "at 1% of a one-week sampling block (`--spans week`)",
+    "H_POOLED": "PLANNER's run: `for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, the plan of "
+                "record's faulty ANDs at δ = 1% (`plan_of_record-week.json` › at › 0.01 › free_compute)",
+    "B_POOLED": "PLANNER's run: the same plan's leaked bits at δ = 1%, output bits plus which units are wrong "
+                "(`plan_of_record-week.json` › at › 0.01 › leak)",
 }
+#: part 3's numbers, filled together from one recorded run of proofs' planner
+PLANNED = ("PLANNER", "H_POOLED", "B_POOLED")
 
 _PERIOD_DERIVED: dict[str, str] = {}
 for _p, _ in PERIODS:
@@ -259,12 +266,6 @@ DERIVED: dict[str, str] = {
     "SUBCIRCUIT_COUNT": "the subcircuits measured (part 2), else the block record's per-subcircuit draw",
     "N_HOURS": "the largest subcircuit fixed proving cost / 1%, in hours",
     "M_MINUTES": "N_HOURS × 60 / D_GPUS",
-    "PLANNER": "`sampled_proofs.optimize` (its source's sha256) and its inputs: needs PROVE_S_PER_AND, BLOCK_GPU_S and "
-               "every subcircuit's units, ands_per_unit, out_bits and fixed_s",
-    "H_POOLED": "PLANNER's `for_budget` at 1% of a one-week sampling block, AND-weighted: its certificate's faulty "
-                "ANDs (`density_bound`), pooled over the horizon",
-    "B_POOLED": "the same plan's leaked bits: `density_bound` of output bits plus which units are wrong "
-                "(`consumers.location_bits`' term), pooled over the horizon",
     **_PERIOD_DERIVED,
 }
 
@@ -401,6 +402,12 @@ def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[s
     if "SERVE_NOISE_S" in values and len(RUN_ID.findall(values["SERVE_NOISE_S"].source)) != 2:
         raise ValueError("measurements: ⟨SERVE_NOISE_S⟩'s source names its two runs, the noise run then the plain run "
                          "it is measured against (`r... against r...`)")
+    if planned := [n for n in PLANNED if n in values]:
+        runs = {n: set(RUN_ID.findall(values[n].source)) for n in planned}
+        if len(planned) != len(PLANNED) or not all(runs.values()) or len(set.intersection(*runs.values())) == 0:
+            raise ValueError(f"measurements: {', '.join(f'⟨{n}⟩' for n in PLANNED)} are filled together from one "
+                             f"recorded run of proofs' planner, each source naming that run (`research run ... "
+                             f"benchmarks/sampling_plan/demo_a.py --spans week`); got {sorted(planned)}")
     if "WORLD_GATES_YEAR" in values and values["WORLD_GATES_YEAR"].label != WORLD_LABEL:
         raise ValueError(f"measurements: ⟨WORLD_GATES_YEAR⟩ is labelled {WORLD_LABEL!r}, the census entry's")
     subcircuits = [dict(s) for s in doc.get("subcircuits") or []]
@@ -421,49 +428,6 @@ def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[s
             if any(f.get(k) is None or str(f[k]).strip() == "" for k in FAILURE_FIELDS):
                 raise ValueError(f"measurements: visible failure {f!r} needs {', '.join(FAILURE_FIELDS)}")
     return values, subcircuits, [str(c) for c in doc.get("caveats") or []], fixed, failures
-
-
-def planned(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) -> dict[str, V]:
-    """PLANNER, H_POOLED and B_POOLED: the planner at 1% of a one-week sampling block with part 2's measured costs, or
-    nothing while one is missing (module docstring)."""
-    per_and, gs = _num(values.get("PROVE_S_PER_AND")), _num(values.get("BLOCK_GPU_S"))
-    keys = ("units", "ands_per_unit", "out_bits", "fixed_s")
-    if per_and is None or not gs or not subcircuits or not all(
-            isinstance(s.get(k), (int, float)) and not isinstance(s.get(k), bool) for s in subcircuits for k in keys):
-        return {}
-    scale = SAMPLING_BLOCK_S / gs
-    cands = [optimize.Candidate(op=s["name"], template=s["name"], units=max(1, round(s["units"] * scale)),
-                                work=int(s["ands_per_unit"]), ands=int(s["ands_per_unit"]), out_bits=int(s["out_bits"]),
-                                cap=max(1, round(s["units"] * scale))) for s in subcircuits]
-    costs = optimize.CostModel(templates={s["name"]: optimize.TemplateCost(statement_fixed=float(s["fixed_s"]),
-                                                                           statement_per_unit=0.0)
-                                          for s in subcircuits}, per_and=float(per_and))
-    objective, budget = optimize.Objective(float(DELTA)), float(BUDGET) * SAMPLING_BLOCK_S
-    plan = optimize.for_budget(optimize.frontier(cands, costs, objective, exact=False), budget, candidates=cands,
-                               costs=costs, objective=objective, exact=False)
-    labels = sorted({values[n].label for n in ("PROVE_S_PER_AND", "BLOCK_GPU_S") if values[n].label}
-                    | {s["label"] for s in subcircuits if s.get("label")})
-    label = "; ".join(labels) or None
-    version = hashlib.sha256(Path(optimize.__file__).read_bytes()).hexdigest()[:12]
-    inputs = (f"`for_budget` over `frontier` (exact=False) at δ = 1/100, `Objective` weighted by ANDs, budget "
-              f"{_fmt(budget)} GPU-s = 1% of a one-week sampling block ({SAMPLING_BLOCK_S:,} H200-s, each "
-              f"subcircuit's units × {scale:.4g} = a week / BLOCK_GPU_S); per_and {_fmt(float(per_and))} GPU-s "
-              f"(PROVE_S_PER_AND); " + "; ".join(
-                  f"{c.template}: n {c.units:,}, {c.ands:,} ANDs, {c.out_bits} output bits, fixed "
-                  f"{_fmt(float(s['fixed_s']))} GPU-s" + (f", k {plan.sizes[c.template]:,}" if plan else "")
-                  for c, s in zip(cands, subcircuits)))
-    out = {"PLANNER": V(f"`sampled_proofs.optimize` sha256:{version}" + ("" if plan else ": no plan fits 1%"),
-                        inputs, label)}
-    if plan is None:
-        return out
-    n = sum(c.units for c in cands)
-    wrong = floor(optimize.density_bound(((c.units, plan.sizes[c.template], 1.0) for c in cands), float(DELTA)))
-    x = wrong / n
-    where = 0.0 if wrong <= 0 else float(n) if 2 * wrong >= n else n * (-x * log2(x) - (1 - x) * log2(1 - x))
-    bits = optimize.density_bound(((c.units, plan.sizes[c.template], float(c.out_bits)) for c in cands), float(DELTA))
-    out["H_POOLED"] = V(plan.certificate.free_compute, DERIVED["H_POOLED"], label)
-    out["B_POOLED"] = V(bits + where, DERIVED["B_POOLED"], label)
-    return out
 
 
 def derive(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) -> dict[str, V]:
@@ -502,7 +466,6 @@ def derive(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) ->
     n = _num(out.get("N_HOURS"))
     if n is not None and d:
         out["M_MINUTES"] = V(float(n * 60 / d), DERIVED["M_MINUTES"], out["N_HOURS"].label)
-    out |= planned(values, subcircuits)
     values = {**values, **out}
     year = dict(PERIODS)["year"]
     gs, world, ands = (_num(values.get(k)) for k in ("BLOCK_GPU_S", "WORLD_GATES_YEAR", "BLOCK_ANDS"))
@@ -668,12 +631,14 @@ def _sources(order: Sequence[str], values: Mapping[str, V], subcircuits: Sequenc
         else:
             src = MEASURED.get(name) or DERIVED.get(name) or f"block record › {RECORD[name]}"
             rows.append(f"| ⟨{name}⟩ | unfilled | {src} |")
-    return f"{filled} of {len(order)} numbers filled; an unfilled one shows as ⟨NAME⟩.\n\n" + "\n".join(rows)
+    head = (f"Every number filled ({filled})." if filled == len(order) else
+            f"A draft: {filled} of {len(order)} numbers filled; an unfilled one shows as ⟨NAME⟩.")
+    return f"{head}\n\n" + "\n".join(rows)
 
 
 def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any] | None = None, *,
-           record_label: str | None = None, template: str | None = None) -> str:
-    """The report's Markdown (module docstring)."""
+           record_label: str | None = None, template: str | None = None, draft: bool = False) -> str:
+    """The report's Markdown (module docstring); refuses one with an unfilled number unless it is a ``draft``."""
     doc = measurements or {"format": MEASUREMENTS}
     sections = list(doc.get("sections") or [])
     status = str(doc.get("status") or "").strip()
@@ -728,7 +693,16 @@ def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any]
               "SOURCES": _sources(order, values, subcircuits, failures),
               "SECTIONS": _sections(sections, rows, serve_noise_line(values, record_label)),
               "MISSES": _misses(rows, failures), "SERVE_NOISE": serve_noise_line(values, record_label)}
-    out = PLACEHOLDER.sub(lambda m: blocks[m[1]] if m[1] in blocks else _cell(m[1], values, record_label), text)
+    sources = "\0SOURCES\0"
+    out = PLACEHOLDER.sub(lambda m: sources if m[1] == "SOURCES" else blocks[m[1]] if m[1] in blocks else
+                          _cell(m[1], values, record_label), text)
+    if (unfilled := list(dict.fromkeys(PLACEHOLDER.findall(out)))) and not draft:
+        raise ValueError(f"the report has {len(unfilled)} unfilled number(s): "
+                         + ", ".join(f"⟨{n}⟩ ({MEASURED.get(n) or DERIVED.get(n) or RECORD.get(n) or 'a block'})"
+                                     for n in unfilled)
+                         + "; fill each in the measurements file (a draft, `render(..., draft=True)`, is never "
+                           "published)")
+    out = out.replace(sources, blocks["SOURCES"])
     if status:
         out = f"{status}\n\n{out}"
     vocabulary(out)
@@ -834,7 +808,7 @@ def proved_section(proved: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:
     complete = (len(drawn) == HANDFUL and all(r["value"] == "accepted" for r in rows[1:1 + len(drawn)])
                 and rows[-1]["value"] == "ok" and n > 0 and refused == n)
     title = "M3 proper: the drawn H200 proof blocks proved in C-Flock"
-    return {"title": title, "text": str(proved.get("text") or ""), "rows": rows}, complete
+    return {"title": title, "text": str(proved.get("text") or ""), "rows": rows + list(proved.get("rows") or [])}, complete
 
 
 def _target(r: Mapping[str, Any]) -> str:

@@ -67,8 +67,10 @@ server, with the other subprotocols absent.
 ## Demo A's report
 
 `verity_e2e_demo/report.py` renders block records and a measurements file (`verity/demo-a-measurements/v1`) through
-`demo_a.template`; its module docstring is the contract. Part 3 is circuit size in AND gates, with no FLOP figure or
-price. A measurements file with `sections` or `proved` renders M3's report (`m3.template`): every row is one number with
+`demo_a.template`; its module docstring is the contract. A report with an unfilled number is refused; only a draft
+(`render(..., draft=True)`, never the command) shows `⟨NAME⟩`. Part 3 is circuit size in AND gates, with no FLOP figure or
+price; its H and B are one recorded run of proofs' planner (`benchmarks/sampling_plan/demo_a.py --spans week`), filled
+together with `PLANNER`. A measurements file with `sections` or `proved` renders M3's report (`m3.template`): every row is one number with
 its run, its own verdict line quoted and its target, whose misses are listed as visible failures. `proved` is
 DRAWPROVE's run (PRF-172), its VERDICT and PROVEBUNDLE lines verbatim: the first line is the M3 fallback's until all 8
 drawn H200 proof blocks are proved in C-Flock and accepted by Lean, and M3's after. Per-call noise's serving overhead
