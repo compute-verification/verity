@@ -167,7 +167,7 @@ def _unset(comp: str, what: str) -> str:
 def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | None = None,
            node: str | None = None) -> dict[str, dict[str, Any]]:
     """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, under `timeout` at its limit, else named missing;
-    one line each on stdout, its verdict the one `piece_row` gives the record."""
+    one line each on stdout, its verdict the one `piece` gives the record."""
     env = dict(os.environ if env is None else env)
     node = node or socket.gethostname()
     got: dict[str, dict[str, Any]] = {}
@@ -184,7 +184,7 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
             rc = subprocess.run(["timeout", "-k", "1m", limit, "bash", "-c", cmd, "_", str(serve_dir), str(window),
                                  str(d)], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, env=env, check=False).returncode
         (d / RAN).write_text(json.dumps({"server": node, "rc": rc, "limit": limit}, sort_keys=True) + "\n")
-        label, row = name.upper(), piece_row(key, out)
+        label, (row, _) = name.upper(), piece(key, out)
         if "development" in row:
             got[comp], label = {**development_line(row["development"]), "rc": rc}, f"{label} (development run, credits nothing)"
         else:
@@ -337,10 +337,18 @@ def sampled_proofs_row(audit_dir: Path, run: str | None = None) -> dict[str, Any
 
 
 def _json(path: Path) -> Any:
+    """``path``'s JSON, None where there's no such file; one that isn't JSON raises ValueError."""
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def piece(key: str, pieces_dir: Path, run: str | None = None) -> tuple[dict[str, Any], tuple[str | None, str]]:
+    """A subprotocol's `piece_row` and `piece_server`; a piece that left a file that isn't JSON is its ``error``, about no
+    server."""
     try:
-        return json.loads(path.read_text())
-    except (OSError, ValueError):
-        return None
+        return piece_row(key, pieces_dir, run), piece_server(key, pieces_dir)
+    except ValueError as e:
+        return ({"verdict": "error", "owner": PIECES.get(key, WIPE)[2],
+                 "reason": f"its piece left a file that isn't JSON: {type(e).__name__}: {e}"[:2000]}, (None, "real"))
 
 
 def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, Any]:
@@ -490,9 +498,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
-    rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: piece_row(k, a.pieces, run) for k in keys}}
+    got = {k: piece(k, a.pieces, run) for k in keys}
+    rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
-                               servers={k: piece_server(k, a.pieces) for k in keys})
+                               servers={k: at for k, (_, at) in got.items()})
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

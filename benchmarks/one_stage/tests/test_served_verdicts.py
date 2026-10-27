@@ -125,6 +125,18 @@ def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tm
                            "why": "its piece refused to run: PoUS REFUSED: the card has a compute process"}
 
 
+def test_a_piece_that_left_a_file_that_is_not_json_errs_about_no_server_and_the_next_piece_still_runs(tmp_path):
+    env = {"BANDWIDTH_CMD": f"echo '{json.dumps(_reject('verity/remote-bandwidth/v0'))}' > \"$3/answer.json\"; "
+                            "echo '{' > \"$3/served.json\"",
+           "POUS_CMD": f"echo '{json.dumps(_reject('verity/pous/p2/v4/run'))}' > \"$3/answer.json\""}
+    got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="n")
+    assert got["bandwidth"]["verdict"] == "error"
+    assert got["bandwidth"]["reason"].startswith("its piece left a file that isn't JSON: JSONDecodeError")
+    assert got["pous"] == {"verdict": "reject", "reason": "no", "rc": 0}
+    row, at = S.piece("bandwidth", tmp_path / "pieces")
+    assert (row["verdict"], row["owner"], at) == ("error", "memory-accounting", (None, "real"))
+
+
 def _accepted() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
          "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
