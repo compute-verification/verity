@@ -1,24 +1,23 @@
 #!/usr/bin/env bash
-# One staging session on vy-dc-h200, from build.sh's lib, ALLP-IFACE's weights module, the weights manifest with
-# digests memory-accounting held W to, and CMP-95 item 2's fixture (the store's layout JSON, `p2_v1/store.py layout`,
+# One staging run on vy-dc-h200, from build.sh's lib, the weights module, the weights manifest with
+# digests memory-accounting held W to, and the store's fixture (its layout JSON, `p2_v1/store.py layout`,
 # and its toy, `p2_v1/store-toy/`); cwd = the source tree's root:
 #
 #   tar -C BUILD_RUN/out -cf /tmp/p2lib.tar .
 #   tar -C benchmarks/pous/p2_v1/store-toy -cf /tmp/store-toy.tar toy.json spot.json c-star.bin spot-c.bin
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 240m \
-#     --env GPU_LEASE_WHO=kernels-kstage [--env ENCODED=1] [--env STEPS=toy,stage,gemm,check] \
+#     --env GPU_LEASE_WHO=LANE [--env ENCODED=1] [--env STEPS=toy,stage,gemm,check] \
 #     --send /tmp/p2lib.tar --send benchmarks/e2e_h200/e2e_h200/served_weights.py --send h200-manifest.json \
 #     --send store-layout.json \
 #     --send /tmp/store-toy.tar [--send SLICE/setup.json --send SLICE/00000.c --send SLICE/00000.json ...] \
 #     -- bash benchmarks/torch_gpu/p2_stage/session.sh
 #
-# (served_weights.py: ALLP-IFACE's generator, which writes the seeded stream; h200-manifest.json: its manifest with
-# digests, art:6600b3ec….)
+# (served_weights.py writes the seeded stream; h200-manifest.json: its manifest with digests.)
 #
 # With ENCODED=1 the store is memory-accounting's encoded store, read only: the layer's segment files of it (each
 # segment's `<s>.c` and `<s>.json`, and `setup.json`, copied off the node that holds it), put once into ENC/seg and kept
-# with `research keep`; its salt is `setup.draw_salt(SOURCE, COMMITMENT)`, the coin and commitment MEM-69 posted.
-# Otherwise the development store STORE under the public test salt SALT, which `encode` extends across sessions.
+# with `research keep`; its salt is `setup.draw_salt(SOURCE, COMMITMENT)`, the deployment's coin and commitment.
+# Otherwise the development store STORE under the public test salt SALT, which `encode` extends across runs.
 #
 # Outside the lease: the lib unpacked and held to its MANIFEST.sha256, the layout to the fixture's LAYOUT_SHA512, the
 # manifest to MANIFEST_SHA256; layer LAYER's stream bytes generated once into SRC/w.bin (`weights write`, seed SEED) and
@@ -39,10 +38,10 @@ ENC=${ENC:-/workspace/tmp/kernels-kstage/mem69-v2-l$LAYER}
 SEED=${SEED:-text:verity/cmp92/h200/weights/v1}
 # public: sha512("not-a-secret: verity/p2-stage/test-salt")[:24], the development store's salt
 SALT=${SALT:-011feb1ddfe7334099b02f79a43b4d1411bec106975fffe4}
-# MEM-69: the deployment coin of record (infra, 00:34:29Z) and W's commitment under the frozen layout
+# the deployment's coin of record and W's commitment under the frozen layout
 SOURCE=${SOURCE:-dd56f549e504fa8a48db829588683baa66d5ab0c8c381665a87c3b53ffeb3ced}
 COMMITMENT=${COMMITMENT:-9aaaf192b1a7c0962b6139b7bad5b6a2abc9809d889ed5da5890628d1799dfe4291ce318bc8ba410b41886e30d52278f89686f429839257eab1728ac5902706a}
-# p2_v1/store.py's LAYOUT_SHA512 (CMP-95 item 2), and art:6600b3ec…'s h200-manifest.json
+# p2_v1/store.py's LAYOUT_SHA512, and h200-manifest.json's
 LAYOUT_SHA512=${LAYOUT_SHA512:-45436c2a341cfef20219a071b9b27bd9013535b1de9001ae22d0bf3bd25a825e6aa7c82a60734047d1de59c38e572e126e3c7c64c78f1176e258cb8cb833b783}
 MANIFEST_SHA256=${MANIFEST_SHA256:-28a29668627351e0118b02bbb4dddd0d3f25e2dfa6860b82f3048c0871792f27}
 STEPS=${STEPS:-toy,stage,gemm,check}

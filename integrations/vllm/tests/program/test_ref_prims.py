@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.program import Program
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P

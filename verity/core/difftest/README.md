@@ -22,6 +22,8 @@ is checked against; after, the Python is held to the Lean.
   comparison and shrinking as `Port`. `verity_difftest.protocol` is the interface's framing in Python (`answer`, `unhex`,
   `canonical_json`, `nat`), so a reference writes only its protocol's decoders and check. A run fails as vacuous unless
   some case is accepted and, unless waived, some is not.
+- `verity_difftest.settings` declares every environment variable core's difftests read (`SETTINGS`, read through `get`):
+  opt-ins to the long or recorded runs, never a value a comparison depends on.
 
 ## Using it from a port
 
