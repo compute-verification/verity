@@ -56,7 +56,7 @@ SCAN_ID_BITS = 17
 ID_PAYLOAD = 503
 #: ``--tamper``'s kinds (module docstring)
 TAMPERS = ("byte", "extra", "late")
-#: ``late``'s hold, past the scan schedule's D = 21 buckets of 100 ms from admission to a connection's first egress cell
+#: ``late``'s hold, past the scan schedule's D = 27 buckets of 100 ms from admission to a connection's first egress cell
 LATE_S = 3.0
 
 

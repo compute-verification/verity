@@ -16,7 +16,7 @@ import dataclasses
 
 import pytest
 
-from verity_vllm.engine.profiles import profile_for_case
+from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
 from verity_vllm.observe.fold.patterns.cublas import CublasLinear, MlaAbsorbBmm

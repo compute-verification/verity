@@ -1,4 +1,4 @@
-"""The kernel pins of the admitted profile (`verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py`) and the GEMM pins of the
+"""The kernel pins of the admitted profile (`verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager.py`) and the GEMM pins of the
 active target."""
 
 from __future__ import annotations
