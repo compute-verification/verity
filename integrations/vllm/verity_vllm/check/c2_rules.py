@@ -1,6 +1,6 @@
 """The C2 rules of one instrumented run's Commit record (local replay, boundary linkage, weights of record) and its execution
 extent, each a `CheckResult`, with the helpers the decision (`verdict.commit_verdict`) shares: form (B) coverage of the replay's named
-gaps, the seed of record, the population scope against Q(P).  The cuBLAS route pin's rule reads the block `check.cublas_route_pin`
+gaps, the seed of record, the population scope against Q(P).  The cuBLAS route pin's rule reads the section `check.cublas_route_pin`
 stamps on the record.
 
 The rules decide from the structured codes the sampled replay stamps on its record (`replay_codes`: the class / family / domain of
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity_vllm.check.commit_rules import _d, _first, _int, _is_row_procedure, _leak, _linkage_of, _mk, _oracle_of, _replay_of
+from verity_vllm.check.commit_rules import _binding_of, _d, _first, _is_row_procedure, _leak, _linkage_of, _mk, _oracle_of, _replay_of
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, PASS, CheckResult
 from verity_vllm.query.manifest.format import is_token_select
@@ -18,8 +18,8 @@ from verity_vllm.records.query_checks import QueryChecks
 
 QUERY_CHECKS = "the sampled replay's population.query_checks"
 
-_POPULATION_GAP_CLASSES = ("plane-fed", "interior-composed-v2")     # the MAN-06f / MAN-06g population moves (rev-cb M-0751 (b))
-# [R16 rev F-r16-07 / M-0068; report M-0059 (2)] which by-name classes form (B) CAN cover: form (B) compares the Match record's dispatcher-level
+_POPULATION_GAP_CLASSES = ("plane-fed", "interior-composed-v2")     # the MAN-06f / MAN-06g population moves
+# which by-name classes form (B) CAN cover: form (B) compares the Match record's dispatcher-level
 # module outputs (`instance_outputs`), so an interior-composed VU (MAN-06g: its module's returned tensor IS an instance output) is covered by a
 # complete (B); a PLANE-FED VU (MAN-06f) is not -- its committed members are the moe/ block-stream planes, and oracle_compare has NO oracle
 # family for `moe/` (NO_ORACLE_FAMILY_PREFIXES: counted 'no oracle family', excluded from compared).  Neither form value-checks those planes
@@ -112,7 +112,7 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
     reconciliation itself fails: a VU whose address is not a required identity, a required identity no Program row produces, a block height
     that disagrees, a rank set that disagrees, a required family with no stated mechanism.  A replay record WITHOUT a manifest to
     reconcile against (`query_checks.ok` None) carries a note naming that; a record predating the fields is graded as before (no note --
-    rows recorded before the fields keep their text).  A `query_checks` block missing a field its writers all write FAILs, naming the
+    rows recorded before the fields keep their text).  A `query_checks` section missing a field its writers all write FAILs, naming the
     field (`records.query_checks`).  The grade rules above stand either way."""
     if not isinstance(sr, dict):
         return None, None
@@ -120,7 +120,7 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
     qt, chk = pop.get("query_total"), pop.get("query_checks")
     if not isinstance(qt, dict) or not isinstance(chk, dict):
         return None, None
-    # [R17 reqval task 3] the one-release engine cross-check on the manifest of record: DISAGREED fails the row by name (the build refuses to
+    # the one-release engine cross-check on the manifest of record: DISAGREED fails the row by name (the build refuses to
     # write such a manifest; a record carrying one anyway -- another path, an edited header -- does not PASS over it)
     cc = qt.get("cross_check")
     if isinstance(cc, dict) and cc.get("agree") is False:
@@ -146,7 +146,7 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
             parts.append(f"required families with no stated mechanism {c.unstated_families}")
         if c.missing_acquisition_families:
             parts.append(f"required families with NO acquisition mechanism {c.missing_acquisition_families}")
-        # [R17-26/27, F-moe-r17-05, R4 c2] the newer checks are named too -- never 'see population.query_checks' for a check that has a name
+        # the newer checks are named too -- never 'see population.query_checks' for a check that has a name
         ep = c.executed_prefix_rule
         if ep is not None and ep.faults:
             parts.append(f"executed-prefix rule faults x{len(ep.faults)} (first {str(ep.faults[0])[:160]})")
@@ -156,7 +156,7 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
                 if f.n > 0:
                     parts.append(f"{label} x{f.n} (first {str(f.first[0] if f.first else '')[:160]})")
         ua = c.identities_unreachable_by_alias
-        if ua is not None and ua.n > 0:                                          # [F-r17b-38] the CAUSE of outside + without-rows, named first
+        if ua is not None and ua.n > 0:                                          # the CAUSE of outside + without-rows, named first
             f0 = ua.first[0] if ua.first else {}
             parts.insert(0, f"identities unreachable by alias x{ua.n} (invocation >= 1 with no op_path_aliases entry; table has "
                             f"{ua.alias_entries} entries; first {f0.get('op_path')} invocation {f0.get('invocation')} rank {f0.get('rank')}; F-r17b-38)")
@@ -168,7 +168,7 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
         return None, ("C2 population does not reconcile with Q(P) (R17-3): the replay's enumeration of the Program rows and the required manifest "
                       f"disagree on what the Program produces -- {'; '.join(parts) or 'see population.query_checks'}")
     scope = str(pop.get("scope") or "")
-    qid = qt.get("query_id") or "Q_module (pre-R17-10 header)"                   # [R17-10] the query of record, by id, on every PASS
+    qid = qt.get("query_id") or "Q_module (pre-R17-10 header)"                   # the query of record, by id, on every PASS
     if c.ok is None:
         return f"C2 population scope: {scope} -- NOT reconciled against Q(P) (no required manifest supplied to the replay); the reach is the replay's own count", None
     return f"C2 population scope (R17-3; query of record {qid}): {scope}", None
@@ -228,7 +228,7 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
 
     gaps = {str(k): int(v) for k, v in not_ev.items() if int(v or 0) > 0 and cls_of(str(k)) in _POPULATION_GAP_CLASSES}
     sel = _no_evaluator_gaps(not_ev, codes)[0]
-    # [pin F-r16-20b / M-0431] a non-selector family with no registered evaluator outside NOT_YET (Hopper Gemm_v2 / Attention_v2) joins the
+    # a non-selector family with no registered evaluator outside NOT_YET (Hopper Gemm_v2 / Attention_v2) joins the
     # gaps form (B) must cover over instance_outputs -- the direct output gap gets the SAME rule as the composed one (BiasAdd over Gemm_v2)
     for k, fam, cnt in _no_evaluator_reasons(not_ev, codes):
         if not is_token_select(fam):
@@ -240,7 +240,7 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
     tags = sorted({t for k in gaps for t in (codes.get(k) or {}).get("tags") or ()})
     reasons = " | ".join(f"{v} x {k.split(' [', 1)[0][:110]}" for k, v in sorted(gaps.items(), key=lambda kv: -kv[1]))
     missing = _form_b_complete_over_values(oc)
-    # [R16 rev F-r16-07 / M-0068] plane-fed VUs are covered by neither form: FAIL by name, whatever form (B) says
+    # plane-fed VUs are covered by neither form: FAIL by name, whatever form (B) says
     plane = {k: v for k, v in gaps.items() if cls_of(k) == "plane-fed"}
     if plane:
         n_p = sum(plane.values())
@@ -252,7 +252,7 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
                     + ("are covered by the complete form (B)" if missing is None else f"are not covered either: {missing}"))
         return None, (f"C2 of record not established: {n_p} plane-fed VUs (MAN-06f) {_PLANE_FED_NEITHER_FORM} -- {reasons_p}{tail}; "
                       "C1 + C3 hold on those planes, C2 needs form (A) over the planes (MAN-06f v3 row->plane mapping) or a bit-exact plane xcheck on record")
-    # [R16 rev F-r16-20 / M-0400] selector outputs with no evaluator: form (B) must value-check every sampled id (family-targeted), else FAIL
+    # selector outputs with no evaluator: form (B) must value-check every sampled id (family-targeted), else FAIL
     sel_note = None
     if sel:
         n_s, fams_s = sum(sel.values()), ", ".join(f"{f} x{c}" for f, c in sorted(sel.items()))
@@ -299,7 +299,7 @@ def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | N
             return False, f"sampled replay seed {seed} != the run root's first 8 bytes {expect} although seed_source says post-commitment root form"
         return True, "seed == run_root[:8] (recomputed)"
     if form == "challenge":
-        # [rev M-0600] the challenge form is a FACT only with the challenge on the record: recompute sha256(challenge|run_root)[:8] and the
+        # the challenge form is a FACT only with the challenge on the record: recompute sha256(challenge|run_root)[:8] and the
         # source text (sampled_replay.challenge_seed); a label without its challenge / another seed is the prover-chosen class (unverifiable)
         chal = smp.get("challenge")
         if chal is None:
@@ -336,19 +336,19 @@ def _partial_replay_named_gap(sr: dict | None, oc: dict | None) -> tuple[str | N
     unev = sr.get("strata_unevaluated") or []
     if not unev or int(samp.get("not_evaluated_n") or 0) <= 0:
         return None, None
-    # [rev-cb M-0740 G1] decide PER STRATUM from the uncapped `unevaluated_strata` (never from the capped not_evaluated[:12] sample): every
+    # decide PER STRATUM from the uncapped `unevaluated_strata` (never from the capped not_evaluated[:12] sample): every
     # stratum in strata_unevaluated must carry an entry with spec, op_path and a reason; a stratum without one is an unnamed gap -> None
     by = {str(u.get("stratum")): u for u in (sr.get("unevaluated_strata") or []) if isinstance(u, dict)}
     if any(k not in by or not (by[k].get("spec") and by[k].get("op_path") and by[k].get("why")) for k in unev):
         return None, None
-    # [rev-cb M-0740 G2] only BY-NAME classes qualify (no evaluator for the family / state-linked / plane-fed / interior-composed v2); an
+    # only BY-NAME classes qualify (no evaluator for the family / state-linked / plane-fed / interior-composed v2); an
     # evaluator fault, a row->member mapping fault, a missing committed input, a device fault never do: a fault is a run that did not
     # evaluate, not a gap on the record.
     classes = {k: RC.stratum_classes(by[k]) for k in unev}
     bad = {k: c for k, c in classes.items() if any(x not in RC.WHY_CLASSES_BY_NAME for x in c)}
     if bad:
         return None, None
-    # [R16 rev F-r16-07 / M-0068] a plane-fed stratum is covered by neither form -> FAIL by name (form (B) cannot lift it)
+    # a plane-fed stratum is covered by neither form -> FAIL by name (form (B) cannot lift it)
     plane = [k for k, c in classes.items() if "plane-fed" in c]
     if plane:
         n_p = sum(int(by[k].get("n") or 0) for k in plane)
@@ -370,18 +370,22 @@ def _partial_replay_named_gap(sr: dict | None, oc: dict | None) -> tuple[str | N
             f"{' | '.join(whys)}]"), None
 
 
-def _batch_attribution_note(bnd: dict, oc) -> str | None:
-    """At B>=2 the per-(step, request) ATTRIBUTION of every committed value rests on form (B):
+def _requests_n(commit: dict) -> int:
+    """`binding.population.requests`, the batch the C2 attribution is about; 0 when the binding counts none (a failed one, a sealed
+    window's, or a TP rank's, which lists its requests' ids)."""
+    b = _binding_of(commit)
+    pop = None if b is None else b.population
+    return 0 if pop is None or pop.requests is None else pop.requests
+
+
+def _batch_attribution_note(n_req: int, oc) -> str | None:
+    """At B>=2 (`n_req`, `_requests_n`) the per-(step, request) ATTRIBUTION of every committed value rests on form (B):
     an equal-shape request swap relabels every row of a shared step together, so the committed record stays self-consistent and the sampled
     replay passes by construction; boundary linkage sees it only at the first swapped boundary and only when the two requests' tokens differ
     there.  Form (B) is not made mandatory here (the verdict stays what the record establishes) -- but a PASS at B>=2 without a
-    complete request attribution on the row's own record NAMES the gap, so no reader has to infer it from an absent block: (None) at B=1, or when
+    complete request attribution on the workload's own record NAMES the gap, so no reader has to infer it from an absent section: (None) at B=1, or when
     the oracle compare's attribution is complete; else the note for the PASS text.  Value-partial by snapshot gaps is not this: the
-    attribution block is complete there."""
-    try:
-        n_req = int((bnd.get("population") or {}).get("requests") or 0)
-    except (TypeError, ValueError):
-        return None
+    attribution section is complete there."""
     if n_req < 2:
         return None
     if not isinstance(oc, dict):
@@ -448,12 +452,11 @@ C_WP = ("checkpoint_binding/weights_of_record", "MAN-09 / rev-cb M-0610",
 
 
 def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
-    """The C2-of-record block of commit_verdict (DECISIONS-2 §4; lines `sr = commit.get("sampled_replay")` .. `_scope`), evaluated rule by rule with
+    """The C2-of-record section of commit_verdict (DECISIONS-2 §4; lines `sr = commit.get("sampled_replay")` .. `_scope`), evaluated rule by rule with
     the SAME nesting (a branch v1 never took is not taken here), emitting: local_replay/sampled_replay, /seed_of_record, /population_gaps,
     /population_scope, /attribution, /cublas_route_pin; boundary_linkage/ordered_linkage; checkpoint_binding/weights_of_record."""
     sr, lk, wp = _replay_of(commit), _linkage_of(commit), commit.get("weights_pin")
     row_proc = _is_row_procedure(commit)
-    bnd = _d(commit.get("binding"))
     oc = _oracle_of(commit)
     out: dict[str, CheckResult] = {}
     sr_scope, sr_inputs = _replay_scope(sr), _replay_inputs(sr, ctx)
@@ -553,8 +556,8 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
             put(C_WP, INSUFFICIENT, reason=(f"weights unpinned (MAN-09): the served weights were not compared with the checkpoint of record -- {wp_why}; "
                                             "the committed weights root is self-consistency, not authentication"), scope=wp_scope, inputs=wp_inputs, notes=wp_notes,
                 differences=[{"name": "weights_unpinned", "why": wp_why}])
-        att = _batch_attribution_note(bnd, _oc)
-        n_req = _int(_d(bnd.get("population")).get("requests"))
+        n_req = _requests_n(commit)
+        att = _batch_attribution_note(n_req, _oc)
         if att is not None:
             put(C_ATT, PASS, notes=[att], scope={"requests": n_req, "attribution_complete": False}, differences=[{"name": "attribution_unverified", "requests": n_req}])
         elif n_req >= 2:
@@ -593,7 +596,7 @@ C_ROUTE = ("local_replay/cublas_route_pin", "note:20261018T1929Z-finding-redteam
 
 
 def rule_route_pin(commit: dict, ctx: dict) -> CheckResult:
-    """v1: `cublas_route_pin.ok is False` -> FAIL by its `why`, on any record (`check.cublas_route_pin.stamp`); NOT_RUN when no block is
+    """v1: `cublas_route_pin.ok is False` -> FAIL by its `why`, on any record (`check.cublas_route_pin.stamp`); NOT_RUN when no section is
     stamped (the Program binds none of the pin's Definitions)."""
     rp = commit.get("cublas_route_pin")
     if not isinstance(rp, dict):
@@ -609,14 +612,13 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     """The executed prefix of record + its Match-account link + rows past the stop, read from binding.coverage (executed_prefix.py's outputs).
     v1 gated these THROUGH the coverage / replay results (a faulted class fails the replay's population scope by name); here each is its own
     check, and a MISSING ACCOUNT LEG (tokens.json / global_match.json not beside the Commit) is INSUFFICIENT_EVIDENCE, not FAIL."""
-    cov = _d(_d(commit.get("binding")).get("coverage"))
-    epr = cov.get("executed_prefix_of_record")
-    link = cov.get("match_account_link")
-    clink = cov.get("commit_account_link")
+    b = _binding_of(commit)
+    cov = None if b is None else b.coverage
+    epr, link, clink, past = ((None,) * 4 if cov is None else
+                              (cov.executed_prefix_of_record, cov.match_account_link, cov.commit_account_link, cov.rows_past_the_stop))
     # no Match record beside the Commit (a config run): the Commit's token record is the account; with both, both hold where it places a prefix
-    by_commit = isinstance(clink, dict) and isinstance(link, dict) and not link.get("match_dir")
-    with_commit = isinstance(clink, dict) and (by_commit or bool(clink.get("required")))
-    past = cov.get("rows_past_the_stop")
+    by_commit = clink is not None and link is not None and not link.match_dir
+    with_commit = clink is not None and (by_commit or clink.required)
     sr = _replay_of(commit) or {}
     facts = _d(_d(sr.get("executed_prefix_of_record")).get("facts_of_record"))
     C_EPR = ("execution_extent/executed_prefix_of_record", "R17-1 / F-moe-r17-03",
@@ -632,43 +634,44 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
               ["binding.coverage.rows_past_the_stop", "executed_prefix_facts.rows_past_stop"])
     out = []
     inputs_extra = {}
-    tj, g6 = _d(_d(link).get("tokens_json")), _d(_d(link).get("global_match"))
-    if tj.get("sha256"):
-        inputs_extra["tokens_json_sha256"] = tj.get("sha256")
-    if g6.get("sha256"):
-        inputs_extra["global_match_sha256"] = g6.get("sha256")
-    tr = _d(_d(clink).get("record"))
-    if with_commit and tr.get("sha256"):
-        inputs_extra["commit_tokens_sha256"] = tr.get("sha256")
-    if not isinstance(epr, dict):
+    tj, g6 = (None, None) if link is None else (link.tokens_json, link.global_match)
+    if tj is not None and tj.sha256:
+        inputs_extra["tokens_json_sha256"] = tj.sha256
+    if g6 is not None and g6.sha256:
+        inputs_extra["global_match_sha256"] = g6.sha256
+    if with_commit and clink.record_sha256:
+        inputs_extra["commit_tokens_sha256"] = clink.record_sha256
+    if epr is None:
         out.append(_mk(*C_EPR, commit, ctx, outcome=NOT_RUN))
     else:
-        reqs = _d(epr.get("requests"))
-        scope = {"requests": len(reqs), "lag": epr.get("lag"), "eos_of_record": epr.get("eos_of_record"), "served_known": epr.get("served_known"), "any_eos_stop": epr.get("any_eos_stop"),
-                 "lengths": {r: [v.get("served_output_len"), v.get("executed_prefix_len"), v.get("cap")] for r, v in reqs.items() if isinstance(v, dict)}}
-        if epr.get("ok") is True:
+        scope = {"requests": len(epr.requests), "lag": epr.lag, "eos_of_record": None if epr.eos_of_record is None else list(epr.eos_of_record),
+                 "served_known": epr.served_known, "any_eos_stop": epr.any_eos_stop,
+                 "lengths": {r: [v.served_output_len, v.executed_prefix_len, v.cap] for r, v in epr.requests.items()}}
+        if epr.ok:
             out.append(_mk(*C_EPR, commit, ctx, outcome=PASS, scope=scope))
         else:
-            probs = list(epr.get("problems") or [])
+            probs = list(epr.problems)
             out.append(_mk(*C_EPR, commit, ctx, outcome=FAIL, scope=scope, differences=[{"name": "executed_prefix_problems", "n": len(probs), "first": probs[:4]}],
                            reason=f"executed prefix of record: {probs[0] if probs else 'not ok'}"))
     account_missing = sorted({leg for f in facts.values() if isinstance(f, dict) for leg in (f.get("account_missing") or [])})
-    if not account_missing and isinstance(link, dict) and not by_commit:
-        account_missing = [leg for leg, present in (("tokens.json", bool(tj)), ("global_match.json", bool(g6))) if not present]
+    if not account_missing and link is not None and not by_commit:
+        account_missing = [leg for leg, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
     # v1 gated the link THROUGH the replay's not-executed class: it faults (-> population_scope FAIL) only when applied, i.e. when a request's
     # prefix is reduced from its cap (`link.required`) or the class names the fault.  Outside that the link is recorded, not gating.
-    gating = bool(_d(clink if by_commit else link).get("required")) or any(f.get("account_missing") or f.get("linked") is not True for f in _faulted_prefix_facts(sr))
-    if not isinstance(link, dict):
+    acct = clink if by_commit else link
+    gating = (acct is not None and acct.required) or any(f.get("account_missing") or f.get("linked") is not True for f in _faulted_prefix_facts(sr))
+    if link is None:
         out.append(_mk(*C_LINK, commit, ctx, outcome=NOT_RUN))
     else:
-        scope = {"required": link.get("required"), "gating": gating, "lag_attested": link.get("lag_attested"), "tokens_json": tj.get("path"), "global_match_verdict": g6.get("verdict"),
-                 "g6_status": g6.get("g6_status"), "requests_linked": len(g6.get("requests_linked") or []) or None,
+        scope = {"required": link.required, "gating": gating, "lag_attested": link.lag_attested, "tokens_json": None if tj is None else tj.path,
+                 "global_match_verdict": None if g6 is None else g6.verdict, "g6_status": None if g6 is None else g6.g6_status,
+                 "requests_linked": (len(g6.requests_linked) if g6 is not None and g6.requests_linked else None),
                  "facts_linked": {r: f.get("linked") for r, f in facts.items() if isinstance(f, dict)} or None, "account_missing": account_missing or None}
         if with_commit:
-            scope |= {"account": "commit token record" if by_commit else "Match record + commit token record", "commit_tokens": tr.get("path"),
-                      "commit_required": _d(clink).get("required"), "commit_lag_attested": _d(clink).get("lag_attested")}
-        probs = ([] if by_commit else list(link.get("problems") or [])) + (list(_d(clink).get("problems") or []) if with_commit else [])
-        linked = (by_commit or link.get("ok") is True) and (not with_commit or _d(clink).get("ok") is True)
+            scope |= {"account": "commit token record" if by_commit else "Match record + commit token record", "commit_tokens": clink.record_path,
+                      "commit_required": clink.required, "commit_lag_attested": clink.lag_attested}
+        probs = ([] if by_commit else list(link.problems)) + (list(clink.problems) if with_commit else [])
+        linked = (by_commit or link.ok) and (not with_commit or clink.ok is True)
         if account_missing and gating:
             out.append(_mk(*C_LINK, commit, ctx, outcome=INSUFFICIENT, scope=scope, inputs=inputs_extra,
                            differences=[{"name": "account_missing", "legs": account_missing}],
@@ -685,14 +688,14 @@ def execution_extent_rules(commit: dict, ctx: dict) -> list[CheckResult]:
         else:
             out.append(_mk(*C_LINK, commit, ctx, outcome=PASS, scope=scope, inputs=inputs_extra,
                            notes=[f"link problems recorded, not gating (no request stopped before its cap): {'; '.join(p[:120] for p in probs[:3])}"]))
-    if not isinstance(past, dict):
+    if past is None:
         out.append(_mk(*C_PAST, commit, ctx, outcome=NOT_RUN))
     else:
-        scope = {"entries_n": past.get("entries_n"), "padded_record": past.get("padded_record"), "padding_entries_n": past.get("padding_entries_n")}
-        if past.get("ok") is not False and not _int(past.get("entries_n")) and not past.get("error"):
+        scope = {"entries_n": past.entries_n, "padded_record": past.padded_record, "padding_entries_n": past.padding_entries_n}
+        if past.ok and not past.entries_n and not past.error:
             out.append(_mk(*C_PAST, commit, ctx, outcome=PASS, scope=scope))
         else:
             out.append(_mk(*C_PAST, commit, ctx, outcome=FAIL, scope=scope,
-                           differences=[{"name": "rows_past_the_stop", "n": past.get("entries_n"), "by_request": past.get("steps_past_by_request"), "error": past.get("error")}],
-                           reason=f"{past.get('entries_n')} committed row(s) past a request's executed prefix"))
+                           differences=[{"name": "rows_past_the_stop", "n": past.entries_n, "by_request": past.steps_past_by_request, "error": past.error}],
+                           reason=f"{past.entries_n} committed row(s) past a request's executed prefix"))
     return out

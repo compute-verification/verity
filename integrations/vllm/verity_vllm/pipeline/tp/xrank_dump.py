@@ -32,7 +32,7 @@ def route_of(settings: dict[str, Any], M: int, N: int, world: int, norm: Any = N
     launch (`call_spans`); over several requests the Build binds one call per request on the launch's route (`route_binding(.., rows)`,
     `vllm_bindings.AllReduceRule`), listed as "calls" [{lo, rows, spec, statics}]."""
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import tp_allreduce as T
+    from verity.ml.definitions.registry import tp_allreduce as T
 
     world = int(world)
     if world <= 2:
@@ -253,7 +253,7 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
 
 def embedding_leg(pk: dict[str, Any], metas: dict[str, Any], step: int, rows: Any, part: Any, mods: dict[str, Any], tensor_of: Any,
                   unverified: dict[tuple[int, str], str]) -> dict[str, Any]:
-    """EmbeddingShard_v1 leg (ruling 27): this rank's committed partial rows == masked gather of the committed ids from ITS vocab shard
+    """EmbeddingShard_v1 check: this rank's committed partial rows == masked gather of the committed ids from ITS vocab shard
     (the live parameter, which the per-rank weights pin ties to the checkpoint of record); rows outside the rank's range are zero."""
     import torch
 

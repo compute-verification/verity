@@ -1,4 +1,4 @@
-"""GLM-5.3's served-default kernels on cc 9.0, folded as the Build binds them (VLLM-14):
+"""GLM-5.3's served-default kernels on cc 9.0, folded as the Build binds them:
 
 * FlashInfer's fused all-reduce + residual + RMSNorm is one collective Compute (`AllReduceRmsNormMnnvl_v1`), its new residual written
   back into the partial's buffer; another pattern code, quantisation or world is refused;
@@ -16,7 +16,7 @@ import dataclasses
 
 import pytest
 
-from verity_vllm.engine.profiles import profile_for_case
+from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
 from verity_vllm.observe.fold.patterns.cublas import CublasLinear, MlaAbsorbBmm
@@ -26,7 +26,7 @@ from verity_vllm.observe.fold.resolver import Collective, Compute, PerRow, Share
 from verity_vllm.observe.fold.tree import build_trees
 
 CUDA, H = "cuda:0", 6144
-#: the served GLM-5.3 engine's declared target: cc 9.0, off batch invariance (the default-kernels ruling)
+#: the served GLM-5.3 engine's declared target: cc 9.0, off batch invariance (vLLM's default kernels)
 H200 = dataclasses.replace(target_of_header(None)[0], compute_capability=(9, 0), num_sms=132, batch_invariant=False)
 
 
@@ -179,7 +179,7 @@ def test_a_bmm_whose_weight_is_no_parameter_view_is_refused():
 
 
 def test_a_transposed_weight_root_writes_one_run_per_inner_row_with_its_leaves_unchanged():
-    """`memory.address_ordered`: W_UK_T's (448, 1, 3584)-strided view as 4,096 address runs, not one per element (VLLM-14)."""
+    """`memory.address_ordered`: W_UK_T's (448, 1, 3584)-strided view as 4,096 address runs, not one per element."""
     from verity.ml.circuits.refs import Affine
     from verity_vllm.observe.fold.memory import address_ordered
     from verity_vllm.observe.fold.views import element_runs
@@ -197,7 +197,7 @@ def test_a_transposed_weight_root_writes_one_run_per_inner_row_with_its_leaves_u
 
 def test_a_permuted_weight_root_answers_its_transposed_reads_from_its_own_map():
     """`MemoryModel.write_root`: W_UK_T and W_UV interleave in one allocation; a read of `W_UV^T` (one element run per element) or of
-    W_UK_T comes from the root's address -> leaf map, equal leaf for leaf to the interval scan, until a write over it (VLLM-14)."""
+    W_UK_T comes from the root's address -> leaf map, equal leaf for leaf to the interval scan, until a write over it."""
     from verity.ml.circuits.refs import Affine, runs
     from verity_vllm.observe.fold.memory import MemoryModel
 
@@ -254,7 +254,7 @@ def _build_kind(settings, M, N=H, rows=None):
     from types import SimpleNamespace
     from verity_vllm.program.frontend.rules.vllm_bindings import collectives as BC
     from verity_vllm.program.frontend.rules.vocab import vocabulary_for
-    from verity_vllm.program.registry import tp_allreduce as T
+    from verity.ml.definitions.registry import tp_allreduce as T
 
     setting, route = T.served_route(settings, M, N)
     plan = {"captured": T.covered(setting, N, route, M), "M": M, "rows_n": rows or M, "N": N}
@@ -265,7 +265,7 @@ def _build_kind(settings, M, N=H, rows=None):
 @pytest.mark.parametrize("custom", [True, False], ids=["defaults", "custom-off"])
 @pytest.mark.parametrize("M,spec", [(256, "AllReduceMultimem_v1{WORLD=8,SIZE=1572864,"), (1, "AllReduceMnnvl_v1{WORLD=8,N=6144,SHOT=1}")])
 def test_a_covered_tp8_all_reduce_is_the_build_s_one_call_over_the_flattened_partial(custom, M, spec):
-    """vLLM's route at the capture's settings, as `AllReduceRule` binds it: one Compute over `Array<8, Array<M*N>>` (VLLM-14)."""
+    """vLLM's route at the capture's settings, as `AllReduceRule` binds it: one Compute over `Array<8, Array<M*N>>`."""
     from verity_vllm.observe.fold.patterns.collectives import TpCollective
 
     settings = {**DEFAULTS, "custom_all_reduce": custom}
@@ -307,7 +307,7 @@ def _requests_ctx(counts, notes=None):
 @pytest.mark.parametrize("counts", [(1, 1), (1, 255), (3, 1, 4)], ids=["decode", "mixed", "three"])
 def test_a_multi_request_tp8_all_reduce_is_the_build_s_one_call_per_request(counts):
     """The Build reduces each request's rows as its own flat call on the route the launch's M picks (`route_binding(c, 8, M, N, rows)`):
-    the fold states the same calls, each over its request's run of the partial and named as a part of the one call (VLLM-14)."""
+    the fold states the same calls, each over its request's run of the partial and named as a part of the one call."""
     from verity_vllm.observe.fold.patterns.collectives import TpCollective
     from verity_vllm.observe.fold.resolver import Group
 

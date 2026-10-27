@@ -1,10 +1,10 @@
-"""[R16 rev M-0243 / M-0259; rev-cb F-cb-23] a PASS at B>=2 without a complete request attribution on the row's own record NAMES the gap.
+"""A PASS at B>=2 without a complete request attribution on the row's own record NAMES the gap.
 
-exec's two B8 256/32 Commit-only reruns on int-1 (llama L40S r16_0618, llama A100 r16_0626) restored the R15 Program but had no Match record,
-so form (B) was not armed; the tree's commit_verdict said a bare 'PASS' and the report rendered Commit checkmark until rev quarantined it
-(M-0259).  Form (B) is NOT made mandatory (R16 pin RULES): the verdict is unchanged; the PASS text at B>=2 carries the attribution gap by
-name when the oracle compare is absent or its attribution block is not complete -- and carries nothing at B=1 (the class does not exist)
-or when attribution is complete (value-partial by snapshot gaps, M-0217, is not this).  A FAIL of any earlier rule is unchanged.
+Two B8 256/32 Commit-only reruns (llama L40S, llama A100) restored the Program but had no Match record, so form (B) was not armed;
+commit_verdict said a bare 'PASS' and the report rendered a Commit checkmark.  Form (B) is NOT made mandatory: the verdict is unchanged;
+the PASS text at B>=2 carries the attribution gap by name when the oracle compare is absent or its attribution block is not complete --
+and carries nothing at B=1 (the class does not exist) or when attribution is complete (value-partial by snapshot gaps is not this).  A
+FAIL of any earlier rule is unchanged.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ VC_OK = {"method": "sampled-exact-replay(complete) + boundary-linkage", "result"
 
 
 def _base(n_req: int) -> dict:
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
     return {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
             "sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6},
             "value_correspondence": VC_OK, "weights_pin": WP_OK}
@@ -42,7 +42,7 @@ def test_b8_without_form_b_passes_with_the_gap_named():
 
 
 def test_b2_with_complete_attribution_passes_clean_even_when_value_partial():
-    oc = _oc(True); oc["complete"] = False; oc["grade"] = "partial"; oc["steps_not_snapshotted"] = 32       # the M-0217 snapshot-gap class
+    oc = _oc(True); oc["complete"] = False; oc["grade"] = "partial"; oc["steps_not_snapshotted"] = 32       # the snapshot-gap class
     ok, reason = commit_verdict({**_base(2), "oracle_compare": oc}, True, min_openings=64)
     assert ok is True and "attribution" not in reason, reason
 

@@ -45,11 +45,14 @@
   research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                                    make the registry's fetched entries under PATH (default: all) present and exact, from the
                                                    private remote when reachable, else the public export; every byte checked; exit 1 if any is missing
-  research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
+  research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
   research data export --verify-url URL [--repo DIR] [--no-previous] [--blobs FILE] [--jobs N] [--json]
-                                                   copy every registry entry (and its `previous` ids) to the public export bucket; --verify-url
+                                                   copy every registry entry (and its `previous` ids, and each --id) to the public export bucket; --verify-url
                                                    fetches them all back through a public front end into a scratch store, checking every byte
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
+  research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--work DIR] [--jobs N]
+                                                   the remote's blobs only uncited artifacts past their kind's TTL hold (gc.py, README §7.4);
+                                                   --apply marks them and deletes those still candidates a grace after their mark
   research data reindex [--remote]                 rebuild the catalog (built aside, swapped in complete); --remote first pulls what the remote has
   research data index [--db F] [--from DIR] [--public [--public-db F]] [--full] [--jobs N] [--json]
                                                    the derived index (bucket_index.py): list the bucket, read the records the index lacks, write
@@ -84,7 +87,7 @@ import os
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from ..secret_hint import lost
 from . import ids, vocab
@@ -1213,8 +1216,8 @@ def cmd_fetch_fixtures(argv: list[str]) -> int:
 
 
 def cmd_export(argv: list[str]) -> int:
-    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block and any `--blobs`, to the public export
-    (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
+    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block, each `--id` and any `--blobs`, to the
+    public export (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
     bytes from the repo, the local store or the private remote.  `--verify-url URL` exports nothing: it fetches all of it back
     through URL into a scratch store and checks every byte against its id (the end-to-end test of a public front end)."""
     from . import fetchset, fixtures as F  # noqa: PLC0415
@@ -1225,6 +1228,7 @@ def cmd_export(argv: list[str]) -> int:
     ap.add_argument("--dry-run", action="store_true", help="HEAD the export and report what would be uploaded")
     ap.add_argument("--no-previous", action="store_true", help="leave out the ids under the map's `previous` block")
     ap.add_argument("--blobs", default=None, metavar="FILE", help="also these blobs: one `<sha256> <bytes>` per line (history stubs)")
+    ap.add_argument("--id", action="append", default=[], metavar="ART", help="also this artifact, which the registry doesn't hold; repeatable")
     ap.add_argument("--verify-url", default=None, metavar="URL", help="fetch everything back through URL and check it; export nothing")
     ap.add_argument("--jobs", type=int, default=fetchset.JOBS)
     ap.add_argument("--json", action="store_true")
@@ -1252,7 +1256,7 @@ def cmd_export(argv: list[str]) -> int:
         print("research data export: no export configured ([export] in store.toml, RESEARCH_EXPORT_DIR or RESEARCH_EXPORT_BUCKET)", file=sys.stderr)
         return 1
     rep = F.export(st, root, dest, srcs=fetchset.sources(st, public=""), include_previous=not ns.no_previous, blobs=blobs,
-                   jobs=ns.jobs, dry_run=ns.dry_run)
+                   arts=ns.id, jobs=ns.jobs, dry_run=ns.dry_run)
     if ns.json:
         _dump(rep)
     else:
@@ -1316,6 +1320,50 @@ def cmd_doctor(argv: list[str]) -> int:
     return 0
 
 
+def cmd_gc(argv: list[str]) -> int:
+    """README §7.4 (`gc.py`): which blobs only uncited artifacts past their kind's TTL hold; `--apply` marks them and deletes those
+    marked at least `gc.GRACE_S` ago that still are.  Read-only without `--apply`."""
+    from . import gc  # noqa: PLC0415
+
+    ap = _ap("gc")
+    ap.add_argument("--cite", action="append", default=[], metavar="DIR", required=True,
+                    help="a tree whose files cite art ids and runs (the notes repository; a checkout of the code); repeatable")
+    ap.add_argument("--cache", required=True, metavar="DIR", help="where manifests, labels and attempts read from the remote are kept")
+    ap.add_argument("--state", metavar="FILE", help="the marks (required with --apply)")
+    ap.add_argument("--apply", action="store_true", help="mark this pass's candidates and delete the ones marked a grace ago")
+    ap.add_argument("--report", metavar="FILE", help="write the plan's summary and the expired ids here (JSON)")
+    ap.add_argument("--work", metavar="DIR", help="where the pass's blob table goes (a local disk; default the temp dir)")
+    ap.add_argument("--cite-linear", action="store_true", help="Linear's issues, comments, projects, project updates and "
+                    "documents cite too (research.linear's credentials; required with --apply)")
+    ap.add_argument("--jobs", type=int, default=gc.JOBS)
+    ns = ap.parse_args(argv)
+    if ns.apply and not (ns.state and ns.cite_linear):
+        ap.error("--apply needs --state and --cite-linear (lanes cite in Linear most: top, 26 Oct)")
+    st = LocalStore(ns.store)
+    if st.remote is None:
+        print("research data gc: no remote configured", file=sys.stderr)
+        return 2
+    say = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
+    try:
+        linear = None
+        if ns.cite_linear:
+            from ..linear import Linear  # noqa: PLC0415
+            linear = Linear().gql
+        p = gc.plan(st.remote, Path(ns.cache), [Path(c) for c in ns.cite], now=gc.clock(), jobs=ns.jobs,
+                    work=Path(ns.work) if ns.work else None, linear=linear, log=say)
+        out: dict[str, Any] = {"remote": st.remote.describe(), "ttl_days": gc.TTL_DAYS, **p.summary()}
+        if ns.apply:
+            out["applied"] = gc.apply(st.remote, p, Path(ns.cache), Path(ns.state), now=gc.clock(), jobs=ns.jobs, log=say)
+    except gc.GcError as e:
+        print(f"research data gc: nothing deleted: {e}", file=sys.stderr)
+        return 1
+    if ns.report:
+        Path(ns.report).write_text(json.dumps({**out, "expired": p.expired}, sort_keys=True) + "\n")
+    _dump(out)
+    applied = out.get("applied") or {}
+    return 1 if applied.get("error_count") or applied.get("lost_count") else 0
+
+
 _VERBATIM_AFTER = ("--meta", "--note")      # free text / JSON values: never rewritten
 _VERBATIM_COMMANDS = ("sql",)
 
@@ -1376,7 +1424,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
     "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
-    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts,
+    "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc,
 }
 
 

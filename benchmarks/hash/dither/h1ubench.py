@@ -11,12 +11,12 @@ A build whose gate fails is not timed.
 
 The receipts are a side computation beside the served product (z, the plain A B^T, is the served call's own GEMM), so a
 call served with them costs plain + h1u and gamma = 1 + h1u / plain, plain the faster of torch._int_mm and vLLM's
-cutlass_scaled_mm. Units are the call's full 32 x 32 tiles; M = 1 is one padded row block (31 zero rows), as h1bench.py
+cutlass_scaled_mm. Units are the call's full 32 x 32 tiles; M = 1 is one padded row tile (31 zero rows), as h1bench.py
 counts it. Every unit is live here.
 
 Gates before any timing, every one in this run (a failed gate exits 4 and times nothing):
   * anchors (CPU, small calls): kh_unit against h1tile.reference on every unit of a 64 x 64 x 512 call (m = 2) whose
-    second row block is dead (live = 0: the zero receipt, PouwH1Tile_v4's dead tile) and of a 32 x 32 x 4608 call (m = 3);
+    second row tile is dead (live = 0: the zero receipt, PouwH1Tile_v4's dead tile) and of a 32 x 32 x 4608 call (m = 3);
     the device seeds against seeds.seed / receipt_seed;
   * every timed shape: 0xA5 poison, then kh_unit's receipts against call_receipts on sampled units (first, last and
     random ones) and no poison left anywhere; then a no-write control (a launch over zero rows) under the same poison,
@@ -38,10 +38,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
-sys.path.insert(0, str(HERE.parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import receipts as RC
 from h1bench import KEY_BLOCKS, auto_j, plain_arms
 from h1bench import Lib as NoiseLib
@@ -129,7 +128,7 @@ def digest(row) -> bytes:
 
 
 class Call:
-    """One call's device buffers for kh_unit: A (rows padded to a 32-row block), B, seeds, receipts."""
+    """One call's device buffers for kh_unit: A (rows padded to a 32-row tile), B, seeds, receipts."""
 
     def __init__(self, lib: Lib, a: torch.Tensor, b: torch.Tensor, salt: bytes, root_a: bytes, root_b: bytes, base: int):
         self.lib, self.a, self.b, self.base = lib, a, b, base
@@ -192,7 +191,7 @@ def gate_shape(call: Call, picks: list[int], ref_t: torch.Tensor) -> dict:
 
 
 def anchors(libs: dict[str, Lib], rng: random.Random) -> list[dict]:
-    """Every build's kh_unit against h1tile.reference (the Definition's words, CPU) on two small calls, dead row block
+    """Every build's kh_unit against h1tile.reference (the Definition's words, CPU) on two small calls, dead row tile
     included."""
     res = []
     for m, n, k, dead in ((64, 64, 512, (1,)), (32, 32, 4608, ())):

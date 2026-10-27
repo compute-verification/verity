@@ -2,7 +2,7 @@
 evaluator should expose the complete small assignment, not only final outputs"; revb PADDED-ACCEPTANCE Stage 1 artefact: "a
 reference-evaluator dump that exposes the COMPLETE small assignment (every wire, not only outputs)").
 
-`rows(prog, transcript)` reads `serve3_reference.materialize`'s transcript `{gate: word}` back against the circuit: for EVERY gate its
+`rows(prog, transcript)` reads `serve3_reference.materialize`'s trace `{gate: word}` back against the circuit: for EVERY gate its
 index, scope path (the node names from the root body down), primitive id, lift class (`input` / `const` / `strict` / `specified` /
 `unlifted` for a primitive that is not a lifted one), the lifted width `w+1` of its output, the raw committed word, and the word's
 reading under LIFTING-SPEC A3 (`active` with its payload / `bot` / `inv` = noncanonical `1‖nonzero`).  Nothing is normalised: the
@@ -18,7 +18,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
-from verity_vllm.program.registry import lifted as L
+from verity.ml.definitions.registry import lifted as L
 from verity.ml.circuits.types import Value
 
 

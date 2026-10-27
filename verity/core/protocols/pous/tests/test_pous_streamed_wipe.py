@@ -148,9 +148,11 @@ def test_one_session_an_id():
         challenger(log=log)
 
 
-def test_the_fill_covers_every_declared_tier():
-    with pytest.raises(ValueError, match="covers every declared tier"):
-        sw.WipeParams(N, K, 1, LIMIT, (("gpu", 128 * sw.LABEL_BYTES),))
+def test_the_declared_tiers_hold_the_fill():
+    with pytest.raises(ValueError, match="the declared tiers hold the fill"):
+        sw.WipeParams(N - 1, K, 1, LIMIT, (("gpu", (N - 2) * sw.LABEL_BYTES),))
+    p = sw.WipeParams(N - 1, K, 1, LIMIT, (("gpu", N * sw.LABEL_BYTES), ("host-dram", 3)))
+    assert p.outside_bits == sw.LABEL_BITS + 24
     with pytest.raises(ValueError, match="each named once"):
         sw.WipeParams(N, K, 1, LIMIT, (("gpu", 128 * sw.LABEL_BYTES), ("gpu", 128 * sw.LABEL_BYTES)))
     with pytest.raises(ValueError):

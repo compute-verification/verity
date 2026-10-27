@@ -16,16 +16,13 @@ A *run directory* is what `bench/run_config.py` produces for one configuration (
     RUN_DIR/fold_summary.json        this module's `FOLD_SUMMARY_SCHEMA` (written twice: `fold_summary_2.json`)
     RUN_DIR/census/census.json       GPU census;  RUN_DIR/census_reconcile.json  its torch-free reconciliation
     RUN_DIR/nonint/noninterference.json
-    RUN_DIR/compare.json             `verity_vllm.check.fold_compare` (tokens, boundary, subcircuits, structure)
-    RUN_DIR/wiring.json              `verity_vllm.check.operand_provenance` (G5: exhaustive operand provenance, D82)
-    RUN_DIR/replay_a.json            `verity_vllm.check.replay.replay --tier a` (verifier-seeded stratified sample + served tokens)
-    RUN_DIR/replay_chain.json        `verity_vllm.check.replay.replay --tier chain` (connected slices with computed intermediates)
-    RUN_DIR/replay_b_step<N>.json    `verity_vllm.check.replay.replay --tier b --step N` — full replay, DIAGNOSTIC ONLY (never gating)
-    RUN_DIR/root_policy.json         `verity_vllm.check.root_policy` (integrator)
     RUN_DIR/golden.json              `verity_vllm.properties.golden --check` (integrator)
     RUN_DIR/quarantine.json          differential tests of newly registered definitions (when the run uses any)
     RUN_DIR/holdouts.json            written by the ORCHESTRATOR: the same gates G1..G6 over holdout workloads
-    RUN_DIR/provenance.json          the sealed verifier's record (`bench/verify_lane.sh`); card top section
+    RUN_DIR/compare.json             `verity_vllm.check.fold_compare` (tokens, boundary, subcircuits, structure)
+    RUN_DIR/wiring.json, replay_a.json, replay_chain.json, replay_b_step<N>.json, root_policy.json, provenance.json
+                                     no producer in this tree: a gate that reads one is skipped with the file missing as
+                                     its reason
 
 Gates:
     G1 observation fidelity    non-interference PASS, tokens equal across a/b/c AND to the control run, every boundary
@@ -54,7 +51,7 @@ Gates:
                                could not decide -- neither pass nor fail, the run verdict INCOMPLETE, never REJECTED.
                                A run without the document keeps today's verdict: G8 `skipped` never makes it INCOMPLETE.
 
-    R1 reference integrity     FAIL-CLOSED (R9 ref lane, `REF_INTEGRITY_RULE`; explicitly authorised checker
+    R1 reference integrity     FAIL-CLOSED (`REF_INTEGRITY_RULE`; explicitly authorised checker
                                addition, outside the frozen set): `fold/construction errors > 0 ⇒ the Program is ineligible
                                as an accepted reference`.  Evidence = `fold_summary.json` (`errors`, `unresolved`,
                                `unsupported`; `error_classes` / `per_step` must agree with `errors`), `fold_summary_2.json`
@@ -119,7 +116,7 @@ HOLDOUT_GATES = ("G1", "G2", "G3", "G4", "G5", "G6")
 #: Structural gates outside the frozen G1..G7 set (evaluated and reported, verdict rule in `verdict`).
 STRUCTURAL_GATES = ("G8",)
 GATE_NAMES["G8"] = "VU partition"
-#: [R9 ref 2026-09-18] integrity gates outside the frozen set: the fail-closed reference-integrity rule.
+#: Integrity gates outside the frozen set: the fail-closed reference-integrity rule.
 INTEGRITY_GATES = ("R1",)
 GATE_NAMES["R1"] = "reference integrity (fail-closed)"
 #: The rule, versioned: quoted in every R1 result and in `gates.json["constants"]`; bump the date on any change of the rule.
@@ -340,7 +337,8 @@ class RunArtifacts:
     @property
     def C(self) -> dict | None:
         """The profile configuration: `run.json["C"]` (values; a card-style `{field: {"value", "provenance"}}` is
-        accepted too), else the profile module named in the manifest.  A gate never reads the log itself."""
+        accepted too), else the profile module named in the manifest; `ArtifactError` when that profile can't be loaded.  A gate never
+        reads the log itself."""
         C = self.manifest.get("C")
         if isinstance(C, dict) and C:
             return {k: (v["value"] if isinstance(v, dict) and "value" in v else v) for k, v in C.items()}
@@ -350,8 +348,8 @@ class RunArtifacts:
         if "C_from_profile" not in self._cache:
             try:
                 self._cache["C_from_profile"] = dict(load_profile_config(name))
-            except Exception:  # noqa: BLE001 - the gate reports the absence
-                self._cache["C_from_profile"] = None
+            except Exception as e:
+                raise ArtifactError(f"profile {name!r} could not be loaded: {type(e).__name__}: {e}") from e
         return self._cache["C_from_profile"]
 
     def workload_requests(self) -> list[dict]:
@@ -368,7 +366,7 @@ class RunArtifacts:
         return []
 
     def expected_steps(self) -> int | None:
-        """The engine steps a run of this workload takes.  [coverage D87] The control run (`control/tokens.json`, the bare engine
+        """The engine steps a run of this workload takes.  The control run (`control/tokens.json`, the bare engine
         on the same workload — THE token reference of every gate) records its realized `timing.engine_steps`; that is the
         expectation, so declared arrivals (B8-mixed), EOS before `max_tokens` and chunked prefill are all compared like for like.
         Fallback for older control files: `max(max_tokens)` (one prefill + max_tokens-1 decode steps, every request at step 0),
@@ -410,8 +408,8 @@ class RunArtifacts:
 
 
 def load_profile_config(name: str) -> dict:
-    """`verity_vllm.engine.profiles.<name>.PROFILE.config` (torch-free import)."""
-    mod = importlib.import_module(name if "." in name else f"verity_vllm.engine.profiles.{name}")
+    """`verity_vllm.observe.fold.profiles.<name>.PROFILE.config` (torch-free import)."""
+    mod = importlib.import_module(name if "." in name else f"verity_vllm.observe.fold.profiles.{name}")
     prof = getattr(mod, "PROFILE", None) or getattr(mod, "profile", None)
     if prof is None:
         for attr in ("build_profile", "make_profile", "get_profile"):
@@ -559,7 +557,11 @@ def gate_G1(run: RunArtifacts) -> GateResult:
         counts = sorted({(r.get("layers_a"), r.get("layers_b")) for r in rows})
         if rows and counts != [(exp_layers, exp_layers)]:
             problems.append(f"per-step layer counts {counts} != expected_layers={exp_layers} in both variants")
-        C = run.C
+        try:
+            C = run.C
+        except ArtifactError as e:
+            C = None
+            problems.append(f"expected_layers={exp_layers} not checked against the profile's NL: {e}")
         if C and C.get("NL") is not None and int(C["NL"]) != exp_layers:
             problems.append(f"expected_layers={exp_layers} disagrees with the profile's NL={C['NL']}")
     detail["noninterference"] = {"PASS": ni.get("PASS"), "hash_comparisons": n_cmp, "hash_equal": n_eq, "steps": len(steps),
@@ -1058,7 +1060,7 @@ def gate_G8(run: RunArtifacts) -> GateResult:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# R1 — reference integrity, fail-closed (R9 ref lane 2026-09-18; outside the frozen G1..G7 set)
+# R1 — reference integrity, fail-closed (outside the frozen G1..G7 set)
 # ---------------------------------------------------------------------------------------------------------
 
 _INTEGRITY_COUNTS = ("errors", "unresolved", "unsupported")
@@ -1328,7 +1330,7 @@ FOLD_SUMMARY_FIELDS: dict[str, str] = {
     "schema": f"`{FOLD_SUMMARY_SCHEMA}`",
     "utc": "UTC time the summary was written",
     "log": "path of the raw observation log folded",
-    "profile": "profile module name (`verity_vllm.engine.profiles.<name>`)",
+    "profile": "profile module name (`verity_vllm.observe.fold.profiles.<name>`)",
     "profile_id": "`Profile.id` of that module",
     "with_program": "true when `Program()` and the digest were built (G6 needs it)",
     "digest": "`program_digest(Program(Captured_v1{PROFILE, WORKLOAD}))` — the structure digest G6 compares (empty without Program())",

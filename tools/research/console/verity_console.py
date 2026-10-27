@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Verity's panels for the site's live console (`/admin/live`), recomputed from their live sources and sent in the site's panel
-format (Project store `internal/live-console/panel-format.md`; the inventory is `internal/live-console/verity-panels.md`).
+format (`apps/docs/lib/panels/format.ts` in the website repository).
 
     verity_console.py --group store [--store DIR] [--research-src DIR] [--out DIR] [--key FILE] [--no-refresh]
     verity_console.py --group node1 [--out DIR] [--key FILE]
 
 - `store`, on the control pod: the evidence store's `check` Attempts of the last day and their `landed` labels. The rest of the
   store's results are the site's Results view, which reads the store's index.
-- `node1`, on vy-nebius-1: its Prometheus (DCGM and node-exporter, with the steward's definitions from `util_collect.py`, a copy of
-  `internal/lanes/nebius-infra/tools/util_collect.py`) and the Kueue samples `vy-usage` appends to /workspace/usage/queues.jsonl;
-  and vy-nebius-2's POUS sampler, read over `ssh vy-n2` and reduced to per-minute rows there.
+- `node1`, on vy-nebius-1: its Prometheus (DCGM and node-exporter, with the utilization definitions in `util_collect.py`) and the
+  Kueue samples `vy-usage` appends to /workspace/usage/queues.jsonl; and vy-nebius-2's POUS sampler, read over `ssh vy-n2` and
+  reduced to per-minute rows there.
 
 Every panel is checked against the format (fields, lengths, cell types, 64 KiB) and written to OUT/<name>.json. When the key file
 exists (default ~/.config/verity/panels.key) each valid panel is also PUT to the site; without it the run is a dry run. A panel
@@ -42,7 +42,7 @@ MAX_BODY = 64 * 1024
 ID = re.compile(r"[a-z0-9-]+/[a-z0-9-]+")
 ISO = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d+)?)?(Z|[+-]\d\d:\d\d)")
 GPUS, CORES = 8, 192
-GPU_TARGET, CPU_TARGET = 60, 70  # Daniel's node-1 targets (docs/gpu-utilization-postmortem.md)
+GPU_TARGET, CPU_TARGET = 60, 70  # node 1's busy targets, %
 PROM = "/api/v1/namespaces/skypilot/services/skypilot-prometheus-server:80/proxy/api/v1"
 QUEUES = Path("/workspace/usage/queues.jsonl")
 
@@ -234,7 +234,7 @@ def prom_now(query: str) -> list[dict]:
 
 def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     sys.path.insert(0, str(HERE))
-    import util_collect as uc  # noqa: PLC0415  the steward's utilization definitions
+    import util_collect as uc  # noqa: PLC0415  the utilization definitions
 
     end = now.timestamp()
     start = (now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=23)).timestamp()
@@ -257,8 +257,7 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     out.append(panel("node1-hours", "vy-nebius-1 per hour: GPU-hours and CPU", "table",
                      ["Hour (UTC)", "GPU-h", "Kueue-allocated", "Held or busy", "Busy", "Util-weighted", "Idle", "CPU busy %",
                       "RAM peak GiB"], hrows, updated_at=iso(now), source=src,
-                     note="The steward's definitions: busy = DCGM utilization above 0 in a minute; held = 1 GiB or more of GPU memory "
-                          "in use; util-weighted = the sum of utilization; idle = GPU-hours neither held nor busy. Kueue-allocated is "
+                     note="Busy = DCGM utilization above 0 in a minute; held = 1 GiB or more of GPU memory in use; util-weighted = the sum of utilization; idle = GPU-hours neither held nor busy. Kueue-allocated is "
                           "GPU-hours admitted to jobs, from 5-minute samples. The last 24 hours, newest first."))
 
     tot = summary["total"]
@@ -269,7 +268,7 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     srows = [[k, sig(v, 3), sig(100 * v / o, 3) if o else None] for k, v in split] + [["All GPU-hours", sig(o, 3), 100.0 if o else None]]
     out.append(panel("node1-split", "vy-nebius-1: where the last 24 hours of GPU-hours went", "table",
                      ["Where the GPU-hours went", "GPU-h", "Share %"], srows, updated_at=iso(now), source=src,
-                     note=f"Since {uc.hour(start)}, the postmortem's split. Held counts any process on a GPU, inside Kueue or not. "
+                     note=f"Since {uc.hour(start)}. Held counts any process on a GPU, inside Kueue or not. "
                           "Busy is generous: utilization above 0 in a minute."))
 
     util = {r["metric"].get("gpu"): {int(float(t)): float(v) for t, v in r["values"]} for r in prom["gpu_util"]}
@@ -294,8 +293,7 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
     out.append(panel("node1-utilization", "vy-nebius-1 utilization, last 24 hours", "line",
                      ["time", "GPU busy %", "GPU util %", "GPU held %", "Kueue-allocated %", "CPU busy %", "GPU busy target %",
                       "CPU busy target %"], urows, unit="%", updated_at=iso(now), source=src,
-                     note="5-minute means over the 8 GPUs and 192 vCPUs. GPU busy: utilization above 0 (the steward's measure, and "
-                          "Daniel's 60% target); GPU util: mean utilization; held: 1 GiB or more of memory in use; Kueue-allocated: "
+                     note="5-minute means over the 8 GPUs and 192 vCPUs. GPU busy: utilization above 0 (target 60%); GPU util: mean utilization; held: 1 GiB or more of memory in use; Kueue-allocated: "
                           "GPUs admitted to jobs. CPU busy: non-idle, non-iowait cores (target 70%)."))
 
     if qlines:
@@ -379,288 +377,7 @@ def node1_panels(ns, now: datetime, errors: list) -> tuple[list[dict], dict]:
         out += pool_panels(pool, n1_from_prom(summary, urows, grows, now), now, errors, minutes)
     except Exception as e:  # noqa: BLE001  the node-1 panels still go out
         errors.append(f"pool: {type(e).__name__}: {e}")
-    try:
-        out += hillclimb_panels(now, errors)
-    except Exception as e:  # noqa: BLE001  the node-1 panels still go out
-        errors.append(f"hillclimb: {type(e).__name__}: {e}")
-    try:
-        out += dot_overhead_panels(now, errors) + vllm_overhead_panels(now, errors)
-    except Exception as e:  # noqa: BLE001  the node-1 panels still go out
-        errors.append(f"prover-overhead: {type(e).__name__}: {e}")
-    try:
-        out += overnight_panels(errors)
-    except Exception as e:  # noqa: BLE001  the node-1 panels still go out
-        errors.append(f"overnight: {type(e).__name__}: {e}")
-    return out, {"queue_samples": len(qlines), "pool_file": POOL.exists(),
-                 "hillclimb_files": len(list(HILLCLIMB.glob("*.json"))) if HILLCLIMB.is_dir() else 0,
-                 "overnight_files": len(list(OVERNIGHT.glob("*.json"))) if OVERNIGHT.is_dir() else 0}
-
-
-# ---------------------------------------------------------------------------------------------------------------- proofs hill climb
-
-HILLCLIMB = Path("/workspace/usage/hillclimb")  # proofs' roll-ups, one `verity/hillclimb-rollup/v0` file per subcircuit
-SUBCIRCUIT = re.compile(r"[a-z0-9]+/[A-Za-z0-9_]+/K=\d+")
-HILLCLIMB_COLUMNS = ["Step", "Label", "Commit", "Run", "Time (UTC)", "Overhead", "Throughput VU/s", "GPU util", "GPU-held s/VU",
-                     "Byte-identical", "Flags", "VUs", "Session s/VU", "Setup s", "Verify s/statement", "Scheme", "GPU",
-                     "vCPU", "Dot", "Prove-only s/VU"]
-
-
-def hillclimb_panels(now: datetime, errors: list) -> list[dict]:
-    """One table per subcircuit, a row per optimization step. The title is the subcircuit id, which the site parses."""
-    out = []
-    for f in sorted(HILLCLIMB.glob("*.json")) if HILLCLIMB.is_dir() else []:
-        try:
-            doc = json.loads(f.read_text())
-            sub = doc["subcircuit"]
-            sid = sub["id"]
-            if doc.get("schema") != "verity/hillclimb-rollup/v0" or not SUBCIRCUIT.fullmatch(sid):
-                raise ValueError(f"schema {doc.get('schema')!r}, subcircuit {sid!r}")
-            text = lambda v, n=200: str(v)[:n] if v not in (None, "") else None  # noqa: E731
-            rows = []
-            for p in sorted(doc.get("points") or [], key=lambda p: p.get("step", 0)):
-                hw = p.get("hardware") or {}
-                rows.append([p.get("step"), text(p.get("label")), text(p.get("commit"), 12), text(p.get("run_id")),
-                             isoz(p.get("time_utc")), sig(p.get("overhead")), sig(p.get("throughput_vu_per_s")),
-                             sig(p.get("gpu_util")), sig(p.get("gpu_held_s_per_vu")),
-                             {True: "yes", False: "no"}.get(p.get("byte_identical")), text(" ".join(p.get("flags") or [])),
-                             p.get("vus") if isinstance(p.get("vus"), int) else None, sig(p.get("t_prove_s_per_vu")),
-                             sig(p.get("setup_s")), sig(p.get("verify_s_per_statement")), text(p.get("scheme"), 60),
-                             text(hw.get("gpu")), hw.get("vcpu") if isinstance(hw.get("vcpu"), int) else None,
-                             text(sub.get("dot")), sig(p.get("t_prove_only_s_per_vu"))])
-            name = "hillclimb-" + re.sub(r"[^a-z0-9]+", "-", sid.lower()).strip("-")
-            when = isoz(doc.get("updated_utc")) or iso(datetime.fromtimestamp(f.stat().st_mtime, timezone.utc))
-            out.append(fit(panel(name, sid, "table", HILLCLIMB_COLUMNS, rows, updated_at=when,
-                                 source=f"proofs' hill-climb roll-up (vy-nebius-1 {f}), from hillclimb.json records",
-                                 note="overhead = datasheet dense peak ÷ (2·K·VUs ÷ session time), the session being the whole interactive "
-                                      "proof job, verifier round trips included (proofs, 4:47 PM PDT Sep 30). Prove-only s/VU is the "
-                                      "prover buckets alone. One row per step.")))
-        except Exception as e:  # noqa: BLE001  one bad file doesn't stop the others
-            errors.append(f"hillclimb {f.name}: {type(e).__name__}: {e}")
-    return out
-
-
-# ------------------------------------------------------------------------------------------------- private-value prover overhead
-
-DOT_DTYPES = ("bf16", "e4m3", "nvf4", "mxf4")
-DOT_KS = (2048, 4096, 8192, 16384)
-N1_STORE = Path("/workspace/research/store/catalog.sqlite")  # node 1's evidence-store catalog, read as it is
-VLLM_CAMPAIGN = "private-overheads-oct2"
-
-
-def point_mode(p: dict) -> str:
-    """A hill-climb point's prover: `zk` (private values, `--zk`) or `m0`, the default when the point doesn't say."""
-    return "zk" if str(p.get("mode") or "").strip().lstrip("-").lower() == "zk" else "m0"
-
-
-def dot_points(errors: list) -> dict[tuple[str, int], dict[str, list[dict]]]:
-    """Every byte-identical point with an overhead, per (dtype, K) cell and mode, oldest first."""
-    cells: dict[tuple[str, int], dict[str, list[dict]]] = defaultdict(lambda: {"zk": [], "m0": []})
-    for f in sorted(HILLCLIMB.glob("*.json")) if HILLCLIMB.is_dir() else []:
-        try:
-            doc = json.loads(f.read_text())
-            sub = doc["subcircuit"]
-            key = (str(sub.get("dtype") or "").lower(), sub.get("K"))
-            for p in doc.get("points") or []:
-                if sig(p.get("overhead")) is None or p.get("byte_identical") is False or not isoz(p.get("time_utc")):
-                    continue
-                cells[key][point_mode(p)].append(p)
-        except Exception as e:  # noqa: BLE001  one bad file doesn't stop the others
-            errors.append(f"prover-overhead {f.name}: {type(e).__name__}: {e}")
-    for modes in cells.values():
-        for ps in modes.values():
-            ps.sort(key=lambda p: isoz(p.get("time_utc")))
-    return cells
-
-
-def dot_overhead_panels(now: datetime, errors: list) -> list[dict]:
-    cells = dot_points(errors)
-    src = "proofs' hill-climb roll-ups (vy-nebius-1 /workspace/usage/hillclimb), 74-gemm-hill.sh points from hillclimb.json"
-    rows, when = [], []
-    for d in DOT_DTYPES:
-        for k in DOT_KS:
-            zk, m0 = cells.get((d, k), {}).get("zk", []), cells.get((d, k), {}).get("m0", [])
-            zl, ml = (zk[-1] if zk else None), (m0[-1] if m0 else None)
-            best = lambda ps: min((p["overhead"] for p in ps), default=None)  # noqa: E731
-            last = max([isoz(p["time_utc"]) for p in (zl, ml) if p], default=None)
-            when += [last] if last else []
-            rows.append([d.upper(), k, sig(zl and zl["overhead"]), sig(best(zk)), zl.get("step") if zl else None,
-                         sig(ml and ml["overhead"]), sig(best(m0)), ratio(zl and zl["overhead"], ml and ml["overhead"]),
-                         len(zk), len(m0), last])
-    any_zk = any(r[8] for r in rows)
-    note = ("Overhead = census dense peak ÷ (2·K·VUs ÷ session time), the session being the whole interactive proof job. "
-            "Latest = the cell's newest byte-identical point of that prover; best = its lowest. ZK ÷ M0 compares the two latests. "
-            "A point is ZK when its record says mode zk; otherwise M0.")
-    if not any_zk:
-        note = "No --zk points yet. " + note
-    out = [panel("prover-overhead-dot-products", "Private-value (--zk) prover overhead per dot-product cell, M0 beside it", "table",
-                 ["Dtype", "K", "ZK latest (×)", "ZK best (×)", "ZK step", "M0 latest (×)", "M0 best (×)", "ZK ÷ M0",
-                  "ZK points", "M0 points", "Latest (UTC)"],
-                 rows, updated_at=max(when, default=None) or iso(now), source=src, note=note[:500])]
-    series = [(f"{d.upper()} K={k}", cells[(d, k)]["zk"]) for d in DOT_DTYPES for k in DOT_KS if cells.get((d, k), {}).get("zk")]
-    times = sorted({isoz(p["time_utc"]) for _, ps in series for p in ps})
-    by = [{isoz(p["time_utc"]): sig(p["overhead"]) for p in ps} for _, ps in series]
-    out.append(panel("prover-overhead-dot-products-steps", "Private-value (--zk) prover overhead per cell, by hill-climb step",
-                     "line", ["Time (UTC)", *[n for n, _ in series]] if series else ["Time (UTC)", "no --zk points yet"],
-                     [[t, *[b.get(t) for b in by]] for t in times], unit="× peak", y_scale="log",
-                     updated_at=times[-1] if times else iso(now), source=src,
-                     note="Each --zk hill-climb point at the time it was measured, one line per cell; lower is better; log scale."))
-    return out
-
-
-def vllm_points(path: Path | None = None) -> list[dict]:
-    """The vLLM proof-unit-weighted overhead points: attempts labelled `ov.ws prover`, `ov.metric overhead` and an `ov.config`
-    of `vllm/<model>/<all|prefill|decode>/<zk|m0>`; the latest assertion of each key wins."""
-    path = path or N1_STORE
-    if not path.exists():
-        return []
-    import sqlite3  # noqa: PLC0415
-    db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30)
-    try:
-        rows = db.execute("SELECT target, key, value, ts FROM labels WHERE target IN "
-                          "(SELECT target FROM labels WHERE key = 'ov.config' AND value LIKE 'vllm/%') "
-                          "AND (key LIKE 'ov.%' OR key = 'campaign') ORDER BY ts").fetchall()
-    finally:
-        db.close()
-    by: dict[str, dict] = defaultdict(dict)
-    for target, key, value, ts in rows:
-        by[target][key] = value
-        by[target]["_ts"] = ts
-    out = []
-    for target, v in by.items():
-        try:
-            value = float(v.get("ov.value"))
-        except (TypeError, ValueError):
-            continue
-        if v.get("ov.ws") != "prover" or v.get("ov.metric") != "overhead" or v.get("campaign", VLLM_CAMPAIGN) != VLLM_CAMPAIGN:
-            continue
-        try:
-            attempt = int(v.get("ov.attempt") or 0)
-        except ValueError:
-            attempt = 0
-        out.append({"target": target, "config": v["ov.config"], "attempt": attempt, "value": value,
-                    "line": v.get("ov.line"), "when": isoz(v["_ts"])})
-    return out
-
-
-def vllm_overhead_panels(now: datetime, errors: list) -> list[dict]:
-    try:
-        pts = vllm_points()
-    except Exception as e:  # noqa: BLE001  an empty panel still goes out
-        errors.append(f"prover-overhead-vllm: {type(e).__name__}: {e}")
-        pts = []
-    src = f"node 1's evidence store: campaign {VLLM_CAMPAIGN}, ov.ws prover, ov.metric overhead, ov.config vllm/*"
-    configs = sorted({p["config"] for p in pts})[:19]
-    latest: dict[tuple[str, int], dict] = {}
-    for p in sorted(pts, key=lambda p: p["when"] or ""):
-        latest[(p["config"], p["attempt"])] = p
-    attempts = sorted({a for _, a in latest})
-    when = max((p["when"] for p in pts if p["when"]), default=None) or iso(now)
-    out = [panel("prover-overhead-vllm", "vLLM prover overhead, weighted over every proof unit of the run", "line",
-                 ["attempt", *configs] if configs else ["attempt", "no points yet"],
-                 [[a, *[sig(latest[(c, a)]["value"]) if (c, a) in latest else None for c in configs]] for a in attempts],
-                 unit="× native", y_scale="log", updated_at=when, source=src,
-                 note=("Prover seconds summed over the run's q-word units ÷ the run's native GPU seconds; x is the hill-climb step "
-                       "(ov.attempt), one line per model, phase and prover. TP1 B1 1024/128 greedy. Lower is better; log scale."
-                       + ("" if configs else " No points yet.")))]
-    rows = []
-    for c in configs:
-        mine = sorted((p for (cc, _), p in latest.items() if cc == c), key=lambda p: p["attempt"])
-        last = mine[-1]
-        parts = c.split("/")
-        other = "/".join(parts[:-1] + ["m0" if parts[-1] == "zk" else "zk"])
-        twin = max((p for (cc, _), p in latest.items() if cc == other), key=lambda p: p["attempt"], default=None)
-        rows.append([c, last["attempt"], (last["line"] or "")[:200] or None, sig(last["value"]),
-                     sig(min(p["value"] for p in mine)),
-                     ratio(last["value"], twin["value"]) if twin and parts[-1] == "zk" else None, len(mine), last["when"]])
-    out.append(panel("prover-overhead-vllm-latest", "vLLM prover overhead: latest step per model, phase and prover", "table",
-                     ["Config", "Step", "Step label", "Latest (× native)", "Best (× native)", "ZK ÷ M0", "Steps", "Labelled (UTC)"],
-                     rows, updated_at=when, source=src,
-                     note="One row per ov.config; ZK ÷ M0 compares a --zk config's latest step with its M0 twin's."))
-    return out
-
-
-# ------------------------------------------------------------------------------------------------------- overnight goal numbers
-
-OVERNIGHT = Path("/workspace/usage/overnight")  # one `verity/overnight-numbers/v0` file per owner, for the console's Overnight view
-OWNER = re.compile(r"[a-z0-9-]{1,40}")
-GOAL_KEY = re.compile(r"[a-z0-9-]{1,40}")
-
-
-GOAL_NOTES = OVERNIGHT / "notes" / "goals.json"  # docs/goals.md's status note and checked state per goal (verity/overnight-goal-notes/v0)
-NOTES_SOURCE = "docs/goals.md status note"
-
-
-def goal_note_rows(n: dict) -> list[list]:
-    """A goal's status note, split into cells of at most 200 characters at spaces, then its checked state."""
-    words, chunks = (n.get("note") or "").split(), [""]
-    for w in words:
-        if chunks[-1] and len(chunks[-1]) + 1 + len(w) > 200:
-            chunks.append("")
-        chunks[-1] = (chunks[-1] + " " + w).strip()[:200]
-    t = isoz(n.get("as_of"))
-    rows = [[n["key"], "status" if i == 0 else "status, continued", c, None, t, NOTES_SOURCE] for i, c in enumerate(chunks) if c]
-    return rows + [[n["key"], "done", "yes" if n.get("done") else "no", None, t, NOTES_SOURCE]]
-
-
-def goal_notes(errors: list) -> tuple[list[dict], str | None]:
-    if not GOAL_NOTES.is_file():
-        return [], None
-    try:
-        doc = json.loads(GOAL_NOTES.read_text())
-        if doc.get("schema") != "verity/overnight-goal-notes/v0":
-            raise ValueError(f"schema {doc.get('schema')!r}")
-        notes = [n for n in doc.get("goals") or [] if isinstance(n.get("owner"), str) and OWNER.fullmatch(n["owner"])
-                 and isinstance(n.get("key"), str) and GOAL_KEY.fullmatch(n["key"])]
-        return notes, isoz(doc.get("updated_utc"))
-    except Exception as e:  # noqa: BLE001  owners' files still publish without the notes
-        errors.append(f"overnight notes: {type(e).__name__}: {e}")
-        return [], None
-
-
-def overnight_panels(errors: list) -> list[dict]:
-    """One table per owner: a row per number, filed under the goal's key, which the site's Overnight view reads. A goal's status
-    note from docs/goals.md stands in for the owner's rows under that key unless the owner's file is at least as new as the note.
-    A file's optional "title" names its panel."""
-    owners: dict[str, dict] = {}
-    for f in sorted(OVERNIGHT.glob("*.json")) if OVERNIGHT.is_dir() else []:
-        try:
-            doc = json.loads(f.read_text())
-            owner = doc.get("owner")
-            if doc.get("schema") != "verity/overnight-numbers/v0" or not isinstance(owner, str) or not OWNER.fullmatch(owner):
-                raise ValueError(f"schema {doc.get('schema')!r}, owner {owner!r}")
-            rows = []
-            for n in doc.get("numbers") or []:
-                v = n.get("value")
-                if not (isinstance(n.get("goal"), str) and GOAL_KEY.fullmatch(n["goal"]) and isinstance(n.get("metric"), str)):
-                    raise ValueError(f"number {json.dumps(n)[:120]}: goal must be a lowercase key and metric a string")
-                if isinstance(v, bool) or not (v is None or isinstance(v, (int, float, str))):
-                    raise ValueError(f"number {n['metric'][:60]!r}: value must be a number, a string or null")
-                rows.append([n["goal"], n["metric"][:200], (v if isinstance(v, int) else sig(v, 6)) if isinstance(v, (int, float)) else (v[:200] if v else None),
-                             (str(n["unit"])[:20] if n.get("unit") else None), isoz(n.get("as_of")), (str(n["source"])[:200] if n.get("source") else None)])
-            when = isoz(doc.get("updated_utc")) or iso(datetime.fromtimestamp(f.stat().st_mtime, timezone.utc))
-            title = doc.get("title")
-            if title is not None and not (isinstance(title, str) and 0 < len(title) <= 120):
-                raise ValueError("title must be a string of 1 to 120 characters")
-            owners[owner] = {"rows": rows, "when": when, "source": f"{owner}'s {f} on vy-nebius-1", "title": title}
-        except Exception as e:  # noqa: BLE001  one bad file doesn't stop the others
-            errors.append(f"overnight {f.name}: {type(e).__name__}: {e}")
-    notes, notes_when = goal_notes(errors)
-    for n in notes:
-        o = owners.setdefault(n["owner"], {"rows": [], "when": None, "source": None})
-        t = isoz(n.get("as_of"))
-        if any(r[0] == n["key"] for r in o["rows"]) and (t is None or (o["when"] and o["when"] >= t)):
-            continue
-        o["rows"] = [r for r in o["rows"] if r[0] != n["key"]] + goal_note_rows(n)
-        o["notes"] = True
-    out = []
-    for owner, o in sorted(owners.items()):
-        when = max((w for w in (o["when"], notes_when if o.get("notes") else None) if w), default=iso(datetime.now(timezone.utc)))
-        source = " and ".join(s for s in (o["source"], f"{NOTES_SOURCE}s ({GOAL_NOTES} on vy-nebius-1)" if o.get("notes") else None) if s)
-        out.append(fit(panel(f"overnight-{owner}", o.get("title") or f"{owner}: overnight goal numbers", "table",
-                             ["Goal", "Metric", "Value", "Unit", "As of (UTC)", "Source"], o["rows"], updated_at=when, source=source,
-                             note="Numbers for the overnight set (Project store docs/goals.md), one row per number, filed under the goal's "
-                                  "key: the owner's file, or the goal's docs/goals.md status note and checked state where that is newer.")))
-    return out
+    return out, {"queue_samples": len(qlines), "pool_file": POOL.exists()}
 
 
 # ---------------------------------------------------------------------------------------------------------- GPU minutes (both nodes)
@@ -838,8 +555,8 @@ def uc_hour(t: float) -> str:
 
 # ---------------------------------------------------------------------------------------------------------------- held idle (infra/*)
 
-IDLE_READINGS = Path("/workspace/usage/held-idle-hourly.jsonl")  # one line per completed UTC hour, node and lane; infra's relay alerts on it
-IDLE_TARGETS = {("node 1", "circuits"): 40.0}  # the 11:30 AM PDT Oct 1 set: circuits' Commits at or below 40% held idle on node 1
+IDLE_READINGS = Path("/workspace/usage/held-idle-hourly.jsonl")  # one line per completed UTC hour, node and lane, which the held-idle alert reads
+IDLE_TARGETS = {("node 1", "circuits"): 40.0}  # held idle %, at most: circuits' Commits on node 1
 POOL_UNLEASED = "lease pool, not leased"  # cluster.usage.POOL_UNLEASED
 N1_LANES = [(re.compile(p), lane) for p, lane in (
     (r"^gpu-pool-circuits-", "circuits"), (r"^gpu-pool-\d", POOL_UNLEASED),  # the provers pool serves every lane
@@ -1083,7 +800,7 @@ def _lease(spans: dict, a: float, b: float) -> tuple[float, float, list[tuple[st
 def tp_lease(row: Path, w0: float, w1: float | None, now: float) -> tuple[float, float, list, int] | None:
     """The lease of a Commit window whose timeline has no `gpu_lease.*` span (a TP Commit writes only `commit.tp_commit`), from
     the files gpu-lease writes in the row as it goes: `gpu_lease.started` to `gpu_lease.released`'s `t`, on one GPU per rank it
-    released (gm357: 145 s on 2 GPUs). A lease still open runs to the window's end, or to `now` up to LEASE_OPEN_MAX_S, on the
+    released. A lease still open runs to the window's end, or to `now` up to LEASE_OPEN_MAX_S, on the
     row's `__tpN__` GPUs. Files an earlier attempt left in the row start before the window and don't count."""
     try:
         a = datetime.strptime((row / "gpu_lease.started").read_text().strip(), "%Y-%m-%dT%H:%M:%SZ")
@@ -1105,13 +822,13 @@ def tp_lease(row: Path, w0: float, w1: float | None, now: float) -> tuple[float,
 def commit_leases(paths, now: float) -> list[tuple[float, float, list[tuple[str, float, float]], int]]:
     """(start, end, [(phase, a, b)...], GPUs) for every Commit's GPU lease in these timelines.
 
-    circuits' definition (`/workspace/research/circuits-held-idle/hi-lease.py`): inside a `stage.commit` window the lease runs
+    Inside a `stage.commit` window the lease runs
     from the end of `gpu_lease.wait` to the end of `gpu_lease.release`, on one GPU, and its phases are LEASE_PHASES plus `work`
     (every `work.*` span). A window with no `gpu_lease.*` span is a TP Commit's, whose lease `tp_lease` reads from the row; its
     phases are the window's spans, as for one GPU, and `phases_by_hour` counts them on each of the lease's GPUs. Every
     Commit attempt in a timeline counts, not only its last.  An hour's line is written once, as the hour ends, so a lease still
     open at `now` runs to `now` (up to LEASE_OPEN_MAX_S), its open phases with it: a Commit writes nothing while a work phase
-    runs (gm176's took 2,077 s)."""
+    runs, which can take over half an hour."""
     out = []
     for p in paths:
         try:
@@ -1230,17 +947,15 @@ def idle_panel(readings: list[dict], now: datetime) -> dict:
                      note="Held idle %: a lane's measured held GPU-hours with utilization 0 (cluster.usage). Node 1: lanes by "
                           "job name; a pool's lease is held for its time, busy by its GPU's DCGM reading, unmeasured without one; "
                           "the pool holder outside a lease is 'lease pool, not leased'. Node 2: by coordinator id; timed-window "
-                          "samples are unmeasured. Change: points against the hour before; infra alerts a lane above target that "
+                          "samples are unmeasured. Change: points against the hour before; the alert rings a lane above target that "
                           "improves by under 5 points. Phases: node 1 circuits' Commit leases' timelines. Newest first."))
 
 
 # ---------------------------------------------------------------------------------------------------------------- pool (infra/*)
 
-POOL = Path("/workspace/usage/infra-pool.json")  # infra's file: node 2 (and later node 1), every 5 minutes, written atomically
+POOL = Path("/workspace/usage/infra-pool.json")  # node 2's publish_pool.py, node 1's half merged in; pool_n1.py's while node 2 pauses
 POOL_HISTORY = HERE / "pool-history.jsonl"      # this script's own 24 h of pool samples, one line a run
-USEFUL_TARGET = 85  # Daniel, 2:06 PM PDT Sep 30: both nodes at >= 85% useful GPU busy by noon Oct 1 PDT
-TARGET_BY = "noon Oct 1 PDT"
-TARGET_END = datetime(2026, 10, 1, 19, 0, tzinfo=timezone.utc)
+USEFUL_TARGET = 85  # useful GPU busy on both nodes, %
 WATERMARK_GPU_H = 12
 POOL_STALE_S = 900
 
@@ -1250,7 +965,7 @@ def pct(v):
 
 
 def n1_from_prom(summary: dict, util_rows: list, gpu_rows: list, now: datetime) -> dict:
-    """Node 1 in the pool file's shape, from this script's own Prometheus reading, until infra's file carries n1."""
+    """Node 1 in the pool file's shape, from this script's own Prometheus reading, until the pool file carries n1."""
     recent = [r for r in util_rows if r[0] >= iso(now - timedelta(hours=1))]
     last = util_rows[-1] if util_rows else None
     mean = lambda j, rows: (sum(r[j] for r in rows if r[j] is not None) / max(1, sum(r[j] is not None for r in rows)) / 100) if rows else None  # noqa: E731
@@ -1262,7 +977,7 @@ def n1_from_prom(summary: dict, util_rows: list, gpu_rows: list, now: datetime) 
 
 
 def held_idle(node: dict):
-    """Held-idle share: infra's field when present, else GPUs with a holder and no work in the last 5 minutes."""
+    """Held-idle share: the pool file's field when present, else GPUs with a holder and no work in the last 5 minutes."""
     if isinstance(node.get("held_idle_1h"), (int, float)):
         return node["held_idle_1h"]
     if isinstance(node.get("gpu_held_1h"), (int, float)) and isinstance(node.get("gpu_busy_1h"), (int, float)):
@@ -1283,7 +998,7 @@ def pool_panels(pool: dict, n1: dict | None, now: datetime, errors: list, minute
     if "n1" not in nodes and n1:
         nodes["n1"] = n1
     gen = pool.get("generated_at") or iso(now)
-    src = f"infra's {POOL} (generated {gen}) and vy-nebius-1's Prometheus"
+    src = f"{POOL} (generated {gen}) and vy-nebius-1's Prometheus"
     names = {"n1": "node 1", "n2": "node 2"}
     order = [k for k in ("n1", "n2") if k in nodes]
     out = []
@@ -1300,8 +1015,8 @@ def pool_panels(pool: dict, n1: dict | None, now: datetime, errors: list, minute
     out.append(panel("pool-busy", "Both nodes, last hour: useful work, other busy, held idle", "bar", ["node", "useful", "busy, not useful", "held idle"],
                      busy_rows, producer="infra", unit="%", target=USEFUL_TARGET, target_label="useful GPU target", stacked=True,
                      updated_at=iso(now), source=src,
-                     note="GPU: useful busy (busy times infra's useful share), busy on filler, and held idle (memory held or a lease, no work). "
-                          "CPU: busy. Node 1's useful share is its busy share until infra's file carries n1."))
+                     note="GPU: useful busy (busy times the pool file's useful share), busy on filler, and held idle (memory held or a lease, no work). "
+                          "CPU: busy. Node 1's useful share is its busy share until the pool file carries n1."))
 
     hist = []
     if POOL_HISTORY.exists():
@@ -1320,7 +1035,7 @@ def pool_panels(pool: dict, n1: dict | None, now: datetime, errors: list, minute
              [pct((h.get(k) or {}).get("cpu")) for k in ("n1", "n2")] for h in hist]
     out.append(panel("pool-utilization", "Useful and raw GPU busy, and CPU busy, both nodes, last 24 hours", "line", cols, urows,
                      producer="infra", unit="%", target=USEFUL_TARGET, target_label="useful GPU target", updated_at=iso(now), source=src,
-                     note="One point per 5-minute run, each over the hour before it. Useful: infra's useful GPU busy. Raw: the share of "
+                     note="One point per 5-minute run, each over the hour before it. Useful: the pool file's useful GPU busy. Raw: the share of "
                           "readings with utilization above 0 (node 1: DCGM every 60 s; node 2: POUS's sampler every 10 s), the same "
                           "rule on both nodes. History starts when this panel did."))
 
@@ -1356,23 +1071,6 @@ def pool_panels(pool: dict, n1: dict | None, now: datetime, errors: list, minute
                          ["node", "kind", "owners", "leased GPU-h", "efficiency %", "idle GPU-h"], krows[:200], producer="infra",
                          updated_at=iso(now), source=src))
 
-    left_h = (TARGET_END - now).total_seconds() / 3600
-    trows = []
-    for k in order:
-        u = useful(nodes[k])
-        prev = [h for h in hist if h["t"] <= iso(now - timedelta(hours=1)) and (h.get(k) or {}).get("useful") is not None]
-        trend = (u - prev[-1][k]["useful"]) if prev and isinstance(u, (int, float)) else None
-        status = ("met" if u >= USEFUL_TARGET / 100 else "behind" if (trend or 0) <= 0 else "on track") if isinstance(u, (int, float)) else "no data"
-        r = raw(k, now.timestamp())
-        trows.append([f"{names[k]} useful GPU busy", f">= {USEFUL_TARGET}%", f"{pct(u)}%" if u is not None else None,
-                      f"{r}%" if r is not None else None,
-                      f"{'+' if (trend or 0) >= 0 else ''}{sig(100 * trend, 2)} pts/h" if trend is not None else None, status, TARGET_BY,
-                      f"{sig(left_h, 3)} h" if left_h > 0 else "ended"])
-    out.append(panel("targets", "Daniel's targets: how each is going", "table",
-                     ["target", "goal", "now (last hour)", "raw busy, util > 0 (last hour)", "change over the hour", "status", "by",
-                      "time left"], trows, producer="infra",
-                     updated_at=iso(now), source=src,
-                     note="Met: at or above the goal now. On track: below, and rising over the last hour. Behind: below and flat or falling."))
     age = (now - datetime.fromisoformat(gen.replace("Z", "+00:00"))).total_seconds() if isinstance(gen, str) else 0
     if age > POOL_STALE_S:
         errors.append(f"pool: {POOL} is {int(age)} s old")

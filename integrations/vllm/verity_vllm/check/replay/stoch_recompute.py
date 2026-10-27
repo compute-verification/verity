@@ -3,7 +3,7 @@ with the Program's own sampler Definition under the DECLARED inputs, and compare
 
 For every snapshotted engine step with a `_gumbel_sample_kernel` launch (row_pod's Match snapshots steps `MATCH_SNAP_STEPS`, default 0,1):
 
-    token', masked' = GumbelTopPTokenSelect_v1{V,S}(bf16 logits row, top_p, seed, pos, temperature)     # verity_vllm/program/registry/sampling.py
+    token', masked' = GumbelTopPTokenSelect_v1{V,S}(bf16 logits row, top_p, seed, pos, temperature)     # verity/ml/definitions/registry/sampling.py
 
 with the bf16 logits row from the capture's snapshot of the sampler input (`SampleEnd.logits_view`), `seed` the request record's
 DECLARED seed (`RunHeader.workload.requests[*].seed`, i.e. the workload manifest -- the Program's runtime input), `pos` the row's
@@ -41,11 +41,14 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg, workload_file
+from verity_vllm.records.workload import Workload
 
 VARIANT = ("vllm d9105ea80 V2 sampler, explicit seed: FlashInfer disabled; _temperature_kernel -> _apply_topp_split(S) "
            "[_topp_sb_stats_kernel, _topp_sb_step_kernel x5, _topp_sb_mask_kernel] -> _gumbel_sample_kernel (Philox tl.rand + Gumbel) "
            "+ argmax/gather; torch.multinomial not used")
+#: the prefix of a record entry naming an input file that is there but couldn't be read
+UNREADABLE = "unreadable: "
 
 
 def _f32_bits(x: float) -> int:
@@ -72,16 +75,15 @@ def _request_facts(header) -> dict[str, dict]:
 def _manifest_facts(path: str | Path) -> dict[str, dict]:
     """The DECLARED facts from the workload manifest itself (`workloads/<row>.json`: `variants[sampling.variant]` +
     per-request `seed`), independent of what the run's header recorded -- so a manifest that disagrees with the run is caught."""
-    w = json.loads(Path(path).read_text())
-    v = str((w.get("sampling") or {}).get("variant", "greedy"))
-    p = (w.get("variants") or {}).get(v) or {"temperature": 0.0, "top_p": 1.0, "top_k": 0}
-    top = (w.get("sampling") or {}).get("seed")
+    w = Workload.load(workload_file(path))
+    p = w.variants.get(w.sampling_variant or "greedy") or {"temperature": 0.0, "top_p": 1.0, "top_k": 0}
+    top = None if w.sampling is None else w.sampling.seed
     out = {}
-    for r in w.get("requests", []) or []:
-        rp = (w.get("variants") or {}).get(str(r["variant"])) if r.get("variant") is not None else p
-        s = r.get("seed", top)
-        out[r["request_id"]] = {"seed": None if s is None else int(s), "temperature": float(rp.get("temperature", 0.0)),
-                                "top_p": float(rp.get("top_p", 1.0)), "top_k": int(rp.get("top_k", 0) or 0)}
+    for r in w.requests:
+        rp = w.variants.get(r.variant) if r.variant is not None else p
+        s = r.seed if r.seed is not None else top
+        out[r.request_id] = {"seed": s, "temperature": float(rp.get("temperature", 0.0)),
+                             "top_p": float(rp.get("top_p", 1.0)), "top_k": int(rp.get("top_k", 0) or 0)}
     return out
 
 
@@ -89,7 +91,7 @@ def _eval_job(job: tuple) -> tuple[int, "np.ndarray", float]:
     """One sampled row through the Definition of record: GumbelTopPTokenSelect_v1{V,S} on (bf16 logits row, top_p, seed, pos, T) ->
     (token, the masked fp32 row it went through, seconds).  Module-level so a worker process can run it."""
     from verity_vllm.properties.admission import evaluate_spec
-    from verity_vllm.program.registry import sampling_topp_difftest as D
+    from verity.ml.definitions.registry import sampling_topp_difftest as D
     V, S, words = job
     t1 = time.time()
     out = evaluate_spec(D.spec({"V": int(V), "S": int(S)}), words)
@@ -103,7 +105,7 @@ def _eval_job_rows(job: tuple) -> tuple[int, "np.ndarray", float]:
     """The same Definition over the whole row at once: `sampling_rows.gumbel_topp_token_select_row`
     (numpy twins of the registered gates, held word-equal to `evaluate_spec` in tests/program/test_sampling_rows.py) -> the same
     (token, masked fp32 row, seconds) triple.  The words layout is `_eval_job`'s: [bf16 row, top_p, seed, pos, temp] (uint64 arrays)."""
-    from verity_vllm.program.registry import sampling_rows as SR
+    from verity.ml.definitions.registry import sampling_rows as SR
     V, S, words = job
     t1 = time.time()
     bf, p_w, seed_w, pos_w, t_w = words
@@ -117,7 +119,7 @@ def _eval_job_rows(job: tuple) -> tuple[int, "np.ndarray", float]:
 
 EVALUATORS = {"lane": _eval_job, "rows": _eval_job_rows}
 EVALUATOR_DOC = {"lane": "evaluate_spec: the registry interpreter walks GumbelTopPTokenSelect_v1{V,S} gate by gate over the V lanes",
-                 "rows": "sampling_rows: numpy twins of the same registered gates over the whole row at once (verity_vllm/program/registry/sampling_rows.py), "
+                 "rows": "sampling_rows: numpy twins of the same registered gates over the whole row at once (verity/ml/definitions/registry/sampling_rows.py), "
                          "held word-equal to the lane walk by tests/program/test_sampling_rows.py and by the reference rows of this run"}
 
 
@@ -147,19 +149,22 @@ def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane"
         return list(pool.imap(fn, jobs, chunksize=1))
 
 
-def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -> dict[str, list[int] | int | dict | None]:
+def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -> tuple[dict[str, list[int] | int | dict | None], list[str]]:
     """The PROGRAM's S per request: `sampling.splits` of the Build's `result.json` for the request's (LP, T) shape --
     `"derived"` (the Program takes S as its `splits` Input and declares the relation S_t = SplitsFor_v1(|live(t)|,
     num_SMs); returned as {"derived": num_sms} so the check derives S_t from the record's live rows at step t), else a fixed int / per-event
-    schedule.  {request_id: splits}; a request whose shape has no Build result maps to None."""
+    schedule.  ({request_id: splits}, unreadable): a request whose shape has no Build result maps to None, and each Build result that
+    could not be read is named with its error."""
     if build_dir is None or workload is None:
-        return {}
+        return {}, []
     import glob
     by_shape: dict[tuple[int, int], list[int] | int | dict] = {}
+    unreadable: list[str] = []
     for p in sorted(glob.glob(str(Path(build_dir) / "build_request*" / "result.json"))):
         try:
             r = json.loads(Path(p).read_text())
-        except Exception:
+        except Exception as e:
+            unreadable.append(f"{p}: {e!r}"[:300])
             continue
         if not r.get("ok", True) or r.get("wrapper") != "request":
             continue
@@ -170,36 +175,38 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
             by_shape[(int(r["LP"]), int(r["T"]))] = {"derived": int(nsm)} if nsm is not None else {"derived": None}
         elif sp is not None:
             by_shape[(int(r["LP"]), int(r["T"]))] = sp
-    w = json.loads(Path(workload).read_text())
     out: dict[str, list[int] | int | None] = {}
-    for r in w.get("requests", []):
-        rid = r.get("request_id") or r.get("id")
-        lp, cap = int(r.get("prompt_len") or len(r.get("prompt_token_ids") or [])), int(r.get("max_tokens") or 0)
-        out[rid] = by_shape.get((lp, cap - 1))
-    return out
+    for q in Workload.load(workload_file(workload)).requests:
+        out[q.request_id] = by_shape.get((q.prompt_length or 0, q.max_tokens - 1))
+    return out, unreadable
 
 
 def _stop_rule(build_dir: str | Path | None) -> dict:
-    """The Program's declared stop rule (GP-01 `stop_rule`: eos_token_ids, eos_lag_rows) from the Build's workload_program.json, if given."""
+    """The Program's declared stop rule (GP-01 `stop_rule`: eos_token_ids, eos_lag_rows) from the Build's workload_program.json, if given;
+    {"source", "error"} when the file is there but can't be read."""
     if build_dir is None:
         return {}
     for p in (Path(build_dir) / "build_workload" / "workload_program.json", Path(build_dir) / "build_workload_program.json.gz"):
+        if not p.exists():
+            continue
         try:
             if p.suffix == ".gz":
                 import gzip
-                gp = json.loads(gzip.open(p, "rt").read())
+                with gzip.open(p, "rt") as f:
+                    gp = json.loads(f.read())
             else:
                 gp = json.loads(p.read_text())
-            return dict(gp.get("stop_rule") or {}) | {"source": str(p)}
-        except (OSError, ValueError):
-            continue
+        except (OSError, ValueError) as e:
+            return {"source": str(p), "error": f"{type(e).__name__}: {e}"[:200]}
+        return dict(gp.get("stop_rule") or {}) | {"source": str(p)}
     return {}
 
 
 def record_lag_rows(header, snapshots_dir: Path | None = None) -> tuple[int | None, str]:
     """The scheduler's EOS lag rows read from the RECORD's own attestation of `async_scheduling` (True -> 1,
     False -> 0): RunHeader.profile.engine_kwargs, RunHeader.engine_kwargs, capture/versions.json engine_kwargs -- the same locations GM-01
-    reads (global_match.record_engine_facts); None when the record does not attest it (the lag slot is then unjudgeable, said so)."""
+    reads (global_match.record_engine_facts); None when the record does not attest it (the lag slot is then unjudgeable, said so), with
+    an `unreadable: ` reason when versions.json is there but can't be read (the draw ledger's problem)."""
     cands: list[tuple[str, object]] = []
     prof = getattr(header, "profile", None) if not isinstance(header, dict) else header.get("profile")
     prof = prof if isinstance(prof, dict) else {}
@@ -208,19 +215,21 @@ def record_lag_rows(header, snapshots_dir: Path | None = None) -> tuple[int | No
     ek_top = getattr(header, "engine_kwargs", None) if not isinstance(header, dict) else header.get("engine_kwargs")
     if isinstance(ek_top, dict):
         cands.append(("RunHeader.engine_kwargs.async_scheduling", ek_top.get("async_scheduling")))
-    if snapshots_dir is not None:
+    unread = None
+    vp = Path(snapshots_dir) / "versions.json" if snapshots_dir is not None else None
+    if vp is not None and vp.exists():
         try:
-            v = json.loads((Path(snapshots_dir) / "versions.json").read_text())
+            v = json.loads(vp.read_text())
             ekv = v.get("engine_kwargs") if isinstance(v.get("engine_kwargs"), dict) else {}
             cands.append(("capture/versions.json engine_kwargs.async_scheduling", ekv.get("async_scheduling")))
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError) as e:
+            unread = f"{UNREADABLE}capture/versions.json ({type(e).__name__}: {e})"[:240] + " -- its engine_kwargs.async_scheduling is not read"
     for src, v in cands:
         if isinstance(v, bool):
             return (1 if v else 0), f"{src}={v!r}"
         if isinstance(v, str) and v.strip().lower() in ("true", "false"):
             return (1 if v.strip().lower() == "true" else 0), f"{src}={v!r}"
-    return None, "not attested (async_scheduling absent from the record's engine_kwargs)"
+    return None, unread or "not attested (async_scheduling absent from the record's engine_kwargs)"
 
 
 def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set | None) -> tuple[list[int] | None, dict]:
@@ -228,10 +237,10 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     its SERVED tokens (draw k serves slot k + 1), its cap C and the scheduler profile A (0 = sync, 1 = async: one lag slot after an EOS):
     r_1 = 1; while no served token is an EOS, every slot up to C executes; the first EOS at slot t_eos (before C) is followed by exactly
     min(A, C - t_eos) executed lag slot(s) and nothing after -- the same rule as pad's `verity_vllm.program.lifting.continuation.recurrence` /
-    `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and moe's executed-prefix rule (`check.executed_prefix`).  Returns
+    `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and moe's executed-prefix rule (`commit.executed_prefix`).  Returns
     None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer draws than the cap, or an EOS before the cap
-    with the profile unattested.  When pad's module is importable the two computations are compared and a disagreement is named."""
-    from verity_vllm.program.lifting import continuation as CT  # pad's Continuation_v1 recurrence (lane/r17-pad 61fe06dff): THE mechanism, not a twin of it
+    with the profile unattested.  When the continuation module is importable the two computations are compared and a disagreement is named."""
+    from verity_vllm.program.lifting import continuation as CT  # the Continuation_v1 recurrence: THE mechanism, not a twin of it
 
     info: dict = {"rule": "verity_vllm.program.lifting.continuation.recurrence / executed_slots (pad, spec s7): EOS at slot t < C -> min(A, C - t) lag slot(s), then inactive"}
     served = list(served)
@@ -247,7 +256,7 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     if A is not None and int(A) not in (0, 1):
         return None, info | {"unjudged": f"scheduler profile A = {A} is not an admitted profile (DP-pad-02: LAG in (0, 1)); the recurrence refuses it"}
     # served[:cap]: the recurrence runs over the C slots (pad's expected_draw_positions does the same); draws past C are EXTRA positions for
-    # the comparison to name (F-r17b-35 (a)), never a reason to stop judging.  A = 0 when no EOS is served before the cap: the lag term is
+    # the comparison to name, never a reason to stop judging.  A = 0 when no EOS is served before the cap: the lag term is
     # then never reached, so the profile does not matter.
     slots = CT.recurrence([None if y is None else int(y) for y in served[:cap]], cap=cap, A=int(A) if A is not None else 0, eos=eos_ids)
     exp = [int(t) for t in CT.executed_slots(slots)]
@@ -282,16 +291,19 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
     wl_req: dict[str, dict] = {}
     if workload is not None:
         try:
-            for r in json.loads(Path(workload).read_text()).get("requests", []):
-                rid = str(r.get("request_id") or r.get("id"))
-                wl_req[rid] = {"prompt_len": int(r.get("prompt_len") or len(r.get("prompt_token_ids") or [])), "cap": int(r.get("max_tokens") or 0)}
+            for r in Workload.load(workload_file(workload)).requests:
+                wl_req[r.request_id] = {"prompt_len": r.prompt_length or 0, "cap": r.max_tokens}
         except (OSError, ValueError) as e:  # noqa: BLE001
             out["problems"].append(f"draw ledger: the workload manifest could not be read ({e!r}): prompt_len / cap unknown, the ledger is unjudged")
     sr = _stop_rule(build_dir)
+    if sr.get("error"):
+        out["problems"].append(f"draw ledger: {UNREADABLE}the Program's stop rule {sr['source']} ({sr['error']}): its EOS ids and declared lag are unknown")
     eos_ids = set(int(x) for x in sr["eos_token_ids"]) if sr.get("eos_token_ids") else None
-    # the lag: the RECORD's attestation of async_scheduling (M-0213 / ruling 21; the same fact GM-01 G6 reads), the Program's declared
+    # the lag: the RECORD's attestation of async_scheduling (the same fact GM-01 G6 reads), the Program's declared
     # stop_rule.eos_lag_rows beside it when it carries one; a disagreement is GM-01's to fail, named here
     lag_rec, lag_src = lag_attested if lag_attested is not None else (None, "not read")
+    if lag_rec is None and str(lag_src).startswith(UNREADABLE):
+        out["problems"].append(f"draw ledger: the record's lag attestation is {lag_src}")
     lag_decl = sr.get("eos_lag_rows")
     lag = lag_rec if lag_rec is not None else (int(lag_decl) if lag_decl is not None else None)
     out["stop_rule"] = {"eos_token_ids": sorted(eos_ids) if eos_ids else None, "eos_ids_source": sr.get("source"),
@@ -401,12 +413,12 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
 def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = None, workload: str | Path | None = None,
                   jobs: int | None = None, build_dir: str | Path | None = None, evaluator: str = "lane",
                   reference_rows: int = 0) -> dict:
-    from verity_vllm.program.kernels import sampling_rng as R
+    from verity_vllm.program import sampling_rng as R
     from verity_vllm.check.fold_compare import SnapshotStore
     from verity_vllm.properties.admission import evaluate_spec
     from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
     from verity_vllm.observe.log import read_log
-    from verity_vllm.program.registry import sampling_topp_difftest as D
+    from verity.ml.definitions.registry import sampling_topp_difftest as D
 
     t0 = time.time()
     events = list(read_log(log_path))
@@ -453,13 +465,14 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     tally = {"exact-match": 0, "mismatch": 0, "no-snapshot": 0, "skipped": 0}
     rows_without_seed = 0             # skipped rows whose request record declares no seed: a FAIL, not an INCOMPLETE
     steps_seen = 0
-    sampled_rows_total = 0            # [rev-pm M-0541 T1] every sampled row of the record counts; the verdict names k of n value-checked
-    program_S = _program_splits(build_dir, workload)      # [T3] the Program's S per request (int or per-event schedule), if a Build is given
+    sampled_rows_total = 0            # every sampled row of the record counts; the verdict names k of n value-checked
+    program_S, splits_unreadable = _program_splits(build_dir, workload)      # the Program's S per request (int or per-event schedule), if a Build is given
+    reasons.extend(f"Build result unreadable ({u}): the Program's S of its request shape is not read" for u in splits_unreadable)
     events_of: dict[str, int] = {}                         # sampled events attributed to each request so far (the event index of the next row)
     s_disagree: list[str] = []
-    chain_absent: list[str] = []      # [rev-pm M-0738] engine steps whose sampler chain is incomplete in the record are NAMED, not dropped
+    chain_absent: list[str] = []      # engine steps whose sampler chain is incomplete in the record are NAMED, not dropped
     engine_steps = len(per_step)
-    draws_seen: dict[str, list[dict]] = {}                 # [R17-32 R5] every sampled row of every request, snapshot or not: the draw ledger
+    draws_seen: dict[str, list[dict]] = {}                 # every sampled row of every request, snapshot or not: the draw ledger
     for step, d in sorted(per_step.items()):
         g, se, ss = d["gumbel"], d["sample_end"], d["start"]
         _lrows = list(getattr(ss, "logits_rows", None) or ())
@@ -468,7 +481,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             draws_seen.setdefault(str(_rid), []).append({"step": int(step), "row": int(_row), "pos": int(_pos),
                                                          "served": int(_srv[_row]) if _row < len(_srv) else None})
         if g is None or se is None or d["mask"] is None:
-            # [rev-pm M-0738] the denominator is the RECORD's sampled rows (StepStart.logits_rows at every engine step), not the tool's
+            # the denominator is the RECORD's sampled rows (StepStart.logits_rows at every engine step), not the tool's
             # view of which steps carry a complete chain: a step whose gumbel launch / top-p mask / SampleEnd is absent still counts
             # its rows as sampled-and-unchecked, and is named
             n_abs = len(getattr(ss, "logits_rows", None) or ()) or len(list(getattr(se, "sampled_token_ids", None) or ()))
@@ -522,10 +535,10 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
                    "served": int(served[row]) if row < len(served) else None,
                    "V": int(V), "S": S, "chain": list(d["topp"]) + (["_temperature_kernel"] if d["temp"] is not None else []),
                    "gumbel_constexprs": {k: v for k, v in cx.items()}}
-            if rid in program_S:      # [rev-pm M-0541 T3] record BOTH the kernel's S (mask constexpr) and the Program's S; name a disagreement
+            if rid in program_S:      # record BOTH the kernel's S (mask constexpr) and the Program's S; name a disagreement
                 sp = program_S[rid]
-                if isinstance(sp, dict):       # [R16 M-0169] derived: S_t = SplitsFor_v1(|live(t)|, num_SMs), |live(t)| = the record's logits rows at t
-                    from verity_vllm.program.registry.topp_geometry import splits_for as _sf
+                if isinstance(sp, dict):       # derived: S_t = SplitsFor_v1(|live(t)|, num_SMs), |live(t)| = the record's logits rows at t
+                    from verity.ml.definitions.registry.topp_geometry import splits_for as _sf
                     nsm = sp.get("derived")
                     pS = int(_sf(int(n_rows_step), int(nsm))) if nsm is not None and 1 <= int(n_rows_step) <= 64 else None
                     rec["program_S"] = pS
@@ -583,7 +596,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             rec["device_facts_match"] = not mism and not unsnap
             rec["device_facts_checked"] = [k for k, v in dev.items() if v is not None]
             rec["device_facts_not_snapshotted"] = unsnap
-            if unsnap:      # [rev-pm M-0541 T2] the token alone is not evidence of the declared fact; the snapshotted device fact is
+            if unsnap:      # the token alone is not evidence of the declared fact; the snapshotted device fact is
                 reasons.append(f"step {step} row {row} ({rid}): the kernel-consumed {', '.join(unsnap)} not snapshotted -- the declared "
                                f"value cannot be tied to the execution at this step")
             if mism:
@@ -598,7 +611,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             pending.append((len(rows), (int(V), int(S), words), None if masked_obs is None else masked_obs[row].view(np.uint32).copy()))
             rows.append(rec)
     # evaluate the pending rows (the Definition of record, GumbelTopPTokenSelect_v1{V,S}) -- by the interpreter ('lane', the path of
-    # record) or by the vectorised twins ('rows'); [R17 stoch lever (a)] under 'rows', `reference_rows` of them ALSO go through the lane
+    # record) or by the vectorised twins ('rows'); under 'rows', `reference_rows` of them ALSO go through the lane
     # walk and both results are compared word for word (token + masked row): a disagreement between the two evaluators is a FAIL by
     # name, never resolved in favour of either.  Both evaluators and the reference count are on the record.
     if evaluator not in EVALUATORS:
@@ -655,7 +668,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     s_ok = not s_disagree
     s_checked = sum(1 for r in rows if r.get("S_agree") is True)
     reasons.extend(chain_absent)
-    # [R17-32 R5 record half, revb M-0566] the draw ledger: one draw per request per step at pos = prompt_len - 1 + k, draws == cap or
+    # the draw ledger: one draw per request per step at pos = prompt_len - 1 + k, draws == cap or
     # EOS + exactly eos_lag_rows lag draw(s) and none after; a ledger problem is a FAIL reason by name
     ledger = draw_accounting(draws_seen, workload, build_dir, lag_attested=record_lag_rows(header, snapshots_dir))
     reasons.extend(ledger["problems"])
@@ -669,10 +682,10 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             ledger["problems"] or rows_without_seed:
         verdict = "FAIL"
     elif not complete:
-        verdict = "INCOMPLETE"          # [rev-pm M-0541 T1] k of n value-checked is not a PASS (row_pod: anything but PASS fails the Match)
+        verdict = "INCOMPLETE"          # k of n value-checked is not a PASS (row_pod: anything but PASS fails the Match)
     else:
         verdict = "PASS" if not reasons else "FAIL"
-    # [rev-pm M-0541 T4] what is declared vs what is observed, said in the verdict: the fold's sampler Const32/Const64 (temperature,
+    # what is declared vs what is observed, said in the verdict: the fold's sampler Const32/Const64 (temperature,
     # top_p, pos) and the seed Param are sourced from the run header's request records (structure, DECLARED); the execution tie is
     # THIS check -- the snapshotted small buffers the kernels consumed (seeds_ptr/pos_ptr/temp_ptr/P), at every checked row.
     n_dev = sum(1 for r in rows if r.get("device_facts_match") is True)
@@ -685,13 +698,13 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             "workload": None if workload is None else str(workload), "build": None if build_dir is None else str(build_dir),
             "declared_facts": facts, "run_header_facts": run_facts, "program_splits": program_S,
             "header_vs_manifest": header_vs_manifest, "structure_note": structure_note,
-            "variant": VARIANT, "definition": "GumbelTopPTokenSelect_v1{V,S} = TemperatureScale_v1 -> TopPMask_v1 -> GumbelSelectF32_v1 (verity_vllm/program/registry/sampling.py)",
-            # [R17 stoch lever (a)] WHICH evaluator produced the value check, and the lane-walk reference beside it: both named
+            "variant": VARIANT, "definition": "GumbelTopPTokenSelect_v1{V,S} = TemperatureScale_v1 -> TopPMask_v1 -> GumbelSelectF32_v1 (verity/ml/definitions/registry/sampling.py)",
+            # WHICH evaluator produced the value check, and the lane-walk reference beside it: both named
             "evaluator": {"name": evaluator, "what": EVALUATOR_DOC[evaluator], "eval_seconds_total": eval_seconds_total,
                           "reference": ref_check, "jobs": jobs, "cpu_quota": _cpu_quota()},
-            # [R17-32 R5, revb S-r17b-16] the record states the RNG's statelessness so 'RNG advances iff r_t' is read off it: a lag slot
-            # (executed, unserved) draws Philox(seed, L - 1 + n) with n served slots (slot t = n + 1 at pos L - 1 + (t - 1), the record's pos fact;
-            # pad 35408bbe9 / F-r17b-40) and nothing else moves; a wrong pos on a device row is a mismatch by name above
+            # the record states the RNG's statelessness so 'RNG advances iff r_t' is read off it: a lag slot
+            # (executed, unserved) draws Philox(seed, L - 1 + n) with n served slots (slot t = n + 1 at pos L - 1 + (t - 1), the record's pos fact)
+            # and nothing else moves; a wrong pos on a device row is a mismatch by name above
             "rng": {"kind": "counter (Philox4x32-10 word 0), key (seed_lo, seed_hi), counter (pos_lo, pos_hi, 0, 0) -- tl.randint(seed, pos)",
                     "state": "none: the draw of a row is a pure function of (seed, pos, lane); no draw is consumed or advanced by another row",
                     "advances_iff_executed": "a row's draw exists iff the row executed (r_t = 1) at its own pos; an EOS-stopped request's lag "
@@ -699,7 +712,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
                                              "pos is drawn; the served rows' draws are unchanged",
                     "checked_here": "declared pos/seed (Program request facts) == device pos/seed (kernel-consumed pos_ptr/seeds_ptr snapshot) "
                                     "at every value-checked row (device_facts_checked); the draw LEDGER below (rng_advances_iff_run)",
-                    # [revb M-0566] R5's record half, MEASURED per request: the ledger of every sampled row (snapshot or not)
+                    # R5's record half, MEASURED per request: the ledger of every sampled row (snapshot or not)
                     "rng_advances_iff_run": ledger},
             "sampling": dict((header.workload or {}).get("sampling") or {}),
             "summary": {"engine_steps_in_record": engine_steps, "sampled_steps_in_log": steps_seen, "steps_chain_absent": len(chain_absent),
@@ -717,7 +730,7 @@ class Options:
     run: str = option("--run", help="Match dir (RUN_DIR/capture/{log.jsonl.gz,snapshots.json,values/})")
     out: str | None = option("--out", default=None)
     max_rows: int | None = option("--max-rows", type=int, default=None)
-    workload: str | None = option("--workload", default=None,
+    workload: str | None = option("--workload", type=workload_arg, default=None,
                                   help="the workload manifest of record (declared seeds / policy); the run's header must agree with it")
     jobs: int | None = option("--jobs", type=int, default=None,
                               help="worker processes for the row evaluations (default min(32, cpus))")
@@ -726,7 +739,7 @@ class Options:
                                "shape, compared with the mask kernel's constexpr S at every checked row; needs --workload)")
     evaluator: str = option("--evaluator", env="STOCH_EVALUATOR", default="lane", choices=sorted(EVALUATORS),
                             help="'lane' = the registry interpreter over the V lanes (the path of record; default; env STOCH_EVALUATOR); 'rows' = the "
-                            "vectorised twins of the same gates (verity_vllm/program/registry/sampling_rows.py), milliseconds per row")
+                            "vectorised twins of the same gates (verity/ml/definitions/registry/sampling_rows.py), milliseconds per row")
     reference_rows: int = option("--reference-rows", type=int, env="STOCH_REFERENCE_ROWS", default=8,
                                  help="under --evaluator rows: this many value-checked rows ALSO go through the lane walk; token + masked row must agree "
                                  "word for word or the verdict is FAIL by name (default 8; env STOCH_REFERENCE_ROWS)")

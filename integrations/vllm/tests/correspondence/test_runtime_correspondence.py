@@ -28,7 +28,7 @@ from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 
 sys.path.insert(0, str(Path(__file__).parent))
-import test_tp_collective_site as tp  # noqa: E402  (the synthetic tensor-parallel Program: one rank of a world of 2)
+import test_tp_collective_site as tp  # the synthetic tensor-parallel Program: one rank of a world of 2
 
 PROF = dict(mode="profile", profile="b1-eager")
 
@@ -46,7 +46,7 @@ def _tp_rank_program(rank=(2, 0), n=3):
 
 
 def _serve_program(**over):
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     C = dict(b1.B0_CONFIG)
     C.update(NL=2, V=64, MAX_POS=64)
     C.update(over)

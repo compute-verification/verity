@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import os
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -523,6 +524,18 @@ def _j10r_kernel():
     if not units.j10r:
         pytest.skip("this h1u.cu build has no J10-R units (kh_units_multi_j10r)")
     return units
+
+
+def test_the_producer_sizes_each_j10r_workspace_through_dither_j10r_ws():
+    """`Units.multi` takes each J10-R call's workspace from dither's `j10r_ws.workspace_bytes` at the call's N, which
+    asks the loaded build (an H1U_JW build's column blocks and W' past its rows) and refuses a size its flags
+    contradict: no served_h1 module calls a build's kh_j10r_*_bytes itself, so an H1U_JW build loaded here isn't sized
+    by its rows."""
+    call = re.compile(r"\bkh_j10r_(?:rows|jw|ws|workspace)_bytes\s*\(")
+    hits = [f"{p.name}:{i}" for p in sorted(SERVED_H1.glob("*.py"))
+            for i, line in enumerate(p.read_text().splitlines(), 1) if call.search(line)]
+    assert hits == []
+    assert Path(PR.WS.__file__) == SERVED_H1.parents[1] / "hash" / "dither" / "j10r_ws.py"
 
 
 def test_the_units_kernels_j10r_receipts_are_h1tile_j10r_reference_at_llama_8b_shapes():

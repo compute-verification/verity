@@ -46,6 +46,7 @@ from pathlib import Path
 import pytest
 import verity_difftest as DT
 from hypothesis import strategies as st
+from verity_difftest import settings
 
 from verity.core.protocols.pouw.circuit import words as W
 from verity.ml.circuits import boolean as BL
@@ -64,17 +65,17 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import REGISTRATION, Program, input_id
 from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, type_from_json
-from verity_vllm.program.registry import act as ACT
-from verity_vllm.program.registry import dense as DENSE
-from verity_vllm.program.registry import dsa as DSA
-from verity_vllm.program.registry import hopper as HOP
-from verity_vllm.program.registry import moe as MOE
-from verity_vllm.program.registry import pouw_rows as PR
-from verity_vllm.program.registry import prims as VP
-from verity_vllm.program.registry import ref_prims as RP
-from verity_vllm.program.registry import sampling as SPL
-from verity_vllm.program.registry import tables as TB
-from verity_vllm.program.registry import topp_word_gates as TW
+from verity.ml.definitions.registry import act as ACT
+from verity.ml.definitions.registry import dense as DENSE
+from verity.ml.definitions.registry import dsa as DSA
+from verity.ml.definitions.registry import hopper as HOP
+from verity.ml.definitions.registry import moe as MOE
+from verity.ml.definitions.registry import pouw_rows as PR
+from verity.ml.definitions.registry import prims as VP
+from verity.ml.definitions.registry import ref_prims as RP
+from verity.ml.definitions.registry import sampling as SPL
+from verity.ml.definitions.registry import tables as TB
+from verity.ml.definitions.registry import topp_word_gates as TW
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -1499,7 +1500,7 @@ def _logf_block(b: int) -> tuple[dict[str, int], list[tuple]]:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(os.environ.get(FULL_LOGF) != "1",
+@pytest.mark.skipif(settings.get(FULL_LOGF) != "1",
                     reason=f"set {FULL_LOGF}=1: NvLogf_v1 and _v2 on all 2^32 words, about 85 core-hours (Lean 1.4 s and "
                            "Python 0.9 s per 2^16 words and log), half an hour on a 192-vCPU machine")
 def test_the_logs_on_every_word():
@@ -1537,10 +1538,9 @@ def test_the_gpu_log_probe(server, tmp_path):
     """Every input word of the L40S and H100 probe of `__nv_logf` (20,007: the edges, then random negatives and NaNs) under
     each FTZ build: `NvLogf_v2` gives the GPU's word. Skipped where the evidence store is not reachable."""
     import glob
-    import os
 
     store = _store_io()
-    if os.environ.get("VERITY_SKIP_STORE") == "1" or not store.reachable():
+    if settings.get("VERITY_SKIP_STORE") == "1" or not store.reachable():
         pytest.skip("the evidence store is not reachable here")
     root = store.fetch(LOG_PROBE, to=tmp_path / "probe")
     runs = sorted(glob.glob(str(root / "*" / "out-*-ftz-true-*.json")))
@@ -1604,7 +1604,8 @@ def _test_mufu_literals(*names: str) -> dict:
     ns: dict = {}
     for node in ast.parse(TEST_MUFU.read_text()).body:
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and getattr(node.targets[0], "id", None) in names:
-            ns[node.targets[0].id] = eval(compile(ast.Expression(node.value), str(TEST_MUFU), "eval"), {"__builtins__": {}}, ns)
+            code = compile(ast.Expression(node.value), str(TEST_MUFU), "eval")
+            ns[node.targets[0].id] = eval(code, {"__builtins__": {}}, ns)  # noqa: S307 -- no builtins; literal_eval refuses F32_EDGES + [...]
     return ns
 
 
@@ -1697,7 +1698,10 @@ def test_mufu_words_out_of_range_are_refused(server):
 
 # ---- E4: the correctly rounded transcendentals of the reference kinds: exp, erf and tanh at 100 digits -------------------
 
-_f32w = lambda v: struct.unpack("<I", struct.pack("<f", v))[0]
+def _f32w(v):
+    return struct.unpack("<I", struct.pack("<f", v))[0]
+
+
 #: the words where the rules change (exp's early exits at 89 and -105, its last finite word 0x42B17217 and its last nonzero
 #: one, erf's 4.2 and tanh's 9.2) and the words about one, two, 2^-12 and 2^-24, with their neighbours, both signs; the
 #: sixteenths below 12; and 8192 seeded words of magnitude below 16
@@ -1934,7 +1938,9 @@ def _lazy_rows(fn: PrimitiveDefinition, rng: random.Random) -> list[tuple]:
     leaf = tc
     while isinstance(leaf, Array):
         leaf = leaf.elem
-    col = lambda: tuple(rng.getrandbits(leaf.w) for _ in range(tc.leaves))
+
+    def col():
+        return tuple(rng.getrandbits(leaf.w) for _ in range(tc.leaves))
     idx = _TOKENS if fn.id.startswith("Gather") else (0, 1, 31, 32, 63, 64, 127, 0xFFFF, rng.getrandbits(ti.w))
     return [(i, col()) for i in idx for _ in range(2)]
 

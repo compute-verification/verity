@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# sweep/stoch_negative_n3.sh — N3, the CHRONOLOGY negative of a B > 1 `Sampling=stochastic` row (R15 lane stoch, DECISION M-0529 (A)).
+# stoch_negative_n3.sh — N3, the CHRONOLOGY negative of a B > 1 `Sampling=stochastic` workload.
 #
 #   The request Program's per-event split count S_r[s] = splits_for(n_live(arrive_r + s)) is computed from the DECLARED chronology
 #   (arrivals + caps of the whole population).  N3 declares a WRONG chronology — one batch-mate's arrival moved — builds the first
@@ -26,6 +26,7 @@ export PYTHONPATH=. HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELIS
 PY=${PY:-/workspace/venv-cu129/bin/python}; PY312=${PY312:-/workspace/venv-py312/bin/python}
 D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW
 WL=workloads/$ROW.json
+"${PY312%/*}/verity-vllm" workload-file "$WL" > /dev/null || exit 2
 [ -f "$WL" ] || { echo "no manifest $WL"; exit 2; }
 [ -f "$D/match/program.json" ] || { echo "no fold under $D/match (run the row's Match first)"; exit 2; }
 N=$OUT/N3; mkdir -p "$N"
@@ -40,7 +41,7 @@ MUT=${N3_MUTATION:-}
 $PY312 - "$WL" "$N/workload.json" "$MUT" "$N/schedules.json" "$D" <<'EOF' || { log "N3: no schedule (see above)"; exit 2; }
 import glob, json, sys
 from verity_vllm.pipeline.build import declared_live_counts
-from verity_vllm.program.registry.topp_split import splits_for
+from verity.ml.definitions.registry.topp_split import splits_for
 nsms = {int(g["num_sms"]) for p in glob.glob(f"{sys.argv[5]}/build_request*/result.json")
         for g in [((json.load(open(p)).get("sampling") or {}).get("geometry") or {})] if g.get("num_sms") is not None}
 if len(nsms) != 1:

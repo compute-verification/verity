@@ -24,6 +24,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
+from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
@@ -126,6 +127,7 @@ def test_ids_frames_are_the_scans_id_events():
 def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifiers_plan():
     opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", "/tmp/x", "--no-commit", "--port", "0"], environ={})
     assert (opts.port, opts.commit, opts.precision, opts.gpu_tree, opts.window_steps) == (0, False, "verity_int8", True, 64)
+    assert (opts.scheme, opts.of_record) == ("rows-sha512", None)
     assert (opts.protocol, opts.run_id, opts.hf_home) == ("vllm", "local", None)
     assert so.engine_options(opts)["quantization"] == "verity_int8" and "attention_backend" not in so.engine_options(opts)
     exact = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--precision", "int8_exact", "--no-gpu-tree"], environ={})
@@ -148,15 +150,86 @@ def test_every_precision_registers_the_verity_int8_method_before_the_engine(prec
     assert set(so.INT8_PARTS) == set(so.PRECISIONS)
 
 
-def test_preflight_refuses_a_gpu_tree_without_ninja_before_the_model_loads():
-    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r"], environ={})
-    with pytest.raises(cli.UsageError, match="ninja.*--no-gpu-tree"):
+def test_preflight_refuses_a_gpu_tree_without_ninja_before_the_model_loads(tmp_path):
+    (man := tmp_path / "manifest.json").write_text("{}")
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man)], environ={})
+    with pytest.raises(cli.UsageError, match=r"ninja is\) on PATH$"):
         so.preflight(opts, which=lambda _: None)
     so.preflight(opts, which=lambda _: "/v/bin/ninja")
-    so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-gpu-tree"], environ={}), which=lambda _: None)
+    so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit"], environ={}), which=lambda _: None)
     with pytest.raises(cli.UsageError, match="window-steps"):
         so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--window-steps", "0"], environ={}),
                      which=lambda _: "/v/bin/ninja")
+
+
+def test_the_served_commit_is_rows_sha512_unless_a_recorded_sha256_run_is_served_again(tmp_path):
+    """rows-sha512 is the default: a committing run that names no scheme is refused before the model loads until it
+    names its bench row's manifest, and is never served under SHA-256. vllm-v1 is served only by name, to serve again a recorded
+    vllm-v1 run of the same model (``--of-record``: its serve.json says vllm-v1, or predates the field); the committer refuses
+    it too, before it builds anything."""
+    def parse(*more: str) -> so.Options:
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
+
+    def refusal(opts: so.Options, which: Any = lambda _: "/v/bin/ninja") -> str | None:
+        try:
+            so.preflight(opts, which=which)
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    def record(name: str, **rec: Any) -> str:
+        (d := tmp_path / name).mkdir()
+        (d / "serve.json").write_text(json.dumps({"model": "m", "revision": "r", "commit": True, **rec}))
+        return str(d)
+
+    (man := tmp_path / "manifest.json").write_text("{}")
+    assert parse().scheme == ss.ROWS == ss.SCHEMES[0] == "rows-sha512" and ss.V1 in ss.SCHEMES
+    assert "(the default)" in refusal(parse()) and "--required-manifest ROW_DIR/manifest.json" in refusal(parse())
+    assert "drop --no-gpu-tree" in refusal(parse("--no-gpu-tree", "--required-manifest", str(man)))
+    assert refusal(parse("--required-manifest", str(man))) is None and refusal(parse("--no-commit")) is None
+    with pytest.raises(cli.UsageError, match="--required-manifest ROW_DIR/manifest.json"):
+        ss.committer(parse(), llm=None)
+
+    v1, old = ("--scheme", "vllm-v1"), record("v1", scheme="vllm-v1")
+    assert "commits SHA-256" in refusal(parse(*v1)) and "--of-record RUN_DIR" in refusal(parse(*v1))
+    with pytest.raises(cli.UsageError, match="commits SHA-256"):
+        ss.committer(parse(*v1), llm=None)
+    assert refusal(parse(*v1, "--of-record", old)) is None
+    assert refusal(parse(*v1, "--of-record", record("before-serve-json-named-it"))) is None
+    assert refusal(parse(*v1, "--of-record", old, "--no-gpu-tree"), which=lambda _: None) is None
+    assert refusal(parse(*v1, "--of-record", old), which=lambda _: None).endswith("or pass --no-gpu-tree")
+    assert "committed under rows-sha512, not under vllm-v1" in refusal(parse(*v1, "--of-record", record("rows", scheme="rows-sha512")))
+    assert "committed nothing" in refusal(parse(*v1, "--of-record", record("uncommitted", commit=False, scheme=None)))
+    assert "served m2@r, not m@r" in refusal(parse(*v1, "--of-record", record("other", model="m2", scheme="vllm-v1")))
+    assert "not a recorded serve-openai run" in refusal(parse(*v1, "--of-record", str(tmp_path / "none")))
+    assert "not under --scheme rows-sha512" in refusal(parse("--required-manifest", str(man), "--of-record", old))
+
+
+def test_retain_exclude_takes_the_attention_interiors_only_under_the_rows_sha512_commit(tmp_path):
+    """``--retain-exclude`` (default off, and $VERITY_RETAIN_EXCLUDE's value when set) names the attention interiors only, the
+    values no reader of a sealed window opens; anything else, and a run with no rows-sha512 Commit, is refused before the model
+    loads, and by the committer before it builds anything."""
+    (man := tmp_path / "manifest.json").write_text("{}")
+    rows = ("--model", "m", "--revision", "r", "--required-manifest", str(man))
+
+    def refusal(*more: str, environ: dict[str, str] | None = None) -> str | None:
+        try:
+            so.preflight(cli.parse("serve-openai", [*rows, *more], environ=environ or {}), which=lambda _: "/v/bin/ninja")
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    assert cli.parse("serve-openai", list(rows), environ={}).retention.retain_exclude == ""
+    assert cli.parse("serve-openai", list(rows), environ={"VERITY_RETAIN_EXCLUDE": "hidden_m1"}).retention.retain_exclude == "hidden_m1"
+    for ok in ("hidden_m1", "hidden", "fa3_hidden_m1", "fa2_hidden_m1_stream,fa3_hidden_m1"):
+        assert refusal("--retain-exclude", ok) is None, ok
+    assert "['gemm_qkv'] aren't attention interiors" in refusal("--retain-exclude", "hidden_m1,gemm_qkv")
+    assert "aren't attention interiors" in refusal(environ={"VERITY_RETAIN_EXCLUDE": "weights"})
+    assert "needs the Commit under --scheme rows-sha512" in refusal("--retain-exclude", "hidden_m1", "--no-commit")
+    v1 = ("--scheme", "vllm-v1", "--of-record", str(tmp_path))
+    assert "needs the Commit under --scheme rows-sha512" in refusal("--retain-exclude", "hidden_m1", *v1)
+    with pytest.raises(cli.UsageError, match="aren't attention interiors"):
+        ss.committer(cli.parse("serve-openai", [*rows, "--retain-exclude", "weights"], environ={}), llm=None)
 
 
 # ---------------------------------------------------------------------------------------------------------------- stand-ins
@@ -305,11 +378,13 @@ class Serving:
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
-                 served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None) -> None:
+                 served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
+                 arm: Any = None) -> None:
         self.runner = Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
-                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks) if commit else None
+                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks,
+                                       arm=arm(self.runner) if arm is not None else None) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
         self.server = so.Server(proto=protocol or proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512,
                                 tokenizer=Tokenizer(),
@@ -396,7 +471,7 @@ def test_errors_and_whole_response(tmp_path):
 
 
 def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
-    """The warden's id request in cells of P + 9 bytes (`active.id_request`, offset 0)."""
+    """The network certifier's id request in cells of P + 9 bytes (`active.id_request`, offset 0)."""
     return A.id_request(model="m", user="u", prompt=[128000, 791, 4062], max_tokens=2, frame_bytes=payload + A.HEADER.size,
                         offset=0)
 
@@ -423,8 +498,8 @@ def dechunked(raw: bytes) -> tuple[bytes, bytes]:
 
 
 def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
-    """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the warden's release headers
-    (`release.with_release`); its base for anything else, the shim's rebuilt POST, an id request in other cells, or
+    """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network certifier's release
+    headers (`release.with_release`); its base for anything else, the shim's rebuilt POST, an id request in other cells, or
     bytes that aren't a request."""
     p = proto.IdsProtocol(payload=proto.ID_PAYLOAD, base=proto.PlainProtocol())
     assert p.of(id_request()) is p and p.of(REL.with_release(id_request(), 3, b"run")) is p
@@ -434,10 +509,10 @@ def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
 
 
 def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_path):
-    """``--protocol ids`` on the warden's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
-    release headers the warden adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
+    """``--protocol ids`` on the network certifier's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
+    release headers the certifier adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
     each sampled id one event of P bytes, then ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the
-    scan's P = 503 every P bytes are one id event, the cells the warden makes of them, and the whole is what
+    scan's P = 503 every P bytes are one id event, the cells the certifier makes of them, and the whole is what
     warden_serve's id-form parser (`parse_id_response`) takes: `io_tie.id_event`s, then `io_tie.TRAILER`. A whole
     response under ids is still the JSON one."""
     for payload in (140, proto.ID_PAYLOAD):
@@ -554,6 +629,26 @@ def test_the_gpu_arms_client_serves_shared_prefix_turns_that_the_server_checks(t
     bad = records(tmp_path, "client.jsonl")
     bad[0]["streamed_ids"] = bad[0]["streamed_ids"][:-1]
     assert not client.compare(bad, records(tmp_path, "requests.jsonl"))["passed"]
+
+
+def test_each_request_records_when_it_was_received_submitted_admitted_and_first_streamed(tmp_path):
+    """The wall-clock stamps that tell late bytes (``received``) from a hold before the engine (``submitted``,
+    ``admitted``), on one clock the server, the engine loop and the windows share."""
+    ticks, lock = iter(range(1, 1_000_000)), threading.Lock()
+
+    def clock() -> float:
+        with lock:
+            return float(next(ticks))
+
+    s = Serving(tmp_path)
+    s.server.clock = s.loop.clock = s.windows.wall = clock
+    with s:
+        assert s.post("/v1/completions", dict(CERTIFIER_BODY, prompt=[1, 2, 3]))[0] == 200
+    (rec,) = records(tmp_path, "requests.jsonl")
+    order = ["head", "received", "submitted", "admitted", "first_token"]
+    assert set(rec["times"]) == set(order), rec["times"]
+    stamps = [rec["times"][k] for k in order]
+    assert stamps == sorted(stamps) and len(set(stamps)) == len(stamps), rec["times"]
 
 
 @pytest.mark.parametrize("idle_close_steps, windows", [(1, 3), (100, 1)])
@@ -674,7 +769,7 @@ def test_top_p_below_one_is_refused_naming_the_gap(tmp_path, top_p):
         status, raw = s.post("/v1/completions", dict(CERTIFIER_BODY, top_p=top_p))
         ok, _ = s.post("/v1/completions", dict(CERTIFIER_BODY, top_p=1))
     err = json.loads(raw)["error"]
-    assert status == 400 and err["param"] == "top_p" and "CIR-87" in err["message"] and f"top_p={top_p}" in err["message"]
+    assert status == 400 and err["param"] == "top_p" and "split count" in err["message"] and f"top_p={top_p}" in err["message"]
     assert "split count" in err["message"] and ok == 200
     assert len(records(tmp_path, "requests.jsonl")) == 1          # the refused request never reached the engine
 

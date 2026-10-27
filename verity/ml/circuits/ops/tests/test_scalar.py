@@ -25,7 +25,8 @@ def _words(rng: random.Random, n: int) -> list[int]:
 
 def test_registered_ids() -> None:
     names = ["F32Fabs", "F32Neg", "F32Fmaxf", "F32Fminf", "F32Sat", "F32BitsShl23", "F32IsFinite", "F32Eq", "Bf16GtStrict",
-             "I32Le", "I32Eq", "I32Add", "BitAnd", "BitNot", "BitOr", "SelectF32", "SelectBf16", "SelectI32"]
+             "I32Le", "I32Eq", "I32Add", "BitAnd", "BitNot", "BitOr", "SelectF32", "SelectBf16", "SelectI32", "F32ToS8RniSat",
+             "U32Hi16"]
     for n in names:
         d = getattr(S, n)
         assert d.id == f"{n}_v1" and REGISTRY[d.id] is d
@@ -74,6 +75,17 @@ def test_bit_level_instructions() -> None:
         assert _f(S.F32BitsShl23.evaluate(0x4B400000 | n)) == 2.0 ** (n - 127)
 
 
+def test_f32_to_s8_rni_sat_rounds_ties_to_even_and_saturates() -> None:
+    """`cvt.rni.sat.s8.f32` against Python's round (ties to even) clamped to [-128, 127], the infinities saturated and NaN 0: on
+    the special words, every integer and half-integer from -130 to 130 with its neighbours an ulp either side, and random words."""
+    rng = random.Random(10)
+    halves = [struct.unpack("<I", struct.pack("<f", k / 2))[0] for k in range(-260, 261)]
+    for u in _words(rng, 20_000) + [(h + d) & 0xFFFFFFFF for h in halves for d in (-1, 0, 1)]:
+        f = _f(u)
+        want = 0 if math.isnan(f) else (127 if f > 0 else -128) if math.isinf(f) else max(-128, min(127, round(f)))
+        assert S.F32ToS8RniSat.evaluate(u) == want & 0xFF, hex(u)
+
+
 def test_integer_bit_and_select() -> None:
     rng = random.Random(8)
     ints = [0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF] + [rng.getrandbits(32) for _ in range(200)]
@@ -82,6 +94,8 @@ def test_integer_bit_and_select() -> None:
         assert S.I32Le.evaluate(a, b) == int(signed(a) <= signed(b))
         assert S.I32Eq.evaluate(a, b) == int(a == b)
         assert S.I32Add.evaluate(a, b) == (a + b) % (1 << 32)
+    for a in ints:
+        assert S.U32Hi16.evaluate(a) == a >> 16
     for a, b in itertools.product((0, 1), (0, 1)):
         assert (S.BitAnd.evaluate(a, b), S.BitOr.evaluate(a, b), S.BitNot.evaluate(a)) == (a & b, a | b, 1 - a)
     for c in (0, 1):

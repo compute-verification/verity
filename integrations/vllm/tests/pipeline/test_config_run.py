@@ -390,8 +390,8 @@ def test_a_config_run_that_failed_says_why_first(tmp_path, kw, why):
 @pytest.mark.parametrize("gm, outcome, why", [("PASS", "PASS", None), ("FAIL", "PASS", "match FAIL"), ("PASS", "FAIL", "commit FAIL")])
 def test_a_single_gpu_row_of_record_is_its_global_matchs_verdict_and_its_commits_decision_document(tmp_path, gm, outcome, why):
     """GM-01 writes ``verdict`` (`check.match.global_match`), never the ``ok`` the record read, and a single-GPU Commit's summary
-    decides nothing (its decision document is the row dir's verdict.json): the first single-GPU row chain to reach its publish
-    (r20261018-000059-6968) was refused as "match FAIL", then "commit FAIL", over a passing Match and Commit."""
+    decides nothing (its decision document is the row dir's verdict.json): a row chain is never refused as "match FAIL" or
+    "commit FAIL" over a passing Match and Commit."""
     d = _row_dir(tmp_path)
     (d / "global_match.json").write_text(json.dumps({"schema": "cb-a/global-match/v1", "verdict": gm, "failed_checks": []}))
     (d / "verdict.json").write_text(json.dumps({"schema": "vllm-verdict/v1", "outcome": outcome, "manifest_digest": "mm"}))
@@ -446,7 +446,7 @@ def _tp_row_dir(tmp_path: Path, *, mismatch_r1: int = 0, ranks: int = 2) -> Path
     fail = mismatch_r1 > 0
     per = {str(r): {"run_root": f"root{r}", "commit_pass": not (fail and r == 1), "commit_fail_reason": "sampled replay mismatch" if fail and r == 1 else None,
                     "openings": {"n": 64, "verified": 64}, "extra": {"expected_tensors": 9, "committed_tensors": 9},
-                    "binding": {"coverage": {"ok": True}}, "sampled_replay": _tp_sr(r, 230, mismatch_r1 if r == 1 else 0)} for r in range(ranks)}
+                    "binding": {"coverage": {"ok": True, "expected_n": 9, "bound_n": 9, "missing_n": 0}}, "sampled_replay": _tp_sr(r, 230, mismatch_r1 if r == 1 else 0)} for r in range(ranks)}
     run = {"arm": "instrumented", "wall_s": 20.0, "engine_steps": 32,
            "commit": {"tp_run_root": "tproot", "world": 2, "per_rank": per, "openings": {"n": 128, "verified": 128}, "tensors": 18,
                       "commit_pass": not fail, "commit_fail_reason": "rank 1: sampled replay mismatch" if fail else "PASS"}}

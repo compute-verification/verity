@@ -54,7 +54,7 @@ SCHEMA = "verity-vllm/fa2-target-capture/v1"
 RECORD = "fa2_target_capture.json"
 HDIMS = (64, 96, 128, 256)
 KBLOCK_M = 64
-MUFU_SRC = Path(__file__).resolve().parents[2] / "verity_vllm/program/kernels/cuda/mufu_probe.cu"
+MUFU_SRC = Path(__file__).resolve().parents[2] / "verity/ml/definitions/numerics/cuda/mufu_probe.cu"
 #: (heads, KV heads, head dim) of the pinned checkpoints whose attention is plain FA2 (`engine/profiles/hf_configs`; Gemma-2's softcap and
 #: window launch another kernel instantiation)
 MODELS = {"smollm2-135m": (9, 3, 64), "smollm2-360m": (15, 5, 64), "pythia-160m": (12, 12, 64), "qwen2.5-0.5b": (14, 2, 64),
@@ -137,7 +137,7 @@ def binary() -> dict[str, Any]:
 # ------------------------------------------------------------------------------------------------------------------------ mufu
 def mufu(work: Path, sm: str) -> dict[str, Any]:
     from verity.ml.circuits import library as L
-    from verity_vllm.program.kernels import fa2_relation
+    from verity.ml.definitions.numerics import fa2_relation
 
     pinned = fa2_relation.tables()
     ref = work / "pinned_tables.bin"
@@ -228,7 +228,7 @@ _TRAITS = re.compile(r"Flash_fwd_kernel_traits<(\d+), (\d+), (\d+), (\d+),")
 
 
 def launch_geometry(names: list[str], D: int) -> dict[str, Any]:
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
 
     tiles = sorted({tuple(int(x) for x in m.groups()) for n in names for m in [_TRAITS.search(n)] if m})
     want = (D, KBLOCK_M, b1.fa2_kblock_n(D), 4)
@@ -253,15 +253,15 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
     reference evaluator, with FA2's `Check_inf` placement: block b guards the rescale's running max iff b >= gfrom; `max * scale` is guarded
     in every block.  `AttnBlock_v2`'s body otherwise, line for line (gfrom 0 is `AttentionHead_v2`)."""
     from verity.ml.circuits.evaluation.reference import evaluate
-    from verity_vllm.program.registry import b1, hopper
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import b1, hopper
+    from verity.ml.definitions.registry import prims as P
 
     def E(prim, *a):
         return int(evaluate(prim, *a)[0])
 
     DOT = hopper.HopperBF16WgmmaDot16
     T, D = k.shape
-    scale = b1._scale_log2_bits(D)
+    scale = b1.scale_log2_bits(D)
     nb = -(-T // BN)
     m = 0
     l = [0] * 4
@@ -314,11 +314,11 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     """Every output row of one launch against the three constructions (a worker process: numpy words in, a record out)."""
     from verity.ml.circuits.evaluation.reference import evaluate
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.kernels import derived_rows as DR
+    from verity.ml.definitions.numerics import derived_rows as DR
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.registry import b1, hopper
-    from verity_vllm.program.registry import fa2_check_inf as F2
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import b1, hopper
+    from verity.ml.definitions.registry import fa2_check_inf as F2
+    from verity.ml.definitions.registry import prims as P
     from verity_vllm.program.frontend import targets as TG
 
     c, D, q, k, v, o, bt = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"]

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -19,22 +18,8 @@ from typing import Any
 
 from verity_config import dumps, sha256, value
 
+from verity_bench import settings
 from verity_bench.vllm.presets import ResolvedSpec, SweepPoint, expand_sweep, resolve_spec
-
-# Validation comes from result.json alone, so a run killed after writing it would read as passed; rc 0 rules that out,
-# and a run from a dirty tree ran code its commit doesn't name.
-PASS_QUERY = """
-SELECT id
-FROM attempts
-WHERE tool = 'vllm_bench_point' AND validation = 'passed' AND rc = 0 AND source_dirty IS NOT 1
-  AND source_commit = '{commit}'
-  AND EXISTS (
-    SELECT 1 FROM attempt_params
-    WHERE attempt = attempts.id AND key = 'identity' AND value = '{identity}'
-  )
-ORDER BY start_utc DESC, id DESC
-LIMIT 1
-""".strip()
 
 
 @dataclass(frozen=True)
@@ -72,7 +57,7 @@ def repository_root(start: str | Path | None = None) -> Path:
 
 
 def _commit(root: Path) -> str:
-    recorded = os.environ.get("RESEARCH_SOURCE_SHA")
+    recorded = settings.RESEARCH_SOURCE_SHA
     if recorded:
         return recorded
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
@@ -102,30 +87,28 @@ COMMIT_MARGIN_S = 86_400
 PULL_JOBS = 64
 
 
-def commit_time(root: Path, commit: str) -> int:
-    process = subprocess.run(["git", "show", "-s", "--format=%ct", commit], cwd=root, capture_output=True, text=True)
+def _show(root: Path, commit: str, field: str) -> str:
+    process = subprocess.run(["git", "show", "-s", f"--format={field}", commit], cwd=root, capture_output=True, text=True)
     if process.returncode != 0:
-        raise ValueError(f"git doesn't know commit {commit} here, so its runs can't be looked up on the store's remote: "
-                         "fetch it, or pass --local-only to read this machine's catalog alone")
-    return int(process.stdout.strip())
+        raise ValueError(f"git doesn't know commit {commit} here, so its runs can't be looked up: fetch it")
+    return process.stdout.strip()
 
 
 class StoreCompletion:
-    """The newest passing attempt with a point's identity: from this machine's catalog, else, unless `local_only`, from
-    the store's remote. The remote is read once per commit by pulling the attempts this store lacks among those started
-    since the commit (`COMMIT_MARGIN_S` before it), and indexing them; never a reindex."""
+    """The newest attempt `research data lookup` finds for a point at its commit's tree, with validation passed and rc 0
+    (a killed run's result.json may read as passed; a dirty tree has no reuse key): from this machine's catalog, else,
+    unless `local_only`, from the store's remote, pulled once per commit since `COMMIT_MARGIN_S` before it; no reindex."""
 
     def __init__(self, store: Any = None, *, root: Path | None = None, local_only: bool = False,
-                 commit_time: Callable[[str], int] | None = None, log: Callable[[str], None] | None = None):
+                 log: Callable[[str], None] | None = None):
         self._store, self.root, self.local_only = store, root, local_only
-        self._commit_time = commit_time
         self._log = log or (lambda message: print(f"verity-bench: {message}", file=sys.stderr))
         self._pulled: set[str] = set()
 
     @property
     def store(self) -> Any:
         if self._store is None:
-            from research.store.local import LocalStore  # noqa: PLC0415
+            from research.store.local import LocalStore
 
             self._store = LocalStore()
         return self._store
@@ -135,34 +118,28 @@ class StoreCompletion:
             raise ValueError("benchmark completion lookup requires hexadecimal identities")
         found = self._local(identity, commit)
         if found is None and not self.local_only and commit not in self._pulled:
-            self.pull(commit)
+            self.pull_since(int(_show(self.root or repository_root(), commit, "%ct")))
+            self._pulled.add(commit)
             found = self._local(identity, commit)
         return found
 
     def _local(self, identity: str, commit: str) -> str | None:
-        rows = self.store.index.sql(PASS_QUERY.format(identity=identity, commit=commit))
-        return str(rows[0][0]) if rows else None
+        from research.store import cli_prov, tools_registry
 
-    def pull(self, commit: str) -> int:
-        """Fetch and index the remote's attempts started since `commit` that this store lacks; how many it indexed."""
-
-        indexed = self.pull_since((self._commit_time or (lambda c: commit_time(self.root or repository_root(), c)))(commit))
-        self._pulled.add(commit)
-        return indexed
+        root = self.root or repository_root()
+        attempts = cli_prov.lookup(tools_registry.load("verity_bench.tool:VLLM_BENCH_POINT", root), root, store=self.store,
+                                   params={"identity": identity}, source_tree=_show(root, commit, "%T"))["attempts"]
+        passing = [a["id"] for a in attempts if a["status"].get("validation") == "passed" and a["status"].get("rc") == 0]
+        return passing[-1] if passing else None
 
     def pull_since(self, started: int) -> int:
         """Fetch and index the remote's attempts started since `started` (Unix seconds, less `COMMIT_MARGIN_S`) that this
         store lacks; how many it indexed."""
 
-        from research.store import ids  # noqa: PLC0415
-        from research.store.local import StoreError  # noqa: PLC0415
+        from research.store import ids
+        from research.store.local import StoreError
 
-        store = self.store
-        remote = store.remote
-        if remote is None:
-            why = getattr(store, "remote_error", None) or "no remote is configured"
-            raise RuntimeError(f"the evidence store has no remote here ({why}): a point another machine ran would read as "
-                               "missing; pass --local-only to read this machine's catalog alone")
+        store, remote = self.store, self._remote()
         since = time.strftime("r%Y%m%d", time.gmtime(started - COMMIT_MARGIN_S))
         listed = [key[len("attempts/"):-len(".json")]
                   for key, _ in remote.list_times("attempts/", start_after=f"attempts/{since}")]
@@ -195,6 +172,27 @@ class StoreCompletion:
         for line in skipped[:5]:
             self._log(f"skipped attempt {line}")
         return indexed
+
+    def pull_labels(self) -> int:
+        """Fetch every label the remote has and this store lacks (one listing of the remote's labels); how many."""
+
+        from research.store import labels_sync
+
+        remote = self._remote()
+        report = labels_sync.sync(self.store, push=False)
+        self._log(f"pulled {len(report['pulled'])} labels from {remote.describe()} "
+                  f"({report['already']} of {report['remote_before']} were here)")
+        for line in report["bad"][:5]:
+            self._log(f"skipped label {line}")
+        return len(report["pulled"])
+
+    def _remote(self) -> Any:
+        remote = self.store.remote
+        if remote is None:
+            why = getattr(self.store, "remote_error", None) or "no remote is configured"
+            raise RuntimeError(f"the evidence store has no remote here ({why}): a point another machine ran would read as "
+                               "missing; pass --local-only to read this machine's catalog alone")
+        return remote
 
 
 def make_plan(
@@ -240,7 +238,7 @@ def _relative_spec(source: str | Path, root: Path) -> str:
         raise ValueError("a recorded benchmark spec must be inside the source tree") from None
 
 
-QUEUE_KINDS = {1: "vllm-bench-1gpu", 8: "vllm-bench-8gpu"}
+QUEUE_KINDS = {1: "vllm-bench-1gpu"}
 # A point writes its records, out/ and what its setup builds (a few MB; the venv and model cache are shared). The
 # queue's default 20 GB request would hold every point once the node's disk nears research disk-hold's 80%.
 POINT_DISK_GB = 5
@@ -275,15 +273,16 @@ def check_point_environment(spec: ResolvedSpec, environ: Mapping[str, str]) -> N
                          "launch points with `verity-bench run SPEC`, which forwards them")
 
 
-#: the GPU nodes whose GPUs `--direct` may take: each has one slot per GPU (g0-g7, since 24 Oct 18:00Z) in GPU_SLOTS
-DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3")
+#: the GPU nodes whose GPUs `--direct` may take: each has one slot per GPU in GPU_SLOTS (the nebius nodes g0-g7, the
+#: single-GPU DC VMs g0)
+DIRECT_NODES = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-dc-h200", "vy-dc-h200-2", "vy-dc-b200")
 GPU_SLOTS = "/workspace/research/locks/gpu/slots"
 
 
 def _env_flags(spec: ResolvedSpec) -> list[str]:
     flags = []
-    if os.environ.get("VERITY_BENCH_VENV"):
-        flags += ["--env", f"VERITY_BENCH_VENV={os.environ['VERITY_BENCH_VENV']}"]
+    if venv := settings.VERITY_BENCH_VENV:
+        flags += ["--env", f"VERITY_BENCH_VENV={venv}"]
     for name, setting in point_environment(spec).items():
         flags += ["--env", f"{name}={setting}"]
     return flags
@@ -354,7 +353,7 @@ def direct_command(plan: Plan, source: str | Path, item: PlannedPoint, root: Pat
         "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
         "--run-max", f"{minutes * 60:g}",
         "--",
-        # Without --max-min a lease has no end, which gpu-lease refuses while a booked window lies ahead; a guest's GPU
+        # Without --max-min a lease has no end, which gpu-lease refuses while a booked period lies ahead; a guest's GPU
         # job is preemptible, as the queued point's is.
         "gpu-lease", str(spec.preset.gpu_count), "--wait", "--max-min", f"{minutes:g}", "--preemptible",
         "--",

@@ -69,7 +69,7 @@ theorem schedMatches_dense : SchedMatches Claims.Recursion.Form.Dense := by
   intro x st hst hf
   obtain ⟨r, hr, ha, rfl⟩ := parse_read hst
   have hh : r.shape.holo = false := hf.1
-  obtain ⟨f, spec', st', s, spec, st, hfs, hstm, hset, hm, hk, hreg, hpts⟩ := innerSetup_files hr ha
+  obtain ⟨f, spec', st', s, spec, st, hfs, hstm, hset, hm, hk, hreg, hpts, -, -⟩ := innerSetup_files hr ha
   unfold RecScope.accepts at ha
   simp only [Bool.and_eq_true, RecScope.isOk_iff] at ha
   obtain ⟨⟨⟨⟨ss, hss⟩, -⟩, ⟨u, hsh⟩⟩, -⟩ := ha

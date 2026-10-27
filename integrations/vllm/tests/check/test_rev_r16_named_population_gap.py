@@ -1,17 +1,15 @@
-"""[R16 rev F-r16-02 / M-0016; fix pin] MAN-06f / MAN-06g move the by-name gaps (VUs fed by MoE block-stream planes; VUs fed by an interior
-producer without an evaluator, e.g. Qwen2.5's BiasAdd over Gemm_v2) out of the sampled population (`population.not_evaluable`), so the
-replay grades COMPLETE.  COORD M-0721 (1) accepted such a gap on a PASS ONLY when form (B) (the Match-oracle compare) is complete over the
-values; rev-cb M-0751 (b) endorsed the population move under the same condition.  Before the fix the condition was enforced only in the
-PARTIAL branch (`_partial_replay_named_gap`) -- unreachable after the population move -- and a record with hundreds of by-name-excluded VUs
-that HAVE committed members and NO form (B) rendered a plain PASS.
+"""MAN-06f / MAN-06g move the by-name gaps (VUs fed by MoE block-stream planes; VUs fed by an interior producer without an evaluator, e.g.
+Qwen2.5's BiasAdd over Gemm_v2) out of the sampled population (`population.not_evaluable`), so the replay grades COMPLETE.  Such a gap is
+accepted on a PASS ONLY when form (B) (the Match-oracle compare) is complete over the values, and the population move holds under the same
+condition.  Before the fix the condition was enforced only in the PARTIAL branch (`_partial_replay_named_gap`) -- unreachable after the
+population move -- and a record with hundreds of by-name-excluded VUs that HAVE committed members and NO form (B) rendered a plain PASS.
 
-Behaviour of record (this file; rev's two strict xfails flipped to plain tests): when `sampled_replay.population.not_evaluable` carries a
+Behaviour of record (this file; two strict xfails flipped to plain tests): when `sampled_replay.population.not_evaluable` carries a
 MAN-06f/06g class (plane-fed / interior-composed-v2) with n > 0, the PASS requires the same complete form (B) the partial rule requires and
-carries the named gap in its text; without it the verdict FAILs 'C2 of record not established (COORD M-0721 (1)) ...'.  The pre-existing
-NOT_YET exclusions (RoPE_v1 no evaluator, Attention_v3 state-linked) are the R15 standard's stated applicability domain and are NOT gated
-(that question, if raised, goes to DECISIONS-PENDING).
+carries the named gap in its text; without it the verdict FAILs 'C2 of record not established ...'.  The pre-existing
+NOT_YET exclusions (RoPE_v1 no evaluator, Attention_v3 state-linked) are the standard's stated applicability domain and are NOT gated.
 
-[R16 rev F-r16-07 / M-0068; report M-0059 (2)] refinement: form (B) compares the Match record's dispatcher-level module outputs and has NO
+refinement: form (B) compares the Match record's dispatcher-level module outputs and has NO
 oracle family for the moe/ block-stream planes (oracle_compare.NO_ORACLE_FAMILY_PREFIXES), so a complete (B) covers an interior-composed
 (MAN-06g) gap -- the module's returned tensor IS an instance output -- but never a PLANE-FED (MAN-06f) one, whose committed members are the
 planes: those VUs are value-checked by neither form and the verdict FAILs by that name whatever form (B) says (C1 + C3 hold on them)."""
@@ -24,7 +22,7 @@ from verity_vllm.check.commit_pass import commit_verdict
 
 
 def _bnd(n_req):
-    return {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
+    return {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
 
 
 BASE = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
@@ -50,7 +48,7 @@ SR_COMPLETE_INTERIOR_ONLY = {**SR_COMPLETE_WITH_NAMED_EXCLUSIONS,
                              "population": {"vus": 2000, "not_evaluable": {K_06G: 140, K_ROPE: 32},
                                             "not_evaluable_by_family": {"BiasAdd_v1 (fed by interior Gemm_v2: composed evaluator, v2)": 140, "RoPE_v1": 32}}}
 
-# the same replay on a dense row: only the NOT_YET exclusions (the R15 standard's applicability domain), no MAN-06f/06g gap
+# the same replay on a dense row: only the NOT_YET exclusions (the standard's applicability domain), no MAN-06f/06g gap
 SR_COMPLETE_NOT_YET_ONLY = {**SR_COMPLETE_WITH_NAMED_EXCLUSIONS,
                             "population": {"vus": 2000, "not_evaluable": {K_ROPE: 32, "state-linked K/V history (Attention_v3)": 16}, "not_evaluable_by_family": {"RoPE_v1": 32, "Attention_v3": 16}}}
 
@@ -68,7 +66,7 @@ def test_named_population_exclusions_without_form_b_do_not_pass_f_r16_02(b):
     assert "form (B) absent" in why and "140 x fed by interior producer" in why
     assert "RoPE" not in why                                                     # the NOT_YET exclusion is not the gap named here
     # the mixed population (rev's original fixture: 140 interior-composed + 64 plane-fed) without form (B): the plane-fed FAIL leads
-    # (F-r16-07) and names the interior-composed rest as not covered either
+    # and names the interior-composed rest as not covered either
     ok, why = commit_verdict({**BASE, "binding": _bnd(b), "sampled_replay": SR_COMPLETE_WITH_NAMED_EXCLUSIONS}, True, min_openings=64)
     assert not ok and why.startswith("C2 of record not established: 64 plane-fed VUs (MAN-06f)"), (b, ok, why)
     assert "64 x fed by moe_block_stream" in why and "the other 140 VUs not evaluable by name (interior-composed-v2) are not covered either: form (B) absent" in why
@@ -84,7 +82,7 @@ def test_interior_composed_exclusions_with_complete_form_b_pass_carrying_the_gap
 
 @pytest.mark.parametrize("b", [1, 2])
 def test_plane_fed_exclusions_fail_by_name_even_with_complete_form_b_f_r16_07(b):
-    """[rev F-r16-07 / M-0068] MAN-06f: the plane-fed VUs' committed members are the moe/ planes; form (B) has no oracle family for moe/
+    """MAN-06f: the plane-fed VUs' committed members are the moe/ planes; form (B) has no oracle family for moe/
     (NO_ORACLE_FAMILY_PREFIXES) and form (A) has no row->plane mapping -> value-checked by NEITHER form -> FAIL named, whatever (B) says.
     The interior-composed part of the same population is reported as covered by the complete (B) (so the text says exactly what is missing)."""
     from verity_vllm.check.oracle_compare import NO_ORACLE_FAMILY_PREFIXES
@@ -141,10 +139,10 @@ def test_partial_or_mismatching_form_b_does_not_lift_the_gap():
 
 def test_not_yet_exclusions_alone_are_the_applicability_domain_not_a_gap():
     """A complete replay whose population excluded only NOT_YET classes (RoPE_v1 no evaluator, Attention_v3 state-linked) PASSes plain with
-    or without form (B) -- the R15 standard the 3 finalized rows were graded by; a zero-count MAN-06 key is no gap either."""
+    or without form (B) -- the standard the 3 finalized workloads were graded by; a zero-count MAN-06 key is no gap either."""
     for b in (1, 2):
         ok, why = commit_verdict({**BASE, "binding": _bnd(b), "sampled_replay": SR_COMPLETE_NOT_YET_ONLY}, True, min_openings=64)
-        # [rev M-0243] the applicability domain is no gap; at B=2 without form (B) the PASS names the attribution gap (and only that)
+        # the applicability domain is no gap; at B=2 without form (B) the PASS names the attribution gap (and only that)
         assert ok and (why == "PASS" if b == 1 else why.startswith("PASS (B=2: per-(step,request) attribution not verified") and "RoPE" not in why), (b, ok, why)
     zero = {**SR_COMPLETE_NOT_YET_ONLY, "population": {"vus": 10, "not_evaluable": {K_06G: 0, K_ROPE: 4}}}
     ok, why = commit_verdict({**BASE, "binding": _bnd(2), "sampled_replay": zero}, True, min_openings=64)

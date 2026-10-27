@@ -7,7 +7,7 @@ Its output is not committed: write it anywhere with --out.
     python tests/dead_code_census.py [--imported imported.json] [--out /tmp/census.json] [--git-dates]
 
 ROOTS (`census_roots.txt`, reviewed by hand): shell entry points (paths or globs: every sweep runner and negatives runner by rule), Python
-entry points, and directories of roots (the R19 regression harness).  A root shell is parsed for `-m module`, `python <path>.py`,
+entry points, and directories of roots (the regression harness).  A root shell is parsed for `-m module`, `python <path>.py`,
 `<name>.py` tokens and `from X import` / `import X` anywhere (heredocs, `-c` strings); every `.sh` a root shell names is a root too.
 Shell scripts are entry points: the census never deletes one.  A module that only a non-root shell runs is non-live and must be kept
 by name in the keep-list.
@@ -16,10 +16,10 @@ STATIC REACHABILITY: an ast import graph over every `.py` under the integration 
 circuit-check loads by path).  Edges: `import a.b`, `from a.b import c`
 (`c` as a submodule when it is one), relative imports, the parents of every imported dotted name (their `__init__`), string
 literals that name an integration module (`importlib.import_module("verity_vllm.program.model")`, dotted registry paths), f-string
-prefixes (`f"verity_vllm.program.registry.{m}"` + every short literal of the same file that completes to a module), path literals
+prefixes (`f"verity.ml.definitions.registry.{m}"` + every short literal of the same file that completes to a module), path literals
 (`verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
-root is LIVE.  `verity_vllm/engine/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
-`registry.catalog.load()` imports every module of `verity_vllm.program.registry` but `quarantine` (`pkgutil`): they are reachable from it.
+root is LIVE.  `verity_vllm/observe/fold/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
+`registry.catalog.load()` imports every module of `verity.ml.definitions.registry` but `quarantine` (`pkgutil`): they are reachable from it.
 
 CLASSES (per module of the census packages):
     LIVE       static_reachable or dynamically_imported
@@ -53,13 +53,17 @@ KEEP_FILE = HERE / "dead_code_keep.json"
 
 PACKAGES = ("verity_vllm",)
 CENSUS_PACKAGES = PACKAGES
+#: the Definitions that moved from the package to `verity.ml.definitions` (circuits', held to the keep-list as it stood): in the
+#: graph and the census, each file keyed by its repository path
+DEFINITIONS = REPO / "verity" / "ml" / "definitions"
 _TOPS = "|".join(PACKAGES + ("tests",))
-TOP_MODULE_RE = re.compile(rf"^(?:{_TOPS})(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
-PATH_LITERAL_RE = re.compile(rf"^(?:{_TOPS})(?:/[A-Za-z0-9_.-]+)+\.py$")
+TOP_MODULE_RE = re.compile(rf"^(?:{_TOPS}|verity\.ml\.definitions)(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
+PATH_LITERAL_RE = re.compile(rf"^(?:{_TOPS}|verity/ml/definitions)(?:/[A-Za-z0-9_.-]+)+\.py$")
 
 #: Other lanes own these; the census reports them, the deletion plan never touches them (the keep-list names the non-live ones).
 PROTECTED = (
     "verity_vllm/engine/profiles/",
+    "verity_vllm/observe/fold/profiles/",
     "verity_vllm/query/",
     "verity_vllm/acquire/",
     "verity_vllm/check/match/global_match.py",
@@ -68,8 +72,7 @@ PROTECTED = (
 
 #: row_pod.sh's Match runs run_config with `--skip census,...,golden,...`: the modules those stages would `-m` are statically reachable
 #: (run_config's stage table names them) but never run by the live launcher.  Reported, not deleted.
-RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.properties.census", "verity_vllm.properties.noninterference", "verity_vllm.check.fold_compare",
-                                    "verity_vllm.check.root_policy", "verity_vllm.properties.golden", "verity_vllm.check.operand_provenance")
+RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.properties.census", "verity_vllm.properties.noninterference", "verity_vllm.properties.golden")
 
 #: a circuit-check sidecar (`circuit_check.sidecars.SUFFIX`, which this suite cannot import): its name is no module name, so nothing
 #: imports it; circuit-check's discovery (`sidecars.discover`) loads it by path
@@ -86,24 +89,37 @@ ARTIFACT_KEEP: dict[str, str] = {
 SHELL_MODULE_RE = re.compile(r"-m\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 SHELL_PY_RE = re.compile(r"(?<![\w/.-])((?:[A-Za-z0-9_./-]+/)?[A-Za-z0-9_]+\.py)(?![\w])")
 SHELL_SH_RE = re.compile(r"(?<![\w.-])((?:[A-Za-z0-9_./$-]+/)?[A-Za-z0-9_]+\.sh)(?![\w])")
-SHELL_IMPORT_RE = re.compile(rf"\b(?:from|import)\s+((?:{'|'.join(PACKAGES)})(?:\.[A-Za-z_][A-Za-z0-9_]*)*)")
+SHELL_IMPORT_RE = re.compile(rf"\b(?:from|import)\s+((?:{'|'.join(PACKAGES)}|verity\.ml\.definitions)(?:\.[A-Za-z_][A-Za-z0-9_]*)*)")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- files
 def py_files() -> list[Path]:
     out: list[Path] = []
-    for top in PACKAGES + ("tests",):
-        for p in sorted((ROOT / top).rglob("*.py")):
+    for top in [ROOT / t for t in PACKAGES + ("tests",)] + [DEFINITIONS]:
+        for p in sorted(top.rglob("*.py")):
             if "__pycache__" in p.parts or p.resolve() == Path(__file__).resolve():
                 continue                                             # this tool names modules in string literals; it is not a consumer
-            if p.name.endswith(SIDECAR):
-                continue
+            if p.name.endswith(SIDECAR) or p == DEFINITIONS / "__init__.py":
+                continue                                             # verity.ml.definitions' own __init__ is verity.ml's, not a Definition's
             out.append(p)
     return out
 
 
+def relpath(p: Path) -> str:
+    """``p`` from ``integrations/vllm``, or from the repository outside it (the moved Definitions)."""
+    return p.relative_to(ROOT if p.is_relative_to(ROOT) else REPO).as_posix()
+
+
+def path_of(rel: str) -> Path:
+    return REPO / rel if rel.startswith("verity/") else ROOT / rel
+
+
+def in_census(rel: str) -> bool:
+    return rel.split("/")[0] in CENSUS_PACKAGES or rel.startswith("verity/ml/definitions/")
+
+
 def modname(p: Path) -> str:
-    parts = list(p.relative_to(ROOT).with_suffix("").parts)
+    parts = relpath(p).removesuffix(".py").split("/")
     if parts[-1] == "__init__":
         parts = parts[:-1]
     return ".".join(parts)
@@ -140,7 +156,7 @@ class Graph:
         self.mod_of: dict[str, str] = {}            # rel path -> module
         self.file_of: dict[str, str] = {}           # module -> rel path
         for p in self.files:
-            rel = p.relative_to(ROOT).as_posix()
+            rel = relpath(p)
             m = modname(p)
             self.mod_of[rel] = m
             self.file_of[m] = rel
@@ -178,7 +194,7 @@ class Graph:
         return out
 
     def _scan(self, p: Path) -> None:
-        rel = p.relative_to(ROOT).as_posix()
+        rel = relpath(p)
         src_mod = self.mod_of[rel]
         try:
             tree = ast.parse(p.read_bytes(), filename=str(p))
@@ -213,12 +229,12 @@ class Graph:
             if not TOP_MODULE_RE.match(pkg) or not self.exists(pkg):
                 continue
             self.add(src_mod, pkg)
-            if pkg == "verity_vllm.engine.profiles":                     # resolved by name from the workload's case at runtime
+            if pkg == "verity_vllm.observe.fold.profiles":                     # resolved by name from the workload's case at runtime
                 for m in self.file_of:
                     if m.startswith(pkg + "."):
                         self.add(src_mod, m)
                 continue
-            if pkg == "verity_vllm.program.registry":                    # registry.catalog.load(): every module of it but quarantine
+            if pkg == "verity.ml.definitions.registry":                    # registry.catalog.load(): every module of it but quarantine
                 for m in self.file_of:
                     if m.rsplit(".", 1)[0] == pkg and m != pkg + ".quarantine":
                         self.add(src_mod, m)
@@ -362,7 +378,7 @@ def non_live_modules(g: Graph | None = None) -> dict[str, str]:
     """Production modules of the census packages no root reaches: module -> rel path (what the keep-list must cover)."""
     g, _, live = static_live(g)
     return {m: rel for rel, m in g.mod_of.items()
-            if rel.split("/")[0] in CENSUS_PACKAGES and not is_test_file(rel) and m not in live}
+            if in_census(rel) and not is_test_file(rel) and m not in live}
 
 
 def all_shell_refs(g: Graph) -> dict[str, set[str]]:
@@ -377,7 +393,7 @@ def all_shell_refs(g: Graph) -> dict[str, set[str]]:
 def git_dates(rels: list[str]) -> dict[str, str | None]:
     out: dict[str, str | None] = {}
     for rel in rels:
-        r = subprocess.run(["git", "log", "-1", "--format=%cs", "--", rel], cwd=ROOT, capture_output=True, text=True, check=False)
+        r = subprocess.run(["git", "log", "-1", "--format=%cs", "--", str(path_of(rel))], cwd=ROOT, capture_output=True, text=True, check=False)
         out[rel] = r.stdout.strip() or None
     return out
 
@@ -448,7 +464,7 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
     roots = set(roots_by_mod)
     live = g.closure(roots)
     static = set(live)
-    profiles_mods = {m for m in g.file_of if m.startswith("verity_vllm.engine.profiles.")}
+    profiles_mods = {m for m in g.file_of if m.startswith("verity_vllm.observe.fold.profiles.")}
     live_sans_profiles = g.closure(roots, skip=profiles_mods)
     saved = set(g.edges["verity_vllm.pipeline.match"])
     g.edges["verity_vllm.pipeline.match"] -= set(RUN_CONFIG_SKIPPED_STAGE_MODULES)
@@ -460,7 +476,7 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
     keep = load_keep()
 
     tests = {rel: m for rel, m in g.mod_of.items() if is_test_file(rel)}
-    prod = {rel: m for rel, m in g.mod_of.items() if not is_test_file(rel) and rel.split("/")[0] in CENSUS_PACKAGES}
+    prod = {rel: m for rel, m in g.mod_of.items() if not is_test_file(rel) and in_census(rel)}
     imported_by_tests: dict[str, set[str]] = defaultdict(set)
     for rel, m in tests.items():
         for x in g.edges.get(m, ()):
@@ -489,7 +505,7 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
         c = "LIVE" if m in live else "TEST-ONLY" if imported_by_tests.get(m) else "DEAD"
         e = {"module": m, "package": rel.split("/")[0], "class": c, "static_reachable": m in static,
              "dynamically_imported": bool(imported and m in imported), "n_imported_by_tests": len(imported_by_tests.get(m, ())),
-             "imported_by_tests": sorted(imported_by_tests.get(m, ()))[:8], "loc": loc(ROOT / rel), "last_commit_date": dates.get(rel),
+             "imported_by_tests": sorted(imported_by_tests.get(m, ()))[:8], "loc": loc(path_of(rel)), "last_commit_date": dates.get(rel),
              "referenced_by_shell": sorted(shell_refs.get(m, ())), "root_via": sorted(roots_by_mod.get(m, ())), "protected": protected(rel),
              "live_only_via_profiles": m in live and m not in live_sans_profiles and m not in profiles_mods,
              "why": g.why(roots, m) if m in static else None}
@@ -511,7 +527,7 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
                 plan_totals[k]["loc"] += e["loc"]
     for rel in deleted_tests:
         plan_totals["tests"]["files"] += 1
-        plan_totals["tests"]["loc"] += loc(ROOT / rel)
+        plan_totals["tests"]["loc"] += loc(path_of(rel))
 
     return {
         "schema": "vllm-dead-code-census/v2",
@@ -523,7 +539,7 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
         "plan_totals": dict(sorted(plan_totals.items())),
         "plan": {"modules": sorted(g.file_of[m] for m in deleted_mods), "tests": dict(sorted(deleted_tests.items())), "broken_imports": broken},
         "keep_stale": sorted(m for m in keep if not g.exists(m) or m in live),
-        "live_only_via_run_config_skipped_stages": {g.file_of[m]: loc(ROOT / g.file_of[m]) for m in sorted(skipped_only)},
+        "live_only_via_run_config_skipped_stages": {g.file_of[m]: loc(path_of(g.file_of[m])) for m in sorted(skipped_only)},
         "live_only_via_profiles": sorted(rel for rel, e in modules.items() if e["live_only_via_profiles"]),
         "modules": modules,
         "artifacts": aplan,

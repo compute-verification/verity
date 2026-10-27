@@ -7,9 +7,9 @@ import Mathlib.Data.Finset.Card
 /-!
 # The circuit model: a declared circuit's gates, their classes, its window and its census (trusted)
 
-One model of what a declared circuit `W` computes, for the lower bounds every resource lane proves over it: the stacking
-property's carry and encode bounds, the requirement `A1` reads, and compute accounting's work statement and fan-in
-floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so that census/v1 and property/v1
+One model of what a declared circuit `W` computes, for the lower bounds every resource audit proves over it: the
+stacking property's carry and encode bounds, the requirement `A1` reads, and compute accounting's work statement and
+fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so that census/v1 and property/v1
 (`verity/ml/circuits/census.py`, `stacking.py`) can be held to it by difftest.
 
 * **Values.** Every value is an integer (`ℤ`): a `Value<w>` leaf read as the integer its Definition gives it, two's
@@ -68,6 +68,16 @@ floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so th
   `low` kinds), and one more when its column holds such a value too: a selection among run-time values is a
   `V`-way select. Without that unit a tree of gathers that share indices, over constant leaves, would compute any
   function of `b` index bits for `b` units. A gather at a fixed index is wiring.
+* **Data products** (`dataProducts`). The only free operations are linear maps whose coefficients are fixed before
+  the run's coins: constants, registered values (the pre-committed weights), additions and wiring. So an s8-family
+  lane is free when one of its multiplicands is a constant or registered value, and one unit when both depend on a
+  run or coin input (`dynamic`), whatever their width or range: an exact product of two data values is a universal
+  gate (an AND of two bits is one, and the bitwise codec computes any function with them,
+  `Accounting.SecurityProofs.Gates.EncodeChainRefuted`). A projection by the weights is free; attention's `QKᵀ` and
+  `PV` are data products. Every other nonlinear operation (a rounding, comparison or selection, exp, a division, a
+  gather at a data-dependent index) is a budgeted gate and pays its units above. **The nonlinear units**
+  (`nonlinear`) are the budgeted units and the data products: the circuit's multiplicative complexity in this model,
+  every operation but a fixed linear map charged.
 * **Cost.** The census (`census`) counts the units of a set of steps by class, the s8 family's MACs, the limb splits'
   carries, the committed outputs and the inputs' bits. Its MACs are every s8-family step's, read from the gate whatever
   its role (`dotMacs`: an H1 + fx1 tile's segment dots and `z` among them), and apart from those the served and the tail
@@ -75,9 +85,10 @@ floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so th
   served. The counting bounds charge each budgeted gate and each run input the size of its declared interval
   (`volume`, `chargedBits`).
 * **The property.** `Property caps A W`: the stacking property `P(c, R_in, L)` of property/v1 as a predicate on `W`'s
-  census and the audit's certified reads: per window, each budgeted class's units within its cap (a rational) per
-  certified byte read, no neutral unit and the run inputs within the window's own `R_in` bound, every gate in a
-  window, and no value read more than `L` engine steps after it is produced.
+  census and the audit's certified reads: per window, each budgeted class's units and the data products each within
+  their cap (a rational) per certified byte read, no neutral unit and the run inputs within the window's own `R_in`
+  bound, every gate in a window, and no value read more than `L` engine steps after it is produced. A product by a
+  weight is free and in no cap, so no MAC is capped as such.
 * **The chain's restriction.** Every budgeted gate reads at most `B` operand bits, the declared bits of its operands
   (`OperandBits`): one gate that reads a word's bits computes a byte of its root.
 * **Fan-in.** MULT-LB's lane programs (`ofLane`: inputs, then instructions that each apply an arbitrary function to at
@@ -266,13 +277,13 @@ def Role.isTail : Role → Bool
 /-- Where a gate sits in the Definition that made it, as the IR binds it:
 * `dot K L tail s`: step `s` of an `S8Dot_v1` coordinate's body (an `S8Matmul_v1` row's among them), whose statics
   are `K` products committed every `L` (`T_t` after `t·L`) and the tail groups' atom counts (`TAIL`);
-* `receipt dot K w a b`: word `w` of an H1 + fx1 tile's CP-W receipt (`PouwH1Tile`, decision 104,
+* `receipt dot K w a b`: word `w` of an H1 + fx1 tile's CP-W receipt (`PouwH1Tile`,
   `verity/core/protocols/pouw/circuit/h1tile.py`): the XOR over the tile's lanes of half `w % 2` of each lane's fx1
-  state after set `w / 2` of `[T_0 … T_{KS−1}, O′, D_1 … D_{m−1}]`, `2·(KS + m)` words at contraction `K`
-  (`KS = K/32` segments). `dot` is the tile's dot kind (its `EXACT`: `S8Dot_v2` or `GemmAccumulatorS8_v2`), and `a`
-  and `b` are the gates of its `A` and `B` operand rows (its call's arguments), from which a word's kind reads whether
-  each operand is an activation, so that a kind reading two (H1 + fx1's attention) stays uncredited under seeded coins
-  (Compose's `Scheme.SeedPriced`);
+  state after set `w / 2` of `[T_0 … T_{KS−1}, O′, D_1 … D_{m−1}]`, `2·(KS + m)` words at contraction `K` (`KS = K/32`
+  segments). `dot` is the tile's dot kind (its `EXACT`: `S8Dot_v2` or `GemmAccumulatorS8_v2`), and `a` and `b` are the
+  gates of its `A` and `B` operand rows (its call's arguments), from which a word's kind reads whether each operand is
+  an activation, so that a kind reading two (H1 + fx1's attention) stays uncredited under seeded coins (Compose's
+  `Scheme.SeedPriced`);
 * `other`: any other place. Every other gate of an H1 + fx1 tile is here: its `z` (each cell's exact product, `EXACT` on
   its rows, which no noise reaches and PIN's warp check never compares), its noise, its sets and folds, and each lane's
   own `PouwXinFinal` words, which aren't committed: only their XOR over lanes is. -/
@@ -303,8 +314,8 @@ An H1 + fx1 tile's receipt word `w` after checkpoint `T_s` (`w < 2·(K/32)`, `s 
 `K`-segment of the tile's products, whose floor its dot kind prices (GRIND's fold premise, `HMu`'s Lemma B′), and its
 two halves share it (`Site.parts`). The last `2·m` words, after `O′ = T_{KS−1} − U·A_0` and `D_d = U·A_d`, are `other`:
 they bind the check's cancellation of the columns' keyed word `U` against the rows' digits, which no segment's floor
-prices, so they carry no floor (RT-COMPOSE r4's check 6). A receipt word's role reads its site alone, not the primitive
-that computes it (the lanes' `PouwXor32`).
+prices, so they carry no floor. A receipt word's role reads its site alone, not the primitive that computes it (the
+lanes' `PouwXor32`).
 
 Off a dot body and a receipt, `S32ByteCarry` and `S32ClampRest` are a limb split's carries (`N − 1` a split, in
 either form), `S32LowByte` and `S32ClampS8` its limb reads, and `PouwDuoAbsorb_v1` the receipt fold's step. -/
@@ -482,8 +493,8 @@ def FanIn (f : ℕ) (C : Dag ι) : Prop :=
 /-- Every value's declared interval lies within `[−2^w, 2^w)`: `w` bits and a sign, so s32 is `Width 31`. -/
 def Width (w : ℕ) (C : Dag ι) : Prop := ∀ g ∈ C, -2 ^ w ≤ g.lo ∧ g.hi < 2 ^ w
 
-/-- **The chain's restriction** (the red team's `B`): every budgeted gate reads at most `B` operand bits, the declared
-bits of the operands it reads. A gather is exempt: its value is one of its operands. -/
+/-- **The chain's restriction**: every budgeted gate reads at most `B` operand bits, the declared bits of the operands
+it reads. A gather is exempt: its value is one of its operands. -/
 def OperandBits (B : ℕ) (C : Dag ι) : Prop :=
   ∀ g ∈ C, ∀ cls f, g.op = .budgeted cls f → (g.args.map fun j => (C[j]?.map Gate.bits).getD 0).sum ≤ B
 
@@ -524,6 +535,18 @@ def units (C : Dag ι) (i : ℕ) : ℕ :=
             (if col.any dyn then 1 else 0)
         else 0
     | _, _ => 0
+
+/-- **Gate `i`'s data products**: the lanes of an s8-family step whose two multiplicands both depend on a run or coin
+input (`dynamic`), one unit each whatever their width or range. A lane with a constant or registered multiplicand is a
+linear map of the other with a coefficient fixed before the coins, and is free. -/
+def dataProducts (C : Dag ι) (i : ℕ) : ℕ :=
+  let dyn := fun j => (dynamic C).getD j false
+  match C[i]? with
+  | some g =>
+    match g.op with
+    | .mma _ _ k _ => ((g.args.tail.take k).zip (g.args.tail.drop k)).countP fun ab => dyn ab.1 && dyn ab.2
+    | _ => 0
+  | none => 0
 
 /-- A circuit's census over a set of steps: its units by class, the s8 family's MACs, the limb splits' carries, its
 committed outputs, and its inputs' bits. -/
@@ -568,6 +591,10 @@ def countAt (C : Dag ι) (s : ℕ → Prop) [DecidablePred s] (p : Gate ι → �
 def unitsAt (C : Dag ι) (s : ℕ → Prop) [DecidablePred s] (b : Budget) : ℕ :=
   ∑ i ∈ Finset.range C.length, if C[i]?.any fun g => decide (s g.step ∧ g.op.budget = some b) then units C i else 0
 
+/-- The data products of `C`'s gates at the steps `s` picks. -/
+def productsAt (C : Dag ι) (s : ℕ → Prop) [DecidablePred s] : ℕ :=
+  ∑ i ∈ Finset.range C.length, if C[i]?.any fun g => decide (s g.step) then dataProducts C i else 0
+
 /-- An s8-family step's MACs, `k`; none for another gate. -/
 def Gate.macs (g : Gate ι) : ℕ := match g.op with | .mma _ _ k _ => k | _ => 0
 
@@ -601,23 +628,33 @@ def Census.budgeted (c : Census) : ℕ := c.rounding + c.compareSelect + c.gathe
 /-- **The budgeted units** of a circuit: its gates' units. -/
 def budgeted (C : Dag ι) : ℕ := ∑ i ∈ Finset.range C.length, units C i
 
+/-- A circuit's data products. -/
+def products (C : Dag ι) : ℕ := ∑ i ∈ Finset.range C.length, dataProducts C i
+
+/-- **The nonlinear units** of a circuit: its budgeted units and its data products, every operation but a linear map
+with coefficients fixed before the coins, what the property's caps bound. -/
+def nonlinear (C : Dag ι) : ℕ := budgeted C + products C
+
 /-- The run inputs' declared bits. -/
 def runBits (C : Dag ι) : ℕ := (C.map (Gate.inputBits .run)).sum
 
 /-- The property's parameters: each budgeted class's cap in units per certified byte read, a rational as property/v1's
-`c` is (an honest circuit's rate is a small fraction of a unit a byte), `R_in`'s bound on each window and `L`. -/
+`c` is (an honest circuit's rate is a small fraction of a unit a byte), the data products' cap per certified byte read,
+`R_in`'s bound on each window and `L`. -/
 structure Caps where
   rounding : ℚ
   compareSelect : ℚ
   gather : ℚ
   fold : ℚ
+  /-- the data products (`dataProducts`) per certified byte read: attention's `QKᵀ` and `PV` in an honest circuit -/
+  products : ℚ
   /-- `R_in` on window `w`: the run-input bytes its steps may read, one bound a window, since windows differ in length -/
   runBytes : ℕ → ℕ
   /-- `L`: the engine steps a value may be read after the step that produced it -/
   life : ℕ
 
-/-- The budgeted units the caps allow per certified byte read. -/
-def Caps.total (k : Caps) : ℚ := k.rounding + k.compareSelect + k.gather + k.fold
+/-- The nonlinear units (budgeted units and data products) the caps allow per certified byte read. -/
+def Caps.total (k : Caps) : ℚ := k.rounding + k.compareSelect + k.gather + k.fold + k.products
 
 /-- The audit's windows: `windows` of them, the window `win t` of each engine step `t`, and the bytes the audit
 certified `W` read in each (`reads w`). -/
@@ -628,15 +665,17 @@ structure Audit where
 
 /-- **The stacking property `P(c, R_in, L)`** of a declared circuit `W`, on its census and the audit's certified reads:
 every gate is in a window; in each window each budgeted class's units are within its cap per certified byte read, no
-unit is neutral (the registry classes every primitive) and the run inputs are within that window's `R_in` bytes; and
-no gate reads a value produced more than `L` engine steps before it. -/
+unit is neutral (the registry classes every primitive), the run inputs are within that window's `R_in` bytes and the
+data products (`productsAt`) within their cap per certified byte read; and no gate reads a value produced more than
+`L` engine steps before it. -/
 def Property (k : Caps) (A : Audit) (W : Dag ι) : Prop :=
   (∀ g ∈ W, A.win g.step < A.windows) ∧
     (∀ w < A.windows,
       let c := census W (fun t => A.win t = w)
       (c.rounding : ℚ) ≤ k.rounding * A.reads w ∧ (c.compareSelect : ℚ) ≤ k.compareSelect * A.reads w ∧
         (c.gather : ℚ) ≤ k.gather * A.reads w ∧ (c.fold : ℚ) ≤ k.fold * A.reads w ∧
-          c.neutral = 0 ∧ c.runBits ≤ 8 * k.runBytes w) ∧
+          c.neutral = 0 ∧ c.runBits ≤ 8 * k.runBytes w ∧
+          ((productsAt W (fun t => A.win t = w) : ℕ) : ℚ) ≤ k.products * A.reads w) ∧
     ∀ i (h : i < W.length), ∀ j ∈ W[i].args, ∀ g ∈ W[j]?, W[i].step ≤ g.step + k.life
 
 /-- `good` holds more than the fraction `ε = εnum/εden` of `S`: `ε·|S| < |good|`. -/

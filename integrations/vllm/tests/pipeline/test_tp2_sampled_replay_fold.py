@@ -1,4 +1,4 @@
-"""CPU tests for TP-08: the per-rank sampled-replay record (manbind MAN-06 form (A) run inside each rank's worker) -- the driver's fold over
+"""CPU tests for TP-08: the per-rank sampled-replay record (MAN-06 run inside each rank's worker) -- the driver's fold over
 ranks/pairs (`tp.c2.sampled_replay_components`) and the worker's fail-closed paths (`_tp2_sampled_replay`: no map, no Build dir,
 a Program that is not of record is REFUSED by name before any evaluation)."""
 from __future__ import annotations
@@ -99,7 +99,7 @@ def test_not_run_shape_when_replay_disabled():
 # ------------------------------------------------------------------------------------------------------------ worker fail-closed paths
 
 def _worker(cfg, bmap, rc=None, model=None):
-    from verity_vllm.engine import rank_worker as W
+    from verity_vllm.pipeline.tp import rank_worker as W
 
     class Stub:
         _tp2_sampled_replay = W.TP2CaptureWorkerExtension._tp2_sampled_replay

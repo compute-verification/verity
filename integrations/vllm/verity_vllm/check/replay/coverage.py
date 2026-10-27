@@ -9,7 +9,7 @@ from typing import Any
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.check.replay.replay_codes import NOT_YET
-from verity_vllm.program.kernels.rows import EVALUATORS
+from verity.ml.definitions.numerics.rows import EVALUATORS
 from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.opening import alias_table, resolve_op_path
 from verity_vllm.check.replay.population import ATTENTION_ROW_FAMILIES, EXECUTED_PREFIX_RULE, NOT_EXECUTED_SCOPE
@@ -34,15 +34,15 @@ ATTENTION_INTERIOR_MECHANISM = ("AttnBlock interiors (Q_fine_v1 units: s[c] dots
 #: the controller / guard families of a request Program's root body (the manifest header's `guard_rows` counts them)
 GUARD_PREFIXES = ("LStepLive", "LSelect", "LBot", "LIsEOS", "LEmitNext")
 
-#: [R17-3 / reqval] the query families the exact replay has NO VU row for, with the mechanism of record that checks their values.  The
+#: the query families the exact replay has NO VU row for, with the mechanism of record that checks their values.  The
 #: population itself is the manifest's (Q(P)); this names, per family, what covers it when no evaluator can -- a required family with no
 #: entry here is reported `class: unstated` (fail closed on the record; never silently "covered").
 QUERY_FAMILY_MECHANISM: dict[str, str] = {
     "weights": "registered inputs: MAN-09 weights pin (served parameters == the checkpoint of record, by digest) + C1 coverage / C3 openings",
     "input_token_ids": "prescribed input: boundary linkage (the committed ids at the arrival step == the declared prompt; sampled id[s-1] -> id[s]) + C1 / C3",
-    # [revb n-2.16-1] the sampler families name what CONSUMES them, as input_token_ids' entry does: the committed seed / splits are the
+    # the sampler families name what CONSUMES them, as input_token_ids' entry does: the committed seed / splits are the
     # inputs of the sampler VU (GumbelTopPTokenSelect_v1) whose exact replay in form (A) reads them by binding, and of stoch_recompute's
-    # R17-2 attribution (the served token re-derived from the committed logits + seed + splits) -- not only a linkage check on their values
+    # attribution (the served token re-derived from the committed logits + seed + splits) -- not only a linkage check on their values
     "sampler_seed": ("prescribed input: prescribed_input_linkage (committed seed == the declared SamplingParams.seed, ruling 36) + C1 / C3; "
                      "CONSUMED BY the sampler VU GumbelTopPTokenSelect_v1's exact replay, which reads the committed seed as its Philox key "
                      "(seed, pos) -- the committed sampled id is reproducible from the committed logits only with it (form (A) per pick; the "
@@ -115,7 +115,7 @@ def _header(man: RequiredManifest | None, key: str) -> Any:
 
 
 def controller_rows_of(programs: dict[str, Any], indices: dict[int, "ProgramIndex"] | None = None) -> dict[str, int]:
-    """[revb S-r17b-20 R4 c2] the replay's OWN count of guard / controller rows per request Program (spec family under GUARD_PREFIXES) -- the
+    """The replay's OWN count of guard / controller rows per request Program (spec family under GUARD_PREFIXES) -- the
     cross-check of the manifest header's `guard_rows`, so a stale or foreign header cannot drop or shrink the controller statement ('the
     collector cannot define its own population', applied to the controller)."""
     out: dict[str, int] = {}
@@ -159,14 +159,14 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     ranks_seen: set[int] = set()
     # shared modules (vLLM's one RotaryEmbedding instance called by every layer): the manifest addresses them at the FIRST layer's path
     # with invocation = layer order and records the per-layer paths in `op_path_aliases` (alias -> [canonical, invocation]) -- resolved
-    # through the ONE table `CommittedStore.words` reads through as well (rel M-0367)
+    # through the ONE table `CommittedStore.words` reads through as well
     aliases = alias_table(man)
 
     def _key(rid: str, st: int, op: str, mem: str) -> tuple:
         canon, inv = resolve_op_path(aliases, op)
         return (rid, st, canon, mem, inv)
 
-    non_row_idents: list[dict] = []                                                # [F-moe-r17-05] the no-row families, classified below
+    non_row_idents: list[dict] = []                                                # the no-row families, classified below
     keyed, keyed_not_exec = Counter(), Counter()                                   # row-produced identities of a no-row family (ATen norm scales)
     if man is not None:
         for ident in man.identities:
@@ -186,7 +186,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     reached: Counter = Counter()
     reached_rows: Counter = Counter()                                              # Program-row addresses (a 2-member row addresses 2 identities)
     evald: Counter = Counter()
-    not_exec: Counter = Counter()                                                  # [R17-26] identities at steps >= n_exec, by family
+    not_exec: Counter = Counter()                                                  # identities at steps >= n_exec, by family
     not_exec_req: Counter = Counter()                                              # per request: every classified identity (rows + named inputs)
     not_exec_req_rows: Counter = Counter()                                         # per request: the classified ROW identities only
     req_max_step: dict[str, int] = {}                                              # per request: the last engine step Q(P) carries an identity at
@@ -229,10 +229,10 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                 req_max_step[str(rid)] = int(st)
         ep = (executed_prefix or {}).get(str(rid))
         # `st` is the identity's / Program row's OWN step = request-relative already (the traversal annotates `engine_step` = arrive + step
-        # beside it); R17-1's n_exec counts the request's own steps, so the comparison is direct -- the arrival enters only for the
+        # beside it); the executed prefix's n_exec counts the request's own steps, so the comparison is direct -- the arrival enters only for the
         # batch-level planes below, whose one step is the ENGINE's
         if ep is not None and not ep.get("faults") and int(st) >= int(ep["n_exec"]) and (man is None or ident is not None):
-            not_exec[fam] += 1                                                    # [R17-26] classified, not reached, not uncovered
+            not_exec[fam] += 1                                                    # classified, not reached, not uncovered
             not_exec_req[str(rid)] += 1
             not_exec_req_rows[str(rid)] += 1
             keyed_not_exec[fam] += ident is not None and fam not in QUERY_FAMILIES_WITH_ROWS
@@ -263,7 +263,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                 if len(missing) < first_n:
                     missing.append({"request_id": k[0], "step": k[1], "op_path": k[2], "member": k[3], "invocation": k[4], "family": ident.get("family"),
                                     "spec": ident.get("spec")})
-    # --- [R17-26 / moe F-moe-r17-05] the class over the NO-ROW families: the rule names identities of a request at request-relative steps
+    # --- the class over the NO-ROW families: the rule names identities of a request at request-relative steps
     # >= n_exec, whatever their family -- a named input (`input_token_ids` at r0's steps past its stop) or any other per-request identity is
     # not executed by the same rule as the rows; a BATCH-LEVEL plane (request_id '*', `requests` list, ONE engine step) is not executed
     # only when EVERY listed request is past its own stop at that engine step (then nothing was committed there); otherwise the identity
@@ -288,7 +288,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
             e, listed = int(ident["engine_step"]), [str(r) for r in ident["requests"]]
             past = [r for r in listed if (ep := executed_prefix.get(r)) is not None and not ep.get("faults")
                     and e - int(ep.get("arrive", 0) or 0) >= int(ep["n_exec"])]
-            # a (plane, listed request) pair is one CELL (revb M-0452 (ii), SPEC A3.6: the request's slices of the plane); the Commit's
+            # a (plane, listed request) pair is one CELL (the request's slices of the plane); the Commit's
             # per-request expansion counts cells -- `cells_not_executed` is the number it reconciles against
             b = batch_level.setdefault(fam, {"identities": 0, "identities_not_executed": 0, "identities_partially_executed": 0,
                                              "request_slots": 0, "request_slots_not_executed": 0, "cells_not_executed": 0})
@@ -326,7 +326,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
         uncovered.append({"family": fam, "spec": None, "class": cls, "identities": n_rowless, "row_addresses": 0,
                           "why": "no VU row of its own (the query requires it; the exact replay has no relation to evaluate for it)",
                           "mechanism": QUERY_FAMILY_MECHANISM.get(fam, "UNSTATED: a required family with no named mechanism -- fail closed on the record")})
-    # [revb S-r17b-16 (R4) / pad R17-32] a LIFTED Program's controller rows (LStepLive / LSelect / LBot; Continuation_v1's LIsEOS<E> `is_eos`,
+    # a LIFTED Program's controller rows (LStepLive / LSelect / LBot; Continuation_v1's LIsEOS<E> `is_eos`,
     # LEmitNext[H] `emit`, LSelect<w> `out` = the bits b_t / e_t / r_t / o_t / u_t) carry NO identity under Q_module_v1's rule (so
     # RequiredValues(Lift(P), Q) == RequiredValues(P, Q) row for row) -- the population statement NAMES them as uncovered with their
     # mechanism of record (the lifted record's R8 controller replay through the registered evaluators; the executed prefix from r_t, R3)
@@ -336,7 +336,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     controller = None
     hdr_rows = int(mq.get("guard_rows") or 0) if isinstance(mq, dict) else 0
     own_rows = {str(k): int(v) for k, v in (controller_rows or {}).items()}          # the replay's own count per request Program (c2)
-    # [c2; revb F-r17b-36] the header vs the replay's own count of guard-prefixed rows: the required manifest of record is the traversal of
+    # the header vs the replay's own count of guard-prefixed rows: the required manifest of record is the traversal of
     # the WORKLOAD Program (manifest_verify.used_program_digest == the workload digest; one manifest, query_total.requests = all of them), so
     # its `guard_rows` is the SUM over the request Programs -- the compare is made AT THE HEADER'S SCOPE (sum(own) vs header), never per
     # request (per-request equality is a semantics the header does not have: B2 {r0: 7, r1: 7} under 14 AGREES; {10, 4} under 14 agrees;
@@ -362,7 +362,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     n_uncovered = sum(int(u["identities"]) for u in uncovered)
     n_not_exec = sum(not_exec.values())
     ep_faults = [{"request_id": r, "faults": e.get("faults")} for r, e in sorted((executed_prefix or {}).items()) if e.get("faults")]
-    # [R17-26 / rel M-0410 (a)] the class is an EXCLUSION over the cap-length manifest of record: a classified request whose Q(P) carries NO
+    # the class is an EXCLUSION over the cap-length manifest of record: a classified request whose Q(P) carries NO
     # identity at its not-executed steps was CUT before it reached the population (a restricted manifest handed in as Q(P)) -- N_manifest
     # would shrink silently and the class count 0.  Named here, fails the reconciliation: the manifest of record is never restricted.
     manifest_cut: list[dict] = []
@@ -376,7 +376,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                                      "n_exec": int(e["n_exec"]), "identities_at_not_executed_steps": int(not_exec_req.get(str(r), 0)),
                                      "why": "Q(P) carries no identity at the request's not-executed steps: the manifest was restricted before the "
                                             "population (R17-26: the manifest of record stays cap-length; the class is the exclusion)"})
-    # [R17 revb F-r17b-38] an identity at invocation >= 1 is addressed ONLY through `op_path_aliases` (a shared module's k-th call, at the
+    # an identity at invocation >= 1 is addressed ONLY through `op_path_aliases` (a shared module's k-th call, at the
     # first layer's path); one that is the image of no alias entry is unreachable from every Program row -- the 960 + 960 on the TP2 B1 row
     # of record were this (the rank merge had dropped the table).  The CAUSE named beside the two symptom counts, fails the reconciliation.
     alias_images = {(str(c), int(k)) for c, k in aliases.values()}
@@ -424,12 +424,12 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
             if refused is not None
             else "NO required manifest supplied: the Program rows' own manifest addresses (the v2 query's population; NOT a Q(P) statement -- "
                  "weights / ids / hidden streams absent)"))
-    # [R17 revb F-r17b-09] the guard's state travels with Q(P) onto the record: a manifest whose dataflow guard was not armed says so here
+    # the guard's state travels with Q(P) onto the record: a manifest whose dataflow guard was not armed says so here
     guard = man.guard if man is not None else None
     guard_line = (("guard armed" if guard.get("armed") else "guard NOT armed") + f" ({guard.get('engine')})" if guard is not None
                   else ("guard state not on the manifest (pre-R17 header)" if man is not None
                         else "manifest refused" if refused is not None else "no manifest"))
-    # [R17 reqval task 3] the one-release cross-check (traversal of record, inventory beside it) travels onto the record and the scope line
+    # the one-release cross-check (traversal of record, inventory beside it) travels onto the record and the scope line
     cc = man.cross_check if man is not None else None
     if cc is not None:
         guard_line += ("; cross-check " + ("AGREED" if cc.get("agree") else "DISAGREED") +
@@ -437,7 +437,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                        f"{(cc.get('identities') or {}).get(cc.get('other_engine'))} identities)")
     elif man is not None:
         guard_line += f"; no cross-check on the manifest (one engine asked for by name: {_manifest_engine_name(man)})"
-    # [COORD R17-10] the query of record BY ID on the scope line (a manifest predating the id: named as such, never assumed)
+    # the query of record BY ID on the scope line (a manifest predating the id: named as such, never assumed)
     qid = (_header(man, "query_id") or "Q_module (pre-R17-10 header, no query_id)") if man is not None else "Q"
     if total:
         scope = (f"{qid}(P) = {total} identities ({', '.join(f'{k} {v}' for k, v in sorted(fam_total.items()))}; {guard_line}); exact replay reaches {n_reached} "
@@ -454,7 +454,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                             "manifest_digest": man.manifest_digest if man is not None else None,
                             "program_digest": man.program_digest if man is not None else None,
                             "query_digest": _header(man, "query_digest"),
-                            "query_id": _header(man, "query_id"),                                                  # [R17-10] Q_module_v1
+                            "query_id": _header(man, "query_id"),                                                  # Q_module_v1
                             "query_id_digest": _header(man, "query_id_digest"),
                             "engine": (_manifest_engine_name(man) if man is not None else None),
                             "implemented_query": _header(man, "implemented_query"),
@@ -479,13 +479,13 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                                         "(revb S-r17b-04 label)")},
             "uncovered_by_name": uncovered, "uncovered_identities": int(n_uncovered),
             "controller": controller,   # [R4] None on an un-lifted Program; on a lifted one the named statement above (also in uncovered_by_name)
-            # [revb F-r17b-22 / report M-0303] the two flat keys the readers wait for, emitted from the SAME computation as the block below
+            # the two flat keys the readers wait for, emitted from the SAME computation as the block below
             "not_executed_by_family": {k: int(v) for k, v in sorted(not_exec.items())},
             "not_executed_rule": {"rule": "not-executed(R17-1, a_r, LAG)", "applied": bool(executed_prefix), "n": int(n_not_exec),
                                   "requests": {r: {"a_r": e["a_r"], "lag": e["lag"], "n_exec": e["n_exec"], "cap": e["cap"], "step_range": e.get("steps_not_executed"),
                                                    "n": int(not_exec_req.get(r, 0)), "faults": e.get("faults"), "mechanism": e.get("mechanism")}
                                                for r, e in sorted((executed_prefix or {}).items())},
-                                  # [revb S-r17b-20 (R3)] WHICH mechanism produced the class, per request, BY NAME: the recurrence (one code path with
+                                  # WHICH mechanism produced the class, per request, BY NAME: the recurrence (one code path with
                                   # Continuation_v1) or the arithmetic (the served list / the unit absent) -- a reader sees the tie's status on the record
                                   "mechanism": {m: int(n) for m, n in sorted(Counter(str(e.get("mechanism") or "unstated").split(":")[0]
                                                                                                  for e in (executed_prefix or {}).values()).items())},
@@ -495,8 +495,8 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                                      "by_family": {k: int(v) for k, v in sorted(not_exec.items())},
                                      "totals": {"N_manifest": int(total) if man is not None else None,
                                                 "N_required": (int(total) - int(n_not_exec)) if man is not None else None, "N_excluded": int(n_not_exec),
-                                                # a batch-level family carries its plane-cell statement beside the identity-level counts (the key moe's
-                                                # reconciler reads, M-0468): {identities: planes fully not executed, cells: (plane, request) cells past the stop}
+                                                # a batch-level family carries its plane-cell statement beside the identity-level counts (the key the MoE
+                                                # reconciler reads): {identities: planes fully not executed, cells: (plane, request) cells past the stop}
                                                 "by_family": {k: {"N_manifest": int(v), "N_required": int(v) - int(not_exec.get(k, 0)), "N_excluded": int(not_exec.get(k, 0)),
                                                                   **({"plane_cells_not_executed": {"identities": int(batch_level[k]["identities_not_executed"]),
                                                                                                    "cells": int(batch_level[k]["cells_not_executed"])}} if k in batch_level else {})}
@@ -524,7 +524,7 @@ def _uncovered_mechanisms(all_vus: list[dict], not_ev_fam: Counter) -> list[dict
     return [{"mechanism": "attention block interiors (Q_fine_v1 units inside the evaluated Attention rows)", "rows": int(n),
              "query_of_record": "Q_module_v1", "unit": "the Attention row (module boundary): committed q + committed K/V history -> committed out",
              "why": ATTENTION_INTERIOR_MECHANISM,
-             # [revb M-0148 (3)] what happens to the committed interior words meanwhile -- stated, not implied
+             # what happens to the committed interior words meanwhile -- stated, not implied
              "committed_words_status": "fa2_hidden_m1_stream / fa3_hidden_m1_stream rows are COMMITTED (coverage + openings) and value-UNCHECKED by "
                                        "this replay; form (B) does not compare them either unless oracle_compare.compared_by_family names "
                                        "hidden_stream (the record's not_compared_by_family.hidden_stream is the count) -- Stage B (Q_fine_v1)"}]

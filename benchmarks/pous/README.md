@@ -25,6 +25,10 @@ scheme's certified parameters.
   reference math, the honest-latency presets as survival curves, the schemes' serving overhead, ε_proof by in-degree, and
   test vectors the console page reproduces. `--histograms` pools the vLLM e2e series' `verify-honest.json` histograms
   into the `measured` preset. Publish with `research data put --kind pous-explorer/v1 --file F --preserve`.
+- `served_piece.sh` runs `served_piece.py`, PoUS's piece of the composed served run (`benchmarks/one_stage/served_verdicts.sh`,
+  `POUS_CMD='bash benchmarks/pous/served_piece.sh "$@"'`). It holds one period over the served checkpoint's linears, as
+  P2's `C*` on the card the window served on, with the memory challenger on the auditor's host. It writes a core answer
+  under a hiding commitment, and keeps the run's witness on the node.
 
 Implementations:
 
@@ -78,20 +82,28 @@ Implementations:
     roots, the fastest of `--reps` on a pseudo-random block, against twice the limit (SeqRoot; the root is untuned, so an upper
     bound on the fastest GPU root).
   The transport is the harness's responder wire, not `p2-audit-wire/v4`'s frames.
+  - `serve.py`: `store.py`'s toy store (below) served under the remote bandwidth audit (`remote_bandwidth.p2`), the CPU
+    reference of the serving loop: each engine step decodes the store layer by layer, runs the layer's matmuls on what
+    it decoded, sketches each block's bytes as it decodes them, and commits one root, which the next step's seed chains
+    from; each window's openings are answered before the next step. `serve.py fixture` writes the decode kernel's
+    sketch fixture: two chained passes' seeds, sign rows, every block's partial and every unit's sketch and receipt
+    (the interface is `remote_bandwidth`'s `PROTOCOL.md` §11). It isn't tracked: `FIXTURE_SHA512` pins its bytes, and
+    they're published as `art:23a1667b4d4515f46fabea029492a1ca3788eef0771b115642f21e18f58f3da2`. `tests/test_pous_p2_serve.py`
+    regenerates it.
   - `store.py`: the served model's encoded weights store. It lays the MQA16K INT8 weights out in W with every tensor
     starting on a block (`store.py layout` writes the layout JSON), and its `decode_layer` is the reference a
     decode-to-staging kernel matches byte for byte. `store-toy/` is a 2-layer store at the registered width: its salt,
     C*, negative blocks, and spot vectors at the real store's indices, with W and the staging buffers pinned by digest
-    (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both.
-
-- `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
-  `p2-16448/v2`, whose ChaCha8 keys the spec does not allow (its F4 names counter-mode SHA-512). The registered P2 with the
-  spec's keys is `p2-16448/v4`; `p2-v1-gpu` measures those keys on the device.
-  - The measured build expands fresh per-block keys in the timed kernel, by ChaCha8 from one 32-byte seed per
-    segment. That is M1's schedule, the one the pinned P2 theorems are about, and inside the 1.05× space bound.
-  - A tweak candidate at or above p (probability c0/2^w per block) stops the kernel with an error instead of drawing
-    the next candidate.
-  - The campaign's shared-key build (M2) runs on the same C for comparison.
+    (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both. `store.py commit` is
+    `setup.commit` of the real W, regenerated in this layout from the seeded generator (`e2e_h200.served_weights`),
+    with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it. `store.py encode` draws the
+    salt from the auditor's coin and encodes C* on every GPU of a node (`pod.sh IMPL=p2-store ... -- encode ...`), as
+    canonical segment files a rerun resumes; `--segments LO:HI --order down` encodes a part and `finish` joins the
+    parts. `verify --decode` rereads a store and decodes it into the commitment, `spot` decodes random blocks against W
+    regenerated from the seed, and `tie` binds the store to the weights' registration digest. `p2_v1/parts/` moves
+    parts between machines without an agent VM: `part-out.sh` publishes a node's segments through its run's custody,
+    and `fetch-records.sh` fetches those records into another machine's store, checking every file against its
+    segment's digests (`join.py`).
 
 A new one is a class in `bench.py`'s `IMPLS`.
 
@@ -102,8 +114,6 @@ PYTHONPATH=. python benchmarks/pous/bench.py --impl reference \
 git -C <#188 checkout> archive -o impl.tar 4e49163193c3750dad580f3a28f5428fbb722a8a
 research run --on <L40S pod> --project verity --source . --cwd source --send impl.tar --campaign pous \
   -- bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=4e49163193c3750dad580f3a28f5428fbb722a8a
-research run --on <L40S pod> --project verity --source . --cwd source --campaign pous \
-  -- bash benchmarks/pous/pod.sh IMPL=p2-gpu [WS=qwen2.5-7b/layer0+head]                     # experimental P2
 research run --on <RTX 4090 pod> --project verity --source . --cwd source --campaign pous \
   -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=qwen2.5-7b/layer0+head] [NVME_DIR=/workspace/nvme]
 research run --on <RTX 4090 pod> --project verity --source . --cwd source --campaign pous \
@@ -145,4 +155,14 @@ default). `bench.py`'s docstring lists the steps; `run.sh` builds for sm_120, ta
 ~~~bash
 research run --on <RTX PRO 6000 node> --project verity --source . --cwd source --campaign streamed-wipe \
   -- bash benchmarks/pous/streamed_wipe/run.sh
+~~~
+
+`wipe_resume/` runs the red team's resume attack (art:7617c8017e80) on both wipes, on CPU. `pi2_state_attack.py` rebuilds
+band and dense blocks from the five odd rounds' SHAKE256 states (1,000 B a 64 KiB block) and times an answer against the
+`D = 5` read deadline. `resume.py` adapts the attack to the streamed wipe, which the prover can't evaluate without `K`, and runs
+it next to honest, naive-cheat and broken-premise provers (`K` on the prover's node, an undeclared tier), all judged by the
+Lean verdict and `streamed_wipe.verdict`. It writes `resume.json` and fails if any prover ends other than expected:
+
+~~~bash
+research run --on <CPU node> --project verity --source . --cwd clone -- bash benchmarks/pous/wipe_resume/run.sh
 ~~~

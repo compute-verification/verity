@@ -1,4 +1,4 @@
-"""[r8 lane E-cleanup 2026-09-18] `AttentionScopeSoftcap` (verity_vllm/engine/profiles/gen_dense_softcap_patterns.py): the FA2 scope of a
+"""`AttentionScopeSoftcap` (verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py): the FA2 scope of a
 softcapped launch resolves to `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` with the base pattern's operands; softcap 0 / None is untouched;
 a windowed + softcapped launch (Gemma-2 even layers) goes through the inert-window rule; bad softcaps are Unsupported with a reason."""
 from __future__ import annotations
@@ -11,11 +11,11 @@ import math
 import pytest
 
 from verity_vllm.observe.fold.patterns import AttentionScope
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as B1PROF
-from verity_vllm.engine.profiles.gen_dense2_patterns import AttentionScopeInertWindow, with_dense2_patterns
-from verity_vllm.engine.profiles.gen_dense_softcap_patterns import AttentionScopeSoftcap, with_softcap_patterns
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as B1PROF
+from verity_vllm.observe.fold.profiles.gen_dense2_patterns import AttentionScopeInertWindow, with_dense2_patterns
+from verity_vllm.observe.fold.profiles.gen_dense_softcap_patterns import AttentionScopeSoftcap, with_softcap_patterns
 
-gemma = importlib.import_module("verity_vllm.engine.profiles.derived_GEMMA2_2B")
+gemma = importlib.import_module("verity_vllm.observe.fold.profiles.derived_GEMMA2_2B")
 from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, resolve_step
 from tests.engine.test_gen_dense2 import FA2, SCOPE, _fa2_edit
@@ -23,7 +23,7 @@ from tests.observe.test_patterns_synthetic import D, KVH, NH, _context_on_host, 
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.rules.vocab import vocabulary_for
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.registry.quarantine.dense import softcap as SC
+from verity_vllm.program.quarantine.dense import softcap as SC
 
 BASE = "Attention_v3{T=33,NH=9,KVH=3,D=64,BN=128}"
 CAPPED = "AttentionSoftcap_v1{T=33,NH=9,KVH=3,D=64,BN=128,CAP=50.0}"

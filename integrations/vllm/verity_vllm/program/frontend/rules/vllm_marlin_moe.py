@@ -32,9 +32,9 @@ from verity_vllm.program.frontend.rules.common import call_args, from_rows, rows
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity_vllm.program.kernels import marlin_moe_rows as MR
-from verity_vllm.program.registry import marlin_moe as MM
-from verity_vllm.program.registry.prims import F32 as F32_WORD, I32 as I32_WORD
+from verity.ml.definitions.numerics import marlin_moe_rows as MR
+from verity.ml.definitions.registry import marlin_moe as MM
+from verity.ml.definitions.registry.prims import F32 as F32_WORD, I32 as I32_WORD
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
@@ -49,7 +49,7 @@ ROLE_KERNELS = {"marlin_moe_rank": "moe_align_block_size's ranks over a key per 
 
 #: the (TK, TN, blocks per SM) each launch of DeepSeek-V4-Pro's TP8 rank ran at each decode batch of M tokens the H200 capture swept
 #: (132 SMs, driver 580.173.02), by the launch's (E, routed TOPK, K, N, launch top_k): w13 (384, 6, 7168, 768, 6), w2 (384, 6, 384,
-#: 7168, 1); the GO r20261014-101203-3273 (tests/properties/dsv4_marlin_capture_gpu.py, dsv4-marlin-capture/v3, its `sweep`)
+#: 7168, 1); a GO run of tests/properties/dsv4_marlin_capture_gpu.py (dsv4-marlin-capture/v3, its `sweep`)
 MARLIN_SERVED = {(384, 6, 7168, 768, 6): {1: (128, 64, 2), 2: (128, 64, 4), 3: (128, 64, 4), **dict.fromkeys((*range(4, 18), 460), (64, 128, 4)),
                                           461: (64, 128, 3), 921: (64, 128, 3), 922: (64, 128, 2), 1024: (64, 128, 2)},
                  (384, 6, 384, 7168, 1): {**dict.fromkeys((*range(1, 18), 460), (64, 128, 4)),

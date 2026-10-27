@@ -1,6 +1,6 @@
 """The served rows (`served_rows`) on the compile slice's corpus-smallkv window: the server's rows as the model runner laid
 them out give the slice's ``srv`` row, and with the row the Commit side registers there, never the prover's own, the slice
-refuses REDTEAM's phase 10 finding 2 (six passes registered where user-1 was admitted at the sixth ask) at ``rows``; the
+refuses six passes registered where user-1 was admitted at the sixth ask at ``rows``; the
 honest run is accepted. The registration's row is bound by b‖c to its leaf, its run root and its index, so the six passes'
 own row isn't the leaf, and the public record holds no row or salt."""
 from __future__ import annotations
@@ -48,7 +48,7 @@ def test_the_runner_rows_are_the_slices(x):
 
 
 def test_the_slice_refuses_six_passes_under_the_served_rows(x):
-    """The honest run with the registered row in ``srv`` is accepted under the verifier's own ``pub``; REDTEAM's cheap run,
+    """The honest run with the registered row in ``srv`` is accepted under the verifier's own ``pub``; the cheap run,
     six passes charged 17 bits against the honest 22, is accepted at 0x3F with its own rows in ``srv`` (a row that
     isn't the registered one, which the b‖c check refuses) and refused at ``rows`` with the registered row. These are
     the reference's verdicts: the corpus class is past what a test evaluates, and the circuit is its reference at the
@@ -111,7 +111,7 @@ def test_the_slices_block_rows_are_the_registered_leaves(x):
 
 @pytest.mark.parametrize("G", [0, 2, 3, 8])
 def test_a_records_g_that_doesnt_divide_p_is_refused(x, G):
-    """REDTEAM phase 19 #3: the verifier indexes a unit's rows by the public record's G, which `register` holds to divide
+    """The verifier indexes a unit's rows by the public record's G, which `register` holds to divide
     P; a record whose G doesn't (2 or 3 on P = 7 floors to 3 or 2 blocks a window, 8 to none, 0 divides by zero) is
     refused there too, rather than read as another G's leaves. The tie's statics, which don't hold P, refuse that G
     too, so no unit is built for a block the registration never has."""

@@ -254,11 +254,12 @@ variable (c) in
 word of the rows. A circuit condition. -/
 def CutsFromRows : Prop := ∀ w ∈ c.wires.toList, w.dst.1 ≠ c.unitNet
 
-/-- **A unit with only its leaf group has no wire into it**: `HmRow.check` refuses a wire into a leaf port, and that
-group's ports are all the unit's. -/
-theorem cutsFromRows_of_single {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    (h : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) : CutsFromRows c := by
-  have P := parse_facts h
+/-- **A unit with only its leaf group has no wire into it**, in a circuit `HmRow.parse` accepted with nets `pre` first:
+`HmRow.check` refuses a wire into a leaf port, and that group's ports are all the unit's. -/
+theorem cutsFromRows_of_singlePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c)
+    (h1 : c.unit.inGroups.size = 1) : CutsFromRows c := by
+  have P := (parse_factsPre_nets h).1
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
   intro w hw hd
@@ -275,13 +276,20 @@ theorem cutsFromRows_of_single {tags : Tags} {bytes : ByteArray} {tables : List 
   rw [hgs, hsz] at h2
   omega
 
-/-- **`KeysRow` from the parse, for a unit reading any number of input groups**: in an untyped circuit with no wire
-into its unit (`CutsFromRows`), at the row widths `16 · words`, every input a computed row reads has the zero or a row
-bit as its key, when every input a unit row reads is a port bit (`PortReads`). -/
-theorem keysRow_of_cuts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    (h : HmRow.parse tags bytes tables = .ok c) (hcr : CutsFromRows c) (hpr : PortReads c hU) :
-    KeysRow c hU (portRowW c) := by
-  obtain ⟨P, -, hunit, hsn, hhn⟩ := parse_facts_pre (fun _ hx => by simp at hx) h
+/-- **A unit with only its leaf group has no wire into it** (`cutsFromRows_of_singlePre` with no net ahead of the
+file). -/
+theorem cutsFromRows_of_single {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    (h : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) : CutsFromRows c :=
+  cutsFromRows_of_singlePre h h1
+
+/-- **`KeysRow` from the parse, for a unit reading any number of input groups**: in an untyped circuit `HmRow.parse`
+accepted with nets `pre` first, with no wire into its unit (`CutsFromRows`), at the row widths `16 · words`, every
+input a computed row reads has the zero or a row bit as its key, when every input a unit row reads is a port bit
+(`PortReads`). -/
+theorem keysRow_of_cutsPre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) (hcr : CutsFromRows c)
+    (hpr : PortReads c hU) : KeysRow c hU (portRowW c) := by
+  obtain ⟨P, -, hunit, hsn, hhn⟩ := parse_factsPre_nets h
   obtain ⟨ls, hls⟩ := P.check
   have C := check_facts P.typed hls
   have hin := check_in P.typed hls
@@ -327,7 +335,7 @@ theorem keysRow_of_cuts {tags : Tags} {bytes : ByteArray} {tables : List (String
   swap
   · rw [ite_eq_right hp']
     have hpv : c.perVu.getD c.unitNet 0 = c.upv := by
-      obtain ⟨hur, hk, hcount⟩ := unit_range_facts P C
+      obtain ⟨hur, hk, hcount⟩ := unit_range_facts_of P.unitNet C
       exact perVu_unit C hur hk hcount hg
     have hone := C.wired c.unitNet P.unitNet hsha hhm u (by rw [hpv]; exact hu) p
       (by rw [ite_eq_left rfl]; omega) hp
@@ -382,12 +390,27 @@ theorem keysRow_of_cuts {tags : Tags} {bytes : ByteArray} {tables : List (String
     simp only [Fin.getElem_fin]
     omega
 
+/-- **`KeysRow` from the parse, for a unit reading any number of input groups** (`keysRow_of_cutsPre` with no net ahead
+of the file). -/
+theorem keysRow_of_cuts {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    (h : HmRow.parse tags bytes tables = .ok c) (hcr : CutsFromRows c) (hpr : PortReads c hU) :
+    KeysRow c hU (portRowW c) :=
+  keysRow_of_cutsPre h hcr hpr
+
+/-- **`KeysRow` from the parse, with nets `pre` first** (a unit given ahead of the file): in an untyped circuit whose
+unit has only its leaf group, at the row widths `16 · words`, every input a computed row reads has the zero or a row bit
+as its key, when every input a unit row reads is a port bit (`PortReads`). -/
+theorem keysRow_of_parsePre {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} (h : HmRow.parse tags bytes tables (pre := pre) = .ok c)
+    (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU) : KeysRow c hU (portRowW c) :=
+  keysRow_of_cutsPre h (cutsFromRows_of_singlePre h h1) hpr
+
 /-- **`KeysRow` from the parse**: in an untyped circuit whose unit has only its leaf group, at the row widths
 `16 · words`, every input a computed row reads has the zero or a row bit as its key, when every input a unit row reads is
 a port bit (`PortReads`). -/
 theorem keysRow_of_parse {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
     (h : HmRow.parse tags bytes tables = .ok c) (h1 : c.unit.inGroups.size = 1) (hpr : PortReads c hU) :
     KeysRow c hU (portRowW c) :=
-  keysRow_of_cuts h (cutsFromRows_of_single h h1) hpr
+  keysRow_of_parsePre h h1 hpr
 
 end FlockSoundness.Discharge.Layout

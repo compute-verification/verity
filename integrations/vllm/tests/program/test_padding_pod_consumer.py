@@ -400,7 +400,7 @@ def test_the_padding_entrys_step_is_the_engine_step_when_a_member_arrives_late()
                 ids.append({"family": fam, "program_digest": PD, "request_id": rid, "step": s, "invocation": 0, "op_path": op, "output_member": mem,
                             "element_range": [0, n], "rank": 0, "engine_step": s + arr, "dtype": dt, **({"rows": 1} if fam == "input_token_ids" else {})})
     epr = {"ok": True, "lag": 0, "requests": {"r0": {"executed_prefix_len": cap, "cap": cap}, "r1": {"executed_prefix_len": 1, "cap": cap}}}
-    from verity_vllm.check.executed_prefix import request_steps_of_record
+    from verity_vllm.commit.executed_prefix import request_steps_of_record
     steps = request_steps_of_record(epr, {"r0": 0, "r1": 1})
     assert steps == {"r0": [0, 1, 2], "r1": [1]}
     by_step = PS.padding_steps_of_record(ids, epr, {"r0": 0, "r1": 1})
@@ -493,7 +493,7 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
     against that bucket family by family."""
     from collections import Counter
     from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.executed_prefix import executed_prefix_of_record
+    from verity_vllm.commit.executed_prefix import executed_prefix_of_record
     if not hasattr(OC, "ORDINAL_SEP"):
         pytest.skip("the ordinal-named committed reader (moe F-moe-r17-06, int-8) is not on this tree: a mixed step's padding tensor beside an executed one of the same name is unreadable here")
     com, run, pm, _hdr, _rsteps, _ids = _b2_mixed_padded()
@@ -515,7 +515,7 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
     rd = OC.OpenedReader(com, run)
     out = PS.padded_population(sr, pm, rd, epr)
     assert hashlib.sha256(json.dumps([out, sr], sort_keys=True).encode()).hexdigest() == \
-        "f8e698e7bd359beba999dd0580036bfc527f9e2181b5ff64ca37d2ea95ccd9bd", "the record block and the population it rewrites, byte for byte"
+        "a5d7a1f4f51030d83a6cbf083ef69ae44b34e81d91e486a70595a178a3aacd74", "the record block and the population it rewrites, byte for byte"
     assert out["ok"], out["problems"]
     assert out["padding_entries"] == out["checked_entries"] == 35 and out["unread_n"] == 0 and out["mismatches_n"] == 0
     assert out["checked_words"] == sum(int(e["width_bytes"]) // PS.LIFTED_CONTAINER[e["encoding"]["committed_dtype"]][1] for e in pads)
@@ -558,7 +558,7 @@ def test_the_inactive_stratum_is_the_padded_records_population_every_bot_entry_r
     assert x2["name"] == "model.embed_tokens/in" and x2["identity"]["request_id"] == "r1"
     got = rd(2, x2["name"], 0, 4)
     assert got is not None and got != PS.bot_word("i32")[:4] and len(got) == 4
-    # a padding entry whose committed word is NOT the bot word: named (R17-42 s5)
+    # a padding entry whose committed word is NOT the bot word: named
     def tampered(step, name, lo, hi):
         got = rd(step, name, lo, hi)
         if got is not None and step == 3 and name.startswith("fa2.m1/L0/r0/"):
@@ -670,7 +670,7 @@ def test_brief_7e_past_a_requests_stop_the_moe_route_planes_are_bot_words_and_a_
         def forging(step, name, lo, hi):
             g = rd(step, name, lo, hi)
             return ((3).to_bytes(8, "little") + g[8:]) if (g is not None and name.startswith("moe/L0/router_ids/r0/bot")) else g
-        from verity_vllm.check.executed_prefix import executed_prefix_of_record
+        from verity_vllm.commit.executed_prefix import executed_prefix_of_record
         epr = executed_prefix_of_record(["r0", "r1"], {"r0": [17, 0], "r1": [5, 6, 7, 8, 9]}, caps={"r0": CAP, "r1": CAP}, eos_of_record=[0], lag=0)
         pads = [e for e in pm["entries"] if e.get("activity") == "bot-by-enablement"]
         from collections import Counter
@@ -766,7 +766,7 @@ def test_fix_e_the_identity_check_reads_a_padding_only_step_as_the_identities_of
 
 
 def test_the_identity_check_counts_the_router_softmax_tap_as_one_more_moe_tensor_of_each_tapped_layer():
-    """The OLMoE sm_120 config run (r20260930-091912-128d) refused every step with moe_layers_bad {L: 7}: under ROUTER_TAP the
+    """An OLMoE sm_120 config run refused every step with moe_layers_bad {L: 7}: under ROUTER_TAP the
     router-softmax source commits `moe/L<k>/router_softmax` beside the block's planes, and the per-layer count expected the block's alone."""
     man_moe = dict(MAN, moe_layers=[0], moe_tensors_per_layer=len(MOE_MEMBERS))
     executed = {0: ["r0"], 1: ["r0"]}

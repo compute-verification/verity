@@ -67,8 +67,8 @@ def test_the_registered_split_count_keeps_one_nucleus_at_every_batch_size_and_po
     import numpy as np
 
     from verity_vllm.pipeline.topp_split_probe import gen_random
-    from verity_vllm.program.registry.topp_geometry import registered_splits, splits_for
-    from verity_vllm.program.registry.topp_split import topp_keep_row
+    from verity.ml.definitions.registry.topp_geometry import registered_splits, splits_for
+    from verity.ml.definitions.registry.topp_split import topp_keep_row
 
     nsm, V = RTX["num_sms"], 4096
     S_reg = registered_splits(nsm)
@@ -398,7 +398,7 @@ def test_workload_labels_by_provenance():
 
 def test_compile_steps_passes_its_own_rule():
     """At top_p 1 and below: the compiler emits the registered split count, so R3 holds at any top_p."""
-    from verity_vllm.program.registry.topp_geometry import registered_splits
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
     steps = pytest.importorskip("verity_vllm.program.predict.steps")
     I1 = pytest.importorskip("verity.core.protocols.certifier.advice")
     cfg = {**TINY, "max_position_embeddings": 64}

@@ -7,7 +7,7 @@ import re
 
 _S_STATIC_RE = re.compile(r"[{,]S=(\d+)(?=[,}])")
 _TOPP_FAMILY = "GumbelTopPTokenSelect_v1"
-_SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temperature, splits): the derived S operand (stoch M-0254)
+_SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temperature, splits): the derived S operand
 
 
 def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None:
@@ -20,7 +20,7 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
         v = getattr(B, "splits_values", {}).get(inst.get("k"))
         if v is not None:
             return int(v)
-        # an unbound instance sequence (a Prog-shaped reader without compare's binding, stoch M-0268 (A)): the 6th operand must be ONE run
+        # an unbound instance sequence (a Prog-shaped reader without compare's binding): the 6th operand must be ONE run
         # ("n", k, 0, 1) onto a `Const32[0x<S>]_v1` instance emitted for the select (fold._const, patterns._stage3 Const(32, S, "splits"))
         args = inst.get("args") or []
         if len(args) > _SPLITS_OPERAND and len(args[_SPLITS_OPERAND]) == 1:
@@ -140,8 +140,8 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     does not schedule -- an undeclared request, a row past a stop, a missing lag row -- is named), a top-p select on a step the state
     schedules nobody at is named, a scheduled sampling step without a top-p select is named, and a step whose state is unestablished
     fails closed.  Without `scheduled` the SampleEnd batch is held to the observed logits rows."""
-    from verity_vllm.program.registry.sampling_vocab import SHARED_GREEDY
-    from verity_vllm.program.registry.topp_geometry import registered_splits
+    from verity.ml.definitions.registry.sampling_vocab import SHARED_GREEDY
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
     from verity_vllm.program.sampling_event import family_of
     topp = (_TOPP_FAMILY, SHARED_GREEDY[_TOPP_FAMILY].id)   # either `sampler_construction`
     per_step: dict[int | None, set[int | None]] = collections.defaultdict(set)

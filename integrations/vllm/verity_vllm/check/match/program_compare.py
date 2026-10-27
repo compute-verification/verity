@@ -34,14 +34,15 @@ import re
 import time
 from dataclasses import dataclass
 
+from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import split_selects
 from verity_vllm.check.match.instance_sequence import Prog
 from verity_vllm.check.match.program_loaders import load_derived, load_oracle
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import UsageError, option
-from verity_vllm.program.compact import expand_mixed as _expand_mixed, hash_operand as _hash_operand, n_crosses_step as _n_crosses_step  # [R17 mfast]
+from verity_vllm.program.compact import expand_mixed as _expand_mixed, hash_operand as _hash_operand, n_crosses_step as _n_crosses_step  #
 # Imported from here by modules open PRs edit (tests/program/test_compact.py, tests/check/test_glm53_rank_rehearsal.py) and
-# by correspondence/resolve_decomp.py, slated for deletion; they move to instance_sequence / program_loaders after those land.
+# by check/match/resolve_decomp.py, slated for deletion; they move to instance_sequence / program_loaders after those land.
 from verity_vllm.check.match.instance_sequence import const_value  # noqa: F401
 from verity_vllm.check.match.program_loaders import LOAD_NOTES  # noqa: F401
 
@@ -52,7 +53,7 @@ def _norm_T(spec: str) -> str:
     return _T_RE.sub("{T=*,", spec)
 
 
-# [R18 x09, F-r18-x09-1] The divergence REPORT of a step whose spec sequences differ.  difflib.SequenceMatcher over a WHOLE step is
+# The divergence REPORT of a step whose spec sequences differ.  difflib.SequenceMatcher over a WHOLE step is
 # O(n*m): a prefill step of an LP-row Program is LP x layers x ops instances, and a step differing throughout ran 40 min to 3 h per leg.
 # No verdict depends on it (spec_seq_equal / spec_multiset_equal / canonical_sha256 / the DAG multiset carry the check); it only fills
 # `first_divergences_T_normalised` and `n_divergent_opcodes`.  So the common prefix and suffix are located in O(n) and the matcher runs
@@ -91,7 +92,7 @@ def compare_steps(A: Prog, B: Prog, unfold_a: bool = False, *, canon_step_relati
     sa, sb = seq(A, unfold_a), seq(B, False)
     def _side(P: Prog, seqs):
         d = {"label": P.label, "digest": P.digest, "instances": len(P.inst), "steps": len(seqs), "inputs": len(P.inputs)}
-        # [M-0169 (4)] the derived split count binding, when present on this side (fold: bound Const32[S] per select; Program: splits input)
+        # the derived split count binding, when present on this side (fold: bound Const32[S] per select; Program: splits input)
         sv = getattr(P, "splits_values", {})
         if sv:
             d["splits_bound"] = {"form": "Const32[S] per top-p select (removed from the sequence, value kept)", "selects": len(sv),
@@ -114,7 +115,7 @@ def compare_steps(A: Prog, B: Prog, unfold_a: bool = False, *, canon_step_relati
             st["only_in_a"] = {k: v for k, v in (ca - cb).items()}
             st["only_in_b"] = {k: v for k, v in (cb - ca).items()}
         if spa != spb:
-            div = _divergence_report([_norm_T(x) for x in spa], [_norm_T(x) for x in spb])   # [R18 x09] bounded, see _divergence_report
+            div = _divergence_report([_norm_T(x) for x in spa], [_norm_T(x) for x in spb])   # bounded, see _divergence_report
             ops = div["ops"]
             st["first_divergences_T_normalised"] = [{"op": t, "a": spa[i1:min(i2, i1 + 3)], "b": spb[j1:min(j2, j1 + 3)], "a_range": [i1, i2], "b_range": [j1, j2]}
                                                     for t, i1, i2, j1, j2 in ops[:6]]
@@ -203,7 +204,7 @@ def _canon_step_relative(P: Prog, i: int, seqs: list[list[int]], unfold: bool):
         return [tuple(arg) for arg in P.canon(i, False)]
     out = []
     for arg in P.canon(i, unfold):
-        if compact:   # [R17 mfast] the record's per-run tuples: each run's producer is remapped on its own
+        if compact:   # the record's per-run tuples: each run's producer is remapped on its own
             arg = _expand_mixed(arg)
         row = []
         for t in arg:
@@ -284,6 +285,8 @@ def main(a: Options) -> int:
     A = load_derived(a.a, a.label_a, compact=cp)
     B = load_oracle(a.b, a.label_b, compact=cp) if os.path.exists(os.path.join(a.b, "program.json")) else load_derived(a.b, a.label_b, compact=cp)
     res = {"schema": "cb-a/compare/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "a_dir": a.a, "b_dir": a.b, "unfold_a": a.unfold_a}
+    if B.oracle_rows is not None:
+        res["fold_form"] = CF.fold_in_form(B, [a.a])
     res["digests"] = {"a": A.digest, "b": B.digest, "equal": A.digest == B.digest}
     res["histograms"] = {"a": spec_histograms(A), "b": spec_histograms(B)}
     ha, hb = res["histograms"]["a"]["T_normalised"], res["histograms"]["b"]["T_normalised"]

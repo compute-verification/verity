@@ -99,7 +99,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
-        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs")
+        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -176,7 +176,7 @@ class Settings:
     #: which the install opens itself, on H1's window-open root or Pearl-C's weights' root (`pouw_h1_settings.OPENS`)
     challenger: str | None = None
     session: Mapping[str, Any] | None = None
-    #: H1's admissions (`pouw_h1_requests.ADMISSIONS`): None or ``round-0``, admit in round 0 only (#2722's live tiles
+    #: H1's admissions (`pouw_h1_requests.ADMISSIONS`): None or ``round-0``, admit in round 0 only (the live tiles
     #: are fixed before the first coin), or ``per-round``
     admission: str | None = None
     #: H1's and Pearl-C's ``gate(session, root)``: the challenger gate's open of the reserved session on that root
@@ -186,6 +186,8 @@ class Settings:
     #: ``graphs`` the engine's CUDA-graph capture sizes, none when eager (`pouw_h1_static.graph_pad`)
     served: Any = None
     graphs: tuple[int, ...] = ()
+    #: Pearl-C's: the lane's open period before ``session``'s reserve, or None (`pouw_h1_window.reserve_salt`, `period_reason`)
+    period: Mapping[str, Any] | None = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:

@@ -35,12 +35,13 @@ DEFINITION_CALLS = frozenset({"primitive", "composite", "PrimitiveDefinition", "
 
 def _core(name: str | None) -> bool:
     """`name` is core as it was before the platform move: under `verity`, except what moves since put there from outside it
-    (the catalog, the kernels, C-Flock, verity_experimental's multiproofs, private circuits and ports), with core's own
+    (the catalog, the kernels, C-Flock, the integration's Definitions, verity_experimental's multiproofs, private circuits and ports), with core's own
     protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock")
+                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
+                "verity.ml.definitions")
     return bool(name) and under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 

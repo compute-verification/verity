@@ -92,11 +92,11 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.program.kernels import flashmla_prefill_twin as PT
-from verity_vllm.program.kernels import flashmla_twin as T
-from verity_vllm.program.kernels.fp8_twins import np_f32_to_e4m3_sat
-from verity_vllm.program.registry import flashmla as F
-from verity_vllm.program.registry import flashmla_prefill as P
+from verity.ml.definitions.numerics import flashmla_prefill_twin as PT
+from verity.ml.definitions.numerics import flashmla_twin as T
+from verity.ml.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
+from verity.ml.definitions.registry import flashmla as F
+from verity.ml.definitions.registry import flashmla_prefill as P
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-flashmla-capture/v1"

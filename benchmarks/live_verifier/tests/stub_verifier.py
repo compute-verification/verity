@@ -20,7 +20,7 @@ import wire  # noqa: E402
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    for flag in ("--out", "--transcript", "--registry", "--verdict", "--port"):
+    for flag in ("--out", "--transcript", "--registry", "--port"):
         ap.add_argument(flag, required=True)
     a, _ = ap.parse_known_args()
     out, transcript = Path(a.out), Path(a.transcript)
@@ -32,12 +32,11 @@ def main() -> int:
     def then(v) -> None:
         got.update(registration=wire.registration_json(v.registration), registry=v.registry_json())
 
-    sessions, _ = T.run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=transcript, verdict=a.verdict,
-                        then=then)
+    sessions, _ = T.run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=transcript, then=then)
     Path(a.registry).write_text(json.dumps(got["registry"], indent=1))
     (out / "verifier.json").write_text(json.dumps(
         {"schema": "verity/remote-session/verifier/v0", "peer": ["127.0.0.1", 0], "registration": got["registration"],
-         "verdict": a.verdict, "sessions": sessions, "registry": got["registry"]}, indent=1))
+         "verdict": "lean", "sessions": sessions, "registry": got["registry"]}, indent=1))
     for k, s in enumerate(sessions):
         print(f"verifier: session {k}: accepted={s['accepted']} failure={s['failure']}", flush=True)
     return 0 if all(s["accepted"] for s in sessions) else 1
