@@ -261,3 +261,6 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
 
 ## 2026-10-27 03:10Z (coordinator) — vy-nebius-1: the route that works (ROWSEG)
 - A run with no pool is refused there, and the `proofs` pool there has one check slot. Use the Lean-records pool: `research run --on vy-nebius-1 … -- env CHECK_SLOTS=/workspace/research/locks/leanrec/slots python3 tools/verity/check/slot.py --by proofs -- nice -n 19 python3 tools/verity/lean/lean_changed.py --records Security --update` (or `… lean_changed.py --try FILE`; or `verity lean try FILE --on vy-nebius-1`). Its 6 trees are shared FCFS until 12:00Z.
+
+## 2026-10-27 03:35Z (coordinator) — honest half head
+- cursor/proofs-rowsfit-3a9d @ 7682f6090f = the honest-half head to merge (rowsfit + honfix HonestFixture/TopsAt/honest_half_fixture + honasm). r20261027-023733-2436 (cpu-3) FULL BUILD rc=0, 11445 jobs; TopsAt, HonestFixture, honest_half_tops, honest_half_fixture etc. axiom-clean. LOWRES: use it in the assembly relaunch. RECE: honest_half_fixture is built, so the lock listing waits only on recursiveKS_nontrivial (KSNONTRIV f8f2) and the witness run ids.
