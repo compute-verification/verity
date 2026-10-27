@@ -14,7 +14,7 @@ The Build is the traced one (`acquire.served.build`) term for term, assembled by
     the Commit seeds), the CUDA-graph dispatch (capture sizes, max_num_seqs, and under FA2 max_model_len) and the fused-MoE configs
     vLLM launched at each row count;
   * the device pin (`program.registry.bf16_gemm_check.device_pin`): the cuBLAS routes, the SM count the attention scheduler reads and
-    the compute capability, whose bindings the Build takes (`served_device`).
+    the compute capability, whose bindings the Build takes, both held to the device's card (`served_device`).
 
 A family without a layout, a config outside it (attention bias, shared experts or dense layers in an MoE, another activation or
 dtype), a pin whose kernels are not the layout's, a GEMM without a route or a step whose fused-MoE row count has no recorded launch is
@@ -282,7 +282,8 @@ def predict(role: str, device: str, schedule: list[dict[str, Any]], steps: int, 
     return SV.assemble(wired, plans, residual, b.kernels, pin["artifact"]["winners"],
                        source={"predicted": {"role": role, "device": device, "config": found[1], "pin": f"pins/served/{pin_file(role, device)}"}},
                        schedule=schedule, steps=steps, routes=dev["cublas"], capture_sizes=d["capture_sizes"], max_num_seqs=d["max_num_seqs"],
-                       device=SD.device_of(dev["compute_capability"], dev["sms"], max_model_len=d.get("max_model_len")),
+                       device=SD.device_of(dev["compute_capability"], dev["sms"], card=SD.CARD.get(device),
+                                           max_model_len=d.get("max_model_len")),
                        split_cap=SV.SPLIT_CAP, lm_head=lm_head, rank=rank)
 
 
