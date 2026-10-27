@@ -37,7 +37,7 @@ from typing import Any
 from verity_vllm.program.predict import scan_state as SS
 
 from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
-from verity.ml.windows.interface import K_MAX
+from verity.ml.windows.interface import K_MAX, LAST_BLOCK_BYTES, proof_block_k_log
 
 FIRST = "AttnBlockFirst_v1"
 END = "AttnHeadEnd_v1"
@@ -194,10 +194,11 @@ FEED_K = ((1024, 23), (2048, 24))
 
 
 def rows_k(rows: int) -> int:
-    """The least k_log of a unit of ``rows`` rows in and out: C-Flock's composer gives each an hm96 slot, the slots rounded up
+    """The least k_log of a unit of ``rows`` rows in and out (`proof_block_k_log` at no logic, one row past
+    `LAST_BLOCK_BYTES` and the rest a byte): C-Flock's composer gives each an hm96 slot, the slots rounded up
     to a power of two, at 2^19 bits a slot of block, and no block is under 2^22. Every `AllGather_v1{W, 64}` composed
     (W 2 to 128) and `{64, 16}` take exactly this at their W + 1 rows (`COMPOSED`), so a gather of 256 parts takes 2^28."""
-    return max(22, 19 + (rows - 1).bit_length())
+    return proof_block_k_log([LAST_BLOCK_BYTES + 1] + [1] * (rows - 1))
 
 
 def measured(lab: str) -> tuple[int, int, str]:
