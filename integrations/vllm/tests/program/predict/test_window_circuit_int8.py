@@ -58,9 +58,9 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     layer = "model.layers.0.self_attn.qkv_proj", "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.gate_up_proj"
     assert {(WB.weight_param(f"{w}.{t}", n), p, 0, n) for w in layer for t, p, n in (("weight", "w", 512),
                                                                                      ("weight_scale", "sw", 32))} <= reads
-    assert len(circuit.registered.params) == 24
-    assert {p.split("/", 1)[0] for p in circuit.registered.params} == {WC.WEIGHTS}
-    assert IF.input_count(json.loads(json.dumps(circuit.description())), pins={WC.WEIGHTS})["free"] == 0
+    assert len(circuit.registered.params) == 26
+    assert {p.split("/", 1)[0] for p in circuit.registered.params} == {WC.WEIGHTS, WC.SLOT_ROWS}
+    assert IF.input_count(json.loads(json.dumps(circuit.description())), pins={WC.WEIGHTS, WC.SLOT_ROWS})["free"] == 0
     assert _blocks(circuit) == _blocks(other)
     labels = _labels(circuit)
     assert all((lab >= 0).all() for lab in labels.values())

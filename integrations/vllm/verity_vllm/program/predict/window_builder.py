@@ -31,6 +31,14 @@ def weight_param(label: str, words: int) -> str:
     return f"{WEIGHTS}/{label}@{words}"
 
 
+def table_param(label: str, words: int) -> str:
+    """The registered parameter of weight ``label`` as a table of rows of ``words`` (an embedding's, `_Builder.table`):
+    ``weight_param(label, words)/table``, a registration of its own, since a table's rows are ``hm96-sha512/row-seg/v1``
+    leaves its opening reads in-circuit (`gates.embedding`) and a read's rows are ``hm96-sha512/row/v2`` leaves its unit
+    takes by reference, so a tied embedding read at the table's width (the token select's ``x0``) is the other one."""
+    return f"{weight_param(label, words)}/table"
+
+
 @dataclass(frozen=True)
 class Grain:
     """The units' size (CIR-95's at Llama-3.2-1B by default): a GEMM slice reads ``gemm_words`` weight words (N = gemm_words
@@ -176,9 +184,9 @@ class _Builder:
         self._wire(tid, "parts", u, n, rows, ((n, s),))
         return tuple(Row(tid, u + i, "o0", len(rows) * rows[0].words) for i in range(n))
 
-    def weight(self, lo: int, hi: int, words: int) -> tuple[str, int]:
-        """The registered parameter of the one weight words [lo, hi) of the weights record lie in, read in rows of ``words``
-        (`weight_param`), and ``lo`` within it; refused where they span two weights."""
+    def _weight(self, lo: int, hi: int, words: int) -> tuple[str, int, int]:
+        """The one weight words [lo, hi) of the weights record lie in, read in rows of ``words``: its label, its words and
+        ``lo`` within it; refused where they span two weights or miss its rows."""
         k = bisect.bisect_right([w[1] for w in self.weights], lo) - 1
         if k < 0 or hi > self.weights[k][1] + self.weights[k][2]:
             raise Unexpressible(f"a weight read of words [{lo}, {hi}) of the weights record spans two weights")
@@ -186,9 +194,15 @@ class _Builder:
         if n % words or (lo - first) % words:
             raise Unexpressible(f"weight {label} of {n} words read from word {lo - first} in rows of {words}: its registration "
                                 "is whole rows of the port, every read on a row")
+        return label, n, lo - first
+
+    def weight(self, lo: int, hi: int, words: int) -> tuple[str, int]:
+        """The registered parameter of the one weight words [lo, hi) of the weights record lie in, read in rows of ``words``
+        (`weight_param`), and ``lo`` within it; refused where they span two weights."""
+        label, n, off = self._weight(lo, hi, words)
         name = weight_param(label, words)
         self.params[name] = n
-        return name, lo - first
+        return name, off
 
     def read(self, tid: str, port: str, at: int, radix: Sequence[int], base: int, step: Sequence[int]) -> None:
         """Units ``[at, at + Π radix)`` of ``tid`` read ``port`` from word ``base`` of the weights record on (``step`` words a
@@ -209,9 +223,12 @@ class _Builder:
 
     def table(self, lo: int, words: int, rows: int) -> IF.Table:
         """The registered table of ``rows`` rows of ``words`` from word ``lo`` of the weights record (an embedding's), one a
-        weight and width."""
-        param, off = self.weight(lo, lo + words * rows, words)
-        return self.tables.setdefault((lo, words, rows), IF.Table(f"table/{param}+{off}", param, off, words, rows))
+        weight and width, its parameter its own (`table_param`)."""
+        label, n, off = self._weight(lo, lo + words * rows, words)
+        param = table_param(label, words)
+        self.params[param] = n
+        return self.tables.setdefault((lo, words, rows), IF.Table(f"table/{weight_param(label, words)}+{off}", param, off,
+                                                                  words, rows))
 
     def _wire(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
               lead: tuple[tuple[int, int], ...] = ()) -> None:

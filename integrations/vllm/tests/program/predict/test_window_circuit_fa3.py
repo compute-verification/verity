@@ -48,7 +48,7 @@ def test_an_fa3_attention_is_its_heads_each_reading_its_kv_groups_gathers():
     assert [_source(circuit, gather5, "parts", 0, r) for r in range(5)] == [(rope, 24 * p + 8, "o0") for p in range(5)]
     assert [_source(circuit, gather5, "parts", 2, r) for r in range(5)] == [(rope, 24 * p + 10, "o0") for p in range(5)]
     assert {_source(circuit, gather5, "parts", 4, r)[0] for r in range(5)} == {pair}
-    assert IF.input_count(json.loads(json.dumps(circuit.description())), pins={WC.WEIGHTS})["free"] == 0
+    assert IF.input_count(json.loads(json.dumps(circuit.description())), pins={WC.WEIGHTS, WC.SLOT_ROWS})["free"] == 0
     labels = _labels(circuit)
     assert all((lab >= 0).all() for lab in labels.values())
     for w in circuit.wires:

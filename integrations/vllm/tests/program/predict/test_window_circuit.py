@@ -213,26 +213,27 @@ def test_each_output_is_its_select_masked_by_its_slots_occupancy_word(window):
 def test_the_weights_and_the_embedding_are_registered_reads(window):
     """Each weight a port reads is its own registered parameter at the port's row width (`WB.weight_param`): GEMM slices,
     norms and RoPE read their rows from it at public positions, and the embedding is `EmbeddingRead_v1`'s opening of the
-    table over its V rows of H, keyed by ``tok`` and pinned by its verdict. With TINY's tied embeddings the LM head's slices
-    read the embedding at 512 words a row, and the token select's ``x0`` unit its first row at 64, the table's own
-    parameter. Both slots' reads of a node are one pattern (RoPE's a slot digit of step 0)."""
+    table over its V rows of H, keyed by ``tok`` and pinned by its verdict, the table a parameter of its own
+    (`WB.table_param`, its rows ``row-seg`` leaves). With TINY's tied embeddings the LM head's slices read the embedding at
+    512 words a row, and the token select's ``x0`` unit its first row at 64, the table's width but a ``row/v2`` read. Both
+    slots' reads of a node are one pattern (RoPE's a slot digit of step 0)."""
     circuit, ids = window
     reg = circuit.registered
     emb, cs = "model.embed_tokens.weight", "model.layers.0.self_attn.rotary_emb.cos_sin_cache"
     assert {p: n for p, n in reg.params.items() if "layers.1" not in p} == {
-        WB.weight_param(emb, 512): 16384, WB.weight_param(emb, 64): 16384, WB.weight_param(cs, 16): 1024,
-        WB.weight_param("model.norm.weight", 64): 64,
+        WB.weight_param(emb, 512): 16384, WB.weight_param(emb, 64): 16384, WB.table_param(emb, 64): 16384,
+        WB.weight_param(cs, 16): 1024, WB.weight_param("model.norm.weight", 64): 64,
         **{WB.weight_param(f"model.layers.0.{w}.weight", n): k for w, n, k in (
             ("input_layernorm", 64, 64), ("post_attention_layernorm", 64, 64), ("self_attn.qkv_proj", 512, 8192),
             ("self_attn.o_proj", 512, 4096), ("mlp.gate_up_proj", 512, 16384), ("mlp.down_proj", 512, 8192))},
         WC.SLOT_ROWS: 2 * 12}
-    assert len(reg.params) == 17
+    assert len(reg.params) == 18
     assert Counter((r.reader, r.port) for r in reg.reads) == {  # a layer's reads its own, a pattern a position
         (ids["Gemm_v2{K=64,N=8}"], "w"): 35, (ids["Gemm_v2{K=128,N=4}"], "w"): 10, (ids["Gemm_v2{K=64,N=1}"], "w"): 1,
         (ids["RMSNormFusedCuda_v2{N=64}"], "w"): 20, (ids["RMSNormTriton_v5{N=64}"], "w"): 1, (ids["RoPEHead_v1{D=16}"], "cs"): 20,
         (ids[ROW], "row"): 1}
     table = f"table/{WB.weight_param(emb, 64)}+0"
-    assert [t.doc() for t in reg.tables] == [{"name": table, "param": WB.weight_param(emb, 64), "offset": 0, "words": 64,
+    assert [t.doc() for t in reg.tables] == [{"name": table, "param": WB.table_param(emb, 64), "offset": 0, "words": 64,
                                               "rows": 256}]
     assert sorted(r.doc().items() for r in reg.roots) == sorted(
         {"reader": ids[EMB], "port": p, "table": table, "of": p, "at": 0, "units": 10}.items() for p in ("domain", "root"))
