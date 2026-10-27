@@ -125,6 +125,71 @@ def test_token_select_combine_v2_equals_v1(V, C):
         _same(new, old, row[0], row[1:], [int(i) for i in RNG.integers(0, C, n)])
 
 
+ONE, NEG_ONE, NAN, NEG_INF = 0x3F80, 0xBF80, 0x7FC0, b1.NEG_INF_BF16
+
+
+def _partials(n: int, C: int, N: int) -> list[tuple[int, list[int], list[int]]]:
+    """(x0, best, idx) for n partials in runs of N: `_rows`' words with indices in a chunk and anywhere in 32 bits (their sums
+    wrap); a maximum tied at both ends of every run boundary, at the row's ends, and with x0; +0 and -0 tied across a boundary
+    both ways round; a NaN x0; a NaN ahead of each run's maximum; and partials of only -inf and NaNs."""
+    out = []
+    for k, row in enumerate(_rows(n + 1, 3)):
+        hi = C if k % 2 else 1 << 32
+        out.append((row[0], row[1:], [int(i) for i in RNG.integers(0, hi, n)]))
+    idx = [int(i) for i in RNG.integers(0, C, n)]
+    bounds = [lo for lo in range(N, n, N)]
+    for a, b in [(lo - 1, lo) for lo in bounds] + [(0, n - 1)]:
+        out.append((NEG_ONE, [ONE if j in (a, b) else NEG_ONE for j in range(n)], idx))
+        out.append((ONE, [ONE if j in (a, b) else NEG_ONE for j in range(n)], idx))
+        for z0, z1 in ((0x0000, 0x8000), (0x8000, 0x0000)):
+            out.append((NEG_ONE, [z0 if j == a else z1 if j == b else NEG_ONE for j in range(n)], idx))
+    for x0 in (NAN, 0xFFC1, NEG_INF):
+        out.append((x0, [ONE] * n, idx))
+    out.append((NEG_ONE, [NAN if j % N == 0 else 0x4000 if j == n - 1 else ONE for j in range(n)], idx))
+    out.append((NEG_INF, [NAN if j % 2 else NEG_INF for j in range(n)], idx))
+    return out
+
+
+@pytest.mark.parametrize("V,C,N", [(2, 1, 1), (130, 64, 2), (200, 64, 1), (200, 64, 2), (200, 64, 3), (200, 64, 4),
+                                   (200, 64, 9), (64 * 9, 64, 4), (64 * 9, 64, 8), (1000, 7, 13)])
+def test_token_select_combine_v3_equals_v2(V, C, N):
+    """Runs of N partials and the rest, one run (N >= n) and runs of one; its body is the runs' reduces and v2 over them."""
+    new, old = bind(DF.TokenSelectCombineV3, V=V, C=C, N=N), bind(DF.TokenSelectCombineV2, V=V, C=C)
+    assert _dead(new) == 0
+    n = len(b1.chunks(V, C))
+    runs = [min(N, n - lo) for lo in range(0, n, N)]
+    assert [nd.fn.id for nd in new.body.nodes] == [f"TokenSelectReduce_v1{{N={r},C={C}}}" for r in runs] + [
+        f"TokenSelectCombine_v2{{V={V},C={min(N * C, V)}}}"]
+    for x0, best, idx in _partials(n, C, N):
+        _same(new, old, x0, best, idx)
+
+
+def test_token_select_combine_v3_equals_v2_at_llama_vocabulary():
+    """Llama-3.2-1B's V = 128,256 in 167 chunks of 768, reduced in runs of 84 and 83."""
+    new, old = bind(DF.TokenSelectCombineV3, V=128256, C=768, N=84), bind(DF.TokenSelectCombineV2, V=128256, C=768)
+    assert [nd.fn.id for nd in new.body.nodes] == ["TokenSelectReduce_v1{N=84,C=768}", "TokenSelectReduce_v1{N=83,C=768}",
+                                                   "TokenSelectCombine_v2{V=128256,C=64512}"]
+    for x0, best, idx in _partials(167, 768, 84)[::5]:
+        _same(new, old, x0, best, idx)
+
+
+@pytest.mark.parametrize("N,C", [(1, 8), (3, 8), (4, 16), (2, 64)])
+def test_token_select_reduce_v1_of_chunks_is_the_wider_chunk(N, C):
+    """N chunks' partials reduced are `TokenSelectChunk_v2{N·C}`'s partial of their logits."""
+    assert _dead(bind(DF.TokenSelectReduceV1, N=N, C=C)) == 0
+    wide, chunk, reduce = (bind(DF.TokenSelectChunkV2, C=N * C), bind(DF.TokenSelectChunkV2, C=C),
+                           bind(DF.TokenSelectReduceV1, N=N, C=C))
+    rows = _logit_rows(N * C) + [[NAN if j % C == 0 else ONE if j in (C - 1, C) else NEG_ONE for j in range(N * C)]]
+    for row in rows:
+        parts = [evaluate(chunk, row[i * C:(i + 1) * C]) for i in range(N)]
+        assert evaluate(reduce, [p[0] for p in parts], [p[1] for p in parts]) == evaluate(wide, row), row
+
+
+def test_token_select_combine_v3_refuses_an_empty_run():
+    with pytest.raises(ValueError, match="N = 0 partials a run"):
+        bind(DF.TokenSelectCombineV3, V=200, C=64, N=0).body
+
+
 def _flat_ands(V: int) -> tuple[int, int]:
     """``TokenSelect_v4{V}``'s flat lowering (`ir_lower`): its ANDs and its widest operand."""
     Cc = Circuit()

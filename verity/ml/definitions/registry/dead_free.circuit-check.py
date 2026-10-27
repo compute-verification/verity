@@ -7,10 +7,11 @@ from typing import Any, Callable
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The RMSNorm at one warp's worth of columns and at Llama-3.2-1B's hidden size (8 warps' chunks), the selects at V = 16,
-    TokenSelect_v4 at four chunks, the last one short, with its chunk and its combine there, and the top-p pieces at the registered
-    split count S = 32, the sampler at V = 64 (where `GumbelTopPTokenSelect_v2` has 6,034 dead gates), and FA2's attention with a
-    first block of 16 keys below kBlockN 32 (where `Attention_v5` has 2 dead gates a head), v19's head also at a first block of 8
-    keys (whose V rows `AttnBlockFirst_v1` pads to a k-step)."""
+    TokenSelect_v4 at four chunks, the last one short, with its chunk and its combine there (v3's in runs of 3 and 1, and a run
+    of 3 reduced), and the top-p pieces at the registered split count S = 32, the sampler at V = 64 (where
+    `GumbelTopPTokenSelect_v2` has 6,034 dead gates), and FA2's attention with a first block of 16 keys below kBlockN 32 (where
+    `Attention_v5` has 2 dead gates a head), v19's head also at a first block of 8 keys (whose V rows `AttnBlockFirst_v1` pads to
+    a k-step)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import dead_free as DF, hopper, prims as P
 
@@ -27,6 +28,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("TokenSelect_v4", lambda: bind(DF.TokenSelectV4, V=200)),
         ("TokenSelectChunk_v2", lambda: bind(DF.TokenSelectChunkV2, C=DF.CHUNK)),
         ("TokenSelectCombine_v2", lambda: bind(DF.TokenSelectCombineV2, V=200, C=DF.CHUNK)),
+        ("TokenSelectReduce_v1", lambda: bind(DF.TokenSelectReduceV1, N=3, C=DF.CHUNK)),
+        ("TokenSelectCombine_v3", lambda: bind(DF.TokenSelectCombineV3, V=200, C=DF.CHUNK, N=3)),
         ("TopPMask_v3", lambda: bind(DF.TopPMaskV3, V=16)),
         ("GumbelSelectF32GivenGreedy_v2", lambda: bind(DF.GumbelSelectF32GivenGreedyV2, V=16)),
         ("GumbelTopPTokenSelectSharedGreedy_v2", lambda: bind(DF.GumbelTopPTokenSelectSharedGreedyV2, V=16)),
