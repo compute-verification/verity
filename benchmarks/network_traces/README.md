@@ -45,8 +45,8 @@ vy-dc-h200-2's `serve-openai` on :18782, inside the scan's class: prompts of 256
 class's 1,024 reach the warden late, NET-107), each answered greedily with at most 64 ids, ending at the base model's
 EOS id 128001. It runs at a given UTC time when asked. vllm starts the endpoint by hand (serve-openai directly with
 `examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, and posts its
-records as an art without `requests.jsonl`, whose prompt ids stay on the served node, and with `users.jsonl`, each
-engine request's id and its warden user. `chain` rebuilds `requests.jsonl` from that map and the kept warden run's
+records as an art without `requests.jsonl`, whose prompt ids stay on the served node, and with `request_users.jsonl`,
+each engine request's id and its warden user. `chain` rebuilds `requests.jsonl` from that map and the kept warden run's
 certified I/O in a 0700 directory beside the kept fetch, so the endpoint step checks the endpoint's trace against the
 certified I/O. The lane's fetch, with `witness/`, stays in a 0700
 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the session's outcome. `chain` runs

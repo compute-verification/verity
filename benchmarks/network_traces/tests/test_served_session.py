@@ -186,7 +186,7 @@ def test_chain_on_vllms_art_reads_requests_jsonl_rebuilt_in_keep_from_its_users_
     (keep / RUN / "fetch.tar.gz").write_bytes(b"")
     for f in ("advice_trace.jsonl", "windows.jsonl", "serve.json"):
         (art / f).write_text("{}\n")
-    (art / SS.USERS).write_text("".join(json.dumps({"engine_id": f"e{j}", "user": f"user-{j}"}) + "\n" for j in range(3)))
+    (art / SS.USERS).write_text("".join(json.dumps({"id": f"e{j}", "user": f"user-{j}"}) + "\n" for j in range(3)))
     (tmp_path / "bin" / "research").write_text(f'#!/bin/sh\n[ "$*" = "data fetch art:ep --to $5" ] && cp -a {art.parent}/. "$5/"\n')
     (tmp_path / "bin" / "research").chmod(0o755)
     monkeypatch.setattr(SS, "HERE", here)
