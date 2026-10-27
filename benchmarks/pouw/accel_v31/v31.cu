@@ -1308,6 +1308,38 @@ struct NoMemRow {
   u32 row;
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, NoMemSrc{(u32)pos}, row, x); }
 };
+// A no-fold call's words rows (S = 1) read from cuBLASLt's int32 D = X W'^T (m x N row-major), its low halves: the row's
+// 16-byte piece at off is cells c0 + off / 2 .. + 7 of the tile at base (one tile row's 8 adjacent cells, 32 bytes of D),
+// the bytes V31Row reads from the tile-major words buffer
+struct LtSrc {
+  const int* base;
+  u64 N;
+  u32 c0, pfm;
+  DEV const int* at(u32 off) const {
+    const u32 c = c0 + off / 2;
+    return base + (u64)(c >> 7) * N + (c & 127);
+  }
+  DEV uint4 ld16(u32 off) const {
+    const int* p = at(off);
+    const uint4 a = __ldg(reinterpret_cast<const uint4*>(p)), b = __ldg(reinterpret_cast<const uint4*>(p + 4));
+    return make_uint4(__byte_perm(a.x, a.y, 0x5410), __byte_perm(a.z, a.w, 0x5410), __byte_perm(b.x, b.y, 0x5410),
+                      __byte_perm(b.z, b.w, 0x5410));
+  }
+  DEV void pf(u32 off) const {   // the next 128 row bytes: 64 cells, 256 bytes of D
+    pf_to(reinterpret_cast<const uint8_t*>(at(off)), pfm);
+    pf_to(reinterpret_cast<const uint8_t*>(at(off + 64)), pfm);
+  }
+};
+struct LtRow {
+  const int* D;
+  u64 lpt, N, tiles_n;
+  u32 row, pf;
+  DEV LtSrc src(u64 pos) const {
+    const u64 t = pos / lpt, j = pos % lpt;
+    return LtSrc{D + (t / tiles_n) * TILE * N + (t % tiles_n) * TILE, N, (u32)(j * row / 2), pf};
+  }
+  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, src(pos), row, x, pf != 0); }
+};
 
 // ---------------------------------------------------------------- the commit in at most cap CTAs an SM
 // commit_gpu's small path launches a CTA for every 128 leaves, and up to 5 of them sit on an SM, so a GEMM CTA launched
@@ -1524,6 +1556,14 @@ static void lt_run(Lt& L, const int8_t* A, const int8_t* B, int* D, cudaStream_t
   const int32_t one = 1, zero = 0;
   CL(cublasLtMatmul(L.h, L.op, &one, B, L.la, A, L.lb, &zero, D, L.ld, D, L.ld, &L.algo, L.ws, L.wsz, st));
 }
+static void lt_free(Lt& L) {
+  cublasLtMatrixLayoutDestroy(L.la);
+  cublasLtMatrixLayoutDestroy(L.lb);
+  cublasLtMatrixLayoutDestroy(L.ld);
+  cublasLtMatmulDescDestroy(L.op);
+  cublasLtDestroy(L.h);
+  cudaFree(L.ws);
+}
 
 // The second baseline: CUTLASS's int8 GEMMs that sm_120 runs (the harness's cutlass_2x.cu, kind 7: mma.sync IMMA.16832
 // at four tile shapes; linked in under -DV31_CUTLASS), the fastest of those that implement the shape (5 calls each), D =
@@ -1634,7 +1674,8 @@ static std::string env_str(const char* name, const char* dflt) {
 // the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl).
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
-      ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0);
+      ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
+      ltw = env_int("V31_LTW", 0);   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -1937,6 +1978,10 @@ struct Fill {
   uint8_t *dA = nullptr, *dB = nullptr;
   uint16_t* perm = nullptr;
   uint16_t* words[2] = {nullptr, nullptr};
+  int* D[2] = {nullptr, nullptr};     // V31_LTW at S = 1: cuBLASLt's X W'^T in place of words
+  uint16_t* wpack = nullptr;          // testing: D packed as words
+  Lt lt{};
+  bool ltw = false;
   Committer cm[2];
   Maps* maps = nullptr;
   cudaStream_t s0 = nullptr, s1 = nullptr, so = nullptr;   // compute, commit, openings
@@ -1979,6 +2024,7 @@ struct Fill {
     pair = gemm_pair(tiles_n);
     items = tiles >> pair;
     grid = std::min(items, nsm);
+    ltw = kn.ltw && S == 1;
     if (kn.ccta < 0 || kn.ccta > 8) { fprintf(stderr, "V31_CCTA: 0 to 8\n"); exit(2); }
     own = !c0;
     if (own) {
@@ -1999,7 +2045,8 @@ struct Fill {
     dA = dalloc<uint8_t>((size_t)m * kb64); dB = dalloc<uint8_t>((size_t)n * kb64);
     perm = dalloc<uint16_t>((size_t)NT * lp);
     for (int b = 0; b < 2; b++) {
-      words[b] = dalloc<uint16_t>((size_t)tiles * S * TILE * TILE);
+      if (ltw) D[b] = dalloc<int>((size_t)m * n);
+      else words[b] = dalloc<uint16_t>((size_t)tiles * S * TILE * TILE);
       cm[b].init(params, leaves, (u32)row, false, false, 0, dom, true, 1);
       CK(cudaMallocHost(&ksw[b], 128));
       ks_consts(params.ks, ksw[b]);
@@ -2008,6 +2055,7 @@ struct Fill {
     maps = dalloc<Maps>(1);
     CK(cudaMemcpy(maps, &mp, sizeof mp, cudaMemcpyHostToDevice));
     gemm_attrs();
+    if (ltw) lt_setup(lt, m, n, k, X, W, D[0], s0);
     for (int b = 0; b < 2; b++) {
       CK(cudaEventCreateWithFlags(&ev_comp[b], cudaEventDisableTiming));
       CK(cudaEventCreateWithFlags(&ev_done[b], cudaEventDisableTiming));
@@ -2018,8 +2066,10 @@ struct Fill {
   void release() {
     CK(cudaDeviceSynchronize());
     for (void* p : {(void*)A, (void*)B, (void*)X, (void*)W, (void*)U, (void*)V, (void*)dA, (void*)dB, (void*)perm, (void*)words[0],
-                    (void*)words[1], (void*)maps, (void*)gctr, (void*)pl.ctl, (void*)pl.claim, (void*)opos, (void*)obuf})
+                    (void*)words[1], (void*)D[0], (void*)D[1], (void*)wpack, (void*)maps, (void*)gctr, (void*)pl.ctl,
+                    (void*)pl.claim, (void*)opos, (void*)obuf})
       cudaFree(p);
+    if (ltw) lt_free(lt);
     for (int b = 0; b < 2; b++) {
       cm[b].release();
       cudaFreeHost(ksw[b]);
@@ -2061,6 +2111,7 @@ struct Fill {
   }
   // launches that share gctr run in one stream's order, so each one's base is the work items launched before it
   void gemm(cudaStream_t st, int b) {
+    if (ltw) { lt_run(lt, X, W, D[b], st); return; }
     gemm_launch<true>(pair, grid, st,
                       GArgs{maps, words[b], nullptr, nullptr, m, n, k, L, S, 0, 8, lp, 0, kn.dyn ? gctr : nullptr, gbase, 0});
     gbase += (u32)items;
@@ -2069,6 +2120,18 @@ struct Fill {
     const uint8_t* w = reinterpret_cast<const uint8_t*>(words[b]);
     return V31Row{w, w, (u64)lpt, (u64)lpt, (u64)n, (u64)tiles_n, (u32)row, (u32)S, (u32)kn.pf};
   }
+  LtRow ltrow(int b) const { return LtRow{D[b], (u64)lpt, (u64)n, (u64)tiles_n, (u32)row, (u32)kn.pf}; }
+  void leaves_nodes(int b, cudaStream_t st) {
+    if (ltw) pl.leaves_nodes(cm[b], ltrow(b), kn.ccta, st);
+    else pl.leaves_nodes(cm[b], rowsrc(b), kn.ccta, st);
+  }
+  // copy b's values poisoned (testing)
+  void poison(int b, cudaStream_t st) {
+    if (ltw) gk::poison(D[b], (size_t)m * n * 4, st);
+    else gk::poison(words[b], (size_t)tiles * S * 32768, st);
+  }
+  // copy b's words as the tile-major buffer (testing): words[b], or D[b] packed into wpack
+  const uint16_t* words_of(int b);
   void set_ks(int b, cudaStream_t st) {
     CK(cudaMemcpyToSymbolAsync(C, ksw[b], 128, offsetof(Consts, ks), cudaMemcpyHostToDevice, st));
   }
@@ -2077,7 +2140,7 @@ struct Fill {
     set_ks(b, s1);
     pl.salts(cm[b], kn.ccta, s1);
     CK(cudaStreamWaitEvent(s1, ev_comp[b]));
-    pl.leaves_nodes(cm[b], rowsrc(b), kn.ccta, s1);
+    leaves_nodes(b, s1);
     CK(cudaEventRecord(ev_done[b], s1));
   }
   void flush() {
@@ -2111,7 +2174,10 @@ struct Fill {
     gemm(s0, b);
     if (ch.kind == 2) {
       const int stride = std::max(1, (int)std::lround(1.0 / ch.frac));
-      forge_kernel<<<(tiles + stride - 1) / stride, 256, 0, s0>>>(words[b], nullptr, S, ch.s0, stride, tiles_n, n, 0xF0F0u);
+      if (ltw)   // forge_kernel's O path: the same 16 low bits in D
+        forge_kernel<<<(tiles + stride - 1) / stride, 256, 0, s0>>>(nullptr, D[b], S, 0, stride, tiles_n, n, 0xF0F0u);
+      else
+        forge_kernel<<<(tiles + stride - 1) / stride, 256, 0, s0>>>(words[b], nullptr, S, ch.s0, stride, tiles_n, n, 0xF0F0u);
     }
     CK(cudaEventRecord(ev_comp[b], s0));
     if (kn.sched == 1) pend = b;
@@ -2131,13 +2197,33 @@ struct Fill {
   // positions' rows (row bytes each) and paths (depth digests each, leaf level first) of copy b, gathered on the device
   void open(int b, const u64* pos, int np, uint8_t* rows, uint8_t* paths);
 };
+// a leaf's row bytes: from the words buffer, or (V31_LTW) from cuBLASLt's D
+struct WordsPiece {
+  const uint8_t* w;
+  u32 row;
+  DEV uint4 piece(u64 pos, u32 off) const { return *reinterpret_cast<const uint4*>(w + pos * row + off); }
+};
+struct LtPiece {
+  LtRow r;
+  DEV uint4 piece(u64 pos, u32 off) const { return r.src(pos).ld16(off); }
+};
+// testing: D (S = 1) as the tile-major words buffer, 8 cells a thread
+__global__ void pack_kernel(const int* __restrict__ D, uint16_t* __restrict__ words, u64 N, u64 tiles_n, u64 tiles) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= tiles * (TILE * TILE / 8)) return;
+  const u64 tile = t / (TILE * TILE / 8);
+  const u32 c = (u32)(t % (TILE * TILE / 8)) * 8;
+  *reinterpret_cast<uint4*>(words + tile * TILE * TILE + c) =
+      LtSrc{D + (tile / tiles_n) * TILE * N + (tile % tiles_n) * TILE, N, c, 0}.ld16(0);
+}
 // a thread a (position, 16-byte piece) of the rows, then a (position, level) of the paths
-__global__ void open_kernel(const uint8_t* __restrict__ words, const u64* __restrict__ levels, u64 width, int depth, int row,
-                            const u64* __restrict__ pos, int np, uint8_t* __restrict__ rows, uint8_t* __restrict__ paths) {
+template <class P>
+__global__ void open_kernel(P src, const u64* __restrict__ levels, u64 width, int depth, int row, const u64* __restrict__ pos,
+                            int np, uint8_t* __restrict__ rows, uint8_t* __restrict__ paths) {
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x, rq = (u64)np * (row / 16);
   if (t < rq) {
     const u64 p = t / (row / 16), c = t % (row / 16);
-    *reinterpret_cast<uint4*>(rows + p * row + 16 * c) = *reinterpret_cast<const uint4*>(words + pos[p] * row + 16 * c);
+    *reinterpret_cast<uint4*>(rows + p * row + 16 * c) = src.piece(pos[p], (u32)(16 * c));
   } else if (t < rq + (u64)np * depth) {
     const u64 p = (t - rq) / depth;
     const int d = (int)((t - rq) % depth);
@@ -2157,11 +2243,23 @@ void Fill::open(int b, const u64* pos, int np, uint8_t* rows, uint8_t* paths) {
   }
   CK(cudaMemcpyAsync(opos, pos, 8 * (size_t)np, cudaMemcpyHostToDevice, so));
   const u64 th = (u64)np * (row / 16 + depth);
-  open_kernel<<<(unsigned)((th + 255) / 256), 256, 0, so>>>(reinterpret_cast<const uint8_t*>(words[b]), cm[b].levels,
-                                                             cm[b].width, depth, row, opos, np, obuf, obuf + (size_t)np * row);
+  const unsigned g = (unsigned)((th + 255) / 256);
+  if (ltw)
+    open_kernel<<<g, 256, 0, so>>>(LtPiece{ltrow(b)}, cm[b].levels, cm[b].width, depth, row, opos, np, obuf, obuf + (size_t)np * row);
+  else
+    open_kernel<<<g, 256, 0, so>>>(WordsPiece{reinterpret_cast<const uint8_t*>(words[b]), (u32)row}, cm[b].levels, cm[b].width,
+                                   depth, row, opos, np, obuf, obuf + (size_t)np * row);
   CK(cudaMemcpyAsync(rows, obuf, (size_t)np * row, cudaMemcpyDeviceToHost, so));
   CK(cudaMemcpyAsync(paths, obuf + (size_t)np * row, need - (size_t)np * row, cudaMemcpyDeviceToHost, so));
   CK(cudaStreamSynchronize(so));
+}
+const uint16_t* Fill::words_of(int b) {
+  if (!ltw) return words[b];
+  if (!wpack) wpack = dalloc<uint16_t>((size_t)tiles * TILE * TILE);
+  const u64 th = (u64)tiles * (TILE * TILE / 8);
+  pack_kernel<<<(unsigned)((th + 255) / 256), 256, 0, s0>>>(D[b], wpack, (u64)n, (u64)tiles_n, (u64)tiles);
+  CK(cudaStreamSynchronize(s0));
+  return wpack;
 }
 
 static std::vector<uint8_t> readfile(const std::string& p, size_t want) {
@@ -2476,7 +2574,7 @@ static void fill_samples(Fill& f, int b, const std::string& dir, const std::stri
     const std::string s = "t" + std::to_string(i) + "_";
     d.bytes(s + "A", A + (size_t)tm * TILE * f.k, (size_t)TILE * f.k, f.s0);
     d.bytes(s + "B", f.B + (size_t)tn * TILE * f.k, (size_t)TILE * f.k, f.s0);
-    d.bytes(s + "words", f.words[b] + (size_t)tile * f.S * TILE * TILE, (size_t)f.S * 32768, f.s0);
+    d.bytes(s + "words", f.words_of(b) + (size_t)tile * f.S * TILE * TILE, (size_t)f.S * 32768, f.s0);
     d.digests(s + "leaves", f.cm[b].levels + 8 * (size_t)tile * f.lpt, f.lpt, f.s0);
   }
 }
@@ -2512,7 +2610,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     f.set_seeds(sd.data());
     Lt lt;
     lt_setup(lt, m, n, k, A, f.B, D, f.s0);
-    gk::poison(f.words[0], (size_t)f.tiles * f.S * 32768, f.s0);
+    f.poison(0, f.s0);
     gk::poison(f.cm[0].levels, f.levels_count() * 64, f.s0);
     CK(cudaStreamSynchronize(f.s0));
     const int b0 = f.issue(ks.data(), A);
@@ -2565,7 +2663,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            for (int i = 0; i < r; i++) {
              f.set_ks(0, s);
              f.pl.salts(f.cm[0], f.kn.ccta, s);
-             f.pl.leaves_nodes(f.cm[0], f.rowsrc(0), f.kn.ccta, s);
+             f.leaves_nodes(0, s);
            }
          }},
         {"call", [&](cudaStream_t s, int r) {
@@ -2575,7 +2673,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
              f.gemm(s, 0);
              f.set_ks(0, s);
              f.pl.salts(f.cm[0], f.kn.ccta, s);
-             f.pl.leaves_nodes(f.cm[0], f.rowsrc(0), f.kn.ccta, s);
+             f.leaves_nodes(0, s);
            }
          }},
         {"ovl", [&](cudaStream_t s, int r) { ovl(s, r, A, false); }},
@@ -2589,7 +2687,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     gk::summary(tm, arms, stderr);
     // the timed schedule's own values: two overlapped calls into poisoned buffers, the last one's tiles to NAME-ovl
     for (int b = 0; b < 2; b++) {
-      gk::poison(f.words[b], (size_t)f.tiles * f.S * 32768, f.s0);
+      f.poison(b, f.s0);
       gk::poison(f.cm[b].levels, f.levels_count() * 64, f.s0);
     }
     CK(cudaStreamSynchronize(f.s0));
@@ -2617,10 +2715,11 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d, \"splitk\": %d, \"candidates\": %d}, "
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
-           "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"arms\": {",
+           "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"arms\": {",
            name, m, n, k, lp, L, row, f.S, (unsigned long long)f.leaves, prop.name, f.nsm, f.grid, lt.algo_id, lt.tile, lt.stages,
            lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false", f.kn.carve, f.kn.dyn,
-           f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES, f.pair ? G_BN : TILE, f.kn.sched);
+           f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES, f.pair ? G_BN : TILE, f.kn.sched,
+           f.ltw ? 1 : 0);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     const double l = at("lt");
@@ -2802,7 +2901,7 @@ int v31_words(void* h, uint64_t c, uint8_t* out) {
   Fill& f = ctx_of(h)->f;
   const int b = f.ready(c);
   if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
-  CK(cudaMemcpy(out, f.words[b], (size_t)f.tiles * f.S * 32768, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(out, f.words_of(b), (size_t)f.tiles * f.S * 32768, cudaMemcpyDeviceToHost));
   return 0;
 }
 int v31_levels(void* h, uint64_t c, uint8_t* out) {

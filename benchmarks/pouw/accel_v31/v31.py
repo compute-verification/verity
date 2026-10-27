@@ -842,7 +842,8 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]
-        variant = f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
+        variant = (f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}" + (f" p{r['pf']}" if r.get("pf") else "")
+                   + (" ltw" if r.get("ltw") else ""))
         cut, gcut = ((f"{ms['cutlass']['ms']:.3f}", f"{r['gamma_ovl_cutlass']:.3f}") if "cutlass" in ms else ("-", "-"))
         parts = ", ".join(f"{ms[x]['ms']:.3f}" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
         print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {ms['lt']['ms']:.3f} | {cut} | "
