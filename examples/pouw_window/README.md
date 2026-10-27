@@ -22,7 +22,9 @@ uv run verity example pouw-window --stage OUT    # one honest statement's circui
 ~~~
 
 `PYTHONPATH=benchmarks/pouw` is for the headline's ε budget (`accounting.headline` imports PoUW's `eps_budget.py`), which
-the window's check doesn't need. `--stage OUT` stages the statement through C-Flock's `UnitStager` for C-Flock `--zk` and
+the window's check doesn't need. Today the run stops there, before it prints the verdicts: `accounting.headline` sets
+`eps_budget.FLOOR_MMA`, which `eps_budget.py` no longer has (since 20 Oct, at the window's old path too; run
+r20261027-010332-8732). `accounting.py` follows `eps_budget`'s current API once its owner updates it. `--stage OUT` stages the statement through C-Flock's `UnitStager` for C-Flock `--zk` and
 the Lean verifier of record; the pod job that proves it, which `run.py`'s docstring calls `job.sh`, isn't in the tree.
 
 - `window.py`: the round (registered W, committed X, the coin, the committed receipts, the draw, the statement) and the
