@@ -311,7 +311,7 @@ in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. 
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
-`LinkWindows.verify`'s verdict of record on a plain or served link is the Lean's, `NetworkCheck.LinkWindow`
+`LinkWindows.verify`'s verdict of record on a plain, served or warden link is the Lean's, `NetworkCheck.LinkWindow`
 (`verity/core/protocols/network/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`; an advised link's stays the Python's. `verify` runs both on every proof, and a link-window where
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch went
@@ -324,13 +324,22 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   sessions' SHA-512s, the registration, the draw, and the Program's and partition's digests and the gate ids. On an
   advised link the window view (`advised.view`, from the tie and clock sources) is the Python's and an input to the Lean,
   which is why advised stays `python`. The Lean reads an LMS key only, and rejects any other.
+- on a warden link (`service.WardenProfile`) the gap list is empty too: the Lean's warden form (`Kind.warden`) is the
+  plain unit's public row with both ends' grids at the warden's parameters digest, which both take as an input (the
+  warden's deployment publishes it), and no sync read, as in the Python; it refuses a warden case whose digest isn't 64
+  bytes, whose ends have a profile, or whose two grids differ.
 - every recorded proving run of N2 replays through both to the verdict it recorded, negative controls included
   (`benchmarks/network_traces/n2_lean_replay.py`): 193 link-windows of seven runs, plain and served, 180 accepted and 13
-  refused, each with nine injected controls that both reject (r20261026-050730-1027).
+  refused, each with nine injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
+  warden runs give 30 link-windows from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a draw of 8 on the
+  H200 warden run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused (r20261026-104647-c07b,
+  r20261026-105654-6220). Each has ten controls: nine that both reject, among them another warden's digest, and
+  `unread`, a sync off Σ_sync that changes neither verdict.
 - the Python keeps running beside the Lean as the reference.
 - the Lean's verdict has its property in `Security/Properties/NetworkCertifier/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted link-window was proved, opened to the
-  word 0b11, certified on both ends and synced within Σ_sync, and its public outputs are verdict 1 and deadline 1.
+  word 0b11, certified on both ends and synced within Σ_sync (a warden link's syncs are not asked of), and its public
+  outputs are verdict 1 and deadline 1.
 
 `tie_service.IngressTie.verify`, the ingress tie's verifier, is not ported and stays Python.
 

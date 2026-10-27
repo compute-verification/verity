@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.Recursion.VStarCross
 /-!
 # (P4) modulo what `E*` reads, and `LastCoinFree`, at the deployed reader (`nextR`)
 
-`StepsBase` reads, beside `KSFlockLin` and `StepsLogFree`, two facts of the bound record's last step: that it reads no
+`StepsBase` reads, beside `KSFlockLin`, two facts of the bound record's last step: that it reads no
 last coin (`Bound.LastCoinFree`) and that it binds its last message modulo what `E*` reads (`Bound.LastBindsEC`). Here
 they are at `bdDeployed` with the deployed reader's steps `nextR rd`, its columns `colsRV rd` for `LastBindsEC`
 (`FlockDeploy.KS.bdR`), and any columns for `LastCoinFree`.
