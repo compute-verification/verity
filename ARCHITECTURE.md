@@ -85,7 +85,7 @@ An integration makes Verity work end to end with a real system, and to Verity it
 
 ## Documentation
 
-- Specifications: the [program format](verity/ml/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/ml/commitments/frame_v3/PROTOCOL.md), [vllm-v1](verity/ml/commitments/vllm_v1/PROTOCOL.md)), the protocols, stated in Lean (`Security/`) with each one's README as its outline (a protocol's `PROTOCOL.md` remains only until its Lean covers it), and [C-Flock's verifier](verity/ml/flock/verifier/PROTOCOL.md).
+- Specifications: the [program format](verity/ml/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/ml/commitments/frame_v3/PROTOCOL.md), [vllm-v1](verity/ml/commitments/vllm_v1/PROTOCOL.md)), the protocols, stated in Lean (`Security/`) with each one's README as its outline (a protocol's `PROTOCOL.md` remains only until its Lean covers it), and C-Flock's verifier, stated in Lean (`verity/core/service/flock/`), with [its outline](verity/ml/flock/verifier/PROTOCOL.md).
 - Each component's README; [AGENTS.md](AGENTS.md) for contributors and agents (the map, the rules, how a change lands); the skills under [`.agents/skills/`](.agents/skills/).
 
 ## Glossary
