@@ -76,7 +76,7 @@ theorem prob_salt_le {C B X : Type} [Fintype C] [Fintype B] {m : ℕ} (hm : 0 < 
     | succ w =>
       have key : ∀ x0 : Paths C (m + 1) × B, prob (fun x' : Paths (Paths C (m + 1) × B) n =>
           D (g (x0, x')) (saltCoin (n := n + 1) hm (x0, x') ⟨w + 1, hw⟩)) ≤ κ := fun x0 =>
-        ih (fun x' => g (x0, x')) ⟨w, Nat.lt_of_succ_lt_succ hw⟩ fun x' z' => hg (x0, x') (x0, z')
+        ih ⟨w, Nat.lt_of_succ_lt_succ hw⟩ (fun x' => g (x0, x')) fun x' z' => hg (x0, x') (x0, z')
       exact prob_le_of_slices_fst (α := Paths C (m + 1) × B) (β := Paths (Paths C (m + 1) × B) n)
         (fun x => D (g x) (saltCoin (n := n + 1) hm x ⟨w + 1, hw⟩)) hκ key
 
