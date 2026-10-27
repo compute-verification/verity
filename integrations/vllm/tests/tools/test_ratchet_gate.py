@@ -405,6 +405,19 @@ def test_a_revert_and_a_pure_move_are_exempt(linted):
     assert _verdicts(G.gate("main", "next")) == [("#4", "exempt")]
 
 
+def test_a_worktree_git_wont_remove_decides_no_verdict_and_goes_by_hand(linted, monkeypatch):
+    """26 Oct on drive's pod: `git worktree remove --force` failed ("Directory not empty"), the gate exited 2, and the sync left
+    the PR out of `next`."""
+    linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
+                                                       P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
+    run = subprocess.run
+    monkeypatch.setattr(G.subprocess, "run", lambda args, *a, **k: subprocess.CompletedProcess(args, 1)
+                        if list(args[:3]) == ["git", "worktree", "remove"] else run(args, *a, **k))
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
+    assert len(linted.git("worktree", "list").splitlines()) == 1
+
+
 def test_a_retired_entry_passes_once_the_base_lint_agrees_it_is_gone(linted):
     linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
                                                        P01: _allowlist(_entry("verity_vllm/b.py", "B"))})

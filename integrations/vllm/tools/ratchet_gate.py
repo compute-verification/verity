@@ -599,6 +599,14 @@ def lint_selection(touched: list[str], lint: str = LINT) -> list[str] | None:
     return sorted({slug(f) for f in code} | {slug(f) for f in touched if f.startswith(f"{lint}/") and is_ratchet(f)} | ruff)
 
 
+def drop_worktree(tree: Path) -> None:
+    """Remove the lints' worktree. Cleanup decides no verdict: when git won't remove it (26 Oct on drive's pod: "Directory not
+    empty"), the directory goes by hand and git forgets it."""
+    if subprocess.run(["git", "worktree", "remove", "--force", str(tree)], capture_output=True).returncode:
+        shutil.rmtree(tree, ignore_errors=True)
+        subprocess.run(["git", "worktree", "prune"], capture_output=True)
+
+
 def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[str, list]) -> tuple[list[str], list[dict]]:
     """(the lints run, their failures): each lint directory's base code, its lints ``selection`` names (None: all of them),
     run on the change's tree against its allowlists, with the base's ruff configs."""
@@ -621,9 +629,10 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
                 for p in (tree / lint / "allowlists").glob("*.json"):
                     p.write_text(json.dumps({"entries": after.get(slug(p.name), [])}))
                 runs.append(subprocess.run([*python, "-c", RUNNER, str(tree / lint), json.dumps(slugs)], cwd=d,
-                                           capture_output=True, text=True))
+                                           capture_output=True, text=True,
+                                           env={**os.environ, "RUFF_CACHE_DIR": str(Path(d) / "ruff-cache")}))
         finally:
-            git("worktree", "remove", "--force", str(tree))
+            drop_worktree(tree)
     ran, failures = [], []
     for r in runs:
         try:
