@@ -85,17 +85,18 @@ theorem soundness (hS : V.SampledProofsSound) (hW : V.PouwSound) (hP : V.PousSou
   · exact Or.inl ⟨hacc, hreg, hfail⟩
   · exact Or.inr ⟨s, Finset.mem_univ s, ⟨hreg, accepts_registered hacc, accepts_wipe hacc⟩, hs⟩
 
-/-- **Its hypotheses hold at the honest deployment**: at registered files, where each subprotocol's honest lemma holds
-(`Vocab.HonestHolds`, `WipeVocab.HonestHolds`), the deployment's honest prover meets the six targets with probability
-`0` on their events, and the event the theorem bounds has probability `0`. -/
-theorem soundness_honest (h : ∀ a, V.HonestHolds a) (hw : W.HonestHolds) (θ F c : ByteArray)
-    (hreg : V.Registered θ F) :
+/-- **Its hypotheses hold at the honest deployment**: at registered files and the honest commitment `commit θ F`,
+where each subprotocol's honest lemma holds (`Vocab.HonestHolds commit`, `WipeVocab.HonestHolds`), the deployment's
+honest prover meets the six targets with probability `0` on their events, and the event the theorem bounds has
+probability `0`. -/
+theorem soundness_honest (commit : ByteArray → ByteArray → ByteArray) (h : ∀ a, V.HonestHolds commit a)
+    (hw : W.HonestHolds) (θ F c : ByteArray) (hreg : V.Registered θ F) (hc : c = commit θ F) :
     (∀ s, Game.prob (fun o => WipeVocab.Verdict V o ∧ ¬ W.Holds θ F c (V.honest θ F c) s o) (V.game θ F c)
         (V.honest θ F c) ≤ W.error θ F c (V.honest θ F c) s) ∧
       Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧
           ((∃ a, ¬ V.Holds θ F c (V.honest θ F c) a o) ∨
             ∃ s, ¬ W.Holds θ F c (V.honest θ F c) s o)) (V.game θ F c) (V.honest θ F c) = 0 := by
-  have h5 := (soundness_of_subprotocols_honest V h θ F c hreg).2
+  have h5 := (soundness_of_subprotocols_honest V commit h θ F c hreg hc).2
   have h0 : ∀ s, Game.prob (fun o => ¬ W.Holds θ F c (V.honest θ F c) s o) (V.game θ F c) (V.honest θ F c) = 0 :=
     hw θ F c hreg
   refine ⟨fun s => ?_, le_antisymm ?_ zero_le⟩
