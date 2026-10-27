@@ -546,7 +546,7 @@ def test_a_tip_whose_pr_heads_cant_be_read_is_refused(tmp_path, monkeypatch, cap
 
 
 def test_merge_refuses_an_attempt_whose_result_is_the_lean_fast_paths_whatever_tool_recorded_it(tmp_path, monkeypatch, capsys):
-    """The coordinator's ruling: no merge accepts the Lean fast path's result (`lean_changed.py --records`, no kernel replay).
+    """No merge accepts the Lean fast path's result (`lean_changed.py --records`, no kernel replay).
     An attempt of `check` that passed on the exact commit is refused when its result is of a kind in `REFUSED_KINDS`, or can't
     be read; the push guard reads the same `passing`. A `check/v1` result of the same commit merges."""
     from research.merge import REFUSED_KINDS, unchecked_pushes
