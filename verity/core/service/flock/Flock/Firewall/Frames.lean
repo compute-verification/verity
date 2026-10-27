@@ -152,7 +152,7 @@ def placeOf (salts : Array (ByteArray × Nat × Array ByteArray)) (l0 : Level0.L
     let some c := s.link | throw "the opening before the session's Commit coins"
     let some (_, _, hi) := salts.find? fun (r, q, _) => r == l0.root && q == p.rep
       | throw s!"table {p.table} rep {p.rep}'s opening before its salts for levels ≥ 1"
-    let t ← tabOfLevel0 (Finish.Fast.setupPar st) l0
+    let t ← tabOfLevel0 (Setup.ofCircuit st) l0
     let xs := Drive.extras st (Drive.linkPoints st c)
     p := { p with opening := some (Drive.openStep t p.rep dom xs hi (p.coins.extract 0 p.alg.size)) }
   match p.opening with
@@ -162,10 +162,10 @@ def placeOf (salts : Array (ByteArray × Nat × Array ByteArray)) (l0 : Level0.L
   | none => throw "no opening"
 
 /-- The algebraic phase's scheduled rounds of a rep of the statement `st` whose stream's domain is `dom`, on its level-0
-root `root` (`Skeleton.rounds`, on the firewall's setup `Finish.Fast.setupPar`). -/
+root `root` (`Skeleton.rounds`). -/
 def algOf (st : Stmt) (root dom : ByteArray) : V (Array (ByteArray × Nat)) := do
   let (sch, _) ← Zk.schedule st.m
-  Skeleton.rounds (Finish.Fast.setupPar st) sch.k0 root dom
+  Skeleton.rounds (Setup.ofCircuit st) sch.k0 root dom
 
 /-- `p` with its algebraic phase's scheduled rounds (`algOf`) on the session's level 0 `l0`, the table being `name`,
 computed once. -/
