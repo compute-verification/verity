@@ -39,9 +39,9 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import commit_fb as F  # noqa: E402
-from check_roots import RESULT_SCHEMA, write_result  # noqa: E402
-from verity_vllm.commit import row_tables_device as RTD  # noqa: E402
+import commit_fb as F
+from check_roots import RESULT_SCHEMA, write_result
+from verity_vllm.commit import row_tables_device as RTD
 
 #: compute-accounting's shape-H step at M = 20,480 (s): P2 decode staged serially at 40 GB/s, and hidden under the GEMMs
 STEP_S = {"staged": 7.5, "overlapped": 3.7}

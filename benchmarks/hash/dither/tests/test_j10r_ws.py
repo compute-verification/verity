@@ -9,9 +9,10 @@ from types import SimpleNamespace
 
 import pytest
 
-DITHER = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(DITHER))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import j10r_ws as JWS
+
+DITHER = Path(__file__).resolve().parents[1]
 
 #: the frozen shape's up and down (j10r90.py's, kraqwxsc's served shapes on the H200) and Llama-3.1-8B's four linears
 #: at served_h1's 64-row slot, (M, N, K)

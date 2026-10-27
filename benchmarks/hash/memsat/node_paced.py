@@ -23,12 +23,13 @@ import sys
 import time
 from pathlib import Path
 
-RS = Path(__file__).resolve().parents[2] / "remote_session"
-sys.path.insert(0, str(RS))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "remote_session"))
 
 import device
 import node
 from prover import ProverSide
+
+RS = Path(__file__).resolve().parents[2] / "remote_session"
 
 
 class Pace:

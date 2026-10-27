@@ -644,7 +644,7 @@ def wait_time_at() -> dict | None:
     if not at:
         return None
     import datetime as dt
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     h, m = (int(x) for x in at.split(":"))
     wait = (now.replace(hour=h, minute=m, second=0, microsecond=0) - now).total_seconds()
     if wait < -43200:
@@ -652,7 +652,7 @@ def wait_time_at() -> dict | None:
     waited = wait if 0 < wait <= 60 * TIME_AT_MAX_MIN else 0.0
     time.sleep(waited)
     return {"at": at, "ahead_s": round(wait, 1), "waited_s": round(waited, 1),
-            "reps_start_utc": dt.datetime.now(dt.timezone.utc).strftime("%H:%M:%SZ")}
+            "reps_start_utc": dt.datetime.now(dt.UTC).strftime("%H:%M:%SZ")}
 
 
 def close_coins() -> None:

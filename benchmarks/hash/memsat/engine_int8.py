@@ -28,10 +28,11 @@ import time
 from collections import Counter
 from pathlib import Path
 
-RS = Path(__file__).resolve().parents[2] / "remote_session"
-sys.path.insert(0, str(RS))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "remote_session"))
 
 import engine as E
+
+RS = Path(__file__).resolve().parents[2] / "remote_session"
 
 BIN_MS = 0.1
 

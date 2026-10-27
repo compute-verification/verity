@@ -53,7 +53,7 @@ def main() -> None:
     for idx in sorted(d.glob("*-index.txt")):
         stem = idx.name[: -len("-index.txt")]
         mt = re.fullmatch(r"(q32|q16|q8n)-m(\d+)-n(\d+)-L(\d+)", stem)
-        enc, m, n, level = mt.group(1), int(mt.group(2)), int(mt.group(3)), int(mt.group(4))
+        enc, m, n = mt.group(1), int(mt.group(2)), int(mt.group(3))
         k = m * ENCODINGS[enc][1]
         key = (enc, n, k)
         if key not in cache:

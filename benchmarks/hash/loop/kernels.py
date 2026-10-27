@@ -21,7 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "served_commit"))
-import nsys_summary as NS  # noqa: E402
+import nsys_summary as NS
 
 
 def main() -> int:

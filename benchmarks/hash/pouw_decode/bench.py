@@ -79,7 +79,7 @@ def emit(out, obj: dict) -> None:
 class Module(R.Dev):
     """A second module in `dev`'s context (pd.cubin): its own functions, launched on `dev`'s current stream."""
 
-    def __init__(self, dev: R.Dev, cubin: bytes):  # noqa: D107 - shares dev's driver and context
+    def __init__(self, dev: R.Dev, cubin: bytes):
         self.__dict__.update({k: v for k, v in dev.__dict__.items() if k not in ("mod", "fns")})
         self.host, self.fns, self.mod = dev, {}, vp()
         self.cubin = cubin

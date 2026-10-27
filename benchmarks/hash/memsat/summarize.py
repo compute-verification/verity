@@ -116,7 +116,8 @@ def step_ms(out: Path, sessions: dict[int, str]) -> dict:
             s = json.loads(line)
             if arm := arm_of(s.get("phase", ""), sessions):
                 by.setdefault(arm, []).append(s["ms"])
-    q = lambda xs, p: round(sorted(xs)[min(len(xs) - 1, int(p * len(xs)))], 2)
+    def q(xs, p):
+        return round(sorted(xs)[min(len(xs) - 1, int(p * len(xs)))], 2)
     return {arm: {"step_ms_p50": q(xs, 0.5), "step_ms_p99": q(xs, 0.99)} for arm, xs in by.items() if xs}
 
 

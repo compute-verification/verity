@@ -308,7 +308,8 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
     gen = torch.Generator(device=dev).manual_seed(20261002)
     xs = {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
     rows = 2 * m * len(weights) if run.hashing else 0
-    forward = lambda: [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
+    def forward():
+        return [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
     keep = ("transcript_root", "activation_roots", "units", "tiles")
 
     def ended(ys):
@@ -763,7 +764,8 @@ class Worker:
 def prompts(reps: int) -> dict:
     """Every mode's prompts, the same in both engines: the prefill warm-up and one prompt per rep, and the decode batch."""
     rng = random.Random(8192)
-    ids = lambda n: [rng.randrange(100, 20000) for _ in range(n)]
+    def ids(n):
+        return [rng.randrange(100, 20000) for _ in range(n)]
     return {"warm": ids(PREFILL), "prefill": [ids(PREFILL) for _ in range(reps)], "decode": [ids(PROMPT) for _ in range(BATCH)]}
 
 

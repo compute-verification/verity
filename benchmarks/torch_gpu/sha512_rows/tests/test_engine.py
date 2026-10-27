@@ -8,8 +8,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-HERE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import bench
 import check

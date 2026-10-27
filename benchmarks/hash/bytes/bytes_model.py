@@ -31,7 +31,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "model"))
-import commit_model as cm  # noqa: E402
+import commit_model as cm
 
 GPUS = ("RTX PRO 6000", "H200", "B200")
 COL, MODE, SECOND_STREAM = "SHA-512 sharaw", "pre", True

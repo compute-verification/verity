@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("research.store.local")
-from research.store.local import LocalStore  # noqa: E402
+from research.store.local import LocalStore
 
 TC_PROBE = Path(__file__).resolve().parents[1]
 if str(TC_PROBE) not in sys.path:

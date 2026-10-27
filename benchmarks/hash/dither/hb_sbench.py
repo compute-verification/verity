@@ -42,7 +42,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, os.environ["HB_DITHER_DIR"])
-import sbench  # noqa: E402
+import sbench
 
 _build = sbench.build
 

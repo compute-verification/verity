@@ -25,15 +25,15 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from check import IV512, md, sha512_comp  # noqa: E402
+from check import IV512, md, sha512_comp
 
-from verity.ml.commitments import hm96  # noqa: E402
-from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
-from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
-from verity.ml.commitments.merkle import CommitmentDomain, domain_message, tree_levels  # noqa: E402
-from verity.ml.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, SHA512_ROW_SEG_SEGMENT_TAG, SHA512_ROW_SEG_TAG,  # noqa: E402
+from verity.ml.commitments import hm96
+from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import CommitmentDomain, domain_message, tree_levels
+from verity.ml.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, SHA512_ROW_SEG_SEGMENT_TAG, SHA512_ROW_SEG_TAG,
                                            row_leaf, sha512_row_seg_digest, sha512_row_seg_prefix)
-from verity.ml.crypto import blake3 as b3  # noqa: E402
+from verity.ml.crypto import blake3 as b3
 
 #: the row geometry: 4 KiB rows of 1 KiB segments unless HM96_LEAF / HM96_SEG say otherwise (`check` reads the dump's own);
 #: Verity's row-seg/v1 has 1 KiB segments, so another SEG is a hypothetical format, never held to Verity

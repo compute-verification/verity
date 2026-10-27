@@ -330,7 +330,8 @@ def card(gpu: str, target: float = 0.05, overrides: Overrides | None = None) -> 
     def cell(c: dict[str, float] | None) -> str:
         if c is None:
             return "n.m."
-        ok = lambda x: " ✓" if x < target else ""
+        def ok(x):
+            return " ✓" if x < target else ""
         return f"{_pct(c['pre'])}{ok(c['pre'])} (step {_pct(c['step'])}{ok(c['step'])})"
 
     rows = [f"| {gpu} (B32 run serve {serve:,.0f} ms) | " + " | ".join(COLUMNS) + " |", "|---|" + "---|" * len(COLUMNS)]

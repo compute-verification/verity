@@ -11,8 +11,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import commit_fb as F  # noqa: E402
-from verity.ml.commitments import row_table as RT  # noqa: E402
+import commit_fb as F
+from verity.ml.commitments import row_table as RT
 
 SALT = F.SaltSource(key=bytes(range(32)), segment=7 * 53 + 3, context=bytes(range(64, 128)))
 

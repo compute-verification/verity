@@ -32,10 +32,10 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import commit_fb as F  # noqa: E402
-from verity.ml.commitments import row_table as RT  # noqa: E402
-from verity_vllm.commit import row_tables as RTB  # noqa: E402
-from verity_vllm.commit import row_tables_device as RTD  # noqa: E402
+import commit_fb as F
+from verity.ml.commitments import row_table as RT
+from verity_vllm.commit import row_tables as RTB
+from verity_vllm.commit import row_tables_device as RTD
 
 RESULT_SCHEMA = "research/result/v0.1"
 CASES = {"layer+head": (37, 1, True, True, True), "two-layers": (5, 2, False, True, True), "one-row": (1, 1, False, False, True),

@@ -40,7 +40,8 @@ def check(d: str) -> dict:
         raw = fh.read()
     if len(raw) != 64 * off[-1]:
         return {"ok": False, "error": f"size {len(raw)} for {off[-1]} nodes"}
-    dig = lambda l, i: f.p.digest_of(raw[64 * (off[l] + i):64 * (off[l] + i + 1)])
+    def dig(l, i):
+        return f.p.digest_of(raw[64 * (off[l] + i):64 * (off[l] + i + 1)])
     bad: list[str] = []
     rng = random.Random(n)
     if n <= 2048:

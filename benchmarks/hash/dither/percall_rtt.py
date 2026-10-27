@@ -44,8 +44,8 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT), str(ROOT / "benchmarks" / "pouw" / "served_h1")]
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import coins as CO
 
 EPOCH = 1
@@ -61,7 +61,8 @@ def quantiles(ns: list[int]) -> dict:
     if not ns:
         return {"n": 0}
     s = sorted(ns)
-    at = lambda q: round(s[min(len(s) - 1, int(q * len(s)))] / 1e6, 4)
+    def at(q):
+        return round(s[min(len(s) - 1, int(q * len(s)))] / 1e6, 4)
     return {"n": len(s), "min_ms": round(s[0] / 1e6, 4), "p50_ms": at(0.5), "p90_ms": at(0.9), "p99_ms": at(0.99),
             "max_ms": round(s[-1] / 1e6, 4), "mean_ms": round(sum(s) / len(s) / 1e6, 4)}
 

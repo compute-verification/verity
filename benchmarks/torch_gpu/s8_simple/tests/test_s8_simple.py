@@ -15,7 +15,7 @@ from verity.ml.circuits.ops import gemm as G
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import check as C  # noqa: E402
+import check as C
 
 
 def _definition(x, sx, w, sw, pairs=None) -> np.ndarray:

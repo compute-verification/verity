@@ -23,8 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import shape as S
 
 from verity.core.protocols.pouw.circuit import h1tile as HT

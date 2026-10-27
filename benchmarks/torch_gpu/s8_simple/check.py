@@ -328,8 +328,8 @@ def run_gpu(a: argparse.Namespace) -> int:
                     del last, last_eager
                 runs.append(run)
                 print(json.dumps({key: v for key, v in run.items() if not key.endswith("reps_ms")}), flush=True)
-                del x, sx, y, y_eager, acc, ri
-            del w, sw
+                x = sx = y = y_eager = acc = ri = None
+            w = sw = None
             if dev.type == "cuda":
                 torch.cuda.empty_cache()
     if fused:

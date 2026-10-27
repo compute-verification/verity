@@ -14,7 +14,7 @@ from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops import gemm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import fixture as FX  # noqa: E402
+import fixture as FX
 
 
 def _words(a: np.ndarray) -> list[int]:

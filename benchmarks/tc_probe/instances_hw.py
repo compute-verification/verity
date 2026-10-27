@@ -65,16 +65,14 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[1]
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
 from verity.ml.circuits.silicon import silicon as S
 from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 from verity.ml.circuits.targets import target as T
 
+REPO = Path(__file__).resolve().parents[2]
 N = P.N
 FIRST_MISMATCHES = 20
 BENCH_INSTANCES = "bench-instances/v1"

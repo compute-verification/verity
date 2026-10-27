@@ -12,8 +12,8 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import fixture as F  # noqa: E402
-import sass_gate  # noqa: E402
+import fixture as F
+import sass_gate
 
 PTXAS = """ptxas info    : Compiling entry function 'attn_ref_qk' for 'sm_90a'
 ptxas info    : Function properties for attn_ref_qk

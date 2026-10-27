@@ -154,7 +154,7 @@ class Engine:
         engine_env.apply_compile_fresh()
         engine_env.apply_engine(None)
         import torch
-        import vllm  # noqa: F401
+        import vllm
         from verity_bench.vllm.arms import Arm, Target, experimental_arm, plugin
         from verity_vllm.engine import vllm_adapter as va
         from verity_vllm.engine.hooks import Hooks, live

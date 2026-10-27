@@ -51,7 +51,7 @@ def run(cmd: list[str], timeout: int = 1800) -> dict:
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return {"cmd": cmd, "rc": p.returncode, "stdout": p.stdout[-4000:], "stderr": p.stderr[-4000:], "seconds": round(time.time() - t0, 1)}
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:  # noqa: PERF203
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         return {"cmd": cmd, "rc": None, "error": repr(e), "seconds": round(time.time() - t0, 1)}
 
 

@@ -33,9 +33,8 @@ import sys
 from contextlib import contextmanager
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-os.environ.setdefault("HB_DITHER_DIR", str(HERE))
-sys.path.insert(0, str(HERE))
+os.environ.setdefault("HB_DITHER_DIR", str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hb_sbench as HS  # puts its arms on sbench.build
 import j10b_ref as JB
 import sbench

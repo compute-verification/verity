@@ -269,7 +269,8 @@ def hm96windows(args: list[str]) -> None:
                     rec[(r["candidate"], r["gpu"], r["leaves"])] = (r, run)
     gpus = sorted({g for _, g, _ in rec}, key=lambda g: ("B200" not in g, "H200" not in g, g))
     sizes = sorted({n for _, _, n in rec})
-    us = lambda r, k: f"{1e3 * r[k]:.0f}"
+    def us(r, k):
+        return f"{1e3 * r[k]:.0f}"
     print("| GPU | window | arm | GB/s pre / step | latency µs pre / step | x SHA-512 pre / step | graph: GB/s pre / step "
           "| graph: latency µs pre / step | graph: x SHA-512 pre / step | run |")
     print("|---|---|---|---|---|---|---|---|---|---|")
@@ -349,7 +350,8 @@ def lattable(args: list[str]) -> None:
                 for r in lines(os.path.join(root, "summary-lat.jsonl")):
                     runs[r["gpu"]] = run
                     (lat_r if r["mode"] == "lat" else ovl_r if r["mode"] == "overlap" else []).append(r)
-    order = lambda g: ("B200" not in g, "H200" not in g, g)
+    def order(g):
+        return ("B200" not in g, "H200" not in g, g)
     print("| GPU | MB (leaves) | lever | host µs pre / step | GPU µs pre / step | % of step (host, step) | run |")
     print("|---|---|---|---|---|---|---|")
     for r in sorted(lat_r, key=lambda r: (order(r["gpu"]), r["leaves"], r["lever"])):
@@ -396,7 +398,8 @@ def levertable(args: list[str]) -> None:
                     leaf_r[(r["gpu"], sub, r["leaves"])] = r
     gpus = sorted({g for g, _, _ in lat_r}, key=lambda g: ("B200" not in g, "H200" not in g, g))
     windows = (4614, 6433, 10078)
-    pct = lambda ms, g: f"{100 * ms / step_ms(g):.1f}%"
+    def pct(ms, g):
+        return f"{100 * ms / step_ms(g):.1f}%"
     print("| GPU | window | lever | format | critical path µs pre / step | GPU busy µs pre / step | % of decode step pre / "
           "step | run |")
     print("|---|---|---|---|---|---|---|---|")
