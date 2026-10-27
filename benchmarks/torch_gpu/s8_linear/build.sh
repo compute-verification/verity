@@ -7,15 +7,14 @@
 #   row_table/       the commitment kernels for sm_90 (`row_tables_device.device_lib("90")`, commit.py's), in the layout of
 #                    ~/.cache/verity/row_table, which run.sh seeds from it; skipped with no Python at $PY
 #   toolchain.txt (nvcc --version and the command line), source.txt (the commit), MANIFEST.sha256
-# Usage, on a CPU node with CUDA 13 (vy-nebius-cpu-1's research pool; vy-nebius-cpu-5 has no nvcc):
-#   research run --on vy-nebius-cpu-1 --pool research --project verity --campaign e2e-demo --source . --cwd source -- \
-#     bash -lc 'uv sync -q --all-packages --extra torch-cpu && bash benchmarks/torch_gpu/s8_linear/build.sh "$OUT/ship"'
+# Usage, from the tree's root on a CPU node with CUDA 13's nvcc:
+#   uv sync --all-packages --extra torch-cpu && bash benchmarks/torch_gpu/s8_linear/build.sh /tmp/s8-linear-ship
 # OUT (default /tmp/s8-linear-ship); CUDA names the toolkit (default /usr/local/cuda-13.0), PY the Python with verity_vllm
 # (default the tree's .venv).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 CUDA=${CUDA:-/usr/local/cuda-13.0}; OUT=${1:-/tmp/s8-linear-ship}; PY=${PY:-$ROOT/.venv/bin/python}
-[ -x "$CUDA/bin/nvcc" ] || { echo "no nvcc at $CUDA: run on vy-nebius-cpu-1 (--on vy-nebius-cpu-1 --pool research)" >&2; exit 1; }
+[ -x "$CUDA/bin/nvcc" ] || { echo "no nvcc at $CUDA: set CUDA to a CUDA 13 toolkit" >&2; exit 1; }
 "$CUDA/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\." || { echo "$CUDA's nvcc is older than 12.8" >&2; exit 1; }
 rm -rf "$OUT"; mkdir -p "$OUT"
 FLAGS=(-O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -fmad=false -Xptxas -v -cubin)

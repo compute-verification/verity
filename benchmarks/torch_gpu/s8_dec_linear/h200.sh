@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# P2's device rates and the INT8 linear over the P2 store on one H200 (vy-dc-h200), from build.sh's ship (cwd = the source
-# tree's root):
+# P2's device rates and the INT8 linear over the P2 store on one H200, from build.sh's ship (cwd = the source tree's
+# root):
 #
-#   tar -C BUILD_RUN/out/ship -cf /tmp/ship.tar .
-#   research run --on vy-dc-h200 --project verity --campaign pous --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=LANE [--env STEPS=bench,scale] --send /tmp/ship.tar \
-#     -- bash benchmarks/torch_gpu/s8_dec_linear/h200.sh [RUN_ARGS...]
+#   tar -C SHIP -cf IN/ship.tar .
+#   OUT=DIR IN=IN [STEPS=bench,scale] bash benchmarks/torch_gpu/s8_dec_linear/h200.sh [RUN_ARGS...]
 #
+# Needs CUDA torch with Triton and `gpu-lease` on PATH; IN defaults to a run directory's inputs/ (RESEARCH_RUN_DIR).
 # Outside the lease: the ship unpacked and held to its MANIFEST.sha256, the card, the toolkit and the Python recorded. Under one
 # timed lease of at most LEASE_MIN minutes (default 25), the STEPS (default bench,scale,run) in order, memory-accounting's
 # tools unchanged on the shipped libp2v1.so (v4 keys, sm_90) first:
@@ -18,7 +17,7 @@
 # VERITY_BENCH_VENV names the Python with torch and Triton (default /workspace/cp/venv312), CUDA the toolkit. Every step's exit
 # code is in $OUT/rc.txt; exits non-zero if any step failed.
 set -uo pipefail
-O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
+O=${OUT:?}; IN=${IN:-${RESEARCH_RUN_DIR:?set IN}/inputs}
 D=benchmarks/torch_gpu/s8_dec_linear
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 CUDA=${CUDA:-/usr/local/cuda-13.0}
