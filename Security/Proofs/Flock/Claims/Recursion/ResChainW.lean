@@ -113,8 +113,8 @@ theorem accPorts_of_W (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ �
     (hS : StepsW rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt)
     (hE : EndsW rd wE final w b elem Claims.Recursion.Form.Dense untr cmt) :
     AccPorts rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt := by
-  intro x st hx hf c ws hJ s wt hw r hr ss hss j nm pt hsv xO p hxO hck hsh hAg hT hc q hq ho ht m k cl jj sh holo
-    S ns nv hpar hshp hholo hpart os last hfin hos hD
+  intro x st hx hf c ws hJ _xs _hxs _hcol s wt hw r hr ss hss j nm pt hsv xO p _hxs0 hxO hck hsh hAg hT hc q hq ho ht m
+    k cl jj sh holo S ns nv hpar hshp hholo hpart os last hfin hos hD
   obtain ⟨D⟩ := hD
   have hW := hS x st hx hf c ws hJ os last hfin hos ⟨D⟩
   have hEn := hE x st hx hf c ws hJ s wt hw r hr ss hss j nm pt hsv xO p hxO hck hsh hAg hT hc q hq ho ht m k cl jj
