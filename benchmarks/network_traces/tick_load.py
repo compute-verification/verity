@@ -4,6 +4,7 @@ this process's own CPUs.
     python tick_load.py --out DIR [--hogs-per-cpu 3] [--requests 400] [--in-flight 4] [--tokens 64]
         [--token-ms 25] [--delta-buckets 52] [--profile planned|served] [--strategies honest[,late,extra]]
         [--secret-bit] [--paced-ms MS] [--warden [--rate 1] [--window 60] [--agent-port PORT | --client-spin]]
+        [--waker-ms MS]
 
 It starts a stub OpenAI streaming endpoint on loopback (`/v1/models`, `/tokenize`, and `/v1/completions`, each
 completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes the requests in flight), then
@@ -41,7 +42,9 @@ THIS-HOST:PORT` there, one session a rehearsal, which reaches this host on PORT 
 rehearse --agent-port`). The stub, the warden, its pacer and the hogs stay here, and the client's offsets are read on
 its clock moved by the offset it measured to this host's. `jitter.json`'s `remote` is the rehearsal's `remote.json`:
 the agent's host, and its clock's offset and round trip before and after. `--client-spin` keeps the receiver here but
-its loop never waits in the kernel, so an offset that its wakeup carries is gone from its readings.
+its loop never waits in the kernel, so an offset that its wakeup carries is gone from its readings. `--waker-ms MS`
+runs, beside the hogs, a writer that wakes a reader over loopback every MS ms, so that at every release this host has
+just carried a write and woken its reader, whether or not the stub wrote just before it.
 """
 
 from __future__ import annotations
@@ -73,6 +76,12 @@ LEAD_MS = 2.0
 SPIN_S = 0.003
 #: `distinguish`'s bins of the offset for the mutual information (octiles), and its shuffles of the bits
 BINS, SHUFFLES = 8, 200
+#: `--waker-ms`'s two processes: a reader asleep on a loopback connection, and a writer that wakes it with a byte every
+#: period, so that this host's network path and a reader's wakeup are as recent at every release whatever the stub does
+WAKER_READER = ("import socket\ns = socket.create_server(('127.0.0.1', 0))\nprint(s.getsockname()[1], flush=True)\n"
+                "c, _ = s.accept()\nwhile c.recv(4096):\n    pass\n")
+WAKER_WRITER = ("import socket, sys, time\nc = socket.create_connection(('127.0.0.1', int(sys.argv[1])))\n"
+                "p = float(sys.argv[2]) / 1000\nwhile True:\n    c.sendall(b'x')\n    time.sleep(p)\n")
 
 
 class SecretBits:
@@ -476,6 +485,8 @@ def main(argv=None) -> int:
     ap.add_argument("--client-spin", action="store_true",
                     help="with --warden: the local client's loop never waits in the kernel (warden_serve.py client "
                          "--spin)")
+    ap.add_argument("--waker-ms", type=float,
+                    help="beside the hogs, a writer that wakes a reader over loopback every MS ms (WAKER_WRITER)")
     a = ap.parse_args(argv)
     if a.agent_port is not None and not a.warden:
         ap.error("--agent-port: with --warden")
@@ -502,16 +513,23 @@ def main(argv=None) -> int:
                    "--strategies", a.strategies, "--out", str(a.out / "rehearsal"), *paced]
     hogs = [subprocess.Popen(["taskset", "-c", cpu_list, sys.executable, "-c", "while True: pass"])
             for _ in range(a.hogs_per_cpu * len(cpus))]
+    wakers = []
+    if a.waker_ms is not None:
+        wakers.append(subprocess.Popen(["taskset", "-c", cpu_list, sys.executable, "-c", WAKER_READER],
+                                       stdout=subprocess.PIPE, text=True))
+        wakers.append(subprocess.Popen(["taskset", "-c", cpu_list, sys.executable, "-c", WAKER_WRITER,
+                                        wakers[0].stdout.readline().strip(), str(a.waker_ms)]))
     try:
         rc = subprocess.run(command, env=os.environ | {"CERTIFIER_SERVE_TIMING": "1"}).returncode
     finally:
-        for h in hogs:
+        for h in hogs + wakers:
             h.kill()
-        for h in hogs:
+        for h in hogs + wakers:
             h.wait()
     doc = {"cpus": cpus, "hogs": len(hogs), "rehearse_exit": rc, "token_ms": a.token_ms, "requests": a.requests,
            "in_flight": a.in_flight, "delta_buckets": a.delta_buckets, "profile": a.profile,
-           "strategies": a.strategies, "paced_ms": a.paced_ms, "warden": a.warden, "client_spin": a.client_spin}
+           "strategies": a.strategies, "paced_ms": a.paced_ms, "warden": a.warden, "client_spin": a.client_spin,
+           "waker_ms": a.waker_ms}
     run = a.out / "rehearsal" if a.warden else a.out / "rehearsal" / "honest"
     if a.warden and (run / "warden.json").exists():
         doc |= {"rate": a.rate, "window": a.window} | warden_summary(run)
@@ -523,7 +541,7 @@ def main(argv=None) -> int:
                       for g in ("egress", "ingress") if g in doc}), flush=True)
     if bits is not None and a.warden and (run / "client.json").exists() and (run / "warden.json").exists():
         j = warden_jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict"),
-                                        "client_spin": a.client_spin}
+                                        "client_spin": a.client_spin, "waker_ms": a.waker_ms}
     elif bits is not None and (run / "client" / "peer.json").exists() and (run / "proxy.json.gz").exists():
         j = jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict")}
     else:
