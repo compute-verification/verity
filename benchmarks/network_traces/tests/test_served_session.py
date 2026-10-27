@@ -74,7 +74,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
     assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.coins, str(inner.challenger_key)) == (
         "chain", "ART", "128001", 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
-    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not examples/vllm/serve.sh",
+    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not demos/vllm/serve.sh",
                                                  "--disk-floor-gb 40"))
     long = SS.parser().parse_args(["plan", "--prompt-ids", str(SS.KI)])
     long.minutes = a.minutes

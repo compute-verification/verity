@@ -55,7 +55,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interfaces"):
+for _p in (Path(__file__).resolve().parent, ROOT / "demos" / "h200" / "interfaces"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

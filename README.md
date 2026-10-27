@@ -70,7 +70,7 @@ on a CPU machine). For GLM-5.3 and DeepSeek-V4-Pro, the circuits predicted ahead
 traced Build on every rank (`verity-vllm predict compare`). `verity-vllm row chain WORKLOAD` reruns a workload's Build,
 Match and Commit from scratch on its GPUs.
 
-Llama-3.2-1B in int8 on one H200 goes through sampled proofs end to end ([`examples/vllm`](examples/vllm/README.md)):
+Llama-3.2-1B in int8 on one H200 goes through sampled proofs end to end ([`demos/vllm`](demos/vllm/README.md)):
 vLLM serves it, its values are committed under SHA-512, live coins draw proof blocks, C-Flock `--zk` proves them, and
 the Lean verifier accepts them and refuses every tampered case. Each drawn proof block is part of one serving step's
 circuit, not yet of the whole served run's.
@@ -107,9 +107,9 @@ GPU machine.
 
 | Demo | What it serves and audits | Command | Details |
 | --- | --- | --- | --- |
-| The H200 demo | A fixed multi-query attention shape on one H200. Every proof block's values are committed, and the P2-encoded weights fill the card's memory. PoUS, the bandwidth audit, the network certifier and the wipe run. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
-| vLLM | Llama-3.2-1B in int8, served by vLLM on one H200 through the committing endpoint. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example vllm` | `examples/vllm/README.md` |
-| Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `examples/dither_full_util/README.md` |
+| The H200 demo | A fixed multi-query attention shape on one H200. Every proof block's values are committed, and the P2-encoded weights fill the card's memory. PoUS, the bandwidth audit, the network certifier and the wipe run. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example h200` | `demos/h200/README.md`, `demos/h200/interfaces/README.md` |
+| vLLM | Llama-3.2-1B in int8, served by vLLM on one H200 through the committing endpoint. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example vllm` | `demos/vllm/README.md` |
+| Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `demos/dither_full_util/README.md` |
 
 The prover's side serves and proves. The auditor's side runs the verifier, the challenger that draws the live coins,
 the network certifier and the memory challenger, and those must run on machines the prover doesn't control.
