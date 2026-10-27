@@ -50,8 +50,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-#: the secret-bit stub's lead before its slot's boundary, drawn per bucket from [0, LEAD_MS) ms: the stub's write reaches
-#: the proxy through the shim's process, a hop whose latency the stub doesn't know, so the leads span it
+#: the secret-bit stub's lead before its slot's boundary, drawn per bucket from [0, LEAD_MS) ms: the stub's write
+#: reaches the proxy through the shim's process, a hop whose latency the stub doesn't know, so the leads span it
 LEAD_MS = 2.0
 #: how long before its slot the stub stops sleeping on its loop and spins: a loop's sleep ends up to 1 ms late, since
 #: epoll's timeout is in ms
@@ -85,7 +85,8 @@ class SecretBits:
         return self.grid is not None
 
     def slot(self, t: int) -> float:
-        """Bucket t's slot on the monotonic clock: its lead before its boundary with bit 1, half a bucket more with 0."""
+        """Bucket t's slot on the monotonic clock: its lead before its boundary with bit 1, and half a bucket more
+        with 0."""
         origin, tau = self.grid
         bit, lead = self.draw(t)
         return origin + t * tau - lead - (0 if bit else tau / 2)
