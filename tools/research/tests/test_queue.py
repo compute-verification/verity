@@ -2878,6 +2878,25 @@ def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
     assert len(shows) == 2
 
 
+def test_a_fetch_moves_a_clone_main_has_passed_to_main_and_keeps_one_that_contains_main(world):
+    """The merge drivers run from the clone's checkout: 27 Oct, an agent VM's clone still checked out at 21 Oct judged #4835's
+    lean-audit.json with that day's merge.py and refused a merge main's resolves.  Drive's checkout, `next`'s tip, stays."""
+    q = world.queue()
+    q._clone()
+    q.fetch()
+    old = _git(q.workdir, "rev-parse", "HEAD")
+    main = world.change({"a.txt": "new\n"})
+    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+    q.fetch()
+    assert _git(q.workdir, "rev-parse", "HEAD") == main != old
+    ahead = world.change({"b.txt": "on next\n"})
+    _git(world.dev, "push", "-q", "origin", f"{ahead}:refs/heads/next")
+    q.fetch()
+    _git(q.workdir, "checkout", "-q", "--detach", ahead)
+    q.fetch()
+    assert _git(q.workdir, "rev-parse", "HEAD") == ahead
+
+
 def test_a_lane_line_names_its_handle_without_a_trailing_period():
     """23 Oct: #3427's body said `Lane proofs.`, and the queue's owner was `proofs.`, a handle no one holds."""
     for body, lane in (("Lane proofs.", "proofs"), ("Lane `lane-2`.", "lane-2"), ("Lane a.", "a"), ("Lane ci-x_", "ci-x"),
