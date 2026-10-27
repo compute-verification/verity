@@ -280,7 +280,6 @@
         "Security/Proofs/Accounting/PouwWork.lean",
         "Security/Proofs/Accounting/TS.lean",
         "Security/Proofs/Accounting/TS/",
-        "examples/toy_onsite/",
         "examples/h200/",
         "examples/dither_full_util/"
       ],

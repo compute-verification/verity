@@ -35,11 +35,6 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   Level 1 on DRAWPROVE r20261027-013625-8e25: 8 live-drawn proof blocks are proved by C-Flock `--zk` and accepted by Lean,
   and the flipped bit is refused. Demo B's memory terms (memory-accounting's, M4) have a slot in its `example.toml` and
   aren't claimed.
-- `toy_onsite/`: the CPU toy (`integrations/torch_loop`) through every protocol and the wipe, composed through onsite, one run
-  on one CPU machine. Its run.sh is `benchmarks/all_protocols/run.sh`, which #4903 moves here; until then `verity bench
-  all-protocols` runs it. Level 1 on S1's run of record, r20261026-161826-eb34: a window with one egress byte changed is
-  rejected, and the honest window is accepted over all six subprotocols. The sampled-proofs roles, each run on its own, are
-  DEPLOYSP's separate toy_network example (#4928).
 - `vllm/`: Llama-3.2-1B served by vLLM on one GPU through `verity_vllm`'s committing endpoint, a served window audited
   through every subprotocol. Its row is in its own `workloads/`, its placement is `placement.toml`, which `run.sh` reads, and
   its scripts reach the integration by `PYTHONPATH`; it is not a package.
