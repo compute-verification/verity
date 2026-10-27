@@ -554,6 +554,23 @@ def test_stratified_draw_checks():
         assert D.strata_problem({"k": 4, "strata": problem}, 6) is not None
 
 
+def test_one_stratified_draw_splits_over_several_tables():
+    """A session of J tables splits one draw (Lean `Draw.tablesWhy`): a stratified draw whose sum of k_s is a positive
+    multiple of J, as a subset draw's k must be; a Bernoulli or work law never, whatever its count."""
+    prog, q, rule, rec = _stratified_registration()
+    law = D.derive(prog, q, rule)                                          # k_s = 2, 2
+    good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
+    assert D.fixed_count(law) == 4
+    for tables in (1, 2, 4):
+        assert D.tables_problem(law, tables) is None and D.check_draw(good, rec, law, tables=tables).ok
+    assert D.tables_problem(law, 3) == "tables: 4 units do not split into 3 equal tables"
+    assert D.check_draw(good, rec, law, tables=3).codes == ("tables",)
+    assert D.tables_problem({"law": "subset", "k": 4}, 2) is None and D.tables_problem({"law": "subset", "k": 3}, 2)
+    assert D.tables_problem({"law": "bernoulli", "p": "1/1"}, 2) == D.TABLES_LAW
+    assert D.tables_problem({"law": "work", "k": 4, "strata": law["strata"]}, 2) == D.TABLES_LAW
+    assert D.tables_problem({"law": "bernoulli", "p": "1/2"}, 1) is None
+
+
 def test_audit_record_under_the_stratified_law():
     """The bound is core's exact count_bound over the strata, each template's own bound is reported, and the integrity
     profile carries the whole law."""

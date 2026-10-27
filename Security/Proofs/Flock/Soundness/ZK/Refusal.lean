@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ZK.Cut
+import Definitions.Flock.ZK.Cut
+import Proofs.Flock.Soundness.ZK.Blocks
+import Proofs.Flock.Soundness.ZK.Dist
 import Proofs.Flock.Soundness.ZK.Session
 
 /-!

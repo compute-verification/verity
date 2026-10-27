@@ -1,5 +1,5 @@
 """machine-model designs [--json]            the design registry (data/designs): each design's name, its aliases, the
-                                          noise on each product, fold, filler, proof unit, coins and perplexity arm"""
+                                          noise on each product, fold, filler, proof block, coins and perplexity arm"""
 from __future__ import annotations
 
 import json
