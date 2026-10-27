@@ -25,7 +25,7 @@ theorem choose_sub_lt_choose {n K₀ kd : ℕ} (hK : 1 ≤ K₀) (hkd : 1 ≤ kd
   obtain ⟨j, rfl⟩ : ∃ j, kd = j + 1 := ⟨kd - 1, by omega⟩
   have h1 : (m + 1 - K₀).choose (j + 1) ≤ m.choose (j + 1) := Nat.choose_le_choose _ (by omega)
   have h2 : 0 < m.choose j := Nat.choose_pos (by omega)
-  rw [Nat.choose_succ_succ]
+  have h3 : (m + 1).choose (j + 1) = m.choose j + m.choose (j + 1) := Nat.choose_succ_succ m j
   omega
 
 /-- **`card_wrong_lt_of_relS`'s hypothesis holds at the honest instance**: the witness opening the evaluation on the

@@ -1,6 +1,45 @@
-# Glossary: older names and narrower senses
+# Glossary: notation, older names and narrower senses
 
 The rest of the [Glossary](../ARCHITECTURE.md#glossary), and it changes with it: a term that replaces an older one gets its row here in the same change.
+
+## Notation
+
+The datacenter model's symbols, one meaning each (Daniel, 26 Oct). The canonical text is the Notion working draft
+"Distinguishing inference from frontier training", §3, §8 and its notation table, with
+`note:training/20261026T1840Z-draft-formal-properties`.
+
+- D, A: the declared circuit, registered once as R = (θ, D, 𝓘), θ its registered input gates and values and 𝓘 its
+  (c,k)-partition into inference blocks; the actual circuit, placed: gate g at device x(g) and tick tick(g).
+- A[X, J], Φ_X: the gates of A placed at location X (a set of devices) during the interval J; X's capacity in gates per
+  second, |A[X, J]| ≤ Φ_X·|J|. Φ_s is a server's, Φ_total the fleet's.
+- W_cert(X, J), U(X, J): the certified declared gate occurrences at X during J; the uncertified gates,
+  |A[X, J]| − |A[X, J] ∩ W_cert(X, J)|.
+- A_phys: layer 1, the prior: the placed circuits the inventory can run under the hardware model.
+- A_i(S), δ_i(S): layer 2, the envelope of subprotocol i's application S, and its failure bound,
+  Pr[accept ∧ A ∉ A_i(S)] ≤ δ_i(S).
+- A′, Break: A_phys ∩ ⋂ A_i(S), which every accepted run lies in except with probability Σ_i Σ_S δ_i(S) + Pr[Break];
+  Break is a forgery of the devices' logged coins.
+- (c, k): a partition's gates per block, exactly, and unregistered input bits per block, at most.
+- c_S, k_S, Δ_wipe: a serving block's padded size ⌊Φ_s·Δ_wipe⌋ and its input allowance k_wipe + (r_in + r_side)·Δ_wipe
+  (what the wipe leaves of M_s, at most 4×10^10 bits plus egress, and certified ingress and side channels over the
+  interval); the wipe interval.
+- ε_dark, ε_undecl, ε_gap, ε_skip, ε_break: unaccounted gates. ε_dark is the dark leaves' share of the fleet's capacity,
+  Φ(L_dark) = ε_dark·Φ_total, ruled at 10^-3 or 10^-2; the rest are shares of the inventoried capacity: ε_undecl and
+  ε_gap are U at locations with no certified declared gates or only partly certified ones, with
+  ε_gap := 1 − |W_cert|/(Φ_X·|J|); ε_skip is PoUW's ε_W and the wrong certificates; ε_break is the gates of the faulty
+  proof blocks F. Each use states its denominator and counts an overlap once.
+- k_exfil(Y), k_infil(Y): block Y's exfiltration capacity log2|O_Y|, O_Y the observable output behaviors (values, and
+  timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information
+  reaching Y that its input accounting has not already charged.
+- HW, INV: named assumptions: the hardware model (credited rates, clocks, silicon semantics, what a wipe clears, link and
+  side-channel rates); inventory coverage, the bound on dark capacity and the honesty of certifiers, challengers and
+  their hosts.
+- δ_coin, δ_crypto: probability bounds from the live-coin draws, under uniform coins; advantage bounds for SHA-512's
+  binding, knowledge soundness and pseudorandomness, against a stated adversary.
+- ρ, T_target: the circuit-size slowdown |C|/T_0 against the reference circuit C_0 of T_0 gates; the time to the target,
+  a separate conclusion, T_target ≥ L·T_0/Φ_total when every target-reaching circuit has at least L·T_0 gates.
+
+## Older names
 
 Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector. They mean:
 
@@ -58,6 +97,10 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | serving block, serving-block bound |
 | "work", "FLOPs", "pricing" for how much a circuit computes; PoUW's and ACCEL's docs until CMP-158, W_cert, the Lean's `WorkSound` and `CircuitWork*` names; "κ/2" | size (gate count); U/s_× |
+| "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | a sampling block of transfer blocks, over a sampling period |
+| "window" for a span of time; `Accounting.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: a sampling period, a certification period (`NetworkCheck.Period`), or a period of T ticks |
+| "session"; code and records' `session` (`session_id`, `core-firewall session`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the firewall's one outer proof per statement); a certifier's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
+| "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |
 
 The `veritor.*` gate families are grandfathered and the prefix is frozen (circuits, 14 Oct 2026, CIR-12): each existing id
 declared in `verity/ml/circuits/targets/target.py` (`veritor.tc-ampere-bf16@1`, the `veritor.tc-bf16.*@1` and
@@ -65,6 +108,8 @@ declared in `verity/ml/circuits/targets/target.py` (`veritor.tc-ampere-bf16@1`, 
 bake it in, and renaming would invalidate every one of them for no semantic gain. No new family is created under
 `veritor.*`: a new family takes a fresh id, and `verity/ml/circuits/tests/test_targets_frozen_families.py` fails on any
 `veritor.*` id outside the grandfathered set.
+
+## Narrower senses
 
 Some words keep a different, narrower sense:
 
