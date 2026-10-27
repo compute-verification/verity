@@ -245,6 +245,7 @@
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
         "integrations/torch_loop/",
+        "examples/toy_network/",
         "fixtures/bench-instances/",
         "benchmarks/census/",
         "Security/Definitions/Accounting/CoinFlow.lean",
