@@ -1270,12 +1270,28 @@ def failed_check(ctx: Ctx, reg: dict, machine: str, row: dict) -> Finding | None
                    thread=MERGE_THREAD)
 
 
+def on_main(ctx: Ctx, sha: str | None) -> bool:
+    """Whether ``sha`` is a commit of `main` (GitHub's compare of it with main is `ahead` or `identical`): the tip an
+    after-landing run checks, which runs to its end to name every red step and suite (TOP-90 row 75), so `cancel_failed` never
+    stops it.  27 Oct: main 54713f81's and 0600bab8's runs were cancelled for a Lean check's slot before their pytest step
+    reported, twice leaving main unverified.  False when GitHub can't say."""
+    if not sha:
+        return False
+    try:
+        got = ctx.sh(["gh", "api", f"repos/{REPO_SLUG}/compare/{sha}...main", "--jq", ".status"], timeout=30)
+    except Exception:  # noqa: BLE001  (cancelling stays the default)
+        return False
+    return got.strip() in ("ahead", "identical")
+
+
 def cancel_failed(ctx: Ctx, machine: str, row: dict, waiting: list[dict]) -> str | None:
     """Cancel a check whose step failed while a ticket waits for a check slot on its machine (top, 8 Oct: running on to find more
     failures is worth it only while nothing waits for its slot): what the post says, or None when it isn't cancelled. A suites.py
     run's failed suite only rings: the lander runs those to land a PR on, and decides whether a suite that failed is its change's
     (top, 9 Oct: 25ea's verity-ops failure was cpu-1's, and its circuit_check worth keeping)."""
     if not (ctx.act and waiting and row.get("step") and not row.get("suite") and row.get("state") == "running"):
+        return None
+    if on_main(ctx, row.get("sha")):
         return None
     who = ", ".join(w.get("run") or "a check" for w in waiting[:3]) + (f" and {len(waiting) - 3} more" if len(waiting) > 3 else "")
     ctx.sh([*ctx.research, "cancel", row["run"], "--on", machine, "--by", "infra", "--reason",
