@@ -26,7 +26,7 @@ Kraft's inequality, as every prefix-free code's do), the same code in every wind
 windows. Its proof multiplies the two sums: over a window's decision streams and counts, the weights `2^(−charge)` are
 the decisions' times the counts', each summing to at most 1. Which slots ask (`en`) is not charged because it is not
 advice: the compile slice, its charge included, is proved on every advised window and never sampled, so `en` is pinned
-by that slice's scan. The carry across windows is chained from the book's priors (`charge_chain.check_chain`).
+by that slice's scan. The carry across windows is chained from the book's priors (#3801, `charge_chain.check_chain`).
 
 **What is left, the one hypothesis.** That `ChargeCount_v1`'s circuit computes `AdviceV1.window`. It is not proved in
 Lean: circuit-check holds the circuit to the Python reference (`arith_encode.py`'s `reference_charge`), and the Lean
