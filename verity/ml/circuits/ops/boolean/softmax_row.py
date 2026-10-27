@@ -1,4 +1,4 @@
-"""A head's attention scores and their softmax as one Boolean Definition, one proof unit a head writing its probability row:
+"""A head's attention scores and their softmax as one Boolean Definition, one proof block a head writing its probability row:
 the attention of CMP-92's transformer (`sampled_proofs.one_stage.partition`'s size classes: T bf16 outputs, class 16·T rounded
 up).
 

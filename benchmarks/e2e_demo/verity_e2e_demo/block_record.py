@@ -1,7 +1,7 @@
 """The block record (CMP-95 interface 6): what each leg writes for one server-time block and what the composed verdict reads,
 one document ``verity/block-record/v1``. It extends the all-protocols runner's per-period report
 (``verity/all-protocols-period/v1``, and its per-window ``verity/all-protocols-window/v1``) with the block's server and
-steps, every leg in one shape, the composed verdict with the JointHorizon error sum, and the monitoring period.
+steps, every leg in one shape, the composed verdict with the JointHorizonLive error sum, and the monitoring period.
 
 **The record.**
 
@@ -10,7 +10,8 @@ steps, every leg in one shape, the composed verdict with the JointHorizon error 
 * ``legs``: ``integrity``, ``pouw``, ``pous``, ``bandwidth``, ``certifier``, ``wipe``, each ``null`` when the block ran no
   such audit, else ``{protocol, owner, server, source: real|fixture, answer, quantity, error, error_from, at, runs}``:
   ``answer`` the core verifier's answer (verdict, reason, commitment, public); ``quantity`` the leg's certificate
-  ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S_cert, Q_cert, K, f·M); ``error`` the probability over the leg's
+  ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S_cert, Q_cert, K, the wipe's foreign_bits at its reads ``k``
+  and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (`DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
   ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`), else not established.
@@ -20,7 +21,7 @@ steps, every leg in one shape, the composed verdict with the JointHorizon error 
   one, and ``joint_horizon``: `JOINT_HORIZON`'s error over this block, the composed legs' errors summed, and at each δ of
   `DELTAS` that δ times the legs established at it. The statement names five audits; the wipe is ``outside_statement``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizon's union bound over them at this
+  `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
 
 `check` recomputes every derived field from the legs. `from_period` builds a record from a runner report and extra legs.
@@ -43,8 +44,8 @@ LEGS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
 DELTAS: tuple[Fraction, ...] = (Fraction(1, 100), Fraction(1, 10**6))
 PERIODS: tuple[tuple[str, int], ...] = (("week", 7 * 86400), ("month", 30 * 86400), ("year", 365 * 86400))
-JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizon", "proved": False,
-                 "file": "Security/Definitions/Accounting/Guarantees/JointPeriod.lean",
+JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizonLive", "proved": True,
+                 "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
 
 
@@ -93,8 +94,8 @@ def _quantity(leg: str, row: Mapping[str, Any]) -> tuple[dict[str, Any], Fractio
         return ({"symbol": "K", "value": int(q["K"]), "unit": "bits", "windows": int(q["windows"])}, frac(q["eps"]),
                 "quantity.eps")
     if leg == "wipe":
-        cert = (a.get("profile") or {}).get("certificate") or {}
-        return ({"symbol": "f·M", "value": int(pub["foreign_bits"]), "unit": "bits", "f": cert.get("f"),
+        k = pub.get("k", (a.get("profile") or {}).get("k"))
+        return ({"symbol": "foreign_bits", "value": int(pub["foreign_bits"]), "unit": "bits", "k": k, "r": pub.get("r"),
                  "M": int(pub["memory_bits"]), "certified": bool(pub["certified"])}, frac(pub["eps"]), "answer.public.eps")
     raise ValueError(f"{leg}: not a leg of {LEGS}")
 
@@ -129,7 +130,7 @@ def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], 
 
 
 def compose(server: str, legs: Mapping[str, Any]) -> dict[str, Any]:
-    """The composed verdict and the JointHorizon error over the block (module docstring)."""
+    """The composed verdict and the JointHorizonLive error over the block (module docstring)."""
     here = {k: v for k, v in legs.items() if v is not None and v["server"] == server}
     elsewhere = sorted(k for k, v in legs.items() if v is not None and v["server"] != server)
     missing = sorted(k for k in LEGS if k not in here)

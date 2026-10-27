@@ -673,6 +673,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         counts[m.template] = counts.get(m.template, 0) + sum(1 for u in local if m.base + u in drawn_units)
         if local:
             drawn.append((mm, local))
+    archived: dict = {}     # the members' circuit, archived once for every Lean verify (`a0.lean_verify`)
+    for mm in members:
+        mm["st"]["archived"] = archived
 
     def member_session(i: int, mm: dict, local: list[int]) -> dict:
         """Member ``mm``'s firewalled session on its proved units ``local`` (drawn, and a work draw's closure), on port
@@ -752,7 +755,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=sorted(served_units))
+                   served=sorted(served_units), v2=v2_proof(done, not plain(a)))
     else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -775,7 +778,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"])
+                   served=given["served"], v2=v2_proof(done, not plain(a)))
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -784,39 +787,44 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
 
-    # negatives: each re-decides one input altered
+    # negatives: each re-decides one input altered (``a.skip_negatives``: not this audit; a run of several audits runs them
+    # once, in its first)
     neg: dict[str, dict] = dict(more_negatives or {})
-    by_template: dict[str, list] = {}
-    for mm in members:
-        by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
-    defs = [tuple(x) for x in by_template.values()]
-    fewer = resized_program(defs) if len(defs) > 1 or defs[0][1] == 1 \
-        else P.population_program(defs[0][0], defs[0][1] - 1)
-    v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table)
-    neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    other = CS.expected_ports(replace(mine, run="00" * 32))
-    v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table)
-    neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    first = members[0]["m"].key
-    flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
-    v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table)
-    neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
-    neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
-    neg.update(wiring_negatives(mine.members, publics))
-    if proved:
-        v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
-        neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
-    neg.update(output_negatives(a, union_draw, sorted(proved)))
-    neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved))
-    neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
-    neg.update(coin_neg)
-    if linked is not None:
-        neg.update(registered_negatives(a, *linked))
-        key = next(iter(row_verdicts))
-        other = {p: {**e, "root": "00" * 64} for p, e in (row_verdicts[key].get("registered") or {}).items()}
-        neg["verdict-reports-another-registered-root"] = {
-            "refused": not TB.reported_reads(reads, {**row_verdicts, key: {**row_verdicts[key], "registered": other}})["ok"]}
+    if getattr(a, "skip_negatives", False):
+        neg.update(coin_neg)
+        summary["negatives_skipped"] = True
+    else:
+        by_template: dict[str, list] = {}
+        for mm in members:
+            by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
+        defs = [tuple(x) for x in by_template.values()]
+        fewer = resized_program(defs) if len(defs) > 1 or defs[0][1] == 1 \
+            else P.population_program(defs[0][0], defs[0][1] - 1)
+        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table)
+        neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        other = CS.expected_ports(replace(mine, run="00" * 32))
+        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table)
+        neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        first = members[0]["m"].key
+        flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
+        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table)
+        neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
+        neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg.update(wiring_negatives(mine.members, publics))
+        if proved:
+            v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
+            neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg.update(output_negatives(a, union_draw, sorted(proved)))
+        neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved))
+        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
+        neg.update(coin_neg)
+        if linked is not None:
+            neg.update(registered_negatives(a, *linked))
+            key = next(iter(row_verdicts))
+            other = {p: {**e, "root": "00" * 64} for p, e in (row_verdicts[key].get("registered") or {}).items()}
+            neg["verdict-reports-another-registered-root"] = {
+                "refused": not TB.reported_reads(reads, {**row_verdicts, key: {**row_verdicts[key], "registered": other}})["ok"]}
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
@@ -883,11 +891,12 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.W
 
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
-               session_roots: dict, served: list[int]) -> None:
-    """The audit as `SampledProofs.OneStage`'s case, what onsite's evidence carries for sampled proofs
-    (`replay.Case.case`: the registration record, the evidence `audit_record` was handed and the verifier's params, δ the
-    audit's as an exact ratio), in ``out/case.json``, and today's Python on it (`replay.python`) in
-    ``out/case-python.json``."""
+               session_roots: dict, served: list[int], v2: dict | str | None = None) -> None:
+    """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
+    `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio), in ``out/case.json``, and
+    today's Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case onsite's
+    evidence carries for sampled proofs, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, or why there
+    is none in ``out/case-v2-error.txt``."""
     try:
         import replay as RP
 
@@ -899,6 +908,49 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         (out / "case-python.json").write_text(json.dumps(RP.python(c), sort_keys=True, default=str))
     except Exception as x:  # noqa: BLE001: the case is a copy of the audit for onsite; its failure leaves the audit's verdict
         (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+        return
+    if v2 is None:
+        return
+    try:
+        if isinstance(v2, str):
+            raise ValueError(v2)
+        (out / "case-v2.json").write_text(json.dumps(case_v2(c.case(), sessions, **v2), sort_keys=True))
+    except Exception as x:  # noqa: BLE001: as the v1 case's
+        (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+
+
+def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registered: dict | None,
+            tables: Sequence[Path]) -> dict:
+    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest and
+    the verifier's registered file), the evidence with its ``verdicts`` replaced by the proofs' files
+    (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``, the paths of the files those name and of the
+    pinned lookup tables, which onsite reads after the evidence (`compose.onsite_check`)."""
+    import replay as RP
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+
+    pr, blobs = PF.evidence_v2(proof, sessions)
+    evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
+    return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
+            "evidence": RP.DT.canonical(evidence).encode().hex(),
+            "params": {**case["params"], "proofs": {"circuit": circuit, "registered": registered}}}
+
+
+def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
+    """`case_v2`'s files from the drawn members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
+    one table's `--zk` sessions on its circuit and public file."""
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+
+    if not zk:
+        return "v2 verifies --zk sessions; this audit's are plain"
+    if len(done) != 1:
+        return f"v2 verifies one table's sessions on its circuit and public file; this audit drew {len(done)} members"
+    mm, sdir = done[0]["mm"], done[0]["sdir"]
+    st, n = mm["st"], mm["m"].n
+    tables = sorted(f for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
+    reads = st.get("registered_file")
+    return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
+                              tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
+            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables}
 
 
 def streamed(a: argparse.Namespace) -> bool:

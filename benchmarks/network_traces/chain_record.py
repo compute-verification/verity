@@ -120,7 +120,7 @@ WARDEN_STUBBED = (
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights (NET-72a)")
 #: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
-#: a proof unit's outputs, at most 16 bits: a faulty unit's leak
+#: a proof block's outputs, at most 16 bits: a faulty proof block's leak
 OUT_BITS = 16
 #: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
@@ -693,7 +693,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "and the server can't move an admission (not met today)",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
-                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriod's sum"]}
+                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's sum"]}
 
 
 #: each reading of the scan's free inputs, as the report labels it
