@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -22,9 +23,12 @@ from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit, window_circuit
+from verity_vllm.records import weights_registration as WRG
 
+from verity.core.protocols.pouw import audit as AU
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.windows import interface as IF
 
@@ -452,8 +456,10 @@ def test_every_input_row_is_wired_registered_or_ingress_counted_from_the_descrip
     assert 0 < alone and other == count["registered"] - alone
 
 
-#: TINY's rotary table's parameter, the one weight the weights record has no root of record for
+#: TINY's rotary table's parameter, the one weight with no root (no byte digest in the weights record)
 ROPE = WB.weight_param("model.layers.0.self_attn.rotary_emb.cos_sin_cache", 16)
+#: the committer's secret key, which its weights' row salts are drawn under (`window_weights.weights_registration`)
+KEY = bytes(range(32))
 
 
 def _alone(doc, param: str) -> int:
@@ -461,46 +467,72 @@ def _alone(doc, param: str) -> int:
     return IF.input_count(doc, pins={param: "ab" * 64}, roots={param: "ab" * 64})["registered"]
 
 
-def test_the_weights_records_roots_hold_every_weight_read_but_the_rotary_tables(window, tmp_path):
-    """The weights record's root of record for each weight parameter (`weights_record` at the window's grain, composed from
-    the pinned checkpoint), pinned by the verifier and recorded by the window's registration (`advice.registered_weights`),
-    holds every weight read but the rotary table's, which has no root of record: the window's free bits are its reads alone
-    and its ingress the slots' rows. Each root is core's `Registered.commit` of the weight's rows at their public salts."""
+def _pins(tmp_path, key: bytes = KEY) -> dict[str, str]:
+    """The verifier's pins of TINY's pinned checkpoint at the test grain: the committer's registration under ``key``, held to
+    the verifier's weights record (`registration_pins`)."""
+    reg, (d, man) = S._registered(), _checkpoint(tmp_path)
+    return WW.registration_pins(WW.weights_registration(reg, key, d, checkpoints_manifest=man, grain=GRAIN),
+                                WW.weights_record(reg, d, man, grain=GRAIN))
+
+
+def test_the_committers_registered_roots_hold_every_weight_read_but_the_rotary_tables(window, tmp_path):
+    """The committer's registration of its weights (`weights_registration` at the window's grain under its key, of the pinned
+    checkpoint), held by the verifier to its own weights record's shapes (`registration_pins`) and recorded by the window's
+    registration (`advice.registered_weights`), holds every weight read but the rotary table's, which has no root: the
+    window's free bits are its reads alone and its ingress the slots' rows. Each root is core's `Registered.commit` of the
+    weight's rows salted `audit.hm96_salt` of the committer's key, a hiding commitment: the verifier's record names no root,
+    another key commits another root for every weight, and a window that serves the checkpoint's words commits the
+    registered roots (`weight_values`)."""
     circuit, _ = window
     doc = json.loads(json.dumps(circuit.description()))
-    d, man = _checkpoint(tmp_path)
-    rec = WC.weights_record(S._registered(), d, man, grain=GRAIN)
-    pins = ADV.registered_weights(rec)
-    assert set(pins) == set(circuit.registered.params) - {ROPE} and list(rec["unrooted"]) == [ROPE]
-    assert {p: e["root"] for p, e in rec["registered_entries"].items()} == pins and rec["grain"] == vars(GRAIN)
+    reg, (d, man) = S._registered(), _checkpoint(tmp_path)
+    registration = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
+    record = WW.weights_record(reg, d, man, grain=GRAIN)
+    pins = WW.registration_pins(registration, record)
+    assert ADV.registered_weights(registration) == pins
+    assert set(pins) == set(circuit.registered.params) - {ROPE} and list(registration["unrooted"]) == list(record["unrooted"]) == [ROPE]
+    assert "registered_roots" not in record and not [e for e in record["registered_entries"].values() if "root" in e]
+    assert registration["grain"] == record["grain"] == vars(GRAIN) and registration["program"] == record["program_digest"]
     rope = _alone(doc, ROPE)
     assert rope == 2 * 5 * 2 * 6 * 16 * 16          # each slot's position's layer's q and k heads, a row of 16 words
     assert IF.input_count(doc, pins=pins, roots=pins) == {"units": 2534, "inputs": 17424800, "wired": 2837536,
                                                          "registered": 14586880 - rope, "ingress": 2 * 6 * 32, "free": rope}
-    ck = WR.CheckpointIndex(d, checkpoints_manifest=man, model="org/m", revision="r")
+    ck, nonces = WR.CheckpointIndex(d, checkpoints_manifest=man, model="org/m", revision="r"), WW.weight_nonces(circuit.registered.params)
     for name, words in (("model.norm.weight", 64), ("model.embed_tokens.weight", 64)):
         p, rows = WB.weight_param(name, words), ck.array(name).view(np.uint16).reshape(-1, words).tolist()
-        want = G.Registered.commit(rec["program_digest"], p, rows, G.supplied_salts(rec["program_digest"], p, len(rows)),
+        want = G.Registered.commit(registration["program"], p, rows, [AU.hm96_salt(KEY, nonces[p], j) for j in range(len(rows))],
                                    schema=G.SCHEMA_V2)
-        assert want.entry() == rec["registered_entries"][p]
+        assert want.entry() == registration["values"][p]
+    other = _pins(tmp_path / "other", bytes(32))
+    assert set(other) == set(pins) and not [p for p in pins if other[p] == pins[p]]
+    served = WW.weight_values(reg, WW.record_words(reg, d, man), KEY, GRAIN)
+    assert {p: v.root.hex() for p, v in served.items()} == pins
 
 
 @pytest.mark.parametrize("weight, served_as", [
     ("model.layers.0.self_attn.k_proj.weight", ["model.layers.0.self_attn.qkv_proj.weight@512"]),
     ("model.embed_tokens.weight", ["model.embed_tokens.weight@512", "model.embed_tokens.weight@64"]),
 ])
-def test_a_changed_weight_byte_leaves_exactly_that_weights_reads_free(window, tmp_path, weight, served_as):
-    """A window that served a checkpoint one byte of ``weight`` away from the pinned one registers another root for each
-    parameter of the weight it is served as (k_proj's byte is the fused qkv's, the tied embedding's is its table's and the
-    LM head's) and the same root for every other: those reads alone go free."""
+def test_a_changed_weight_byte_is_never_registered_and_leaves_exactly_that_weights_reads_free(window, tmp_path, weight, served_as):
+    """A committer serving a checkpoint one byte of ``weight`` away from the pinned one refuses to register that weight (its
+    served words aren't the pinned shards'), and only that one; a window that serves it under the registered key commits
+    another root for each parameter of the weight it is served as (k_proj's byte is the fused qkv's, the tied embedding's
+    is its table's and the LM head's) and the registered root for every other, so those reads alone open no registered
+    read: they go free."""
     circuit, _ = window
     doc = json.loads(json.dumps(circuit.description()))
-    pins = ADV.registered_weights(WC.weights_record(S._registered(), *_checkpoint(tmp_path), grain=GRAIN))
-    served = ADV.registered_weights(WC.weights_record(S._registered(), *_checkpoint(tmp_path / "served", flip=weight), grain=GRAIN))
+    reg, (d, man) = S._registered(), _checkpoint(tmp_path)
+    pins = WW.registration_pins(WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN),
+                                WW.weights_record(reg, d, man, grain=GRAIN))
+    served = WW.record_words(reg, *_checkpoint(tmp_path / "served", flip=weight))
+    refused = {served_as[0].rpartition("@")[0]: "served words that aren't the checkpoint's"}
+    with pytest.raises(ValueError, match=re.escape(f"no weight registered: {refused} ")):
+        WW.weights_registration(reg, KEY, d, served, checkpoints_manifest=man, grain=GRAIN)
+    roots = {p: v.root.hex() for p, v in WW.weight_values(reg, served, KEY, GRAIN).items()}
     changed = [f"{WC.WEIGHTS}/{p}" for p in served_as]
-    assert sorted(p for p in pins if pins[p] != served[p]) == changed
+    assert set(roots) == set(pins) and sorted(p for p in pins if pins[p] != roots[p]) == changed
     free = _alone(doc, ROPE) + sum(_alone(doc, p) for p in changed)
-    assert IF.input_count(doc, pins=pins, roots=served)["free"] == free > _alone(doc, ROPE)
+    assert IF.input_count(doc, pins=pins, roots=roots)["free"] == free > _alone(doc, ROPE)
 
 
 def _checkpoint(tmp_path, seed: int = 3, flip: str | None = None, quant: dict | None = None) -> tuple[str, str]:
@@ -537,38 +569,61 @@ def _checkpoint(tmp_path, seed: int = 3, flip: str | None = None, quant: dict | 
     return str(d), str(man)
 
 
-def test_the_weights_pin_is_the_class_programs_weights_record_of_the_pinned_checkpoint(tmp_path):
-    """`weights_record`: every field of the class Program's weights record (TINY's 23: each layer's fused qkv and gate-up,
-    o and down projections and norms, the embedding, the final norm, the rotary table and the attention scales), in the
-    Program's order, composed from the checkpoint's pinned shards, so it is of record, with a root of record for each weight
-    parameter the class circuit registers at the grain the record names but the rotary table; one element changed in a
-    shard is another root, and a shard the manifest doesn't pin leaves the record not of record, which no window registers
-    (`advice.registered_weights`), nor a record with no weight parameter's root, nor one of another model than the run
-    served."""
+def test_the_verifier_holds_the_committers_registration_to_its_weights_records_shapes(tmp_path):
+    """`weights_record`, the verifier's: every field of the class Program's weights record (TINY's 23: each layer's fused qkv
+    and gate-up, o and down projections and norms, the embedding, the final norm, the rotary table and the attention
+    scales), in the Program's order, composed from the checkpoint's pinned shards, so it is of record, and for each weight
+    parameter the class circuit registers at the grain the record names but the rotary table its entry's shape (value,
+    leaves, words, domain) and no root. One key's registration of one checkpoint is one registration; the verifier pins its
+    roots only where it registers exactly the record's parameters at their shapes (`registration_pins`), and a window
+    records only a registration (`advice.registered_weights`): never a weights record, nor one of another model than the
+    run served. A key that isn't 32 bytes draws no salt, and a shard the manifest doesn't pin leaves the checkpoint not of
+    record, which no committer registers."""
     reg = S._registered()
     d, man = _checkpoint(tmp_path)
-    rec = WC.weights_record(reg, d, man, grain=GRAIN)
+    rec = WW.weights_record(reg, d, man, grain=GRAIN)
     assert (rec["of_record"], rec["complete"], rec["n_fields"], rec["unresolved"]) == (True, True, 23, [])
-    program = WC.class_program(reg, WC.WEIGHTS_CLASS).program
+    program = WC.class_program(reg, WW.WEIGHTS_CLASS).program
     assert [f["field"] for f in rec["fields"]] == [n for n, _ in dict(program.fn.signature()[0])[WC.WEIGHTS].fields]
-    params = class_circuit(reg, WC.WEIGHTS_CLASS, grain=GRAIN).registered.params
-    assert rec["grain"] == vars(GRAIN) and set(rec["registered_roots"]) | set(rec["unrooted"]) == set(params)
-    assert len(rec["registered_roots"]) == len(params) - 1 == 15 and list(rec["unrooted"]) == [ROPE]
-    assert ADV.registered_weights(rec) == ADV.registered_weights(rec, {"model": "org/m", "revision": "r"}) == rec["registered_roots"]
-    again = WC.weights_record(reg, *_checkpoint(tmp_path / "again"), grain=GRAIN)
-    assert (again["root_of_record"], again["registered_roots"]) == (rec["root_of_record"], rec["registered_roots"])
+    params, shapes = class_circuit(reg, WW.WEIGHTS_CLASS, grain=GRAIN).registered.params, rec["registered_entries"]
+    assert rec["grain"] == vars(GRAIN) and set(shapes) | set(rec["unrooted"]) == set(params)
+    assert len(shapes) == len(params) - 1 == 15 and list(rec["unrooted"]) == [ROPE]
+    assert not [p for p, e in shapes.items() if set(e) != {"value", "leaves", "words", "domain"} or e["value"] != p
+                or e["leaves"] * e["words"] != params[p]]
+    registration = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
+    assert registration["model"] == {"repo": "org/m", "revision": "r"} and set(registration["values"]) == set(shapes)
+    pins = WW.registration_pins(registration, rec)
+    assert ADV.registered_weights(registration) == ADV.registered_weights(registration, {"model": "org/m", "revision": "r"}) == pins
+    d2, man2 = _checkpoint(tmp_path / "again")
+    assert WW.weights_registration(reg, KEY, d2, checkpoints_manifest=man2, grain=GRAIN) == registration
+    values, one = registration["values"], WB.weight_param("model.norm.weight", 64)
+    for bad, record, why in [
+            ({**registration, "schema": WR.SCHEMA}, rec, f"field 'schema' is {WR.SCHEMA!r}, not {WRG.SCHEMA}"),
+            (registration, {k: v for k, v in rec.items() if k != "registered_entries"}, "the record states none"),
+            ({**registration, "values": {p: e for p, e in values.items() if p != one}}, rec, f"registers ['{one}'] unlike"),
+            ({**registration, "values": {**values, one: {**values[one], "leaves": 2 * values[one]["leaves"]}}}, rec,
+             f"entries for ['{one}'] aren't the record's shapes"),
+            ({**registration, "values": {**values, one: {**values[one], "root": "ab"}}}, rec,
+             f"field 'values.{one}' doesn't name its parameter with a root of 64 bytes"),
+            ({**registration, "values": {**values, one: {**values[one], "salt": "00" * 192}}}, rec,
+             f"field 'values.{one}.salt' is not a field of the record")]:
+        with pytest.raises(ValueError, match=re.escape(why)):
+            WW.registration_pins(bad, record)
+    for bad, serve, why in [(rec, None, "never a weights record"),
+                            ({**registration, "values": {"x": {**values[one], "value": "x"}}}, None, "registers ['x'], not weight"),
+                            (registration, {"model": "org/other", "revision": "r"}, "the run served org/other@r")]:
+        with pytest.raises(ValueError, match=re.escape(why)):
+            ADV.registered_weights(bad, serve)
+    with pytest.raises(ValueError, match="32-byte key"):
+        WW.weights_registration(reg, KEY[:16], d, checkpoints_manifest=man, grain=GRAIN)
     shard = Path(d) / "model.safetensors"
     body = bytearray(shard.read_bytes())
     body[-1] ^= 1
     shard.write_bytes(bytes(body))
-    unpinned = WC.weights_record(reg, d, man, grain=GRAIN)
+    unpinned = WW.weights_record(reg, d, man, grain=GRAIN)
     assert unpinned["of_record"] is False and unpinned["root_of_record"] != rec["root_of_record"]
-    for bad, serve, why in [(unpinned, None, "of record False"), ({**rec, "schema": "verity/commit/weights-of-record/v1"}, None, "v1"),
-                            ({**rec, "registered_roots": {}}, None, "no registered_roots"),
-                            ({**rec, "registered_roots": {WC.WEIGHTS: rec["root_of_record"]}}, None, "no registered_roots"),
-                            (rec, {"model": "org/other", "revision": "r"}, "the run served org/other@r")]:
-        with pytest.raises(ValueError, match=why):
-            ADV.registered_weights(bad, serve)
+    with pytest.raises(ValueError, match="the checkpoint is not of record"):
+        WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
     assert WR.SCHEMA == rec["schema"]
 
 
