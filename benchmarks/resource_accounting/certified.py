@@ -49,7 +49,7 @@ CLEAR = ROOT / "benchmarks" / "pouw" / "clear"
 SCHEME, LINE, VERSION = "pearl-c-sm120-v1-h3", "pearl-c-sm120", "v1-h3"
 EPS_S = Fraction(1, 1000)
 DELTA = Fraction(1, 2 ** 40)
-#: the PR whose (n, k) and layout lookup prices γ at the Llama linears (compute-accounting's)
+#: the PR whose (n, k) and layout lookup prices γ at the Llama linears
 GAMMA_PIN = "#1809"
 #: the served layout whose twin is γ's max over its linears
 LAYOUT = "llama31_8b"
@@ -64,8 +64,8 @@ PER_RUN = ("a per-run compute residual holds only conditional on BudgetAbort for
 FIRST_FETCH = ("first fetches are charged to the bandwidth account, not compute (Daniel's ruling); a priced-sum column, "
                "compute + p·reads at p the device's DRAM rate in MAC units, waits for compute-accounting's priced lemma "
                "(w1Priced)")
-S_BASIS = ("Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem (EndToEndRing, "
-           "#1790) is held")
+S_BASIS = ("Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem (EndToEndRing) "
+           "is held")
 NO_POUS = "no PoUS arm in this run"
 SUMMARIZE = ROOT / "benchmarks" / "bandwidth" / "summarize.py"
 

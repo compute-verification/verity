@@ -10,9 +10,9 @@
 #
 # WORK is the e2e's vLLM environment on node 2 (benchmarks/pouw/pearl_c_vllm/setup.sh).  ARMS (default
 # "stock plain enc:2 enc:3 stock") are serve.py's arms in order, an encoded arm as enc:K or enc:K:LIB (LIB pb56 or pb60),
-# ra-codec-wide's fused GEMM as wide:BITS:K, wide:BITS:K:tag or wide:BITS:K:sk16 (BITS 127, 255, 521, 256 or 512, then
+# the wide codec's fused GEMM as wide:BITS:K, wide:BITS:K:tag or wide:BITS:K:sk16 (BITS 127, 255, 521, 256 or 512, then
 # wide_run.sh's LIBSET suffix such as rcuem; K = 0 its plain payloads; tag: the ro-blake3/v1 tag of every block read, as
-# decode runs; sk16: the sketch-then-hash tag, and sk16c each decode step committed as it goes), ra-codec-tensor's as
+# decode runs; sk16: the sketch-then-hash tag, and sk16c each decode step committed as it goes), the tensor-core codec's as
 # tensor:FIELD:K or tensor:FIELD:K:tag (FIELD
 # 255, 511, 512, 521, 767, 768, 1023, 1279, 1536 or 2048, codec_tensor/wt.cu built for each the arms name; K >= 1, 512,
 # 768, 1536 and 2048 being full-slot fields at K = 1; tag: its tag warps tag the store's 4,088-byte blocks; skKS or

@@ -144,7 +144,7 @@ GPU_HBM_BYTES = 96 * 2 ** 30
 """One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`)."""
 HBM_BYTES = timing.GPUS * GPU_HBM_BYTES
 DISK_BYTES_PER_S = 4.4e9
-"""The node's disks' read ceiling, each disk's highest second summed (4.311e9, r20261018-155556-0b37) and rounded up:
+"""The node's disks' read ceiling, each disk's highest second summed (4.311e9) and rounded up:
 how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
 KINDS = ("weights", "kv", "filler", "activations")
 TIERS = ("hbm", "host")
@@ -1423,8 +1423,8 @@ class Verifier:
         measured, per window as declared, and the memory line's forms), on the verifier's node (`ledger.Node.stated`:
         every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, `--disk-bytes-per-s` and
         `--link-bytes-per-s`, and their bursts), whatever share of the node the store is on.  Both R are the verifier's, which the
-        prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing
-        (MEM-24).  Each reading (`spec`, `measured`) also carries the session's terms (`audit.Ledger`) and its
+        prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing.
+        Each reading (`spec`, `measured`) also carries the session's terms (`audit.Ledger`) and its
         certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
         establishes, whose γ is the node's only once its store spans the node; and its timing term's parts
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window

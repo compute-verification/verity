@@ -334,8 +334,8 @@ def test_the_pous_arm_reports_its_audit_s_cert_and_the_chain_beside_it():
     md = R.markdown(doc, {}, "fixture", _pous_result())
     assert "19 of 20 audits accepted" in md and "limit 854 µs" in md and "S_cert 1.021 GB" in md
     assert ("S_cert's basis: Pous.SecurityProofs.P2SlackFamilyUncond; P2 is experimental, and the deployed ring's theorem "
-            "(EndToEndRing, #1790) is held.") in md
-    assert "The deployed store is 2^19 blocks, |C| = 1.078 GB of the card's 103 GB (M); lane ra-pous-scale" in md
+            "(EndToEndRing) is held.") in md
+    assert "The deployed store is 2^19 blocks, |C| = 1.078 GB of the card's 103 GB (M); the store is not yet sized" in md
     assert f"Capacity {C.RESIDUAL}: M − S_cert = " in md
     assert "| 0.400 | 0.600 | 0.500 | +50.0% | +20.0% | 2 |" in md
     assert "gates failed: timed_audit" in md and R.pous(_doc(), None) is None
