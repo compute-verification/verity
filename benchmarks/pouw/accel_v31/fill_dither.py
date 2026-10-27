@@ -24,10 +24,10 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import v31  # noqa: E402
-import v31lib  # noqa: E402
+import v31
+import v31lib
 
-from verity.core.protocols.pouw.circuit import dither  # noqa: E402
+from verity.core.protocols.pouw.circuit import dither
 
 # NAME M N K LP L ROW KIND CHEAT FULL: KIND fill (the pad, from fill seeds) or served (an operand A, from served seeds;
 # operands in -127 .. 126, as a served root refuses a row of A + d_A or B + d_B spanning -128 .. 128); FULL 1: the whole

@@ -69,8 +69,7 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "commit_gpu"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "commit_gpu"))
 import reference as cref
 
 from verity.ml.commitments.identity import identity_digest_sha512
@@ -980,7 +979,9 @@ def operands(sh: Shape, rng: np.random.Generator, kind: str = "llm") -> tuple[np
         return (rng.integers(-128, 128, size=(sh.m, sh.k)).astype(np.int8), rng.integers(-128, 128, size=(sh.n, sh.k)).astype(np.int8))
     a = rng.standard_t(3, size=(sh.m, sh.k))
     b = rng.standard_normal(size=(sh.n, sh.k))
-    q = lambda x: np.clip(np.rint(127 * x / np.abs(x).max(axis=1, keepdims=True)), -127, 127).astype(np.int8)
+    def q(x: np.ndarray) -> np.ndarray:
+        return np.clip(np.rint(127 * x / np.abs(x).max(axis=1, keepdims=True)), -127, 127).astype(np.int8)
+
     return q(a), q(b)
 
 
