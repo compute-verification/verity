@@ -6,7 +6,7 @@ Where the numbers come from:
 - Runs labeled campaign=g2 (`research data label RUN campaign g2 --by circuits --ref RUN`). The run's record
   (`outputs.run_record`) holds verity-bench result docs (`*bench/result.json`, schema verity-bench/vllm-overhead/v1, from
   served_commit's `run.sh` or `prof.sh`: TP1 engines under vLLM's serving defaults) or tp_decode summaries
-  (`out/<arm>/summary.json`, `tp_decode.sh`: GLM-5.3 TP8 eager, the mode of GLM-5.3's row of record). A tp_decode arm's value
+  (`out/<arm>/summary.json`, `tp_decode.sh`: GLM-5.3 TP8 eager, the mode of GLM-5.3's workload of record). A tp_decode arm's value
   retention is its summary's `retain`; a run older than that field took it from `RETAIN=` on its command line when it ran the
   retain wrapper (`tp_decode_retain.sh`), and otherwise retained none, which `tp_decode.sh` exported before it took `RETAIN`.
 - The hash loop's results (campaign=hash-loop, kind bench-result/v1, `benchmarks/hash/loop/collect.py`'s): Qwen3-8B B32
@@ -29,7 +29,7 @@ tp_decode's min and max over its pairs, or the loop's interval where it has one:
 An arm's scheme follows its name (`classify`): rows-sha512 (served-commit-rows*, tp_decode's rows*, the loop's sha512*);
 vllm-v1 (served-commit, served-commit-prof, served-commit-nativedrain*, ...: SHA-256 position leaves, kept in the table and
 never counted, by the one-hash rule); rows-blake3 (the loop's research arm, never counted). `-layer` arms acquire only each
-layer's residual stream, K and V (their roots are no scheme's: the per-layer unit is an open question, not the Commit of
+layer's residual stream, K and V (their roots are no scheme's: the per-layer proof block is an open question, not the Commit of
 record), and `-4k` arms hash 4 KiB rows, rows-sha512's row size since the loop's iteration 1; the loop's rows are 4
 KiB from that iteration on, and every other rows arm (`rows`, `served-commit-rows`) hashes 256 B rows, the size before. A
 what-if arm (`whatif` in its name) commits less than the Commit and never counts. A compiled
@@ -453,7 +453,7 @@ def report(measures: list[Measure]) -> str:
          "interleaved reps, or the min and max over tp_decode's pairs. prefill ttft is time to first token; decode itl_p50 is "
          "per-token latency p50, and decode step the mean decode step; run tpot is the run's wall per output token, prefill "
          "included. Full Commit commits every value; per-layer commits each layer's residual stream, K and V only (a "
-         "unit whose roots are no scheme's). Each is split by value retention: host keeps every committed value in host "
+         "proof block whose roots are no scheme's). Each is split by value retention: host keeps every committed value in host "
          "memory for openings (GLM-5.3's mode of record); none keeps only the authentication state, so openings replay. A "
          "cell shows rows-sha512 at its 4 KiB rows where it has such a measure, else at the former 256 B rows (arm `rows` or "
          "`served-commit-rows`, named in the cell). A compiled measure counts only pinned to its Build of record."),

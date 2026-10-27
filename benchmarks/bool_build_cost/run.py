@@ -1,11 +1,11 @@
-"""The Boolean Build's cost against the word Build's on one row's specializations: the descriptor of their union and the
-`Q_word_v1{16,32}` unit rules the manifest computes for them (`verity.ml.definitions.word`'s prefetch, then its check, one rule per
+"""The Boolean Build's cost against the word Build's on one workload's specializations: the descriptor of their union and the
+`Q_word_v1{16,32}` proof-block rules the manifest computes for them (`verity.ml.definitions.word`'s prefetch, then its check, one rule per
 distinct Definition), timed per Definition.
 
     uv run benchmarks/bool_build_cost/run.py [--row qwen3-06b|small] [--ir word,boolean] [--part descriptor,rules]
                                              [--jobs N] [--t T,T,...] --out DIR
 
-A row is its Calls' word specializations (`ROWS`); the Boolean ones are `verity.ml.definitions.boolean.boolean_version` of each, as the Boolean
+A workload is its Calls' word specializations (`ROWS`); the Boolean ones are `verity.ml.definitions.boolean.boolean_version` of each, as the Boolean
 Build's lift calls them.  `--t` keeps the attention specializations of those key lengths only.  Writes `DIR/<ir>.json` (descriptor
 bytes, Program digest, the largest Definitions, rule seconds and the verdict per specialization, a digest of every rule) and
 `DIR/rules-<ir>.jsonl` (one line per rule as it finishes, so a run cut short keeps what it measured).
@@ -44,7 +44,7 @@ def qwen3_06b() -> list[str]:
 
 
 def small() -> list[str]:
-    """Two padded attention rows (one block, and a full block plus one key), RoPE and SiLU-mul at Qwen3-0.6B's statics."""
+    """Two padded attention rows (one tile, and a full tile plus one key), RoPE and SiLU-mul at Qwen3-0.6B's statics."""
     return [_attention(1, 0), _attention(65, 0), "RoPE_v1{NHEADS=8,D=128}", "SiluMul_v2{I=3072}"]
 
 

@@ -1,4 +1,4 @@
-"""Stage 0 on sm_120: which FP4-path ``mma`` mnemonics ptxas accepts for ``sm_120a`` and what each lowers to, before any semantics.
+"""Phase 0 on sm_120: which FP4-path ``mma`` mnemonics ptxas accepts for ``sm_120a`` and what each lowers to, before any semantics.
 
     python benchmarks/tc_probe_fp4/stage0_sm120.py --out DIR [--arch sm_120a]
 

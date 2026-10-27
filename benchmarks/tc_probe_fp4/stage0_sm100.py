@@ -1,4 +1,4 @@
-"""Stage 0: instruction reality on a datacenter Blackwell part (sm_100 / sm_103), before any semantics.
+"""Phase 0: instruction reality on a datacenter Blackwell part (sm_100 / sm_103), before any semantics.
 
     python benchmarks/tc_probe_fp4/stage0_sm100.py --out $RESEARCH_RUN_DIR [--arch sm_100a] [--cutlass /workspace/cutlass]
 
@@ -12,7 +12,7 @@ Records, into ``stage0.json`` and a ``bench-result/v1`` ``result.json``:
     of MMA instructions per kernel (must be one);
   * optionally, the SASS of a CUTLASS sm_100 block-scaled GEMM (example 72a, compiled with nvcc against ``--cutlass``): the
     opcodes its main loop uses, so the probe's instruction is the one production kernels use.
-Nothing here executes a tensor-core instruction; stage 1/2 (probe.py --instruction tcgen05_*) do.
+Nothing here executes a tensor-core instruction; phases 1 and 2 (probe.py --instruction tcgen05_*) do.
 """
 from __future__ import annotations
 

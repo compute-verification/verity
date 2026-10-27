@@ -89,9 +89,9 @@ def registry_level(status: str | None) -> Level:
 
 #: Elements with 0 mismatches on the anchor SKU for PINNED.  One default ``tc_probe --sweep`` is ~2.5e7 elements, so 1e7 demands a
 #: full sweep (the 1.4e5-element FP8-family run alone cannot pin) while one run suffices; at 1e7 independent draws a per-element
-#: defect of rate 5e-7 escapes with probability e^-5 < 1%.
+#: defect of rate 5e-7 is accepted with probability e^-5 < 1%.
 N_MIN = 10_000_000
-#: Honest verification units the prover's relation must accept (bit-exact against ``Model.step``) and mutations it must reject.
+#: Honest proof blocks the prover's relation must accept (bit-exact against ``Model.step``) and mutations it must reject.
 HONEST_MIN = 2_000
 NEGATIVES_MIN = 100
 #: Words an agreeing anchor run must hold to count as a second device / environment for TRUSTED_STABLE (a canary is ~5-30k).
@@ -900,7 +900,7 @@ def _contract_instance_sets(subject: Subject, contract: Any | None = None) -> li
         vals = {k: getattr(contract, f"{prefix}_INSTANCES_{k}", None) for k in ("DATASET", "TIER", "DIGEST")}
         if not all(isinstance(v, str) and v for v in vals.values()):
             continue
-        # an optional ``<PREFIX>_INSTANCES_FAMILIES`` (family -> VU count at the frozen tier size) is the recipe's corner-family
+        # an optional ``<PREFIX>_INSTANCES_FAMILIES`` (family -> proof-block count at the frozen tier size) is the recipe's corner-family
         # composition -- what a fixture manifest's ``composition.corner_families`` carries for a materialised set (Tc's edge predicate)
         fams = getattr(contract, f"{prefix}_INSTANCES_FAMILIES", None)
         tier: dict = {}

@@ -3,9 +3,9 @@
 #   research run --on vy-glm53-eu --cwd source --gpus 8 --mem-gb 400 --timeout 75m --project verity -- env ARM=rows bash benchmarks/served_commit/tp_decode.sh
 # ARM: rows | rows-4k | rows-layer | rows-layer-4k.  RETAIN (default none): the committer's value retention, VERITY_RETAIN
 # (none | host | device), which summary.json records as the committer took it.  BATCHES (default 1,8,32), PAIRS (default 3), ROW
-# (default GLM-5.3's TP8 eager B1 row, whose request every batch rotates), CASE (default GLM53), TP (default 8), VENV (default
+# (the workload, default GLM-5.3's TP8 eager B1, whose request every batch rotates), CASE (default GLM53), TP (default 8), VENV (default
 # /workspace/cp/venv312).  The engine: gpu_memory_utilization GPU_UTIL (0.92), max_model_len MAX_MODEL_LEN (288),
-# max_num_batched_tokens MAX_BATCHED (2048, the row's).
+# max_num_batched_tokens MAX_BATCHED (2048, the workload's).
 # Out: $RESEARCH_RUN_DIR/out/$ARM (runs.jsonl, summary.json, committer_make.json, versions.json, b<B>/ the warm-ups).
 set -euo pipefail
 TREE=$PWD

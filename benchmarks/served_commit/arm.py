@@ -14,8 +14,8 @@ reads an arm's scheme from its name. The Commit is what `prof_arm`'s rows arms a
 (`verity_bench.vllm.commit_arm`) measure.
 
 Each of the harness's runs is one Commit. ``begin_run`` resets the committer and installs it (before the clock),
-``end_run`` finalizes the run's commitment (inside the timed window, so a run's time includes the hashing backlog), and
-the run's checks happen after the window, before the next run or when the harness reads ``extras`` or ``gate``: the
+``end_run`` finalizes the run's commitment (inside the timed period, so a run's time includes the hashing backlog), and
+the run's checks happen after that period, before the next run or when the harness reads ``extras`` or ``gate``: the
 collector's errors and, with the values retained, `linkage` (each request's committed input id at a step is the token
 committed as its sample at the step before). The source's hooks are made through ``target.hooks``; the committer's
 patches of the model runner are its own, installed by ``begin_run`` and removed by ``end_run``.

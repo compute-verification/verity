@@ -19,7 +19,7 @@ labeled run, `served.py` the served arm's runs).
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
   serving on a high-priority stream over the worker's hashing, the finalize profile, NVTX ranges; `-base` and `-batch`
   arms turn the decode host-cost changes off, or all but the batched captured copies; `-ring8` and `-w64` arms size the
-  staging ring at 32 windows of 256 or 64 MiB; `-cap` arms hash in launches of at most `PROF_ROWS_CAP` blocks while the
+  staging ring at 32 windows of 256 or 64 MiB; `-cap` arms hash in launches of at most `PROF_ROWS_CAP` CTAs while the
   ring has room; `-4k` arms hash 4 KiB rows, and `-layer` arms acquire only each layer's residual stream, K and V; no
   scheme's roots), optionally under nsys,
   summarized by `nsys_summary.py`, and with `PIN_BUILD` under a Build of record's compile artifact (`served-pin` seeds one
