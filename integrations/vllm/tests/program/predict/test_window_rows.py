@@ -182,10 +182,11 @@ def test_a_chunks_best_is_its_first_maximum_above_minus_infinity():
     assert WR.chunk_best(np.array([ninf, inf], dtype=np.uint16)) == (inf, 1)
 
 
-def _served(low, s, T: int, pruned: int = PRUNED, also: tuple[int, ...] = ()):
+def _served(low, s, T: int, pruned: int = PRUNED, also: tuple[int, ...] = (), whole: tuple[int, ...] = ()):
     """Slot ``s``'s values as a request's served rows (`Served`): its prompt's positions in prefill, but for the last
     ``pruned`` nodes of a position and the nodes ``also`` at its last prompt position only, and ``T`` decode steps, each
-    member's elements by row under op ``op<k>``, op by op."""
+    member's elements by row under op ``op<k>``, op by op. A pruned node in ``whole`` is committed at every prompt
+    position, as the engine computes it, though its Program's one row is the last position's."""
     nodes, pos, lp = low.fn.body.nodes, WR.positions(low.fn), s.row[1]
     K = len(nodes) // (max(pos) + 1)
     rows, store = [], {}
@@ -198,16 +199,22 @@ def _served(low, s, T: int, pruned: int = PRUNED, also: tuple[int, ...] = ()):
             for r, p in enumerate(ps):
                 rows.append({"spec": descriptor_id(nodes[p * K + k].fn), "step": step, "op_path": f"op{k}", "members": members,
                              "row": r})
+            ps = list(range(lp)) if step == 0 and k in whole else ps
             for i, m in enumerate(names):
                 store[(step, f"op{k}", m)] = np.concatenate([s.values[p * K + k][i] for p in ps])
     return rows, store
 
 
 def _read(store):
+    """`Served`'s ``read`` and ``bound`` over ``store``."""
     def read(step, op, m, lo, hi):
         a = store.get((step, op, m))
         return (None, f"no {op}/{m} at step {step}") if a is None else (a[lo:hi], "")
-    return read
+
+    def bound(step, op, m):
+        a = store.get((step, op, m))
+        return 0 if a is None else a.size
+    return read, bound
 
 
 def test_a_served_value_is_the_nodes_value_and_the_rest_are_computed(window):
@@ -218,7 +225,7 @@ def test_a_served_value_is_the_nodes_value_and_the_rest_are_computed(window):
     low, _f, tables, weights, slots = window
     s0 = slots[0]
     rows, store = _served(low, s0, T=1)
-    served = WR.Served(rows, _read(store))
+    served = WR.Served(rows, *_read(store))
     assert served.LP == 4 and len(served.prefill) == 32 and len(served.decode) == 1
     got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, served)
     K = 32
@@ -231,28 +238,28 @@ def test_a_served_value_is_the_nodes_value_and_the_rest_are_computed(window):
 
     norm = dict(store)
     norm[(0, "op1", "out")] = norm[(0, "op1", "out")] ^ np.uint16(1)
-    changed = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, _read(norm)))
+    changed = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(norm)))
     assert np.array_equal(changed.values[1][0], store[(0, "op1", "out")][:64] ^ np.uint16(1))
 
     bad = dict(store)
     bad[(0, "op0", "out")] = bad[(0, "op0", "out")] ^ np.uint16(1)
     with pytest.raises(ValueError, match="node 0 .* at position 0: served as .*not the table's row at its token"):
-        WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, _read(bad)))
+        WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(bad)))
     pick = dict(store)
     pick[(1, f"op{K - 1}", "out")] = (pick[(1, f"op{K - 1}", "out")] + 1) % 256
     with pytest.raises(ValueError, match="at position 4: served as .*not the first maximum of its logits"):
-        WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, _read(pick)))
+        WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(pick)))
     other = [{**d, "spec": "Gemm_v2{K=1,N=1}"} if (d["op_path"], d["step"]) == ("op2", 1) else d for d in rows]
     with pytest.raises(ValueError, match="position 4's node 2 is .*served as Gemm_v2"):
-        WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(other, _read(store)))
+        WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(other, *_read(store)))
     with pytest.raises(ValueError, match="the served request's 4 prompt ids, its slot row's 3"):
         WR.Slot(low.fn, CLASS, SLOTS[1], weights, served)
     dropped = [d for d in rows if (d["op_path"], d["step"]) != ("op2", 1)]
     with pytest.raises(ValueError, match=r"step 1: none of the prefill's op \('op2', .*\) \(1 ops\)"):
-        WR.Served(dropped, _read(store))
+        WR.Served(dropped, *_read(store))
     twice = rows + [{**d} for d in rows if (d["op_path"], d["step"]) == ("op2", 1)]
     with pytest.raises(ValueError, match=r"step 1: op \('op2', .*\) served at two rows"):
-        WR.Served(twice, _read(store))
+        WR.Served(twice, *_read(store))
 
 
 def test_a_served_prefill_is_read_by_op_however_its_rows_interleave(window):
@@ -272,12 +279,33 @@ def test_a_served_prefill_is_read_by_op_however_its_rows_interleave(window):
 
     interleaved = sorted((d for d in rows if d["step"] == 0), key=at) + [d for d in rows if d["step"] == 1][::-1]
     assert [d["op_path"] for d in interleaved].index(f"op{mid}") > [d["op_path"] for d in interleaved].index(f"op{mid + 1}")
-    served = WR.Served(interleaved, _read(store))
+    served = WR.Served(interleaved, *_read(store))
     assert [v[0]["op_path"] for v in served.prefill] == [f"op{k}" for k in range(K)]
     assert [d["op_path"] for d in served.decode[0]] == [f"op{k}" for k in range(K)]
     got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, served)
     assert got.source == [WR.COMPUTED if p < lp - 1 and k in pruned else WR.SERVED for p in range(5) for k in range(K)]
     assert all(np.array_equal(a, b) for x, y in zip(got.values, s0.values) for a, b in zip(x, y))
+
+
+def test_a_pruned_node_committed_at_every_prompt_position_is_read_at_the_last(window):
+    """The engine computes the last layer and the final norm at every prompt position, so the record binds them a row a
+    position though the Program computes them at the last one only, while it gathers the logits a row a request: a pruned
+    node's one row is its member's last prompt row where the record binds a row a prompt position, else its only one.
+    Bound at another number of rows, it is refused by name."""
+    low, _f, _t, weights, slots = window
+    s0, K = slots[0], 32
+    mid, norm, lp = K - PRUNED - 2, K - PRUNED, s0.row[1]
+    rows, store = _served(low, s0, T=1, also=(mid,), whole=(mid, norm))
+    ours = {key: a for key, a in store.items() if key[:2] == (0, f"op{norm}")}
+    assert all(a.size == lp * f.leaves for a, f in zip(ours.values(), WR._fields(low.fn.body.nodes[norm].fn)))
+    assert not np.array_equal(s0.values[norm][0], s0.values[(lp - 1) * K + norm][0])
+    got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(store)))
+    assert got.source[(lp - 1) * K + norm] == WR.SERVED
+    assert all(np.array_equal(a, b) for x, y in zip(got.values, s0.values) for a, b in zip(x, y))
+    two = {**store, **{key: a[:2 * (a.size // lp)] for key, a in ours.items()}}
+    with pytest.raises(ValueError, match=rf"op{norm}: its one prefill row's members bound at \[2.0\] rows, not a row a prompt "
+                                         rf"position \({lp}\) nor one"):
+        WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(two)))
 
 
 def test_a_call_boundary_is_matched_at_its_site_whatever_its_fx_node_counts_to(window):
@@ -300,13 +328,13 @@ def test_a_call_boundary_is_matched_at_its_site_whatever_its_fx_node_counts_to(w
 
     rows = [{**d, "op_path": spell(d["op_path"], d["step"])} for d in rows]
     store = {(st, spell(op, st), m): v for (st, op, m), v in store.items()}
-    served = WR.Served(rows, _read(store))
+    served = WR.Served(rows, *_read(store))
     assert [served.prefill[k][0]["op_path"] for k in (a, b)] == ["m/row_quant", "m/row_quant_1"]
     assert [served.decode[0][k]["op_path"] for k in (a, b)] == ["m/row_quant_2", "m/row_quant_3"]
     got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, served)
     assert all(np.array_equal(x, y) for u, w in zip(got.values, s0.values) for x, y in zip(u, w))
     with pytest.raises(ValueError, match=r"step 1: none of the prefill's op \('m/row_quant_1', .*\) \(1 ops\)"):
-        WR.Served([d for d in rows if d["op_path"] != "m/row_quant_3"], _read(store))
+        WR.Served([d for d in rows if d["op_path"] != "m/row_quant_3"], *_read(store))
 
 
 def test_a_node_served_under_other_statics_is_held_to_its_class_nodes_value(window):
@@ -321,7 +349,7 @@ def test_a_node_served_under_other_statics_is_held_to_its_class_nodes_value(wind
             if (d["op_path"], d["step"]) == (op, 0) else d for d in rows]
     prefill = [d for d in rows if (d["op_path"], d["step"]) == (op, 0)]
     assert len(prefill) == s0.row[1] and all(d["spec"] != descriptor_id(low.fn.body.nodes[k].fn) for d in prefill)
-    got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, _read(store)))
+    got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(store)))
     assert got.source[k] == WR.SERVED
     assert all(np.array_equal(x, y) for u, w in zip(got.values, s0.values) for x, y in zip(u, w))
     m = prefill[0]["members"][0][0]
@@ -329,7 +357,7 @@ def test_a_node_served_under_other_statics_is_held_to_its_class_nodes_value(wind
     bad[(0, op, m)] = bad[(0, op, m)] ^ np.uint16(1)
     with pytest.raises(ValueError, match=rf"node {k} .* at position 0: served as .*not its Definition's value on its "
                                          r"operands \(served as Attention_v4\{"):
-        WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, _read(bad)))
+        WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(bad)))
 
 
 def test_the_registered_values_are_each_weights_rows_and_the_slot_rows(window):
@@ -372,7 +400,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     read's population Program, and the reference evaluator on every unit."""
     low, _f, values, weights, slots = window
     rows_, store = _served(low, slots[0], T=1)
-    s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, _read(store)))
+    s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, *_read(store)))
     rows = WR.Rows(low, [s0, slots[1]], values)
     win = IF.Window(low.circuit, RUN, LAW, 64, registered=values)
     win.supply(CR)

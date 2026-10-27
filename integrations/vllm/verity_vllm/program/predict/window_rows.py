@@ -264,17 +264,21 @@ def _sites(ops: Sequence[tuple[str, tuple[str, ...]]]) -> dict[tuple[str, tuple[
 @dataclass
 class Served:
     """One request's served values by class node: its Program's rows as `ProgramIndex.describe` gives them, each with its
-    row's ``spec`` (``{spec, step, op_path, members, row}``, its step the request's), and ``read(step, op_path, member, lo,
-    hi)``, a member's elements [lo, hi) at a request step (`CommittedStore.words` at the request's arrival plus it).
+    row's ``spec`` (``{spec, step, op_path, members, row}``, its step the request's), ``read(step, op_path, member, lo,
+    hi)``, a member's elements [lo, hi) at a request step (`CommittedStore.words` at the request's arrival plus it), and
+    ``bound(step, op_path, member)``, the elements the record binds that member at.
 
     The request's prefill is its step 0: each op (its op path and members) a row a prompt position, or one row, its last
     position's, where prefill prunes it; the ops in the order of their last prompt position's rows, the one position that
     computes them all, which is the class Program's node order within a position however the prefill interleaves the
-    others. Step s ≥ 1 is position LP − 1 + s, a row each of those ops, matched to them by site (`_sites`), since a call
+    others. A pruned op's one row is its member's last of the prompt's where the record binds the member at a row a prompt
+    position (the engine computes the last layer at them all; only the logits gather a row a request), else its only one.
+    Step s ≥ 1 is position LP − 1 + s, a row each of those ops, matched to them by site (`_sites`), since a call
     boundary's op path names an fx node numbered over the request's steps. A row of another Definition than its class
     node's is refused by name; one of its Definition at other statics is `Slot`'s to hold to the class node's value."""
     rows: Sequence[Mapping[str, Any]]
     read: Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
+    bound: Callable[[int, str, str], int]
     prefill: list[list[Mapping[str, Any]]] = field(init=False)
     decode: list[list[Mapping[str, Any]]] = field(init=False)
     LP: int = field(init=False)
@@ -321,16 +325,23 @@ class Served:
             if d is None or not d["members"]:
                 raise ValueError(f"{rid}: row {r['i']} ({r['spec']}) has no committed member")
             rows.append({**d, "spec": r["spec"]})
-        return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, op, m, lo, hi))
+
+        def bound(s: int, op: str, m: str) -> int:
+            ends = [e["identity"].get("element_range", (0, None))[1] for e in store.entries(rid, arrive + s, op, m)[0]]
+            return max((int(x) for x in ends if x is not None), default=0)
+
+        return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, op, m, lo, hi), bound)
 
     def __call__(self, p: int, k: int, node: Any) -> tuple[str, list[np.ndarray]] | None:
         """Position ``p``'s node ``k`` (``node``, its index within its position) as served, its row's spec and its values;
         None where the engine didn't compute it."""
         if k >= len(self.prefill):
             raise ValueError(f"node {k} of a position, past the served request's {len(self.prefill)} ops a position")
+        pruned = False
         if p < self.LP:
             v = self.prefill[k]
-            d = v[p] if len(v) == self.LP else v[0] if p == self.LP - 1 else None
+            pruned = len(v) != self.LP
+            d = v[p] if not pruned else v[0] if p == self.LP - 1 else None
         else:
             d = self.decode[p - self.LP][k] if p - self.LP < len(self.decode) else None
         if d is None:
@@ -342,9 +353,17 @@ class Served:
             if not all(str(m[0]).isdigit() for m in members):
                 raise ValueError(f"{d['op_path']}: members {[m[0] for m in members]}, not its return fields by index")
             members.sort(key=lambda m: int(m[0]))
+        step, op = int(d["step"]), str(d["op_path"])
+        row = int(d["row"])
+        if pruned:
+            n = {self.bound(step, op, str(m)) / int(width) for m, width, _dtype in members}
+            if n not in ({self.LP}, {1}):
+                raise ValueError(f"{op}: its one prefill row's members bound at {sorted(n)} rows, not a row a prompt position "
+                                 f"({self.LP}) nor one")
+            row = self.LP - 1 if n == {self.LP} else 0
         out = []
         for m, width, _dtype in members:
-            a, why = self.read(int(d["step"]), str(d["op_path"]), str(m), int(d["row"]) * int(width), (int(d["row"]) + 1) * int(width))
+            a, why = self.read(step, op, str(m), row * int(width), (row + 1) * int(width))
             if a is None:
                 raise ValueError(f"position {p}'s node {k}: {why}")
             out.append(a)
