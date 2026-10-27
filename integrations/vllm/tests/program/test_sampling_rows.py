@@ -240,7 +240,7 @@ def test_the_logs_outside_their_domain_are_one_pinned_nan_on_every_path():
         (0xFF800000, 0xFF800000, 0x80000000, 0xFF800000)
 
 
-#: the probe's edge words (art:e5dd6ce9..., the L40S and the H100, every FTZ build alike): input -> the GPU's output
+#: the probe's edge words (`PROBE`: the L40S and the H100, every FTZ build alike): input -> the GPU's output
 PROBE_EDGES = {"nv_logf": {0xBF800000: 0x7FFFFFFF, 0x80000000: 0xFF800000, 0x80400000: 0xFF800000, 0x80000001: 0xFF800000,
                            0x807FFFFF: 0xFF800000, 0xFF7FFFFF: 0x7FFFFFFF, 0xFF800000: 0x7FFFFFFF},
                "nv_log1pf": {0xC0000000: 0x7FFFFFFF, 0xBF800000: 0xFF800000, 0xBF800001: 0x7FFFFFFF, 0xFF800000: 0x7FFFFFFF,

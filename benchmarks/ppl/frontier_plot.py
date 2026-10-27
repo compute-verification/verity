@@ -5,7 +5,7 @@ route, one panel per (model, set, context).
     frontier_plot.py plot --eps EPS.json --png OUT.png --table OUT.md [--json OUT.json] RESULTS.json...
 
 `eps` runs `machine-model eps --json` (benchmarks/pouw/machine_model) with the decided settings: Π the current vector
-with UNI on issue at 0.92 (decision 73), the floor credit (decision 74), operands at the noise's floor, q* = 8 on the
+with UNI on issue at 0.92, the floor credit, operands at the noise's floor, q* = 8 on the
 lane route and 100% checking (the core ε, never mixed with ε_sample). The readings differ only in the table route each
 design's zero-instance words leave open (`READINGS`):
 - `closed`: no table route (q*_T at or above the threshold);
@@ -18,7 +18,7 @@ design's zero-instance words leave open (`READINGS`):
   threshold being 2.07 two-sided). co32c's (c + U)·b sums overflow a byte
   for U ≥ ±8 (narrow_u.py's T), so its packed route needs halfword fields, ≥ 2.5 slots before index and build, closed;
   so do b = 2 coins on both of A's operands (8 chunks a segment at an 8-bit index);
-- `restated floor`: SCALAR-ROUTE as the coordinator restated it (1.22 slots and 3.5 B at 6 TB/s, builds and combining
+- `restated floor`: the scalar table route's floor, restated (1.22 slots and 3.5 B at 6 TB/s, builds and combining
   free); b-bit coins on the indexed operand move the multi-field floor only to ≈ 1.15 slots and 4.0 B, since a field's
   entries are bounded by the table side's width, not the index's.
 

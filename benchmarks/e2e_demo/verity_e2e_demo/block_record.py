@@ -1,4 +1,4 @@
-"""The block record (CMP-95 interface 6): what each leg writes for one server-time block and what the composed verdict reads,
+"""The block record: what each subprotocol writes for one server-time block and what the composed verdict reads,
 one document ``verity/block-record/v1``. It extends the all-protocols runner's per-period report
 (``verity/all-protocols-period/v1``, and its per-window ``verity/all-protocols-window/v1``) with the block's server and
 steps, every leg in one shape, the composed verdict with the JointHorizon error sum, and the monitoring period.

@@ -37,7 +37,7 @@ def A1_multiplicative (c γ₁ : ℝ) (k : ℕ) (R : Mat) : Prop :=
       c * (1 - γ₁) * (Module.finrank ℚ V : ℝ) ≤ r
 
 /-- **A1 at W1's constant** `c = 2`, under checkpoint independence (P7-2: for a dependent `R` it is a false
-hypothesis) and MinRank ≥ 2 (TD-5: without it A1(2) is false). Daniel's decision of 03:35Z prices sub-word extraction
+hypothesis) and MinRank ≥ 2 (TD-5: without it A1(2) is false). A ruling prices sub-word extraction
 like PRMT (16 per word), so the packed-field route is gone and a scalar-pipe product costs 8 = 16/2.
 
 Stronger, probably false asymptotically; not used by the recommended chain. Additions are free here (`a1.md`,
