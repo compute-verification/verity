@@ -283,6 +283,16 @@ def test_a_replayed_verifier_gives_the_same_verdicts(tmp_path):
     assert "record/w1/certifier/answer.json" in verifier
 
 
+def test_the_parties_run_one_command_at_a_time(tmp_path, capsys):
+    _, whole = run(tmp_path, registry(tmp_path), "--periods", "2")
+    reg = registry(tmp_path)
+    for parties in (["firewall"], ["network-certifier"], ["workers"], ["challenger", "verifier"]):
+        rc, split = run(tmp_path, reg, "--periods", "2", *[x for p in parties for x in ("--party", p)], state="split")
+    assert rc == 0 and split == whole
+    assert [json.loads(x.split(" ", 1)[1])["party"] for x in capsys.readouterr().out.splitlines()
+            if x.startswith("PARTY ")][-3:] == ["challenger", "verifier", "challenger"]
+
+
 def test_a_party_placed_elsewhere_is_refused(tmp_path, capsys):
     rc, _ = run(tmp_path, registry(tmp_path), "--party", "challenger", "--machine", "auditor-1")
     assert rc == 2 and "refused machine" in capsys.readouterr().err
