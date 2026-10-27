@@ -5,7 +5,7 @@ import Definitions.Pouw.Fp8Atom.Atom
 
 `BLACKWELL_SM120_NVF4` and `BLACKWELL_SM120_MXF4` in `verity.ml.tc.models` (`BlockScaledAlignAdd`, verity `main` at
 `29f691bec`): one accumulator coordinate of `mma.sync.aligned.kind::mxf4nvf4.block_scale.m16n8k64` on sm_120 (SASS
-`OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X` and `OMMA.SF.16864.F32.E2M1.E2M1.E8`). Lane fp4-re fitted them on the RTX 5090 with
+`OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X` and `OMMA.SF.16864.F32.E2M1.E2M1.E8`). They were fitted on the RTX 5090 with
 0 mismatches over 8,339,456 NVFP4 and 7,389,184 MXFP4 elements, and the RTX PRO 6000 reproduces them (2,269,184 and
 2,056,192 elements, 0 mismatches). Transcribed function by function:
 
