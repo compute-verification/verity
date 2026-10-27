@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import advice as I1
+from verity.core.protocols.network_certifier import advice as I1
 from verity.ml.commitments import advice as AC
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import advice_windows as AW

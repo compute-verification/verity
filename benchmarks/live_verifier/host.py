@@ -59,7 +59,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   `models.json` pins it.
 - **A replay** (`replay RUN`, `vy-verifier-replay@<run>.service`) checks each transcript against `SHA256SUMS` and
   against the sha256 and bytes `verifier.json` recorded for it, and replays them through both verifiers
-  (`verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript --record verifier.json`), or the record
+  (`verity/core/protocols/poub/lean/tests/replay.py transcript --record verifier.json`), or the record
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/core/protocols/pous/wipe_party.py`, port 47611) and its block challenger
@@ -103,7 +103,7 @@ from typing import Any, BinaryIO, Callable, Iterator
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
 VERIFIER = TREE / "benchmarks" / "remote_session" / "verifier.py"
-REPLAY = TREE / "verity" / "core" / "protocols" / "remote_bandwidth" / "lean" / "tests"
+REPLAY = TREE / "verity" / "core" / "protocols" / "poub" / "lean" / "tests"
 DIFFTEST = TREE / "verity" / "core" / "difftest" / "python"
 RESEARCH = TREE / "tools" / "research" / "src"
 

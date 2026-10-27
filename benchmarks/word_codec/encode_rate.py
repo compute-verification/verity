@@ -41,7 +41,7 @@ sys.path[:0] = [str(HERE), str(HERE.parents[1])]
 
 import kv as K  # noqa: E402
 import kv_bench as KB  # noqa: E402
-from verity.core.protocols.remote_bandwidth import timing  # noqa: E402
+from verity.core.protocols.poub import timing  # noqa: E402
 
 REFERENCE = 1.499e10
 HOST_SHARE = 0.125

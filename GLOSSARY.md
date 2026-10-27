@@ -175,10 +175,10 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`Security/Definitions/Pouw/Assumptions/Dither.lean`), until it is renamed | Dither |
 | "the accelerator model", "the machine model" for 𝓜 (`benchmarks/pouw/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
 | `ShaSpeed` and `ServiceSound`, the Lean's names until they are renamed | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
-| ρ, "slowdown" and "the circuit-size slowdown" for \|C\|/T_0, "dampener", "compute dampener"; `benchmarks/rho` (its `Slowdown.rho`, `slowdown()`, the `rho` command) until they are renamed, the Lean's `Nci.Dampener` and `Dampener*` names (`DampenerRemotePeriod`) until they are renamed | overhead(𝒢, 𝒜′, η); "slowdown" is wall-clock time only, and ρ is 𝓜's resource rate |
+| ρ, "slowdown" and "the circuit-size slowdown" for \|C\|/T_0, "dampener", "compute dampener"; `benchmarks/overhead` (its `Slowdown.rho`, `slowdown()`, the `rho` command) until they are renamed, the Lean's `Nci.Dampener` and `Dampener*` names (`DampenerRemotePeriod`) until they are renamed | overhead(𝒢, 𝒜′, η); "slowdown" is wall-clock time only, and ρ is 𝓜's resource rate |
 | T_0 and the reference circuit C_0 as overhead's normalizer; T_target ≥ L·T_0/Φ_total | the threshold T_𝒢(η; 𝒜_phys), which a reference construction bounds; the time to the task, at least T_𝒢(η; 𝒜′) of server-time |
 | A_phys, A_i(S), δ_i(S), A′ in roman letters; "layer 1", "layer 2", "layer 3"; "the one theorem", "soundness one theorem" | 𝒜_phys, 𝒜_a, δ_a, 𝒜′; the physical model, protocol soundness, the exclusion bound |
-| ε_gap, and its `gap.*` routes in `benchmarks/rho` (`gap.floor`, `gap.clock`) until they are renamed | ε_undecl (`undecl.gpu`, `undecl.clock`) |
+| ε_gap, and its `gap.*` routes in `benchmarks/overhead` (`gap.floor`, `gap.clock`) until they are renamed | ε_undecl (`undecl.gpu`, `undecl.clock`) |
 | ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | ε_undecl + ε_skip at that GPU; the exchanged bits are an input term (k_S's r_in and r_side), reported beside it in bits |
 | G for the target or the acceptable outputs | 𝒴, and the task 𝒢 |
 | θ for a card's numbers | the card table (θ is the registered inputs) |

@@ -38,7 +38,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.core.protocols.poub import store as rstore  # noqa: E402
 
 import device  # noqa: E402
 import store_layout  # noqa: E402

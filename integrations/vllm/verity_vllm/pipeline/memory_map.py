@@ -39,8 +39,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.remote_bandwidth import codec
-from verity.core.protocols.remote_bandwidth.memory_map import dumps
+from verity.core.protocols.poub import codec
+from verity.core.protocols.poub.memory_map import dumps
 from verity_vllm.acquire.sources.kv_slots_source import MEMBER
 from verity_vllm.check.replay.cached_prefix import layout_of
 from verity_vllm.check.replay.index import ProgramIndex

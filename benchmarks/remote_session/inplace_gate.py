@@ -1,6 +1,6 @@
 """The in-place pass's gate and timing on one GPU (`inplace.py`; `inplace.sh` builds session.cu and runs it).
 
-The gate, before anything is timed, is over a store registered as vLLM's binder registers one (`verity_vllm.protocols.remote_bandwidth`'s
+The gate, before anything is timed, is over a store registered as vLLM's binder registers one (`verity_vllm.protocols.poub`'s
 `Store`, `TorchBacking`, `PagedBacking` and `page_layout`): weight tensors (bf16 with an unregistered tail, int8 held
 transposed, a view 48 bytes into a fused tensor, a plain bf16 matrix) and a KV pool of three layers, two in
 FlashAttention's layout (2, pages, slots, heads, dim) sharing one storage and one page-major (pages, 2, ...). Each
@@ -45,9 +45,9 @@ sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
 
 from device import BLOCK, PER_LEAF, Lib, digests, rb, store_salt  # noqa: E402
 from inplace import FUSED_H0, InPlace, Region, level_at  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.binder import PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, PageLayout  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.registry import RemoteBandwidthReceipt, Store  # noqa: E402
+from verity_vllm.protocols.poub.binder import PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
+from verity_vllm.protocols.poub.interface import IDENTITY, PageLayout  # noqa: E402
+from verity_vllm.protocols.poub.registry import RemoteBandwidthReceipt, Store  # noqa: E402
 
 ROWS = rb.SKETCH_ROWS
 

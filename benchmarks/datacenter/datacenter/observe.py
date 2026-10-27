@@ -7,7 +7,7 @@ once content is fixed) and a digest of their content. The challenger records eac
 window, to a wipe's spot checks. A `Deviation` plays the adversary.
 
 This is the run's model, on simulated ticks. The same records come from the real certifier
-(`verity.core.protocols.certifier`) when the mock datacenter runs it on real links (`benchmarks/network_sim`).
+(`verity.core.protocols.network_certifier`) when the mock datacenter runs it on real links (`benchmarks/network_sim`).
 """
 from __future__ import annotations
 

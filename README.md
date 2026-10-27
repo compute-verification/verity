@@ -19,10 +19,10 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 | Proofs of useful work (PoUW) | A credited size S of noised matrix products, at least (1 − ε)·S of their AND gates computed right. Dither is its no-fold design, stated over the ACCEL model of the accelerator. | [`verity/core/protocols/pouw`](verity/core/protocols/pouw/PROTOCOL.md), [Dither](verity/core/protocols/pouw/dither/PROTOCOL.md) |
 | Proofs of useful space (PoUS) | A lower bound on the bits a device's memory held, from timed rounds the memory challenger runs and signs. | [`verity/core/protocols/pous`](verity/core/protocols/pous/README.md) |
 | The bandwidth audit | A lower bound on the bits read from PoUS's store. | [`verity/core/protocols/bandwidth`](verity/core/protocols/bandwidth/PROTOCOL.md) |
-| The remote bandwidth audit | The same, over a node's registered store. | [`verity/core/protocols/remote_bandwidth`](verity/core/protocols/remote_bandwidth/README.md) |
-| The network certifier | An auditor-trusted device on each node's uplink certifies that the traffic carried only committed values, and bounds the bits that left the site. | [`verity/core/protocols/certifier`](verity/core/protocols/certifier/README.md) |
+| The remote bandwidth audit | The same, over a node's registered store. | [`verity/core/protocols/poub`](verity/core/protocols/poub/README.md) |
+| The network certifier | An auditor-trusted device on each node's uplink certifies that the traffic carried only committed values, and bounds the bits that left the site. | [`verity/core/protocols/network_certifier`](verity/core/protocols/network_certifier/README.md) |
 | The wipe | A server's life is cut into server-time blocks, each opened by a certified wipe of its memory, so state crosses a boundary only as a committed value. | `verity/core/devices/memory_challenger/lean` |
-| Novel communication intensity (NCI) | Inference rather than training: the committed circuit divides into blocks of bounded size, each reading a bounded amount of novel information. | `verity/core/protocols/network/nci/lean` |
+| Novel communication intensity (NCI) | Inference rather than training: the committed circuit divides into blocks of bounded size, each reading a bounded amount of novel information. | `verity/core/protocols/inference_only/lean` |
 
 ## The two composite protocols
 

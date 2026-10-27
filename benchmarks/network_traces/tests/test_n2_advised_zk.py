@@ -23,7 +23,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.core.protocols.certifier import advice as ADV, head_check as HC
+from verity.core.protocols.network_certifier import advice as ADV, head_check as HC
 
 HERE = Path(__file__).resolve().parents[1]
 

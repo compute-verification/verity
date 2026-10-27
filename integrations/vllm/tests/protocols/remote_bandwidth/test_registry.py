@@ -8,10 +8,10 @@ import struct
 import numpy as np
 import pytest
 
-from verity.core.protocols.remote_bandwidth import receipts as rb
-from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, Lifecycle, PageLayout, Stale, StoreView
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, KindReceipt, RemoteBandwidthReceipt, Store, chain
-from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
+from verity.core.protocols.poub import receipts as rb
+from verity_vllm.protocols.poub.interface import IDENTITY, Append, Lifecycle, PageLayout, Stale, StoreView
+from verity_vllm.protocols.poub.registry import ArrayBacking, KindReceipt, RemoteBandwidthReceipt, Store, chain
+from verity_vllm.protocols.poub.verify import verify_opening
 
 WORD = 64
 BLOCK = 256
@@ -201,7 +201,7 @@ def test_windows_chain_through_the_session():
 def test_the_sessions_first_window_chains_from_the_verifiers_registration_digest():
     """The driver's `Registration.digest`, not the store's own log root, is the root before the session's first pass;
     a later window takes none."""
-    from verity.core.protocols.remote_bandwidth import audit
+    from verity.core.protocols.poub import audit
     s = Store()
     weights(s)
     digest = audit.register(bytes(32), b"node", s.layout().blocks, bytes(64), nonce=bytes(32)).digest
@@ -328,7 +328,7 @@ def _driver_root(s: Store, backings: dict[str, ArrayBacking], pc, receipt=RECEIP
 
 
 def test_a_pass_lays_its_segments_out_as_subtrees_of_the_drivers_tree():
-    from verity_vllm.protocols.remote_bandwidth.registry import aligned
+    from verity_vllm.protocols.poub.registry import aligned
     s, backings = _aligned_store()
     (pc,), _ = _window(s, SIGMA, [([0, 1, 2, 3], None)])
     got = [(x.region, x.count, x.position, aligned(x)) for x in pc.segments]

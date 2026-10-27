@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import advice as I1
+from verity.core.protocols.network_certifier import advice as I1
 
 HERE = Path(__file__).parent
 

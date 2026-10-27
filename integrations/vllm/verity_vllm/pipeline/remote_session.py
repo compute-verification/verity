@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity_vllm.protocols.remote_bandwidth import remote
+from verity_vllm.protocols.poub import remote
 
 
 def commit_session(opts: Any, out: Any, kv_pages: int | None) -> remote.CommitSession:
@@ -13,7 +13,7 @@ def commit_session(opts: Any, out: Any, kv_pages: int | None) -> remote.CommitSe
     `serve_remote.RemoteOptions`), its KV pool at ``kv_pages`` pages (None: the engine's own) and its record under ``out``."""
     backend_of = None
     if opts.remote_session_lib:
-        from verity_vllm.protocols.remote_bandwidth.in_place import InPlaceBackend
+        from verity_vllm.protocols.poub.in_place import InPlaceBackend
         backend_of = InPlaceBackend.for_commit(opts.remote_session_lib)
     return remote.CommitSession(opts.remote_verifier, plan=opts.remote_plan, kv_pages=kv_pages,
                                 weight_blocks=opts.remote_weight_blocks, kv_lib=opts.remote_kv_lib, backend_of=backend_of,

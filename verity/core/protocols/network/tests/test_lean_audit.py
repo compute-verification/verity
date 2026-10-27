@@ -22,12 +22,12 @@ import test_network_records_protocol as R
 import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import audit, lean_audit, service
-from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsKey, LmsSigner,
+from verity.core.protocols.network_certifier import audit, lean_audit, service
+from verity.core.protocols.network_certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsKey, LmsSigner,
                                                         parameters_digest)
-from verity.core.protocols.certifier.commitment import commit
-from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
-from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
+from verity.core.protocols.network_certifier.commitment import commit
+from verity.core.protocols.network_certifier.grid import Certifier, GridParams, occupancy
+from verity.core.protocols.network_certifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -325,12 +325,12 @@ def test_with_the_executable_named_it_needs_nothing_else(lean, tmp_path):
     before the import, which runs after `SERVER.close`)."""
     script = (
         "import atexit, sys; sys.modules['verity_difftest'] = None\n"
-        "atexit.register(lambda: print('closed', sys.modules['verity.core.protocols.certifier.lean_audit']"
+        "atexit.register(lambda: print('closed', sys.modules['verity.core.protocols.network_certifier.lean_audit']"
         ".SERVER._proc is None))\n"
         "from fractions import Fraction\n"
-        "from verity.core.protocols.certifier import lean_audit\n"
-        "from verity.core.protocols.certifier.grid import Certifier, GridParams\n"
-        "from verity.core.protocols.certifier.schedule import ClockSync, SyncSet, run_shaper\n"
+        "from verity.core.protocols.network_certifier import lean_audit\n"
+        "from verity.core.protocols.network_certifier.grid import Certifier, GridParams\n"
+        "from verity.core.protocols.network_certifier.schedule import ClockSync, SyncSet, run_shaper\n"
         "g, s = GridParams(1, 1, 1), [ClockSync(0, Fraction(1))]\n"
         "a = lean_audit.Audit()\n"
         "print(a.check_link('a', run_shaper([], [], s, Certifier('a', g)), [], s, SyncSet((0,), (Fraction(1),)), g))\n"

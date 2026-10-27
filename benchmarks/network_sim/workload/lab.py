@@ -19,7 +19,7 @@ so φ's messages are recast:
   chunk one canonical event (`active.event`) after the line `id: <position>`, which the proxy reads and doesn't
   record. A session's events are then padded with empty ones (`active.event(b"")`, of no message) to the block's most,
   F, so every response of a block is F events (`fixlen`): with F_in, the served profile N2 derives a link's egress
-  counts from (`verity.core.protocols.certifier.served`). The positions number a block's events 0 … n − 1 in session,
+  counts from (`verity.core.protocols.network_certifier.served`). The positions number a block's events 0 … n − 1 in session,
   message and chunk order, the padding last, the canonical order the certifier's shaper hands in, so the k-th event
   released on a link is position k.
 
@@ -34,7 +34,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from verity.core.protocols.certifier.active import (
+from verity.core.protocols.network_certifier.active import (
     HEADER,
     LENGTH,
     TOKEN_BYTES,

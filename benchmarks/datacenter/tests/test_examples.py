@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections import Counter
 
 import pytest
-from verity.core.protocols.remote_bandwidth import ledger
+from verity.core.protocols.poub import ledger
 
 from datacenter import Cadence, Port, route
 from datacenter.examples import GB, leaf_spine, rack, rtx_node, two_sites, with_dpu

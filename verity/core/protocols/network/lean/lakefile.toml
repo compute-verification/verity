@@ -17,7 +17,7 @@ path = "../../interface"
 
 [[require]]
 name = "certifier_program"
-path = "../../certifier/lean"
+path = "../../network_certifier/lean"
 
 [[require]]
 name = "lms"
