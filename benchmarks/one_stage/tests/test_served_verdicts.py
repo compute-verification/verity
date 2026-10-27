@@ -122,12 +122,12 @@ WIPE_REJECT = {"protocol": W.PROTOCOL, "verdict": "reject", "reason": "a read ca
                "public": None, "profile": None}
 
 
-@pytest.mark.parametrize("case", ["accept", "elsewhere", "refused", "reject"])
+@pytest.mark.parametrize("case", ["accept", "elsewhere", "unserved", "refused", "reject"])
 def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_server(tmp_path, monkeypatch, capsys, case):
     """`record` takes the wipe out of ``record_missing`` only when its answer accepts and its served.json names the
-    record's node: served on another server it stays missing (``elsewhere``), a wipe that wrote no answer
-    (served_wipe.sh refused) stays missing with its issue, and one whose answer rejects makes the record reject with no
-    block record."""
+    record's node: served on another server it stays missing (``elsewhere``), an accepting answer with no served.json
+    names no server and stays missing (``unserved``), a wipe that wrote no answer (served_wipe.sh refused) stays missing
+    with its issue, and one whose answer rejects makes the record reject with no block record."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
     wipe = tmp_path / "pieces" / "wipe"
@@ -136,7 +136,8 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         (wipe / "refused.txt").write_text("WIPE REFUSED: the card has a compute process\n")
     else:
         (wipe / "answer.json").write_text(json.dumps(WIPE_REJECT if case == "reject" else WIPE_ACCEPT))
-        (wipe / "served.json").write_text(json.dumps({"server": "vy-dc-h200-2" if case == "elsewhere" else "vy-dc-h200"}))
+        if case != "unserved":
+            (wipe / "served.json").write_text(json.dumps({"server": "vy-dc-h200-2" if case == "elsewhere" else "vy-dc-h200"}))
     (tmp_path / "serve").mkdir()
     rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
                  "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(tmp_path / "pieces"),
@@ -157,6 +158,8 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
     assert line["record_missing"] == ["bandwidth", "certifier", "pous", "pouw", "wipe"]
     if case == "elsewhere":
         assert rec["legs"]["wipe"]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == ["wipe"]
+    elif case == "unserved":
+        assert rec["legs"]["wipe"] is None and "the wipe" not in line["missing"]
     else:
         assert rec["legs"]["wipe"] is None and line["missing"]["the wipe"] == "MEM-96"
 

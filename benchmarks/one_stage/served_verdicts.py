@@ -357,8 +357,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                 "why": "block_record carries an accepted subprotocol's certificate only", **dev}
         return report, None, line
     w = rows.get("wipe") or {}
-    extra = ({"wipe": {"row": w, "server": wipe_server or node, "runs": w.get("runs") or [run]}}
-             if w.get("verdict") == "accept" else None)
+    extra = ({"wipe": {"row": w, "server": wipe_server, "runs": w.get("runs") or [run]}}
+             if w.get("verdict") == "accept" and wipe_server is not None else None)
     rec = BR.from_period(report, steps=steps, deployment=BR.REFERENCE, extra=extra)
     line = {"composed": rec["composed"]["verdict"], "verdicts": verdicts, "missing": missing, **dev,
             "record_missing": rec["composed"]["missing"], "check": BR.check(rec), "steps": list(steps), "node": node,
