@@ -437,13 +437,16 @@ theorem notR_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x i�
           fun c => (_root_.Flock.Readable.fixedOf st.m st.c.kLog
             ((p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt).getD c default)).map fun f => (c, f.1, f.2)
         refine List.mem_flatMap.2 ⟨0, List.mem_range.2 hlen, ?_⟩
-        dsimp only
+        try dsimp only
         rw [hts0, hfx]
         exact List.mem_map_of_mem (f := fun f : ℕ × (ℕ → Bool) => ((0 : ℕ), f.1, f.2)) (List.mem_of_find?_eq_some hf)
       have h5 := H.2.2 _ hmem
-      dsimp only at h5
+      try dsimp only at h5
       rw [hf1, hf2] at h5
-      exact absurd (hrow0.trans h5) (by decide)
+      first
+        | exact absurd (hrow0.trans h5) (by decide)
+        | exact absurd (hrow0.symm.trans h5) (by decide)
+        | exact absurd (h5.symm.trans hrow0) (by decide)
 
 /-- **The fixture's inner statement is in the plain scope**: Flock's setup of it passes `PlainIn`'s checks
 (`setupView`). -/
