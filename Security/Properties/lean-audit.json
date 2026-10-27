@@ -176,9 +176,25 @@
    "owner": "@training",
    "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c"
   },
+  "NetTiming.Allocated": {
+   "owner": "@network-accounting",
+   "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
+  },
   "NetTiming.DeviceIntact": {
    "owner": "@network-accounting",
    "digest": "35b47a0bae4d98550943cb5e4a66ecb4ecddeb3d6093fd79cd1feac4e18e0060"
+  },
+  "NetTiming.JitterBounded": {
+   "owner": "@network-accounting",
+   "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
+  },
+  "NetTiming.Packed": {
+   "owner": "@network-accounting",
+   "digest": "07208a21923ece8f743252f10d99fd592646fa16e1b476a784300c62cc134570"
+  },
+  "NetTiming.Regenerates": {
+   "owner": "@network-accounting",
+   "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
   },
   "Pous.P2.Assumptions.CoinCommitHides": {
    "owner": "@memory-accounting",
@@ -247,22 +263,6 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
-  },
-  "NetTiming.Allocated": {
-   "owner": "@network-accounting",
-   "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
-  },
-  "NetTiming.JitterBounded": {
-   "owner": "@network-accounting",
-   "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
-  },
-  "NetTiming.Packed": {
-   "owner": "@network-accounting",
-   "digest": "07208a21923ece8f743252f10d99fd592646fa16e1b476a784300c62cc134570"
-  },
-  "NetTiming.Regenerates": {
-   "owner": "@network-accounting",
-   "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
   }
  },
  "meaning": [
