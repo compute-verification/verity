@@ -14,7 +14,8 @@ the change's base, the list's total held, a loosened lint failing, a base lint t
 the silent-except check beside that (a new swallowing handler, typed or broad, refused by name with the fix, one that
 re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
 counted lints counting one change), a repository list (ruff's, a counted lint's) catching up to what its base holds and no
-further, a public command P16's list gains (passing when the file it names runs it, refused when that file doesn't or isn't
+further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
+public command P16's list gains (passing when the file it names runs it, refused when that file doesn't or isn't
 there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
@@ -1287,3 +1288,31 @@ def test_a_lane_text_list_catches_up_to_what_its_base_holds_and_a_pinned_file_ha
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_LANE_JSON}: {G.key({'file': 'AGENTS.md'})} 0 -> 1"]), c["why"]
     assert "repo_lane_text.json: AGENTS.md is pinned at zero (PINNED), so it has no entry" in (_lane_lint(lane_linted) or "")
+
+
+def test_a_lint_that_comes_to_count_more_records_its_list_at_the_files_it_leaves_untouched_and_no_others(lane_linted):
+    """The base's lint can't count a new kind, so the rise is taken from a change to the lint's module at each file of the
+    base's tree it leaves untouched, where the text is the base's; a file it edits, or a rise with no edit to the lint, is
+    held as before, and main stays green after it lands."""
+    b = {"file": "docs/b.md", "count": 2}
+    lane_linted.git("checkout", "-q", "main")
+    lane_linted.commit("text the lint will count", {"docs/b.md": "# B\n\nTOY1 and TOY2.\n"})
+    lane_linted.git("checkout", "-q", "-B", "pr")
+    real = (SCRIPT.parents[3] / REPO_LANE_LINT).read_text()
+    lane = '    ("codename", r"\\[lane ", None),\n'
+    wider = real.replace(lane, '    ("toy", r"TOY\\d\\b", None),\n' + lane, 1)
+    assert wider != real
+    lane_linted.commit("counts TOY ids, and records them", {REPO_LANE_LINT: wider, REPO_LANE_JSON: _allowlist(DOCS_A, b)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["pooled"]) == ("passed", ["repo_lane_text"], [
+        f"{REPO_LANE_JSON} 1 -> 3 in total, 2 of it in 1 key(s) at files the change leaves untouched, recorded as the lint "
+        "it edits counts them"]), c["why"]
+    assert _lane_lint(lane_linted) is None
+    lane_linted.commit("and one more in the file", {"docs/b.md": "# B\n\nTOY1, TOY2 and TOY3.\n",
+                                                    REPO_LANE_JSON: _allowlist(DOCS_A, {**b, "count": 3})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_LANE_JSON}: {G.key({'file': 'docs/b.md'})} 0 -> 3"]), c["why"]
+    lane_linted.git("checkout", "-q", "-B", "pr", "main")
+    lane_linted.commit("records them with the lint as it is", {REPO_LANE_JSON: _allowlist(DOCS_A, b)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_LANE_JSON}: {G.key({'file': 'docs/b.md'})} 0 -> 2"]), c["why"]
