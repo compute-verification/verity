@@ -19,16 +19,16 @@
 # VARIED=N (with ADMIT=release-order; VARIED_RUNS=3, VARIED_RATE=4, VARIED_JITTER_MS=400): before READY, VARIED_RUNS runs of N
 # varied requests (network-accounting's traffic, `serve_load.py --varied`), each numbered under a fresh release run and
 # sent up to the jitter late, then `tools/admit_rows_check.py` over the serve dir: every window's first rows must be in
-# admission order (VLLM-98), else the endpoint stops (exit 14). After UNTIL the check runs again over everything served.
+# admission order, else the endpoint stops (exit 14). After UNTIL the check runs again over everything served.
 # `verity example vllm serve` (run.sh) starts it where placement.toml's [run.serve] says, on one leased GPU, with the node's VENV,
-# CUDA_HOME, HF_HOME, HIDDEN_SO and NORM_TAP_SO, the run's SERVE_ROOT, and the row's REPO, REV and ROW (the Commit of record's row
-# dir) as its environment; --env PORT=... and --env UNTIL=... after `serve` change the run's own. Windows are sealed off the engine loop and close at WINDOW_GB committed; the server itself also refuses to start, and later
+# CUDA_HOME, HF_HOME, HIDDEN_SO and NORM_TAP_SO, the run's SERVE_ROOT, and the workload's REPO, REV and ROW (the Commit of record's
+# workload dir) as its environment; --env PORT=... and --env UNTIL=... after `serve` change the run's own. Windows are sealed off the engine loop and close at WINDOW_GB committed; the server itself also refuses to start, and later
 # stops taking requests, below DISK_FLOOR_GB free on the serve dir's filesystem, and copies its records into $OUT after each
 # window and at any stop. SEAL_HOLD_GB (64), SEAL_WARM_GB (0), MAX_NUM_SEQS (8), MAX_NUM_BATCHED_TOKENS (2048) and
 # WINDOW_REQUESTS (unset: no bound) are serve-openai's --seal-hold-gb, --seal-warm-gb, --max-num-seqs,
 # --max-num-batched-tokens and --window-requests (a window's class slots, e.g. 4 for V3b's class of record).
-# PROTOCOL (unset: vllm) is its --protocol: ids streams the scan's id form raw to a warden's id requests, for a warden in
-# front of the endpoint, and answers every other request (the smokes, the bursts, VARIED's load, the network certifier's
+# PROTOCOL (unset: vllm) is its --protocol: ids streams the scan's id form raw to the network certifier's id requests, for a
+# certifier in front of the endpoint, and answers every other request (the smokes, the bursts, VARIED's load, the certifier's
 # shim and probes) as vllm does.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under that registered compiler, and window K's
 # request Programs and manifest.json.
@@ -49,7 +49,7 @@ export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host
 export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
-# A learning step's transient host copy: a 1,984-token prefill step stages over 16 GiB (r20261024-222401-5a22), past the
+# A learning step's transient host copy: a 1,984-token prefill step stages over 16 GiB, past the
 # collector's 4096 MiB default, and isn't committed; lease --mem-gb 256 with it.
 [ "$MAX_MODEL_LEN" -gt 512 ] && export VERITY_LEARN_HOST_BUDGET_MB=${VERITY_LEARN_HOST_BUDGET_MB:-65536}
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
@@ -152,7 +152,7 @@ EOF
 ( while kill -0 "$SRV" 2>/dev/null; do advice_pass; sleep 10; done; advice_pass ) &
 ADV=$!
 
-if [ "$ADMIT" = release-order ]; then   # releases 1 then 0 of a fresh warden run, a second apart: 0 must reach the engine first
+if [ "$ADMIT" = release-order ]; then   # releases 1 then 0 of a fresh release run, a second apart: 0 must reach the engine first
   "$PY" - "$PORT" "$REPO" "$D" <<'EOF2' 2>&1 | tee "$OUT/admit_smoke.txt"
 import json, sys, threading, time, urllib.request, uuid
 from pathlib import Path
@@ -299,7 +299,7 @@ print(json.dumps({"window": int(k), "committer": json.loads((w / "commit" / "run
 EOF
 done
 
-if [ "${VARIED:-0}" -gt 0 ]; then   # network-accounting's varied traffic, each run numbered as the warden releases it
+if [ "${VARIED:-0}" -gt 0 ]; then   # network-accounting's varied traffic, each run numbered as the network certifier releases it
   for i in $(seq 1 "${VARIED_RUNS:-3}"); do
     run=$("$PY" -c "import uuid; print(uuid.uuid4().hex)")
     "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$VARIED" --rate "${VARIED_RATE:-4}" --prompt-range 16:1024 \

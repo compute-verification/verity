@@ -46,7 +46,7 @@ cumulative pool bound to the longest cached prefix, and gives `kind`, the canoni
   prover's choice of eviction, so it is sent and charged, and no choice goes uncharged (LEAK-LEAN's `BitsCount`).
 The resumes and the order of new requests that `derived._walk` would otherwise read are the replay's, so v1 sends none.
 The KV pool's size is registered before the run, never sent: a prover that chose it could declare a bigger pool and buy
-derived hits with it (REDTEAM's phase 7).
+derived hits with it.
 
 **The windows** (the certifier PROTOCOL's A5: no later than the first window whose rows the value changes). Step s's
 window is the earliest window an output at step s or later is released in (the last window where none follows). An

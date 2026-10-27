@@ -22,7 +22,7 @@ for v in /workspace/cp/venv312 /workspace/jobs/venv312; do [ -z "${PY:-}" ] && [
 [ -x "${PY:-}" ] || { echo "s8_linear: no Python with torch (VERITY_BENCH_VENV)" >&2; exit 2; }
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
-export PYTHONPATH=$ROOT/integrations/vllm:$ROOT
+export PYTHONPATH=$ROOT/integrations/vllm:$ROOT:$ROOT/tools/config
 export TRITON_CACHE_DIR=$S/triton
 mkdir -p "$S/ship" && tar -C "$S/ship" -xf "$SHIP" && (cd "$S/ship" && sha256sum -c --quiet MANIFEST.sha256) \
   || { echo "s8_linear: the ship $SHIP is missing or fails its MANIFEST" >&2; exit 2; }

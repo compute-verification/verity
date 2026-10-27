@@ -51,8 +51,8 @@ class WeightsRows:
         return bytes(H.rows_tree(rs, leaves, 0, stream)[1])
 
     def root(self, t: int, entry: list, flat: Any, mode: str) -> tuple[bytes, int]:
-        """Tensor ``t``'s root under `VERITY_WEIGHTS_HASH` ``mode``, and how many device roots it checked against the host's (SYS-05
-        device-checked: a mismatch is refused)."""
+        """Tensor ``t``'s root under `VERITY_WEIGHTS_HASH` ``mode``, and how many device roots it checked against the host's (under
+        device-checked; a mismatch is refused)."""
         if mode == "host" or not flat.is_cuda:
             return self.host_root(t, entry, flat), 0
         r = self.device_root(t, entry, flat)
@@ -61,7 +61,7 @@ class WeightsRows:
         rh = self.host_root(t, entry, flat)
         if rh != r:
             raise RuntimeError(f"weights registration: device root != host root for {entry[0]} ({entry[3]} B, {step_rows.NAME}): "
-                               f"{r.hex()[:16]} vs {rh.hex()[:16]} -- refusing to commit (SYS-05 device-checked)")
+                               f"{r.hex()[:16]} vs {rh.hex()[:16]} -- refusing to commit (device-checked)")
         return r, 1
 
     def tree(self, names: list, roots: list[bytes]) -> dict:

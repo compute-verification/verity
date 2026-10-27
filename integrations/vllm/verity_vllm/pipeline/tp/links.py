@@ -40,7 +40,7 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
     params = [(n, str(t)) for n, t in program.fn.body.params]
     user = [n for n, _ in params if n != "weights"]
     probe = res["tp"]["collectives"]["record"]
-    peer_ranks = [r for r in range(tp) if r != rank]                       # [lane vllm-tp-n] world-1 peers per collective, in rank order
+    peer_ranks = [r for r in range(tp) if r != rank]                       # world-1 peers per collective, in rank order
     n_peer = len(probe) * len(peer_ranks)
     peer_names = user[len(user) - n_peer:]
     sched = (res["tp"].get("schedule") or {}).get("record") or []
