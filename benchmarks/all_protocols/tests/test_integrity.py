@@ -18,14 +18,13 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity_all_protocols import runner as RN, table as T
+from verity_all_protocols import runner as RN, settings, table as T
 from verity_all_protocols.table import check_answer
 
 I = T.load("sampled-proofs")
@@ -150,7 +149,7 @@ def test_kept_records_hold_no_prover_file(tmp_path):
         "summary.json", "window/audit.json", "window/m0/pub-4.bin"]
 
 
-TOOLS = os.environ.get("VERITY_ALL_PROTOCOLS_TOOLS")
+TOOLS = settings.VERITY_ALL_PROTOCOLS_TOOLS
 
 
 @pytest.mark.slow

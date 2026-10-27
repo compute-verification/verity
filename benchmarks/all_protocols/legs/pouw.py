@@ -35,7 +35,6 @@ honest period by reject dominance.
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import tempfile
@@ -46,6 +45,7 @@ from pathlib import Path
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import operands as OP
 from verity.core.protocols.pouw import window as Wd
+from verity_all_protocols import settings
 
 LEAN_ENV = "VERITY_POUW_CHECK"
 H1_DIR = "pouw"
@@ -156,7 +156,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict:
     answer = CC.case(c)
     line = CC.line(answer)
     lean = None
-    if exe := os.environ.get(LEAN_ENV):
+    if exe := settings.get(LEAN_ENV):
         lean = lean_line(exe, c)
         if lean != line:
             raise RuntimeError(f"pouw-check and core_check disagree on the period:\n  lean   {lean}\n  python {line}")

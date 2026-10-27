@@ -117,6 +117,7 @@ import numpy as np
 from verity.core.protocols.sampled_proofs.one_stage import audit as A, registration as R
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.windows.rows import BC_BYTES, SALT_BYTES
+from verity_all_protocols import settings
 
 PROTOCOL = "verity/certifier/v0"
 ONE_STAGE = R.PROTOCOL
@@ -183,14 +184,8 @@ WARDEN_TAMPERED_PERIOD = 0
 WARDEN_TRAFFIC = ("--rate", "0.5", "--seed", "0", "--tail", "60", "--temperature", "0", "--top-p", "1")
 #: why a warden period past link-window 0 isn't decided yet
 WARDEN_PENDING = "scan_zk.py proves link-window 0 alone (no --window W), so no later link-window has a scan answer"
-#: the scan's sampled draw (``SCAN_DRAW``): Lean ``draw --stratified K`` of the window's 2T units
-SCAN_DRAW = 16
 #: what `scan_prove` keeps of a scan's ``--out``: its summary and its honest round's registration, draw and audit record
 SCAN_KEEP = ("summary.json", "joint/program.json", "honest/registration.json", "honest/draw.json", "honest/audit.json")
-
-
-def _env_int(name: str, default: int) -> int:
-    return int(os.environ.get(name) or default)
 
 
 # --- the period's records ----------------------------------------------------------------------------------------------
@@ -402,7 +397,7 @@ def _env(tools: Mapping[str, str], exes: Mapping[str, str]) -> dict[str, str]:
     return {**os.environ, "VERITY_NETWORK_RECORDS_EXE": exes["network-records"],
             "PYTHONPATH": os.pathsep.join(filter(None, [tools["m0-pythonpath"], str(TRACES),
                                                         str(ROOT / "tools" / "verity" / "circuit_check" / "src"),
-                                                        os.environ.get("PYTHONPATH")]))}
+                                                        settings.PYTHONPATH]))}
 
 
 def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, tools: Mapping[str, str],
@@ -417,8 +412,8 @@ def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, too
     if (s / "relay.json").exists():
         return json.loads((s / "relay.json").read_text())
     s.mkdir(parents=True, exist_ok=True)
-    exes, height = lean_exes(), _env_int("CERTIFIER_HEIGHT", 10)
-    tamper = os.environ.get("CERTIFIER_TAMPER", "extra")
+    exes, height = lean_exes(), settings.CERTIFIER_HEIGHT
+    tamper = "extra" if settings.CERTIFIER_TAMPER is None else settings.CERTIFIER_TAMPER
     strategies = ["honest", *([tamper] if tamper else [])]
     frames = steps * math.ceil(4 * h / TOKEN_BYTES)
     if out_shape is not None:
@@ -535,7 +530,7 @@ def n2_refusal(report: Mapping[str, Any]) -> str | None:
 # --- the warden session --------------------------------------------------------------------------------------------------
 
 def _traces_env() -> dict[str, str]:
-    return {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(TRACES), os.environ.get("PYTHONPATH")]))}
+    return {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(TRACES), settings.PYTHONPATH]))}
 
 
 def scan_schedule(env: Mapping[str, str] | None = None) -> list[str]:
@@ -625,7 +620,7 @@ def scan_prove(run: Path, s: Path, strategy: str, tools: Mapping[str, str], draw
     env = {**os.environ, "FC_FIREWALL_LEAN": tools["flock-firewall"],
            "PYTHONPATH": os.pathsep.join(filter(None, [tools["m0-pythonpath"], str(TRACES),
                                                        str(ROOT / "tools" / "verity" / "circuit_check" / "src"),
-                                                       os.environ.get("PYTHONPATH")]))}
+                                                       settings.PYTHONPATH]))}
     keep = s / "scan" / strategy
     keep.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="certifier-leg-scan-"))
@@ -667,8 +662,7 @@ def warden_tampers() -> list[str]:
     sys.path.insert(0, str(TRACES))
     import torch_loop_stub as S
 
-    got = WARDEN_TAMPERS if os.environ.get("WARDEN_TAMPER") is None else [
-        t for t in os.environ["WARDEN_TAMPER"].split(",") if t]
+    got = WARDEN_TAMPERS if settings.WARDEN_TAMPER is None else [t for t in settings.WARDEN_TAMPER.split(",") if t]
     if bad := [t for t in got if t not in S.TAMPERS]:
         raise RuntimeError(f"WARDEN_TAMPER: {bad} not of the stub's tampers {S.TAMPERS}")
     return list(got)
@@ -684,9 +678,9 @@ def warden_session(period_dir: Path, keep: Path | None = None) -> dict[str, Any]
 def _warden_session(period_dir: Path, s: Path, keep: Path | None = None) -> dict[str, Any]:
     tools, exes = _tools(period_dir), lean_exes()
     prompts, steps, h = requests_of(period_dir)
-    rec = warden_rehearse(s, prompts, steps, h, _periods(period_dir), _env_int("CERTIFIER_HEIGHT", 10),
+    rec = warden_rehearse(s, prompts, steps, h, _periods(period_dir), settings.CERTIFIER_HEIGHT,
                           ["honest", *warden_tampers()], keep=keep)
-    draw = _env_int("SCAN_DRAW", SCAN_DRAW)
+    draw = settings.SCAN_DRAW
     rec["scan_prove"] = {st: scan_prove(s / "rehearsal" / st, s, st, tools, draw) for st in rec["strategies"]
                          if rec["scan"][st]["accepted"]}
     rec["exes"] = exes
@@ -1153,7 +1147,7 @@ def tie_holds(index: int, tie: Mapping[str, Any], integrity: str) -> None:
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """The period's network certifier check (module docstring) into ``out``, on the path ``CERTIFIER_PATH`` names
     (`PATHS`); its answer at δ = 1/100."""
-    path = os.environ.get("CERTIFIER_PATH") or PATHS[0]
+    path = settings.CERTIFIER_PATH or PATHS[0]
     if path not in PATHS:
         raise RuntimeError(f"CERTIFIER_PATH: one of {PATHS}, not {path!r}")
     return (warden_leg if path == "warden" else certifier_leg)(period_dir, node, out)
@@ -1364,7 +1358,7 @@ __all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "DELTAS", "PATHS", "PROTOCOL", "P
            "relay", "relayed", "tie_holds", "tie_of", "audit_program",
            "clock_evidence", "failed", "free_inputs", "holds_at", "io", "layout", "leg", "loop_units", "match_ids",
            "match_outputs", "n2_refusal", "n2_report", "once", "period_windows", "publish", "registered_outputs", "requests_of",
-           "rows_case_of", "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_prove", "scan_schedule",
+           "rows_case_of", "SCAN_KEEP", "scan_dry", "scan_prove", "scan_schedule",
            "scan_window", "session", "term_delta", "warden_argv", "warden_ids", "warden_io", "warden_leg",
            "warden_period_windows", "warden_publish", "warden_rehearse", "warden_session", "warden_tampers",
            "warden_windows"]

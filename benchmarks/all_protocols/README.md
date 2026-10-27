@@ -39,6 +39,8 @@ every machine of a census deployment, the pooled total first and the per-window 
   what acceptance certifies, and may write `out/<component>.case.json` (its port's case, for onsite) and `out/runs.json`.
   A lane plugs its protocol in by adding its file. A subprotocol with no file reports
   `{"verdict": "missing", "owner": LANE}`, and one whose file raises reports `error`. Neither is ever a verdict.
+- `verity_all_protocols/settings.py`: every environment variable the runner, the legs and the tests read (`CERTIFIER_PATH`,
+  `CERTIFIER_TAMPER`, `WARDEN_TAMPER`, `CERTIFIER_HEIGHT`, `SCAN_DRAW`, …), declared once with its type, default and doc.
 - `legs/sampled_proofs.py`: sampled proofs, real. `benchmarks/prove_path/records_audit.py` on the window, from its records
   alone, at k = 64 and δ = 1/100 by default: live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of
   record's audit record, turned into sampled proofs' answer (`verity/sampled-proofs/one-stage/v1`). It also hands on

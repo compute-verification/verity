@@ -90,7 +90,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from . import compose as C, monitoring as M, tie as T
+from . import compose as C, monitoring as M, settings, tie as T
 from .table import ANSWERS, PERIOD, TABLE, Entry, LegFn, check_answer, leg_of
 
 FORMAT = "verity/all-protocols-window/v1"
@@ -131,7 +131,7 @@ def row_of(entry: Entry, a: Any, out: Path) -> dict[str, Any]:
     """A leg's report row from its answer (checked to be a core answer first)."""
     a = check_answer(a)
     runs = json.loads((out / "runs.json").read_text()) if (out / "runs.json").exists() else []
-    run = os.environ.get("RESEARCH_RUN_ID")
+    run = settings.RESEARCH_RUN_ID
     accepted = a["verdict"] == "accept"
     return {"protocol": a["protocol"], "owner": entry.owner, "verdict": a["verdict"], "reason": a["reason"],
             "commitment": a["commitment"], "quantity": a["public"] if accepted else None,
@@ -167,7 +167,7 @@ def decide(period_dir: Path, node: str, out: Path, table: Sequence[Entry] = TABL
             cases[e.name] = json.loads(case.read_text()) if case.exists() else None
         seconds[e.name] = round(clock() - t, 1)
     p = json.loads((period_dir / PERIOD).read_text())
-    report = {"format": FORMAT, "window": p["window"], "node": node, "run": os.environ.get("RESEARCH_RUN_ID"),
+    report = {"format": FORMAT, "window": p["window"], "node": node, "run": settings.RESEARCH_RUN_ID,
               "loop": {"circuit": p["circuit"], "run_root": p["run_root"], "law": p["law"], "cap": p["cap"],
                        "delta": p.get("delta"), "tampered": bool(p.get("prover_env")), "pouw": p.get("pouw"),
                        **({"tie": {k: p["tie"][k] for k in ("strategy", "window", "stratum", "root")}}
@@ -180,7 +180,7 @@ def decide(period_dir: Path, node: str, out: Path, table: Sequence[Entry] = TABL
 
 
 def _python(module: str, argv: Sequence[str], log: Path | None = None) -> subprocess.CompletedProcess:
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(LOOP), os.environ.get("PYTHONPATH")]))}
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(LOOP), settings.PYTHONPATH]))}
     if log is None:
         return subprocess.run([sys.executable, "-m", module, *argv], cwd=ROOT, env=env, capture_output=True, text=True,
                               check=False)
@@ -305,14 +305,14 @@ def of_record(a: argparse.Namespace) -> str | None:
     if a.law not in (None, want["law"]):
         return (f"S1's run of record draws under {want['law']} (the tie's output class needs a streamed work draw, and "
                 f"the run's figures are stated at k = {want['law'].partition(':')[2]}), not --law {a.law}: drop --law")
-    tamper = os.environ.get("CERTIFIER_TAMPER")
+    tamper = settings.CERTIFIER_TAMPER
     if a.tie_tamper and tamper not in (None, "byte"):
         return (f"--tie-tamper ties a window to the CERTIFIER_TAMPER=byte relay (one egress byte changed), not "
                 f"CERTIFIER_TAMPER={tamper}: unset it")
     for k, v in want.items():
         setattr(a, k, v)
     if a.tie_tamper:
-        os.environ["CERTIFIER_TAMPER"] = "byte"
+        settings.put("CERTIFIER_TAMPER", "byte")
     return None
 
 
@@ -333,7 +333,7 @@ def mode_of(a: argparse.Namespace, argv: Sequence[str]) -> dict[str, Any]:
                       "windows": a.windows, "start": a.start, "tamper": sorted(a.tamper),
                       "tie_tamper": sorted(a.tie_tamper), "registered": a.registered, "wired": a.wired,
                       "requests": a.requests, "steps": a.steps, "cap": a.cap, "delta": a.delta,
-                      "certifier_tamper": os.environ.get("CERTIFIER_TAMPER")},
+                      "certifier_tamper": settings.CERTIFIER_TAMPER},
             **({"gap": WIRING_GAP, "companion": COMPANION} if a.of_record and not a.wired else {})}
 
 
@@ -348,7 +348,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", type=one_window, default=1, help="1 only: the windows are audited one at a time (ONE_AT_A_TIME)")
     ap.add_argument("--session-jobs", type=one_session, default=1,
                     help="1 only: each integrity audit runs its sessions one at a time (ONE_AT_A_TIME)")
-    ap.add_argument("--node", default=os.environ.get("RESEARCH_MACHINE") or os.uname().nodename)
+    ap.add_argument("--node", default=settings.RESEARCH_MACHINE or os.uname().nodename)
     ap.add_argument("--tamper", default="", help="windows whose loop tampers with its outputs, e.g. 1,3")
     ap.add_argument("--law", help=f"the proof service's law of each window (default {LAW}, and {TIE_LAW} with --tie, "
                     "which needs a work law)")
@@ -404,7 +404,7 @@ def main(argv: list[str] | None = None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     a.mode = mode_of(a, argv)
     (out / "mode.json").write_text(json.dumps(a.mode, indent=1, sort_keys=True))
-    run = os.environ.get("RESEARCH_RUN_ID") or "local"
+    run = settings.RESEARCH_RUN_ID or "local"
     reports: list[dict] = []
     lock = threading.Lock()
 
