@@ -136,10 +136,12 @@ WARDEN_SERVED_STUBBED = (
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: a proof block's outputs, at most 16 bits: a faulty proof block's leak
 OUT_BITS = 16
-#: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, not met there until a run shows the written
-#: buckets tell a receiver no more than an idle one. The warden hands each bucket to a pacer that releases it at a time
-#: fixed before the bucket is made (`warden.Warden(paced=…)`), as the served proxy does (`active.Proxy(paced=…)`)
-JITTER = "assumed (J)"
+#: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
+#: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
+#: (`warden.Warden(paced=…)`, `active.Proxy(paced=…)`), yet the host's state after the server's writes for the next
+#: bucket still moves a bucket's arrival offset, so J isn't met at D_j = 1
+JITTER_BOUND = 2
+JITTER = "J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel)"
 #: what `horizon_k`'s K rests on until its two per-window inputs are discharged
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
@@ -224,6 +226,7 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
                          "deployed": tuple(dep["certifier_key"]["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W,
                                                                                lms.DEPLOYED.H)},
                  "session": dep["session"], "link": lw.link, "sync_bits": lw.charge,
+                 "window_buckets": setup.egress_params.buckets,
                  "in_the_clear": CLEAR["certificates"]}
     if records is None or out["clocks_file"] is None or not kept.is_file() or not kept_clocks.is_file():
         return out | {"verdict": "refused", "why": f"{client}: the client kept no certificates.jsonl or clocks.jsonl, "
@@ -564,8 +567,7 @@ def audit_of(d: Path) -> dict:
     """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its units, the
     units its law draws (a subset law's ``k``, a stratified law's ``Σ k``, as `NetworkCheck.Period` counts them), the
     least rate it draws a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs
-    (`free_inputs`); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts exactly, and J the offsets
-    within a bucket."""
+    (`free_inputs`). Its jitter term is the link's steps over the period, which `d1_terms` charges."""
     reg = json.loads((d / "registration.json").read_text())
     law, n = reg["law"], reg["population"]
     if law.get("law") == "subset":
@@ -579,7 +581,12 @@ def audit_of(d: Path) -> dict:
         raise SystemExit(f"--audit {d}: K's q is a subset or stratified law's, not {law}")
     return {"window": str(d), "registration": hashlib.sha512(json.dumps(reg, sort_keys=True).encode()).hexdigest(),
             "units": n, "drawn": drawn, "q": str(q),
-            "free": free_inputs(json.loads((d / "circuit.json").read_text())), "jitter": 0}
+            "free": free_inputs(json.loads((d / "circuit.json").read_text()))}
+
+
+def jitter_bits(steps: int) -> int:
+    """K's jitter term over `steps` steps at `JITTER_BOUND`, ⌈log2 D_j^steps⌉ (`NetworkCheck.Period`'s)."""
+    return (JITTER_BOUND ** steps - 1).bit_length()
 
 
 def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
@@ -616,12 +623,17 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
     honest = (n2.get("members") or {}).get("honest") or {}
     acc = [bool(r.get("certified")) and bool(honest.get("network_accepted")) for r in rows]
     network = network_terms(cert, endpoint or {})
+    steps = len(rows) * (cert.get("window_buckets") or 0)
     if None in network.values():
         k = {"open": f"the network's terms aren't all computed: {network}"}
     elif not audits:
         k = {"open": "no compute audit's window (--audit: the served units' registration and circuit), whose free "
                      "inputs and draw the K counts", "network": network}
+    elif not steps:
+        k = {"open": "the certificates step records no link-window's egress buckets (window_buckets), the steps over "
+                     "which K's jitter term charges each audit", "network": network}
     else:
+        audits = [a | {"steps": steps, "jitter": jitter_bits(steps)} for a in audits]
         k = {f"{d:.3g}": horizon_k(audits, Fraction(d), network) for d in DELTAS} | {"audits": audits}
     return {"theorem": "NetTiming.Guarantees.PeriodLeakAccepted, KS as hypothesis",
             "K": k,
@@ -661,7 +673,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     generator reading of the scan's statement: log2 #Ss = 0, the fail cell's
     position log2(egress_cells + 1) a connection, the scan's ``prog`` rows its free inputs (T·NP a link-window as
     registered, 32 + KO·IDB a request if ``prog`` were an input only at its anchored entries), no faulty term with
-    every unit drawn, b = NS + NV, and Dj = 1. The period's link-windows and requests scale the run's own."""
+    every unit drawn, b = NS + NV, and the jitter term at `JITTER_BOUND`, T bits a link-window (its scan's T steps).
+    The period's link-windows and requests scale the run's own."""
     import scan_zk as SZ
     from verity.core.protocols.certifier import ingress_scan as IS, warden as W
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
@@ -681,10 +694,12 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     rate = v["requests"] / v["windows"]
     window_s = T * params.bucket_ms / 1000
     free = {"registered": {"link_window": T * NP, "request": 0}, "anchors": {"link_window": 0, "request": anchored}}
+    jitter = jitter_bits(T)
 
     def count(link_windows: float, delta: float | None, reading: str) -> float:
         requests = rate * link_windows
-        k = requests * cap + link_windows * free[reading]["link_window"] + requests * free[reading]["request"]
+        k = (requests * cap + link_windows * (free[reading]["link_window"] + jitter)
+             + requests * free[reading]["request"])
         if delta is None:
             return k
         fmax = math.ceil(math.log(1 / delta))
@@ -708,8 +723,9 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
             "draw": {"units": units, "drawn": drawn},
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
-            "terms": {"log2_Ss": 0, "cap_per_request": cap, "free": free, "faulty": 0, "jitter": 0,
-                      "jitter_term": JITTER, "b": NS + NV,
+            "terms": {"log2_Ss": 0, "cap_per_request": cap, "free": free, "faulty": 0,
+                      "jitter_per_link_window": jitter, "jitter_bound": JITTER_BOUND, "jitter_term": JITTER,
+                      "b": NS + NV,
                       "fmax": {f"{d:g}": math.ceil(math.log(1 / d)) for d in LEAK_DELTAS}},
             "weights_bits": weights_bits, "rows": rows,
             "theorems": {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted",
@@ -720,8 +736,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "a claim, with lean and Daniel",
                 "log2 #Ss = 0 only once the schedule's digest binds each connection's admission bucket and lane, "
                 "and the server can't move an admission (not met)",
-                f"the jitter term is 0 at D_j = 1, {JITTER}, not met until a run shows the paced warden's written "
-                "buckets tell a receiver no more than an idle one",
+                f"the jitter term is T bits a link-window, one a bucket: {JITTER}",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
                 "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's sum"]}
@@ -738,7 +753,8 @@ def leak_markdown(doc: dict) -> str:
     share = lambda x: f"{100 * x:.3g}%" if x < 1 else f"{x:.3g}×" if x < 100 else f"{x:,.0f}×"
     lines = []
     for reading, title in READINGS.items():
-        lines += [f"**{title}**, bits, and the share of the weights (the jitter term 0, {JITTER}):", "",
+        lines += [f"**{title}**, bits, and the share of the weights (the jitter term one bit a bucket, {JITTER}):",
+                  "",
                   "| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |",
                   "|---|---|---|---|---|---|"]
         lines += [f"| {r['period']} | {r['machines']:,} | {bits(r['pooled'][d1])} ({share(r['pooled_share'][d1])}) | "
