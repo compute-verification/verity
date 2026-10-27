@@ -84,8 +84,8 @@ Two kinds of committed run:
   and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at ASK-122's fixed slots; every slot's
   Program whatever the window's requests, each placed at the window's first boundary): its record (or ``--description``,
   its description) and its input count at the verifier's pins (``--pin NAME=ROOT``, the roots it fixed before the run,
-  ``weights`` holding every weight's ``weights/<label>@<words>``; a registered read counts registered only where the
-  window's registration, `verity-vllm advice`'s, records the pinned root under the pin's name, and any other is free),
+  each of its parameter alone, a weight's ``weights/<label>@<words>``; a registered read counts registered only where the
+  window's registration, `verity-vllm advice`'s, records the pinned root for its parameter, and any other is free),
   which ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
   unit's rows as the record's members (V3c).
 * **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class

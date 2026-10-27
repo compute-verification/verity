@@ -28,8 +28,6 @@ from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, W
 from verity.ml.windows import interface as IF
 
 GRAIN = Grain(gemm_words=512, rows=9, select=64)
-#: the verifier's pin of the weights at a root the window's registration records for them, so every weight's parameter is held
-HELD = {WC.WEIGHTS: "ab" * 64}
 CLASS = WindowClass(2, 4, 2)
 #: the class of record's slots (8, 4 a boundary at buckets 0 and 16) at TINY's caps
 SLOTS = WindowClass(8, 4, 2, lanes=4, every=16)
@@ -46,6 +44,13 @@ THREE = ([(4, 2, G2), (2, 2, G2), (3, 1, {**S.GREEDY, "max_tokens": 1})], [[(0, 
 EMB, COMBINE = "EmbeddingRead_v1{V=256,H=64}", "TokenSelectCombine_v2{V=256,C=64}"
 FIRST, FEED = "TokenFeed_v1{NP=4,FIRST=true}", "TokenFeed_v1{NP=4,FIRST=false}"
 ROW, MASK = "SlotRow_v1{NP=4}", "SlotMask_v1{}"
+
+
+def held(circuit) -> dict[str, dict[str, str]]:
+    """`interface.input_count`'s pins and the window's roots holding every registered parameter of ``circuit``: each
+    weight's own, ``weights/<label>@<words>``, pinned by the verifier at the root the window's registration records for it."""
+    roots = {p: "ab" * 64 for p in circuit.registered.params}
+    return {"pins": roots, "roots": roots}
 
 
 def _label(fn) -> str:
@@ -333,7 +338,7 @@ def test_past_one_key_block_a_head_reads_its_full_blocks_gather_made_once(long):
     assert _source(circuit, full, "q", 0) == (rope, 12 * 128, "o0")
     assert [_source(circuit, full, p, 0) for p in ("m_prev", "l_prev", "o_prev")] == [(first, 8, o) for o in ("o0", "o1", "o2")]
     assert [_source(circuit, end, p, 8 * 128) for p in ("l", "o")] == [(full, 0, "o1"), (full, 0, "o2")]
-    assert max(_unit_rows(circuit).values()) == 129 and IF.input_count(circuit.description(), pins=HELD, roots=HELD)["free"] == 0
+    assert max(_unit_rows(circuit).values()) == 129 and IF.input_count(circuit.description(), **held(circuit))["free"] == 0
 
 
 @pytest.mark.slow
@@ -359,7 +364,7 @@ def test_the_class_of_record_lowers_within_the_grain_and_its_description_is_its_
     assert sum(n.values()) == 4 * sum(k for _, k in two.templates) == 8 * 296_711
     shape = [(len(c.wires), len(c.registered.reads), len(c.blocks.inference)) for c in (two, circuit)]
     assert shape == [(33278, 18481, 13062)] * 2 and len(built.program.fn.body.nodes) == 26088
-    assert IF.input_count(circuit.description(), pins=HELD, roots=HELD)["free"] == 0
+    assert IF.input_count(circuit.description(), **held(circuit))["free"] == 0
 
 
 def _labels(circuit) -> dict[str, np.ndarray]:
@@ -423,25 +428,30 @@ def test_inference_entries_are_the_slots_runs_side_by_side():
 
 
 def test_every_input_row_is_wired_registered_or_ingress_counted_from_the_description(window, tmp_path):
-    """`interface.input_count` over the circuit's description (JSON, no Program lowered) at the verifier's one pin, the
-    weights record's root of record fixed before the run (`weights_record`), which holds every weight's registered
-    parameter (one a weight and row width, ``weights/<label>@<words>``), and a window whose registration records that root
-    for ``weights`` (`verity-vllm advice --weights-of-record`), finds no free input row, so a proof of the window's units
-    leaves nothing but the declared advice to the prover; the ingress is the two slots' rows, 6 i32s each (occupancy,
-    prompt length and 4 ids). Every registered read, table read and opening is of the weights (the GEMM slices', norms' and
-    RoPE tables' rows; the embedding table's root, domain and rows), so with no pin, or a window whose ``weights`` root is
-    another's or none, all of them are free."""
+    """`interface.input_count` over the circuit's description (JSON, no Program lowered), each weight's registered parameter
+    (one a weight and row width, ``weights/<label>@<words>``) pinned by the verifier itself before the run at the root the
+    window's registration records for it (`held`), finds no free input row, so a proof of the window's units leaves nothing
+    but the declared advice to the prover; the ingress is the two slots' rows, 6 i32s each (occupancy, prompt length and 4
+    ids). Every registered read, table read and opening is of the weights (the GEMM slices', norms' and RoPE tables' rows;
+    the embedding table's root, domain and rows), so with no pin all of them are free, and a weight whose window root is
+    another's is free by its own reads. So is every weight at the weights record's root of record alone (`weights_record`,
+    which `verity-vllm advice --weights-of-record` records for ``weights``): nothing yet ties a weight's committed root to
+    it (VLLM-125), so it holds none."""
     circuit, _ = window
     doc, reg = json.loads(json.dumps(circuit.description())), circuit.registered
     assert {r.param for r in reg.reads} | {t.param for t in reg.tables} == set(reg.params)
     assert {p.split("/", 1)[0] for p in reg.params} == {WC.WEIGHTS}
     count = {"units": 2534, "inputs": 17424800, "wired": 2837536, "registered": 14586880, "ingress": 2 * 6 * 32, "free": 0}
-    pin = ADV.registered_weights(WC.weights_record(S._registered(), *_checkpoint(tmp_path)))
-    assert IF.input_count(doc, pins=pin, roots=pin) == count
+    pins, roots = held(circuit).values()
+    assert IF.input_count(doc, pins=pins, roots=roots) == count
     free = {**count, "registered": 0, "free": 14586880}
-    assert IF.input_count(doc) == IF.input_count(doc, pins=pin) == free
-    other = ADV.registered_weights(WC.weights_record(S._registered(), *_checkpoint(tmp_path / "other", seed=4)))
-    assert other != pin and IF.input_count(doc, pins=pin, roots=other) == free
+    record = ADV.registered_weights(WC.weights_record(S._registered(), *_checkpoint(tmp_path)))
+    assert IF.input_count(doc) == IF.input_count(doc, pins=pins) == free
+    assert IF.input_count(doc, pins=record, roots={**roots, **record}) == free
+    one = WB.weight_param("model.norm.weight", 64)
+    alone = IF.input_count(doc, pins={one: pins[one]}, roots=roots)["registered"]
+    other = IF.input_count(doc, pins=pins, roots={**roots, one: "cd" * 64})["registered"]
+    assert 0 < alone and other == count["registered"] - alone
 
 
 def _checkpoint(tmp_path, seed: int = 3) -> tuple[str, str]:
@@ -583,4 +593,4 @@ def test_a_token_select_is_its_function_at_the_grains_chunk():
     assert (n["TokenSelectChunk_v2{C=128}"], n["TokenSelectCombine_v2{V=256,C=128}"]) == (20, 10)
     assert not [t for t in n if t.startswith(("TokenSelectChunk_v2{C=64}", "TokenSelectCombine_v2{V=256,C=64}"))]
     assert {_source(circuit, ids["TokenSelectChunk_v2{C=128}"], "x", u)[0] for u in range(20)} == {ids["AllGather_v1{WORLD=16,N=8}"]}
-    assert IF.input_count(circuit.description(), pins=HELD, roots=HELD)["free"] == 0
+    assert IF.input_count(circuit.description(), **held(circuit))["free"] == 0

@@ -10,7 +10,7 @@ from collections import Counter
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, HELD, OTHER, WINDOW, _blocks, _label, _labels, _source
+from tests.program.predict.test_window_circuit import CLASS, GRAIN, OTHER, WINDOW, _blocks, _label, _labels, _source, held
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
@@ -60,7 +60,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
                                                                                      ("weight_scale", "sw", 32))} <= reads
     assert len(circuit.registered.params) == 24
     assert {p.split("/", 1)[0] for p in circuit.registered.params} == {WC.WEIGHTS}
-    assert IF.input_count(json.loads(json.dumps(circuit.description())), pins=HELD, roots=HELD)["free"] == 0
+    assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit))["free"] == 0
     assert _blocks(circuit) == _blocks(other)
     labels = _labels(circuit)
     assert all((lab >= 0).all() for lab in labels.values())

@@ -391,9 +391,11 @@ def _sha(p: Path) -> str:
 def registered_weights(record: dict[str, Any], serve: dict[str, Any] | None = None) -> dict[str, str]:
     """What a window's registration records of the weights it served (``registered_roots``): the window circuit's registered
     parameter (`weights_of_record.PARAM`, `window_circuit.WEIGHTS`) and ``record``'s root of record (`check.weights_of_record`), the root the verifier
-    pins before the run from the checkpoint's pinned shards, so the circuit's weight reads count registered exactly when the
-    two are one (`interface.input_count`).  Refused unless the record is of record under the current schema (every field
-    composed from the pinned shards) and, given the run's ``serve.json``, of its model at its revision."""
+    pins before the run from the checkpoint's pinned shards. It holds no weight read yet: the window circuit reads each
+    weight as its own parameter, ``weights/<label>@<words>``, which `interface.input_count` holds only by its own pin, and
+    nothing yet ties a weight's committed root to this one (VLLM-125). Refused unless the record is of record under the
+    current schema (every field composed from the pinned shards) and, given the run's ``serve.json``, of its model at its
+    revision."""
     from verity_vllm.check import weights_of_record as WR
 
     root = record.get("root_of_record")
@@ -625,8 +627,7 @@ class Options:
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON",
                                            help="the served weights' record (check.weights_of_record), whose root of record each "
-                                                "window's registration records for the circuit's weights (default: none recorded, "
-                                                "and every weight read counts free)")
+                                                "window's registration records for the circuit's weights (default: none recorded)")
 
 
 def _say(rep: dict[str, Any], where: str = "") -> bool:

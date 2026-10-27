@@ -526,7 +526,8 @@ def registered(n: int = 12, cap: int = 4) -> tuple[I.Window, Held]:
 
 def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_inputs():
     """#4317's record format: the reads in the record's ``registered``, its other fields only when declared, and the free
-    input bits counted from the description alone."""
+    input bits counted from the description alone. A pin names its parameter alone: ``w``'s holds no ``w/a@8``, whose
+    reads count registered only at its own pin and the window's same root for it."""
     win, _ = registered()
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     assert I.Registered.of(doc["registered"]) == win.circuit.registered and "ingress" not in doc
@@ -540,11 +541,11 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
     assert I.input_count(doc, BY_ID.__getitem__, w, {"w": "cd" * 64})["registered"] == 0
     nested = {**doc, "registered": {**doc["registered"], "params": {"w/a@8": 6 * K // 2},
                                     "reads": [{**doc["registered"]["reads"][0], "param": "w/a@8"}]}}
-    assert I.input_count(nested, BY_ID.__getitem__, w, w)["registered"] == 12 * 8 * K
     own, other = {"w/a@8": "ef" * 64}, {"w/a@8": "12" * 64}
-    assert I.input_count(nested, BY_ID.__getitem__, {**w, **own}, {**w, **own})["registered"] == 12 * 8 * K
-    for pins, roots in [({"w/b@8": "ab" * 64}, {"w/b@8": "ab" * 64}), (w, {"w": "cd" * 64}), (w, {"w/a@8": "ab" * 64}),
-                        ({**w, **own}, {**w, **other})]:
+    for pins in (own, {**w, **own}):
+        assert I.input_count(nested, BY_ID.__getitem__, pins, {**w, **own})["registered"] == 12 * 8 * K
+    for pins, roots in [(w, w), (w, {**w, **own}), (w, {"w/a@8": "ab" * 64}), ({"w/b@8": "ab" * 64}, {"w/b@8": "ab" * 64}),
+                        (own, other), (own, w), ({**w, **own}, {**w, **other})]:
         assert I.input_count(nested, BY_ID.__getitem__, pins, roots)["registered"] == 0, (pins, roots)
     assert "registered" not in json.loads(I.circuit_bytes(window()[0].circuit_record()))
     for bad, why in [({**doc["registered"], "params": {"w": 5 * K // 2}}, "leaves"),

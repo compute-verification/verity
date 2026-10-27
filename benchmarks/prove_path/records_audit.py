@@ -57,12 +57,12 @@ them out of an audit (its summary says so), for a run of several audits of one c
 
 ``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
 from its description alone (`declared_count`), before the committer writes its members' rows. A registered read counts as
-registered only at a parameter ``--pin`` names (``NAME`` and every ``NAME/…`` no pin of its own names) with the root the
-verifier fixed before the run, and only where the window's registration (``--registration``) records that root under the
-pin's name (`registration_roots`, `interface.held`), any other free. For vLLM's window circuit that is ``weights``, the
+registered only at a parameter ``--pin`` names, with the root the verifier fixed before the run, and only where the
+window's registration (``--registration``) records that root for it (`registration_roots`, `interface.held_params`), any
+other free. A pin names its parameter alone: for vLLM's window circuit, each weight's ``weights/<label>@<words>``. The
 served model's weights record, whose root of record the checkpoint's pinned shards fix before the run
-(`verity_vllm.check.weights_of_record`) and which `verity-vllm advice --weights-of-record` records in each window's
-registration: it holds every weight's parameter, ``weights/<label>@<words>``.
+(`verity_vllm.check.weights_of_record`) and which `verity-vllm advice --weights-of-record` records for ``weights`` in each
+window's registration, holds none of them until each weight's committed root is tied to it (VLLM-125).
 
 ``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
 registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names
