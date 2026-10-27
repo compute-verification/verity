@@ -1,6 +1,6 @@
 """`verity.ml.commitments.gates.lms`: the Boolean LMS verifier accepts every signature `lms.sign_at` makes at
 (N, W) = (64, 1) on trees of height 1 and 2, refuses each with one thing wrong (a chain value, C, a path node, the leaf index,
-the message, I, the root) exactly where `lms.verify` does, and its parts cost the gates pinned here."""
+the message, I, the root) exactly where `lms.verify` does, and its parts cost the gates pinned here and carry their builders."""
 from __future__ import annotations
 
 import numpy as np
@@ -66,6 +66,11 @@ def test_the_verifier_agrees_with_the_reference(H) -> None:
 def test_the_parts_cost_the_pinned_gates() -> None:
     for (name, statics), (ands, xors, nots) in PARTS.items():
         assert getattr(G, name).traced(*statics).counts == {"and": ands, "xor": xors, "not": nots}, name
+
+
+def test_every_part_carries_its_builder() -> None:
+    """C-Flock lowers a part by its ``build`` when it has one, and gate by gate otherwise, where one compression passes 1 GB."""
+    assert all(callable(getattr(G, name).build) for name, _ in PARTS)
 
 
 @pytest.mark.slow
