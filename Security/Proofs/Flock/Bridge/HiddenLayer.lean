@@ -125,10 +125,10 @@ theorem countPrReg_nontrivial {mPts : ℕ} {Reg : Type} {I : Discharge.Exec.Inpu
     {S₀ : Finset (Fin 1)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (L : Law 1)
     (hL : ∀ ω, L.draw ω = Finset.univ)
     (σ : Strategy (audit L Reg (batchedSessionZC execArith hs512 (planZHJ dj y₀)))) (t' v : ℝ)
-    (hB : (nTab I : ℝ) ^ 2 * Fintype.card (PubIx dj y₀ toyPartition
+    (hB : (nTab I : ℝ) ^ 2 * Fintype.card (PubIx (Reg := Reg) dj y₀ toyPartition
         (toyBinding execArith (planZHJ dj y₀) (tabZHJ dj y₀) H512) L) *
-      (pubFinder dj y₀ toyPartition (toyBinding execArith (planZHJ dj y₀) (tabZHJ dj y₀) H512) kDep (2 ^ 192)
-        (2 ^ 192) (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ)).Pr Claims.Sampling.sha512Msg ≤ 1 / 2 ^ 200) :
+      (pubFinder (Reg := Reg) dj y₀ toyPartition (toyBinding execArith (planZHJ dj y₀) (tabZHJ dj y₀) H512) kDep
+        (2 ^ 192) (2 ^ 192) (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ)).Pr Claims.Sampling.sha512Msg ≤ 1 / 2 ^ 200) :
     L.miss 1 +
         ksAvgZC execArith hs512 (planZHJ dj y₀) kDep
           (fun S R τ j => ksBoundAccZ execArith hs512 (planZHJ dj y₀ S R) j kDep τ) (reg σ) (cont σ) +

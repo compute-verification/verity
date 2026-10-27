@@ -26,9 +26,9 @@ def ToySetupHJ : Prop :=
   ∃ (I : Inputs) (mPts : ℕ) (S₀ : Finset (Fin 1)) (d₀ : Lean.Json) (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (σ : Strategy (audit Bridge.toyLaw Unit (batchedSessionZC execArith hs512 (planZHJ Bridge.toyDj y₀))))
     (t' v : ℝ),
-    (nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIx Bridge.toyDj y₀ Bridge.toyPartition
+    (nTab I : ℝ) ^ 2 * Fintype.card (Bridge.PubIx (Reg := Unit) Bridge.toyDj y₀ Bridge.toyPartition
         (Bridge.toyBinding execArith (planZHJ Bridge.toyDj y₀) (tabZHJ Bridge.toyDj y₀) H512) Bridge.toyLaw) *
-      (Bridge.pubFinder Bridge.toyDj y₀ Bridge.toyPartition
+      (Bridge.pubFinder (Reg := Unit) Bridge.toyDj y₀ Bridge.toyPartition
         (Bridge.toyBinding execArith (planZHJ Bridge.toyDj y₀) (tabZHJ Bridge.toyDj y₀) H512) Bridge.kDep (2 ^ 192)
         (2 ^ 192) (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ)).Pr Claims.Sampling.sha512Msg ≤ 1 / 2 ^ 200
 
