@@ -18,6 +18,7 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
+from verity.ml.definitions.numerics import torch_blocks as TB
 from verity.ml.definitions.numerics import torch_kernels as TK
 from verity.ml.definitions.registry import torch_embedding as TE, torch_loss as TL
 
@@ -117,6 +118,27 @@ def test_the_entry_rows_are_the_gpus(step) -> None:
     got = evaluate_words(bind(TE.EmbeddingBackwardEntry, M=len(t), H=g.shape[1]), vocab, np.broadcast_to(t, (len(vocab), len(t))),
                          np.broadcast_to(g.T, (len(vocab), *g.T.shape)))
     _same(np.asarray(got).reshape(rows.shape), rows)
+
+
+def _forward(step, F: int):
+    t, rows, out = step["emb_fwd_t"], step["emb_fwd_rows"], step["emb_fwd_out"]
+    w = np.zeros((V, F), np.uint16)
+    w[t] = rows[:, :F]
+    return t, w, out[:, :F]
+
+
+def test_the_embedding_forward_is_the_gpus(step) -> None:
+    """The model of `EmbeddingTorch_v1` on 8 of the step's 256 positions (the least and greatest ids, and two ids held twice),
+    every feature, from a table of V rows holding the weight's rows at those ids."""
+    t, w, out = _forward(step, step["emb_fwd_rows"].shape[1])
+    _same(TB.embedding(t, w), out)
+
+
+def test_the_embedding_forward_definition_is_the_gpus(step) -> None:
+    """`EmbeddingTorch_v1{M=8, V=49152, H=1}` on the same positions, the first feature: the gather's tree of Calls at the GPU's
+    own V, which the unit tests' small vocabularies don't reach. About 3 s and 0.5 GB."""
+    t, w, out = _forward(step, 1)
+    _same(np.asarray(evaluate_words(bind(TE.EmbeddingTorch, M=len(t), V=V, H=1), t[None], w[None])).reshape(out.shape), out)
 
 
 def test_the_rows_of_512_and_1024_keys_are_the_gpus(shapes) -> None:

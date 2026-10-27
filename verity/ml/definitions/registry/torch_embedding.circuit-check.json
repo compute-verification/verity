@@ -27,6 +27,10 @@
   "EmbeddingBackwardSortStep_v1": {
    "and": 1024,
    "type": "cc611e2361874321543b928aae0f7c428250008095698326103810848d190a89ce95606a4839648cbf4e55cecf728f755d07655b002efc4a78394cff27ed361a"
+  },
+  "EmbeddingTorch_v1{M=3,V=64,H=4}": {
+   "and": 17088,
+   "type": "0b6049a19439b818fe4ae41e11db475786496b3bf4e2c19070b10d87dfaf87bb17d15a368ee93c598377dbe7126cefc0449585fb4c5fac32e743ebb02ee46cf0"
   }
  }
 }
