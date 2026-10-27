@@ -7,20 +7,23 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
         [CR_K=V ...]
     python certifier_piece.py relay --listen PORT --to PORT
 
-* **front** is served_verdicts.sh's load when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
+* **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
   (`served_session.session`, ``warden-rehearse --scan --prompts --window-per-group``) against serve-openai on PORT, one
   group of ``--prompts`` requests (at most the scan's 4 lanes) of ``--prompt-ids`` ids below ``--vocab``, each answered
   with exactly ``--tokens`` ids, drawn from a fresh secret seed. A group is sent half a bucket into link-window 0 and
   its cells are link-window 0's alone (``--tokens`` at most 4 keeps the group in one link-window), so the engine admits
-  the group together and closes it into one Commit window: the window the run audits. The defaults are the window
-  circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs). The gate's fetch, ``witness/`` with it, is
-  kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays on the node); OUT gets ``session.json``
-  and ``bundle.tgz``, the public outcome. ``--gate local`` is the dry run's (this tree's gate in this process, a
+  the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
+  ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
+  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs). The gate's fetch,
+  ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays on the node);
+  OUT gets ``session.json`` and ``bundle.tgz``, the public outcome. ``--gate local`` is the dry run's (this tree's gate in this process, a
   `relay` to PORT its tunnel): a warden on the prover's node is no auditor's device, so it never stands for the gate.
   Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when the chain accepted and ``network-period check`` accepted the period, whose answer it then is.
-  1. The kept warden run: exactly one fetch under SERVE_DIR/`PRIVATE`, else undecided.
+  1. The kept warden run: exactly one fetch under SERVE_DIR/`PRIVATE`. With none the run's load didn't go through the
+     front, and the piece refuses to run: it writes DIR/`REFUSED` naming why and no answer, which leaves the certifier
+     missing. More than one is undecided.
   2. The window's requests are certified ones: each window request's user names one of the warden's certified
      requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
   3. The chain (`served_session.py chain`: chain_record.sh's warden path, certs, endpoint, N2, tie and scan) on the
@@ -64,6 +67,8 @@ PRIVATE = Path("private") / "certifier"
 #: the endpoint's records the chain reads (network_e2e `chain.ENDPOINT`)
 ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
 PROTOCOL = "verity/certifier/v0"
+#: a piece's refusal to run, which `served_verdicts.py` reads as the subprotocol missing
+REFUSED = "refused.txt"
 LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
@@ -119,14 +124,14 @@ def relay(listen: int, to: int, *, ready: Callable[[], None] = lambda: None) -> 
         try:
             while chunk := src.recv(1 << 16):
                 dst.sendall(chunk)
-        except OSError:
-            pass
+        except OSError as e:
+            print(f"relay {listen} to {to}: {e!r}, closing the connection", file=sys.stderr, flush=True)
         finally:
             for s in (src, dst):
                 try:
                     s.shutdown(socket.SHUT_RDWR)
-                except OSError:
-                    pass
+                except OSError as e:
+                    print(f"relay {listen} to {to}: shutdown: {e!r}", file=sys.stderr, flush=True)
 
     while True:
         conn, _ = srv.accept()
@@ -335,6 +340,12 @@ def piece(a: argparse.Namespace) -> int:
         if not kv.startswith("CR_") or "=" not in kv:
             print(f"refused: {kv!r}: CR_K=V, a chain_record.sh variable", file=sys.stderr)
             return 2
+    if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
+        why = (f"no warden run kept under {serve_dir / PRIVATE}: the run's load didn't go through the certifier's front "
+               "(CERTIFIER_FRONT)")
+        (d / REFUSED).write_text(why + "\n")
+        print(f"CERTIFIER refused: {why}", flush=True)
+        return 3
     try:
         exe = period_exe(a.lean)
         chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, a.set),  # noqa: E731

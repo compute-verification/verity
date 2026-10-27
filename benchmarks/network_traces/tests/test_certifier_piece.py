@@ -6,8 +6,8 @@ and its outcome. The piece, on a serve dir whose window was the warden's synthet
 link-window: the period mirror's certifier/v0 accept (`period_case`) then goes through `served_verdicts.py record` into
 the block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the warden
 didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a
-period the check rejects are rejects; no kept run or no report is undecided. The leak guard reads the piece's DIR
-against the run's witness."""
+period the check rejects are rejects; with no kept run the piece refuses to run, which leaves the certifier missing, and
+no report is undecided. The leak guard reads the piece's DIR against the run's witness."""
 from __future__ import annotations
 
 import importlib.util
@@ -116,13 +116,23 @@ def _integrity() -> dict:
     return S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent"))
 
 
-def _record(pieces: Path):
-    rows = {"integrity": _integrity(), **{k: S.piece_row(k, pieces) for k in S.PIECES}, "wipe": S.piece_row("wipe", pieces)}
-    return S.record(rows, window=K, steps=(0, 9), node="vy-dc-h200", run="r1")
+def _record(monkeypatch, capsys, serve: Path, pieces: Path) -> tuple[dict | None, dict]:
+    """`served_verdicts.py record` over the pieces `pieces` ran, sampled proofs' row an accept: the block record (None
+    where none was written) and the ``RECORD`` line."""
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda d, run=None: _integrity())
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    out = pieces.parent / "record"
+    capsys.readouterr()
+    S.main(["record", "--serve-run", str(serve), "--window", str(K), "--sampled-proofs", str(out / "sampled-proofs"),
+            "--pieces", str(pieces), "--out", str(out)])
+    (line,) = [x.removeprefix("RECORD ") for x in capsys.readouterr().out.splitlines() if x.startswith("RECORD ")]
+    rec = out / "block-record.json"
+    return (json.loads(rec.read_text()) if rec.exists() else None), json.loads(line)
 
 
 def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_the_block_record(tmp_path, warden,
-                                                                                                period, capsys):
+                                                                                                period, capsys,
+                                                                                                monkeypatch):
     accept = period.reference(period.case("accept", 1, "clock"))
     assert accept["verdict"] == "accept" and accept["protocol"] == CP.PROTOCOL
     d = _serve_dir(tmp_path / "serve", warden)
@@ -130,7 +140,7 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
                                                     accept))
     got = S.pieces(d, K, tmp_path / "pieces", env=env)
     piece = tmp_path / "pieces" / "certifier"
-    assert got["certifier"] == {"verdict": "accept", "reason": None, "rc": 0}, (piece / "piece.log").read_text()
+    assert (got["certifier"]["verdict"], got["certifier"]["rc"]) == ("accept", 0), (piece / "piece.log").read_text()
     assert "MISSING the network certifier" not in capsys.readouterr().out
     assert json.loads((piece / "answer.json").read_text()) == accept
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
@@ -142,7 +152,7 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert [(keep / "endpoint" / f).stat().st_mode & 0o777 for f in CP.ENDPOINT] == [0o600] * 4
     row = S.piece_row("communication", tmp_path / "pieces")
     assert (row["verdict"], row["quantity"], row["owner"]) == ("accept", accept["public"], "network-accounting")
-    report, rec, line = _record(tmp_path / "pieces")
+    rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert BR.check(rec) == {} and not line["check"]
     assert "certifier" not in line["record_missing"] and line["verdicts"]["the network certifier"] == "accept"
@@ -150,14 +160,14 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert leg["quantity"]["symbol"] == "K" and leg["quantity"]["value"] == int(accept["public"]["K"])
 
 
-def test_a_window_request_the_warden_didnt_certify_is_rejected_before_any_chain(tmp_path, warden, capsys):
+def test_a_window_request_the_warden_didnt_certify_is_rejected_before_any_chain(tmp_path, warden, capsys, monkeypatch):
     stranger = {"user": "not-the-wardens", "prompt": [1, 2], "output": [3]}
     d = _serve_dir(tmp_path / "serve", warden, [*warden["records"][:1], stranger])
     env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, tmp_path / "none", {}))
     got = S.pieces(d, K, tmp_path / "pieces", env=env)
     assert got["certifier"]["verdict"] == "reject" and "is no certified request" in got["certifier"]["reason"]
     assert not (d / CP.PRIVATE / RUN / "chain").exists()
-    _report, rec, line = _record(tmp_path / "pieces")
+    rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["the network certifier"])
     changed = dict(warden["records"][0], output=[*warden["records"][0]["output"], 7])
     d = _serve_dir(tmp_path / "changed", warden, [changed])
@@ -194,14 +204,18 @@ def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_peri
     assert a["verdict"] == "undecided" and "no verity/certifier/v0 verdict" in a["reason"]
 
 
-def test_no_kept_run_or_no_report_is_undecided_and_composes_pending(tmp_path, warden):
+def test_no_kept_run_refuses_and_leaves_the_certifier_missing_and_no_report_is_undecided(tmp_path, warden, capsys,
+                                                                                         monkeypatch):
     d = _serve_dir(tmp_path / "serve", warden, kept=False)
+    env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, tmp_path / "none", {}))
+    S.pieces(d, K, tmp_path / "pieces", env=env)
+    piece = tmp_path / "pieces" / "certifier"
+    assert not (piece / "answer.json").exists() and "no warden run kept" in (piece / CP.REFUSED).read_text()
+    assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
+    rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
+    assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
     a, unpacked = CP.decide(d, K, tmp_path / "dir", chain=lambda *x: pytest.fail("no chain"), check=lambda *x: {})
     assert (a["verdict"], unpacked) == ("undecided", None) and "0 warden runs kept" in a["reason"]
-    (tmp_path / "pieces" / "certifier").mkdir(parents=True)
-    (tmp_path / "pieces" / "certifier" / "answer.json").write_text(json.dumps(a))
-    _report, rec, line = _record(tmp_path / "pieces")
-    assert rec is None and (line["composed"], line["by"]) == ("pending", ["the network certifier"])
     d = _serve_dir(tmp_path / "silent", warden)
     a, _ = CP.decide(d, K, tmp_path / "dir2", chain=lambda *x: 7, check=lambda *x: {})
     assert a["verdict"] == "undecided" and a["reason"].startswith("the chain wrote no report (exit 7)")
