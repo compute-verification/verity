@@ -38,7 +38,7 @@ open scoped ENNReal
 inductive Index
   | sampled
   | network
-  deriving DecidableEq, Fintype
+  deriving DecidableEq
 
 /-- The claim each index certifies. -/
 def audit : Index → Audit
@@ -63,8 +63,7 @@ def deployment : Deployment where
   components := Core.Toy.components
   comp a := (ofAudit a).map comp
   comp_mem a P h := by
-    cases a <;> simp only [ofAudit, Option.map_some, Option.map_none, reduceCtorEq, Option.some.injEq] at h <;>
-      subst h <;> simp [comp, Core.Toy.components]
+    cases a <;> simp [ofAudit] at h <;> subst h <;> simp [comp, Core.Toy.components]
 
 example : deployment.protocol = Core.Toy.protocol := rfl
 
@@ -131,8 +130,8 @@ def releasesBy (ans : List Release → ByteArray) (pre : List Release) :
 log. -/
 def honest {ι : Type} {d : Device ι} {α : Type} [Fintype α] (G : Given d α) (θ F c : ByteArray) :
     Game.Strategy (play (G.rounds θ) θ F c) :=
-  bindStrategy (releases (G.rounds θ)) _ (releasesBy (G.answer θ F c) [] (G.rounds θ))
-    fun log => ⟨G.evidence θ F c log, PUnit.unit⟩
+  bindStrategy (releases (G.rounds θ)) (fun log => .send ByteArray fun e => .ret ⟨θ, F, c, log, e⟩)
+    (releasesBy (G.answer θ F c) [] (G.rounds θ)) fun log => ⟨G.evidence θ F c log, PUnit.unit⟩
 
 /-- **The toy's vocabulary**: `G`'s fields, the toy's at the claims it decides and inert at the others, no gates
 computed, and the toy's honest prover. -/

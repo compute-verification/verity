@@ -35,8 +35,8 @@ theorem honestHoldsAt_sampled (G : Given d α) (h : SampledHonest G) :
     HonestHoldsAt (vocab G) G.commit (audit .sampled) := by
   intro θ F hreg
   obtain ⟨hc, ho, hε⟩ := h θ F hreg
-  exact prob_play_eq_zero _ θ F _ _
-    (fun _ _ hn => hn ((vocab G).holds_sampled_of_opens θ F _ _ _ hc ho hε)) _
+  exact prob_play_eq_zero _ θ F _ _ (fun log e hn => hn ((vocab G).holds_sampled_of_opens θ F (G.commit θ F)
+    ((vocab G).honest θ F (G.commit θ F)) ⟨θ, F, G.commit θ F, log, e⟩ hc ho hε)) _
 
 /-- **The network certifier's claim at the honest deployed instance**, from its honest lemma. -/
 theorem honestHoldsAt_network (G : Given d α) (h : NetworkHonest G) :
@@ -98,11 +98,10 @@ theorem not_honestHolds_sampled_of_unopened (θ F c : ByteArray) (hreg : V.Regis
       intro u hu
       obtain ⟨g, hg, hk⟩ := (Finset.mem_filter.1 hu).2
       refine Finset.mem_filter.2 ⟨Finset.mem_univ u, Or.inr ⟨g, hg, fun ho => ?_⟩⟩
-      unfold Opens at ho
-      rw [hk] at ho
+      simp only [Opens, hk] at ho
       obtain ⟨p, hp, -⟩ := ho
       rw [hplace g hk] at hp
-      exact Option.noConfusion hp
+      cases hp
     have hcard := Finset.card_le_card hsub
     have hh' : ((Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card : ℝ) ≤
         (V.certOf θ).ε * V.units F := hh
