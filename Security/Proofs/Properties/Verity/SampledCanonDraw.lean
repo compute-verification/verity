@@ -390,7 +390,7 @@ theorem drawOS_of_units {n kd : ℕ} {Lb : Fin 1 → ℕ} (x : (i : Fin 1) → F
     show (match FlockSoundness.Audit.Law.runOS x (.subset kd) n with
       | some d => Finset.univ.filter fun u : Fin n => u.val ∈ d.units
       | none => Finset.univ) = _
-    rw [hd]
+    rw [hd] <;> rfl
 
 end Verity.Game.LiveDrive
 
