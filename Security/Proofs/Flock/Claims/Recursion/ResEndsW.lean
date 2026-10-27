@@ -421,9 +421,8 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
     rw [← e1]
     exact held_chainW elem hJ.2.1 hJ.2.2.1 hr hl hpc hh' hw hfind
       (fun o' co ho' hcan wo hwo =>
-        let ⟨q', hq', _, hcm⟩ := hC x st hx hf c ws hJ r hr s cS hpc _ nm pt hsvO row (nmb, r0) hh' o' co ho' hcan wt wo
-          hw hwo i hfind
-        ⟨q', hq', hcm⟩) 0 ho2
+        (hC x st hx hf c ws hJ r hr s cS hpc _ nm pt hsvO row (nmb, r0) hh' o' co ho' hcan wt wo hw hwo i
+          hfind).imp fun _ h => ⟨h.1, h.2.2⟩) 0 ho2
   rw [hkn, ← _root_.Flock.RecAlgebra.getElem!_el]
   have hn22 : r0 / 2 = 0 := by omega
   have hn2m : r0 % 2 = r0 := Nat.mod_eq_of_lt hr0
