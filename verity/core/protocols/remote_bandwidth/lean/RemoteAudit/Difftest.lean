@@ -228,12 +228,26 @@ those drawn, or as one given in full. -/
 inductive Op
   | register (node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec) (receipt : Kind)
       (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray)
+  | registerStored (view : Core.Registration.View) (store : String) (codec : Codec.Codec) (receipt : Kind)
+      (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray)
   | session (registration : Nat ⊕ Registration) (params : Session.Params) (coins appendCoins : Array ByteArray)
       (notBeforeNs : Nat) (index : Option Int) (inFlight perCoin : Nat)
   | event (node : ByteArray) (k : Nat) (e : Session.Event)
   | close (node : ByteArray)
   | live (node : ByteArray)
   | drawn (node : ByteArray)
+
+/-- The view of an accepted registration log, `{"params", "log"}` as `Core.Registration.protocol` reads them; a log of
+another composite, or one the check refuses, is an error. -/
+def loggedView (j : Json) : V Core.Registration.View := do
+  let p ← Core.Registration.Params.ofJson (← J.get j "params" "op")
+  let l ← J.get j "log" "op"
+  Core.Registration.ascii l "the log"
+  let c ← Core.Registration.Committed.ofJson l
+  if c.composite != p.composite then throw "the log is another composite's"
+  match Core.Registration.check p.auditor p.composite c.log with
+  | .ok s => pure s.view
+  | .error (i, r) => throw s!"entry {i}: {r.name}"
 
 def opOf (j : Json) : V Op := do
   match ← J.str j "op" "op" with
@@ -242,6 +256,10 @@ def opOf (j : Json) : V Op := do
     let some kind := Kind.ofName? (← J.str j "receipt" "op") | throw "a receipt kind is sketch-sha512 or block-sha512"
     pure (.register (← hex j "node") (← nat j "blocks") (← hex j "payload_root") (← codecOf (← J.get j "codec" "op")) kind
       bind (← J.str j "layout" "op") (← nat j "rows") (← hex j "nonce"))
+  | "register_stored" =>
+    let some kind := Kind.ofName? (← J.str j "receipt" "op") | throw "a receipt kind is sketch-sha512 or block-sha512"
+    pure (.registerStored (← loggedView j) (← J.str j "store" "op") (← codecOf (← J.get j "codec" "op")) kind
+      (← J.bool j "bind" "op") (← J.str j "layout" "op") (← nat j "rows") (← hex j "nonce"))
   | "session" =>
     let which ← match ← J.get j "registration" "op" with
       | .num n => .inl <$> J.asNat (.num n) "registration"
@@ -259,6 +277,12 @@ def opOf (j : Json) : V Op := do
 
 private def refusedJ : Json := Json.mkObj [("refused", .bool true)]
 
+/-- A registration call's result: the registration drawn, or `refused`. -/
+private def afterDraw (drawn : Array Registration) (out : Array Json) :
+    Option Registration → Array Registration × Array Json
+  | some reg => (drawn.push reg, out.push (Json.mkObj [("codec_seed", hexJ reg.codecSeed), ("digest", hexJ reg.digest)]))
+  | none => (drawn, out.push refusedJ)
+
 /-- `audit.Registry` under a given source: `{"source", "registry", "ops"}`, from the registry `registry/v0` reads back
 (`null` for an empty one), to each call's result (`refused` where `Registry` raises `RegistryError`) and the registry
 after them. A session's events go to it by its node and its place among its registration's sessions. -/
@@ -275,11 +299,11 @@ def registryFn (j : Json) : V Json := do
     | .register node blocks root codec kind bind layout rows nonce =>
       let (reg?, r') ← r.register source node blocks root codec kind bind layout rows nonce
       r := r'
-      match reg? with
-      | some reg =>
-        drawn := drawn.push reg
-        out := out.push (Json.mkObj [("codec_seed", hexJ reg.codecSeed), ("digest", hexJ reg.digest)])
-      | none => out := out.push refusedJ
+      (drawn, out) := afterDraw drawn out reg?
+    | .registerStored v store codec kind bind layout rows nonce =>
+      let (reg?, r') ← r.registerStored source v store codec kind bind layout rows nonce
+      r := r'
+      (drawn, out) := afterDraw drawn out reg?
     | .session which params coins appendCoins notBeforeNs index f g =>
       let reg ← match which with
         | .inl i => match drawn[i]? with

@@ -9,7 +9,7 @@ The verifier's definition is the Lean package `lean/` (`RemoteAudit`: Lean is th
 verifier of record, Python mirrors it, and the remote audit switches first). `audit.py` and what it calls here
 (`receipts.py`, `codec.py`, `coins.py`) mirror it and are held to it by `lean/tests/`' difftest: every event's result,
 the session's outcome and its record, the registry (`Registry`: one live registration a node, each session's index
-`k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec seed, codec, plans,
+`k`, the outcomes `close` counts, a store drawn from the registration log, and `registry/v0`), and the pieces (registration and its codec seed, codec, plans,
 receipts, openings, draws).
 Where the two differ, the Python is what is wrong. The properties of the Lean's verdicts are
 `Security/Properties/RemoteAudit.lean`.
@@ -96,7 +96,8 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 
 ## Code
 
-- `audit.py`: the lifecycle (`register`, `Registry`, `Session`), pacing (`Pace`: a live coin every k passes, two
+- `audit.py`: the lifecycle (`register`, `Registry`, `Session`; `stored` reads a node's store from the deployment's
+  registration log, `verity/core/protocols/registration.py`), pacing (`Pace`: a live coin every k passes, two
   windows in flight or, at `in_flight` 1, each coin after the root before it), the record and its ledger.
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node

@@ -26,6 +26,7 @@ from typing import Any
 
 import verity_difftest as D
 from verity_difftest import protocol as P
+from verity.core.protocols import registration as log
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, wire
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
 from verity.core.protocols.remote_bandwidth.receipts import Plan
@@ -379,6 +380,36 @@ def registry_of(v: Any) -> audit.Registry:
     return audit.Registry.from_json(v)
 
 
+STORE = "store"
+
+
+def store_log(node: bytes, blocks: int, payload_root: bytes, store: str = STORE, item: dict | None = None,
+              store_bytes: int | None = None) -> dict:
+    """A remote site's registration log holding a node's store, with the auditor's parameters, as `register_stored`
+    takes them (`{"params", "log"}`): the site, the node as its host, the store as a memory leaf of the node's N blocks
+    (or `store_bytes`), and θ's value for its payload (`audit.payload_item`, or `item`)."""
+    n = node.decode()
+    site = log.Hardware(locs=(log.Loc("site", "site"), log.Loc(n, "host", "site"),
+                              log.Loc(store, "memory", n, tier="dram",
+                                      bytes=blocks * codec.BLOCK_BYTES if store_bytes is None else store_bytes)))
+    theta = log.Information((audit.payload_item(store, node, blocks, payload_root) if item is None else item,))
+    return {"params": log.params("remote", log.Auditor()),
+            "log": {"composite": "remote", "entries": [e.to_json() for e in log.chain("remote", [site, theta])]}}
+
+
+def logged_view(v: Any) -> log.View:
+    """`loggedView`: the view of an accepted registration log, `{"params", "log"}`; a log of another composite, or one
+    the check refuses, is refused."""
+    composite, auditor = log.params_of(_get(v, "params"))
+    theirs, entries = log.log_of(_get(v, "log"))
+    if theirs != composite:
+        raise D.Reject("the log is another composite's")
+    try:
+        return log.check(auditor, composite, entries).view()
+    except log.Refused as e:
+        raise D.Reject(str(e)) from None
+
+
 def registry_op(v: Any) -> tuple:
     """`opOf`: a call on the registry, its kind first. A session names its registration by its place among those drawn
     in the case, or in full."""
@@ -388,6 +419,11 @@ def registry_op(v: Any) -> tuple:
         receipts.receipt_kind(kind)
         return (op, hex_(v, "node"), nat(v, "blocks"), hex_(v, "payload_root"), codec_of(_get(v, "codec")), kind,
                 bind, _str(v, "layout"), nat(v, "rows"), hex_(v, "nonce"))
+    if op == "register_stored":
+        bind, kind = _bool(v, "bind"), _str(v, "receipt")
+        receipts.receipt_kind(kind)
+        return (op, logged_view(v), _str(v, "store"), codec_of(_get(v, "codec")), kind, bind, _str(v, "layout"),
+                nat(v, "rows"), hex_(v, "nonce"))
     if op == "session":
         which = _get(v, "registration")
         which = nat(v, "registration") if isinstance(which, int) and not isinstance(which, bool) else registration_of(which)
@@ -401,9 +437,10 @@ def registry_op(v: Any) -> tuple:
 
 
 def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registration], op: str, a: tuple) -> Any:
-    if op == "register":
-        node, blocks, root, c, kind, bind, layout, rows, nonce = a
-        reg = r.register(source, node, blocks, root, c, kind, bind=bind, layout=layout, rows=rows, nonce=nonce)
+    if op in ("register", "register_stored"):
+        *store, c, kind, bind, layout, rows, nonce = a
+        draw = r.register if op == "register" else r.register_stored
+        reg = draw(source, *store, c, kind, bind=bind, layout=layout, rows=rows, nonce=nonce)
         drawn.append(reg)
         return {"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}
     if op == "session":

@@ -10,9 +10,11 @@ many reads of a node's registered blocks the node made in each window, from rece
    follow (`receipts.LAYOUTS`: store-order/v0, a vector one registered block's bytes; `receipts.plan_of` checks a
    kernel's map), and sketch-sha512's rows (`receipts.ROWS`: 16 by default, or 64; 0 under block-sha512).
    `Registration.digest` binds the node, the store's size, the payload root, the codec seed, the codec's name, the
-   receipt kind, `bind`, the layout and the rows.  The verifier keeps one live registration a node (`Registry`): a
-   second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
-   counting its sessions, an unended one as failed.
+   receipt kind, `bind`, the layout and the rows.  The node, N and the payload root are what the deployment's
+   registration log registers for the store (`stored`: a memory leaf of the node and θ's value of its payload), the
+   codec seed a coin, and the rest the protocol's public parameters (`Registry.register_stored`).  The verifier keeps
+   one live registration a node (`Registry`): a second while one is live is refused and draws nothing, and a
+   registration ends only when the verifier closes it, counting its sessions, an unended one as failed.
 2. Coins.  Before the session the proof service's challenger draws two live coins a window, its challenge `σ_t` and
    its openings coin, and a coin an append, and commits to them (`coins.Coins`: session k's epoch of the one challenger,
    on its own host when it is remote).  Each coin opens once, after the root the verifier recorded for it, which the
@@ -101,6 +103,7 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
+from verity.core.protocols import registration as log
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
 from verity.ml.commitments import verify_opening
@@ -417,6 +420,40 @@ def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec
     seed = derive(source, CODEC_DOMAIN, {"node": _node(node), "blocks": blocks, "payload": payload_root,
                                          "codec": codec.name, "nonce": nonce}).stream("codec", SEED_BYTES)
     return Registration(node, blocks, payload_root, seed, codec, receipt, bind, layout, rows)
+
+
+PAYLOAD_WORDS = BLOCK_BYTES // 2
+"""A payload leaf's words in θ: a block's bytes as 16-bit words."""
+
+
+def payload_item(store: str, node: bytes, blocks: int, payload_root: bytes) -> dict:
+    """θ's value for the payload of the store the registration log registers as `store` (`stored`): its root, a leaf a
+    block, in the node's payload domain."""
+    return {"domain": payload_domain(node, blocks).domain_id.hex(), "kind": "theta", "leaves": blocks,
+            "root": payload_root.hex(), "value": store, "words": PAYLOAD_WORDS}
+
+
+def stored(view: log.View, store: str) -> tuple[bytes, int, bytes]:
+    """The store the registration log registers as `store`, read from an accepted log's view: the memory leaf of that
+    id, in a host, whose id is the node, holding N blocks' bytes, and θ's value of the same name, the payload by its
+    root (`payload_item`).  The node, N and the payload root, which the registration's digest binds; ValueError for a
+    store the log doesn't register so."""
+    x = view.site.loc(store)
+    if x is None or x.kind != "memory":
+        raise ValueError(f"the registration log registers no memory leaf {store}")
+    host = view.site.host(x)
+    if host is None:
+        raise ValueError(f"the store {store} is in no host")
+    if x.bytes % BLOCK_BYTES:
+        raise ValueError(f"the store {store} is not whole blocks of {BLOCK_BYTES} bytes")
+    node, blocks, t = host.encode(), x.bytes // BLOCK_BYTES, view.value(store)
+    if t is None:
+        raise ValueError(f"θ registers no payload for the store {store}")
+    root = bytes.fromhex(t["root"])
+    if t != payload_item(store, node, blocks, root):
+        raise ValueError(f"θ's value {store} is not the store's payload: a leaf a block of {PAYLOAD_WORDS} words in "
+                         "the node's payload domain")
+    return node, blocks, root
 
 
 class Tiles(Protocol):
@@ -1441,6 +1478,12 @@ class Registry:
         registration = register(source, node, blocks, payload_root, codec, receipt, **kw)
         self._live[node] = _Live(registration.digest, registration, [])
         return registration
+
+    def register_stored(self, source: bytes, view: log.View, store: str, codec: Codec = codec.DEFAULT,
+                        receipt: str = receipts.DEFAULT, **kw) -> Registration:
+        """`register` of the store the registration log registers as `store` (`stored`): its node, N and payload root
+        are the log's, never the prover's word; a store the log doesn't register draws nothing (ValueError)."""
+        return self.register(source, *stored(view, store), codec, receipt, **kw)
 
     def session(self, params: Params, registration: Registration, tiles: Tiles | None, *, not_before_ns: int,
                 clock: Callable[[], int] = time.monotonic_ns, entropy: Callable[[int], bytes] = os.urandom,
