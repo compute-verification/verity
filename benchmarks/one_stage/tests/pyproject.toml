@@ -1,0 +1,14 @@
+# served_verdicts' suite: its window pick, missing pieces and block record on toy serve dirs (nothing is lowered or proved).
+# `served_verdicts.sh`, `served_verdicts.py` and this test stay where they are when the rest of the one-stage audit moves to
+# `examples/one_stage/`: vllm runs them from here, and moves them to `examples/vllm/` itself. That move (#4916) renames this
+# file `pyproject.toml`, so this directory is a suite of its own; before it, the one-stage audit's suite runs the test.
+[tool.pytest.ini_options]
+testpaths = ["."]
+
+[tool.verity.tests]
+# `served_verdicts.py`: what the test imports (`sys.path` and `import served_verdicts`).
+# `benchmarks/all_protocols` and `benchmarks/e2e_demo/verity_e2e_demo`: its rows (`runner.row_of`, the integrity leg's
+# answer) and its block record (`block_record`, its schema). `integrations/vllm/verity_vllm`: the H1 window it reads.
+inputs = ["verity", "benchmarks/one_stage/served_verdicts.py",
+          "benchmarks/all_protocols/verity_all_protocols", "benchmarks/all_protocols/legs",
+          "benchmarks/e2e_demo/verity_e2e_demo", "integrations/vllm/verity_vllm"]

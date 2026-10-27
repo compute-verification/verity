@@ -67,7 +67,7 @@ while they import or run the drivers (`zk_cost.py` imports `a0` and `a6`, `a8_gp
   `commit/replay_bundle_p0/` (a single-GPU row defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
 - `served_verdicts.sh` (with `served_verdicts.py`): the Wed 28 run (VLLM-33), one served window through every subprotocol
-  (`research run --on vy-dc-h200 --project verity --cwd clone -- bash examples/one_stage/served_verdicts.sh`). It serves
+  (`research run --on vy-dc-h200 --project verity --cwd clone -- bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
   few greedy requests from the certifier's traffic generator, and seals each window. On the window holding the most requests,
   none carried, it runs sampled proofs: the window's advice and request Programs, V3b's window circuit at each class of

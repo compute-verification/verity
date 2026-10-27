@@ -35,7 +35,7 @@
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 4h --env CLASSES='4,32,4 record' -- \
-#     bash examples/one_stage/served_verdicts.sh
+#     bash benchmarks/one_stage/served_verdicts.sh
 # Defaults are vy-dc-h200's: the int8 B4 row and taps of r20261026-185144-3ccb, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
 # public records and every log.
@@ -139,11 +139,11 @@ if [ -n "${H1_GATE:-}" ]; then
     git -C "$TREE" rev-list --first-parent "$MAIN_SHA" > "$OUT/main.txt" || { say "PREFLIGHT: MAIN_SHA $MAIN_SHA not in this tree"; exit 3; }
     export MAIN_FILE=$OUT/main.txt
   fi
-  "$PY" examples/one_stage/served_verdicts.py gate --gate "$H1_GATE" ${MAIN_FILE:+--main "$MAIN_FILE"} 2>&1 \
+  "$PY" benchmarks/one_stage/served_verdicts.py gate --gate "$H1_GATE" ${MAIN_FILE:+--main "$MAIN_FILE"} 2>&1 \
     | tee -a "$OUT/verdicts.txt"
   [ "${PIPESTATUS[0]}" = 0 ] || stop gate 3
   H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer ${H1_PEER:-vy-dc-h200}, T ${H1_T:-512}, S $WINDOW_STEPS), a development run under TOP-84's development key: it credits nothing"
-  export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python examples/one_stage/served_verdicts.py pouw \$1 \$2 \$3"}
+  export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3"}
 fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
   say "COINS sampled proofs: the live challenger $PP_CHALLENGER (peer ${PP_PEER:-?}); $H1_COINS"
@@ -155,7 +155,7 @@ fi
 # 1-2. the endpoint and its requests, under the GPU lease
 export D OUT
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-composed} gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" --mem-gb "${LEASE_MEM_GB:-128}" \
-  -- bash "$TREE/examples/one_stage/served_verdicts.sh" serve
+  -- bash "$TREE/benchmarks/one_stage/served_verdicts.sh" serve
 rc=$?
 [ "$rc" = 0 ] || stop serve "$rc"
 "$PY" - "$D" <<'EOF' 2>&1 | tee -a "$OUT/verdicts.txt"
@@ -194,7 +194,7 @@ for f in serve.json windows.jsonl seals.jsonl requests.jsonl load.jsonl; do cp "
 [ -d "$D/h1" ] && (cd "$D" && find h1 -name pouw-h1-calls.json -exec cp --parents {} "$OUT/serve/" \;)
 
 # 3. sampled proofs: the window, its advice and Programs, V3b's window circuit, then C-Flock --zk and the Lean verifier
-PICK=$("$PY" examples/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$OUT/window.err")
+PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$OUT/window.err")
 [ -n "$PICK" ] || { say "WINDOW refused: $(cut -c1-600 "$OUT/window.err")"; stop window 12; }
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
 say "WINDOW $PICK"
@@ -247,10 +247,10 @@ say "SAMPLED-PROOFS (run.sh exit $rc): $(grep -m1 '^RECORDS' "$OUT/sampled-proof
 
 # 4. the other subprotocols, each its piece's verdict or MISSING with its issue
 TPY=$TREE/.venv/bin/python
-"$TPY" examples/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" 2>&1 | tee -a "$OUT/verdicts.txt"
+"$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" 2>&1 | tee -a "$OUT/verdicts.txt"
 
 # 5. one record of every verdict
-"$TPY" examples/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$OUT/sampled-proofs/served" \
+"$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$OUT/sampled-proofs/served" \
   --pieces "$OUT/pieces" --out "$OUT/record" 2>&1 | tee -a "$OUT/verdicts.txt"
 rec=${PIPESTATUS[0]}
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
