@@ -638,6 +638,14 @@
    "owner": "@network-accounting",
    "digest": "587ee43dd7856b8ad6f0c8de911713d9f366c2024c911f3ffdffab76edb06cd4"
   },
+  "Accounting.ServingBlocks.BodySize": {
+   "owner": "@training",
+   "digest": "1faefed448313f1d7131abc33458873b4ae6f44fc432dab2b20a4bdacc43d4e3"
+  },
+  "Accounting.ServingBlocks.NoStraddle": {
+   "owner": "@training",
+   "digest": "cc64864fe1d5d462668ff127eaec3c7c05de98b684b1e48157dfc4ee9b763c8e"
+  },
   "Accounting.ServingBlocks.OperationBodies": {
    "owner": "@training",
    "digest": "25425610b273220a8177cad6271ffe78c05b706834d70442816fd8bb0615e31a"
@@ -649,6 +657,10 @@
   "Accounting.ServingBlocks.PerBlockCap": {
    "owner": "@training",
    "digest": "fc80a20590bcf892400edbf6b11e8183eae21ac9f59a29ea41bc65787f7f05fd"
+  },
+  "Accounting.ServingBlocks.UncertifiedBodySize": {
+   "owner": "@training",
+   "digest": "b1c48ece3ff425a99714ac5ee17ec3293c18fea4e5e61ccf17b9b5c6f6996f91"
   },
   "Accounting.ServingBlocks.UncertifiedCap": {
    "owner": "@training",
@@ -4440,6 +4452,76 @@
    "assumptions": [],
    "type_hash": "ce07bb9268f9ba61b228b15986624be7a933fefcbad6c041e24f3c41e0e22c5c"
   },
+  "Accounting.SecurityProofs.ServingBlocks.StraddleBound": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound.{u_1} : Accounting.Guarantees.ServingBlocks.StraddleBound"
+   ],
+   "assumptions": [],
+   "type_hash": "396b0ebfd87fe79eb3b4f411a2f45e72e80df04a63433f6eee6bfaf63ff5803d"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.StraddleBound_honest": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_honest : Accounting.Guarantees.ServingBlocks.StraddleBound_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "e184deb5475037adca4c3f65a4abed12a28494acce44abe3fd6a703b8df85c25"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial :",
+    "  Accounting.Guarantees.ServingBlocks.StraddleBound_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "116abdec734fb2fda35e508b14f8041be642d72237b5491dcbe734f7d3fb3903"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial_overlap": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial_overlap :",
+    "  Accounting.Guarantees.ServingBlocks.StraddleBound_nontrivial_overlap"
+   ],
+   "assumptions": [],
+   "type_hash": "d1f9efc37ef795f9513fd52717eafb6a723834e4691d20ce9ffa97ca10ee2f0d"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing.{u_1} :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedCrossing"
+   ],
+   "assumptions": [],
+   "type_hash": "514b78eb06c5d9a22d70c244e0f680600ee0982c77bb367c9db6a8d353cd19b0"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_honest": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_honest :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedCrossing_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "a48701bd4a83225d2244d337f044e9eb97b3ab22b523031c052fe1d728564720"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedCrossing_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "638f48a2426ff558838f97f976b262e1427c41c4e3c7d3011c422d1c11e1faa0"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial_bodies": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial_bodies :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedCrossing_nontrivial_bodies"
+   ],
+   "assumptions": [],
+   "type_hash": "71e37b1c57523517b2d0fcbbfa23a7a755b4979ed3b7be0244417bcb908a0a0e"
+  },
   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": {
    "owner": "@training",
    "signature": [
@@ -4466,6 +4548,68 @@
    ],
    "assumptions": [],
    "type_hash": "2d20e7e6b89b4fdf3de336f65c1bb585181dc57741bfd6d21d65b68f85246846"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal.{u_1} : Accounting.Guarantees.ServingBlocks.UncertifiedLocal"
+   ],
+   "assumptions": [],
+   "type_hash": "88f0a8ddc18d21128bf456b1f6b64b620c9a9f79c78821a045d0b2f801859705"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_honest": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_honest :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedLocal_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "3593b77d9eef0b681e47a144db3361fed896562313d44ad52bfc78146393b171"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedLocal_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "8ef19956249b5f76faa146d5990d1cfa27f21ba0382fc5b35e42976ce9e45a1a"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial_bodies": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial_bodies :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedLocal_nontrivial_bodies"
+   ],
+   "assumptions": [],
+   "type_hash": "c57e004eac64775e285c85f35cadd9dbd30a577f20af63fcada2d6bb43b9f9eb"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural.{u_1} :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedStructural"
+   ],
+   "assumptions": [],
+   "type_hash": "665bd4ea9d9e9676b51079de015513abb7693c0ef02127854ceb80603bafc412"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_honest": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_honest :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedStructural_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "7e25319474ad6ecb9a7eab8731092f550507621bdbddcf7d4c0e99430b35bd30"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_nontrivial": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_nontrivial :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedStructural_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "82de28a836b99b5433d24b189e05ca1dc90860a3e463c61d5a70ee1100058667"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -12704,7 +12848,22 @@
    "Verity.SecurityProofs.AndSizeLe": "frozen (no-function): It is about an arbitrary circuit and set of its gates (Verity.Circuit.andSize, Security/Definitions/Core/Formalism.lean): its AND gates are operation gates, so the AND count is at most the size; not about a function's code.",
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
-   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code."
+   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural": "frozen (no-function): It is a counting fact about an arbitrary circuit's counted operations, a set of its gates and blocks inside it (Accounting.ServingBlocks.uncertified, Security/Definitions/Accounting/ServingBlocks/Straddle.lean), under named premises about them (Overlap, BodySize, NoStraddle), not a function's acceptance; it is the uncertified cap omega_max mu |U| / s_x as it was read, with no straddling made exact as a premise.",
+   "Accounting.SecurityProofs.ServingBlocks.StraddleBound": "frozen (no-function): It is stated over an arbitrary declaration, its counted operations, a set of its gates and blocks inside it, under named premises about them (OperationBodies, Overlap), not a function's acceptance; it charges each operation that straddles the certified boundary to an unregistered input bit of the uncertified gates or of a block (Accounting.ServingBlocks.crossing), as Accounting.SecurityProofs.ServingBlocks.ServingBlockBound charges what a serving block's cap leaves to its unregistered inputs.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing": "frozen (no-function): Like Accounting.SecurityProofs.ServingBlocks.StraddleBound, it is stated over an arbitrary declaration, its counted operations, a set of its gates and blocks inside it under named premises about them (OperationBodies, Overlap, BodySize), not a function's acceptance; it is the uncertified cap with no premise on straddling, its crossing term omega_max mu crossing in place of NoStraddle.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal": "frozen (no-function): Like Accounting.SecurityProofs.ServingBlocks.StraddleBound, it is stated over an arbitrary declaration, its counted operations, a set of its gates and blocks inside it under named premises about them (OperationBodies, Overlap, UncertifiedBodySize), not a function's acceptance; it is the uncertified cap under the weakest premise that keeps its |U| / s_x term, with only the blocks' unregistered inputs omega_max mu sum_i |in(B i) \\ theta| added.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_honest": "completeness: UncertifiedStructural's honest lemma: at Honest's dark remainder (Accounting.ServingBlocks.Honest, Security/Definitions/Accounting/ServingBlocks/Instances.lean) with no blocks, its premises hold together at omega_max = mu = s = 1. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_nontrivial": "lemma: UncertifiedStructural's nontrivial lemma for NoStraddle: at Straddle read as one server with gate 1 its inference block (Security/Definitions/Accounting/ServingBlocks/Straddle/Instances.lean), the operation gate 2 represents is computed by the certified gate 1 and the uncertified gate 2; every premise but NoStraddle holds at omega_max = mu = 1 and s = 2, with OperationBodies too, NoStraddle fails, and the weight 1 is above the cap 1/2. A counterexample at an instance, not a property of a Lean function.",
+   "Accounting.SecurityProofs.ServingBlocks.StraddleBound_honest": "completeness: StraddleBound's honest lemma: at Honest its premises hold together at omega_max = mu = 1. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
+   "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial": "lemma: StraddleBound's nontrivial lemma for OperationBodies: at Detached read as one server with gate 1 its inference block, every premise but OperationBodies holds at omega_max = mu = 1, no unregistered bit crosses the certified boundary, and the straddling weight 1 is above the bound 0. A counterexample at an instance, not a property of a Lean function.",
+   "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial_overlap": "lemma: StraddleBound's nontrivial lemma for Overlap, and its attainment: at Straddle read as one server with gate 1 its inference block, every premise holds at mu = 1 and the straddling weight 1 equals the bound omega_max mu crossing = 1; Overlap fails at mu = 0, and there the weight 1 is above the bound 0. A counterexample at an instance, not a property of a Lean function.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_honest": "completeness: UncertifiedCrossing's honest lemma: at Honest its premises hold together at omega_max = mu = s = 1. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial": "lemma: UncertifiedCrossing's nontrivial lemma for BodySize: at Counter's one gate with no blocks, every premise but BodySize at s = 2 holds at omega_max = mu = 1, BodySize fails, and the weight 1 is above the cap 1/2. A counterexample at an instance, not a property of a Lean function.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial_bodies": "lemma: UncertifiedCrossing's nontrivial lemma for OperationBodies: at Detached read as one server with gate 1 its inference block, every premise but OperationBodies holds at omega_max = mu = 1 and s = 2, no unregistered bit crosses the certified boundary, and the weight 1 is above the cap 1/2. A counterexample at an instance, not a property of a Lean function.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_honest": "completeness: UncertifiedLocal's honest lemma: at Honest's dark remainder with no blocks, its premises hold together at omega_max = mu = s = 1. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial": "lemma: UncertifiedLocal's nontrivial lemma for UncertifiedBodySize: at Straddle read as one server with gate 1 its inference block, every premise but UncertifiedBodySize at s = 2 holds at omega_max = mu = 1, the operation gate 2 represents has one gate outside the block, and its weight 1 is above the cap 1/2. A counterexample at an instance, not a property of a Lean function.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial_bodies": "lemma: UncertifiedLocal's nontrivial lemma for OperationBodies: at Detached read as one server with gate 2 its inference block, every premise but OperationBodies holds at omega_max = mu = 1 and s = 2, the block reads no unregistered bit, and the weight 1 is above the cap 1/2. A counterexample at an instance, not a property of a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -15312,6 +15471,50 @@
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary"
    ]
   },
+  "Definitions.Accounting.Guarantees.ServingBlocks.Straddle": {
+   "digest": "f14c289992ff54758035f3441b492a4fe86141430427498cba9393db0c17645b",
+   "definitions": {
+    "Accounting.Guarantees.ServingBlocks.StraddleBound": "8115e87a78ee9e6cc58c19772afd720f44cce1fff4209eb7c335165185d9d032",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedCrossing": "b2380afb0f67cf4a5c7980d2b7411929e0cd403969c151043e4c166a3c053357",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedLocal": "936d7cf705acf39d8361d066280cef44176b2d28cadec7b1aaf487ae18e6d199",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedStructural": "4a1431c60625593586f6979eeca0a01632285563234f9ea8998480913c4e3815"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural"
+   ]
+  },
+  "Definitions.Accounting.Guarantees.ServingBlocks.Straddle.Witnesses": {
+   "digest": "6b508b8004eaca7bf990eb2b756435e9ea9082b88448280b50beae324a21fb11",
+   "definitions": {
+    "Accounting.Guarantees.ServingBlocks.StraddleBound_honest": "cd2061ab4e978052299719d468b1b2052a6dd61869926613d69bc26764750310",
+    "Accounting.Guarantees.ServingBlocks.StraddleBound_nontrivial": "89cc5193468f02c5b7d101c19c1acc6eb7d3e1f4b24ede8a4670e043f8adc291",
+    "Accounting.Guarantees.ServingBlocks.StraddleBound_nontrivial_overlap": "3371e2e311efa580891aac388d8d91d1852edd58eac9b24b871cf555e5d567f5",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedCrossing_honest": "566e3a7c2acfe41f7fb1d5f8e8de7143a60e14ce0e6edb930eafdb1b2b3b71f2",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedCrossing_nontrivial": "5dc5b7ad908a4e8c8e19723ee77354c39628370be7f5e969e845cb302925aebf",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedCrossing_nontrivial_bodies": "a3e22ecd2b87ba67a2e52db81a9da17eb0f335e3ba09a9f6158975d43144916b",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedLocal_honest": "11689e83247f79962fc936b7b0829d5d8590721356cf590377862c258c7ebe00",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedLocal_nontrivial": "805aeba92359b2cd4f4f79505ea94a47c54e0d93fb2e75b8dc6987c25f39e541",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedLocal_nontrivial_bodies": "7a9f99d69b87b4b76e05e7021565133ed0abf87ce8da34f9cac9d9579fdc77bc",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedStructural_honest": "2fc433241582e7ccbdfa3963b36c4dfe77d08f8bbf96007a8766545472b0a000",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedStructural_nontrivial": "608ed73809f6732750317434b95de765dd241b0f88b84e2a9171f317b04af60a"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_honest",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial_bodies",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial_bodies",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_nontrivial"
+   ]
+  },
   "Definitions.Accounting.Guarantees.ServingBlocks.Witnesses": {
    "digest": "f2dedc96277747be80d81705ebc395808548c93c56343bf9e6546ec6a0b031df",
    "definitions": {
@@ -17163,8 +17366,23 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_honest",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial_bodies",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial"
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial_bodies",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_nontrivial"
    ]
   },
   "Definitions.Accounting.ServingBlocks.Instances": {
@@ -17209,8 +17427,64 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_honest",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial_bodies",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial"
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial_bodies",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_nontrivial"
+   ]
+  },
+  "Definitions.Accounting.ServingBlocks.Straddle": {
+   "digest": "1f49cd2194501dac31346a726480ebbbc4e5aabe68e7a30c638da5140bf996cd",
+   "definitions": {
+    "Accounting.ServingBlocks.BodySize": "1faefed448313f1d7131abc33458873b4ae6f44fc432dab2b20a4bdacc43d4e3",
+    "Accounting.ServingBlocks.Counted.straddle": "1ec7e0528381a7403547dfbc165b359bab3b8db5baba1f428c233c36d87250ee",
+    "Accounting.ServingBlocks.NoStraddle": "cc64864fe1d5d462668ff127eaec3c7c05de98b684b1e48157dfc4ee9b763c8e",
+    "Accounting.ServingBlocks.UncertifiedBodySize": "b1c48ece3ff425a99714ac5ee17ec3293c18fea4e5e61ccf17b9b5c6f6996f91",
+    "Accounting.ServingBlocks.crossing": "dbb3b3228af02fd2aacf05310a99fd04b292f01088688256be3ce9841cdad795",
+    "Accounting.ServingBlocks.uncertified": "0b2f6eaf540e1bc7c1c3892630721c7db386530f7d80cfe73adbbbdf52b08b72"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial_bodies",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial_bodies",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_nontrivial"
+   ]
+  },
+  "Definitions.Accounting.ServingBlocks.Straddle.Instances": {
+   "digest": "53ee2c977f917c2567b1f62bf7bbf7817bce56af9106753d817d3953c119affc",
+   "definitions": {
+    "Accounting.ServingBlocks.Detached.certified": "2d79abf6a7e7e510c79400824d34f3c56b532cda0e328fb6a80245ae00b616e8",
+    "Accounting.ServingBlocks.Detached.represented": "d83d96de4785bdbbc42654a0382baea45be7e580c833e4a3939401a03c9120f4",
+    "Accounting.ServingBlocks.Detached.server": "d0d81c200cc9819a59ebd7865c4a1a9e92140d53fc618d67d139f42253dd1c5d",
+    "Accounting.ServingBlocks.Straddle.certified": "88b50af6991b71a9c1382ce6d335e8824ff34c1f6c17502cac7d167a95c8e846",
+    "Accounting.ServingBlocks.Straddle.server": "0b186ad1ea64e297dd0d22e3bd0a0d0ecd5c200b0b89198d64658047ff0d2908"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial_bodies",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial_bodies",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_nontrivial"
    ]
   },
   "Definitions.Accounting.TS.Drawn": {
@@ -19632,9 +19906,24 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_honest",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial_bodies",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial_bodies",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_nontrivial",
     "Accounting.SecurityProofs.pouwRow",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
@@ -19785,8 +20074,22 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_honest",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial_bodies",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial_bodies",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_nontrivial",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
@@ -19938,6 +20241,15 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.StraddleBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial_bodies",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_nontrivial_bodies",
     "Nci.SecurityProofs.CompliesCK",
     "Nci.SecurityProofs.PartitionCovers",
     "Verity.SecurityProofs.AndSizeLe",
@@ -20272,9 +20584,12 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedCrossing_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedLocal_honest",
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedStructural_honest",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
