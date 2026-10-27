@@ -1,4 +1,4 @@
-"""PoUS's session verdict as one proof unit: whether a memory challenger's session passes, from its round records and the
+"""PoUS's session verdict as one proof block: whether a memory challenger's session passes, from its round records and the
 expected digests of the blocks they challenged.  Its one output bit is the session's public verdict.
 
     PousVerdict_v1{K, M, LIMIT}

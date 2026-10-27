@@ -4,7 +4,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.Setup
 # flock-verify's tables at `count > 1`
 
 `Stmt.setupTables` at `count > 1`, under a tag without hidden outputs (`setupTables_parts`): the tag allows several
-tables and `count ≤ Tags.MAX_TABLES`; the draw, when there is one, is a subset draw, and the session's units are its
+tables and `count ≤ Tags.MAX_TABLES`; the draw, when there is one, is a subset or stratified draw (`Draw.tablesWhy`), and
+the session's units are its
 units (without one, the population's every unit); they split into `count` nonempty equal parts; and table `j` is
 `setupH`'s statement under `Tags.tableIdentity count j` at the subset draw of part `j`, the consecutive units
 `j·k … j·k + k − 1` with `k = units/count`.
@@ -26,9 +27,11 @@ theorem splits_ok {units : Array ℕ} {count : ℕ} {e : String} {w : Unit}
   · simp only [Bool.or_eq_true, beq_iff_eq, bne_iff_ne, ne_eq, not_or, not_not] at hc
     omega
 
-theorem draw_subset {draw : Option Json} {u u' : Draw.UnitDraw} {k : ℕ}
-    (hd : draw.mapM Draw.UnitDraw.ofJson = .ok (some u)) (hlaw : u.law = .subset k) (huu : some u = some u') :
-    (∀ d, draw = some d → ∃ v, Draw.UnitDraw.ofJson d = .ok v ∧ (∃ k', v.law = .subset k') ∧
+theorem draw_split {draw : Option Json} {u u' : Draw.UnitDraw}
+    (hd : draw.mapM Draw.UnitDraw.ofJson = .ok (some u))
+    (hlaw : (∃ k, u.law = .subset k) ∨ ∃ K st, u.law = .stratified K st) (huu : some u = some u') :
+    (∀ d, draw = some d → ∃ v, Draw.UnitDraw.ofJson d = .ok v ∧
+      ((∃ k', v.law = .subset k') ∨ ∃ K st, v.law = .stratified K st) ∧
       v.population = u'.population ∧ v.units = u'.units) ∧ (draw = none → u'.units = Array.range u'.population) := by
   cases huu
   cases draw with
@@ -45,7 +48,7 @@ theorem draw_subset {draw : Option Json} {u u' : Draw.UnitDraw} {k : ℕ}
       rw [h1] at hd
       simp only [Functor.map, Except.map, Except.ok.injEq, Option.some.injEq] at hd
       subst hd
-      exact ⟨_, rfl, ⟨k, hlaw⟩, rfl, rfl⟩
+      exact ⟨_, rfl, hlaw, rfl, rfl⟩
 
 theorem draw_none {draw : Option Json} (hd : draw.mapM Draw.UnitDraw.ofJson = .ok none) : draw = none := by
   cases draw with
@@ -73,7 +76,8 @@ theorem setupTables_parts (hh : tags.hiddenOutputs = false) (hc1 : 1 < count)
       .ok (spec, sts)) :
     tags.manyTables.isSome ∧ count ≤ Tags.MAX_TABLES ∧
       ∃ (population : ℕ) (units : Array ℕ),
-        (∀ d, draw = some d → ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧ (∃ k', u.law = .subset k') ∧
+        (∀ d, draw = some d → ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧
+          ((∃ k', u.law = .subset k') ∨ ∃ K st, u.law = .stratified K st) ∧
           u.population = population ∧ u.units = units) ∧
         (draw = none → units = Array.range population) ∧
         0 < units.size ∧ units.size % count = 0 ∧ sts.size = count ∧
@@ -115,10 +119,14 @@ theorem setupTables_parts (hh : tags.hiddenOutputs = false) (hc1 : 1 < count)
   all_goals
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
     obtain ⟨hpos, hmod⟩ := splits_ok (by assumption)
-  · obtain ⟨hD1, hD2⟩ := draw_subset (by assumption) (by assumption) (by assumption)
-    exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, hD1, hD2, hpos, hmod, hsz, fun j hj => ok_of_refuse (hall j hj)⟩
-  · have hdn := draw_none (by assumption)
-    exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, fun d hd => by simp [hdn] at hd,
-      fun _ => rfl, hpos, hmod, hsz, fun j hj => ok_of_refuse (hall j hj)⟩
+  all_goals first
+    | (have hdn : draw = none := draw_none ‹draw.mapM Draw.UnitDraw.ofJson = .ok none›
+       exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, fun d hd => by simp [hdn] at hd,
+         fun _ => rfl, hpos, hmod, hsz, fun j hj => ok_of_refuse (hall j hj)⟩)
+    | (have hdu : draw.mapM Draw.UnitDraw.ofJson = .ok (some _) := ‹_›
+       obtain ⟨hD1, hD2⟩ := draw_split hdu
+         (by first | exact .inl ⟨_, by assumption⟩ | exact .inr ⟨_, _, by assumption⟩) (by assumption)
+       exact ⟨Option.isSome_iff_exists.2 ⟨_, by assumption⟩, by omega, _, _, hD1, hD2, hpos, hmod, hsz,
+         fun j hj => ok_of_refuse (hall j hj)⟩)
 
 end FlockSoundness.Discharge.Tables
