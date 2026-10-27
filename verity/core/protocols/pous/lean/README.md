@@ -81,7 +81,8 @@ Proofs/Pous/P2/                     proved: the `m1p` guarantees (Count, Rows, D
                                     RingTight: recomputing the roots breaks `MeetsOn`; RingTrunc: dropping low
                                     bits breaks `k = 88` from `L = 2^30`)
 Proofs/Pous/Chain/Flat.lean         proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
-                                    the public encoder over the overwrite chain (the graded lanes, flattened)
+                                    the public encoder over the overwrite chain (the graded lanes, flattened, then
+                                    pruned to what their importers use and the docs cite)
 Proofs/Pous/Continuous/             proved: the continuous audit's counting step (`MissCount.lean`), the three
                                     rules its memory challenger enforces (`Verifier.lean`), `PerAnswer` and
                                     `ContinuousAudit` (`PerAnswer.lean`), the 64 KiB band at `D = 5`

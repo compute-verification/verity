@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The drawn-unit replay bundle proved (prove_bundle.py; PRF-171's M1, and with PB_K M3's rehearsal): the torch loop's window
+# The drawn-unit replay bundle proved (prove_bundle.py; M1, and with PB_K M3's rehearsal): the torch loop's window
 # and its tampered twin written under the fixture's test key, and the bundle made from the window (`prove_bundle.py make`).
 # Without PB_K the draw is the fixture's FIXTURE_DRAW under its registered subset:4; with PB_K=K the windows register
 # subset:K, the challenger logs its receipt of the window's registration, and Lean `flock-verify draw --registration`
@@ -50,7 +50,7 @@ if [ "${PB_BUILD_ONLY:-0}" = 1 ]; then
   log "build only: $O/bin, stamp $STAMP"
   exit 0
 fi
-export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/torch_loop:$REPO/benchmarks/e2e_demo:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/torch_loop:$REPO/examples/h200/interfaces:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover can overflow on a many-core node
 # (prove_path/run.sh)
