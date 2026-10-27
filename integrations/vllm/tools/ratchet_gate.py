@@ -23,7 +23,10 @@ when:
 
 * in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per package, P07's)
   holds more in total after it than before.  A key may rise, or a new one appear, when the same kind's other keys fall by
-  at least as much, so a move from one package to another passes (the vLLM coordinator, 26 Oct);
+  at least as much, so a move from one package to another passes (the vLLM coordinator, 26 Oct).  A change to a counted
+  lint's module (``COUNTED``) may raise its list's counts for files the change doesn't touch: that is code already there,
+  which the retuned rule counts, so the list takes it at landing and only shrinks after (27 Oct 05:10Z, VLLM-134); a rise
+  in a file the change touches is held as before;
 * among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
   more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``); and
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
@@ -372,10 +375,12 @@ def counted_kinds(s: str, entries: list) -> set:
     return set() if s in MEASURES else {kind(e) for e in entries if isinstance(e, dict) and "count" in e}
 
 
-def growth(before: dict[str, list], after: dict[str, list],
-           paths: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
+def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str],
+           retuned: frozenset[str] = frozenset(), touched: frozenset[str] = frozenset()) -> tuple[list[str], list[str], list[str]]:
     """(each grown ratchet, count and pooled kind; the entries that grew it, or the keys that moved in a grown kind; each
-    kind a key rose in whose total didn't grow): what the change adds, against its base."""
+    kind a key rose in whose total didn't grow, and each retuned list's rise): what the change adds, against its base.  A
+    counted lint in ``retuned``, whose module the change changes, may count more in a file the change doesn't touch (not in
+    ``touched``): that is code already there, which its new rule counts, so its list takes it at landing."""
     grown, fix, pooled = [], [], []
     for s in sorted(before):
         was_all, now = [e for e in before[s] if not is_mark(e)], [e for e in after.get(s, []) if not is_mark(e)]
@@ -394,17 +399,24 @@ def growth(before: dict[str, list], after: dict[str, list],
             if count(e) > was.get(key(e), count(e)):
                 grown.append(f"{paths[s]} count {was[key(e)]} -> {count(e)} for {key(e)}")
         for pool in sorted(kinds, key=str):
-            lo, hi = Counter(), Counter()
+            lo, hi, files = Counter(), Counter(), {}
             for side, entries in ((lo, was_all), (hi, now)):
                 for e in entries:
                     if in_pool(e) and kind(e) == pool:
                         side[key(e)] += count(e)
-            moved = sorted((k for k in lo.keys() | hi.keys() if lo[k] != hi[k]), key=lambda k: (lo[k] - hi[k], k))
+                        files[key(e)] = e.get("file")
+            risen = {k: hi[k] - lo[k] for k in hi if s in retuned and hi[k] > lo[k] and files[k] not in touched}
+            moved = sorted((k for k in lo.keys() | hi.keys() if lo[k] != hi[k] and k not in risen),
+                           key=lambda k: (lo[k] - hi[k], k))
             total = f"{paths[s]}{'' if pool is None else f' {pool}'} {sum(lo.values())} -> {sum(hi.values())} in total"
-            if sum(hi.values()) > sum(lo.values()):
+            if sum(hi.values()) - sum(risen.values()) > sum(lo.values()):
                 grown.append(total)
                 fix += [f"{paths[s]}: {k} {lo[k]} -> {hi[k]}" for k in moved]
-            elif any(hi[k] > lo[k] for k in moved):
+                continue
+            if risen:
+                pooled.append(f"{total}, {sum(risen.values())} of it in {len(risen)} file(s) the change doesn't touch, which "
+                              f"its changed {counted_paths(s)[0]} now counts (a retuned lint's list takes them)")
+            if any(hi[k] > lo[k] for k in moved):
                 pooled.append(f"{total} over {len(moved)} moved key(s)")
     return grown, fix, pooled
 
@@ -802,7 +814,9 @@ def judge(c: Change, base: str) -> None:
         after, now_at, bad = ratchets(c.hi)
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
-        grown, added, c.pooled = growth(before, after, {**was_at, **now_at})
+        changed = frozenset(f for f in diff if f)
+        retuned = frozenset(s for s, *_ in COUNTED if counted_paths(s)[0] in changed)
+        grown, added, c.pooled = growth(before, after, {**was_at, **now_at}, retuned, changed)
     noqa_grows = c.noqa_added > c.noqa_removed
     if c.touched and not (grown or bad or noqa_grows):
         selection = {lint: s for lint in LINTS if (s := lint_selection(c.touched, lint)) is None or s}

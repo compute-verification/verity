@@ -12,8 +12,9 @@ a member below the top), the environment-read check beside it (a new direct read
 fix, one in a registry passing, a read moved within its file passing, a rename moving its entry, a registry mark counted from
 the change's base, the list's total held, a loosened lint failing, a base lint that doesn't load leaving the change unjudged),
 the silent-except check beside that (a new swallowing handler, typed or broad, refused by name with the fix, one that
-re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
-counted lints counting one change), the source checks' findings kept beside the verdict, where ruff comes from (this
+re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, a
+retuned lint's list taking what it newly counts in files the change doesn't touch, both counted lints counting one
+change), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
 than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
 (a revert, a pure move the base's move_check certifies), and its command line."""
@@ -1025,6 +1026,31 @@ def test_the_silent_except_list_may_not_grow_and_loosening_its_lint_fails_naming
     assert (c["verdict"], c["lints"], c["fix"]) == ("failed", ["repo_silent_excepts"], [
         "repo_silent_excepts: tools/s.py: 1 found, 0 allowed",
         "repo_silent_excepts: tools/s.py:4 except OSError: return None"]), c["why"]
+
+
+def test_a_retuned_counted_lint_s_list_takes_what_it_newly_counts_in_files_the_change_does_not_touch(silent_linted):
+    """Only with a change to the lint's module, and only in files the change leaves as they were."""
+    u = {"file": "tools/u.py", "count": 1}
+    silent_linted.git("checkout", "-q", "main")
+    silent_linted.commit("code a retuned rule would count", {
+        "tools/u.py": "import contextlib, os\n\n\ndef rm(p):\n    with contextlib.suppress(OSError):\n        os.remove(p)\n"})
+    silent_linted.git("checkout", "-q", "-B", "pr")
+    retuned = (SCRIPT.parents[3] / REPO_SILENT_LINT).read_text() + "\n# retuned: it counts suppress(...) too\n"
+    silent_linted.commit("the list takes u.py's, with no change to the lint", {REPO_SILENT_JSON: _allowlist(TOOLS_S, u)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_SILENT_JSON}: {G.key(u)} 0 -> 1"]), c["why"]
+    silent_linted.commit("the lint, retuned", {REPO_SILENT_LINT: retuned})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["pooled"]) == ("passed", ["repo_silent_excepts"], [
+        f"{REPO_SILENT_JSON} 1 -> 2 in total, 1 of it in 1 file(s) the change doesn't touch, which its changed "
+        f"{REPO_SILENT_LINT} now counts (a retuned lint's list takes them)"]), c["why"]
+    silent_linted.commit("and a new suppress(...) in u.py", {
+        "tools/u.py": "import contextlib, os\n\n\ndef rm(p):\n    with contextlib.suppress(OSError):\n        os.remove(p)\n"
+                      "\n\ndef rmdir(p):\n    with contextlib.suppress(OSError):\n        os.rmdir(p)\n",
+        REPO_SILENT_JSON: _allowlist(TOOLS_S, {**u, "count": 2})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_SILENT_JSON}: {G.key(u)} 0 -> 2"]), c["why"]
+    assert c["why"].startswith(f"grows {REPO_SILENT_JSON} 1 -> 3 in total"), c["why"]
 
 
 def test_both_counted_lints_count_the_top_change_each_naming_its_own_fix(env_linted):
