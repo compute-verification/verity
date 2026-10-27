@@ -153,7 +153,7 @@ def serve(m: L.Model, requests: list[int], steps: int, rows: int, served: SV.Ser
     ctx = PO.Context(stage="serve", enabled=(ENTRY,),
                      settings={"pouw": {**settings, "rows": rows, "steps": steps, "retain_steps": steps, "runner": runner,
                                         "served": served}})
-    served.tap = CT.CommitTap("embed")
+    served.tap = CT.CommitTap(port=CT.IDS_PORT)
     comp = PO.install(model, ctx)
     box["run"] = pouw.h1_run(ENTRY)
     same, x = [], m.embed[torch.tensor(requests)].clone()
@@ -164,7 +164,7 @@ def serve(m: L.Model, requests: list[int], steps: int, rows: int, served: SV.Ser
                     for i, t in enumerate(requests)] if s == 0 else []
             runner.execute_model(SimpleNamespace(scheduled_new_reqs=reqs, num_scheduled_tokens={f"r{i}": 1 for i in range(len(requests))},
                                                  total_num_scheduled_tokens=len(requests)))
-            served.tap.take("embed/in", torch.tensor(ids), s)
+            served.tap.take(CT.IDS_PORT, torch.tensor(ids), s, len(ids))
             for w, (name, layer, lin) in enumerate(zip(model.names, model.layers, m.layers)):
                 xq, s_a = int8_ops.row_quant(x)
                 served.tap.take(f"{CT.site(name)}/0", xq, s)
