@@ -238,11 +238,11 @@ installs it first, so a machine without elan works), must pass clean and fail on
   modules the package imports.
 - `guarantees`: the guarantees (README "Glossary"), and any lemma still listed beside them.
   `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
-  hypotheses, a hash of the type, and for each module the definitions the guarantees read, with a hash each, the
-  guarantees that read them, and a `digest` of those hashes (which the record therefore determines). Without `--update`
-  the audit fails on any difference, so a statement, or a definition it depends on, cannot change without a visible diff
-  of this file. A record holds the statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof
-  with allowed axioms replaces it.
+  hypotheses, a hash of the type, and for each module the definitions the guarantees read, with a hash each, and a
+  `digest` of those hashes, not who reads them: the hashes fix that. Without `--update` the audit fails on any
+  difference, so a statement, or a definition it depends on, cannot change without a visible diff of this file. A record
+  holds the statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms
+  replaces it.
 - `owner`, in each guarantee's entry: the handle of the lane that answers for it (`@proofs`, `@compute-accounting`), whom
   a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
   `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
@@ -416,10 +416,10 @@ The proofs package's own audit replays its declarations through the kernel, so `
 Two branches that each add guarantees both change `lean-audit.json`, usually in the same `reads` module, so git's text merge
 conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/verity/lean/merge.py --install` has registered
 it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
-or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
-the digest is recomputed. Guarantees arrive byte for byte from their branches, and a hand-written section one side extends
-(a module added to `meaning`) is kept. A guarantee's `owner` merges apart from the rest of its entry, so one side's new
-owner and the other side's restatement both apply.
+or a policy entry applies. Within a module both sides changed, the definitions merge the same way, and the digest is
+recomputed; an older lock's readers are dropped. Guarantees arrive byte for byte from their branches, and a hand-written
+section one side extends (a module added to `meaning`) is kept. A guarantee's `owner` merges apart from the rest of its
+entry, so one side's new owner and the other side's restatement both apply.
 
 What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
 `reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
