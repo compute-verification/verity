@@ -1,4 +1,4 @@
-"""[R16 fp8] Sampled exact replay of the block-scaled FP8 linear (Qwen3-4B-FP8's `Fp8GroupQuant_v1 -> ScaledMmFp8Block_v1` under one
+"""Sampled exact replay of the block-scaled FP8 linear (Qwen3-4B-FP8's `Fp8GroupQuant_v1 -> ScaledMmFp8Block_v1` under one
 LinearBase module): the e4m3 `weight` and the f32 `weight_scale_inv` are REGISTERED inputs read in their declared widths (`Value<8>`,
 `Value<32>` -- a mixed-width `weights` struct), the activation words and group scales are INTERIOR (composed from the committed bf16
 row, two ports read as two arg slices), the GEMM row is the VU.  Positive on a tiny honest Program (twins = the Definitions,
@@ -211,7 +211,7 @@ def test_honest_fp8_program_replays_bit_exactly_the_gemm_rows_are_vus_the_quant_
     assert {k.split("|")[4].rsplit(".", 1)[-1] for k in gemm_strata} == {"gate_up_proj", "down_proj"}
     assert rep["evaluators"]["ScaledMmFp8Block_v1"].startswith("verity.ml.definitions.numerics.derived_rows.scaled_mm_fp8_block_row")
     assert rep["evaluators"]["Fp8GroupQuant_v1"].startswith("verity.ml.definitions.numerics.derived_rows.fp8_group_quant_row")
-    # [rev M-0100] the twins name what pinned them: fixture sha256 (the file in the tree), kernels, device, date, tests
+    # the twins name what pinned them: fixture sha256 (the file in the tree), kernels, device, date, tests
     import hashlib
     from pathlib import Path
     prov = rep["evaluator_provenance"]
@@ -271,7 +271,7 @@ def test_perturbed_block_scale_fails_the_gemm_vu_a_load_bearing_registered_input
 
 
 def test_weight_field_provided_in_the_wrong_width_is_refused_by_name_never_cast(fp8_world):
-    """A provider handing a Value<8> field as 16-bit words (the pre-R16 `np.uint16` cast) is an unresolved input, not a silent evaluation."""
+    """A provider handing a Value<8> field as 16-bit words (the older `np.uint16` cast) is an unresolved input, not a silent evaluation."""
     def read16(field, lo, hi):
         a = fp8_world.fields[field][lo:hi]
         return a.astype(np.uint16) if a.dtype == np.uint8 else a
