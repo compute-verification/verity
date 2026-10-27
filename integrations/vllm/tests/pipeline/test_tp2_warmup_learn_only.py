@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity_vllm.acquire.committer_api import StepCommitment
-from verity_vllm.engine.rank_worker import TP2CaptureWorkerExtension as _cls
+from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline.tp import warmup as WU
 
 

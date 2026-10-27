@@ -405,6 +405,20 @@ def pv_row_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
     return kernel
 
 
+def pv_row_pad_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
+    """`PvRowPad_v1{T, K, D, DOT}`: `PvRow_v1{T, K, D, DOT}` with key t's p word and V row zeroed unless t < n (n an
+    unsigned u16 word, ``(B,)``)."""
+    row = pv_row_kernel(steps)
+
+    def kernel(p: np.ndarray, *rest: np.ndarray, T: int, K: int, D: int, DOT: Any):
+        *vs, n = rest
+        keep = np.arange(T)[None, :] < (np.asarray(n).astype(np.int64) & 0xFFFF)[:, None]
+        return row(np.where(keep, p, 0).astype(p.dtype), *(np.where(keep[:, t, None], v, 0).astype(v.dtype)
+                                                           for t, v in enumerate(vs)), T=T, K=K, D=D, DOT=DOT)
+
+    return kernel
+
+
 # ---- instance sampling for self_check ------------------------------------------------------------------------------------
 
 def _words(rng: np.random.Generator, fmt, shape: tuple[int, ...], specials: tuple[int, ...], p_special: np.ndarray,
@@ -472,6 +486,13 @@ def sample_tc(rng: np.random.Generator, n: int, params, *, fp8: str = "e4m3", **
         b[c, h:] = b[c, :h]
         out[-2], out[-1] = a, b
     return out
+
+
+def sample_pv_row_pad(rng: np.random.Generator, n: int, params, **statics: Any) -> list[np.ndarray]:
+    """`sample_tc` for p and the key rows, and a key count n: mostly 0..T + 1, an eighth uniform u16 words."""
+    T = params[0].n
+    counts = np.where(rng.random(n) < 0.125, rng.integers(0, 1 << 16, n), rng.integers(0, T + 2, n)).astype(np.uint16)
+    return [*sample_tc(rng, n, params[:-1], **statics), counts]
 
 
 def sample_tc_e5m2(rng: np.random.Generator, n: int, params, **statics: Any) -> list[np.ndarray]:

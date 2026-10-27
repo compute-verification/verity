@@ -30,7 +30,7 @@ SCALE}`: the row at position pos = S - 1 over its own S keys, the first S rows o
     Y_c  = P . V'[c]                                           S8Matmul_v1{D, S'}, keys zero-padded to S' (a multiple of 32)
     out  = bf16(RN32(RN32(RN32(RN32(Y_c) r) + RN32(z V'_0c)) s_v[c]))      `Int8AttnOut`: apv_ref.py's served f, no dither
 
-s_q s_k is exact in float64 (`F32MulWide`), and A is one 32-bit word: a value several proof units read is at most 32 bits.  What
+s_q s_k is exact in float64 (`F32MulWide`), and A is one 32-bit word: a value several proof blocks read is at most 32 bits.  What
 every row of a KV group reads (K', V', s_v, f32(V'_0)) is computed once, by `Int8KvQuant`.
 
 The primitives here are the ones no registry had: `F32Rint`, `F32ToS8Rzi`, `S8ToF32`, `F32MulWide`, `F64Mul`, `F64ToU32RniSat`,

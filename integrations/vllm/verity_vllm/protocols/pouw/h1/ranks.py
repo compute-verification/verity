@@ -112,7 +112,7 @@ class RankTap(CT.CommitTap):
     names: dict[str, str] = field(default_factory=dict)
     out: list[tuple[str, int, np.ndarray]] = field(default_factory=list)
 
-    def take(self, name: str, t: Any, step: int) -> None:
+    def take(self, name: str, t: Any, step: int, n: int | None = None) -> None:
         if self.embed is not None and name == f"{self.embed}/in":
             self.out.append((name, int(step), np.array(CT._host(t))))
             return

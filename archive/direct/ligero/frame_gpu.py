@@ -21,7 +21,7 @@ ENABLED = os.environ.get("LIGERO_COMMIT_GPU", "1") != "0"
 ROW_SCHEMES = ("blake3", "blake3-xob")  # leaf schemes whose row digests run here (one leaf, two circuits)
 
 try:
-    _shared = str(Path(__file__).resolve().parents[3] / "verity" / "ml" / "kernels")
+    _shared = str(Path(__file__).resolve().parents[2] / "shared")
     if _shared not in sys.path:
         sys.path.insert(0, _shared)
     import cupy as cp

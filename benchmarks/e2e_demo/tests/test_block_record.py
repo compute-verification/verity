@@ -90,10 +90,22 @@ def _accepting_report() -> tuple[dict, dict]:
     report = {"format": "verity/all-protocols-period/v1", "run": p0["run"], "period": 0, "node": p0["server"],
               "protocols": rows, "composed": None}
     w = p0["legs"]["wipe"]
-    wipe = {"row": {"answer": {**w["answer"], "protocol": w["protocol"],
-                               "profile": {"certificate": {"f": w["quantity"]["f"]}}}},
+    wipe = {"row": {"answer": {**w["answer"], "protocol": w["protocol"], "profile": {"k": w["quantity"]["k"]}}},
             "server": p0["server"], "runs": w["runs"], "source": "fixture"}
     return report, wipe
+
+
+def test_the_wipe_is_its_threshold_at_its_reads() -> None:
+    """The wipe's quantity is `verity/wipe/v0`'s `foreign_bits` at the `k` and `r` it publishes; tonight's wipe, from
+    before it published them, carries its profile's `k` and no `r`."""
+    assert _load("block-record-r2-period0")["legs"]["wipe"]["quantity"] == {
+        "symbol": "foreign_bits", "value": 1 << 28, "unit": "bits", "k": 2152, "r": None, "M": 1 << 28, "certified": False}
+    public = {"certified": True, "egress_mib": 0, "eps": f"1/{2 ** 128}", "foreign_bits": 39_721_768_854, "k": 5231,
+              "memory_bits": 1_146_400_000_000, "r": 59}
+    lg = R.leg("wipe", {"answer": {"protocol": "verity/wipe/v0", "verdict": "accept", "reason": None, "commitment": "00",
+                                   "public": public, "profile": {"k": 5231}}}, server="n0", runs=["r"])
+    assert (lg["quantity"]["value"], lg["quantity"]["k"], lg["quantity"]["r"]) == (39_721_768_854, 5231, 59)
+    assert lg["error"] == f"1/{2 ** 128}" and all(at["holds"] for at in lg["at"].values())
 
 
 def test_six_accepting_legs_on_one_server_compose_to_accept() -> None:

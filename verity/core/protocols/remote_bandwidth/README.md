@@ -97,9 +97,18 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   log records the session's pin, on the verifier's own first-parent list of main (`trusted`).
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
+- `p2.py`: the audit over PoUS's P2-encoded weights store (`PROTOCOL.md` §11): the registration from PoUS's setup,
+  receipts of units of four 2,056-byte blocks that the decode kernel sketches as it decodes (`Sketcher`, its CPU
+  reference), and openings checked on PoUS's `vk`. Its Lean is `lean/RemoteAudit/P2.lean`, held to it by
+  `lean/tests/test_p2.py`; the Lean session doesn't take a P2 store yet.
+- `p2_party.py`: a P2 session's verifier and its challenger as a party of their own, on a host the prover doesn't
+  control: started over ssh with the channel on its stdin and stdout (`--stdio`, as an auditor gate's verb starts it)
+  or on a TCP port, it holds the auditor's registration and its plan (the units holding a tensor's block, not the
+  store's padding past them, which is PoUS's: MEM-72), drives the session on its own clock and coins, and answers
+  the verdict with the credited reads (`q_bytes`). `prove` is the prover's side of the channel.
 - `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
   (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
-- `memory_map.py`: memory-map/v1, serving's record of the KV blocks it wrote and freed, as the audit's appends,
+- `memory_map.py`: memory-map/v1, serving's record of the KV pages it wrote and freed, as the audit's appends,
   releases and plan changes, and as the schedule the prover publishes (`schedule`).
 - `schedule.py`: the schedule check, without which `ledger` credits nothing after the seed: each pass's plan is the
   verifier's plan of the published schedule at its step, the schedule is within the cap on its bits the session

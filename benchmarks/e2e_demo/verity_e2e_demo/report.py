@@ -17,7 +17,7 @@ once at the top and in the sources table.
 
 **Demo A** composes sampled proofs, PoUW and network accounting (`DEMO_A`): accept when all three accepted on the
 block's server, reject when one rejected, pending otherwise, with their errors summed as
-``Accounting.Guarantees.JointHorizon`` states it. PoUS, the bandwidth audit and the wipe compose at M4 (Demo B).
+``Accounting.Guarantees.JointHorizonLive`` states it. PoUS, the bandwidth audit and the wipe compose at M4 (Demo B).
 
 **The guarantee** cites LEAN-56's ``Flock.Guarantees.JointStratified`` when ``JOINT_LOCKED`` is true (locked by M3),
 else #4358's per-subcircuit bound, with the joint figure labelled unlocked.
@@ -34,6 +34,14 @@ beside it.
 **Stubs.** Each of `STUBS` is a caveat until the measurements file's ``fixed`` names it, with the run that shows it
 fixed.
 
+**Visible failures** (top's row 68): the draw stays uniform over every unit, and a drawn unit that can't be proved (one
+landing in a PoUW tile lane) is a failure with no redraw. The measurements file's ``visible_failures`` names each, with
+its subcircuit, unit id, step, slot, why and run; part 1 lists them beside the verdict, and Demo A's verdict on the
+block counts them as failures, not skips. Left out, the list renders as ``⟨VISIBLE_FAILURES⟩``; an empty list says
+every drawn unit was proved.
+
+**Gathers** are wire references, not proof units: a measured subcircuit named for one is refused.
+
 **Words.** Each protocol by its name, "sampling block" and "subcircuit": `render` refuses a report that says "leg",
 "window" or "template" (`BANNED`), measurement text included.
 
@@ -44,6 +52,7 @@ The measurements file::
      "subcircuits": [{"name": "...", "units": 1024, "drawn": 8, "ands_per_unit": 21963, "out_bits": 16,
                       "fixed_s": 30.0, "source": "..."}],
      "fixed": {"pouw-live-salt": "the run that shows it"},
+     "visible_failures": [{"subcircuit": "...", "unit": 4093, "step": 12, "slot": 7, "why": "...", "source": "r..."}],
      "caveats": ["what was stubbed"]}
 
     python -m verity_e2e_demo.report RECORD.json [RECORD.json ...] [--measurements M.json] [--record-label TEXT] \
@@ -100,7 +109,9 @@ PERIODS = block_record.PERIODS
 BANNED = re.compile(r"\b(legs?|windows?|templates?)\b", re.IGNORECASE)
 PLACEHOLDER = re.compile(r"⟨([A-Z][A-Z0-9_]*)⟩")
 #: placeholders that stand for a rendered block rather than one number
-BLOCKS = ("LABEL", "RECORDS", "SUBCIRCUITS", "PERIODS", "CAVEATS", "SOURCES")
+BLOCKS = ("LABEL", "RECORDS", "VISIBLE_FAILURES", "SUBCIRCUITS", "PERIODS", "CAVEATS", "SOURCES")
+#: what names a visible failure: the drawn unit, why it wasn't proved, and the run that shows it
+FAILURE_FIELDS = ("subcircuit", "unit", "step", "slot", "why", "source")
 
 #: read from the first block record: {NAME: the record's field}
 RECORD: dict[str, str] = {
@@ -146,9 +157,9 @@ MEASURED: dict[str, str] = {
     "H_A": "the bound (BOUND_CITATION) at δ = 1/100 on the block's draw, harm in ANDs: "
            "`sampled_proofs.optimize.certify` on the block's sizes and k",
     "H_B": "the same bound, harm in output bits",
-    "BLOCK_ANDS": "the block's circuit: ANDs over all its proof units (circuit-check's ANDs a unit × units, per "
+    "BLOCK_ANDS": "the block's circuit: ANDs over all its proof blocks (circuit-check's ANDs a unit × units, per "
                   "subcircuit)",
-    "BLOCK_OUTPUT_BITS": "the block's circuit: output bits over all its proof units",
+    "BLOCK_OUTPUT_BITS": "the block's circuit: output bits over all its proof blocks",
     "POUW_EPS": "CMP-126 (H200-POUW): PoUW's ε at δ = 1/100 from the block's one draw, its tiles a subcircuit at the "
                 "planner's k",
     "POUW_COVERAGE": "CMP-126: the share of the block's static INT8 MACs its tiles cover (`range`)",
@@ -165,6 +176,11 @@ MEASURED: dict[str, str] = {
     "SERVE_STEP_S": "CMP-97's block run: seconds a step",
     "SERVE_NOISE_SHARE": "CMP-126 (KCOMMIT-FB): per-call noise's timed overhead over plain INT8 at the block's M",
     "SIMULATED_RTT_MS": "CMP-97's block run: the challenger's simulated round trip",
+    "STEP_S_B512": "M3's block run on the H200 at batch 512: seconds a step",
+    "ROW_SLOT_NS_B512": "the same run: nanoseconds a step per row-slot",
+    "STEP_S_B1024": "M3's block run on the H200 at batch 1,024: seconds a step",
+    "ROW_SLOT_NS_B1024": "the same run: nanoseconds a step per row-slot",
+    "STEP_S_KERNELS": "kernels' faster step at batch 512: seconds a step",
     "BLOCK_FLOP": "the block's circuit: 2 × its MACs, its INT8 ops counted as FP8 FLOP",
     "WORLD_FLOP_YEAR": f"the world's compute, FP8 FLOP a year, labelled {WORLD_LABEL} (census entry pending, CMP-133)",
 }
@@ -246,13 +262,16 @@ def _tiles(public: Mapping[str, Any] | None) -> str | None:
     return t.split("{", 1)[0] if t else None
 
 
-def demo_a_verdict(record: Mapping[str, Any]) -> str:
-    """Demo A's composed verdict over `DEMO_A` on the record's block (module docstring)."""
+def demo_a_verdict(record: Mapping[str, Any], failures: int = 0) -> str:
+    """Demo A's composed verdict over `DEMO_A` on the record's block, counting its `failures` visible failures (module
+    docstring)."""
     legs, server = record["legs"], record["server"]
     rejected = [p for p in DEMO_A if legs.get(p) and legs[p]["server"] == server
                 and legs[p]["answer"]["verdict"] in ("reject", "error")]
     if rejected:
         return "reject (" + ", ".join(PROTOCOL_NAMES[p] for p in rejected) + ")"
+    if failures:
+        return f"fail ({failures:,} drawn unit{'s' * (failures != 1)} not proved: visible failures, no redraw)"
     absent = [p for p in DEMO_A if not legs.get(p) or legs[p]["server"] != server]
     if absent:
         return "pending: no " + ", no ".join(PROTOCOL_NAMES[p] for p in absent) + " on the block's server"
@@ -313,9 +332,10 @@ def from_record(record: Mapping[str, Any], label: str | None = None) -> dict[str
     return out
 
 
-def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[str, Any]], list[str], dict[str, str]]:
-    """The measurements file's values, subcircuits, caveats and fixed stubs; refuses a name it may not fill and a value
-    or a fix with no source."""
+def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[str, Any]], list[str], dict[str, str],
+                                                       list[dict[str, Any]] | None]:
+    """The measurements file's values, subcircuits, caveats, fixed stubs and visible failures (None when it doesn't
+    say); refuses a name it may not fill, a gather as a subcircuit, and a value, a fix or a failure with no source."""
     if doc.get("format") != MEASUREMENTS:
         raise ValueError(f"measurements: format {doc.get('format')!r}, not {MEASUREMENTS}")
     values: dict[str, V] = {}
@@ -335,11 +355,20 @@ def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[s
     for s in subcircuits:
         if not s.get("name") or not str(s.get("source") or "").strip():
             raise ValueError(f"measurements: subcircuit {s!r} needs a name and a source")
+        if re.match(r"(All)?Gather", s["name"]):
+            raise ValueError(f"measurements: subcircuit {s['name']!r}: a gather is a plain wire reference, not a proof "
+                             f"unit; leave it out")
     fixed = dict(doc.get("fixed") or {})
     for k, src in fixed.items():
         if k not in STUBS or not str(src or "").strip():
             raise ValueError(f"measurements: fixed {k!r} needs to be one of {sorted(STUBS)} with the run that shows it")
-    return values, subcircuits, [str(c) for c in doc.get("caveats") or []], fixed
+    failures = doc.get("visible_failures")
+    if failures is not None:
+        failures = [dict(f) for f in failures]
+        for f in failures:
+            if any(f.get(k) is None or str(f[k]).strip() == "" for k in FAILURE_FIELDS):
+                raise ValueError(f"measurements: visible failure {f!r} needs {', '.join(FAILURE_FIELDS)}")
+    return values, subcircuits, [str(c) for c in doc.get("caveats") or []], fixed, failures
 
 
 def planned(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) -> dict[str, V]:
@@ -444,7 +473,7 @@ def _cell(name: str, values: Mapping[str, V], quiet: str | None = None) -> str:
     return _fmt(v.value) + (f" *({v.label})*" if v.label and v.label != quiet else "")
 
 
-def _records(records: Sequence[Mapping[str, Any]]) -> str:
+def _records(records: Sequence[Mapping[str, Any]], failures: int = 0) -> str:
     head = ("| block record | server | steps | " + " | ".join(PROTOCOL_NAMES[p] for p in DEMO_A)
             + " | Demo A | all six audits |")
     rows = [head, "|" + " --- |" * (len(DEMO_A) + 5)]
@@ -458,7 +487,19 @@ def _records(records: Sequence[Mapping[str, Any]]) -> str:
     for i, r in enumerate(records):
         lo, hi = r["server_time"][0]["steps"]
         rows.append(f"| {r['run']}{' (this report)' if i == 0 else ''} | {r['server']} | [{lo}, {hi}) | "
-                    + " | ".join(cell(r, p) for p in DEMO_A) + f" | {demo_a_verdict(r)} | {r['composed']['verdict']} |")
+                    + " | ".join(cell(r, p) for p in DEMO_A)
+                    + f" | {demo_a_verdict(r, failures if i == 0 else 0)} | {r['composed']['verdict']} |")
+    return "\n".join(rows)
+
+
+def _failures(failures: Sequence[Mapping[str, Any]] | None) -> str:
+    if failures is None:
+        return "⟨VISIBLE_FAILURES⟩"
+    if not failures:
+        return "None: every drawn unit was proved."
+    rows = ["| subcircuit | unit | step | slot | why | run |", "|" + " --- |" * 6]
+    rows += [f"| {f['subcircuit']} | {_fmt(f['unit'])} | {_fmt(f['step'])} | {_fmt(f['slot'])} | {f['why']} | "
+             f"{f['source']} |" for f in failures]
     return "\n".join(rows)
 
 
@@ -506,10 +547,10 @@ def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extr
             lines.append(f"{PROTOCOL_NAMES[p].capitalize()} ran on a fixture, not on the block "
                          f"(block record {r['run']}).")
     if not r["composed"]["joint_horizon"]["statement"].get("proved"):
-        lines.append("JointHorizon is stated, not yet proved: the error sum in part 1 is the sum it states.")
+        lines.append("JointHorizonLive is stated, not yet proved: the error sum in part 1 is the sum it states.")
     lines.append("PRF-167: the state carried across a wipe has no cross-session binding term yet, so the bound holds "
                  "per server-time block.")
-    lines.append("`pous-ring-instantiation` is M4's: PoUS's S_cert, the bandwidth audit's Q_cert and the wipe's f·M "
+    lines.append("`pous-ring-instantiation` is M4's: PoUS's S_cert, the bandwidth audit's Q_cert and the wipe's foreign_bits "
                  "compose at M4 (Demo B), not in Demo A.")
     labels = sorted({v.label for v in values.values() if v.label})
     if quiet:
@@ -522,11 +563,19 @@ def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extr
     return "\n".join(f"- {x}" for x in lines)
 
 
-def _sources(order: Sequence[str], values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) -> str:
+def _sources(order: Sequence[str], values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]],
+             failures: Sequence[Mapping[str, Any]] | None) -> str:
     rows = ["| number | value | filled from |", "| --- | --- | --- |"]
     filled = 0
     for name in order:
         v = values.get(name)
+        if name == "VISIBLE_FAILURES":
+            filled += failures is not None
+            rows.append(f"| ⟨VISIBLE_FAILURES⟩ | {'unfilled' if failures is None else f'{len(failures):,}'} | "
+                        + ("; ".join(sorted({str(f['source']) for f in failures})) or "the measurements file: none"
+                           if failures is not None else "the measurements file's visible_failures: each drawn unit "
+                           "that couldn't be proved (one in a PoUW tile lane), with its run") + " |")
+            continue
         if name == "SUBCIRCUITS":
             src = "; ".join(f"{s['name']}: {s['source']}" for s in subcircuits) or \
                   "CMP-97's block and PRF-171's prove run: per subcircuit its units, drawn units, ANDs a unit, " \
@@ -551,8 +600,12 @@ def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any]
     if not records:
         raise ValueError("render needs at least one block record: the first is the block the report is about")
     text = TEMPLATE.read_text() if template is None else template
-    measured, subcircuits, caveats, fixed = load_measurements(measurements or {"format": MEASUREMENTS})
+    measured, subcircuits, caveats, fixed, failures = load_measurements(measurements or {"format": MEASUREMENTS})
     values = {**from_record(records[0], record_label), **measured}
+    if failures:
+        v = values["DEMO_A_VERDICT"]
+        values["DEMO_A_VERDICT"] = V(demo_a_verdict(records[0], len(failures)),
+                                     v.source + ", with the measurements file's visible failures", v.label)
     for r in records[1:]:
         from_record(r)
     if "SUBCIRCUIT_COUNT" not in values and not subcircuits:
@@ -565,7 +618,7 @@ def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any]
     for name in PLACEHOLDER.findall(text):
         if name not in known:
             raise ValueError(f"the template's ⟨{name}⟩ is no number of `report` (RECORD, MEASURED, DERIVED or BLOCKS)")
-        names = [name] if name not in BLOCKS or name == "SUBCIRCUITS" else []
+        names = [name] if name not in BLOCKS or name in ("SUBCIRCUITS", "VISIBLE_FAILURES") else []
         if name in ("BOUND_CITATION", "HORIZON_CITATION"):
             names.append("JOINT_LOCKED")
         if name == "PERIODS":
@@ -575,10 +628,11 @@ def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any]
               f"(block record {records[0]['run']}), and every measurement labelled *({record_label})*, is the "
               f"{record_label}'s, not the demo block's. Any other number that isn't the demo block's own is marked "
               f"in place.") if record_label else "> A number that isn't the demo block's own is marked in place."
-    blocks = {"LABEL": banner, "RECORDS": _records(records), "SUBCIRCUITS": _subcircuits(subcircuits, record_label),
+    blocks = {"LABEL": banner, "RECORDS": _records(records, len(failures or ())),
+              "VISIBLE_FAILURES": _failures(failures), "SUBCIRCUITS": _subcircuits(subcircuits, record_label),
               "PERIODS": _periods(values, record_label),
               "CAVEATS": _caveats(records, values, caveats, record_label, fixed),
-              "SOURCES": _sources(order, values, subcircuits)}
+              "SOURCES": _sources(order, values, subcircuits, failures)}
     out = PLACEHOLDER.sub(lambda m: blocks[m[1]] if m[1] in blocks else _cell(m[1], values, record_label), text)
     vocabulary(out)
     return out
