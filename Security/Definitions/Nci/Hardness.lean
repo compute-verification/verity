@@ -3,8 +3,8 @@ import Definitions.Nci
 /-!
 # Priced reads: the vocabulary
 
-Daniel's one schema for the hardness premises (26 Oct): a set of at most `c` operation gates is handed, besides the
-registered inputs, at least the price of the operand values of the counted operations it computes whole, less a deficit.
+The one schema for the hardness premises: a set of at most `c` operation gates is handed, besides the registered
+inputs, at least the price of the operand values of the counted operations it computes whole, less a deficit.
 The premise is `Assumptions.Priced`; this is what it reads.
 
 * `Operations`: counted operations, each with its gates and the operand values it reads.

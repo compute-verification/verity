@@ -3,18 +3,18 @@ import Definitions.Nci.Hardness
 /-!
 # Priced reads: the one hardness schema
 
-`Priced` is the one named premise the hardness arguments instantiate (Daniel, 26 Oct): the operations a block computes
-whole cost it at least their operands' price in bits it is handed. Each argument picks its counted operations, the
-values it prices and the price (`Priced`'s instances). It reads no decoder: the local-description-length route is one
-way to establish it (`Guarantees.PricedOfActivationRate`).
+`Priced` is the one named premise the hardness arguments instantiate: the operations a block computes whole cost it at
+least their operands' price in bits it is handed. Each argument picks its counted operations, the values it prices and
+the price (`Priced`'s instances). It reads no decoder. The local-description-length route gives its inequality at a
+registered partition's blocks (`Guarantees.PricedOfActivationRate`), not at every set of at most `c` gates.
 -/
 
 namespace Nci.Hardness.Assumptions
 
 open Verity
 
-/-- NEW PREMISE. **Priced reads** ([PRICED]) at price `π`, deficit `Λ` (Daniel's `λ`; Lean reserves `λ`) and block
-size `c`, with free side information `A`: every set `S` of at most `c` operation gates is handed, at inputs outside `θ`
+/-- NEW PREMISE. **Priced reads** ([PRICED]) at price `π`, deficit `Λ` (`λ`, which Lean reserves) and block size `c`,
+with free side information `A`: every set `S` of at most `c` operation gates is handed, at inputs outside `θ`
 and outside `A S`, at least the price of the operand values of the counted operations it computes whole, less `Λ`:
 `π(Ops(S)) − Λ ≤ |in(S) \ (θ ∪ A S)|`, where `π(X) = Σ_{v ∈ X} π v` and `|·|` counts bits.
 
@@ -28,10 +28,7 @@ Its instances, each a choice of counted operations, the values priced and the pr
 * **cover**: products, pricing each distinct updated parameter at `p` (`Nci.Cover.Assumptions.UpdateHardness` at
   `b = p`, `Λ = 0`, with `in(S)` counted as the cover theorem counts it);
 * **fan-out**: products, pricing each activation occurrence at `β` (`Operations.ofActs`;
-  `Guarantees.FanOutBoundPriced`);
-* **partial sums**: accumulation steps, pricing their partial-sum operands. `Ops(S)` holds the partial sums `S`
-  computes as well as those entering it, so a price on every partial sum is stronger than the draft's, which prices
-  only the entering ones;
+  `Guarantees.FanOutBlockCap`, `Guarantees.FanOutBoundPriced`);
 * **recovery** (§5.3): output occurrences, pricing the coordinates of the update that their outputs determine, with
   `A S` the other inputs of `S` (the activations they multiply), which are free.
 

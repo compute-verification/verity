@@ -9,8 +9,9 @@ import Definitions.Nci.Assumptions.Ldl
   occurrence: the cap the serving-block bound sums over serving blocks.
 * `FanOutBoundPriced`: Corollary 4b under `Priced` at `β` per activation occurrence, with no decoder and no Lemma 1.
 * `PricedOfActivationRate`: the local-description-length route, `ActivationRate` with `EvaluatesBlocks`, gives
-  `Priced`'s inequality at every block of the registered partition, at deficit `Λ + ⌈log₂ B⌉ + aBlk`, so Corollary 4b
-  as `Nci.Ldl.Guarantees.FanOutBound` states it is a corollary of the priced bound.
+  `Priced`'s inequality at the blocks of `R`'s partition, at deficit `Λ + ⌈log₂ B⌉ + aBlk`. It does not give `Priced`,
+  which is an inequality at every set of at most `c` gates. Corollary 4b's count reads the inequality at the blocks
+  only, so the bound follows from it through `bound_of_blocks`, as from `Priced`.
 
 The overhead `|C| / T₀` is written out: `|C|` is `size computed`, the number of operation gates, and `T₀ > 0` a
 reference construction's size, which bounds the threshold.
@@ -55,16 +56,17 @@ def FanOutBoundPriced : Prop :=
     Assumptions.Priced d (Operations.ofActs d.D J gates act) (fun _ => β) Λ c (fun _ => ∅) →
       c * β * J.card / (T₀ * e * (k + Λ)) ≤ d.D.size d.D.computed / T₀
 
-/-- **The LDL route gives `Priced`** (`ActivationRate` ⇒ `Priced`): let the run `X = eval inp` take the registered
+/-- **The LDL route gives `Priced`'s inequality at `R`'s blocks**: let the run `X = eval inp` take the registered
 values of `R`, and give each counted product of `M` gates holding its representative. If the decoder evaluates blocks
 for the activation tuples `a` within `t` at overhead `aBlk` (`EvaluatesBlocks`) and they meet `ActivationRate β Λ t`
-with `β ≥ 0`, then at every block of `R`'s partition `Priced`'s inequality holds at `β` per activation occurrence and
-deficit `Λ' = Λ + ⌈log₂ B⌉ + aBlk`, with no side information: `β |Ops(I)| − Λ' ≤ |in(I) \ θ|`.
+with `β ≥ 0`, then at each block `I` of `R`'s partition `Priced`'s inequality holds at `β` per activation occurrence
+and deficit `Λ' = Λ + ⌈log₂ B⌉ + aBlk`, with no side information: `β |Ops(I)| − Λ' ≤ |in(I) \ θ|`.
 
 Lemma 1 without the read cap: the block's description is its index and its unregistered input bits, so
 `β |V_I| − Λ ≤ LDL(a_I) ≤ ⌈log₂ B⌉ + |in(I) \ θ| + aBlk`; the products the block computes whole have their
-representative in it, so their activation occurrences are among `V_I`. It gives the inequality at the partition's blocks
-only, which is all `FanOutBoundPriced`'s count uses. -/
+representative in it, so their activation occurrences are among `V_I`. It gives the inequality at `R`'s blocks, not at
+every set of at most `c` gates, so it is not `Priced`. Corollary 4b's count reads it at the blocks only:
+`FanOutBoundPriced`'s bound follows from it through `bound_of_blocks`, at `h = k + Λ'`. -/
 def PricedOfActivationRate : Prop :=
   ∀ (d : Declaration) (n : ℕ) (R : Registration d n) {ι A : Type} [DecidableEq A] (M : Products d.D ι A)
     (gates : ι → Finset (Fin d.D.N)) (D : Decoder) (t aBlk : ℕ) (a : Fin n → d.D.Transcript → List Bool) (β Λ : ℝ)
