@@ -339,7 +339,6 @@
     {"file": "tools/verity/check/suites.py", "count": 18},
     {"file": "tools/verity/check/tests/test_check.py", "count": 1},
     {"file": "tools/verity/check/tests/test_lean_slot.py", "count": 1},
-    {"file": "tools/verity/check/train_times.py", "count": 1},
     {"file": "tools/verity/check/verdicts.py", "count": 5},
     {"file": "tools/verity/circuit_check/src/circuit_check/bodies.py", "count": 1},
     {"file": "tools/verity/circuit_check/src/circuit_check/cache.py", "count": 10},
