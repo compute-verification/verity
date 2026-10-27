@@ -3407,12 +3407,13 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
         return 0
     m = next((m for m in chain if m.pr == pr), None)
     live = (p := opened.get(pr)) and ((p.branch and getattr(q.github, "branch_tip", lambda _b: None)(p.branch)) or p.head)
-    if sha and len(sha) < 40:
+    if sha:
+        # a full SHA is checked too: a mistyped one would record a verdict on a commit that doesn't exist, which never counts
         known = {h for h in (m and m.head, live) if h and h.startswith(sha)}
         r = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False)
         if len(known) != 1 and r.returncode:
             raise QueueError(f"review: --sha {sha} is neither #{pr}'s head on `{q.branch}` nor on GitHub, nor a commit the queue's "
-                             "clone has: pass the full 40-character SHA")
+                             f"clone has: pass {'the' if len(sha) < 40 else 'its'} full 40-character SHA")
         sha = known.pop() if len(known) == 1 else r.stdout.strip()
     if sha is None and m and live and live != m.head:
         raise QueueError(f"review: #{pr} is on `{q.branch}` at {m.head[:12]}, but GitHub has its head at {live[:12]}, pushed since "
