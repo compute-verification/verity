@@ -27,14 +27,14 @@ from verity_vllm.engine import int8_attention as A
 from verity_vllm.engine import int8_ops
 
 SCHEMA = "verity-vllm/int8-batch-gpu/v1"
-#: (H, G, d, requests, longest window, block size, logit spread[, amplitude: q, k and v times it, a power of two])
+#: (H, G, d, requests, longest window, page size, logit spread[, amplitude: q, k and v times it, a power of two])
 CASES = [(8, 2, 64, 6, 200, 16, 1.0), (4, 1, 32, 9, 70, 8, 300.0), (12, 4, 16, 5, 40, 16, 1e-3), (32, 8, 128, 8, 600, 16, 1.0),
          (32, 8, 128, 8, 2100, 16, 1.0), (32, 8, 128, 4, 8192, 16, 1.0), (32, 8, 128, 32, 300, 16, 2.0), (8, 2, 64, 1, 1, 16, 1.0),
          (8, 2, 64, 6, 90, 16, 1.0, 2.0 ** -130), (8, 2, 64, 6, 90, 16, 1.0, 2.0 ** 100), (6, 3, 80, 7, 150, 32, 1.0)]
 
 
 def batch(gen: torch.Generator, h: int, g: int, d: int, n_req: int, s_hi: int, bs: int, spread: float, amp: float = 1.0):
-    """A paged batch: each request a decode row, a chunk or a whole prompt over a random window, under a shuffled block table;
+    """A paged batch: each request a decode row, a chunk or a whole prompt over a random window, under a shuffled page table;
     q, k and v are N(0, 4) times `amp` (2^-130: subnormal in float32, scales too)."""
     lens, rows = [], []
     for r in range(n_req):

@@ -1,7 +1,7 @@
 """Each stratum's circuit file of a period's declared window Program, built with the auditor's own lowering, and the
-``--circuit-files`` its period-open commits (core's `credit.committed_files`, #3143; proofs, 21 Oct 21:31Z).
+``--circuit-files`` its period-open commits (core's `credit.committed_files`).
 
-A drawn unit at K is proved on K's template, `h1window.template(K, h1window.tile_unit(K, TILE))`, one of the declared
+A drawn proof block at K is proved on K's template, `h1window.template(K, h1window.tile_unit(K, TILE))`, one of the declared
 Program's ``TILES``. It is lowered by C-Flock's `class_statement.UnitStager`, as ``benchmarks/pouw/h1_prove/stage.py``
 lowers it (`h1unit.Shape.stager`, under ``HZ_STAGE``, ``fast`` by default), and bound to the window's Program and
 partition: ``{"program": its program_digest, "partition": the digest of its Q_template_instances partition object}``,
@@ -53,7 +53,7 @@ def strata(layout: dict) -> list[int]:
 def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, str]]:
     """What every stratum's circuit file is bound to, ``{"partition", "program"}``, and each K's template id, for the
     declared window Program whose descriptor is `descriptor` (the period's ``--circuit`` its SHA-512) and whose layout
-    is `layout`. ValueError when K's template is not one of the descriptor's definitions, or (with #3143's credit) the
+    is `layout`. ValueError when K's template is not one of the descriptor's definitions, or (with core's credit) the
     partition is not the one core's credit verifies statements under."""
     from verity.core.protocols.pouw import credit as CR
     from verity.core.protocols.pouw.circuit import h1window as HW

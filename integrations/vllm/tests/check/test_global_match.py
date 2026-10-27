@@ -31,7 +31,7 @@ from tests.observe.test_fold_synthetic import A_COS, C, memory  # noqa: F401 - `
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.log import dumps as log_dumps
 
-KC = V(e2e.A_KC, (8, BS, 1, 8))   # 8 KV blocks: two private blocks per request for up to 4 requests
+KC = V(e2e.A_KC, (8, BS, 1, 8))   # 8 KV pages: two private pages per request for up to 4 requests
 VC = V(e2e.A_VC, (8, BS, 1, 8))
 
 
@@ -356,12 +356,12 @@ def workload_doc(**fields):
 
 
 def row_workload(row_id, **sweep):
-    """The workload record of sweep row `row_id` (its `sweep` block also holding `sweep`), as GP-01 reads it."""
+    """The workload record of sweep workload `row_id` (its `sweep` section also holding `sweep`), as GP-01 reads it."""
     return WL.Workload.of(workload_doc(sweep={"row_id": row_id, **sweep}), "wl.json")
 
 
 def sampling_block(**fields):
-    """A workload record's greedy sampling block with `fields`, as GP-01's stop rule reads it."""
+    """A workload record's greedy sampling section with `fields`, as GP-01's stop rule reads it."""
     return WL.WorkloadSampling.of({"variant": "greedy", **fields}, "wl.json")
 
 
@@ -1017,7 +1017,7 @@ def _real_workload_descriptor(lag: int | None):
 
 
 def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_an_edited_lag_block(tmp_path):
-    """[R17-1] (mechanism row OLMoE B2 16:43Z: the first real Build crashed GM-01 here -- the mock-shaped reader looked for a root
+    """[R17-1] (OLMoE B2's first real Build crashed GM-01 here -- the mock-shaped reader looked for a root
     `bindings.lag` the codec never writes).  The static is inlined in program_fn / the root id; both inside the verified digest."""
     from verity.ml.circuits.codec import canonical_json, program_digest
     for lag in (0, 1):
@@ -1034,11 +1034,11 @@ def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_a
         p = d / "workload_program.json"; p.write_text(json.dumps(art))
         gp = gm.from_gprog(str(p))
         assert gp["gprog_artifact"]["digest_verification"] == {**gp["gprog_artifact"]["digest_verification"], "verified": True, "lag_static": lag}
-        # the lag block edited to the other value under the intact Program -> refused by name (the block is a claim, the static is the Program)
+        # the lag section edited to the other value under the intact Program -> refused by name (the section is a claim, the static is the Program)
         p.write_text(json.dumps(dict(art, lag={"value": 1 - lag, "async_scheduling": not lag})))
         with pytest.raises(ValueError, match="lag declaration is not the Program's"):
             gm.from_gprog(str(p))
-        # the block deleted -> refused too (a Program that declares a lag must carry the block GM-01 consumes)
+        # the section deleted -> refused too (a Program that declares a lag must carry the section GM-01 consumes)
         p.write_text(json.dumps({k: v for k, v in art.items() if k != "lag"}))
         with pytest.raises(ValueError, match="lag declaration is not the Program's"):
             gm.from_gprog(str(p))
@@ -1099,7 +1099,7 @@ def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(mem
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and res["failed_checks"] == ["G1"]
     assert any("enable_prefix_caching=True is outside the Program's declared applicability" in p for p in _check(res, "G1")["problems"])
-    # (b) a compiled record (enforce_eager false + the compiled record's compilation block) against the eager Program: FAIL, named twice
+    # (b) a compiled record (enforce_eager false + the compiled record's compilation section) against the eager Program: FAIL, named twice
     set_header(profile_engine=dict(eager_ek, enforce_eager=False, compilation_config={"cudagraph_mode": "PIECEWISE"}),
                profile_compilation={"mode": "3", "cudagraph_mode": "PIECEWISE", "enforce_eager": False, "capture_sizes": [1, 2]})
     res = gm.check(gp, oracle)
@@ -1139,7 +1139,7 @@ def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(mem
     gp2 = dict(gp, applicability={"execution": "bi-eager", "row_execution": "bi-eager", "refusal": None})
     res = gm.check(gp2, oracle)
     assert res["verdict"] == "FAIL" and any("declares no applicability.engine" in p for p in _check(res, "G1")["problems"])
-    # a Program that refused the row can never Match it
+    # a Program that refused the workload can never Match it
     gp["applicability"]["refusal"] = "row execution 'bi-compiled' is not modelled"
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and any("refused this row's applicability" in p for p in _check(res, "G1")["problems"])
@@ -1148,7 +1148,7 @@ def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(mem
 def test_compiled_execution_is_modelled_only_from_components_that_declare_its_compilation_facts():
     # compiled M-0153 (4a) / M-0174: derive_step writes applicability.engine = profile.modelled_engine() (enforce_eager False +
     # compilation_mode/backend/cudagraph_mode/...) for a bi-compiled profile; GP-01 models the compiled execution iff every component
-    # declares it with AGREEING facts; the workload engine block = enforce_eager False + the normalised facts. Eager rows untouched.
+    # declares it with AGREEING facts; the workload engine section = enforce_eager False + the normalised facts. Eager workloads untouched.
     from verity_vllm.pipeline import global_program as G
     eng = {"enforce_eager": False, "compilation_mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE",
            "attention": "splitting op executed outside the CUDA graphs", "program_derivation": "eager module-forward trace"}
@@ -1162,17 +1162,17 @@ def test_compiled_execution_is_modelled_only_from_components_that_declare_its_co
     # the label without any compilation facts: refused (the Program cannot state the compiled execution it models)
     bare = {k: {kk: vv for kk, vv in v.items() if kk not in ("engine", "compilation")} for k, v in comps.items()}
     assert "no compilation facts" in G.workload_applicability(row, bare)["refusal"]
-    # a compilation dict of facts (no engine block) is accepted too
+    # a compilation dict of facts (no engine section) is accepted too
     facts_only = {k: dict(bare[k], compilation={"mode": 3, "cudagraph_mode": "PIECEWISE", "capture_sizes": [1, 2]}) for k in bare}
     f = G.workload_applicability(row, facts_only)
     # the CompilationMode enum VALUE (3) is spelled as its NAME so the record's own sources are comparable (M-0261)
     assert f["refusal"] is None and f["engine"]["compilation"] == {"mode": "VLLM_COMPILE", "cudagraph_mode": "PIECEWISE", "capture_sizes": [1, 2]}
-    # facts that disagree between components: refused; an engine block saying eager under the compiled label: refused
+    # facts that disagree between components: refused; an engine section saying eager under the compiled label: refused
     dis = {k: dict(v, engine=dict(v["engine"])) for k, v in comps.items()}
     dis[(11, 1)]["engine"]["cudagraph_mode"] = "FULL_AND_PIECEWISE"
     ref = G.workload_applicability(row, dis)["refusal"]
     assert "disagree" in ref and ("compilation facts" in ref or "engine" in ref)
-    # [M-0174 (a)] the components' agreed engine block travels verbatim into the workload engine block (claim text and all), the
+    # [M-0174 (a)] the components' agreed engine section travels verbatim into the workload engine section (claim text and all), the
     # facts normalised beside it under `compilation`; GP-01's own compose-level conditions stay
     claimed = {k: dict(v, engine=dict(v["engine"], claim="boundary-level: module outputs correspond under graph replay")) for k, v in comps.items()}
     e = G.workload_applicability(row, claimed)["engine"]
@@ -1180,7 +1180,7 @@ def test_compiled_execution_is_modelled_only_from_components_that_declare_its_co
     assert e["enable_prefix_caching"] is False
     eag = {k: dict(v, engine=dict(v["engine"], enforce_eager=True)) for k, v in comps.items()}
     assert "enforce_eager true" in G.workload_applicability(row, eag)["refusal"]
-    # an eager row served by compiled components is still refused (the label rule), and eager components keep GP-01's eager engine block
+    # an eager workload served by compiled components is still refused (the label rule), and eager components keep GP-01's eager engine section
     assert "'bi-eager' is not modelled" in G.workload_applicability(row_workload("x__bi-eager"), comps)["refusal"]
     eager = {k: dict(v, execution="bi-eager", engine={"enforce_eager": True}) for k, v in comps.items()}
     e = G.workload_applicability(row_workload("x__bi-eager"), eager)
@@ -1225,7 +1225,7 @@ def test_compiled_program_requires_the_record_to_attest_the_same_compilation_fac
     set_header(engine_kwargs={"enforce_eager": False, "enable_prefix_caching": False, "compilation_config": {"cudagraph_mode": "PIECEWISE"}})
     res = gm.check(gp, oracle, record_alternate=False)
     assert res["verdict"] == "PASS" and res["execution"]["effective_compilation"] == {"cudagraph_mode": "PIECEWISE"}
-    # the recorder's profile.compilation block (rev-pm M-0261: mode VLLM_COMPILE, cudagraph PIECEWISE, sizes [1,2]) is read there, the
+    # the recorder's profile.compilation section (rev-pm M-0261: mode VLLM_COMPILE, cudagraph PIECEWISE, sizes [1,2]) is read there, the
     # enum value spelling ("3") normalised to the name, compiled's key names (compilation_mode) normalised too
     set_header(engine_kwargs={"enforce_eager": False, "enable_prefix_caching": False},
                compilation={"mode": "3", "cudagraph_mode": "PIECEWISE", "backend": "inductor", "enforce_eager": False, "capture_sizes": [1, 2]})
@@ -1952,7 +1952,7 @@ def test_greedy_rows_report_no_sampler_geometry_to_check(memory, tmp_path):
 
 
 def test_gp01_declares_the_sampler_geometry_for_a_stochastic_row_only():
-    """GP-01 (M-0169 (2b), CIR-87 (1)): a stochastic row's workload Program declares the registered S = SplitsFor_v1(1, num_SMs) of the
+    """GP-01 (M-0169 (2b), CIR-87 (1)): a stochastic workload's Program declares the registered S = SplitsFor_v1(1, num_SMs) of the
     components' agreed num_SMs, the same for 2 requests as for 8; greedy rows declare nothing; a stochastic sampler without num_SMs, or
     whose components carry another S (a derived-S build), is a named refusal."""
     from verity_vllm.pipeline import global_program as G
@@ -2343,7 +2343,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     assert rc == 0
     doc = json.loads(dout.read_text())
     comp_dirs = [g["component"]["dir"] for g in gp["requests"] if (g.get("component") or {}).get("dir")]
-    # the standalone stage: its own fold + component decode, the record's operations (the fixtures' components are fold records, as
+    # the standalone run: its own fold + component decode, the record's operations (the fixtures' components are fold records, as
     # check() reads them)
     ref = BD.decompose(str(oracle), comp_dirs, None, within_step="dag", ops=gm.match_ops(fast=False))
     def strip(o):

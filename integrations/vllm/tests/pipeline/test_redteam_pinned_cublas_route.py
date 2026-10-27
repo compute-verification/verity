@@ -1,6 +1,6 @@
 """Red-team repro: a served cuBLAS route that departs from the pin passes a TP Commit, digest equality intact.
 
-A switched row's AOT Program equals its traced Build because both read the same pin: the Build's binding
+A switched workload's AOT Program equals its traced Build because both read the same pin: the Build's binding
 (`program/frontend/rules/vllm_bindings/bf16_gemm.py`), the fold (`observe/fold/patterns/cublas.py`) and the predictor
 (`predict/dsa.py`) each take the split count of a bf16 GEMM from `bf16_gemm_check.default_cublas_route`,
 a table of what cuBLAS chose on the capture box.  The serving process's cuBLAS decides its own route, and two environment variables

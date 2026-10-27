@@ -15,33 +15,33 @@ the lane's period (`period_open_argv`: ``period-open --name P --cap 1 --circuit 
 --circuit-files FILES --length LENGTH``, which signs the registration's W, K the proof service's committed draw K, `declared_draw_k`, which core's credit reads as the
 open's ``draw_k``, FILES ``{"k<K>": SHA-512}``, each stratum's file's, which core's credit verifies statements
 against, `credit.committed_files`, and LENGTH `FILL`'s fixed length, `fill_length`, which core's credit holds the
-window's served rows to, `credit.committed_length`), reserves the window's session (``reserve --peer PEER --scheme S --families
+window's served rows to, `credit.committed_length`), reserves the window's challenge phase (``reserve --peer PEER --scheme S --families
 F``), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
 --model MODEL --circuit DIGEST --challenger AT --session RESERVE --gate GATE`` (the window's b/<K> salted with the key the
 gate's ``model-key`` gives the lane's key), under ``gpu-lease 1 --wait --max-min MIN`` with ``--gpu-lease MIN``, so
 the GPU is held only while it serves (a run without ``--gpus`` sees no GPU, and gets the one its own
-``gpu-lease`` hands out): the window opens its session through ``GATE open --session S --root R`` once round
+``gpu-lease`` hands out): the window opens its challenge phase through ``GATE open --session S --root R`` once round
 0 is admitted, R = `salt.window_open_root(W, round 0's request table root, S)`, its salt coin opens after R,
 and each call's A and z/y tables are committed as the window Program's registered values, beside the period's ``b/<K>``
 (`pouw_h1_served.Served`) under the round roots; the served Program's layout must be the declared one's. The serving process stops at its last
-served step: it hands the window and its session's stream to this process (``--handoff``, `pouw_h1_handoff`) and exits,
-ending its lease, and ``pouw_h1_gpu.py --close-from`` closes and releases the window on no GPU, on the same session
-(`serve`; the verdict's ``stages`` has when each stage exited and ``lease_after_served_s``). Once the session has its ``end`` entry it
-closes the period, takes the ledger (``GATE ledger``), the host's pins log (``GATE pins``, the bytes infra publishes as
-``challenger-pins head``), the session's tree (``GATE fetch S``) and the key's pin (``GATE pubkey``), and runs the
+served step: it hands the window and its challenge phase's stream to this process (``--handoff``, `pouw_h1_handoff`) and exits,
+ending its lease, and ``pouw_h1_gpu.py --close-from`` closes and releases the window on no GPU, on the same challenge phase
+(`serve`; the verdict's ``stages`` has when each phase exited and ``lease_after_served_s``). Once the challenge phase has its ``end`` entry it
+closes the period, takes the ledger (``GATE ledger``), the host's pins log (``GATE pins``, the bytes the gate publishes as
+``challenger-pins head``), the challenge phase's tree (``GATE fetch S``) and the key's pin (``GATE pubkey``), and runs the
 verifier's side on them (`pouw_h1_gpu.check_challenger`): `pouw_h1_challenger.session_reason`
-against the ledger's newest head, `trusted_rounds_reason` on the session's ``out/`` with the window's ``{root}``, each
-reading the session through core's `challenger.pinned_session` under that pins log and the verifier's own first-parent
-history of main (``--main``, ``git rev-list --first-parent origin/main``; without it every session is refused),
+against the ledger's newest head, `trusted_rounds_reason` on the challenge phase's ``out/`` with the window's ``{root}``, each
+reading the challenge phase through core's `challenger.pinned_session` under that pins log and the verifier's own first-parent
+history of main (``--main``, ``git rev-list --first-parent origin/main``; without it every challenge phase is refused),
 `pouw_h1_challenger.manifest_reason` and `period_reason`. ``pouw_h1_served.register``'s outcome (each call's
 ``--registered`` file) is in the serve record. Then
 the red team (`red_team`), CPU only, reruns the verifier's side on edited copies of the record and the ledger, each of
 which must be refused: R replaced by the bare weights' root, R replaced by another window's root, the ledger cut before
-the session's end entry, a call's table root changed, a call with no A table root, the round log cut before the last
+the challenge phase's end entry, a call's table root changed, a call with no A table root, the round log cut before the last
 step, a pin that isn't the gate key's, no pins log, a pins log cut before the lines the open sealed and one with a
-line rewritten, no copy of main's first-parent history and one without the session's pin; and with the local gate, a
-period opened with a ``--weights-root`` no registration has (refused at the open), and sessions forged through the gate
+line rewritten, no copy of main's first-parent history and one without the challenge phase's pin; and with the local gate, a
+period opened with a ``--weights-root`` no registration has (refused at the open), and challenge phases forged through the gate
 itself (a period of their own), opened on the bare weights' root and on another window's root with the window's other
 coins after its own roots. The verdict is ``$OUT/rehearsal.json``: ``ok`` when the honest window is accepted by
 ``session_reason``, ``trusted_rounds_reason``, ``manifest_reason`` and ``period_reason``, each of its calls' A tables is
@@ -50,9 +50,9 @@ the prover's own directory and published nowhere under ``$OUT`` (``key_custody``
 Its ``credit`` is the gate-passed rows beside core's (`pouw_h1_challenger.credit_reason`: ``manifest``, ``window``,
 ``calls``, ``eps``), which credits nothing until each drawn call's statement (its proof files) exists.
 
-**The rehearsal** (a research run on vy-nebius-2; the gate's tree is proofs' #2953, ``cursor/challenger-ledger-v2-7c3e``,
-whose serve.py ends a session with its record leaf and refused hellos and seals ``hellos.jsonl``; with ``--served`` the
-tree must be one with the model registry, #3204, on main from dbf3a75e31, archived with the int8 checkpoints' manifest
+**The rehearsal** (a research run on vy-nebius-2; the gate's tree is one whose serve.py ends a challenge phase with its record
+leaf and refused hellos and seals ``hellos.jsonl``; with ``--served`` the tree must be one with the model registry,
+archived with the int8 checkpoints' manifest
 its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 snapshot on the node):
 
     git archive --format=tar.gz -o gate-tree.tgz COMMIT verity benchmarks/live_challenger \\
@@ -88,7 +88,7 @@ vy-admin's, made before the run (the run registers nothing); its key is ``lms.DE
 temporary directory; serve.py on vy-challenger-1 reaches the serving node by its certifier coin link, the peer named
 in ``/etc/vy/peers`` (``--peer``, the serving node), whose 127.0.0.1:PORT the window connects to, PORT the one the open
 answers (7811..7899, `pouw_h1_window.at_port`), not 27811.. on the node itself; its coins are the Lean verifier's on
-vy-challenger-1; the session's end is read from ``GATE status`` (the live gate has no ``wait``); and no session is
+vy-challenger-1; the challenge phase's end is read from ``GATE status`` (the live gate has no ``wait``); and no challenge phase is
 forged (each would be a live window of the lane's period). The gate checks only that ``--circuit`` is a SHA-512 (128 hex
 digits) and ``--circuit-files`` each K's (`auditor.circuit_files_of`), and records them; core's credit compares the
 files with each statement's circuit file, and the descriptor with the window's layout. Never run anything on
@@ -123,7 +123,7 @@ MODEL = "LLAMA31_8B_INT8"
 
 
 def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
-    """The CPU stage: `pouw_h1.FILL`'s declared window Program over Llama-3.1-8B (`pouw_h1_served.declared`, no window's
+    """The CPU phase: `pouw_h1.FILL`'s declared window Program over Llama-3.1-8B (`pouw_h1_served.declared`, no window's
     prefix), written as its descriptor's canonical JSON, gzipped (``d/PROGRAM``; the JSON's SHA-512 is its
     `program_digest`: the period's ``--circuit``), and its layout (``d/PROGRAM_META``), which the served window's must
     equal."""
@@ -222,7 +222,7 @@ class Gate:
 
 
 def _poll_end(gate: Gate, session: str) -> dict[str, Any]:
-    """The live gate has no ``wait``: read ``status`` until the session has its end entry (serve.py's exit after the
+    """The live gate has no ``wait``: read ``status`` until the challenge phase has its end entry (serve.py's exit after the
     window's close), at most an hour."""
     import time
     for _ in range(720):
@@ -247,8 +247,8 @@ def register_model(gate: Gate, checkpoint: str, pdir: Path, circuit: str, scratc
 
 def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path, circuit: str | None = None
           ) -> dict[str, Any]:
-    """The window in two stages, both logged to ``serve.log``: served on the GPU (under ``gpu-lease`` with
-    ``--gpu-lease``), which hands its window and its session's stream to this process (`pouw_h1_handoff.Holder`) and
+    """The window in two phases, both logged to ``serve.log``: served on the GPU (under ``gpu-lease`` with
+    ``--gpu-lease``), which hands its window and its challenge phase's stream to this process (`pouw_h1_handoff.Holder`) and
     exits, ending its lease; then closed and released on no GPU (``pouw_h1_gpu.py --close-from``) on that stream. The
     window's salt key, its saved state and each call's values are the prover's (`pouw_h1_prover`, DRAWN1): kept past the
     close in ``--prover-root``/SESSION, owner-only and outside the run's directory, under a ``research keep`` record."""
@@ -319,7 +319,7 @@ def key_custody(prover: Path, published: Path) -> dict[str, Any]:
 
 
 def evidence(gate: Gate, session: str, d: Path) -> dict[str, Any]:
-    """The ledger, the host's pins log, the key's pin and the session's tree as the gate gives them, in `d`."""
+    """The ledger, the host's pins log, the key's pin and the challenge phase's tree as the gate gives them, in `d`."""
     d.mkdir(parents=True, exist_ok=True)
     rc, ledger = gate.raw("ledger")
     (d / "windows.jsonl").write_bytes(ledger if rc == 0 else b"")
@@ -338,7 +338,7 @@ def evidence(gate: Gate, session: str, d: Path) -> dict[str, Any]:
 def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, window: dict | None = None,
           period: str | None = None, descriptor: bytes | None = None, pins: list[Path] | None = None,
           main: list[str] | None = None) -> dict[str, Any]:
-    """`pouw_h1_gpu.check_challenger`, the verifier's side: with `window` on the session's ``out/``
+    """`pouw_h1_gpu.check_challenger`, the verifier's side: with `window` on the challenge phase's ``out/``
     (`trusted_rounds_reason`), else on its tree (`session_reason`), under the host's pins log's heads `pins` and the
     verifier's own first-parent history of main `main`; its credit over `descriptor`, the period's circuit's bytes
     (`program_bytes`)."""
@@ -363,9 +363,9 @@ def _edited(record: dict, edit: Any, path: Path) -> Path:
 
 
 def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: str) -> tuple[dict[str, Any], str]:
-    """`honest` (the window's commitment) with its coins swapped for a session the gate reserves and opens on
+    """`honest` (the window's commitment) with its coins swapped for a challenge phase the gate reserves and opens on
     `opened_on`, its salt opened after `opened_on` and its round and draw coins after the window's own roots, as
-    `test_pouw_h1._salted` forges one in process: (the forged commitment, its session)."""
+    `test_pouw_h1._salted` forges one in process: (the forged commitment, its challenge phase)."""
     from verity.core.protocols.pouw import window as Wd
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import requests as RQ
@@ -395,7 +395,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
              draw_k: int = 1, model: str | None = None, circuit_files: dict[str, str] | None = None,
              main: list[str] | None = None) -> dict[str, Any]:
     """Each case the verifier's side must refuse, on edited copies of the run's record and ledger (CPU only), and with
-    `gate` (the local gate's), sessions forged through it; `main` is the verifier's first-parent history of main."""
+    `gate` (the local gate's), challenge phases forged through it; `main` is the verifier's first-parent history of main."""
     from verity.core.protocols.pouw import salt as PS
     record_path = out / "serve" / "pouw-h1-calls.json"
     record = json.loads(record_path.read_text())

@@ -444,7 +444,7 @@ POUW_SCHEMES = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", "pearl-fp8-v4")
 
 
 def _refused_beside_sampled_proofs(scheme):
-    """The refusal of an executor whose scheme has no circuit, as #311 words it."""
+    """The refusal of an executor whose scheme has no circuit, word for word."""
     return (f"pouw:{scheme}: executes {APPLY}, and the Program has no Definition for what it computes there, so sampled proofs "
             f"would trace it as the stock computation (refused until the option names one: traced_as)")
 

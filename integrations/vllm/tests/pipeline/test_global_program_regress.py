@@ -227,7 +227,7 @@ def _derived_dir(tmp_path, LP, T, execution="bi-eager"):
 
 
 def _manifest(tmp_path, reqs, name="workload.json", **extra):
-    """A workload record (`records.workload`) of `reqs`, its greedy sampling block holding `extra`, on an eager row."""
+    """A workload record (`records.workload`) of `reqs`, its greedy sampling section holding `extra`, on an eager workload."""
     p = tmp_path / name
     json.dump({"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}},
                "requests": [{"request_id": f"uuid-{i}", "prompt_token_ids": list(range(1, r["LP"] + 1)), "max_tokens": r["cap"],
@@ -261,7 +261,7 @@ def test_gp01_build_reads_no_execution_record_and_is_stable_across_builds(tmp_pa
 def test_gp01_build_to_from_gprog_carries_the_declared_lag_static_end_to_end(tmp_path):
     """[R17-1, F-r17-02 (rev M-0062) / coord M-0070] GP-01 `build` -> GM-01 `from_gprog` on ITS OWN artifact + descriptor: the Program's
     `lag` static is read where the codec writes it (program_fn / root spec ids inside the verified digest) and equals the artifact's
-    lag.value; LAG 0 and LAG 1 are two Programs (two digests); an edited lag block over an intact Program is refused by name."""
+    lag.value; LAG 0 and LAG 1 are two Programs (two digests); an edited lag section over an intact Program is refused by name."""
     from verity_vllm.check.match import global_match as gm
     reqs = [{"LP": 3, "cap": 3}, {"LP": 5, "cap": 1, "arrive": 1}]
     derived = [_derived_dir(tmp_path, 3, 2), _derived_dir(tmp_path, 5, 0)]
@@ -283,7 +283,7 @@ def test_gp01_build_to_from_gprog_carries_the_declared_lag_static_end_to_end(tmp
         assert g["lag"]["value"] == lag and g["stop_rule"]["lag"] == lag
         outs[(lag, target is None)] = (a["workload_digest"], out)
     assert outs[(1, True)][0] == outs[(1, False)][0] != outs[(0, False)][0]     # the same LAG = one Program however declared; LAG 0 != LAG 1
-    # the block edited to the other value over the intact Program -> refused by name, and the artifact edited to claim NO lag as well
+    # the section edited to the other value over the intact Program -> refused by name, and the artifact edited to claim NO lag as well
     d1, out1 = outs[(1, True)]
     p = os.path.join(out1, "workload_program.json"); art = json.load(open(p))
     json.dump({**art, "lag": {**art["lag"], "value": 0}}, open(p, "w"))
@@ -513,7 +513,7 @@ def test_batch_decomp_refuses_a_header_that_disagrees_with_the_programs_input_la
 
 def test_single_weights_input_node_baseline_still_passes(tmp_path):
     """Control for the F-fp8-GM1 fixture machinery: the same toy with a width-HOMOGENEOUS weights Record (ONE Input node on both sides,
-    one weight tensor `weights` named by every hint — the pre-R15 dense layout) goes through `decompose` as every dense row does
+    one weight tensor `weights` named by every hint — the pre-R15 dense layout) goes through `decompose` as every dense workload does
     today — attributed, no XREQ, canonical-equal, PASS — so the xfail above is about the weights node COUNT and nothing else."""
     HREC = Record(("wa", Array(2, Value(16))), ("wc", Array(2, Value(16))))
     HREC_REPR = "{wa: Array<2,Value<16>>, wc: Array<2,Value<16>>}"
