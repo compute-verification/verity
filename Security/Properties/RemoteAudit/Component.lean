@@ -21,11 +21,10 @@ node's g accepting a record's session (`Properties.RemoteAudit.Line.Verified`). 
   of `Verified`. On the same node, trace, records and premises, and the bytes `a ω`, `b ω` and `e ω` the component is
   given at each outcome (the parameters, the commitment and the evidence), the probability that the component accepts
   bytes that play the record of `ω` on the node (`Plays`) while the record's link-charged line credits a stretch more
-  than the trace held over its span is at most `LineHeld`'s bound with its PRF and hiding terms taken by two named
-  premises (`OpeningsPrf` on SHA-512's stream, `CoinsHidden` on hm96's leaves), so that past the sketch's δs and the
-  binding term its numbers are the live sample's: `δ + Σ_c s/2^64`, the session's `⌈W/g⌉` draws at its `samples` s.
-* **PublishedEps**: what the component publishes as `eps` on acceptance is that `δ + Σ_c s/2^64` at the component's
-  δ (`RemoteAudit.Protocol.DELTA`), or nothing certified at all.
+  than the trace held over its span is at most `LineHeld`'s bound, term for term.
+* **PublishedEps**: what the component publishes as `eps` on acceptance is that bound's draw term, `δ + Σ_c s/2^64`
+  over the session's `⌈W/g⌉` draws at its `samples` s, at the component's δ (`RemoteAudit.Protocol.DELTA`), or nothing
+  certified at all.
 
 `Plays` is the component's acceptance (`DecodedAccepted` unfolded at `RemoteAudit.Protocol.protocol`, whose decoders
 are `decodeParams`, `decodeCommitment` and `decodeEvidence`) with what picks out the record the line reads: the
@@ -56,13 +55,14 @@ def AcceptIsVerified : Prop :=
         .ok (rs, s) ∧
       s.outcome = some "accepted" ∧ s.summary = some sm ∧ pub = (RemoteAudit.Protocol.certify params g sm).1
 
-/-- **The component publishes the error `LineHeldAtComponent` proves.** Whenever `RemoteAudit.Protocol.check` accepts
-parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session
+/-- **The component publishes the draw term of `LineHeldAtComponent`'s bound.** Whenever `RemoteAudit.Protocol.check`
+accepts parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session
 (`sessionOf`: its parameters, its windows a draw g, coins, append coins, clock floor and events), and either the public
 outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows), or at every node of those
 parameters and g whose δ is the component's `RemoteAudit.Protocol.DELTA` the published `eps` is `δ + Σ_c s/2^64` over
-the node's `⌈W/g⌉` draws (`Node.draws`) at its `samples` s: `LineHeldAtComponent`'s bound less the sketch's δs and the
-binding term. It is a constant of the session's parameters, not of the draws the session made. -/
+the node's `⌈W/g⌉` draws (`Node.draws`) at its `samples` s: `LineHeldAtComponent`'s bound less the sketch's δs, the
+PRF advantage, hiding and binding terms. It is a constant of the session's parameters, not of the draws the session
+made. -/
 def PublishedEps : Prop :=
   ∀ (p : RemoteAudit.Protocol.Params) (reg : RemoteAudit.Registration) (e : RemoteAudit.Protocol.Evidence)
     (pub : RemoteAudit.Protocol.Public) (prof : Lean.Json),
@@ -91,13 +91,10 @@ def Plays (node : Node) (rec : Record) (a b e : ByteArray) : Prop :=
 
 /-- **The memory line of record, link-charged, at the bandwidth component.** `LineHeld`'s node, trace, records and
 premises verbatim, one coin for each of the session's draws (`Node.draws`), and the bytes the component is given at
-each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence), with two premises more at the node's δ:
-the openings stream is a PRF at each window test (`OpeningsPrf`, `prf/sha-512`) and the coin commitment hides each
-openings coin (`CoinsHidden`, hm96). Then the probability that the component accepts bytes that play the record of
-`ω` on the node (`Plays`) while a stretch of the record's link-charged line credits more than the trace held over its
-span is at most `δs + (δ + Σ_c s / 2^64 + bind)`: `LineHeld`'s bound with its PRF and hiding terms taken by the
-premises, so that past the sketch's δs and the binding term its numbers are the live sample's, the ε the component
-publishes at δ = `DELTA` (`PublishedEps`). -/
+each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): the probability that the component
+accepts bytes that play the record of `ω` on the node (`Plays`) while a stretch of the record's link-charged line
+credits more than the trace held over its span is at most `δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`,
+`LineHeld`'s bound. -/
 def LineHeldAtComponent : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
     (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Record)
@@ -113,10 +110,10 @@ def LineHeldAtComponent : Prop :=
     Routed (ofRecord T node r) → Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
-    Registered (ofRecord T node r) node →
-    OpeningsPrf F com prf (node.delta : ℝ) → CoinsHidden F com prf (node.delta : ℝ) →
     Pouw.pr (fun ω => Plays node (r ω) (a ω) (b ω) (e ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 1) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
-        (R.binding (F.play com) prf rest).toReal)
+        (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
+          ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
+        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
 
 end Properties.RemoteAudit.Component

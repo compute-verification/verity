@@ -1,4 +1,4 @@
-"""verity-vllm's tests in N parts, each a `suites.py verity-vllm` run of its own, so N jobs run the suite at once (VLLM-112).
+"""verity-vllm's tests in N parts, each a `suites.py verity-vllm` run of its own, so N jobs run the suite at once.
 
     python3 integrations/vllm/tools/suite_parts.py 2/8             part 2 of 8: its test modules, from integrations/vllm
     python3 integrations/vllm/tools/suite_parts.py --list 8        each part's modules and estimated seconds
@@ -120,9 +120,7 @@ SECONDS: dict[str, float] = {
     "tests/program/test_flashmla.py": 32,
     "tests/program/test_boolean_gather.py": 32,
     "tests/pipeline/test_tp_build_relabel.py": 32,
-    "tests/check/test_provenance.py": 31,
     "tests/program/test_boolean_fp8.py": 30,
-    "tests/commit/test_oracle.py": 29,
     "tests/program/test_fp8_moe.py": 29,
     "tests/check/test_sampled_replay_glm53_rows.py": 29,
     "tests/pipeline/test_run_config_dry_run.py": 29,

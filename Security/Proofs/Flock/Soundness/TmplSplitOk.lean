@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.TmplSplitStep
 
 /-!
-# What a walked table means (PRF-133, part 3, stage 3)
+# What a walked table means
 
 `Spec`: a class's table, placed at any chunk origin `H`, values (`tabExp`, `tabSum`) to its copies' `refVal`s, as
 `ExpOk` and `SumOk` say of `foldDef`'s `Out`; its open inputs are keyed by an input of its Definition and one of its

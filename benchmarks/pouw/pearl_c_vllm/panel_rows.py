@@ -4,7 +4,7 @@ window retained it), as ``panel.py append`` commands.
 
   python benchmarks/pouw/pearl_c_vllm/panel_rows.py E2E_JSON VERIFY_DIR [--panel PANEL_PY] [--append]
 
-The rows go under ``pearl-c-sm120`` at the scheme's version (v1-h3), with the coordinator's e2e shapes (11:50Z item 5).  Each
+The rows go under ``pearl-c-sm120`` at the scheme's version (v1-h3), at the panel's e2e shapes.  Each
 row's slowdown is ``pearlc`` over stock vLLM ``fp8`` in the same window, interleaved rep by rep, or in ABAB blocks when the two
 engines could not stay resident, which the row's description then says; ``--hash-free`` is ``pearlc-nohash`` over ``fp8``.  The clocks
 are every rep's SM clock, the arm's and the ``fp8`` baseline's.  Refused, with the reason, unless every gate held, both verify
@@ -14,19 +14,21 @@ prefill row's attempt, another phase of it (``--attempt``).  Without ``--append`
 
 When the window also timed stock FP8 as vLLM serves it (``--fp8-graphs``), decode's headline row is over that graphed
 baseline (``slowdown_vs_fp8_graphs``, its reps' clocks as the base's) at the decode shape, and the eager row goes beside it
-at the same shape with `EAGER_SUFFIX`, in the same attempt: the root's panel ruling (21:33Z).  Both pass the same gate.
+at the same shape with `EAGER_SUFFIX`, in the same attempt, as the panel's rule says.  Both pass the same gate.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import shlex
 import subprocess
 import sys
 from pathlib import Path
 
+from verity_config.settings import of
+
+settings = of(__file__)
 PANEL = "/cursor/stores/bc-b729c175-2ef6-418e-98fe-10896709028b/internal/pouw/panel/panel.py"
 #: the decode shape's suffix for the row over eager stock FP8, beside the headline over graphed FP8
 EAGER_SUFFIX = "-eager"
@@ -34,7 +36,7 @@ PHASES = {"prefill_8192": ("prefill", "prefill_8192", "prefill", "s"), "decode_b
 
 
 def interleaving(summary: dict) -> str:
-    """How the baseline was timed against the arm, as the row says it (the root's ruling, 12:11Z)."""
+    """How the baseline was timed against the arm, as the row says it."""
     if summary["interleave"] == "rep":
         return ("the stock FP8 baseline interleaved rep by rep: both engines resident in their own processes on the same GPU, "
                 "each idle while the other times")
@@ -43,7 +45,7 @@ def interleaving(summary: dict) -> str:
 
 
 #: the lane that appends the rows
-BY = os.environ.get("PANEL_BY", "bc-dd22acf8")
+BY = settings.PANEL_BY
 
 
 def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[float, str] | None = None) -> list[list[str]]:
@@ -70,7 +72,7 @@ def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[f
                  "split: the GEMM runs inside the call's graph" if graphs else
                  f"GEMM {s['gemm_x_fp8']:.3f}, hashing and records {s['hashing_x_fp8']:.3f}, else {s['else_x_fp8']:.3f}")
         desc = (f"PoUW MVP e2e: Llama-3.1-8B-Instruct in vLLM (BF16, TP 1, eager) with every linear committed by "
-                f"pouw_pearl_c_device{' (--graphs: each decode call one CUDA graph, #593)' if e2e.get('graphs') else ''}"
+                f"pouw_pearl_c_device{' (--graphs: each decode call one CUDA graph)' if e2e.get('graphs') else ''}"
                 "; "
                 f"{phase} {'one 8,192-token prompt' if phase == 'prefill' else '32 sequences, per step'}; "
                 f"over stock vLLM FP8 {s['slowdown_vs_fp8']:.3f}x ({split}), over BF16 {s['slowdown_vs_bf16']:.3f}x; "
@@ -116,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--panel", default=PANEL)
     p.add_argument("--append", action="store_true")
     p.add_argument("--kernel-ratio", type=float, help="decode's kernel-time ratio (served_profile.py's GPU ms a step, Pearl-C over "
-                   "stock FP8), published beside the eager ratio until both arms run with CUDA graphs (the 19:58Z ruling)")
+                   "stock FP8), published beside the eager ratio until both arms run with CUDA graphs")
     p.add_argument("--kernel-ratio-run", help="the profile run the kernel-time ratio comes from")
     a = p.parse_args(argv)
     if (a.kernel_ratio is None) != (a.kernel_ratio_run is None):

@@ -1,4 +1,4 @@
-"""`pouw_h1.H1Run`'s call tables hashed on the GPU (VLLM-96): a call's A table and z table, each
+"""`pouw_h1.H1Run`'s call tables hashed on the GPU: a call's A table and z table, each
 `pouw_h1_requests.hiding_rows` of its leaves, computed by the Commit's row-table kernels (`protocol_options/pouw_cuda/row_table.cu`,
 `commit.row_tables_device`) as a step of one table.
 
@@ -321,7 +321,7 @@ def _kernel_tables(run: Any, call: Any, a: Any, s_a: Any, zy: Any, where: str) -
 
 
 def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
-    """``run``'s (a `pouw_h1.H1Run`'s) commit of the call's A table (`table_leaves`) and its z table, leaf u unit u's z/y
+    """``run``'s (a `pouw_h1.H1Run`'s) commit of the call's A table (`table_leaves`) and its z table, leaf u proof block u's z/y
     record (`pouw_h1_records`; an empty call's all zero), none for a served call whose arm handed over no records. Hashed
     where `path` says (by default on the GPU when the call's tensors, ``zy`` its records, are CUDA tensors), each root
     `hiding_rows`'."""

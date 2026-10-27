@@ -28,9 +28,10 @@ the difftest's `session` reads (`Difftest.sessionFn`):
 On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
 session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each draw's receipts and
 draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉`
-openings coins at its `samples` s each: the bound `Properties.RemoteAudit.Component.LineHeldAtComponent` proves at
-`Node.delta = DELTA` (`PublishedEps`), whose PRF and coin-commitment hiding steps are named premises, not numbers. It is
-a constant of the parameters, not the draws a session made (`min(s, U_c)`, U_c the prover's), which can be fewer. The
+openings coins at its `samples` s each (the per-draw term of `Accounting.Guarantees.Remote.PooledDraw`; its PRF and
+coin-commitment hiding terms are named assumptions, not numbers): the draw term of the bound
+`Properties.RemoteAudit.Component.LineHeldAtComponent` proves at `Node.delta = DELTA` (`PublishedEps`). It is a
+constant of the parameters, not the draws a session made (`min(s, U_c)`, U_c the prover's), which can be fewer. The
 ledger's γ terms, which need the node's measured rates, are not taken off: `q_bytes` is the reads the session's
 openings certify. When the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says why.
 -/
