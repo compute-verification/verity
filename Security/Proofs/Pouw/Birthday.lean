@@ -333,11 +333,11 @@ theorem birthday_le {q n : ℕ} (hq : q ≤ 2 ^ 64) (hn : 2 ^ 512 ≤ n) :
   have hn' : (2 : ℝ) ^ 512 ≤ n := by exact_mod_cast hn
   have h0 : (0 : ℝ) ≤ q := Nat.cast_nonneg q
   have h1 : (q : ℝ) * (q - 1) ≤ 2 ^ 64 * 2 ^ 64 := by nlinarith [mul_le_mul hq' hq' h0 (by positivity)]
-  have hpos : (0 : ℝ) < 2 * n := by linarith [hn', (by positivity : (0 : ℝ) < 2 ^ 512)]
-  rw [div_le_div_iff₀ hpos (by positivity)]
+  have hpos : (0 : ℝ) < 2 * n := mul_pos two_pos (lt_of_lt_of_le (by positivity) hn')
+  rw [div_le_div_iff₀ hpos (by positivity), one_mul]
   calc (q : ℝ) * (q - 1) * 2 ^ 385 ≤ 2 ^ 64 * 2 ^ 64 * 2 ^ 385 := mul_le_mul_of_nonneg_right h1 (by positivity)
-    _ = 1 * (2 * 2 ^ 512) := by norm_num
-    _ ≤ 1 * (2 * n) := by linarith
+    _ = 2 * 2 ^ 512 := by rw [← pow_add, ← pow_add, ← pow_succ']
+    _ ≤ 2 * n := mul_le_mul_of_nonneg_left hn' (by norm_num)
 
 end Proofs
 
