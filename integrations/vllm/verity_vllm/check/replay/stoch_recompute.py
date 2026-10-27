@@ -41,7 +41,7 @@ from pathlib import Path
 import numpy as np
 from dataclasses import dataclass
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg, workload_file
 from verity_vllm.records.workload import Workload
 
 VARIANT = ("vllm d9105ea80 V2 sampler, explicit seed: FlashInfer disabled; _temperature_kernel -> _apply_topp_split(S) "
@@ -75,7 +75,7 @@ def _request_facts(header) -> dict[str, dict]:
 def _manifest_facts(path: str | Path) -> dict[str, dict]:
     """The DECLARED facts from the workload manifest itself (`workloads/<row>.json`: `variants[sampling.variant]` +
     per-request `seed`), independent of what the run's header recorded -- so a manifest that disagrees with the run is caught."""
-    w = Workload.load(path)
+    w = Workload.load(workload_file(path))
     p = w.variants.get(w.sampling_variant or "greedy") or {"temperature": 0.0, "top_p": 1.0, "top_k": 0}
     top = None if w.sampling is None else w.sampling.seed
     out = {}
@@ -175,12 +175,9 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
             by_shape[(int(r["LP"]), int(r["T"]))] = {"derived": int(nsm)} if nsm is not None else {"derived": None}
         elif sp is not None:
             by_shape[(int(r["LP"]), int(r["T"]))] = sp
-    w = json.loads(Path(workload).read_text())
     out: dict[str, list[int] | int | None] = {}
-    for r in w.get("requests", []):
-        rid = r.get("request_id") or r.get("id")
-        lp, cap = int(r.get("prompt_len") or len(r.get("prompt_token_ids") or [])), int(r.get("max_tokens") or 0)
-        out[rid] = by_shape.get((lp, cap - 1))
+    for q in Workload.load(workload_file(workload)).requests:
+        out[q.request_id] = by_shape.get((q.prompt_length or 0, q.max_tokens - 1))
     return out, unreadable
 
 
@@ -294,7 +291,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
     wl_req: dict[str, dict] = {}
     if workload is not None:
         try:
-            for r in Workload.load(workload).requests:
+            for r in Workload.load(workload_file(workload)).requests:
                 wl_req[r.request_id] = {"prompt_len": r.prompt_length or 0, "cap": r.max_tokens}
         except (OSError, ValueError) as e:  # noqa: BLE001
             out["problems"].append(f"draw ledger: the workload manifest could not be read ({e!r}): prompt_len / cap unknown, the ledger is unjudged")
@@ -733,7 +730,7 @@ class Options:
     run: str = option("--run", help="Match dir (RUN_DIR/capture/{log.jsonl.gz,snapshots.json,values/})")
     out: str | None = option("--out", default=None)
     max_rows: int | None = option("--max-rows", type=int, default=None)
-    workload: str | None = option("--workload", default=None,
+    workload: str | None = option("--workload", type=workload_arg, default=None,
                                   help="the workload manifest of record (declared seeds / policy); the run's header must agree with it")
     jobs: int | None = option("--jobs", type=int, default=None,
                               help="worker processes for the row evaluations (default min(32, cpus))")

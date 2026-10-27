@@ -1,5 +1,5 @@
-"""`tools/agent-guard/boot.sh` puts the shell hook on a VM whose branch predates it: cloud agents read project hooks only, and
-on 10 Oct top's and ci's VMs ran no hook because their branches (5 Oct) had no `.cursor/hooks.json`."""
+"""`tools/agent-guard/boot.sh` puts the shell hook on a VM whose branch predates it: cloud agents read project hooks only, so
+a VM on a branch without `.cursor/hooks.json` would run no hook."""
 import json
 import os
 import shutil
@@ -57,7 +57,7 @@ def test_boot_installs_the_hook_on_an_old_branch_and_steps_aside_for_a_tracked_o
     assert p.returncode == 0 and "tracks .cursor/hooks.json" in p.stdout, (p.stdout, p.stderr)
     assert git("status", "--porcelain") == ""
     path_lines = [ln for ln in (tmp_path / "bashrc").read_text().splitlines() if "/workspace/.venv/bin" in ln]
-    assert path_lines == ["export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH"], "research on PATH, once (INF-71)"
+    assert path_lines == ["export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH"], "research on PATH, once"
 
 
 def test_boot_refuses_without_origin_or_an_earlier_copy(tmp_path):

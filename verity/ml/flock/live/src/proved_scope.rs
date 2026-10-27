@@ -200,10 +200,17 @@ pub fn circuit_why(c: &Composite, hidden: bool) -> Option<String> {
         Some(format!("a unit of 2^{} rows", unit.unit_log))
     } else if !port_reads(unit) {
         Some("a unit row reading an input column that is not a port bit".into())
+    } else if let Some(why) = rows_why(&c.ports, &c.out_row_ports, hidden) {
+        Some(why.into())
+    } else if c.pinned > 0 {
+        Some(PINNED_WHY.into())
     } else {
-        rows_why(&c.ports, &c.out_row_ports, hidden).map(String::from)
+        None
     }
 }
+
+/// `ProvedScope.pinnedWhy`: a statement with pinned outputs, which no soundness theorem covers yet.
+pub const PINNED_WHY: &str = "pinned outputs (META pinned_outputs): a form no soundness theorem covers yet";
 
 /// `ProvedScope.scopeWhy hidden`'s last rule: the rows `v1Ports` (or, with hidden outputs, `bitRows`) admits.
 fn rows_why(ports: &[Port], out_row_ports: &[usize], hidden: bool) -> Option<&'static str> {
@@ -443,7 +450,7 @@ mod tests {
         Composite {
             name: "wires".into(), sha512: [0; 64], class_sha512: [0; 64], meta: serde_json::Value::Null,
             nets: nets.into_iter().map(|n| ("net".to_string(), n)).collect(), ranges: vec![], ports: vec![], n_in: 0,
-            out_words: vec![], out_row_ports: vec![], g: 1, k_log: 0, upv: per_vu[0], unit_net: 0, leaves_in: vec![],
+            out_words: vec![], out_row_ports: vec![], pinned: 0, g: 1, k_log: 0, upv: per_vu[0], unit_net: 0, leaves_in: vec![],
             leaves_out: vec![], public_inputs: vec![], leaves_public: vec![], rows: vec![], sha_net: k, hm_net: k + 1, out_net: 0,
             out_ports: vec![], out_slotted: false, leaf_cuts_of: vec![], leaf_cuts, dummy_bc: vec![], dummy_outputs: vec![],
             leaf_scheme: serde_json::Value::Null, per_vu,

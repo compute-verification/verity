@@ -1,11 +1,13 @@
 """The Commit scheme and the sealing of `verity_vllm.pipeline.serve_openai`'s windows.
 
-`committer` builds the server's committer: ``--scheme vllm-v1`` `NativeHostCommitter` (32-byte roots), ``--scheme rows-sha512``
-the declared Commit of record's (`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512
-trees, 64-byte roots) with its acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the bench
-row's required manifest (``--required-manifest``): the attention hidden tap (``--hidden-so``), the norm-scale tap
-(``--norm-tap-so``) and the hook sets of the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``)
-and a part the manifest names that did not attach is refused (`parts_missing`). Then `served_record.StepInputPort` (each step's
+`committer` builds the server's committer: ``--scheme rows-sha512`` (the default) the declared Commit of record's
+(`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
+acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the bench row's required manifest
+(``--required-manifest``): the attention hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
+the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``) and a part the manifest names that did not
+attach is refused (`parts_missing`); ``--scheme vllm-v1`` `NativeHostCommitter` (SHA-256, 32-byte roots), which only a recorded
+run's readers take, so a run under it names the recorded vllm-v1 run it serves again (``--of-record``, `scheme_refusal`). Then
+`served_record.StepInputPort` (each step's
 stream starts with its input ids, then its positions, each padded to ``--max-num-batched-tokens``: the port the certifier's
 served-rows tie reads) and `served_record.SamplerInputsSource` are attached and the arena sized; under ``--seal`` it registers
 the weights. The port is the step's one copy of its ids (`single_ids`): the embedding's own input isn't committed beside it.
@@ -22,7 +24,10 @@ than its rows ran (`positions_off`), and the context carries the manifest's ``op
 shared module's layer-N path through, the window's served-rows record (`serve_commit.CommitWindows`' ``served_rows``) and the
 step-input port (`port_of`; `port_layout` is where the window's streams put it). The window's requests are named by the body's ``user`` (the id the advice names them
 by), and the bundle names no Programs: a served window's Programs are the registered compiler's for its advice, made after
-the window closed.
+the window closed. With ``--retain-exclude hidden_m1`` (`RetentionOptions`) the attention interiors (``fa2.m1/*``, ``fa3.m1/*``)
+are committed as before, same leaves and roots, but not copied off the device, so the bundle's store doesn't hold them and its
+manifest names them ``committed_not_retained``: no reader of a sealed window opens them (no Program of record reads an
+``fa*.m1`` identity, and C2 and the oracle compare skip them), and a read of one is refused by name.
 
 A window is sealed off the engine loop (`Sealer`), over a view of the committer that holds the window's own per-step state,
 with the pinned blocks its values sit in lent out of the committer's pool until the seal has read them (`thaw`): the view
@@ -48,21 +53,99 @@ import threading
 import time
 from collections import deque
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.commit import json_chunks as JC
-from verity_vllm.commit.served_record import PORT_NAMES
-from verity_vllm.config import UsageError
+from verity_vllm.commit import step_rows
+from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
+from verity_vllm.config import UsageError, option
 
-SCHEMES = ("vllm-v1", "rows-sha512")
+ROWS, V1 = step_rows.NAME, "vllm-v1"
+#: the token budget's floor under rows-sha512: the step-input port's ids fill whole ``step_rows.ROW_BYTES`` rows
+PORT_IDS = step_rows.ROW_BYTES // StepInputPort.IB
+#: the server's Commit schemes, its default first
+SCHEMES = (ROWS, V1)
 #: what a sealed served window's context says it is (`deferred_rows.of_record` reads no Programs of record for it)
 SERVED_WINDOW = "verity-vllm/served-window/v1"
 
 
 #: the committer a declared Commit commits rows-sha512 with (`pipeline.commit`'s default ``--committer``)
 DECLARED_COMMITTER = "native_collect_v2b"
+
+
+@dataclass(frozen=True, kw_only=True)
+class RetentionOptions:
+    """serve-openai's ``--retain-exclude`` (its ``retention`` group, `retention_refusal`)."""
+    retain_exclude: str = option("--retain-exclude", env="VERITY_RETAIN_EXCLUDE", default="", metavar="FAMILIES",
+                                 help="rows-sha512: commit these value families without retaining them (sets VERITY_RETAIN_EXCLUDE, as "
+                                      "the Commit's --retain-exclude does): the attention interiors only, hidden_m1 (fa2_hidden_m1, "
+                                      "fa3_hidden_m1), which no reader of a sealed window opens. Their leaves and roots are the "
+                                      "same; each seal's manifest names them committed_not_retained (store_dump.not_retained)")
+
+
+def retention_refusal(opts: Any) -> str | None:
+    """Why ``opts.retention`` can't hold (None: it can): ``--retain-exclude`` names attention interiors only, and the Commit under
+    rows-sha512, whose committer leaves them on the device."""
+    spec = opts.retention.retain_exclude
+    if not spec:
+        return None
+    from verity_vllm.commit.committer.host_retention import HIDDEN_M1_FAMILIES, retain_exclude_families
+
+    if other := sorted(retain_exclude_families(spec) - HIDDEN_M1_FAMILIES):
+        return (f"--retain-exclude {spec}: {other} aren't attention interiors; serve-openai commits without retaining only "
+                f"{sorted(HIDDEN_M1_FAMILIES)} (hidden_m1), which no reader of a sealed window opens")
+    if not opts.commit or opts.scheme != ROWS:
+        return f"--retain-exclude {spec} commits values without retaining them: it needs the Commit under --scheme {ROWS}"
+    return None
+
+
+def recorded_scheme(rec: Mapping[str, Any]) -> str | None:
+    """The scheme a recorded serve-openai run committed under, from its serve.json ``rec``: its ``scheme``, vllm-v1 for a
+    committing run recorded before serve.json named one, None for a run that committed nothing."""
+    return rec.get("scheme", V1) if rec.get("commit") else None
+
+
+def scheme_refusal(opts: Any) -> str | None:
+    """Why ``opts`` can't commit under its scheme (None: it can). rows-sha512 needs the GPU tree, the bench row's manifest and
+    a token budget of whole step-input port rows (`PORT_IDS`). vllm-v1 commits SHA-256, which only a recorded run's readers
+    take, so it only serves again a recorded vllm-v1 run of the same model, the one ``--of-record`` names."""
+    if why := retention_refusal(opts):
+        return why
+    if opts.of_record and opts.scheme != V1:
+        return f"--of-record names a recorded {V1} run to serve again under --scheme {V1}, not under --scheme {opts.scheme}"
+    if not opts.commit:
+        return None
+    if opts.scheme == ROWS and not opts.gpu_tree:
+        return f"--scheme {ROWS} (the default) is the windowed collector's, which hashes its rows on the GPU: drop --no-gpu-tree"
+    if opts.scheme == ROWS and not opts.required_manifest:
+        return (f"--scheme {ROWS} (the default) commits with the Commit of record's parts, which its bench row's manifest names: "
+                "pass --required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so), or --no-commit to serve "
+                "without a Commit")
+    if opts.scheme == ROWS and int(opts.max_num_batched_tokens) % PORT_IDS:
+        return (f"--scheme {ROWS} starts each step's stream with its step-input port, the step's ids in whole "
+                f"{step_rows.ROW_BYTES}-byte rows: pass --max-num-batched-tokens a multiple of {PORT_IDS}, not "
+                f"{opts.max_num_batched_tokens}")
+    if opts.scheme != V1:
+        return None
+    if not opts.of_record:
+        return (f"--scheme {V1} commits SHA-256 (32-byte roots), which only a recorded run's readers take: serve under {ROWS}, the "
+                f"default, or name the recorded {V1} run this one serves again with --of-record RUN_DIR (its serve.json)")
+    try:
+        rec = json.loads((Path(opts.of_record) / "serve.json").read_text())
+        if not isinstance(rec, Mapping):
+            raise ValueError("serve.json is not a JSON object")
+    except (OSError, ValueError) as e:
+        return f"--of-record {opts.of_record}: not a recorded serve-openai run ({type(e).__name__}: {e})"
+    if (got := recorded_scheme(rec)) != V1:
+        what = f"under {got}" if got else "nothing"
+        return f"--of-record {opts.of_record} committed {what}, not under {V1}: serve under {ROWS} (drop --scheme {V1} and --of-record)"
+    if (rec.get("model"), rec.get("revision")) != (opts.model, opts.revision):
+        return (f"--of-record {opts.of_record} served {rec.get('model')}@{rec.get('revision')}, not {opts.model}@{opts.revision}: "
+                f"a run under {V1} serves its recorded run's model again")
+    return None
 
 
 def committer_args(opts: Any) -> SimpleNamespace:
@@ -104,14 +187,20 @@ def parts_missing(com: Any, manifest: Mapping[str, Any], hidden_required: bool |
     return [p for p in want if not any(h == p or (p == "hidden_m1" and h.startswith(p)) for h in have)]
 
 
-def target_of() -> dict[str, Any]:
-    """What the compiler's φ reads of the serving device: its target profile (`TargetProfile.from_device`) and the execution,
-    bi-eager where vLLM runs batch-invariant (`vllm.envs.VLLM_BATCH_INVARIANT`)."""
+def target_of(model: Any = None) -> dict[str, Any]:
+    """What the compiler's φ reads of the serving device: its target profile (`TargetProfile.from_device`) with, given the served
+    ``model``, the int8 scope its layers run read back from them (`kernel_readback.int8_exact_of`: ``linears`` under
+    ``--precision verity_int8``, which predict's Build of an exact-int8 checkpoint requires; a mixed scope is refused), and the
+    execution, bi-eager where vLLM runs batch-invariant (`vllm.envs.VLLM_BATCH_INVARIANT`)."""
     import vllm.envs as envs
 
+    from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
 
-    return {"target": TargetProfile.from_device().to_json(), "execution": "bi-eager" if envs.VLLM_BATCH_INVARIANT else "eager"}
+    target = TargetProfile.from_device()
+    if model is not None:
+        target = target.with_overrides(int8_exact=int8_exact_of(model))
+    return {"target": target.to_json(), "execution": "bi-eager" if envs.VLLM_BATCH_INVARIANT else "eager"}
 
 
 def seal_of(opts: Any) -> dict[str, Any]:
@@ -122,26 +211,36 @@ def seal_of(opts: Any) -> dict[str, Any]:
     return {"label": f"serve-openai:{opts.run_id}", "code": SI.code_identity(SI.TREE)["sha256"], "engine_of_record": engine_facts_of_record()}
 
 
-def committer(opts: Any, llm: Any) -> Any:
-    """The server's committer over ``llm`` under ``opts.scheme`` (module docstring), refused unless it retains on the host (the served
-    record is read back from there)."""
+def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
+    """The server's committer over ``llm`` under ``opts.scheme`` (module docstring), its run ``label:<run id>``, refused unless the
+    scheme may commit (`scheme_refusal`) and it retains on the host (the served record is read back from there)."""
+    if why := scheme_refusal(opts):
+        raise UsageError(why)
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine.handle import model_runner
 
-    eng = SimpleNamespace(llm=llm.vllm, runner=get_model_runner(llm.vllm), model=llm.model,
+    run_id = f"{label}:{opts.run_id}"
+    eng = SimpleNamespace(llm=llm.vllm, runner=model_runner(llm.vllm), model=llm.model,
                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
     manifest, hidden_m1 = None, False
-    if opts.scheme == "rows-sha512":
+    spec = opts.retention.retain_exclude
+    if opts.scheme == ROWS:
+        from verity_vllm import settings
+        from verity_vllm.commit.committer.host_retention import retain_exclude_families
         from verity_vllm.engine import vllm_adapter as va
         from verity_vllm.pipeline import commit as C, commit_attach as CA
 
         manifest, args = manifest_of_record(opts), committer_args(opts)
-        com = C.make_committer(DECLARED_COMMITTER, eng, args, f"serve-openai:{opts.run_id}")
+        if spec:
+            settings.put("VERITY_RETAIN_EXCLUDE", spec)
+        com = C.make_committer(DECLARED_COMMITTER, eng, args, run_id)
+        if spec and set(getattr(com, "retain_exclude", ())) != retain_exclude_families(spec):
+            raise RuntimeError(f"--retain-exclude {spec}: the committer {com.name} excludes {sorted(getattr(com, 'retain_exclude', ()))}")
     else:
-        com = NativeHostCommitter(eng, run_id=f"serve-openai:{opts.run_id}", arena_bytes=None, chunk=opts.chunk,
+        com = NativeHostCommitter(eng, run_id=run_id, arena_bytes=None, chunk=opts.chunk,
                                   hash_threads=opts.hash_threads, gpu_tree=opts.gpu_tree, fast_copy=opts.cudart_copy)
-    if getattr(com, "commit_scheme", "vllm-v1") != opts.scheme:
-        raise RuntimeError(f"--scheme {opts.scheme}: the committer {com.name} commits {getattr(com, 'commit_scheme', 'vllm-v1')}")
+    if getattr(com, "commit_scheme", V1) != opts.scheme:
+        raise RuntimeError(f"--scheme {opts.scheme}: the committer {com.name} commits {getattr(com, 'commit_scheme', V1)}")
     if com.retain != "host":
         raise UsageError(f"VERITY_RETAIN={com.retain}: the served record is read back from the values retained on the host")
     if manifest is not None:
@@ -298,8 +397,10 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
     (`binding.build_binding_map` over the window's layouts and step roots, its request rows by name), the store and weights tree
     (`replay_bundle.write_store`, with ``extras`` the registered tensors' bytes `extras_of` read, else read here), then
     `replay_bundle.seal_all` over the window's one run, its sampled replay and linkage deferred to the bundle; ``commit/runs.jsonl``
-    and ``commit/verdict.json`` are the record it is opened against. Returns what the window's line in windows.jsonl records of it."""
-    from verity_vllm.commit import binding as B
+    and ``commit/verdict.json`` are the record it is opened against. Returns what the window's line in windows.jsonl records of it.
+    The values the committer committed and didn't retain (``--retain-exclude``, `store_dump.not_retained`, which refuses any other
+    gap) are named in the context, the bundle's manifest and that line as `replay_bundle.NOT_RETAINED`."""
+    from verity_vllm.commit import binding as B, store_dump as SD
     from verity_vllm.pipeline import replay_bundle as RB
 
     t0 = time.perf_counter()
@@ -329,9 +430,10 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
                               "digest": manifest.get("digest")},
         "op_path_aliases": dict(manifest.get("op_path_aliases") or {})}
     hashed: dict[str, str] = {}
+    unretained = {RB.NOT_RETAINED: nr} if (nr := SD.not_retained(com)) else {}
     RB.write_store(out, 0, com, rc, digests=hashed, extras=extras)
     t_store = time.perf_counter()
-    scheme = getattr(com, "commit_scheme", "vllm-v1")
+    scheme = getattr(com, "commit_scheme", V1)
     sr, bl = RB.deferred_records(RB.path(out, 0))
     row = {"pair": 0, "arm": "instrumented", "label": label, "served_window": {"schema": SERVED_WINDOW, **{k: rec.get(k) for k in ("window", "run_id")}},
            "tokens_equal_ref": None,
@@ -349,7 +451,7 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
                              "programs": "none sealed: the registered compiler's Programs for the window's advice",
                              "served_rows": rec.get("served_rows"), "step_input_port": port if port is None or binder is None else
                              {**port, "binds_as": {k: list(v) for k, v in aliased.items()}}, **of_record},
-           RB.HASHED: hashed}
+           RB.HASHED: hashed, **unretained}
     verdict: dict[str, Any] = {"schema": SERVED_WINDOW, "run_id": rec.get("run_id"), "window": rec.get("window"), "commit_pass": None,
                                "commit_scheme": scheme, "run_root": rc.run_root.hex()}
     tl = SimpleNamespace(span=lambda *_a, **_k: _Null())
@@ -361,7 +463,7 @@ def seal_window(com: Any, rc: Any, d: Path, *, rec: Mapping[str, Any], reqs: lis
             "commit_scheme": scheme, "binding_map_digest": bmap["digest"], "binding_map_entries": bmap["entries_n"],
             "requests": [q["request_id"] for q in reqs], "port_layout": layout, "seal_s": round(time.perf_counter() - t0, 3),
             "phases_s": {"binding_map": round(t_map - t0, 3), "store": round(t_store - t_map, 3),
-                         "bundle": round(time.perf_counter() - t_store, 3)}}
+                         "bundle": round(time.perf_counter() - t_store, 3)}, **unretained}
 
 
 def port_of(com: Any) -> dict[str, Any] | None:

@@ -67,6 +67,7 @@ import Proofs.Flock.Soundness.SessionBatchAcc
 import Proofs.Flock.Soundness.Game.Seq
 import Proofs.Flock.Soundness.ExtractWait
 import Proofs.Flock.Soundness.LinkFinder
+import Proofs.Flock.Soundness.LinkCarry
 import Proofs.Flock.Soundness.Game.LockLin
 import Proofs.Flock.Soundness.Game.LockOff
 import Proofs.Flock.Soundness.ExtractAccLin
@@ -89,6 +90,7 @@ import Proofs.Flock.Soundness.TmplValue
 import Proofs.Flock.Soundness.TmplValueUnit
 import Proofs.Flock.Soundness.TmplUnitNet
 import Proofs.Flock.Soundness.TmplComputes
+import Proofs.Flock.Soundness.TmplReads
 import Proofs.Flock.Soundness.ExecCircuit
 import Proofs.Flock.Soundness.ExecCheck
 import Proofs.Flock.Soundness.ExecLookup
@@ -101,7 +103,6 @@ import Proofs.Flock.Soundness.ExecTemplateSetup
 import Proofs.Flock.Soundness.ExecFlatClass
 import Proofs.Flock.Soundness.ExecFlatCopies
 import Proofs.Flock.Soundness.Types.Flat
-import Proofs.Flock.Soundness.Rope.Lowering
 import Proofs.Flock.Soundness.Types.Dag
 import Proofs.Flock.Soundness.Types.Parts
 import Proofs.Flock.Soundness.Types.Flatten
@@ -193,11 +194,13 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec
 import Proofs.Flock.Soundness.Discharge.HiddenDec
 import Proofs.Flock.Soundness.Discharge.HdecCor
 import Proofs.Flock.Soundness.Discharge.Hidden
+import Proofs.Flock.Soundness.Discharge.Pinned
 import Proofs.Flock.Soundness.Discharge.ZkCoins
 import Proofs.Flock.Soundness.Discharge.PrivateCircuit
 import Proofs.Flock.Soundness.Discharge.ZkHidden
 import Proofs.Flock.Soundness.Discharge.Composed
 import Proofs.Flock.Soundness.Discharge.PlainJ
+import Proofs.Flock.Soundness.Discharge.PlainHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg
 import Proofs.Flock.Soundness.Discharge.PlainReg
 import Proofs.Flock.Soundness.Discharge.ZkEveryCoin

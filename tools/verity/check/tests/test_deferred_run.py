@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[4]
 
 
@@ -67,3 +69,44 @@ def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without
     head, tail = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
     assert "--tool" not in head and head[head.index("--send") + 1].endswith(CHECK.SHARD_PARTS)
     assert tail[:2] == ["slot", "--priority"] and tail[-3:] == ["--keep-going", "--deferred", "pytest,circuit-check"]
+
+
+def _pack(tmp_path: Path, monkeypatch) -> Path:
+    """A pack of one circuit-check target's pass, one suite's and one Lean package's, as a recorded check's pack holds them."""
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "earned" / "check"))
+    monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "earned" / "tests"))
+    for p in (CHECK.cache_dir() / "circuit-check" / "v1" / "d" / "t.json", CHECK.cache_dir() / "lean-audit" / "k.json",
+              CHECK.VERDICTS.roots()["tests"] / "suite" / "k.json"):
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("{}")
+    CHECK.VERDICTS.export(pack := tmp_path / "gathered.tar.gz")
+    return pack
+
+
+@pytest.mark.parametrize("circuit_cache", [False, True])
+def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, tmp_path, circuit_cache):
+    """Drive's after-landing run (`train.sh --deferred STEPS --no-cache --circuit-cache`): its suites, Lean and steps reuse no
+    pass, and circuit-check its per-target ones, imported from the gathered pack (its entries alone) and packed again as the run
+    stores them; `--no-cache` alone, the nightly `audit-main`, imports and packs nothing."""
+    pack = _pack(tmp_path, monkeypatch)
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "here" / "check"))
+    monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "here" / "tests"))
+    run_dir, got = tmp_path / "run", {}
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261027-000000-abcd")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.delenv("VERITY_SKIP_STORE", raising=False)
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
+
+    def run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache=None):
+        got.update(cache=cache, circuit_cache=circuit_cache, packs=packs is not None, reused=reused is not None)
+        return True, []
+
+    monkeypatch.setattr(CHECK, "run", run)
+    argv = ["--deferred", "pytest,circuit-check", "--keep-going", "--no-cache", *(["--circuit-cache"] if circuit_cache else []),
+            "--no-regenerate", "--verdicts-in", str(pack)]
+    assert CHECK.main(argv) == 0
+    assert got == {"cache": False, "circuit_cache": circuit_cache, "packs": circuit_cache, "reused": circuit_cache}
+    assert sorted(CHECK.VERDICTS.entries()) == (["check/circuit-check/v1/d/t.json"] if circuit_cache else [])
+    doc = json.loads((run_dir / "result.json").read_text())
+    assert ("only" in (doc.get("verdicts") or {}).get("in", {})) is circuit_cache

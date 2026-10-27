@@ -2,10 +2,11 @@
 `ProvedScope.check`'s table cap: a `--zk` session of more than `zkTableCap` tables is refused, with the text the live
 build's mirror (`proved_scope.rs`, `statement_why`) gives; one of `zkTableCap` tables passes the statement's rules, and
 without `--zk` the rule is still at most one table. Under `--plain-tables` (`ProvedScope.checkP`) a plain session of
-public outputs passes the cap at up to `Tags.MAX_TABLES` tables and is refused at 65, a statement with hidden outputs
-is refused at any count, and the verifier's own program must be the one META binds (`ProvedScope.programWhyP`). Its
-draw is by the subset law alone (`ProvedScope.lawWhy` at `plainTables`), where without the flag a plain session at public
-outputs draws by the stratified law alone.
+public or hidden outputs passes the cap at up to `Tags.MAX_TABLES` tables and is refused at 65, a statement with hidden
+outputs and plain SHA-512 leaves is refused at any count, and the verifier's own program must be the one META binds
+(`ProvedScope.programWhyP`). Its draw is by the
+subset law alone (`ProvedScope.lawWhy` at `plainTables`), where without the flag a plain session at public outputs draws
+by the stratified law alone.
 -/
 import Flock.ProvedScope
 
@@ -29,8 +30,12 @@ def whyP (tags : Tags) (count : Nat) : String :=
 #guard ProvedScope.firstFailure (ProvedScope.statementRules Tags.circuit false 1 false) == none
 #guard whyP Tags.circuit967b8d06 65 ==
   "refused: 65 tables in a session under --plain-tables, more than 64: a statement form the soundness proof does not cover"
-#guard whyP Tags.circuit 2 == "refused: verity/flock-circuit, a statement with hidden outputs under --plain-tables: " ++
-  "a statement form the soundness proof does not cover"
+#guard whyP Tags.circuitPlainLeaves 2 == "refused: verity/flock-circuit+plain-leaves, a statement with hidden " ++
+  "outputs and flock-leaf/sha512-unsalted leaves under --plain-tables: a statement form the soundness proof does not cover"
+#guard whyP Tags.circuit 65 ==
+  "refused: 65 tables in a session under --plain-tables, more than 64: a statement form the soundness proof does not cover"
+#guard Tags.circuit.hiddenOutputs && Tags.circuit.merkleLeaf == "hm96-sha512/v1"
+#guard ProvedScope.plainTablesWhy Tags.circuit Tags.MAX_TABLES == none
 #guard ProvedScope.plainTablesWhy Tags.circuit967b8d06 Tags.MAX_TABLES == none
 #guard ProvedScope.plainTablesWhy Tags.circuit967b8d06 1 == none
 

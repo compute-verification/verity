@@ -65,6 +65,17 @@ def layout (p : Program) (query : Json) : V Layout := do
   let inputs := (inputGates p.desc).map fun g => ({ unit := none, pus := #[(g, g + 1)] } : RU)
   return { classes := #[pop, if inputs.isEmpty then #[] else #[inputs]] }
 
+/-- A layout's population: its first class's replay units, in slot order. -/
+def popOf (l : Layout) : List RU := ((l.classes.toList.headD #[]).toList.map Array.toList).flatten
+
+/-- **The population is the registration's `n` units, in order**: the layout of `p` under `query` is defined, and its
+population is `n` replay units with slot `u` unit `u`. The run refuses a registration whose program and query fail it
+(`Run.run`, `population-order`): the sampled audit's knowledge soundness reads slot `u` as the game's unit `u`. -/
+def popOk (p : Program) (query : Json) (n : Nat) : Bool :=
+  match layout p query with
+  | .error _ => false
+  | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)
+
 /-- **The checked proof units** (`Deploy.checked`) of a draw that proves the units `proved`: each proof unit of every
 replay unit among them and of every input slot, as `(slot, index)`, in slot order. -/
 def checked (l : Layout) (proved : Array Nat) : Array (Nat × Nat) :=

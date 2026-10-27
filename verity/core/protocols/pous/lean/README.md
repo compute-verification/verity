@@ -44,12 +44,22 @@ Definitions/Pous/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild,EraseMee
 Definitions/Pous/P2/Cost.lean       P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
+Definitions/Pous/P2/Mutable.lean    the mutable store (PoUS as an obligation over the weights): one key pair per
+                                    tag, a window's snapshot (`snap`) and the other tags' keys (`rest`)
 Definitions/Pous/Assumptions.lean         trusted, the assumptions: named hypotheses (Lemma A, Conjecture B1′)
 Definitions/Pous/Assumptions/P2.lean      P2's named open step `PrimeP16448`, the primality of its modulus
 Definitions/Pous/Guarantees.lean          trusted, the frozen statements: 31, each with its category, the 28
                                     grade.sh grades against and three proved results cited outside the package
 Definitions/Pous/Guarantees/P2.lean       seven frozen statements about the abstract model `m1p` at P2's parameters,
                                     six of which grade.sh grades against; none is about the concrete P2
+Definitions/Pous/Guarantees/Obligation.lean
+                                    the mutable store's audit window: tag freshness (`SnapshotFresh`), a block's
+                                    offset absorbing its content (`P2ContentAbsorbs`), the window's bound from
+                                    P2's static one at every block count (`ObligationOfStatic`), from
+                                    `P2RingRoundSecure` (`ObligationOfRoundSecure`) and from its widening to `2^27`
+                                    blocks, `P2RingRoundSecureWide` (`ObligationOfRoundSecureWide`), and the demo's
+                                    memory term at `1038·2^16` blocks (`ObligationDemo`, `ObligationDemoWide`),
+                                    proved in `Proofs/Pous/Obligation.lean`
 Definitions/Pous/Guarantees/SecureErasure.lean
                                     two frozen statements, which grade.sh grades against: secure erasure on the
                                     band at every `N` and at 96 GiB (`SecureErasureMeetsFamily`,
@@ -71,7 +81,8 @@ Proofs/Pous/P2/                     proved: the `m1p` guarantees (Count, Rows, D
                                     RingTight: recomputing the roots breaks `MeetsOn`; RingTrunc: dropping low
                                     bits breaks `k = 88` from `L = 2^30`)
 Proofs/Pous/Chain/Flat.lean         proved, generated: P3 with a concrete `H`, the band, the dense chain scheme and
-                                    the public encoder over the overwrite chain (the graded lanes, flattened)
+                                    the public encoder over the overwrite chain (the graded lanes, flattened, then
+                                    pruned to what their importers use and the docs cite)
 Proofs/Pous/Continuous/             proved: the continuous audit's counting step (`MissCount.lean`), the three
                                     rules its memory challenger enforces (`Verifier.lean`), `PerAnswer` and
                                     `ContinuousAudit` (`PerAnswer.lean`), the 64 KiB band at `D = 5`

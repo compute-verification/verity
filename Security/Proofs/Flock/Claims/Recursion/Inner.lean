@@ -119,6 +119,17 @@ def CallsLogColl (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Fl
     (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws) ∨
       ∃ u v, findColl (D.calls x ws) = some (u, v) ∧ Collision H u v
 
+/-- **`CallsLogColl` over the calls a finder searches at a draw** (a code fact): wherever `E_O` gives witnesses `ws` on
+an accepted run at the coins `r`, the inner verifier's calls in the inner view's run are among `cl x r ws`, or two of
+those collide. `CallsLogColl` is it at the recorded calls; `CallsLogCollAt` at `Deploy.callsAt`, which searches the
+inner verifier's own calls at the draw's coins too. -/
+def CallsLogCollBy (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
+    (cl : (x : Msg) → (Fin (D.V.k x) → Coin) → List Flock.Wit → List (Msg × Msg)) : Prop :=
+  ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
+    (c : (EO D I DO decO).C x) (ws : List Flock.Wit), EOGives H D I DO decO P x ω r c ws →
+    (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ cl x r ws) ∨
+      ∃ u v, findColl (cl x r ws) = some (u, v) ∧ Collision H u v
+
 /-- **`D.calls` records each played inner message's opening** (`CallsOpen` at the rounds the inner view plays, a code
 fact): wherever `E_O` gives witnesses on an accepted run, at each round the inner view plays, some recorded calls open
 the run's message there, its commit string, to the inner view's message there under `opening`. An inner view that

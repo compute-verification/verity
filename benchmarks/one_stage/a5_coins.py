@@ -7,7 +7,8 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what vy-challenger-1
   writes, and its key is this run's alone, so its draws show the path, not an auditor's coins. Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins vy-challenger-1 only to such a commit; its code is this
-  tree's. ``gate:USER@HOST``: vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its
+  tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
+  (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its
   peer, `open` on the TP run root (`served_h1.coins.open_window`), the client on the peer's 127.0.0.1:PORT with the session's
   secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins`; the verifier's key is then the
   deployment's record (`served_h1.coins.key_record`), never the session's key.json. The layout is `SCHEME` with one family
@@ -40,6 +41,7 @@ import io
 import json
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import tarfile
@@ -137,24 +139,8 @@ def lines(path: Path) -> list[str]:
     return [x for x in path.read_text().split("\n") if x]
 
 
-#: how long a client waits for an opened session's address to listen: the gate's open answers once the session's challenger
-#: has signed its commitment, before its `ssh -R` tunnel listens on the peer's 127.0.0.1:PORT (live_challenger/serve.py)
-TUNNEL_WAIT_S = 120
-
-
-def connect_when_listening(address: str, secret: bytes | None, connect: Callable[..., Any] = R.RemoteChallenger.connect,
-                           wait_s: float = TUNNEL_WAIT_S, clock: Callable[[], float] = time.monotonic,
-                           sleep: Callable[[float], None] = time.sleep) -> Any:
-    """The session's client at `address` once something listens there. A refused connection sends no hello and opens no
-    coin, so it is tried again every half second for up to `wait_s`; any other failure raises at once."""
-    deadline = clock() + wait_s
-    while True:
-        try:
-            return connect(address, secret)
-        except ConnectionRefusedError:
-            if clock() >= deadline:
-                raise
-            sleep(0.5)
+#: the proof service's rule for a client of a session the gate has just opened (`remote.connect_when_listening`)
+TUNNEL_WAIT_S, connect_when_listening = R.TUNNEL_WAIT_S, R.connect_when_listening
 
 
 class Draws:
@@ -395,11 +381,12 @@ def lean_side(audit: dict | None) -> dict | None:
 def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
                        register: Callable[[S.Stream], S.Registration], honest: S.Stream, coins: VerifierCoins,
                        draw: S.Draw, outcome: Callable[[S.Stream, S.Draw, dict | None], tuple[S.Outcome, dict | None]],
-                       window: str) -> dict[str, dict]:
+                       window: str, closure: dict[int, list[int]] | None = None) -> dict[str, dict]:
     """The refusals that apply to a draw `draw` from the verifier's own `coins` on stream `honest`, once its outcome is
     final. `stream_of(coins)` is a fresh stream of the same Spec on `coins`, `register(stream)` receives the honest
     registration on it, and `outcome(stream, draw, coins)` delivers the honest sessions and decides (the outcome, its
-    audit record); `window` is the registration's window root.
+    audit record); `window` is the registration's window root, and `closure` the closure map the honest draw was selected
+    under (`Stream.select`), which every select here passes too.
 
     * ``verifier-coins-claimed-as-challenger``: the honest draw's bytes passed off as the auditor's challenger's coins
       (`Replay`) with no evidence: `coins.coins_reason` refuses, and the Lean's run refuses at its select (`coins`).
@@ -419,7 +406,7 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
                                    ("verifier-coins-with-evidence", OwnReplay(read), FOREIGN_EVIDENCE)):
         s = stream_of(replay)
         try:
-            d = s.select(register(s))
+            d = s.select(register(s), closure=closure)
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
             got, audit = outcome(s, d, evidence)
@@ -431,11 +418,11 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
         if isinstance(replay, Replay):
             row["python"] = CC.coins_reason(evidence, window, after, read, lms_verify)
         neg[name] = {"refused": accepted is False and at == SELECT_COINS and row.get("python", "") is not None, **row}
-    neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.registration), "drawn",
+    neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.registration, closure=closure), "drawn",
                                                   lambda: len(coins.read))
     fresh = OwnReplay(read)
-    neg["verifier-coins-before-the-registration"] = stream_refusal(lambda: stream_of(fresh).select(draw.registration),
-                                                                   "unknown", lambda: fresh.at)
+    neg["verifier-coins-before-the-registration"] = stream_refusal(
+        lambda: stream_of(fresh).select(draw.registration, closure=closure), "unknown", lambda: fresh.at)
     return neg
 
 
@@ -466,6 +453,7 @@ class Local:
         self.host = A.Host(root=root / "var", peers=root / "peers", name=LOCAL_HOST, pins=root / "pins.jsonl")
         (root / "var" / "sessions").mkdir(parents=True)
         (root / "peers").write_text(f"{LOCAL_HOST} research@127.0.0.1\n{LOCAL_PEER} research@127.0.0.1\n")
+        (root / "coin-ports").write_text(f"{LOCAL_PEER} {A.PORTS.start}-{A.PORTS.stop - 1}\n")
         self.pin = on_main(main)
         self.host.pins.write_text(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
         self.params = lms.Params(64, *LOCAL_PARAMS)
@@ -477,8 +465,6 @@ class Local:
         A, host = self.A, self.host
         body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
         argv = A.serve_argv(host, session, body)
-        i = argv.index("--peer")
-        del argv[i:i + 2]
         argv[argv.index("--port") + 1] = "0"
         argv += ["--params", ",".join(map(str, LOCAL_PARAMS)), "--keygen-workers", "1"]
         A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(timezone.utc), argv=argv)
@@ -577,6 +563,34 @@ class Gate:
         return self.H1.published(dest / self.session), dest / "windows.jsonl", dest / "pins.jsonl", self.key
 
 
+class Loopback:
+    """The challenger party's host on this machine (`challenger_party.Host`, `verity run CONFIG --party challenger`'s)
+    at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
+    from the party itself, so its coins are a development session's, not an auditor's (`simulated`)."""
+
+    def __init__(self, address: str) -> None:
+        host, port = address.rsplit(":", 1)
+        self.address, self.session = (host, int(port)), None
+
+    def _ask(self, req: dict) -> dict:
+        with socket.create_connection(self.address) as s, s.makefile("rwb") as f:
+            f.write((json.dumps(req) + "\n").encode())
+            f.flush()
+            got = json.loads(f.readline())
+        if "refused" in got:
+            raise Ch.CoinError(f"the challenger party refused {req['op']}: {got['refused']}")
+        return got
+
+    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME) -> tuple[str, str, str]:
+        got = self._ask({"op": "open", "root": root, "layout": layout, "minutes": minutes, "scheme": scheme})
+        self.session = got["session"]
+        return got["address"], got["secret"], got["commitment"]
+
+    def finish(self, dest: Path) -> tuple[Path, Path, Path, Ch.ChallengerKey]:
+        got = self._ask({"op": "finish", "dest": str(dest)})
+        return Path(got["session"]), Path(got["ledger"]), Path(got["pins"]), Ch.ChallengerKey.from_json(got["key"])
+
+
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
     p = lms.Params(64, key.W, key.H)
     try:
@@ -608,10 +622,13 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     first_parent = R.main_lines(main)
     if challenger == "local":
         session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")), first_parent)
+    elif challenger.startswith("loopback:"):
+        session = Loopback(challenger.removeprefix("loopback:"))
     elif challenger.startswith("gate:") and peer and key_record:
         session = Gate(challenger.removeprefix("gate:"), ssh_key, peer, key_record, first_parent)
     else:
-        raise SystemExit(f"--challenger is local or gate:USER@HOST (with --peer and --challenger-key), not {challenger!r}")
+        raise SystemExit(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST (with --peer and --challenger-key), "
+                         f"not {challenger!r}")
     manager = _Manager(ctx=get_context("spawn"))
     manager.start()
     draws = manager.Draws(root, ranks)

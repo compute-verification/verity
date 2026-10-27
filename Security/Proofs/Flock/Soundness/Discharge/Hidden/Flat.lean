@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+import Proofs.Flock.Soundness.ParseUnitPre
 
 /-!
 # A hidden-output statement's flat twin, and its output rows' message bits
@@ -23,18 +24,42 @@ open Hm Compose Flock.DeriveAll Types.Dag
 abbrev flatTwin (st : Stmt) : Stmt :=
   { st with da := (HmRow.delta st.c st.pin).1, db := (HmRow.delta st.c st.pin).2 }
 
-/-- **What the copy positions read**, for a statement whose circuit `HmRow.parse` accepted and whose Δ is
-`HmRow.delta`'s. -/
-theorem unitFacts_of_parse {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {st : Stmt}
-    (hp : HmRow.parse tags cf tables = .ok st.c) (hda : st.da = (HmRow.delta st.c st.pin).1) :
-    Aliased.UnitFacts tags st := by
-  obtain ⟨P, ⟨more, hm, hmore⟩, hunit, hsn, hhn⟩ := parse_facts_nets (pre := #[]) (fun _ hx => by simp at hx) hp
+/-- **What the copy positions read, with nets `pre` first**, for a statement whose circuit `HmRow.parse` accepted with
+nets `pre` ahead of the file, whose unit's rows end at its useful rows, and whose Δ is `HmRow.delta`'s. -/
+theorem unitFacts_ofPre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} {st : Stmt} (hp : HmRow.parse tags cf tables (pre := pre) = .ok st.c)
+    (hrows : st.c.unit.a.rows ≤ st.c.unit.useful ∧ st.c.unit.b.rows ≤ st.c.unit.useful)
+    (hda : st.da = (HmRow.delta st.c st.pin).1) : Aliased.UnitFactsPre tags pre st := by
+  obtain ⟨P, -, hunit, hsn, hhn⟩ := parse_factsPre_nets hp
   obtain ⟨ls, hcheck⟩ := P.check
   have C := check_facts P.typed hcheck
   have hname : (st.c.nets.getD st.c.unitNet default).1 = "unit" := by
     obtain ⟨hlt, hp', -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hunit
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
     simpa using hp'
+  refine ⟨P, C, by rw [hda]; exact delta_flat st.c st.pin P.typed, fun he => ?_, fun he => ?_, hrows.1, hrows.2⟩
+  · rw [← he, hname] at hsn
+    exact absurd hsn (by unfold HmRow.SHA_NET; decide)
+  · rw [← he, hname] at hhn
+    exact absurd hhn (by unfold HmRow.HM_NET; decide)
+
+/-- **What the copy positions read, for a unit given ahead of the file** (a templated file's unit net `n`, which is not
+`Built`): for a statement whose circuit `HmRow.parse` accepted with `n` first, whose Δ is `HmRow.delta`'s, when `n`'s
+rows end at its useful rows. -/
+theorem unitFacts_of_parsePre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {n : Net}
+    {st : Stmt} (hp : HmRow.parse tags cf tables (pre := #[("unit", n)]) = .ok st.c)
+    (hrows : n.a.rows ≤ n.useful ∧ n.b.rows ≤ n.useful) (hda : st.da = (HmRow.delta st.c st.pin).1) :
+    Aliased.UnitFactsPre tags #[("unit", n)] st :=
+  unitFacts_ofPre hp ((unit_of_parsePre hp).2.2 ▸ hrows) hda
+
+/-- **What the copy positions read**, for a statement whose circuit `HmRow.parse` accepted and whose Δ is
+`HmRow.delta`'s: the unit is one of the file's nets, whose rows `Net.parse` ends at its useful rows. -/
+theorem unitFacts_of_parse {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {st : Stmt}
+    (hp : HmRow.parse tags cf tables = .ok st.c) (hda : st.da = (HmRow.delta st.c st.pin).1) :
+    Aliased.UnitFacts tags st := by
+  obtain ⟨P, ⟨more, hm, hmore⟩, -, -, -⟩ := parse_factsPre_nets hp
+  obtain ⟨ls, hcheck⟩ := P.check
+  have C := check_facts P.typed hcheck
   have hmem : st.c.nets.getD st.c.unitNet default ∈ more := by
     have : st.c.nets.getD st.c.unitNet default ∈ st.c.nets.toList := getD_mem_toList P.unitNet
     rw [hm] at this
@@ -46,12 +71,7 @@ theorem unitFacts_of_parse {tags : Tags} {cf : ByteArray} {tables : List (String
       have h2 : (st.c.nets.getD st.c.unitNet default).2.lookup.isSome = false := C.unit_lookup
       rw [h1] at h2
       cases h2
-  refine ⟨P, C, by rw [hda]; exact delta_flat st.c st.pin P.typed, fun he => ?_, fun he => ?_,
-    hrows.1.le, hrows.2.le⟩
-  · rw [← he, hname] at hsn
-    exact absurd hsn (by unfold HmRow.SHA_NET; decide)
-  · rw [← he, hname] at hhn
-    exact absurd hhn (by unfold HmRow.HM_NET; decide)
+  exact (unitFacts_ofPre hp ⟨hrows.1.le, hrows.2.le⟩ hda).facts (fun _ hx => by simp at hx)
 
 /-! ## An output row's message bits -/
 

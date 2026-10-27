@@ -4,11 +4,11 @@ import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 /-!
 # The registration's population is the game's units, in order (`Bridge.PopMatches`)
 
-`Bridge.PopMatches desc q n`, a decidable check on the files, as `Bridge.RowsV2` is: the descriptor bytes `desc` parse
+`Bridge.PopMatches desc q n`, a decidable check on the files, as `Bridge.RowsOk` is: the descriptor bytes `desc` parse
 (`SampledProofs.Program.parse`), the layout the deployed verifier evaluates on them under the registration's query `q`
 (`SampledProofs.Slots.layout`, which reads the query as JSON, `Reg.query`) is defined, and its population, the layout's
 first class, is `n` replay units with slot `u` unit `u`. It says nothing of the units' gates: that slot `u`'s gates are
-unit `u`'s lowered gates needs the descriptor-to-circuit-file lowering, a follow-up (PRF-164).
+unit `u`'s lowered gates needs the descriptor-to-circuit-file lowering, which is not yet stated.
 
 * `popOf l`: a layout's population, its first class's replay units in slot order.
 * `popMatches_iff`: `PopMatches` is that the parse and the layout succeed and the population's units are
