@@ -1,6 +1,7 @@
 import Properties.Verity.Soundness
 import Proofs.Properties.Composition
 import Proofs.Core.Game.Prob
+import Proofs.Accounting.JointLive
 
 /-!
 # Soundness at the verifier of record, from its subprotocols' targets
@@ -8,7 +9,8 @@ import Proofs.Core.Game.Prob
 Onsite's acceptance is NCI's on the registration sampled proofs committed to, and every component's on its own case
 (`accepts_registered`, `accepts_components`, from `Properties.Composition`'s `answerAccepts` at onsite and
 `acceptRegistration`). So the event `Verity.Soundness` bounds lies inside the union of the subprotocols' events, each at
-most its target's error at the strategy (`prob_exists_finset_le`).
+most its target's error at the strategy: `Accounting.Guarantees.JointPeriodLive` at the period `Vocab.live`, each target
+being `Accounting.PeriodLive.Sound` there.
 
 Beside it, the two checks every guarantee carries: `soundness_of_subprotocols_honest`, at the honest deployment (the
 deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
@@ -29,18 +31,20 @@ theorem component_mem (a : Audit) : component a ∈ Onsite.components := by
 
 /-- **What the verifier of record accepts, NCI accepted on the registration sampled proofs committed to.** -/
 theorem accepts_registered {s : Sent} (h : Accepts s) : RegistrationAccepts s := by
-  obtain ⟨⟨n, ps⟩, ⟨b, d⟩, ⟨k, ev⟩, hp, hc, he, pub, prof, hch⟩ := Properties.Composition.answerAccepts _ _ _ _ h
+  obtain ⟨⟨n, ps⟩, ⟨b, d⟩, ⟨k, ev⟩, hp, hc, he, pub, prof, hch⟩ :=
+    Properties.Composition.answerAccepts (Onsite.protocol.on s.blobs) s.params s.commitment s.evidence h
   exact ⟨n, ps, b, d, k, ev, ⟨hp, hc, he⟩, pub, prof,
     Properties.Composition.acceptRegistration "verity/onsite/v0" NciCheck.Protocol.protocol
-      SampledProofs.OneStage.protocol.id Onsite.components n ps b d k ev pub prof hch⟩
+      SampledProofs.OneStageZk.protocol.id s.components n ps b d k ev pub prof hch⟩
 
 /-- **What the verifier of record accepts, every component accepts on its own case.** -/
 theorem accepts_components {s : Sent} (h : Accepts s) (a : Audit) : ComponentAccepts a s := by
   obtain ⟨n, ps, b, d, k, ev, hdec, pub, prof, hreg⟩ := accepts_registered h
   obtain ⟨-, -, -, -, -, -, ⟨-, -, hfst, -⟩, hcases, -⟩ := hreg
-  have hm : component a ∈ (Properties.Composition.triples Onsite.components ps ev).map (·.1) := by
+  have hm : (component a).onBlobs (Blobs.ofArray s.blobs) ∈
+      (Properties.Composition.triples s.components ps ev).map (·.1) := by
     rw [hfst]
-    exact component_mem a
+    exact List.mem_map.2 ⟨_, component_mem a, rfl⟩
   obtain ⟨x, hx, hx1⟩ := List.mem_map.mp hm
   exact ⟨n, ps, b, d, k, ev, hdec, x, hx, hx1, hcases x hx⟩
 
@@ -73,12 +77,13 @@ theorem soundness_of_subprotocols : Soundness := by
     | network => exact hN
   calc Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c σ a o)
           (V.game θ F c) σ
-      ≤ Game.prob (fun o => ∃ a ∈ Finset.univ, V.Verdict a o ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ :=
+      ≤ Game.prob (fun o => ∃ a, (V.live θ F c).accepts a o ∧ ¬ (V.live θ F c).Holds (V.certOf θ) σ a o)
+          (V.game θ F c) σ :=
         Game.prob_mono (fun o ⟨hacc, hreg, a, hfail⟩ =>
-          ⟨a, Finset.mem_univ a, ⟨hreg, accepts_registered hacc, accepts_components hacc a⟩, hfail⟩) _ σ
-    _ ≤ ∑ a, Game.prob (fun o => V.Verdict a o ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ :=
-        prob_exists_finset_le _ _ _ σ
-    _ ≤ ∑ a, V.error a θ F c σ := Finset.sum_le_sum fun a _ => hT a θ F c σ
+          ⟨a, (⟨hreg, accepts_registered hacc, accepts_components hacc a⟩ : V.Verdict a o), hfail⟩) _ σ
+    _ ≤ ∑ a, V.error a θ F c σ :=
+        Accounting.SecurityProofs.JointPeriodLive ι α d (V.circuitOf F) Outcome (V.game θ F c) (V.live θ F c)
+          (V.certOf θ) (fun a => V.error a θ F c) (fun a => hT a θ F c) σ
 
 /-- An event every play after `θ`, `F` and `c` meets has probability one. -/
 theorem prob_play_eq_one (ns : List ℕ) (θ F c : ByteArray) (p : Outcome → Prop)
@@ -123,6 +128,38 @@ theorem soundness_of_subprotocols_nontrivial {ι α : Type} [Fintype α] {d : De
     (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c σ a o)
     (fun _ _ => ⟨trivial, hreg, a, hfail _⟩) σ
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
+
+/-- An event no play after `θ`, `F` and `c` meets has probability zero. -/
+theorem prob_play_eq_zero (ns : List ℕ) (θ F c : ByteArray) (p : Outcome → Prop)
+    (hp : ∀ log e, ¬ p ⟨θ, F, c, log, e⟩) (σ : Game.Strategy (play ns θ F c)) : Game.prob p (play ns θ F c) σ = 0 := by
+  refine (Game.prob_bind_of_const (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Outcome)) p
+    (fun _ => False) (fun log t => ?_) (releases ns) σ).trans (Game.prob_false _ _)
+  simp [Game.prob, hp]
+
+/-- **One subprotocol's failing instance is the theorem's**: at files that pass the commit phase's check, a strategy at
+which subprotocol `a`'s claim fails with probability above the errors summed makes the conclusion fail for a verifier
+that accepts everything. So the one model-level failing instance (ONE19's, through that subprotocol's `_nontrivial`)
+gives the theorem's, with no instance of its own. -/
+theorem soundness_of_subprotocols_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
+    (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hreg : V.Registered θ F) (a : Audit)
+    (hlt : ∑ b, V.error b θ F c σ < Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ) :
+    ¬ V.SoundnessFor fun _ => True := by
+  intro h
+  have hz : Game.prob (fun o => ¬ V.Registered o.params o.file) (V.game θ F c) σ = 0 :=
+    prob_play_eq_zero (V.rounds θ) θ F c _ (fun _ _ hn => hn hreg) σ
+  have hle : Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ ≤
+      Game.prob (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c σ a o)
+        (V.game θ F c) σ :=
+    calc Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ
+        ≤ Game.prob (fun o => ((fun _ => True) o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c σ a o) ∨
+            ¬ V.Registered o.params o.file) (V.game θ F c) σ :=
+          Game.prob_mono (fun o ho => by
+            by_cases hr : V.Registered o.params o.file
+            · exact Or.inl ⟨trivial, hr, a, ho⟩
+            · exact Or.inr hr) _ σ
+      _ ≤ _ := Game.prob_or_le _ _ _ σ
+      _ = _ := by rw [hz, add_zero]
+  exact lt_irrefl _ ((hle.trans (h θ F c σ)).trans_lt hlt)
 
 namespace Vocab
 

@@ -25,14 +25,14 @@ In the rows form (`rowsWindowCheck`, `PeriodRowsWindowAccepted`):
 * its rows registered: the ingress then the egress rows, each `warden_rows.check_registration`'s (`PeriodRowsChecked`:
   the link-window's value, link, end and window, the bound schedule's digest and rows, the link-window's domain, and the
   key's certificate on the head), both held by the scan's registration (`PeriodRowsRegistered`);
-* proved: one-stage's answer for its registration's digest accepted, with one level drawn `subset:k` or stratified and
-  a `bound` (`PeriodRowsProved`).
+* proved: one-stage's answer for its registration's digest accepted, with one level of the scan's `2T` units drawn
+  `subset:k` or stratified and a `bound` (`PeriodRowsProved`).
 
 The per-window predicate is the period check's own, not N2's link-window verdict (`NetworkCheck.LinkWindow.verdict`,
 `Properties.NetworkCertifier.LinkWindowAcceptMeans`): the period check never runs that verdict; it reads each
 link-window's one-stage answer, whose verifier of record is N2's (`LinkWindows.verify`) or the scan's. What the
 certifier signs about the clock is witness, so the clock is synced as the auditor's device certified it
-(`trusted-nebius-host`), not by a clear-text sync in Σ_sync.
+(`trusted-host`), not by a clear-text sync in Σ_sync.
 
 Comparisons the code makes with a `BEq` instance not known to be lawful (`Json`, `ByteArray`, `String`, the profile's
 levels) are stated as the code's `==` returning `true`.
@@ -115,11 +115,12 @@ def PeriodRowsRegistered (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) 
     PeriodRowsChecked p s sd w .egress re ∧ holds reg ri = true ∧ holds reg re = true
 
 /-- The rows-form link-window was proved: its answer is one-stage's for the registration's digest and accepted, with a
-public output holding a `bound` and a profile of one level drawn `subset:k` or stratified. -/
-def PeriodRowsProved (reg : Registration) (x : Window) : Prop :=
+public output holding a `bound` and a profile of one level drawn `subset:k` or stratified, of the scan's `2T` units
+under the schedule `s` (the ingress and the egress rows, `T` each). -/
+def PeriodRowsProved (s : Schedule) (reg : Registration) (x : Window) : Prop :=
   x.answer.protocol = oneStage ∧ (x.answer.digest == some reg.digest) = true ∧ x.answer.verdict = .accept ∧
     ∃ pub prof i l b, x.answer.published = some pub ∧ x.answer.profile = some prof ∧
-      Core.Integrity.ofJson prof = .ok i ∧ i.levels = #[l] ∧
+      Core.Integrity.ofJson prof = .ok i ∧ i.levels = #[l] ∧ l.size = 2 * s.window ∧
       ((∃ k, l.draw = some (.subset k)) ∨ ∃ ss, l.draw = some (.stratified ss)) ∧
       Flock.J.nat pub "bound" "public" = .ok b
 
@@ -128,7 +129,7 @@ accepted: registered as the scan's Program, its three records certified, its row
 def PeriodRowsWindowAccepted (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg : Registration) (x : Window) :
     Prop :=
   PeriodWindowProgram p reg ∧ PeriodRowsCertified p w x ∧ PeriodRowsRegistered p s sd w reg x ∧
-    PeriodRowsProved reg x
+    PeriodRowsProved s reg x
 
 /-- The commitment registers and the evidence answers exactly the period's `p.windows` link-windows, and every one,
 the `i`-th being the session's window `p.first + i`, is accepted in the parameters' form: in the clock form after the
