@@ -77,11 +77,11 @@ of it. An endpoint that holds requests.jsonl (a dry rehearsal's stand-in's) is r
 
 The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate directory there):
 
-    research run --on vy-nebius-cpu-2 --source . --project verity --as LANE --cwd source --timeout 90m \\
-      -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at UTC'
-    research run --on vy-nebius-cpu-2 --source . --project verity --as LANE --cwd clone --timeout 180m \\
+    research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd source --timeout 90m \\
+      -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at 2026-10-28T12:00:00Z'
+    research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd clone --timeout 180m \\
       --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
-      tools/verity/check/slot.py --by LANE --wait-max 1200 --run-max 9900 -- nice -n 19 bash -c \\
+      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 9900 -- nice -n 19 bash -c \\
       'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
       --eos-ids 128001 --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
