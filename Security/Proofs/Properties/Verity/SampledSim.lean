@@ -471,6 +471,7 @@ open Accounting Core
 open FlockSoundness.Discharge
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open Pouw.PearlC.FlockTile (toVerity)
+open Properties.SampledProofs.OneStageZk (SessionInputs SessionTranscript)
 
 local notation "𝔽" => FlockLevel3.GF128
 
@@ -493,38 +494,36 @@ theorem releases_bind {β : Type} :
     simp only [Game.bind_ret]
     exact releases_bind ns _
 
-/-- **`prob_le`'s domination from the reduction**: the play at `σ` is dominated by the live audit, its draw from the
-operating system's bytes `src` (A3), wherever every outcome the reduction reaches that is accepted off the break has its
-live session in its rounds, at a live transcript flock-verify `--zk` accepts (`hok`). -/
+/-- **The play dominated by the live audit**: the play at `σ`, in the event `P`, is dominated by the live audit, its
+draw from the operating system's bytes `src` (A3), wherever every outcome in `P` has its releases bring the reduction
+into the session's rounds, at a live transcript flock-verify `--zk` accepts (`hok`). -/
 theorem dominated_of_drive {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Strategy (V.game θ F c))
-    {Brk : Outcome → Prop} {n mL mPts : ℕ} {Lb : Fin mL → ℕ} {Reg Ω : Type} [Fintype Ω] [Nonempty Ω] {I : Exec.Inputs}
-    (proj : Outcome → Exec.Transcript) (src : Ω → (i : Fin mL) → Fin (Lb i) → Fin 256)
+    (P : Outcome → Prop) {n mL mPts : ℕ} {Lb : Fin mL → ℕ} {Reg Ω : Type} [Fintype Ω] [Nonempty Ω] {I : Exec.Inputs}
+    (src : Ω → (i : Fin mL) → Fin (Lb i) → Fin 256)
     (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src) (law : Flock.Draw.Law) (pop : ℕ)
     (dg : ByteArray → ByteArray) (planZ : Finset (Fin n) → Reg → List (ZkSession.TabZK 𝔽 mPts)) (N : ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Exec.Transcript) (R₀ : Reg) (m : ℕ)
     (tagOf : ByteArray → Option Game.LiveDrive.Tag) (spΩ : Game.Split ((i : Fin mL) → Fin (Lb i) → Fin 256) m)
     (spP : Game.Split (Fin 2 → Fin mPts → 𝔽) m) (spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m)
     (rootOf : ByteArray → Array ByteArray) (bytesOf : ByteArray → ByteArray) (pfOf : ByteArray → Array ByteArray)
-    (hok : ∀ hs e, ZkExec.AcceptsZK I (proj ⟨θ, F, c, hs.map (Game.recOf fun b x => (⟨b, x⟩ : Release)), e⟩) →
-      ¬ Brk ⟨θ, F, c, hs.map (Game.recOf fun b x => (⟨b, x⟩ : Release)), e⟩ →
+    (hok : ∀ hs e, P ⟨θ, F, c, hs.map (Game.recOf fun b x => (⟨b, x⟩ : Release)), e⟩ →
       ∃ x rB pts N' rs, Game.LiveDrive.reached (q := fun o => ZkExec.LiveAcceptsZK I o) Game.LiveDrive.nOfJ
           Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) (fun x => (planZ (Game.LiveDrive.drawOS law pop x) R₀).length)
           mPts N (fun x rB pts rs pf => (R₀, Game.LiveDrive.drawOS law pop x,
             wr (Game.LiveDrive.drawOS law pop x) R₀ ⟨rB, pts, rs, pf⟩)) src m (uniform_of_A3 hA3) tagOf spΩ spP spR
           rootOf bytesOf hs = .at (.rnds x rB pts N' rs) ∧
         ZkExec.AcceptsZK I (wr (Game.LiveDrive.drawOS law pop x) R₀ ⟨rB, pts, rs, pfOf e⟩)) :
-    Game.Dominated (fun o => ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ
-      (fun o => ZkExec.LiveAcceptsZK I o)
+    Game.Dominated P (V.game θ F c) σ (fun o => ZkExec.LiveAcceptsZK I o)
       (toVerity (Exec.auditLive (FlockSoundness.Audit.Law.execOS (n := n) src law pop) Reg
         (Composed.liveOfZJ dg planZ N wr))) := by
   rw [Game.LiveDrive.toVerity_auditLive]
   refine Game.dom_send_right R₀ (Game.Dominated.of_eq
     (releases_bind (V.rounds θ) fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Outcome)) ?_)
   exact Game.LiveDrive.dom_live Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) _ mPts N _ src m
-    (uniform_of_A3 hA3) tagOf spΩ spP spR rootOf bytesOf _ _ pfOf (fun hs e h => hok hs e h.1 h.2) (V.rounds θ) _
+    (uniform_of_A3 hA3) tagOf spΩ spP spR rootOf bytesOf _ _ pfOf hok (V.rounds θ) _
 
-/-- **`prob_le`'s domination from ONE-4's refusals, read in the play**: where the play's outcome is accepted off the
-break, its tagged releases are the draw's block, then the link points', then one block per round, each one release per
+/-- **`prob_le`'s domination from ONE-4's refusals, read in the play**: where sampled proofs' verdict accepts the
+play's outcome off the break, its tagged releases are the draw's block, then the link points', then one block per round, each one release per
 chunk of its coin (one release per (session, round), in the live order: `hcanon`'s first five conjuncts), and the
 transcript `proj` reads is the live audit's at the draw, roots, points and rounds those releases read back to, and the
 proof files (the record's coins the device's releases: its last). -/
@@ -537,7 +536,7 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
     (tagOf : ByteArray → Option Game.LiveDrive.Tag) (spΩ : Game.Split ((i : Fin mL) → Fin (Lb i) → Fin 256) m)
     (spP : Game.Split (Fin 2 → Fin mPts → 𝔽) m) (spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m)
     (rootOf : ByteArray → Array ByteArray) (bytesOf : ByteArray → ByteArray) (pfOf : ByteArray → Array ByteArray)
-    (hcanon : ∀ hs e, ZkExec.AcceptsZK I (proj ⟨θ, F, c, hs.map (Game.recOf fun b x => (⟨b, x⟩ : Release)), e⟩) →
+    (hcanon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf fun b x => (⟨b, x⟩ : Release)), e⟩ →
       ¬ Brk ⟨θ, F, c, hs.map (Game.recOf fun b x => (⟨b, x⟩ : Release)), e⟩ →
       ∃ (kd kp : Game.LiveDrive.Block m) (rds : List (Game.LiveDrive.RoundBlock m)),
         hs.filter (Game.LiveDrive.Tagged m tagOf) =
@@ -552,17 +551,93 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
                 Game.LiveDrive.roundsOf Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg)
                   (fun x => (planZ (Game.LiveDrive.drawOS law pop x) R₀).length) m spR bytesOf
                   (spΩ.e (Game.LiveDrive.decChunks m _ kd.bits)) rds fun _ _ => [], pfOf e⟩) :
-    Game.Dominated (fun o => ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ
+    Game.Dominated (fun o => V.Verdict .sampled o ∧ ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ
       (fun o => ZkExec.LiveAcceptsZK I o)
       (toVerity (Exec.auditLive (FlockSoundness.Audit.Law.execOS (n := n) src law pop) Reg
         (Composed.liveOfZJ dg planZ N wr))) := by
-  refine dominated_of_drive σ proj src hA3 law pop dg planZ N wr R₀ m tagOf spΩ spP spR rootOf bytesOf pfOf
-    fun hs e hacc hb => ?_
-  obtain ⟨kd, kp, rds, hc, hd, hp, hN, hr, hpr⟩ := hcanon hs e hacc hb
+  refine dominated_of_drive σ _ src hA3 law pop dg planZ N wr R₀ m tagOf spΩ spP spR rootOf bytesOf pfOf
+    fun hs e ⟨hv, hacc, hb⟩ => ?_
+  obtain ⟨kd, kp, rds, hc, hd, hp, hN, hr, hpr⟩ := hcanon hs e hv hb
   refine ⟨_, _, _, _, _, Game.LiveDrive.reached_canon (q := fun o => ZkExec.LiveAcceptsZK I o) Game.LiveDrive.nOfJ
     Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) _ mPts N _ src m (uniform_of_A3 hA3) tagOf spΩ spP spR rootOf bytesOf
     hs kd kp rds hc hd hp hN hr, ?_⟩
   rw [← hpr]
   exact hacc
+
+/-- **The reduction at a live session `A`**: the coupling's transcript of the play (`proj`: off the break, where
+sampled proofs' verdict accepts, a session's transcript of v2's evidence at `A`'s inputs, `covers`), the registration
+it sends the live audit (`R₀`), and how it reads the device's releases: their bits (`m`), their tags, the chunks of the
+draw, the link points and the rounds, the roots and the rounds' bytes the releases answer, and the proof files the
+evidence holds. `canon` is ONE-4's refusals and v2's coins, read in the play (`dominated_of_canon`). -/
+structure Drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (Brk : Outcome → Prop)
+    {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit} {kd K₀ : ℕ} {desc : Claims.Msg}
+    (A : Flock.Guarantees.LiveAt n D hU kd K₀ desc) where
+  proj : Outcome → Exec.Transcript
+  covers : ∀ o, V.Verdict .sampled o → ¬ Brk o → ∀ p c' e pub prof, SampledCase o.sent p c' e →
+    _root_.SampledProofs.OneStageZk.checkBlobs p c' e (Core.Blobs.ofArray o.sent.blobs) = .accept pub prof →
+    SessionInputs p e o.sent.blobs A.I ∧ ∃ s ∈ e.sessions, SessionTranscript p e o.sent.blobs s (proj o)
+  R₀ : A.Reg
+  m : ℕ
+  tagOf : ByteArray → Option Game.LiveDrive.Tag
+  spΩ : Game.Split ((i : Fin 1) → Fin (A.Lb i) → Fin 256) m
+  spP : Game.Split (Fin 2 → Fin (Exec.mPtsOf D.unroll.g (kd / Composed.nTab A.I)) → 𝔽) m
+  spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m
+  rootOf : ByteArray → Array ByteArray
+  bytesOf : ByteArray → ByteArray
+  pfOf : ByteArray → Array ByteArray
+  canon : ∀ hs e, V.Verdict .sampled ⟨θ, F, c, hs.map (Game.recOf fun b x => (⟨b, x⟩ : Release)), e⟩ →
+    ¬ Brk ⟨θ, F, c, hs.map (Game.recOf fun b x => (⟨b, x⟩ : Release)), e⟩ →
+    ∃ (kd' kp : Game.LiveDrive.Block m) (rds : List (Game.LiveDrive.RoundBlock m)),
+      hs.filter (Game.LiveDrive.Tagged m tagOf) =
+          (kd'.rels ++ kp.rels ++ rds.flatMap fun r => r.k.rels).map (Game.LiveDrive.rel m) ∧
+        kd'.Fits m tagOf .draw spΩ ∧ kp.Fits m tagOf .points spP ∧ rds.length ≤ A.N ∧
+        (∀ r ∈ rds, r.Fits Game.LiveDrive.nOfJ Game.LiveDrive.mkJ
+          (fun x => (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀ (Game.LiveDrive.drawOS (.subset kd) n x) R₀).length)
+          m tagOf spR bytesOf (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits))) ∧
+        proj ⟨θ, F, c, hs.map (Game.recOf fun b x => (⟨b, x⟩ : Release)), e⟩ =
+          A.wr (Game.LiveDrive.drawOS (.subset kd) n (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits))) R₀
+            ⟨rootOf kp.b, spP.e (Game.LiveDrive.decChunks m _ kp.bits),
+              Game.LiveDrive.roundsOf Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ A.dg)
+                (fun x => (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀ (Game.LiveDrive.drawOS (.subset kd) n x) R₀).length)
+                m spR bytesOf (spΩ.e (Game.LiveDrive.decChunks m _ kd'.bits)) rds fun _ _ => [], pfOf e⟩
+
+namespace Drive
+
+variable {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {Brk : Outcome → Prop} {n : ℕ}
+  {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit} {kd K₀ : ℕ} {desc : Claims.Msg} {A : Flock.Guarantees.LiveAt n D hU kd K₀ desc}
+  (Dr : Drive V θ F c σ Brk A)
+
+/-- The play at `σ` is dominated by `A`'s live audit (`dominated_of_canon`). -/
+theorem dominated : Game.Dominated (fun o => V.Verdict .sampled o ∧ ZkExec.AcceptsZK A.I (Dr.proj o) ∧ ¬ Brk o)
+    (V.game θ F c) σ (fun o => ZkExec.LiveAcceptsZK A.I o) (toVerity A.G) :=
+  dominated_of_canon σ Dr.proj A.src A.hA3 (.subset kd) n A.dg (ZkHidden.planZHJ (Reg := A.Reg) A.dj A.y₀) A.N A.wr
+    Dr.R₀ Dr.m Dr.tagOf Dr.spΩ Dr.spP Dr.spR Dr.rootOf Dr.bytesOf Dr.pfOf Dr.canon
+
+/-- **The live audit's strategy the reduction builds.** -/
+noncomputable def τ : FlockSoundness.Game.Strategy A.G :=
+  Pouw.PearlC.FlockTile.stratOfVerity A.G (Classical.choose Dr.dominated)
+
+/-- **The play coupled to `A`'s live audit** at the reduction's strategy. -/
+noncomputable def coupling : PlayCoupling V θ F c σ Brk A.I A.G Dr.τ :=
+  PlayCoupling.ofDominated Dr.proj Dr.covers Dr.dominated
+
+end Drive
+
+/-- **`SampledDeploy.accept_le` from the reductions**: at each session `A θ F c σ r hr` a reduction (`Drive`, its break
+the collision or the forger's success), and the session's strategy the reduction builds (`SampledDeploy.τOf := (Dr …).τ`):
+off the break, sampled proofs' verdict accepts at most as often as the live audit does. -/
+theorem accept_le_of_drives {V : Vocab d α} (Fg : LmsForger) (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
+    (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
+      Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
+    (Brk : ByteArray → ByteArray → ByteArray → Outcome → Prop)
+    (Dr : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
+      (hr : V.parsed F = some r), Drive V θ F c σ (fun o => Brk θ F c o ∨ Fg.Forges θ o) (A θ F c σ r hr)) :
+    ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
+      (hr : V.parsed F = some r), V.Registered θ F →
+      Game.prob (fun o => V.Verdict .sampled o ∧ ¬ Brk θ F c o ∧ ¬ Fg.Forges θ o) (V.game θ F c) σ ≤
+        FlockSoundness.Game.prob (fun o => ZkExec.LiveAcceptsZK (A θ F c σ r hr).I o)
+          (A θ F c σ r hr).G (Dr θ F c σ r hr).τ :=
+  accept_le_of_couplings Fg kd desc A (fun θ F c σ r hr => (Dr θ F c σ r hr).τ) Brk
+    fun θ F c σ r hr _ => (Dr θ F c σ r hr).coupling
 
 end Verity

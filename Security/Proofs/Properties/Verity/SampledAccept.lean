@@ -16,8 +16,8 @@ probability that flock-verify `--zk` accepts the live audit's transcript at the 
   `AcceptsZK` reads no coin, so this needs no run of the deployed Flock verifier, no `Shows` and no `LiveCoins`; it is
   ONE-3t's `session_verdict` read up to the decision.
 * **The coupling, `PlayCoupling`, open.** A transcript of the play (`proj`) that, off the break and wherever v2
-  accepts, is a session's of the evidence, at the coupling's inputs `I` (`covers`); and the transport of
-  `AcceptsZK I ∘ proj` off the break from the play at `σ` to the live audit at `τ` (`prob_le`). `prob_le` is where the
+  accepts, is a session's of the evidence, at the coupling's inputs `I` (`covers`); and the transport of the verdict
+  with `AcceptsZK I ∘ proj` off the break from the play at `σ` to the live audit at `τ` (`prob_le`). `prob_le` is where the
   device's releases become the session's coins: the play's raw release bits against `auditLive`'s draw (A3's `src`)
   and the live session's points, with ONE-4's `DrawnByDevice` putting a record whose coins no device session released
   in the break.
@@ -220,7 +220,8 @@ theorem componentAccepts_sampled {s : Sent} (h : ComponentAccepts .sampled s) :
 /-- **The play coupled to a live audit**, at the session's inputs `I`, the live audit's game `G` and the strategy `τ`
 the play at `σ` induces: a transcript of each outcome (`proj`) that, off the break `Brk` and wherever sampled proofs'
 verdict accepts, is a session's transcript of v2's evidence, at inputs `I` (`covers`); and off the break, the play
-gives `proj` a transcript flock-verify `--zk` accepts at most as often as the live audit gives its own (`prob_le`). -/
+gives sampled proofs' verdict with a transcript `proj` flock-verify `--zk` accepts at most as often as the live audit
+gives its own (`prob_le`). -/
 structure PlayCoupling (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (Brk : Outcome → Prop)
     {n : ℕ} {Reg : Type} (I : Exec.Inputs) (G : FlockSoundness.Game (Reg × Finset (Fin n) × Exec.Transcript))
     (τ : FlockSoundness.Game.Strategy G) where
@@ -228,7 +229,7 @@ structure PlayCoupling (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy
   covers : ∀ o, V.Verdict .sampled o → ¬ Brk o → ∀ p c' e pub prof, SampledCase o.sent p c' e →
     _root_.SampledProofs.OneStageZk.checkBlobs p c' e (Core.Blobs.ofArray o.sent.blobs) = .accept pub prof →
     SessionInputs p e o.sent.blobs I ∧ ∃ s ∈ e.sessions, SessionTranscript p e o.sent.blobs s (proj o)
-  prob_le : Game.prob (fun o => ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ ≤
+  prob_le : Game.prob (fun o => V.Verdict .sampled o ∧ ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ ≤
     FlockSoundness.Game.prob (fun o => ZkExec.LiveAcceptsZK I o) G τ
 
 /-- **The verdict off the break is a coupled acceptance**: off the break, sampled proofs' verdict accepts at most as
@@ -243,7 +244,7 @@ theorem accept_le_of_coupling {V : Vocab d α} {θ F c : ByteArray} {σ : Game.S
   obtain ⟨hv, hb⟩ := ho
   obtain ⟨p, c', e, pub, prof, hcase, hacc⟩ := componentAccepts_sampled hv.2.2
   obtain ⟨hI, s, hs, ht⟩ := Cp.covers o hv hb p c' e pub prof hcase hacc
-  exact ⟨acceptsZK_of_transcript hacc hs ht hI, hb⟩
+  exact ⟨hv, acceptsZK_of_transcript hacc hs ht hI, hb⟩
 
 /-- **`SampledDeploy.accept_le` from a coupling** at the session `A θ F c σ r hr` and its strategy `τOf`, for each
 registered file that parses, off the collision `Brk` and the forger `Fg`'s success (the coupling's break is either). -/
@@ -273,7 +274,7 @@ noncomputable def PlayCoupling.ofDominated {V : Vocab d α} {θ F c : ByteArray}
     (covers : ∀ o, V.Verdict .sampled o → ¬ Brk o → ∀ p c' e pub prof, SampledCase o.sent p c' e →
       _root_.SampledProofs.OneStageZk.checkBlobs p c' e (Core.Blobs.ofArray o.sent.blobs) = .accept pub prof →
       SessionInputs p e o.sent.blobs I ∧ ∃ s ∈ e.sessions, SessionTranscript p e o.sent.blobs s (proj o))
-    (h : Game.Dominated (fun o => ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ
+    (h : Game.Dominated (fun o => V.Verdict .sampled o ∧ ZkExec.AcceptsZK I (proj o) ∧ ¬ Brk o) (V.game θ F c) σ
       (fun o => ZkExec.LiveAcceptsZK I o) (Pouw.PearlC.FlockTile.toVerity G)) :
     PlayCoupling V θ F c σ Brk I G (Pouw.PearlC.FlockTile.stratOfVerity G (Classical.choose h)) where
   proj := proj
