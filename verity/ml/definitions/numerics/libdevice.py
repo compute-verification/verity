@@ -1,4 +1,4 @@
-"""[ov-sampling] Bit-exact, torch-free transcription of the two libdevice functions inside vLLM's Gumbel-max sampler:
+"""Bit-exact, torch-free transcription of the two libdevice functions inside vLLM's Gumbel-max sampler:
 `__nv_logf` and `__nv_log1pf` (CUDA libdevice.10.bc as shipped with Triton 3.7.1, FTZ variants — Triton compiles kernels with
 `nvvm-reflect-ftz=1`, and the cached PTX of `_gumbel_sample_kernel` shows exactly the instruction mix the IR predicts:
 `fma.rn.ftz.f32` ×192, `add.rz` ×8, `cvt.rn.f32.s32` ×24, `mul.f32` ×40, `add.f32` ×24, `max.f32` ×8, no `lg2.approx`).
