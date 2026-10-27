@@ -147,6 +147,6 @@ quantizer (2 proof blocks of codes and one of the scale), down and residual.
   commit on every SM or on a green context of N (`MODE:LAYOUT:STEPS:N`, the forward on every SM, or `:Nr`, on the other
   SMs' green context; `serve:LAYOUT:STEPS:Nr`, the served step alone there; `--host-lag`, the forward's host waiting on
   the side stream's reads before it allocates), with nvidia-smi's clocks, power and HBM, torch's allocator counters,
-  each overlapped or capped step's roots against the served loop's and a `VERDICT` line a run; `overlap.sh`: it under one
+  each overlapped or capped step's roots against today's loop's and a `VERDICT` line a run; `overlap.sh`: it under one
   GPU lease (its header has the `research run` line). `green_probe.py`: the commit on a green context of N SMs beside
-  int8 GEMMs on the other SMs or every SM, uncoupled or coupled as the served loop couples them (no model).
+  int8 GEMMs on the other SMs or every SM, uncoupled or coupled as today's loop couples them (no model).

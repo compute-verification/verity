@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # overlap.py on one leased H200 (cwd = the source tree's root): the serve-time commit beside e2e_h200's served step at the
-# frozen shape, alone, in the served loop, and overlapped at both priorities. Circuits' shared-row Layout JSON, a fetched
-# fixture (fixtures/artifacts.json), is sent; the served families layout is e2e_h200's own.
+# frozen shape, alone, in today's loop, and overlapped at both priorities. Circuits' shared-row Layout JSON, a fetched
+# fixture (fixtures/artifacts.json), is sent; today's families layout is e2e_h200's own.
 #
 #   research data fetch-fixtures benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
@@ -10,7 +10,7 @@
 #
 # Before the lease: uv sync, attn_ref's cubin, the SHA-512 engine's build. Then one GPU lease of at most LEASE_MIN (30)
 # minutes for overlap.py, its JSON and summary into $OUT. Exit: overlap.py's (0 every run ran and every overlapped root is
-# the served loop's), 3 the setup failed, else the lease's.
+# today's loop's), 3 the setup failed, else the lease's.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run under research run}; OUT=$D/out; IN=$D/inputs; mkdir -p "$OUT"
 fail() { tail -20 "$2"; echo "$1 3" | tee "$OUT/status.txt"; exit 3; }
