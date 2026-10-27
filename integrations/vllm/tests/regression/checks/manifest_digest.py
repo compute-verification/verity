@@ -14,7 +14,7 @@ dropped or renamed changes the digest.  TP rows (#70, #75: rank Programs under b
 The builder is the integration's (the query path `verity-vllm manifest`, Q_module_body_v1 -- the same build / build-global flags
 row_pod.sh uses).
 
-`actual` also states what the built manifest PROMOTED ([R19 int-20, F-r19-int-20]: interior rows whose output crosses a module
+`actual` also states what the built manifest PROMOTED (interior rows whose output crosses a module
 boundary, flagged `promoted: true`) -- the facts a labelled decision on the fixture may name (`resolver.sanction`; #57's decision):
 
     promoted            the count of promoted identity rows (0 on a v1-shaped manifest)
@@ -90,7 +90,7 @@ def _one_or_list(members: list[str]):
 
 
 def _promotion(row: resolver.Row, man: dict) -> dict:
-    """[F-r19-int-20] The promotion facts of a built manifest (see the module docstring): `promoted`, `promoted_member`,
+    """The promotion facts of a built manifest (see the module docstring): `promoted`, `promoted_member`,
     `promoted_member_class`, `only_new` (+ `only_new_basis`, and the set arithmetic against v1 when its manifest.json resolves)."""
     rows = man.get("identities") or []
     v2 = (man.get("query") or {}).get("engine") in QUERY_ENGINES
