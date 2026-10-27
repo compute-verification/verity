@@ -763,7 +763,7 @@ def cmd_table(a: argparse.Namespace) -> int:
     for r in rows:
         model, pred = D6.get((r["k"], r["n"]), ("", float("nan")))
         ms = r["arms"]
-        wrap = f"w{r['wrap']}/{r['wcw']}" if r.get("wrap", 1) == 2 else "w1"
+        wrap = f"w{r['wrap']}/{r['wcw']}" if r.get("wrap", 1) >= 2 else "w1"
         variant = (f"r{r.get('row', '?')} {r.get('cprio', 'hi')} c{r.get('carve', -1)} d{r.get('dyn', 0)} {wrap} "
                    f"k{r.get('ccta', 0)} n{r.get('maxnreg', 208)}" + (f" p{r['pf']}" if r.get("pf") else ""))
         parts, commit = (", ".join(f"{ms[x]['ms']:.3f}" if x in ms else "-" for x in xs)

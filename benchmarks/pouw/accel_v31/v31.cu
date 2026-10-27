@@ -311,6 +311,37 @@ DEV void cp_async16(uint32_t dst, const void* src) {
 }
 DEV void cp_async_wait_all() { asm volatile("cp.async.wait_all;" ::: "memory"); }
 
+// w_X B~^T added into the 128 x CW tile of dO at (i0, j0), after its X w_W^T is stored (rare: A's wraps): thread (row r,
+// group g) over the tile's 32-column blocks g, g + G, ... (G = blockDim / 128), from B~^T's row k of each wrap (k, s)
+template <int CW>
+DEV void wrap_a_side(const WrapArgs& a, size_t i0, size_t j0) {
+  const int t = threadIdx.x, r = t & 127, g = t >> 7, G = blockDim.x >> 7;
+  const int na = a.cntA[i0 + r];
+  if (na == 0) return;
+  const int* LA = a.listA + (i0 + r) * a.capA;
+#pragma unroll 1
+  for (int cb = 32 * g; cb < CW; cb += 32 * G) {
+    const size_t c0 = j0 + cb;
+    int v[32];
+#pragma unroll
+    for (int i = 0; i < 32; ++i) v[i] = 0;
+    for (int q = 0; q < na; ++q) {
+      const int e = __ldg(LA + q);
+      const uint4* p = reinterpret_cast<const uint4*>(a.BtT + (size_t)(e >> 1) * a.n + c0);
+      const int s = e & 1 ? -1 : 1;
+#pragma unroll
+      for (int u = 0; u < 4; ++u) halves8(__ldg(p + u), [&](int i, int x) { v[8 * u + i] += s * x; });
+    }
+    int4* d = reinterpret_cast<int4*>(a.dO + (i0 + r) * a.n + c0);
+#pragma unroll
+    for (int u = 0; u < 8; ++u) {
+      int4 x = d[u];
+      x.x += v[4 * u]; x.y += v[4 * u + 1]; x.z += v[4 * u + 2]; x.w += v[4 * u + 3];
+      d[u] = x;
+    }
+  }
+}
+
 // The same dO over 128 rows x CW columns a CTA (2 CW threads). X w_W^T by columns: noise tile by noise tile, the tile's
 // L' rows of X^T (128 bytes each, 16-byte chunks swizzled by k & 7) go to shared memory, and thread (column l, half h)
 // adds s X[i, k] for its column's wraps in the tile (FormArgs::off) to its 64 rows. It adds v = x ^ 0x80 (s = 1) or
@@ -381,31 +412,95 @@ __global__ void __launch_bounds__(2 * CW, CW == 128 ? 2 : 1) wrap2_kernel(WrapAr
   }
   flush();
   __syncthreads();
-  const int r = t & 127, g = t >> 7;
-  const int na = a.cntA[i0 + r];
-  if (na == 0) return;
-  const int* LA = a.listA + (i0 + r) * a.capA;
-#pragma unroll 1
-  for (int half = 0; half < 2; ++half) {
-    const size_t c0 = j0 + 64 * g + 32 * half;
-    int v[32];
+  wrap_a_side<CW>(a, i0, j0);
+}
+
+// wrap3: wrap2's dO with a warp's lanes on one wrap at a time. A warp owns CW / 8 columns and takes them four at a time
+// (a quad): lane (g, i) = (lane / 8, lane % 8) adds s X[16 i .. 16 i + 15, k] for the wraps (k, s) of the quad's column g,
+// reading 16 bytes of the staged X^T row k (a quad's four reads are four whole 128-byte rows: no bank conflicts). A round
+// costs the most wraps of the quad's four columns, not of a warp's 32; a column out of wraps reads the row of 0x80 bytes
+// past the tile, which adds 0. A lane keeps its 16 rows in 16-bit lanes (wrap2's sums) and its column's wraps and
+// negative wraps since its last flush (n | neg << 16), and flushes the quad into dO before a column passes 256.
+template <int CW>
+__global__ void __launch_bounds__(256, CW == 128 ? 3 : 2) wrap3_kernel(WrapArgs a) {
+  constexpr int CPW = CW / 8, NQ = CPW / 4;
+  constexpr u32 ALL = 0xFFFFFFFFu;
+  extern __shared__ __align__(16) uint8_t xs[];
+  const int t = threadIdx.x, lane = t & 31, g = lane >> 3, i = lane & 7, gl = lane & 24, lp = a.lp, nt = a.nt;
+  const size_t i0 = (size_t)blockIdx.y * TILE, jb = (size_t)blockIdx.x * CW, j0 = jb + (t >> 5) * CPW;
+  const int* offc = a.offB + (j0 + (lane < CPW ? lane : 0)) * (nt + 1);   // lane c < CPW: column j0 + c's offsets
+  u32 acc[NQ][8], cnt[NQ], flushed = 0;
 #pragma unroll
-    for (int i = 0; i < 32; ++i) v[i] = 0;
-    for (int q = 0; q < na; ++q) {
-      const int e = __ldg(LA + q);
-      const uint4* p = reinterpret_cast<const uint4*>(a.BtT + (size_t)(e >> 1) * a.n + c0);
-      const int s = e & 1 ? -1 : 1;
+  for (int q = 0; q < NQ; ++q) {
+    cnt[q] = 0;
 #pragma unroll
-      for (int u = 0; u < 4; ++u) halves8(__ldg(p + u), [&](int i, int x) { v[8 * u + i] += s * x; });
-    }
-    int4* d = reinterpret_cast<int4*>(a.dO + (i0 + r) * a.n + c0);
-#pragma unroll
-    for (int u = 0; u < 8; ++u) {
-      int4 x = d[u];
-      x.x += v[4 * u]; x.y += v[4 * u + 1]; x.z += v[4 * u + 2]; x.w += v[4 * u + 3];
-      d[u] = x;
-    }
+    for (int r = 0; r < 8; ++r) acc[q][r] = 0;
   }
+  if (t < 8) reinterpret_cast<uint4*>(xs + lp * 128)[t] = make_uint4(0x80808080u, 0x80808080u, 0x80808080u, 0x80808080u);
+  // acc[q][2 k + (b & 1)]'s low (b < 2) or high half: row 16 i + 4 k + b of column 4 q + g
+  auto flush = [&](int q) {
+    int* d = a.dO + (i0 + 16 * i) * a.n + j0 + 4 * q + g;
+    const int cst = (int)(cnt[q] >> 16) - 128 * (int)(cnt[q] & 0xFFFF);
+    const bool first = !(flushed >> q & 1);
+#pragma unroll
+    for (int k = 0; k < 4; ++k)
+#pragma unroll
+      for (int b = 0; b < 4; ++b) {
+        int* p = d + (size_t)(4 * k + b) * a.n;
+        const u32 w = acc[q][2 * k + (b & 1)];
+        *p = (first ? 0 : *p) + (int)(b < 2 ? w & 0xFFFF : w >> 16) + cst;
+      }
+#pragma unroll
+    for (int r = 0; r < 8; ++r) acc[q][r] = 0;
+    cnt[q] = 0;
+    flushed |= 1u << q;
+  };
+  const uint32_t xb = (uint32_t)__cvta_generic_to_shared(xs);
+  int o0 = lane < CPW ? __ldg(offc) : 0;
+  for (int tau = 0; tau < nt; ++tau) {
+    const int o1 = lane < CPW ? __ldg(offc + tau + 1) : 0;
+    __syncthreads();
+    for (int e = t; e < lp * 8; e += 256) {
+      const int kk = e >> 3, c = e & 7;
+      cp_async16(xb + kk * 128 + (c << 4), a.XT + (size_t)(tau * lp + kk) * a.m + i0 + 16 * c);
+    }
+    cp_async_wait_all();
+    __syncthreads();
+    const int nl = o1 - o0, kb = tau * lp;
+#pragma unroll
+    for (int q = 0; q < NQ; ++q) {
+      const int src = 4 * q + g, nc = __shfl_sync(ALL, nl, src), bc = __shfl_sync(ALL, o0, src);
+      if (__any_sync(ALL, (int)(cnt[q] & 0xFFFF) + nc > 256)) flush(q);
+      const int R = (int)__reduce_max_sync(ALL, (u32)nc);
+      const int* Lc = a.listB + (j0 + src) * a.capB + bc;
+      u32 inc = (u32)nc;
+      for (int ch = 0; ch < R; ch += 8) {
+        u32 pl = (u32)lp << 7;   // p: the staged row's offset | negative
+        if (ch + i < nc) {
+          const int e = __ldg(Lc + ch + i);
+          pl = (u32)((e >> 1) - kb) << 7 | (u32)(e & 1);
+        }
+        inc += (u32)__popc(__ballot_sync(ALL, pl & 1) >> gl & 0xFF) << 16;
+        const int nr = min(8, R - ch);
+        for (int r = 0; r < nr; ++r) {
+          const u32 p = __shfl_sync(ALL, pl, gl | r);
+          const uint4 v = *reinterpret_cast<const uint4*>(xs + (p & ~1u) + 16 * i);
+          const u32 m = 0x80808080u ^ (0u - (p & 1u)), w[4] = {v.x ^ m, v.y ^ m, v.z ^ m, v.w ^ m};
+#pragma unroll
+          for (int k = 0; k < 4; ++k) {
+            acc[q][2 * k] += __byte_perm(w[k], 0, 0x4240);
+            acc[q][2 * k + 1] += __byte_perm(w[k], 0, 0x4341);
+          }
+        }
+      }
+      cnt[q] += inc;
+    }
+    o0 = o1;
+  }
+#pragma unroll
+  for (int q = 0; q < NQ; ++q) flush(q);
+  __syncthreads();
+  wrap_a_side<CW>(a, i0, jb);
 }
 
 // ---------------------------------------------------------------- TMA, mbarrier, ldmatrix, mma.sync (floored_gemm's)
@@ -739,16 +834,11 @@ DEV void pf_to(const uint8_t* p, u32 pf) {
   if (pf == 2) asm volatile("prefetch.global.L2 [%0];" ::"l"(p));
   else pf_l1(p);
 }
-struct CRow {
-  const uint8_t* p;
-  u32 pfm;
-  DEV uint4 ld16(u32 off) const { return ldg16(p + off); }
-  DEV void pf(u32 off) const { pf_to(p + off, pfm); }
-};
-// O's row h of a tile: cells [h ROW / 4, (h + 1) ROW / 4) in the tile's row-major order, read from the m x N output
-struct ORow {
-  const uint8_t* base;   // the tile's first cell
-  u64 stride;            // N 4
+// a row's 4-byte cell c (from c0) at base + (c >> 7) stride + (c & 127) 4: O's row h of a tile (the tile's first cell,
+// stride N 4, c0 = h ROW / 4), or a words row (stride 512 and c0 = 0: contiguous)
+struct CellRow {
+  const uint8_t* base;
+  u64 stride;
   u32 c0, pfm;
   DEV const uint8_t* at(u32 off) const {
     const u32 c = c0 + off / 4;
@@ -757,7 +847,9 @@ struct ORow {
   DEV uint4 ld16(u32 off) const { return ldg16(at(off)); }
   DEV void pf(u32 off) const { pf_to(at(off), pfm); }
 };
-// leaf pos: tile pos / LPT; j = pos % LPT < S ROW_W a words row (segment j / ROW_W), else O's row j - S ROW_W
+// leaf pos: tile pos / LPT; j = pos % LPT < S ROW_W a words row (segment j / ROW_W), else O's row j - S ROW_W. Both kinds
+// go through one CellRow, so a warp whose leaves straddle the two (most warps: LPT isn't a multiple of 32) hashes once,
+// not once a kind.
 struct V31Row {
   const uint8_t* words;
   const uint8_t* O;
@@ -765,12 +857,9 @@ struct V31Row {
   u32 row, S, pf;
   DEV void digest(u64 pos, u64* x) const {
     const u64 t = pos / lpt, j = pos % lpt;
-    if (j < srw) {
-      hash_after_block(C.mid_P, CRow{words + t * S * 32768ull + j * row, pf}, row, x, pf != 0);
-    } else {
-      const u64 tm = t / tiles_n, tn = t % tiles_n;
-      hash_after_block(C.mid_P, ORow{O + (tm * TILE * N + tn * TILE) * 4, N * 4, (u32)((j - srw) * row / 4), pf}, row, x, pf != 0);
-    }
+    const bool w = j < srw;
+    const uint8_t* base = w ? words + t * S * 32768ull + j * row : O + ((t / tiles_n) * TILE * N + (t % tiles_n) * TILE) * 4;
+    hash_after_block(C.mid_P, CellRow{base, w ? 512ull : N * 4, w ? 0u : (u32)((j - srw) * row / 4), pf}, row, x, pf != 0);
   }
 };
 // timing only (the bench's leaf_nomem arm): a row's bytes made in registers, V31Row's compressions without its loads
@@ -1043,7 +1132,8 @@ static std::string env_str(const char* name, const char* dflt) {
 // The knobs a bench line records. V31_CARVE: every kernel's preferred shared-memory carveout (percent; < 0 leaves the
 // driver's choice), so commit_gpu's small-path CTAs (no shared memory) can sit beside a GEMM CTA; V31_DYN: the GEMM takes
 // its tiles from a counter; V31_CPRIO: the commit stream's priority against the compute stream's (hi, lo or eq); V31_WRAP:
-// the wrap correction's kernel (1: wrap_kernel, 2: wrap2_kernel), V31_WCW its columns a CTA (256 where N allows, or 128);
+// the wrap correction's kernel (1: wrap_kernel, 2: wrap2_kernel, 3: wrap3_kernel), V31_WCW its columns a CTA (256 where N
+// allows, or 128);
 // V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small);
 // V31_PF: each row's next 128-byte block prefetched as its compression starts (0 none, 1 into L1, 2 into L2).
 struct Knobs {
@@ -1054,7 +1144,8 @@ struct Knobs {
 static void set_carveout(int pct) {
   if (pct < 0) return;
   const void* ks[] = {(const void*)gemm_kernel<true>,  (const void*)gemm_kernel<false>,  (const void*)wrap_kernel,
-                      (const void*)wrap2_kernel<128>,  (const void*)wrap2_kernel<256>,   (const void*)form_a_kernel,
+                      (const void*)wrap2_kernel<128>,  (const void*)wrap2_kernel<256>,   (const void*)wrap3_kernel<128>,
+                      (const void*)wrap3_kernel<256>,  (const void*)form_a_kernel,
                       (const void*)form_b_kernel,      (const void*)bits_kernel,         (const void*)noise_kernel,
                       (const void*)perm_kernel,        (const void*)salt_small<true>,    (const void*)leaf_small<V31Row, 0>,
                       (const void*)level_kernel,       (const void*)top_small,           (const void*)salt_persist,
@@ -1189,6 +1280,8 @@ struct Ctx {
   void wrap(cudaStream_t st) {
     const WrapArgs w{XT, BtT, listA, cntA, listB, cntB, dO, m, n, capA, capB, offB, lp, NT};
     if (kn.wrap == 1) wrap_kernel<<<dim3(n / TILE, m / TILE), 256, TILE * 129 * 4, st>>>(w);
+    else if (kn.wrap == 3 && wcw == 256) wrap3_kernel<256><<<dim3(n / 256, m / TILE), 256, (lp + 1) * 128, st>>>(w);
+    else if (kn.wrap == 3) wrap3_kernel<128><<<dim3(n / 128, m / TILE), 256, (lp + 1) * 128, st>>>(w);
     else if (wcw == 256) wrap2_kernel<256><<<dim3(n / 256, m / TILE), 512, lp * 128, st>>>(w);
     else wrap2_kernel<128><<<dim3(n / 128, m / TILE), 256, lp * 128, st>>>(w);
   }
@@ -1275,7 +1368,8 @@ static void kernel_attrs(FILE* f) {
   const KAttr ks[] = {{"gemm_proto", (const void*)gemm_kernel<true>}, {"gemm_plain", (const void*)gemm_kernel<false>},
                       {"form_a", (const void*)form_a_kernel}, {"form_b", (const void*)form_b_kernel},
                       {"wrap", (const void*)wrap_kernel}, {"wrap2_128", (const void*)wrap2_kernel<128>},
-                      {"wrap2_256", (const void*)wrap2_kernel<256>}, {"bits", (const void*)bits_kernel},
+                      {"wrap2_256", (const void*)wrap2_kernel<256>}, {"wrap3_128", (const void*)wrap3_kernel<128>},
+                      {"wrap3_256", (const void*)wrap3_kernel<256>}, {"bits", (const void*)bits_kernel},
                       {"leaf_small", (const void*)leaf_small<V31Row, 0>}, {"salt_small", (const void*)salt_small<true>},
                       {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist},
                       {"leaf_persist_nomem", (const void*)leaf_persist<NoMemRow>}};

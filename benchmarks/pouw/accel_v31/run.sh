@@ -19,9 +19,9 @@
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
-# cprio (lo), carve (100), dyn (1), wrap (2), wcw (256), ccta (1), pf (0) (v31.cu's Knobs) and nreg (the GEMM's register cap, a
-# build of its own; default v31.cu's), default row=8192; REPS (default 7); Q, the proof blocks a verdict opens (default
-# 64); LP, T, ROW (the gates' default 256 3 1024);
+# cprio (lo), carve (100), dyn (1), wrap (2; 1, 2 or 3), wcw (256), ccta (1), pf (0) (v31.cu's Knobs) and nreg (the GEMM's
+# register cap, a build of its own; default v31.cu's), default row=8192; REPS (default 7); Q, the proof blocks a verdict
+# opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
 # uv run -q --no-project --with numpy python: the node's python3 has no numpy); LEASE, the command that leases the GPU
 # (default gpu-lease 1 --wait --max-min 25 --; a timed run passes "gpu-lease 8 --wait --timed --max-min 30 --" under
@@ -65,7 +65,7 @@ done
 # gates: NAME M N K OPERANDS CHEAT [LP T ROW]. Honest ones cover a partial last segment (K 1280), wrap-heavy operands
 # (uniform; at N 384 wrap2's 128 columns a CTA, at N 512 its 256), zeros, a third Z digit (K 20480: 208 NT >= 2^14), a
 # third Y digit (K 32768: 128 NT >= 2^14), L' 512 at t 2, rows of 2, 8 and 32 KiB; the cheats skip a noise tile, forge
-# one tile's T_1, or one tile's O (of 4 tiles). The gates run v31.cu's default knobs.
+# one tile's T_1, or one tile's O (of 4 tiles). The gates run the first variant's knobs (the bench's samples check the rest).
 GATES=${GATES:-"
 g-llm 256 256 1536 llm none
 g-uniform 256 384 1280 uniform none
@@ -116,7 +116,8 @@ $LEASE bash -c '
   "$W/v31" attrs > "$O/attrs.json" 2>&1
   while read -r name m n k ops cheat lp t row; do
     [ -n "$name" ] || continue
-    "$W/v31" gate "$W/gates/$name" "$m" "$n" "$k" "${lp:-$LP}" "${t:-$T}" "${row:-$ROW}" "$cheat" >> "$O/gates.log" 2>&1
+    env $(knob_env "${VARIANTS%% *}") "$W/v31" gate "$W/gates/$name" "$m" "$n" "$k" "${lp:-$LP}" "${t:-$T}" "${row:-$ROW}" \
+      "$cheat" >> "$O/gates.log" 2>&1
     echo "gate $name rc $?" >> "$O/rc.txt"
   done < "$W/gates.txt"'
 echo "lease gates rc $?" >> "$O/rc.txt"
