@@ -1,5 +1,6 @@
 # The toy onsite example's rung on the ladder (examples/README.md): the CPU toy (integrations/torch_loop) through every
-# protocol and the wipe, composed through onsite. Its runner is run.sh (`verity example toy-onsite`). Placed where its run of
+# protocol and the wipe, composed through onsite. Its runner is benchmarks/all_protocols/run.sh, which #4903's move makes this
+# directory's run.sh (`verity example toy-onsite`); until then it is `verity bench all-protocols`. Placed where its run of
 # record ran: every party of the one run on vy-nebius-cpu-4, the verifier's coins in-process on the prover's node. Level 2
 # needs the auditor's roles on auditor-host: the live-gate run (CMP-90, coins from vy-challenger-1) is cited here once #4726
 # and #4980 land.
