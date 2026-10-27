@@ -3,22 +3,21 @@ import Definitions.Pouw.Dither
 /-!
 # SAK at the served words: the work premise of `Properties.Pouw.Served.ServedWork` (trusted)
 
-`Pouw.SakLb.SAKResidual` (SAK-LB, #4875) states symmetric algorithmic knowledge for exact matrix products as one
+`Pouw.SakLb.SAKResidual` states symmetric algorithmic knowledge for exact matrix products as one
 pointwise premise on the no-fold round's cells: outside a set of the round's dithers of probability at most `κdeg B`, a
 program that exchanges no bits and reads at most `B` bits of advice costs at least the fraction of the words it gets
 right times `pub`, less a luck allowance `lam`. It is a proof-only definition over `noFoldRound`'s types.
 
-`SAKServed` is the same claim at the served protocol's types (`PouwCheck.Period`, H1's design): a window's words are
+`SAKServed` is the same claim at the served protocol's types (`PouwCheck.Period`): a window's words are
 its tiles' (`Fin Np → W`), the dither is the window's round-0 coin (its salt, `Properties.Pouw.Period.SaltIsLiveCoin`),
 and a tile counts as right only when all of its words are the honest ones (`rightWords`), each weighted by its
 credited words `wt t`. At `pub = p · Σ_t wt t` the right fraction by tiles is at most the right fraction by words, so
 `SakLb.SAKResidual` at the same `μ`, `lam` and `κdeg`, on a round whose cells are the tiles' credited words, gives
 `SAKServed` pointwise: it asks no more of 𝓜.
 
-**Non-vacuity rests on the fixed model.** RM1 (note:compute-research/20261027T0035Z-draft-rt-model-min) shows that 𝓜
-as `Definitions.Core.Accel` writes it makes `SAKMatmul` and `SAKResidual` false: free register reductions run the four
-Russians' method below the public best's cost. `SAKServed` is false there too. A guarantee that takes it says something
-only on the model MODEL-MIN fixes (CMP-165).
+**Non-vacuity rests on the fixed model.** 𝓜 as `Definitions.Core.Accel` writes it makes `SAKMatmul` and
+`SAKResidual` false: free register reductions run the four Russians' method below the public best's cost. `SAKServed`
+is false there too. A guarantee that takes it says something only on a model that charges those reductions.
 -/
 
 namespace Pouw.Assumptions
@@ -32,7 +31,7 @@ noncomputable def rightWords {I D W : Type} {Np : ℕ} (hon : I → D → Fin Np
     (T : Fin Np → W) : ℝ :=
   ∑ t : Fin Np, if T t = hon a d t then wt t else 0
 
-/-- `pouw-sak-served` (proposed; `SakLb.SAKResidual` at the served words, R-ACCEL-6). **SAK at the served words**: in
+/-- `pouw-sak-served` (proposed; `SakLb.SAKResidual` at the served words). **SAK at the served words**: in
 𝓜 at its device premises, on every registrable instance `a ∈ Reg`, every program that exchanges no bits with outside
 machines, on any advice `s` of at most `B` bits fixed before the window's salt `d`, costs at least `p` a credited word
 it gets right, less the luck allowance `lam a`, at every salt outside a set `Deg` of probability at most `κdeg B`:
@@ -44,11 +43,11 @@ cost a credited word at the period's dual prices `μ`, one price for the tile st
 instance the protocol lets a prover register, so a prover that registers its cheapest instance gets that instance's
 words at `p` each, no less. The advice is anything computed before the salt within (G1)'s memory, as `SAKMatmul`'s
 (the un-noised products, the weights' preprocessing), and the degenerate salts are those on which J10-R's noise leaves
-the product's structure (finding W2).
+the product's structure.
 
 It is falsified by any program on the card, with any advice, that gets a share of a window's tiles right on most
-salts at a measured priced cost below `p` a credited word of them, less `lam`. Under RM1 it is false of 𝓜 as written
-(module doc). -/
+salts at a measured priced cost below `p` a credited word of them, less `lam`. It is false of 𝓜 as written (module
+doc). -/
 def SAKServed (G : Accel) (μ : G.Res → ℝ) {I D W : Type} [Fintype D] {Np : ℕ} (Reg : Set I)
     (hon : I → D → Fin Np → W) (wt : Fin Np → ℝ) (p : ℝ) (lam : I → ℝ) (κdeg : ℕ → ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ a ∈ Reg, ∀ (B : ℕ) (St : Type), (∃ e : St → Fin (2 ^ B), Function.Injective e) →

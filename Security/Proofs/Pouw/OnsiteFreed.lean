@@ -14,15 +14,15 @@ import Proofs.Pouw.DitherWitness
 * `outsourcePeriod_of_perProgram`: the per-program `OutsourceWithinEgress` implies its period form, so
   `OutsourceWithinEgressPeriod` asks no more of the model. Each program is replaced by its exchange-free one; the state
   path, and so the transcript, is unchanged, and the answers' exchanged bits are nonnegative (G2).
-* `OnsiteFreed_honest`, `OnsiteFreed_nontrivial` (LEAN-66): at `Proofs.Pouw.DitherWitness`'s machine `tw`, round
-  `twRound` and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`), with the work check the witness's sampling blocks'
+* `OnsiteFreed_honest`, `OnsiteFreed_nontrivial`: at `Definitions.Pouw.Witness`'s machine `tw`, round `twRound`
+  and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`), with the work check the witness's sampling blocks'
   checks (`twWork`). Every premise holds there: the remote floor at `F = (1 − ε_W) C`, `ε_W = 1/7 + ln 2 / 2`
   `WorkSound`'s error at the witness, from `WorkSound`'s conclusion there (`witness_freed`) at the prover with every
   answer at no use (`fitAnswers`, which passes `WorkSound`'s devices' reading) by filling each resource the prover
   leaves with its other job; the outsourcing premise at `β = 0` from the per-program one; the certifier's count
   at `K = 0` and `δ = 0`, since the witness machine exchanges nothing. The onsite verdict accepts the honest prover,
-  and the bound is `ε = ε_W < 1` at `κ + δ = 1/2`. At verdicts that accept everything the conclusion is false: a prover that does nothing
-  leaves the period to other work worth 46 against at most `32 + ε C < 46`.
+  and the bound is `ε = ε_W < 1` at `κ + δ = 1/2`. At verdicts that accept everything the conclusion is false: a
+  prover that does nothing leaves the period to other work worth 46 against at most `32 + ε C < 46`.
 
 **What the witness doesn't show.** The witness machine exchanges no bits, so `β = K = 0` and the certifier's check
 refuses nothing (`twNet`); the onsite statement's `β K` term and the certifier's refusals aren't exercised.
@@ -142,7 +142,7 @@ theorem withPrograms_timedUse (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (r : G
   rw [withPrograms_commitIn A (fc := A.commit) (fw := A.work) (fa := fa) (fun _ _ => rfl) (fun _ _ => rfl),
     withPrograms_workIn A (fc := A.commit) (fw := A.work) (fa := fa) (fun _ _ => rfl) (fun _ _ => rfl)]
 
-/-- **The per-program price of an exchanged bit implies its period form** (RT-POOL RP21): each sampling block's
+/-- **The per-program price of an exchanged bit implies its period form**: each sampling block's
 commit phase, work and answer replaced by its exchange-free one, the prover sends the same transcript, and its timed
 work costs at most `β` a bit its commit phases and work exchanged more, which is at most `β` a bit its programs
 exchanged (an answer's bits are a count, G2). So `OutsourceWithinEgressPeriod` asks no more of the model than
@@ -392,7 +392,7 @@ section Witnesses
 
 open Pouw.Witness Pouw.SecurityProofs.DitherWitness Pouw.SecurityProofs.OnsiteFreedWitness
 
-/-- **`OnsiteFreed`'s honest witness** (LEAN-66, CMP-145): at `Proofs.Pouw.DitherWitness`'s machine, round and period,
+/-- **`OnsiteFreed`'s honest witness**: at `Definitions.Pouw.Witness`'s machine, round and period,
 every premise of `OnsiteFreed` holds: the dual price, `C = 14 > 0`, `β = 0`, G1, G2, P1 and P2, the remote floor at
 `F = (1 − ε_W) C` and `κ = 1/2` (from `WorkSound` there), the period form of the outsourcing premise (from the
 per-program one) and the certifier's count at `K = 0` and `δ = 0`. The bound says something (`ε = ε_W < 1`,
@@ -414,7 +414,7 @@ theorem OnsiteFreed_honest :
   show ∑ _b : Fin 2, ((0 : ℝ) + 0 + 0) ≤ 0
   simp
 
-/-- **`OnsiteFreed`'s nontrivial witness** (LEAN-66, CMP-145): its conclusion at the honest witness's instance
+/-- **`OnsiteFreed`'s nontrivial witness**: its conclusion at the honest witness's instance
 (`ε = ε_W`, `C = 14`, `κ + δ = 1/2`) is false at verdicts that accept everything. The quiet prover is accepted on
 every oracle and coins and leaves the period to other work worth 46, against at most `32 + ε C < 46` for any honest
 strategy, so the event has probability 1. -/

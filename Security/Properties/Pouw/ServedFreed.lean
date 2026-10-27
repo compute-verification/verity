@@ -6,15 +6,15 @@ import Properties.Pouw.ServedWork
 
 `ServedWork` is the remote form: the prover's whole inventory is one machine of 𝓜 whose programs exchange nothing
 outside it, and an accepted period's priced work on it is at least `p` a credited word, less the luck allowances.
-`ServedFreed` is the onsite form at the same check (H1, J10-R, `PouwCheck.Credit.window` on each window): the
+`ServedFreed` is the onsite form at the same check (the J10-R period, `PouwCheck.Credit.window` on each window): the
 inventory is the registered devices, a network certifier counts the bits their window programs exchange with machines
 outside them, and an accepted period that the certifier also accepts frees at most `ε C` of the registered devices'
-capacity at the period's dual price (R-ACCEL-1's freed compute, `Pouw.Dither.Period.FreedWithin`). It composes:
+capacity at the period's dual price (`Pouw.Dither.Period.FreedWithin`). It composes:
 
 * `ServedWork` at an exchange-free replacement of the window programs;
-* the price of an exchanged bit over the period's window programs together (`OutsourceWithinEgressServed`, RT-POOL
-  RP21): the window programs have exchange-free ones, each fixed before its window's salt, with the same outputs at the
-  windows' inputs, whose priced work is at most `β` a bit the originals exchanged more;
+* the price of an exchanged bit over the period's window programs together (`OutsourceWithinEgressServed`): the
+  window programs have exchange-free ones, each fixed before its window's salt, with the same outputs at the windows'
+  inputs, whose priced work is at most `β` a bit the originals exchanged more;
 * the certifier's count (`CertifiedExchange`): it accepts a period whose window programs exchanged more than `K` bits
   but with probability `δ`;
 * weak duality (`Pouw.Guarantees.Dither.FreedOfFloor`): a floor on the credited work at the dual price bounds what
@@ -23,15 +23,14 @@ capacity at the period's dual price (R-ACCEL-1's freed compute, `Pouw.Dither.Per
 `ε` is the period's own: an accepted period's credit (`creditPrefix`) depends on its prefix, so the bound reads
 `ε(x) C = max(0, C − (p · creditPrefix(x) − Σ_w lam_w) + β K)`.
 
-**Non-vacuity rests on the fixed model.** `ServedWork`'s `SAKServed` is false on 𝓜 as written (RM1,
-note:compute-research/20261027T0035Z-draft-rt-model-min), so this statement says something only on the model MODEL-MIN
-fixes (CMP-165).
+**Non-vacuity rests on the fixed model.** `ServedWork`'s `SAKServed` is false on 𝓜 as written, so this statement says
+something only on a model that charges the free register reductions that falsify it.
 
-**The coins stay in the boundary** (RT-POOL RP4). `OutsourceWithinEgressServed` is claimed where a window's salt
+**The coins stay in the boundary.** `OutsourceWithinEgressServed` is claimed where a window's salt
 reaches a machine outside the registered devices only through a bit their programs exchange (`CoinsConfidential`).
-For the MVP that holds by placement (Daniel's RP4 ruling): the device that runs a server's network certifier produces
-that server's live coins, and private messages travel only on private links (`WitnessPathPrivate`). Trust in that
-device and its host provider is `trusted-host`.
+For the MVP that holds by placement: the device that runs a server's network certifier produces that server's live
+coins, and private messages travel only on private links (`WitnessPathPrivate`). Trust in that device and its host
+provider is `trusted-host`.
 
 The proof is `Proofs.Pouw.ServedFreed`; `Proofs.Pouw.ServedFreed.Honest` has its honest and nontrivial lemmas.
 -/
@@ -41,8 +40,8 @@ namespace Properties.Pouw.Served
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Properties.Pouw.PeriodJ10R
 
-/-- `pouw-outsource-egress-served` (proposed; class L, RT-POOL RP21; `pouw-outsource-egress` over a period's window
-programs together). **An exchanged bit replaces at most `β` of priced work, over a period's window programs**: in the
+/-- `pouw-outsource-egress-served` (proposed; class L; `pouw-outsource-egress` over a period's window programs
+together). **An exchanged bit replaces at most `β` of priced work, over a period's window programs**: in the
 model at its device premises, for the prover's instances `inst` and advice `state`, every family of window programs
 `work` fixed before its windows' salts (`FixedBeforeSalt`) has an exchange-free family `work'`, also fixed before the
 salts, that outputs what `work` does at each window's advice and salt, and whose priced work over the period is at
@@ -51,7 +50,7 @@ most `work`'s plus `β` a bit `work` exchanged with machines outside the registe
 Main's per-program `Pouw.Assumptions.OutsourceWithinEgress` implies it
 (`Properties.Pouw.Served.SecurityProofs.outsourceServed_of_perProgram`): this is the weaker claim. At `β` it holds
 only if a window's honest priced cost is at most `β` times the fewest bits that carry its salt out and its outputs
-back (RT-PROTO-2 P2). It is falsified by window programs, fixed before their salts, whose every exchange-free
+back. It is falsified by window programs, fixed before their salts, whose every exchange-free
 replacement with the same outputs costs more than `β` a bit they exchanged more, or by a salt readable outside the
 boundary but through a counted bit (module doc). -/
 def OutsourceWithinEgressServed {C B I St : Type} (O : Type) {m n : ℕ} (hm : 0 < m) (G : Pouw.Dither.Accel)
@@ -67,17 +66,17 @@ def OutsourceWithinEgressServed {C B I St : Type} (O : Type) {m n : ℕ} (hm : 0
           ∑ w, G.cost μ (work x w) (state x w, saltCoin hm x w) +
             β * ∑ w, G.ext (work x w) (state x w, saltCoin hm x w)
 
-/-- `pouw-certified-exchange` (proposed; the network certifier's count at the served check, NET-84). **The certifier
+/-- `pouw-certified-exchange` (proposed; the network certifier's count at the served check). **The certifier
 accepts a period that exchanged more than `K` bits but with probability `δ`**: the probability over the period's coins
 that the certifier's check `cert` accepts while the period's window programs exchanged `ext > K` bits with machines
 outside the registered devices is at most `δ`. The served form of `Pouw.Assumptions.CertifiedImport`; the certifier's
 guarantee (`NetTiming.Guarantees.PeriodLeakAccepted`) bounds the information an accepted period carries out, and the
-step from it to this count is open (NET-84). It is falsified by a strategy whose periods the certifier accepts, with
+step from it to this count is open. It is falsified by a strategy whose periods the certifier accepts, with
 probability more than `δ`, after its window programs exchanged more than `K` bits. -/
 def CertifiedExchange {Ω : Type} [Fintype Ω] (cert : Ω → Prop) (ext : Ω → ℝ) (K δ : ℝ) : Prop :=
   prob (fun x => cert x ∧ K < ext x) ≤ δ
 
-/-- **The served PoUW protocol's freed compute, onsite** (H1, J10-R, `Credit.window`'s verdict; R-ACCEL-1, CMP-145).
+/-- **The served PoUW protocol's freed compute, onsite** (the J10-R period, `Credit.window`'s verdict).
 Under `ServedWork`'s premises and setting, with the inventory's closure (`ext = 0`) dropped: let the window programs
 `work` run on the registered devices, one machine `G` of 𝓜 at its device premises, and exchange bits with machines
 outside them; let `Pd` be the registered devices' period with `μ` its dual price at one credit (`Period.DualOpt μ 1`),
@@ -87,7 +86,7 @@ exchanged more than `K` bits but with probability `δ` (`CertifiedExchange`), th
 `δ_s + n·(δ_bind + δ_ks) + n·κ_deg(B) + δ`, a period that the work check and the certifier both accept frees at most
 `ε(x) C` of the registered devices' capacity beside its windows' timed work, where
 `ε(x) C = max(0, C − (p · creditPrefix(x) − Σ_w lam(inst_w)) + β K)`: no other work `z` that fits beside the windows'
-use is worth more than an honest strategy's plus `ε(x) C`. Non-vacuous only on the model MODEL-MIN fixes (module doc). -/
+use is worth more than an honest strategy's plus `ε(x) C`. Non-vacuous only on the fixed model (module doc). -/
 def ServedFreed : Prop :=
   ∀ {ι K T L U C Ξ V I W St : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty C] [Nonempty Ξ] [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
