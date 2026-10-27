@@ -35,6 +35,14 @@ def test_the_derivation_is_monotone_and_crosses_a_power_of_two():
     assert rounds_log(zk_rounds(26, 22, 3)) == 7 and rounds_log(zk_rounds(32, 27, 64)) == 8
 
 
+def test_the_largest_admitted_schedule_keeps_a6_under_2_to_the_minus_236():
+    """ASSUMPTIONS.md A6's `N·2^-256` at the largest schedule a statement can draw: `m ≤ 35` (`Stmt.setup`), `k_log ≤ 27` and
+    1024 regions (`Stmt.checkInRange`), 64 tables (`Tags.MAX_TABLES`), each table two rep streams beside the session's."""
+    top = max(rounds_log(zk_rounds(m, 27, 1024)) for m in range(22, 36))
+    n = (1 + 2 * 64) << top
+    assert top == 12 and n < 2**20 and n * 2**236 < 2**256
+
+
 @pytest.mark.parametrize("session", sorted(SESSIONS))
 def test_recorded_sessions_draw_the_derived_schedule(session):
     stage = FIXTURE / "stage" / "circuit.txt"

@@ -151,9 +151,8 @@ coins.
     prover could have drawn itself. The step is statistical only (no hash property, no `hash-derived-key`, no CRS):
     the key is fresh for each session.
   - *N* counts every leaf committed under the session's key, opened or not: `|streams| · 2^rounds_log`
-    (`CoinTree::build`; no padding leaf): `N = (1 + 2J)·2^rounds_log`, the statement's `rounds_log`
-    (`Flock.zkRounds`, `coin_spec_of`). Admitted: at most 12 (`Stmt.checkInRange`), 64 tables: `N < 2^19`,
-    so `N·2^-256 < 2^-237`.
+    (`CoinTree::build`; no padding leaf), `(1 + 2J)·2^rounds_log` at the statement's `rounds_log` (`Flock.zkRounds`).
+    At most 12 (`m ≤ 35`, `Stmt.checkInRange`) and 64 tables: `N < 2^20`, `N·2^-256 < 2^-236`.
   - *What the bound needs.* The salts are uniform and independent, one per leaf, never reused. The key is independent
     of the salts, drawn after the prover's nonce, and never reused across sessions. Both come from `/dev/urandom`, which
     is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the draw at `Hello`. The
