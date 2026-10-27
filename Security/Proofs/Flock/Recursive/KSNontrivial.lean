@@ -16,10 +16,11 @@ round with no SHA-512 call; it computes nothing, so its record holds no call and
 the dense statements stay deployed. `RecursiveKSAtAll` is `RecursiveKSAt` there.
 
 * **The nontrivial lemma** (`recursiveKS_nontrivial`): `RecursiveKS`'s `KSLin2On` at accept-all is false at every
-  brings, from one named assumption, `RecDeploy.KSFixture`: some bytes the deployed readers map to a hand-built inner
-  statement (`DeployedParses`: a one-gate circuit `x ⊕ x` claimed to output `1` on `0`, one table at `m = 22`), with a
-  coin-server record at whose transcript its V\* parts are in scope (`PartsInScope`). Its density, its inner statement's
-  lack of a witness (by `decide`) and its plain scope are proved here. The silent prover is accepted on every run and
+  brings, from one named assumption, `RecDeploy.KSFixture`: some bytes the deployed readers map to a hand-built false
+  row (`DeployedParses`: a row of the inner statement's first table with a zero A side, the lowering of a gate `w ⊕ w`,
+  whose bit block `0` fixes to `1`) and to `PlainIn`'s checks, with a coin-server record at whose transcript its V\* parts
+  are in scope (`PartsInScope`). Its density, its inner statement's lack of a witness and its plain scope are proved
+  here. The silent prover is accepted on every run and
   nothing is extracted, so `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each at a
   large enough `M` and `R`; and `λ₂ ≥ 100` there (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`
   (`κ_lt_half_of_lamLin2`). The general form is
@@ -348,7 +349,7 @@ theorem flockR_of_R (b : RecDeploy.Brings) (L : Claims.Recursion.VStarB.LayoutB)
 
 /-- **The fixture's statement is dense**: its compiled form, by `DeployedParses`, has no holo inner circuit and no
 RecSparse phase. -/
-theorem denseAt_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) : RecDeploy.DenseAt x := by
+theorem denseAt_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x i₀) : RecDeploy.DenseAt x := by
   intro s hs
   have h1 := h.1
   rw [hs] at h1
@@ -356,9 +357,17 @@ theorem denseAt_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) : RecDeploy
   show s.form.holo = false ∧ s.form.sparse = none
   exact ⟨congrArg Prod.fst h2, congrArg Prod.snd h2⟩
 
-/-- **The fixture's inner statement has no witness**: block 0 claims that `innerCircuit₀`, which outputs `0` on every
-input, outputs `1` on `0`. -/
-theorem notR_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) (v : Claims.Flock.Wit) :
+/-- A row whose coefficients are all zero sums to `0`. -/
+theorem xsum_of_zero {A z : ℕ → Bool} {n : ℕ} (h : ∀ r < n, A r = false) : _root_.Flock.Readable.xsum A z n = false := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    rw [_root_.Flock.Readable.xsum_succ, ih (fun r hr => h r (by omega)), h n (by omega)]
+    rfl
+
+/-- **The fixture's inner statement has no witness**: in block `0`, row `i₀` of the first table has a zero A side, so
+the system forces its bit to `0` (`Sys.Holds`'s rows), while the table's fixed bit at `i₀` sets it to `1`. -/
+theorem notR_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x i₀) (v : Claims.Flock.Wit) :
     ¬ Claims.Flock.R
       (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
         (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
@@ -366,22 +375,77 @@ theorem notR_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) (v : Claims.Fl
         RecDeploy.DeployedR.wR).deploy.parse (RecDeploy.xIOf x) v := by
   intro hR
   obtain ⟨s, hs, hrel⟩ := hR
+  have hs' : (_root_.Flock.Readable.parseBytes (FlockDeploy.readOf false) (RecDeploy.xIOf x)).map
+      (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation) = some s := hs
+  obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hs'
   have h2 := h.2.1
-  rw [hs] at h2
-  have h3 := Option.some.inj (h2 : some (s.C, s.inp 0, s.out 0, s.pub) = some RecDeploy.innerView₀)
-  have hC : s.C = RecDeploy.innerCircuit₀ := congrArg Prod.fst h3
-  have hi : s.inp 0 = [.pub 0] := congrArg (fun p => p.2.1) h3
-  have ho : s.out 0 = [.pub 1] := congrArg (fun p => p.2.2.1) h3
-  have hp : s.pub = [false, true] := congrArg (fun p => p.2.2.2) h3
-  have hb := hrel 0 (by unfold Claims.Flock.Stmt.nBlocks; positivity)
-  rw [hC, hi, ho] at hb
-  first
-    | (simp only [List.map_cons, List.map_nil, Claims.Flock.val, hp] at hb; revert hb; decide)
-    | (simp [Claims.Flock.val, hp, RecDeploy.innerCircuit₀, Claims.Circuit.eval, Claims.Circuit.wires] at hb)
+  rw [hp] at h2
+  have h3 : RecDeploy.rowView i₀ p = some RecDeploy.rowView₀ := h2
+  unfold RecDeploy.rowView at h3
+  cases hst : p.sts[0]? with
+  | none => rw [hst] at h3; simp at h3
+  | some st =>
+    rw [hst] at h3
+    have h4 := Option.some.inj h3
+    simp only [RecDeploy.rowView₀, Prod.mk.injEq] at h4
+    obtain ⟨hOk, hi, hrow, hfix⟩ := h4
+    have hOk' : (_root_.Flock.Readable.Tab.ofStmt st).Ok := of_decide_eq_true hOk
+    have hi' : i₀ < 2 ^ st.c.kLog := of_decide_eq_true hi
+    have hJ : 0 < p.sts.size := by
+      first
+        | exact (Array.getElem?_eq_some_iff.1 hst).1
+        | exact Array.size_pos_of_mem (Array.mem_of_getElem? hst)
+        | (apply Nat.pos_of_ne_zero; intro h0; simp [h0] at hst)
+    have hts0 : (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt).getD 0 default =
+        _root_.Flock.Readable.Tab.ofStmt st := by
+      rw [List.getD_eq_getElem?_getD, List.getElem?_map, Array.getElem?_toList, hst]
+      rfl
+    have hm : (p.sts[0]?.map (·.m)).getD 0 = st.m := by rw [hst]; rfl
+    have hk : (p.sts[0]?.map (·.c.kLog)).getD 0 = st.c.kLog := by rw [hst]; rfl
+    have hiff := _root_.Flock.Readable.Sys.relS_iff (_root_.Flock.Readable.sysOf_wf _ _ _)
+      (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation p) v rfl rfl rfl rfl rfl
+    have H := (hiff.1 hrel) 0 (Nat.two_pow_pos _)
+    rw [hm, hk] at H
+    have hlen : 0 < (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt).length := by simpa using hJ
+    have hrow0 := H.1 0 hlen i₀ hi'
+    have hx : _root_.Flock.Readable.xsum
+        ((_root_.Flock.Readable.sysOf st.m st.c.kLog (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt)).A 0 i₀)
+        ((_root_.Flock.Readable.sysOf st.m st.c.kLog (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt)).bit v 0 0)
+        (_root_.Flock.Readable.sysOf st.m st.c.kLog (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt)).N = false := by
+      apply xsum_of_zero
+      intro r hr
+      show ((p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt).getD 0 default).a i₀ r = false
+      rw [hts0]
+      have := List.all_eq_true.1 hrow r (List.mem_range.2 hr)
+      simpa using this
+    rw [hx, Bool.false_and] at hrow0
+    cases hf : (_root_.Flock.Readable.Tab.ofStmt st).fixed.find? (fun f => f.1 == i₀) with
+    | none => rw [hf] at hfix; simp at hfix
+    | some f =>
+      rw [hf] at hfix
+      have hf2 : f.2 0 = true := Option.some.inj hfix
+      have hf1 : f.1 = i₀ := beq_iff_eq.1 (List.find?_some hf)
+      have hfx : _root_.Flock.Readable.fixedOf st.m st.c.kLog (_root_.Flock.Readable.Tab.ofStmt st) =
+          (_root_.Flock.Readable.Tab.ofStmt st).fixed :=
+        if_pos (show (_root_.Flock.Readable.Tab.ofStmt st).m = st.m ∧ (_root_.Flock.Readable.Tab.ofStmt st).kLog = st.c.kLog ∧
+          (_root_.Flock.Readable.Tab.ofStmt st).Ok from ⟨rfl, rfl, hOk'⟩)
+      have hmem : ((0 : ℕ), f.1, f.2) ∈
+          (_root_.Flock.Readable.sysOf st.m st.c.kLog (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt)).slots := by
+        show ((0 : ℕ), f.1, f.2) ∈ (List.range (p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt).length).flatMap
+          fun c => (_root_.Flock.Readable.fixedOf st.m st.c.kLog
+            ((p.sts.toList.map _root_.Flock.Readable.Tab.ofStmt).getD c default)).map fun f => (c, f.1, f.2)
+        refine List.mem_flatMap.2 ⟨0, List.mem_range.2 hlen, ?_⟩
+        dsimp only
+        rw [hts0, hfx]
+        exact List.mem_map_of_mem (f := fun f : ℕ × (ℕ → Bool) => ((0 : ℕ), f.1, f.2)) (List.mem_of_find?_eq_some hf)
+      have h5 := H.2.2 _ hmem
+      dsimp only at h5
+      rw [hf1, hf2] at h5
+      exact absurd (hrow0.trans h5) (by decide)
 
-/-- **The fixture's inner statement is in the plain scope**: Flock's setup sets it up at one table, `m = 22`,
-`k_log = 6`, one region, two link points (`innerTables₀`). -/
-theorem plainIn_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
+/-- **The fixture's inner statement is in the plain scope**: Flock's setup of it passes `PlainIn`'s checks
+(`plainView`). -/
+theorem plainIn_of_parses {x : Msg} {i₀ : ℕ} (h : RecDeploy.DeployedParses x i₀) :
     ∃ s spec sts, FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts := by
   have h3 := h.2.2
   cases hs : FlockDeploy.setupOf false (RecDeploy.xIOf x) with
@@ -389,29 +453,19 @@ theorem plainIn_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
   | some t =>
     obtain ⟨s, spec, sts⟩ := t
     rw [hs] at h3
-    have h4 := Option.some.inj (h3 : some (spec.points, spec.mPts,
-      sts.toList.map fun st => (st.m, st.c.kLog, st.regions.size)) = some RecDeploy.innerTables₀)
-    have hpts : spec.points = 2 := congrArg Prod.fst h4
-    have hm : spec.mPts = 2 := congrArg (fun p => p.2.1) h4
-    have hl : sts.toList.map (fun st => (st.m, st.c.kLog, st.regions.size)) = [(22, 6, 1)] :=
-      congrArg (fun p => p.2.2) h4
-    have hsz : sts.size = 1 := by simpa using congrArg List.length hl
-    refine ⟨s, spec, sts, ⟨hs, by omega, by omega, by omega, fun st hst => ?_⟩⟩
-    have hmem := List.mem_map_of_mem (f := fun st : _root_.Flock.Stmt => (st.m, st.c.kLog, st.regions.size)) hst
-    rw [hl] at hmem
-    simp only [List.mem_singleton, Prod.mk.injEq] at hmem
-    obtain ⟨h1, h2, h3'⟩ := hmem
-    refine ⟨by omega, by omega, ?_⟩
-    first
-      | (show st.c.kLog ≤ 27 ∧ st.regions.size ≤ 1026 ∧ spec.mPts ≤ 64; omega)
-      | (simp only [FlockSoundness.Accounting.Stmt.InRangeWide, FlockDeploy.acct]; omega)
+    have hv : RecDeploy.plainView (s, spec, sts) = true := Option.some.inj h3
+    simp only [RecDeploy.plainView, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, and_assoc] at hv
+    obtain ⟨h1, h2, hp, ht⟩ := hv
+    refine ⟨s, spec, sts, ⟨hs, h1, h2, hp, fun st hst => ?_⟩⟩
+    obtain ⟨a, b, c, d, e⟩ := ht st hst
+    exact ⟨a, b, show st.c.kLog ≤ 27 ∧ st.regions.size ≤ 1026 ∧ spec.mPts ≤ 64 from ⟨c, d, e⟩⟩
 
 /-- **`RecursiveKS`'s nontrivial lemma** (LEAN-66): `RecursiveKS`'s conclusion, `KSLin2On` at the deployed values, is
 false at the verifier that accepts everything (`RecAt.acceptAll`), at every brings, from the named assumption
 `RecDeploy.KSFixture`: some bytes the deployed readers map to the hand-built fixture (`DeployedParses`), with a
 coin-server record at whose transcript its V\* parts are in scope (`PartsInScope`). Everything else is proved here: the
-statement is dense (`denseAt_of_parses`), its inner statement has no witness (`notR_of_parses`, by `decide` on the
-one-gate `innerCircuit₀`) and is in the plain scope (`plainIn_of_parses`); the silent prover is accepted on every run
+statement is dense (`denseAt_of_parses`), its inner statement has no witness (`notR_of_parses`: a row with a zero A side
+whose bit block `0` fixes to `1`) and is in the plain scope (`plainIn_of_parses`); the silent prover is accepted on every run
 and nothing is extracted, so `Pr[accept ∧ ¬extract] = 1`; every finder term is `0`; the tails are below `1/4` each; and
 `λ₂ ≥ 100` there (`RecDeploy.lamLin2_deployed_ge_dep`) gives `κ < 1/2`. -/
 theorem recursiveKS_nontrivial (h : RecDeploy.KSFixture) :
@@ -426,7 +480,7 @@ theorem recursiveKS_nontrivial (h : RecDeploy.KSFixture) :
           RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
           RecDeploy.DeployedR.wR)
         (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt := by
-  obtain ⟨x, aux, nOf, hd, recRest, hP, hO, hn, hS⟩ := h
+  obtain ⟨x, i₀, aux, nOf, hd, recRest, hP, hO, hn, hS⟩ := h
   obtain ⟨s, spec, sts, hin⟩ := plainIn_of_parses hP
   refine ⟨aux, nOf, hd, recRest, fun b => ?_⟩
   have hO' : ∀ j < RecDeploy.nS x, ∃ i spec' sts', RecDeploy.PartIn
