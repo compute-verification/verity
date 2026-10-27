@@ -682,13 +682,14 @@ private def recordOf (stream : String) (msg : ByteArray) (n : Nat) (table : Stri
 #guard (sessionUses 0 (recordOf "circuit/rep1" (Flock.Transcript.header 4 1 4) 5)).toOption.isNone
 #guard (sessionUses 0 (recordOf "t/rep0" (Flock.Transcript.header 4 1 5) 5)).toOption.isNone
 #guard (sessionUses 0 (recordOf "circuit/rep1" (Flock.Transcript.header 4 1 5) 5 "t")).toOption.isNone
-#guard publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'a' 128))])],
-  digest := .empty } ("".pushn 'a' 128) == none
-#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'a' 128))])],
-  digest := .empty } ("".pushn 'b' 128)).isSome
-#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [("public_file", Json.str ("".pushn 'A' 128))])],
-  digest := .empty } ("".pushn 'A' 128)).isSome
-#guard (publicWhy { record := Json.mkObj [("window", Json.mkObj [])], digest := .empty } ("".pushn 'a' 128)).isSome
+/-- A registration whose window is `w`. -/
+private def windowed (w : List (String × Json)) : OneStage.Commitment :=
+  { record := Json.mkObj [("window", Json.mkObj w)], digest := .empty }
+
+#guard publicWhy (windowed [("public_file", Json.str ("".pushn 'a' 128))]) ("".pushn 'a' 128) == none
+#guard (publicWhy (windowed [("public_file", Json.str ("".pushn 'a' 128))]) ("".pushn 'b' 128)).isSome
+#guard (publicWhy (windowed [("public_file", Json.str ("".pushn 'A' 128))]) ("".pushn 'A' 128)).isSome
+#guard (publicWhy (windowed []) ("".pushn 'a' 128)).isSome
 #guard coinsMismatch #["00".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0)) == none
 #guard (coinsMismatch #["01".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0))).isSome
 
