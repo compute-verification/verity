@@ -8,7 +8,7 @@ Unchanged from `dither_one.check`: every call's A, admit and z roots and the ste
 against h1r v1 (the receipts don't move with the peel); y (dumped) = dequant of the kernel's own z; wb's density by
 h1o_ref; 0xA5 over every buffer read. Changed, all against A B^T by torch's int8 GEMM (int8_exact.int_mm) in place of
 h1o_ref's v3 z:
-  * gate: z on every slot row of every call (rows >= m and dead row blocks are A = 0, so z = 0); y equal to today's
+  * gate: z on every slot row of every call (rows >= m and dead row tiles are A = 0, so z = 0); y equal to today's
     (int8_ops.scaled_mm's body, the exact arm's) on every call, required; three units on the CPU: the kernel's z = A B^T, the
     receipt = CA's definition's (`dither_one.h1v3_unit`) and CA's own code's (`h1v3_itself`, H1V3's h1tile.reference),
     and CA's z peeled on the CPU from its own noise (`peel_cpu`) = A B^T, where the literal peel z - b B^T - A c^T - b c^T

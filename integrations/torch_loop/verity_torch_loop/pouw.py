@@ -14,7 +14,7 @@ credit them: no new pin; PoUW's check takes the window's operands (`operands`) b
 * **The window** (`H1Loop.window`) is an `interface.Window` of ``N = pad(N_real + 1)`` tiles (`pouw.window`'s grid: N_real
   real tiles, credited ``floor_point(N_real)``, the rest filler tiles of zero rows), unit u at position u, under the law
   subset:K′ that ε and δ fix (`window.k_prime`).
-* **The operands** (`H1Loop.operands`, CMP-91) are committed before the salt, in the tile's own row shape: ``a``, one row
+* **The operands** (`H1Loop.operands`) are committed before the salt, in the tile's own row shape: ``a``, one row
   a (step, layer, row block, K half) of R tokens' 64 codes, and ``b``, one a (layer, column block, K half) of C channels'
   64 codes, each with one zero row for the fillers: per-window values of PoUW's `operands` (domains binding the run
   root), named in the registration's window (``activations``). The tiles' ``a`` and ``b`` ports declare reads of them
@@ -22,7 +22,7 @@ credit them: no new pin; PoUW's check takes the window's operands (`operands`) b
   the value's root; the tiles' roots are those two roots. Their root X (`H1Loop.X`, `core_check.values_root` of
   ``activations``) is what the window's salt is released against, so the salt comes after them (`H1Loop.window`'s
   ``salt``), the same for every tile.
-* **The live salt** (``live``, CMP-90): the registration names the pinned weights' entries (``registered``,
+* **The live salt** (``live``): the registration names the pinned weights' entries (``registered``,
   `weights_group`) and no ``W`` root, so W is their root; `window_salt.issue` opens one salt-only session on
   R = `salt.anchored_epoch_root(W, X, k)` (`H1Loop.anchors`) and the tiles take its salt. `SALT` beside the window holds
   the answer's ``public.salt`` and the verifier's ``live`` params, and the check item's coins are live.

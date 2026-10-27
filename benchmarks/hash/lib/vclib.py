@@ -1,4 +1,4 @@
-"""libvc's Python binding (ctypes): plans built from the references' own prefix blocks, launches on raw device pointers.
+"""libvc's Python binding (ctypes): plans built from the references' own prefix chunks, launches on raw device pointers.
 
 A committer passes device pointers as ints (``tensor.data_ptr()``) and its stream as an int
 (``torch.cuda.current_stream().cuda_stream``); nothing here allocates on the device or synchronizes. Every prefix the

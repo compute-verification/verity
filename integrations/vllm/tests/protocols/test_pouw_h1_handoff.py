@@ -1,6 +1,6 @@
 """`protocol_options.pouw_h1_handoff`, the rehearsal's hand-off: a served H1 window saved by its serving process, its
-challenger session's stream handed to a holder, and the window closed and released by another process on the same
-session, with the verifier's checks as they are for a window closed where it served."""
+challenger challenge phase's stream handed to a holder, and the window closed and released by another process on the same
+challenge phase, with the verifier's checks as they are for a window closed where it served."""
 from __future__ import annotations
 
 import json
@@ -72,9 +72,9 @@ def _served(settings, n=40, arm=Int8Arm):
 
 
 def test_a_window_closed_by_another_process_is_the_one_its_session_served(tmp_path, monkeypatch):
-    """The serving process saves its window and hands its session's stream to a holder, and its own end of the stream
+    """The serving process saves its window and hands its challenge phase's stream to a holder, and its own end of the stream
     goes; the window resumed from the file on that descriptor closes, opens its last round's coin and its draw, and
-    closes the session: the record is one manifest under the coins the auditor's session released, in order, and each
+    closes the challenge phase: the record is one manifest under the coins the auditor's challenge phase released, in order, and each
     call's A table is under its round's root."""
     host = _host(tmp_path, monkeypatch)
     run = _served(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64))))
@@ -100,7 +100,7 @@ def test_a_window_closed_by_another_process_is_the_one_its_session_served(tmp_pa
 
 
 def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_refused(tmp_path, monkeypatch):
-    """Only a window open on the auditor's session and not yet closed hands off, a tensor left in its state isn't saved,
+    """Only a window open on the auditor's challenge phase and not yet closed hands off, a tensor left in its state isn't saved,
     and a saved window whose round's slot owners were changed rebuilds a slot table its round's root isn't over, which
     `resume` refuses."""
     host = _host(tmp_path, monkeypatch)
@@ -125,9 +125,9 @@ def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_r
 
 @pytest.mark.slow
 def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypatch):
-    """`pouw_h1_gpu.py --close-from` on a handed-off window and the record its serving stage left: the window closed,
-    measured and released on the session's stream, and the record (``pouw_h1_gpu.json``) completed with its commitment,
-    the session closed and each call's A table under its round's root."""
+    """`pouw_h1_gpu.py --close-from` on a handed-off window and the record its serving phase left: the window closed,
+    measured and released on the challenge phase's stream, and the record (``pouw_h1_gpu.json``) completed with its commitment,
+    the challenge phase closed and each call's A table under its round's root."""
     from tests.protocols import pouw_h1_gpu as GPU
     host, out = _host(tmp_path, monkeypatch), tmp_path / "out"
     run = _served(_remote(transcript_dir=str(out), served=SV.Served(window=bytes(64))), n=64, arm=ZyArm)
@@ -162,7 +162,7 @@ def test_a_gate_verb_reaches_the_gate_over_ssh_word_for_word():
 
 def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
     """A child process hands a stream's descriptor to the holder and exits; the holder's descriptor still reaches the
-    stream's other end, so the session isn't closed by the serving process's exit."""
+    stream's other end, so the challenge phase isn't closed by the serving process's exit."""
     here, there = socket.socketpair()
     holder = HO.Holder(tmp_path / "stream.sock")
     child = ("import socket, sys\nfrom types import SimpleNamespace as N\n"
@@ -179,7 +179,7 @@ def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
 
 
 def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(tmp_path, monkeypatch):
-    """PRF-131: the served trees a window saves keep no rows, and `pouw_h1_kept.kept_row` rebuilds every row of each
+    """The served trees a window saves keep no rows, and `pouw_h1_kept.kept_row` rebuilds every row of each
     of its step A tables, z tables and its ``b/<K>`` from the prover's directory and the saved state, each committing to
     its tree's ``b || c`` under the tree's own salt; a kept A code changed afterwards rebuilds a row that isn't."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as G

@@ -1,9 +1,9 @@
 """J10 banded noise on one H200 or B200 at kernel level (kernels-j10; measured only, nothing here is served or credited):
 the credited one-stream call (kh_one_peel's two-launch form: h1s_noise into the workspace, then h1u, or h1k in a K-split
 build; z = A B^T) on per-unit noise, against the same call on J10 banded noise at bands of g column tiles
-(kh_one_peel_band: h1j_noise hashes each band's row blocks once, into its leader's workspace region, and every unit's
-columns; the units read their rows from the leader's region), gated against CA's banded reference (#2866,
-`banded.banded_reference` under the tree `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and labelled
+(kh_one_peel_band: h1j_noise hashes each band's row tiles once, into its leader's workspace region, and every unit's
+columns; the units read their rows from the leader's region), gated against CA's banded reference
+(`banded.banded_reference` under the tree `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and labelled
 `j10b_ref.CA_LABEL`.
 
     arms  NAME-osp              per-unit noise (kh_one_peel), the baseline
@@ -13,7 +13,7 @@ columns; the units read their rows from the leader's region), gated against CA's
           NAME-osp-bG-noise     its noise launch alone (mode 2): the noise share, one way
           NAME-osp-bG-units     its unit launch alone (mode 1)
     gate  before any timing, per shape and gated arm: h1zbench.gate_one (0xA5 over receipts, z, zo, y and the workspace;
-          z = A B^T on the selected row blocks against float64; y = dequantize(z); the no-write control refused;
+          z = A B^T on the selected row tiles against float64; y = dequantize(z); the no-write control refused;
           F_FAULT, F_FAULT_WB and F_FAULT_XA conforming on unit 0, a band leader). The per-unit arm's receipts against
           served_h1/receipts.py on its picks. A banded arm's receipts and z: unit 0 and non-leaders (the first, the last, one
           drawn) against CA's banded_reference itself (without CA's tree the gate fails), every band leader's receipt
@@ -181,7 +181,7 @@ def noise_runner(noise: NoiseLib, *a):
 
 
 class NoiseLib:
-    """h1noise.cu's kn_band: an r x c tile layout's noise blocks (h1tile.Layout's order), per-unit (band 1) or J10 banded."""
+    """h1noise.cu's kn_band: an r x c tile layout's noise chunks (h1tile.Layout's order), per-unit (band 1) or J10 banded."""
 
     def __init__(self, path: str):
         h = self.h = ctypes.CDLL(path)
@@ -207,7 +207,7 @@ def tw_arms(c: Call, lib: Z.OneLib, noise: NoiseLib, gs: list[int], rng: random.
     its 4x units' positions, unit (ri, cj) at base + ri (N / 8) + cj) and its noise (kn_band at h1tile.Layout(32, 8, K)'s
     counts), per-unit and banded at each g, beside today's 32 x 32 tile's through the same kernel. Gated before timing:
     the kernel's counts are the Layout's; each arm's buffer 0xA5 first, then no 0xA5 block in any block a unit hashes, every
-    non-leader row block still 0xA5, and drawn blocks against seeds.noise_block of the unit's seed_j; CA's
+    non-leader row tile still 0xA5, and drawn blocks against seeds.noise_block of the unit's seed_j; CA's
     banded_reference on two 32 x 8 tiles (a leader and a non-leader at the first g), which holds the shape to CA's
     definition (h1tile.Layout's 4 | r, 8 | c; its fold over (r / 4)(c / 8) lanes)."""
     from verity.ml.protocols.pouw.circuit import h1tile as HT
@@ -262,7 +262,7 @@ def tw_arms(c: Call, lib: Z.OneLib, noise: NoiseLib, gs: list[int], rng: random.
 
 
 def tw_ca(c, g0: int, workers: int) -> dict:
-    """CA's banded_reference on row block 0's 32 x 8 tiles J = g0 (a band leader) and g0 + 1 (a non-leader) at g0, unit
+    """CA's banded_reference on row tile 0's 32 x 8 tiles J = g0 (a band leader) and g0 + 1 (a non-leader) at g0, unit
     (0, J) at c.base + J: z = A B^T, 2 sets receipt words each, both read the leader's position, and the leader's receipt
     is h1tile.reference's at its own position (its noise is its own) while the non-leader's is not."""
     from verity.ml.protocols.pouw.circuit import h1tile as HT

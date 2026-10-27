@@ -1,4 +1,4 @@
-"""CA's banded reference itself on a few J10-banded units: `circuit.banded.banded_reference` (#2866) from the tree on
+"""The credit's banded reference itself on a few J10-banded units: `circuit.banded.banded_reference` from the tree on
 PYTHONPATH, which the banded kernels' z and receipts are held to.
 
     PYTHONPATH=TREE python j10ca_ref.py IN.json OUT.json [WORKERS]

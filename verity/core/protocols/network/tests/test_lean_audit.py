@@ -172,7 +172,7 @@ def _service_rounds(tmp_path, W, record=lambda w, r: r, certified=lambda w, e: e
 def test_service_verify_is_the_same_under_the_adapter(lean, tmp_path, monkeypatch):
     """`LinkWindows.clear`, with `service.Audit` the adapter, gives `audit.Audit`'s verdict on six link-windows
     in order: honest ones, a forged signature, a grid whose frame differs from the Program's at its counts (accepted:
-    the frames are N3's), a grid with a frame more than the profile's, and an unset deadline bit; the adapter's says
+    N2 holds counts only), a grid with a frame more than the profile's, and an unset deadline bit; the adapter's says
     `by: lean` and carries the reference's accept bit."""
     def other_grid(w, r):
         return dataclasses.replace(r, grid=((bytes([9, 9]), None),) + r.grid[1:]) if w % 3 == 2 else r
