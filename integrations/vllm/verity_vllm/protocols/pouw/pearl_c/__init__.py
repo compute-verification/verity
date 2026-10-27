@@ -376,7 +376,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             if self.graphs else None,
             "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
                                                                                      if aside_ends else "")) if lag_ends else "read back at its end",
-            "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
+            "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound"}
         self.cur: _Pass | None = None
         self.begin()
 

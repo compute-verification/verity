@@ -1,11 +1,10 @@
-"""[R16 global, F-global-SNAP] run_config derives the Match capture's per-tensor snapshot cap from the workload's largest forward and the
-checkpoint's widths when no --snapshot-max-bytes is given (D87 made automatic).  Torch-free.
+"""run_config derives the Match capture's per-tensor snapshot cap from the workload's largest forward and the
+checkpoint's widths when no --snapshot-max-bytes is given.  Torch-free.
 
-The defect of record: m1_capture's fixed 32 MiB cap skipped the prefill-step gate_up output of every 1024-class row ([1024+B, 2I] bf16 =
-33.7 MB for Llama-3.2-1B, 36.7 MB for Qwen2.5-1.5B; snapshots.json 'skipped: spanned bytes 33685504 > snapshot_max_bytes 33554432'), so
-the Commit's form (B) oracle-compare reported 'no snapshot of alloc ... (0 entries of that alloc)' for those rows (exec M-0545 llama B4
-1024/128, M-0655 qwen H100 B1 1024/128 -- FAIL by name where the Hopper Gemm_v2 has no evaluator; global int-2 B16 mixed-arrivals: 16
-layers x 5 rows of the [1028, 16384] gate_up at engine step 36, the step a 1024-token prompt arrived).  256/32 rows never hit it."""
+A fixed 32 MiB cap skips the prefill-step gate_up output of every 1024-class row ([1024+B, 2I] bf16 = 33.7 MB for Llama-3.2-1B,
+36.7 MB for Qwen2.5-1.5B; snapshots.json 'skipped: spanned bytes 33685504 > snapshot_max_bytes 33554432'), and the Commit's form (B)
+oracle-compare then reports 'no snapshot of alloc ... (0 entries of that alloc)' for those rows (a B16 mixed-arrivals row: 16 layers
+x 5 rows of the [1028, 16384] gate_up at engine step 36, the step a 1024-token prompt arrives).  256/32 rows never hit it."""
 from __future__ import annotations
 
 import json
@@ -31,7 +30,7 @@ def _wl(prompt_lens, max_tokens=128, mnbt=None):
 def test_the_32_mib_cap_of_record_skipped_the_1024_class_prefill_gate_up_and_the_derived_cap_covers_it():
     # the record's numbers: llama int-2 B16 mixed-arrivals, the [1028, 16384] bf16 gate_up at the 1024-token arrival = 33,685,504 B
     assert 1028 * LLAMA_1B["GU"] * 2 == 33_685_504 > RC.SNAPSHOT_CAP_FLOOR == 33_554_432
-    # qwen H100 B1 1024/128: [1024, 17920] bf16 = 36,700,160 B (exec M-0655: 'no snapshot of alloc 392 bytes [0,35840) at event 127')
+    # qwen H100 B1 1024/128: [1024, 17920] bf16 = 36,700,160 B
     assert 1024 * QWEN_15B["GU"] * 2 == 36_700_160 > RC.SNAPSHOT_CAP_FLOOR
     assert 35_840 == QWEN_15B["GU"] * 2       # one row of that tensor = the committed identity's byte range
     # the derived caps: rows = the engine's max_num_batched_tokens of the workload (the bound the scheduler enforces)

@@ -32,7 +32,7 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
 
 
 @pytest.mark.parametrize("command", [
-    "env | cut -d= -f1",                                  # the leak, five times by 6 Oct
+    "env | cut -d= -f1",                                  # a multi-line value's later lines print as names
     "env",
     "env | sort",
     "env -0 | cut -z -d= -f1 | tr '\\0' '\\n'",
@@ -65,7 +65,7 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     "timeout 5 env",
     "env FOO=1 env",
     "xargs -0 env",
-    "ps aux",                                             # a daemon's token in its argv, 6 Oct
+    "ps aux",                                             # a daemon's token in its argv
     "ps auxww | head -50",
     "ps -ef",
     "ps -eF | sort",
@@ -80,7 +80,7 @@ def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     "ps -o args -C git",
     "ps -p 1,2 -o args",
     "cat /proc/*/cmdline",
-    "tmux -f /exec-daemon/tmux.portal.conf show-environment -g | cut -d= -f1",   # the Nebius key's lines again, 11 Oct
+    "tmux -f /exec-daemon/tmux.portal.conf show-environment -g | cut -d= -f1",   # a multi-line key's lines
     "tmux show-environment",
     "tmux showenv -t main",
     "tmux show-environment -g NEBIUS_SA_PRIVATE_KEY",

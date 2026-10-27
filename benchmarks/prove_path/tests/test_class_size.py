@@ -12,8 +12,8 @@
   as the projection says;
 * a probe that doesn't divide evenly is refused, and so is a template `size` has no measurement for; m is the log of the
   cells;
-* a gather's k_log is its rows' (its parts and its output, an hm96 slot each), circuits' composed values at every W they
-  composed, and a gather of 256 parts needs a block of 2^28 bits, which `size` refuses as C-Flock does;
+* a gather's k_log is its rows' (its parts and its output, an hm96 slot each), as composed at every W measured, and a
+  gather of 256 parts needs a block of 2^28 bits, which `size` refuses as C-Flock does;
 * with no ``--class``, ``prove_path.py`` takes the class of record.
 """
 from __future__ import annotations

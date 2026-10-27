@@ -1,7 +1,6 @@
-"""[R19 int-20, F-r19-int-20; lane/vllm-v2-oracle-key] The C2 oracle resolves a PROMOTED member through the Value's producer, not the
-module prefix of the fold's hint.
+"""The C2 oracle resolves a PROMOTED member through the Value's producer, not the module prefix of the fold's hint.
 
-Row #57 leg 3 (r20260923-091414-451a): over a Match that snapshotted every step, the 432 promoted `model`/`out` identities (the
+Row #57 leg 3: over a Match that snapshotted every step, the 432 promoted `model`/`out` identities (the
 embedding scale's output crossing into layer 0) were "no fold instance of this op at this step" -- the fold hints that instance by
 the producing Call's own site, the manifest names it by the Program row's module.  Same Value, two names.  The oracle now answers
 from the dataflow: the fold instance of the producer family whose OUTPUT storage range contains an OPERAND view of a consumer
