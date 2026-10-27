@@ -17,7 +17,7 @@ from verity.ml.circuits.ops import gemm as G
 from verity.ml.windows import interface as I
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import a5  # noqa: E402
+import a5
 
 GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
 WIDE = bind(G.Gemm, K=16, N=32, **G.GEMM_AMPERE)
