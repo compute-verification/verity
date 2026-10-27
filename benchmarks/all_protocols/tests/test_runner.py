@@ -86,7 +86,7 @@ OUTSIDE = tuple(dataclasses.replace(e, onsite=False) if e.name == "bandwidth" el
 def test_a_rejecting_audit_rejects_though_it_is_no_onsite_component(tmp_path):
     r = decide(tmp_path, integrity=fake("accept"), bandwidth=fake("reject"), table=OUTSIDE)
     assert r["composed"]["verdict"] == "reject"
-    assert r["composed"]["outside_onsite"] == ["bandwidth", "wipe"]
+    assert r["composed"]["outside_onsite"] == ["bandwidth"]
 
 
 def onsite_exe(tmp_path: Path, verdict: str = "accept", reason: str | None = None) -> Path:
@@ -94,7 +94,8 @@ def onsite_exe(tmp_path: Path, verdict: str = "accept", reason: str | None = Non
     exe = tmp_path / "onsite"
     exe.write_text(f"#!{sys.executable}\n" + f'''import json, sys
 p, c, e = (open(f, "rb").read() for f in sys.argv[2:5])
-json.dump({{"argv1": sys.argv[1], "params": json.loads(p), "commitment": c.hex(), "evidence": json.loads(e)}},
+json.dump({{"argv1": sys.argv[1], "params": json.loads(p), "commitment": c.hex(), "evidence": json.loads(e),
+           "blobs": [open(f, "rb").read().hex() for f in sys.argv[5:]]}},
           open({str(tmp_path / "seen.json")!r}, "w"))
 print(json.dumps({{"commitment": c.hex(), "profile": None if {verdict!r} != "accept" else {{}}, "protocol": "verity/onsite/v0",
                   "public": None if {verdict!r} != "accept" else {{}}, "reason": {reason!r}, "verdict": {verdict!r}}}))
@@ -160,25 +161,42 @@ def test_onsite_decides_once_every_component_is_a_port(tmp_path):
     assert got["commitment"] == C.bind(C.PROTOCOL, [(i, "ab" * 64) for i in ids]).hex()
     assert got["params"] == {"components": [{"id": i, "params": {"k": 1}} for i in ids]}
     assert set(r["composed"]["inputs"].values()) == {"leg"}
+    assert got["blobs"] == []
+
+
+def test_onsite_reads_the_blobs_a_case_names(tmp_path):
+    """Integrity's case names the files its audit on the proofs reads (``blobs``); onsite gets them after the evidence,
+    every case's in the order of the components' ids, and nothing of them reaches the params or the evidence."""
+    exe = onsite_exe(tmp_path)
+    (tmp_path / "circuit.txt").write_bytes(b"circuit")
+    (tmp_path / "pub.bin").write_bytes(b"public")
+    case = {"commitment": "01", "evidence": "02", "params": {"k": 1}}
+    every = {e.name: fake("accept", case) for e in T.TABLE}
+    every["integrity"] = fake("accept", case | {"blobs": [str(tmp_path / "circuit.txt"), str(tmp_path / "pub.bin")]})
+    r = decide(tmp_path, **every, onsite=EVERY_PORT, exe=str(exe))
+    assert r["composed"]["verdict"] == "accept"
+    got = json.loads((tmp_path / "seen.json").read_text())
+    assert got["blobs"] == [b"circuit".hex(), b"public".hex()]
+    assert all(set(x) == {"commitment", "evidence", "id", "params"} for x in got["evidence"]["components"])
 
 
 def test_onsite_checks_every_period_beside_stubs_and_missing_cases(tmp_path):
     """Work rejects on its own case beside an undecided stub and a port with no case: onsite runs on all three, the stub
     on a case with no statement, the port on one it refuses, and it rejects on work's case."""
     exe = onsite_exe(tmp_path, "reject", "verity/pouw/v1 reject: params: no template")
-    onsite = ["PouwCheck.protocol", "SampledProofs.OneStage.protocol", "Stub.pous"]
+    onsite = ["PouwCheck.protocol", "SampledProofs.OneStageZk.protocol", "Stub.pous"]
     r = decide(tmp_path, integrity=fake("accept"), work=fake("reject", {"commitment": "01", "evidence": "02", "params": {}}),
                onsite=onsite, exe=str(exe))
     c = r["composed"]
     assert c["verdict"] == "reject" and c["answer"]["verdict"] == "reject" and c["agree"]
-    assert c["inputs"] == {"verity/pouw/v1": "leg", "verity/sampled-proofs/one-stage/v1": "no case (integrity accept)",
+    assert c["inputs"] == {"verity/pouw/v1": "leg", "verity/sampled-proofs/one-stage/v2": "no case (integrity accept)",
                            "verity/stub/pous/v0": "stub"}
     got = {x["id"]: x for x in json.loads((tmp_path / "seen.json").read_text())["evidence"]["components"]}
     assert got["verity/stub/pous/v0"]["evidence"] == C.STUB_CASE["evidence"]
-    assert got["verity/sampled-proofs/one-stage/v1"]["commitment"] == ""
+    assert got["verity/sampled-proofs/one-stage/v2"]["commitment"] == ""
     again = tmp_path / "again"
     again.mkdir()
-    exe = onsite_exe(again, "reject", "verity/sampled-proofs/one-stage/v1 reject: params: missing")
+    exe = onsite_exe(again, "reject", "verity/sampled-proofs/one-stage/v2 reject: params: missing")
     r = decide(again, integrity=fake("accept"), work=fake("reject", {"commitment": "01", "evidence": "02", "params": {}}),
                onsite=onsite, exe=str(exe))
     assert r["composed"]["verdict"] == "reject" and not r["composed"]["agree"]
@@ -195,18 +213,19 @@ def test_onsite_accepting_while_an_outside_audit_is_undecided_is_undecided(tmp_p
     case = {"commitment": "01", "evidence": "02", "params": {}}
     every = {e.name: fake("accept", case) for e in T.TABLE}
     every["bandwidth"] = fake("undecided")
-    r = decide(tmp_path, **every, onsite=["SampledProofs.OneStage.protocol"], exe=str(exe), table=OUTSIDE)
+    r = decide(tmp_path, **every, onsite=["SampledProofs.OneStageZk.protocol"], exe=str(exe), table=OUTSIDE)
     assert r["composed"]["verdict"] == "undecided"
 
 
 def test_the_table_names_every_onsite_component_once():
     onsite = C.onsite_components()
     assert onsite == ["NetworkCheck.Period.protocol", "PousCheck.RunProtocol.protocol", "PouwCheck.protocol",
-                      "RemoteAudit.Protocol.protocol", "SampledProofs.OneStage.protocol"], "onsite's components changed"
+                      "RemoteAudit.Protocol.protocol", "SampledProofs.OneStageZk.protocol",
+                      "MemoryChallenger.WipeProtocol.protocol"], "onsite's components changed"
     named = sorted(e.component for e in T.TABLE if e.onsite)
     assert named == sorted(C.component_of(x)[0] for x in onsite)
     assert len({e.name for e in T.TABLE}) == len({e.component for e in T.TABLE}) == len(T.TABLE) == 6
-    assert len(named) == 5
+    assert len(named) == 6
     assert T.TABLE[0].name == "integrity", "integrity runs first: PoUW's evidence is its answer"
 
 
@@ -226,6 +245,7 @@ def test_each_leg_reads_the_answers_before_it(tmp_path):
 def test_onsite_components_are_read_as_written():
     src = "def components : List Protocol := [Ports.certifier, Stub.pous,\n  Pouw.Core.protocol, Stub.sampledProofs]"
     assert C.onsite_components(src) == ["Ports.certifier", "Stub.pous", "Pouw.Core.protocol", "Stub.sampledProofs"]
+    assert C.onsite_components(src.replace("List Protocol", "List BlobProtocol")) == C.onsite_components(src)
     assert [C.stub_component(x) for x in C.onsite_components(src)] == [None, "pous", None, "sampled-proofs"]
     with pytest.raises(ValueError, match="no `def components"):
         C.onsite_components("def other := []")
