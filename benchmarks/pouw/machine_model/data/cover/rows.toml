@@ -515,8 +515,8 @@ argument = "each lane's result is a function of ≤ 3 register words, a word and
 source = "θ alu.lop3, alu.shf, alu.lea_hi, alu.prmt; sm_120 census 'LOP3 with IADD3, SHF, PRMT or F2FP: 2.0 total (one ALU pipe)' (note:20261015T0608Z-draft-census-sm120 §2); sm_90 census row A 'ALU pipe: LOP3, SHF, LEA.HI (and IADD3) 1.9691 /SM/clk, one pipe'; sm_90 PRMT by DS_alu"
 
 [[row]]
-ops = ["BMSK", "SGXT", "LOP", "LOP32I", "SHL", "SHR", "ISCADD", "ISCADD32I", "PLOP3", "PSETP", "P2R", "R2P"]
-what = "bit masks, sign extension, older logic and shift forms, predicate logic and packs"
+ops = ["LOP", "LOP32I", "SHL", "SHR", "ISCADD", "ISCADD32I", "PSETP", "P2R", "R2P"]
+what = "older logic and shift forms, predicate sets and packs"
 mark = "coarse"
 envelope = "lane"
 pipe = "alu"
@@ -525,6 +525,33 @@ rate = "alu.lop3"
 cost = "a lane of alu a lane"
 argument = "≤ 3 words and the predicate word in, a word or the predicate word out a lane; on the alu pipe by Nsight's definition (logic, bit manipulation) at the CPG's bitwise rate (DS_alu, DS_lop), with no run of their own"
 source = "θ alu.lop3; DS_alu (sm_90), DS_lop (sm_120)"
+
+[[row]]
+ops = ["BMSK", "SGXT", "PLOP3"]
+devices = ["sm_90"]
+what = "bit masks, sign extension, predicate logic"
+mark = "coarse"
+envelope = "lane"
+pipe = "alu"
+words = [3, 2]
+rate = "alu.lop3"
+cost = "a lane of alu a lane"
+argument = "≤ 3 words (PLOP3: 3 predicates of the predicate word) in, a word or 2 predicates out a lane; on the alu pipe by Nsight's definition (logic, bit manipulation) at the CPG's bitwise rate (DS_alu), with no H200 run of their own"
+source = "θ alu.lop3; DS_alu"
+
+[[row]]
+ops = ["BMSK", "SGXT", "PLOP3"]
+devices = ["sm_120"]
+what = "bit masks, sign extension, predicate logic"
+mark = "covered"
+envelope = "lane"
+pipe = "alu"
+words = [3, 2]
+rate_value = 1.9431
+rate_unit = "warp instructions/SM/clk"
+cost = "a lane of alu a lane"
+argument = "≤ 3 words (PLOP3: 3 predicates of the predicate word) in, a word or 2 predicates out a lane. Each runs on the ALU pipe: PLOP3.LUT 1.9431 alone and 1.9948 with LOP3, SGXT and BMSK 1.6815 alone and 1.8739 with LOP3 (on separate pipes the pairs would reach 3.4 and more)"
+source = "pipes.cu, r20261027-015018-838b: plop3, sgxt, bmsk and their mix_X_lop3"
 
 [[row]]
 ops = ["IADD3", "IADD", "IADD32I", "ISETP", "IMNMX", "VIMNMX", "IABS", "SEL"]
@@ -551,8 +578,8 @@ pipe = "fma"
 words = [4, 2]
 rate = ["alu.iadd3", "issue"]
 cost = "1/32 of an issue slot a lane (fma)"
-argument = "≤ 2 64-bit or 3 32-bit words and carries in, a word pair or a word and a predicate out a lane. The CPG gives CC 12.0's integer add and compare/min/max 128 results a SM-clock (DS_lop: held by the issue slot), past alu's 64, so they're on fma, issue-bound; VIMNMX runs at 3.916 and SEL at 1 SMSP-cycle a warp instruction (the issue rate), while IADD3 measured 64 on the ALU pipe beside LOP3"
-source = "θ alu.iadd3 (sheet 128, measured 64), θ issue; DS_lop; census VMNX 3.916, KSEL (SEL 1.000 SMSP-cycles), A"
+argument = "≤ 2 64-bit or 3 32-bit words and carries in, a word pair or a word and a predicate out a lane. The CPG gives CC 12.0's integer add and compare/min/max 128 results a SM-clock (DS_lop: held by the issue slot), past alu's 64, so they're on fma, issue-bound; VIMNMX runs at 3.916 and SEL at 1 SMSP-cycle a warp instruction (the issue rate), while IADD3 measured 64 on the ALU pipe beside LOP3, and so did IADD.64 (1.6831 alone, 1.8529 with LOP3) and IABS (1.6817, 1.8739); fma holds each at its issue slot either way. ptxas 13.0 lowers add.u32 and sub.u32 to IADD3 or IMAD, never IADD"
+source = "θ alu.iadd3 (sheet 128, measured 64), θ issue; DS_lop; census VMNX 3.916, KSEL (SEL 1.000 SMSP-cycles), A; pipes.cu, r20261027-015018-838b: iadd64, iabs and their mix_X_lop3"
 
 [[row]]
 ops = ["IMAD", "IMUL", "IMUL32I", "IDP", "IDP4A"]
