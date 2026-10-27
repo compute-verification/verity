@@ -920,7 +920,9 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
     cuBLASLt and CUTLASS, with the weight side a period's (v3.2: ovl), a call's (the run of record's per-call weight coins:
     ovl_w) and the filler's pad (ovl_pad), ovl with the commit's loads left out (ovl_nomem: its compressions on bytes made in
     registers; wrong roots, timing only), the GEMM's tensor duty (cuBLASLt's time over the call's period, per-call weight
-    coins) and where the call's time goes. An arm the call doesn't run (a served call's pad) is "-"."""
+    coins) and where the call's time goes. An arm the call doesn't run (a served call's pad) is "-". Then wgmma.linear's
+    time (a -DV31_WG build's served bench), gamma ovl_w over it, and the share of O's rows the GEMM's hash warps hashed
+    (V31_RP 4, the last overlapped call)."""
     rows = []
     for path in a.files:
         for line in Path(path).read_text().splitlines():
@@ -932,12 +934,21 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
 
     print("| shape | m x N x K | L | S | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | / CUTLASS | gamma ovl_w | / CUTLASS "
           "| gamma ovl_pad | gamma nomem | gamma call | gamma gemm | tensor duty | coins, coins_w, pad, form_a, form_b, gemm, "
-          "commit ms |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+          "commit ms | wgl ms | gamma ovl_w / wgl | O hashed in the GEMM: rows / chunks |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]
         variant = (("served " if r.get("o") else "") + f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
-                   + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else ""))
+                   + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else "")
+                   + (f" wg{r.get('wbn', '')}" if r.get("wg") else "") + (f" rp{r['rp']}" if r.get("wg") and r.get("rp") else "")
+                   + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
+                   + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
+                   + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else ""))
+        fused = "-"
+        if r.get("fused_leaves", -1) >= 0 and r.get("o_leaves"):
+            fused = f"{100 * r['fused_leaves'] / r['o_leaves']:.1f}%"
+            if r.get("fused_blocks", -1) >= 0 and r.get("row_blocks"):
+                fused += f" / {100 * r['fused_blocks'] / (r['o_leaves'] * r['row_blocks']):.1f}%"
         cut = g(ms["cutlass"]["ms"]) if "cutlass" in ms else "-"
         gcut, gcut_w = (r.get("gamma_ovl_cutlass"), r.get("gamma_ovl_w_cutlass")) if "cutlass" in ms else (None, None)
         parts = ", ".join(g(ms[x]["ms"]) if x in ms else "-" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
@@ -945,7 +956,8 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
         print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {g(ms['lt']['ms'])} | {cut} | "
               f"{g(ms['ovl']['ms'])} | {g(r['gamma_ovl'])} | {g(gcut)} | {g(r.get('gamma_ovl_w'))} | {g(gcut_w)} | "
               f"{g(r.get('gamma_ovl_pad'))} | {g(r.get('gamma_ovl_nomem'))} | {g(r['gamma_call'])} | {g(r['gamma_gemm'])} | "
-              f"{100 / duty:.1f}% | {parts} |")
+              f"{100 / duty:.1f}% | {parts} | {g(ms['wgl']['ms']) if 'wgl' in ms else '-'} | {g(r.get('gamma_ovl_w_wgl'))} | "
+              f"{fused} |")
     return 0
 
 

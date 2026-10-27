@@ -16,7 +16,8 @@ clock, 132 SMs, 1,830 MHz).
 Its arm of record is the one a call of the protocol runs: a served call's seeds are per call (`dither.seeds(coin, receipt,
 call)`), so `ovl_w`, the weight side every call; a filler's is `ovl_pad`, its pad and every coin a call. Its split is a
 serial call's parts with those seeds: tensor `gemm` (served: cuBLASLt's O, then the protocol GEMM over k < (S - 1) L),
-hashing `coins`, `coins_w`, `pad` and `commit`, other `form_a` and `form_b`.
+hashing `coins`, `coins_w`, `pad` and `commit`, other `form_a` and `form_b`. Where the lines time wgmma.linear (`wgl`, a
+-DV31_WG build's served bench), gamma_u is against its step from the same lines.
 
     python3 h200_step.py BENCH.jsonl ... [--wgmma 3.06]
 """
@@ -33,7 +34,7 @@ MODELS = {"mqa16k52": CALLS, "8b": {(6144, 4096): 32, (4096, 4096): 32, (28672, 
 WGMMA = {"mqa16k52": 3.06}
 RHO = 4096 * 132 * 1.83e9
 ARMS = ("lt", "plain", "coins", "form", "wrap", "gemm", "commit", "call", "ovl")
-FILL_ARMS = ("lt", "coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit", "call", "ovl", "ovl_w", "ovl_pad")
+FILL_ARMS = ("lt", "coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit", "call", "ovl", "ovl_w", "ovl_pad", "wgl")
 
 
 def rows(paths: list[str]) -> list[dict]:
@@ -130,7 +131,8 @@ def main() -> int:
         for (lp, L, row, o, var), v in st.items():
             s, step = v["s"], v["step"]
             mhz = f"{v['mhz'][0]:.0f}-{v['mhz'][1]:.0f}" if v["mhz"] else "-"
-            gu = f"{step / ref:.3f}" if ref and step else "-"
+            r = s["wgl"] or ref
+            gu = f"{step / r:.3f}" if r and step else "-"
             split = v["tensor"] + v["hashing"] + v["other"]
             print(f"| {lp} | {L} | {row} | {'served' if o else 'filler'} | {var} | {f(step)} | {v['record']} | {gu} | "
                   f"{f(step / s['lt'] if step else None)} | {f(s['ovl'])} | {f(s['ovl_w'])} | {f(s['ovl_pad'])} | "
@@ -138,8 +140,9 @@ def main() -> int:
                   f"{v['hashing'] / split:.1%} | {s['lt']:.3f} | {f(1 - v['macs'] / (step * RHO) if step else None)} | "
                   f"{mhz} |")
         for (lp, L, row, o, var), v in st.items():
-            step, lt = v["step"], v["s"]["lt"]
-            vs = f"gamma_u {step / ref:.3f} against wgmma's {ref} s, " if ref and step else ""
+            step, lt, wl = v["step"], v["s"]["lt"], v["s"]["wgl"]
+            vs = (f"gamma_u {step / wl:.3f} against wgmma.linear's {wl:.3f} s (these lines' wgl), " if wl and step
+                  else f"gamma_u {step / ref:.3f} against wgmma's {ref} s, " if ref and step else "")
             print(f"summary: {model} no-fold {'served' if o else 'filler'} L {L} L' {lp} row {row} {var}: step "
                   f"{f(step)} s ({v['record']}), {vs}gamma_lt {f(step / lt if step else None)} against cuBLASLt's "
                   f"{lt:.3f} s; tensor {v['tensor']:.3f}, hashing {v['hashing']:.3f}, other {v['other']:.3f} s serial")
