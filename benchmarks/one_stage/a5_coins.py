@@ -7,7 +7,7 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what vy-challenger-1
   writes, and its key is this run's alone, so its draws show the path, not an auditor's coins. Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins vy-challenger-1 only to such a commit; its code is this
-  tree's. ``loopback:HOST:PORT``: the same development session in a process of its own, the challenger party
+  tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
   (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its
   peer, `open` on the TP run root (`served_h1.coins.open_window`), the client on the peer's 127.0.0.1:PORT with the session's
   secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins`; the verifier's key is then the
@@ -581,8 +581,8 @@ class Gate:
 
 
 class Loopback:
-    """The challenger party running as its own process on this machine (`challenger_party.py`, `verity run CONFIG --party
-    challenger`'s step 0) at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
+    """The challenger party's host on this machine (`challenger_party.Host`, `verity run CONFIG --party challenger`'s)
+    at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
     from the party itself, so its coins are a development session's, not an auditor's (`simulated`)."""
 
     def __init__(self, address: str) -> None:
