@@ -1,5 +1,5 @@
-"""Descriptor codec: nested-static dependency discovery (frontend rulings §8.3), identity conflicts (§8.1), and the
-reference normalisation of `concat`.
+"""Descriptor codec: nested-static dependency discovery, identity conflicts, and the reference normalisation of
+`concat`.
 
 Ported from veritor ``verity.ir/tests/test_codec.py`` (1-114, 131-224).  The tests over veritor's model registry (B1
 attention padding, KV-cache aliasing, the pinned v0 digests) stayed behind; the one `b1.Gemm` reference became a local
@@ -214,6 +214,35 @@ def test_bind_keys_a_bool_static_apart_from_the_int_it_equals():
         assert sa.id != sb.id and not same_definition(sa, sb)
         assert program_digest(Program(sa)) != program_digest(Program(sb))
     assert (bind(Both, FLAG=True).id, bind(Both, FLAG=1).id) == ("AnyFlag_v1{FLAG=True}", "AnyFlag_v1{FLAG=1}")
+
+
+def test_decode_refuses_a_record_its_registered_composite_refuses():
+    """The decoder holds a binding record of a composite the registry holds to that composite's `refuse`, as `bind` holds a
+    built one: the token feed at FIRST=1, its id, record and body otherwise well formed, is no Program's, so no reader that
+    accepts by id meets it."""
+    from verity.ml.definitions.registry.io_shell import TokenFeed
+
+    feed = bind(TokenFeed, NP=2, FIRST=True)
+    sig = feed.signature()
+    calls = CompositeDefinition("CallsTokenFeed", 1, (), lambda S: sig, lambda B, S, slot: B.call(feed, slot), register=False)
+    text = json.dumps(encode_program(Program(calls)), separators=(",", ":"))
+    assert "TokenFeed_v1{NP=2,FIRST=true}" in text
+    assert program_digest(decode_program(json.loads(text), REGISTRY)) == program_digest(json.loads(text))
+    lookalike = json.loads(text.replace("FIRST=true", "FIRST=1").replace('"FIRST":true', '"FIRST":1'))
+
+    class Lookup:
+        """A registry as the decoder reads one, through `in` and `[]` alone (benchmarks/one_stage/replay.py's stand-ins)."""
+
+        def __contains__(self, fid: str) -> bool:
+            return fid in REGISTRY
+
+        def __getitem__(self, fid: str):
+            return REGISTRY[fid]
+
+    for registry in (REGISTRY, Lookup()):
+        with pytest.raises(ValueError, match=r"^definition 'TokenFeed_v1\{NP=2,FIRST=1\}': TokenFeed_v1 refuses this binding: "
+                                             r"NP must be at least 1 and FIRST a bool \(got NP=2, FIRST=1\)$"):
+            decode_program(lookalike, registry)
 
 
 def test_unbound_composite_as_a_static_value_is_not_encodable():

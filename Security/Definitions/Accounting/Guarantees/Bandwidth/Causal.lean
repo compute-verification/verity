@@ -3,11 +3,11 @@ import Definitions.Accounting.Bandwidth.Causal
 /-!
 # B3 and Mbw on a strategy's runs (trusted)
 
-The rows B3 and Mbw of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.8), stated over the runs of a
-strategy causal from every tick (`CausalFrom`) rather than over an abstract device of the bandwidth audit's game. The
-strategy maps the store (for Mbw, the store and `z`) and the oracle to a run; the chip is the location `X`, the window is
-`[t₀, t₀ + T)`, and the chip commits to `τ` of what it did in the window, the tags the verifier checks at `s` blocks
-drawn uniformly. The hypotheses are the model's constraints on such a strategy:
+The actual-circuit model's rows B3 and Mbw, stated over the runs of a strategy causal from every tick (`CausalFrom`)
+rather than over an abstract device of the bandwidth audit's game. The strategy maps the store (for Mbw, the store and
+`z`) and the oracle to a run; the chip is the location `X`, the window is `[t₀, t₀ + T)`, and the chip commits to `τ` of
+what it did in the window, the tags the verifier checks at `s` blocks drawn uniformly. The hypotheses are the model's
+constraints on such a strategy:
 - the chip's state at `t₀` is at most `M` bits (memory) and fixed by the store, or by the store and `z`, before the
   seed (`hpre`: the oracle doesn't reach it);
 - every wire into the chip runs on a port of HBM, of the rest or of the oracle, and the links are alphabets
@@ -37,9 +37,9 @@ store, the oracle and the sample that the tags pass while
 
   `∑ wd + (M + 1) + βs·T + m·b + λ < k·b`
 
-is at most `((k − 1)/N)^s + C(N, m)·2^{βs·T}/2^{h·m} + C(T·qt, k − m)/2^λ`, `βs` the rest's ports' capacities summed
-and `∑ wd` the bits HBM delivered in the window. This is `AuditInteractive`'s bound at `S = M + 1`, `c = βs·T`,
-`q = T·qt`: the console's B3 at `e > 0`, `m·b` less for relayed tags, with no `2^e`. Proof:
+is at most `((k − 1)/N)^s + C(N, m)·2^{βs·T}/2^{h·m} + C(T·qt, k − m)/2^λ`, `βs` the rest's ports' capacities summed and
+`∑ wd` the bits HBM delivered in the window. This is `AuditInteractive`'s bound at `S = M + 1`, `c = βs·T`, `q = T·qt`:
+the actual-circuit model's B3 at `e > 0`, `m·b` less for relayed tags, with no `2^e`. Proof:
 `Bandwidth.SecurityProofs.B3`.
 
 Frozen (no-function, world-unlisted): stated over arbitrary strategies causal from every tick, with the chip's ports'
@@ -66,8 +66,8 @@ def B3 : Prop :=
 
 /-- **B3 at `e = 0`.** `B3` when the rest's ports' signals don't depend on the oracle: the probability that the tags
 pass while `∑ wd + (M + 1) + βs·T + λ < k·b` is at most `AuditInteractiveRO`'s bound
-`((k − 1)/N)^s + s/2^h + C(T·qt, k)/2^λ`, with no relayed-tag term. So an accept gives the console's B3 at `e = 0`:
-the chip read at least `k·b − M_chip − 1 − c_side − λ` bits from HBM in the window, `c_side = βs·T`. Proof:
+`((k − 1)/N)^s + s/2^h + C(T·qt, k)/2^λ`, with no relayed-tag term. So an accept gives the actual-circuit model's B3 at
+`e = 0`: the chip read at least `k·b − M_chip − 1 − c_side − λ` bits from HBM in the window, `c_side = βs·T`. Proof:
 `Bandwidth.SecurityProofs.B3RO`.
 
 Frozen (no-function, world-unlisted): as `B3`. -/
@@ -149,8 +149,8 @@ is `z`): the probability over the store, `z`, the oracle and the sample that the
   `∑ wd + (M + 1) + βs·T + λ < k·b + n`
 
 is at most `AuditRO`'s error `((k − 1)/N)^s + s/2^h + C(T·qt, k)/2^λ`. Read with `cert_bw = k·b − (M + 1) − βs·T − λ`,
-what `B3RO` certifies: an accept gives `n ≤ ∑ wd − cert_bw` at that error and no extra slack. This is the console's Mbw
-for the chip of a strategy's run. Proof: `Bandwidth.SecurityProofs.Mbw`.
+what `B3RO` certifies: an accept gives `n ≤ ∑ wd − cert_bw` at that error and no extra slack. This is the actual-circuit
+model's Mbw for the chip of a strategy's run. Proof: `Bandwidth.SecurityProofs.Mbw`.
 
 Frozen (no-function, world-unlisted): as `B3`. -/
 def Mbw : Prop :=
@@ -178,8 +178,9 @@ def Mbw : Prop :=
 
 /-- **Mbw in the capacity form** (`e = 0`). `Mbw` with HBM hearing only the chip in place of passive memory, every
 tick's HBM signal counted at `βm` bits: the probability that the tags pass while `βm·T + (M + 1) + βs·T + λ < k·b + n`
-is at most `AuditRO`'s error. So an accept gives `n ≤ βm·T − cert_bw`, the console's `q ≤ β_HBM·T − cert_bw =
-res_bw`, which needs of HBM only that it computes no tag. Proof: `Bandwidth.SecurityProofs.MbwCapacity`.
+is at most `AuditRO`'s error. So an accept gives `n ≤ βm·T − cert_bw`, the actual-circuit model's
+`q ≤ β_HBM·T − cert_bw = res_bw`, which needs of HBM only that it computes no tag. Proof:
+`Bandwidth.SecurityProofs.MbwCapacity`.
 
 Frozen (no-function, world-unlisted): as `B3`. -/
 def MbwCapacity : Prop :=

@@ -1,4 +1,4 @@
-"""R16 tp TP-10 -- the pin's acceptance-set negative 'TP shard / reference mismatch' (`tp2_commit --serve-shard-from <rank>:<param>:<from_rank>`):
+"""TP-10 -- the pin's acceptance-set negative 'TP shard / reference mismatch' (`tp2_commit --serve-shard-from <rank>:<param>:<from_rank>`):
 a rank serves ANOTHER rank's shard of one parameter, composed from the SAME pinned checkpoint.  Every served byte is a checkpoint byte and
 the multiset of shard digests over the world is unchanged -- a whole-tensor / whole-checkpoint hash cannot see it -- but the per-rank pin
 (MAN-09: served shard == the slice the rank Program's shard map prescribes) must FAIL naming exactly that parameter on exactly that rank.
@@ -79,7 +79,7 @@ def test_a_replicated_parameter_has_no_other_ranks_shard(checkpoint):
 
 
 def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
-    """[TP-11, rev F-r16-19] the import path of record is written from the RUNNING process (sys.modules), not a static closure."""
+    """[TP-11] the import path of record is written from the RUNNING process (sys.modules), not a static closure."""
     from verity_vllm.pipeline.tp.rank_worker import repo_modules_loaded
     from verity_vllm.check import weights_of_record  # noqa: F401  -- imported here == must be listed
     r = repo_modules_loaded()
@@ -89,7 +89,7 @@ def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
     assert r["native_collect_jit_sources"] == [] or all(f.endswith((".cpp", ".cu", ".h")) for f in r["native_collect_jit_sources"])
 
 
-# ---- [rev M-0460] the decode-only (step-ranged) request-label swap negative ------------------------------------------------------------
+# ---- the decode-only (step-ranged) request-label swap negative ------------------------------------------------------------
 
 def test_swap_spec_all_steps_and_ranged():
     from verity_vllm.pipeline.tp.rank_worker import parse_swap_spec, swap_label

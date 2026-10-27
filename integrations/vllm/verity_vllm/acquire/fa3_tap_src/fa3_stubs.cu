@@ -1,4 +1,4 @@
-// Verity R13 lane hopper: link stubs for the FA3 tap build.  flash_api.cpp's dispatch (with the build's FLASHATTENTION_DISABLE_*
+// Verity: link stubs for the FA3 tap build.  flash_api.cpp's dispatch (with the build's FLASHATTENTION_DISABLE_*
 // set: sm90 only, bf16 only, hdim 64/128, PackGQA only, no split/softcap/local/appendKV/fp8/fp16) still names the NON-paged
 // PackGQA forward of each head dim; vLLM's paged-KV serving launches never reach it (page 16 % kBlockN != 0 -> PagedKVNonTMA), so it
 // is not compiled -- any call is a hard error, never a silent substitute.  Head dims not selected at build time are stubbed too.

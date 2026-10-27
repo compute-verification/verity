@@ -6,8 +6,9 @@
 #     the H200 int8 row's manifest (ROW/manifest.json) and taps (HIDDEN_SO, NORM_TAP_SO). Each closed window is sealed as a
 #     rows-sha512 row dir, and the seal opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
 #     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
-#     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, committed under salts drawn from the committer's key
-#     $D/private/weights.key, 0600, which no record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
+#     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
+#     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under salts drawn from the committer's
+#     key $D/private/weights.key, 0600, neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
@@ -34,7 +35,13 @@
 #     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, else names it MISSING with its issue. No verdict is
 #     made for a piece that didn't run. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
 #     bandwidth session's `--remote-verifier HOST:PORT`) goes in SERVE_ARGS, serve-openai's further arguments, and its piece
-#     reads what it wrote in the serve dir.
+#     reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with WIPE_CMD set (e.g.
+#     'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'), serve() calls it in TREE, under the serve's lease
+#     and before serve-openai starts, with (the serve dir D, `all`, $OUT/pieces/wipe), since the window isn't picked yet, and
+#     says its last line as WIPE. The record reads its pieces/wipe/answer.json and composes the wipe only when that answer
+#     accepts and pieces/wipe/served.json names this node as the server it ran on. A wipe that wrote no answer (refused, or
+#     failed before its judge) leaves the wipe missing, one served elsewhere stays missing, and one whose answer rejects
+#     makes the record reject: a failed wipe is never accepted.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing.
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
@@ -154,6 +161,11 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   local h1=()
   [ -n "${H1_GATE:-}" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
                                --challenger-peer "${H1_PEER:-vy-dc-h200}" --max-num-batched-tokens "${H1_T:-512}")
+  if [ -n "${WIPE_CMD:-}" ]; then  # the wipe of this card, before its engine loads
+    mkdir -p "$OUT/pieces/wipe"
+    (cd "$TREE" && bash -c "$WIPE_CMD" _ "$D" all "$OUT/pieces/wipe") > "$OUT/pieces/wipe/piece.log" 2>&1
+    say "WIPE (exit $?): $(tail -1 "$OUT/pieces/wipe/piece.log" | cut -c1-600)"
+  fi
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal --gpu-tree \

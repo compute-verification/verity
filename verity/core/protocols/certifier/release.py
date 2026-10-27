@@ -1,4 +1,4 @@
-"""The release order on the server's side (VLLM-89): each request a certifier releases reaches the server with
+"""The release order on the server's side: each request a certifier releases reaches the server with
 `x-verity-release: N`, N its 0-based index in the certifier run's release order (dense: each released request once,
 a request a fault drops before its release unnumbered), and `x-verity-release-run: ID`, the run's id in hex, so that
 `serve-openai --admit release-order` adds requests to its engine in the order the certifier released them, whatever

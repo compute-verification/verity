@@ -21,14 +21,14 @@ def load_derived(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fal
     prov = rep.get("provenance", rep)
     src = prov.get("source") if isinstance(prov.get("source"), dict) else {}
     # the module's USER inputs precede the weight fields: `example_inputs` records one entry per input (the greedy wrapper's `prompt`;
-    # [R15 stoch] the stochastic wrapper's `prompt` + `seed`); a report without it is the one-input greedy wrapper
+    # the stochastic wrapper's `prompt` + `seed`); a report without it is the one-input greedy wrapper
     user_inputs = src.get("example_inputs") or src.get("inputs") or [[0]]
     n_user = max(1, len(user_inputs))
     reg = SI.derived_registration(prov, n_user, d)   # a `registered_values` derivation's `values`, between them
     fields = {n_user + bool(reg) + w["field"]: w["name"] for w in prov["weights"]}  # derive: user inputs first, then one Input batch per field
     P = cls(label, desc, fields, tok_node=0, compact=compact)
     SI.set_supplied(P, [(n_user, None, reg)] if reg else [], d)
-    # [R17 D90] a TP rank Program (derive_step --tp): `tp_links.json` names the user inputs in order (`prompt`, `peers_0`, ... = the k-th
+    # a TP rank Program (derive_step --tp): `tp_links.json` names the user inputs in order (`prompt`, `peers_0`, ... = the k-th
     # collective's peer partial, issue order); each `peers_<k>` is its own Input node (one field at offset 0), and so is each WITNESS (a
     # user input the table lists neither among `prompt_inputs` nor `peer_inputs`: the MoE align `schedule`), bound by its name.  Refused
     # by name when the link table and the report disagree on how many user inputs there are.
@@ -54,13 +54,13 @@ def load_derived(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fal
 
 
 def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = False) -> Prog:
-    # [R17 mfast, rev F-r17-12] the checker reads the FILES OF RECORD and nothing beside them: a compact copy written into the fold dir by
+    # the checker reads the FILES OF RECORD and nothing beside them: a compact copy written into the fold dir by
     # the record's producer (unit 7's sidecars, withdrawn) is prover input whose content nothing the checker owns authenticates -- a forged
-    # sidecar with the sources' true digests/sizes/sha256 pasted in was accepted (M-0497).  `instances.jsonl` itself may be stored in either
+    # sidecar with the sources' true digests/sizes/sha256 pasted in was accepted.  `instances.jsonl` itself may be stored in either
     # form (F2, run_config.INSTANCES_SCHEMA_V2: operand references as progressions); this loader keeps only the parameter-space items --
     # "p" runs and [GLM-5.3] "P" progressions, read without expansion (a scattered weight operand is ~1e6 runs) -- so its semantics do not
     # depend on the form.  The form read is stated (LOAD_NOTES -> impl.config.fold_load) so two documents of one capture under two stores are distinguishable by content.
-    # [R17 mfast n2, COORD R17-37 (2) / F-r17-15 (iii)] the two record files are hashed AS READ (one pass: every byte the loader consumes
+    # the two record files are hashed AS READ (one pass: every byte the loader consumes
     # goes through sha256 before it is decoded), and the digests are stated beside the form (LOAD_NOTES -> impl.fold_load[dir].program_sha256 /
     # instances_sha256): a Match document -- the record checker's as much as the fast one's -- is tied to the IMMUTABLE INPUT ARTIFACTS by
     # content, so the audit tool compares the two documents' digests with the row's files (and with each other) instead of trusting that
@@ -85,16 +85,16 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
                 LOAD_NOTES[d] = {"source": "record files", "instances_schema": o.get("schema"),
                                  "operand_refs_form": o.get("operand_refs_form") or "runs", "program_sha256": program_sha}
             if "node" in o:
-                # [R16 global, GM-01 memory at LP 4096] only the PARAMETER-space runs ("p": prompt / weights reads -- O(instances)) of each
+                # only the PARAMETER-space runs ("p": prompt / weights reads -- O(instances)) of each
                 # operand are kept from `operand_refs`; the node-space runs ("n": the attention K/V reads, O(LP^2) over a long prefill) are
                 # the same references `Prog.inst[*].args` holds and are never read from the rows.  Operand arity is preserved (one list per
                 # operand, possibly empty) so `operand_roots[k]` still names operand k below.
                 rows.append({"node": o["node"], "step": o.get("step"), "row": o.get("row"), "rows": o.get("rows"), "hint": o.get("hint"),
                              "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in (o.get("operand_refs") or [])],
                              "pattern": o.get("pattern"),
-                             "request": o.get("request"),  # [X-09] the fold's own attribution when recorded
+                             "request": o.get("request"),  # the fold's own attribution when recorded
                              "position": o.get("position"),  # prefix_reads links a cached row to its producer by position (and layer: hint)
-                             "operand_roots": o.get("operand_roots")})  # [R15 fp8] per-operand weight names (multi-weight Computes)
+                             "operand_roots": o.get("operand_roots")})  # per-operand weight names (multi-weight Computes)
     if d not in LOAD_NOTES:     # a pre-header instances.jsonl (no schema line): the form is the default, the digests are still stated
         LOAD_NOTES[d] = {"source": "record files", "instances_schema": None, "operand_refs_form": "runs", "program_sha256": program_sha}
     LOAD_NOTES[d]["instances_sha256"] = ih.hexdigest()
@@ -108,14 +108,14 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     """The rest of load_oracle over the retained rows."""
     # weight layout: the WEIGHTS parameter's offset ranges -> weight name from the hints ("module/param.name"). The fold lays
     # out one prompt parameter per request followed by the weights (`fold._header`): weights = param n_input_nodes-1 (== 1
-    # only at B=1; [R13 X-09] the hard-coded 1 read request 1's PROMPT as the weight map at B>1).
+    # only at B=1; the hard-coded 1 read request 1's PROMPT as the weight map at B>1).
     n_in = pj.get("n_input_nodes", 2)
-    # [R15 fp8] the weights Record is the LAST root parameter (fold contract) -- its index is the largest `p` index any instance reads,
+    # the weights Record is the LAST root parameter (fold contract) -- its index is the largest `p` index any instance reads,
     # not `n_input_nodes - 1`: a Record that is not width-homogeneous (FP8: e4m3 weights, f32 block scales, bf16 norms) is encoded as
     # ONE Input node per leaf field (436 for Qwen3-4B-FP8 at B=1), so the node count no longer says how many prompt parameters there are.
     p_idx = {i for o in rows for a in (o.get("operand_refs") or []) for r in a for i in _p_indices(r)}
     w_param = max(p_idx) if p_idx else n_in - 1
-    # [R17 D90] the fold states its parameter layout by name (program.json `params`): the weights index is read from it when present
+    # the fold states its parameter layout by name (program.json `params`): the weights index is read from it when present
     # (exact, even for a fold whose instances read no weight -- a fixture) and cross-checked against the instances' largest "p" index.
     names = [n for n, _t in (pj.get("params") or [])]
     if names:
@@ -125,7 +125,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
             raise ValueError(f"{d}: instances read parameter {max(p_idx)} as the largest, program.json puts `weights` at {len(names) - 1}")
         w_param = len(names) - 1
     p = cls(label, desc, {}, tok_node=0, oracle_rows=rows, compact=compact)
-    # [R17 D90] a tensor-parallel rank fold: one homogeneous `peers_<i>` Record per request = ONE Input node at the parameter's index (every
+    # a tensor-parallel rank fold: one homogeneous `peers_<i>` Record per request = ONE Input node at the parameter's index (every
     # parameter before the weights is homogeneous, one node each); its fields (issue order, leaf offsets) come from `peers_layout`.  The k of a
     # field is its ordinal among the REQUEST's fields = the rank Program's `peers_<k>` for that request.
     for ent in pj.get("peers_layout") or []:
@@ -149,8 +149,8 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
         p.witness_index[node] = int(ent["request_index"])
     p.tp = pj.get("tp")
     w_nodes = SI.load_oracle_supplied(p, pj, d)   # a `registered_values` fold's supplied parameters
-    del pj, desc   # [R16 global] the descriptor JSON (12.5 GB on disk for the 4096/512 fold) is not needed past the decode
-    # Input node -> offset of its first leaf inside the weights parameter (0 for a single homogeneous Record node -- the pre-R15 layout):
+    del pj, desc   # the descriptor JSON (12.5 GB on disk for the 4096/512 fold) is not needed past the decode
+    # Input node -> offset of its first leaf inside the weights parameter (0 for a single homogeneous Record node -- the older layout):
     # the codec emits the prompt parameters' nodes first (one each, `w_param` of them), then the Record's leaf batches in field order.
     w_nodes = w_nodes if w_nodes is not None else {k for k in p.inputs if k >= w_param}
     base, acc = {}, 0
@@ -161,7 +161,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     p.input_base = base
     # Field = the union of every range the instances read under one weight name (the fold's hint `module/param`; the
     # RoPE table is hinted `module/rope.q|k` per position -> the module's `cos_sin_cache`). Equal ranges keep the first name.
-    # [R15 fp8] a Compute that reads several weights (the block-scaled FP8 GEMM: `weight` AND `weight_scale_inv`) records the name of
+    # a Compute that reads several weights (the block-scaled FP8 GEMM: `weight` AND `weight_scale_inv`) records the name of
     # each weight operand in `operand_roots` (fold meta, from `Compute.roots`); operand k is then spanned under ITS name, never
     # the hint's -- the union under one name would fuse two fields into a range the derived program does not have.
     span: dict[str, list[int]] = {}
@@ -187,7 +187,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     p.oracle_wmap_overlaps = [(a, b) for a, b in zip(p.oracle_wmap, p.oracle_wmap[1:]) if a[1] > b[0]]
     p._wlos = [lo for lo, _, _ in p.oracle_wmap]
     p.n_input_nodes = n_in
-    # [R16 global, GM-01 memory at LP 4096] the (parameter-space) `operand_refs` served only `w_param` and the weight-field map above; they
+    # the (parameter-space) `operand_refs` served only `w_param` and the weight-field map above; they
     # are dropped from the retained rows.  `operand_roots` (one short name per operand) stays.  Consumers of `oracle_rows` (batch_decomp,
     # global_match.canonicalize_record) read node/step/row/rows/request/spec.
     for o in rows:
