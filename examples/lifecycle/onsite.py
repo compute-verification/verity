@@ -1,7 +1,9 @@
 """The onsite composite (`verity/onsite/v0`: the network certifier, PoUS, PoUW, the bandwidth audit and sampled proofs) on
 the lifecycle, as a deployment of four parties: the developer and three of the auditor's, the verifier, the network
-certifier on the site's uplink and the memory challenger at the end of its link to the node. Where the auditor's devices
-sit is part of the site's `Layout`, and the hardware registration's checks hold every uplink to having a certifier.
+certifier splitting the site's uplink and the memory challenger at the end of its link to the node. Where the auditor's
+devices sit is part of the site's `Layout`, and the hardware registration's checks hold every boundary link to a
+certifier splitting it (`uncertified`) and every host holding the prover's memory to a challenger's link
+(`challenger-reach`).
 
 - The network certifier is the outside world's only way in: it carries each request to the developer and its response
   back, commits to every frame it sees under its own salts, and signs each declaration period's view
@@ -19,9 +21,9 @@ from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
-from lifecycle import (CERTIFIER, CHALLENGER, D, DEVELOPER, LATER, OUTSIDE, PLAN, SHARED, SHEETS, SIZES, THETA_ROWS,
-                       VERIFIER, AuditorDevice, Developer, Device, Layout, Link, Store, Tape, Verifier, answer, body,
-                       digest, frame, frame_commitment, load_of, msg, opens, products, schema, theta_of)
+from lifecycle import (CERTIFIER, CHALLENGER, D, DEVELOPER, LATER, NODE, OUTSIDE, PLAN, SHARED, SIZES, THETA_ROWS,
+                       VERIFIER, Developer, Layout, Link, Loc, Tape, Verifier, answer, body, digest, frame,
+                       frame_commitment, load_of, msg, opens, products, schema, theta_of)
 from verity.core.deploy import runtime
 from verity.core.deploy.manifest import Channel, Manifest, Role
 from verity.core.deploy.party import Finish, Identity, Received, Send
@@ -32,15 +34,21 @@ from verity.ml.crypto import lms
 
 ID = "lifecycle-onsite"
 UPLINK, CERT, CHAL = "uplink0", "cert0", "chal0"
-CHAL_LINK = Link("chal0-node0", (CHAL, "node0"), 100_000, 1_000_000)
-"""The memory challenger's link to the node: 1 ms each way."""
-LAYOUT = Layout("onsite", ("node0",), (Device("gpu0", "sim-int8-a", "node0"), Device("gpu1", "sim-int8-b", "node0")),
-                (Store("nvme0", "node0", 1 << 43),), (Link(UPLINK, ("node0", OUTSIDE), 100_000, 100_000), CHAL_LINK),
-                (AuditorDevice(CERT, "certifier", UPLINK), AuditorDevice(CHAL, "challenger", CHAL_LINK.name)))
-"""The site's first hardware registration: one node with two devices and a store, its uplink with the network certifier
-on it, and the memory challenger's link."""
 LMS = lms.Params(64, 4, 4)
 """The certifier's signing key: 16 one-time keys, two a declaration period."""
+CERT_SEED = Tape(b"lifecycle/onsite").bytes("certifier-key", LMS.N)
+CERT_KEY = lms.public_key(lms.keygen(LMS, CERT_SEED)).hex()
+AUDITOR = {CERT: CERT_KEY, CHAL: ""}
+"""The auditor's own devices, each with its key: the verifier refuses a registered certifier or challenger that isn't
+one of them (`owner`)."""
+CHAL_LINK = Link("chal0-node0", (CHAL, "node0"), 100_000, 1_000_000)
+"""The memory challenger's link to the node: 1 ms each way."""
+LAYOUT = replace(NODE, locs=(*NODE.locs, Loc(CERT, "certifier", "site0", "auditor", key=CERT_KEY),
+                             Loc(CHAL, "challenger", "site0", "auditor")),
+                 links=(Link(UPLINK, ("node0", CERT), 100_000, 100_000), Link("uplink0-out", (CERT, OUTSIDE), 100_000, 0),
+                        CHAL_LINK))
+"""The site's first hardware registration entry: the node, its uplink split by the network certifier (node to
+certifier, certifier to the outside), and the memory challenger with its link to the node."""
 ROWS = 2
 """Theta rows the memory challenger asks for a round."""
 
@@ -150,12 +158,21 @@ class Challenger:
         return [Send(VERIFIER, msg("Report", rd["k"], report)), *(self._begin() if self.queue else ())]
 
 
+def theta_reach(layout: Layout, store: str) -> tuple[int, int]:
+    """Where theta is held, as the memory challenger's round reads it from the layout: the rate from its memory leaf to a
+    chip (its device's card, or the slowest device on its host for a host tier), and the latency of the challenger's
+    link to its host."""
+    parent, host = layout.loc(store).parent, layout.host(store)
+    devs = [parent] if layout.kind(parent) == "device" else [x.id for x in layout.of_kind("device") if x.parent == host]
+    lat = min(x.lat for x in layout.links if host in x.ends and "challenger" in map(layout.kind, x.ends))
+    return min(layout.device(d)["bw"] for d in devs), lat
+
+
 class OnsiteVerifier(Verifier):
     """The verifier, with the onsite components: the certifier's signed view of each declaration period, and the memory
     challenger's report."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
-        self.keys = {c: bytes.fromhex(pk) for c, pk in params["certifiers"].items()}
         self.views: dict[int, dict[str, Any]] = {}
         self.reports: dict[int, dict[str, Any]] = {}
         return super().start(params, identity)
@@ -164,15 +181,17 @@ class OnsiteVerifier(Verifier):
         return [Send(CERTIFIER, msg("Go", 0))]
 
     def declared(self, k: int) -> list[Any]:
-        chal = next(a for a in self.layout.auditors if a.kind == "challenger")
-        bw = min(SHEETS[d.sku]["bw"] for d in self.layout.devices)
+        """The memory challenger's round, with what the layout says of where theta is held: its device's rate from
+        memory to chip (the bandwidth audit's projection) and the latency of the challenger's link to its host."""
+        bw, lat = theta_reach(self.layout, self.builder.store)
         return [Send(CHALLENGER, msg("Open", k, {"theta": self.baseline.theta, "bw_bits_per_tick": bw,
-                                                 "latency_ticks": self.layout.link(chal.link).latency_ticks}))]
+                                                 "latency_ticks": lat}))]
 
     def component(self, m: Message, k: int, j: Any) -> None:
         if m.type == "View":
-            cert = next((a.name for a in self.layout.auditors if a.kind == "certifier" and a.link == j.get("link")), None)
-            pk = self.keys.get(cert)
+            link = next((x for x in self.layout.links if x.id == j.get("link")), None)
+            cert = next((e for e in link.ends if self.layout.kind(e) == "certifier"), None) if link else None
+            pk = bytes.fromhex(self.layout.loc(cert).key) if cert else None
             signed = pk is not None and all(
                 lms.verify(LMS, pk, certified(pk[:16], j, w), lms.Signature.decode(LMS, bytes.fromhex(j["signatures"][w])))
                 for w in lms.DIRECTIONS)
@@ -205,7 +224,7 @@ class OnsiteVerifier(Verifier):
                                          {"elapsed_ticks": rp["elapsed_ticks"], "bound_ticks": rp["bound_ticks"]})}
 
 
-MS = CHAL_LINK.latency_ticks // 1_000_000
+MS = CHAL_LINK.lat // 1_000_000
 MANIFEST = Manifest(
     ID, 1, "examples/lifecycle/onsite.py:MANIFEST",
     parties=(Role(DEVELOPER, "developer", needs=("coins", "clock")), Role(VERIFIER, "auditor", needs=("coins",)),
@@ -228,14 +247,11 @@ PROTOCOL = runtime.ProtocolDef(MANIFEST, {DEVELOPER: Developer, VERIFIER: Onsite
 
 def run(cheat: str | None = None, seed: bytes = b"lifecycle/onsite") -> dict[str, Any]:
     """One monitoring period of the onsite composite, simulated: the verifier's outcome, and each party's."""
-    cert_seed = Tape(seed).bytes("certifier-key", LMS.N)
-    pk = lms.public_key(lms.keygen(LMS, cert_seed))
-    config = {"protocol": ID, "params": {"protocol": "onsite", "declarations": len(SIZES), "auditor": [CERT, CHAL],
-                                         "certifiers": {CERT: pk.hex()}},
+    config = {"protocol": ID, "params": {"protocol": "onsite", "declarations": len(SIZES), "auditor": AUDITOR},
               "party": [{"name": p} for p in (DEVELOPER, VERIFIER, CERTIFIER, CHALLENGER)]}
-    caps = {DEVELOPER: {"theta": theta_of(1), "state0": 0, "layout": LAYOUT, "later": replace(LATER, site="onsite"),
-                        "plan": PLAN, "product": products()["onsite"][0], "cheat": cheat},
-            CERTIFIER: {"load": load_of(2, SIZES), "seed": cert_seed}}
+    caps = {DEVELOPER: {"theta": theta_of(1), "state0": 0, "layout": LAYOUT, "later": LATER, "plan": PLAN,
+                        "product": products()["onsite"][0], "cheat": cheat},
+            CERTIFIER: {"load": load_of(2, SIZES), "seed": CERT_SEED}}
     result = runtime.run(config, [DEVELOPER, VERIFIER, CERTIFIER, CHALLENGER], "simulated", None,
                          protocols={ID: PROTOCOL}, seed=seed, authenticate=False, capabilities=caps)
     return {"status": result.status, "outcomes": result.outcomes, **(result.outcomes[VERIFIER]["outcome"] or {})}

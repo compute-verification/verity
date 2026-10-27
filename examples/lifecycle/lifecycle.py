@@ -1,25 +1,27 @@
 """The lifecycle both composite protocols step through, on a tiny model, with the parts they share: the phases as functions
 with typed inputs and outputs, and the developer and verifier as parties of the deployment layer (`verity.core.deploy`).
-A composite's own module (`remote.py`) adds what it has of its own, through the verifier's hooks; `run.py` runs it;
+`onsite.py` and `remote.py` add what each composite has of its own, through the verifier's hooks; `run.py` runs both;
 README.md walks through it.
 
 The phases, each a function here:
 
-1. **Hardware registration** (`check_registration`): the site's `Layout` (its devices, named by SKU, their stores, its
-   links and uplinks, and where the auditor's devices sit), registered before anything else and grown by later
-   registrations, each checked before anything is placed on what it adds.
+1. **Hardware registration** (`check_registration`): the site's `Layout`, one tree of locations (site, hosts, devices by
+   card digest, memory leaves by tier and bytes, and the auditor's certifiers and challengers) with its links, folded
+   from an append-only log of `Registration` entries. The first entry comes before anything else; each later one is
+   checked against the layout its prefix folds to before anything is placed on what it adds.
 2. **Registration** (`register`, `check_baseline`): the builder B by its descriptor (its advice cap and its static
    placement plan) and the baseline, theta's and the initial state's hiding commitments, before any coin.
 3. **Operation** (`operate`): the developer serves a declaration period's requests through the model (`forward`),
    realizing what only run time decides: the batching.
 4. **Declaration k** (`declare`, `check_declaration`): the developer reports the declared advice a_k; B appends the
    declaration block to the declared circuit C = B(a_1 || ... || a_k) (`Builder.grow`: B is prefix-extending, so the
-   blocks before are unchanged) and places its units on registered devices; the block's values are committed; and its
-   record binds the previous record and the layout its units were placed on.
+   blocks before are unchanged) and places it (`placement`: its units on device leaves, theta on a memory leaf, naming
+   the layout's head); the block's values are committed; and its record binds the previous record and that placement.
 5. **Audit of declaration k** (`draw`, `prove`, `verify`, `pouw_window`): live coins after the commitment, sampled
    proofs' draw at PoUW's size K', each drawn unit proved behind the firewall and checked by the verifier.
 6. **Accounting** (`compose`, `account`): each declaration's composite verdict by the composition's rule, the monitoring
-   period's, its pooled bound, and its credit against the capacity of the layout's devices.
+   period's, its pooled bound, and its credit against the compute the layout holds: each subprotocol's accounting is a
+   projection of the layout (`Layout.accounting`).
 
 `prove` and `verify` are a stand-in for C-Flock behind the firewall: the proof is the drawn unit's opening, which `verify`
 checks against the commitments and re-evaluates in the clear. It is sound for the example and not zero-knowledge.
@@ -31,8 +33,9 @@ import hashlib
 import importlib.util
 import json
 import sys
-from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+import textwrap
+from collections.abc import Mapping, Sequence
+from dataclasses import asdict, dataclass, field, replace
 from fractions import Fraction
 from functools import cache
 from pathlib import Path
@@ -263,139 +266,252 @@ class Refusal(Exception):
 
 # --- 1. hardware registration ------------------------------------------------------------------------------------------
 
-SHEETS = {"sim-int8-a": {"tc": 64, "mem": 64 << 33, "bw": 3200, "chip": 1 << 25},
-          "sim-int8-b": {"tc": 128, "mem": 128 << 33, "bw": 6400, "chip": 1 << 26}}
-"""The auditor's data sheets for the simulated SKUs, in `Accounting.Device`'s terms: int8 tensor-core multiply-adds a tick
-(`rate .tc`), bits of device memory (`mem`), bits from device memory to the chip a tick (`bw`) and bits of on-chip state
-(`chip`). A tick is a nanosecond."""
 OUTSIDE = "outside"
-"""An uplink's far end: the rest of the world."""
-KINDS = ("certifier", "challenger")
+"""The far end of a boundary link: the rest of the world, a location every layout has."""
+TIERS = ("hbm", "dram", "disk")
+"""A memory leaf's tier."""
+PARENTS = {"site": (None,), "host": ("site",), "device": ("host",), "memory": ("device", "host"), "certifier": ("site",),
+           "challenger": ("site",)}
+"""Each kind of location and the kinds its parent may be: memory under a device or a host, a device under a host, a host
+under the site, and the auditor's devices at the site, placed by their links."""
+LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
+"""The kinds a link may join, sorted. A certifier sits on an uplink by splitting it: host to certifier, certifier to
+`OUTSIDE`."""
+AUDITOR_KINDS = ("certifier", "challenger")
 
 
 @dataclass(frozen=True)
-class Device:
-    name: str
+class Card:
+    """An SKU's data-sheet card, in `Accounting.Device`'s terms: int8 tensor-core multiply-adds a tick (`rate .tc`), bits
+    from device memory to the chip a tick (`bw`), bits of on-chip state (`chip`) and bytes of device memory (`mem`). A
+    tick is a nanosecond. A device names its card by digest."""
+
     sku: str
-    node: str
+    tc: int
+    bw: int
+    chip: int
+    mem: int
+
+    def digest(self) -> str:
+        return digest("lifecycle/card/v1", asdict(self))
+
+
+SHEETS = {c.sku: c for c in (Card("sim-int8-a", 64, 3200, 1 << 25, 64 << 30),
+                             Card("sim-int8-b", 128, 6400, 1 << 26, 128 << 30))}
+"""The auditor's data sheets for the simulated SKUs. A registered card must be one of them: a device's limits are the
+auditor's, never the developer's word."""
 
 
 @dataclass(frozen=True)
-class Store:
-    name: str
-    node: str
-    bits: int
+class Loc:
+    """A location in the site's tree, and who owns it. A device names its card's digest, a memory leaf its tier and its
+    bytes, a certifier its signing key."""
+
+    id: str
+    kind: str
+    parent: str | None = None
+    owner: str = "prover"
+    card: str = ""
+    tier: str = ""
+    bytes: int = 0
+    key: str = ""
 
 
 @dataclass(frozen=True)
 class Link:
-    """A link between two ends (nodes, the auditor's devices, or `OUTSIDE` for an uplink), with its rate and latency."""
+    """A link between two locations (`OUTSIDE` among them), with its bits a tick each way (`β`) and its latency in
+    ticks."""
 
-    name: str
+    id: str
     ends: tuple[str, str]
-    bits_per_tick: int
-    latency_ticks: int
+    beta: int
+    lat: int
 
 
 @dataclass(frozen=True)
-class AuditorDevice:
-    """One of the auditor's devices and where it sits: a network certifier on an uplink, a memory challenger at the far
-    end of its link to a node."""
+class Registration:
+    """One entry of the hardware registration log: the cards, locations and links it adds, chained to the log's head
+    (`previous`). It is atomic: checked as a whole against the layout its prefix folds to."""
 
-    name: str
-    kind: str
-    link: str
+    previous: str
+    cards: tuple[Card, ...] = ()
+    locs: tuple[Loc, ...] = ()
+    links: tuple[Link, ...] = ()
+
+    def to_json(self) -> dict[str, Any]:
+        return {"previous": self.previous, "cards": [asdict(c) for c in self.cards], "locs": [asdict(x) for x in self.locs],
+                "links": [{**asdict(x), "ends": list(x.ends)} for x in self.links]}
+
+    @classmethod
+    def of(cls, j: Mapping[str, Any]) -> Registration:
+        return cls(str(j["previous"]),
+                   tuple(Card(str(c["sku"]), int(c["tc"]), int(c["bw"]), int(c["chip"]), int(c["mem"])) for c in j["cards"]),
+                   tuple(Loc(str(x["id"]), str(x["kind"]), None if x["parent"] is None else str(x["parent"]),
+                             str(x["owner"]), str(x["card"]), str(x["tier"]), int(x["bytes"]), str(x["key"]))
+                         for x in j["locs"]),
+                   tuple(Link(str(x["id"]), (str(x["ends"][0]), str(x["ends"][1])), int(x["beta"]), int(x["lat"]))
+                         for x in j["links"] if len(x["ends"]) == 2))
+
+    def digest(self) -> str:
+        return digest("lifecycle/hardware/v1", self.to_json())
 
 
 @dataclass(frozen=True)
 class Layout:
-    """The site, as one object: its nodes, their devices and stores, its links (uplinks among them) and the auditor's
-    devices. A hardware registration is a Layout too, of what it adds (`check_registration` merges it). Devices carry
-    their SKU only: their limits are the auditor's data sheets' (`SHEETS`), never the developer's word."""
+    """The site, as one object: its cards, its tree of locations with their owners, and its links, folded from the
+    hardware registration log. `head` is the log's head, the digest a placement names. Every subprotocol's accounting is
+    a projection of it (`accounting`)."""
 
-    site: str
-    nodes: tuple[str, ...] = ()
-    devices: tuple[Device, ...] = ()
-    stores: tuple[Store, ...] = ()
+    protocol: str
+    head: str
+    cards: tuple[Card, ...] = ()
+    locs: tuple[Loc, ...] = ()
     links: tuple[Link, ...] = ()
-    auditors: tuple[AuditorDevice, ...] = ()
-
-    def to_json(self) -> dict[str, Any]:
-        return {"site": self.site, "nodes": list(self.nodes),
-                "devices": [{"name": d.name, "sku": d.sku, "node": d.node} for d in self.devices],
-                "stores": [{"name": s.name, "node": s.node, "bits": s.bits} for s in self.stores],
-                "links": [{"name": x.name, "ends": list(x.ends), "bits_per_tick": x.bits_per_tick,
-                           "latency_ticks": x.latency_ticks} for x in self.links],
-                "auditors": [{"name": a.name, "kind": a.kind, "link": a.link} for a in self.auditors]}
 
     @classmethod
-    def of(cls, j: Mapping[str, Any]) -> Layout:
-        return cls(str(j["site"]), tuple(str(n) for n in j["nodes"]),
-                   tuple(Device(str(d["name"]), str(d["sku"]), str(d["node"])) for d in j["devices"]),
-                   tuple(Store(str(s["name"]), str(s["node"]), int(s["bits"])) for s in j["stores"]),
-                   tuple(Link(str(x["name"]), tuple(str(e) for e in x["ends"]), int(x["bits_per_tick"]),
-                              int(x["latency_ticks"])) for x in j["links"]),
-                   tuple(AuditorDevice(str(a["name"]), str(a["kind"]), str(a["link"])) for a in j["auditors"]))
+    def genesis(cls, protocol: str) -> Layout:
+        """The empty layout a deployment's log starts from: its head names the composite."""
+        return cls(protocol, digest("lifecycle/hardware/genesis", protocol))
 
     def digest(self) -> str:
-        return digest("lifecycle/layout/v1", self.to_json())
+        return self.head
 
-    def merge(self, more: Layout) -> Layout:
-        return Layout(self.site, self.nodes + more.nodes, self.devices + more.devices, self.stores + more.stores,
-                      self.links + more.links, self.auditors + more.auditors)
+    def add(self, entry: Registration) -> Layout:
+        """The layout `entry` folds this one to, unchecked (`check_registration` checks it)."""
+        return Layout(self.protocol, entry.digest(), self.cards + entry.cards, self.locs + entry.locs,
+                      self.links + entry.links)
 
-    def link(self, name: str) -> Link:
-        return next(x for x in self.links if x.name == name)
+    def loc(self, i: str) -> Loc | None:
+        return next((x for x in self.locs if x.id == i), None)
 
-    def uplinks(self) -> list[Link]:
-        return [x for x in self.links if OUTSIDE in x.ends]
+    def kind(self, i: str) -> str:
+        return "outside" if i == OUTSIDE else self.loc(i).kind
 
-    def capacity(self, ticks: int) -> dict[str, int]:
-        """What the layout's devices and links can do over `ticks`, from the data sheets: multiply-adds (`tc`), bits from
-        device memory to chip (`bw`) and over the links (`link`), and bits held in device memory and stores."""
-        sheets = [SHEETS[d.sku] for d in self.devices]
-        return {"tc": sum(s["tc"] for s in sheets) * ticks, "bw": sum(s["bw"] for s in sheets) * ticks,
-                "link": sum(x.bits_per_tick for x in self.links) * ticks, "mem": sum(s["mem"] for s in sheets),
-                "store": sum(s.bits for s in self.stores)}
+    def of_kind(self, kind: str) -> list[Loc]:
+        return [x for x in self.locs if x.kind == kind]
+
+    def card(self, device: str) -> Card:
+        return next(c for c in self.cards if c.digest() == self.loc(device).card)
+
+    def host(self, i: str) -> str:
+        """The host a location is in."""
+        x = self.loc(i)
+        while x.kind != "host":
+            x = self.loc(x.parent)
+        return x.id
+
+    def boundary(self) -> list[Link]:
+        """The prover's boundary links: a host's link to `OUTSIDE`, or to the certifier that splits its uplink."""
+        return [x for x in self.links if tuple(sorted(map(self.kind, x.ends))) in (("host", "outside"), ("certifier", "host"))]
+
+    def certified(self, link: Link) -> bool:
+        return "certifier" in map(self.kind, link.ends)
+
+    def device(self, i: str) -> dict[str, int]:
+        """`Accounting.Device`'s view of a device leaf: its card's rate, bandwidth and on-chip state, and as its memory the
+        bytes of the memory leaves under it."""
+        c = self.card(i)
+        return {"tc": c.tc, "bw": c.bw, "chip": c.chip,
+                "mem": sum(x.bytes for x in self.of_kind("memory") if x.parent == i)}
+
+    def accounting(self, ticks: int) -> dict[str, dict[str, Any]]:
+        """Each subprotocol's accounting over `ticks`, projected from the layout: PoUW's compute (the devices' cards'
+        multiply-adds), PoUS's memory (the prover's memory leaves, by tier), the bandwidth audit's rates (device memory
+        to chip, and the boundary links') and the network certifier's boundary (the links it splits, and the bits the
+        rest could carry unseen)."""
+        devs = [self.device(x.id) for x in self.of_kind("device")]
+        boundary = self.boundary()
+        return {"pouw": {"devices": len(devs), "tc": sum(d["tc"] for d in devs) * ticks},
+                "pous": {t: sum(x.bytes for x in self.of_kind("memory") if x.tier == t) for t in TIERS},
+                "bandwidth": {"device_bits": sum(d["bw"] for d in devs) * ticks,
+                              "boundary_bits": sum(x.beta for x in boundary) * ticks},
+                "certifier": {"boundary": [x.id for x in boundary],
+                              "certified": [x.id for x in boundary if self.certified(x)],
+                              "uncertified_bits": sum(x.beta for x in boundary if not self.certified(x)) * ticks}}
 
 
-def check_registration(layout: Layout | None, registration: Layout, auditor: Collection[str] = ()) -> Layout:
-    """Phase 1, the verifier's side: `registration` checked against the layout so far (None before the first) and merged
-    into it, or a refusal by name. Names are unique (`duplicate`); every device's SKU has a data sheet the auditor holds
-    (`data-sheet`); every device and store is on a registered node (`node`); every link joins two registered ends
-    (`link`); every auditor device is one of `auditor`, the auditor's own, where its kind sits (`auditor-device`); and
-    onsite, every uplink has a network certifier on it (`uplink-certifier`)."""
-    base = layout or Layout(registration.site)
-    if registration.site != base.site:
-        raise Refusal("site", f"a {registration.site} registration of a {base.site} site")
-    m = base.merge(registration)
-    for kind, names in (("node", list(m.nodes)), ("device", [d.name for d in m.devices]),
-                        ("store", [s.name for s in m.stores]), ("link", [x.name for x in m.links]),
-                        ("end", list(m.nodes) + [a.name for a in m.auditors])):
-        if dup := sorted({n for n in names if names.count(n) > 1}):
-            raise Refusal("duplicate", f"{kind} {dup} registered twice")
-    for d in registration.devices:
-        if d.sku not in SHEETS:
-            raise Refusal("data-sheet", f"{d.name}'s SKU {d.sku!r} has no data sheet the auditor holds")
-    for x in (*registration.devices, *registration.stores):
-        if x.node not in m.nodes:
-            raise Refusal("node", f"{x.name} is on {x.node!r}, which no registration holds")
-    ends = {*m.nodes, *(a.name for a in m.auditors), OUTSIDE}
+def check_registration(layout: Layout, registration: Registration, auditor: Mapping[str, str] | None = None) -> Layout:
+    """Phase 1, the verifier's side: one entry of the hardware registration log checked against the layout its prefix
+    folds to, and the layout it folds to, or a refusal by name, the first hit winning. `auditor` maps the auditor's own
+    devices to their keys.
+
+    - `previous`: the entry isn't chained to the log's head.
+    - `duplicate-id`: an id, or a card, is registered already.
+    - `unknown-ref`: a parent or a link's end isn't registered.
+    - `kind`: the tree is ill-formed (`PARENTS`, `LINKS`), or a certifier doesn't split exactly one uplink.
+    - `card-digest`: a card isn't the auditor's data sheet for its SKU, or a device's card isn't registered.
+    - `capacity`: a memory leaf holds nothing, or a device's memory leaves exceed its card's memory.
+    - `owner`: a certifier or challenger isn't one of the auditor's own devices with its key, or a prover location is
+      registered as the auditor's.
+    - onsite, `uncertified`: some boundary link has no certifier splitting it.
+    - onsite, `challenger-reach`: a host holding the prover's memory has no link to a memory challenger."""
+    auditor = auditor or {}
+    if registration.previous != layout.head:
+        raise Refusal("previous", f"the entry follows {registration.previous[:16]}..., not the log's head "
+                                  f"{layout.head[:16]}...")
+    m = layout.add(registration)
+    ids = [x.id for x in m.locs] + [x.id for x in m.links] + [OUTSIDE]
+    cards = [c.digest() for c in m.cards]
+    if dup := sorted({i for i in ids if ids.count(i) > 1} | {c.sku for c in m.cards if cards.count(c.digest()) > 1}):
+        raise Refusal("duplicate-id", f"{dup} registered twice")
+    known = {x.id for x in m.locs} | {OUTSIDE}
+    for x in registration.locs:
+        if x.parent is not None and x.parent not in known:
+            raise Refusal("unknown-ref", f"{x.id}'s parent {x.parent!r} isn't registered")
     for x in registration.links:
-        if len(x.ends) != 2 or len(set(x.ends)) != 2 or not set(x.ends) <= ends or x.bits_per_tick <= 0 or x.latency_ticks < 0:
-            raise Refusal("link", f"link {x.name} joins {list(x.ends)}, not two registered ends")
-    links = {x.name: x for x in m.links}
-    for a in registration.auditors:
-        x = links.get(a.link)
-        if (a.name not in auditor or a.kind not in KINDS or x is None
-                or (a.kind == "certifier") != (OUTSIDE in x.ends) or (a.kind == "challenger" and a.name not in x.ends)):
-            raise Refusal("auditor-device", f"{a.name} is not one of the auditor's devices where a {a.kind} sits")
-    if m.site == "onsite":
-        certified = {a.link for a in m.auditors if a.kind == "certifier"}
-        if bare := [x.name for x in m.uplinks() if x.name not in certified]:
-            raise Refusal("uplink-certifier", f"uplinks {bare} have no network certifier on them")
+        if bad := [e for e in x.ends if e not in known]:
+            raise Refusal("unknown-ref", f"link {x.id} names {bad}, which aren't registered")
+    for x in registration.locs:
+        if (x.kind not in PARENTS or (None if x.parent is None else m.kind(x.parent)) not in PARENTS[x.kind]
+                or (x.kind == "memory") != (x.tier in TIERS)):
+            raise Refusal("kind", f"{x.kind} {x.id} can't sit under {x.parent!r}")
+    for x in registration.links:
+        if x.ends[0] == x.ends[1] or tuple(sorted(map(m.kind, x.ends))) not in LINKS or x.beta <= 0 or x.lat < 0:
+            raise Refusal("kind", f"link {x.id} can't join {list(x.ends)}")
+    for c in m.of_kind("certifier"):
+        far = sorted(m.kind(e) for x in m.links if c.id in x.ends for e in x.ends if e != c.id)
+        if far != ["host", "outside"]:
+            raise Refusal("kind", f"certifier {c.id} doesn't split one uplink: it links to {far}")
+    for c in registration.cards:
+        if SHEETS.get(c.sku) != c:
+            raise Refusal("card-digest", f"card {c.sku} ({c.digest()[:16]}...) isn't the auditor's data sheet for it")
+    for x in registration.locs:
+        if x.kind == "device" and x.card not in cards:
+            raise Refusal("card-digest", f"{x.id}'s card {x.card[:16]}... isn't registered")
+    for x in registration.locs:
+        if x.kind == "memory" and x.bytes <= 0:
+            raise Refusal("capacity", f"memory {x.id} holds nothing")
+    for d in m.of_kind("device"):
+        if (held := m.device(d.id)["mem"]) > m.card(d.id).mem:
+            raise Refusal("capacity", f"{d.id}'s memory leaves hold {held} bytes, over its card's {m.card(d.id).mem}")
+    for x in registration.locs:
+        if x.kind in AUDITOR_KINDS and (x.owner != "auditor" or auditor.get(x.id) != x.key):
+            raise Refusal("owner", f"{x.kind} {x.id} isn't one of the auditor's own devices")
+        if x.kind not in AUDITOR_KINDS and x.owner != "prover":
+            raise Refusal("owner", f"{x.kind} {x.id} is a prover's location, registered as the {x.owner}'s")
+    if m.protocol == "onsite":
+        if bare := [x.id for x in m.boundary() if not m.certified(x)]:
+            raise Refusal("uncertified", f"boundary links {bare} have no certifier splitting them")
+        reached = {e for x in m.links if "challenger" in map(m.kind, x.ends) for e in x.ends}
+        if far := sorted({m.host(x.id) for x in m.of_kind("memory")} - reached):
+            raise Refusal("challenger-reach", f"hosts {far} hold the prover's memory, and no memory challenger links "
+                                              "to them")
     return m
 
+
+CARD_A, CARD_B = SHEETS["sim-int8-a"], SHEETS["sim-int8-b"]
+NODE = Registration("", (CARD_A, CARD_B), (
+    Loc("site0", "site"), Loc("node0", "host", "site0"),
+    Loc("gpu0", "device", "node0", card=CARD_A.digest()), Loc("hbm0", "memory", "gpu0", tier="hbm", bytes=64 << 30),
+    Loc("gpu1", "device", "node0", card=CARD_B.digest()), Loc("hbm1", "memory", "gpu1", tier="hbm", bytes=128 << 30),
+    Loc("dram0", "memory", "node0", tier="dram", bytes=512 << 30),
+    Loc("nvme0", "memory", "node0", tier="disk", bytes=1 << 40)))
+"""What both composites' sites register first: one node with two devices, each with its HBM, and the host's DRAM and
+disk. Each composite adds its links and the auditor's devices (`remote.LAYOUT`, `onsite.LAYOUT`)."""
+LATER = Registration("", locs=(
+    Loc("gpu2", "device", "node0", card=CARD_B.digest()), Loc("hbm2", "memory", "gpu2", tier="hbm", bytes=128 << 30),
+    Loc("nvme1", "memory", "node0", tier="disk", bytes=1 << 40)))
+"""The hardware a site adds after its first declaration: a third device and a disk."""
 
 # --- 2. registration ---------------------------------------------------------------------------------------------------
 
@@ -437,11 +553,12 @@ class Builder:
     """B, the registered builder: declared advice to the declared circuit. A declaration's advice is self-delimiting (its
     unit count, then each unit's batch), so B(a_1 || ... || a_k) parses declaration by declaration and extends
     B(a_1 || ... || a_{k-1}): B is prefix-extending. Placement is B's and static, not the advice's: from declaration k on,
-    `plan` names the devices B places units on, unit j on the (j mod their number)-th. `cap` is the public cap on one
-    declaration's advice, in bits."""
+    `plan` names the device leaves B places units on, unit j on the (j mod their number)-th, and `store` the memory
+    leaf theta is held in. `cap` is the public cap on one declaration's advice, in bits."""
 
     cap: int = 32
     plan: tuple[tuple[int, tuple[str, ...]], ...] = ((1, ("gpu0", "gpu1")),)
+    store: str = "hbm0"
     COUNT_BITS = 8
     BATCH_BITS = 4
     FORMAT = "lifecycle/builder/v1"
@@ -449,13 +566,14 @@ class Builder:
     def descriptor(self) -> dict[str, Any]:
         return {"format": self.FORMAT, "unit": UNIT.name, "block": BLOCK.name, "cap": self.cap,
                 "advice": {"count": self.COUNT_BITS, "batch": self.BATCH_BITS, "batch_max": BATCH},
-                "plan": [[k, list(ds)] for k, ds in self.plan], "grid": pouw_window_rules.GRID_BITS}
+                "plan": [[k, list(ds)] for k, ds in self.plan], "store": self.store,
+                "grid": pouw_window_rules.GRID_BITS}
 
     @classmethod
     def of(cls, j: Any) -> Builder:
         """The verifier's B from a registered descriptor: one of this builder's format, or a refusal (`builder`)."""
         try:
-            b = cls(int(j["cap"]), tuple((int(k), tuple(str(d) for d in ds)) for k, ds in j["plan"]))
+            b = cls(int(j["cap"]), tuple((int(k), tuple(str(d) for d in ds)) for k, ds in j["plan"]), str(j["store"]))
         except (KeyError, TypeError, ValueError) as e:
             raise Refusal("builder", f"the registered builder's descriptor doesn't parse: {type(e).__name__}") from None
         starts = [k for k, _ in b.plan]
@@ -612,30 +730,58 @@ def rows_of(served: Served, n: int, state: int) -> list[list[int]]:
     return rows + [[0] * (2 * D) + [last]] * (n - len(rows))
 
 
+THETA_BYTES = THETA_ROWS * D
+"""Theta's bytes in the memory leaf B holds it in."""
+
+
+def placement(builder: Builder, blk: Block, head: str) -> dict[str, Any]:
+    """B's placement of a declaration block (`Requirement.Placement`): each unit's device leaf and theta's memory leaf,
+    naming the layout they are placed on by its head."""
+    return {"layout": head, "units": [p.device for p in blk.units], "theta": builder.store}
+
+
+def check_placement(layout: Layout, p: Mapping[str, Any]) -> None:
+    """A placement against the layout it names, or a refusal by name: `placement-off-layout` (it names another layout than
+    the log's head, or a leaf the layout doesn't hold), `placement-auditor` (a leaf is the auditor's), `placement-kind`
+    (a unit off a device leaf, theta off a memory leaf) and `placement-capacity` (theta over its memory leaf's bytes)."""
+    if p["layout"] != layout.head:
+        raise Refusal("placement-off-layout", f"the placement names layout {p['layout'][:16]}..., not the log's head")
+    leaves = [*p["units"], p["theta"]]
+    if off := sorted({i for i in leaves if layout.loc(i) is None}):
+        raise Refusal("placement-off-layout", f"B places on {off}, which no hardware registration holds")
+    if aud := sorted({i for i in leaves if layout.loc(i).owner != "prover"}):
+        raise Refusal("placement-auditor", f"B places on {aud}, the auditor's")
+    if bad := sorted({i for i in p["units"] if layout.kind(i) != "device"} | {p["theta"]} - {
+            x.id for x in layout.of_kind("memory")}):
+        raise Refusal("placement-kind", f"B places units off a device, or theta off a memory leaf: {bad}")
+    if THETA_BYTES > layout.loc(p["theta"]).bytes:
+        raise Refusal("placement-capacity", f"theta's {THETA_BYTES} bytes don't fit in {p['theta']}")
+
+
 def declare(k: int, served: Served, prev: str, layout: str, builder: Builder, circuit: Sequence[Block], advice: str,
             state: int, tape: Tape) -> tuple[Declaration, Block, R.Registered]:
-    """Phase 4, the developer's side: the declared advice, B's block, its values committed and the record."""
+    """Phase 4, the developer's side: the declared advice, B's block and its placement on the layout so far (`layout`, its
+    head), its values committed and the record."""
     a_k = builder.encode(served.batches)
     blk = builder.grow(circuit, advice, a_k)
     values = commit(blk.program, f"block/{k}", rows_of(served, blk.n, state), tape)
-    record = {"declaration": k, "prev": prev, "layout": layout, "advice_bits": len(a_k), "circuit": blk.program,
-              "units": blk.n, "values": committed(values)}
+    record = {"declaration": k, "prev": prev, "placement": placement(builder, blk, layout), "advice_bits": len(a_k),
+              "circuit": blk.program, "units": blk.n, "values": committed(values)}
     return Declaration(k, a_k, record), blk, values
 
 
 def check_declaration(d: Declaration, layout: Layout, builder: Builder, circuit: Sequence[Block], advice: str) -> Block:
-    """Phase 4, the verifier's side: the advice within the cap, B's block grown from it, every unit B places on a device
-    the hardware registrations hold (`placement`), and the record naming that block, the layout and the values."""
+    """Phase 4, the verifier's side: the advice within the cap, B's block grown from it, its placement on the layout as
+    registered now (`check_placement`), and the record naming that block, its placement and the values (`record`)."""
     blk = builder.grow(circuit, advice, d.advice)
-    if off := sorted({p.device for p in blk.units} - {x.name for x in layout.devices}):
-        raise Refusal("placement", f"B places declaration {d.k}'s units on {off}, which no hardware registration holds")
+    p = placement(builder, blk, layout.head)
+    check_placement(layout, p)
     v = d.record.get("values", {})
-    want = {"declaration": d.k, "layout": layout.digest(), "advice_bits": len(d.advice), "circuit": blk.program,
-            "units": blk.n}
+    want = {"declaration": d.k, "placement": p, "advice_bits": len(d.advice), "circuit": blk.program, "units": blk.n}
     if ({k: d.record.get(k) for k in want} != want or set(d.record) != {*want, "prev", "values"}
             or (v.get("program"), v.get("value"), v.get("words"), v.get("leaves"))
             != (blk.program, f"block/{d.k}", ROW_WORDS, blk.n)):
-        raise Refusal("record", f"declaration {d.k}'s record is not B's block, the layout and its values")
+        raise Refusal("record", f"declaration {d.k}'s record is not B's block, its placement and its values")
     return blk
 
 
@@ -829,8 +975,9 @@ def account(baseline: str, declarations: Sequence[Mapping[str, Any]], lines: Seq
             ) -> dict[str, Any]:
     """Phase 6 over the monitoring period's declarations: the chain from the registration through every declaration's
     record, each declaration's composite verdict, the period's (the same rule over the declarations), the credited AND
-    gates and multiply-adds against the capacity of the devices registered in each declaration period, the pooled bound,
-    and the same scaled to monitoring periods of a week, a month and a year of declarations like these on `layout`."""
+    gates and multiply-adds against the compute the layout registered in each declaration period held (its PoUW
+    projection), the pooled bound, each subprotocol's projection of `layout` over a declaration period, and the same
+    scaled to monitoring periods of a week, a month and a year of declarations like these on `layout`."""
     ref = _reference()
     prev, broken = baseline, None
     for d, x in zip(declarations, lines):
@@ -849,9 +996,10 @@ def account(baseline: str, declarations: Sequence[Mapping[str, Any]], lines: Seq
         m = seconds // DECLARATION_SECONDS
         n_m = n * m // max(1, len(lines))
         w_m = -(-EPS.numerator * n_m // EPS.denominator)
-        cap_m = layout.capacity(seconds * TICKS_PER_SECOND)
-        scaled[name] = {"declarations": m, "credited_ands": n_m * unit_ands(), "capacity_tc": cap_m["tc"],
-                        "share": _share(n_m * MACS, cap_m["tc"]), "capacity_link_bits": cap_m["link"],
+        cap_m = layout.accounting(seconds * TICKS_PER_SECOND)
+        scaled[name] = {"declarations": m, "credited_ands": n_m * unit_ands(), "capacity_tc": cap_m["pouw"]["tc"],
+                        "share": _share(n_m * MACS, cap_m["pouw"]["tc"]),
+                        "boundary_bits": cap_m["bandwidth"]["boundary_bits"],
                         "log10_delta": f"{w_m * float(np.log10(float(q))):.0f}" if q else None}
     return {"verdict": verdict, "reason": broken or next((f"declaration {x['k']}: {x['composite']['reason']}" for x in lines
                                                           if x["composite"]["verdict"] != "accept"), None),
@@ -863,7 +1011,7 @@ def account(baseline: str, declarations: Sequence[Mapping[str, Any]], lines: Seq
                       "credited_units": n, "wrong_units": w,
                       "statement": f"except with probability {delta} = ({q})^{w}, fewer than {EPS} of the period's "
                                    f"{credited} credited AND gates ({n} units) are in wrong units"},
-            "scaled": scaled}
+            "accounting": layout.accounting(DECLARATION_SECONDS * TICKS_PER_SECOND), "scaled": scaled}
 
 
 # --- the parties ---------------------------------------------------------------------------------------------------------
@@ -903,7 +1051,7 @@ class Declared:
 class Developer:
     """The developer: registers its hardware and its baseline, serves each declaration period's requests, declares, and
     proves the drawn units behind the firewall. Its capabilities: `theta`, `state0`, `layout` (its first hardware
-    registration), `later` (the one it adds after its first declaration), `plan` (B's placement), `product`, `load`
+    registration entry), `later` (the one it adds after its first declaration), `plan` (B's placement), `product`, `load`
     (remote: its declaration periods' requests; onsite they arrive through the certifier) and `cheat`, the one way it
     deviates, if any (`CHEATS`)."""
 
@@ -911,13 +1059,19 @@ class Developer:
         c = identity.capabilities
         self.theta, self.cheat, self.product = c["theta"], c.get("cheat"), c["product"]
         self.load, self.state = list(c.get("load", ())), c["state0"]
-        self.layout, self.later, plan = c["layout"], c["later"], c["plan"]
+        first, later, plan = c["layout"], c["later"], c["plan"]
+        new = next(x.id for x in later.locs if x.kind == "device")
         if self.cheat == "placement":
-            plan = ((1, (*plan[0][1][:-1], self.later.devices[0].name)), *plan[1:])
+            plan = ((1, (*plan[0][1][:-1], new)), *plan[1:])
         if self.cheat == "hardware":
-            self.later = replace(self.later, devices=(replace(self.later.devices[0], name=self.layout.devices[0].name),))
+            old = next(x.id for x in first.locs if x.kind == "device")
+            later = replace(later, locs=tuple(replace(x, id=old) if x.id == new else x for x in later.locs))
         self.builder = Builder(plan=plan)
         self.onsite = params["protocol"] == "onsite"
+        genesis = Layout.genesis(params["protocol"])
+        self.first = replace(first, previous=genesis.head)
+        self.layout = genesis.add(self.first)
+        self.later = replace(later, previous=self.layout.head)
         self.blocks: list[Declared] = []
         self.pending: list[list[int]] = []
         self.held: list[Send] = []
@@ -932,7 +1086,7 @@ class Developer:
             if self.cheat == "builder":
                 j["builder"] = {**j["builder"], "format": "another/builder/v1"}
             self.baseline, self.prev = base, base.digest()
-            out = [Send(VERIFIER, msg("Hardware", 0, self.layout.to_json())), Send(VERIFIER, msg("Register", 0, j))]
+            out = [Send(VERIFIER, msg("Hardware", 0, self.first.to_json())), Send(VERIFIER, msg("Register", 0, j))]
             if not self.onsite:
                 out += self._serve_and_declare(self.load[0])
             return out
@@ -972,8 +1126,8 @@ class Developer:
         return s
 
     def current(self) -> Layout:
-        """The layout as registered so far: the first registration, and the later one once it is sent."""
-        return self.layout.merge(self.later) if self.blocks else self.layout
+        """The layout as registered so far: the first entry, and the later one once it is sent."""
+        return self.layout.add(self.later) if self.blocks else self.layout
 
     def _serve_and_declare(self, requests: Sequence[Sequence[int]]) -> list[Any]:
         k = len(self.blocks) + 1
@@ -1047,8 +1201,8 @@ class Verifier:
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         self.protocol, self.total = params["protocol"], params["declarations"]
-        self.auditor = set(params.get("auditor", ()))
-        self.layout: Layout | None = None
+        self.auditor = dict(params.get("auditor", {}))
+        self.layout = Layout.genesis(self.protocol)
         self.baseline: Baseline | None = None
         self.builder: Builder | None = None
         self.circuit: list[Block] = []
@@ -1088,13 +1242,13 @@ class Verifier:
         k, j = m.fields["k"], body(m)
         if m.type == "Hardware":
             try:
-                reg = Layout.of(j)
+                reg = Registration.of(j)
             except (KeyError, TypeError, ValueError, IndexError) as e:
                 raise Refusal("hardware", f"the hardware registration doesn't parse: {type(e).__name__}") from None
             self.layout = check_registration(self.layout, reg, self.auditor)
-            self.public["hardware"].append({"after": len(self.declarations), "layout": self.layout.digest(), **j})
+            self.public["hardware"].append({"after": len(self.declarations), "head": self.layout.head, **j})
             return []
-        if self.layout is None:
+        if not self.public["hardware"]:
             raise Refusal("out-of-phase", f"{m.type} before the hardware registration")
         if m.type == "Register":
             if self.baseline is not None:
@@ -1115,7 +1269,7 @@ class Verifier:
                                     "".join(x["advice"] for x in self.declarations))
             self.circuit.append(blk)
             self.declarations.append({"k": k, "advice": d.advice, "record": d.record, "digest": d.digest,
-                                      "capacity": self.layout.capacity(DECLARATION_SECONDS * TICKS_PER_SECOND)})
+                                      "accounting": self.layout.accounting(DECLARATION_SECONDS * TICKS_PER_SECOND)})
             self.parts[k] = {}
             self.awaiting.append(k)
             return [Send("coins", Message("CoinsDraw", {"n": coin_bytes(draw_size(blk), blk.n)})), *self.declared(k)]
@@ -1161,9 +1315,10 @@ class Verifier:
         sp = sampled_proofs(Declaration(k, d["advice"], d["record"]), blk, self.draws[k], checks)
         answers = {sp["protocol"]: sp, IDS["pouw"]: pouw_window(sp, blk), **self.answers(k, checks)}
         line = {"k": k, "record": d["digest"], "advice": d["advice"], "advice_bits": len(d["advice"]),
-                "layout": d["record"]["layout"], "placement": [p.device for p in blk.units],
+                "layout": d["record"]["placement"]["layout"], "placement": d["record"]["placement"]["units"],
+                "theta_leaf": d["record"]["placement"]["theta"],
                 "batches": [p.batch for p in blk.units], "circuit": blk.program, "units": blk.n, "real": blk.real,
-                "ands": blk.ands(), "credited_ands": blk.credited_ands(), "capacity_tc": d["capacity"]["tc"],
+                "ands": blk.ands(), "credited_ands": blk.credited_ands(), "capacity_tc": d["accounting"]["pouw"]["tc"],
                 "draw": self.parts[k]["draw"],
                 "answers": {i: {"verdict": a["verdict"], "reason": a["reason"]} for i, a in answers.items()},
                 "composite": compose(self.protocol, answers)}
@@ -1206,12 +1361,10 @@ SIZES = (3, 4, 2)
 """Requests in each declaration period of the example's monitoring period."""
 PLAN = ((1, ("gpu0", "gpu1")), (2, ("gpu0", "gpu1", "gpu2")))
 """B's placement: gpu2 from declaration 2 on, once the later hardware registration holds it."""
-LATER = Layout("", devices=(Device("gpu2", "sim-int8-b", "node0"),), stores=(Store("nvme1", "node0", 1 << 43),))
-"""The hardware a site adds after its first declaration."""
 CHEATS = ("hardware", "builder", "placement", "unreported", "advice-cap", "recommit", "wrong-value", "fork")
 """Each way the developer deviates in the tests, by the phase that refuses it: hardware registration (`hardware`: a later
-registration names a device twice), registration (`builder`), operation (`placement`: B places a unit on a device before
-its registration; `unreported`), declaration (`advice-cap`, `recommit`), audit (`wrong-value`) and accounting (`fork`)."""
+entry names a device again), registration (`builder`), operation (`placement`: B places a unit on a device before its
+registration; `unreported`), declaration (`advice-cap`, `recommit`), audit (`wrong-value`) and accounting (`fork`)."""
 ONSITE_CHEATS = ("io-mismatch", "lost-theta", "off-node")
 """The deviations only an onsite composite's own devices see: the wire carrying other outputs than the committed ones,
 answering the memory challenger with a row that isn't theta's, and fetching theta from off the node."""
@@ -1223,15 +1376,24 @@ def summary(outcome: Mapping[str, Any]) -> list[str]:
     """The verifier's public outcome as lines, phase by phase."""
     out: list[str] = []
     hw = list(outcome.get("hardware", ()))
+    skus = {digest("lifecycle/card/v1", c): c["sku"] for h in hw for c in h["cards"]}
+
+    def where(x: Mapping[str, Any]) -> str:
+        detail = (skus.get(x["card"], "?") if x["kind"] == "device" else f"{x['tier']} {x['bytes'] >> 30} GiB"
+                  if x["kind"] == "memory" else x["owner"] if x["owner"] != "prover" else "")
+        return f"{x['id']} ({x['kind']}{' ' + detail if detail else ''}{' in ' + x['parent'] if x['parent'] else ''})"
+
+    def wrap(head: str, items: Sequence[str]) -> None:
+        if items:
+            out.extend(textwrap.wrap(", ".join(items), 120, initial_indent=head, subsequent_indent=" " * len(head)))
 
     def hardware(after: int) -> None:
         for h in [h for h in hw if h["after"] == after]:
-            parts = [f"{d['name']} ({d['sku']}) on {d['node']}" for d in h["devices"]]
-            parts += [f"{s['name']} ({s['bits'] >> 33} GiB) on {s['node']}" for s in h["stores"]]
-            parts += [f"{x['name']} {x['ends'][0]}-{x['ends'][1]}" for x in h["links"]]
-            parts += [f"{a['name']} ({a['kind']} on {a['link']})" for a in h["auditors"]]
-            out.extend([f"1 hardware     registration{' after declaration ' + str(after) if after else ''}: "
-                        + ", ".join(parts), f"               layout {h['layout'][:32]}..."])
+            out.append(f"1 hardware     registration{' after declaration ' + str(after) if after else ''}: entry "
+                       f"{h['head'][:16]}..., after {h['previous'][:16]}...")
+            wrap(f"{'':15s}cards      ", [c["sku"] for c in h["cards"]])
+            wrap(f"{'':15s}locations  ", [where(x) for x in h["locs"]])
+            wrap(f"{'':15s}links      ", [f"{x['id']} {x['ends'][0]}-{x['ends'][1]}" for x in h["links"]])
 
     hardware(0)
     reg = outcome.get("registration")
@@ -1266,6 +1428,14 @@ def summary(outcome: Mapping[str, Any]) -> list[str]:
                 f"  advice       {p['advice_bits_charged']} bits charged as leakage",
                 f"  bound        {b['statement']}; a declaration alone: delta {b['per_declaration_delta']} at eps "
                 f"{b['eps']}"]
+        a = p["accounting"]
+        wrap("  projections  ", [f"a declaration period on the final layout: PoUW {a['pouw']['devices']} devices, "
+                          f"{a['pouw']['tc']:.2e} multiply-adds",
+                          "PoUS " + ", ".join(f"{t} {n >> 30} GiB" for t, n in a["pous"].items()),
+                          f"bandwidth {a['bandwidth']['device_bits']:.2e} device-memory bits, "
+                          f"{a['bandwidth']['boundary_bits']:.2e} boundary bits",
+                          f"certifier: boundary {a['certifier']['boundary']}, certified {a['certifier']['certified']}, "
+                          f"{a['certifier']['uncertified_bits']:.2e} bits unseen"])
         for name, s in p["scaled"].items():
             d = "0" if s["log10_delta"] is None else f"10^{s['log10_delta']}"
             out.append(f"  {name:6s}       {s['declarations']} declarations of {DECLARATION_SECONDS} s like these: "

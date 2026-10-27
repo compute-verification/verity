@@ -1,5 +1,5 @@
 """The lifecycle example's two composites over one monitoring period: honest, each accepts; each way the developer deviates
-(`lifecycle.CHEATS`, at least one a phase) is refused by name or rejected by the component whose check it breaks, except
+(`lifecycle.CHEATS` and `ONSITE_CHEATS`, at least one a phase) is refused by name or rejected by the component whose check it breaks, except
 what the remote composite can't see, which goes uncredited."""
 
 from __future__ import annotations
@@ -18,14 +18,14 @@ from verity.core.protocols.sampled_proofs.parties import IDS
 
 MODS = {"onsite": onsite, "remote": remote}
 
-REFUSED = {"hardware": ("duplicate", "hardware registration"), "builder": ("builder", "registration"),
-           "placement": ("placement", "operation"), "advice-cap": ("advice-cap", "declaration"),
+REFUSED = {"hardware": ("duplicate-id", "hardware registration"), "builder": ("builder", "registration"),
+           "placement": ("placement-off-layout", "operation"), "advice-cap": ("advice-cap", "declaration"),
            "recommit": ("recommit", "declaration")}
 """Deviations the verifier refuses, ending the run: the refusal's name and the phase whose check it breaks."""
 REJECTED = {"wrong-value": (("onsite", "remote"), 2, "sampled-proofs"), "unreported": (("onsite",), 2, "certifier"),
             "io-mismatch": (("onsite",), 2, "certifier"), "lost-theta": (("onsite",), 1, "pous"),
             "off-node": (("onsite",), 1, "bandwidth")}
-"""Deviations a component rejects: the composites they reach, the first segment they touch, and the component."""
+"""Deviations a component rejects: the composites they reach, the first declaration they touch, and the component."""
 
 
 @cache
@@ -55,7 +55,7 @@ def test_remote_period() -> None:
 
 
 def test_every_cheat_is_a_case() -> None:
-    assert set(L.CHEATS) == set(REFUSED) | set(REJECTED) | {"fork"}
+    assert set(L.CHEATS + L.ONSITE_CHEATS) == set(REFUSED) | set(REJECTED) | {"fork"}
     assert {p for _, p in REFUSED.values()} | {"audit", "accounting"} == {
         "hardware registration", "registration", "operation", "declaration", "audit", "accounting"}
 
@@ -71,35 +71,90 @@ def test_refused(protocol: str, cheat: str) -> None:
 def test_hardware_registration_grows() -> None:
     o = outcome("onsite")
     first, later = o["hardware"]
-    assert (first["after"], later["after"]) == (0, 1) and first["layout"] != later["layout"]
-    assert o["lines"][0]["layout"] == first["layout"] and o["lines"][1]["layout"] == later["layout"]
+    assert (first["after"], later["after"]) == (0, 1) and later["previous"] == first["head"] != later["head"]
+    assert o["lines"][0]["layout"] == first["head"] and o["lines"][1]["layout"] == later["head"]
     assert "gpu2" not in o["lines"][0]["placement"] and "gpu2" in o["lines"][1]["placement"]
 
 
-def _layout(**kw: Any) -> L.Layout:
-    return replace(L.Layout("onsite"), **kw)
+AUDITOR = {"onsite": onsite.AUDITOR, "remote": {}}
+A = L.CARD_A.digest()
+UPLINK9 = (L.Link("u9", ("node0", "cert9"), 1, 1), L.Link("u9-out", ("cert9", L.OUTSIDE), 1, 0))
+ENTRIES = {
+    "accepted": (None, L.LATER),
+    "stale": ("previous", L.LATER),
+    "gpu0-again": ("duplicate-id", L.Registration("", locs=(L.Loc("gpu0", "device", "node0", card=A),))),
+    "no-parent": ("unknown-ref", L.Registration("", locs=(L.Loc("hbm9", "memory", "gpu9", tier="hbm", bytes=1),))),
+    "device-at-site": ("kind", L.Registration("", locs=(L.Loc("gpu9", "device", "site0", card=A),))),
+    "loop-link": ("kind", L.Registration("", links=(L.Link("l9", ("node0", "node0"), 1, 1),))),
+    "not-the-sheet": ("card-digest", L.Registration("", cards=(replace(L.CARD_A, tc=1 << 20),))),
+    "unregistered-card": ("card-digest", L.Registration("", locs=(L.Loc("gpu9", "device", "node0", card="00"),))),
+    "over-hbm": ("capacity", L.Registration("", locs=(L.Loc("gpu9", "device", "node0", card=A),
+                                                      L.Loc("hbm9", "memory", "gpu9", tier="hbm", bytes=(64 << 30) + 1)))),
+    "empty-memory": ("capacity", L.Registration("", locs=(L.Loc("dram9", "memory", "node0", tier="dram"),))),
+    "foreign-certifier": ("owner", L.Registration("", locs=(L.Loc("cert9", "certifier", "site0", "auditor", key="00"),),
+                                                  links=UPLINK9)),
+    "auditor-host": ("owner", L.Registration("", locs=(L.Loc("node9", "host", "site0", "auditor"),))),
+    "bare-uplink": ("uncertified", L.Registration("", links=(L.Link("u9", ("node0", L.OUTSIDE), 1, 1),))),
+    "unreached-host": ("challenger-reach", L.Registration("", locs=(L.Loc("node1", "host", "site0"),
+                                                                    L.Loc("dram1", "memory", "node1", tier="dram", bytes=1)),
+                                                          links=(L.Link("n01", ("node0", "node1"), 1, 1),))),
+}
+"""A later entry for each check `check_registration` makes, with the refusal it draws."""
+REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
+"""The entries a remote site accepts: it has no certifier and no memory challenger to hold its links to."""
 
 
-@pytest.mark.parametrize(("registration", "name"), [
-    (replace(L.LATER, site="onsite"), None),
-    (_layout(devices=(L.Device("gpu0", "sim-int8-a", "node0"),)), "duplicate"),
-    (_layout(devices=(L.Device("gpu9", "no-such-sku", "node0"),)), "data-sheet"),
-    (_layout(stores=(L.Store("nvme9", "node9", 1),)), "node"),
-    (_layout(links=(L.Link("l9", ("node0", "node9"), 1, 1),)), "link"),
-    (_layout(nodes=("node1",), links=(L.Link("uplink1", ("node1", L.OUTSIDE), 1, 1),)), "uplink-certifier"),
-    (_layout(nodes=("node1",), links=(L.Link("uplink1", ("node1", L.OUTSIDE), 1, 1),),
-             auditors=(L.AuditorDevice("cert9", "certifier", "uplink1"),)), "auditor-device"),
-    (replace(L.LATER, site="remote"), "site"),
-])
-def test_check_registration(registration: L.Layout, name: str | None) -> None:
-    """Each check `check_registration` makes, on a later registration of the onsite site."""
-    auditor = (onsite.CERT, onsite.CHAL)
-    layout = L.check_registration(None, onsite.LAYOUT, auditor)
-    if name is None:
-        assert L.check_registration(layout, registration, auditor).devices[-1].name == "gpu2"
+def _first(protocol: str) -> L.Layout:
+    g = L.Layout.genesis(protocol)
+    return L.check_registration(g, replace(MODS[protocol].LAYOUT, previous=g.head), AUDITOR[protocol])
+
+
+@pytest.mark.parametrize("protocol", MODS)
+@pytest.mark.parametrize("case", ENTRIES)
+def test_check_registration(protocol: str, case: str) -> None:
+    """Each check `check_registration` makes, on a later entry of each composite's site's log."""
+    layout = _first(protocol)
+    name, entry = ENTRIES[case]
+    entry = replace(entry, previous=L.Layout.genesis(protocol).head if case == "stale" else layout.head)
+    if name is None or (protocol == "remote" and case in REMOTE_ACCEPTS):
+        assert L.check_registration(layout, entry, AUDITOR[protocol]).head == entry.digest()
         return
     with pytest.raises(L.Refusal) as e:
-        L.check_registration(layout, registration, auditor)
+        L.check_registration(layout, entry, AUDITOR[protocol])
+    assert e.value.name == name, e.value
+
+
+def test_projections() -> None:
+    """Each subprotocol's accounting is the layout's: the later entry's device adds its card's rate to PoUW's compute and
+    its memory to PoUS's; onsite every boundary link is certified, remote none is."""
+    on, rem = _first("onsite"), _first("remote")
+    grown = on.add(replace(L.LATER, previous=on.head))
+    a, b, r = on.accounting(1), grown.accounting(1), rem.accounting(1)
+    assert b["pouw"]["tc"] - a["pouw"]["tc"] == L.CARD_B.tc and b["pous"]["hbm"] - a["pous"]["hbm"] == 128 << 30
+    assert a["certifier"]["certified"] == a["certifier"]["boundary"] == ["uplink0"] and a["certifier"]["uncertified_bits"] == 0
+    assert r["certifier"]["certified"] == [] and r["certifier"]["uncertified_bits"] == r["bandwidth"]["boundary_bits"]
+    assert on.device("gpu0") == {"tc": 64, "bw": 3200, "chip": 1 << 25, "mem": 64 << 30}
+
+
+@pytest.mark.parametrize(("p", "name"), [
+    ({"units": ["gpu0", "gpu1"], "theta": "hbm0"}, None),
+    ({"layout": "00", "units": ["gpu0"], "theta": "hbm0"}, "placement-off-layout"),
+    ({"units": ["gpu9"], "theta": "hbm0"}, "placement-off-layout"),
+    ({"units": ["cert0"], "theta": "hbm0"}, "placement-auditor"),
+    ({"units": ["hbm0"], "theta": "hbm0"}, "placement-kind"),
+    ({"units": ["gpu0"], "theta": "gpu1"}, "placement-kind"),
+    ({"units": ["gpu0"], "theta": "tiny"}, "placement-capacity"),
+])
+def test_check_placement(p: dict[str, Any], name: str | None) -> None:
+    on = _first("onsite")
+    layout = L.check_registration(on, L.Registration(on.head, locs=(
+        L.Loc("tiny", "memory", "node0", tier="dram", bytes=8),)), onsite.AUDITOR)
+    p = {"layout": layout.head, **p}
+    if name is None:
+        L.check_placement(layout, p)
+        return
+    with pytest.raises(L.Refusal) as e:
+        L.check_placement(layout, p)
     assert e.value.name == name
 
 

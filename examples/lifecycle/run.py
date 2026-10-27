@@ -16,7 +16,7 @@ import remote
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--cheat", choices=lifecycle.CHEATS)
+    ap.add_argument("--cheat", choices=lifecycle.CHEATS + lifecycle.ONSITE_CHEATS)
     ap.add_argument("--only", choices=("onsite", "remote"))
     a = ap.parse_args(argv)
     for name, mod in (("onsite", onsite), ("remote", remote)):

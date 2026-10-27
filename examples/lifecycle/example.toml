@@ -6,10 +6,10 @@ run = "runs"
 proof = "none"
 
 [placement]
-prover = "local"               # the developer: serving, closing segments, the stand-in prover
+prover = "local"               # the developer: serving, declaring, the stand-in prover
 verifier = "local"
 challenger = "local"           # the memory challenger (onsite)
-certifier = "local"            # the network certifier on the uplink (onsite)
+certifier = "local"            # the network certifier splitting the uplink (onsite)
 
 [evidence]
 tests = ["examples/lifecycle/tests/test_lifecycle.py::test_onsite_period",
