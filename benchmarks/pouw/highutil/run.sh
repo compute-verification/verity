@@ -16,7 +16,9 @@
 # card file or its SKU, for summary.json's certified share at the card's clock ceiling and, with NSYS=1, terms.json (terms.py:
 # where the rest of θ x wall goes); nvidia-smi's clock event reasons go to clocks-{before,after}.txt. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
 # (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP, LP_MAX
-# and L (default 512, 1024 and 16384: S = 1 at every layer; LP_MAX=512 runs down as four K-slices, 1024 as two): prep's; NSYS=1: after the periods, Nsight Systems over one plain and one protocol period (their
+# and L (default 512, 512 and 16384: S = 1 at every layer, down as four K-slices at L' 512; LP_MAX=1024 runs it as two at
+# L' 1,024, 1.7% more GPU time a step on the RTX, r20261027-071030-adb5 against -071726-a30c): prep's; NSYS=1: after the
+# periods, Nsight Systems over one plain and one protocol period (their
 # kernels' share of the GPU's time); NCU=1: Nsight Compute over two steps of each arm (pipes.py: each kernel's tensor-pipe
 # active share and INT8 MACs, kernels serialized; pipes-{plain,proto}.json); LEASE (default gpu-lease 1 --wait --max-min 25 --); PY (default uv run -q --no-project
 # --with numpy python) for the prep, TORCH_PY for the rest. v31's V31_* knobs come from the environment when the Provers are
@@ -34,7 +36,7 @@ export PYTHONPATH=.
 GENCODE=${GENCODE:-arch=compute_120a,code=sm_120a} NVFLAGS=${NVFLAGS:-} THETA_DEVICE=${THETA_DEVICE:-sm_120}
 TORCH_PY=${TORCH_PY:-uv run -q --no-project --with torch --with numpy --with safetensors --with tokenizers --with pyarrow python}
 CKPT=${CKPT:-/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7}
-ROW=${ROW:-8192} LP=${LP:-512} LP_MAX=${LP_MAX:-1024} L=${L:-16384} BLOCKS=${BLOCKS:-4} STEPS=${STEPS:-300} Q=${Q:-2048} PERIODS=${PERIODS:-2} NEGATIVE=${NEGATIVE-skip:2@2}
+ROW=${ROW:-8192} LP=${LP:-512} LP_MAX=${LP_MAX:-512} L=${L:-16384} BLOCKS=${BLOCKS:-4} STEPS=${STEPS:-300} Q=${Q:-2048} PERIODS=${PERIODS:-2} NEGATIVE=${NEGATIVE-skip:2@2}
 COINS=${COINS:-local} MAIN=${MAIN:-${RESEARCH_RUN_DIR:-.}/inputs/main.txt}
 CARD=${CARD:-${RESEARCH_RUN_DIR:-.}/inputs/card.toml}
 CARDA=()

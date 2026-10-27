@@ -3,8 +3,8 @@
 prover, with live coins, and the certified share of the GPU's tensor peak that the periods establish.
 
 **The workload.** Llama-3.1-8B's linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x
-14336) at M = 16,384, s8 x s8 with int32 accumulation, called back to back, down as two K-slices at L' = 1,024 (`calls`,
-`lp_of`: Dither's argument covers a segment of at most T_MAX L', and v31 takes L' <= 1,024). A step is one transformer block's calls,
+14336) at M = 16,384, s8 x s8 with int32 accumulation, called back to back, down as K-slices (`calls`, `lp_of`: Dither's
+argument covers a segment of at most T_MAX L', and v31 takes L' <= 1,024). A step is one transformer block's calls,
 and step g runs block g mod NB, so NB = 32 consecutive steps are the prefill's every linear. B is the published
 checkpoint's weights (verity-int8/Llama-3.1-8B-INT8 at its pinned revision, q k v and gate up fused as served; `prep
 --checkpoint`, the shards' SHA-256 in the registration). A is the s8 input each linear gets in a W8A8 forward of that

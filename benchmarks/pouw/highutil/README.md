@@ -14,9 +14,10 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
   call's commit beside the next call's compute), with both operands of every transformer block on the GPU. L is 16,384,
   so every call has one segment (S = 1), and under `V31_LTW=1` (run.sh's default) a call at S = 1 takes cuBLASLt's int32
   X W'^T in place of v31's GEMM. Dither's argument covers a segment of at most 8 L' (`T_MAX`), and v31 takes L' <= 1024,
-  so a call takes the least L' from 512 that covers its K (`period.lp_of`), and down (K = 14,336, which would need
-  L' >= 1,792) runs as two K-slices of 7,168 at L' = 1,024 (`down.0`, `down.1`, t = 7; `period.calls`) whose outputs sum
-  to its own; QKV, O and gate-and-up are whole at L' = 512 (t = 8). The plain arm is cuBLASLt (`torch._int_mm`) on the same linears, each
+  so a call takes the least L' from 512 to `--lp-max` that covers its K (`period.lp_of`), and down (K = 14,336, which
+  would need L' >= 1,792) runs as K-slices (`period.calls`) whose outputs sum to its own: four of 3,584 at L' 512 (t = 7,
+  run.sh's default), or two of 7,168 at L' 1,024 (`LP_MAX=1024`, t = 7), which measured 1.7% more GPU time a step.
+  QKV, O and gate-and-up are whole at L' = 512 (t = 8). The plain arm is cuBLASLt (`torch._int_mm`) on the same linears, each
   whole, so the slicing's cost counts against the protocol.
 - `hu_lib.cu` builds `libv31.so` from `v31.cu` with two functions more, so the host never waits on the device inside a
   block: `hu_point_b` points a call's weights at the block's device tensor (no `v31_set_b` copy and wait), and
