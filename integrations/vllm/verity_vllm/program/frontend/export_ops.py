@@ -57,7 +57,7 @@ def ensure_ops() -> None:
     def _(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.empty(tuple(a.shape[:-1]) + (a.shape[-1] + b.shape[-1],), dtype=a.dtype, device=a.device)
 
-    # [lane vllm-tp-n] the WORLD-ary collectives (world > 2): `parts` in RANK order; bound by `AllReduceRule` / `AllGatherRule` to
+    # the WORLD-ary collectives (world > 2): `parts` in RANK order; bound by `AllReduceRule` / `AllGatherRule` to
     # `AllReduce_v2{WORLD,N}` / `AllGather_v1{WORLD,N}`.  World 2 keeps the binary ops above (recorded identities).
     @torch.library.custom_op("verity_tp::all_reduce", mutates_args=())
     def all_reduce(parts: list[torch.Tensor]) -> torch.Tensor:
@@ -132,7 +132,7 @@ class CollectiveBus:
         return [r for r in range(self.world) if r != self.rank]
 
     def _peers_of(self, kind: str, x: torch.Tensor, out_shape: tuple) -> list[torch.Tensor] | None:
-        """Collective k's `world-1` peer partials (the other ranks', in rank order), or None in probe mode.  [lane vllm-tp-n] the flat peer
+        """Collective k's `world-1` peer partials (the other ranks', in rank order), or None in probe mode.  The flat peer
         input list is `k*(world-1) + j`: at world 2 exactly the old one-peer-per-collective layout (`peers_<k>`), so world-2 Program
         parameter names and digests are unchanged."""
         k = self.cursor

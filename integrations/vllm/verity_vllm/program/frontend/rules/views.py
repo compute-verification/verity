@@ -37,7 +37,7 @@ _STATIC_ARITH = {aten.add.Tensor, aten.sub.Tensor, aten.mul.Tensor, aten.floor_d
                  # transformers 5.x `masking_utils` plumbing on static positions (G-RH-1; the `new_ones` / `to.dtype_layout` forms of
                  # G-RH-5 / G-RH-11 are the same static-structure class): `find_packed_sequence_indices` = diff -> ne -> cumsum, the
                  # mask functions = `q_idx.new_ones(())`, `__and__`, `packed[b, kv_idx] == packed[b, q_idx]` (index with static indices),
-                 # `.to(dtype=bool, layout=strided, device=…)`; `.to(device=…, dtype=…)` of a static mask (G-RH-2). All integral/bool.
+                 # `.to(dtype=bool, layout=strided, device=…)`; `.to(device=…, dtype=…)` of a static mask. All integral/bool.
                  aten.diff.default, aten.__and__.Tensor, aten.__or__.Tensor, aten.__xor__.Tensor, aten.index.Tensor, aten.to.dtype_layout,
                  aten.to.device}
 # `x.new_ones(shape) / new_zeros / new_full`: constant makers whose ONE tensor operand only supplies dtype/device defaults (never read)
@@ -174,7 +174,7 @@ class ReshapeRule(ViewRule):
 
 
 class ViewDtypeRule(ViewRule):
-    """v2 (G-RH-2): also `aten.to.device(x, device, dtype)` — `.to(device=…, dtype=…)` — a device move is not semantics; only the
+    """v2: also `aten.to.device(x, device, dtype)` — `.to(device=…, dtype=…)` — a device move is not semantics; only the
     dtype is looked at, exactly as for `to.dtype` (same width: a view; bf16<->f32: `CastF32Bf16`; anything else: refused)."""
     info = RuleInfo("ViewDtype", 2, "view", applies_to="aten.view.dtype / aten.to.dtype / aten.to.dtype_layout / aten.to.device / _to_copy between dtypes of one width",
                     preconditions=("operand is a value collection", "source and target dtypes have the same Value<w> width",
@@ -339,7 +339,7 @@ class PermuteRule(ViewRule):
                     preconditions=("operand is a value collection",), evidence_domain="structural (no gates)")
 
     def targets(self):
-        # [R15 fp8] `aten.numpy_T` is `Tensor.T` (all axes reversed): the FP8 linears pass `weight.T` / `weight_scale_inv.T` to `cutlass_scaled_mm`
+        # `aten.numpy_T` is `Tensor.T` (all axes reversed): the FP8 linears pass `weight.T` / `weight_scale_inv.T` to `cutlass_scaled_mm`
         return {aten.permute.default, aten.t.default, aten.transpose.int, aten.numpy_T.default}
 
     def applies(self, node, ctx):

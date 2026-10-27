@@ -233,7 +233,7 @@ def host_facts() -> dict:
     return h
 
 
-#: [R13 moe] the vLLM dispatcher custom ops whose body is PURE PYTHON DISPATCH to the computation (no kernel of their own):
+#: the vLLM dispatcher custom ops whose body is PURE PYTHON DISPATCH to the computation (no kernel of their own):
 #: `vllm.moe_forward[_shared](hidden, router_logits, ..., layer_name)` -> `MoERunner._forward_impl`, and inside it
 #: `vllm.fused_experts(...)` -> `fused_moe.fused_experts_op` -> `fused_experts_impl` (the router top-k, the block schedule, the two
 #: grouped-GEMM Triton launches, the activation and the routed sum).  Exported as opaque nodes they hide the whole MoE block behind

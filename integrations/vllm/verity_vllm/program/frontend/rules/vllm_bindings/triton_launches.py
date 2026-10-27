@@ -274,7 +274,7 @@ class TritonGemmRule(InPlaceRule):
         rows, lead = rows_of(ac)
         K, N = shape_of(bc.type)[0]
         w_nk = _untransposed(ctx, b, K, N, ctx.hint_name(node) + "/W")  # b = W.t(): the kind's W is [N, K] — a reference rearrangement
-        accepted, dot = _target_kinds()   # [R13 hopper] the target's registered k16 step selects Gemm_v1 (accepted) or Gemm_v2{DOT}
+        accepted, dot = _target_kinds()   # the target's registered k16 step selects Gemm_v1 (accepted) or Gemm_v2{DOT}
         pouw = _pouw_scheme(node)
         bias_role = ("pouw_linear_row_bias", {}) if pouw is not None else gemm_bias_role()
         fused = _bias_add_reader(node, c, ctx, len(rows), N) if bias_role is not None else None

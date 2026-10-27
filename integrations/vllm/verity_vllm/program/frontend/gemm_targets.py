@@ -60,7 +60,7 @@ FIXED_CONSTEXPRS: dict[str, Any] = {"GROUP_SIZE_M": 8, "A_LARGE": False, "B_LARG
 #: profile pin 128`); the (2048, 6144) row has BLOCK_SIZE_K 128.  Read from vLLM on
 #: an L40S; `tests/program/test_gemm_targets.py` checks the copy against vLLM's table wherever vLLM imports.
 #: (`verity_vllm.observe.fold.profiles.gen_llama_patterns.ADA_TUNED_GEMM` re-exports it.)
-#: APPLICABILITY IDENTITY (global M-0140 (3)): `REGISTERED["ada"].table_sha256()` is the `tuned_gemm_table_sha256` derive_step writes into
+#: APPLICABILITY IDENTITY: `REGISTERED["ada"].table_sha256()` is the `tuned_gemm_table_sha256` derive_step writes into
 #: every L40S/4090 component's applicability, and GP-01 refuses a workload whose components disagree on it.  The one-key table of
 #: r14-rc3 hashed to ADA_TABLE_SHA256_RC3 below (the value in every L40S artifact Built before the release that carries this file);
 #: the five-key table hashes to a different value, so a pre-/post-change component pair is a NAMED Build refusal, never composed.
@@ -83,7 +83,7 @@ ADA_TUNED_GEMM: dict[tuple[int, int], dict[str, Any]] = {
                                                        (1024, (128, 128, 4, 3)), (2048, (128, 128, 4, 3)))},
 }
 
-#: [R13 hopper] vLLM's sm_90 table, VERBATIM `_BATCH_INVARIANT_MATMUL_TUNED_CONFIGS["hopper"]` of the pinned vLLM (`batch_invariant_configs.py`
+#: vLLM's sm_90 table, VERBATIM `_BATCH_INVARIANT_MATMUL_TUNED_CONFIGS["hopper"]` of the pinned vLLM (`batch_invariant_configs.py`
 #: sha256 72ea0d4df0ab5ae288abb7df5c203d2ad5f1709c7295d87ec72da775fddc1b7a), all five keys (every row `BLOCK_SIZE_K` 128, M<=1..16 buckets
 #: `BLOCK_SIZE_M` 16).  Llama-3.2-1B hits (2048, 2048) (o_proj) only; Qwen3-class shapes (K 2048; V 151936) hit the rest.
 HOPPER_TUNED_GEMM: dict[tuple[int, int], dict[str, Any]] = {
@@ -183,7 +183,7 @@ REGISTERED: dict[str, GemmTarget] = {
         evidence=("R10/R11 Tier A: LLAMA32_1B / SMOLLM2 / QWEN05 eager captures on the RTX 4090 and L40S (sm_89), every GEMM launch "
                   "(default tiling and the (2048,2048) table buckets M<=1 / M<=32) bit-exact against Gemm_v1{K,N} — tests/observe/test_gen_llama.py, "
                   "the numerics lane (mma.AMPERE_BF16: Ada's bf16 mma.sync is parameter-identical to Ampere's, verity.ml.circuits.silicon.models.ADA_BF16_M16N8K16)",
-                  # [R15 moe GEMM-ADA-TABLE] the four Qwen3-class rows of the table were registered without their own launches until R15
+                  # the four Qwen3-class rows of the table were registered without their own launches until R15
                   "R15 lane moe: verity_vllm/program/gemm_target_correspondence.py --model ada-tuned-table on cp-moe3 (L40S, cc 8.9, 142 SMs, "
                   "vLLM d9105ea80 family 'ada'): ALL five tuned (N,K) rows x M in {1,2,4,5,8,9,16,17,32,33,64,65,256,257,512,513,1024,1033,2048,2049} "
                   "(+ stress families at M 1/17/257 on (2048,6144)/(4096,2048)) = 124 cases, 30 distinct launch configs (every tabled bm 16/32/64/128 "
@@ -195,7 +195,7 @@ REGISTERED: dict[str, GemmTarget] = {
                   "all 5 Llama-3.2-1B GEMM shapes x M in {1,2,7,13,32,128,129,515,1024} (+ stress families at M 1/7/129) launched with the default "
                   "128/128/64 8w/3s tiling (vLLM family None), Triton PTX sm_80 mma.sync.m16n8k16 bf16 only, bit-exact against the single ascending "
                   "k16 chain of mma.AMPERE_BF16 — out/gen/sweep/evidence/ampere/gemm_target_a100.json",)),
-    # [R13 hopper] sm_90: Triton lowers `tl.dot` to `wgmma.mma_async` — a different k16 step (`HopperBF16WgmmaDot16`: one group of 16 products,
+    # sm_90: Triton lowers `tl.dot` to `wgmma.mma_async` — a different k16 step (`HopperBF16WgmmaDot16`: one group of 16 products,
     # 26-bit adder, floor -133; lane HP's wgmma re-measurement = Hawkeye's H100 `mma.sync.m16n8k16` model), so the Definition is the
     # statics-lifted `Gemm_v2{K,N,DOT}` (`verity_vllm.program.frontend.targets.gemm_spec`), not `Gemm_v1`.  vLLM family "hopper": the tuned table above.
     "hopper": GemmTarget(
