@@ -1839,7 +1839,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         if ns.verb == "audit":
             keys = {h["handle"]: h["linear"] for h in reg["handles"] if h.get("linear")}
             teams = [keys.get(t.lstrip("@"), t) for t in ([ns.target] if ns.target else []) + ns.value]
-            found = lin.audit(linear.owners(reg), teams or None)
+            found = lin.audit(linear.owners(reg), teams or None, None if ns.now is None else float(ns.now))
             if ns.lane:
                 found = [f for f in found if f["lane"] == ns.lane.lstrip("@")]
             counts = linear.tally(found)
@@ -4036,6 +4036,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--lane", default=None, metavar="HANDLE", help="audit: only this lane's findings (`-`: those with no lane)")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")
     p.add_argument("--json", action="store_true", help="audit: the findings and counts as JSON")
+    p.add_argument("--now", default=None, metavar="EPOCH", help="audit: the time it audits at, in seconds since the epoch (default: now)")
     p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True)
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
     p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")
