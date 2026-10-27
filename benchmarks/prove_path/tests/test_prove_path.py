@@ -1109,3 +1109,14 @@ def test_the_verifiers_traces_run_with_its_interpreter_from_integrations_vllm_an
     assert (Path(got["cwd"]), got["path"][:2]) == (VLLM.resolve(), [str(VLLM.resolve()), str(VLLM.resolve().parents[1])])
     with pytest.raises(RuntimeError, match=rf"^the verifier's trace of {re.escape(str(tmp_path / 'b2'))} failed \(rc 3\)"):
         PP.trace_builds(cmds, str(py))
+
+
+def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
+    """`committer_key`: 32 bytes made mode 0600 where the file doesn't exist, the same bytes read back every window after;
+    a file of another size is refused."""
+    p = tmp_path / "private" / "committer.key"
+    k = PP.committer_key(str(p))
+    assert len(k) == 32 and (p.stat().st_mode & 0o777) == 0o600 and PP.committer_key(str(p)) == k
+    p.write_bytes(bytes(31))
+    with pytest.raises(ValueError, match="32 bytes, not 31"):
+        PP.committer_key(str(p))

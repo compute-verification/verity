@@ -14,8 +14,12 @@
 #     default `weights`; #4317 with #4757; `record` is the class of record); then the window audited from its records alone
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the drawn proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
-#     layer 0's SiluMul_v2 at step 1), not the window circuit's: proving the window circuit's own units is V3c (VLLM-103),
-#     named missing until it lands.
+#     layer 0's SiluMul_v2 at step 1), not the window circuit's. V3c (VLLM-125) proves the window circuit's own units at
+#     V3C_CLASS (default 4,32,4, which CLASSES must hold): `prove_path.py window-commit` commits the window as that class
+#     circuit's units, the weights under the committer's key ($D/private/committer.key) and pinned in the window's
+#     pins.json; its circuit.json less its run fields is held to the verifier's own window-circuit record at the class; then
+#     `records_audit.py audit --circuit --registered` (V3C_LAW, default subset:1) draws and proves its members.
+#     `served_verdicts.sh v3c` runs only that step on an existing serve dir (D and its window K set), the build first.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, else names it MISSING with its issue. No verdict is
 #     made for a piece that didn't run. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
@@ -64,6 +68,53 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
 count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
+
+V3C=${V3C_CLASS:-4,32,4} v3c_ok=0; vtag=${V3C//,/-}
+v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its circuit held to the verifier's window-circuit record
+  VW=$D/v3c-w$K-$vtag
+  [ -f "$D/window-circuit-w$K-$vtag.json" ] || { say "WINDOW-COMMIT class $V3C: no window-circuit record at it (CLASSES '$CLASSES')"; return 1; }
+  # off the GPU (it isn't leased here): the weights hashed by h1.registered's NumPy path, the reference
+  (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout "${V3C_TIMEOUT:-120m}" "$PY" benchmarks/prove_path/prove_path.py window-commit --serve-run "$D" \
+    --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
+    --key "$D/private/committer.key" --pins "$VW/pins.json" --out "$VW/window") \
+    > "$OUT/window-commit-$vtag.json" 2> "$OUT/window-commit-$vtag.err"
+  local rc=$?
+  if [ "$rc" != 0 ]; then
+    say "WINDOW-COMMIT class $V3C refused (exit $rc): $(grep -v '^ ' "$OUT/window-commit-$vtag.err" | tail -2 | cut -c1-800)"
+    return 1
+  fi
+  say "WINDOW-COMMIT class $V3C: $(cut -c1-1500 "$OUT/window-commit-$vtag.json")"
+  cp "$VW/pins.json" "$OUT/v3c-pins-$vtag.json"
+  "$PY" - "$D/window-circuit-w$K-$vtag.json" "$VW/window/circuit.json" "$V3C" <<'EOF' 2>&1 | tee -a "$OUT/verdicts.txt"
+import json, sys
+from verity.ml.windows import interface as IF
+mine, theirs = (json.load(open(f)) for f in sys.argv[1:3])
+ok = IF.circuit_of(theirs) == mine
+print(f"WINDOW-CIRCUIT-HELD class {sys.argv[3]}: the committed circuit.json less its run fields is the verifier's own "
+      f"window-circuit record: {'PASS' if ok else 'FAIL'}")
+sys.exit(0 if ok else 1)
+EOF
+  [ "${PIPESTATUS[0]}" = 0 ] && v3c_ok=1
+}
+v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights pinned
+  local run leanb m0 rc
+  run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
+    "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for window $K in windows.jsonl"; return 1; }
+  leanb=$TREE/verity/core/service/flock/.lake/build/bin
+  m0=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/ml/flock/python:$TREE/integrations/vllm
+  mkdir -p "$OUT/v3c-audit"
+  (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout "${V3C_AUDIT_TIMEOUT:-180m}" \
+    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
+    --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$VW/pins.json" \
+    --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
+    --firewall "$leanb/flock-firewall" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
+  rc=$?
+  cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
+  say "V3C-AUDIT class $V3C (records_audit.py exit $rc): $(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log" | cut -c1-3000)"
+  [ -n "$(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log")" ] \
+    || say "V3C-AUDIT: no RECORDS line; $(tail -3 "$OUT/v3c-audit/audit.err" | tr '\n' ' ' | cut -c1-800)"
+  return $rc
+}
 
 serve() {  # under the lease: the endpoint, the requests, every closed window sealed, the endpoint stopped
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
@@ -132,6 +183,21 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
 }
 ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
 BUILD=$!
+
+if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its advice written (step 3); V3c alone
+  [ -n "${K:-}" ] && [ -f "$D/advice/w$K/private/advice.bin" ] || { say "V3C: set D and K, a serve dir and its window with advice"; exit 3; }
+  # the verifier's record at the class from this tree, whatever an earlier run left in D
+  CUDA_VISIBLE_DEVICES='' "$PY" benchmarks/prove_path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
+    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$D/window-circuit-w$K-$vtag.json" \
+    --pin "${PIN:-weights}" --class "$V3C" > "$OUT/window-circuit-$vtag.json" 2> "$OUT/window-circuit-$vtag.err" \
+    || { say "WINDOW-CIRCUIT class $V3C refused: $(tail -1 "$OUT/window-circuit-$vtag.err" | cut -c1-600)"; exit 12; }
+  say "WINDOW-CIRCUIT class $V3C: $(cat "$OUT/window-circuit-$vtag.json")"
+  v3c_commit
+  wait "$BUILD"; rc=$?
+  [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
+  [ "$v3c_ok" = 1 ] || exit 16
+  v3c_audit; exit $?
+fi
 
 H1_COINS="PoUW H1: not served (no H1_GATE)"
 if [ -n "${H1_GATE:-}" ]; then
@@ -235,10 +301,10 @@ for c in $CLASSES; do
     say "WINDOW-CIRCUIT class $c refused (exit $rc): $(grep -m1 'window-circuit' "$OUT/window-circuit-$tag.err" | cut -c1-600)"
   fi
 done
-say "MISSING V3c (VLLM-103, vllm-stack-neutral): the committer writing the window circuit's units as the record's members," \
-    "so its own units are drawn and proved; the proof blocks below are the sealed window's step units"
+v3c_commit || true
 wait "$BUILD"; rc=$?
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
+[ "$v3c_ok" = 1 ] && v3c_audit
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
   PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$OUT/sampled-proofs.log" 2>&1
 rc=$?
