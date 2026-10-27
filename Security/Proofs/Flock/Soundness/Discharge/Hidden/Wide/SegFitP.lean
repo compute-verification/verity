@@ -28,8 +28,9 @@ theorem unitIn_of_drop {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.Un
     (hp : HmIn.parse st.c = .ok pi) {r : ℕ} (hk : keepCol st.c pi r = false) : UnitIn st.c r := by
   simp only [keepCol, Bool.or_eq_false_iff] at hk
   have hq : HmIn.publicCol st.c pi r = true := by simpa using hk.2
-  obtain ⟨k, hk', jj, -, t, -, hr, hlt, -⟩ := publicCol_at hp hk.1 F.check L.unit_built hq
-  have hb := built_spec L.unit_built
+  have hU := FlockSoundness.unit_built F.parse F.check
+  obtain ⟨k, hk', jj, -, t, -, hr, hlt, -⟩ := publicCol_at hp hk.1 F.check hU hq
+  have hb := built_spec hU
   have hz : st.c.unit.useful < 2 ^ st.c.unitRange.slotLog := by rw [L.unit_slotLog]; exact F.check.unit_zero
   have hz' : st.c.unit.useful < 2 ^ (st.c.rangeOf st.c.unitNet).slotLog := hz
   have h1 := hb.2.1
