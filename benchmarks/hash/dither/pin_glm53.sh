@@ -33,14 +33,14 @@ EOF
 )
 research keep "$HF_HOME/hub/models--zai-org--GLM-5.3" --owner @vllm --expires 2026-11-06T00:00:00Z --priority low \
   --regenerate "huggingface_hub snapshot_download zai-org/GLM-5.3 at checkpoints.json's GLM53 revision" \
-  --why "the FP8-block base of GLM53_INT8 (VLLM-74), read by int8-checkpoint make and report" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
+  --why "the FP8-block base of GLM53_INT8, read by int8-checkpoint make and report" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
 stamp "base at $base_dir"
 
 pin_dir="$HF_HOME/hub/models--${REPO/\//--}"
 mkdir -p "$pin_dir"
 research keep "$pin_dir" --owner @vllm --expires 2026-11-20T00:00:00Z --priority normal \
   --regenerate "verity-vllm int8-checkpoint make --role $ROLE --hf-home $HF_HOME --jobs $JOBS" \
-  --why "GLM-5.3 int8 ($RECIPE, VLLM-74) for the Dither leg's serve" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
+  --why "GLM-5.3 int8 ($RECIPE) for Dither's serve" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
 
 if [ "$MODE" = make ]; then
   stamp "make $ROLE"

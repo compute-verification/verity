@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# h1r.cu built for sm_120a (and CA's noise.cu, receipts.py's reference noise) on the CPU, then h1rgate.py on one leased GPU for
+# h1r.cu built for sm_120a (and served_h1's noise.cu, receipts.py's reference noise) on the CPU, then h1rgate.py on one leased GPU for
 # at most 30 minutes: the gate on a full served step, then the timing.  Extra arguments go to h1rgate.py.
 #   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
 #     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/h1r.sh

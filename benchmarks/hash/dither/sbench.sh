@@ -179,7 +179,7 @@ if [ -n "${BW_LIB:-}" ]; then
 fi
 # coins off the node (sbench.py's "Coins"): every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
 # {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own session
-# from infra's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on
+# from the challenger gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on
 # this node, HEX the root of the coin commitment its challenger signed, which its hello must answer, R its --rounds when
 # not 16384), waited for with ss -ltn
 # before the lease (never a probe connect: a challenger serves the first connection whose hello it accepts); none: in-process
@@ -203,7 +203,7 @@ export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so V
 CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
 git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
   && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
-# CA's H1V3 (with the wrap correction and the peel, z = A B^T): dither_one's gate runs its h1tile.reference.  By default
+# H1V3 (with the wrap correction and the peel, z = A B^T): dither_one's gate runs its h1tile.reference.  By default
 # this source's own (PouwH1Tile_v4, ungated); H1V3_SHA names another commit, from this repository, else (the node's lacks
 # the commit) the archive sent with the run: `git archive --format=tar.gz $H1V3_SHA verity > h1v3-$H1V3_SHA.tar.gz`,
 # `research run --send` it

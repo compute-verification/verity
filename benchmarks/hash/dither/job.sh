@@ -6,7 +6,7 @@
 #            resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository files
 #            nvcc -M names (a bench refuses a library whose sources differ at its own commit)
 #   kbench   kb.so (and kb_pg.so on sm_100a): hb_kbench.py (the honest GEMMs gated, then timed against the plain int8 GEMMs);
-#            verify.py (CA's numpy twin) runs after a `research fetch`, off the node
+#            verify.py (the numpy twin) runs after a `research fetch`, off the node
 #   h1       h1noise.so: h1bench.py (H1's per-unit noise gated, then timed against the plain int8 GEMMs)
 #   h1u      h1u.so, h1noise.so and every h1u_* / h1noise_* variant shipped: h1ubench.py (H1 + fx1's fused unit, and
 #            each build's two-launch kh_unit_ws as arm NAME-ws, gated against receipts.py and h1tile.reference, the
@@ -15,7 +15,7 @@
 #            with the exact wrap correction, gated against h1v3_ca.py (H1V3's reference) at small anchors and against
 #            h1zref.cu's z = X·(B + c)ᵀ at the served shapes, receipts against receipts.py, y = dequant(z), the no-write
 #            control and both faults; then timed against its two-launch receipts-only form, the noise floor and plain)
-#   j10hb    h1zref.so and every h1u*.so shipped: j10hb.py (kernels-j10, measured only: each build's credited one-stream
+#   j10hb    h1zref.so and every h1u*.so shipped: j10hb.py (measured only: each build's credited one-stream
 #            call on per-unit noise against J10 banded noise, both gated, then timed with each form's two launches alone;
 #            with h1noise.so shipped too, its --noise-lib, which BENCH_ARGS --tw's tile-width price needs)
 #   prof     every h1u*.so shipped: hb_prof.py under ncu (--set full, --clock-control none), each build gated as h1ubench.py
@@ -29,7 +29,7 @@
 #            (the same calls against plain INT8); j10r90.sh builds the sm_90a arms
 #   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py and test_lane_refs.py with
 #            PARTIALS_LIB each (option A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu
-#            backend and SERVE-REG's gated lane rows)
+#            backend and PouwH1LaneZy_v1's gated lane rows)
 #   z        h1c.so (the served libh1c.so, the base) and every h1c_*.so variant shipped (built from $H1C_VARIANTS,
 #            NAME=FLAGS as $VARIANTS): zbench.py (dither-a -zy's between-step tables, each build gated against
 #            commit.py and the base's every word, then each set's h1c_build timed)
@@ -191,7 +191,7 @@ for b in ${BENCH//,/ }; do
       fi ;;
     partials)
       # every h1u*.so shipped: test_partials.py and test_lane_refs.py with PARTIALS_LIB, their gpu tests (kh_seeds_at and
-      # kh_lanes, against the cpu's and SERVE-REG's lane rows) on each
+      # kh_lanes, against the cpu's and PouwH1LaneZy_v1's lane rows) on each
       for f in "$LIBS"/h1u.so "$LIBS"/h1u_*.so; do
         [ -f "$f" ] || continue
         v=$(basename "$f" .so); NEED+=("$v")

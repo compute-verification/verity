@@ -10,12 +10,12 @@
 #   build  (a CPU node) job.sh's build of the four at sm_90a with --no-compress ($OUT/lib/sm_90a), then the SASS gate on
 #          each: sass-gate.json on sass_pins.json as it stands (the verdict, the script's exit), and sass-gate-sm90pin.json
 #          on a scratch copy of the gate whose 13.0.1-sm_90a entry is pinned as jobs/pin_target.sh pins it (ieee_pin.cu's
-#          pinned builds at sm_90a, sass_gate.py --pin) and given the numeric run that pinned it on the H200,
-#          r20261023-120437-0149 (ieee_pin.cu, ieee_pin.py, pin_target.sh and the gate as they are now), an entry that
+#          pinned builds at sm_90a, sass_gate.py --pin) and given the numeric run that pinned it on the H200
+#          (`run` below: ieee_pin.cu, ieee_pin.py, pin_target.sh and the gate as they are now), an entry that
 #          never landed: what the gate would flag once it does
 #   check  (vy-dc-h200, under gpu-lease) job.sh's j10r90: unitsbench.py's J10-R gates at its own shapes, then j10r90.py
 #          check at the frozen shape
-#   time   (vy-dc-h200, under gpu-lease) job.sh's j10r90t: j10r90.py time; with an s8-ship.tar sent (KP2-S8's
+#   time   (vy-dc-h200, under gpu-lease) job.sh's j10r90t: j10r90.py time; with an s8-ship.tar sent (the
 #          s8_linear/build.sh ship plus its wgmma.py and configs.py), wgmma.linear as a second plain arm
 #
 #   research run --on auto --cwd source --timeout 30m -- bash benchmarks/hash/dither/j10r90.sh build

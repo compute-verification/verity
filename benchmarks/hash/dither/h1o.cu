@@ -1,10 +1,10 @@
-// Dither's served linear in one stream (CA's H1V3, 07:04Z, with its exact wrap correction, 08:20Z): each call's
+// Dither's served linear in one stream (H1V3, with its exact wrap correction): each call's
 // y = dequant(z), z = O' - sum_d 128^d D_d + 256 X (wb⁺ - wb⁻)^T, from the noised mainloop that also computes the call's
 // H1 + fx1 receipts (`h1r_unit`'s MMAs over X = A + b and W' = B + c + U and its tail, `segment.call_words`), so the MMAs
 // whose words are receipted are the MMAs that serve: no other product of A and B is computed.  wb⁺ = [B + c + U > 127] and
 // wb⁻ = [B + c + U < -128] come from B and the noise in the unit (never an input), so z = X (B + c)^T exactly for every
 // int8 B (s32, mod 2^32), the z each cell commits.  The seeds are the call's own, from the window's
-// salt and root(A_j), root(B_j) (`unit_seed`, the 17 Oct seeded regime), so a call needs its A table's root before its
+// salt and root(A_j), root(B_j) (`unit_seed`, the seeded regime), so a call needs its A table's root before its
 // units and nothing from a later round.  A served call is two plain launches on the caller's stream into caller-owned
 // buffers, the step read from the device (`H1OStep`), so a CUDA graph captured once serves every step:
 //   (h1c_a_call) the call's A slot rows (rows < m xq's bytes and scales, rows >= m the canonical empty row) and their
@@ -14,8 +14,8 @@
 //                writes zero receipts and zero z and y.  `h1o_unitsb` is the same in the block form (`h1b_unit<OutEpi>`,
 //                a unit a block of five warps), for decode, where a call's units would leave most SMs idle, and
 //                `h1o_unitss` in the split form (`h1s_unit<OutEpi>`, six warps: the hashing a chunk ahead of the
-//                building, the fold in two halves).  `h1o_unitsbp` and `h1o_unitssp` are those two peeled (CA, 11:02Z
-//                and 12:16Z; H1V3's PouwPeelSeg): z = O + 256 X (wb⁺ - wb⁻)ᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ, today's
+//                building, the fold in two halves).  `h1o_unitsbp` and `h1o_unitssp` are those two peeled
+//                (H1V3's PouwPeelSeg): z = O + 256 X (wb⁺ - wb⁻)ᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ, today's
 //                product from the same O, so y = dequant(A Bᵀ) serves the registered model; the receipts are the same
 //                words, and the peel adds binary-by-int8 MMAs beside the wrap MMA (no product of A itself)
 //   h1o_units{s,b}2[p]  those kernels as separate functions whose shared-memory carveout `h1o_init` sets to the maximum
