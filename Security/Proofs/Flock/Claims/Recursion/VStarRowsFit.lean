@@ -119,7 +119,7 @@ theorem flatPieces_tops {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ}
 theorem rowsFit_of_getElem? {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {h : List (Msg × Msg)}
     {i : ℕ}
     (hl : (HpEarly.flatPieces ((DeployedR.layR OpenRows.elemR).pieceAt x i)).length = (roundRows I w ρ h i).length)
-    (hk : ∀ k v, (HpEarly.flatPieces ((DeployedR.layR OpenRows.elemR).pieceAt x i))[k]? = some v →
+    (hk : ∀ k (v : ℕ × (Msg × List HmNets.Lin)), (HpEarly.flatPieces ((DeployedR.layR OpenRows.elemR).pieceAt x i))[k]? = some v →
       ∃ (st : _root_.VStar.Stmt) (c : Circuit) (src : _root_.VStar.In.Src) (pin : _root_.VStar.In.PartIn)
         (nm : String) (q n : ℕ) (ps : List ℕ) (rw : _root_.VStar.In.Row),
         partAt x v.1 = some (st, c) ∧ srcOf I x w ρ h = some src ∧
@@ -173,7 +173,9 @@ theorem capFlat_fit {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.f
   have hRR := roundRows_cap (I := Ir) (x := x) (w := w) (ρ := ρ) (hist := H) hr hrs
     (show j + 1 ≤ H.length by omega) he ht hc hp h0 hw
   refine ⟨_, c, src, pin, ps, _, hpa, hsrc, hpin, ?_, hq0, (hrow t ht).trans hRR, hps, hRR⟩
-  simp [capFlat, capPieceAt, topPiece, List.getElem?_map, List.getElem?_range ht, hc, hq0]
+  have ht' := ht
+  simp only [Array.getD_eq_getD_getElem?] at ht'
+  simp [capFlat, capPieceAt, topPiece, List.getElem?_map, List.getElem?_range ht', hc, hq0]
 
 /-! ## `RowsFit` at the rounds with pieces -/
 
@@ -221,12 +223,12 @@ theorem rowsFit_tops {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.
       have hRRlen : (roundRows (Ir.fit x) w ρ H (j + 1)).length =
           ((List.range ((rs.getD (j % rs.size) default).2.1).size).flatMap (capSlots r rs j)).length +
             (rowSlot r j).length := by
-        rw [roundRows, List.length_mapIdx, fit_rows_length, List.length_take,
+        rw [roundRows, List.length_mapIdx, fit_rows_length Ir x w ρ.1 (H.take (j + 1)), List.length_take,
           Nat.min_eq_left (show j + 1 ≤ H.length by omega), slotsAt_tops hr hrs hte, List.length_append]
       have hAlen : ((List.range ((rs.getD (j % rs.size) default).2.1).size).flatMap (capFlat r rs j)).length =
           ((List.range ((rs.getD (j % rs.size) default).2.1).size).flatMap (capSlots r rs j)).length :=
         flatMap_length_congr _ _ (capFlat_length r rs j) _
-      have hA : ∀ k v,
+      have hA : ∀ k (v : ℕ × (Msg × List HmNets.Lin)),
           ((List.range ((rs.getD (j % rs.size) default).2.1).size).flatMap (capFlat r rs j))[k]? = some v →
           ∃ (st : _root_.VStar.Stmt) (c : Circuit) (src : _root_.VStar.In.Src) (pin : _root_.VStar.In.PartIn)
             (nm : String) (q n : ℕ) (ps : List ℕ) (rw : _root_.VStar.In.Row),
