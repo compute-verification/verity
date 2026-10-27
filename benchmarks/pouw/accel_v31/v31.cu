@@ -66,12 +66,19 @@ struct phc_prepared {   // no CUTLASS: Cut never finds a kernel
 // function in another code size and pipe mix, for the GEMM's hash warps and the leaf phase
 #define V31_STR_(x) #x
 #define V31_STR(x) V31_STR_(x)
+// V31_HCV (with V31_SX 0 or 1): lowreg.cuh's rounds, the chaining value in local memory through them (16 fewer live
+// registers, for hash warps at a low setmaxnreg)
 #ifdef V31_SX
-#include "../../torch_gpu/sha512_rows/sha512x.cuh"
+#include "../../torch_gpu/sha512_rows/lowreg.cuh"
 #ifndef V31_SX_V
 #define V31_SX_V 0
 #endif
+#ifdef V31_HCV
+static_assert(V31_SX == 0 || V31_SX == 1, "V31_HCV: lowreg.cuh's rounds take ROLL 0 or 1");
+#define SX_FORM V31_STR(V31_SX_V) "." V31_STR(V31_SX) ".m"
+#else
 #define SX_FORM V31_STR(V31_SX_V) "." V31_STR(V31_SX)
+#endif
 #else
 #define SX_FORM ""
 #endif
@@ -1507,7 +1514,15 @@ DEV u32 hash_blocks(u64* x, const Src& src, u32 lb, u32 b0, bool pf, const Stop&
       }
     }
     if (b == nblk - 1) W[15] = (u64)(128 + lb) * 8;
-#ifdef V31_SX
+#if defined(V31_SX) && defined(V31_HCV)
+    u64 v[8], xs[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) v[i] = xs[i] = x[i];
+    asm volatile("" ::"l"(xs) : "memory");   // xs's address escapes: it stays in memory, and is read back after the rounds
+    sx::rounds<V31_SX_V, V31_SX>(v, W);
+#pragma unroll
+    for (int i = 0; i < 8; ++i) x[i] = xs[i] + v[i];
+#elif defined(V31_SX)
     sx::compress<V31_SX_V, V31_SX>(x, W);
 #else
     sha::compress(x, W);
@@ -2447,6 +2462,8 @@ struct Fill {
 #ifdef V31_WG
   wgp::Args wa_plain{}, wa_words{};
 #endif
+  // the wg GEMM of D's clock64 sums (wgp::Args::clk), two slots of 4: clk_on, the slot gemm() passes it (null: none)
+  unsigned long long *clk = nullptr, *clk_on = nullptr;
 
   // "": fine; else why the shape can't be committed
   static std::string bad_shape(int m, int n, int k, int lp, int L, int row) {
@@ -2618,6 +2635,8 @@ struct Fill {
     CK(cudaMemcpy(wsa, ha.data(), 4 * (size_t)m, cudaMemcpyHostToDevice));
     CK(cudaMemcpy(wsw, hw.data(), 4 * (size_t)n, cudaMemcpyHostToDevice));
     wa_plain = wg_args(Ap, Bp, 0);
+    clk = dalloc<unsigned long long>(8);
+    CK(cudaMemset(clk, 0, 64));
     wa_plain.hall = env_int("V31_HALL", 0);
     wa_plain.hnw = env_int("V31_R5NHW", 0);
     wgw = wg && Wn > 0 && env_int("V31_WGW", 1) != 0;
@@ -2717,6 +2736,7 @@ struct Fill {
     if (o && wg) {
       wgp::Args g = wa_plain;
       g.O = D[b];
+      g.clk = clk_on;
       if (tst) g.tso = tso[b];
       if (kn.rp == 4 || kn.rp == 5) {
         xep[b] = epoch(st);
@@ -3463,6 +3483,24 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
 #endif
     const int ICUT = (int)arms.size();
     if (cut.best) arms.push_back({"cutlass", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) cut_run(cut, s); }});
+    // the gemm and ovl arms' SM clock from clock64 (cmhz): each item's wg GEMMs of D, CTA 0's cycles over its ns
+    std::vector<std::vector<double>> cmhz(arms.size());
+    for (size_t a = 0, slot = 0; f.clk && a < arms.size(); a++) {
+      if (arms[a].name != "gemm" && arms[a].name != "ovl") continue;
+      unsigned long long* c = f.clk + 4 * slot++;
+      auto inner = arms[a].enqueue;
+      arms[a].enqueue = [&f, c, inner](cudaStream_t s, int r) {
+        CK(cudaMemsetAsync(c, 0, 16, s));
+        f.clk_on = c;
+        inner(s, r);
+        f.clk_on = nullptr;
+      };
+      arms[a].after = [c, &cmhz, a](const gk::Item&) {
+        unsigned long long h[2];
+        CK(cudaMemcpy(h, c, 16, cudaMemcpyDeviceToHost));
+        if (h[1]) cmhz[a].push_back(1e3 * (double)h[0] / (double)h[1]);
+      };
+    }
     const gk::Timing tm = gk::timed_items(arms, reps, f.s0, nv);
     CK(cudaGetLastError());
     gk::summary(tm, arms, stderr);
@@ -3529,7 +3567,8 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            f.kn.lminb, f.kn.sahead ? 1 : 0, SHA_ADD, SHA_ROT, SHA_ROLL, SX_FORM, fused,
            f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
-      printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
+      printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"cmhz\": %s}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a],
+             jn(gk::median(cmhz[a])).c_str());
     const double l = at("lt");
     printf("}, \"gamma_ovl\": %s, \"gamma_ovl_w\": %s, \"gamma_ovl_pad\": %s, \"gamma_ovl_nomem\": %s, \"gamma_call\": %s, "
            "\"gamma_gemm\": %s, ",

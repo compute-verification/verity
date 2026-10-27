@@ -43,7 +43,9 @@
 # (OVL_CALLS overlapped calls, default 4) for the first variant on each shape and L, and h200_pipes.py's duty of each pipe
 # over the overlapped call (pipes.md).
 #
-# HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
+# MODE=build: the builds alone (no GPU), and each one's ptxas line for RP 5's kernels (registers, spills), ptxas-r5.txt.
+#
+# HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill|build (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 7), wcw (256), ccta (1), pf (0), diag (0), sched (0), ltw (0), served (0),
 # gemm (0), wgbn (256), cm (0), wgg (16), rp (0), r5h (96), r5w (1), tst (0), r5src (0), r5nhw (0), hall (0), hchunk (0), wgw (1),
@@ -51,7 +53,9 @@
 # Knobs), nreg (the GEMM's
 # register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's), sha (ADD.ROT.ROLL:
 # sha512.cuh's SHA_ADD, SHA_ROT and SHA_ROLL, a build of its own; default SHA_FLAGS) and sx (V.ROLL: sha512x.cuh's compress
-# in hash_blocks, V31_SX_V and V31_SX, a build of its own; default sha::compress), default row=8192; REPS
+# in hash_blocks, V31_SX_V and V31_SX, a build of its own; default sha::compress), hcv (1: with sx at ROLL 0 or 1, the
+# chaining value in local memory through the rounds, V31_HCV, a build of its own) and r5s (RP 5's one register split,
+# V31_R5_SPLITS, a build of its own and r5h's default), default row=8192; BUILD_JOBS (default 6) builds at once; REPS
 # (default 7); Q, the proof blocks a
 # verdict opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
@@ -85,16 +89,18 @@ knob_env() {
     "V31_WCW=$(knob "$1" wcw 256) V31_CCTA=$(knob "$1" ccta 1) V31_PF=$(knob "$1" pf 0) V31_DIAG=$(knob "$1" diag 0)" \
     "V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0) V31_SERVED=$(knob "$1" served 0)" \
     "V31_GEMM=$(knob "$1" gemm 0) V31_WGBN=$(knob "$1" wgbn 256) V31_CM=$(knob "$1" cm 0) V31_WGG=$(knob "$1" wgg 16)" \
-    "V31_RP=$(knob "$1" rp 0) V31_R5H=$(knob "$1" r5h 96) V31_HALL=$(knob "$1" hall 0) V31_HCHUNK=$(knob "$1" hchunk 0)" \
+    "V31_RP=$(knob "$1" rp 0) V31_R5H=$(knob "$1" r5h "$(knob "$1" r5s 96)") V31_HALL=$(knob "$1" hall 0)" \
+    "V31_HCHUNK=$(knob "$1" hchunk 0)" \
     "V31_WGW=$(knob "$1" wgw 1) V31_R5W=$(knob "$1" r5w 1) V31_TST=$(knob "$1" tst 0) V31_R5SRC=$(knob "$1" r5src 0)" \
     "V31_R5NHW=$(knob "$1" r5nhw 0)" \
     "V31_LMINB=$(knob "$1" lminb 5) V31_SAHEAD=$(knob "$1" sahead 0)"
 }
-# vbin VARIANT: its binary's suffix after $W/v31 (nreg, sha and sx each make a build of their own; empty: the default build)
+# vbin VARIANT: its binary's suffix after $W/v31 (nreg, sha, sx and r5s each make a build of their own; empty: the default
+# build)
 vbin() {
-  local n s x
-  n=$(knob "$1" nreg ""); s=$(knob "$1" sha ""); x=$(knob "$1" sx "")
-  echo "${n:+-n$n}${s:+-s$s}${x:+-x$x}"
+  local n s x r c
+  n=$(knob "$1" nreg ""); s=$(knob "$1" sha ""); x=$(knob "$1" sx ""); r=$(knob "$1" r5s ""); c=$(knob "$1" hcv "")
+  echo "${n:+-n$n}${s:+-s$s}${x:+-x$x}${c:+-c}${r:+-r$r}"
 }
 export -f knob knob_env vbin
 
@@ -135,14 +141,26 @@ echo "build rc $?" >> "$O/rc.txt"
 [ -x "$W/v31" ] || { cat "$O/rc.txt"; tail -20 "$O/build.log"; exit 1; }
 for v in $VARIANTS; do
   b=$(vbin "$v")
-  { [ -z "$b" ] || [ -e "$W/v31$b" ]; } && continue
-  n=$(knob "$v" nreg "") s=$(knob "$v" sha "") x=$(knob "$v" sx "")
+  { [ -z "$b" ] || [ -e "$W/.b$b" ]; } && continue
+  : > "$W/.b$b"
+  n=$(knob "$v" nreg "") s=$(knob "$v" sha "") x=$(knob "$v" sx "") r=$(knob "$v" r5s "")
   nf=(); [ -n "$n" ] && nf=(-DV31_MAXNREG="$n" -DV31_WG_NREG="$n")
   [ -n "$x" ] && IFS=. read -r xv xr <<< "$x" && nf+=(-DV31_SX="${xr:-2}" -DV31_SX_V="$xv")
+  [ -n "$r" ] && nf+=(-DV31_R5_SPLITS="$r")
+  [ -n "$(knob "$v" hcv "")" ] && nf+=(-DV31_HCV)
   sf=; [ -n "$s" ] && IFS=. read -r sa sr sl <<< "$s" && sf="-DSHA_ADD=$sa -DSHA_ROT=$sr -DSHA_ROLL=${sl:-1}"
-  BSHA=$sf build "$W/v31$b" "$O/build$b.log" "${nf[@]}"
-  echo "build ${b#-} rc $?" >> "$O/rc.txt"
+  { BSHA=$sf build "$W/v31$b" "$O/build$b.log" "${nf[@]}"; echo "build ${b#-} rc $?" >> "$O/rc.txt"; } &
+  while [ "$(jobs -rp | wc -l)" -ge "${BUILD_JOBS:-6}" ]; do wait -n; done
 done
+wait
+if [ "$MODE" = build ]; then
+  for f in "$O"/build*.log; do
+    awk -v f="${f##*/}" 'match($0, /Compiling entry function .*gemm_r5[A-Za-z0-9_]*/) { k = substr($0, RSTART + 25, RLENGTH - 25) }
+      k && /spill stores/ { s = $0 } k && /Used [0-9]+ registers/ { print f, k, s, $0; k = "" }' "$f"
+  done > "$O/ptxas-r5.txt"
+  cat "$O/rc.txt"
+  exit 0
+fi
 
 LEASE=${LEASE-gpu-lease 1 --wait --max-min 25 --}
 if [ "$MODE" = fill ]; then
