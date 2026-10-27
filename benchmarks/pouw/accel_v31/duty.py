@@ -3,8 +3,11 @@ duty.metrics' metrics over OVL_CALLS overlapped calls or as many wgmma.linear ca
 table, each pipe's active share of the range's elapsed cycles (idle is its complement)."""
 
 import csv
+import re
 import sys
 from pathlib import Path
+
+NUM = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
 
 COLS = (
     ("tensor", "sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed"),
@@ -30,10 +33,8 @@ def ranges(path):
     for r in rows[head + 2:]:
         d = {}
         for k, v in zip(rows[head], r):
-            try:
-                d[k] = float(v.replace(",", ""))
-            except ValueError:
-                d[k] = v
+            s = v.replace(",", "")
+            d[k] = float(s) if NUM.fullmatch(s) else v
         out.append(d)
     return out
 
