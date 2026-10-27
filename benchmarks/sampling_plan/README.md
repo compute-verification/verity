@@ -1,8 +1,8 @@
 # sampling_plan
 
-The sampling plan for one served row under C-Flock, from the planner in `verity.core.protocols.sampled_proofs`
+The sampling plan for one served workload under C-Flock, from the planner in `verity.core.protocols.sampled_proofs`
 (`optimize`, `candidates`, `costfit`): the cost model fitted from proving measurements, the cuts the candidate generator
-finds, the frontier of ε (at δ = 2^-40, against the row's MACs, W_ref's proxy) over the verification overhead B, the
+finds, the frontier of ε (at δ = 2^-40, against the workload's MACs, W_ref's proxy) over the verification overhead B, the
 break-even granularity, and how the plan moves with each input. A model, not a measurement: every input carries its
 source and status, measured or assumed (`inputs.py`).
 

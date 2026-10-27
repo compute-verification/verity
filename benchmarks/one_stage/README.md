@@ -52,8 +52,8 @@ negatives.
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
 - `examples/vllm/commit.sh` (the vLLM example's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
-  bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the row's Build and Match of record, a config-run Commit that seals
-  `commit/replay_bundle_p0/` (a single-GPU row defers only as a config run), its replay on CPU, and the row dir in the evidence
+  bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
+  `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
 - `served_verdicts.sh` (with `served_verdicts.py`): the Wed 28 run (VLLM-33), one served window through every subprotocol
   (`research run --on vy-dc-h200 --project verity --cwd clone -- bash benchmarks/one_stage/served_verdicts.sh`). It serves

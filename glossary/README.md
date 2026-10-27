@@ -66,6 +66,15 @@ Daniel (26 Oct, 6:40 PM PDT, tentative): credit and all reporting are in circuit
 Daniel's standing instruction goes with it: anyone who finds a reason this is wrong floats it the moment they find it,
 on its #agent-coordination thread or to @compute-research.
 
+## Workload
+
+Daniel (26 Oct, 5:49 and 5:56 PM PDT): a **workload** is what a datacenter runs over a monitoring period: its Programs,
+their inputs (weights, and requests or data) and their placement. It is one thing at every scale, from one server to a
+whole datacenter, inference and training alike, and workloads compose: workloads run side by side are one workload.
+"Row" no longer names one; it stays only for a commitment's matrix rows. vLLM's workload files
+(`integrations/vllm/workloads/*.json`, `verity-vllm/workload/v2`) each state one workload with the runtime that serves it
+(engine, target, execution).
+
 ## Older names
 
 Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector. They mean:
@@ -124,6 +133,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | serving block, serving-block bound |
 | "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in ACCEL's docs until CMP-158; W_cert, the Lean's `WorkSound`, `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_× |
+| "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | a sampling block of transfer blocks, over a sampling period |
 | "window" for a span of time; `Accounting.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: a sampling period, a certification period (`NetworkCheck.Period`), or a period of T ticks |
 | "session"; code and records' `session` (`session_id`, `core-firewall session`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the firewall's one outer proof per statement); a certifier's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
