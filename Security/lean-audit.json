@@ -848,51 +848,51 @@
   },
   "Claims.ZKMal.RefSession.Causal": {
    "owner": "@proofs",
-   "digest": "ac7ac65a43e12215b7c389f1994d08367e2863950c05e0ef51af2c131f7a3610"
+   "digest": "9aa12ecf3a0419d257e741df1e5f4568d6233a75eb85579b32fa193b6e939b0b"
   },
   "Claims.ZKMal.RefSession.Complete": {
    "owner": "@proofs",
-   "digest": "1d5511a29281c5d397c2c94ba529e63a7bc605f1c9e45b7e78c01df429b77461"
+   "digest": "1cba55d33dd9e6fa8d71c81ca6402abfb020b308124d43eaebf733bfd47755f4"
   },
   "Claims.ZKMal.RefSession.DummyReg": {
    "owner": "@proofs",
-   "digest": "d0941e3be41414d572cebb2b04f1ee3ed60fa7a0af585ee18f249c169dc36968"
+   "digest": "a8f0b1d02d31d5c8bff9c85d64c3004a71a15a34fd68241cf027f6e88ca33604"
   },
   "Claims.ZKMal.RefSession.SwCausal": {
    "owner": "@proofs",
-   "digest": "b142dbf11a079ae3b3a17ea6998412b7c6f1484841d67222988b13f0f3180099"
+   "digest": "c6102342f1af218efeec5d356d956ec0dcf70f263603dd172e5727245f439c7a"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "e094edd96d7e838d04e60b4c9da5032e8527957ce6d39841cdaa556ce8737bfa"
+   "digest": "0c39eeaace8601bcb60b075475e66baae334dcc526b71bccb275f9abcfe17fb7"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
-   "digest": "69b61813dfa9fe04fd4c633c25b5d6b7260f219dead233699c1ea43bdeaf3af0"
+   "digest": "6ba677b85a0fb4af3c0d4b693271bc1bf5e686631f867088c88b568f184612ce"
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "70ed630c18e7fcdabc71ab312ae77e8b7fde5406868822c6e7348d0b35848570"
+   "digest": "ee99dbc35c29c82dd6654105f5b1ab0b5c4cd93b0c6aa6b9a19cada821c8c9c9"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "7d8d1ed3f572c8ca298f17cb436b1c8aae5dc71715f65333eb1eb91d15c9a9a6"
+   "digest": "7241d716a0e3b0448457b1726b99345c11ccc4bad465ade92aac7c1be1dac63f"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "4009bd65e43f8f847dac5ec049749f5784eff6f796c5a056ef1da88d0c0b8998"
+   "digest": "ee5d51ab707ca8fc53e809a6d2ad857a1d376980fd7e42242adb4f8729e68df2"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "d43f9407570cddb72b59be3f6d34d86368cf1e99075102f78e5c484adc8f9d8b"
+   "digest": "d6e7d1a9281f96e9fa7cdd8802a7cdc33ca9c5cc4477a7b2f1cec24b1095105c"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
-   "digest": "d28e74c9e4fa96589a66082d888603f579f4dbd793875e0a7036d64eb1965ba8"
+   "digest": "de44bcff6d0389de0ebf200f69ba8ee39d0d7379c5cc6bc3defe1dda727ce433"
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "993de8b5a92e54a4fb2025c5e20a856190bd616bd514619dc7d040f6fa122a36"
+   "digest": "afd9719b360a79eb8cf40c9ea64a800bbf11cf41142391427104db77aed21c0c"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -916,7 +916,7 @@
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "19754906626d4a924a0f426de0a869ec2fb51205150bccd39c4acf924c3b5902"
+   "digest": "9a20d17a30b02c32678af450267f3981d15e184057cb9fcaebc2c6633bc5e57c"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
@@ -940,43 +940,43 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "b9f5758fa1b09d529ec84f00ab3bdbe8eb870b23510449e91b720a78e6d9fb6f"
+   "digest": "9bb9b7300ac82b0874a02da3c117db2f47d90a1dac5b06eca2e9e78459133a7a"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
-   "digest": "bf936a34f2e318ea230a7c862a802dc7fe3823d6a52093dbaa271288750efec4"
+   "digest": "c62d3ab5556aeb2b965d2ed2f48b7348a152b0136602dc7bf5cd659a6a1e83e3"
   },
   "Flock.SoundAtBridge.OpenedPlurAt": {
    "owner": "@proofs",
-   "digest": "fd6c740d69afd18bdea5b4a4f28fcbc9e0373186181d600912e0047ff6bc8647"
+   "digest": "99b6051c7d92aa17c783c9069e064fcfd6f8685bbcd2e638f7e1a8eeba3b42fb"
   },
   "Flock.SoundAtBridge.RelOfRows": {
    "owner": "@proofs",
-   "digest": "1de3200e2fc13a1a32be8ea2c42bd5b28d43d8bf108d54f3ce440c8c3c1a40eb"
+   "digest": "1f632b372afbffaf1c857779ed81b2ca731e2c76dc2fb37ad93095c5c8d14d58"
   },
   "Flock.SoundAtBridge.RowsSession.CR": {
    "owner": "@proofs",
-   "digest": "ca6f5491b87eb4a765ec37339e0228f58992b4a2a4ac74f1a669d5b6ba903127"
+   "digest": "3183e513ddbf9b9eca4c7a67a6be5b745a2f02db22f90ecbbdad89d39f7fddc2"
   },
   "Flock.SoundAtBridge.RowsSession.RowsAt": {
    "owner": "@proofs",
-   "digest": "ed786d1542f2699f8647fce7c1943402b31ca72a9597a7e350b4915f412b4b41"
+   "digest": "710ce863202caa200538b05a5e6126413fd844dfab91be9b854e3127e64367a8"
   },
   "Flock.SoundAtBridge.RowsSession.ServedRegistered": {
    "owner": "@proofs",
-   "digest": "aab5525ec51b208ad22d409473a1786b4fefbe29570ef559e046b76dac18fa58"
+   "digest": "ad6a5a0975f717068fc404b8556f44a129277ece869061700db6a89622479e47"
   },
   "Flock.SoundAtBridge.WindowLaw": {
    "owner": "@proofs",
-   "digest": "c0e07c2a05f20d89aa210ac5c9b922aea73e39914a4160c0daf6e2f89b5df551"
+   "digest": "56ee9e4c34686ae71190c032009541b60743e4c82c4c15e53744837be0dddd09"
   },
   "FlockDeploy.PlainIn": {
    "owner": "@proofs",
-   "digest": "f44440b776c87b114fe5fcac1e6100e2a8da5f2d383f7e8796edc174be851d94"
+   "digest": "a1d4cc44dd8f9e49e0e1f4f7e974e6b9e9b8da6fc7d58f9c77cfbdb6bf2021f6"
   },
   "FlockDeploy.ZkIn": {
    "owner": "@proofs",
-   "digest": "839c39d84bc023c33a45c98bd7fab2cc8bddf83fa4c1eeaf56ff2aac4d689ac4"
+   "digest": "16f7bf24424cba1c394396578081d86597ff703b14b8eaee15505ad43f56ebb2"
   },
   "FlockSoundness.Accounting.Stmt.InRange": {
    "owner": "@proofs",
@@ -2024,11 +2024,11 @@
   },
   "RecDeploy.PartIn": {
    "owner": "@proofs",
-   "digest": "e8b299cd058e2c971ae2bb29cbe9a2e1f91b9ab1cc4fa04587c7673140bba3ba"
+   "digest": "15566be6060a82dff639558e4b665667f7791e506199829cefc7fbddaea05e57"
   },
   "RecDeploy.PlainLeavesAdmitted": {
    "owner": "@proofs",
-   "digest": "3885946de9c97c36820e074493ddd79030ae317978a4a464d491439a6f0c9ede"
+   "digest": "1d3963f9bdb102e4ef805d143d635dae7a9e630fa2ce9828beff504c5e898e5e"
   },
   "Verity.Advice.Framing.Separated": {
    "owner": "@proofs",
@@ -37742,7 +37742,7 @@
    ]
   },
   "Flock.Tmpl": {
-   "digest": "fa1704693ec4d8697ba3953a884b70be64ed94f5e2d7376fedd7606f731690fa",
+   "digest": "aeed757f75953ce94e74a2a60d598ebc8826f82fb50d5c14548491e7e668b7a4",
    "definitions": {
     "Flock.Tmpl.Acc": "977dadb7026ef0ee9fecd23490ee0ab6dfcf4eff4aa0d4b49c4de239f97821f2",
     "Flock.Tmpl.Acc.empty": "f5793cac95dca49d796fcccae6a8a9edb614b41112b0485384b68ae4894f3be2",
@@ -37796,7 +37796,6 @@
     "Flock.Tmpl.instInhabitedDef.default": "84e124c853e700ce2f14ab9e6c883253d524c47090e963532fa988f4fc25d50a",
     "Flock.Tmpl.parse": "2cc3beb9fbf4c4174008f013de0ac2c57dd45a5635297b1af2c720a8707c1829",
     "Flock.Tmpl.parse._sparseCasesOn_3": "b637662f24e53b2d5717d95ac3e3c781b170b925d9e02e9ddcf23ce643efef4e",
-    "Flock.Tmpl.parse.match_3": "7d381262edca2d1b0b707ceebefe187f31fbea53d7d954523602fe8acc0a0391",
     "Flock.Tmpl.place": "ac4b23f4e42fcfda2da4976d04cc28d67d5a041e10719ed5fe167b1bccfb1d4d",
     "Flock.Tmpl.unroll": "b5e60733061ccc0a0a99ba4b28fec528e52516d67a7b5a37c6fd6f61570d0982",
     "Flock.Tmpl.write": "6ad4a2e8427d885d98219bc3b97309c3de7a16479eb856f09aab5f1aec37f1fd",
