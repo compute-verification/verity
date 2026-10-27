@@ -54,14 +54,8 @@ theorem wipeSound5GB_of_wipeSound (hop : W.AtOperatingPoint) (h : W.WipeSound) (
 end WipeVocab
 
 /-- **What onsite accepts, each of its components accepts on its own case.** -/
-theorem accepts_case {s : Sent} (h : Accepts s) {P : BlobProtocol} (hP : P ∈ Onsite.components) : CaseAccepts P s := by
-  obtain ⟨n, ps, b, d, k, ev, hdec, pub, prof, hreg⟩ := accepts_registered h
-  obtain ⟨-, -, -, -, -, -, ⟨-, -, hfst, -⟩, hcases, -⟩ := hreg
-  have hm : P.onBlobs (Blobs.ofArray s.blobs) ∈ (Properties.Composition.triples s.components ps ev).map (·.1) := by
-    rw [hfst]
-    exact List.mem_map.2 ⟨_, hP, rfl⟩
-  obtain ⟨x, hx, hx1⟩ := List.mem_map.mp hm
-  exact ⟨n, ps, b, d, k, ev, hdec, x, hx, hx1, hcases x hx⟩
+theorem accepts_case {s : Sent} (h : Accepts s) {P : BlobProtocol} (hP : P ∈ Onsite.components) : CaseAccepts P s :=
+  accepts_case_at h hP
 
 theorem wipe_mem : (MemoryChallenger.WipeProtocol.protocol : BlobProtocol) ∈ Onsite.components := by
   simp [Onsite.components]
