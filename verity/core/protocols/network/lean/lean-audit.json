@@ -50,7 +50,6 @@
  },
  "guarantees": {
   "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": {
-   "owner": "@network-accounting",
    "signature": [
     "NetworkCheck.RecordsBytes.evidenceOf_toEvidence (j : Lean.Json) :",
     "  Eq (NetworkCheck.Check.evidenceOf j)",
@@ -60,7 +59,6 @@
    "type_hash": "d7bf8ddfba8b0ea4d7cf8032d17af12ffd5866408dad0686344a41de65319ff6"
   },
   "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq": {
-   "owner": "@network-accounting",
    "signature": [
     "NetworkCheck.RecordsBytes.expectedGridsOfBytes_eq (g : NetworkCheck.Check.Grid) (W : Nat)",
     "  (l : NetworkCheck.Records.ByteLink) (w : Fin W) :",
@@ -71,13 +69,11 @@
    "type_hash": "092871ea38ce03e4ffd45e0d031320be0fea5add9d8241fbea215d8ec39efa35"
   },
   "NetworkCheck.RecordsBytes.unhex_eq": {
-   "owner": "@network-accounting",
    "signature": ["NetworkCheck.RecordsBytes.unhex_eq (s : String) : Eq (NetworkCheck.Records.unhex s) (Flock.unhex s)"],
    "assumptions": [],
    "type_hash": "47004c441f361d7380e6a9c49d91ceb2bc2b4739ca315db785465a279eeeb248"
   },
   "NetworkCheck.RecordsGrid.expectedGrids_eq": {
-   "owner": "@network-accounting",
    "signature": [
     "NetworkCheck.RecordsGrid.expectedGrids_eq (g : NetworkCheck.Check.Grid) (W : Nat) (l : NetworkCheck.Check.Link)",
     "  (w : Fin W) :",

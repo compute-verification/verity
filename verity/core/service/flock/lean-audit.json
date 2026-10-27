@@ -77,11 +77,9 @@
  },
  "assumptions": {
   "Flock.Firewall.Contract.FirewallComputes": {
-   "owner": "@firewall-contract",
    "digest": "0c8b7fe474f4820e1d04fd025d2f6f5b1f83032f66704316d3f21d62dfe4682b"
   },
   "Flock.Firewall.Contract.Holds": {
-   "owner": "@firewall-contract",
    "digest": "a139e61f09c1b477e998dc5d05c672b6205c3c0f83f253756a553acb3d401b8d"
   }
  },
@@ -435,7 +433,6 @@
  },
  "guarantees": {
   "Flock.Firewall.Contract.commitLeaf_eq": {
-   "owner": "@firewall-contract",
    "signature": [
     "Flock.Firewall.Contract.commitLeaf_eq (msg salt : ByteArray) :",
     "  Eq (Flock.Firewall.Contract.commitLeaf msg salt)",
@@ -445,7 +442,6 @@
    "type_hash": "a7d43f86e900aef1dd9ec4d39216186ccbdccd394d69bdaac40f3f3c7e908a67"
   },
   "Flock.Firewall.Contract.holds_coins": {
-   "owner": "@firewall-contract",
    "signature": [
     "Flock.Firewall.Contract.holds_coins {pub : Flock.Firewall.Contract.PublicInput} {t : Flock.Firewall.Contract.Transcript}",
     "  (h : Flock.Firewall.Contract.Holds pub t) {stream : String} {k : Nat} {cs relayed : Array Flock.F128}",
@@ -463,7 +459,6 @@
    "type_hash": "f7c75fc8ff69fd14d2eb14fdf528503aa90514b4631c436a3973c0793267c6eb"
   },
   "Flock.Firewall.Contract.holds_coins_binding": {
-   "owner": "@firewall-contract",
    "signature": [
     "Flock.Firewall.Contract.holds_coins_binding {pub : Flock.Firewall.Contract.PublicInput}",
     "  {t t' : Flock.Firewall.Contract.Transcript} (h : Flock.Firewall.Contract.Holds pub t)",
@@ -491,7 +486,6 @@
    "type_hash": "2f38b70ba9aae0ea55033e2810725f001faa26ae99c11c7b348a0a78f2c07c06"
   },
   "Flock.Firewall.Contract.holds_commit": {
-   "owner": "@firewall-contract",
    "signature": [
     "Flock.Firewall.Contract.holds_commit {pub : Flock.Firewall.Contract.PublicInput}",
     "  {t : Flock.Firewall.Contract.Transcript} (h : Flock.Firewall.Contract.Holds pub t) {msg : ByteArray} {i : Nat}",
@@ -510,7 +504,6 @@
    "type_hash": "9e86b324d2e725880221dddee14f20fb05839f5e4ffff11ada6ddabd2f2b0361"
   },
   "Flock.Firewall.Contract.holds_computed": {
-   "owner": "@firewall-contract",
    "signature": [
     "Flock.Firewall.Contract.holds_computed {spec : String → Option ByteArray} {pub : Flock.Firewall.Contract.PublicInput}",
     "  {t : Flock.Firewall.Contract.Transcript} (h : Flock.Firewall.Contract.Holds pub t)",
@@ -526,7 +519,6 @@
    "type_hash": "9c0c81dfbc7167b19c682b77768e00765a7a0a77b778d97ca5f45f0eef5fd3a4"
   },
   "Flock.Firewall.Contract.holds_finish": {
-   "owner": "@firewall-contract",
    "signature": [
     "Flock.Firewall.Contract.holds_finish {pub : Flock.Firewall.Contract.PublicInput}",
     "  {t : Flock.Firewall.Contract.Transcript} (h : Flock.Firewall.Contract.Holds pub t) :",
@@ -536,7 +528,6 @@
    "type_hash": "aa67703052894f171a7b02e9bb4cc0ac0b3da1a2da9592ca3ebf2c136a3accc5"
   },
   "Flock.Firewall.Contract.holds_fixed": {
-   "owner": "@firewall-contract",
    "signature": [
     "Flock.Firewall.Contract.holds_fixed {pub : Flock.Firewall.Contract.PublicInput} {t : Flock.Firewall.Contract.Transcript}",
     "  (h : Flock.Firewall.Contract.Holds pub t) {what : String} {src : Flock.Firewall.Contract.By} {want sent : ByteArray}",
@@ -562,7 +553,6 @@
    "type_hash": "01861c4768c06289a8317df2c471999f9378506a0c7c59972ed9bab24531ec36"
   },
   "Flock.Firewall.Contract.holds_masked": {
-   "owner": "@firewall-contract",
    "signature": [
     "Flock.Firewall.Contract.holds_masked {pub : Flock.Firewall.Contract.PublicInput}",
     "  {t : Flock.Firewall.Contract.Transcript} (h : Flock.Firewall.Contract.Holds pub t) {v : Flock.F128} {p : Nat}",
