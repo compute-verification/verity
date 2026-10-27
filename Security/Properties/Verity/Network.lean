@@ -23,7 +23,7 @@ theorem componentAccepts_network {s : Sent} (h : ComponentAccepts .network s) :
   ⟨_, _, _, hx ▸ hd⟩
 
 /-- **ONE-13 at onsite**: given `PeriodAcceptMeans`, when onsite's network component accepts, its case decodes to a
-period whose every link-window was accepted: proved, certified on both ends and its clock synced. -/
+period whose every link-window was accepted in the parameters' form. -/
 theorem componentAccepts_network_windows (hP : PeriodAcceptMeans) {s : Sent} (h : ComponentAccepts .network s) :
     ∃ (θ b ev : ByteArray) (p : NetworkCheck.Period.Params) (c : NetworkCheck.Period.Commitment)
       (e : NetworkCheck.Period.Evidence),
