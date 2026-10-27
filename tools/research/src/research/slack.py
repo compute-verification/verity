@@ -4092,7 +4092,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     issue_flags(p)
     card_flags(p)
     p.set_defaults(verb=None, id=None, link=None, wait=False, every=WAIT_EVERY_S, json=False)
-    p = cmd("linear", "Linear issues, through the app (never the Linear MCP connector, which acts as Daniel): `check` (what "
+    p = cmd("linear", "Linear issues, relations, projects and milestones, through the app (never the Linear MCP connector, "
+                      "which acts as Daniel): `check` (what "
                       "the credentials reach; exit 0 when fit for asks), `state ISSUE STATE` (by name; " + LINEAR_STATES + "), "
                       "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `list TEAM [--state S]` (open by "
                       "default), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, with its fix; exit "
