@@ -14,10 +14,11 @@
 #     so the engine's idle closes them into one window. The lease ends once every closed window is sealed.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
 #     closed window's advice under PROVE-PATH's registered compiler and the weights registration (`--weights-of-record`),
-#     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit at each class of CLASSES
-#     (`prove_path.py window-circuit --pins` the registration, and PIN's NAME=ROOT if set; #4317 with #4757; `record` is the
-#     class of record), its registered and free input bits at those pins, each within WC_TIMEOUT (default 30m; Llama-3.2-1B
-#     int8's class of record needs longer); then the window audited from its records alone
+#     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
+#     --pins` the registration, and PIN's NAME=ROOT if set; #4317 with #4757), its registered and free input bits at those
+#     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs;
+#     then at the class of record, a measurement within WC_RECORD_TIMEOUT (default 2h) whose timeout or refusal is said and
+#     never fails the run (unless CLASSES names `record`, which then gates instead); then the window audited from its records alone
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the drawn proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1), not the window circuit's: proving the window circuit's own units is V3c (VLLM-103),
@@ -40,8 +41,9 @@
 # development key, so the run is a development run and credits nothing. The COINS line says which.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
-#   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 4h --env CLASSES='4,32,4 record' -- \
+#   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 4h -- \
 #     bash benchmarks/one_stage/served_verdicts.sh
+# `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
 # Defaults are vy-dc-h200's: the int8 B4 row and taps of r20261026-185144-3ccb, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
 # public records and every log.
@@ -54,7 +56,7 @@ HIDDEN_SO=${HIDDEN_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so} NORM_TAP_
 VENV=${VENV:-/workspace/cp/venv312}
 REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737d03a919526bf800} PRECISION=${PRECISION:-verity_int8}
 PORT=${PORT:-18190} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
-REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-record} CAP=${CAP:-8388608} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512}
+REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-4,32,4} CAP=${CAP:-8388608} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
 H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 if [ -n "${H1_GATE:-}" ]; then WINDOW_STEPS=${WINDOW_STEPS:-16}; else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
@@ -137,7 +139,40 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   [ "$rc" = 0 ] && [ "$c" -gt 0 ] && [ "$s" -ge "$c" ]
 }
 
+circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line headed $3: 0 iff it counted
+  local c=$1 head=$3 cls=() tag=record pins=() wp=$NO_WEIGHTS f rc
+  [ "$c" = record ] || { cls=(--class "$c"); tag=${c//,/-}; }
+  [ -f "$WREG" ] && pins=(--pins "$WREG") wp="at the weights registration's pins"
+  f=$D/window-circuit-w$K-$tag.json
+  timeout "${2#*=}" "$PY" benchmarks/prove_path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
+    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" "${pins[@]}" ${PIN:+--pin "$PIN"} \
+    "${cls[@]}" > "$OUT/window-circuit-$tag.json" 2> "$OUT/window-circuit-$tag.err"
+  rc=$?
+  if [ "$rc" = 0 ]; then
+    say "$head: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["count"]; print("registered", c["registered"], "bits, free", c["free"], "bits of", c["inputs"], "input bits")' \
+      "$OUT/window-circuit-$tag.json" 2>&1 | cut -c1-200) $wp; $(cat "$OUT/window-circuit-$tag.json"); record $(sha256sum "$f" | cut -c1-16)… $(stat -c %s "$f") bytes"
+  elif [ "$rc" = 124 ]; then
+    say "$head timed out after $2 (exit 124): no count"
+  else
+    say "$head refused (exit $rc): $({ grep -m1 'window-circuit' "$OUT/window-circuit-$tag.err" \
+      || tail -1 "$OUT/window-circuit-$tag.err"; } | cut -c1-600)"
+  fi
+  return "$rc"
+}
+circuits() {  # in TREE: every class of CLASSES gates (0 iff each counted); the class of record after them gates nothing
+  local bad=0 c
+  grep -q '"window-circuit"' benchmarks/prove_path/prove_path.py \
+    || { say "MISSING V3b's window circuit (#4317 with #4757, VLLM-103): this tree's prove_path.py has no window-circuit"; return 1; }
+  for c in $CLASSES; do circuit "$c" "WC_TIMEOUT=${WC_TIMEOUT:-30m}" "WINDOW-CIRCUIT class $c" || bad=1; done
+  case " $CLASSES " in
+    *" record "*) ;;
+    *) circuit record "WC_RECORD_TIMEOUT=${WC_RECORD_TIMEOUT:-2h}" "WINDOW-CIRCUIT class record (measurement)";;
+  esac
+  return "$bad"
+}
+
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
+if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; exit $?; fi
 
 stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; free -g | head -2; nvidia-smi -L; echo "serve dir $D"; } \
@@ -231,8 +266,8 @@ CA=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-ru
   | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
 [ -n "$CA" ] || stop compiler 13
 echo "registered compiler: $CA" > "$OUT/compiler.txt"
-WA=() PINS=() WP="$NO_WEIGHTS"
-[ -f "$WREG" ] && WA=(--weights-of-record "$WREG") PINS=(--pins "$WREG") WP="at the weights registration's pins"
+WA=()
+[ -f "$WREG" ] && WA=(--weights-of-record "$WREG")
 for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl"); do
   # shellcheck disable=SC2086
   vv advice "$D" --window "$k" --cap "$CAP" $CA "${WA[@]}" --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1
@@ -249,27 +284,7 @@ say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))[
 [ "$rc" = 0 ] || stop compile 15
 cd "$TREE" || exit 9
 wc_ok=0
-for c in $CLASSES; do
-  if ! grep -q '"window-circuit"' benchmarks/prove_path/prove_path.py; then
-    say "MISSING V3b's window circuit (#4317 with #4757, VLLM-103): this tree's prove_path.py has no window-circuit"; break
-  fi
-  cls=(); tag=record; [ "$c" = record ] || { cls=(--class "$c"); tag=${c//,/-}; }
-  f=$D/window-circuit-w$K-$tag.json
-  timeout "${WC_TIMEOUT:-30m}" "$PY" benchmarks/prove_path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
-    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" "${PINS[@]}" ${PIN:+--pin "$PIN"} \
-    "${cls[@]}" > "$OUT/window-circuit-$tag.json" 2> "$OUT/window-circuit-$tag.err"
-  rc=$?
-  if [ "$rc" = 0 ]; then
-    wc_ok=1
-    say "WINDOW-CIRCUIT class $c: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["count"]; print("registered", c["registered"], "bits, free", c["free"], "bits of", c["inputs"], "input bits")' \
-      "$OUT/window-circuit-$tag.json" 2>&1 | cut -c1-200) $WP; $(cat "$OUT/window-circuit-$tag.json"); record $(sha256sum "$f" | cut -c1-16)… $(stat -c %s "$f") bytes"
-  elif [ "$rc" = 124 ]; then
-    say "WINDOW-CIRCUIT class $c timed out after WC_TIMEOUT=${WC_TIMEOUT:-30m} (exit 124): no count"
-  else
-    say "WINDOW-CIRCUIT class $c refused (exit $rc): $({ grep -m1 'window-circuit' "$OUT/window-circuit-$tag.err" \
-      || tail -1 "$OUT/window-circuit-$tag.err"; } | cut -c1-600)"
-  fi
-done
+circuits && wc_ok=1
 say "MISSING V3c (VLLM-103, vllm-stack-neutral): the committer writing the window circuit's units as the record's members," \
     "so its own units are drawn and proved; the proof blocks below are the sealed window's step units"
 wait "$BUILD"; rc=$?
