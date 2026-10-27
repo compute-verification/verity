@@ -1501,6 +1501,13 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   each instance's public words. The header repeats `public_inputs`; the body ends with every instance's public words
   (u16 LE). The verifier needs its own `--public-inputs F` (`verity/flock-public-inputs/v1`: `{format, instances,
   ports}`, then the population's words), refusing a differing word, a missing file and a port named on one side only.
+- **Shared reads** (`Flock.HmIn.checkReads`; form (B)'s one writer a window). META may name `shared_reads`
+  (`[{port, group, position}]`, only with `public_inputs`): input row `port` is one table row per group of `G = group`
+  instances, and public input `position` is the instance index mod `G` (seed `instance`, derivation `mod:G`). The
+  population's public file must be a shared-row file whose `port` table has `n / G` rows (`n` a multiple of `G`) and
+  whose instance `i` reads table row `⌊i/G⌋`, so each window `(⌊i/G⌋, i mod G)` is one instance's. A statement without
+  hidden outputs refuses the key. `circuit.write` refuses the same files with the same refusals
+  (`circuit.check_shared_reads`).
 - **Proof.** The Merkle trees are `hm96-sha512/v1` (`PcsParams.merkle_hash = 3`, 64-byte digests): every level's openings
   carry `opened_salts` (192 bytes per opened row, after the siblings), and an opened row's leaf is
   `SHA-512(leaf_prefix ‖ (x ⊕ M(key)·y) ‖ SHA-512(salt_prefix ‖ y))` for `x = SHA-512(row)`.

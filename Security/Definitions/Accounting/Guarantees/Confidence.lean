@@ -4,13 +4,13 @@ import Mathlib.Data.Fintype.Pi
 /-!
 # Composition and fit (trusted)
 
-Sections 4 and 5 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.3).
+The actual-circuit model's composition and fit.
 
 * `Composition`: `k` protocols in one run, with independent coins (protocol `i`'s coins reach nothing but the input
   gates at its verifier's leaves `V i`) and `E i` sound at `δ i` alone, accept together with the run outside the
   confidence set (some `E i` failing) with probability at most `∑ δ i`. A guarantee may read the strategy (B2's reads
   it through `e`), but only by varying its own protocol's coins: `E i` is read on protocol `i`'s slice, the joint
-  strategy with the other coins fixed, as in its own game, the other verifiers' gates the prover's (v2.8). So each
+  strategy with the other coins fixed, as in its own game, the other verifiers' gates the prover's. So each
   protocol's random oracle, when its guarantee varies one (PoUW's budget), is among its own coins `Ω i`, and its
   answers are computed gates whose operation those coins fix, not input gates, which protocol `i`'s coins reach only
   at `V i`. The feasible set is a set of runs, so it doesn't depend on which party runs a gate.

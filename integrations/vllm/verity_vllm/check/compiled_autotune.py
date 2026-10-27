@@ -1,7 +1,7 @@
 """Autotune equivalence of an Inductor kernel's candidate launch configs -- shown on the committed data, in the treatment process.
 
-Daniel's rule for compiled kernels: "if the autotune choice affects the numerics, it is part of the specialization identity and
-must be pinned; if it does not, show it (same outputs bit-for-bit) and record it".  Inductor's pointwise heuristic offers more than one
+The rule for compiled kernels: if the autotune choice affects the numerics, it is part of the specialization identity and
+must be pinned; if it does not, show it (same outputs bit-for-bit) and record it.  Inductor's pointwise heuristic offers more than one
 launch config (XBLOCK x num_warps) and benchmarks them ONCE per process, keeping the winner -- so two processes (the control and the
 treatment arm, or the production run and a later one) may execute two different specializations of the SAME generated source (Qwen L40S B8
 run 9: `triton_poi_fused_mul_silu_slice_t_1` control XBLOCK=512/8 warps vs treatment XBLOCK=1024/4 warps; the deny-list identity then says
@@ -155,7 +155,7 @@ def replay_under_candidates(kernel: str, ins: list, outs: dict[str, Any], roles:
         return rec
     cands, why = candidates(kernel)
     rec["heuristic"] = str(getattr(aut, "heuristic_type", None))
-    # [rev F-r16-22] config independence is STRUCTURAL only for a pointwise kernel (one thread per element: XBLOCK/num_warps set scheduling
+    # config independence is STRUCTURAL only for a pointwise kernel (one thread per element: XBLOCK/num_warps set scheduling
     # and masking, not the arithmetic); for a reduction the config sets the summation/fma order, so bit-equality on sampled launches is a
     # property of the data, not of the kernel -- recorded, but the merge lifts a cross-arm config difference only when `structural`
     rec["structural"] = rec["heuristic"].endswith("POINTWISE")

@@ -15,7 +15,7 @@ server window of whole wipe periods (``tiers.windows_bound``'s windows):
   (``tiers.ingress``): the residual at the wipe that opens it and its intake. What crosses a later wipe inside it isn't
   novel; what crosses the one that opens it is, so a token carried across a wipe in the residual pays like one carried in.
 * F3, loss (empirical): every token's computation in a dense model that reaches the target loss L* depends on at least
-  N* updated weights beyond the registered models (``ReachSlots`` at token threads, which ASK-68 adopts for dense
+  N* updated weights beyond the registered models (``ReachSlots`` at token threads, which the policy adopts for dense
   recipes; false for a token-routed MoE, whose tokens use fewer); ``n_star`` reads N* off a loss law, at no data limit
   unless given one. Each server's first window, which builds its weights from a seed, is charged (``left_out``).
 * F4, boundary (empirical): one window starts each token, from its id; any other window that does work on it reads at
@@ -169,7 +169,7 @@ def share(p: dict, rate: float) -> float:
 
 def left_out(p: dict, periods: int) -> float:
     """What the fit bound leaves out, in ``share``'s unit: each server's first window of ``periods`` wipe periods, at mfu,
-    over the horizon. That window builds its weights from a seed, so F1's weight half fails there (ASK-68), and
+    over the horizon. That window builds its weights from a seed, so F1's weight half fails there, and
     ``Nci.SecurityProofs.Fit.fitBoundSlots_init`` adds the counted multiplications inside it to the bound. The threads
     it starts need no F3: their work in later windows is paid for by their entry fees there. F3 is asked, outside the
     first windows, of the threads started later, which do no work in a first window when every server starts with the

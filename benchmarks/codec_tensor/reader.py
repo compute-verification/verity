@@ -3,13 +3,13 @@ byte for byte against the driver (`verity/core/protocols/remote_bandwidth/receip
 the same bytes.
 
 ~~~text
-segment     a device reader's part of a pass: count = 16 · 2^h blocks of one region, read in order from position
+segment     a device reader's part of a pass: count = 16 · 2^h chunks of one region, read in order from position
             p = a multiple of count (`verity_vllm.protocols.remote_bandwidth.registry.aligned`); its root is the node (h + 4 levels above
-            the blocks) end_pass takes by segment number, and `open` serves an opening's leaf receipts and leaf path
+            the chunks) end_pass takes by segment number, and `open` serves an opening's leaf receipts and leaf path
 salts       the store's PRF, SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be leaf) (`Store.salt`), so none is kept
 ~~~
 
-sketch-sha512 receipts (`sketch_receipt.py`) run at k_s = 16 rows (dp4a) and at k_s = 64, a block's 2^−64 (int8 tensor
+sketch-sha512 receipts (`sketch_receipt.py`) run at k_s = 16 rows (dp4a) and at k_s = 64, a chunk's 2^−64 (int8 tensor
 cores, `pack64`'s signs): σ then hash as two kernels, or both in one (`rb_sketch64_receipts`), σ never leaving the SM.
 
     python reader.py --lib reader.so --out OUT [--gate-blocks 4096] [--gib 8]
@@ -156,7 +156,7 @@ class Reader:
         return out.raw
 
     def receipts(self, data, j0: int, n: int, ys, zs=None, load: str | None = None) -> None:
-        """Receipts of n blocks at `data` (store indices j0 …) into ys (n x 8), each bound to its spread z in zs."""
+        """Receipts of n chunks at `data` (store indices j0 …) into ys (n x 8), each bound to its spread z in zs."""
         self.call("rb_receipts", data.data_ptr(), zs.data_ptr() if zs is not None else None, j0, n, ys.data_ptr(),
                   LOADS.index(load or self.load))
 
@@ -168,12 +168,12 @@ class Reader:
         self.call("rb_sketch_set", skr.prefix(seed))
 
     def sketches64(self, data, n: int, sk, zs=None, mt: int = 2, ctas: int = 0) -> None:
-        """σ at 64 rows of n blocks at `data` into sk (n x 64 int32), mt m-tiles a warp."""
+        """σ at 64 rows of n chunks at `data` into sk (n x 64 int32), mt m-tiles a warp."""
         self.call("rb_sketch64", data.data_ptr(), zs.data_ptr() if zs is not None else None, n,
                   self.signs64.data_ptr(), sk.data_ptr(), mt, ctas)
 
     def sketch64_receipts(self, data, j0: int, n: int, ys, zs=None, sk=None, mt: int = 0) -> None:
-        """64-row sketch-sha512 receipts of n blocks at `data` (store indices j0 …) into ys (n x 8): in one kernel at
+        """64-row sketch-sha512 receipts of n chunks at `data` (store indices j0 …) into ys (n x 8): in one kernel at
         mt = 0 (σ into sk too, if given), else rb_sketch64 at mt m-tiles a warp and then the hash."""
         zp = zs.data_ptr() if zs is not None else None
         if not mt:
@@ -185,12 +185,12 @@ class Reader:
         self.call("rb_sketch64_hash", sk.data_ptr(), j0, n, ys.data_ptr())
 
     def sketches(self, data, n: int, sk, zs=None, ctas: int = 0) -> None:
-        """The sketches of n blocks at `data` into sk (n x 16 int32), each block XORed with its spread z in zs."""
+        """The sketches of n chunks at `data` into sk (n x 16 int32), each chunk XORed with its spread z in zs."""
         self.call("rb_sketch", data.data_ptr(), zs.data_ptr() if zs is not None else None, n, self.signs.data_ptr(),
                   sk.data_ptr(), ctas)
 
     def sketch_receipts(self, data, j0: int, n: int, ys, zs=None, sk=None) -> None:
-        """sketch-sha512 receipts of n blocks at `data` (store indices j0 …) into ys (n x 8)."""
+        """sketch-sha512 receipts of n chunks at `data` (store indices j0 …) into ys (n x 8)."""
         sk = self.torch.empty((n, skr.ROWS), dtype=self.torch.int32, device="cuda") if sk is None else sk
         self.sketches(data, n, sk, zs)
         self.call("rb_sketch_hash", sk.data_ptr(), j0, n, ys.data_ptr())
@@ -414,7 +414,7 @@ def sketch_gate(reader: Reader, torch, blocks: int, rng: np.random.Generator, ro
 
 def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     """One pass over gib GiB as a device reader does it, against reading the same bytes: receipts (z of zero bytes,
-    and over half of it each block bound to a spread z the other half holds), leaves, the whole tree."""
+    and over half of it each chunk bound to a spread z the other half holds), leaves, the whole tree."""
     n = int(gib * 2 ** 30) // BLOCK // rb.PER_LEAF * rb.PER_LEAF
     for S in SEGMENTS:
         if (n // S) % rb.PER_LEAF or (u := n // S // rb.PER_LEAF) & (u - 1) or n % S:

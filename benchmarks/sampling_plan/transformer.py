@@ -457,7 +457,7 @@ def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int =
 
 
 def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
-    """The plan as the GPU loop registers it (`integrations/torch_loop`'s `circuit_record(..., law, cap)`), each subcircuit
+    """The plan as a GPU loop registers it (a `circuit_record(..., law, cap)`), each subcircuit
     a Definition's descriptor id (a stub's id until CIR-100 lands) with its units:
 
     * `windows`, the form `IntegrityPeriod` (#4358) reads: one window a subcircuit, its units under `subset:k_s` in
