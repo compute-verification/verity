@@ -1,10 +1,10 @@
 // Does a wide decode kept apart from the GEMM overlap the weights' read? sqfloor.cu's 1,536-bit squaring (form 2, one
-// level of Karatsuba, 252 registers a thread, so two 128-thread blocks fill an SM's register file) beside a streaming
+// level of Karatsuba, 252 registers a thread, so two 128-thread CTAs fill an SM's register file) beside a streaming
 // read of HBM, on two streams. ra-codec-theory's 1,536-bit point prices its decode at this squaring's standalone rate
 // (0.93 passes of the read) and charges only the excess over the read as step time, which needs the two at once.
 //
 // The squaring work is fixed at RATIO of the read's time at the squaring's full-occupancy rate, then placed SQ_BPSM
-// blocks a SM (so one block a SM squares twice as long a chain); the read is RD_BPSM 256-thread blocks a SM.
+// CTAs a SM (so one CTA a SM squares twice as long a chain); the read is RD_BPSM 256-thread CTAs a SM.
 //
 //   sqoverlap gate K N                          N words, K squarings, in sqfloor's gate format (sqfloor_gate.py)
 //   sqoverlap run SQ_BPSM RD_BPSM RATIO REPS    one JSON line: each alone, and both on two streams in each order

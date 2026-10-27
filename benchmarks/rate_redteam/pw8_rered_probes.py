@@ -1,13 +1,13 @@
 """pw8 re-red-team (EndToEndWindow on cursor/pouw-work-bound-stmt2-c7a9 at 8814ab8bb, WindowEps's three links on
-cursor/pouw-window-eps-stmt2-c7a9 at 01b0e2a4c): probes against main's window, draw, service and tile unit.
+cursor/pouw-window-eps-stmt2-c7a9 at 01b0e2a4c): probes against main's window, draw, service and tile proof block.
 
-1. the draw: `core_check.stream_subset` (Lean's `Draw.subset`) is a uniform K-subset, and `window.sampling`'s law and
+1. the draw: `core_check.stream_subset` (Lean's `Draw.subset`) is a uniform K-subset, and `window.sampling`'s sampling design and
    `instance_ts`'s sessions are what both drafts model (`Law.subset n K`, `serviceLaw`).
 2. ε at δ: EndToEndWindow's first term is (1 − W/(1000·N·w_max))^K′ with ε = 1/1000 fixed; at the served ε = 1%, δ = 2^-128
    windows K′ buys only about 2^-13 at that threshold, so the statement doesn't certify what those windows claim.
 3. the deadline: `AcceptsBy` needs received <= t_d, but main's `Check.registration_deadline` defaults to None and served_zk
    never sets it, so the service accepts runs the statement doesn't cover.
-4. ServedTie on main: the window's tile unit reads no -h3 leaf (no `tile_read` in any Program), ignores its index fields,
+4. ServedTie on main: the window's tile proof block reads no -h3 leaf (no `tile_read` in any Program), ignores its index fields,
    and `window_problem` is Python only, so a window whose committed outputs aren't the served leaves is accepted.
 5. ksJoint_le's κ = 2^logLen/(e·Kr) at main's fast100 level-0 lengths, and the Kr it needs.
 6. the recheck of WindowEps at 373694a79: FlockKnowledgeSound at analysisZC (κ = 0, g over 1 − rateZ), sized at those
