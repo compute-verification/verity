@@ -220,15 +220,16 @@ def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_up
 
 def test_onsite_w63_beside_the_reference():
     """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 65.6 kbit/s,
-    0.0203 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.58e10 bits and ρ's lower end, which the dark
-    share's 1% caps near 100, rises from 98.7 to 99.8; at line rate both are vacuous (2.35). The cadence feeds the
+    0.0203 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.58e10 bits and ρ's lower end, which a dark
+    share of 1% caps near 100, rises from 98.7 to 99.8; at line rate both are vacuous (2.35). The cadence feeds the
     serving rho credits only if outputs outnumber prompts more than 28:1, so it isn't the default."""
-    ref, w63 = evaluate_named(REG, "reference-onsite-h200"), evaluate_named(REG, "onsite-w63")
+    reg = REG.override({"fleet.world-h200.eps_dark": 0.01})
+    ref, w63 = evaluate_named(reg, "reference-onsite-h200"), evaluate_named(reg, "onsite-w63")
     inputs = [r.scenario.regime.budget(r.scenario.context).inputs for r in (ref, w63)]
     assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.583e10, rel=1e-3)]
     assert w63.scenario.regime.certifier.intake_of(w63.scenario.context) == pytest.approx(0.0203, rel=1e-3)
     assert [(round(r.lo, 1), round(r.hi)) for r in (ref, w63)] == [(98.7, 249), (99.8, 250)]
-    line = REG.override({"regime.onsite.intake": REG.param("regime.onsite.intake").high,
+    line = reg.override({"regime.onsite.intake": REG.param("regime.onsite.intake").high,
                          "regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
     at_line = [evaluate_named(line, n) for n in ("reference-onsite-h200", "onsite-w63")]
     assert all(r.vacuous(r.lo) and round(r.lo, 2) == 2.35 for r in at_line)
