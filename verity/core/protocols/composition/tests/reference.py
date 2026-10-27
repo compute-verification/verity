@@ -312,6 +312,10 @@ class Product:
         answers = self.run(ps, ev, blobs)
         if isinstance(answers, str):
             return REJECT, answers
+        return self.judge(answers, c)
+
+    def judge(self, answers: list[tuple[str, dict]], c: bytes) -> tuple:
+        """`Core.Composition.judge`: reject first, then the binding, then undecided."""
         rule = verdict([a["verdict"] for _, a in answers])
         if rule == REJECT:
             return REJECT, "a component rejected"
@@ -346,6 +350,41 @@ class Product:
             c, blobs = self.split(case)
             return self.run(self.params(c["params"]), self.evidence(P.unhex(c["evidence"])), blobs)
         return fitted_verdicts(answers)
+
+
+@dataclass(frozen=True)
+class Same(Product):
+    """`Core.Composition.sameB id ss components`: `product`, except that once the cases fit, the components ``same``
+    (each committing to a registration record) must all have committed to the first one's digest."""
+
+    same: tuple = ()
+
+    def strays(self, answers: list[tuple[str, dict]]) -> str | None:
+        """`Core.Composition.strays`. A component's answer carries its digest exactly when its commitment decodes and it
+        doesn't reject before; where `committedBy` has a digest the answer doesn't, the component rejects, and so does
+        the composition."""
+        got = [(i, a["commitment"]) for i, a in answers if i in self.same]
+        if not got or any(d is None for _, d in got):
+            return None
+        (s, d), rest = got[0], got[1:]
+        return next((f"registration: {s} committed {d}, {t} committed {e}" for t, e in rest if e != d), None)
+
+    def check(self, ps, c: bytes, ev, blobs: list[bytes] = ()) -> tuple:
+        answers = self.run(ps, ev, blobs)
+        if isinstance(answers, str):
+            return REJECT, answers
+        if stray := self.strays(answers):
+            return REJECT, stray
+        return self.judge(answers, c)
+
+    def committed(self, case: Any) -> list[str | None]:
+        """The digests the components ``same`` committed to on a case that fits the composition, else none."""
+        try:
+            c, blobs = self.split(case)
+            out = self.run(self.params(c["params"]), self.evidence(P.unhex(c["evidence"])), blobs)
+        except (Reject, KeyError, TypeError):
+            return []
+        return [] if isinstance(out, str) else [a["commitment"] for i, a in out if i in self.same]
 
 
 @dataclass(frozen=True)
@@ -423,8 +462,9 @@ class Registered:
         return fitted_verdicts(answers)
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids, onsite's after its
-#: registration check, NCI's, on the registration integrity (v2) commits to.
-REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
+#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids: remote's two
+#: committing to one registration record, onsite's after its registration check, NCI's, on the registration integrity
+#: (v2) commits to.
+REMOTE = Same("verity/remote/v0", (POUW, SAMPLED_PROOFS), (POUW.id, SAMPLED_PROOFS.id))
 ONSITE = Registered("verity/onsite/v0", NCI_CHECK, SAMPLED_PROOFS.id,
                     Product("verity/onsite/v0", (CERTIFIER, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE)))

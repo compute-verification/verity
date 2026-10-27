@@ -7,11 +7,13 @@ subprotocols' packages, with no Mathlib:
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`);
   `registered id R s components`, the same after a registration check `R`, on the registration the subprotocol `s`
-  commits to (`Registered.lean`); both over blobs (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the
-  `#guard`s that pin both rules (`Guards.lean`).
+  commits to, and `same id ss components`, the product whose subprotocols `ss` must commit to one registration
+  (`Registered.lean`); all three over blobs (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the `#guard`s
+  that pin the rules (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, PoUS, proof of useful
   bandwidth (PoUB), network certification and the memory challenger's wipe, after NCI's registration check.
-- `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW.
+- `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW, on one registration
+  record.
 
 The rule and the formats are written once, over any list of subprotocols, and the two products are values of it that
 differ in their id and subprotocols. Each product's executable is the core CLI (`onsite id | check | serve`,
@@ -98,6 +100,18 @@ whatever the subprotocols answer (`mismatch`: `registration: R checked D, s comm
 Otherwise it answers as the product of the subprotocols does under the commitment's first 64 bytes, and the registration
 adds nothing to what is public or kept.
 
+## One registration
+
+Every subprotocol whose commitment names a registration must name the composition's one. `same id ss components`
+(`sameB` over blobs) is the product of the subprotocols, except that once the cases fit, subprotocols `ss` that didn't
+all commit to the first one's digest reject it whatever the subprotocols answer (`strays`: `registration: s committed
+D, t committed D'`); one whose commitment doesn't decode rejects as a subprotocol. Its formats are the product's. Remote
+is one: `sameB "verity/remote/v0" [verity/pouw/v1, verity/sampled-proofs/one-stage/v2] components`, whose PoUW window
+and one-stage audit each commit to the window's registration record. At onsite the one-stage audit commits to the
+registration NCI checked (above). Onsite's PoUW period and network certification name one record a window, in their
+evidence and their period commitment, so they join the check when each window's record names the registration log's
+head (`Core.Registration`, `../interface`), whose head then becomes the one registration.
+
 ## The difftest
 
 `uv run tools/verity/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`
@@ -122,7 +136,11 @@ Hypothesis draws 1000 cases a product (seed 0): each subprotocol's case accepts,
 the subprotocols the same blobs (sampled proofs' circuit and public file), and the composition's inputs, its blobs or the
 case itself are often broken. Sampled proofs accept only on a session's proof, which no case carries (its cases are
 audits with no session, undecided when their draw drew nothing, and audits whose sessions' files are in no blob), so no
-product accepts in the difftest until a v2 case with a proof does. `test_a_reference_without_reject_dominance_is_caught`
+product accepts in the difftest until a v2 case with a proof does. Remote's cases reject: a third of them put both
+subprotocols on PoUW's record, which the one-stage audit refuses (PoUW's window reads registered values, outside v2's
+mirror), and the rest mostly on two records, which remote refuses;
+`test_remote_refuses_two_records_and_else_keeps_the_products_verdict` shows that refusal changes no other verdict of
+the product's. `test_a_reference_without_reject_dominance_is_caught`
 shows the difftest tells the rule above from one without reject dominance: such a reference disagrees with the Lean on a
 case where one subprotocol rejects and another is undecided.
 

@@ -25,6 +25,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 import periods
@@ -183,6 +184,23 @@ def registration_case(draw, committed: dict) -> dict:
             "digest": bytes.fromhex(digest) if digest else committed["root"]}
 
 
+def one_record(product: R.Same, cases: list[dict]) -> list[dict]:
+    """The cases with every component of ``product.same`` committing to the first one's record, each with its digest as
+    its Python reads it on `BLOBS`: a pair that passes `Core.Composition.strays` and leaves the verdict to the
+    components."""
+    first = next(c for c in cases if c["id"] in product.same)
+    by_id = {C.id: C for C in product.components}
+
+    def recommit(c: dict) -> dict:
+        if c["id"] not in product.same or c is first:
+            return c
+        C = by_id[c["id"]]
+        case = {"commitment": first["root"].hex(), "evidence": c["evidence"].hex(), "params": c["params"]}
+        digest = C.answer({**case, "blobs": BLOBS} if getattr(C, "blobs", False) else case)["commitment"]
+        return {**c, "root": first["root"], "digest": bytes.fromhex(digest) if digest else first["root"]}
+    return [recommit(c) for c in cases]
+
+
 #: The binding breaks come five times: with `commitment-size` they are the breaks that leave every component's case standing,
 #: and so the way to a rejection that no component's own explains.
 MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
@@ -213,6 +231,8 @@ def composite(draw, product: R.Product | R.Registered) -> dict:
     aims = [None if mode > 1 else R.UNDECIDED if mode == 1 and j == pending else R.ACCEPT
             for j in range(len(product.components))]
     cases = [draw(component_case(C, k)) for C, k in zip(product.components, aims)]
+    if isinstance(product, R.Same) and draw(st.integers(0, 2)) == 0:
+        cases = one_record(product, cases)
     named = [{"id": c["id"], "params": c["params"]} for c in cases]
     entries = [{"commitment": c["root"].hex(), "evidence": c["evidence"].hex(), "id": c["id"], "params": c["params"]}
                for c in cases]
@@ -300,6 +320,8 @@ def reference(product: R.Product | R.Registered, seen: collections.Counter):
             seen["reject, a component undecided"] += 1
         if out["verdict"] == R.REJECT and parts and R.REJECT not in parts:
             seen["reject, no component rejected"] += 1
+        if isinstance(product, R.Same) and (got := product.committed(case)) and None not in got:
+            seen["two registrations" if len(set(got)) > 1 else "one registration"] += 1
         return out
     return answer
 
@@ -310,10 +332,18 @@ class UndecidedPort(D.ProtocolPort):
     accepted = R.UNDECIDED
 
 
+class RejectingPort(D.ProtocolPort):
+    """A product port whose drawn cases reject: its two components must commit to one registration record, and on one
+    record integrity (v2) refuses PoUW's window (its program reads registered values, outside v2's mirror), so the
+    drawn cases don't reach undecided. Its bar is the two ways its components' records meet, counted in `seen`."""
+    accepted = R.REJECT
+
+
 def port(name: str, product: R.Product | R.Registered, seen: collections.Counter) -> D.ProtocolPort:
     """`name serve` of the Lake package `name`, on the product's cases and, one draw in ten, any JSON line."""
-    return UndecidedPort(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
-                         package=PROTOCOLS / name)
+    kind = RejectingPort if isinstance(product, R.Same) else UndecidedPort
+    return kind(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
+                package=PROTOCOLS / name, need_rejects=kind is UndecidedPort)
 
 
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
@@ -347,21 +377,50 @@ def test_the_rule_changes_the_trial_only_where_a_rejection_meets_an_undecided_co
                 assert R.trial_verdict(vs) == R.verdict(vs), vs
 
 
-def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int) -> None:
-    """Lean and Python agree on every case, and the cases reach each verdict but acceptance: integrity (v2) accepts only
-    on a session's proof, which no case carries, so no product accepts."""
+def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int,
+           kinds: tuple[str, ...] = (R.REJECT, R.UNDECIDED, "reject, a component undecided",
+                                     "reject, no component rejected")) -> None:
+    """Lean and Python agree on every case, and the cases reach each of `kinds` (by default each verdict but
+    acceptance: integrity (v2) accepts only on a session's proof, which no case carries, so no product accepts)."""
     seen.clear()
     stats = D.run(p, examples=examples, seed=0, server=server)
     print(f"{p.label}: {stats}, verdicts {dict(seen)}")
     assert seen[R.ACCEPT] == 0, dict(seen)
-    assert stats.examples == examples and stats.counts == {v: seen[v] for v in (R.REJECT, R.UNDECIDED)}
-    for kind in (R.REJECT, R.UNDECIDED, "reject, a component undecided", "reject, no component rejected"):
+    assert stats.examples == examples and stats.counts == {v: seen[v] for v in (R.REJECT, R.UNDECIDED) if seen[v]}
+    for kind in kinds:
         assert seen[kind] > examples // 50, (kind, dict(seen))
 
 
 @pytest.mark.slow
 def test_remote_agrees(remote_server):
-    _agree(REMOTE, remote_server, SEEN["remote"], 1000)
+    """Remote's components meet on one record (left to the components) and on two (refused), each often."""
+    _agree(REMOTE, remote_server, SEEN["remote"], 1000, (R.REJECT, "reject, a component undecided",
+                                                       "reject, no component rejected", "one registration",
+                                                       "two registrations"))
+
+
+def test_remote_refuses_two_records_and_else_keeps_the_products_verdict():
+    """On drawn cases remote's verdict is its product's without the registration check (`Core.Composition.product`,
+    remote before it), except where its components committed to two records, which it refuses: the check changes no
+    other verdict. Python only: the difftest holds the Lean to it."""
+    product = R.Product(R.REMOTE.id, R.REMOTE.components)
+    seen = collections.Counter()
+
+    @settings(max_examples=200, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(composite(R.REMOTE))
+    def check(case):
+        got, was = R.REMOTE.answer(case), product.answer(case)
+        committed = R.REMOTE.committed(case)
+        two = bool(committed) and None not in committed and len(set(committed)) > 1
+        seen["two" if two else "one"] += 1
+        if two:
+            assert got["verdict"] == R.REJECT, got
+            assert got["reason"].startswith("registration: ") or was["verdict"] == R.REJECT, (got, was)
+        else:
+            assert {k: v for k, v in got.items() if k != "reason"} == {k: v for k, v in was.items() if k != "reason"}
+        seen[f"was {was['verdict']}, two" if two else "same"] += 1
+    check()
+    assert seen["two"] > 20 and seen["one"] > 20 and seen["was undecided, two"] > 0, dict(seen)
 
 
 @pytest.mark.slow

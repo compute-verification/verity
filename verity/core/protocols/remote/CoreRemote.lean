@@ -3,8 +3,9 @@ Remote Verity (`verity/remote/v0`): what the verifier establishes with no hardwa
 components are integrity by sampled proofs' one-stage audit on the proofs themselves
 (`SampledProofs.OneStageZk.protocol`, `verity/sampled-proofs/one-stage/v2`: flock-verify `--zk` run on each session's
 files, which the caller hands in as blobs) and work by proof of useful work (`PouwCheck.protocol`).
-`Core.Composition.productB` composes them on the caller's blobs: both accept or remote doesn't, and either one's
-rejection rejects remote whatever the other answers.
+`Core.Composition.sameB` composes them on the caller's blobs: both accept or remote doesn't, and either one's
+rejection rejects remote whatever the other answers. Each one's commitment is the window's registration record, and
+both must commit to the same one: two records' digests reject remote whatever the components answer.
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases
@@ -18,7 +19,7 @@ open Composition
 /-- Remote's components, in the order of their ids. -/
 def components : List BlobProtocol := [PouwCheck.protocol, SampledProofs.OneStageZk.protocol]
 
-def protocol : BlobProtocol := productB "verity/remote/v0" components
+def protocol : BlobProtocol := sameB "verity/remote/v0" (components.map (·.id)) components
 
 /-- A case its component's own `answer` refuses: empty parameters, commitment and evidence. -/
 private def refused (P : BlobProtocol) : Case :=
@@ -41,5 +42,4 @@ private def bothRefused : Answer := answer [refused PouwCheck.protocol, refused 
 -- v1's audit is not remote's integrity component
 #guard (answer [refused PouwCheck.protocol, refused SampledProofs.OneStage.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
-
 end Core.Remote
