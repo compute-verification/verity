@@ -1,7 +1,7 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-commit"
-# The Commit (sampled proofs) against stock FP8. `sampled-proofs:vllm-v1` is refused as a protocol arm on verity_vllm.LLM
+# The Commit (sampled proofs) against stock FP8. `sampled-proofs:rows-sha512` is refused as a protocol arm on verity_vllm.LLM
 # (sampled proofs runs in a row's Commit stage), so the arm installs the Commit's committer itself
 # (verity_bench.vllm.commit_arm). Its module-boundary hooks are Python wrappers that compiled graphs never run: eager.
 arms = ["stock-fp8", "commit"]

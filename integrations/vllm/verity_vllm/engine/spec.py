@@ -25,6 +25,8 @@ from typing import Any
 
 import verity_config
 
+__all__ = ["SCHEMA", "Engine", "EngineSpec", "from_mapping", "load"]
+
 SCHEMA = "verity-vllm/engine-spec/v0"
 
 
