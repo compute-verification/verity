@@ -7,31 +7,31 @@ rationals.  It is computed here and in its Lean, `lean/RemoteAudit/Line.lean`, h
 clock) read it.  Floats are for display only, outside this module.
 
 A paced session is groups g = 0..C, group g's coin σ_g released at s_g, its n_g passes ending at its last root's
-arrival a_g, and the registered blocks of each kind its passes read (`Group`).  e_g = max(a_g, s_(g+1)) (a_C for the
+arrival a_g, and the registered chunks of each kind its passes read (`Group`).  e_g = max(a_g, s_(g+1)) (a_C for the
 last) and L_g = e_g − s_g hold its reads; Δ_g = s_(g+1) − s_g (L_C for the last).  Stretch m is the `per` groups
 [lo, hi) = [m·per, (m + 1)·per), for each m before the last full stretch, so the group after it (hi) is in the
-session: it spans Σ from e_0 (m = 0: before group 0's reads a block may never have been there) or s_lo to s_hi, its P
-passes are its groups', and L = max L_g over the groups lo − 1 to hi.  Each form charges X blocks a ns and B blocks at
-once beyond that rate (`Charge`, from the node's rates and bursts: `charges`), so R = X·(Σ + 2L) + B blocks come back
+session: it spans Σ from e_0 (m = 0: before group 0's reads a chunk may never have been there) or s_lo to s_hi, its P
+passes are its groups', and L = max L_g over the groups lo − 1 to hi.  Each form charges X chunks a ns and B chunks at
+once beyond that rate (`Charge`, from the node's rates and bursts: `charges`), so R = X·(Σ + 2L) + B chunks come back
 from outside the store while the stretch's reads are served:
 
-- held over time: at most S + (2L·R + fill)/Σ registered blocks are absent at an instant, on average over Σ, S the
-  on-chip storage in blocks rounded up (`ChipCeiling` counts whole blocks, and a block split between a chip and memory
-  is one of them) and `fill` the wrong receipts W spread over the groups lo..hi at v_g = Δ_g/n_g block-ns
+- held over time: at most S + (2L·R + fill)/Σ registered chunks are absent at an instant, on average over Σ, S the
+  on-chip storage in chunks rounded up (`ChipCeiling` counts whole chunks, and a chunk split between a chip and memory
+  is one of them) and `fill` the wrong receipts W spread over the groups lo..hi at v_g = Δ_g/n_g chunk-ns
   each (L/n_hi in hi), highest first, at most n_g·N in group g;
 - the snapshot: at most (W + R)/P + S are absent at a pass, on average over the passes.
 
 W is the pooled bound of the session's record (`pooled.bound`, the Lean's `RemoteAudit.Pooled`: its windows' receipts
 and draws at δ), so the line reads it from the record's windows, never from a float another module computed.  The
-line of record reads its groups' passes, its windows and its registered blocks off the Lean verifier's record of the
+line of record reads its groups' passes, its windows and its registered chunks off the Lean verifier's record of the
 session (`line_of_record`, the Lean's `lineOfRecordAt` at the record's `groups_per_coin` g, `lineOfRecord` at g = 1),
 and each group's times and reads beside it (`Seen`), refused unless the record is of the registration given with it
 (`unregistered`, the Lean's `lineOfRegistered`).
 
-Each kind is credited its mean blocks a pass less those, in bytes, and at least 0: weights (in HBM), HBM, and filler
+Each kind is credited its mean chunks a pass less those, in bytes, and at least 0: weights (in HBM), HBM, and filler
 (HBM less the weights, and the host tier).  A reading's line is its worst stretch by weights credited, the first on a
-tie, and its shares are of the node's bytes.  Both forms need every pass to read every registered block (`Covers`): a
-block a pass leaves out can be absent across it with neither a wrong read nor a rebuild.
+tie, and its shares are of the node's bytes.  Both forms need every pass to read every registered chunk (`Covers`): a
+chunk a pass leaves out can be absent across it with neither a wrong read nor a rebuild.
 
 The JSON form (`inputs_json`, `run_json`; `record_inputs_json`, `record_run_json` for the record's) is the Lean's:
 integers, each rational a string `n` or `n/d`, and the windows a list of [receipts, draws].  A float given here is
@@ -99,8 +99,8 @@ GROUP = ("released_ns", "last_ns", "passes", "least", "weights", "hbm", "host")
 @dataclass(frozen=True, slots=True)
 class Group:
     """One group: its coin's release s_g and its last root's arrival a_g (ns, on one clock), its passes n_g, the
-    registered blocks its least pass read (`least`: the least any pass read in HBM plus the least in the host tier,
-    the verifier's `held`), and the registered blocks its passes read in all, by kind: weights (in HBM), all of HBM,
+    registered chunks its least pass read (`least`: the least any pass read in HBM plus the least in the host tier,
+    the verifier's `held`), and the registered chunks its passes read in all, by kind: weights (in HBM), all of HBM,
     and the host tier."""
 
     released_ns: int
@@ -119,8 +119,8 @@ class Group:
 
 @dataclass(frozen=True, slots=True)
 class Charge:
-    """What brings a registered block back into node memory other than a read of it there: at most `rate` blocks a ns
-    and `burst` blocks at once beyond it (the statements' X and B)."""
+    """What brings a registered chunk back into node memory other than a read of it there: at most `rate` chunks a ns
+    and `burst` chunks at once beyond it (the statements' X and B)."""
 
     rate: Fraction
     burst: Fraction
@@ -128,7 +128,7 @@ class Charge:
 
 @dataclass(frozen=True, slots=True)
 class Rates:
-    """The node's ways back into its memory (`ledger.Node`'s): its squaring ceiling over a block's encode in squarings
+    """The node's ways back into its memory (`ledger.Node`'s): its squaring ceiling over a chunk's encode in squarings
     (rebuilds), its disks' and its boundary links' read ceilings (bytes a second), and each one's burst (bytes)."""
 
     squarings_per_s: Fraction
@@ -150,7 +150,7 @@ class Rates:
 
 
 def charges(rates: Rates, block_bytes: int) -> dict[str, Charge]:
-    """Each form's charge in blocks: time-held X = s/E + β and B = B_r + B_d (rebuilds and the node's disks,
+    """Each form's charge in chunks: time-held X = s/E + β and B = B_r + B_d (rebuilds and the node's disks,
     `HeldOverTime`), link-charged X + β_l and B + B_l (its boundary links too, `HeldOverTimeLinks`)."""
     b = block_bytes
     x = rates.squarings_per_s / rates.encode_squarings / NS + rates.disk_bytes_per_s / b / NS
@@ -161,7 +161,7 @@ def charges(rates: Rates, block_bytes: int) -> dict[str, Charge]:
 
 @dataclass(frozen=True, slots=True)
 class Reading:
-    """A stretch read one way: the registered blocks it charges as absent (`lost_blocks`) and each kind's bytes
+    """A stretch read one way: the registered chunks it charges as absent (`lost_blocks`) and each kind's bytes
     credited, at least 0."""
 
     lost_blocks: Fraction
@@ -176,8 +176,8 @@ class Reading:
 
 @dataclass(frozen=True, slots=True)
 class Stretch:
-    """Stretch m, groups [lo, hi): its span Σ, passes P, L (`l_max_ns`) and its groups' L summed, the mean blocks of
-    each kind a pass read, the blocks charged back R (`rebuild_blocks`), the wrong receipts' absent block-ns (`fill`),
+    """Stretch m, groups [lo, hi): its span Σ, passes P, L (`l_max_ns`) and its groups' L summed, the mean chunks of
+    each kind a pass read, the chunks charged back R (`rebuild_blocks`), the wrong receipts' absent chunk-ns (`fill`),
     and its two readings."""
 
     stretch: int
@@ -421,7 +421,7 @@ SEEN = ("released_ns", "last_ns", "least", "weights", "hbm", "host")
 @dataclass(frozen=True, slots=True)
 class Seen:
     """What the auditor saw of one window beside the record of it: its coin's release and its last root's arrival (ns,
-    on one clock), the registered blocks its least pass read, and the registered blocks its passes read in all, by
+    on one clock), the registered chunks its least pass read, and the registered chunks its passes read in all, by
     kind (`Group`'s, but its passes, which are the record's)."""
 
     released_ns: int
@@ -508,7 +508,7 @@ def times_off(record: Mapping, seen: Sequence[Seen]) -> str | None:
 
 def unregistered(registration: audit.Registration, record: Mapping) -> str | None:
     """Why `record` isn't of `registration`, or None: it names another registration's digest, or other registered
-    blocks than the registration's (the Lean's `Line.unregistered`)."""
+    chunks than the registration's (the Lean's `Line.unregistered`)."""
     if record["registration"] != registration.digest.hex():
         return "the record is not of the registration given"
     if record["blocks"] != registration.blocks:
@@ -520,10 +520,10 @@ def line_of_record(record: Mapping, *, registration: audit.Registration, samples
                    per: int, block_bytes: int, chip_bytes: int, node_bytes: int, delta: object, rates: Rates,
                    clock: str = "record") -> Line:
     """The line of an accepted session's record: `line` at its groups and windows (`of_summary`, at the record's
-    `groups_per_coin` g, 1 when it doesn't name it: above 1 the windows are its draws) and its registered blocks (the
+    `groups_per_coin` g, 1 when it doesn't name it: above 1 the windows are its draws) and its registered chunks (the
     record's `blocks`, the registration the session ran on). Refused for a record drawn more than one window a coin at
     one window in flight (`SHARED`), then for a record not of `registration` (`unregistered`, the Lean's
-    `lineOfRegistered`), whose blocks the line would credit. On the record's `clock` the times seen are held to the
+    `lineOfRegistered`), whose chunks the line would credit. On the record's `clock` the times seen are held to the
     record's, refused after `of_summary`'s refusals where they differ (`times_off`); on another (`CLOCKS`) the record
     doesn't hold them."""
     g = record.get("groups_per_coin", 1)

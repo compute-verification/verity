@@ -42,15 +42,15 @@ REPO = HERE.parents[2]
 
 KIND = "kernel-attempt/v1"
 #: the gate code's version, so a record's validity is derived from it rather than voided by hand: 1 = the reference verifier
-#: accepts the timed run's own transcript (08:35Z); 2 = outputs poisoned before the dumped call and a no-write
-#: negative control the verifier rejects (11:50Z)
+#: accepts the timed run's own transcript; 2 = outputs poisoned before the dumped call and a no-write
+#: negative control the verifier rejects
 GATES = "pouw-gates/2"
 GATES_REQUIRED = 2
 TIERS = ("1", "2a", "2b", "3")
 OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
 #: label keys (`research.store.vocab`): the producing lane about its own attempt
 KERNEL_OUTCOME, KERNEL_REASON = "kernel_outcome", "kernel_reason"
-#: a call's step groups, as `verity.core.protocols.pouw.serving.GROUPS` (#567) names them; checked against it when it is importable
+#: a call's step groups, as `verity.core.protocols.pouw.serving.GROUPS` names them; checked against it when it is importable
 GROUPS = ("row_seeds", "a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 PHASES = ("before", "gemm", "after")
 ONE_LINE = 240
@@ -67,7 +67,7 @@ def _import_path(rel: str) -> None:
 
 
 def serving():
-    """`verity.core.protocols.pouw.serving` when importable (#567), else None."""
+    """`verity.core.protocols.pouw.serving` when importable, else None."""
     try:
         from verity.core.protocols.pouw import serving as S  # noqa: PLC0415
     except ImportError:
@@ -174,7 +174,7 @@ def typed_gamma(result: dict) -> dict[str, str]:
     return out
 
 
-#: `verity.core.protocols.pouw.serving.SchemeId`'s FP8 grammar (#567), where the device names the record: sm120 (G = 4) is the panel's v1,
+#: `verity.core.protocols.pouw.serving.SchemeId`'s FP8 grammar, where the device names the record: sm120 (G = 4) is the panel's v1,
 #: sm120-unpromoted its v2; an older name (``pearl-c-sm120-v2-hot-h3``) isn't checked
 _SCHEME = re.compile(r"pearl-c-(?P<device>sm120|sm120-unpromoted)-(?:v0|v1)(?:-h[0-9]+)?(?:@[a-z0-9_]+)?")
 
