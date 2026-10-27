@@ -5,7 +5,15 @@ stock control, the same endpoint, engine and load with no protocol and no Commit
     python benchmarks/one_stage/served_overhead.py table --composed DIR... --stock DIR... [--served-table FILE] [--allow KEY]
         [--out DIR]
 
-The ruler is the engine's own step trace, ``advice_trace.jsonl`` (`verity_vllm.engine.step_trace`), which `serve-openai`
+Two rulers, each the same code in both arms. The client's is `examples/vllm/serve_load.py --varied`'s timings file
+(``load.timings.json`` beside its record; `served_verdicts.sh` copies the composed run's to ``$OUT/timings/``): each request's
+send, first-token and done times on the client's monotonic clock. Per load, from it:
+
+- ``client_time_per_output_token_s``: the first send to the last done, over the output ids the requests streamed;
+- ``client_time_to_first_token_s``: the mean over requests that streamed a token of send to first token;
+- ``client_tokens_per_s``: those tokens over that span.
+
+The engine's is its own step trace, ``advice_trace.jsonl`` (`verity_vllm.engine.step_trace`), which `serve-openai`
 writes with the Commit on or off: each request's arrival at the scheduler and each executed step's output, stamped with the
 server's wall clock, and the tokens each step emitted. A load is a busy period of the trace: from an arrival with nothing in
 flight to the step that finishes the last request in flight. Per load:
@@ -17,7 +25,7 @@ flight to the step that finishes the last request in flight. Per load:
   (``windows.jsonl``'s ``seconds.on_loop``), when the engine loop can't step: what a server under steady load would get.
   Without the Commit it equals ``tokens_per_s``.
 
-The trace doesn't see the HTTP side and the client (the same code in both arms), anything after a load's last step but a
+The trace doesn't see the HTTP side and the client, anything after a load's last step but a
 window's on-loop close (the seal runs off the loop; the verdict pieces run after serving), or anything before the first
 arrival (the model load, the weights registration).
 
@@ -40,6 +48,8 @@ from typing import Any
 
 TRACE, WINDOWS, SERVE = "advice_trace.jsonl", "windows.jsonl", "serve.json"
 METRICS = ("time_per_output_token_s", "time_to_first_token_s", "tokens_per_s", "busy_tokens_per_s")
+CLIENT = ("client_time_per_output_token_s", "client_time_to_first_token_s", "client_tokens_per_s")
+TIMINGS = "*.timings.json"
 #: two-sided 95% Student-t quantiles by degrees of freedom (verity_bench.vllm.runner's T95, its first rows)
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228, 15: 2.131,
        20: 2.086, 30: 2.042, 60: 2.000, 120: 1.980}
@@ -106,6 +116,26 @@ def load_metrics(load: dict[str, Any], windows: dict[int, dict[str, Any]]) -> di
                         "h1": [bool(w.get("pouw_h1")) for w in ws]}}
 
 
+def client_metrics(doc: dict[str, Any]) -> dict[str, Any]:
+    """One load's client metrics (module docstring) from its timings document; `ValueError` when a request failed."""
+    reqs = doc["requests"]
+    if bad := [r["user"] for r in reqs if not r.get("ok") or r.get("send_s") is None or r.get("done_s") is None]:
+        raise ValueError(f"requests that failed or have no send or done time: {bad}")
+    tokens = sum(int(r["tokens"]) for r in reqs)
+    span = max(r["done_s"] for r in reqs) - min(r["send_s"] for r in reqs)
+    first = [r["first_token_s"] - r["send_s"] for r in reqs if r.get("first_token_s") is not None]
+    return {"requests": len(reqs), "tokens": tokens, "span_s": span, "client_time_per_output_token_s": span / tokens,
+            "client_time_to_first_token_s": statistics.fmean(first), "client_tokens_per_s": tokens / span,
+            "start_unix": doc.get("start_unix")}
+
+
+def timings_of(d: Path) -> list[Path]:
+    """A serve dir's timings files in load order: beside its records (`served_stock.sh`'s load-<j>, the serve dir's load), else
+    in ``../timings`` (`served_verdicts.sh`'s ``$OUT/timings`` beside ``$OUT/serve``)."""
+    key = lambda f: (len(f.name), f.name)   # noqa: E731  (load-2 before load-10)
+    return sorted(d.glob(TIMINGS), key=key) or sorted((d.parent / "timings").glob(TIMINGS), key=key)
+
+
 def identity(d: Path) -> dict[str, Any]:
     """What must agree between two serve dirs for their loads to share a ratio: the engine `serve-openai` built and how it admits."""
     s = json.loads((d / SERVE).read_text())
@@ -137,10 +167,17 @@ def serve_dir(d: Path) -> dict[str, Any]:
         raise ValueError(f"{d}: no {TRACE} with a header")
     windows = {int(w["window"]): w for w in _jsonl(d / WINDOWS)}
     s = json.loads((d / SERVE).read_text())
+    got = [load_metrics(x, windows) for x in loads(trace)]
+    files = timings_of(d)
+    if files and len(files) != len(got):
+        raise ValueError(f"{d}: {len(files)} timings files for {len(got)} loads in its trace")
+    for ld, f in zip(got, files):
+        ld["client"] = client_metrics(json.loads(f.read_text())) | {"file": f.name}
+        ld.update({k: ld["client"][k] for k in CLIENT})
     return {"dir": str(d), "run_id": s.get("run_id"), "commit": s.get("commit"), "protocols": s.get("protocols"),
             "remote_session": s.get("remote_session"), "identity": identity(d),
             "scheduler": {k: v for k, v in trace[0]["config"].items() if k != "num_gpu_blocks"},
-            "loads": [load_metrics(x, windows) for x in loads(trace)]}
+            "loads": got}
 
 
 def summary(values: list[float]) -> dict[str, Any]:
@@ -193,7 +230,8 @@ def table(composed: list[Path], stock: list[Path], *, allow: tuple[str, ...] = (
     if {(ld["requests"]) for ld in c1 + s1} != {c1[0]["requests"]}:
         raise ValueError(f"loads of different sizes: composed {[ld['requests'] for ld in c1]}, stock {[ld['requests'] for ld in s1]}")
     rows = {}
-    for m in METRICS:
+    client = all("client" in ld for ld in c1 + s1 + warm)
+    for m in (CLIENT if client else ()) + METRICS:
         c, s = summary([ld[m] for ld in c1]), summary([ld[m] for ld in s1])
         rows[m] = {"composed": c, "stock": s, "ratio": ratio(c, s),
                    **({"stock_warm": (w := summary([ld[m] for ld in warm])), "ratio_warm": ratio(c, w)} if warm else {})}
@@ -214,7 +252,10 @@ def _fmt(x: dict[str, Any], scale: float = 1.0, unit: str = "") -> str:
 
 
 def markdown(t: dict[str, Any]) -> str:
-    names = {"time_per_output_token_s": ("time per output token", 1e3, " ms"), "time_to_first_token_s": ("time to first token", 1e3, " ms"),
+    names = {"client_time_per_output_token_s": ("client: time per output token", 1e3, " ms"),
+             "client_time_to_first_token_s": ("client: time to first token", 1e3, " ms"),
+             "client_tokens_per_s": ("client: tokens per second", 1.0, ""),
+             "time_per_output_token_s": ("time per output token", 1e3, " ms"), "time_to_first_token_s": ("time to first token", 1e3, " ms"),
              "tokens_per_s": ("tokens per second", 1.0, ""), "busy_tokens_per_s": ("tokens per busy second", 1.0, "")}
     warm = any("stock_warm" in r for r in t["metrics"].values())
     head = "| metric | composed | stock (first load) | composed / stock |" + (" stock (warm loads) | composed / warm |" if warm else "")

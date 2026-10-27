@@ -8,7 +8,8 @@
 # release run of its own. The first load is the composed run's one load after its endpoint listens; later ones are warm.
 # What the composed run has and this doesn't: the Commit (committer, taps, GPU tree, seal), H1, any SERVE_ARGS subprotocol, and
 # the weights registration before the load. $OUT/rep-<i>/ is that lifetime's --out: serve.json, advice_trace.jsonl (the
-# scheduler's step trace with wall times), summary.json, pauses.jsonl, and load-<j>.jsonl, the client's record of load j.
+# scheduler's step trace with wall times), summary.json, pauses.jsonl, load-<j>.jsonl, the client's record of load j, and
+# load-<j>.timings.json, its per-request send, first-token and done times (the composed run's is $OUT/timings/load.timings.json).
 # `served_overhead.py` reads them beside the composed run's $OUT/serve. WARM lifetimes (default 1) run first as $OUT/warm-<i>/,
 # so the reps find the Triton and vLLM caches as warm as the composed run's node keeps them; a cold first lifetime's first step
 # took 0.40 s against 0.018 s warm (r20261027-175833-6214). With NOT_AFTER (a UTC time, `date -d` syntax) no lifetime starts

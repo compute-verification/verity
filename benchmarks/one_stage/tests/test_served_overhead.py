@@ -1,7 +1,8 @@
 """`served_overhead.py` on toy serve dirs: a trace splits into its loads at the arrivals with nothing in flight, each load's
 time per output token, time to first token and tokens per second come from its arrivals and step outputs, a Commit window's
-on-loop close counts only in busy tokens per second, and `table` takes each dir's first load, refuses engines that differ
-unless allowed, and puts composed over stock with a delta-method interval."""
+on-loop close counts only in busy tokens per second, the client's timings file gives the same three from send to done, and
+`table` takes each dir's first load, refuses engines that differ unless allowed, and puts composed over stock with a
+delta-method interval."""
 from __future__ import annotations
 
 import json
@@ -93,6 +94,45 @@ def test_the_single_protocol_rows_are_the_serving_paths_h200_first():
             {"protocol": "Commit", "device": "NVIDIA H200", "point": "b8", "over_served": {"time_per_output_token_s": {"mean": 1.2, "n": 6}}}]
     got = O.single_rows({"rows": rows})
     assert [(r["device"], r["time_per_output_token_ratio"]["mean"]) for r in got] == [("NVIDIA H200", 1.2), ("NVIDIA B200", 1.1)]
+
+
+def _timings(send: float, first: float, done: float, *, ok: bool = True) -> dict:
+    """Two requests sent at ``send`` and ``send + 0.5``, two tokens each."""
+    req = lambda u, s: {"user": u, "release": 0, "at_s": s, "send_s": s, "first_token_s": s + first, "done_s": s + done,  # noqa: E731
+                        "tokens": 2, "ok": ok}
+    return {"clock": "monotonic", "release_run": "r", "start_unix": 1.0e9, "requests": [req("u0", send), req("u1", send + 0.5)]}
+
+
+def test_the_client_ruler_reads_the_timings_beside_the_records_or_in_timings(tmp_path):
+    s = _dir(tmp_path / "s", _load(100.0, 0.5) + _load(200.0, 0.25))
+    for j, doc in ((1, _timings(0.0, 0.25, 1.5)), (2, _timings(0.0, 0.5, 3.5))):
+        (s / f"load-{j}.timings.json").write_text(json.dumps(doc))
+    first, warm = O.serve_dir(s)["loads"]
+    assert first["client"]["file"] == "load-1.timings.json" and first["client"]["tokens"] == 4
+    assert first["client_time_per_output_token_s"] == pytest.approx(2.0 / 4) and first["client_tokens_per_s"] == pytest.approx(2.0)
+    assert first["client_time_to_first_token_s"] == pytest.approx(0.25) and warm["client_time_to_first_token_s"] == pytest.approx(0.5)
+    c = _dir(tmp_path / "out" / "serve", _load(10.0, 1.5))
+    (tmp_path / "out" / "timings").mkdir()
+    (tmp_path / "out" / "timings" / "load.timings.json").write_text(json.dumps(_timings(0.0, 4.0, 7.5)))
+    t = O.table([c], [s])
+    assert list(t["metrics"])[:3] == list(O.CLIENT)
+    r = t["metrics"]["client_time_per_output_token_s"]
+    assert r["composed"]["mean"] == pytest.approx(2.0) and r["ratio"]["mean"] == pytest.approx(4.0)
+    assert "client: time per output token" in O.markdown(t)
+
+
+def test_the_client_ruler_refuses_failed_requests_and_a_count_that_misses_the_loads(tmp_path):
+    with pytest.raises(ValueError, match="failed"):
+        O.client_metrics(_timings(0.0, 0.25, 1.5, ok=False))
+    s = _dir(tmp_path / "s", _load(100.0, 0.5) + _load(200.0, 0.25))
+    (s / "load-1.timings.json").write_text(json.dumps(_timings(0.0, 0.25, 1.5)))
+    with pytest.raises(ValueError, match="1 timings files for 2 loads"):
+        O.serve_dir(s)
+
+
+def test_without_timings_the_table_has_only_the_engine_ruler(tmp_path):
+    t = O.table([_dir(tmp_path / "c", _load(10.0, 1.0))], [_dir(tmp_path / "s", _load(10.0, 0.5))])
+    assert list(t["metrics"]) == list(O.METRICS)
 
 
 def test_served_stock_sh_parses():
