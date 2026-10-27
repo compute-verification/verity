@@ -38,11 +38,11 @@ record field on which the two differ refuses the session as `disagreement`.
 
 What the Lean accepts is stated in `Security/Properties/RemoteAudit.lean` and `Security/Properties/RemoteAudit/`
 (`Properties.RemoteAudit`): `Coins` (draws openable, openings unread until drawn), `Live` (the live process is the
-session's run), `Shared`, `Pooled` (`PooledCovers`), `Line` (`LineHeld`, `LineHeldIdentity`, `LineCoversSession`),
+session's run), `Shared`, `Pooled` (`PooledCovers`), `Line` (`LineChecked`, `LineRegistered`, `StretchBound`, and
+`LineHeld`, which reads that no device outside the node computed for it from the network certifiers' observed ingress),
 `Schedule` (`ScheduleChecked`, `ScheduleFixesLayout`; `steered_of_checked` under `ScheduleLayoutGap`) and `Component`
-(`AcceptIsVerified`, `LineHeldAtComponent`), with the chain, the
-plans' distinctness, the steps, the lifetime cap and released chunks staying out of later plans in
-`Properties.RemoteAudit` itself.
+(`AcceptIsVerified`, `LineHeldAtComponent`), with the chain, the plans' distinctness, the steps, the lifetime cap and
+released chunks staying out of later plans in `Properties.RemoteAudit` itself.
 
 ## Guarantees
 
