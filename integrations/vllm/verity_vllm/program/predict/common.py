@@ -1,5 +1,5 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
-class, the IR types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
+class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
 batch a request's calls run in (`_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
 token select over a row's whole-vocabulary logits (`select_token`)."""
 

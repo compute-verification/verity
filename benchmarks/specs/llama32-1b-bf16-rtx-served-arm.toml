@@ -4,7 +4,7 @@ id = "llama32-1b-bf16-rtx-served-arm"
 # G2's served arm (benchmarks/served_commit/served_arm.py): the Commit at rows-sha512's 4 KiB rows, compiled (G2's
 # served-commit-rows-4k, control stock@compiled) and eager (commit-rows-4k-eager, control stock), against stock as vLLM
 # serves it (stock@compiled) and the batch-invariant eager stock every eager row is timed against (stock), interleaved
-# rep by rep on one RTX PRO 6000. G2's H200 served preset otherwise (llama32-1b-bf16-h200-served), and G2's width sweep.
+# rep by rep on one RTX PRO 6000, over G2's width sweep.
 arms = ["stock", "stock@compiled", "served-commit-rows-4k", "commit-rows-4k-eager"]
 arm_modules = ["served_commit.served_arm:ROWS_4K", "served_commit.served_arm:EAGER_ROWS_4K"]
 sweep = "width"
