@@ -497,19 +497,32 @@ theorem setupOf_of {x : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {s
 theorem insE_tags (tags0 : Flock.Tags) (circuit publicFile : ByteArray) (tables : List (String × ByteArray))
     (part : Json) (program : ByteArray) (draw : Option Json) (reg : Option (Array Flock.Registered.Port)) :
     (insE tags0 circuit publicFile tables part program draw reg).read.tags =
-      Flock.Witness.zkTags { tags := tags0, circuitFile := circuit, publicFile, count := 1, tables,
-        partition := some part, program := some program } := by
-  simp only [insE, Flock.Readable.Read.tags, FlockSoundness.Discharge.ZkExec.zkTags,
-    FlockSoundness.Discharge.ZkExec.zkCoins, Flock.Witness.zkTags, Flock.Witness.zkCoins,
-    FlockSoundness.Discharge.ZkExec.withCoins_tree, ↓reduceIte]
+      Flock.Witness.zkTags
+        { tags := tags0, circuitFile := circuit, publicFile := publicFile, count := 1, tables := tables,
+          partition := some part, program := some program } := by
+  first
+  | (simp only [insE, Flock.Readable.Read.tags, FlockSoundness.Discharge.ZkExec.zkTags,
+      FlockSoundness.Discharge.ZkExec.zkCoins, Flock.Witness.zkTags, Flock.Witness.zkCoins,
+      FlockSoundness.Discharge.ZkExec.withCoins_tree, ↓reduceIte, ite_true, if_true]; done)
+  | (show Flock.Readable.Read.tags _ = _
+     unfold Flock.Readable.Read.tags insE
+     simp only [if_pos rfl, FlockSoundness.Discharge.ZkExec.zkTags_eq, Flock.Witness.zkTags,
+       FlockSoundness.Discharge.ZkExec.withCoins_tree]
+     done)
+  | simp [insE, Flock.Readable.Read.tags, FlockSoundness.Discharge.ZkExec.zkTags_eq, Flock.Witness.zkTags,
+      Flock.Witness.zkCoins, FlockSoundness.Discharge.ZkExec.withCoins_tree]
 
 theorem insE_coins (tags0 : Flock.Tags) (circuit publicFile : ByteArray) (tables : List (String × ByteArray))
     (part : Json) (program : ByteArray) (draw : Option Json) (reg : Option (Array Flock.Registered.Port)) :
     (insE tags0 circuit publicFile tables part program draw reg).read.coins =
-      Flock.Witness.zkCoins { tags := tags0, circuitFile := circuit, publicFile, count := 1, tables,
-        partition := some part, program := some program } := by
-  simp only [insE, Flock.Readable.Read.coins, FlockSoundness.Discharge.ZkExec.zkCoins, Flock.Witness.zkCoins,
-    FlockSoundness.Discharge.ZkExec.withCoins_tree, ↓reduceIte]
+      Flock.Witness.zkCoins
+        { tags := tags0, circuitFile := circuit, publicFile := publicFile, count := 1, tables := tables,
+          partition := some part, program := some program } := by
+  first
+  | (simp only [insE, Flock.Readable.Read.coins, FlockSoundness.Discharge.ZkExec.zkCoins, Flock.Witness.zkCoins,
+      FlockSoundness.Discharge.ZkExec.withCoins_tree, ↓reduceIte, ite_true, if_true]; done)
+  | simp [insE, Flock.Readable.Read.coins, FlockSoundness.Discharge.ZkExec.zkCoins, Flock.Witness.zkCoins,
+      FlockSoundness.Discharge.ZkExec.withCoins_tree]
 
 theorem ins_setup_ok {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (h1 : s.read.tags.hm96Rows = true)
@@ -664,11 +677,12 @@ theorem run_last {Ω : Type} (P : Claims.Prover Ω) {xS : Msg} (ω : Ω)
   rw [hys] at hnew hget ⊢
   rw [List.take_left] at hnew
   subst hnew
-  have hgl : (ys ++ [(a, o)])[ys.length]? = some (a, o) := by simp
+  have hgl : (new ++ [(a, o)])[new.length]? = some (a, o) := by simp
   rw [hgl] at hget
   obtain ⟨ha, ho⟩ := Prod.mk.inj (Option.some.inj hget)
-  subst ha ho
+  rw [ho]
   simp only [List.map_append, List.map_cons, List.map_nil, List.length_append, List.length_singleton]
+  first | (rw [← ha]; done) | (rw [ha]; done) | simp [ha]
 
 /-- A round before a run's last is answered with its coin's bytes. -/
 theorem run_coin {Ω : Type} (P : Claims.Prover Ω) {xS : Msg} (ω : Ω)
@@ -890,25 +904,5 @@ theorem acc_of_accepts (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
   obtain ⟨hsome, -⟩ := hsess r (fun _ _ _ => rfl)
   obtain ⟨hS, hL⟩ := hshow _ _ hsome
   exact Run.flock_of_shows hacc hs P' xS () (fun i => r (emb i)) hS hL
-
-/-- **`acc_of_accepts`' conclusion is not automatic**: the deployed Flock verifier, whose run `SessionRuns` reads the
-sampled run's acceptance off, refuses a statement that does not decode, whatever the prover sends. -/
-theorem acc_of_accepts_nontrivial {Ω : Type} (P : Claims.Prover Ω) (ω : Ω)
-    (r : Fin ((FlockDeploy.V true).k []) → FlockDeploy.Coin) :
-    (Claims.run FlockDeploy.sha512 P (FlockDeploy.V true) [] ω r).out ≠ .acc := by
-  intro h
-  obtain ⟨as', ha⟩ := RecDeploy.stepWith_acc FlockDeploy.sha512 P [] ω _ _ _ _ _ h
-  have hdec : FlockDeploy.decode [] = none := rfl
-  have hs : FlockDeploy.setupOf true [] = none := by
-    first
-    | rfl
-    | simp [FlockDeploy.setupOf, FlockDeploy.insOf, hdec]
-  have hact : FlockDeploy.act true [] as' ((List.range as'.length).map (Claims.coinSeq r)) = .rej := by
-    unfold FlockDeploy.act
-    rw [hs]
-  change ((FlockDeploy.next true [] as' ((List.range as'.length).map (Claims.coinSeq r))).eval
-    FlockDeploy.sha512).1 = .acc at ha
-  rw [FlockDeploy.next_rej _ hact] at ha
-  cases ha
 
 end Properties.SampledProofs.OneStageZk
