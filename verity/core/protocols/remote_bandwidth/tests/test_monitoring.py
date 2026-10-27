@@ -17,8 +17,8 @@ EPS = Fraction(2 ** 24 + 2 * audit.SAMPLES, 2 ** 64)
 ALL_DRAWN = {"verdict": "accept", "reason": None, "public": {"eps": str(EPS), "q_bytes": 34 * codec.BLOCK_BYTES},
              "profile": {"delta": str(Fraction(1, 2 ** 40)), "gaps": [], "receipts": 34, "windows": [[17, 17], [17, 17]],
                          "wrong": "0"}}
-"""An accepted run of the subprotocol at 64 KiB (r20261025-235311-4b2b): two windows of 17 receipts, every one drawn, at
-the eps `certify` publishes for it, its two openings coins at `samples` each."""
+"""An accepted run of the subprotocol at 64 KiB: two windows of 17 receipts, every one drawn, at the eps `certify`
+publishes for it, its two openings coins at `samples` each."""
 
 
 def partly_drawn() -> dict:
