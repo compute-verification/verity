@@ -7,8 +7,9 @@ A device engine for the commitment's hashes, bit for bit the CPU reference's (`v
 - that leaf's frame-v3-sha512 leaf, and frame-v3-sha512 nodes and pads a level at a time, `merkle.CommitmentDomain`.
 
 commit_slots (the commit path beside this directory) runs on it: the calls below
-are its inner "hash these rows" and "hash this level" steps. The compression is `sha512x.cuh`'s `compress<V, ROLL>`, with
-`sha::compress`'s contract (`benchmarks/pouw/commit_gpu/sha512.cuh`), so a kernel can also swap just the compression in.
+are its inner "hash these rows" and "hash this level" steps. The compression is `sx::compress<V, ROLL>` from the GPU's one
+SHA-512 header (`verity/ml/kernels/sha512.cuh`), with `sha::compress`'s contract, so a kernel can also swap just the
+compression in.
 
 ## The call
 
@@ -63,7 +64,7 @@ What each hash costs, and what is shared (a row's leaf is five compressions and 
 
 ## Compression variants
 
-`V` picks the pipe of each sigma function's shifts (S0, S1, s0, s1; `sha512x.cuh`):
+`V` picks the pipe of each sigma function's shifts (S0, S1, s0, s1; `verity/ml/kernels/sha512.cuh`):
 
 - 0: funnel shifts on the integer ALU;
 - 1: the high half of each rotation as mul.hi/mad.lo on the FMA pipe;
@@ -92,7 +93,6 @@ n mod 128 >= 112 ends with such a chunk, as 21,022 of a slot's 21,857 rows do on
 
 ## Files
 
-- `sha512x.cuh`: the compression. Its rounds are p2keys4.cuh's (`benchmarks/pous/p2_v1/`, copied, not included).
 - `rows.cuh`: the formats as host+device functions.
 - `rows.cu`: the kernels.
 - `rows_host.cpp`: the host twin.
@@ -102,7 +102,7 @@ n mod 128 >= 112 ends with such a chunk, as 21,022 of a slot's 21,857 rows do on
 - `sass.py`: opcode counts per variant.
 - `sass_count.py`: one kernel's SASS counts per main-loop iteration, by opcode and issue pipe (`ruler.sh`'s pipe mix).
 - `gpu.sh`: one leased GPU run.
-- `ruler.sh`, `as_commit_gpu.cuh`: the variants on commit_gpu's ruler (`commit_gpu sha`, gated by `reference.py check`)
+- `ruler.sh`: the variants on commit_gpu's ruler (`commit_gpu sha` built with `-DSHA_SX`, gated by `reference.py check`)
   against its default build, with each build's SASS pipe mix, SM clock and ncu's pipe utilization.
 - `hashcat.sh`, `hashcat_forms.cu`, `hashcat_summary.py`: hashcat's SHA-512 kernels (`-m 1700`, `-m 1710`, optimized and
   pure, built from source in scratch) against the default compression in one lease at one locked SM clock, in
