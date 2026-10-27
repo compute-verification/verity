@@ -1,9 +1,9 @@
-"""serve-openai's ``--admit release-order`` (`serve_admit.ReleaseOrder`) on CPU: requests reach the engine in the warden's
+"""serve-openai's ``--admit release-order`` (`serve_admit.ReleaseOrder`) on CPU: requests reach the engine in the network certifier's
 release order (``x-verity-release``) whatever order the frontend reads their bodies in, a missing earlier release holds the
-later ones, and a release that never comes (the warden dropped it) or is refused holds them only until its skip, never for
+later ones, and a release that never comes (the network certifier dropped it) or is refused holds them only until its skip, never for
 good. The gate's skip is driven by hand (an injected ``schedule``), so nothing here waits on the clock.
 
-And a step's rows (`serve_admit.keep_scheduler_rows`, VLLM-98): Model Runner V2's own order puts a later-admitted shorter
+And a step's rows (`serve_admit.keep_scheduler_rows`): Model Runner V2's own order puts a later-admitted shorter
 prompt's first row ahead of an earlier one's (endpoint 2's windows 220 and 237); with the scheduler's order kept, a step's
 new rows are in admission order, decodes first. Kept only where no attention backend needs the decodes first."""
 from __future__ import annotations

@@ -45,7 +45,7 @@ def LinearOps(B, S, x, W):
 @composite("TwoLinears", 1, ["M", "opsA", "opsB"],
            lambda S: ((("x", A2), ("W", Array(S.M, A2))), Array(2, Array(S.M, V16))))
 def TwoLinears(B, S, x, W):
-    """`bind(Row, ops=opsA)` and `bind(Row, ops=opsB)` coexist in one program (ruling §8.3)."""
+    """`bind(Row, ops=opsA)` and `bind(Row, ops=opsB)` coexist in one program."""
     a = B.call(bind(LinearOps, M=S.M, ops=S.opsA), x, W)
     b = B.call(bind(LinearOps, M=S.M, ops=S.opsB), x, W)
     return B.call(bind(Stack2, M=S.M), a, b)
@@ -225,7 +225,7 @@ def test_a_self_compare_round_trips():
     _same_circuit(P, decode_program(desc, REGISTRY))
 
 
-# -- zero-stride broadcasts (ruling §8.5): `[z, z, z]` compacts, `[z0, z1, z2]` does not -------------------------
+# -- zero-stride broadcasts: `[z, z, z]` compacts, `[z0, z1, z2]` does not ----------------------------------------
 
 def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_strided():
     from verity.ml.circuits.refs import Affine, Concat, Strided, concat, is_broadcast

@@ -206,10 +206,3 @@ def f32_to_bf16(C, u):
     low, lsb = u[:16], u[16]
     carry = add(C, low, const_bits(0x7FFF, 16), cin=lsb, width=16, carry_out=True)[16]
     return add(C, u[16:32], [carry], width=16)
-
-
-def epilogue_only():
-    C = Circuit()
-    u = C.input("u", 32)
-    C.output("y16", f32_to_bf16(C, u))
-    return C

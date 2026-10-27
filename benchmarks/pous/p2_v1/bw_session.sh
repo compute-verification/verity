@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One remote bandwidth session over C* on the demo card (bandwidth.py session), served from MEM-69's encoded store through
+# One remote bandwidth session over C* on the demo card (bandwidth.py session), served from the mem69-v2 encoded store through
 # kernels' staging decode, and the cheat that skips a layer's reads; cwd = the source tree's root:
 #
 #   research run --on vy-dc-h200-2 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
@@ -13,15 +13,15 @@
 # `p2_party --listen --sessions 2` already listening, the cheat at CHEAT_CONNECT (by default the same listener), with
 # TUNNEL ('SSH_OPTIONS USER@HOST') through `ssh -L` to TUNNEL's host, CONNECT then the address there. The registration
 # the verifier holds is the tracked bandwidth-mem69-v2.json, and the store must be it, its plan the layout's tensors'
-# units (MEM-72: not the padding past lm_head). ENC is only ever read. The lib
+# units (not the padding past lm_head). ENC is only ever read. The lib
 # is kernels' build: p2lib.tar from the run's inputs (LIB_SHA256), else that build's out/ on this host (BUILD), else
 # build.sh's in scratch, each held to its MANIFEST.sha256 and its sources to the kernels' build's
-# (LIB_SOURCES_SHA256); the layout is CMP-95 item 2's (LAYOUT_SHA512), from the run's inputs or kernels' run KSTAGE's
+# (LIB_SOURCES_SHA256); the layout is the card's frozen store layout (LAYOUT_SHA512), from the run's inputs or kernels' run KSTAGE's
 # on this host.
 #
 # Outside the lease: both held to their pins, the store's registration to the tracked one, and the toy's session on the
 # CPU (P2's reference decode, the same verifier) as a preflight. Under one untimed lease of at most LEASE_MIN minutes
-# (default 10), refused near INF-242's window (Tue 27 Oct 08:00-10:00Z): MODE's sessions (default both), the honest one
+# (default 10), refused near the card's booked window (Tue 27 Oct 08:00-10:00Z): MODE's sessions (default both), the honest one
 # (WINDOWS x PASSES, SAMPLES openings a window, expect accept) and then the cheat (SKIP_LAYER's reads skipped, one window
 # of one pass, expect reject). Each step's exit code is in $OUT/rc.txt and each session's verdict line in
 # $OUT/verdicts.txt; exits non-zero if any failed.

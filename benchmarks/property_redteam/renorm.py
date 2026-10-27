@@ -1,6 +1,6 @@
 """N_L at toy sizes: a search for circuits of 6b's model that return a square's digits with few budgeted gates.
 
-**The conjecture** (note:20261017T1859Z-report-property-redteam, §R3.3 step 4). For every vector Q of integer quadratics in
+**The conjecture.** For every vector Q of integer quadratics in
 the digits of a and every lattice Λ ⊆ ℤ^L of rank r, the a ∈ [0, p) for which some canonical output lies in Q(a) + Λ number
 at most B^(r + d₀ − L)·p, with d₀ an absolute constant. At B = 256 that is 6b's `Renormalization F f w d ε` with
 d = d₀ + log₂(1/ε)/8, and the formula under test is d ≈ 4 + log₂(1/ε)/8.

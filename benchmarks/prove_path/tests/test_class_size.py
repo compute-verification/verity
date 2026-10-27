@@ -4,7 +4,7 @@
   positions (`window_circuit.class_circuit`), and at TINY of 2,048 positions at a class of 261, past two key blocks of 128:
   every template but the heads and their key gathers is a fixed count a position, `TokenFeed_v1` one a prompt position and
   `SlotRow_v1` one a Program;
-* v19's heads (#4263), at a block of 3 keys: a head over T keys is its first block, ceil(T / 3) - 1 full ones (none
+* v19's heads, at a block of 3 keys: a head over T keys is its first block, ceil(T / 3) - 1 full ones (none
   guarded: a one-row decode's FA2 guards its first visited block only) and its end; its keys reach it through one gather a
   full block, shared, and its first block's own where that block is neither one key nor full;
 * with ``VERITY_PROVE_PATH_CLASS_OF_RECORD=1``, the class of record at Llama-3.2-1B lowers exactly, within C-Flock's block,
@@ -138,7 +138,7 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured():
 
 def test_window_circuit_and_class_size_default_to_the_class_of_record():
     """Without ``--class``, ``window-circuit`` and ``class-size`` take the class of record, the certifier run of record's
-    envelope at ASK-122's fixed slots (8 slots, 4 at each of buckets 0 and 16, EVERY 16; 1,024 prompt ids, 64 outputs); a
+    envelope at the fixed slots (8 slots, 4 at each of buckets 0 and 16, EVERY 16; 1,024 prompt ids, 64 outputs); a
     given class is read as SLOTS,PROMPT,OUTPUTS[,LANES,EVERY], every slot at one boundary without LANES."""
     import prove_path as PP
 

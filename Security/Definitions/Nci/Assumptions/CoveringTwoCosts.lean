@@ -8,7 +8,7 @@ one cost `c = r · b`. Here each has its own: parameter-hardness at a weight cos
 activation-chaining at an activation cost `c_a` (`ActivationChainedAt`), over the same vocabulary (`Nci.Covering`). At
 `c_w = c_a = r · b` they are `ParameterHard` and `ActivationChained`.
 
-**Why two costs** (training's realism input, thread message 1792662617.028409). One shared `c` is at most both what an
+**Why two costs.** One shared `c` is at most both what an
 updated weight costs to rebuild and an activation's width, `c_a ≤ 16` at bf16, 8 at FP8, 4 at FP4. An updated weight
 compresses far below that, so one `c` charges every activation the weights' entropy. In training's fine-tuning numbers the
 slowdown bound is `ρ` about 45 with two costs against 1.1 with one.

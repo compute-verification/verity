@@ -199,7 +199,7 @@ export DITHER_H1C=$S/libh1c.so DITHER_H1F=$S/libh1f.so DITHER_H1O=$S/libh1o.so V
 # SBENCH_PICK pins Inductor's autotune picks (picks.py); the node's shared Inductor cache would hand back another run's
 # timed .best_config, so a pinned run compiles into its own
 [ -n "${SBENCH_PICK:-}" ] && export TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
-# CA's credit gate (#2684) at its pinned head, for the dither-1s-credit arm
+# the credit gate at its pinned head, for the dither-1s-credit arm
 CREDIT_GATE_SHA=${CREDIT_GATE_SHA:-b25b34d96e}
 git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocols/pouw/credit_gate.py" > "$S/credit_gate.py" 2>/dev/null \
   && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
@@ -231,7 +231,7 @@ if [ -n "${J10R_SHA:-}" ]; then
   [ -f "$S/j10r/verity/core/protocols/pouw/circuit/h1tile.py" ] || { echo "sbench: J10R_NO_TREE at $J10R_SHA"; exit 14; }
   export DITHER_J10R_TREE=$S/j10r DITHER_J10R_SHA=$J10R_SHA
 fi
-# ASK-64's measured round trips (percall_rtt.py's percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
+# the per-call challenger round's measured round trips (paced samples in percall-wait-ns.txt, sent with the run) for the dither-1s-percall-rtt arm
 [ -f "$D/inputs/percall-wait-ns.txt" ] && export DITHER_PERCALL_WAITS=$D/inputs/percall-wait-ns.txt
 cd integrations/vllm
 PY=${PY:-/workspace/jobs/venv312/bin/python3}

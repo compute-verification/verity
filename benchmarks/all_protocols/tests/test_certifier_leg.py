@@ -43,12 +43,7 @@
   evidence, and the mirror accepts it;
 * each term of a case is decided at its share of the δ (`term_delta`): a signed clock case of two audits and a signed
   rows period of the mirror's (three scans, its two audits in no term) are accepted with eps that δ, an unsplit one
-  with eps their sum, which `holds_at` refuses;
-* `block_leg` turns a period's accepted answer, clock form (r20261025-213746-7692's period 0) or rows form
-  (r20261025-235229-305e's), into the block record's certifier leg, K held at each δ its exact eps is at most, and
-  refuses a rejected answer; where #4454's ``verity/block-record/v1`` is in the tree, each leg fits its schema, is
-  `block_record.leg`'s of the runner's row, reproduces its fixture's certifier leg from that leg's answer, and a fixture
-  record carrying it checks clean.
+  with eps their sum, which `holds_at` refuses.
 """
 from __future__ import annotations
 
@@ -664,8 +659,8 @@ def test_a_scan_window_is_its_audit_records_answer_and_a_refused_one_a_reject(tm
 def test_a_rows_case_is_the_rows_forms():
     import warden_serve as WS
 
-    schedule = {"bucket_ms": 100, "cell_bytes": 512, "delay": 21, "egress_cells": 65, "ingress_buckets": 12,
-                "ingress_cells": 47, "lanes": 4, "queue": 4, "slots": 4, "window": 32}
+    schedule = {"bucket_ms": 100, "cell_bytes": 512, "delay": 27, "egress_cells": 65, "every": 16,
+                "ingress_buckets": 12, "ingress_cells": 47, "lanes": 4, "queue": 4, "slots": 4, "window": 32}
     dep = {"key": {"params": [64, 1, 6], "public": "ab" * 24, "key_id": "ab" * 16}, "params": schedule,
            "session": "cd" * 32}
 
@@ -778,80 +773,6 @@ def test_each_term_is_decided_at_its_share_of_the_periods_delta(monkeypatch, del
     L.holds_at(0, a, delta)
 
 
-ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())
-CLOCK_RUN, ROWS_RUN = "r20261025-213746-7692", "r20261025-235229-305e"
-E2E = ROOT / "benchmarks" / "e2e_demo"
-BLOCK_SCHEMA = E2E / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
-
-
-def _block_leg(run: str, delta: str) -> dict:
-    return L.block_leg(ANSWERS[run]["answers"][delta], server=ANSWERS[run]["node"], runs=[run])
-
-
-def _held(value: int) -> dict:
-    return {"holds": True, "value": value, "epsilon": None, "by": "run"}
-
-
-def _not_held(eps: str, delta: str) -> dict:
-    return {"holds": False, "why": f"the run established it except with {eps}, more than {delta}"}
-
-
-def test_a_period_answer_of_either_form_is_the_block_records_certifier_leg():
-    clock = _block_leg(CLOCK_RUN, "1/100")
-    assert (clock["protocol"], clock["owner"], clock["server"], clock["source"], clock["runs"]) == (
-        L.PROTOCOL, "network-accounting", ANSWERS[CLOCK_RUN]["node"], "real", [CLOCK_RUN])
-    assert clock["answer"] == {k: ANSWERS[CLOCK_RUN]["answers"]["1/100"][k]
-                               for k in ("verdict", "reason", "commitment", "public")}
-    assert clock["quantity"] == {"symbol": "K", "value": 2178452, "unit": "bits", "windows": 1}
-    assert (clock["error"], clock["error_from"]) == ("1/100", "quantity.eps")
-    assert clock["at"] == {"1/100": _held(2178452), "1/1000000": _not_held("1/100", "1/1000000")}
-    assert _block_leg(CLOCK_RUN, "1/1000000")["at"] == {"1/100": _held(2180068), "1/1000000": _held(2180068)}
-    rows = _block_leg(ROWS_RUN, "1/100")
-    assert "scans" in rows["answer"]["public"] and rows["quantity"]["value"] == 12200606
-    assert rows["error"] == "1/50" and rows["at"] == {"1/100": _not_held("1/50", "1/100"),
-                                                       "1/1000000": _not_held("1/50", "1/1000000")}
-    rows6 = _block_leg(ROWS_RUN, "1/1000000")
-    assert rows6["error"] == "1/500000" and rows6["at"] == {"1/100": _held(12202528),
-                                                            "1/1000000": _not_held("1/500000", "1/1000000")}
-    answer = ANSWERS[CLOCK_RUN]["answers"]["1/100"]
-    with pytest.raises(ValueError, match="certifies no K"):
-        L.block_leg(ANSWERS[CLOCK_RUN]["tampered"], server="n", runs=[CLOCK_RUN])
-    with pytest.raises(ValueError, match="not verity/certifier/v0"):
-        L.block_leg(answer | {"protocol": "verity/sampled-proofs/one-stage/v1"}, server="n", runs=[CLOCK_RUN])
-    with pytest.raises(ValueError, match="real or fixture"):
-        L.block_leg(answer, server="n", runs=[CLOCK_RUN], source="synthetic")
-    with pytest.raises(ValueError, match="at least one run"):
-        L.block_leg(answer, server="n", runs=[])
-
-
-@pytest.mark.skipif(not BLOCK_SCHEMA.exists(), reason="verity/block-record/v1 (#4454) is not in this tree yet")
-def test_the_block_leg_fits_the_block_records_schema_its_fixture_and_its_runner_path():
-    jsonschema = pytest.importorskip("jsonschema")
-    schema = json.loads(BLOCK_SCHEMA.read_text())
-    B = _module("verity_e2e_demo_block_record", E2E / "verity_e2e_demo" / "block_record.py")
-    assert [str(d) for d in L.BLOCK_DELTAS] == [str(d) for d in B.DELTAS]
-    leg_schema = jsonschema.Draft202012Validator({"$schema": schema["$schema"], "$defs": schema["$defs"],
-                                                  "$ref": "#/$defs/leg"})
-    for run, x in ANSWERS.items():
-        for delta, a in x["answers"].items():
-            got = L.block_leg(a, server=x["node"], runs=[run])
-            leg_schema.validate(got)
-            row = {"answer": a, "quantity": a["public"], "owner": "network-accounting", "runs": [run]}
-            assert B.leg("certifier", row, server=x["node"], runs=[run]) == got
-    rec = json.loads((E2E / "tests" / "fixtures" / "block-record-r2-period0.json").read_text())
-    fx = rec["legs"]["certifier"]
-    assert L.block_leg({**fx["answer"], "protocol": fx["protocol"]}, server=fx["server"], runs=fx["runs"]) == fx
-    for run, delta in ((CLOCK_RUN, "1/100"), (ROWS_RUN, "1/1000000")):
-        legs = rec["legs"] | {"certifier": L.block_leg(ANSWERS[run]["answers"][delta], server=rec["server"],
-                                                       runs=[run])}
-        composed = B.compose(rec["server"], legs) | {"onsite": rec["composed"]["onsite"]}
-        mine = rec | {"legs": legs, "composed": composed, "monitoring_period": B.monitoring_period(
-            rec["monitoring_period"]["deployment"], Fraction(composed["joint_horizon"]["error_sum"]))}
-        jsonschema.Draft202012Validator(schema).validate(mine)
-        assert B.check(mine) == {}
-        assert composed["joint_horizon"]["at"]["1/1000000"]["not_established"] == ["certifier"]
-
-
 @pytest.mark.slow
 def test_a_loop_window_registers_what_the_stub_serves(tmp_path):
     a = Namespace(law="subset:2", cap=8, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={},
@@ -886,7 +807,10 @@ def test_a_registered_weights_window_reads_unit_for_unit_as_the_plain_one(tmp_pa
     for u, (lab, rows) in want.items():
         assert got[u][0] == lab and all(np.array_equal(got[u][1][p], r) for p, r in rows.items())
     circuit = json.loads((d / "circuit.json").read_text())
-    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins={"w", "sw"})["free"] == 1024 * (1024 + 32)
+    pins = {v: e["root"] for v, e in json.loads(weights["pin"].read_text())["values"].items()}
+    roots = IF.registered_roots(json.loads((d / "registration.json").read_text())["window"])
+    assert set(pins) == {"w", "sw"} and roots == pins
+    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins=pins, roots=roots)["free"] == 1024 * (1024 + 32)
     assert L.free_inputs(json.loads((plain / "circuit.json").read_text()))["bits"] == FREE
 
 
@@ -937,7 +861,9 @@ def test_a_wired_registered_window_gives_the_leg_its_requests_outputs_and_free_i
     assert L.match_outputs([{"stream": 1, "session": "s.0"}, {"stream": 2, "session": "s.1"}], events, FRAMES, outputs,
                            STEPS)["equal"]
     # every activation is a tie and every weight registered: only the requests' step-0 up_proj inputs are free
-    pins, untied = RA.window_pins(json.loads((d / "registration.json").read_text())["window"], circuit)
+    w = json.loads((d / "registration.json").read_text())["window"]
+    pins, untied = RA.window_pins(w, circuit)
     pins |= RA.pinned(json.loads(weights["pin"].read_text()))
     assert not untied
-    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins=pins)["free"] == 2 * (1024 + 32)
+    count = IF.input_count(circuit, pins=RA.pin_roots(pins), roots=RA.window_roots(w))
+    assert L.free_inputs(circuit)["bits"] == count["free"] == 2 * (1024 + 32)

@@ -1,4 +1,4 @@
-// SHA-512 on sm_90a / sm_100a for H1's per-unit streams (pouw.circuit.seeds): a seed's noise block t is
+// SHA-512 on sm_90a / sm_100a for H1's per-unit streams (pouw.circuit.seeds): a seed's noise chunk t is
 // SHA-512(NOISE_TAG || seed || u64be t), one compression of a 96-byte message whose words 0..10 are the seed's. So rounds
 // 0..10 (the midstate) and every schedule term free of word 11 are a seed's, computed once (NoiseMid), and a block runs
 // rounds 11..79 on them with immediate constants.
@@ -22,7 +22,7 @@ __device__ __forceinline__ u64 rotr(u64 x, int n) { return (x >> n) | (x << (64 
 // H1S_ROTF = R (0..6) puts R of each round's six Sigma rotations, and H1S_ROTFW = R (0..4) R of the schedule's four sigma
 // rotations, on the FMA pipe (rotr_f) instead of two funnel shifts on the ALU pipe: sm_90's ALU pipe (SHF, LOP3, IADD3)
 // is 16 lanes a sub-partition and its IMAD pipe another 16, and a unit's hashing is nearly all ALU-pipe work, so moving
-// some of it can raise the units' throughput where the ALU pipe binds (shabench.cu's V 12..16). Both 0 is the funnel
+// some of it can raise the units' throughput where the ALU pipe binds. Both 0 is the funnel
 // shifts' code as before. Served on the H200, R = 6 is slower than 0: Dither's T 64 step +20% with today's units, +6%
 // with J10-R's. rotr_f<N>: with lo and hi x's halves (swapped for N > 32), n = N mod 32 and m = 2^(32 - n)
 // read from constant memory (so ptxas can't fold it back into shifts), c = {lo >> n, lo << 32 - n} = {mul.hi(lo, m),

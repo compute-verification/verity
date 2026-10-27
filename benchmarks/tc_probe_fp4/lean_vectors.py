@@ -48,7 +48,7 @@ CHAIN_LIST = "nvf4Chains"
 SPECIAL_LIST = "nvf4Specials"
 PLACEMENTS = ((0, 0), (13, 6))
 POISON = 0xA5A5A5A5
-NAN_WORD = 0x7FFFFFFF  # the record-only word for a NaN accumulator (lane fp4-re)
+NAN_WORD = 0x7FFFFFFF  # the record-only word for a NaN accumulator
 DUMP_FIELDS = ("A", "Bt", "SFA", "SFB", "C", "D_tile", "D_rows")
 _ENTRY = re.compile(r"⟨([^⟩]*)⟩")
 
@@ -235,8 +235,8 @@ def records(lists: dict, selected: list, words: dict, model) -> list[dict]:
 
 
 class FakeLow7:
-    """CPU stand-in (``--fake-silicon low7``): the pinned model on every scale byte's low 7 bits (the decode the assessor measured,
-    ``r20260930-093120-b2f2``), NaN where it refuses; ``--fake-silicon verity`` is the pinned model as-is, which reads the same
+    """CPU stand-in (``--fake-silicon low7``): the pinned model on every scale byte's low 7 bits (the decode measured on the device),
+    NaN where it refuses; ``--fake-silicon verity`` is the pinned model as-is, which reads the same
     low 7 bits.  With the launch switched off it returns the poison, as the library does.  Refused under a research run."""
 
     def __init__(self, name: str):

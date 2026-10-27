@@ -1,4 +1,4 @@
-"""The verify step (panel rule (b), 08:35Z): after the lease, in the same research run, run each arm's reference
+"""The verify step (panel rule (b)): after the lease, in the same research run, run each arm's reference
 verifier on the transcripts its timed code emitted, and write beside each panel row of the run's result JSON the verifier's
 commit, its accept line verbatim, and the transcript as ``<run id>:<path> sha256:<hex>``; then print each accepted row's
 `panel.py append` arguments.
@@ -69,7 +69,7 @@ class UsageError(ValueError):
 
 
 def now() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def sha256_file(path: Path) -> str:

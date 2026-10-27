@@ -378,7 +378,7 @@ class CompiledKernelCheck:
             res["outputs_checked"] += len(out_roles)
             res["outputs_exact"] += sum(per_out_ok)
             res["launches_checked"] += 1
-            # [R16 compiled, Daniel DECISIONS-3 autotune rule] the kernel's own compiled source under EVERY candidate launch config
+            # [the compiled-kernel autotune rule] the kernel's own compiled source under EVERY candidate launch config
             # on these committed inputs == the committed outputs (bit for bit), the executed config included -- shown per kernel
             # on up to MAX_LAUNCHES_PER_KERNEL sampled launches; the merge lifts a cross-arm config difference only for kernels shown
             self._autotune_equivalence(kernel, ins, outs, roles, res)

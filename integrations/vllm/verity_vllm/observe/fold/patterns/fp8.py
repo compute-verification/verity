@@ -106,7 +106,7 @@ class PerTokenGroupFp8Quant:
         if not (x.dtype == "bfloat16" and xq.dtype == E4M3 and xs.dtype == "float32"):
             return unsupported(node, "Fp8GroupQuant_v1 is bf16 -> (e4m3, f32)", dtypes=[x.dtype, xq.dtype, xs.dtype])
         if bool(ue8m0):
-            from verity.ml.definitions.registry import deepgemm  # noqa: PLC0415  (loaded only on the ue8m0 branch)
+            from verity.ml.definitions.registry import deepgemm  # loaded only on the ue8m0 branch
             spec = bind(deepgemm.Fp8GroupQuantUe8m0, K=K, G=G)
         else:
             spec = bind(fp8.Fp8GroupQuant, K=K, G=G)

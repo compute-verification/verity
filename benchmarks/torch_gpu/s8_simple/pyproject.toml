@@ -1,9 +1,0 @@
-# The simplest exact W8A8 linear (`s8_simple.py`, HASH-11) and its check on a GPU (`check.py`, run by `check.sh`). Not a
-# package: the skeleton puts this directory on its path. The suite holds the check's CPU twin to the Definition and runs
-# the check on the CPU at tiny shapes. Needs torch and numpy (the workspace's torch-cpu extra).
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-
-[tool.verity.tests]
-# `verity`: `ScaledMmS8Coordinate_v1`'s reference evaluator (`ml.circuits.ops.gemm`), which the twin is held to
-inputs = ["verity"]

@@ -4,7 +4,7 @@ every forward, for an nsys profile of the served path at the panel's shapes, and
   python served_profile.py -- <e2e.py's arguments>          # run e2e.main with the ranges (under nsys by served_profile.sh)
   python served_profile.py --analyze REPORT.sqlite --out served-profile.json
 
-It runs the tree's own `e2e.py`, unchanged, on whichever tree is on PYTHONPATH (#540's at 8ca97148, or the migrated stack's),
+It runs the tree's own `e2e.py`, unchanged, on whichever tree is on PYTHONPATH,
 and adds only ranges and host timestamps:
 - each ``llm.generate`` is a range ``gen|<mode>|<phase>|<i>``: the mode read from the engine (``fp8`` for the base engine,
   else the arm's: ``bf16``, ``pearlc-nohash``, ``pearlc``), the phase from the request (``prefill``: one prompt, one token;

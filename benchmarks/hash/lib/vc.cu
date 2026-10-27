@@ -41,7 +41,7 @@ struct RowK {
   u64 kw_xpad[80];                   // row/v2: the all-padding last block (lb % 128 == 0)
   u64 kw_segpad[80];                 // row-seg: a whole segment's padding block
   u64 kw_fold[80];                   // row-seg rows of an even s: the fold's all-padding last block
-  u64 mid_Q[2][8];                   // row-seg: after Q, per shape (tiles: full tiles, the last row block's)
+  u64 mid_Q[2][8];                   // row-seg: after Q, per shape (tiles: full tiles, the last row tile's)
   u32 scheme, lb, xpad;
   u32 s[2];                          // segments a unit, per shape
   u32 last[2];                       // the last segment's bytes, per shape
@@ -174,7 +174,7 @@ __global__ void __launch_bounds__(128, 2) k_row_segs(const __grid_constant__ Row
 }
 
 // Pearl-C's tiles: segment j of tile (ti, tj) is the tile's rows 2j and 2j + 1, each row's two 32-column chunks as le32 C~ ||
-// le32 U; the full row blocks' tiles first (32 segments each), then the last row block's (s = R / 2).
+// le32 U; the full row tiles' tiles first (32 segments each), then the last row tile's (s = R / 2).
 __global__ void __launch_bounds__(128, 2) k_tile_segs(const __grid_constant__ RowK R, const uint8_t* __restrict__ tab,
                                                       const uint8_t* __restrict__ C, const uint8_t* __restrict__ U, u64* __restrict__ dig) {
   const u32 rows = R.rows, cols = R.cols, tn = cols / 64;

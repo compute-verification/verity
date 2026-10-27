@@ -38,8 +38,8 @@ def _boolean_roots() -> list[Any]:
 
 
 def _population_roots() -> list[Any]:
-    """`TemplateInstances_v1` of the scaled s8 coordinate (K = 64, sm_120) at N = 2, a served s8 linear's window program (the
-    torch loop's, at its K), and `TemplatePopulations_v1` of the s8 accumulator and that coordinate at counts 1 and 2."""
+    """`TemplateInstances_v1` of the scaled s8 coordinate (K = 64, sm_120) at N = 2, a served s8 linear's window program, and
+    `TemplatePopulations_v1` of the s8 accumulator and that coordinate at counts 1 and 2."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
     from verity.ml.circuits.population import (

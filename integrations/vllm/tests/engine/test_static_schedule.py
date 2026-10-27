@@ -1,4 +1,4 @@
-"""`engine.static_schedule`: a run that declares `sampling.ignore_eos` is held to a schedule the declaration alone decides (VLLM-31)."""
+"""`engine.static_schedule`: a run that declares `sampling.ignore_eos` is held to a schedule the declaration alone decides."""
 from __future__ import annotations
 
 from verity_vllm.engine import static_schedule as ss

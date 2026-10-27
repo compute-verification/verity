@@ -1,6 +1,6 @@
 """The host CPUs' modular-squaring rate at a Sloth prime: what a node's 2 × 64 cores add to the adversary's Φ.
 
-Daniel's node-level ruling puts the host inside the device, so the host's squaring throughput adds to the
+Node-level accounting puts the host inside the device, so the host's squaring throughput adds to the
 adversary's encode rate Φ, and γ's rebuild term d/(k·x₁,adv) grows with it. One Sloth root raises to the b-bit
 exponent (p+1)/4, about b squarings mod p; the encode at k is k roots a word. This measures squarings/s per core and across a pinned set of
 cores (aggregate, so cache and memory contention count), using `gmpy2.powmod(base, 1 << S, p)`, whose exponent is

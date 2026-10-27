@@ -462,7 +462,7 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
         if (dot := T.moe_expert_dot(target_of(ctx)[0])) is not None:
             return unsupported(node, f"padded construction on a target whose fused_moe_kernel runs the k16 step {dot.id}: MoeFfnFixedL_v1's "
                                "expert bodies run the Ampere one", dot=dot.id)
-        from verity.ml.definitions.registry import moe_pad as MP  # noqa: PLC0415  (the padded Definitions register on first use, as vocab.py's kind does)
+        from verity.ml.definitions.registry import moe_pad as MP  # the padded Definitions register on first use, as vocab.py's kind does
         if self.renormalize:
             return unsupported(node, "padded construction with renormalize=True: MoeFfnFixedL_v1 states the MoeRouterTopK_v1 (unnormalised) router only",
                                renormalize=True)
@@ -653,7 +653,7 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
 
     def _fp8_parts(self, node: TreeNode, ctx: StepContext, r: Group) -> Group | Unsupported:
         """`r` with each expert GEMM replaced by its activation quant, then its block-FP8 pair form."""
-        from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant  # noqa: PLC0415  (registry.fp8 loads with an FP8 scope only)
+        from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant  # registry.fp8 loads with an FP8 scope only
         C, G = self.config, self.group
         E, TOPK, H, I = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"]
         up, down = find_descendants(node, lambda n: n.is_triton and triton_name(n) == K_FUSED)

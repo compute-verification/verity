@@ -1,0 +1,9 @@
+{
+ "schema": "network-traces/leak-guard-declared/v1",
+ "names": ["cells.salts", "certified.jsonl", "client.json", "fails.records", "prompts.json", "requests.records",
+           "responses.records", "stalls.json", "traffic.json", "warden.json"],
+ "allow": [
+  {"sha256": "*", "witness": "stalls.json", "records": ["resources.jsonl"],
+   "why": "the runner's sampler records the run's cgroup memory.events as key -> count (research.telemetry.cgroup, cgroup.memory_events), as the stall probe records its own cgroup's (stall_probe.cgroup_state); with no events the keys and zero counts are the same bytes in both, and which pieces match moves with the counts. Read by digest on 27 Oct: the same 51 pieces of a gate's stalls.json, at offsets 402-452 of line 0's cgroup in each of r20261027-012706-3a17, r20261027-033119-ec2c, r20261027-060444-bddf and r20261026-100351-ca6a, and no other find"}
+ ]
+}

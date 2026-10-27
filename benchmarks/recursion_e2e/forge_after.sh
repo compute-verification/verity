@@ -3,7 +3,7 @@
 # tree's (main's Lean sources), built under WORK; nothing under FLOCK_WORK is written. On vy-nebius-1, through a slot:
 #   research run --on vy-nebius-1 --project verity --source . --cwd source -- env CHECK_SLOTS=/workspace/research/locks/leanrec/slots \
 #     python3 tools/verity/check/slot.py --by benchmarks -- bash benchmarks/recursion_e2e/forge_after.sh \
-#     FLOCK_WORK=/workspace/cache/bench-recrun-fw TAG=k64n16fw RUN=r20261024-075623-ecd2
+#     FLOCK_WORK=/workspace/cache/bench-recrun-fw TAG=k64n16fw RUN=<the run id>
 for kv in "$@"; do export "$kv"; done
 : ${FLOCK_WORK:?} ${TAG:?} ${RUN:?}
 OUT=${RESEARCH_RUN_DIR:-/tmp/forge-after}/out; export OUT; mkdir -p $OUT

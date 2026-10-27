@@ -1,6 +1,7 @@
-"""units.sm_90a.cubin (build.sh's) in torch's context: its kernels, launched on torch's current stream through the driver
-API.  The cubin is $UNITS_CUBIN, else units.sm_90a.cubin beside this file, else build/units.sm_90a.cubin here.  torch is
-imported only here, so the twins run without it.
+"""build.sh's cubin for the current device in torch's context: its kernels, launched on torch's current stream through the
+driver API.  The arch is the device's (`ARCHES`: the H200's sm_90a, the RTX PRO 6000's sm_120a), and the cubin
+$UNITS_CUBIN, else units.<arch>.cubin beside this file, else build/units.<arch>.cubin here.  torch is imported only here,
+so the twins run without it.
 """
 from __future__ import annotations
 
@@ -13,6 +14,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 KERNELS = ("units_rmsnorm", "units_quant", "units_quant4", "units_softmax", "units_argmax", "units_relu", "units_add",
            "units_sweep")
+#: compute capability -> the cubin's arch
+ARCHES = {(9, 0): "sm_90a", (12, 0): "sm_120a"}
+#: the kernels only that arch's cubin has (units.cu's SM120)
+ARCH_KERNELS = {"sm_120a": ("units_sweep_words",)}
 #: units.cu's RT and SR: the threads of an RMSNorm, quantizer or softmax CTA
 ROW_THREADS = 128
 
@@ -24,21 +29,30 @@ CUDA = {
 }
 
 
-def cubin_path() -> Path:
+def arch() -> str:
+    """The current device's cubin arch, refused for a device build.sh has no cubin for."""
+    import torch
+    cc = torch.cuda.get_device_capability()
+    if cc not in ARCHES:
+        raise RuntimeError(f"compute capability {cc[0]}.{cc[1]}: build.sh has cubins only for {sorted(ARCHES.values())}")
+    return ARCHES[cc]
+
+
+def cubin_path(arch: str = "sm_90a") -> Path:
     env = os.environ.get("UNITS_CUBIN")
     if env:
         return Path(env)
-    beside = HERE / "units.sm_90a.cubin"
-    return beside if beside.exists() else HERE / "build" / "units.sm_90a.cubin"
+    beside = HERE / f"units.{arch}.cubin"
+    return beside if beside.exists() else HERE / "build" / f"units.{arch}.cubin"
 
 
 class Lib:
     """The cubin's kernels in torch's context on the current device."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, arch: str = "sm_90a"):
         import torch
         self.torch = torch
-        self.path = Path(path)
+        self.path, self.arch = Path(path), arch
         self.cubin = self.path.read_bytes()
         self.sha256 = hashlib.sha256(self.cubin).hexdigest()
         self.cu = C.CDLL(os.environ.get("UNITS_LIBCUDA", "libcuda.so.1"))
@@ -52,7 +66,7 @@ class Lib:
         self.ck("cuCtxSetCurrent", ctx)
         self.mod = vp()
         self.ck("cuModuleLoadData", C.byref(self.mod), self.cubin)
-        self.fns = {name: self.fn(name) for name in KERNELS}
+        self.fns = {name: self.fn(name) for name in KERNELS + ARCH_KERNELS.get(arch, ())}
 
     def ck(self, f: str, *a) -> None:
         r = getattr(self.cu, f)(*a)
@@ -75,7 +89,8 @@ class Lib:
 
 @functools.cache
 def lib() -> Lib:
-    return Lib(cubin_path())
+    a = arch()
+    return Lib(cubin_path(a), a)
 
 
 def ptr(t) -> vp:
@@ -84,7 +99,7 @@ def ptr(t) -> vp:
 
 
 def threads(n: int) -> int:
-    """A block of at least n threads (at least one warp), a whole number of warps."""
+    """A CTA of at least n threads (at least one warp), a whole number of warps."""
     return max(32, -(-n // 32) * 32)
 
 

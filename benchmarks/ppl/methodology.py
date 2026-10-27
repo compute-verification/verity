@@ -15,8 +15,8 @@ SEEDS = (0, 1, 2)
 CALIBRATION = {"set": "c4", "ctx": 2048, "windows": tuple(range(100, 116))}
 #: C4: the first 3000 documents of the validation shard (enough for every window above)
 C4_DOCS = 3000
-#: the bf16 reference and calibration streams run this many consecutive windows per forward (as tonight's harnesses did);
-#: arms run one window per forward, since their coins are drawn per window
+#: the bf16 reference and calibration streams run this many consecutive windows per forward; arms run one window per
+#: forward, since their coins are drawn per window
 REF_BATCH = 4
 #: the window on which every exactness gate that is too costly for every window runs (peels, recomputed products, the
 #: HF reference layer), on every layer

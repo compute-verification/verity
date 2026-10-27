@@ -170,7 +170,7 @@ def timing(cubin, reps: int = 10) -> dict:
         hashed = clock(lambda: cubin.launch(seeds, blocks, sink, sink=True), reps)
         full = torch.empty(units, blocks, 16, dtype=torch.int32, device="cuda")
         written = clock(lambda: cubin.launch(seeds, blocks, full), reps)
-        del full, sink
+        full = sink = None
         torch.cuda.empty_cache()
         out.append({"m": m, "n": n, "k": k, "units": units, "blocks_per_unit": blocks, "noise_blocks": lay.blocks,
                     "key_blocks": RC.LANES, "gemm_ms": round(gemm, 4), "noise_hash_ms": round(hashed, 4),

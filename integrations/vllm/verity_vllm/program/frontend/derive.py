@@ -56,7 +56,7 @@ from verity.ml.definitions.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
 
-DERIVE_VERSION = "verity_vllm.program.frontend.derive/2026-09-09.d4"  # d4: G-RH-16 (rotary table without terminal cast), G-RH-17 (0-d buffer operand in Elementwise) (lane DERIVE-4); d2: HF 5.x plumbing closures G-RH-1/-2/-4/-6/-8/-9/-10 (lane DERIVE-2); d3: G-RH-14 (embedding padding_idx), G-RH-7 (bf16 inv_freq rotary table) (lane DERIVE-3)
+DERIVE_VERSION = "verity_vllm.program.frontend.derive/2026-09-09.d4"  # d4: rotary table without terminal cast, 0-d buffer operand in Elementwise; d3: embedding padding_idx, bf16 inv_freq rotary table; d2: HF 5.x plumbing
 
 aten = torch.ops.aten
 

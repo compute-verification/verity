@@ -1,4 +1,4 @@
-description = "PPL-COMPILE's format baseline in C2's scope, no PoUW: FP8 E4M3, one scale per token and per output row (Q, K per head and token, P per row, V per channel) on every linear and lm_head, rounded to nearest, products in FP32; attention plain int8 as in pc-int8; after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too), keys centred"
+description = "format baseline in C2's scope, no PoUW: FP8 E4M3, one scale per token and per output row (Q, K per head and token, P per row, V per channel) on every linear and lm_head, rounded to nearest, products in FP32; attention plain int8 as in pc-int8; after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too), keys centred"
 
 [[linear]]
 step = "smooth"

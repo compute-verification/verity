@@ -6,7 +6,7 @@ import Definitions.Accounting.Guarantees.Actual.WipeBridge
 # The store held read by read, on the deployed labels (trusted)
 
 `Accounting.Guarantees.Actual.WipeReadHeld` takes `Accounting.Assumptions.UniformLabels`, uniform labels given the
-auditor's devices' coins. The deployed labels are SHA-512 of a wipe's key and the index (PR #2726), with each wipe's key
+auditor's devices' coins. The deployed labels are SHA-512 of a wipe's key and the index, with each wipe's key
 derived from the auditor's secret for the server and the wipe (`streamed_wipe.wipe_key`), a PRF of the secrets, for
 which that premise is false. `WipeReadHeldPrf` states the guarantee on them, in PoUS's streamed-label wipe's form
 (`Pous.Guarantees.StreamedWipe`): no named label assumption, and the PRF (C3, claim `prf/sha-512`) enters as an

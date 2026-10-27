@@ -222,7 +222,7 @@ TC_PROBE = Tool(
 )
 ~~~
 
-Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`, `archive/direct/ligero/tool.py`; the example above is
+Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`; the example above is
 illustrative, the files follow the scripts' argparse) and are found by `research run --tool <dotted.module:NAME>` or
 `--tool <name>` via the registry in `research/store/tools_registry.py` (name -> dotted path; keep it tiny). A declaration
 imports nothing but `research.store.tool`: it must load on the control machine and in a shipped source tree alike (`load` falls

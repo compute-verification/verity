@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# overlap.py on one leased H200 (cwd = the source tree's root): the serve-time commit beside ALLP-H200's served step at the
-# frozen shape, alone, in today's loop, and overlapped at both priorities. Circuits' shared-row Layout JSON (CIR-113,
-# art:f6eb8ebd...) is sent; today's FAMILIES layout is e2e_h200's own.
+# overlap.py on one leased H200 (cwd = the source tree's root): the serve-time commit beside e2e_h200's served step at the
+# frozen shape, alone, in today's loop, and overlapped at both priorities. Circuits' shared-row Layout JSON (fetched as
+# below) is sent; today's families layout is e2e_h200's own.
 #
 #   research data fetch art:f6eb8ebda6ebef5a2cab7bfcfd37e8266660d8241e46a5037fe615a2040b695f --to DIR
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \

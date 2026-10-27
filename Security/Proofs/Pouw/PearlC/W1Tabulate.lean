@@ -27,7 +27,7 @@ the TT family restated at `W1.w1Priced`.
 What these do not do: refute a named form at the deployed protocol. At `NoiseSha512.sha512Sem` with the game's salt the
 reference reads no oracle. Without the text bound a program could tabulate it per salt in `tree` at depth 256 and pay
 for one path (`exec_tree`). The rest of that program (the salt's bits, the word tables, the leaf's writes) and its
-transcript are the red team's arithmetic (`note:compute-accounting/20261024T1730Z-report-w1-redteam`, W1RT-1). Under
+transcript are the red team's arithmetic (W1RT-1). Under
 the bound it is not a program (`tree_not_code`).
 
 **What the bound leaves, an argument and not a theorem here.**

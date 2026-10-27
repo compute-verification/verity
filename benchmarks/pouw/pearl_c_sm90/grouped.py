@@ -187,7 +187,7 @@ def tiles_pd(dev) -> int:
 def tiles_g(R, dev, us: list[Unit], n: int) -> int:
     """TILES_PD's tiles a CTA for units `us` at `n` columns: TILES_GW where the cubin has pd_tiles_gw and PD_G's CTAs are past
     the SMs (decode at 6144 columns, 192; prefill), so none waits a whole chain for one; else PD_G (pd_tiles_g's), whose
-    CTAs (128 at 4096 columns) each run fewer chains at once (r20261024-121033-7bc5: 0.324 ms there against TILES_GW's 0.333)."""
+    CTAs (128 at 4096 columns) each run fewer chains at once."""
     if "tiles4" in PLACE or not has(dev, f"pd_tiles_gw_{TILES_PD}"):
         return R.PD_G
     ctas = sum(R.cdiv(u.m16, 64) * R.cdiv(n // 64, R.PD_G) for u in us)

@@ -18,7 +18,7 @@ Exponents are carried in "U-units" (value + 256). Each addend is written pre-shi
 ``lsb - candidate >= 0``. The normalisation takes bits [40, 64) of ``|T| << u``, ``u = min(lz, lsb_u - 67)``: ``lz`` for a
 normal result, the FP32 subnormal grid otherwise, and the field is ``lsb_u - u - 67 + q[23]``.
 
-:func:`unit` is the finite-domain unit (``lowering``'s ``fp4-nvf4`` pipe). :func:`step_total` is the IR primitives' piece, total
+:func:`unit` is the finite-domain unit (``lowering``'s ``fp4-nvf4`` pipe). :func:`step_total` is the primitives' piece, total
 on every encoding: ``BlackwellNvf4OmmaDot64`` and, with UE8M0 scales (``BLACKWELL_SM120_MXF4``: one scale per 32 codes, the
 floor binding, sums leaving binary32 or falling below its subnormal grid), the MXFP4 step.
 """

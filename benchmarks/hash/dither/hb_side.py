@@ -19,12 +19,12 @@ import torch
 
 
 def auto_j(units: int, nb: int, sms: int) -> int:
-    """h1bench.py's: the largest J (noise blocks a lane) that still leaves about 64 warps an SM."""
+    """h1bench.py's: the largest J (noise chunks a lane) that still leaves about 64 warps an SM."""
     return max(1, min(32, (units * nb) // (32 * sms * 64)))
 
 
 class Units:
-    """`kh_unit_ws` over a plan's calls: each call's A [T, K] and B [N, K] s8 (row stride K), its live row blocks, its
+    """`kh_unit_ws` over a plan's calls: each call's A [T, K] and B [N, K] s8 (row stride K), its live row tiles, its
     seeds at the plan's seed offset (16 words a unit) and its receipts at the plan's word offset, in h1r's unit order."""
 
     def __init__(self, path: str, plans: list, sms: int):

@@ -254,7 +254,7 @@ def test_the_recorded_check_takes_cpu_only_torch():
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     assert tool.CHECK.command[:6] == ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu"], \
-        "every member's own dependencies, not only the root's dev group (CI-36: #2159's new member lacked scipy)"
+        "every member's own dependencies, not only the root's dev group"
     import tomllib
     cpu = [p for p in tomllib.loads((ROOT / "uv.lock").read_text())["package"] if p["name"] == "torch" and "+cpu" in p["version"]]
     assert cpu and all("download.pytorch.org/whl/cpu" in p["source"]["registry"] for p in cpu)
@@ -553,7 +553,7 @@ def test_circuit_check_is_granted_the_slot_once_every_step_beside_it_has_ended(t
 
 
 def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypatch):
-    """CI-35: pytest's parallel suites had no bound beside circuit-check's, so the two together outgrew the slot."""
+    """Pytest's parallel suites had no bound beside circuit-check's, so the two together outgrew the slot."""
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
@@ -633,7 +633,7 @@ def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
     assert "--timeouts" in pytest and " --timeouts " in argv[2], \
-        "each suite bounded by its timeout_s: without it a hung test held a train slot 24 h (CI-184)"
+        "each suite bounded by its timeout_s: without it a hung test held a train slot 24 h"
 
 
 def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(tmp_path):
@@ -826,7 +826,7 @@ def _gone(pid: int) -> None:
 
 
 def test_a_step_that_hangs_writing_nothing_is_stopped_and_fails_as_hung(tmp_path, monkeypatch):
-    """r20261025-021824-ba9f and r20261025-023312-fa65 (CI-184): under --keep-going lean-suites failed, and pytest's suites.py
+    """r20261025-021824-ba9f and r20261025-023312-fa65: under --keep-going lean-suites failed, and pytest's suites.py
     sat 23-24 h on a test that never returned, writing nothing, while circuit-check waited on the grant pytest's end writes and
     the run held its slot.  Here pytest's process waits on a child that never exits; once the watch's clock (injected) has passed
     `IDLE_S` with pytest's outputs unchanged, the child and pytest are stopped, pytest fails as hung, the grant is written and the
@@ -1082,7 +1082,7 @@ def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
     assert rec["status"] == "failed" and f"a {kind} result" in rec["detail"]
     rec = step(None)
     assert rec["status"] == "failed" and rec["detail"].startswith("refused: no readable")
-    for bad in ([], {"packages": {"a": full}}, {"packages": ["a"]}):     # JSON, not an audit's report: it crashed check (#966)
+    for bad in ([], {"packages": {"a": full}}, {"packages": ["a"]}):     # JSON, not an audit's report: it crashed check
         rec = step(bad)
         assert rec["status"] == "failed" and "is not an audit's report" in rec["detail"], rec
     rec = step({"passed": True, "failed": [], "packages": [{**full, "seconds": ["replay"]}]})
@@ -1396,8 +1396,8 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     # the flags, the store key
     p = train("--deferred", "pytest,lean-audit", "--agreement", "--no-cache", "--no-regenerate")
     assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
-    p = train("--deferred", "pytest", "--against", "main")
-    assert p.returncode == 2 and "--deferred takes no --against" in p.stderr, p.stderr
+    p = train("--against", "main")
+    assert p.returncode == 2 and "train: --against refused" in p.stderr, p.stderr
 
 
 @pytest.mark.parametrize("twins", [False, True])
@@ -1479,12 +1479,10 @@ def _train_repo(tmp_path):
     return git, train, argv
 
 
-def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_not_its_ancestor(tmp_path):
-    """The two hand-built launches of 9 Oct (one of an empty commit, one without `--cwd source`) are what train.sh removes: it
-    refuses, before launching anything, a commit whose tree is its parent's, one no branch of origin holds (the run ships what
-    origin holds), a BASE that isn't an ancestor of it, and --agreement beside --against."""
+def test_train_sh_refuses_an_empty_commit_and_one_origin_lacks(tmp_path):
+    """The hand-built launch of an empty commit (9 Oct) is what train.sh removes: it refuses, before launching anything, a commit
+    whose tree is its parent's, and one no branch of origin holds (the run ships what origin holds)."""
     git, train, argv = _train_repo(tmp_path)
-    root = git("rev-parse", "HEAD")
     git("commit", "-q", "--allow-empty", "-m", "empty")
     git("push", "-q", "origin", "HEAD:main")
     p = train("HEAD", "vy-x")
@@ -1496,45 +1494,26 @@ def test_train_sh_refuses_an_empty_commit_one_origin_lacks_and_a_base_that_is_no
     git("commit", "-q", "-am", "local")
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "is on no branch of origin" in p.stderr, p.stderr
-
-    git("push", "-q", "origin", "HEAD:main")
-    head = git("rev-parse", "HEAD")
-    git("checkout", "-q", "-b", "side", root)
-    (tmp_path / "repo" / "s").write_text("s\n")
-    git("add", "s")
-    git("commit", "-q", "-m", "side")
-    git("push", "-q", "origin", "side")
-    p = train(head, "vy-x", "--against", "side")
-    assert p.returncode == 1 and "is not an ancestor of" in p.stderr, p.stderr
-
-    posted.unlink()
-    p = train(head, "vy-x", "--against", root, "--agreement")
-    assert p.returncode == 2 and "--agreement refused with --against" in p.stderr, p.stderr
-    assert not argv.exists() and not posted.exists()
+    assert not argv.exists()
 
 
-def test_train_sh_runs_drives_shadow_as_an_ordinary_quiet_job_and_a_train_with_priority_and_its_post(tmp_path):
-    """drive's per-PR shadow (`TRAIN_ORDINARY=1 TRAIN_QUIET=1`) must never take a check slot ahead of a lane's or a train's, nor
-    ring anyone when its launch registers nothing (ci, 21 Oct); a train keeps `--priority` and its post."""
+def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tmp_path):
     git, train, argv = _train_repo(tmp_path)
     (tmp_path / "repo" / "a").write_text("b\n")
     git("commit", "-q", "-am", "change")
     git("push", "-q", "origin", "HEAD:main")
-    assert train("HEAD", "vy-x").returncode == 0 and "--priority" in argv.read_text().split()
-    p = train("HEAD", "vy-x", "--agreement", TRAIN_ORDINARY="1", TRAIN_QUIET="1")
+    p = train("HEAD", "vy-x", "--agreement")
     args = argv.read_text().split()
-    assert p.returncode == 0 and "--priority" not in args and {"--record", "--keep-going", "--agreement"} <= set(args), args
+    assert p.returncode == 0 and {"--record", "--priority", "--keep-going", "--agreement"} <= set(args), args
 
     (tmp_path / "origin.git").rename(tmp_path / "gone.git")
     (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
-    p = train("HEAD", "vy-x", TRAIN_ORDINARY="1", TRAIN_QUIET="1")
-    assert p.returncode == 1 and "git fetch origin failed" in p.stderr and not (tmp_path / "posted").exists(), p.stderr
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
 
 
 def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
-    """infra, 26 Oct 09:54Z (#4657): drive launches train.sh detached, so its fetch in the queue's clone can meet a tick's, which
+    """Drive launches train.sh detached, so its fetch in the queue's clone can meet a tick's, which
     fails one of them with `cannot lock ref`.  It tries twice more, 5 s and then 15 s later, and only then registers no run."""
     git, train, argv = _train_repo(tmp_path)
     (tmp_path / "repo" / "a").write_text("b\n")
@@ -1551,7 +1530,7 @@ def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
     sleeps.unlink()
     origin.rename(gone)
     (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\n')
-    p = train("HEAD", "vy-x", TRAIN_QUIET="1")
+    p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "git fetch origin failed" in p.stderr and sleeps.read_text().split() == ["5", "15"], p.stderr
 
 
@@ -1582,39 +1561,6 @@ def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(
     p = train(git("rev-parse", "same"), "vy-x")
     assert p.returncode == 1 and "is empty (its tree is its base" in p.stderr, p.stderr
     assert not argv.exists()
-
-
-def test_train_sh_against_launches_the_touched_suites_from_the_source_tree(tmp_path):
-    """`--against BASE` launches `suites.py --changed BASE` (no --quick) through the quick tier's job in a priority slot, as a
-    `research run --cwd source`: the flag the 10:14Z hand-built launch lacked, so the suites ran outside the shipped tree."""
-    git, train, argv = _train_repo(tmp_path)
-    root = git("rev-parse", "HEAD")
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
-    head = git("rev-parse", "HEAD")
-    p = train("HEAD", "vy-x", "--against", root)
-    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
-    a = argv.read_text().splitlines()
-    assert a[:3] == ["run", "-q", "research"] and a[3:5] == ["run", "--on"] and a[5] == "vy-x"
-    assert a[a.index("--cwd") + 1] == "source" and a[a.index("--source") + 1] == str(tmp_path / f"train-{head[:12]}")
-    cmd, job = a[a.index("--") + 1:], a[-1]
-    assert cmd[:3] == ["python3", "tools/verity/check/slot.py", "--priority"] and cmd[-3:-1] == ["sh", "-c"], \
-        "cpu-1's launcher takes only a run whose command is slot.py's (slot_only.through_slot; the lander, 10 Oct)"
-    assert [a[i + 1] for i, x in enumerate(a) if x == "--send"] == ["tools/research/src/research/quick_tier.py"]
-    assert f"--head {head} --base {root} --" in job
-    assert job.endswith("python tools/verity/check/suites.py") and "--quick" not in job
-
-
-def test_train_sh_against_keeps_the_quick_tiers_bounds_and_lean_build():
-    """train.sh is bash, so it copies the quick tier's slot wait, run time and Lean builds from research.queue: this keeps the
-    copies equal."""
-    from research import queue
-
-    text = (ROOT / "tools" / "verity" / "check" / "train.sh").read_text()
-    assert f"wait_s={queue.REMOTE_WAIT_S} run_s={queue.REMOTE_TIMEOUT_S}" in text
-    assert "".join(f" --lean {d}" for d in queue.LEAN_BUILDS) + " --head" in text
-    assert "uv run --locked --all-packages --extra torch-cpu python tools/verity/check/suites.py" == " ".join(queue.QUICK_TIER[:-1])
 
 
 def test_train_sh_stops_a_launcher_that_launched_nothing_in_the_wait(tmp_path):
@@ -1672,7 +1618,7 @@ def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_pat
 
 
 def test_the_lean_audit_step_regenerates_records_only_where_the_lean_job_takes_it(tmp_path, monkeypatch):
-    """CI-64: a train's Lean check passes a package whose only failures are record differences, and drive commits the
+    """A train's Lean check passes a package whose only failures are record differences, and drive commits the
     regenerated locks as it lands. A tree whose lean_audit.py predates `--regenerate` runs as it always did."""
     monkeypatch.setattr(CHECK, "LEAN_JOBS", tmp_path)
     (tmp_path / "lean_audit.py").write_text("ap.add_argument('--fresh')\n")

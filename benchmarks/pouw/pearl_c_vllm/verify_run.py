@@ -1,4 +1,4 @@
-"""The reference replay on a vLLM pass's transcript (``pouw_pearl_c_device``'s retained pass): #449's work law
+"""The reference replay on a vLLM pass's transcript (``pouw_pearl_c_device``'s retained pass): the work law
 (`clear_work`), over the pass's whole workload, with the prover's openings read from the pass's files.
 
   python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json --coins COINS.json [--draws T] [--jobs J] [--commit SHA] [--fast]
@@ -59,9 +59,9 @@ from verity_vllm.protocols.pouw import pearl_c as PD
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
-import fast_tile as FT  # noqa: E402
-import clear_work as CW  # noqa: E402
-from clear_audit import TileOpening, Transcript, Verifier  # noqa: E402
+import fast_tile as FT
+import clear_work as CW
+from clear_audit import TileOpening, Transcript, Verifier
 
 DRAWS = 3
 

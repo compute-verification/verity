@@ -1,4 +1,4 @@
-"""IR-registered `ncp-v2` dequantization: `PouwI32ToF32Rn_v1`, cvt.rn.f32.s32, and `NcpDequant_v1`, a credited Z's served
+"""Registered `ncp-v2` dequantization: `PouwI32ToF32Rn_v1`, cvt.rn.f32.s32, and `NcpDequant_v1`, a credited Z's served
 BF16 y = bf16(fp32(s)·fp32(t)·Z) + bias, the unit PoUW's `ncp2.linear` ends each output entry with and a served PoUW
 linear's row (`NcpLinearRow_v1`) ends with too.
 

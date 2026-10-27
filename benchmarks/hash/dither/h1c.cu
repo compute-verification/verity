@@ -31,7 +31,7 @@
 // the levels from 7 up are launches of their own.  H1C_LMINB = B (H1C_HB) asks the leaves kernel's registers to leave
 // room for B blocks an SM (with H1C_MK and H1C_MID the leaves hold 200 registers on sm_120a, 160 on sm_90a and 192 on
 // sm_100a; B = 4 caps them at 128 on all three, with 64 to 96 bytes more stack).  H1C_LT = N (H1C_LVF) gives h1c_levels'
-// block N threads, 256 by default: at 128 registers a 256-thread block fits 2 an SM, so a build of more tables than
+// block N threads, 256 by default: at 128 registers a 256-CTA fits 2 an SM, so a build of more tables than
 // twice the SMs runs its levels' serial chain in two waves.  H1C_APW = 1: h1c_a_pre_k reads a row's M_key byte-table
 // rows a y word at a time, the word's 8 rows' loads issued before any is folded and y rotated in registers (as hb_mk),
 // rather than one row after another with y indexed at run time.  H1C_SEGMID = 1 (H1C_HB): a segment's first block
@@ -1675,7 +1675,7 @@ extern "C" __global__ void __launch_bounds__(32 * AW) h1c_a_call_k(const H1Tab* 
   if (threadIdx.x == 0) *reinterpret_cast<unsigned*>(P + A_CNT) = 0;
 }
 
-// segment block q of a row (the bytes after the segment's prefix block: L of them, then SHA-512's padding) as message words;
+// segment block q of a row (the bytes after the segment's prefix chunk: L of them, then SHA-512's padding) as message words;
 // row's bytes below k, the tail's (sa's) at k and above
 __device__ __forceinline__ void a_seg_words(u64 w[16], const uint8_t* row, const uint8_t* tl, int k, int p0, int L, int nb,
                                             int q) {

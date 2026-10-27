@@ -4,7 +4,7 @@
 //   tcgen05_bf16_m128n8k16_tiles         one tcgen05.mma M128 N16 K16 per tile        A 128x16 bf16, Bt 8x16 bf16, C/D 128x8 f32
 //   tcgen05_bf16_m128n8k16_chain4_tiles  four back to back on one TMEM accumulator     A 128x64 bf16, Bt 8x64 bf16, C/D 128x8 f32
 //
-// This is the k16 step cuBLAS's sm_100 BF16 GEMMs issue (UTCHMMA).  After benchmarks/tc_probe_fp4/tcgen05_fp4.cu (lane tcgen05, the
+// This is the k16 step cuBLAS's sm_100 BF16 GEMMs issue (UTCHMMA).  After benchmarks/tc_probe_fp4/tcgen05_fp4.cu (the
 // block-scaled FP4 kinds on the same die), with the tile interface of wgmma_tiles.cu so tc_probe.py's families, layout check and
 // models apply unchanged.  Per tile (one 128-thread CTA, thread m owns row m):
 //   1. warp 0 allocates 32 TMEM columns (tcgen05.alloc); thread 0 initialises an mbarrier.

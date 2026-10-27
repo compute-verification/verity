@@ -1,4 +1,4 @@
-"""`verity.ml.circuits.ops.boolean.elementwise`: the Boolean element-wise operations (the f32 ones with the IR's NaN words and,
+"""`verity.ml.circuits.ops.boolean.elementwise`: the Boolean element-wise operations (the f32 ones with the word primitives' NaN words and,
 as the `_v4`s, with the GPU's) agree with their word primitives (`trace.word_of`) on
 every pair (triple) of special words, on random words and on words chosen to land in the subnormal range (a bf16 operation also
 on every word against a few specials, and a product at f32's subnormal and overflow ends), carry exactly their

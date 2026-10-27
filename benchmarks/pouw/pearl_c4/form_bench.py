@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import dev as D  # noqa: E402
+import dev as D
 
 REF = "form_nv_v0"
 VARIANTS = (REF, "form_nv_v1", "form_nv")

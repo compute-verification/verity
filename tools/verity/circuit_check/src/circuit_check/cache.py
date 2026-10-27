@@ -49,8 +49,10 @@ the module that registers a kernel is imported with the registries, and no check
 package an enumerator listed (`targets.load_registries`, the vLLM registry's ``catalog.load`` and ``boolean._load``,
 `_ENUMERATORS`: each imports every module it lists and names any that fails, nothing else) is held by its listing, the modules
 it lists by their names, each module's content used only to follow a move (`_children`), and the modules it imported are not
-pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``).  The checker's
-own version is the digest of this package's sources less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
+pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``), unless it is
+the checker's own: those, like the checker code that ran, are held by the checker's version alone.  The checker's
+own version is the digest of this package's code (each module's AST without its docstrings, `_code`, so an edit to its prose or
+comments reruns no target) less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
 peaks, which decide which targets run beside which, never what a check computes, and which no recording holds either,
 `cli.heavy`) and the known failures (`KNOWN`, which decide only the run's summary).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
@@ -105,8 +107,9 @@ outside the tree (another tree's copy, which no recorded read covers).
 
 The task list of ``--all`` (each target and its key) is an entry too, of the request ``task-list``: it holds what any target
 could (every binding's recording, every Definition the catalog reached with what its build read, `task_list_reads`), every in-tree
-module the process imported and every binding file whole, and counts only when each is unchanged where it was, never through a
-move; a run reuses it only when every target it lists is reused that way too, and then builds no Definition.
+module the process imported but the checker's own (its version) and every binding file whole, and counts only when each is
+unchanged where it was, never through a move; a run reuses it only when every target it lists is reused that way too, and then
+builds no Definition.
 
 Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``; there is no expiry and no path or time
 shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
@@ -317,8 +320,8 @@ _HOOKS = ("__import__", "import_module", "exec_module")
 
 
 #: the read `importlib.metadata` makes of every `sys.path` entry, held by what it yields: each installed distribution's
-#: name and version (`_distributions`), not each directory's listing (17 Oct: since every workspace member is installed,
-#: every member's root was in every target's reads, and a file added to one made every target miss)
+#: name and version (`_distributions`), not each directory's listing (every workspace member is installed, so
+#: a listing would put every member's root in every target's reads, and a file added to one would make every target miss)
 DISTRIBUTIONS = "<distributions>"
 _METADATA: list[str] = []
 
@@ -1586,6 +1589,8 @@ def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[s
     for rel in acc.sources:                            # a loaded module's source looked for, by the module's name
         f = os.path.abspath(os.path.join(root, rel))
         name = by_file.get(f)
+        if f.startswith(os.path.join(str(_HERE), "")):
+            continue                                   # the checker's version, and `targets.py` by its units
         if name is not None and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f):
             present.add(name)
         elif name is not None and (m := _side(name)) is not None and (r := _sidecar(root, m, ".py")) is not None \
@@ -1639,16 +1644,40 @@ def _dist(root: Path, top: str) -> str | None:
         return None
 
 
+class _Prose(ast.NodeTransformer):
+    """A module's AST without its statements that are a string alone (its docstrings among them)."""
+
+    def visit_Expr(self, node: ast.Expr) -> ast.AST | None:
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            return None
+        return self.generic_visit(node)
+
+
+_CODE: dict[bytes, bytes] = {}
+
+
+def _code(p: Path) -> bytes:
+    """A file of the checker as its version holds it: a module by the digest of its AST with every string-alone statement cut
+    (`_Prose`; the AST holds no comment, formatting or line number), so an edit to its prose keeps the version; any other file
+    by its bytes.  Memoized by the bytes, since `key` reads every file again for each entry."""
+    data = p.read_bytes()
+    if p.suffix != ".py":
+        return data
+    if data not in _CODE:
+        _CODE[data] = b"ast:" + hashlib.sha512(ast.dump(_Prose().visit(ast.parse(data))).encode()).digest()
+    return _CODE[data]
+
+
 def version() -> str:
-    """The checker's own version: the digest of this package's sources, less `targets.py` and ``pins/`` (each target holds
-    its own parts of them), `HEAVY` and `KNOWN` (no target's input)."""
+    """The checker's own version: the digest of this package's code (`_code`: no docstring or comment), less `targets.py` and
+    ``pins/`` (each target holds its own parts of them), `HEAVY` and `KNOWN` (no target's input)."""
     h = hashlib.sha512()
     _INTERNAL.append(True)
     try:
         for p in sorted(_HERE.rglob("*")):
             if (p.is_file() and "__pycache__" not in p.parts and p not in (TARGETS, HEAVY, KNOWN[0])
                     and PINS not in p.parents and KNOWN[1] not in p.parents):
-                h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
+                h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + _code(p) + b"\0")
     finally:
         _INTERNAL.pop()
     return h.hexdigest()
@@ -2045,9 +2074,9 @@ def unit_reads(units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str
 
 def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
     """What the task list's entry holds (`cli.run`): what any target could hold (`attributed` over every binding's recording and
-    every root), every in-tree module this process imported, and every binding file whole.  More than the union of the targets'
-    reads: a new binding entry, a new Definition in a registry module or a new module an enumerated package lists changes the
-    list without changing what any target read."""
+    every root), every in-tree module this process imported but the checker's own (its key's `version`), and every binding file
+    whole.  More than the union of the targets' reads: a new binding entry, a new Definition in a registry module or a new module
+    an enumerated package lists changes the list without changing what any target read."""
     fr = Frame()
     for f in _PRODUCED.values():
         fr.merge(f)
@@ -2059,8 +2088,8 @@ def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
         for name, m in list(sys.modules.items()):
             if isinstance(f := getattr(m, "__file__", None), str):
                 by_file.setdefault(os.path.abspath(f), name)
-        mods = {name for f, name in by_file.items() if _rel(f) is not None and (p := _resolve(root, name)) is not None
-                and os.path.realpath(p) == os.path.realpath(f)}
+        mods = {name for f, name in by_file.items() if _rel(f) is not None and not f.startswith(os.path.join(str(_HERE), ""))
+                and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f)}
         units = {f"{n}#*" for f in _unit_files() if (n := _named_file(f, ".py", by_file)) is not None}
     finally:
         _INTERNAL.pop()

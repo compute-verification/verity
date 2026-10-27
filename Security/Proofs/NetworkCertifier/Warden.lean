@@ -10,7 +10,7 @@ import Mathlib.Data.Fintype.BigOperators
 late cell (`wardenLane_eq`): its data cells and padding before it, the fail cell, padding after. So the device's output
 is the client view of the schedule, the data and the fail cells (`trusted-host`). A lane of `n` cells has its
 fail cell among `none, 0, …, n − 1`, so the views are an image of the schedules, the fail choices and the data; with
-the data from the advice strings within the caps and the content, their count is #3533's advice count times `2^k`.
+the data from the advice strings within the caps and the content, their count is the advice string's count times `2^k`.
 -/
 
 namespace NetTiming

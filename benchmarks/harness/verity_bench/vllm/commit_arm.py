@@ -38,10 +38,11 @@ fails. The custom gate reads every run so far.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+
+from verity_vllm.engine.env import apply_target
 
 #: the row Commit's staging (`config.CommitConfig`): 256 MiB windows, 8 slots; learning bounded, nothing raw retained
 ENV = {"VERITY_WINDOW_MB": "256", "VERITY_WINDOW_SLOTS": "8", "VERITY_STAGING_BOUNDED": "1", "VERITY_RETAIN": "none"}
@@ -110,7 +111,7 @@ class CommitArm:
     def ready(self, target: Any) -> None:
         from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
-        os.environ.update(ENV)
+        apply_target(ENV)
         engine = self.engine(target)
         com = NativeCollectCommitter(engine, run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,
                                      native_hooks=True, auto_blocks=True, native_worker=True)

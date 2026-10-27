@@ -944,7 +944,7 @@ def pair_halves(secret: bytes = SECRET, session: bytes = SESSION) -> tuple[activ
 def test_a_sealed_pair_link_carries_only_ciphertext_and_every_record_is_the_unsealed_runs(honest_run):
     """With the link sealed between two of the auditor's certifiers (`Proxy(pair=…)`), each direction under its own
     keys, the proxy publishes the unsealed run's records, egress and ingress, so every verdict, raw and committed, is
-    the unsealed run's: N2, N3 and the timing bound read the same grids. The wire is r sealed units of B + 64 bytes a
+    the unsealed run's: N2 and the timing bound read the same grids. The wire is r sealed units of B + 64 bytes a
     bucket, padding sealed too, so it holds no frame's bytes and no run of zeros, and opened in order under the
     egress direction's keys it is the unsealed run's wire, byte for byte. The same secret seals the run to the same
     wire, and another secret to another wire with the same records. Without a pair (the default) the proxy is

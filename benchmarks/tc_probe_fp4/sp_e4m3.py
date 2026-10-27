@@ -46,8 +46,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import probe as P  # noqa: E402  (first: it puts verity on the path)
-import k32  # noqa: E402
+import probe as P
+import k32
 
 SCHEMA = "pouw-rtxpro/tc-sparse-e4m3/v1"
 INSTRUCTION_ID = "sm120.mma.sp.m16n8k64.e4m3"

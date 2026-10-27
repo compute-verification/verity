@@ -11,7 +11,7 @@ folded into its gates and the gates its outputs don't read are dropped. The ReLU
 `scalar.select`. The absmax is the unsigned max (`scalar.gt_u`) of the relu'd words' 15 magnitude bits: the widening to f32 is
 exact and keeps the order, NaNs above +inf, so it is the word Definition's max of the widened magnitudes, and its high half the
 bf16 word. The scale's amax > 0 is the sign bit clear and the magnitude neither zero nor a NaN; the divisions are `fp.f32_div`
-with the IR's NaN words (`F32Div_v3`'s, `F32Div_v1` on bits) and the codes `scalar.f32_to_s8_rni_sat`.
+with the word primitives' NaN words (`F32Div_v3`'s, `F32Div_v1` on bits) and the codes `scalar.f32_to_s8_rni_sat`.
 """
 from __future__ import annotations
 

@@ -139,7 +139,7 @@ def _install_inductor_lowering(op) -> None:
     def handler(x, id):
         return fallback(x, id)
 
-    handler._is_fallback_handler = True     # noqa: SLF001
+    handler._is_fallback_handler = True
     L.register_lowering(op, type_promotion_kind=None)(handler)
 
 
@@ -260,7 +260,7 @@ class CompiledGraphSource:
                 __orig(self_, *a, **kw)
                 try:
                     me.wrap_model(self_.get_model(), self_)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     me.errors.append(f"wrap_model: {e!r}"[:300])
                     raise
 

@@ -220,7 +220,7 @@ class Device:
         self.ck(self.lib.ph_read(vp(self._flush.ptr), self._flush.nbytes, 1, vp(self._sink.ptr), 4, vp(stream or self.stream)))
 
     def write_flush(self, stream: int | None = None) -> None:
-        """The write flush (#475's, the W5 control only): zeroing 4x the L2 leaves dirty lines."""
+        """The write flush (the W5 control only): zeroing 4x the L2 leaves dirty lines."""
         self.ck(self.lib.ph_fill(8, vp(self._flush.ptr), self._flush.nbytes, u64(0), vp(stream or self.stream)))
 
     def event(self) -> int:

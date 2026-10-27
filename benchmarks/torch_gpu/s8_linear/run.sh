@@ -3,7 +3,7 @@
 # S8_MAX_MIN (30) minutes, from build.sh's ship sent with the run (nothing is compiled here):
 #   tar -C BUILD_RUN/out/ship -cf /tmp/s8-ship.tar .
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 90m \
-#     --env GPU_LEASE_WHO=kernels-kp2s8 --send /tmp/s8-ship.tar -- bash benchmarks/torch_gpu/s8_linear/run.sh STEP...
+#     --env GPU_LEASE_WHO=LANE --send /tmp/s8-ship.tar -- bash benchmarks/torch_gpu/s8_linear/run.sh STEP...
 # A STEP is a script and its arguments in one word, e.g. "run.py --ms 1,7,257 --no-swap" (the canary) then "run.py" (the
 # gate); each writes into $OUT/<i>-<script>. @OUT@ in a step is $OUT ("bench.py --configs @OUT@/1-tune/best.json"), @S@
 # the run's scratch directory (deleted at exit, never uploaded), and a step "cpu:SCRIPT ..." runs with no lease ("cpu:realw.py

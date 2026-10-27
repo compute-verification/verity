@@ -38,7 +38,7 @@
   reads must refuse: the rows open no pinned root. In the wired circuit each value is one row a linear (``w`` the s8
   [H][H] codes, ``H² / 2`` words, ``sw`` the H scales, ``2H`` words: `commit_weights`' ``wired``), each linear unit reading
   its layer's row.
-* **Committed activations** (`TorchLoop.commit_activations`, CMP-91): each window's activation rows, ``x`` (every linear's
+* **Committed activations** (`TorchLoop.commit_activations`): each window's activation rows, ``x`` (every linear's
   s8 input row, ``H / 2`` words) and ``sx`` (its f32 scale, 2 words), one row a (request, step, layer) in unit order (unit
   u's rows are row ``u // H``), committed as core's registered values in ``hm96-sha512/row/v2`` under fresh salts, each
   domain binding the window's run root, so a window's rows open under no other window's domain. Their entries go in the

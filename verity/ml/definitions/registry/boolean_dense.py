@@ -37,7 +37,7 @@ F32 = Array<32, Value<1>>; each word view is its _v1 at the same statics, `Bf16M
                                                   the same rows with the f32 scalar an input (``c``; the division's
                                                   ``inv = RN32(1 / C)``); word views `value_inputs`' _v3
 
-Each is a batch of one element Definition per member, traced from `verity.ml.circuits.silicon.fp`'s builders with the IR's NaN words,
+Each is a batch of one element Definition per member, traced from `verity.ml.circuits.silicon.fp`'s builders with the evaluator's NaN words,
 and computes no value twice (`Q_word`'s no-recompute rule): ``x * x`` decodes x once (`SquareF32Element_v1`, not
 ``F32Mul_v3(x, x)``); a constant static is folded into the gates (`elementwise.specialized`; `Bf16DivScalar`'s K is ATen's
 RN32(1 / C), `dense.reciprocal_bits`, `Bf16MulScalar`'s f32(C)); a scalar every member shares has its own gates once per row

@@ -12,8 +12,8 @@ releases it. Every frame on the link is B bytes: a header (kind u8, stream u32, 
 fill. Padding is B zero bytes (kind `PAD`); `DATA` is a payload.
 
 **The canonical framing** is every sender's, so that each direction's frames are one public template's: the same
-header on every frame, then the sender's bytes at a fixed place, then the same bytes after them (N3 checks a window's
-frames against that template, and nothing else of a frame is free). On egress a frame is one event (`event`): the
+header on every frame, then the sender's bytes at a fixed place, then the same bytes after them, so nothing else of a
+frame is free. On egress a frame is one event (`event`): the
 `DATA` header on stream `CANONICAL_STREAM` with length `EVENT_BYTES`, `EVENT_HEAD`, the base64 of at most
 `TOKEN_BYTES` bytes padded with NUL to `EVENT_TEXT` characters, and `EVENT_TAIL`, so a token is one frame, or one per
 `TOKEN_BYTES` of it (`events`). An id event (`id_event`, `ID_EVENT_BYTES`) is that object with no text: its request's

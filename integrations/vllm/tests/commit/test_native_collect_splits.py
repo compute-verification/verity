@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
+from verity_vllm.commit.committer import native_collect as NC
 
 
 class _FakeKernel:
@@ -105,7 +105,7 @@ def test_split_count_of_one_step_is_the_agreed_kernel_s_or_nothing():
 
 
 def test_a_step_vllm_skipped_top_p_on_binds_the_prescribed_s():
-    """TinyLlama Gumbel (top_p 1) B8 on sm_120 (g211, r20260930-192928-96f5): the derived-S Program requires `runner.sampler/splits` per
+    """TinyLlama Gumbel (top_p 1) B8 on sm_120: the derived-S Program requires `runner.sampler/splits` per
     request per step, but vLLM runs no split kernel when every row has top_p 1 (`get_top_k_top_p` -> top_p None), so 118/118 were unbound.
     The prescribed S = SplitsFor_v1(rows, num_SMs) is bound instead -- only for a derived-S Program and only when EVERY row has top_p 1."""
     np = pytest.importorskip("numpy")
@@ -127,7 +127,7 @@ def test_a_step_vllm_skipped_top_p_on_binds_the_prescribed_s():
 
 
 def test_every_tp_rank_arms_the_prescribed_s_as_the_single_rank_commit_does(tmp_path):
-    """phi4-14b TP2 B8 top_p 1 on sm_120 (cov-gm358-r2, r20261002-220307-6e56): each rank left its 121 `runner.sampler/splits` unbound.
+    """phi4-14b TP2 B8 top_p 1 on sm_120: each rank left its 121 `runner.sampler/splits` unbound.
     Only the single-rank `taps.attach` armed the prescribed S; a TP rank attaches through `taps.for_ranks` (None with no tap on) and
     `attach_rank`, which did not.  Every rank arms it now, with or without taps, for a derived-S manifest only."""
     from types import SimpleNamespace

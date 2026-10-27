@@ -1393,9 +1393,10 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
     """`line_record` with the session's transcript (`session`) runs `Session.run` on it and reads the line off the
     record that run makes (`Line.lineOfRun`, `LineHeld`'s `lineOf`): the line of the session's kept record, given
     beside it or not, with the times seen on the verifier's clock the record's own. A kept record that isn't the run's,
-    a transcript cut short of its verdict, `samples` other than its parameters' and times seen off the record's are
-    refused, and a transcript that names two windows a coin beside one openings coin a window is malformed; on the
-    challenger's clock the times aren't held to the record."""
+    a record or transcript of another registration than the one given, a transcript cut short of its verdict,
+    `samples` other than its parameters' and times seen off the record's are refused, and a transcript that names two
+    windows a coin beside one openings coin a window is malformed; on the challenger's clock the times aren't held to
+    the record."""
     import copy
     import json
 
@@ -1423,6 +1424,9 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
         assert call(inputs) == call({**inputs, "session": case}) == call({**bare, "session": case}) == want
         assert call({**moved, "session": case}) == {
             "refused": "the record is not the one Session.run makes of the session's transcript"}
+        other = {**inputs, "registration": {**inputs["registration"], "payload_root": "01" * 64}}
+        assert call({**other, "session": case}) == call(other) == verifier.line.record_run_json(other) == {
+            "refused": "the record is not of the registration given"}
         assert call({**bare, "session": {**case, "events": case["events"][:-1]}}) == {
             "refused": "the Lean verifier gave the session no record"}
         with pytest.raises(lv.LeanError, match="samples: the session's"):

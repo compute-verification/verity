@@ -1,10 +1,10 @@
-"""[ov-sampling] Bit-exact, torch-free transcription of the two libdevice functions inside vLLM's Gumbel-max sampler:
+"""Bit-exact, torch-free transcription of the two libdevice functions inside vLLM's Gumbel-max sampler:
 `__nv_logf` and `__nv_log1pf` (CUDA libdevice.10.bc as shipped with Triton 3.7.1, FTZ variants — Triton compiles kernels with
 `nvvm-reflect-ftz=1`, and the cached PTX of `_gumbel_sample_kernel` shows exactly the instruction mix the IR predicts:
 `fma.rn.ftz.f32` ×192, `add.rz` ×8, `cvt.rn.f32.s32` ×24, `mul.f32` ×40, `add.f32` ×24, `max.f32` ×8, no `lg2.approx`).
 
-The LLVM IR both functions were transcribed from is `out/gen/lanes/ov-sampling/probe/libdevice_logf_log1pf.ll` (dumped with
-llvmlite from `triton/backends/nvidia/lib/libdevice.10.bc`).  Every fp32 operation is reproduced with a single IEEE rounding:
+Both functions were transcribed from their LLVM IR in `triton/backends/nvidia/lib/libdevice.10.bc` (dumped with
+llvmlite).  Every fp32 operation is reproduced with a single IEEE rounding:
 
     fma.rn.ftz.f32   -> `fma_f32`     exact product in float64 (24+24 bits) + TwoSum error term + midpoint-aware final rounding
     add.rz.ftz.f32   -> `add_rz_f32`  float64 sum + TwoSum error term, truncated toward zero

@@ -1,5 +1,5 @@
 """J10 banded noise on the RTX PRO 6000 at kernel level: the credited one-stream arm `mix-cpeel` (block2 where a call's
-column blocks outnumber the SMs, split elsewhere; peeled, z = A B^T) with per-unit noise, against the same units on banded
+column tiles outnumber the SMs, split elsewhere; peeled, z = A B^T) with per-unit noise, against the same units on banded
 noise (h1o.cu's h1o_band_launch: a band-rows pass, then units that hash only their columns), labelled `j10b_ref.LABEL`
 until CA's reference lands. Measured only: nothing here is served or credited.
 
@@ -10,14 +10,14 @@ until CA's reference lands. Measured only: nothing here is served or credited.
                            workspace in its segment loop (groups of 4 chunks, h1o.cu's forms 0 and 3)
           mix-cpeel-bGs    the same with block2's rows staged in its noise buffers (forms 4 and 5); split always stages
           mix-cpeel-bGp    mix-cpeel-bG with the units launched as the pass's programmatic dependents (h1o_band_launch's
-                           mode 3: their seeds, midstates and column blocks overlap the pass, which decode's latency is)
+                           mode 3: their seeds, midstates and column tiles overlap the pass, which decode's latency is)
     gate  per arm and window, as h1ogate.py: a dither_one.Window over NL layers with the served shapes, a step of m rows
           captured per Window.captures (0xA5 first, the band workspace too) and dither_one.check on each, the gate
           verdict over gate, control, fault, fault_wb and fault_xa. For a banded arm check runs with its receipts
           reference at band G (h1r.cu's h1r_launch_band: v1, full compressions, the rows from the leader's seed_j in the
           seeds buffer), its CPU units on j10b_ref's noise (h1v3_ca's word functions: dither_one.h1v3_unit with h1tile's
           rows taken from the leader), z held to A B^T (peeled), and CA's banded reference itself on the same units, which
-          the gate requires (#2866: banded.banded_reference under the tree j10b_ref.ca_tree finds, j10ca_ref.py; send
+          the gate requires (banded.banded_reference under the tree j10b_ref.ca_tree finds, j10ca_ref.py; send
           banded-1a4d1de024.tar.gz). Then the band workspace of the gate
           step against j10b_ref.row_block (the first and last live band of each call whole, up to 384 drawn bands 8
           blocks each) and no 0xA5 block left in a live band.

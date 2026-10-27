@@ -226,7 +226,7 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
 
     Specializations are shared through a per-definition cache keyed by the binding record. Function-valued
     statics are keyed by id, so a cache hit whose function references are *different* definitions under the
-    same id is a conflict (ruling §8.1), not a silent reuse of the first body."""
+    same id is a conflict, not a silent reuse of the first body."""
     if isinstance(F, SpecializedDefinition):
         merged = dict(F.bindings)
         merged.update(kw)

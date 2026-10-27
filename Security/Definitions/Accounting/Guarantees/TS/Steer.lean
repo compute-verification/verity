@@ -4,7 +4,7 @@ import Definitions.Accounting.TS.Steer
 /-!
 # Steering under one σ (trusted)
 
-STEER-PROOF's route B (note:20261018T0303Z-draft-steer-proof), each `def G : Prop` proved as
+STEER-PROOF's route B, each `def G : Prop` proved as
 `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS.Steer`:
 
 * `LinSteerSegments`: LIN-STEER holds for a segmented consumer exactly when its noise-active segments all carry the

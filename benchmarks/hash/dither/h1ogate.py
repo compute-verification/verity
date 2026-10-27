@@ -3,7 +3,7 @@ a block of six warps, `h1s_unit`), `h1o_unitsb` (a unit a block of five, `h1b_un
 `h1r_unit<2>`), the first two with the credited peel (`split-cpeel`, `block-cpeel`: z = A B^T from the noised
 stream's O, DITHER_PEEL=1), and those two again as the kernels `h1o_init` gives the maximum shared-memory carveout
 (`split2`, `block2`, `split2-cpeel`, `block2-cpeel`: two units' blocks an SM, block2 with immediate barrier ids), and
-`mix-cpeel` (`dither_one.MIX_FORMS`: block2 where a call's column blocks outnumber the SMs, split elsewhere), each gated
+`mix-cpeel` (`dither_one.MIX_FORMS`: block2 where a call's column tiles outnumber the SMs, split elsewhere), each gated
 through `dither_one.check`, then timed against each other.
 
     gate  per form, a `dither_one.Window` (T = 64) over NL layers' four linears with the served shapes, random full-range

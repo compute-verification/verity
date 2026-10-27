@@ -129,7 +129,8 @@ def y_unit(u, alpha_a, alpha_b):
     rounded to BF16 nearest-even (numpy's float32 is IEEE's, as `fast_tile.install` holds the process to)."""
     import numpy as np
 
-    inv = lambda alpha: np.float32(1) / alpha.view(np.float32)
+    def inv(alpha):
+        return np.float32(1) / alpha.view(np.float32)
     w = ((u.view(np.float32) * inv(alpha_a)[:, None]) * inv(alpha_b)[None, :]).view(np.uint32).astype(np.uint64)
     return ((w + 0x7FFF + ((w >> 16) & 1)) >> 16).astype(np.uint16)
 

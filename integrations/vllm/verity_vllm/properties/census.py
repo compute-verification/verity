@@ -29,7 +29,7 @@ Two halves, one CLI:
 Launch counts: per step, every declared kernel must launch on the device exactly as many times as the step has root events
 whose resolution declares it.  Claiming by name alone lets an untraced launch of a declared kernel (a JIT or cuteDSL kernel
 that leaves no dispatcher event) overwrite a Call's output in place: the fold sees no read-before-write and the residue stays
-zero (note:20261019T0602Z-report-a9-glm-moe-final).  A mismatch is refused by name: the kernel, its device count against its
+zero.  A mismatch is refused by name: the kernel, its device count against its
 declaring events, and the buffers (allocations) those events write.  `kernel_allowlist.LAUNCH_COUNT_ALLOWLIST` exempts a
 declared name with its reason, which the report records.  Two cases are not counted: launches the frozen `KERNEL_ALLOWLIST`
 claims (copies, fills, the runner's metadata kernels), which the residue accepts at any count with or without a declaration,

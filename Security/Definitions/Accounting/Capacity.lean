@@ -27,7 +27,7 @@ in bit-ticks over the window, a time average, and the account's bit-ticks bound 
 whole total, so over a window of `T` ticks the certificate this realization gives is about `S₀/T` bits on average,
 where `S₀` is the state the game is sound against (`Accounting.Guarantees.CapacityOfStateBound`). That is inherent to
 games graded by their peak state: a useful certificate needs a game graded at each round boundary (the continuous
-audit, for P2), and that choice is Daniel's. No table should cite `CapacityOfStateBound` at a session window.
+audit, for P2), and that choice is still open. No table should cite `CapacityOfStateBound` at a session window.
 -/
 
 namespace Accounting

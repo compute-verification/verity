@@ -19,7 +19,7 @@ walk-and-log cost 0 (`honest_realization`). So `extract_of_realization` applies 
   work.
 
 It doesn't show `ShaRealize`, a realization for every prover: `toyG`'s programs read the oracle table as data, so
-`Accel.OracleCalls` fails on it, and `ShaRealize` assumes it (RT-LEAN-2 L28).
+`Accel.OracleCalls` fails on it, and `ShaRealize` assumes it.
 -/
 
 namespace Pouw.SecurityProofs.ShaRealize.Witness

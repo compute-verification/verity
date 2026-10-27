@@ -271,7 +271,8 @@ def node_hash(C, domain, level, index, d, cur, sib, n: int) -> list:
 
 # --- traced Definitions ------------------------------------------------------------------------------------------------------
 
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str) -> CompositeDefinition:
+def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str,
+          version: int = 1) -> CompositeDefinition:
     """A Definition traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
 
     @lru_cache(maxsize=None)
@@ -284,7 +285,7 @@ def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Calla
         params, ret = signature(S)
         return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
 
-    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
+    d = CompositeDefinition(name, version, statics, signature, body, conformance="exact-model-tested", doc=doc)
     # C-Flock lowers an activation by its builder, commits included (`ir_lower._boolean_activation`)
     d.build = build  # type: ignore[attr-defined]
     d.traced = traced  # type: ignore[attr-defined]

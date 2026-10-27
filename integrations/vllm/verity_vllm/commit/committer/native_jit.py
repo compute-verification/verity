@@ -115,7 +115,7 @@ def default_parent(name: str) -> str:
 def staged_sources(build_dir: str, sources: Sequence[str]) -> list[str]:
     """The sources copied into `<build_dir>/src/` (rewritten only when their bytes differ), the paths torch compiles.  torch writes the
     source paths into build.ninja and ninja rebuilds when that file changes, so compiling each tree's own copy rebuilt the shared,
-    digest-keyed dir for every job of another tree (~2 min of nvcc under the build lock per GPU job on Nebius, Sep 30).  A digest-keyed
+    digest-keyed dir for every job of another tree (~2 min of nvcc under the build lock per GPU job).  A digest-keyed
     dir holds one source set, so its staged copy is the same file for every tree.  The local headers they include (`local_headers`) are
     staged at their relative paths beside them, so the copies compile as the originals do."""
     sd = os.path.join(build_dir, "src")

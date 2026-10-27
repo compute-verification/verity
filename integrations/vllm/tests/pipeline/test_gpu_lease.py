@@ -347,6 +347,7 @@ ONE = {"CUDA_VISIBLE_DEVICES": "5", "GPU_LEASE_UUID": "GPU-5"}
     (_args(replay_deferred=False), _com(), ENG, ONE, "no --replay-deferred", False),
     (_args(replay_bundle_overlap=0), _com(), ENG, ONE, "--replay-bundle-overlap 0", False),
     (_args(), _com(), ENG, ONE, "replay_bundle.start began no write", False),
+    (_args(serving_rows="request.json"), _com(), ENG, ONE, "--serving-rows commits its window at the C2 site", True),
     (_args(tensor_digests=True), _com(), ENG, ONE, "--tensor-digests", True),
     (_args(), _com(retain="none"), ENG, ONE, "replay the run on the engine", True),
     (_args(), _com(retain_exclude={"fa3_hidden_m1"}), ENG, ONE, "replay the run on the engine", True),

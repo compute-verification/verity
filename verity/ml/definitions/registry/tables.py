@@ -1,5 +1,5 @@
-"""The tables a program brings, as registered values, and the read that takes one as an operand (Daniel, 1 Oct: a table a
-program brings is a value, committed and always hidden; the measured MUFU tables stay gates of their operations).
+"""The tables a program brings, as registered values, and the read that takes one as an operand (a table a program
+brings is a value, committed and always hidden; the measured MUFU tables stay gates of their operations).
 
 A table of 2^IB entries of EW u16 words (an entry's low word first) is the registered parameter `table_type(name)`: rows of
 `ROW_WORDS` words, which a read takes whole as an operand (`TABLES` is each table's `(index_bits, entry_words)`):

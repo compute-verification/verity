@@ -382,7 +382,7 @@ def test_own_partial_rows_are_the_ranks_part_at_worlds_2_4_and_8(W):
     """A collective row's operand is `world` equal parts in rank order: rank r's own rows are its part's (N leaves for a per-row
     collective, M * N for a flat one), each named by the node producing it, not only the first (rank 0) or the last (rank W-1) run."""
     from verity_vllm.check.match import rank_match as RMx
-    N, spec = 7, lambda k: f"spec{k}"  # noqa: E731
+    N, spec = 7, lambda k: f"spec{k}"
     runs = [("n" if r % 2 else "p", r, 0, N) for r in range(W)]
     for rank in range(W):
         assert RMx._own_rows(runs, {"rank": rank, "world": W, "N": N}, spec) == ([f"spec{rank}"] if rank % 2 else ["<not-a-node>"])

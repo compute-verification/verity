@@ -33,13 +33,10 @@ inputs = [
     "Security/Properties/lakefile.toml", "Security/Properties/lake-manifest.json", "Security/Properties/lean-toolchain",
     # test_lean_verifier.py and test_audit_profile.py read the audit layer's files and its lifted statements
     "Security/Proofs/Flock/Soundness/Audit", "Security/Definitions/Flock/Guarantees/Audit.lean",
-    # test_lean_rope.py compares the RoPE data `verity_flock.lean_rows` writes
-    "Security/Proofs/Flock/Soundness/Rope/Gates.lean", "Security/Proofs/Flock/Soundness/Rope/Pinned.lean",
-    "Security/Proofs/Flock/Soundness/Rope/Checkpoints.lean", "Security/Proofs/Flock/Soundness/Rope/Chunks.lean",
     # test_randomness_spec.py hashes the spec fixtures/randomness_lean.json was generated from
     "Security/Proofs/Flock/Soundness/PlanDraw.lean",
-    # tests import B-Ligero (through verity_numerical) and circuit-check's targets, and read the census
-    "archive/direct", "tools/verity/circuit_check", "benchmarks/census",
+    # tests import circuit-check's targets and read the census
+    "tools/verity/circuit_check", "benchmarks/census",
     # the Lean verifier's stratified draw against the one-stage protocol's, and the Lean spec of verity.ml.randomness against
     # its pinned vectors
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",

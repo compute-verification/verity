@@ -89,12 +89,13 @@ Layout terms (`layout`): the audit's free inputs (`free_inputs`, from the window
 input-row bits, less the rows wires feed or ``external`` names) and its Program (`audit_program`, the window's
 population program rebuilt from its records, off which the period check reads its units and the bits each commits),
 the observation horizon the link's (its link-windows' buckets, `certifier_serve.WINDOW_BUCKETS` each), jitter bound 1
-(N2 holds the planned profile's egress counts exactly, so no observation moves), and no connection through the network
-certifier but the link, whose counts the profile fixes (``cells`` empty).
+(N2 holds the planned profile's egress counts exactly, so no count moves; that no offset within a bucket tells a
+receiver more is J's, assumed, `JITTER`, and not met: an offset the prover chooses within a bucket reaches the
+client), and no connection through the network certifier but the link, whose counts the profile fixes (``cells``
+empty).
 
-**The block record** (`block_leg`): a period's accepted answer, of either path, as the certifier leg of
-``verity/block-record/v1`` (CMP-95 item 6): K in bits, its error the answer's exact ``eps``, and the certificate at
-δ = 1/100 and 10⁻⁶ wherever ``eps`` is at most δ. A loop's leg and the H200 fallback's write that one shape.
+**The block record**: a period's accepted answer, of either path, is the certifier leg of ``verity/block-record/v1``
+by `benchmarks/network_traces/block_certifier.py`'s ``block_leg``, which also holds `check`.
 """
 from __future__ import annotations
 
@@ -127,6 +128,10 @@ SESSION = "certifier-session"
 #: the δ a period's certificate holds at: its answer's, then the one written beside it, each split across the case's
 #: terms (`term_delta`)
 DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
+#: K's jitter term, 0 at the case's jitter bound 1: J (`NetTiming.JitterBounded`) assumes it, and the certifier doesn't
+#: meet J at that bound (an offset the prover chooses within a bucket reaches the client); each answer's row in
+#: ``summary.json`` says so (``jitter_term``)
+JITTER = "assumed (J)"
 #: N2's stream decides at `certifier_serve.DELTA`
 N2_DELTA = Fraction(2) ** -40
 #: the lines of a failed session step's log its error carries (`failed`)
@@ -984,18 +989,10 @@ def rows_case_of(rw: Mapping[str, Any], windows: Sequence[int], scans: Mapping[i
 
 
 def check(exe: str, case: Mapping[str, Any]) -> dict[str, Any]:
-    """``network-period check`` on the case: its answer."""
-    with tempfile.TemporaryDirectory() as d:
-        files = []
-        for name, data in (("params.json", canonical_json(case["params"])),
-                           ("commitment.bin", bytes.fromhex(case["commitment"])),
-                           ("evidence.json", bytes.fromhex(case["evidence"]))):
-            (Path(d) / name).write_bytes(data)
-            files.append(str(Path(d) / name))
-        p = subprocess.run([exe, "check", *files], capture_output=True, text=True)
-    if p.returncode not in (0, 1, 2) or not p.stdout.strip():
-        raise RuntimeError(f"network-period check exited {p.returncode}: {p.stderr[-2000:]}")
-    return json.loads(p.stdout.strip().splitlines()[-1])
+    """``network-period check`` on the case: its answer (`block_certifier.check`)."""
+    sys.path.insert(0, str(TRACES))
+    import block_certifier as BC
+    return BC.check(exe, case)
 
 
 # --- the certified outputs -----------------------------------------------------------------------------------------------
@@ -1215,7 +1212,8 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
                 (out / f"{name}.answer.json").write_text(json.dumps(a, sort_keys=True))
                 pub = a.get("public") or {}
                 row[str(delta)] = {"verdict": a["verdict"], "reason": a.get("reason"), "term_delta": str(d),
-                                   "K": pub.get("K"), "eps": pub.get("eps"), "scans": pub.get("scans")}
+                                   "K": pub.get("K"), "eps": pub.get("eps"), "scans": pub.get("scans"),
+                                   "jitter_term": JITTER}
                 if strategy == "honest" and k == 0:
                     answer = a
         if strategy == "honest":
@@ -1308,7 +1306,8 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
             (out / f"{name}.case.json").write_text(json.dumps(case, sort_keys=True))
             (out / f"{name}.answer.json").write_text(json.dumps(a, sort_keys=True))
             row[str(delta)] = {"verdict": a["verdict"], "reason": a.get("reason"), "term_delta": str(d),
-                               "K": (a.get("public") or {}).get("K"), "eps": (a.get("public") or {}).get("eps")}
+                               "K": (a.get("public") or {}).get("K"), "eps": (a.get("public") or {}).get("eps"),
+                               "jitter_term": JITTER}
             if strategy == "honest" and k == 0:
                 answer = a
             if TAMPERED_WINDOW.get(strategy) in ws and a["verdict"] == "accept":
@@ -1322,45 +1321,9 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-# --- the block record ----------------------------------------------------------------------------------------------------
-
-#: the block record's δs (``verity/block-record/v1``'s ``at``): a leg's certificate holds at δ where its error is at
-#: most δ. The leg splits each of its `DELTAS` across a period's terms (`term_delta`), so its answer at δ has error δ.
-BLOCK_DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
-#: where the block record says a leg's error is read from: the runner row's ``quantity`` (the answer's public)
-BLOCK_ERROR_FROM = "quantity.eps"
-
-
-def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real",
-              owner: str | None = "network-accounting") -> dict[str, Any]:
-    """The block record's certifier leg (``legs.certifier`` of ``verity/block-record/v1``, CMP-95 item 6) of one
-    period's ``network-period check`` answer, in the clock form or the rows form: the answer's verdict, reason,
-    commitment and public; the quantity K, the bits a covert sender in ``server`` can move over the link in the
-    period's ``windows`` link-windows; the error the answer's exact ``eps``; and the certificate at each δ of
-    `BLOCK_DELTAS`, K wherever ``eps`` ≤ δ, else not established. ``runs``: the run ids it comes from; ``source``:
-    ``real`` or ``fixture``. Only an accepted answer certifies a K, so any other is a ValueError: the record's
-    quantity has no shape for a period that certifies nothing."""
-    if answer.get("protocol") != PROTOCOL:
-        raise ValueError(f"protocol {answer.get('protocol')!r}: not {PROTOCOL}")
-    if answer.get("verdict") != "accept":
-        raise ValueError(f"a {answer.get('verdict')} period certifies no K ({answer.get('reason')})")
-    if source not in ("real", "fixture"):
-        raise ValueError(f"source {source!r}: real or fixture")
-    if not runs:
-        raise ValueError("a leg comes from at least one run")
-    pub = answer["public"]
-    K, eps = int(pub["K"]), Fraction(pub["eps"])
-    at = {str(d): {"holds": True, "value": K, "epsilon": None, "by": "run"} if eps <= d else
-          {"holds": False, "why": f"the run established it except with {eps}, more than {d}"} for d in BLOCK_DELTAS}
-    return {"protocol": PROTOCOL, "owner": owner, "server": server, "source": source,
-            "answer": {k: answer.get(k) for k in ("verdict", "reason", "commitment", "public")},
-            "quantity": {"symbol": "K", "value": K, "unit": "bits", "windows": int(pub["windows"])},
-            "error": str(eps), "error_from": BLOCK_ERROR_FROM, "at": at, "runs": list(runs)}
-
-
-__all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "DELTAS", "PATHS", "PROTOCOL", "PUBLIC_SESSION", "STUBBED",
+__all__ = ["DELTAS", "JITTER", "PATHS", "PROTOCOL", "PUBLIC_SESSION", "STUBBED",
            "TAMPERED_WINDOW", "WARDEN_PENDING", "WARDEN_PUBLIC", "WARDEN_TAMPERED_PERIOD", "WARDEN_TAMPERS",
-           "answer_of_outcome", "audit_answer", "block_leg", "case_of", "certified_events", "certifier_leg", "check",
+           "answer_of_outcome", "audit_answer", "case_of", "certified_events", "certifier_leg", "check",
            "relay", "relayed", "tie_holds", "tie_of", "audit_program",
            "clock_evidence", "failed", "free_inputs", "holds_at", "io", "layout", "leg", "loop_units", "match_ids",
            "match_outputs", "n2_refusal", "n2_report", "once", "period_windows", "publish", "registered_outputs", "requests_of",

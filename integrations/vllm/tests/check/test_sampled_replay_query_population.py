@@ -43,7 +43,7 @@ def _manifest_for(w) -> dict:
     return T.v2_manifest(w.inst, tuple(sorted(w.prompts)))
 
 
-def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(world):  # noqa: F811
+def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(world):
     man = _manifest_for(world)
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3, workers=0, manifest=man)
@@ -82,7 +82,7 @@ def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(w
     assert fail is None and note.startswith("C2 population scope (R17-3; query of record Q_module_body_v1): Q_module_body_v1(P) = ") and "exact replay reaches" in note
 
 
-def test_the_record_carries_the_engine_configuration_the_evaluators_were_conditioned_on_measured_never_declared(world, monkeypatch):  # noqa: F811
+def test_the_record_carries_the_engine_configuration_the_evaluators_were_conditioned_on_measured_never_declared(world, monkeypatch):
     """[revb M-0083 ASK] VLLM_BATCH_INVARIANT (and the split-K workspace configs it pins) as a named fact beside the evaluator strings: the
     Gemm_v2 Hopper pin (dense M-0081) holds only under batch-invariant mode.  Measured from the replay's process; a fact the process cannot
     see is 'unavailable: <why>' by name -- never a declared default."""
@@ -129,7 +129,7 @@ def test_the_cublas_version_is_the_mapped_librarys_or_unavailable_by_name(tmp_pa
     assert SR.cublas_versions(str(maps))["cublas_version"].startswith("unavailable: OSError: ")
 
 
-def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliation_and_the_verdict(world):  # noqa: F811
+def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliation_and_the_verdict(world):
     man = _manifest_for(world)
     bad = copy.deepcopy(man)
     ghost = dict(next(r for r in man["identities"] if r["family"] == "instance_outputs"), op_path="model.layers.7.mlp.down_proj", output_member="0")
@@ -159,7 +159,7 @@ def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliati
     assert ok is True and "C2 population scope (R17-3; query of record Q_module_body_v1): Q_module_body_v1(P) = " in why, why
 
 
-def test_a_vu_whose_identity_the_query_does_not_require_is_outside_the_query_never_added_to_the_reach(world):  # noqa: F811
+def test_a_vu_whose_identity_the_query_does_not_require_is_outside_the_query_never_added_to_the_reach(world):
     """The replay does not enlarge Q(P): a Program row addressing an identity the manifest does not carry is a named finding (the
     replay's enumeration and the query disagree on what the Program produces), and the identity is not counted as reached."""
     man = _manifest_for(world)
@@ -177,7 +177,7 @@ def test_a_vu_whose_identity_the_query_does_not_require_is_outside_the_query_nev
     assert rep["query_total"]["identities"] == full["query_total"]["identities"] - 1 and chk["accounted"] is True
 
 
-def test_without_a_manifest_the_record_says_the_population_is_not_reconciled(world):  # noqa: F811
+def test_without_a_manifest_the_record_says_the_population_is_not_reconciled(world):
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=3, workers=0)
     pop = rep["population"]
@@ -195,7 +195,7 @@ def test_a_replay_record_predating_the_fields_is_graded_as_before_without_a_scop
     assert _query_population_scope(None) == (None, None)
 
 
-def test_moe_plane_identities_reconcile_at_their_planes(moe_world):  # noqa: F811
+def test_moe_plane_identities_reconcile_at_their_planes(moe_world):
     """[MAN-06f v3] the fused-MoE block rows are addressed at their PLANES (`moe/L<k>` / plane) -- the manifest's moe_block_stream
     identities.  Every plane identity is either reached (an evaluator exists) or uncovered by name (plane-fed producer without one)."""
     man = _manifest_for(moe_world)
@@ -215,7 +215,7 @@ def test_moe_plane_identities_reconcile_at_their_planes(moe_world):  # noqa: F81
             assert u["class"] == "plane-fed" and u["spec"].startswith("Moe")
 
 
-def test_a_required_family_without_a_stated_mechanism_fails_closed(world):  # noqa: F811
+def test_a_required_family_without_a_stated_mechanism_fails_closed(world):
     man = _manifest_for(world)
     odd = copy.deepcopy(man)
     odd["identities"].append(dict(man["identities"][0], family="future_family", step="*", request_id="*"))
@@ -231,7 +231,7 @@ def test_a_required_family_without_a_stated_mechanism_fails_closed(world):  # no
     assert fail is not None and "no stated mechanism ['future_family']" in fail
 
 
-def test_f_moe_r17_05_batch_level_planes_are_classified_per_listed_request_and_excluded_only_when_every_request_is_past_its_stop(world):  # noqa: F811
+def test_f_moe_r17_05_batch_level_planes_are_classified_per_listed_request_and_excluded_only_when_every_request_is_past_its_stop(world):
     """[moe F-moe-r17-05 (1)] a BATCH-LEVEL identity (request_id '*', `requests` list, one ENGINE step -- the fa2 hidden plane) is not
     executed only when EVERY listed request is past its own stop at that engine step (nothing was committed there); a plane some listed
     request still executes EXISTS (smaller composition) and stays REQUIRED -- its per-request slots past the stop are counted beside it
@@ -286,7 +286,7 @@ def test_f_moe_r17_05_batch_level_planes_are_classified_per_listed_request_and_e
     assert ne3["by_request"]["r1"]["batch_level_slots_not_executed"] == 0 and ne3["by_request"]["r0"]["batch_level_slots_not_executed"] == 1
 
 
-def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_and_never_shrinks_the_query(world):  # noqa: F811
+def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_and_never_shrinks_the_query(world):
     """[COORD R17-26 (1), F-moe-r17-03] a request that stopped at a declared EOS executed n_exec = min(a_r + LAG, cap) steps: the manifest of
     record stays the cap-length population (same query_total, same digests); its identities at request-relative steps >= n_exec are the
     NAMED class not-executed(R17-1, a_r, LAG) -- a third bucket beside reached / uncovered, out of the sampling pool (never a stratum that
@@ -409,7 +409,7 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
 # the arithmetic min(a_r + LAG, cap) demoted to a CHECK; which mechanism produced the class is on the record BY NAME
 # ---------------------------------------------------------------------------------------------------------------------------------------
 
-def test_f_r17b_39_the_last_phase_is_anchored_to_the_last_executed_step_and_the_lag_step_is_named(world):  # noqa: F811
+def test_f_r17b_39_the_last_phase_is_anchored_to_the_last_executed_step_and_the_lag_step_is_named(world):
     """[revb F-r17b-39 MINOR] On r17_2241 the EOS-stopped r0 (a_r 11, LAG 1, n_exec 12, cap 32) had NO `last` stratum: `last` was anchored to
     the cap step (31, not executed), its last executed step 11 -- the lag step, the R17-1 / F-r17-14 boundary -- sat in `mid` at catch
     probability n / |mid|.  Now: `last` = n_exec - 1 per request under a fault-free executed prefix, the steps past it are 'not-executed'

@@ -3,7 +3,7 @@ import Definitions.Pous.Model.Audit
 /-!
 # The secure-erasure audit: volatile memory in full use through the spot reads
 
-Added on 4 Oct 2026, under the model Daniel set that day: the disks are unplugged, so the prover's memory is volatile
+Under this model the disks are unplugged, so the prover's memory is volatile
 only (device memory and host DRAM), and the audit is a proof of memory utilization. A prover declares `S` bits of volatile memory;
 the audit asks it to fill them with the keyed fill `C` and then reads `C` back at random places under a short deadline.
 `EraseMeets` (`Security/Definitions/Pous/Accounting/EraseMeets.lean`) states the requirement over this game.

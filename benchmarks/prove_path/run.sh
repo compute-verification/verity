@@ -10,16 +10,16 @@
 #     from integrations/vllm/workloads/$ROW.json. The honest partition is PP_PARTITION (default a5's step-16 SiluMul_v2,
 #     stratified:4); the forged one SiluMul_v2{I=1536} at step 16, all 3 units drawn, on ranks PP_FORGED_RANKS (default 0).
 #   PP_LLAMA=art:ID: a single-GPU (TP1) Commit's row dir in the store, fetched once per node into PP_CACHE (default
-#     ~/.cache/verity-prove-path): Llama-3.2-1B's Commit r20261024-055630-5377 (art:f7428299…, $LROW, the sealed bundle
+#     ~/.cache/verity-prove-path): Llama-3.2-1B's Commit r20261024-055630-5377 ($LROW, the sealed bundle
 #     commit/replay_bundle_p0 and the Build's build_request_LP*). Its compiler is I2's compile_steps; its advice the declared
 #     run's. The bundle's context records the Commit's absolute node paths, and none is read: the prover's Programs are read from
-#     --row-dir, the verifier's from its own trace of each (PP_VLLM_PYTHON), and the Build manifest falls back to
+#     --row-dir, the verifier's from its own compile of each, and the Build manifest falls back to
 #     <row dir>/manifest.json (sha256-checked against the record). The honest partition is
 #     PP_PARTITION (default layer 0's SiluMul_v2{I=8192} at step 1, 4 units, subset:2); the forged one layer 0's at step 24, the
 #     one unit only r0 decodes there, drawn (subset:1), forged at PP_FORGE (default 0:0). With PP_SERVE_STANDIN=1, the same
 #     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
 #   PP_SERVE_RUN=DIR|art:ID PP_WINDOW=K PP_SERVE_ROWS=DIR|art:ID: a serve-openai run's closed Commit window K (default 0), its
-#     advice, requests and engine from the run dir, its Commit from the window's sealed row dir (#3532's form); PP_TARGET=F the
+#     advice, requests and engine from the run dir, its Commit from the window's sealed row dir; PP_TARGET=F the
 #     serving device's target profile where serve.json records none. The honest and forged partitions are PP_PARTITION and
 #     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). The window's compiler lists its
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
@@ -27,10 +27,9 @@
 #     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
 #     audited from its records alone (records_audit.py: circuit.json, the registration and the values, the advice's opening),
 #     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
-#   PP_VLLM_PYTHON=PY: the interpreter holding the pinned vLLM (CPU, on meta, as tools/advice_compile.py runs it) that a TP1 or
-#     served window's verifier traces its own Build of each Program I2 compiles with (prove_path.py audit's and circuit's
-#     --vllm-python): the rows' names, the parameters' names and types, supplied, the correspondence and prefix_cache.json are
-#     no Program digest's, so the verifier never reads them from the row dir. Default the tree's venv, which holds no vLLM.
+#   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or served window's verifier writes its
+#     own Build of each Program I2 compiles from its compile, with no vLLM, since the rows' names, the parameters' names and
+#     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
 #   PP_TORCH_FROZEN=1: the torch loop's decode step at the frozen H200 shape (verity_torch_loop.serve_frozen: width 16,384, MQA,
 #     MLP 65,536, every matmul coordinate a unit), one window per template, each audited from its records alone against the
 #     circuit registered before it ran, under PP_LAW (default subset:64, per window) in members of PP_TORCH_LOOP_CAP units
@@ -59,7 +58,7 @@
 #     input, so only each request's own row is free), in members of one unit
 #     (PP_TORCH_LOOP_CAP default 1) under stratified:3 (a unit of every template), with its weights one row a linear, plus
 #     an arm whose quantize units' codes are tampered (--tamper-activations), which the drawn quantize unit must refuse.
-#   PP_TORCH_DECODER=1: the same for the torch loop's decoder (verity_torch_loop.serve_transformer, CMP-92's 2-layer
+#   PP_TORCH_DECODER=1: the same for the torch loop's decoder (verity_torch_loop.serve_transformer, a 2-layer
 #     transformer, its four templates' units), honest and tampered, against the circuit registered before it ran, in members
 #     of PP_TORCH_LOOP_CAP units (default 16), committed by PP_TORCH_DECODER_WORKERS processes (default 8);
 #     PP_TORCH_LOOP_SHAPE: more serve_transformer.py flags (--prompt, --generate, --bf16-dot). The public member files

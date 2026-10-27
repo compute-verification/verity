@@ -212,7 +212,7 @@ def render(doc: Mapping[str, Any]) -> str:
     lines = [
         "# Where the bandwidth audit's time goes",
         "",
-        "Llama-3.1-8B FP8 on one RTX PRO 6000, memory accounting's encoded stack in vLLM. Each row is ms an output "
+        "Llama-3.1-8B FP8 on one RTX PRO 6000, the bandwidth audit's encoded stack in vLLM. Each row is ms an output "
         f"token, the mean over the point's paired reps ± its 95% half-width (Student t). `{AUDIT_SPANS}` over "
         f"`{PLAIN_SPANS}` is split into rows that sum to it: the top-up's contention from the arms with the top-up off, "
         "every other row a part of the spans arms with the top-up off. The credited lines' difference (spans off) is "

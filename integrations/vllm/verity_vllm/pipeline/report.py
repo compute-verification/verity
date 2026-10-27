@@ -7,8 +7,8 @@ used (census kernels, patterns, roots, instances per step) and what it cost.  `o
 field.  `summarize_md(card)` renders the fixed-width top section (CASE / provenance / counts / replay / HOLDOUTS /
 SUPPORT CLAIM / VERDICT) followed by a short markdown block.
 
-The five provenance rows come from `provenance.json`, written by the sealed verifier (`bench/verify_lane.sh`); without it
-the card is `unsealed: true` and those rows print `n/a`.
+The five provenance rows come from `provenance.json`, which no stage in this tree writes; without it the card is
+`unsealed: true` and those rows print `n/a`.
 """
 
 from __future__ import annotations
