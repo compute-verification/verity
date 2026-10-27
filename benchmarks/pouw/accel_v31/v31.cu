@@ -6,13 +6,14 @@
 //            512-bit seeds in SHA-512 counter mode (a stub: v31.py's StubChallenger issues the seeds)
 //   form     X = wrap8(A + d_A + V) and W' = wrap8(B + d_B + U pi_tau) with their wrap lists (k << 1 | negative, a row
 //            each), X^T and B~^T = (B + d_B + U pi)^T for the wrap correction, and the peel's tail rows
-//            P_A = [Z_0 .. Z_{dz-1} | V x dy], P_B = [U x dz | Y_0 .. Y_{dy-1}] (Z_X and Y_W in balanced base-128 digits,
-//            the last digit a full int8)
+//            P_A = [Z_0 | -V | Z_1 .. Z_{dz-1} | V x (dy - 1)], P_B = [-U | Y_0 | U x (dz - 1) | Y_1 .. Y_{dy-1}] (Z_X and
+//            Y_W in balanced base-128 digits, the last digit a full int8)
 //   wrap     dO = w_X B~^T + X w_W^T, sparse, on the CUDA cores (a 128 x 128 tile a CTA)
 //   gemm     X W'^T on the tensor cores (mma.sync s8, a 3-stage TMA ring, 128 x 128 tiles of 8 warps); after each segment
 //            of L = t L' inner indices every thread stores its accumulators' low 16 bits (T_s) to the words buffer; then
-//            the tail stages subtract P_A P_B^T stage by stage at their digit's weight (128^d), and the epilogue adds
-//            256 dO: O = T_S + 256 dO - Z_X U^T - V Y_W^T = (A + d_A)(B + d_B)^T mod 2^32
+//            P_A P_B^T's first two blocks (-Z_0 U^T - V Y_0^T) as more main stages, the tail stages subtracting the rest
+//            stage by stage at their digit's weight (128^d), and the epilogue adds 256 dO:
+//            O = T_S + 256 dO - Z_X U^T - V Y_W^T = (A + d_A)(B + d_B)^T mod 2^32
 //   commit   commit_gpu's small path (CTAs that fit beside the GEMM's) over the call's rows: hm96-sha512/row/v2 rows of ROW
 //            bytes in one frame-v3-sha512 tree, salts prf_salt(Ks, pos); its salt and leaf phases in at most V31_CCTA
 //            CTAs an SM (salt_persist, leaf_persist), so a GEMM CTA finds room beside them
@@ -194,8 +195,9 @@ __global__ void form_a_kernel(FormArgs f) {
   for (int r = 0; r < 16; ++r) {
     int8_t* p = f.P + (i0 + r) * f.TL;
     int z = zs[r * lp + c];
-    for (int d = 0; d < f.dz; ++d) p[d * lp + c] = (int8_t)digit(z, d + 1 == f.dz, f.flag);
-    for (int d = 0; d < f.dy; ++d) p[(f.dz + d) * lp + c] = (int8_t)v[r];
+    for (int d = 0; d < f.dz; ++d) p[(d ? d + 1 : 0) * lp + c] = (int8_t)digit(z, d + 1 == f.dz, f.flag);
+    p[lp + c] = (int8_t)-v[r];
+    for (int d = 1; d < f.dy; ++d) p[(f.dz + d) * lp + c] = (int8_t)v[r];
   }
 }
 // B side: thread c holds Y_W[j, c] for its 16 rows in registers; U's row gathered through pi from shared memory
@@ -241,9 +243,11 @@ __global__ void form_b_kernel(FormArgs f) {
 #pragma unroll
   for (int r = 0; r < 16; ++r) {
     int8_t* p = f.P + (j0 + r) * f.TL;
-    for (int d = 0; d < f.dz; ++d) p[d * lp + c] = us[r * lp + c];
+    const int8_t u = us[r * lp + c];
+    p[c] = (int8_t)-u;
+    for (int d = 1; d < f.dz; ++d) p[(d + 1) * lp + c] = u;
     int z = y[r];
-    for (int d = 0; d < f.dy; ++d) p[(f.dz + d) * lp + c] = (int8_t)digit(z, d + 1 == f.dy, f.flag);
+    for (int d = 0; d < f.dy; ++d) p[(d ? f.dz + d : 1) * lp + c] = (int8_t)digit(z, d + 1 == f.dy, f.flag);
   }
 }
 
@@ -675,7 +679,8 @@ struct GArgs {
   const int* dO;
   int* O;            // m x N, row-major (u32 mod 2^32)
   int M, N, K, L, S, TT, group;
-  int lp, dz;        // tail stage ts is block ts 128 / L' of P_A P_B^T: Z_b U^T (b < dz) or V Y_{b - dz}^T, at 128^digit
+  int lp, dz;        // tail stage ts is block b = ts 128 / L' of P_A P_B^T: b 0 and 1 (-Z_0 U^T, -V Y_0^T) add as main
+                     // stages do; then Z_{b - 1} U^T (b <= dz) or V Y_{b - dz}^T, at 128^digit, subtract
   u32* ctr;          // the tile counter (null: CTA c takes tiles c, c + grid, ...); a launch advances it by its tiles
   u32 base;          // ctr's value before this launch
 };
@@ -872,7 +877,7 @@ __global__ void __maxnreg__(V31_MAXNREG) gemm_kernel(const GArgs a) {
   R.prologue();
   R.consumer_init(warp, lane);
   const int wm = warp / Ring::WARPS_N, wn = warp % Ring::WARPS_N, g = lane >> 2, q = lane & 3;
-  const int KT = a.K / BK;
+  const int KT = a.K / BK, KS = KT + (PROTO ? 2 * a.lp / BK : 0);   // the main stages, then the tail's shift-0 blocks
   auto seg = [&](const int (&acc)[4][4][4], size_t tile, int kt) {
     if constexpr (PROTO)
       if (((kt + 1) * BK) % a.L == 0 || kt + 1 == KT) store_words(acc, a.words, tile, a.S, ((kt + 1) * BK + a.L - 1) / a.L, wm, wn, g, q);
@@ -887,26 +892,26 @@ __global__ void __maxnreg__(V31_MAXNREG) gemm_kernel(const GArgs a) {
     int acc[4][4][4];
     uint32_t fa[2][4][4], fb[2][4][2];
     R.load(fa[0], fb[0], R.stage(R.s), 0);
-    if (KT == 1) {
+    if (KS == 1) {
       R.body<true, true>(acc, fa, fb);
       seg(acc, tile, 0);
     } else {
       R.body<true, false>(acc, fa, fb);
       seg(acc, tile, 0);
 #pragma unroll 1
-      for (int kt = 1; kt < KT - 1; kt++) {
+      for (int kt = 1; kt < KS - 1; kt++) {
         R.body<false, false>(acc, fa, fb);
-        seg(acc, tile, kt);
+        if (kt < KT) seg(acc, tile, kt);
       }
       R.body<false, true>(acc, fa, fb);
-      seg(acc, tile, KT - 1);
+      if (KS - 1 < KT) seg(acc, tile, KS - 1);
     }
     const int row0 = tm * TILE + wm * 64 + g, col0 = tn * TILE + wn * 32 + 2 * q;
     if constexpr (PROTO) {
 #pragma unroll 1
-      for (int ts = 0; ts < a.TT; ts++) {
+      for (int ts = KS - KT; ts < a.TT; ts++) {
         const int blk = ts * BK / a.lp;
-        R.tail(acc, 7 * (blk < a.dz ? blk : blk - a.dz));
+        R.tail(acc, 7 * (blk <= a.dz ? blk - 1 : blk - a.dz));
       }
     }
 #pragma unroll
