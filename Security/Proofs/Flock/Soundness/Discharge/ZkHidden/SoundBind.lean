@@ -81,6 +81,7 @@ noncomputable def sitesShH : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y�
   A S _ _ _ := (tableShH dj y₀ S).twinA
   B S _ _ _ := (tableShH dj y₀ S).twinB
   sat S _ _ _ := (tableShH dj y₀ S).sat (zkTyped ht)
+  pin S _ _ _ := (tableShH dj y₀ S).pin (zkTyped ht)
   acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h

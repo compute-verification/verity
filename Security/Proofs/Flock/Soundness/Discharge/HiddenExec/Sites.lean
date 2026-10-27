@@ -24,7 +24,7 @@ open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ}
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
-  (hv1 : Hidden.Any.RowsFitS c)
+  (hv1 : Hidden.Any.RowsFitP c)
 
 /-- `stmtOf` of `Hidden.unpin st` is the twin, at matrices read off `unpin`, of a statement equal to `stmtOf st`. -/
 theorem twin_of_eq {T : Model.Statement} {st : Stmt} {hwf : StmtWF st}
@@ -46,6 +46,17 @@ theorem twin_sat_of_linear {tags : Tags} {T : Model.Statement} {st : Stmt} {hwf 
       z := by
   subst hT
   exact sat_pinned L F hleaf hda hdb hwf hlin regs hz
+
+/-- **With every pinned bit a linear row, a witness of a statement equal to `stmtOf st` is 0 at every pinned bit**
+(`sat_pinnedZ`). -/
+theorem twin_zero_of_linear {tags : Tags} {T : Model.Statement} {st : Stmt} {hwf : StmtWF st}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} (hT : T = stmtOf st hwf regs)
+    (L : FlockSoundness.Layout (Hidden.unpin st)) (F : Aliased.UnitFacts tags (Hidden.flatTwin st))
+    (hleaf : st.leaf = default) (hda : st.da = (HmOut.delta st.c st.pin).1)
+    (hdb : st.db = (HmOut.delta st.c st.pin).2) (hlin : ∀ y ∈ Hidden.pinnedCols st.c, LinearBit st.c y)
+    {z : Model.Witness T.m} (hz : T.Satisfies z) : ∀ o (r : Fin (2 ^ T.kLog)), PinBit st.c r.val → T.block z o r = 0 := by
+  subst hT
+  exact (sat_pinnedZ L F hleaf hda hdb hwf hlin regs hz).2
 
 namespace TableH
 
@@ -78,7 +89,7 @@ noncomputable def acc : AcceptedH (twin x.T.S x.twinA x.twinB) where
   ht := ht
   h := x.h
   L := Hidden.unpin_layout ht x.h
-  hR := unitRowsFlat_unpin ht x.h (by rw [x.c_eq hc]; exact hv1.1.toP)
+  hR := unitRowsFlat_unpin ht x.h (by rw [x.c_eq hc]; exact hv1.1)
   regs := x.regs
   hT := (Integrate.model_eq (st := Hidden.unpin x.st) (parse_facts (parse_untyped ht (setupHidden_parseC x.h)).1)
     (Hidden.unpin_layout ht x.h)
@@ -94,6 +105,16 @@ theorem sat (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S x
     (Hidden.setupHidden_spec x.h).da (Hidden.setupHidden_spec x.h).db
     (pinned_linear (Hidden.checkPinned_of_checkRows hp.2) P.typed P.nets) hz
 
+include ht in
+/-- **A witness of a drawn table is 0 at every pinned output's bit** (`twin_zero_of_linear`, as `sat`). -/
+theorem pin (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) :
+    ∀ o (r : Fin (2 ^ x.T.S.kLog)), PinBit x.st.c r.val → x.T.S.block z o r = 0 :=
+  have hp := parse_untyped ht (setupHidden_parseC x.h)
+  have P := parse_facts hp.1
+  twin_zero_of_linear x.hT (Hidden.unpin_layout ht x.h) (flat_unitFacts ht x.h) (Hidden.setupHidden_spec x.h).leaf
+    (Hidden.setupHidden_spec x.h).da (Hidden.setupHidden_spec x.h).db
+    (pinned_linear (Hidden.checkPinned_of_checkRows hp.2) P.typed P.nets) hz
+
 end TableH
 
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
@@ -104,6 +125,7 @@ noncomputable def sitesAtH : SitesH (planAtH (Reg := Reg) dj x₀) (tabAtH dj x�
   A S _ _ _ := (tableAtH dj x₀ S).twinA
   B S _ _ _ := (tableAtH dj x₀ S).twinB
   sat S _ _ _ := (tableAtH dj x₀ S).sat ht
+  pin S _ _ _ := (tableAtH dj x₀ S).pin ht
   acc S _ _ _ := (tableAtH dj x₀ S).acc ht hc hv1
   vu S _ u h := (tableAtH dj x₀ S).vu u h
   hvu S _ u h := (tableAtH dj x₀ S).hvu u h
