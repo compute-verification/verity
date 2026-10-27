@@ -6,7 +6,7 @@ a public power of two from 16 to 262,144 bits):
     RowAbsMax_v1{N, RELU}       (x: bf16[N]) -> bf16: max |x_k| over the row, relu'd first under RELU
     QuantChunkS8_v1{N, RELU}    (x: bf16[N], amax: bf16) -> (s8[N], f32): a chunk's codes under the row's amax, and the scale
 
-**The function** is the torch loop's ``quantize`` (`verity_torch_loop.loop`) of its row, relu'd first under ``RELU``:
+**The function** is a W8A8 linear's per-row ``quantize`` in torch of its row, relu'd first under ``RELU``:
 
 * ReLU on bf16, ``x < 0 ? +0 : x`` (``torch.relu``: -0 and a NaN are themselves), then the exact widening to f32;
 * amax = max |x_k| over the row, NaN when any |x_k| is (``amax``'s propagation): the integer max of the f32 encodings with their
@@ -44,7 +44,7 @@ from .prims import BF16, F32, S8
 __all__ = ["F32_127", "F32_INF", "F32_ONE", "QuantChunkS8", "QuantRowS8", "RowAbsMax", "refuse"]
 
 F32_ONE, F32_127, F32_INF = 0x3F800000, 0x42FE0000, 0x7F800000
-CONFORMANCE = "exact-model-tested; the torch loop's quantize on CPU torch (integrations/torch_loop/tests/test_quant.py)"
+CONFORMANCE = "exact-model-tested; numpy float32, the same IEEE operations as torch's quantize (verity/ml/circuits/ops/tests/test_quant.py)"
 
 
 def refuse(b: dict) -> str | None:

@@ -9,8 +9,8 @@ step or named, and a replay bundle and block record written. `verity bench e2e_h
 
 It lives here, not in `integrations/`, because it is a run harness that composes pieces from several owners (memory's
 store and decode call, kernels' GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run, as
-`benchmarks/` holds; `integrations/torch_loop` stays the CPU loop of `verity.ml.windows.interface`. When the real pieces land
-they replace the fixtures here, one module each, and the record's `stands_in_for` fields go to `null`.
+`benchmarks/` holds. When the real pieces land they replace the fixtures here, one module each, and the record's
+`stands_in_for` fields go to `null`.
 
 ## What runs, and what stands in
 

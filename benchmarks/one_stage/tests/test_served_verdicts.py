@@ -18,7 +18,6 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import served_verdicts as S
-from verity_all_protocols import runner, table
 from verity_e2e_demo import block_record as BR
 
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
@@ -85,7 +84,7 @@ def _accepted() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
          "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
          "profile": {"levels": [{"name": "unit", "size": 4}], "drawn": {"unit": 2}, "delta": "1/100"}}
-    return runner.row_of(next(e for e in table.TABLE if e.name == "integrity"), a, Path("/nonexistent"))
+    return S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent"))
 
 
 def _rows(integrity: dict, pieces: Path) -> dict:
