@@ -14,12 +14,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c4"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "pouw" / "tests"))
-import f1_fast as Q
-import pearl_c4_vectors as V
-import test_pouw_pearl_c4 as T
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
-import clear_work as CW
+import f1_fast as Q  # noqa: E402
+import pearl_c4_vectors as V  # noqa: E402
+import test_pouw_pearl_c4 as T  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c4 as F  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c_work as W  # noqa: E402
+import clear_work as CW  # noqa: E402
 
 
 def test_row_law_is_the_reference_law():

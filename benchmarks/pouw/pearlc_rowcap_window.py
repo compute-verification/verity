@@ -46,13 +46,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "pearl_c_sm90"))
-import glm53_slices as SL
-import pearlc_census as K
-import pearlc_k256_gate as G
-import run_result
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
+import glm53_slices as SL  # noqa: E402
+import pearlc_census as K  # noqa: E402
+import pearlc_k256_gate as G  # noqa: E402
+import run_result  # noqa: E402
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
+from verity.core.protocols.pouw.schemes import get  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c_debit as D  # noqa: E402
 
 SCHEME, K_, N, ROWS, TN = "pearl-c-h100-v1-h3", 256, 6144, 64, 64
 NT = N // TN

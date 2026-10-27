@@ -47,13 +47,13 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import pearlc_census as K
-import run_result
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+import pearlc_census as K  # noqa: E402
+import run_result  # noqa: E402
+from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
+from verity.core.protocols.pouw.schemes import get  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c_debit as D  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
 
 SCHEME = "pearl-c-h100-v1-h3"
 K_ = 256
@@ -150,6 +150,7 @@ def cell(fam: str, run: int, rows: int = 64, cols: int = 64) -> dict:
     A8, B8 = np.array(ops.a.codes, dtype=np.uint8), np.array(ops.b.codes, dtype=np.uint8)
     ii, jj = np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij")
     A, B = A8[ii.ravel()], B8[jj.ravel()]
+    nw = rows * cols
     credit = Fraction(s.credit_of(Shape(1, k, N_CREDIT)), N_CREDIT)
 
     # ---- the ticket chain: every skip set, the served debit, the cap

@@ -37,7 +37,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import run_result
+import run_result  # noqa: E402
 
 # ---- E4M3 codec -------------------------------------------------------------------------------------------------------
 MAG = np.zeros(128, dtype=np.float64)
