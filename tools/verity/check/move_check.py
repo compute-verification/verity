@@ -55,7 +55,10 @@ whole subtree in BASE moved there file by file. When only `verity/core/protocols
 inferred. Renames are git's exact ones, and its similar ones (`-M`) as candidates, each edit then judged as above; a file
 below a directory that moved whole is paired with its place there, whichever identical file git paired it with. A deleted
 path is paired with the added one a word map at BASE moves it to, and an in-place edit of a path a word map moves to a path
-new at HEAD is that move and another file landing on its path (`landings`), each pair again judged as above.
+new at HEAD is that move and another file landing on its path (`landings`), each pair again judged as above. The entry
+the range appends to `moves.json` adds each of its paths that the range bears out on its own (`declared`): a directory
+that moved whole but for files a longer path of the entry sends elsewhere, which no rename pairs, and a file whose edit
+leaves it below git's similarity, each pair again judged as above.
 `--map OLD=NEW` adds an entry, and a dotted one (no `/`) also maps a Python or Lean module and those below it.
 """
 from __future__ import annotations
@@ -854,10 +857,35 @@ def moves_change(old: str, new: str, pmap: dict[str, str], base: Tree) -> tuple[
     return None
 
 
+def declared(base: Tree, head: Tree) -> dict[str, str]:
+    """The paths of the entry the range appends to `moves.json` that the range bears out without them: each names a file or
+    directory of BASE, and every BASE file below it (and below no longer path of the entry) is gone at HEAD, with its place
+    below the entry's new path new at HEAD. Whether its content moved unchanged is then judged like any pair's."""
+    try:
+        a, b = json.loads(base.text(MOVES) or "{}"), json.loads(head.text(MOVES) or "{}")
+    except ValueError:
+        return {}
+    am, bm = a.get("moves"), b.get("moves")
+    if not (isinstance(am, list) and isinstance(bm, list)) or len(bm) != len(am) + 1 or bm[:len(am)] != am:
+        return {}
+    paths = bm[-1].get("paths") if isinstance(bm[-1], dict) else None
+    if not isinstance(paths, dict) or not all(isinstance(v, str) for v in (*paths, *paths.values())):
+        return {}
+    decl = {o.rstrip("/"): n.rstrip("/") for o, n in paths.items()}
+    out = {}
+    for o, n in decl.items():
+        mine = [f for f in base.files if (f == o or f.startswith(o + "/"))
+                and max((d for d in decl if f == d or f.startswith(d + "/")), key=len) == o]
+        if mine and all(f not in head.set and (t := n + f[len(o):]) in head.set and t not in base.set for f in mine):
+            out[o] = n
+    return out
+
+
 def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str | None = None) -> dict:
     extra = extra or {}
     dotted = {o: n for o, n in extra.items() if "/" not in o}
     B, H = Tree(base, cwd), Tree(head, cwd)
+    extra = {**declared(B, H), **extra}
     entries = landings(raw_diff(base, head, cwd), B, H)
     whole = [w for _, w in base_maps(B)]
     exact = [(e["old"], e["new"]) for e in entries

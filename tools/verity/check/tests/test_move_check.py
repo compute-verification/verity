@@ -622,6 +622,50 @@ def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
     assert f["path"] == "tools/research/src/research/store/moves.json" and "T/Models/Core/A.lean" in f["reason"]
 
 
+SPLIT_DIR = {
+    "p/circuit/__init__.py": "",
+    "p/circuit/a.py": "from p.circuit.live import T\n\nA = T + 1\n",
+    "p/circuit/live.py": "T = 1\n",
+    "p/circuit/a.sidecar.py": "from p.circuit.a import A\n",
+    "p/other.py": "X = 1\n",
+    "suite/pyproject.toml": 'inputs = ["p/circuit", "p/other.py"]\n',
+    MC.MOVES: json.dumps({"about": "x", "moves": []}, indent=2) + "\n",
+}
+
+
+def _split_dir(tmp_path: Path, paths: dict[str, str] | None) -> dict:
+    """`p/circuit/` moves to `q/circuit/` but for `live.py`, which goes to `p/`: no rename pairs the directory, and the
+    one-line sidecar whose import is rewritten is below git's similarity. ``paths`` is the entry appended to `moves.json`."""
+    repo, base = _repo(tmp_path, SPLIT_DIR)
+    _move(repo, "p/circuit/live.py", "p/live.py")
+    for f in ("__init__.py", "a.py", "a.sidecar.py"):
+        _move(repo, f"p/circuit/{f}", f"q/circuit/{f}")
+    _write(repo, {"q/circuit/a.py": "from p.live import T\n\nA = T + 1\n", "q/circuit/a.sidecar.py": "from q.circuit.a import A\n",
+                  "suite/pyproject.toml": 'inputs = ["q/circuit", "p/other.py"]\n'})
+    if paths is not None:
+        _write(repo, {MC.MOVES: json.dumps({"about": "x", "moves": [{"paths": paths}]}, indent=2) + "\n"})
+    return _check(repo, base)
+
+
+def test_the_appended_moves_entry_pairs_what_no_rename_does(tmp_path):
+    r = _split_dir(tmp_path, {"p/circuit/live.py": "p/live.py", "p/circuit/": "q/circuit/"})
+    assert r["certified"], r["refusals"]
+    assert r["map"]["p/circuit"] == "q/circuit"
+    assert {e["path"] for e in r["edits"]} >= {"suite/pyproject.toml", "q/circuit/a.sidecar.py", MC.MOVES}
+
+
+def test_without_the_entry_a_split_directory_is_refused(tmp_path):
+    paths = {f["path"] for f in _split_dir(tmp_path, None)["refusals"]}
+    assert {"suite/pyproject.toml", "q/circuit/a.sidecar.py"} <= paths
+
+
+def test_an_entry_the_range_does_not_bear_out_adds_nothing(tmp_path):
+    """An entry is a map only where the range moved each file it names to its place: `r/circuit/` is nowhere at HEAD."""
+    r = _split_dir(tmp_path, {"p/circuit/live.py": "p/live.py", "p/circuit/": "r/circuit/"})
+    assert "p/circuit" not in r["map"]
+    assert {MC.MOVES, "suite/pyproject.toml"} <= {f["path"] for f in r["refusals"]}
+
+
 def test_a_lock_field_the_writer_wraps_anew_is_still_a_move(tmp_path):
     """`check.py --update` wraps a list a renamed module lengthened past its line: the same value, laid out anew."""
     lock = _lock(roots=["Models"], layers={"Definitions.Core": {"imports": ["Definitions.Core"]}},
