@@ -4,6 +4,7 @@ import Definitions.Core.Advice
 import Definitions.Core.PrivatePartition
 import Definitions.Core.Declaration
 import Definitions.Core.Boolean
+import Definitions.Core.Size
 import Definitions.Core.Game
 import Definitions.Core.Decisive
 import Definitions.Core.Scalar
