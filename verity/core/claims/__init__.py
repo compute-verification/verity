@@ -44,7 +44,7 @@ class Property:
 
 @dataclass(frozen=True, slots=True)
 class Instance:
-    """A primitive a property is assumed of; ``algebraic``: an algebraic hash (Poseidon2, Ajtai digests)."""
+    """A primitive a property is assumed of; ``algebraic``: an algebraic primitive (Poseidon2, Ajtai digests, ML-KEM)."""
 
     id: str
     name: str
@@ -66,6 +66,8 @@ PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("prf", "Pseudorandom function", "PRF"),
     # of a signature scheme: no forgery on a new message after chosen-message queries, each one-time key used once
     Property("euf-cma", "Existential unforgeability under chosen-message attack", "EUF-CMA"),
+    # of a KEM: the shared secret is pseudorandom given its ciphertext, under decapsulation queries on other ciphertexts
+    Property("ind-cca", "Indistinguishability under chosen-ciphertext attack", "IND-CCA"),
 )}
 
 INSTANCES: dict[str, Instance] = {i.id: i for i in (
@@ -89,6 +91,10 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     # memory challenger's signatures; its EUF-CMA rests on SHA-512 itself: multi-target second-preimage resistance under RFC
     # 8554's prefixes (its §9) and, for keys derived from a seed (its Appendix A), SHA-512 as a PRF keyed by the seed
     Instance("lms-sha512-n64", "LMS over SHA-512"),
+    # FIPS 203's ML-KEM at its 1024 parameters (Module-LWE with the Fujisaki-Okamoto transform), through the `cryptography`
+    # package: the one-hash rule's transport exception (AGENTS.md, Daniel, 26 Oct), only for a remote party's sessions,
+    # whose key is the XOR of its PRF output with the chain key's (verity.ml.crypto.transport), never on pair links
+    Instance("ml-kem-1024", "ML-KEM-1024", algebraic=True),
 )}
 
 ENTRIES: dict[str, Entry] = {e.id: e for e in (
@@ -224,6 +230,25 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
           "Certifier coverage", "standard"),
+    # the transport's premises (Security/Definitions/Core/Assumptions/Transport.lean; Daniel, 26 Oct 6:42 PM PDT):
+    # `WitnessPathPrivate c` is the per-channel premise beside the per-party `Confined p` and the site's `Covered`, read
+    # by Verity.Guarantees.TransportPassiveZk with `ChannelHides` as its keyed alternative
+    Entry("witness-path-private", "assumption",
+          "Witness path private: every node that can read a private frame of the channel in transit, over its life, is "
+          "its auditor end, one of the prover's own machines, or an auditor party under Confined p",
+          "Witness path private", "standard"),
+    Entry("imprint-path-private", "assumption",
+          "Imprint path private: every node that can read the bytes of the channel's one imprint exchange, over the "
+          "cable between an onsite auditor device and its server, is its auditor end, one of the prover's own machines, "
+          "or an auditor party under Confined p", "Imprint path private", "standard"),
+    Entry("channel-hides", "assumption",
+          "Channel hides: to a reader outside the channel's ends, the sealed units of its private traffic are within eta "
+          "of the units of blank traffic of the same declared sizes, from prf/sha-512 under a secret chain key, and for "
+          "a remote party's session from ind-cca/ml-kem-1024 in its place", "Channel hides", "standard"),
+    Entry("channel-authentic", "assumption",
+          "Channel authentic: the units a receiver accepts are a prefix of those its peer sent, or the run holds a "
+          "forgery (an LMS signature on a new handshake message, or a tag under the session's keys on a new unit), from "
+          "euf-cma/lms-sha512-n64 and prf/sha-512", "Channel authentic", "standard"),
     # `Accounting.Placed.LatencyAtMost` (Security/Definitions/Accounting/Physical.lean) is its Lean form, a premise of the
     # proof-of-space pool's count (Accounting.Guarantees.Actual.AnsweredOfQuiet, WipeReadHeld): with the memory
     # challenger's acceptance of late answers only (Accounting.Assumptions.LateAnswers) it refuses a label sent before

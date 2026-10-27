@@ -62,9 +62,9 @@ def _refused(name: str, f, *args):
 def test_the_key_schedule_is_the_stated_construction():
     """Extract is HMAC(salt, ikm) and expand is HKDF-Expand's first block under the label and the length-prefixed
     context, whose info starts with 0x00 where `aead.keys`'s starts with ``ve``; the imprint, ratchet, transcript,
-    session (ratchet key, KEM secret, and their XOR), traffic and AEAD keys are the stated HMACs; a record is its padded
-    plaintext sealed at nonce u64be epoch ‖ u64be seq, and an update moves the secret to expand(s, "update") at epoch 1.
-    A pinned digest holds a whole stream's bytes."""
+    session (the chain key's PRF, alone or XORed with the KEM secret's), traffic and AEAD keys are the stated HMACs; a
+    record is its padded plaintext sealed at nonce u64be epoch ‖ u64be seq, and an update moves the secret to
+    expand(s, "update") at epoch 1. A pinned digest holds a whole stream's bytes."""
     assert T.extract(b"salt", b"ikm") == _hmac(b"salt", b"ikm")
     info = _label(b"x") + struct.pack(">I", 3) + b"ctx"
     assert T.expand(R_D, "x", b"ctx") == _hmac(R_D, info + b"\x01") == _hkdf_expand(R_D, info, 64)
@@ -79,7 +79,7 @@ def test_the_key_schedule_is_the_stated_construction():
     t = hashlib.sha512(_label(b"transcript") + b"".join(struct.pack(">I", len(m)) + m for m in (b"a", b"bb"))).digest()
     assert T.transcript(b"a", b"bb") == t
     by_key, by_kem = _expand(k1, b"session", t), _expand(SS, b"session kem", t)
-    assert T.session(t, key=k1) == by_key and T.session(t, kem_secret=SS) == by_kem
+    assert T.session(t, key=k1) == by_key
     assert T.session(t, key=k1, kem_secret=SS) == bytes(a ^ b for a, b in zip(by_key, by_kem, strict=True))
 
     s = _expand(by_key, b"traffic i>r")
@@ -250,16 +250,20 @@ def test_the_imprint_binds_both_ids_and_both_randomnesses_and_refuses_a_mismatch
 
 
 def test_the_session_modes_and_the_two_ends():
-    """The ratchet key, the KEM secret and both give three different sessions, each bound to the transcript; a session
-    needs at least one secret, and a KEM secret of at least 32 bytes. The initiator's and the responder's ends talk in
-    both directions, and no end opens what it sent. No repr shows a key."""
-    sessions = {T.session(TRANSCRIPT, key=ROOT), T.session(TRANSCRIPT, kem_secret=SS),
-                T.session(TRANSCRIPT, key=ROOT, kem_secret=SS), T.session(T.transcript(b"other"), key=ROOT)}
+    """The chain key alone (onsite) and the chain key with an ML-KEM-1024 secret (remote) give different sessions, each
+    bound to the transcript and to the KEM secret; there is no session on a KEM secret alone (Daniel, 26 Oct), and a KEM
+    secret is exactly 32 bytes. The initiator's and the responder's ends talk in both directions, and no end opens what
+    it sent. No repr shows a key."""
+    sessions = {T.session(TRANSCRIPT, key=ROOT), T.session(TRANSCRIPT, key=ROOT, kem_secret=SS),
+                T.session(TRANSCRIPT, key=ROOT, kem_secret=SS[::-1]), T.session(T.transcript(b"other"), key=ROOT)}
     assert len(sessions) == 4
-    with pytest.raises(ValueError):
-        T.session(TRANSCRIPT)
-    with pytest.raises(ValueError):
-        T.session(TRANSCRIPT, kem_secret=SS[:31])
+    with pytest.raises(ValueError, match="chain key"):
+        T.session(TRANSCRIPT, None, kem_secret=SS)
+    with pytest.raises(TypeError):
+        T.session(TRANSCRIPT, kem_secret=SS)  # type: ignore[call-arg]
+    for bad in (SS[:31], SS + b"\x00"):
+        with pytest.raises(ValueError):
+            T.session(TRANSCRIPT, key=ROOT, kem_secret=bad)
     with pytest.raises(ValueError):
         T.traffic(SIGMA, "a>b")
 

@@ -426,9 +426,12 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
 - **The challenger's and the certifier's specs** (network-accounting, infra and proofs): the challenger on the
   certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node private links, as
   implemented.
-- **Keyed transport**, in place of `WitnessPathPrivate`'s private links (pre-shared keys, ML-KEM for transport only, or
-  keys set at provisioning), is the secure-transport workstream's. Whether ML-KEM may bend the one-hash rule is
-  Daniel's.
+- **Keyed transport**, for a channel that can't meet `WitnessPathPrivate c` (the per-channel premise, Daniel, 26 Oct),
+  is the secure-transport workstream's (`verity.ml.crypto.transport`; `Definitions/Core/Transport`, where
+  `Guarantees.TransportPassiveZk` takes either the premise or `ChannelHides`). Daniel ruled on 26 Oct: an onsite device
+  holds an imprint key (a shared secret
+  installed over the cable once per device, then a SHA-512 ratchet), and a remote party with no cable adds ML-KEM-1024,
+  always XORed with the SHA-512 chain key's PRF output and never on pair links (AGENTS.md, "One hash").
 - **The firewall** (@proofs, with C-Flock's ZK server):
   - that it proves a replica's answers concurrently, and its release schedule. If it can't, RT-SIZE's queued check
     coins are the fix (CMP-158, RS5), and `Timed` must then read the check coin's time apart from the selection's;

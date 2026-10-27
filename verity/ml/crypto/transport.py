@@ -1,6 +1,12 @@
-"""Confidential channels between an auditor party and the prover, from SHA-512 alone: the key schedule and the record
-layer over `aead`. The handshake's messages, its LMS signatures and the channel's framing are the deployment layer's;
-this module takes the handshake's transcript and gives each direction a sender and a receiver.
+"""Confidential channels between an auditor party and the prover: the key schedule and the record layer over `aead`.
+The handshake's messages, its LMS signatures, its ML-KEM-1024 encapsulation and the channel's framing are the deployment
+layer's; this module takes the handshake's transcript and gives each direction a sender and a receiver.
+
+Every channel has a SHA-512 chain key (Daniel, 26 Oct). An onsite device's is its imprint key, a key class of its own:
+installed over the cable once per auditor device, then ratcheted. A remote party with no cable holds a chain key
+installed at provisioning, and each of its sessions also XORs in an ML-KEM-1024 shared secret (``ind-cca/ml-kem-1024``,
+the one-hash rule's transport exception), so its security never drops below the chain key's alone. No session runs on a
+KEM secret alone, and the certifiers' pair links never use this module.
 
 H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104), [x] is u16be len(x) ‖ x and ⟨x⟩ is u32be len(x) ‖ x.
 
@@ -15,9 +21,9 @@ H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104), [x] is u16be len(x) ‖ x and ⟨x
   sides one apart), the side behind steps forward, the session is keyed from K_m, and each side stores (m + 1, K_{m+1})
   in place of its state before its first record. A key once replaced opens no earlier session.
 - **Session** (`transcript`, `session`, `traffic`, `ends`): σ from the transcript hash T and the channel's secrets:
-  ``expand(K_m, "session", T)``, ``expand(ss, "session kem", T)`` for a KEM's shared secret ss, or the XOR of the two
-  when the channel has both. Each PRF reads T, which holds the KEM's ciphertext, so σ is pseudorandom while either
-  secret is (PRF-then-XOR; Giacon, Heuer, Poettering 2018). Direction d (``i>r`` or ``r>i``) starts at
+  ``expand(K_m, "session", T)`` onsite, and for a remote party its XOR with ``expand(ss, "session kem", T)``, ss the
+  session's ML-KEM-1024 shared secret. Each PRF reads T, which holds the KEM's ciphertext, so σ is pseudorandom while
+  either secret is (PRF-then-XOR; Giacon, Heuer, Poettering 2018). Direction d (``i>r`` or ``r>i``) starts at
   ``s_d = expand(σ, "traffic " ‖ d)``, and its keys at secret s are ``aead.Keys(expand(s, "enc"), expand(s, "mac"))``.
 - **Records** (`Sender`, `Receiver`): the plaintext ``u8 type ‖ u32be len(body) ‖ body``, zero-padded to the frame's
   declared size, sealed by `aead.seal` at the implicit nonce ``u64be epoch ‖ u64be seq``. A record is data, an update
@@ -29,7 +35,9 @@ H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104), [x] is u16be len(x) ‖ x and ⟨x
 structure (the frame's declared size class), never a private value's length.
 
 Every key is an HMAC-SHA512 output under a uniform key, so a PRF under ``prf/sha-512`` (Bellare 2006), and a KEM's
-shared secret enters only as an HMAC key. Standard library only.
+shared secret enters only as an HMAC key. Standard library only. The premises are named in
+``Security/Definitions/Core/Transport.lean``: ``WitnessPathPrivate c`` for a channel without keys, and ``ImprintPathPrivate
+c`` for the cable during the imprint.
 """
 from __future__ import annotations
 
@@ -40,8 +48,8 @@ from dataclasses import dataclass
 
 from verity.ml.crypto import aead
 
-__all__ = ["CLOSE", "DATA", "DIRECTIONS", "EPOCH_RECORDS", "HEADER", "KEY_BYTES", "LABEL", "REFUSALS", "UPDATE",
-           "WINDOW", "Chain", "Receiver", "Refused", "Sender", "advance", "check_imprint", "ends", "expand", "extract",
+__all__ = ["CLOSE", "DATA", "DIRECTIONS", "EPOCH_RECORDS", "HEADER", "KEM_SECRET_BYTES", "KEY_BYTES", "LABEL",
+           "REFUSALS", "UPDATE", "WINDOW", "Chain", "Receiver", "Refused", "Sender", "advance", "check_imprint", "ends", "expand", "extract",
            "imprint", "keys", "nonce", "session", "traffic", "transcript"]
 
 LABEL = b"verity/transport/v1/"
@@ -54,6 +62,8 @@ NONCE = struct.Struct(">QQ")
 EPOCH_RECORDS = 1 << 32
 #: how far apart two sides' ratchet indices may be and still agree
 WINDOW = 1 << 16
+#: an ML-KEM-1024 shared secret's length (FIPS 203)
+KEM_SECRET_BYTES = 32
 REFUSALS = ("imprint-mismatch", "ratchet-mismatch", "oversized", "epoch-full", "record-refused", "after-close",
             "truncated")
 _U64 = 1 << 64
@@ -147,21 +157,19 @@ def transcript(*messages: bytes) -> bytes:
     return hashlib.sha512(_field(LABEL + b"transcript") + b"".join(map(_long, messages))).digest()
 
 
-def session(t: bytes, key: bytes | None = None, kem_secret: bytes | None = None) -> bytes:
-    """σ of the handshake whose transcript hash is `t`, from the ratchet's K_m (`key`), a KEM's shared secret, or
-    both."""
+def session(t: bytes, key: bytes, kem_secret: bytes | None = None) -> bytes:
+    """σ of the handshake whose transcript hash is `t`, from the ratchet's K_m (`key`), XORed for a remote party with
+    the PRF of its ML-KEM-1024 shared secret `kem_secret`. There is no session without `key`."""
     if not (isinstance(t, bytes) and len(t) == 64):
         raise ValueError("a transcript hash is 64 bytes")
-    parts = []
-    if key is not None:
-        parts.append(expand(_key(key, "a session's ratchet key"), "session", t))
-    if kem_secret is not None:
-        if not (isinstance(kem_secret, bytes) and len(kem_secret) >= 32):
-            raise ValueError("a KEM's shared secret is at least 32 bytes")
-        parts.append(expand(kem_secret, "session kem", t))
-    if not parts:
-        raise ValueError("a session has a ratchet key, a KEM's shared secret, or both")
-    return parts[0] if len(parts) == 1 else bytes(a ^ b for a, b in zip(*parts, strict=True))
+    if key is None:
+        raise ValueError("every session has its chain key; a KEM's shared secret is only ever XORed in beside it")
+    sigma = expand(_key(key, "a session's ratchet key"), "session", t)
+    if kem_secret is None:
+        return sigma
+    if not (isinstance(kem_secret, bytes) and len(kem_secret) == KEM_SECRET_BYTES):
+        raise ValueError(f"an ML-KEM-1024 shared secret is {KEM_SECRET_BYTES} bytes")
+    return bytes(a ^ b for a, b in zip(sigma, expand(kem_secret, "session kem", t), strict=True))
 
 
 def traffic(sigma: bytes, direction: str) -> bytes:

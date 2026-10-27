@@ -142,11 +142,16 @@ the standing rulings stated nowhere else.
 - **One hash: SHA-512 with its whole output, everywhere.**
   - Commitments are hm96 rows in frame-v3-sha512 trees.
   - Signatures are hash-based (LMS, n = 64).
-  - BLAKE3 leaves the served path for `archive/`. There are two named exceptions:
+  - BLAKE3 leaves the served path for `archive/`. There are three named exceptions:
     - Pearl's FP8 scheme, as Pearl defines it.
     - Duo receipts, PoUW's per-step receipts: keyed u32 mul/xor/rotl folds over committed accumulator words. They
       bind under the named premise H-μ⁺, the premise ledger's row R1
       (`note:20261016T0219Z-report-premise-ledger`), not yet in a lock.
+    - ML-KEM-1024, for transport key agreement only (claim `ind-cca/ml-kem-1024`, the `cryptography` dependency;
+      Daniel, 26 Oct 6:42 PM PDT). Only a remote party with no cable to its device uses it, and always combined with
+      the SHA-512 chain key, the session key the XOR of two PRF outputs, so security never drops below hash-only. It
+      never runs on pair links. An onsite device holds an imprint key instead: a shared secret installed over the cable
+      once per auditor device, then a SHA-512 ratchet (`verity.ml.crypto.transport`).
 - **Live coins only.** Fiat–Shamir is out, with two exceptions, each at a rate where live coins are impractical:
   - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
     pass's root (Daniel, 12 Oct);

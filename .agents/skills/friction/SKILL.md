@@ -133,6 +133,9 @@ Keys and access:
 - (25 Oct, TOP-84) A lane's development gate key on an auditor's gate (vy-challenger-1, vy-auditor-2) is no ask: the lane
   makes an ed25519 key, sends infra only the public half, and infra registers it under that lane. Only the per-lane Cursor
   secret that credit-bearing windows need is Daniel's.
+- (26 Oct 6:42 PM PDT) An onsite auditor device's transport key is an imprint key, a key class of its own: a shared secret
+  installed over the cable once per auditor device, then a SHA-512 ratchet (`verity.ml.crypto.transport`). It is a
+  protocol key, never in a record, a log or the prover's configuration.
 
 Landing:
 
@@ -150,6 +153,11 @@ Landing:
 
 Protocols and claims:
 
+- (26 Oct 6:42 PM PDT) `WitnessPathPrivate c` is the per-channel premise, beside the per-party `Faithful p`, `Secret p`
+  and `Confined p` and the site's `Covered` (`Security/Definitions/Core/Transport.lean`); a keyed channel takes
+  `ChannelHides` in its place.
+- (26 Oct 6:42 PM PDT) ML-KEM-1024 is the one-hash rule's transport exception, under AGENTS.md's conditions: a remote
+  party's chain key comes from provisioning, and no session runs on a KEM secret alone (`transport.session` refuses it).
 - (25 Oct) The warden and the network certifier are one device: a tap on each AI server's uplink, whose one code run
   under one `trusted-host` gives both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
