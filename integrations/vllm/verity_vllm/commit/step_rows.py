@@ -22,9 +22,9 @@ logged; a leaf's salt ``y`` is derived from it by SHA-512 alone, as COMMIT-GPU d
 ctx, geo, row_bits})`` over the step's vllm-v1 identity digests, so the domain is known when the step's length is (a hit plan's, or
 the step's end); the tree is core's ``tree_levels`` (padded to a power of two with frame pads).  The step root is ``vllm_v1.step_root``
 over the tree root and the run root ``vllm_v1.run_root``, both under SHA-512: 64-byte roots.  An opening carries the row, its salt
-and the frame path; :func:`fold_path` recomputes ``h`` and folds the path as core's ``verify_opening`` does.  A range opening of
-leaves ``[lo, hi)`` carries their rows and salts and, per level, the run's boundary siblings (:func:`range_shape`); :func:`fold_range`
-folds them as core's ``verify_multiproof`` folds those leaves' multiproof, which is the path's siblings in order.
+and the frame path, from which ``h`` is recomputed and opened under the tree root by core's ``verify_opening``.  A range opening of
+leaves ``[lo, hi)`` carries their rows and salts and, per level, the run's boundary siblings (:func:`range_shape`), which in order are
+those leaves' multiproof, folded to the tree root by core's ``multiproof_root``.
 
 The registered weights are committed the same way (``NativeHostCommitter.register_weights``, which `pipeline.cpu_replay` opens
 against): registered tensor ``t``'s bytes are its rows (the last zero-padded), salted from ``Ks_t = SHA-512(WEIGHTS_TAG || Kw ||
@@ -48,7 +48,7 @@ from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_le
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
 
 __all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG", "binding",
-           "domain", "fold_path", "fold_range", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt",
+           "domain", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt",
            "step_root", "t_nibbles", "t_table", "tensor_hs", "tensor_key", "tensor_root", "weights_domain", "weights_root", "weights_tree"]
 
 NAME = "rows-sha512"
@@ -104,17 +104,6 @@ def path(lv: Sequence[Sequence[bytes]], pos: int) -> tuple[bytes, ...]:
     return tuple(lv[d][(pos >> d) ^ 1] for d in range(len(lv) - 1))
 
 
-def fold_path(dom: CommitmentDomain, pos: int, h: bytes, sibs: Sequence[bytes]) -> bytes | None:
-    """The tree root that leaf ``pos`` with hiding digest ``h`` and path ``sibs`` stands for; None for a path of the wrong shape."""
-    if not 0 <= pos < dom.count or len(sibs) != merkle_depth(dom.count) or any(len(s) != dom.digest_bytes for s in sibs):
-        return None
-    digest, cursor = leaf(dom, pos, h), pos
-    for d, sib in enumerate(sibs):
-        digest = dom.node(d, cursor >> 1, *((digest, sib) if cursor % 2 == 0 else (sib, digest)))
-        cursor >>= 1
-    return digest
-
-
 def range_shape(n: int, lo: int, hi: int) -> tuple[tuple[bool, bool], ...]:
     """Per level, leaves first, whether the run ``[lo, hi)`` of a tree of ``n`` leaves needs its left and its right sibling (the tree
     is complete, so every node has one)."""
@@ -123,30 +112,6 @@ def range_shape(n: int, lo: int, hi: int) -> tuple[tuple[bool, bool], ...]:
         out.append((lo % 2 == 1, hi % 2 == 1))
         lo, hi = lo // 2, (hi + 1) // 2
     return tuple(out)
-
-
-def fold_range(dom: CommitmentDomain, lo: int, hs: Sequence[bytes], sibs: Sequence[tuple[bytes | None, bytes | None]]) -> bytes | None:
-    """The tree root that leaves ``lo .. lo + len(hs) - 1`` with hiding digests ``hs`` and their boundary siblings ``sibs`` (per level
-    ``(left | None, right | None)``, :func:`range_shape`'s) stand for; None for a run or a path of the wrong shape."""
-    hi = lo + len(hs)
-    if not hs or not 0 <= lo < hi <= dom.count:
-        return None
-    shape = range_shape(dom.count, lo, hi)
-    if len(sibs) != len(shape) or any((left is None) == need_l or (right is None) == need_r
-                                      for (left, right), (need_l, need_r) in zip(sibs, shape)):
-        return None
-    if any(s is not None and (type(s) is not bytes or len(s) != dom.digest_bytes) for pair in sibs for s in pair):
-        return None
-    nodes = [leaf(dom, lo + k, h) for k, h in enumerate(hs)]
-    for d, (left, right) in enumerate(sibs):
-        if left is not None:
-            nodes.insert(0, left)
-            lo -= 1
-        if right is not None:
-            nodes.append(right)
-        lo >>= 1
-        nodes = [dom.node(d, lo + k, nodes[2 * k], nodes[2 * k + 1]) for k in range(len(nodes) // 2)]
-    return nodes[0]
 
 
 def step_root(program: bytes, ctx: bytes, geo: bytes, layout: bytes, n: int, tree_root: bytes) -> bytes:

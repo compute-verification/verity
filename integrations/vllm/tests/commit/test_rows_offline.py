@@ -55,7 +55,9 @@ def test_leaf_openings_carry_their_salts_and_verify():
     assert not com.verify(rc, replace(o, value=bytes([o.value[0] ^ 1]) + o.value[1:]))
     assert not com.verify(rc, replace(o, salt=bytes([o.salt[0] ^ 1]) + o.salt[1:]))
     assert not com.verify(rc, replace(o, path=o.path[:-1]))
+    assert not com.verify(rc, replace(o, path=o.path + o.path[:1]))
     assert not com.verify(rc, replace(o, path=(bytes(R.ROOT_BYTES),) + o.path[1:]))
+    assert not com.verify(replace(rc, steps=[replace(sc, merkle_root=bytes(R.ROOT_BYTES)) for sc in rc.steps]), o)
     assert not com.verify(replace(rc, run_root=rc.run_root[:32]), o)
 
 
@@ -68,9 +70,11 @@ def test_range_openings_verify_through_the_opened_reader():
             assert reader(s, name, 1, len(raw) - 1) == raw[1:-1]
     assert reader.stats["failed"] == 0 and reader.record()["steps_bound"] == len(STEPS)
     ro = com.open_range(1, 1, 4)
-    assert len(ro.salts) == 3 * R.SALT_BYTES and com.verify_range(rc, ro)
+    (left, right), *up = ro.path
+    assert len(ro.salts) == 3 * R.SALT_BYTES and com.verify_range(rc, ro) and left is not None and right is None
     for bad in (replace(ro, value=bytes([ro.value[0] ^ 1]) + ro.value[1:]), replace(ro, salts=bytes(len(ro.salts))),
-                replace(ro, salts=ro.salts[:-1]), replace(ro, path=ro.path[:-1]), replace(ro, lo=0, hi=3)):
+                replace(ro, salts=ro.salts[:-1]), replace(ro, path=ro.path[:-1]), replace(ro, lo=0, hi=3),
+                replace(ro, path=((bytes(R.ROOT_BYTES), None), *up)), replace(ro, path=((None, None), *up)), replace(ro, path=((left[:32], None), *up))):
         assert not com.verify_range(rc, bad)
     assert not com.verify_range(replace(rc, run_root=bytes(R.ROOT_BYTES)), ro)
     assert not com.verify_range(replace(rc, run_root=rc.run_root[:32]), ro)

@@ -158,15 +158,27 @@ def verify_multiproof(
     proof: Sequence[bytes],
     hash: str = "sha256",
 ) -> bool:
-    """Whether the leaf digests ``leaves[rank]`` reconstruct ``root`` with ``proof`` (``hash`` the domain's frame hash).
+    """Whether the leaf digests ``leaves[rank]`` reconstruct ``root`` with ``proof`` (:func:`multiproof_root`)."""
 
-    False when a rank lies outside the tree, when ``leaves`` is empty (nothing
+    return (reconstructed := multiproof_root(count, domain_id, leaves, proof, hash)) is not None and reconstructed == root
+
+
+def multiproof_root(
+    count: int,
+    domain_id: bytes,
+    leaves: Mapping[int, bytes],
+    proof: Sequence[bytes],
+    hash: str = "sha256",
+) -> bytes | None:
+    """The root the leaf digests ``leaves[rank]`` reconstruct with ``proof`` (``hash`` the domain's frame hash).
+
+    None when a rank lies outside the tree, when ``leaves`` is empty (nothing
     is authenticated) or when the proof is not consumed exactly.  A ``hash``
     that is not a SHA frame's raises ``ValueError``.
     """
 
     if not leaves or any(not 0 <= rank < count for rank in leaves):
-        return False
+        return None
     cursor = 0
 
     def sibling(level: int, index: int) -> bytes:
@@ -179,8 +191,8 @@ def verify_multiproof(
     try:
         reconstructed = _fold(count, leaves, sibling, _node_of(domain_id, hash))
     except IndexError:
-        return False
-    return cursor == len(proof) and reconstructed == root
+        return None
+    return reconstructed if cursor == len(proof) else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,5 +236,6 @@ __all__ = [
     "multiproof",
     "multiproof_cost",
     "multiproof_from_paths",
+    "multiproof_root",
     "verify_multiproof",
 ]
