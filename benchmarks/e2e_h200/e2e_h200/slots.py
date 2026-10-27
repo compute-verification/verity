@@ -1,4 +1,4 @@
-"""Sequence slots and the MQA KV cache of the step driver for the frozen H200 decoder (CMP-105).
+"""Sequence slots and the MQA KV cache of the step driver for the frozen H200 decoder.
 
 The frozen shape decodes one position a step per sequence: a request is exactly ``prompt`` bytes, its slot runs positions
 ``0 .. steps - 1`` (``steps = prompt + generate - 1 <= ctx``), the input at position p is prompt byte p while p < prompt and
@@ -34,7 +34,7 @@ K, V = 0, 1
 
 @dataclass(frozen=True)
 class SlotShape:
-    """The frozen decoder's KV shape and request class (CMP-92: MQA, one KV head of 64, context 32, 8 + 24 bytes)."""
+    """The frozen decoder's KV shape and request class (MQA, one KV head of 64, context 32, 8 + 24 bytes)."""
 
     slots: int
     layers: int = 52

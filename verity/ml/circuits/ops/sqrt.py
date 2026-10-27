@@ -1,4 +1,4 @@
-"""IR-registered FP32 square root: `PouwF32SqrtRn_v1`, sqrt.rn.f32 as the GPU computes it (ρ's root in Pearl's statistics,
+"""Registered FP32 square root: `PouwF32SqrtRn_v1`, sqrt.rn.f32 as the GPU computes it (ρ's root in Pearl's statistics,
 and the IEEE slow path of a served kernel's `sqrt.rn`).  Its Boolean version is `PouwF32SqrtRn_v2` (PoUW's
 `verity.core.protocols.pouw.circuit.boolean`, from `ops.boolean.sqrt.f32_sqrt_rn`).
 

@@ -63,10 +63,10 @@ def salts(members: Sequence[Any], rows: Mapping[str, np.ndarray], ys: dict[str, 
 def _strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | None:
     """Each of member ``m``'s units' ``b || c`` of its row ``port``, from its public body (`rows.Committed.public_body`): a
     shared-row member's, the row of the port's table its ref names, the row its statement reads. None for a body that is
-    not the member's."""
+    not the member's or a port it lacks."""
     names = [q for q, _ in m.all_rows]
     body = publics.get(m.key)
-    if body is None:
+    if body is None or port not in names:
         return None
     if not m.tables:
         if len(body) != m.n * len(names) * BC_BYTES:

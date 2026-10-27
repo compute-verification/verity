@@ -15,7 +15,7 @@
 //   FOLD 6  FOLD 4's Karatsuba level over FOLD 5's 8-limb squares.
 //   FOLD 7  FOLD 5's square, then a fold of one 64-bit multiply-add a limb.
 //   FOLD 8, 9   FOLD 6 held to 6 and 7 blocks of 128 a SM (80 and 72 registers), where its 96 registers allow 5.
-//   FOLD 10     FOLD 5 held to 8 blocks a SM (64 registers), where its 72 allow 7.
+//   FOLD 10     FOLD 5 held to 8 CTAs a SM (64 registers), where its 72 allow 7.
 //   FOLD 11, 12 two and three Karatsuba levels over FOLD 5's squares (NL/4- and NL/8-limb), then FOLD 1's fold.
 //   FOLD 13, 14 FOLD 6 and FOLD 5 held to one more block of 128 a SM than their registers allow, at 768 bits (5 and 6)
 //               and 1,024 (3 and 4): a sub-partition's 16K registers hold floor(512 / registers) warps.
@@ -23,7 +23,7 @@
 // -DSQ_BITS=1024 -DSQ_C=105 (`kv.py`'s primes), with the forms that matter there (FOLD 1, 5, 6, 7, 11-14 at ILP 1).
 //
 //   sq gate FOLD ILP K N           N words from a fixed seed, K squarings: "x0 xK" in hex, canonical
-//   sq time FOLD ILP K TPB WAVES REPS   timed launches at the occupancy's blocks a SM times WAVES
+//   sq time FOLD ILP K TPB WAVES REPS   timed launches at the occupancy's CTAs a SM times WAVES
 //   sq probe P W A ITERS WAVES     the pipe probe (below), its digests checked against the host's, then timed
 //   sq clock                       the SM clock off a timed clock64 spin
 #include <cuda_runtime.h>
