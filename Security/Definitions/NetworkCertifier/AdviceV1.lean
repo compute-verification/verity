@@ -6,7 +6,7 @@ import Mathlib.Data.List.OfFn
 
 Definitions only. They mirror `verity/core/protocols/certifier/arith_encode.py`'s references one for one, with each
 Python name in its docstring: `ChargeCount_v1{N}`'s charge (`reference_charge`), the bits ENC-CODE's 32-bit
-Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`'s `ArithEncoder`) would write for a
+Witten–Neal–Cleary arithmetic coder (`examples/network_vllm/encodings/code.py`'s `ArithEncoder`) would write for a
 window that sends only decisions, counted rather than written (the counting variant, which the composition charges).
 
 A window codes the number of decisions it sends (n_arrived) as the book's Exp-Golomb bin and its offset in the bin, then
