@@ -113,6 +113,16 @@ def chunk_best(x: np.ndarray) -> tuple[int, int]:
     return int(x[i]), i
 
 
+def _pinned(family: str) -> str | None:
+    """What the circuit pins a node of Definition ``family``'s value to, which a served value is held to: an embedding's
+    its opening of the table, a token select's its chunks' scan; None where a served value is taken as served."""
+    if family == "Embedding":
+        return "the table's row at its token"
+    if family == "TokenSelect":
+        return "the first maximum of its logits"
+    return None
+
+
 class Slot:
     """Slot ``row``'s class Program ``fn`` of class ``cls`` evaluated (module docstring): ``row`` its `SLOT_ROW` row
     (occupancy, prompt length, ids), ``weights`` the weights record's fields and ``served`` its request's served values,
@@ -146,14 +156,14 @@ class Slot:
         fam, fields, what = node.fn.name, _fields(node.fn), f"node {j} ({node.fn.id}) at position {self.position[j]}"
         if fam == "Embedding":
             self._token(self.position[j], node.args[0])
-        want = self._evaluate(node, fields, what) if got is None or fam in ("Embedding", "TokenSelect") else None
+        pin = _pinned(fam)
+        want = self._evaluate(node, fields, what) if got is None or pin else None
         if got is not None:
             if len(got) != len(fields):
                 raise ValueError(f"{what}: served as {len(got)} members, not its {len(fields)} return fields")
             got = [_cast(a, ty, f"{what}, served") for a, ty in zip(got, fields)]
             if want is not None and not all(np.array_equal(a, b) for a, b in zip(got, want)):
-                raise ValueError(f"{what}: served as {got[0][:4].tolist()}..., not "
-                                 + ("the table's row at its token" if fam == "Embedding" else "the first maximum of its logits"))
+                raise ValueError(f"{what}: served as {got[0][:4].tolist()}..., not {pin}")
         self.values.append(got if got is not None else want)
         self.source.append(SERVED if got is not None else COMPUTED)
 
@@ -223,15 +233,22 @@ class Slot:
         return parts[0] if len(parts) == 1 else np.concatenate(parts)
 
 
+def _op(d: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
+    """A served row's op: its op path and its members' names."""
+    return str(d["op_path"]), tuple(str(m[0]) for m in d["members"])
+
+
 @dataclass
 class Served:
     """One request's served values by class node: its Program's rows as `ProgramIndex.describe` gives them, each with its
     row's ``spec`` (``{spec, step, op_path, members, row}``, its step the request's), and ``read(step, op_path, member, lo,
     hi)``, a member's elements [lo, hi) at a request step (`CommittedStore.words` at the request's arrival plus it).
 
-    The request's prefill is its step 0: each op (its op path and members) a row a prompt position, in the class Program's
-    node order within a position, or one row, its last position's, where prefill prunes it; step s ≥ 1 is position
-    LP − 1 + s, its rows in node order. A row whose spec isn't its class node's descriptor id is refused by name."""
+    The request's prefill is its step 0: each op (its op path and members) a row a prompt position, or one row, its last
+    position's, where prefill prunes it; the ops in the order of their last prompt position's rows, the one position that
+    computes them all, which is the class Program's node order within a position however the prefill interleaves the
+    others. Step s ≥ 1 is position LP − 1 + s, a row each of those ops, matched to them by op. A row whose spec isn't its
+    class node's descriptor id is refused by name."""
     rows: Sequence[Mapping[str, Any]]
     read: Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
     prefill: list[list[Mapping[str, Any]]] = field(init=False)
@@ -245,18 +262,27 @@ class Served:
         if sorted(steps) != list(range(len(steps))):
             raise ValueError(f"a request's served steps are 0, 1, ...; not {sorted(steps)}")
         ops: dict[tuple[str, tuple[str, ...]], list[Mapping[str, Any]]] = {}
-        for d in steps.get(0, ()):
-            ops.setdefault((str(d["op_path"]), tuple(str(m[0]) for m in d["members"])), []).append(d)
-        self.prefill = [sorted(v, key=lambda d: int(d["row"])) for v in ops.values()]
+        last: dict[tuple[str, tuple[str, ...]], int] = {}
+        for i, d in enumerate(steps.get(0, ())):
+            ops.setdefault(_op(d), []).append(d)
+            last[_op(d)] = i
+        order = sorted(ops, key=last.__getitem__)
+        self.prefill = [sorted(ops[o], key=lambda d: int(d["row"])) for o in order]
         self.LP = max((len(v) for v in self.prefill), default=0)
-        for (op, _), v in zip(ops, self.prefill):
+        for (op, _), v in zip(order, self.prefill):
             if [int(d["row"]) for d in v] not in (list(range(self.LP)), [0]):
                 raise ValueError(f"{op}: prefill rows {[d['row'] for d in v]}, not one a prompt position nor the last one's")
-        self.decode = [steps[s] for s in range(1, len(steps))]
-        for s, rs in enumerate(self.decode, 1):
-            got = [(str(d["op_path"]), tuple(str(m[0]) for m in d["members"])) for d in rs]
-            if got != list(ops):
-                raise ValueError(f"step {s}'s {len(rs)} rows are not the prefill's {len(ops)} ops in its order")
+        self.decode = []
+        for s in range(1, len(steps)):
+            by: dict[tuple[str, tuple[str, ...]], Mapping[str, Any]] = {}
+            for d in steps[s]:
+                if by.setdefault(_op(d), d) is not d:
+                    raise ValueError(f"step {s}: op {_op(d)} served at two rows")
+            if missing := [o for o in order if o not in by]:
+                raise ValueError(f"step {s}: none of the prefill's op {missing[0]} ({len(missing)} ops)")
+            if extra := [o for o in by if o not in ops]:
+                raise ValueError(f"step {s}: op {extra[0]}, which the prefill never computes ({len(extra)} ops)")
+            self.decode.append([by[o] for o in order])
 
     @classmethod
     def of_record(cls, pi: Any, store: Any, rid: str, arrive: int) -> Served:
