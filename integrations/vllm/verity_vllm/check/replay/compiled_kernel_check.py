@@ -21,7 +21,7 @@ import torch
 
 from verity_vllm.check import compiled_autotune
 from verity_vllm.commit import challenge as CH
-from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, relation, roles_of, rms_eps_of, warm_vml
+from verity_vllm.program.compiled_relations import OUTPUT_ROLES, relation, roles_of, rms_eps_of, warm_vml
 
 _DT = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32, "int64": torch.int64, "int32": torch.int32,
        "uint8": torch.uint8, "int8": torch.int8}
@@ -378,7 +378,7 @@ class CompiledKernelCheck:
             res["outputs_checked"] += len(out_roles)
             res["outputs_exact"] += sum(per_out_ok)
             res["launches_checked"] += 1
-            # [R16 compiled, Daniel DECISIONS-3 autotune rule] the kernel's own compiled source under EVERY candidate launch config
+            # [the compiled-kernel autotune rule] the kernel's own compiled source under EVERY candidate launch config
             # on these committed inputs == the committed outputs (bit for bit), the executed config included -- shown per kernel
             # on up to MAX_LAUNCHES_PER_KERNEL sampled launches; the merge lifts a cross-arm config difference only for kernels shown
             self._autotune_equivalence(kernel, ins, outs, roles, res)

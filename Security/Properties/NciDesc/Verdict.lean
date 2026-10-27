@@ -17,10 +17,9 @@ the verdict has the property (`OnExpansions`).
   the thread bounds (`Throttled`, `ThrottledDark` and their `Slots` forms), under their named assumptions
   (`WeightsIncompressible` or `WeightsIncompressibleSlots`, and `BaselineRegistered`), which the check does not see.
 
-None is a guarantee yet: each is proved from `DescAgrees`, whose proof rests on one open statement, `Novel.ReadsExact`
-(`descAgrees_of_readsExact`, `Proofs.Properties.Nci.Agrees`): `descReports_of` and `descWitnesses_of` in
-`Proofs.Properties.Nci.DescVerdict`, and the four
-bounds in `Proofs.Nci.DescVerdict` (package `security_proofs`), whose proofs need the thread bounds'.
+Each is proved from `DescAgrees` (`SecurityProofs.DescAgrees`, `Proofs.Properties.Nci.Agrees`): `DescReports` and
+`DescWitnesses` in `Proofs.Properties.Nci.DescVerdict`, and the four bounds in `Proofs.Nci.DescVerdict` (package
+`security_proofs`), whose proofs need the thread bounds'.
 -/
 
 namespace NciCheck.Properties

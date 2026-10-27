@@ -68,7 +68,7 @@ class SiluAndMulWithClamp(SiluAndMul):
     kind: ClassVar[str] = "silu_mul_clamp"
 
     def statics(self, node: TreeNode, a: dict) -> dict | Unsupported:
-        from verity_vllm.program.registry.dsv4_moe import limit_bits  # noqa: PLC0415  (the DeepSeek-V4 registry on use)
+        from verity.ml.definitions.registry.dsv4_moe import limit_bits  # the DeepSeek-V4 registry on use
         limit, alpha, beta = as_float(a.get("limit")), as_float(a.get("alpha", 1.0)), as_float(a.get("beta", 0.0))
         if (alpha, beta) != (1.0, 0.0):
             return unsupported(node, "silu_and_mul_with_clamp's alpha and beta are not 1 and 0 (SiluMulClamp_v1 is the clamp alone)",

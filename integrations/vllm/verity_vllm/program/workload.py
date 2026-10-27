@@ -428,6 +428,21 @@ def served_lengths_rule(lag: int) -> dict:
             "rule": "R17-1 / DP-pad-02 (b); one definition for Build (this Program), GM-01 G6 and the finalizer"}
 
 
+def eos_lag_rows_declared(engine: dict | None) -> int | None:
+    """The post-EOS rows a declared engine block computes: `async_scheduling` True -> 1, False -> 0, undeclared or non-boolean ->
+    None.  GP-01 always declares it (`workload_lag`), so None here means a Program from before the lag was declared: GM-01 G6 then
+    fails by name on any EOS stop (nothing is read from the record as the rule) and labels a record without an EOS stop
+    `lag.exercised false`."""
+    if not isinstance(engine, dict):
+        return None
+    v = engine.get("async_scheduling")
+    if isinstance(v, bool):
+        return 1 if v else 0
+    if isinstance(v, str) and v.strip().lower() in ("true", "false"):
+        return 1 if v.strip().lower() == "true" else 0
+    return None
+
+
 class WorkloadProgram:
     def __init__(self, requests: list[WorkloadRequest], shared: str = "weights", manifest_digest: str | None = None,
                  ordering: str = "manifest", *, lag: int, theta_registered: bool = False) -> None:

@@ -1,13 +1,15 @@
 """Served Pearl-C's live coins (`protocol_options.pouw`'s install under the setting ``challenger``): the install has the
-gate open the session it reserved on its salt epoch's root R = `salt.epoch_open_root` of the weights' root W it
+gate open the challenge phase it reserved on its salt epoch's root R = `salt.epoch_open_root` of the weights' root W it
 committed and the epoch's number k over W (``pass_index``), its coins the salt coin alone (`window.SALT_FAMILIES`), takes
-that coin after R (`pouw_h1_window.salt_session`, `pouw_pearl_c_host.epoch_of`) and closes the session at release, so
-the session ends closed and complete; refused, before any patch or any coin: no session, a session of H1's layout, a
-session bound to another commitment or another root, an in-process coin beside the challenger's and a mix of the two. A
+that coin after R (`pouw_h1_window.salt_session`, `pouw_pearl_c_host.epoch_of`) and closes the challenge phase at release, so
+the challenge phase ends closed and complete; refused, before any patch or any coin: no challenge phase, a challenge phase of H1's layout, a
+challenge phase bound to another commitment or another root, an in-process coin beside the challenger's and a mix of the two,
+and a challenge phase reserved while the lane's open period is H1's, which `pouw_h1_window.reserve_salt` refuses before
+reserving. A
 reinstall is an epoch of its own: a fresh hm96 key, and over the same W the next k. The verifier holds the pass to that
-session (`pouw_h1_challenger.session_reason`'s Pearl-C branch, `salt_session_reason`; Lean `Properties.Pouw.LiveSalt`),
+challenge phase (`pouw_h1_challenger.session_reason`'s Pearl-C branch, `salt_session_reason`; Lean `Properties.Pouw.LiveSalt`),
 recomputing R from W and ``pass_index``: it counts only reserved salt-only and ended closed and complete, and the pass's
-coins and salt are read from the session, never from the pass.
+coins and salt are read from the challenge phase, never from the pass.
 
 CPU only: the auditor host is `challenger_host.Host` or `challenger_host.Gate` in this process, and the device run a
 stand-in that starts its epoch through `pouw_pearl_c_device.epoch_of` (no GPU here).
@@ -17,6 +19,7 @@ from __future__ import annotations
 import itertools
 import json
 import random
+import re
 import shutil
 import socket
 import threading
@@ -47,14 +50,14 @@ ENTRY = f"pouw:{SCHEME}"
 AUDITOR = "vy-challenger-1:7811"
 ROOTS = {0: b"\x05" * 64}
 SID = CH.session_id(1)
-#: the gate's reserve answer for the install's session, which the install opens itself on its salt epoch's root
+#: the gate's reserve answer for the install's challenge phase, which the install opens itself on its salt epoch's root
 RESERVED = {"session": SID, "seq": 0, "peer": "vy-nebius-1", "by": "vllm", "expires_utc": "2026-10-20T11:18:00Z"}
-#: the auditor's challenger key, its ledger's and its sessions' (five leaves a session: reserve, open, record, close, end)
+#: the auditor's challenger key, its ledger's and its challenge phases' (five leaves a challenge phase: reserve, open, record, close, end)
 PRIVATE, KEY = CH.challenger_key(3, H=5)
 
 
 def salt_only(seed: int) -> LC.LiveChallenger:
-    """A Pearl-C session's challenger: the salt coin alone, drawn from `seed`."""
+    """A Pearl-C challenge phase's challenger: the salt coin alone, drawn from `seed`."""
     return LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, CH.entropy(seed))
 
 
@@ -114,7 +117,7 @@ def _device_run_is_the_stand_in(monkeypatch):
 
 
 def _host(tmp_path, monkeypatch, seed=1, challenger=None):
-    """The auditor host's challenger (by default Pearl-C's, its salt coin alone), its session `SID` reserved on its
+    """The auditor host's challenger (by default Pearl-C's, its salt coin alone), its challenge phase `SID` reserved on its
     ledger and reached at `AUDITOR`."""
     host = CH.Host(tmp_path / "auditor", challenger or salt_only(seed), seed, SID, gated=True)
     monkeypatch.setattr(R.RemoteChallenger, "connect",
@@ -136,9 +139,9 @@ def _untouched(model):
 
 
 def test_a_served_install_takes_the_sessions_salt_coin_after_its_epochs_root(tmp_path, monkeypatch):
-    """The gate opens the reserved session on salt epoch 0's root over the weights' root W the install committed,
-    the run's epoch is the session's salt coin opened after that root (and no other coin of it), its salt over W, the
-    commitment carries the session without its secret and the epoch's ``pass_index``, and release closes the session."""
+    """The gate opens the reserved challenge phase on salt epoch 0's root over the weights' root W the install committed,
+    the run's epoch is the challenge phase's salt coin opened after that root (and no other coin of it), its salt over W, the
+    commitment carries the challenge phase without its secret and the epoch's ``pass_index``, and release closes the challenge phase."""
     host = _host(tmp_path, monkeypatch)
     model, w, answers = _model(), weights_root(ROOTS), []
     root = PS.epoch_open_root(w, 0)
@@ -166,7 +169,7 @@ def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one
         tmp_path, monkeypatch):
     """Each install's `commit_weights` draws its own hm96 key, so a reinstall's weights' root W is its own. A reinstall
     committing a W this process already had an epoch over (the stand-in's fixed roots: the same key over the same weights)
-    is that W's next epoch: k = 1, its session opened on its own epoch root, never epoch 0's."""
+    is that W's next epoch: k = 1, its challenge phase opened on its own epoch root, never epoch 0's."""
     keys = []
     monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: keys.append(salt_key) or ROOTS)
     w, model, cs, hosts = weights_root(ROOTS), _model(), [], []
@@ -184,7 +187,7 @@ def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one
 
 
 def test_pearl_c_takes_its_coins_from_one_live_session_or_is_refused_before_any_patch():
-    """No session, an open answer in place of the reserve (a session opened before the weights' root was committed), no
+    """No challenge phase, an open answer in place of the reserve (a challenge phase opened before the weights' root was committed), no
     gate, an in-process challenger beside the auditor host's, or a capture: each refused before the model is touched. A
     config naming the auditor host's challenger gets no in-process coins, and the epoch takes a live opening only of a
     live commitment, and an in-process opening only of an in-process one."""
@@ -235,8 +238,8 @@ def test_pearl_c_takes_its_coins_from_one_live_session_or_is_refused_before_any_
 
 
 def test_a_session_bound_to_another_commitment_is_closed_and_refused_before_its_first_coin(tmp_path, monkeypatch):
-    """A gate answer naming coins other than the challenger's on that port (another process's session) closes the
-    session before its salt coin and refuses the install, which patches nothing and starts no run."""
+    """A gate answer naming coins other than the challenger's on that port (another process's challenge phase) closes the
+    challenge phase before its salt coin and refuses the install, which patches nothing and starts no run."""
     host, model = _host(tmp_path, monkeypatch), _model()
     with pytest.raises(ValueError, match=f"commits to coins {host.challenger.commitment.root.hex()[:16]}..., not "
                                          f"{'dd' * 8}..., the commitment the gate's answer gives session {SID}"):
@@ -247,7 +250,7 @@ def test_a_session_bound_to_another_commitment_is_closed_and_refused_before_its_
 
 
 def test_a_session_of_h1s_layout_is_closed_and_refused_before_its_first_coin(tmp_path, monkeypatch):
-    """A session reserved with H1's layout (salt, draw and round coins) would release only its salt coin under a Pearl-C
+    """A challenge phase reserved with H1's layout (salt, draw and round coins) would release only its salt coin under a Pearl-C
     pass and end incomplete, which counts nothing: the install closes it before its salt coin and refuses, patching
     nothing and starting no run."""
     host, model = _host(tmp_path, monkeypatch, challenger=Wd.live_challenger(0, 1, CH.entropy(1))), _model()
@@ -266,7 +269,7 @@ def test_a_session_of_h1s_layout_is_closed_and_refused_before_its_first_coin(tmp
     None,
 ])
 def test_a_gate_answer_not_the_reserved_session_on_the_epoch_root_is_refused_before_any_coin(monkeypatch, answer):
-    """The gate's answer must be the reserved session opened on salt epoch 0's root: another root, another session
+    """The gate's answer must be the reserved challenge phase opened on salt epoch 0's root: another root, another challenge phase
     or no open at all is refused before the challenger is reached."""
     root, model = PS.epoch_open_root(weights_root(ROOTS), 0).hex(), _model()
     given = None if answer is None else {**answer, "root": answer["root"] or root}
@@ -278,8 +281,78 @@ def test_a_gate_answer_not_the_reserved_session_on_the_epoch_root_is_refused_bef
     _untouched(model)
 
 
+def _reserving(gate):
+    """The challenger gate `gate` (`challenger_host.Gate`) as words, for ``reserve`` alone: it reserves challenge phase `SID` with the
+    request's layout and answers as the gate's reserve does, naming the period of its lane the challenge phase joined."""
+    def call(verb, *words):
+        assert verb == "reserve"
+        a = dict(zip(words[::2], words[1::2]))
+        e = gate.reserve(SID, json.loads(a["--families"]), scheme=a["--scheme"], epoch=int(a["--epoch"]))
+        return {**RESERVED, "seq": e["seq"], "period": gate._current.get("vllm")}
+    return call
+
+
+def _kinds(gate):
+    return [json.loads(line)["kind"] for line in gate.lines]
+
+
+H1_OPEN = {"cap": 4, "circuit": "c1" * 64, "draw_k": 27, "rows": 64}
+H1_REFUSED = ("the lane's open period p-h1 is H1's (its open commits draw_k, rows): a salt-only session is a window "
+              "H1's checks refuse (window.live_epoch_reason)")
+
+
+def test_a_salt_only_session_is_refused_by_name_while_the_lanes_open_period_is_h1s():
+    """While the lane's open period is H1's (its open commits H1's draw K and table rows), a Pearl-C salt-only challenge phase
+    would be a window H1's checks refuse, so the period would earn nothing: `reserve_salt` refuses by name before
+    reserving, reading the lane's open period from the gate's ledger. A challenge phase reserved in it anyway (here by hand) is
+    refused by the install by name, before any patch and before the gate opens it, so no challenge phase is opened; so is a
+    reserve that joined a period the install isn't given. A Pearl-C period (its cap and circuit alone), another lane's H1
+    period, or none is reserved and installs."""
+    gate = CH.Gate(PRIVATE, KEY)
+    gate.period_open("p-h1", **H1_OPEN)
+    with pytest.raises(ValueError, match=re.escape(f"refused before reserving a salt-only session: {H1_REFUSED}")):
+        PHW.reserve_salt(_reserving(gate), lambda: gate.lines, "vllm", "vy-nebius-1", 0)
+    assert _kinds(gate) == ["period-open"]
+
+    period = PHW.open_period(gate.lines, "vllm")
+    reserved = _reserving(gate)("reserve", "--families", json.dumps(Wd.SALT_FAMILIES), "--scheme", Wd.LIVE_SCHEME,
+                                "--epoch", "0")
+    assert reserved["period"] == period["period"] == "p-h1"
+
+    def refused(**kw):
+        model = _model()
+        ctx = _served(lambda sid, r: pytest.fail("the gate opened a session"), **kw)
+        assert len(PO.refusals(ctx)) == 1
+        with pytest.raises(PO.Refused) as e:
+            PO.install(model, ctx)
+        _untouched(model)
+        return str(e.value)
+    assert f"{SCHEME}: {H1_REFUSED}" in refused(session=reserved, period=period)
+    assert f"{SCHEME}: the gate's reserve answer joined period p-h1, but the lane's open period read from the auditor's " \
+        "ledger (the pouw setting 'period', pouw_h1_window.open_period) is none" in refused(session=reserved)
+    assert f"{SCHEME}: pouw setting 'period' is the lane's open period, its period-open body" in refused(
+        session=reserved, period={"lane": "vllm"})
+    assert _kinds(gate) == ["period-open", "reserve"] and RUNS == []
+
+    late = CH.Gate(PRIVATE, KEY)                          # the period opened between the ledger's read and the reserve
+    late.period_open("p-h1", **H1_OPEN)
+    with pytest.raises(ValueError, match=re.escape(f"session {SID} is reserved and refused before its open: the gate's "
+                                                   "reserve answer joined period p-h1, but the lane's open period")):
+        PHW.reserve_salt(_reserving(late), lambda: [], "vllm", "vy-nebius-1", 0)
+    assert _kinds(late) == ["period-open", "reserve"]
+
+    for opens in ((), (("p-pc", "vllm", {"cap": 2, "circuit": "c1" * 64}),), (("k-h1", "kernels", H1_OPEN),)):
+        g = CH.Gate(PRIVATE, KEY)
+        for name, lane, fields in opens:
+            g.period_open(name, lane, by=lane, **fields)
+        answer, period = PHW.reserve_salt(_reserving(g), lambda: g.lines, "vllm", "vy-nebius-1", 0)
+        joined = "p-pc" if opens and opens[0][1] == "vllm" else None
+        assert answer["period"] == (period and period["period"]) == joined and _kinds(g)[-1] == "reserve"
+        assert PO.refusals(_served(lambda *a: None, session=answer, period=period)) == ()
+
+
 class _GateSession:
-    """Session `SID` of infra's gate `gate` (`challenger_host.Gate`, its ledger under `KEY`), reserved with `families`
+    """Challenge phase `SID` of the challenger gate `gate` (`challenger_host.Gate`, its ledger under `KEY`), reserved with `families`
     and, once the gate opens it (`open`, the install's pouw setting ``gate``), served by `challenger` on a socket pair
     with its record and close signed under `KEY` at the gate's next leaves, as serve.py's are. `end` has the gate end it
     over its ``out/`` once its client has closed it; `tree` is its tree as the gate's ``fetch`` gives it."""
@@ -316,8 +389,8 @@ class _GateSession:
 
 
 def _ended_over(out, families, root, end=True, **override):
-    """A ledger of one session `SID` reserved with `families`, opened on `root` and, with `end`, ended over `out` with its
-    end's fields replaced by `override`: what a gate would sign for a session served otherwise."""
+    """A ledger of one challenge phase `SID` reserved with `families`, opened on `root` and, with `end`, ended over `out` with its
+    end's fields replaced by `override`: what a gate would sign for a challenge phase served otherwise."""
     g = CH.Gate(PRIVATE, KEY)
     g.reserve(SID, families)
     g.open(SID, root)
@@ -332,12 +405,12 @@ def _ended(gate):
 
 
 def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_complete(tmp_path, monkeypatch):
-    """CMP-81: the install's session, reserved with the salt coin alone and opened on salt epoch 0's root R over the
+    """The install's challenge phase, reserved with the salt coin alone and opened on salt epoch 0's root R over the
     weights' root W, ends closed and complete with that one coin released, and the verifier holds the pass to it
-    (`session_reason`'s Pearl-C branch): the one session the ledger opened on R, which it recomputes from W and the
+    (`session_reason`'s Pearl-C branch): the one challenge phase the ledger opened on R, which it recomputes from W and the
     pass's ``pass_index``, read through the gate's fetch. The manifest head names it by its `SESSION_KEYS` alone, with
     ``pass_index`` (`session_head`). The verifier's own weights' root, or the period's registered one, must be the
-    pass's; a pass naming no epoch number, another epoch's, its session by another ledger seq, or
+    pass's; a pass naming no epoch number, another epoch's, its challenge phase by another ledger seq, or
     its hello's secret, is refused."""
     gate = CH.Gate(PRIVATE, KEY)
     s = _GateSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, salt_only(5))
@@ -379,9 +452,9 @@ def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_comple
 
 
 def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_complete(tmp_path, monkeypatch):
-    """A session of H1's layout, as #3868's served Pearl-C passes reserved it, releases only its salt coin and ends
+    """A challenge phase of H1's layout, as the served Pearl-C passes reserve it, releases only its salt coin and ends
     incomplete: refused, and refused too under an end that claimed it complete, for its reserve's layout. A salt-only
-    session never ended, ended without its client closing it, short of its coin, or having released any other family is
+    challenge phase never ended, ended without its client closing it, short of its coin, or having released any other family is
     refused."""
     gate = CH.Gate(PRIVATE, KEY)
     s = _GateSession(tmp_path, monkeypatch, gate, Wd.live_families(1), Wd.live_challenger(0, 1, CH.entropy(6)))
@@ -426,9 +499,9 @@ def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_comp
 
 def test_a_passs_salt_is_read_from_its_session_never_from_the_pass(tmp_path, monkeypatch):
     """The pass's coins, salt opening and salt agree with one another under another salt-only challenger's commitment
-    (`epoch_of` takes them), but they are not the session's: the commitment is the one the session's challenger signed,
-    read from its files through the ledger, never the pass's word. A pass naming another commitment for its session, a
-    salt other than `audit.salt_of` of the session's coin, or another session's tree are refused."""
+    (`epoch_of` takes them), but they are not the challenge phase's: the commitment is the one the challenge phase's challenger signed,
+    read from its files through the ledger, never the pass's word. A pass naming another commitment for its challenge phase, a
+    salt other than `audit.salt_of` of the challenge phase's coin, or another challenge phase's tree are refused."""
     gate = CH.Gate(PRIVATE, KEY)
     s = _GateSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, salt_only(8))
     with PO.install(_model(), _served(s.open)) as comp:

@@ -159,7 +159,7 @@ def ensure_distributed(vllm_config, backend: str = "gloo") -> str:
             try:
                 init_distributed_environment(world_size=1, rank=0, distributed_init_method=f"tcp://127.0.0.1:{_free_port()}", local_rank=0, backend=backend)
                 break
-            except Exception as e:  # noqa: BLE001 -- torch's DistNetworkError; only the port race is retried
+            except Exception as e:  # torch's DistNetworkError; only the port race is retried
                 if "EADDRINUSE" not in str(e) or attempt == _PORT_TRIES - 1:
                     raise
         ensure_model_parallel_initialized(1, 1)
@@ -405,7 +405,7 @@ class StochasticRequest(nn.Module):
         return self._request(prompt, 0, seed, splits)
 
     def _request(self, prompt: torch.Tensor, C: int, seed: torch.Tensor, splits: torch.Tensor | None) -> torch.Tensor:
-        entry = (lambda s: None) if self.S is not None else (lambda s: splits[s:s + 1])   # noqa: E731
+        entry = (lambda s: None) if self.S is not None else (lambda s: splits[s:s + 1])
         tok = self._step(prompt[C:] if C else prompt, C, seed, entry(0), 0)
         toks = [tok]
         for s in range(self.T):
@@ -446,7 +446,7 @@ def prefix_input(model: nn.Module, C: int) -> torch.Tensor:
 def registered_policy_splits(sampling: dict) -> int | None:
     """The registered split count S of a stochastic policy: `sampling["splits"]` when it is an int equal to
     `topp_geometry.registered_splits` of the policy's geometry's num_SMs (`build.sampler_geometry`); else None."""
-    from verity_vllm.program.registry.topp_geometry import registered_splits
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
     S, g = sampling.get("splits"), sampling.get("geometry") or {}
     if isinstance(S, bool) or not isinstance(S, int) or g.get("num_sms") is None:
         return None

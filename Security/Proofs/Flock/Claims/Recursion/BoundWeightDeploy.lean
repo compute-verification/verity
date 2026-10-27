@@ -3,8 +3,8 @@ import Proofs.Flock.Claims.Recursion.BoundWeight
 /-!
 # The deployed bound record at `coverW`, and the route with (P3) discharged
 
-Daniel's ruling (19 Oct, 2:06 PM PDT, ASK-72): the deployed bound record states its inner claim at `IVStar` at the weight
-`coverW` of `deployPlainTrim`'s weight, the least at which (P3) (`Bound.WeightCovers`) holds, at about 4 bits of `λ`.
+The deployed bound record states its inner claim at `IVStar` at the weight `coverW` of `deployPlainTrim`'s weight, the
+least at which (P3) (`Bound.WeightCovers`) holds, at about 4 bits of `λ`.
 
 * **The weight** is `wCover rel = coverW (deployPlainTrim rel).weight`, and **the deployed bound record** `bdCover` is
   `bdDeployed` at it, at every other choice the code side makes. `bdDeployed` keeps `γ`'s weight at `IVStar` a parameter,
@@ -21,7 +21,7 @@ bits per SHA-512 call at `wCover`, against 69.4 at `w = C_DE`: its third term, `
 binds, loses about 4 bits. That is below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route
 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
 165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises
-still open: `PartChecksB`, `PartOpensB`, `DecompB`, the readers' three facts and the coin server's transcript
+still open: `PartChecksBV`, `PartOpensB`, `DecompB`, the readers' three facts and the coin server's transcript
 reading back (`RecDeploy.ReadsBackB`, `RecDeploy.ksLin2_deployed_open`, with the last round's pieces at the parts that
 commit the earlier rounds, `RecDeploy.finOpen`). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`).

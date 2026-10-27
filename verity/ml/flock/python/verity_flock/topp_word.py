@@ -47,9 +47,9 @@ from .gf2 import (
 
 # the pipeline, its word gates and their constants are written once, in the registry (`topp_keep_builder`, `topp_word_gates`);
 # F, R, CW, WIDTH and SPLIT_COUNTS are re-exported
-from verity_vllm.program.registry.topp_keep_builder import F, R, SPLIT_COUNTS, keep_word  # noqa: E402, F401
-from verity_vllm.program.registry.topp_keep_builder import Engine as _Engine  # noqa: E402
-from verity_vllm.program.registry.topp_word_gates import CW, EPS9, HALF, LOG2E, M126, QNAN, WIDTH  # noqa: E402, F401
+from verity.ml.definitions.registry.topp_keep_builder import F, R, SPLIT_COUNTS, keep_word  # noqa: E402, F401
+from verity.ml.definitions.registry.topp_keep_builder import Engine as _Engine  # noqa: E402
+from verity.ml.definitions.registry.topp_word_gates import CW, EPS9, HALF, LOG2E, M126, QNAN, WIDTH  # noqa: E402, F401
 
 
 def _c(v: int):

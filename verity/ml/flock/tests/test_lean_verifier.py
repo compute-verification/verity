@@ -221,6 +221,66 @@ def test_unit_draw_check(tmp_path):
         assert g["ok"] == (want == "") and g["why"].startswith(want), (case, g)
 
 
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_draw_is_held_to_its_registered_law(tmp_path):
+    """`draw --registration F` and `draw-test --registration F`: the law is the one the window registered before any coin,
+    so a draw at another k (subset:8 against a registered subset:2, and the reverse) or over another population is refused."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    regs = {}
+    for k in (2, 8):
+        regs[k] = tmp_path / f"reg-{k}.json"
+        regs[k].write_text(json.dumps({"law": {"law": "subset", "k": k}, "population": 512, "program": "x"}))
+
+    def draw(k, reg, population=512):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", str(population), "--k", str(k),
+                            "--registration", str(reg)], capture_output=True, text=True)
+        return p.returncode, p.stdout, p.stderr
+
+    for k, other in ((2, 8), (8, 2)):
+        rc, out, _ = draw(k, regs[k])
+        assert rc == 0 and len(json.loads(out[5:])["units"]) == k
+        rc, out, err = draw(other, regs[k])
+        assert rc == 2 and not out and f"is not the registered law {{\"k\":{k},\"law\":\"subset\"}}" in err
+    rc, out, err = draw(2, regs[2], population=511)
+    assert rc == 2 and not out and "the population 511 is not the registered 512" in err
+
+    def subset(k, n=512):
+        return {"law": "subset", "population": n, "k": k, "units": list(range(k))}
+
+    cases = [(2, subset(2), ""), (2, subset(8), "U2: the law"), (8, subset(8), ""), (8, subset(2), "U2: the law"),
+             (2, subset(2, 511), "U2: the population")]
+    for k, d, want in cases:
+        f = tmp_path / "cases.json"
+        f.write_text(json.dumps([{"record": d, "statement": d, "instances": len(d["units"])}]))
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(f), "--registration", str(regs[k])],
+                           capture_output=True, text=True, check=True)
+        g = json.loads(p.stdout.splitlines()[-1][10:])
+        assert g["ok"] == (want == "") and g["why"].startswith(want), (k, d, g)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_draw_over_several_tables_has_a_count_they_split():
+    """`draw --tables J` refuses a law whose unit count the J tables can't split evenly: a Bernoulli draw (its count is random),
+    a subset whose k isn't a multiple of J, and J outside 1..MAX_TABLES; a subset of k = 4 over 2 tables is one draw of 4 units."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+
+    def draw(*args):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", "8", *args],
+                           capture_output=True, text=True)
+        return p.returncode, p.stdout, p.stderr
+
+    rc, out, err = draw("--p", "1/2", "--tables", "2")
+    assert rc == 2 and not out and "tables: several tables need a subset or stratified draw" in err
+    rc, out, err = draw("--k", "3", "--tables", "2")
+    assert rc == 2 and not out and "3 units do not split into 2 equal tables" in err
+    for j in ("0", "65"):
+        rc, out, err = draw("--k", "4", "--tables", j)
+        assert rc == 2 and not out and "1 ≤ J ≤ 64" in err
+    for j in ("1", "2", "4"):
+        rc, out, _ = draw("--k", "4", "--tables", j)
+        assert rc == 0 and len(json.loads(out[5:])["units"]) == 4
+
+
 def _ir_tests() -> Path:
     """The circuits' `tests`, inside the `verity.ml.circuits` the import system finds (whichever member ships it): the vectors the
     Lean verifier agrees with.  Located, never checked for here: one that is missing fails `test_the_reference_vectors_exist`, not a skip."""

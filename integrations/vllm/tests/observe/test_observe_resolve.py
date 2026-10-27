@@ -1,4 +1,4 @@
-"""v2 Phase 4b: the value-observation contract (`verity_vllm.observe.contract`) and occurrence resolution (`verity_vllm.correspondence.resolve`) over a
+"""v2 Phase 4b: the value-observation contract (`verity_vllm.observe.contract`) and occurrence resolution (`verity_vllm.check.match.resolve`) over a
 SYNTHETIC record -- pure python, no torch, no GPU.
 
 The record is a two-request batched fold in today's on-disk shape (instances.jsonl v1 rows + capture/log.jsonl.gz RunHeader/StepStart):
@@ -14,7 +14,7 @@ import json
 import pytest
 
 from verity_vllm.observe import contract as OB
-from verity_vllm.correspondence import resolve as RS
+from verity_vllm.check.match import resolve as RS
 from verity_vllm.check.match import batch_decomp as BD
 
 A, B = "req-A", "req-B"

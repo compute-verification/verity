@@ -249,7 +249,7 @@ class Function(_Callable):
             out = self.fn(*ex, **kw)
         except FrontendError:
             raise
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise FrontendError(_classify(e), f"{type(e).__name__}: {str(e).splitlines()[0][:200]}", self.id) from e
         ret_type = type_of(out, self.id)
         if self.ret_schema is not None:
@@ -264,7 +264,7 @@ class Function(_Callable):
             ep = torch.export.export(_Wrap(self.fn, in_spec, kw), tuple(flat), strict=False)
         except FrontendError:
             raise
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise FrontendError(_classify(e), f"{type(e).__name__}: {str(e).splitlines()[0][:200]}", self.id) from e
         _guard(ep, self.id)
         return _Spec(param_types, ret_type, ep, erased)
@@ -403,11 +403,11 @@ class Ops:
 
     def const(self, w: int, bits: int, name: str = ""):
         """`Const<w>[0x..]`: a zero-arity gate with a fixed correct output (emitted immediately)."""
-        from verity_vllm.program.registry.b1 import const
+        from verity.ml.definitions.registry.b1 import const
         return Prim(const(w, bits))(name=name)
 
     def gather_bf16(self, vocab: int) -> Prim:
-        from verity_vllm.program.registry.prims import gather_bf16
+        from verity.ml.definitions.registry.prims import gather_bf16
         return Prim(gather_bf16(vocab))
 
     def __getitem__(self, fid: str) -> _Callable:

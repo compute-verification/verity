@@ -20,7 +20,7 @@ read:
   over (`Efficient` is stated at one decoder, this one);
 * `KSFlock_meets`, `BitsFlock_meets`: so do the inner radius decoder at the deployed plain record and the outer one;
 * `KSBound_meets`, `KSPrivBound_meets`: at the deployed bound record (`RecDeploy.bdCover`, `RecDeploy.bdDeployed` at
-  `γ`'s weight `RecDeploy.wCover` at `IVStar`, `coverW` of the trimmed plain record's weight (ASK-72); its element-level
+  `γ`'s weight `RecDeploy.wCover` at `IVStar`, `coverW` of the trimmed plain record's weight; its element-level
   Flock is the trimmed plain record `FlockDeploy.deployPlainTrim` with only its verifier's steps, columns and weight
   replaced), the inner radius decoder meets the spec, and so does the outer one at the deployed `--zk` record;
 * `Inner.KS_meets`, `Inner.KSAbort_meets`: the inner radius decoder meets the spec at the deployed plain record, the
@@ -37,7 +37,7 @@ read:
   round at an inner-ready statement in scope where every answer is a coin's bytes and none a bad inner coin
   (`RecDeploy.halted_live`);
 * `ZKStop_meets_ready`: where that leaves the stop live. The inner statement `RecDeploy.PlainLeavesAdmitted` names
-  (#2468's) is in Flock's scope and true, and at every statement in scope carrying it the reference prover runs every
+  is in Flock's scope and true, and at every statement in scope carrying it the reference prover runs every
   round before the staging round where every answer is a coin's bytes and none a bad inner coin
   (`RecDeploy.ready_of_admitted`); so it does wherever the inner statement's size, its regions and its honest record
   fit, which in scope are the inner readiness the stop reads (`RecDeploy.ready_inScope_iff`);
@@ -259,7 +259,7 @@ theorem ZKStop_meets_ready {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, 
           (RecDeploy.deployRecStop IV ivScope b tapeOf SO nAt innerMsg).halted H (RecDeploy.stopRounds IV x) x ms =
             false := by
   refine ⟨fun hA => ?_, fun H x ms hs hl hfit hlen hc hb => ?_⟩
-  · obtain ⟨inner, hr, -, hS, hR⟩ := RecDeploy.ready_of_admitted hA
+  · obtain ⟨inner, hr, hS, hR⟩ := RecDeploy.ready_of_admitted hA
     refine ⟨inner, hS, hR, fun H x ms hs hx hlen hc hb => ?_⟩
     exact RecDeploy.halted_live IV ivScope b tapeOf SO nAt innerMsg H x ms hs (by rw [hx]; exact hr) hlen hc hb
   obtain ⟨s, spec, sts, hset, -, hiff⟩ := RecDeploy.ready_inScope_iff hs

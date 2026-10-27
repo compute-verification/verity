@@ -8,7 +8,7 @@ import types
 import pytest
 
 from verity_vllm.engine import topp_pin
-from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits, splits_for
+from verity.ml.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits, splits_for
 
 #: the RTX PRO 6000, the L40S, the H100, and two SM counts below 32
 SM_COUNTS = (188, 142, 132, 16, 6)
@@ -95,7 +95,8 @@ def test_the_pin_is_armed_at_import_by_every_rank_and_by_the_driver_before_it_bu
     import ast
     import inspect
 
-    from verity_vllm.engine import build, rank_worker
+    from verity_vllm.engine import build
+    from verity_vllm.pipeline.tp import rank_worker
 
     top = ast.parse(inspect.getsource(topp_pin)).body
     assert any(isinstance(n, ast.Expr) and ast.unparse(n) == "arm()" for n in top)

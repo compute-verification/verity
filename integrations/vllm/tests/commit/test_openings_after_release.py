@@ -15,7 +15,6 @@ CPU reference of the same chunk tree (`commit_block_offline`) so they need no CU
 from __future__ import annotations
 
 import copy
-import os
 
 import pytest
 
@@ -50,11 +49,9 @@ def _metas(step: int, seed: int) -> tuple[list[TensorMeta], bytes]:
 
 
 def _committer(retain: str, run_id: str = "p0-test") -> NativeHostCommitter:
-    os.environ["VERITY_RETAIN"] = retain
-    try:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("VERITY_RETAIN", retain)
         return NativeHostCommitter(None, run_id=run_id, gpu_tree=True)
-    finally:
-        del os.environ["VERITY_RETAIN"]
 
 
 def _run(com: NativeHostCommitter, seed: int = 1, steps: int = 3):
@@ -378,7 +375,7 @@ def test_verdict_rules_for_host_plus_replay_and_bounded_records():
     # the in-run openings under exclude: `skipped` set with a host share -> the host share must verify; the after-release record carries the rest
     rec = _rec(good)
     rec["openings"] = {"n": 40, "verified": 40, "skipped": "retain=host excluding ['fa2_hidden_m1']: 24 of 64 -> replay", "deferred_replay_n": 24}
-    rec["openings_after_release"]["deferred_received_n"] = 24                          # ... and the after-release stage received them all
+    rec["openings_after_release"]["deferred_received_n"] = 24                          # ... and the after-release phase received them all
     assert commit_verdict(rec, True)[0]
     rec["openings_after_release"]["deferred_received_n"] = 23                          # one deferred pick opened nowhere -> FAIL by name
     ok, why = commit_verdict(rec, True)
@@ -386,11 +383,11 @@ def test_verdict_rules_for_host_plus_replay_and_bounded_records():
     rec["openings_after_release"]["deferred_received_n"] = 24
     rec["openings"]["verified"] = 39
     assert not commit_verdict(rec, True)[0]
-    # the population-drawn openings (binding) partition the same way: host share verifies, deferred share must reach the replay stage.
+    # the population-drawn openings (binding) partition the same way: host share verifies, deferred share must reach the replay phase.
     # A record WITH a binding block is a row-procedure record: C2 of record (replay / linkage / pin) must be on it for the PASS branch.
     from verity_vllm.check.commit_rules import binding_check
     po = {"n": 81, "bound": 81, "unbound_n": 0, "opened": 76, "verified": 76, "skipped": "retain=host excluding [...]: 5 of 81 -> replay", "deferred_replay_n": 5}
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "population": {"n": 69761}, "openings_population": po}
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 69761, "bound_n": 69761, "missing_n": 0}, "population": {"n": 69761}, "openings_population": po}
     assert binding_check(bnd) == (True, "PASS")
     ok, why = binding_check({**bnd, "openings_population": {**po, "verified": 75}})
     assert not ok and "host share" in why, why
@@ -404,7 +401,7 @@ def test_verdict_rules_for_host_plus_replay_and_bounded_records():
     rec["openings_after_release"]["deferred_received_n"] = 4                           # one population pick opened nowhere -> FAIL by name
     ok, why = commit_verdict(rec, True)
     assert not ok and "5 population pick(s) deferred" in why, why
-    # [rev F-r17b-13] by POSITION: 24 challenge + 5 population deferred, the after-release stage received 24 -- count-only would pass, the
+    # [rev F-r17b-13] by POSITION: 24 challenge + 5 population deferred, the after-release phase received 24 -- count-only would pass, the
     # positions say five picks opened nowhere
     pa = [[3, i] for i in range(24)]
     pb = [[7, 100 + i] for i in range(5)]
@@ -437,7 +434,7 @@ def test_verdict_rules_for_host_plus_replay_and_bounded_records():
     rec["binding"]["openings_population"] = {**po, "deferred_positions": pb}
     rec["openings_after_release"]["deferred_received_positions"] = pa + pb
     rec["openings_after_release"]["deferred_received_n"] = 29
-    del rec["openings_after_release"]                                                  # deferred picks and no after-release stage at all -> FAIL
+    del rec["openings_after_release"]                                                  # deferred picks and no after-release phase at all -> FAIL
     ok, why = commit_verdict(rec, True)
     assert not ok and "no openings-after-release" in why, why                         # (the in-run `skipped` rule names it first)
     rec["openings"] = {"n": 64, "verified": 64}                                        # ... and with only POPULATION picks deferred, the new rule does

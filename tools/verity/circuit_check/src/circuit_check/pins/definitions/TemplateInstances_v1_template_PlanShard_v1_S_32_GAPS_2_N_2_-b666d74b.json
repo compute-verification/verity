@@ -1,0 +1,8 @@
+{
+ "definitions": {
+  "TemplateInstances_v1{template='PlanShard_v1{S=32,GAPS=2}',N=2}": {
+   "and": 6106,
+   "type": "d9350f4a516d7f9d2f5bc0fc5b2b740487529aceed92c7ed9f4d1e35fd2ff52a519a90eb6ddd0493ce6b5a74c59d9537b9be3e118c78488f704d9340ab9c488a"
+  }
+ }
+}

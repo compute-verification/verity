@@ -9,7 +9,7 @@ The workload is Serve_v1 (`benchmarks/network_sim/workload/served.py`) at a ladd
 the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says why). Two verifiers are measured:
 
 * `measure`, the NCI check: `nci-check --policy` (`NciCheck.Desc`, one summary per Definition) on an instance whose θ is
-  the registered inputs and whose IUs are the root's Calls, one each. `--policy` leaves out θ's provenance
+  the registered inputs and whose isolation blocks are the root's Calls, one each. `--policy` leaves out θ's provenance
   (`NciCheck.Baseline`), which reads the registration log and adds work in θ's length and the log's. Where the unrolled
   circuit is small enough (`--unrolled-max`), the instance expanded gate by gate also goes through
   `nci-check --policy --unrolled` (`NciCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
@@ -31,18 +31,18 @@ verity bench verifier_cost plot ART --to PNG             # from the store
 `nci_glm.sh` runs `nci-check --policy` on GLM-5.3's registered Programs: the eight per-rank workload Programs of the B1
 Build (vLLM, TP8 on 8×H200, a 256-token prompt and 32 sampled tokens), each checked against the Build's pinned
 digest. A registered Program's root is its inputs and one Call, the request, so the only division `NciCheck.Desc` can
-check on it is that one IU; and its weights are bound per run (`Input<w>_v1`), so θ can't hold them
+check on it is that one isolation block; and its weights are bound per run (`Input<w>_v1`), so θ can't hold them
 (`theta-not-registered`). `nci_glm.py` (its docstring has the cases) derives Programs with the same computed gates and
-wires: rank 0's with its weights bound at registration (θ), one IU per rank; and the eight ranks' requests joined into
+wires: rank 0's with its weights bound at registration (θ), one isolation block per rank; and the eight ranks' requests joined into
 one Definition the node's root calls once, each collective reading the other ranks' partials where it read its
-`peers_*` inputs, one IU per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
+`peers_*` inputs, one isolation block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
 α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
 per layer, per Call) are out of `NciCheck.Desc`'s reach at this size: it holds each root node's reads as pieces of
 gates, about one per leaf on GLM-5.3, so only a Call's internal reads stay small. Three of rank 0's Definitions (the
 router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in all through `--policy`,
 `--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json` (`verity/nci-glm/v1`) has a row
 per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict summarised, wall seconds and
-peak RSS; `$OUT/ius/` has each verdict's IUs. A rank's check takes about 21 minutes and 7 GB, the node's (a 2.2 GB
+peak RSS; `$OUT/ius/` has each verdict's isolation blocks. A rank's check takes about 21 minutes and 7 GB, the node's (a 2.2 GB
 descriptor) about 2.6 hours and 50 GB, and the whole run about 3 hours (r20261023-064803-3874).
 
 ~~~sh
@@ -62,7 +62,7 @@ research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-
   - θ is its root's `RegisteredInput` nodes, and its `annotations.theta` where it has them;
   - given the registration, it is the program of the record that the trusted input names as the run's own, and
     there is one provenance entry per θ node, each citing the log's first record.
-- **The IU.** One IU holds every root node that isn't an input, which is the whole node's session (the demo's
+- **The isolation block.** One isolation block holds every root node that isn't an input, which is the whole node's session (the demo's
   division).
 - **The checks**, in the order they start (`NODE_POINTS`):
   - given the registration, the check of record (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), at A: the

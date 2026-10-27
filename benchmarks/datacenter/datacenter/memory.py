@@ -13,12 +13,15 @@ Where the bits really are decides how fast they can be served (`read_rate`, `ser
 bandwidth, and, when they sit on another device, the path from there (each link's latency, the bits at its narrowest
 link). A deadline that only the registered holder can meet turns "the answer was on time" into "the bits were on that
 device": by latency for a small sample, by bandwidth for a whole read. Labels the prover could rebuild from a seed
-faster than the deadline locate nowhere.
+faster than the deadline locate nowhere. A wipe fills a device no faster than its write ceiling, else the links into
+it (`fill_rate`).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal
+
+from verity.core.protocols.remote_bandwidth.codec import BLOCK_BYTES
 
 from .physical import Datacenter
 from .time import Interval
@@ -84,8 +87,7 @@ class Wipe:
         return Store(f"labels@{self.device}", self.bits, self.device, "labels", self.regen)
 
 
-#: a store block: 4 KiB, as requirement.BLOCK_BITS and the remote audit's receipts count them
-BLOCK_BITS = 4096 * 8
+BLOCK_BITS = BLOCK_BYTES * 8
 
 
 @dataclass(frozen=True)
@@ -152,7 +154,20 @@ def answer_time(dc: Datacenter, challenger: str, registered: str, actual: str, b
 
 
 def regen_time(dc: Datacenter, store: Store, bits: float) -> float:
-    """Seconds the prover's fastest device needs to rebuild `bits` of `store` from its seed, at its declared
-    `rate["square-1024"]`, the codec's squarings (μ_rebuild's twin); infinite for a store that can't be rebuilt."""
-    rates = [float(d.rate["square-1024"]) for d in dc.devices.values() if "square-1024" in d.rate and not d.trusted]
-    return bits * store.regen / max(rates) if store.regen and rates else float("inf")
+    """Seconds the prover needs to rebuild `bits` of `store` from its seed at its block's summed `rate["square-1024"]`,
+    as `ledger.Node.rebuild` sums a node's; infinite for a store that can't be rebuilt."""
+    block = dc.block_of(store.device)
+    devices = block.devices if block is not None else dc.devices.values()
+    rate = sum(float(d.rate["square-1024"]) for d in devices if "square-1024" in d.rate and not d.trusted)
+    return bits * store.regen / rate if store.regen and rate else float("inf")
+
+
+def into(dc: Datacenter, device: str) -> float:
+    """Bits a second every path into `device` from the rest of the datacenter carries: the links that end at it."""
+    return sum(float(l.capacity) for l in dc.links if device in (l.a, l.b))
+
+
+def fill_rate(dc: Datacenter, device: str) -> float:
+    """Bits a second a wipe can write into `device`: its write ceiling, else the links into it."""
+    d = dc.devices[device]
+    return float(d.write) if d.write is not None else into(dc, device)

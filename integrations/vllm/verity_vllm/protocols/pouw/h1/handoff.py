@@ -1,4 +1,4 @@
-"""An H1 window handed from its serving process to a CPU process for its close (VLLM-68), so the GPU is held only while it
+"""An H1 window handed from its serving process to a CPU process for its close, so the GPU is held only while it
 serves: `H1Run.close` commits the window's empty calls, their tables and its rounds on the CPU, and the serving process's
 GPU lease ends only when it exits.
 
@@ -161,7 +161,7 @@ def _declare(served: SV.Served, run: PH.H1Run) -> None:
     served.program = None
     if served.program_digest is not None:
         served.program = SV.declared(run.shapes_, run.modules, run.rows, run.steps, served.tile, served.blocks,
-                                     served.prefix, served.unit)
+                                     served.prefix, served.unit, served.arch)
         if P.program_digest(served.program) != served.program_digest:
             raise ValueError(f"{run.entry}: the window Program declared again is not the one its tables were registered under")
 

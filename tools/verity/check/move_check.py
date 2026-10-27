@@ -1,12 +1,12 @@
 """`move-check`: certify that BASE..HEAD is a pure move, so the lander may schedule it first in a quiet window, alone in its
-train (Daniel, 4 Oct). It relaxes no gate: a certified move still goes through `check`.
+train. It relaxes no gate: a certified move still goes through `check`.
 
     uv run python tools/verity/check/move_check.py BASE HEAD [--map OLD=NEW ...] [--json]
 
 Every path git sees changed must be one of:
 - a rename with byte-identical content and mode (git's 100% rename);
-- an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it (from the root)
-  is rewritten to where it is now, in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
+- an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it (from the root, also
+  after a variable such as `$REPO/`) is rewritten to where it is now, in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
   the file's own directory first, in a `*.py` file a pathlib chain `ROOT / "a" / "b"` read as `"a/b"`. Each changed
   line left may only rewrite a moved path as written below a directory its old and new places share
   (`verity_vllm/program/predict/`), or a dotted name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a
@@ -16,7 +16,8 @@ Every path git sees changed must be one of:
   `*.py` file, also the module of an `import M` /
   `from M import` line (a relative one, `.m`, read from the file's own place), or a `Path(__file__).parents[N]` anchor
   (or `Path(m.__file__)`'s, and the path joined to it) recounted to name, from where it now is, what the old one named,
-  moved;
+  moved; in a shell script, likewise a path from its own directory (`$(dirname "$0")/../..`, or after
+  `${BASH_SOURCE[0]}` or a variable it sets to its own path, `SH_SELF`);
 - an added line in `REGISTRIES` that registers exactly a package the range created: a root `pyproject.toml` workspace
   member (or its `tool.uv.sources` entry) for a directory that is new at HEAD, a `tests/test_lean_packages.py` entry for a
   new Lake package with its `lean-audit.json`; and in any `pyproject.toml`, an added line of a new Lake package's own
@@ -55,7 +56,10 @@ whole subtree in BASE moved there file by file. When only `verity/core/protocols
 inferred. Renames are git's exact ones, and its similar ones (`-M`) as candidates, each edit then judged as above; a file
 below a directory that moved whole is paired with its place there, whichever identical file git paired it with. A deleted
 path is paired with the added one a word map at BASE moves it to, and an in-place edit of a path a word map moves to a path
-new at HEAD is that move and another file landing on its path (`landings`), each pair again judged as above.
+new at HEAD is that move and another file landing on its path (`landings`), each pair again judged as above. The entry
+the range appends to `moves.json` adds each of its paths that the range bears out on its own (`declared`): a directory
+that moved whole but for files a longer path of the entry sends elsewhere, which no rename pairs, and a file whose edit
+leaves it below git's similarity, each pair again judged as above.
 `--map OLD=NEW` adds an entry, and a dotted one (no `/`) also maps a Python or Lean module and those below it.
 """
 from __future__ import annotations
@@ -246,13 +250,17 @@ def map_path(p: str, pmap: dict[str, str]) -> str:
 
 @functools.lru_cache(maxsize=8)
 def _paths_pattern(olds: tuple[str, ...]) -> re.Pattern:
-    return re.compile(r"(?:(?<![\w.\-/])|(?<=^/))(" + "|".join(map(re.escape, olds)) + r")(?![\w.\-])", re.M)
+    """A moved path from the root: alone, at a line's `/`, or after a variable holding the checkout (`$REPO/`, `${ROOT}/`),
+    as `tools/move/layout.py` rewrites it; never the tail of a longer path."""
+    return re.compile(r"(?:(?<![\w.\-/])|(?<=^/)|(?<![\w.\-/$])(\$\{?\w+\}?/))(" + "|".join(map(re.escape, olds))
+                      + r")(?![\w.\-])", re.M)
 
 
 def substitute(text: str, pmap: dict[str, str]) -> str:
     if not pmap:
         return text
-    return _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).sub(lambda m: pmap[m.group(1)], text)
+    return _paths_pattern(tuple(sorted(pmap, key=len, reverse=True))).sub(lambda m: (m.group(1) or "") + pmap[m.group(2)],
+                                                                          text)
 
 
 def short_forms(pmap: dict[str, str], base: Tree) -> dict[str, str]:
@@ -425,6 +433,43 @@ def anchor_rewrite(old: str, new: str, at_old, at_new, pmap: dict[str, str]) -> 
     for x, y in zip(a, b):
         dx, dy = anchored(x, at_old(x.group("mod"))), anchored(y, at_new(y.group("mod")))
         if x.group("head") != y.group("head") or dx is None or dy is None or map_path(dx, pmap) != dy:
+            return False
+    return True
+
+
+#: a shell script's own directory and the path joined to it (`$(dirname "$0")/../..`), as `tools/move/layout.py` writes it
+SH_ANCHOR = re.compile(r'(?P<head>\$\(dirname\s+"(?P<ref>\$(?:\{[A-Za-z_0-9]\w*(?:\[0\])?\}|[A-Za-z_0-9]\w*))"\))'
+                       r'(?P<rel>(?:/[\w.\-]+)+)')
+#: a variable a shell script sets to its own path (`SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")`)
+SH_SELF = re.compile(r'^\s*(?:export\s+|readonly\s+|local\s+)?(?P<v>[A-Za-z_]\w*)=(?P<q>"?)'
+                     r'(?:\$\(cd\s+"\$\(dirname\s+"(?P<a>\$0|\$\{BASH_SOURCE\[0\]\})"\)"\s+&&\s+pwd\)/\$\(basename\s+"(?P=a)"\)'
+                     r'|\$\((?:realpath|readlink\s+-f)\s+"(?:\$0|\$\{BASH_SOURCE\[0\]\})"\))(?P=q)\s*$', re.M)
+SH_OWN = {"0", "BASH_SOURCE", "BASH_SOURCE[0]"}
+
+
+def is_shell(path: str, text: str) -> bool:
+    return path.endswith(".sh") or re.match(r"#!\S*(?:/|\s)(?:ba|da|z)?sh\b", text) is not None
+
+
+def sh_self_names(text: str) -> set[str]:
+    """The names whose `dirname` is a shell script's own directory: its own path's, and each variable it sets to that."""
+    return SH_OWN | {m.group("v") for m in SH_SELF.finditer(text)}
+
+
+def sh_anchor_rewrite(old: str, new: str, old_path: str, new_path: str, names_old: set[str], names_new: set[str],
+                      pmap: dict[str, str]) -> bool:
+    """Whether `new` is `old` with each of a shell script's paths from its own directory recounted so that, from the script's
+    new place, it names the path the old one named, moved by `pmap`."""
+    a, b = list(SH_ANCHOR.finditer(old)), list(SH_ANCHOR.finditer(new))
+    if not a or len(a) != len(b) or SH_ANCHOR.sub("\0", old) != SH_ANCHOR.sub("\0", new):
+        return False
+    for x, y in zip(a, b):
+        ref = x.group("ref")[1:].strip("{}")
+        if x.group("ref") != y.group("ref") or ref not in names_old or ref not in names_new:
+            return False
+        dx = posixpath.normpath(posixpath.join(posixpath.dirname(old_path), x.group("rel")[1:]))
+        dy = posixpath.normpath(posixpath.join(posixpath.dirname(new_path), y.group("rel")[1:]))
+        if dx.startswith("..") or dy.startswith("..") or map_path(dx, pmap) != dy:
             return False
     return True
 
@@ -827,22 +872,31 @@ def copy_change(name: str, old: str, new: str, src_path: str, new_path: str, pma
     return lakefile_change(old, new, src_path, new_path, pmap, lmods, head)
 
 
+def appended(old: str, new: str) -> tuple[dict[str, str] | None, str | None]:
+    """The `paths` of the one entry `moves.json`'s `new` text appends to its `old` one, each old path's new path, or why
+    `new` isn't `old` with one such entry appended."""
+    try:
+        a, b = json.loads(old), json.loads(new)
+    except ValueError:
+        return None, "not JSON"
+    am, bm = a.get("moves"), b.get("moves")
+    if not (isinstance(am, list) and isinstance(bm, list)) or len(bm) != len(am) + 1 or bm[:len(am)] != am or \
+            {k: v for k, v in a.items() if k != "moves"} != {k: v for k, v in b.items() if k != "moves"}:
+        return None, "changes more than one appended entry"
+    entry = bm[-1]
+    if not (isinstance(entry, dict) and set(entry) == {"paths"} and isinstance(entry["paths"], dict)
+            and all(isinstance(v, str) for v in (*entry["paths"], *entry["paths"].values()))):
+        return None, "the appended entry isn't one `paths` map"
+    return {o.rstrip("/"): n.rstrip("/") for o, n in entry["paths"].items()}, None
+
+
 def moves_change(old: str, new: str, pmap: dict[str, str], base: Tree) -> tuple[str, str | None] | None:
     """Why `moves.json` at HEAD isn't BASE's with one entry appended whose `paths` agree with the range: each BASE file
     below an entry's old path (and below no longer one) moved to the same place below its new path. An entry may name a
     path BASE doesn't have (a file an open branch adds), which no file contradicts."""
-    try:
-        a, b = json.loads(old), json.loads(new)
-    except ValueError:
-        return "not JSON", None
-    am, bm = a.get("moves"), b.get("moves")
-    if not (isinstance(am, list) and isinstance(bm, list)) or len(bm) != len(am) + 1 or bm[:len(am)] != am or \
-            {k: v for k, v in a.items() if k != "moves"} != {k: v for k, v in b.items() if k != "moves"}:
-        return "changes more than one appended entry", None
-    entry = bm[-1]
-    if not (isinstance(entry, dict) and set(entry) == {"paths"} and isinstance(entry["paths"], dict)):
-        return "the appended entry isn't one `paths` map", None
-    declared = {o.rstrip("/"): n.rstrip("/") for o, n in entry["paths"].items()}
+    declared, why = appended(old, new)
+    if declared is None:
+        return why, None
     for f in base.files:
         o = max((d for d in declared if f == d or f.startswith(d + "/")), key=len, default=None)
         if o is not None and map_path(f, pmap) != declared[o] + f[len(o):]:
@@ -850,10 +904,28 @@ def moves_change(old: str, new: str, pmap: dict[str, str], base: Tree) -> tuple[
     return None
 
 
+def declared(base: Tree, head: Tree) -> dict[str, str]:
+    """The paths of the entry the range appends to `moves.json` that the range bears out without them: each names a file or
+    directory of BASE, and every BASE file below it (and below no longer path of the entry) is gone at HEAD, with its place
+    below the entry's new path new at HEAD. Whether its content moved unchanged is then judged like any pair's. A range
+    that appends no such entry declares nothing, and `moves_change` refuses its `moves.json` edit, if any, by name."""
+    decl, _ = appended(base.text(MOVES) or "{}", head.text(MOVES) or "{}")
+    out: dict[str, str] = {}
+    if decl is None:
+        return out
+    for o, n in decl.items():
+        mine = [f for f in base.files if (f == o or f.startswith(o + "/"))
+                and max((d for d in decl if f == d or f.startswith(d + "/")), key=len) == o]
+        if mine and all(f not in head.set and (t := n + f[len(o):]) in head.set and t not in base.set for f in mine):
+            out[o] = n
+    return out
+
+
 def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str | None = None) -> dict:
     extra = extra or {}
     dotted = {o: n for o, n in extra.items() if "/" not in o}
     B, H = Tree(base, cwd), Tree(head, cwd)
+    extra = {**declared(B, H), **extra}
     entries = landings(raw_diff(base, head, cwd), B, H)
     whole = [w for _, w in base_maps(B)]
     exact = [(e["old"], e["new"]) for e in entries
@@ -1017,8 +1089,12 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             def at(tree: Tree, path: str, text: str):
                 return lambda mod: path if mod is None else module_file(tree, text, mod)
 
+            sh = is_shell(old, a) and is_shell(new, b)
+            sh_names = (sh_self_names(a), sh_self_names(b)) if sh else (set(), set())
+
             def pair(x: str, y: str, at_old=at(B, old, a), at_new=at(H, new, b)) -> bool:
                 return any((py and (import_rewrite(z, y, modules, old, new) or anchor_rewrite(z, y, at_old, at_new, pmap)))
+                           or (sh and sh_anchor_rewrite(z, y, old, new, *sh_names, pmap))
                            or dotted_rewrite(z, y, modules) or registry_pair(new, z, y)
                            for z in dict.fromkeys((x, substitute(x, short))))
 

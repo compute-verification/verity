@@ -103,15 +103,23 @@ def _p07_env_owners() -> frozenset[str]:
     raise AssertionError("tests/lint/test_p07_declared_inputs.py states no ENV_OWNERS")
 
 
+def _package_entries(name: str) -> list[dict]:
+    """An allowlist's entries in the package: the lints also hold the Definitions that moved to ``verity/ml/definitions/``,
+    which the scorecard doesn't count."""
+    entries = json.loads((LIMITS / f"{name}.json").read_text(encoding="utf-8"))["entries"]
+    return [e for e in entries if e["file"].startswith(f"{SC.PACKAGE}/")]
+
+
 @pytest.mark.slow
 def test_the_real_tree_agrees_with_the_p10_and_p7_allowlists() -> None:
     """On the real package (about 6 s): the scorecard's size bands and environment uses are the numbers the P10 and P7
-    ratchets hold, so a scorecard that drifted from what the lints enforce fails here, which the toy tree can't show."""
+    ratchets hold for it, so a scorecard that drifted from what the lints enforce fails here, which the toy tree can't
+    show."""
     card = SC.scorecard(TOOLS.parents[2], outside=False)
-    p10 = json.loads((LIMITS / "p10_size.json").read_text(encoding="utf-8"))["entries"]
+    p10 = _package_entries("p10_size")
     assert card["size"]["modules_over_800"] == sum(e["kind"] == "module" for e in p10)
     assert card["size"]["functions_over_150"] == sum(e["kind"] == "function" for e in p10)
-    p07 = json.loads((LIMITS / "p07_declared_inputs.json").read_text(encoding="utf-8"))["entries"]
+    p07 = _package_entries("p07_declared_inputs")
     owners = _p07_env_owners()
     by_module = card["settings"]["by_module"]
     assert card["settings"]["sites"] - sum(by_module.get(f, 0) for f in owners) == \

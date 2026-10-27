@@ -17,7 +17,7 @@ from verity.ml.circuits.codec import encode_program
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.program import Program
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import moe
+from verity.ml.definitions.registry import moe
 
 NAN, PINF, NINF, PZ, NZ = 0x7FC0, 0x7F80, 0xFF80, 0x0000, 0x8000
 
@@ -74,6 +74,6 @@ def test_the_statement_is_the_default_and_the_kernel_order_router_stays_declarab
 
 
 def test_the_fold_states_the_declared_router():
-    from verity_vllm.engine.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PATTERNS
+    from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PATTERNS
     assert MOE_CONSTRUCTION_PATTERNS["indexed-read"]({}).router is None
     assert MOE_CONSTRUCTION_PATTERNS["indexed-read-ordered"]({}).router == "ordered"

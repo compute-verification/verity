@@ -41,7 +41,10 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
+settings = of(__file__)
 _STEPS: list[dict] = []
 _CUR: dict | None = None
 _PHASE: dict = {"name": "start", "rep": -1}
@@ -87,7 +90,7 @@ def _patch_engine(llm) -> None:
     ``exec|TOKENS|REQUESTS`` and ``sample_tokens`` a range ``sample``, both on the runner instance, so outside the PoUW
     option's class-level hook (`pouw_pass.hook_steps`)."""
     import torch
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
     eng = llm.llm_engine
     step = eng.step
 
@@ -105,7 +108,7 @@ def _patch_engine(llm) -> None:
             _STEPS.append(rec)
 
     eng.step = stepped
-    runner = get_model_runner(llm)
+    runner = handle.model_runner(llm)
     execute = runner.execute_model
 
     def execute_model(so, *a, **kw):
@@ -126,8 +129,9 @@ def _live(arm):
     session reserved on infra's gate (`bench_arm._LiveSession`), which the option opens on its salt epoch's root
     (`salt.epoch_open_root` of the weights' root and the epoch's number) and draws its salt coin from
     (`pouw_h1_window.salt_session`), through the pouw settings ``challenger`` (this node's 127.0.0.1, at the port the
-    gate's open answers), ``session`` (the reserve answer) and ``gate``. Returns the arm and the reserve answer, None
-    when the arm's coins stay in-process."""
+    gate's open answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the
+    reserve joined, which the option refuses when it is H1's). Returns the arm and the reserve answer, None when the
+    arm's coins stay in-process."""
     import dataclasses
 
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm, _LiveSession
@@ -139,10 +143,10 @@ def _live(arm):
     if env.gate_command is None or env.peer is None:
         raise SystemExit("live coins take PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER "
                          "(this node's name in the challenger host's peers) together")
-    session = _LiveSession(env.gate_command, env.peer, env.epoch)
+    session = _LiveSession(env.gate_command, env.peer, env.epoch, env.lane)
     config = dict(arm.protocols_config or {})
     config["pouw"] = {**config.get("pouw", {}), "challenger": "127.0.0.1:0", "session": session.reserved,
-                      "gate": PHW.gate_of(session.gate.call)}
+                      "gate": PHW.gate_of(session.gate.call), "period": session.period}
     return dataclasses.replace(arm, protocols_config=config), session.reserved
 
 
@@ -157,7 +161,7 @@ def _engine(spec_name: str, arm_id: str):
     arms = resolve_arms(names, spec.arm_modules, {k: v for k, v in spec.arm_settings.items() if k in names})
     arm, reserved = _live(next(x for x in arms if x.id == arm_id))
     preset, eager = arm_execution(arm, preset, eager)
-    if preset.engine_settings.get("serving_defaults") and os.environ.get(INDUCTOR_DIR_MARK) != "1":
+    if preset.engine_settings.get("serving_defaults") and not settings.get(INDUCTOR_DIR_MARK):
         import tempfile
         os.environ["TORCHINDUCTOR_CACHE_DIR"] = tempfile.mkdtemp(prefix="served_step_inductor_")
         os.environ[INDUCTOR_DIR_MARK] = "1"
@@ -210,7 +214,7 @@ def run(a) -> int:
         _PHASE.update(name="end", rep=-1)
         doc = {"schema": "verity-pouw/served-step/v1", "spec": spec.id, "arm": arm.to_json(), "point": point.to_json(),
                "identity": dict(engine.identity), "gate": gate, "reps": reps,
-               "numa": json.loads(os.environ["DITHER_NUMA_RECORD"]) if os.environ.get("DITHER_NUMA_RECORD") else None}
+               "numa": settings.DITHER_NUMA_RECORD}
         (out / "reps.json").write_text(json.dumps(doc, indent=1, default=str))
         (out / "steps.json").write_text(json.dumps(_STEPS))
         print(json.dumps({"arm": arm.id, "point": point.id, "gate": bool(gate.get("passed")),

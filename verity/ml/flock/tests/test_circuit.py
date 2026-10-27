@@ -41,6 +41,7 @@ def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
     (hp, bp), (hv, bv) = (b.split(b"\n", 1) for b in (prover, verifier))
     hp, hv = json.loads(hp), json.loads(hv)
     assert set(hv) <= PUBLIC_HEADER and set(hv["frame_v3"]) == PUBLIC_FRAME and hv == dict(hp, rows=False)
+    assert verifier == FC.public_file(hv, bv), "the header line is C-Flock's, so the file's SHA-512 is public_file_sha512"
     ports = [(nm, w) for nm, w, _ in meta["ports"]]
     names = [nm for nm, _ in ports]
     assert names[meta["input_ports"]:] == [nm for nm, _ in meta["out_ports"]], "one output row per output port"
@@ -66,6 +67,13 @@ def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
         words = np.frombuffer(bp[at:at + 2 * w], dtype="<u2").tolist()
         assert any(salt), "a hiding leaf: the salt is not zero"
         assert bv[k * FC.BC_BYTES:][:FC.BC_BYTES] == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(words, 16, ROLE_X), salt)
+
+
+def test_the_verifiers_file_header_is_the_line_c_flock_writes():
+    """`public_file`'s header line is serde_json's of the header (`Instances::public_file`): compact, keys sorted, UTF-8
+    unescaped, ``rows`` false, so the prover's record's ``public_file_sha512`` is the staged file's SHA-512."""
+    got = FC.public_file({"z": [1, {"b": None, "a": "é"}], "rows": True, "m": "s"}, b"\x00\xff")
+    assert got == '{"m":"s","rows":false,"z":[1,{"a":"é","b":null}]}'.encode() + b"\n\x00\xff"
 
 
 @pytest.mark.slow
@@ -397,8 +405,8 @@ def test_returned_outputs_need_a_cut_tail():
 
 @pytest.mark.parametrize("prim", sorted(p for p in TL.MUFU if p not in ("MufuEx2Ftz_v1", "Fa2InvSum_v1")))
 def test_mufu_pieces_match_the_ir(prim):
-    from verity_vllm.program.kernels import rms_relation
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.numerics import rms_relation
+    from verity.ml.definitions.registry import prims as P
 
     t = rms_relation.tables("cuda")
     tabs = {"rsq": np.asarray(t.rsq, dtype=np.uint32), "sqrt": np.asarray(t.sqrt, dtype=np.uint32), "rcp": np.asarray(t.rcp, dtype=np.uint32)}
@@ -449,7 +457,7 @@ def _run(C, inputs, t):
 def test_attention_tail_ops_match_the_ir(name, arity):
     """Exact on encodings, but for a NaN result's payload (canonical here, as for F32Add; every NaN meets a bf16 cast or a
     NaN-blind consumer before it leaves the tail)."""
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     args = [_f32_samples(150, 11 + i) for i in range(arity)]
     t = len(args[0])
@@ -472,7 +480,7 @@ DIVISORS = [0x45000000, 0x00800000, 0x45C00000, 0x45E00000, 0x46C00000, 0x404000
 def test_f32_div_by_a_constant_matches_the_ir(k):
     """A row tail's ``F32Div_v1`` by its constant (RMSNorm's ``/ N``) is the IR's division on every encoding but a NaN result's
     payload, through the exact reciprocal or, for N = 6144, the IEEE divider: quotients rounding into the subnormals included."""
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     xs = _f32_samples(200, 13) + [0x00C00000, 0x01400000, 0x00800001, 0x7F7FFFFF, 0x80FFFFFF, 0x0A2AAAAB]
     C = Circuit()
@@ -486,8 +494,8 @@ def test_f32_div_by_a_constant_matches_the_ir(k):
 def test_mufu_ex2_matches_the_ir():
     """The circuit's EX2 equals the IR's, and every 0 < |x| < 2^-23 gives T[0] = 1.0 (a reduction shift of 64 or more is 0),
     including |x| < 2^-63, where a shift taken mod 64 read ex2(2^-64) as 2.0."""
-    from verity_vllm.program.kernels import fa2_relation
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.numerics import fa2_relation
+    from verity.ml.definitions.registry import prims as P
 
     ex2 = np.asarray(fa2_relation.tables().ex2, dtype=np.uint32)
     tiny = [s << 31 | e << 23 | f for s in (0, 1) for e in (1, 2, 40, 63, 64, 65, 103, 104) for f in (0, 1, 0x7FFFFF)]
@@ -515,8 +523,8 @@ def test_mufu_ex2_matches_the_ir():
 
 
 def test_fa2_inv_sum_matches_the_ir():
-    from verity_vllm.program.kernels import fa2_relation
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.numerics import fa2_relation
+    from verity.ml.definitions.registry import prims as P
 
     rcp = np.asarray(fa2_relation.tables().rcp, dtype=np.uint32)
     xs = _f32_samples(300, 9)

@@ -4,7 +4,7 @@ events shaped as vLLM d9105ea80 issues them for GLM-5.3 at a TP8 rank on the H20
 default dynamic block-FP8 linears.
 
 It checks that the scope claims every event and binds the gate (both tiers, through the profile's `gate_spec`), the shared expert's
-two dynamic block-FP8 linears and SiLU, the sigmoid router, the routed input quant, both pair forms on Hopper's tuned tiles with #1944's
+two dynamic block-FP8 linears and SiLU, the sigmoid router, the routed input quant, both pair forms on Hopper's tuned tiles with the
 MMAv2/QGMMA step selection (`fp8_moe.sm90_dot`), the routed SiLU and its quant and `moe_sum`, with operand rows the Definitions'
 parameters fit, and that the combine after the op is `ResidualAdd_v1`; that without a `gate_spec` the gate is the Build's
 (`served_gate_spec`); and that it refuses, by name, a gate with no Definition, an unattested cuteDSL gate, a missing attestation, a
@@ -23,17 +23,17 @@ import pytest
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.types import Array
-from verity_vllm.engine.profiles.gen_ln_patterns import ResidualAddPattern
-from verity_vllm.engine.profiles.gen_ov_moe_patterns import TRITON_EXPERTS, MoEFusedExpertsFp8
-from verity_vllm.engine.profiles.gen_shared_moe_patterns import GATE_CUBLAS, GATE_CUTEDSL, MoEFusedSharedExpertsFp8, served_gate_spec
+from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import TRITON_EXPERTS, MoEFusedExpertsFp8
+from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import GATE_CUBLAS, GATE_CUTEDSL, MoEFusedSharedExpertsFp8, served_gate_spec
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import moe as MOE
-from verity_vllm.program.registry.prims import BF16, F32
+from verity.ml.definitions.registry import moe as MOE
+from verity.ml.definitions.registry.prims import BF16, F32
 
-Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
+Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 H, I, SI, E, TOPK, G, RSF = 6144, 256, 256, 256, 8, 128, 2.5
 C = {"NUM_EXPERTS": E, "TOPK": TOPK, "H": H, "I": I, "SHARED_I": SI, "ROUTED_SCALING_FACTOR": RSF}
 CUDA = "cuda:0"
@@ -238,7 +238,7 @@ def _reasons(res) -> list:
     return [getattr(r, "reason", r) for r in res if isinstance(r, Unsupported)]
 
 
-#: #1944's tile-dependent e4m3 step (`fp8_moe.sm90_dot`): the M=4 tile (8, 64) puts the dot's N at 8 under SWAP_AB, MMAv2;
+#: the tile-dependent e4m3 step (`fp8_moe.sm90_dot`): the M=4 tile (8, 64) puts the dot's N at 8 under SWAP_AB, MMAv2;
 #: the M=16 (16, 64) and M=32 (16, 128) tiles are wgmma, QGMMA
 @pytest.mark.parametrize("M,gate,dot", [(4, GATE_CUBLAS, "HopperE4m3MmaV2Dot32_v1"), (32, GATE_CUBLAS, "HopperE4m3QgmmaDot32_v1"),
                                         (4, GATE_CUTEDSL, "HopperE4m3MmaV2Dot32_v1"), (16, GATE_CUTEDSL, "HopperE4m3QgmmaDot32_v1")])

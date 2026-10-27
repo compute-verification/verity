@@ -37,14 +37,14 @@ def _s32(x: int) -> int:
 
 
 def values(tok: int, start: int, vs: int) -> tuple[int, int, int]:
-    """(local, ge, le) of one token id, as signed int32 / 0-1: the IR's I32Add (wrapping) and I32Le (signed) on the id's 32-bit word."""
+    """(local, ge, le) of one token id, as signed int32 / 0-1: the circuit's I32Add (wrapping) and I32Le (signed) on the id's 32-bit word."""
     t = _s32(tok)
     return _s32(t - start), int(_s32(start) <= t), int(t <= _s32(start + vs - 1))
 
 
 def shard_fn(VS: int, H: int, START: int) -> Any:
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import b1_tp2
+    from verity.ml.definitions.registry import b1_tp2
 
     return bind(b1_tp2.EmbeddingShard, VS=VS, H=H, START=START)
 
@@ -53,7 +53,7 @@ def shard_fn(VS: int, H: int, START: int) -> Any:
 def slots(VS: int, H: int, START: int) -> tuple[int, ...]:
     """The shard Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i of a
     row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     G = W.Graph(shard_fn(VS, H, START))
     R = W.units(G, 16, 32)

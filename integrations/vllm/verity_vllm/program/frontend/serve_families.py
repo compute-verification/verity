@@ -4,8 +4,8 @@ attention geometry a semantic profile declares and the `BN` static it binds, and
 from __future__ import annotations
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry.b1 import BN, Serve, ServeV4, fa2_kblock_n
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry.b1 import BN, Serve, ServeV4, fa2_kblock_n
 
 
 #: [E7 D54] the pinned attention kernel source the geometry rule below is read from
@@ -14,7 +14,7 @@ FA2_KERNEL_SOURCE = ("vllm-project/flash-attention 506341a143fcabd4bb79052a7605a
 
 
 def fa2_kernel_geometry(attention_consts: dict, D: int) -> dict:
-    """[E7 D54 2026-09-13] The block geometry of the attention kernel a SEMANTIC PROFILE declares, at head dim ``D``.
+    """The block geometry of the attention kernel a SEMANTIC PROFILE declares, at head dim ``D``.
 
     ``attention_consts`` is the profile's attention node ``consts`` (`manifests/semantic-profiles/*.json`,
     `layer_nodes[op_type == "attention"].consts`: `backend`, `fa_version`, `num_splits`, `head_size`, ...) -- the pinned

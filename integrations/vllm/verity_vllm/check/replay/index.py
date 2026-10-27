@@ -16,7 +16,7 @@ from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import moe_plane_kind
 from verity_vllm.program.compact import expanded_file_args, p_item_indices, runs_from_file_items
-from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
+from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 
 
 SAMPLER_OP = "runner.sampler"

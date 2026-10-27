@@ -4,6 +4,8 @@ import Definitions.Pouw.Basic.Mat
 import Definitions.Pouw.Basic.Prob
 import Definitions.Pouw.Basic.QTree
 import Definitions.Pouw.D1
+import Definitions.Pouw.Dither
+import Definitions.Pouw.DitherInstance
 import Definitions.Pouw.Eps1.M3
 import Definitions.Pouw.Dimension.Causal
 import Definitions.Pouw.Dimension.Defs
@@ -29,6 +31,7 @@ import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
 import Definitions.Pouw.H1Zy
 import Definitions.Pouw.M1
+import Definitions.Pouw.MerkleExtract
 import Definitions.Pouw.NCP.Defs
 import Definitions.Pouw.NCP.ExtraIdentity
 import Definitions.Pouw.NCP.Pinned
@@ -139,7 +142,7 @@ them by the rounding margin outright, unpinned.
 H-1T's per-tile count statement: the tiles, their domain `Tiling.AtLeast` and the output slots (`H1TTile`), the named
 assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProofs`).
 
-## `FpG1`: FP8-g1 and W4A8-g1's operands (FPX-DESIGN, PR #2710)
+## `FpG1`: FP8-g1 and W4A8-g1's operands (FPX-DESIGN)
 
 The encodings (`Encoding`): E4M3's integer grid to a bound, the doubled E2M1 grid, round to nearest onto a grid, the
 coin, an operand entry and a device's g1 grids. The int8 GEMM, the coin's rank-one terms and the epilogue (`Gemm`).

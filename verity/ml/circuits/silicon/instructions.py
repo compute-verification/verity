@@ -5,7 +5,7 @@ The ontology of the silicon campaign has three code objects and two store object
 
     Instruction   one PTX instruction class on one architecture (this module)        code
     Model         the executable accumulator-step semantics (``models.py``)          code
-    Target        a frozen relation over one instruction (``verification.target``)   code
+    Target        a frozen relation over one instruction (``targets.target``)        code
     Evidence      recorded hardware runs                                             store (``tc-evidence/v1``)
     Pin           the decision that evidence validates a model for an instruction    store
 
@@ -13,14 +13,14 @@ An :class:`Instruction` carries its ``status``:
 
     pinned       a model reproduces every recorded hardware word of this instruction (the evidence names the run)
     hypothesis   a model exists, chosen by analogy or by another instruction's evidence; nothing measured on this one
-    unprobed     no model, or a model this repository will not vouch for; the probe lane goes first
+    unprobed     no model, or a model this repository will not vouch for; a hardware probe goes first
 
-``INSTRUCTIONS`` is keyed by stable ids other lanes use as strings (``sm90.wgmma.m64n8k32.e4m3``); the ids are
+``INSTRUCTIONS`` is keyed by stable ids other code uses as strings (``sm90.wgmma.m64n8k32.e4m3``); the ids are
 part of the interface and do not change when a status does.  ``ptx`` is recorded only where a source repository
 recorded the mnemonic (``None`` otherwise -- never invented); ``shape`` is ``(m, n, k)`` of the *modelled*
 instruction, which for the ``wgmma`` families is the N=8 member of the same instruction class as the measured
 ``n64`` one (an accumulator coordinate's semantics do not depend on N).  ``evidence`` entries are free-text
-pointers for now (repository paths, veritor/autoproof records, run ids); they become store artifacts later.
+pointers (repository paths, veritor/autoproof records, run ids).
 """
 from __future__ import annotations
 
@@ -277,8 +277,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
         ),
         _i(
             # veritor measured Hopper BF16 through wgmma (HOPPER_BF16_WGMMA_K16: one group of 16, 26 bits, floor
-            # -133); Hawkeye's H100 model has the same parameters.  The legacy mma.sync path was measured on 2026-09-22
-            # (lane tc-probe-fp8): same pipeline, 0/25.7M mismatches -- pinned.
+            # -133); Hawkeye's H100 model has the same parameters.  The legacy mma.sync path was measured too: the same
+            # pipeline, 0 mismatches -- pinned.
             id="sm90.mma.m16n8k16.bf16",
             sm="sm_90",
             ptx="mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
@@ -300,7 +300,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(64, 8, 16),
             a_dtype="bf16", b_dtype="bf16", acc_dtype="f32", scale=None,
             model=HOPPER_BF16_WGMMA_K16,
-            status="pinned",  # benchmarks/tc_probe/trust.py computed PINNED (P1-P5, Ta) on 2026-09-26 before this entry was added
+            status="pinned",  # benchmarks/tc_probe/trust.py computed PINNED (P1-P5, Ta)
             dossier="art:50508ab77719ba3d93bd2985416eba0029116f313304a4632e67ad0dd28579d9",
             evidence=(_H100_WGMMA_BF16, _H100_BF16),
         ),
@@ -368,11 +368,10 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "the separate squared sum; integrations/vllm/tests/properties/dsv4_mhc_capture_gpu.py reruns the gate",),
         ),
         _i(
-            # Measured 2026-09-22 (D14 resolved): on sm_90a this PTX op is NOT a tensor-core FP8 instruction.  ptxas lowers
+            # Measured (D14 resolved): on sm_90a this PTX op is NOT a tensor-core FP8 instruction.  ptxas lowers
             # it to two HMMA.16816.F32 (the BF16 K=16 pipeline, HOPPER_BF16_M16N8K16) over the two k-halves with zero
             # accumulators plus IEEE FP32 FADDs; that composite reproduces 25,040,128/25,040,128 words for e4m3 and e5m2.
-            # `model` stays None because the composite is not a single GroupSum; expressing it as a Model is a follow-up,
-            # and the status stays "unprobed" only in the registry's narrow sense (no single-pipeline model to pin).
+            # `model` stays None because the composite is not a single GroupSum, and the status stays "unprobed" only in the registry's narrow sense (no single-pipeline model to pin).
             id="sm90.mma.m16n8k32.e4m3",
             sm="sm_90",
             ptx="mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32",
@@ -384,7 +383,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
         ),
         # --- Blackwell consumer (sm_120) --------------------------------------------------------------------------
         _i(
-            # lane fp4-5090, run r20260922-182911-1f10 (RTX 5090, cc 12.0, driver 570.153.02, -arch=sm_120a, SASS HMMA.16816):
+            # Measured on the RTX 5090 (cc 12.0, driver 570.153.02, -arch=sm_120a, SASS HMMA.16816):
             # 204,800/204,800 elements agree with the Hopper BF16 pipeline (one group of 16, 26 bits, floor -133); the Ampere/Ada
             # pipeline fails 48,569 of them.  The consumer Blackwell keeps Hopper's BF16 datapath for legacy mma.sync.
             id="sm120.mma.m16n8k16.bf16",
@@ -399,7 +398,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
         ),
         _i(
             # Measured on the RTX PRO 6000, the conformance device of target FP8_SM120_MMA, whose anchor trust uses for this id;
-            # trust.py computed PINNED (P1-P5) on 2026-09-30 before this entry was added.
+            # trust.py computed PINNED (P1-P5).
             id="sm120.mma.m16n8k32.e4m3",
             sm="sm_120",
             ptx="mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32",
@@ -431,11 +430,10 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(16, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM120_NVF4,
-            # Model BlockScaledAlignAdd (lane fp4-re) reproduces every word of 8.34M sweeps; lane fp4-proof's fresh-seed sweep
-            # (_PIN_FP4) supplied P2's missing 3.4M elements and benchmarks/tc_probe/trust.py computed PINNED (P1-P5) on 2026-09-23
-            # before this flip (registry <= computed level, lane pin-bf16).  Re-published once lane fp4-proof's B-Ligero
-            # relation supplied Tc (2,048 honest VUs / 3,131 negatives, art:098c184a...): still PINNED, Ta and Tc now PASS,
-            # Td (hardware-in-the-loop replay of the frozen input set) open.  Previous: art:de42d6cad7c63a387d64535efc...
+            # Model BlockScaledAlignAdd reproduces every word of the fit sweeps; a fresh-seed sweep (_PIN_FP4) supplied P2's
+            # missing elements and benchmarks/tc_probe/trust.py computed PINNED (P1-P5) (registry <= computed level).  With the
+            # B-Ligero relation supplying Tc it stays PINNED: Ta and Tc PASS, and Td (hardware-in-the-loop replay of the frozen
+            # input set) is open.
             status="pinned",
             dossier="art:3e02931df28cccd398de4219f9d977371a58cdc6e8addfb7ff0a6269e5481b0e",
             evidence=(_RTX5090_FP4_RE, _AUTOPROOF, _AUTOPROOF_UNSCALED, _RTX5090_NVF4, _PIN_FP4,
@@ -444,14 +442,14 @@ INSTRUCTIONS: dict[str, Instruction] = {
         ),
         _i(
             # autoproof did not probe UE8M0 scales; the mnemonic below is the one ptxas 12.8 accepts on sm_120a (kind::mxf4nvf4
-            # with .scale_vec::2X and .ue8m0; lane fp4-5090) and its SASS is OMMA.SF.16864.F32.E2M1.E2M1.E8.
+            # with .scale_vec::2X and .ue8m0) and its SASS is OMMA.SF.16864.F32.E2M1.E2M1.E8.
             id="sm120.mma.m16n8k64.e2m1.mxf4",
             sm="sm_120",
             ptx="mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0",
             shape=(16, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue8m0",
             model=BLACKWELL_SM120_MXF4,
-            # As nvf4: 0 mismatches over 7.39M words (fp4-re) + 9.66M (fp4-proof, _PIN_FP4); trust computed PINNED on 2026-09-23.
+            # As nvf4: 0 mismatches over the fit sweeps and the fresh-seed sweep (_PIN_FP4); trust computed PINNED.
             status="pinned",
             dossier="art:d8d4d1b602c9fde61df218c315430535fe5181882ab6b26c2b95dd81dc1b5d92",
             evidence=(_RTX5090_FP4_RE, _PIN_FP4, _PRO6000_MXF4,
@@ -460,9 +458,9 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "accumulator window anchors on the exponent field and the grid never drops below 2^-174 (D19)"),
         ),
         _i(
-            # The int8 grid's instruction (lane compute-accounting, 2026-10-15).  Exact integer arithmetic, so the model has
-            # no adder parameters to fit.  benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-10-15
-            # before this flip (registry <= computed level).  Measured on one RTX PRO 6000 only, and anchors there.
+            # The int8 grid's instruction.  Exact integer arithmetic, so the model has no adder parameters to fit.
+            # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store (registry <= computed level).  Measured on
+            # one RTX PRO 6000 only, and anchors there.
             id="sm120.mma.m16n8k32.s8",
             sm="sm_120",
             ptx="mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32",
@@ -478,10 +476,9 @@ INSTRUCTIONS: dict[str, Instruction] = {
                       "census r20261015-062626-f65b: IMMA.16832 at 1,023.6 MACs/SM/clk (QMMA.16832: 1,023.8), 16 SMSP cycles "
                       "per warp MMA, dependent latency 27.2 cycles"),
         ),
-        # --- the int8 grid's instruction on the datacenter cards (lane compute-accounting, 2026-10-19) -------------
+        # --- the int8 grid's instruction on the datacenter cards ------------------------------------------------
         # One function on every card: these entries' models are sm120.mma.m16n8k32.s8's step under each arch's name.
-        # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-10-19 before these entries said so;
-        # each measured on one card, which is its anchor.
+        # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store; each measured on one card, which is its anchor.
         _i(
             id="sm90.wgmma.m64n8k32.s8",
             sm="sm_90",
@@ -495,6 +492,51 @@ INSTRUCTIONS: dict[str, Instruction] = {
             evidence=(HOPPER_SM90_S8_K32.validated,
                       "SASS IGMMA.64x8x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,254,336 elements: "
                       "r20261019-043020-f267 (tc-evidence art:240115d34164094f3254ce6c2c68aff72eda20cc62195b7150d990fa226ba14c)"),
+        ),
+        # The N an s8 GEMM's warpgroup tile issues (the sm_90a s8 GEMM's m64n{64,128,256}k32).
+        # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store;
+        # all eight forms of each (s8/u8 operands, .satfinite or not) agreed, from one run on one H200.
+        _i(
+            id="sm90.wgmma.m64n64k32.s8",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n64k32.s32.s8.s8.satfinite",
+            shape=(64, 64, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:cefe56718712a2f5aab9f11bcc93f88d1397f65de22214cdc9e9ea4a6a9b25ae",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IGMMA.64x64x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,330,112 elements: "
+                      "r20261026-010336-7755 (tc-evidence art:383858621ad3a9bbcc29e1f84c17abd2bb57c6ba755fcc818b00bb3327b64686)"),
+        ),
+        _i(
+            id="sm90.wgmma.m64n128k32.s8",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n128k32.s32.s8.s8.satfinite",
+            shape=(64, 128, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:0591e812e5d097de162d8fd7123b587205b41ea1cb8aa762e6f7c77b0d29ecec",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IGMMA.64x128x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,428,416 elements: "
+                      "r20261026-010336-7755 (tc-evidence art:0a2c4a3b704b37a5a34389cf47cabd6210a948a54f62606c58a67f70916773ef)"),
+        ),
+        _i(
+            id="sm90.wgmma.m64n256k32.s8",
+            sm="sm_90",
+            ptx="wgmma.mma_async.sync.aligned.m64n256k32.s32.s8.s8.satfinite",
+            shape=(64, 256, 32),
+            a_dtype="s8", b_dtype="s8", acc_dtype="s32", scale=None,
+            model=HOPPER_SM90_S8_K32,
+            status="pinned",
+            dossier="art:a8edefe33c92be56eec3de9fc36e3c313cad3ba7657fc3b924367d834547665a",
+            anchor_device="NVIDIA H200",
+            evidence=(HOPPER_SM90_S8_K32.validated,
+                      "SASS IGMMA.64x256x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,616,832 elements: "
+                      "r20261026-010336-7755 (tc-evidence art:99307205fd01b708f117203d2a483f74e3d2660c723288031d830f66df0b8ecf)"),
         ),
         _i(
             id="sm90.mma.m16n8k32.s8",
@@ -540,7 +582,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
         # --- Blackwell datacenter (sm_100) ------------------------------------------------------------------------
         _i(
             # The datacenter Blackwell keeps Hopper's BF16 datapath for legacy mma.sync, as the consumer one does.
-            # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-10-19 before this flip.
+            # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store.
             id="sm100.mma.m16n8k16.bf16",
             sm="sm_100",
             ptx="mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
@@ -559,7 +601,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(128, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue4m3",
             model=BLACKWELL_SM100_NVF4,
-            status="pinned",  # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
+            status="pinned",  # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store
             evidence=(_B200_TCGEN05, _B200_STAGE0,
                       "SASS UTCOMMA.4X, one per tile kernel; 0 mismatches over 16,461,824 elements: r20260923-001528-f5c5 (303,104), "
                       "r20260923-001759-d869 (6,463,488 + probe3 1,601/1,601), r20260923-001856-7d63 (1,134,592, K=128 chain), "
@@ -575,7 +617,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             shape=(128, 8, 64),
             a_dtype="e2m1", b_dtype="e2m1", acc_dtype="f32", scale="ue8m0",
             model=BLACKWELL_SM100_MXF4,
-            status="pinned",  # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store on 2026-09-23 before this flip
+            status="pinned",  # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store
             evidence=(_B200_TCGEN05, _B200_STAGE0,
                       "SASS UTCOMMA, one per tile kernel; 0 mismatches over 12,898,304 elements: kind::mxf4 r20260923-001838-42a4 "
                       "(3,956,736) and r20260923-002320-6fbf (3,956,736), kind::mxf4nvf4 2X r20260923-001832-17dc (3,956,736) and "
@@ -585,7 +627,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
         _i(
             # The k16 step of cuBLAS's BF16 GEMMs on the B200 (vLLM's served routes there).  Hopper's wgmma pipeline: one group of
             # 16, a 26-bit adder, floor -133, and the total semantics' special values.  benchmarks/tc_probe/trust.py computed
-            # PINNED (P1-P5) from the store on 2026-10-19 before this flip.
+            # PINNED (P1-P5) from the store.
             id="sm100.tcgen05.mma.bf16",
             sm="sm_100",
             ptx="tcgen05.mma.cta_group::1.kind::f16 [d_tmem], a_desc, b_desc, idesc(bf16 x bf16 -> f32, M128 N16 K16, K-major), enable_input_d",

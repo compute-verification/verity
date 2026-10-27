@@ -4,7 +4,7 @@ program_sampler_construction`, passed as `pipeline.match --program-dir`), never 
 A single-request Program's select is specialised on its constant split count (`GumbelTopPTokenSelect_v2{V,S}`, `registry.topp_words`),
 which has no shared-greedy form: it compares as the plain `GumbelTopPTokenSelect_v1{V}` (`split_selects.as_fold_selects`), so its fold
 binds that one.  A Program whose selects read the `splits` Input (every batched component) declares S4's `shared-greedy` and folds to
-`GumbelTopPTokenSelectSharedGreedy_v1{V}`, as before.  #101's fourth Match (r20260928-175437-cfe5) failed on exactly this pair: derived
+`GumbelTopPTokenSelectSharedGreedy_v1{V}`, as before.  Workload 101's fourth Match (r20260928-175437-cfe5) failed on exactly this pair: derived
 `GumbelTopPTokenSelect_v1` x32, record `GumbelTopPTokenSelectSharedGreedy_v1` x32.
 """
 from __future__ import annotations
@@ -24,13 +24,13 @@ from verity_vllm.observe.fold.patterns.sampling import SCRATCH_TOPP_SELECT, Toke
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.program import sampling_event as SE
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import sampling_vocab
-from verity_vllm.program.registry import dead_free, topp_words
+from verity.ml.definitions.registry import sampling as SM
+from verity.ml.definitions.registry import sampling_vocab
+from verity.ml.definitions.registry import dead_free, topp_words
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
 PLAIN, SHARED = "greedy-check-per-stage", "shared-greedy"
-#: #101's fourth try (train V fe7931d5, run r20260928-175437-cfe5): its Build (`build_request/`) and its records (the Match's files)
+#: workload 101's fourth try (run r20260928-175437-cfe5): its Build (`build_request/`) and its records (the Match's files)
 BUILD_101 = "art:7fef3bd2ef46404067d0c4a534cd0fef72e730f4d01c8b7a6a20022eb5edd9f7"
 RECORDS_101 = "art:89aa13c1fa28b559c1928526dedf8175f34587f7a6ae82bd1fb10555ed35999d"
 ROW_101 = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager"
@@ -75,7 +75,7 @@ def _program_dir(tmp_path: Path, V: int, S: int | None) -> tuple[Path, str]:
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_vllm.program.frontend.rules.base import RuleSet
     from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-    from verity_vllm.program.registry import b1
+    from verity.ml.definitions.registry import b1
     LP, STEPS = 3, 1
     C = dict(b1.B0_CONFIG, NL=1, V=V, MAX_POS=64)
     rules = RuleSet("default+stoch", list(DEFAULT_RULES.rules) + list(VLLM_SAMPLING_RULES), list(DEFAULT_RULES.families))
@@ -96,7 +96,7 @@ def _program_dir(tmp_path: Path, V: int, S: int | None) -> tuple[Path, str]:
 
 def _fold_select(V: int, pattern: TokenSelectGumbelTopP, target: TargetProfile | None = None) -> str:
     """The spec the fold's top-p select binds at its gather (`TokenSelectGumbelTopP._stage3`) under a capture header declaring `target`
-    (None: a header with no declared target, as #101's capture folds under the default)."""
+    (None: a header with no declared target, as workload 101's capture folds under the default)."""
     from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, ViewDesc
     from verity_vllm.observe.fold.resolver import StepContext
     from verity_vllm.observe.fold.tree import TreeNode
@@ -123,7 +123,7 @@ def _profile(*patterns) -> Profile:
 @pytest.mark.parametrize("S, construction, folded", [(4, PLAIN, "GumbelTopPTokenSelect_v1"), (None, SHARED, "GumbelTopPTokenSelectSharedGreedy_v1")])
 def test_the_fold_binds_the_construction_the_program_declares(tmp_path, S, construction, folded):
     """Single-request: the Program's v2 select declares the plain construction and the fold binds `GumbelTopPTokenSelect_v1{V}`, the spec
-    the compare reads the v2 select as; without the Program's construction the fold binds S4's shared-greedy default, #101's failure.
+    the compare reads the v2 select as; without the Program's construction the fold binds S4's shared-greedy default, workload 101's failure.
     Batched: the Program's `SharedGreedy_v1` declares `shared-greedy` and the fold binds it exactly as it did before."""
     V = 64
     d, select = _program_dir(tmp_path, V, S)
@@ -183,9 +183,9 @@ def test_101s_build_declares_the_plain_construction_and_its_select_folds_as_it_c
 @pytest.mark.slow
 def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_path):
     """#101's fourth Match, replayed on CPU from its records: the preserved capture folded under the construction its Build declares, then
-    the Match's own comparison (`program-compare`, as the row runs it) against the Build's request Program: every family's count equal
+    the Match's own comparison (`program-compare`, as the workload runs it) against the Build's request Program: every family's count equal
     but the dense SiLU's version (the Build predates SiluMul_v2), the selects among them.  The records
-    tree holds `match/` (the capture log among it) but not the row-level `match_compare.json`; that file, the failing comparison, is
+    tree holds `match/` (the capture log among it) but not the workload-level `match_compare.json`; that file, the failing comparison, is
     checked only where a tree carries it.  A store that lists or fetches nothing skips by name."""
     store = _store()
     try:
@@ -222,10 +222,10 @@ def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_p
                           "--b", str(run), "--out", str(tmp_path / "match_compare.json")], cwd=VLLM_DIR, env=env, capture_output=True, text=True)
     assert cmp.returncode == 0, cmp.stderr[-3000:]
     res = json.load(open(tmp_path / "match_compare.json"))
-    # #101's Build predates SiluMul_v2 (#820) and binds SiluMul_v1; the fold binds the record target's vocabulary's silu_mul (v2)
+    # workload 101's Build predates SiluMul_v2 and binds SiluMul_v1; the fold binds the record target's vocabulary's silu_mul (v2)
     assert res["histogram_diff_T_normalised"] == {"SiluMul_v1{I=8192}": [4592, 0], "SiluMul_v2{I=8192}": [0, 4592]}, res["histogram_diff_T_normalised"]
 
 
 def _profile_of_101() -> str:
-    from verity_vllm.engine.profiles import profile_module_for_case
+    from verity_vllm.observe.fold.profiles import profile_module_for_case
     return profile_module_for_case(json.load(open(VLLM_DIR / "workloads" / f"{ROW_101}.json"))["case"])

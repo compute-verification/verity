@@ -94,7 +94,7 @@ did and the device has since encoded, and its frees are of blocks whose values' 
 `Replay.take(s)` is the plan's change for the pass at `s` since the last pass (`Plan.changed`, the root's
 `Session.receive(..., change=...)`), the blocks appended and released between them, of which a block appended and
 released in between is in neither; it refuses a step at or before one already applied or taken.  That a pass's plan
-holds every complete block the circuit reads at its step is the plan's proof unit's to check, against this record and
+holds every complete block the circuit reads at its step is the plan's proof block's to check, against this record and
 the circuit's requirement, inside zero knowledge.
 
 The schedule.  `schedule` turns the map into the schedule the prover publishes (each block's write and free, the

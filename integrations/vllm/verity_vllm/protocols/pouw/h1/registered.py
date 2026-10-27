@@ -43,7 +43,8 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import batch
 from verity.ml.commitments.merkle import merkle_depth
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.ml.commitments.rowleaf import (ROW_SEG_BYTES, sha512_row_seg_prefix, sha512_row_seg_segment_prefix,
+                                           sha512_row_seg_segments, sha512_row_v2_prefix)
 from verity.ml.crypto import chacha20
 
 _INST = hm96.SHA512
@@ -71,13 +72,32 @@ def _digests(words: np.ndarray, lo: int, hi: int, head: Any, out: np.ndarray) ->
         out[j] = np.frombuffer(h.digest(), np.uint8)
 
 
-def row_digests(words: np.ndarray) -> np.ndarray:
-    """Each row's ``x``, ``(n, 64)`` u8: `registered.row_digest(row, 16, SCHEMA_V2)` of ``words`` ``(n, W)`` u16."""
+def _seg_digests(rows: np.ndarray, lo: int, hi: int, heads: list[Any], outer: Any, out: np.ndarray) -> None:
+    for j in range(lo, hi):
+        o = outer.copy()
+        for s, h in enumerate(heads):
+            h = h.copy()
+            h.update(rows[j, ROW_SEG_BYTES * s:ROW_SEG_BYTES * (s + 1)])
+            o.update(h.digest())
+        out[j] = np.frombuffer(o.digest(), np.uint8)
+
+
+def row_digests(words: np.ndarray, schema: str = G.SCHEMA_V2) -> np.ndarray:
+    """Each row's ``x``, ``(n, 64)`` u8: `registered.row_digest(row, 16, schema)` of ``words`` ``(n, W)`` u16, ``schema``
+    ``SCHEMA_V2`` or ``SCHEMA_SEG``."""
     words = np.ascontiguousarray(words, "<u2")
     n, w = words.shape
-    head, out = hashlib.sha512(sha512_row_v2_prefix(16 * w)), np.empty((n, 64), np.uint8)
-    rows = words.view(np.uint8).reshape(n, 2 * w)
-    list(_pool().map(lambda lo: _digests(rows, lo, min(lo + _ROWS, n), head, out), range(0, n, _ROWS)))
+    out, rows = np.empty((n, 64), np.uint8), words.view(np.uint8).reshape(n, 2 * w)
+    if schema == G.SCHEMA_V2:
+        head = hashlib.sha512(sha512_row_v2_prefix(16 * w))
+        list(_pool().map(lambda lo: _digests(rows, lo, min(lo + _ROWS, n), head, out), range(0, n, _ROWS)))
+        return out
+    if schema != G.SCHEMA_SEG:
+        raise ValueError(f"rows of {schema!r}: {G.SCHEMA_V2} or {G.SCHEMA_SEG}")
+    segs = sha512_row_seg_segments(16 * w)
+    heads = [hashlib.sha512(sha512_row_seg_segment_prefix(j, len(segs), m)) for j, m in enumerate(segs)]
+    outer = hashlib.sha512(sha512_row_seg_prefix(16 * w))
+    list(_pool().map(lambda lo: _seg_digests(rows, lo, min(lo + _ROWS, n), heads, outer, out), range(0, n, _ROWS)))
     return out
 
 
@@ -166,30 +186,33 @@ def path() -> str:
 
 
 def commit(program: str, value: str, words: np.ndarray, key: bytes, nonce: int, keep_rows: bool = False,
-           row_salts: bytes | None = None, **binding: Any) -> G.Registered:
-    """`registered.Registered.commit(program, value, rows, salts, schema=SCHEMA_V2, **binding)` of ``words`` ``(n, W)``
+           row_salts: bytes | None = None, schema: str = G.SCHEMA_V2, **binding: Any) -> G.Registered:
+    """`registered.Registered.commit(program, value, rows, salts, schema=schema, **binding)` of ``words`` ``(n, W)``
     u16, ``rows`` their rows and ``salts`` row j's `audit.hm96_salt(key, nonce, j)`, or with ``row_salts`` (n salts
-    concatenated, each used once) those, ``key`` and ``nonce`` unread. ``binding``: the domain's other arguments
+    concatenated, each used once) those, ``key`` and ``nonce`` unread. ``schema``: ``SCHEMA_V2``, or ``SCHEMA_SEG`` (an
+    embedding table's rows, hashed with NumPy wherever `path` says). ``binding``: the domain's other arguments
     (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none. Hashed where `path` says."""
     words = np.asarray(words)
     if words.ndim != 2 or not words.shape[0] or not words.shape[1] or words.dtype != np.uint16:
         raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
+    if schema not in (G.SCHEMA_V2, G.SCHEMA_SEG):
+        raise ValueError(f"rows of {schema!r}: {G.SCHEMA_V2} or {G.SCHEMA_SEG}")
     n, w = words.shape
     dom = G.domain(program, value, w, n, G.WORD_BITS, **binding)
     given = None if row_salts is None else bytes(row_salts)
     fixed = None if given is None else tuple(given[192 * j:192 * (j + 1)] for j in range(n))
     if fixed is not None and (len(given) != 192 * n or len(set(fixed)) != n):
         raise ValueError(f"one {_INST.salt_bytes}-byte salt per row, never reused")
-    if path() == "gpu":
+    if schema == G.SCHEMA_V2 and path() == "gpu":
         from verity_vllm.protocols.pouw.h1 import registered_device as D
 
         bcs, levels = D.device_commit(words, key, nonce, given, dom.domain_id)
     else:
-        bcs, levels = _numpy(words, key, nonce, given, dom.domain_id)
+        bcs, levels = _numpy(words, key, nonce, given, dom.domain_id, schema)
     return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS,
                         rows=Rows(np.ascontiguousarray(words) if keep_rows else None, n),
                         salts=Salts(key, nonce, n) if fixed is None else fixed,
-                        bcs=bcs, levels=levels, schema=G.SCHEMA_V2, **binding)
+                        bcs=bcs, levels=levels, schema=schema, **binding)
 
 
 def public_salts(head: bytes, first: int, n: int) -> bytes:
@@ -206,14 +229,15 @@ def public_salts(head: bytes, first: int, n: int) -> bytes:
                     for u in range(first, first + n) for i in range(_INST.salt_bytes // 64))
 
 
-def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None,
-           domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None, domain_id: bytes,
+           row_schema: str = G.SCHEMA_V2) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
     """`commit`'s ``b || c`` strings and tree levels from NumPy and `hashlib`: the reference."""
     n = words.shape[0]
     ys = salts(key, nonce, n) if given is None else given
-    b = (row_digests(words) ^ np.frombuffer(batch.masks(_INST, _INST.default_key, ys), np.uint8).reshape(n, 64)).tobytes()
+    b = (row_digests(words, row_schema)
+         ^ np.frombuffer(batch.masks(_INST, _INST.default_key, ys), np.uint8).reshape(n, 64)).tobytes()
     salt_h, leaf_h = hashlib.sha512(_INST.salt_prefix), hashlib.sha512(_INST.leaf_prefix(_INST.default_key))
-    frame, schema = _Frame(domain_id), _part(G.SCHEMA_V2.encode())
+    frame, schema = _Frame(domain_id), _part(row_schema.encode())
     bcs, leaves = [], []
     for j in range(n):
         h = salt_h.copy()

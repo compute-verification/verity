@@ -1,4 +1,4 @@
-"""IR-registered MUFU primitives: the special-function unit's `ex2`, `rcp`, `sqrt`, `rsqrt` and `tanh` approximations as sm_89
+"""Registered MUFU primitives: the special-function unit's `ex2`, `rcp`, `sqrt`, `rsqrt` and `tanh` approximations as sm_89
 computes them, FA2's inverse sum, and the range scaling `div.full.f32` puts around `rcp`.
 
 Encodings: f32 = `Value<32>`.  Every evaluator is total on encodings except `MufuTanh`, which raises `MufuTanhUnmeasured` on a word
@@ -9,16 +9,15 @@ Tables (package data under `tables/`).  `mufu_{rsq,sqrt,rcp,ex2}_delta_int8.xz` 
 little-endian u32 words, xz-compressed, from the first word 1.0 (`0x3F800000`).  `table(key)` decodes one by its
 `verity.ml.circuits.library` name or SHA-512 and refuses words whose SHA-512 is not the library's; the Lean verifier's archive holds the
 same words under that SHA-512.  `mufu_tanh_sm89.{json,xzblocks}` is MUFU.TANH's measured shard with its manifest (see the
-MufuTanh section).  All were measured on an RTX 4090 (sm_89): conformance evidence for that architecture.  The delta tables are
-the captures of records `W11-40f0cebeb670-20260907T1800Z` (ex2, rcp) and `W11C-40f0cebeb670-20260907T1900Z` (rsq, sqrt); the
-Triton record `W11R-40f0cebeb670-20260907T1802Z` measured the same rcp and sqrt words.
+MufuTanh section).  All were measured on an RTX 4090 (sm_89): conformance evidence for that architecture.  A Triton capture
+measured the same rcp and sqrt words.
 
 Batch kernels.  Every primitive but `MufuTanh` has a numpy kernel registered with `verity.ml.circuits.evaluation` (domain: every encoding).
 
-Provenance.  These are the definitions the vLLM integration registered in `verity_vllm.program.registry.prims` (same ids,
+Provenance.  These are the definitions the vLLM integration registered in `verity.ml.definitions.registry.prims` (same ids,
 signatures and conformance statuses), which re-exports them from here.  The bit rules are the integration's C++ models
 (`fa2_model.cpp`: `mufu_ex2_bits`, `mufu_rcp_bits`; `rms_triton_model.cpp`: `mufu_sqrt`, `mufu_rsq`, `div_full_parts`,
-`rsqrt_nonftz`) on integers; the kernels are its numpy ports (`integrations/vllm/verity_vllm/program/kernels/derived_rows.py`).
+`rsqrt_nonftz`) on integers; the kernels are its numpy ports (`verity/ml/definitions/numerics/derived_rows.py`).
 """
 from __future__ import annotations
 
@@ -262,25 +261,24 @@ def RsqrtApprox(x: int) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# MUFU.TANH (`tanh.approx.f32`, FA2 `apply_softcap` = `cutlass::fast_tanh`) — measured-shard pilot 2026-09-17 (lane gemma)
+# MUFU.TANH (`tanh.approx.f32`, FA2 `apply_softcap` = `cutlass::fast_tanh`) — a measured shard
 #
 # The hardware tanh is NOT RN32(tanh) (98 % of words differ on [0.5, 0.75), up to 126 ulp there, 133 ulp in the ov-dense samples),
 # is not monotone (1081 adjacent inversions per 2^22 words, drops of up to 38 ulp at mantissa-segment boundaries), and no closed form
 # is known — so, like `MufuEx2Ftz` / `MufuRcpFtz`, it is a measured word table.  Unlike ex2/rcp it has no exponent reduction: the
 # table spans every f32 word between the small-|x| identity region and the saturation point, hence SHARDS of contiguous word ranges
-# (measured by `measure_tanh.py`, whose sha256 the manifest records; its last copy in this repository,
-# `integrations/vllm/verity_capture/bench/measure_tanh.py`, not that revision, was deleted in ca5d65e8e; format
+# (measured by `measure_tanh.py`, whose sha256 the manifest records and which is no longer in this repository; format
 # `verity/mufu-tanh-shard/xz-blocks/v1`: xz blocks of int8 first differences of an injective ordered image of the output words,
 # ~0.005 B/word).  The evaluator answers
 #   (a) NaN inputs and the closed regions in `MUFU_TANH_RULES` (each established by an EXHAUSTIVE scan of the whole region),
 #   (b) every other word from the table: the in-tree `tables/mufu_tanh_sm89.{json,xzblocks}` (manifest with
-#       sha512, hardware/software, rules, evidence job ids, a 512-word raw sample; table [0x31000000, 0x41000000) = [2^-29, 8), which
+#       sha512, hardware/software, rules, the measurement jobs, a 512-word raw sample; table [0x31000000, 0x41000000) = [2^-29, 8), which
 #       covers the table-only region [2^-8, 8) with margin; the manifest is pinned by `MUFU_TANH_TABLE_MANIFEST_SHA512`); negative
 #       words via the table's odd symmetry, which is used only where the measurement shows 0 violations over the table's whole range.
 # `MufuTanhUnmeasured` is raised only when the table does not cover the word or does not load: manifest missing or not the pinned
 # one, table file sha512 != manifest.  Never an approximation.
 # Hardware/software of the table: RTX 4090 (sm_89), driver 580.178.04, torch 2.13.0+cu129 / triton 3.7.1
-# (`inline_asm_elementwise("tanh.approx.f32 $0, $1;")`); the sub-ranges re-measured on driver 580.126.20 (cp-cov-a) hashed identical.
+# (`inline_asm_elementwise("tanh.approx.f32 $0, $1;")`); the sub-ranges re-measured on driver 580.126.20 hashed identical.
 # The table is conformance evidence for that stack only.
 # ---------------------------------------------------------------------------------------------------------
 
@@ -293,19 +291,17 @@ MUFU_TANH_TABLE_MANIFEST_SHA512 = ("e206d35a2b05819d283694486510e115df650eb77543
 _F32_SIGN = 0x80000000
 
 # Closed regions of the domain, each established ONLY by an exhaustive measurement of the whole region; None = not established, the
-# evaluator raises there.  Evidence (2026-09-17, RTX 4090 sm_89, driver 580.178.04, `measure_tanh.py`; the job summaries were
-# lane w-gemma's local output, not kept, and the manifest records each job's id, range and word sha256; every job also ran the
-# sign-flipped words and found 0 odd-symmetry violations):
-#   identity_below 0x3B800001: job 0917T215010-79fd04 scanned [0x00000000, 0x31000000): 822,083,584 / 822,083,584 words hw(x) == x
-#                              (word sha 125078cf…); job 0917T214646-3b1c9a's shard [0x31000000, 0x41000000) has its first hw != x word
-#                              at 0x3B800001 (= 2^-8 + ulp) -> hw(x) == x for every |x| <= 2^-8, both signs (±0 included).
-#   saturate_from  0x41000000: job 0917T215017-e0d178 scanned [0x41000000, 0x80000000): 1,048,576,001 / 1,048,576,001 non-NaN words
-#                              (8.0 .. max finite, +inf) -> 0x3F800000 exactly (word sha aa255aa2…); negatives -> 0xBF800000 by the
-#                              0-violation symmetry check.  Below 8.0 no word saturates (last non-one word 0x40FFFFFF, shard 3b1c9a).
-#   nan_out        0x7FFFFFFF: job e0d178: all 8,388,607 positive NaN payloads -> 0x7FFFFFFF; job 0917T215355-08991c scanned
-#                              [0xFF800001, 0x100000000): all 8,388,607 negative payloads -> 0x7FFFFFFF (word sha 2e0c30da…).
-# Between the two rules, [0x3B800001, 0x41000000) is TABLE ONLY (shard 3b1c9a = the in-tree `mufu_tanh_sm89.xzblocks`, 449,932 B,
-# sha256 5e261b88…, pulled from cp-cov-d by job 0917T220405-876a84 and re-hashed on the laptop).
+# evaluator raises there.  Evidence (RTX 4090 sm_89, driver 580.178.04, `measure_tanh.py`; the manifest records each job's
+# range and word sha256; every job also ran the sign-flipped words and found 0 odd-symmetry violations):
+#   identity_below 0x3B800001: a scan of [0x00000000, 0x31000000) found hw(x) == x on every word; the table's shard
+#                              [0x31000000, 0x41000000) has its first hw != x word at 0x3B800001 (= 2^-8 + ulp) -> hw(x) == x
+#                              for every |x| <= 2^-8, both signs (±0 included).
+#   saturate_from  0x41000000: a scan of [0x41000000, 0x80000000) found every non-NaN word (8.0 .. max finite, +inf)
+#                              -> 0x3F800000 exactly; negatives -> 0xBF800000 by the 0-violation symmetry check.  Below 8.0 no
+#                              word saturates (the shard's last non-one word is 0x40FFFFFF).
+#   nan_out        0x7FFFFFFF: all 8,388,607 positive NaN payloads -> 0x7FFFFFFF, and a scan of [0xFF800001, 0x100000000) found
+#                              all 8,388,607 negative payloads -> 0x7FFFFFFF.
+# Between the two rules, [0x3B800001, 0x41000000) is TABLE ONLY (the shard is the in-tree `mufu_tanh_sm89.xzblocks`).
 MUFU_TANH_RULES: dict = {
     "identity_below": 0x3B800001,   # word w: hw(x) == x (bitwise) for every word 0 <= |x| < w
     "saturate_from": 0x41000000,    # word w: hw(x) == ±1.0 for every word |x| >= w, inf included
