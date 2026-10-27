@@ -87,3 +87,18 @@ def test_the_period_scheme_is_not_accepted_by_default(device) -> None:
     c, signed = runs[0]
     v = mc.verdict(signed, c.commitment, c.openings(), expected, trusted={device.public})
     assert not v.accepted and any("not accepted" in r for r in v.reasons)
+
+
+def test_a_challenger_restarted_within_its_attachment_signs_no_more_sessions(device) -> None:
+    """Under no-state-rollback: the challenger's party key reopened from the device within the period, as a restarted
+    challenger would, is refused the period's attachment, so it opens no period of it and signs no session of it; the
+    party it would replace signs on."""
+    signer = pr.PeriodSigner(attest.Period(device.issue(DEPLOYMENT, PARTY), ATTACHMENT, LINK, 7), device.public)
+    signer.sign(b"session 0", bytes(64))
+    restarted = device.party(DEPLOYMENT, PARTY)
+    with pytest.raises(lms.StateError, match="already started"):
+        pr.PeriodSigner(attest.Period(restarted, ATTACHMENT, LINK, 7), device.public)
+    with pytest.raises(lms.StateError, match="not the one this key started"):
+        restarted.liveness(ATTACHMENT, LINK, 7, 1)
+    signer.sign(b"session 1", bytes(range(64)))
+    assert signer.close().count == 2

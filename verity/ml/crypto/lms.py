@@ -659,7 +659,11 @@ class PartyKey:
     """One party's lower tree on its device, certified by the device's identity for the party in one deployment: it signs
     the party's `period_root_message` once per certification period and its `liveness_message` once per sampling block,
     each at the next leaf of its `LeafState`, into an `HssSignature`. The signed roots go to the prover only, as witness;
-    the liveness records are public."""
+    the liveness records, and with them the lower key and its certificate, are public.
+
+    It signs for one attachment at a time, the one it last started (`start`), and starts each attachment once in the
+    key's life: a restart within an attachment signs nothing more of it. That rests on no-state-rollback, the leaf
+    state's own premise: a state restored from before the start would start it again."""
 
     def __init__(self, directory: str | os.PathLike, identity: bytes, deployment: bytes, party: str,
                  params: Params = DEPLOYED, workers: int = 1, *, _key: PrivateKey | None = None) -> None:
@@ -670,6 +674,23 @@ class PartyKey:
         self.certificate = Signature.decode(params, (self.directory / LOWER_CERTIFICATE).read_bytes())
         if not verify_certificate(params, self.identity, self.deployment, party, self.lower, self.certificate):
             raise StateError(f"{self.directory}: its certificate does not verify under the identity")
+        self.attachment: bytes | None = None
+
+    def start(self, attachment: bytes) -> None:
+        """Start this key's run of ``attachment`` (the attachment id the challenger drew), after the key's leaf state on
+        disk records it as started (`LeafState.start`), so that `period_root` and `liveness` sign for it; a no-op for the
+        attachment already started here, and refused for one the state records already (this key's earlier run of it, or
+        another signer's)."""
+        attachment = bytes(attachment)
+        if attachment == self.attachment:
+            return
+        with LeafState(self.directory / LOWER_STATE, self.lower, self.params.H, wait=True) as state:
+            state.start(attachment)
+        self.attachment = attachment
+
+    def _started(self, attachment: bytes) -> None:
+        if self.attachment is None or bytes(attachment) != self.attachment:
+            raise StateError(f"{self.directory}: attachment {bytes(attachment).hex()} is not the one this key started")
 
     def sign(self, message: bytes) -> HssSignature:
         """``message`` (a role digest made with this key's identifier ``self.key.I``) signed at the next unused leaf."""
@@ -677,8 +698,10 @@ class PartyKey:
             return HssSignature(self.lower, self.certificate, sign(self.key, state, message))
 
     def period_root(self, attachment: bytes, link: str, period: int, count: int, root: bytes) -> HssSignature:
+        self._started(attachment)
         return self.sign(period_root_message(self.key.I, self.deployment, self.party, attachment, link, period, count,
                                              root))
 
     def liveness(self, attachment: bytes, link: str, period: int, block: int) -> HssSignature:
+        self._started(attachment)
         return self.sign(liveness_message(self.key.I, self.deployment, self.party, attachment, link, period, block))

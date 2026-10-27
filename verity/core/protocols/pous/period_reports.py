@@ -4,8 +4,10 @@ As an auditor party with a device identity (`lms.Identity`, the lower key it iss
 the challenger signs no session alone. `PeriodSigner` is its `memory_challenger.Signer`: each session it closes is the
 next sampling block of the party's certification period, with the session's record (`memory_challenger.message`, 64
 bytes, bound to the session's id and header) the block's one record, and `sign` returns the block's public liveness
-record, the session's one output in the clear. The period's root is signed once, at its close (`PeriodSigner.close`),
-and the closed period (its records, root and two-level signature) goes to the prover only, as witness.
+record, the session's one output in the clear, signed before the session's record joins the period. The period's root
+is signed once, at its close (`PeriodSigner.close`), and the closed period (its records, root and two-level signature)
+goes to the prover only, as witness. The period starts its attachment on the party's key (`lms.PartyKey.start`), so a
+challenger restarted within the attachment signs no more of its sessions, under no-state-rollback.
 
 `period_verify` is `PERIOD`'s verification of a session against its closed period, in the clear: the session's record
 opens to the period's root, whose signature verifies under the device's identity for the party, and its liveness record
@@ -35,8 +37,11 @@ class PeriodSigner:
         self.period, self.public_key, self.scheme, self.blocks = period, bytes(identity), scheme, 0
 
     def sign(self, session: bytes, record: bytes) -> bytes:
-        block, self.blocks = self.blocks, self.blocks + 1
-        return self.period.block(block, [record])
+        """The session's liveness record, as the period's next block, whose one record is ``record``: signed before the
+        record joins the period, and a refused signature takes no block, so each block's index is its record's."""
+        live = self.period.block(self.blocks, [record])
+        self.blocks += 1
+        return live
 
     def close(self) -> attest.SignedPeriod:
         """Sign the period's root, once; what goes to the prover."""

@@ -41,6 +41,8 @@ def device(tmp_path_factory) -> dict:
     me = lms.Identity.init(tmp_path_factory.mktemp("device"), P2)
     stranger = lms.Identity.init(tmp_path_factory.mktemp("stranger"), P2)
     party, theirs = me.issue(DEPLOYMENT, PARTY), stranger.issue(DEPLOYMENT, PARTY)
+    party.start(ATTACHMENT)
+    theirs.start(ATTACHMENT)
     root = attest.root(RECORDS)
     return {"identity": me.public, "stranger": stranger.public, "lower": party.lower,
             "live": party.liveness(ATTACHMENT, LINK, PERIOD, 2).encode(),
