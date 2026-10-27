@@ -1,7 +1,8 @@
 {
- "roots": ["VStarDifftest", "VStarTrace"],
+ "roots": ["VStarDifftest", "VStarTraceCli"],
  "exempt": {
-  "VStarMain": "the vstar executable's entry point, one line; its command is VStar.Cli.cmd, audited under the verifier's package (verity/core/service/flock)"
+  "VStarMain": "the vstar executable's entry point, one line; its command is VStar.Cli.cmd, audited under the verifier's package (verity/core/service/flock)",
+  "VStarTrace": "the vstar-trace executable's entry point, one line; its command is VStar.TraceCli.cmd, audited under the root VStarTraceCli"
  },
  "layers": {
   "VStarDifftest": {
@@ -9,7 +10,7 @@
    "except": [],
    "why": "the difftest port reaches V* only through the harness, as a port does"
   },
-  "VStarTrace": {
+  "VStarTraceCli": {
    "imports": ["Lean", "Flock", "VStar"],
    "except": [],
    "why": "the trace assigner's difftest side: reads a staged part and prints VStar.Trace's digests"

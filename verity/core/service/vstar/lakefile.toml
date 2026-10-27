@@ -16,6 +16,9 @@ path = "../flock"
 name = "verity_difftest"
 path = "../../difftest/lean"
 
+[[lean_lib]]
+name = "VStarTraceCli"
+
 [[lean_exe]]
 name = "vstar"
 root = "VStarMain"
