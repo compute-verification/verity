@@ -349,10 +349,11 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
     (["--scan", "--prompts", "--requests", "401"], b"[[1]]", "--requests '401': 1 to 400"),
     (["--scan", "--prompts", "--tokens", "0"], b"[[1]]", "--tokens '0': 1 to 64"),
     (["--scan", "--prompts", "--tokens", "65"], b"[[1]]", "--tokens '65': 1 to 64"),
-    *[(["--scan", "--prompts"], bad, "--prompts: stdin is a JSON array of 1 to 400 prompts, each an array of 1 to 2048 "
+    *[(["--scan", "--prompts"], bad, "--prompts: stdin is a JSON array of 1 to 400 prompts, each an array of 1 to 1024 "
                                      "token ids below 2^17")
       for bad in (b"", b"x", b"[]", b"[[]]", b"[1]", b"[[1.0]]", b"[[131072]]", b"[[-1]]", b"[[true]]", b'[["1"]]',
-                  b'{"p": [[1]]}', b"\xff", json.dumps([[1]] * 401).encode(), json.dumps([[0] * 2049]).encode())],
+                  b'{"p": [[1]]}', b"\xff", json.dumps([[1]] * 401).encode(), json.dumps([[0] * 1025]).encode(),
+                  json.dumps([[1], [0] * 2048]).encode())],
     (["--scan", "--prompts"], b" " * A.WARDEN_PROMPTS_BYTES + b"[[1]]", "--prompts: over 1048576 bytes on stdin"),
     (["--scan", "--prompts", "--window-per-group"], json.dumps([[1]] * 5).encode(),
      "--window-per-group: 5 prompts, past a group's 4 (the scan's lanes)"),
@@ -364,6 +365,17 @@ def test_the_gate_refuses_prompts_it_cant_check_and_writes_nothing(host, argv, s
     rc, out = gate(host, REQUEST + ["--height", "10"] + argv, stdin=stdin, started=[])
     assert rc == 3 and why in json.loads(out)["refused"]
     assert not host.certifier.exists()
+
+
+def test_a_scan_rehearsals_prompt_may_be_the_scans_ki_ids_and_no_more():
+    """A scan rehearsal's prompt is at most the scan's KI = 1024 ids (`WARDEN_PROMPT_IDS`; `test_warden_serve` holds
+    it to `scan_zk.CLASS.KI`): the scan refuses a request of more, so the gate takes exactly KI and refuses KI + 1 at
+    input. A varied certifier rehearsal's prompts, which no scan reads, keep the varied plan's 2048
+    (`CERTIFIER_PROMPTS`)."""
+    assert A.prompts_of(json.dumps([[0] * 1024, [1]]).encode()) == [[0] * 1024, [1]]
+    with pytest.raises(A.Refused, match="each an array of 1 to 1024 token ids"):
+        A.prompts_of(json.dumps([[0] * 1025]).encode())
+    assert A.prompts_of(json.dumps([[0] * 2048]).encode(), A.CERTIFIER_PROMPTS) == [[0] * 2048]
 
 
 def test_a_groups_windows_are_the_scans_delay_and_its_tokens_buckets_and_their_minutes_the_groups_windows():

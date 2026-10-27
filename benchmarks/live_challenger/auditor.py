@@ -140,7 +140,8 @@ first coin.
   (1 to 8: the plan's margin over the probed rates and latencies, 2 otherwise; an endpoint that slows under a load its
   probes didn't meet needs more), each recorded and passed on only when given (`parse_varied`). `--prompts` sends the
   caller's own prompts in place of `--prompt-range`'s chat turns: the gate reads them off its stdin as a scan
-  rehearsal's (`certifier_prompts`), writes them to `witness/prompts.json` (the request records their count and ids),
+  rehearsal's, each of up to 2048 ids (`certifier_prompts`), writes them to `witness/prompts.json` (the request records
+  their count and ids),
   and request j sends the (j mod n)-th of the n at the same seed's arrivals and `max_tokens`; the plan and the
   certified I/O in `out/` carry them, as they carry every varied request's prompt. It takes no `--in-flight`,
   `--profile`, `--temperature` or `--top-p` (its requests are greedy, each with a seed of its own), nor a `--minutes`
@@ -173,7 +174,7 @@ first coin.
   warden frames what the server sends, and the check and the scan refuse a response that isn't by name. A scan
   rehearsal's `--prompts` sends the caller's own requests instead (a period's of a loop, say): the gate reads them off
   its stdin (`warden_prompts`: at most `WARDEN_PROMPTS_BYTES` of JSON, `WARDEN_PROMPTS` prompts of `WARDEN_PROMPT_IDS`
-  token ids each, below 2^17, the scan's IDB), writes them to `witness/prompts.json` alone (the request records their
+  token ids each, at most the scan's KI of 1024 and below 2^17, its IDB), writes them to `witness/prompts.json` alone (the request records their
   count and ids), and `rehearse --prompts` sends request j the (j mod n)-th of the n with exactly `--tokens`
   (`WARDEN_PROMPT_TOKENS`, the scan's 64 by default), `--requests` (`WARDEN_PROMPT_REQUESTS`) the prompts' count by
   default. `--window-per-group` (at most the scan's 4 lanes of prompts) sends them a group at a time, group g's half a
@@ -328,10 +329,11 @@ SCAN = {f: int(v) for f, v in zip(SCAN_SCHEDULE[::2], SCAN_SCHEDULE[1::2])}
 #: a scan rehearsal's `--prompts`, read off the gate's stdin: at most `WARDEN_PROMPTS_BYTES` of JSON, an array of
 #: `WARDEN_PROMPTS` prompts, each of `WARDEN_PROMPT_IDS` token ids below 2^`WARDEN_PROMPT_ID_BITS` (the scan's IDB);
 #: then `--requests` and `--tokens` (each request's exact count, at most the scan's egress cells but the trailer's)
-#: take `WARDEN_PROMPT_REQUESTS` and `WARDEN_PROMPT_TOKENS`
+#: take `WARDEN_PROMPT_REQUESTS` and `WARDEN_PROMPT_TOKENS`. A prompt is at most the scan's KI ids (`scan_zk.CLASS`),
+#: since the scan refuses a request of more and the gate refuses it at input instead
 WARDEN_PROMPTS_BYTES = 1 << 20
 WARDEN_PROMPTS = (1, 400)
-WARDEN_PROMPT_IDS = (1, 2048)
+WARDEN_PROMPT_IDS = (1, 1024)
 WARDEN_PROMPT_ID_BITS = 17
 WARDEN_PROMPT_REQUESTS = (1, 400)
 WARDEN_PROMPT_TOKENS = (1, SCAN["--egress-cells"] - 1)
@@ -1269,17 +1271,17 @@ def parse_weights(argv: list[str], host: Host) -> dict:
     return {"device": "weights", "shape": a.shape, "minutes": WEIGHTS_MINUTES}
 
 
-def prompts_of(data: bytes) -> list[list[int]]:
+def prompts_of(data: bytes, ids: tuple[int, int] = WARDEN_PROMPT_IDS) -> list[list[int]]:
     """A `--prompts` request's prompts, off the gate's stdin (`data`: at most `WARDEN_PROMPTS_BYTES`, of which the gate
-    reads one byte more): JSON, an array of `WARDEN_PROMPTS` prompts, each an array of `WARDEN_PROMPT_IDS` token ids
-    below 2^`WARDEN_PROMPT_ID_BITS`."""
+    reads one byte more): JSON, an array of `WARDEN_PROMPTS` prompts, each an array of `ids` token ids (a scan
+    rehearsal's `WARDEN_PROMPT_IDS`) below 2^`WARDEN_PROMPT_ID_BITS`."""
     if len(data) > WARDEN_PROMPTS_BYTES:
         raise Refused(f"--prompts: over {WARDEN_PROMPTS_BYTES} bytes on stdin")
     try:
         prompts = json.loads(data)
     except ValueError:
         prompts = None
-    (lo, hi), (ilo, ihi) = WARDEN_PROMPTS, WARDEN_PROMPT_IDS
+    (lo, hi), (ilo, ihi) = WARDEN_PROMPTS, ids
     if not (isinstance(prompts, list) and lo <= len(prompts) <= hi
             and all(isinstance(p, list) and ilo <= len(p) <= ihi for p in prompts)
             and all(type(t) is int and 0 <= t < 1 << WARDEN_PROMPT_ID_BITS for p in prompts for t in p)):
@@ -1313,10 +1315,11 @@ def warden_prompts(req: dict, data: bytes) -> bytes:
 
 
 def certifier_prompts(req: dict, data: bytes) -> bytes:
-    """A varied certifier rehearsal's `--prompts` (`prompts_of`): request j sends the (j mod n)-th of the n
-    (`certifier_serve.py rehearse --prompts-file`), at the same seed's arrivals and `max_tokens`. The request records
-    their count and ids alone. Returns the prompts' canonical bytes, the witness's `PROMPTS`."""
-    prompts = prompts_of(data)
+    """A varied certifier rehearsal's `--prompts` (`prompts_of`, each of `CERTIFIER_PROMPTS` ids, the varied plan's
+    prompt lengths: no scan reads them): request j sends the (j mod n)-th of the n (`certifier_serve.py rehearse
+    --prompts-file`), at the same seed's arrivals and `max_tokens`. The request records their count and ids alone.
+    Returns the prompts' canonical bytes, the witness's `PROMPTS`."""
+    prompts = prompts_of(data, CERTIFIER_PROMPTS)
     req["prompts"] = {"count": len(prompts), "ids": sum(map(len, prompts))}
     return json.dumps(prompts, separators=(",", ":")).encode()
 
