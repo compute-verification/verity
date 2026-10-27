@@ -615,7 +615,7 @@ structure SessionIn (V : Vocab d α) (q : Dep) (θ F c : ByteArray) (σ : Game.S
     Names p e (Core.Blobs.ofArray bs) (x ξ) ∧
       Shows q.Bd.IVStar q.st (x ξ) e.proofs (Core.Blobs.ofArray bs)
         (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen ∧
-      RowsShow q.Bd.IVStar q.st (x ξ) e.proofs bs (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen
+      RowsShow q.Bd.IVStar q.st (x ξ) e.proofs (Core.Blobs.ofArray bs) (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen
   calls_le : ∀ ξ ω r, runCalls (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) ω r) ≤ V.cost θ F c σ
 
 attribute [instance] SessionIn.finΞ SessionIn.neΞ SessionIn.finΩ SessionIn.neΩ
@@ -821,6 +821,6 @@ theorem sampledProofsRecursive_honest (V : Vocab d α) :
   refine (Game.prob_mono (p := fun o => RecVerdict V o ∧ ¬ V.Holds θ F c σ .sampled o) (q := fun _ => False)
     (fun o ho' => ho'.2 (V.holds_sampled_of_opens θ F c σ o hc ho hε))
     _ σ).trans ?_
-  exact (Game.prob_false _ σ).le.trans (zero_le _)
+  exact (Game.prob_false _ σ).le.trans zero_le
 
 end Verity.Recursive
