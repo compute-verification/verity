@@ -262,9 +262,9 @@ on an eyeball review, and the full check runs after landing (24 Oct). ci's `rese
 
 ## Where writing goes
 
-- **Work items** are Linear issues in the owning team (14 Oct), each holding its full brief: context, done-condition,
-  pointers. A lead's subscription to its team is the wake path, and pickup is the issue's state change. Slack carries
-  conversation, broadcasts, alerts and Daniel's cards, never the brief. Open work that outlives its thread is an issue too.
+- **Work and its status** are Linear issues in the owner's team, each in a project and milestone; the projects, grouped
+  by Goal, are the campaign map (Daniel, 14 and 26 Oct). Slack carries rings and conversation, never the brief or status.
+  How: the coordinating skill.
 - **This repo** holds code, tests, small fixtures and maintained current-truth docs only (`README.md`, `AGENTS.md`,
   `ARCHITECTURE.md`, the root's `GLOSSARY.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`,
   `PROTOCOL.md`; `tests/test_repository.py`). A protocol keeps its `PROTOCOL.md` only while experimental: the PR whose Lean covers it
@@ -327,4 +327,5 @@ notation converge, not multiply); it does no lane work. Launching, handing over 
 kernels on sm_120), `friction` (when something is in your way, and the rulings), `smell-check` (before you call something
 served, end to end, proved or credited, or relay another lane's claim; the catalogue is the notes' `kb/smell-catalogue.md`),
 `asking-daniel`, `process-design` (before adding, changing or retiring a process, its effect on velocity),
-`using-slack` and `authoring-skills` (at most 16 KB a skill: current rules, not their history).
+`using-slack`, `coordinating` (filing, tracking and reporting work in Linear, and how long each message is) and
+`authoring-skills` (at most 16 KB a skill: current rules, not their history).
