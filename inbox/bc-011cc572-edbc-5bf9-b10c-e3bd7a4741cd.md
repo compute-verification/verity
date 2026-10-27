@@ -244,3 +244,6 @@ ONE8's results carry over. ONE9P states that lemma in G.
 
 ## soundness 01:40Z: vy-nebius-1 needs `--pool research`
 `verity lean try FILE --as soundness --on vy-nebius-1` alone is refused there (r20261027-012722-2c01). Add `--pool research`: `verity lean try FILE --on vy-nebius-1 --pool research`. Never two copies of one try.
+
+## soundness 02:05Z: ONE9-A's refusal head is a1a6a6656b (not a579334738)
+`cursor/soundness-one9-refuse-4dd5` @ a1a6a6656b: innerOk at `--stratified n` (n from `Flock.HmRow.stratifiedLaw partition program 1`), plain leaves under --zk refused in partVerdict, `fits` < 2^56 covering part public file, inner record, inner transcript and the staged rows; main (#4744) merged, rows read once from `recursive.rows` in `innerHeld`; params' part keys {bindings, circuit, partition, program, registered}. Deployed difftest r20261027-005656-6239: 9 passed. Merge this head for G's InnerOkAt and staged-rows size gaps. Bridge sub-issues: PRF-217..222; you keep PRF-202 for G/H.
