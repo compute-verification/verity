@@ -1,4 +1,5 @@
 import Definitions.Accounting.Guarantees.Additive
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.BigOperators.Intervals
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Ring.NNRat
@@ -85,8 +86,7 @@ theorem rateAt_stream (es : List (AccelRun m)) (b : ℕ) (h : ∀ e ∈ es, Rate
     have hes := ih fun e' he' => h e' (by simp [he'])
     have hs : stream (e :: es) = e.instrs ++ stream es := by simp [stream]
     have hb : (e :: es).length * b = b + es.length * b := by
-      simp only [List.length_cons]
-      ring
+      rw [List.length_cons, Nat.add_mul, Nat.one_mul, Nat.add_comm]
     rw [hs, hb]
     exact rateAt_append he hes
 
