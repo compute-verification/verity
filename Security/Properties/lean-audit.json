@@ -18,6 +18,7 @@
   "Properties.Pous",
   "Properties.NetworkCertifier",
   "Properties.NetworkCertifier.LinkWindow",
+  "Properties.NetworkCertifier.PerServerIngress",
   "Properties.CertifierNetwork",
   "Properties.CertifierNetwork.Runs",
   "Properties.Identity",
@@ -1553,6 +1554,15 @@
    ],
    "assumptions": [],
    "type_hash": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953"
+  },
+  "Properties.NetworkCertifier.perServerIngress": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkCertifier.perServerIngress_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkCertifier.perServerIngress_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkCertifier.undecidedPending": {
    "owner": "@network-accounting",
@@ -3593,9 +3603,17 @@
    "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.RingDevice), none under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round), RingDevice holds at the deployed budget for every audit, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
-   "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period"
+   "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
+   "Properties.NetworkCertifier.perServerIngress": "frozen (premise,no-function): its soundness conjunct's event's acceptance is the deployed check's whole decision (NetworkCheck.Period.check), but it takes the sampled verifier's named assumptions (Claims.Sampling.KS, the commitment's Binds, Claims.Flock.ListWithin, Properties.NetworkScan.StmtFlattens), the network certifier's (Regenerates, Packed, Allocated and JitterBounded of Definitions.NetworkCertifier.Assumptions, StatusComplete) and its own module's (AnswersOfRecord, ScanScope, RecordsCells, OpensPass, WardenRowsOpen, OkOpens, ChainOpens), none under shape.premises; and its count conjunct bounds the secrets an outside sender passes through the warden, which reads the warden's record and the scan's Program and not the check. Its honest and nontrivial lemmas are perServerIngress_honest and perServerIngress_nontrivial.",
+   "Properties.NetworkCertifier.perServerIngress_honest": "completeness: the honest lemma of perServerIngress: a rows-form period whose every window's and audit's answer is accepted, the windows' at one delta (HonestWindowsAccepted), is accepted by NetworkCheck.Period.check with every window answered, so AnswersOfRecord reads an accepted window's answer",
+   "Properties.NetworkCertifier.perServerIngress_nontrivial": "completeness: the nontrivial lemma of perServerIngress: a check that accepts every period fails PeriodSound at any period one of whose windows' registered ingress the scan doesn't accept, wherever the period's error is below 1"
   },
   "conjectures": {
+   "Properties.NetworkCertifier.ScanCountsRequests": {
+    "status": "open",
+    "test": "verity/core/protocols/certifier/tests/test_network_certifier_scan_counts.py::test_window_enumeration",
+    "why": "The frame streams of the windows the scan's Program accepts at a statement number at most scanBound: windowBits for a window of correct units (its requests' fields, requestBits, and its buckets' blocks, bucketBits), and faultyIngressBits more for each faulty ingress unit (its bucket's whole row and two requests a lane); open. Its tests enumerate every window of rows over a cell alphabet at toy classes from the empty state (test_window_enumeration) and from a faulty unit's forged states (test_faulty_unit_two_more_a_slot), and check each field's count at its edges (test_field_counts) and the W63 terms (test_w63_terms)."
+   },
    "Pous.P2.Assumptions.P2RingAuditSecure": {
     "status": "open",
     "test": "verity/core/protocols/pous/tests/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",

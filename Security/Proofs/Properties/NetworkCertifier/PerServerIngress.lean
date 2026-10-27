@@ -94,7 +94,7 @@ theorem scanDeclared_of {S : ℕ} {C : Prog} {P : Partition} {d : Design} {lay :
     intro g hg
     rw [hinp]
     exact valOver_out hT hP ι hι (fun _ => True) (fun _ _ _ _ _ _ => trivial) (fun _ _ _ => rfl) hg trivial
-  simp only [ScanDeclared, Set.mem_setOf_eq]
+  simp only [ScanDeclared, Set.mem_ofPred_eq]
   refine ⟨hlen, F, hF, traceVal C ref, heldAdv C P F ref, fun g b h => faultyGate_of_heldAdv h, fun e he => ?_,
     fun g hg => ?_⟩
   · obtain ⟨h1, h2, heq, hc⟩ := hchain e he
@@ -393,13 +393,10 @@ theorem checksOf_congr (s : Schedule) {x y : Stmt} (h : x.desc = y.desc) : check
   unfold checksOf
   rw [h]
 
-section Deploy
-
-variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-
 /-- **The count**: an outside sender's secrets whose every window's registered ingress the scan accepts number at most
 `∏_i scanBound · (∏_ℓ (r ℓ + 1))^n · Dj^n`. -/
-theorem perServerIngress_count (H : Msg → Msg) (D : Deploy Coin Col T) (δ : ℝ) (p : Params) (s : Schedule)
+theorem perServerIngress_count {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (δ : ℝ) (p : Params)
+    (s : Schedule)
     (cls : ScanClass) (ops : Stmt → List (Opening Bool)) {K : ℕ} {Z In Act Wire : Type}
     (I : Interaction 1 K s.allocation Z In Act Wire) (Dj : ℕ) (r : Fin 1 → ℕ)
     (view : ℕ → Obs 1 K s.allocation → Wire) (hW2 : Regenerates I.certifier view) (hW4 : Packed I.certifier)
@@ -449,8 +446,6 @@ theorem perServerIngress_count (H : Msg → Msg) (D : Deploy Coin Col T) (δ : �
   rw [Nat.cast_mul (∏ i, scanBound s cls (sw i) (Pw i) δ)]
   exact mul_le_mul_left hCs _
 
-end Deploy
-
 /-! ## The guarantee -/
 
 theorem perServerIngress : PerServerIngress := by
@@ -489,8 +484,8 @@ theorem scanBound_drawn {s : Schedule} (cls : ScanClass) {st : Stmt} {P : Partit
 
 /-- **The count where the draw takes every ingress unit** (`IngressDrawn` at every window): `perServerIngress_count`
 with no faulty ingress unit, at most `∏_i #faultySets · 2^windowBits · (∏_ℓ (r ℓ + 1))^n · Dj^n`. -/
-theorem perServerIngress_drawn {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-    [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) (δ : ℝ) (p : Params) (s : Schedule)
+theorem perServerIngress_drawn {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (δ : ℝ) (p : Params)
+    (s : Schedule)
     (cls : ScanClass) (ops : Stmt → List (Opening Bool)) {K : ℕ} {Z In Act Wire : Type}
     (I : Interaction 1 K s.allocation Z In Act Wire) (Dj : ℕ) (r : Fin 1 → ℕ)
     (view : ℕ → Obs 1 K s.allocation → Wire) (hW2 : Regenerates I.certifier view) (hW4 : Packed I.certifier)
