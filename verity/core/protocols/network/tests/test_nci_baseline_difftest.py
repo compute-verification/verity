@@ -95,7 +95,7 @@ def test_an_output_entry_is_refused_as_an_unknown_kind():
 
 
 def test_theta_cites_the_first_record_of_the_deployments_log():
-    """One registration log is one deployment, and θ cites its first record (compute-accounting, 21 Oct). The two pinned
+    """One registration log is one deployment, and θ cites its first record. The two pinned
     acceptances cite it from the deployment's first run, whose own record it is, and from its third. The pinned
     `theta-not-at-deployment-start` case cites, from the third run, the second record, which registers the same value
     under the same root and precedes the run's own, so the rule it replaces (a record before the run's own) took it; cited

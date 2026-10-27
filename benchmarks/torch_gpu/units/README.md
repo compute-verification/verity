@@ -51,7 +51,7 @@ research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU
 ```
 
 The fixture holds every pool word of the twins to circuits' references and refuses to write on a disagreement:
-`--replay` to the CPU replay's (`benchmarks/e2e_h200/replay.py`, which `build.sh` passes unless REPLAY names another),
+`--replay` to the CPU replay's (`examples/h200/replay.py`, which `build.sh` passes unless REPLAY names another),
 and `--rows` to `ops.rows`' `argmax` and `add_row` (ROWS names a file to load in its place). `tests/` run on a
 CPU: the word operations against the fp32 primitives' evaluators, each twin against a scalar composition of them, the
 sweep digests and models, and `build_check.py`.

@@ -1,23 +1,24 @@
-"""Target-family preflight (R18 infra, r18-int-2; x09 M-0009 / coord M-0026 / report M-0016).
+"""Target-family preflight.
 
-A row id names its DEVICE CLASS in its third token (`<model>__<dtype>__<device>__tp<k>__...`, e.g. `__l40s__`).  The row's Build
-target family, the pod device the GPU stages run on, and the Build that comes out (build_summary.json step.target) must all be
-that class -- #60's Build of record (r17_1207) was a Hopper-target Program (cc 9.0, FA3, Gemm_v2) built on the H100 host for an
-`__l40s__` row and its Match then compared an L40S capture against it.  The check is a PREFLIGHT: it runs before Build and
+A workload id names its DEVICE CLASS in its third token (`<model>__<dtype>__<device>__tp<k>__...`, e.g. `__l40s__`).  The
+workload's Build target family, the pod device the GPU stages run on, and the Build that comes out (build_summary.json
+step.target) must all be that class: otherwise a Hopper-target Program (cc 9.0, FA3, Gemm_v2) built on an H100 host for an
+`__l40s__` workload has its Match compare an L40S capture against it.  The check is a PREFLIGHT: it runs before Build and
 before any engine, and fails by name `PRECHECK_FAIL_TARGET_FAMILY`.
 
-Family = compute capability (major, minor), the same reading the finalizer applies (report M-0016: l40s 8.9 / a100 8.0 / h100 9.0 /
-b200 10.0).  Three facts are compared with the row's family:
-  declared  -- the manifest's `target.compute_capability` when the workload declares one, else the row's device class when its SM
+Family = compute capability (major, minor), the same reading the finalizer applies (l40s 8.9 / a100 8.0 / h100 9.0 /
+b200 10.0).  Three facts are compared with the workload's family:
+  declared  -- the manifest's `target.compute_capability` when the workload declares one, else the id's device class when its SM
                count is fixed (`declared_profile`; Build gets it as --target, and a Build-only stage then needs no device)
   device    -- the pod GPU's compute capability (nvidia-smi compute_cap; torch as fallback) when a GPU stage runs here or the Build
-               target is the device (no declared target); a device-target Build under an empty CUDA_VISIBLE_DEVICES (a leased row,
-               `pipeline.gpu_lease`) is refused, since it would see no device and derive for the default target.  The Match's CPU
-               phase (`--match-phase cpu`: the check, the derives and the fold over GPU legs already captured) is no GPU stage
+               target is the device (no declared target); a device-target Build under an empty CUDA_VISIBLE_DEVICES (a leased
+               workload, `pipeline.gpu_lease`) is refused, since it would see no device and derive for the default target.  The
+               Match's CPU phase (`--match-phase cpu`: the check, the derives and the fold over GPU stages already captured) is no
+               GPU stage
   built     -- build_summary.json step.target.compute_capability, checked again AFTER Build (--build-summary)
 A WAIVER (`--waiver <reason>`, row_pod.sh: $TARGET_FAMILY_WAIVER) turns a would-be failure into `WAIVED <reason>` -- recorded in
-stages.txt and in the record, never silent; the release canary sets it because its `__l40s__` base rows also run on the Hopper canary
-host.  A row of record never carries a waiver (the finalizer reads the line).
+stages.txt and in the record, never silent; the release canary sets it because its `__l40s__` base workloads also run on the Hopper
+canary host.  A workload of record never carries a waiver (the finalizer reads the line).
 
 Torch-free; stdlib only.  Record schema: verity-sweep/target-family/v1.
 """
@@ -32,7 +33,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option
+from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option, workload_arg
 
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
 SCHEMA = "verity-sweep/target-family/v1"
@@ -193,7 +194,7 @@ def summary_line(rec: dict) -> str:
 @dataclass(frozen=True, kw_only=True)
 class Options:
     row: str = option("--row", help="row id (device class in its third token)")
-    workload: str | None = option("--workload", default=None, help="workload manifest (declared target block)")
+    workload: str | None = option("--workload", type=workload_arg, default=None, help="workload manifest (declared target block)")
     stages: str = option("--stages", default="build,match,commit")
     build_summary: str | None = option("--build-summary", default=None,
                                        help="check the Build that came out (step.target) as well")
@@ -202,9 +203,9 @@ class Options:
     waiver: str | None = option("--waiver", env="TARGET_FAMILY_WAIVER", default=None,
                                 help="named waiver (canary); recorded, never silent")
     devices: str | None = option("--devices", env="CUDA_VISIBLE_DEVICES", env_empty=True, default=None,
-                                 help="the GPUs the row's stages see (empty under a GPU lease: a Build then has no device to target)")
+                                 help="the GPUs the workload's stages see (empty under a GPU lease: a Build then has no device to target)")
     match_phase: str = option("--match-phase", default="all", choices=("all", "gpu", "cpu"),
-                              help="the Match's phase (the row's --match-phase): cpu runs no GPU leg, so its match reads no device")
+                              help="the Match's phase (`verity-vllm row --match-phase`): cpu runs no GPU stage, so its match reads no device")
     out: str | None = option("--out", default=None, help="write the record here")
 
 

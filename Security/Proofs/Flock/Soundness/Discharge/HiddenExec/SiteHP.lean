@@ -187,7 +187,8 @@ theorem out_copyHP (a : AcceptedHP T) (ho : a.st.c.outNet = a.st.c.unitNet)
     rw [hw, hleaf]
     unfold Layout.outCol
     omega
-  have hmc := Hidden.Any.msg_copyFP L L0 F0 (Hidden.da_offUnit L0 F0 s.ports s.da) hrows (hz.ex _) o hg hjo hkw ht
+  have hmc := Hidden.Any.msg_copyFP L L0 F0 (Hidden.da_offUnit L0 F0 s.ports s.da (Hidden.unpinned_of_rep hpa hcr hrows.1))
+    hrows (hz.ex _) o hg hjo hkw ht
   have hp := (hrows.2 jo hjo).1
   have hb : (16 * k + t) / 8 = 2 * k + t / 8 := by omega
   have hb8 : (16 * k + t) % 8 = t % 8 := by omega
@@ -214,7 +215,9 @@ theorem AcceptedHP.row_bc (a : AcceptedHP T) (hupv : 0 < a.st.c.upv)
   dsimp only at hupv hrf hg hp ⊢
   have L0 := flat_layoutP ht s
   have F0 := flat_unitFactsP ht s
-  have hz0 := Hidden.Any.sat_flatFP L L0 F0 (Hidden.da_offUnit L0 F0 s.ports s.da) hrf.1 hz
+  have hpc := Hidden.parse_untyped ht s.parse
+  have hz0 := Hidden.Any.sat_flatFP L L0 F0
+    (Hidden.da_offUnit L0 F0 s.ports s.da (Hidden.unpinned_of_rep hpc.1 hpc.2 hrf.1.1)) hrf.1 hz
   exact Hidden.Any.row_bc_tgtS L0 F0 rfl hupv hz0 o hg hp (hrf.kind hp)
 
 /-- **A row's `b ‖ c` at a drawn unit's site**, at public inputs (`bc_site_colH`). -/

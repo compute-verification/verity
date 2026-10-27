@@ -18,9 +18,9 @@ its overhead carries the share of capacity it leaves idle (its MFU) and its time
 `T_0 / Φ_total`; the reference itself runs in `T_0 / (MFU₀ Φ_total)`. So an adversary no protocol encumbers sits at
 `μ / MFU` (`Result.unmonitored`), and a lower bound below it is vacuous: it doesn't exclude even that adversary.
 
-A scenario's `structure` (default `reference`, `data/exclusion.toml`) is the elementary uncertified cap's `s_×`, from
-the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or dark gates at more
-than one gate an operation cites its straddling premise.
+A scenario's `structure` (else `structure.default`, `reference`; `data/exclusion.toml`) is the elementary uncertified
+cap's `s_×`, from the same source as `units.gates_per_flop` (`Structure.check`); a bound that counts uncertified or dark
+gates at more than one gate an operation cites its straddling premise, and the runs that measured `s_×`.
 """
 
 from __future__ import annotations
@@ -107,7 +107,7 @@ def build(registry: Registry, name: str) -> Scenario:
         tuple(family(registry, n) for n in registry[f"{t}.families"]),
         tuple(CLASSES[n] for n in registry.get(f"{t}.bounds", list(CLASSES))),
         tuple(ATTACKS[n] for n in registry.get(f"{t}.attacks", list(ATTACKS))),
-        structure(registry, registry.get(f"{t}.structure", "reference")), premises(registry))
+        structure(registry, registry.get(f"{t}.structure", registry["structure.default"])), premises(registry))
 
 
 @dataclass(frozen=True)

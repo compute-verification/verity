@@ -372,7 +372,7 @@ def test_on_a_requirement_link_a_pass_is_credited_the_circuit_s_reads_at_its_ste
 
 
 def test_a_registered_session_with_filler_planned_is_credited_the_circuit_s_reads() -> None:
-    """VLLM-24's shape, the link covering the weights while KV isn't registered.  The store's 8 registered blocks are
+    """A session whose link covers the weights while KV isn't registered.  The store's 8 registered blocks are
     4 of weights (the last half full), an embedding table of 16 rows in 2, and 2 of filler, and every pass plans the
     whole store (PlanShard at GAPS = 0).  Each of the 5 steps reads every weight, the table row its token selects and
     the KV its earlier steps wrote, which no registered block holds and which is never complete here.  So each plan

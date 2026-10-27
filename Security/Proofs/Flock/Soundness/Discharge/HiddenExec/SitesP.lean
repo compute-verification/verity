@@ -56,7 +56,8 @@ noncomputable def acc : AcceptedHP x.T.S where
   h := x.h
   pi := (Hidden.setupHidden_specP x.h).choose
   s := x.specP
-  L := Hidden.hidden_layoutP ht x.specP
+  L := Hidden.hidden_layoutP ht x.specP (Hidden.unpinned_of_rep (Hidden.parse_untyped ht x.specP.parse).1
+    (Hidden.parse_untyped ht x.specP.parse).2 (by rw [x.c_eq hc]; exact hv1.1.1))
   hR := unitRowsFlatP ht x.specP (by rw [x.c_eq hc]; exact hv1.1)
   regs := x.regs
   hregs := x.hregs
