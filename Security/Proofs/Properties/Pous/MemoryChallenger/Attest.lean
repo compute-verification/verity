@@ -896,7 +896,7 @@ theorem opening_one (v : ByteArray) :
   have hw := root_width #[v]
   rw [root_one] at hw
   simp only [verifyOpening, hc, root_one, hw]
-  simp [Attest.periodDomain, Domain.make, depth]
+  simp [Attest.periodDomain, Domain.makeU64, depth]
 
 /-- What `Lms.key` gives at the deployed parameters: a 16-byte identifier, and a public key of `16 + N` bytes that
 starts with it. -/
