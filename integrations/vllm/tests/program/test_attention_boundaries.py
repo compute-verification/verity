@@ -1,6 +1,6 @@
 """The attention family's Definition modules import only `verity` and Definition modules: what the catalog move needs of them.
 
-A Definition module of the family (`DEFINITION_MODULES`, verity#1130's DSA and sparse-MLA modules included) imports the standard
+A Definition module of the family (`DEFINITION_MODULES`, the DSA and sparse-MLA modules included) imports the standard
 library, numpy, `verity`, the family's other Definition modules, and from another family's registry module only the Definitions
 and the word constants of a Definition body that `OTHER_FAMILIES` names.  Its vocabulary (`MOVES`) is `attention_vocab`'s, which no
 Definition module imports.  An import is any import statement, at module level or in a function.
