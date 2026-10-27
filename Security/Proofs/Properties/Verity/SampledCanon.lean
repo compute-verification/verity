@@ -2,6 +2,7 @@ import Proofs.Properties.Verity.SampledSim
 import Std.Data.String.ToNat
 import Proofs.Flock.Claims.Complete.Json.Hex
 import Proofs.Flock.Claims.Complete.Json.Parse
+import Proofs.Flock.Claims.Bridge.Custody
 
 /-!
 # The device's refusals, read in the play
@@ -748,11 +749,10 @@ theorem foldl_append_data (L : List ByteArray) : ∀ acc : ByteArray,
 theorem foldl_digests (rb : Array ByteArray) :
     (rb.map Flock.Sha512.hash).foldl (· ++ ·) .empty =
       ⟨(Flock.Guarantees.LiveHash.rootDigests rb).toArray⟩ := by
-  have e0 : ByteArray.empty.data.toList = [] := rfl
   apply ByteArray.ext
   apply Array.toList_inj.mp
   rw [← Array.foldl_toList, foldl_append_data]
-  simp [Flock.Guarantees.LiveHash.rootDigests, e0, List.map_map, Function.comp_def]
+  simp [Flock.Guarantees.LiveHash.rootDigests, List.map_map, Function.comp_def]
 
 /-- A member of a parsed value is well formed. -/
 theorem wf_getD {j : Json} (hw : _root_.Claims.Json.Wf j) (k : String) : _root_.Claims.Json.Wf (getD j k) := by
@@ -844,6 +844,71 @@ theorem sessionUses_pointsHash {slot : Nat} {record : String} {us : List (Challe
   have hw := wf_getD (FlockComplete.JsonRT.parse_wf record j hj) "link"
   rw [← pointsAfter_eq_pointsHash hw ha hk hsz (h5 j hj)]
   exact ⟨pts, hhd⟩
+
+theorem getD_of_fld {j l : Json} {k : String} (h : Flock.Record.fld j k = .ok l) : getD j k = l := by
+  unfold Flock.Record.fld at h
+  unfold getD field?
+  cases hv : j.getObjVal? k with
+  | error e => rw [hv] at h; cases h
+  | ok v => rw [hv] at h; cases h; rfl
+
+/-- **`Record.decode`'s S5**: the link of a record it decodes holds, under `root_b_<dk>`, each table's digest as the
+hex of the `dg` of the table's decoded root. -/
+theorem decode_rootDigests {spec : Flock.SessionSpec} {text : String} {sess : Flock.Session}
+    (h : Flock.Record.decode spec text = .ok sess) :
+    ∃ j l, Flock.JsonParse.parse text = .ok j ∧ Flock.Record.fld j "link" = .ok l ∧
+      List.Forall₂ (fun t rb => ∃ v, Flock.Record.fld l s!"root_b_{spec.dk}" = .ok v ∧
+        Flock.Record.str v t = .ok (Flock.hexOf (spec.dg rb))) spec.tables.toList sess.rootB.toList := by
+  revert sess
+  show FlockSoundness.Refine.Ret (Flock.Record.decode spec text) _
+  rw [Flock.Record.decode.eq_def]
+  cases hp : Flock.JsonParse.parse text with
+  | error e => intro sess h; cases h
+  | ok j =>
+    simp only []
+    rw [pure_bind]
+    ret_walk [Flock.Record.fld, Flock.Record.arr, Array.mapM]
+    all_goals
+      refine ⟨j, _, rfl, by assumption, ?_⟩
+      refine List.Forall₂.imp (fun t rb h => ?_) (Claims.Bridge.Custody.mapM_forall₂ (by assumption))
+      beta_reduce at h
+      obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨v5, h5a, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨s5, h5b, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨_, h5c, h⟩ := FlockSoundness.Refine.ebind_ok h
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      have e := beq_iff_eq.1 (FlockSoundness.Refine.check_ok_iff.1 h5c)
+      subst e
+      exact ⟨v5, h5a, h5b⟩
+
+/-- **A session's link points are released after `pointsHash` of the roots `Record.decode` reads** from its record,
+at a statement of the tables `TABLES` with SHA-512 digests. -/
+theorem sessionUses_pointsHash_of_decode {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
+    (h : sessionUses slot record = .ok us) {spec : Flock.SessionSpec} {sess : Flock.Session}
+    (hd : Flock.Record.decode spec record = .ok sess) (ht : spec.tables = TABLES) (hs : spec.sha512Digests = true) :
+    ∃ pts, us.head? = some
+      (⟨Hello.slotStream slot POINTS, Flock.Guarantees.LiveHash.pointsHash sess.rootB, (pts.size + 3) / 4⟩, pts) := by
+  obtain ⟨j, l, hj, hl, hf⟩ := decode_rootDigests hd
+  have hlen := hf.length_eq
+  simp only [Array.length_toList] at hlen
+  refine sessionUses_pointsHash h (by rw [← hlen, ht]) fun j' hj' i hi hr => ?_
+  rw [hj] at hj'
+  cases hj'
+  rw [getD_of_fld hl]
+  obtain ⟨v, hv, hstr⟩ := (List.forall₂_iff_get.1 hf).2 i (by simpa [ht] using hi) (by simpa using hr)
+  have hk : s!"root_b_{spec.dk}" = "root_b_sha512" := by
+    rw [show spec.dk = "sha512" by simp [Flock.SessionSpec.dk, hs]]; rfl
+  have hg : ∀ b, spec.dg b = Flock.Sha512.hash b := fun b => by simp [Flock.SessionSpec.dg, hs]
+  rw [hk] at hv
+  rw [getD_of_fld hv]
+  simp only [List.get_eq_getElem, Array.getElem_toList, hg] at hstr
+  first
+    | (simpa [ht] using hstr)
+    | (simp only [ht] at hstr; exact hstr)
 
 end SampledProofs.OneStageZk
 
