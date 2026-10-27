@@ -31,7 +31,7 @@ PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, q
 SESSION = bytes(range(32))
 #: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
 PROCESS_CLOCK: list[VirtualClock] = []
-#: what a window's commit takes of its process's time: TRACE-CORPUS's small-KV run measured 378-392 ms
+#: what a window's commit takes of its process's time: the trace corpus's small-KV run measured 378-392 ms
 SLOW_COMMIT_S = 0.4
 
 

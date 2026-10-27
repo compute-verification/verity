@@ -23,8 +23,8 @@ id (`release`), which `deployment.json` names (`run_id`).
 - The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
   is H = 20 (the auditor gate's default, `benchmarks/live_challenger/auditor.py`).
 
-**Traffic** (`traffic`, `varied_traffic`): varied, as CERT-VARLEN's: Poisson arrivals at `--rate` a second, prompts of
-16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
+**Traffic** (`traffic`, `varied_traffic`): varied, as `certifier_serve`'s: Poisson arrivals at `--rate` a second,
+prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
 (log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests. `--temperature` and
 `--top-p` put the same on every request instead (the gate's `warden-rehearse` always gives both): an endpoint applies
 its own generation config to a request that omits them. `rehearse --ids` sends the scan's traffic instead (`id_traffic`,
@@ -702,7 +702,7 @@ def prepare_process(params: WardenParams) -> dict:
     """The warden's process made ready before its origin, so that no tick waits in the kernel (state D) on what the
     run's growth would otherwise ask of it then:
     - descriptors: its table holds every connection's two and every queued one's (`reserve_fds`): the opening burst of
-      TRACE-CORPUS's heavy trace grew it past 256, 512 and 1024 descriptors, and the ticker waited a grace period at
+      the trace corpus's heavy trace grew it past 256, 512 and 1024 descriptors, and the ticker waited a grace period at
       each (`stall_probe` found every D episode of the ticker in `__wait_rcu_gp` there, 14-28 ms on CPU);
     - memory: a page fault for fresh memory charges the memory cgroup, and a cgroup at its limit reclaims in the
       faulting thread. glibc's heap is kept whole (no trim) and serves every allocation under 32 MiB (no mmap), a

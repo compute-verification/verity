@@ -1,5 +1,5 @@
 """The compile slice (`compile_slice.CompileSlice_v1`) proved in zero knowledge: one window of a few steps as one unit,
-proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`, through N2-ZK's audit path
+proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`, through N2's audit path
 (`n2_zk.py`: its stager, firewall and received-pieces scan).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
@@ -210,8 +210,9 @@ def chain(x: SimpleNamespace, program: str, registration: str) -> SimpleNamespac
 
 
 def _corpus(tmp: Path) -> Path:
-    """corpus-smallkv unpacked as ENC-DERIVED's tests read it (`benchmarks/network_e2e/encodings/tests/test_v1.py`'s
-    `_corpus`, which imports pytest): each batch in Model Runner V2's order, each stop-id finish marked `eos`."""
+    """corpus-smallkv unpacked as the derived rules' tests read it
+    (`benchmarks/network_e2e/encodings/tests/test_v1.py`'s `_corpus`, which imports pytest): each batch in Model Runner
+    V2's order, each stop-id finish marked `eos`."""
     import gzip
     import shutil
 
