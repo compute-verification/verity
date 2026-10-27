@@ -8,7 +8,7 @@ import Proofs.Pouw.Dither
 * `workSoundAtX_of_workSound`: `WorkSound` gives `WorkSoundAtX c pb hr x` on every card table at every open
   parameter: an instance of its quantifiers at the counted and timed verdict, which accepts no more than the service's
   verdict, with the exchange bound from the certifier's counts and `pub_mm`, `pub_sha` the card's public bests at `μ`.
-  The sampling blocks' work fits the period from the clocks (CMP-154): `RootAfterCoin` puts block `b`'s work inside
+  The sampling blocks' work fits the period from the clocks: `RootAfterCoin` puts block `b`'s work inside
   its window, from its coins at `t b` to its root's arrival, G2 bounds its use by `ρ_r` times that window, and the
   challenger's order (block `b + 1`'s coins after block `b`'s roots) makes the windows disjoint inside `[0, T]`
   (`sum_windows_le_T`). No count of sampling blocks or of selected ones is read.
@@ -20,8 +20,8 @@ import Proofs.Pouw.Dither
 * `h200_onCard`, `sm120_onCard` (rule I): at those parameters, on any period's devices, `cardAccel` (programs as runs
   within the devices' rates, no oracle calls, its call step at a public compression) is the devices under the identity
   match (`OnCard`), meets (G1), (G2) and (G3), and `CallsAtPub`, so the hypotheses on `G` are not empty either.
-  `cardAccel` is a witness, not the canonical card accelerator RT-LEAN L31 asks for: its programs are any runs within
-  the rates, so `SAKMatmul` is false at it.
+  `cardAccel` is a witness, not the canonical card accelerator `WorkSoundOnCard`'s Open names: its programs are any
+  runs within the rates, so `SAKMatmul` is false at it.
 -/
 
 namespace Pouw.SecurityProofs.DitherInstance

@@ -155,7 +155,7 @@ noncomputable def pearlCProtocolDevRev1RowCapAt (d : PearlCDevice) (sem : PearlC
     capOK := fun H s U u act =>
       (pearlCProtocolDevRev1 d sem ρ).capOK H s U u act ∧ (pearlCProtocolDevRev1RowCap d sem ρr).capOK H s U u act }
 
-/-- **(C2)'s tiles at a wider row cap** (card a6872606, option (a)): `pearlCTilesDevRev1` at the cap `ρ`, whose tile is
+/-- **(C2)'s tiles at a wider row cap**: `pearlCTilesDevRev1` at the cap `ρ`, whose tile is
 within the cap when its debit is at most `ρ` times its credited rows' credit and every credited row's is at most `ρr`
 times that row's share (`pearlCTilesDevRev1RowCap` at `ρr`). The credit is rev1's at `ρ`, `(1 − ρ)·C` times the
 credited rows' share. -/

@@ -24,7 +24,7 @@ and decision 107's units, for the window's share `ε` (`0 < ε ≤ 1`, the `ε` 
   sessions' queries, and a session that opens the registered roots to anything but `Ccom` is the link term inside
   `WindowBound`'s `β`. `q` counts the sessions' calls too (`ProverModel.sessCalls`), so that `β`'s state terms, which
   a session state holding a collision of `H` makes about 1, can be bounded on average over the oracle by the counted
-  queries on the random-oracle card, as `ε_id` is. That bound holds only where the sessions are one oracle program's
+  queries on the random-oracle claim, as `ε_id` is. That bound holds only where the sessions are one oracle program's
   run at `H`, counted by that program's calls. `sessCalls` is a model field, not yet tied to an oracle program (see
   `ProverModel`), so no card reads a number for `E[β]` from it until that tie is stated.
 * **The acceptance is the service's at the draw coin's cutoff** (`WindowWork.AcceptsBy`): the sessions accept and the
@@ -172,7 +172,7 @@ queries, but `Bounded` counts them: a session state that holds a collision of `H
 fixes the cost; a prover only picks a program.
 A session's strategy is a strategy of the session at `H`, whose type depends on `H`, so no oracle program's output is
 one. `sessCalls` is free: the model picks a separate session play at each oracle and its count, and nothing ties the
-count to the play's queries. So a bound on the sessions' state terms at counted queries (the random-oracle card's,
+count to the play's queries. So a bound on the sessions' state terms at counted queries (the random-oracle claim's,
 through `Pouw.Window.CollCounted`) holds only for a model whose sessions are one oracle program's run at `H`,
 counted by that program's calls:
 * at a true count it is false: a model whose session play at each `H` holds a hardcoded collision of `H` counts 0
@@ -249,7 +249,7 @@ def AcceptsBy {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workl
 end Prover
 
 /-- **Straight-line extraction of the registration's transcript** (a named premise, open; the random-oracle model,
-claim id `random-oracle`, card 9cd57182), for a prover model `PM`, PoUW's cost model `CM`, a domain `D`, the transcript
+claim id `random-oracle`), for a prover model `PM`, PoUW's cost model `CM`, a domain `D`, the transcript
 `Ccom H s R` that the registration `R`'s commitments bind at the oracle and the salt (the analysis's committed transcript,
 read at the registration alone), the extractor's cost `T_ext` and calls `q_ext`, and an error `ε_id(q, N)`. For every
 in-domain workload and every prover `B` within `(T, q)` there is an adversary `A` of PoUW's game within
@@ -278,7 +278,7 @@ It is stated for models whose registration is an oracle program's output with it
 (`ProverModel.RegQueries`, its antecedent); the sessions' calls are counted in `q` too (`Prover.Bounded`), which can only
 shrink the provers it quantifies over. It is the shape of relative security's
 premises, an adversary that commits first with random-oracle commitments (`Assumptions.ServiceSoundStaged`,
-`Extraction`), and it is carded on the random-oracle card with the seeded windows' premise
+`Extraction`), and it is filed under the random-oracle claim with the seeded windows' premise
 (`Accounting.Assumptions.Compose.SeedExtractedAt`), so that the random oracle is ruled on once. -/
 def StraightLineExtraction [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {n : ℕ} {Reg : Type}
     {Lr : Reg → Law n} {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}

@@ -52,7 +52,7 @@ decision 101's keyed draw) is retired.
   `rateZ = N₀/(ek)` (`Pouw.Window.flockKnowledgeSound_analysisZC`, proved, read through the bridge below).
   `ksJoint_le` (`κ = 2^logLen/(e·Kr)`) is the non-ZK plain-leaf table's, which main's window doesn't run.
 * `LinkSoundIn … σ (δlink σ)`: C-Flock's link finder at the window's state, over the window's run.
-* `coll`: the random-oracle card's collision bound at the sessions' counted queries (`CollCounted`, premise, open), on
+* `coll`: the random-oracle claim's collision bound at the sessions' counted queries (`CollCounted`, premise, open), on
   average over the oracle; `WindowEps`'s bound at each oracle reads it through `Pouw.Window.avg_counted_le` (proved).
   It holds only where the plays are one oracle program's run at each oracle, counted by that program's calls. As
   stated, over a separate play at each oracle with a free count, it is false at a true count (a play holding a

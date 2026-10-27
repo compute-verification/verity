@@ -99,12 +99,12 @@ at `δ_s = 1%` and through 115 at `10⁻⁶`, and `ε(j) < 1%` from 3,857 and 11
 What H1's instance takes that the deployed path doesn't give, each a named premise:
 * `RegisteredBeforeDraw`, with the window's rows committed by its registration: the binding premise reads both. The
   tiles' registered roots are tags (below), so the registration commits no row (`anchors []`, `wires []`), and an
-  opening the service gives is bound to nothing fixed before the draw. Discharge path: CMP-91, ALLP-WIRE's anchors
+  opening the service gives is bound to nothing fixed before the draw. Discharge path: ALLP-WIRE's anchors
   committed before the draw coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
 * `SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet it: the loop is given
   its salt before it serves, and nothing in the record binds the salt to a live coin (`core_check.salt` is not part of
   `answer`; the check item names no coin mode, so the window is seeded, and `Scope`'s `Declared.Live` and
-  `LayerCommitted` fail of the circuit it runs). Its discharge path is CMP-90 (ALLP-SALT); CMP-81's per-epoch live
+  `LayerCommitted` fail of the circuit it runs). Its discharge path is ALLP-SALT; the per-epoch live
   salt is the fix's shape (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1.
 * `StagedPins`: the leg's proofs are of the window's staged statement, not the pinned flat circuit `core_check.opening`
   reads. The bridge is stated over the staged statement (`ServiceSound` is the service's soundness for it, `stagedAt`),
@@ -308,9 +308,9 @@ salt the verifier holds for the window, which every tile's noise reads through i
 every drawn unit's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
 round's values are committed. The deployed path doesn't meet it: the loop is given its salt before it serves, nothing
 in the record binds the salt to a live coin (`core_check.salt` is not part of `answer`), and the check item names no
-coin mode, so the window is seeded. Its discharge path is CMP-90 (ALLP-SALT); CMP-81's per-epoch live salt is the
+coin mode, so the window is seeded. Its discharge path is ALLP-SALT; the per-epoch live salt is the
 fix's shape (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1. A named
-assumption in the lock (ASK-133, option A, decided by the lane): a deployment gap until CMP-90 (#4405). -/
+assumption in the lock: a deployment gap until the salt is a live coin. -/
 def SaltIsLiveCoin {C B : Type} {m n : ℕ} (hm : 0 < m) (salt : Paths (Paths C m × B) n → Fin n → ByteArray)
     (enc : C → ByteArray) : Prop :=
   ∀ x w, salt x w = enc (coinAt (coinAt x w).1 ⟨0, hm⟩)
