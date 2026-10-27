@@ -4,7 +4,8 @@
 placement's public properties, the declaration with its named assumptions, the verifier's plan). For each block it
 concludes:
 
-- `credited`: the work the claims prove was spent on the declared Program there, each kind at its weight (W_ref);
+- `credited`: the declared size in ANDs of the Program's part the claims prove ran there (`Profile.ands`), with its
+  multiply-adds by format beside it, never credited (`macs`);
 - `busy` and `headroom`: the share of the epoch that work needs on the block's devices, each kind at their declared
   rate for it (multiply-adds at a precision, word operations, Boolean gates), and the share the audits leave
   unaccounted;
@@ -95,6 +96,8 @@ class BlockAccount:
     loads: dict[str, float] = field(default_factory=dict)
     #: what places the work on the block: "fleet-closed", "salt-custody" or "forced" (the tightest bound), or None
     anchor: str | None = None
+    #: its multiply-adds by format (`mac:bf16`, ...), never credited
+    macs: dict[str, float] = field(default_factory=dict)
 
     @property
     def headroom(self) -> float:
@@ -130,6 +133,8 @@ class Account:
     #: premise multiplies (`Ledger.custody`)
     seconds: float = 0.0
     servers: int = 0
+    #: why nothing is credited (`Profile.uncounted`)
+    uncounted: str | None = None
 
     @property
     def export_bits(self) -> float:
@@ -163,11 +168,14 @@ class Account:
                 + sum(self.serviced.values()))
 
     def __repr__(self) -> str:
-        lines = [f"{'block':8} {'credited':>9} {'local ≥':>9} {'busy':>9} {'outsource':>9} {'reads':>8} {'local ≥':>8} "
-                 f"{'carried (bits)':>14}"]
+        lines = [f"{'block':8} {'ANDs':>9} {'local ≥':>9} {'busy':>9} {'outsource':>9} {'reads':>8} {'local ≥':>8} "
+                 f"{'carried (bits)':>14}  MACs by format (not credited)"]
         for b in self.blocks:
             lines.append(f"{b.block:8} {b.credited:9.3g} {b.local_at_least:9.3g} {100 * b.busy:8.3g}% {b.outsourceable:9.3g} "
-                         f"{b.reads:8.3g} {b.reads_local_at_least:8.3g} {b.carried:14.3g}")
+                         f"{b.reads:8.3g} {b.reads_local_at_least:8.3g} {b.carried:14.3g}  "
+                         + (", ".join(f"{k[4:]} {n:.3g}" for k, n in sorted(b.macs.items())) or "none"))
+        if self.uncounted:
+            lines.append(f"nothing credited: {self.uncounted}")
         inputs = ", ".join(f"{k}: {v}" for k, v in self.input_bits.items()) if len(self.input_bits) <= 4 else \
             f"{len(self.input_bits)} inputs"
         lines.append(f"covert budget: {self.covert_bits:g} bits = {self.advice_bits:g} profile advice + "
@@ -277,7 +285,8 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                 names.append(SALT_CUSTODY.name)
         anchor = min(bounds, key=lambda a: bounds[a])
         blocks.append(BlockAccount(b.name, credited[b.name], busy, bounds[anchor], carried, reads[b.name],
-                                   reads_local[b.name], profile.forced[b.name], names, k, dict(loads), anchor))
+                                   reads_local[b.name], profile.forced[b.name], names, k, dict(loads), anchor,
+                                   {kind: n for kind, n in profile.work.get(b.name, {}).items() if kind.startswith("mac:")}))
 
     links = {repr(port): dc.uplink(port.certifier) for port in dc.ports}
     window_seconds = dc.cadence.seconds(dc.cadence.window_ticks)
@@ -293,7 +302,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
                    {b: sum(float(d.memory) for d in dc.block(b).devices if d.memory is not None) for b in back},
                    _credits(claims, profile, blocks, inside, refused_stores), capacity(dc),
                    dict(profile.exported), [f"{l.a}-{l.b}" for l in dc.uncovered_links()], seconds,
-                   sum(d.kind == "gpu" for b in dc.blocks for d in b.devices))
+                   sum(d.kind == "gpu" for b in dc.blocks for d in b.devices), profile.uncounted)
 
 
 def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], inside, refused_stores) -> list[Credit]:
