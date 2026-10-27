@@ -216,8 +216,7 @@ def test_an_output_newer_than_its_hash_is_half_written_and_loses_every_hash_with
 
 
 def test_a_module_without_a_trace_loses_the_hash_files_it_kept(tmp_path):
-    """compute-accounting, 26 Oct 09:49Z: cpu-5's `build-0` held `W1.olean` rewritten at 09:08, its `.hash` from 07:47 and
-    no `W1.trace`, as a `repair` that dropped only the trace left it; `damaged` reads only traces, so it went unflagged,
+    """A slot's tree held a rewritten `W1.olean`, its `.hash` from an earlier build and no `W1.trace`, as a `repair` that dropped only the trace left it; `damaged` reads only traces, so it went unflagged,
     and the next `.ltar` restore would have kept the stale `.hash` beside a new trace."""
     tree = tmp_path / "tree"
     lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
@@ -345,7 +344,7 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
 
 
 def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds_them(trying, tmp_path):
-    """cpu-5's `build-0`, 26 Oct: `Proofs.Pouw` failed there with `W1BudgetAbort` replayed beside a fresh
+    """In one slot's tree `Proofs.Pouw` failed with `W1BudgetAbort` replayed beside a fresh
     `TTOutW1RowSeed`, each built against another `W1`, while it elaborated from source everywhere else."""
     tree, calls = trying
     proofs = tree / "Sec" / "Proofs" / ".lake" / "build" / "lib" / "lean"

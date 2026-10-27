@@ -278,7 +278,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   (`tests/test_lean_packages.py` checks the test exists), so a counterexample fails `check`; a falsified one refuses every
   property resting on it, which stays under `frozen` only as `falsified`. Every package is checked: without a `shape`
   section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
-  is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.
+  is a claims change: the landing DM shows it with its reason (`research.spec_alert` sends it), and nothing waits on it.
 - **The spec**, the trusted text a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
   policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means what it means
   whatever proves the propositions inside it), followed through `meaning` and where the walk leaves it, must lie in the
@@ -499,7 +499,7 @@ module docstring has the layout and the rules. In short:
 - Every write is conditional. A blob that already exists (a 412 or a 409) must have the same MD5, and blobs go up in one
   part so that their ETag is their MD5. Records go last.
 - On node 1, `run_daily.py` is the daily publish (`vy-lean-cache-daily.timer`, deployed with the `cache.py` beside it).
-  It builds a fresh clone of main at `/build/verity` per package in infra's sandbox (`vy-lean-sandbox`), with the
+  It builds a fresh clone of main at `/build/verity` per package in the node's build sandbox (`vy-lean-sandbox`), with the
   dependencies fetched outside as research and bound read-only. It runs `publish` and `prune` only after
   `vy-lean-sandbox clean` passes. A probe that got through, a refused sandbox or an unclean tree publishes nothing.
 

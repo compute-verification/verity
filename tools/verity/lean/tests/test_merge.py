@@ -221,12 +221,12 @@ def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_change
 FIXTURES = HERE / "fixtures" / "merge"
 
 
-def test_4406_onto_next_takes_the_side_that_changed_the_definitions(tmp_path, capsys):
-    """#4406 (cursor/lean-vocab-hash-fc8d at 172198e129) onto `next` at aa5d70a9f1, base main's b6b9338dcb (26 Oct): #4406
-    moves `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused the train.
-    The fixture is that group on each side with the records of its readers (a sample of the branch's new ones), as locks
-    listed them then. Read without them, `next`'s group is the base's, so the merge is the branch's group, cleanly."""
-    sides = json.loads((FIXTURES / "hash-basic-4406-onto-next.json").read_text())
+def test_a_branch_onto_next_takes_the_side_that_changed_the_definitions(tmp_path, capsys):
+    """A branch moves `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused
+    the train. The fixture is that group on each side with the records of its readers (a sample of the branch's new ones),
+    as locks listed them then. Read without them, `next`'s group is the base's, so the merge is the branch's group,
+    cleanly."""
+    sides = json.loads((FIXTURES / "hash-basic-onto-next.json").read_text())
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
     assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
@@ -361,7 +361,7 @@ def test_unwitnessed_entries_both_sides_add_merge_in_the_order_update_writes():
 
 
 def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
-    """#1860 against #1842 (12 Oct): each side added imports to `Definitions.Accounting` and a clause to its `why`."""
+    """Each side added imports to `Definitions.Accounting` and a clause to its `why`."""
     base = {"layers": {"D": {"imports": ["Mathlib", "D"], "except": [], "why": "trusted text; they import no proof"},
                        "E": {"imports": ["E"], "except": [], "why": "e"}}}
     ours = {"layers": {"D": {"imports": ["Mathlib", "P.Audit", "D"], "except": [], "why": "trusted text; M reads P; they import no proof"},
@@ -382,7 +382,7 @@ def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
 
 
 def test_two_branches_that_each_add_a_root_merge_the_roots():
-    """c3-spec-2 against c3-n11-readcol (13 Oct): each side added a test module to Flock's roots."""
+    """Each side added a test module to Flock's roots."""
     base = {"roots": ["Flock", "Flock.Test.RecOpening", "VStar"]}
     ours = {"roots": ["Flock", "Flock.Test.RecOpen", "Flock.Test.RecOpening", "VStar"]}
     theirs = {"roots": ["Flock", "Flock.Test.RecOpening", "Flock.Test.ReadWhole", "VStar"]}
@@ -400,7 +400,7 @@ def _lean(tmp: Path, base: str, ours: str, theirs: str) -> tuple[str, int]:
 
 
 def test_a_lean_file_whose_sides_only_add_imports_merges_and_any_other_conflict_stays_git_s(tmp_path):
-    """#1860 against #1850 (12 Oct): each side added a module to Guarantees.lean's import list at the same place."""
+    """Each side added a module to Guarantees.lean's import list at the same place."""
     base = "import G.Bandwidth\nimport G.Joint\n\ntheorem t : True := trivial\n"
     ours = "import G.Memory\nimport G.Bandwidth\nimport G.Joint\n\ntheorem t : True := trivial\n"
     theirs = "import G.Actual\nimport G.Bandwidth\nimport G.Joint\n\ntheorem t : True := by trivial\n"
@@ -412,7 +412,7 @@ def test_a_lean_file_whose_sides_only_add_imports_merges_and_any_other_conflict_
 
 def test_an_import_one_side_removed_stays_removed_where_the_other_side_moved_it(tmp_path):
     """Ours removes `G.B` and adds `G.F`; theirs moves `G.B` to the end.  Git sees the removal on both sides where `G.B` was
-    and two additions at the end, so a merge of that hunk alone brings `G.B` back (#4690 onto `next`)."""
+    and two additions at the end, so a merge of that hunk alone brings `G.B` back."""
     imports = lambda *ms: "".join(f"import G.{m}\n" for m in ms) + "\ntheorem t : True := trivial\n"
     text, left = _lean(tmp_path, imports("A", "B", "C", "D", "E"), imports("A", "C", "D", "E", "F"), imports("A", "C", "D", "E", "B"))
     assert left == 0 and text == imports("A", "C", "D", "E", "F")
@@ -426,10 +426,10 @@ def test_imports_both_sides_add_merge_and_one_both_sides_remove_stays_removed(tm
     assert left == 0 and text == imports("A", "Y", "X", "B", "C")
 
 
-def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
-    """`Security/Definitions/Accounting.lean` as git gave it to the driver when drive merged #4690 onto `next` (5534d5ccd4,
-    26 Oct): the merge kept the import of the module #4690 retired, and Security stopped building (ci's check 83067ace)."""
-    sides = json.loads((FIXTURES / "accounting-4690-onto-next.json").read_text())
+def test_a_branch_onto_next_drops_the_import_it_retired(tmp_path):
+    """`Security/Definitions/Accounting.lean` as git gave it to the driver when drive merged a branch onto `next`: git's
+    merge kept the import of the module the branch retired, and Security stopped building."""
+    sides = json.loads((FIXTURES / "accounting-onto-next.json").read_text())
     text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
     gone = "import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod\n"
     assert left == 0 and gone in sides["base"] and gone in sides["ours"] and gone not in sides["theirs"]
@@ -524,7 +524,7 @@ def _lakefile(tmp: Path, base: str, ours: str, theirs: str) -> tuple[str, int]:
 
 
 def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
-    """#1541 against #1573 and the Properties lakefile's other conflicts (Oct): each side required a package after the same
+    """The Properties lakefile's conflicts: each side required a package after the same
     block and appended roots to the same line; the merge keeps both, wrapped as ours wraps, and stays TOML."""
     import tempfile
     import tomllib
@@ -580,7 +580,7 @@ def test_git_merges_two_branches_that_each_require_a_package_with_the_installed_
 
 
 def test_lists_of_names_merge_where_both_sides_append_one():
-    """#2600 against next (18 Oct, proofs): each side appended a module to `meaning`, which merged as one value and refused
+    """Each side appended a module to `meaning`, which merged as one value and refused
     the merge; every list of names (`meaning`, `claims.modules`, `shape.premises`...) merges as a list, as `roots` did."""
     base = {"meaning": ["A"], "claims": {"modules": ["C"], "witnesses": {}}, "shape": {"premises": ["P"]}}
     ours = {"meaning": ["A", "B"], "claims": {"modules": ["C", "D"], "witnesses": {}}, "shape": {"premises": ["P", "Q"]}}

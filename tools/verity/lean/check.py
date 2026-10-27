@@ -131,7 +131,7 @@ allowed axioms replaces it.  `--update` writes the records and `reads` from the 
 whole `lean-audit.json`, changed or not, beside the package's reports too (`audit-TAG/` under `--out`, which a recorded run
 publishes), and prints what changed: each changed guarantee's signature before and after, and each changed definition a
 guarantee reads with its source now.  A weakened definition passes every axiom check and the replay, so a person has to see
-those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
+those changes: the landing DM (`research.spec_alert` sends it) shows them when they land on `main`.  An audit without
 `--update` whose every failure is a record difference (its code is in `RECORD_DIFFERENCE`: two records each right on its
 side of a merge whose definitions changed, an owned entry with no record yet, a premise the lock doesn't list) writes the
 same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a train's
@@ -302,8 +302,8 @@ def cores() -> int:
 #: of C-Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
 MEM_FLOOR_GIB = 24
 #: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaked at 145 GiB at 48 threads
-#: (r20261018-175656-1c85) and was killed at a 128 GiB cap at 16 (r20261019-084601-01a0), so the replay's resident base is
-#: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
+#: and was killed at a 128 GiB cap at 16, so the replay's resident base is about 120 GiB and a thread adds under 1: fewer
+#: threads don't make it fit, only the floor does
 SPEC_FLOOR_GIB = 160
 #: where a machine below the floor runs it instead
 ON_NODE = ("research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'lean-audit/*' -- "
@@ -345,7 +345,7 @@ def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")
 
 
 #: about what one `lean` of a Mathlib or ArkLib build peaks at: Lake runs as many at once as `LEAN_NUM_THREADS`, so a build
-#: of such a package runs no more than its memory holds (two queued Security builds were OOM-killed at 64 and 16 GB, 18 Oct)
+#: of such a package runs no more than its memory holds (Security builds with a `lean` per CPU were OOM-killed in 64 and 16 GB scopes)
 BUILD_GIB_PER_JOB = 8
 
 
@@ -413,7 +413,7 @@ def plugin_targets(pkg: Path) -> list[str]:
     """The compiler plugins the package's fetched dependencies load (`plugins` of a `[[lean_lib]]` in their `lakefile.toml`),
     as targets `@dep/Lib:facet`.  Lake links one twice when two of a package's libraries load it, one under the module system
     and one not (ArkLib's `ArkLib` and `ArkLibTest` with `ArkLibLintPlugin:shared`), and the two links race on one file, so the
-    build links each alone first, after which both find it up to date (INF-62)."""
+    build links each alone first, after which both find it up to date."""
     out: list[str] = []
     for f in sorted((pkg / ".lake" / "packages").glob("*/lakefile.toml")):
         try:
@@ -1579,14 +1579,14 @@ def witness_pin(rule: str, n: str, of: str, role: str, policy: dict, facts: dict
 
 
 def claim_failures(policy: dict, facts: dict) -> list[str]:
-    """Each claim definition has its witnesses (`claims` in the policy; LEAN-26, proofs' claims-landing norms): every predicate
+    """Each claim definition has its witnesses (`claims` in the policy): every predicate
     the spec declares under `claims.modules` (a named assumption, and one `claims.not` lists with the reason, aside) names
     under `claims.witnesses` a theorem `fails`, whose statement past its `∀` and `∃` binders is `¬ C …` with the claim `C`
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
     meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
     An entry is stale only when it names no predicate under `claims.modules`, so a named assumption (a claim a guarantee
-    takes as a premise) may keep its entry, which is then checked like any other. A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    takes as a premise) may keep its entry, which is then checked like any other. A `meets` witness must say something about the deployment (`vacuous_meets`): its conclusion, past its `∀`,
     `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
     a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
     of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
@@ -1965,7 +1965,7 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
 
 
 def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: list[str]) -> list[Failure]:
-    """How ``n``, the `nontrivial` witness of the exclusion theorem ``g``, falls short of the form ruled for it:
+    """How ``n``, the `nontrivial` witness of the exclusion theorem ``g``, falls short of the form required of it:
     at an explicit circuit, (each other premise of ``g`` holds) ∧ ¬ (a named premise of ``g``) ∧ ¬ (``g``'s bound). Among
     the conjuncts of its conclusion (`Facts.lean`'s `conclusion`, in any order), one is `¬ C …` with C a head of ``g``'s
     conclusion, one is `¬ P …` with P one of ``g``'s premises (under its own `∀` binders if it has them), and the others,
@@ -2140,7 +2140,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                                  f"commit the record"))
         elif rec["digest"] != h:
             fails.append(Failure("assumptions.digest", a, f"assumptions: {what} changed; run `check.py --update` and commit "
-                                 f"the record (Daniel's DM shows the change when it lands)"))
+                                 f"the record (the landing DM shows the change)"))
     for d, by in sorted(premised.items()):
         if d in assumed:
             continue
@@ -2156,8 +2156,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                                   else "") + ", so it is no alias of listed assumptions, which the lock would not count.")
         fails.append(Failure("assumptions.unlisted-premise", d, f"assumptions: {d} is a premise of "
                              f"{', '.join(sorted(by))}, an assumption the lock doesn't list; run `check.py --update` to "
-                             f"add it with its guarantees' owner and commit the record (Daniel's DM shows it when it "
-                             f"lands), or write {json.dumps(d)}: {json.dumps({'owner': '@lane'} | entry)} under "
+                             f"add it with its guarantees' owner and commit the record (the landing DM shows it), or "
+                             f"write {json.dumps(d)}: {json.dumps({'owner': '@lane'} | entry)} under "
                              f"`assumptions`{'' if mine else ' with the lane that answers for it'}.{parts}"))
     return out, fails
 
@@ -3049,7 +3049,7 @@ def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
 def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
     """With `--dev-cache`, main's verified build of each package ``pkg`` requires by path too (`setup.sh` restores only
     ``pkg``'s): a rebuild of one isn't byte-identical to the published build, so every module above it would compile again
-    (Security/Proofs at the published commit, 21 Oct: 1,607 of its modules). A failed restore leaves those to `lake build`."""
+    (Security/Proofs at the published commit: 1,607 of its modules). A failed restore leaves those to `lake build`."""
     if not DEV_CACHE or rc != 0 or not (deps := path_deps(pkg)):
         return rc, text
     # `cache.py get` unstages from inside each package, so Lake needs that package's dependencies where it looks: a path
@@ -3624,7 +3624,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         log(f"audit: {pkg}/{POLICY}: guarantees and reads rewritten from the build" + (
             f"; {len(notes) - len(must)} lines say the same statements, printed differently, rehashed, moved or lifted"
             if len(notes) > len(must) else "") + (
-            "; these change what a guarantee says, and Daniel is shown them when they land:\n" + "\n".join(f"  {s}" for s in must)
+            "; these change what a guarantee says, and the landing DM shows them:\n" + "\n".join(f"  {s}" for s in must)
             if must else ""))
     elif update and (work / POLICY).read_text() != (pkg / POLICY).read_text():
         dump(pkg, new)
@@ -3953,8 +3953,8 @@ def main(argv: list[str]) -> int:
     failed = by_controls + [str(r["package"]) for r in reports if r["failures"]]
     if changed := [r["package"] for r in reports if r.get("statement_changes")]:
         print(f"audit: guarantees, the definitions they read, or listed compile-time code changed in "
-              f"{', '.join(changed)}: say so in the PR; Daniel gets a DM with the changes above when they land (review.txt in "
-              f"each package's reports)", flush=True)
+              f"{', '.join(changed)}: say so in the PR; the landing DM shows the changes above (review.txt in each "
+              f"package's reports)", flush=True)
     regen = {os.path.relpath(r["package"], a.repo.resolve()): r["regenerated"] for r in reports if r.get("settled")}
     for p, f in regen.items():
         print(f"audit: {p}: every failure is a record difference, settled by {f}, which the train commits over "
