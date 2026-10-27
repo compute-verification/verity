@@ -94,13 +94,14 @@ def test_the_no_fold_step_is_against_the_lines_own_wgmma_linear(tmp_path, capsys
     lines = [json.loads(_fill_line(n, k, True)) for n, k in calls]
     for x in lines:
         x["arms"]["wgl"] = {"ms": 1.2, "mhz": 1980}
+        x["lp"] = 512
     f = tmp_path / "fill-bench-served1-gemm1-rp4.jsonl"
     f.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
     st = h200_step.fill_steps(h200_step.rows([str(f)]), calls=calls)
-    assert st[(256, 4096, 16384, True, "served1-gemm1-rp4")]["s"]["wgl"] == pytest.approx(128 * 1.2e-3)
+    assert st[(512, 4096, 16384, True, "served1-gemm1-rp4")]["s"]["wgl"] == pytest.approx(128 * 1.2e-3)
     monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f)])
     assert h200_step.main() == 0
-    assert ("summary: 8b no-fold served L 4096 L' 256 row 16384 served1-gemm1-rp4: step 0.384 s (ovl_w), gamma_u 2.500 "
+    assert ("summary: 8b no-fold served L 4096 L' 512 row 16384 served1-gemm1-rp4: step 0.384 s (ovl_w), gamma_u 2.500 "
             "against wgmma.linear's 0.154 s (these lines' wgl), gamma_lt 3.000 against cuBLASLt's 0.128 s") in capsys.readouterr().out
 
 
