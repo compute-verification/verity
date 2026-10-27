@@ -1,4 +1,4 @@
-"""`p2_v1/scale.py`'s CPU pieces: its special-form root is `reference.rho`'s, a block it encodes decodes back, and a path it
+"""`p2_v1/scale.py`'s CPU pieces: its special-form root is `reference.rho`'s, a label it encodes decodes back, and a path it
 gathers has log2 B siblings of 64 bytes."""
 from __future__ import annotations
 
