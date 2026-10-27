@@ -4,7 +4,7 @@ import Properties.Challenger
 # Proofs of `Properties.Challenger`
 
 `liveAnswer`: `Live.factors` turns `answer`'s check into `checkAt` at the coins the evidence reads, and `answerAt` runs
-the same decoders. `coinsFromLog`: ONE-4's target from `liveAnswer` and the reader's property `DrawnByDevice`.
+the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the reader's property `DrawnByDevice`.
 `drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement, and
 `roundsByDevice_nontrivial` likewise `RoundsByDevice`'s.
 `oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
