@@ -132,7 +132,7 @@ theorem and in the lock.
 
 Open: `G` is still any accelerator that is the devices at `x` (`OnCard`), not the canonical card-level accelerator
 whose programs are exactly the card's; the witness that `SAKMatmul` and `ShaSpeed` hold at such a `G`, with free
-guesses (RT-LEAN-2 L38), is WORKSOUND-WIT's. A round's commitment reads the oracle, which the card has no instruction
+guesses (RT-LEAN-2 L38), is WORKSOUND-WIT's. A sampling block's commitment reads the oracle, which the card has no instruction
 for (ABSORB-THM's realization, R-ACCEL-7). -/
 def WorkSoundOnCard (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=
   ∀ {ι : Type} (cap : ι → ℕ) (oracle : ℕ) (can : (c.Mem → c.Mem) → ℕ → (c.Mem → Prop) → Prop),

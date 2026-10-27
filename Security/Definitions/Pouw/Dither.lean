@@ -395,7 +395,7 @@ end Prover
 
 /-- **The service's verdict on a period** (RT-LEAN-2 L29): what the verifier accepts, from the oracle, the verifier's
 coins, the transcript (`Prover.transcript`) and the readings `Obs` of the auditor's devices (the network certifier's
-signed counts). It reads no code: the rounds' checks run inside C-Flock's zero-knowledge proofs (`ServiceSound` ties
+signed counts). It reads no code: the sampling blocks' checks run inside C-Flock's zero-knowledge proofs (`ServiceSound` ties
 it to `Prover.Accepted`). -/
 abbrev Verdict (P : RoundProto) (k : ℕ) (Obs : Type) : Type :=
   P.Orc → (Fin k → P.Draw × P.Chk) → (Fin k → P.Inst × P.Root × P.Ans) → Obs → Prop
