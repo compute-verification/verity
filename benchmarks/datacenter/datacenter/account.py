@@ -30,19 +30,19 @@ advice, timing advice, inputs, every refused port-window charged at its link's f
 everything a block out for maintenance held), and the failure probability (the sum of the claims' deltas). Beside the
 covert budget, which is only what goes beyond the committed computation, it reports the export (λ_out, `export_bits`):
 the committed bits that crossed a certified boundary out of a block, by port. They count as novel information read by
-their receivers once the declaration's certifiers cover every link (Daniel, 19 Oct); until then the export is reported
+their receivers once the declaration's certifiers cover every link; until then the export is reported
 as not applicable, with the uncovered links named.
 
 Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW's proved bound (`Profile.ticks`, (1 − ε)
 of the floor program's block-ticks, which no accepted window undercuts over any route) as `compute` on the whole block
 where the scheme gives one, else the honest routing's
 time on each facet (kinds on one facet add up, kinds on different facets run at once) as `compute:<facet>`, on the block as far as attribution places it there and graded by its anchor,
-the rest on the whole datacenter, since PoUW credits the prover system (decision 111); a store's device the bits read from it and the
+the rest on the whole datacenter, since PoUW credits the prover system; a store's device the bits read from it and the
 bit-ticks it held over the interval the claim proves (a snapshot proves an instant, and carries none). `capacity` gives each unit's resources a tick by the
 declaration, and an account whose credits exceed them anywhere (`overcredited`, by `double_credit`, Horn's interval
 test) is unsound. A `Ledger` joins accounts of successive epochs or of overlapping audits, and applies the same rule
 across them (`joint`): one device's time, bandwidth and memory are credited once. Its `custody` is the cumulative check
-on the registered weights (NET-37): the share of them that the epochs' covert budgets, charged exports and a side
+on the registered weights: the share of them that the epochs' covert budgets, charged exports and a side
 channel of σ a server (`DEDICATED_RACKS`) could have carried out.
 """
 from __future__ import annotations
@@ -56,17 +56,16 @@ from .memory import answer_time, fill_rate, into, regen_time
 from .physical import Assumption, Datacenter, Port
 from .time import Interval
 
-#: the premise that no undeclared compute is reachable from a block (compute accounting's option (a))
+#: the premise that no undeclared compute is reachable from a block
 FLEET_CLOSED = Assumption("fleet-closed", 1, "premise", "declared")
-#: compute accounting's salt custody (note:compute-accounting/20261018T0730Z-draft-attrib, unproved): a salt the block's
-#: certifier releases only into it pins the work that depends on it, while k, the bits that could carry it out before
-#: registration, stays at most this many
+#: salt custody (unproved): a salt the block's certifier releases only into it pins the work that depends on it, while
+#: k, the bits that could carry it out before registration, stays at most this many
 SALT_CUSTODY = Assumption("salt-custody", 384, "bits", "declared")
 #: a block's proof blocks counted under the served query (Q_word v1 at X = 16) because no one-stage registration named the
-#: Program's partition (proofs, review 4)
+#: Program's partition
 SERVED_PARTITION = Assumption("served-partition", 1, "premise", "declared")
-#: σ, the side channel from each server to machines off its block, under Daniel's premise (19 Oct 04:30Z) that no
-#: untrusted machine shares a block's rack
+#: σ, the side channel from each server to machines off its block, under the premise that no untrusted
+#: machine shares a block's rack
 DEDICATED_RACKS = Assumption("dedicated-racks", 1e3, "bit/s per server", "declared")
 
 
@@ -144,7 +143,7 @@ class Account:
 
     @property
     def export_charged(self) -> bool:
-        """Whether the export is charged: only once network certifiers cover every link (Daniel, 19 Oct), and not
+        """Whether the export is charged: only once network certifiers cover every link, and not
         applicable while `uncovered` names any."""
         return not self.uncovered
 

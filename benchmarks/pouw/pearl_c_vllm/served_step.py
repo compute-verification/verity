@@ -154,7 +154,6 @@ def _engine(spec_name: str, arm_id: str):
     from verity_bench.vllm.arms import resolve_arms
     from verity_bench.vllm.presets import load_spec, served
     from verity_bench.vllm.runner import _VllmEngine, arm_execution
-    from verity_vllm import settings as vllm_settings
     from verity_vllm.engine.env import INDUCTOR_DIR_MARK
     spec = load_spec(spec_name)
     preset, eager = served(spec.preset, spec.eager)
@@ -162,7 +161,7 @@ def _engine(spec_name: str, arm_id: str):
     arms = resolve_arms(names, spec.arm_modules, {k: v for k, v in spec.arm_settings.items() if k in names})
     arm, reserved = _live(next(x for x in arms if x.id == arm_id))
     preset, eager = arm_execution(arm, preset, eager)
-    if preset.engine_settings.get("serving_defaults") and not vllm_settings.get(INDUCTOR_DIR_MARK):
+    if preset.engine_settings.get("serving_defaults") and not settings.get(INDUCTOR_DIR_MARK):
         import tempfile
         os.environ["TORCHINDUCTOR_CACHE_DIR"] = tempfile.mkdtemp(prefix="served_step_inductor_")
         os.environ[INDUCTOR_DIR_MARK] = "1"
