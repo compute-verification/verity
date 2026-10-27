@@ -1,4 +1,4 @@
-"""Pearl-C's debit, replayed by the verifier on a drawn tile (red team F1): `Pouw.PearlC.Skip` and `Game.lean`'s `debitOf`.
+"""Pearl-C's debit, replayed by the verifier on a drawn tile: `Pouw.PearlC.Skip` and `Game.lean`'s `debitOf`.
 
 * `word_flags(a, b)` is `Skip.wordFlags` over a word's k/32 atoms (a, b: the word's A′ row and B̃ row as E4M3 codes).
   - The chain runs in groups of four atoms (`Params.pi.G`), each from +0, and each group's word is promoted into an FP32

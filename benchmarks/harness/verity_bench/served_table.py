@@ -1,6 +1,6 @@
 """One table of every protocol's served overhead on Llama-3.1-8B, rendered from the evidence store.
 
-PoUW's run of record is kernels' live rows (`LIVE`): each a timed in-process vLLM run whose arm and control the run's own
+PoUW's run of record is its live rows (`LIVE`): each a timed in-process vLLM run whose arm and control the run's own
 `summary.json` and `stop.json` report, standing only when every gate it records passed and its coins were off-node.
 
 Each served row (`PROTOCOLS`) is either a protocol's run of record (`Protocol.record`: run ids, or an art id whose `runs`
@@ -9,7 +9,7 @@ catalog (after pulling the remote's attempts started since the spec was added), 
 older one. A result labelled `superseded_by` is skipped. Ratios are paired by rep from the result's own reps; caveats are
 the `label` and `note` assertions on the result and its run.
 
-Beside a protocol's row of record, `BREAKDOWNS` puts where its time goes by span: `verity_bench.breakdown`'s rows (ms an
+Beside a protocol's run of record, `BREAKDOWNS` puts where its time goes by span: `verity_bench.breakdown`'s rows (ms an
 output token, not ratios) at each run its record names.
 """
 
@@ -38,7 +38,7 @@ SUPERSEDED_BY = "superseded_by"
 POINT_TOOL = "vllm_bench_point"
 
 # Validation comes from result.json alone; rc 0 rules out a run killed after writing it, and a dirty tree ran code its
-# commit doesn't name (jobs.PASS_QUERY's rule, keyed here by spec and point rather than by one commit's identity).
+# commit doesn't name (jobs.StoreCompletion's rule, keyed here by spec and point rather than by one commit's identity).
 PASSING = """
 SELECT a.id, o.artifact, a.source_commit
 FROM attempts a
@@ -68,7 +68,7 @@ class Protocol:
 @dataclass(frozen=True)
 class Live:
     """A live PoUW row: `arm`'s decode step over `control`'s, timed in run `run` on `device`, read from the
-    `summary.json` and `stop.json` under `out` in the run's record (kernels' `hb_sbench.py`/`sbench.sh` layout)."""
+    `summary.json` and `stop.json` under `out` in the run's record (`hb_sbench.py`/`sbench.sh`'s layout)."""
 
     device: str
     run: str
@@ -78,23 +78,25 @@ class Live:
 
 
 PROTOCOLS = (
-    Protocol("Pearl-C served (cross-check; #3410, #3459)",
+    Protocol("Pearl-C served (cross-check)",
              ("llama31-8b-1gpu-pouw-protocol-served", "llama31-8b-1gpu-pouw-protocol-served-b32"),
              "pouw:pearl-c-sm120-v1-h3", "stock-fp8"),
     Protocol("Pearl-C whole-step (cross-check)", (), "pouw-pearl-c-whole", "stock-fp8",
              record=("art:271004b42aaab49fe04df9b65a831cc7592fc21997c29c3acf1c8ca6082c33db",)),
     # The bandwidth specs run every arm but the compiled one on decode-only CUDA graphs: no eager stock.
-    Protocol("PoUS bandwidth audit (#3847)", (), "bandwidth-audit", None,
+    Protocol("PoUS bandwidth audit", (), "bandwidth-audit", None,
              record=("art:953934e2c78a694c2156e8547fd3c4487f2ca77cec6ff006463bff8cdac67290",)),
-    # art:33b8cc62's three results (#3817); its meta names no runs.
-    Protocol("Commit (#3817)", (), "commit@compiled", None,
-             record=("r20261024-172755-61f0", "r20261024-172748-dd9d", "r20261024-172623-d8fe")),
-    # art:a94655c4's quiet runs at 595cce6dda (#3939): the served spec's b8 and b32, then the H1 spec's.
+    # The width spec's b1, b8 and b32 on an RTX PRO 6000, then the -h200 spec's on an H200 and the -b200 spec's on a B200.
+    Protocol("Commit", (), "commit@compiled", None,
+             record=("r20261024-172755-61f0", "r20261024-172748-dd9d", "r20261024-172623-d8fe",
+                     "r20261027-095337-40f1", "r20261027-095351-7f90", "r20261027-095354-9af9",
+                     "r20261027-061530-0f1c", "r20261027-061540-c4f3", "r20261027-061543-2056")),
+    # The served spec's b8 and b32, then the H1 spec's.
     Protocol("H1 served, GPU commit path (cost only, in-process coins)", (), "pouw:eps1-sm120-h1fx1", "stock-int8",
              record=("r20261025-113633-fd71", "r20261025-113621-0c4a", "r20261025-113639-775f",
                      "r20261025-113628-088d")),
 )
-# The factor that restates a ratio over batch-invariant eager stock as one over stock as served (#3409's factor table).
+# The factor that restates a ratio over batch-invariant eager stock as one over stock as served.
 FACTORS = Protocol("conversion factor", (), SERVED, "stock-fp8",
                    record=("art:837392ce4529748dd033843d048ed97d176d7640aa31a90281ccd7c2dd4e77b6",))
 
@@ -117,7 +119,7 @@ class Breakdown:
 
 
 BREAKDOWNS = (
-    Breakdown("PoUS bandwidth audit (#3847)",
+    Breakdown("PoUS bandwidth audit",
               ("art:b95a662684a8d62181a763e2bcd6fd39003cfd8dd2b40b8d2733f3df45a4f5ed",)),
 )
 
@@ -152,6 +154,7 @@ class Found:
     reps: int
     point: Mapping[str, Any]
     caveats: list[dict[str, Any]]
+    device: str | None = None
 
 
 def _labels(store: Any, targets: Sequence[str], pull: bool) -> list[dict[str, Any]]:
@@ -190,7 +193,8 @@ def _judge(store: Any, run: str, art: str, commit: str, arms: Sequence[str], pul
         if absent := [arm for arm in arms if arm not in row["arms"]]:
             return [], f"no timed {', '.join(absent)} at {row['point']['id']}"
     caveats = [label for label in labels if label["key"] in CAVEAT_KEYS]
-    return [Found(run, art, commit, int(doc["execution"]["reps"]), row, caveats) for row in rows], None
+    device = doc["identity"].get("gpu")
+    return [Found(run, art, commit, int(doc["execution"]["reps"]), row, caveats, device) for row in rows], None
 
 
 def _newest(store: Any, spec: str, point: str, arms: Sequence[str], pull: bool,
@@ -276,10 +280,10 @@ def _points(protocol: Protocol, pull: bool, store: Any,
 
 def _source(spec: str, point: str, found: Found | None, record: str | None) -> dict[str, Any]:
     if found is None:
-        return {"spec": spec, "point": point, "run": None, "art": None, "commit": None, "reps": None, "caveats": [],
-                "record": record}
-    return {"spec": spec, "point": point, "run": found.run, "art": found.art, "commit": found.commit,
-            "reps": found.reps, "caveats": found.caveats, "record": record}
+        return {"spec": spec, "point": point, "device": None, "run": None, "art": None, "commit": None, "reps": None,
+                "caveats": [], "record": record}
+    return {"spec": spec, "point": point, "device": found.device, "run": found.run, "art": found.art,
+            "commit": found.commit, "reps": found.reps, "caveats": found.caveats, "record": record}
 
 
 def _over(point: Mapping[str, Any], arm: str, over: str | None, metric: str) -> dict[str, Any] | None:
@@ -430,7 +434,7 @@ def build(*, store: Any = None, root: Path | None = None, local_only: bool = Fal
           added: Callable[[str], int] | None = None, log: Callable[[str], None] | None = None,
           protocols: Sequence[Protocol] | None = None, factors: Protocol | None = None,
           live: Sequence[Live] | None = None, breakdowns: Sequence[Breakdown] | None = None) -> dict[str, Any]:
-    """`collect` after pulling the remote's attempts started since the oldest spec without a record was added (#3406's
+    """`collect` after pulling the remote's attempts started since the oldest spec without a record was added (`check`'s
     pull), unless `local_only`. A run of record is read by id, from the remote where this machine lacks it."""
 
     protocols = PROTOCOLS if protocols is None else protocols
@@ -521,7 +525,7 @@ def render(table: Mapping[str, Any]) -> str:
     lines = [
         "# Served overhead on Llama-3.1-8B",
         "",
-        "## PoUW: run of record (kernels' live rows)",
+        "## PoUW: run of record (live rows)",
         "",
         "Each row is one in-process vLLM run on one GPU: Llama-3.1-8B int8 (the verity-int8 pin), every engine on "
         "vLLM's defaults (torch.compile, CUDA graphs), prefix caching off, decode at batch B with max_num_batched_tokens "
@@ -546,23 +550,26 @@ def render(table: Mapping[str, Any]) -> str:
     lines += [f"- {row['device']} (`{row['run']}`): `{row['arm']}`; {_cell(row['form'])}" for row in table["live"]]
     lines += [
         "",
-        "## Served rows on one RTX PRO 6000 (`vllm_bench_point`)",
+        "## Served rows, one GPU each (`vllm_bench_point`)",
         "",
+        "The device is the GPU the run's engines saw (the result's `identity.gpu`); a ratio's arm and stock ran on it in "
+        "the same run. "
         f"Ratios are a protocol's arm over `{table['served_stock']}` (stock FP8 as vLLM serves it), paired by rep: mean "
         "± 95% half-width (Student t), or the mean alone at one rep; lower is better. A row is its protocol's run of "
         "record (the art or runs `PROTOCOLS` names) or, without one, the newest passing run of its spec and point in "
         "the evidence store; a result labelled `superseded_by` is skipped. The caveat is the newest `label` and `note` "
         "on the result and its run.",
         "",
-        "| protocol | spec | point | / served stock, per output token | / served stock, per decode token "
+        "| protocol | device | spec | point | / served stock, per output token | / served stock, per decode token "
         "| / eager stock, per output token | reps | run | art | caveat |",
-        "|---|---|---|---:|---:|---:|---:|---|---|---|",
+        "|---|---|---|---|---:|---:|---:|---:|---|---|---|",
     ]
     for row in rows:
         eager = _ratio(row["over_eager"][PER_OUTPUT]) if row["over_eager"] else "—"
         served = row["over_served"] or {}
-        lines.append("| " + " | ".join([row["protocol"], f"`{row['spec']}`", row["point"], _ratio(served.get(PER_OUTPUT)),
-                                        _ratio(served.get(PER_DECODE)), eager, *_sources(row)]) + " |")
+        lines.append("| " + " | ".join([row["protocol"], row["device"] or "—", f"`{row['spec']}`", row["point"],
+                                        _ratio(served.get(PER_OUTPUT)), _ratio(served.get(PER_DECODE)), eager,
+                                        *_sources(row)]) + " |")
     lines += ["", "Arms:", ""]
     seen = set()
     for row in rows:

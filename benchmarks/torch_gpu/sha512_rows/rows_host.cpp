@@ -1,6 +1,6 @@
 // The kernels' host twin (rows.cu's extern "C" calls, one loop a kernel, on host memory), built by engine.host_lib with the
 // system C++ compiler: what the CPU tests hold to the reference. The stream and variant arguments are ignored. It counts what
-// it hashes (sxr_counts): compressions, those of them over a constant schedule (C::kw), and ChaCha20 blocks.
+// it hashes (sxr_counts): compressions, those of them over a constant schedule (C::kw), and ChaCha20 chunks.
 #include <cstdint>
 
 namespace {
