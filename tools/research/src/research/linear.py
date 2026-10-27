@@ -142,12 +142,14 @@ def _input(**given: tuple[str, str | None]) -> dict:
         if v is None:
             continue
         if k in DATES:
-            try:
-                ok = v.lower() == "none" or bool(DUE_RE.fullmatch(v) and datetime.strptime(v, "%Y-%m-%d"))
-            except ValueError:
-                ok = False
-            if not ok:
-                raise LinearError(f"{flag} {v!r}: give a date as YYYY-MM-DD, or `none` to clear it")
+            bad = f"{flag} {v!r}: give a date as YYYY-MM-DD, or `none` to clear it"
+            if v.lower() != "none":
+                if not DUE_RE.fullmatch(v):
+                    raise LinearError(bad)
+                try:
+                    datetime.strptime(v, "%Y-%m-%d")
+                except ValueError:
+                    raise LinearError(bad) from None
             out[k] = None if v.lower() == "none" else v
         elif k in TEXTS:
             if not v.strip():
