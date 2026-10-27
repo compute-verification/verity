@@ -47,13 +47,13 @@ class Example:
     name: str
     data: dict | None       # example.toml, or None when it is missing or doesn't parse (`error`)
     error: str = ""
-    runner: str = ""        # run.py or run.sh, what `verity example NAME` runs
+    runner: str = ""        # config.toml (`verity run`), run.py or run.sh, what `verity example NAME` runs
 
 
 def examples(root: Path) -> list[Example]:
     out = []
     for d in sorted(p for p in (root / "examples").iterdir() if p.is_dir() and not p.name.startswith((".", "_"))):
-        runner = next((r for r in ("run.py", "run.sh") if (d / r).is_file()), "")
+        runner = next((r for r in ("config.toml", "run.py", "run.sh") if (d / r).is_file()), "")
         f = d / "example.toml"
         if not f.is_file():
             out.append(Example(d.name, None, f"no example.toml: add one ({SCHEMA})", runner))
