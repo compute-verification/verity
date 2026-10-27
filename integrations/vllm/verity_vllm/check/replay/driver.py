@@ -40,7 +40,6 @@ PROTOCOL SUMMARY (Commit stage: local replay (`C2`) of record = sampled exact VU
     request-relative steps >= n_exec leave the pool into a NAMED class before any draw; a request linked over fewer steps than its
     cap must end on a declared EOS id at steps[-1 - lag] (undeclared EOS / unattested lag = unlinked by name); weights_check.equal
     False fails the replay by name.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 
 The check runs here; its steps live beside it: `index` (the Program rows), `population` and `coverage` (what may be sampled
 and what the query population names), `sample` (the stratified draw and its seed), `opening` (committed words by
@@ -158,7 +157,7 @@ _FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormTriton_v5": ("rms",), "RMS
                 # [R17 dense, ruling R17-11] the attention rows' softmax reads the measured MUFU.EX2 / MUFU.RCP tables: loaded in the parent
                 "Attention_v3": ("fa2",), "Attention_v2": ("fa2",), "Attention_v4": ("fa2",), "Attention_v5": ("fa2",), "Attention_v18": ("fa2",),
                 "AttentionSoftcap_v2": ("fa2",),
-                # [MAN-06f v3 unit 2] the router's NvExpf reads the measured MUFU.EX2 table (fa2 tables, ~1.5 s to load): loaded in the parent
+                # the router's NvExpf reads the measured MUFU.EX2 table (fa2 tables, ~1.5 s to load): loaded in the parent
                 "MoeRouterTopK_v1": ("fa2",), "MoeRouterTopKNorm_v1": ("fa2",),
                 "MoeRouterTopKOrdered_v1": ("fa2",), "MoeRouterTopKOrderedNorm_v1": ("fa2",), "MoeExpertGemm_v1": (), "MoeExpertGemmW_v1": (), "MoeExpertGemm_v2": (),
                 "MoeExpertGemmW_v2": (), "MoeSum_v1": ()}

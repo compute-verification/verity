@@ -13,7 +13,7 @@ NOT_YET exclusions (RoPE_v1 no evaluator, Attention_v3 state-linked) are the R15
 
 [R16 rev F-r16-07 / M-0068; report M-0059 (2)] refinement: form (B) compares the Match record's dispatcher-level module outputs and has NO
 oracle family for the moe/ block-stream planes (oracle_compare.NO_ORACLE_FAMILY_PREFIXES), so a complete (B) covers an interior-composed
-(MAN-06g) gap -- the module's returned tensor IS an instance output -- but never a PLANE-FED (MAN-06f) one, whose committed members are the
+gap -- the module's returned tensor IS an instance output -- but never a PLANE-FED one, whose committed members are the
 planes: those VUs are value-checked by neither form and the verdict FAILs by that name whatever form (B) says (C1 + C3 hold on them)."""
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def test_named_population_exclusions_without_form_b_do_not_pass_f_r16_02(b):
 
 @pytest.mark.parametrize("b", [1, 2])
 def test_interior_composed_exclusions_with_complete_form_b_pass_carrying_the_gap_f_r16_02(b):
-    """MAN-06g (Qwen2.5 BiasAdd over Gemm_v2): the module output IS an instance output form (B) compares -> a complete (B) covers the gap."""
+    """Interior-composed (Qwen2.5 BiasAdd over Gemm_v2): the module output IS an instance output form (B) compares -> a complete (B) covers the gap."""
     ok, why = commit_verdict({**BASE, "binding": _bnd(b), "sampled_replay": SR_COMPLETE_INTERIOR_ONLY, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
     assert ok and why.startswith("PASS (C2 of record by form (B) [oracle compare complete: 3 compared, 0 mismatch, instance outputs 2] over 140 VUs not evaluable by name"), (b, ok, why)
     assert "MAN-06g" in why and "interior-composed-v2" in why and "140" in why and "MAN-06f" not in why and "plane" not in why

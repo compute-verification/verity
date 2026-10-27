@@ -41,7 +41,6 @@ PROTOCOL SUMMARY (Match stage, B>1: the per-request decomposition of the batched
     request's prompt or node is XREQ and fails the sweep row; a request is compared at (LP_r, T_r) = (its prompt length, its served decode
     steps), never at the row envelope; the operand counts are the positional comparison, the verdict follows --within-step (dag of
     record; sequence recorded beside it).  Inside GM-01 (MATCH_PIPELINE=shared) the same decompose() writes this document via --decomp-out.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 from __future__ import annotations

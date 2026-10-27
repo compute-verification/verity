@@ -201,7 +201,7 @@ class Honest:
             got = EV.evaluate(fam, d["statics"], inputs, wsl)
             if len(got) > 1:                                            # the relation's ports under their committed members, as the replay reads them
                 got = EV.by_member(got, pi.member_of_port(r["i"]))
-            if d.get("plane") and d["plane"] not in got and len(got) == 1:  # [MAN-06f v3] the act SiluMul's `out` IS its plane
+            if d.get("plane") and d["plane"] not in got and len(got) == 1:  # the act SiluMul's `out` IS its plane
                 got = {d["plane"]: next(iter(got.values()))}
             if not d["members"]:                                        # interior row (pre-bias Gemm): value flows on, nothing is committed
                 self.values[(rid, r["i"])] = np.asarray(next(iter(got.values()))).reshape(-1).astype(np.uint16)
@@ -485,7 +485,7 @@ def test_verdict_c2_of_record_replay_plus_linkage_replaces_the_oracle_gate_at_b2
     ok_sr = {"result": True, "grade": "complete", "why": None}
     ok_lk = {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0}
     ok_wp = {"result": True, "compared": 98, "mismatched": [], "missing": []}
-    base["weights_pin"] = ok_wp                                                           # [MAN-09] the checkpoint pin is part of the record
+    base["weights_pin"] = ok_wp                                                           # the checkpoint pin is part of the record
     ok_, why_ = commit_verdict({**base, "binding": _bnd(2), "sampled_replay": ok_sr, "boundary_linkage": ok_lk}, True, min_openings=64)
     assert ok_ is True and why_.startswith("PASS (B=2: per-(step,request) attribution not verified on this record"), why_   # [rev M-0243] PASS, gap named
     # mismatch: named
@@ -1393,7 +1393,7 @@ def test_device_retained_store_is_replayed_serially_and_a_child_device_fault_fal
     assert strip(ser) == strip(rep3)
 
 
-# ------------------------------------------------------------------------------------------------ [MAN-06f v3] fused-MoE planes
+# ------------------------------------------------------------------------------------------------------------- fused-MoE planes
 E_MOE, TOPK, VPT = 16, 2, 8               # experts, routed slots, values per router thread (E/VPT = 2 threads -> a real xor butterfly)
 
 
@@ -1541,7 +1541,7 @@ def _plane_word(store, entries, rid, step, plane, elem, flip=0x0080, op_path="mo
 
 
 def test_moe_plane_faults_fail_named_at_the_pair_or_token(moe_world):
-    """[MAN-06f v3 negatives] a flipped committed word of one plane is caught BY NAME at its pair / token: an act word (the SiluMul@experts VU
+    """A flipped committed word of one plane is caught BY NAME at its pair / token: an act word (the SiluMul@experts VU
     of that pair and the down row that reads it), a sum word (the MoeSum VU of that token and the fused norm that reads it), an up word (the
     act VU whose input it is and the up VU that produced it), a router id (the router VU and every expert row of that slot); a flipped word
     of r1's plane never fails an r0 VU (the per-request plane split).  The MoeSum is the experts module's returned tensor `out` with the sum
@@ -1591,7 +1591,7 @@ def test_moe_plane_alias_check_is_a_fact_of_the_record_honest_true_aliased_false
     """[FLUSH-03 fact of record; rev M-0494 (3)] the replay record states, per (request, step, MoE layer), that the committed up plane is
     not the committed down plane's bytes: honest world -> result True over every triple with both planes; the pre-FLUSH-03 alias replayed on
     one request's step -> result False naming that (request, step, layer) while the other request's triple still differs; a dense Program
-    (no moe/L<k> planes) -> None with 0 compared.  The aliased plane is also caught by the MAN-06f v3 relation (mismatch by name) -- the check
+    (no moe/L<k> planes) -> None with 0 compared.  The aliased plane is also caught by the plane relation (mismatch by name) -- the check
     is the direct fact beside it, not a second gate."""
     w = moe_world
     bmap, committed = w.bmap_and_reader()
@@ -1614,8 +1614,8 @@ def test_moe_plane_alias_check_is_a_fact_of_the_record_honest_true_aliased_false
 
 
 def test_moe_swapped_request_plane_split_fails_named(moe_world):
-    """[MAN-06f v3 negatives; binding.py MOE-B2] the binding's per-request plane split is what the mapping reads through: r1's `up` entry
-    pointed at r0's rows (the pre-MOE-B2 'whole plane to every request' shape) makes r1's act VUs read another request's up words ->
+    """The binding's per-request plane split is what the mapping reads through: r1's `up` entry
+    pointed at r0's rows (the older 'whole plane to every request' shape) makes r1's act VUs read another request's up words ->
     F_V != committed act, named at r1's pairs; r0 stays exact."""
     w = moe_world
 
@@ -1663,7 +1663,7 @@ def test_moe_planes_carrying_r0_rows_only_bound_whole_to_r1_fail_the_replay(moe_
 
 
 def test_moe_plane_mapping_refuses_a_program_that_is_not_pair_major(moe_world):
-    """[MAN-06f v3] the row -> plane mapping is checked against the Program, never guessed: an up row whose `[p]` name disagrees with its
+    """The row -> plane mapping is checked against the Program, never guessed: an up row whose `[p]` name disagrees with its
     Program-order ordinal, or whose args do not read router slot p % TOPK, is NAMED as a mapping failure (class `mapping`, never carried on
     a PASS) and removed from the evaluable population -- no plane word of another pair is ever read.  A dense Program has no MoE rows and
     its population is untouched."""
@@ -1987,8 +1987,8 @@ def test_population_stamps_on_every_reason_the_code_its_text_decodes_to(moe_worl
     from verity_vllm.check.replay import replay_codes as RC
 
     monkeypatch.delitem(RK.EVALUATORS, "RMSNormFusedCuda_v2")                  # direct no-evaluator gaps
-    monkeypatch.delitem(RK.EVALUATORS, "MoeRouterTopK_v1")                     # a plane producer without an evaluator (MAN-06f)
-    monkeypatch.delitem(RK.EVALUATORS, "Gemm_v1")                              # BiasAdd over an interior Gemm (MAN-06g) + direct Gemm gaps
+    monkeypatch.delitem(RK.EVALUATORS, "MoeRouterTopK_v1")                     # a plane producer without an evaluator (plane-fed)
+    monkeypatch.delitem(RK.EVALUATORS, "Gemm_v1")                              # BiasAdd over an interior Gemm (interior-composed) + direct Gemm gaps
     monkeypatch.setitem(RC.NOT_YET, "TokenSelect_v1", "not replayed by this version (test label)")     # the stated domain
     rows = [dict(r) for r in moe_world.inst["rows"]]
     ups = [k for k, r in enumerate(rows) if r["spec"].startswith("MoeExpertGemm_v1")][:2]

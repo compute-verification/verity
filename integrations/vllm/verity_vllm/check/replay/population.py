@@ -134,9 +134,9 @@ def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict
 
 
 def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int = 0) -> set[str]:
-    """[MAN-06g] the INTERIOR producers this row's VU would have to compose that
+    """The INTERIOR producers this row's VU would have to compose that
     this replay cannot evaluate: an `['n', producer, lo, hi]` input whose producer row claims no committed member (interior: the pre-bias
-    Gemm under a BiasAdd, MAN-07) and whose family has no registered evaluator (Gemm_v2 on Hopper / batch-invariant Ada Programs), or a
+    Gemm under a BiasAdd) and whose family has no registered evaluator (Gemm_v2 on Hopper / batch-invariant Ada Programs), or a
     composable interior whose own inputs have that defect (bounded by INTERIOR_DEPTH).  Derived from the Program rows alone (families +
     member claims), never from the collector's emissions.  Empty when every interior input composes (Gemm_v1 under BiasAdd_v1)."""
     out: set[str] = set()
@@ -222,7 +222,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
             continue
         d = pi.describe(r)
         if d is not None and d.get("plane_error"):
-            # [MAN-06f v3] a fused-MoE layer row whose row -> plane slice mapping the Program does not support (inconsistent geometry, an
+            # a fused-MoE layer row whose row -> plane slice mapping the Program does not support (inconsistent geometry, an
             # ordinal outside the plane, a name index that disagrees with Program order): NAMED, class `mapping` -- a fault of the record's
             # Program shape, never a guess at another pair's words and never carried on a PASS.
             _not_ev(f"MoE plane row -> plane slice mapping failed: {d['plane_error']}", "mapping", fam)
@@ -235,7 +235,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
             elif not d["members"]:
                 not_ev_fam[f"{fam} (structure / interior: no identity)"] += 1        # Const*, BiasAdd, ...: counted, no relation to replay
             elif d.get("plane"):
-                # [MAN-06f v3 unit 1] a plane PRODUCER (router / expert GEMM / sum) whose relation has no evaluator in this version: its
+                # a plane PRODUCER (router / expert GEMM / sum) whose relation has no evaluator in this version: its
                 # plane IS read -- as the committed input of the rows it feeds (up -> the act SiluMul, sum -> the next fused norm) -- but
                 # the plane's own production is not re-evaluated.  Named under the moe_block_stream class so the verdict's (B)-conditioned
                 # population-gap rule keeps gating it until the evaluator lands (unit 2), never a silent 'no evaluator' domain exclusion.

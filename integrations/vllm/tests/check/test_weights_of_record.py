@@ -150,7 +150,7 @@ def test_record_is_derived_from_the_pinned_shards_and_names_every_field(checkpoi
     assert rec["complete"] is True and rec["unresolved"] == []
     assert rec["checkpoint"]["all_shards_pinned"] is True
     assert rec["checkpoint"]["shards"]["model.safetensors"]["pinned"] is True
-    assert rec["n_fields"] == len(fields) and rec["n_pinned"] == len(fields)               # [MAN-09c] the kv scale is pinned as the engine constant
+    assert rec["n_fields"] == len(fields) and rec["n_pinned"] == len(fields)               # the kv scale is pinned as the engine constant
     assert rec["unpinned"] == [] and rec["engine_assumptions"] == {"kv_cache_dtype": "auto"}
     by = {f["field"]: f for f in rec["fields"]}
     assert by["model.model.layers.0.self_attn.attn._k_scale"]["rule"].startswith("engine constant: kv-cache scale == f32 1.0")
@@ -187,7 +187,7 @@ def test_honest_served_model_passes_and_one_flipped_element_fails_by_name(checkp
     del short["model.layers.1.mlp.experts.w2_weight"]
     res2 = WR.check(rec, live_digests(short))
     assert res2["result"] is False and res2["missing"] == ["model.model.layers.1.mlp.experts.w2_weight"]
-    # [MAN-09c] a served kv scale that is not the engine constant 1.0 (a quantized cache's scale, or a tampered one) fails by name
+    # a served kv scale that is not the engine constant 1.0 (a quantized cache's scale, or a tampered one) fails by name
     sc = dict(served)
     sc["model.layers.0.self_attn.attn._k_scale"] = np.float32(0.5).reshape(()).view(np.uint32)
     res3 = WR.check(rec, live_digests(sc))
@@ -300,7 +300,7 @@ def test_fp8_kv_scale_loader_placeholders_are_pinned_as_the_sentinel_unless_the_
     placeholders (Fp8KVCacheMethod.create_weights: KVCacheScaleParameter = f32 -1.0; never written and read by no kernel with the kv
     cache unquantized) beside the `_k_scale` engine constants.  Qwen3-4B-FP8 B1 on cp-h100 (07:57Z): 144 such fields -> 'no checkpoint
     tensor and no composition rule' -> weights of record incomplete -> Commit FAIL by name, although every one of the 434 checkpoint-
-    backed fields (e4m3 weights, f32 weight_scale_inv, norms, embeddings) compared equal.  MAN-09c rule: pinned EXACTLY as the sentinel
+    backed fields (e4m3 weights, f32 weight_scale_inv, norms, embeddings) compared equal.  The rule: pinned EXACTLY as the sentinel
     under kv_cache_dtype auto; a served value other than -1.0 FAILS by name; a checkpoint that DOES ship a kv scale of that name is
     pinned 1:1 from the checkpoint (the `not ck.has(live)` guard); another kv_cache_dtype leaves them unpinned by name."""
     d, man, t = checkpoint
@@ -490,7 +490,7 @@ def test_f_r16_21_a_kv_scale_the_checkpoint_ships_under_a_remapped_name_is_pinne
     # the same rule under a quantized kv cache: the shipped scales are pinned from their source (the remap-aware compose rev M-0516 names
     # as the remedy for the half-cell), the sourceless placeholders unpinned BY NAME (fp8 621a31fe8; never assumed)
     recq = WR.weights_of_record(prog, ck, prefix=PREFIX, kv_cache_dtype="fp8_e4m3")
-    assert recq["complete"] is True and set(recq["unpinned"]) == {L + "q_scale", L + "prob_scale", L + "_k_scale"}   # _k_scale: MAN-09c's own non-auto rule
+    assert recq["complete"] is True and set(recq["unpinned"]) == {L + "q_scale", L + "prob_scale", L + "_k_scale"}   # _k_scale: the engine constants' own non-auto rule
     byq = {f["field"]: f for f in recq["fields"]}
     assert byq[L + "k_scale"]["pinned"] is True and byq[L + "v_scale"]["pinned"] is True and "kv_cache_dtype=fp8_e4m3" in byq[L + "q_scale"]["why"]
     # (2) modelopt: k_proj.output_scale; legacy fused kv_scale feeds BOTH k and v
@@ -599,7 +599,7 @@ def test_a_served_build_is_pinned_by_its_weight_reads(checkpoint):
 
 
 def test_gemma_normalizer_is_composed_from_config_and_compared_like_a_weight(checkpoint):
-    """dense (MAN-09 preflight on the real Gemma-2-2B Program, 316 fields): `model.model.normalizer` -- vLLM's non-persistent 0-d bf16
+    """dense (the weights-pin preflight on the real Gemma-2-2B Program, 316 fields): `model.model.normalizer` -- vLLM's non-persistent 0-d bf16
     buffer torch.tensor(hidden_size ** 0.5) -- has no checkpoint tensor and was the ONE unresolved field (complete False -> every Gemma
     Commit would FAIL 'weights of record' closed).  Rule: composed from config.json's hidden_size by the frozen analytic rule
     (root_policy ANALYTIC_TABLES['normalizer'] / analytic.normalizer_word: sqrt(H) rounded once to bf16), pinned and compared."""
