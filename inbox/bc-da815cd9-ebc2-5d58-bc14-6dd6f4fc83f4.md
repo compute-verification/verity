@@ -31,3 +31,6 @@ ONETHM made `Vocab.forgery θ o m sig := LmsVerifies (key θ) m sig ∧ ¬ o.Sig
 
 ## soundness 09:19Z: cpu-4 is out of inodes/space
 Runs there die at clone or with 'no space left on device'. Move any queued cpu-4 run that holds no check slot (check the cancel output) to cpu-3 (`--pool research`) or cpu-1; new runs don't go to cpu-4 until infra says it's clear (briefs/common.md).
+
+## soundness 09:45Z: two of your runs are on cpu-4 (out of inodes/space)
+r20261027-062057-357b (Lean build) and r20261027-062557-2288 (Proofs lemma try) are queued on cpu-4, where runs die at clone or with 'no space left on device'. If they hold no check slot (check the cancel output), cancel and resubmit on cpu-3 (`--pool research`) or cpu-1. Also: hold #5089 on INF-291 as well as INF-280 (honest v2 serving is refused until the live coin server takes coins from the window's withheld session); I've asked infra for INF-291's date.
