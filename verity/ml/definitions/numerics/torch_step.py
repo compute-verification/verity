@@ -1,5 +1,5 @@
 """numpy models of `registry.torch_step`'s own nodes, as `program_walk` calls them (`program_walk.Model`): F.linear's three
-GEMMs along the routes `cublas_bf16.train_route` names (`bf16_gemm_check.cublas_route_rows`), `torch_train`'s transpose, RMSNorm
+GEMMs along their ROUTE static (`bf16_gemm_check.cublas_route_rows`), `torch_train`'s transpose, RMSNorm
 forward, backward and weight gradient and SiLU forward and backward, the residual stream's bf16 add and multiply, and the
 optimizer's widening, AdamW step and bf16 copy, each in its kernel's order on bf16 (u16) and f32 (u32) words, with
 `torch_kernels`' NaNs and roundings.
@@ -16,7 +16,6 @@ import numpy as np
 
 from verity.ml.circuits.ops import mufu as MU
 from verity.ml.definitions.registry import bf16_gemm_check as GC
-from verity.ml.definitions.registry import cublas_bf16 as CB
 from verity.ml.definitions.registry import torch_train as TT
 
 from . import torch_blocks as TB
@@ -35,10 +34,10 @@ def _family(f: Any) -> str:
     return getattr(f, "base_id", None) or f.id
 
 
-def linear(role: str, M: int, K: int, N: int, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """F.linear's ``role`` GEMM at x (M, K), W (N, K) (`cublas_bf16.train_linear`): each row of a against the rows of b, along
-    the captured route; bf16 words (a's rows, b's rows)."""
-    return GC.cublas_route_rows(CB.train_route(role, M, K, N), a, b)
+def linear(route: dict[str, Any], a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """One of F.linear's GEMMs along ``route`` (`cublas_bf16.route_gemm`, `cublas_bf16.train_route` at the root's shapes): each
+    row of a against the rows of b; bf16 words (a's rows, b's rows)."""
+    return GC.cublas_route_rows(dict(route), a, b)
 
 
 def row_sum(p: np.ndarray, lanes: int) -> np.ndarray:
@@ -188,16 +187,14 @@ def _silu_backward(S: dict, dy, x):
     return silu_backward(dy, x, bool(S["CONTRACT"]))
 
 
-def _linear(role: str) -> Callable[..., np.ndarray]:
-    def model(S: dict, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-        return np.stack([linear(role, int(S["M"]), int(S["K"]), int(S["N"]), a[m], b[m]) for m in range(a.shape[0])])
-    return model
+def _linear(S: dict, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return np.stack([linear(S["ROUTE"], a[m], b[m]) for m in range(a.shape[0])])
 
 
 MODELS: dict[str, Callable[..., Any]] = {
-    "LinearTorch_v1": _linear("fwd"),
-    "LinearTorchDx_v1": _linear("dX"),
-    "LinearTorchDw_v1": _linear("dW"),
+    "LinearTorch_v1": _linear,
+    "LinearTorchDx_v1": _linear,
+    "LinearTorchDw_v1": _linear,
     "Transpose_v1": lambda S, x: np.ascontiguousarray(np.swapaxes(x, 1, 2)),
     "RmsNormTorch_v1": _rms,
     "RmsNormTorchBackward_v1": lambda S, dy, x, w, r: rms_backward(dy, x, w, r, int(S["LANES"])),

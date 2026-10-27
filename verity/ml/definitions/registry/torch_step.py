@@ -4,21 +4,22 @@ Llama decoder with a tied embedding, eager attention and the causal-LM cross-ent
 576, 9 query heads on 3 KV heads of 64, MLP 1536, vocabulary 49152), then the gradient clip and the optimizer step. Every node
 of its body is one call or batch of a training Definition on bits.
 
-    LinearTorch_v1{M, K, N}     (x: Array<M, Array<K, BF16>>, w: Array<N, Array<K, BF16>>) -> Array<M, Array<N, BF16>>
-    LinearTorchDx_v1{M, K, N}   (dy: Array<M, Array<N, BF16>>, wt: Array<K, Array<N, BF16>>) -> Array<M, Array<K, BF16>>
-    LinearTorchDw_v1{M, K, N}   (dyt: Array<N, Array<M, BF16>>, xt: Array<K, Array<M, BF16>>) -> Array<N, Array<K, BF16>>
-    TrainStep_v1{L, B, S}       (ids, labels: Array<M, U32>, n: Array<S, U16> of kind position, cs: Array<S, Array<D, BF16>>,
-                                 each weight W.w (bf16), then each weight's W.master, W.exp_avg, W.exp_avg_sq (f32, its
-                                 shape), step: F32, lr, beta1, beta2, eps, wd, max_norm: F64)
-                                -> Tuple<loss: F32, total_norm: BF16, step: F32, ok: BIT, then each weight's new
-                                         (W.w, W.master, W.exp_avg, W.exp_avg_sq)>
+    LinearTorch_v1{M, K, N, ROUTE}     (x: Array<M, Array<K, BF16>>, w: Array<N, Array<K, BF16>>) -> Array<M, Array<N, BF16>>
+    LinearTorchDx_v1{M, K, N, ROUTE}   (dy: Array<M, Array<N, BF16>>, wt: Array<K, Array<N, BF16>>) -> Array<M, Array<K, BF16>>
+    LinearTorchDw_v1{M, K, N, ROUTE}   (dyt: Array<N, Array<M, BF16>>, xt: Array<K, Array<M, BF16>>) -> Array<N, Array<K, BF16>>
+    TrainStep_v1{L, B, S}              (ids, labels: Array<M, U32>, n: Array<S, U16> of kind position, cs: Array<S, Array<D, BF16>>,
+                                        each weight W.w (bf16), then each weight's W.master, W.exp_avg, W.exp_avg_sq (f32, its
+                                        shape), step: F32, lr, beta1, beta2, eps, wd, max_norm: F64)
+                                       -> Tuple<loss: F32, total_norm: BF16, step: F32, ok: BIT, then each weight's new
+                                                (W.w, W.master, W.exp_avg, W.exp_avg_sq)>
 
 The weights W are `weights(L)`: embed, layer i's l{i}.NAME (`LAYER`) and norm, in HF's ``named_parameters`` order. A weight's
 parameter is its node's name with ``.w``, so a walk's values name both apart (`program_walk`). step is the optimizer's step
 count before this step, the same for every tensor; the hyperparameters are private values.
 
 `LinearTorch`, `LinearTorchDx` and `LinearTorchDw` are F.linear's three GEMMs at x (M, K), W (N, K): the forward, dX = dY·W and
-dW = dYᵀ·X, each `cublas_bf16.train_linear`'s row GEMM batched over its first operand's rows with the second shared. A
+dW = dYᵀ·X, each ROUTE's row GEMM (`cublas_bf16.route_gemm`) batched over its first operand's rows with the second shared; the
+root binds each at `cublas_bf16.train_route`'s route for its shape, so its body is `cublas_bf16.train_linear`'s. A
 transposed operand (Wᵀ, dYᵀ, Xᵀ) comes in as its `Transpose_v1` copy, a node of the root, so one copy serves every GEMM that
 reads it: a layer's normed input feeds the dW of q, k and v.
 
@@ -111,52 +112,60 @@ def _dims() -> dict[str, int]:
     return {"H": c["H"], "I": c["I"], "NH·D": c["NH"] * c["D"], "KVH·D": c["KVH"] * c["D"]}
 
 
+def _row_gemm(role: str, route: Any, M: int, K: int, N: int) -> Any:
+    if not isinstance(route, dict):
+        raise TypeError(f"ROUTE = {route!r} is not a route record")
+    return CB.route_gemm(dict(route), *CB.TRAIN_LINEAR_ROLES[role][2](M, K, N))
+
+
 def _route_refusal(role: str):
     def refuse(b: dict) -> str | None:
-        if not all(k in b for k in ("M", "K", "N")):
+        if not all(k in b for k in ("M", "K", "N", "ROUTE")):
             return None
         try:
-            CB.train_route(role, int(b["M"]), int(b["K"]), int(b["N"]))
-        except (TypeError, ValueError) as e:
-            return str(e)
+            _row_gemm(role, b["ROUTE"], int(b["M"]), int(b["K"]), int(b["N"]))
+        except (TypeError, ValueError, KeyError) as e:
+            return f"{role}: {e}"
         return None
     return refuse
 
 
 def _rows(B, role: str, S: Any, a: Coll, b: Coll) -> Coll:
-    return B.batch(CB.train_linear(role, S.M, S.K, S.N), a, b, axes=(0, None))
+    return B.batch(_row_gemm(role, S.ROUTE, S.M, S.K, S.N), a, b, axes=(0, None))
 
 
 def _mat(r: int, c: int) -> Array:
     return Array(r, Array(c, BF16))
 
 
+_CONFORMANCE = ("exact-model-tested; the batch over the rows of ROUTE's row GEMM (cublas_bf16.route_gemm); the root binds "
+                "cublas_bf16.train_route's route, the cuBLAS capture's (cublas_bf16.TRAIN_CAPTURE)")
 LinearTorch = CompositeDefinition(
-    "LinearTorch", 1, ("M", "K", "N"),
+    "LinearTorch", 1, ("M", "K", "N", "ROUTE"),
     lambda S: ((("x", _mat(S.M, S.K)), ("w", _mat(S.N, S.K))), _mat(S.M, S.N)),
     lambda B, S, x, w: _rows(B, "fwd", S, x, w),
-    doc="F.linear's forward at x (M, K), W (N, K): cublas_bf16.train_linear's row GEMM on each of x's rows against W's rows",
-    conformance="exact-model-tested; each route's row GEMM is the cuBLAS capture's (cublas_bf16.TRAIN_CAPTURE), and this is "
-                "its batch over the rows",
-    refuse=_route_refusal("fwd"))
+    doc="F.linear's forward at x (M, K), W (N, K): ROUTE's row GEMM on each of x's rows against W's rows",
+    conformance=_CONFORMANCE, refuse=_route_refusal("fwd"))
 LinearTorchDx = CompositeDefinition(
-    "LinearTorchDx", 1, ("M", "K", "N"),
+    "LinearTorchDx", 1, ("M", "K", "N", "ROUTE"),
     lambda S: ((("dy", _mat(S.M, S.N)), ("wt", _mat(S.K, S.N))), _mat(S.M, S.K)),
     lambda B, S, dy, wt: _rows(B, "dX", S, dy, wt),
-    doc="F.linear's input gradient dX = dY·W at x (M, K), W (N, K): train_linear's dX row GEMM on each of dY's rows against "
-        "the rows of Wᵀ, its Transpose_v1 copy",
-    conformance="exact-model-tested; each route's row GEMM is the cuBLAS capture's (cublas_bf16.TRAIN_CAPTURE), and this is "
-                "its batch over the rows",
-    refuse=_route_refusal("dX"))
+    doc="F.linear's input gradient dX = dY·W at x (M, K), W (N, K): ROUTE's dX row GEMM on each of dY's rows against the "
+        "rows of Wᵀ, its Transpose_v1 copy",
+    conformance=_CONFORMANCE, refuse=_route_refusal("dX"))
 LinearTorchDw = CompositeDefinition(
-    "LinearTorchDw", 1, ("M", "K", "N"),
+    "LinearTorchDw", 1, ("M", "K", "N", "ROUTE"),
     lambda S: ((("dyt", _mat(S.N, S.M)), ("xt", _mat(S.K, S.M))), _mat(S.N, S.K)),
     lambda B, S, dyt, xt: _rows(B, "dW", S, dyt, xt),
-    doc="F.linear's weight gradient dW = dYᵀ·X at x (M, K), W (N, K): train_linear's dW row GEMM on each row of dYᵀ against "
-        "the rows of Xᵀ, both Transpose_v1 copies",
-    conformance="exact-model-tested; each route's row GEMM is the cuBLAS capture's (cublas_bf16.TRAIN_CAPTURE), and this is "
-                "its batch over the rows",
-    refuse=_route_refusal("dW"))
+    doc="F.linear's weight gradient dW = dYᵀ·X at x (M, K), W (N, K): ROUTE's dW row GEMM on each row of dYᵀ against the "
+        "rows of Xᵀ, both Transpose_v1 copies",
+    conformance=_CONFORMANCE, refuse=_route_refusal("dW"))
+
+
+def _linear(F: CompositeDefinition, role: str, M: int, K: int, N: int) -> Any:
+    """F at (M, K, N) on the route sm_120 takes there (`cublas_bf16.train_route`), which refuses any shape the capture does not
+    cover."""
+    return bind(F, M=M, K=K, N=N, ROUTE=CB.train_route(role, M, K, N))
 
 
 def weights(L: int) -> tuple[tuple[str, int | None, int], ...]:
@@ -275,14 +284,14 @@ class _Step:
 
     def linear(self, name: str, x: Coll, w: Coll) -> Coll:
         (N, K), M = (w.type.n, w.type.elem.n), self.M
-        return self.B.call(bind(LinearTorch, M=M, K=K, N=N), x, w, name=name)
+        return self.B.call(_linear(LinearTorch, "fwd", M, K, N), x, w, name=name)
 
     def linear_backward(self, name: str, dy: Coll, w: Coll, xt: Coll) -> tuple[Coll, Coll]:
         """dX and dW of the linear ``name`` from its output gradient dy, its weight and its input's transpose."""
         B, M = self.B, self.M
         N, K = w.type.n, w.type.elem.n
-        dx = B.call(bind(LinearTorchDx, M=M, K=K, N=N), dy, _transpose(B, w, N, K), name=f"{name}.dx")
-        dw = B.call(bind(LinearTorchDw, M=M, K=K, N=N), _transpose(B, dy, M, N), xt, name=f"{name}.dw")
+        dx = B.call(_linear(LinearTorchDx, "dX", M, K, N), dy, _transpose(B, w, N, K), name=f"{name}.dx")
+        dw = B.call(_linear(LinearTorchDw, "dW", M, K, N), _transpose(B, dy, M, N), xt, name=f"{name}.dw")
         return dx, dw
 
     def add(self, name: str, a: Coll, b: Coll) -> Coll:

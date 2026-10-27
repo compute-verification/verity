@@ -3,7 +3,8 @@
 forward's model to an sm_120 GPU's words: four tokens of each of the five norms of a 2-layer smollm2-135m training step (B 1,
 S 256, torch 2.14.0+cu130 on an RTX PRO 6000, cc 12.0) in `fixtures/torch-training-norm/norms.npz`, cut from a dump every
 row of which was checked the same way. The GEMMs' model is `bf16_gemm_check.cublas_route_rows`, which `test_cublas_train.py`
-holds to `train_linear`'s row GEMMs, so here each linear's body is that row GEMM over its first operand's rows. The optimizer's
+holds to `train_linear`'s row GEMMs, so here each linear's body is that row GEMM over its first operand's rows, and its model is
+its bits on each route kind at a small shape. The optimizer's
 models (the gradient's widening, AdamW on runs of f32 words, the bf16 copy) are held to their bits the same way."""
 from __future__ import annotations
 
@@ -92,22 +93,50 @@ def test_the_root_refuses_a_shape_the_capture_does_not_cover(statics) -> None:
         bind(TS.TrainStep, **statics).signature()
 
 
-@pytest.mark.parametrize("D,role", [(TS.LinearTorch, "fwd"), (TS.LinearTorchDx, "dX"), (TS.LinearTorchDw, "dW")])
+LINEARS = [(TS.LinearTorch, "fwd"), (TS.LinearTorchDx, "dX"), (TS.LinearTorchDw, "dW")]
+#: a linear's (M, K, N) whose row GEMM is (K 64, N 3), two rows of it (`cublas_bf16.TRAIN_LINEAR_ROLES`)
+SMALL = {"fwd": (2, 64, 3), "dX": (2, 3, 64), "dW": (64, 3, 2)}
+#: the route kinds the capture takes, at K 64
+SMALL_ROUTES = [{"kernel": "nosplit"}, {"kernel": "splitk", "SPLIT_K": 4, "partial": "bf16"}, {"kernel": "serialk", "SPLIT_K": 4},
+                {"kernel": "splitk", "SPLIT_K": 3, "partial": "bf16", "align": 8, "tile_k": 16}]
+
+
+@pytest.mark.parametrize("D,role", LINEARS)
 def test_each_linear_is_its_row_gemm_over_the_first_operands_rows(D, role: str) -> None:
     """At (K, N) = (576, 1536), where the dX GEMM takes cuBLAS's 8-way split-K with bf16 partials and the others the unsplit
     chain; the second operand is shared by every row."""
     M, K, N = 256, 576, 1536
-    f = bind(D, M=M, K=K, N=N)
+    f = TS._linear(D, role, M, K, N)
     (node,) = f.body.nodes
     assert node.form == "batch" and node.n == (N if role == "dW" else M) and tuple(node.axes) == (0, None)
     assert node.fn.id == CB.train_linear(role, M, K, N).id
     with pytest.raises(ValueError):
-        bind(D, M=300, K=K, N=N).signature()
+        TS._linear(D, role, 300, K, N)
+
+
+@pytest.mark.parametrize("D,role", LINEARS)
+@pytest.mark.parametrize("route", [{"kernel": "cublaslt"}, {"kernel": "splitk", "SPLIT_K": 3, "partial": "bf16", "align": 8},
+                                   {"kernel": "serialk", "SPLIT_K": 128}, "nosplit"])
+def test_a_linear_refuses_a_route_with_no_row_gemm_on_bits(D, role: str, route) -> None:
+    with pytest.raises(ValueError, match="refuses this binding"):
+        bind(D, **dict(zip("MKN", SMALL[role])), ROUTE=route)
+
+
+@pytest.mark.parametrize("D,role", LINEARS)
+@pytest.mark.parametrize("route", SMALL_ROUTES, ids=lambda r: "-".join(map(str, r.values())))
+def test_each_linear_model_is_the_bits_on_each_route(D, role: str, route) -> None:
+    M, K, N = SMALL[role]
+    f = bind(D, M=M, K=K, N=N, ROUTE=route)
+    (_, a), (_, b) = f.signature()[0]
+    rng = np.random.default_rng(5)
+    x = _words(rng, (8, a.n, a.elem.n), raw=0.02, special=0.02)
+    w = _words(rng, (8, b.n, b.elem.n), raw=0.02, special=0.02)
+    _same(_model(f, x, w), BS.evaluate_words(f, x, w))
 
 
 def test_every_model_is_keyed_by_its_family() -> None:
-    fs = [bind(TS.LinearTorch, M=256, K=576, N=192), bind(TS.LinearTorchDx, M=256, K=576, N=192),
-          bind(TS.LinearTorchDw, M=256, K=576, N=192), bind(TT.Transpose, R=3, C=5), EW.Bf16AddF2fp, EW.Bf16MulBf16,
+    fs = [TS._linear(D, role, 256, 576, 192) for D, role in LINEARS] + [
+          bind(TT.Transpose, R=3, C=5), EW.Bf16AddF2fp, EW.Bf16MulBf16,
           bind(TT.RmsNormTorch, H=576, LANES=32, EPS=TS.EPS, RSQRT=bind(BMU.RsqrtApprox)),
           bind(TT.RmsNormTorchBackward, H=576, LANES=32), bind(TT.RmsNormTorchWeightGrad, M=256, H=576),
           bind(TT.SiluTorch, N=TS.ACT_N, EX2=EX2), bind(TT.SiluTorchBackward, N=TS.ACT_N, EX2=EX2, CONTRACT=1),
