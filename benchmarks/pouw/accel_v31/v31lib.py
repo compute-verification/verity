@@ -269,10 +269,13 @@ s-s4 served 256 256 4096 128 1024 16384 llm none
 s-partial served 256 384 3072 128 896 8192 llm none
 s-lp256 served 256 256 4096 256 2048 16384 llm none
 s-lp1024 served 256 256 8192 1024 4096 16384 llm none
+s-lp2048 served 256 256 14336 2048 14336 16384 llm none
 s-row1k served 256 512 2048 128 1024 1024 llm none
 s-big served 512 1024 8192 512 4096 16384 llm none
 s-uniform served 256 256 2048 256 2048 16384 uniform rootless
 cs-forgeO served 256 256 4096 512 4096 16384 llm forgeO:0.25
+cs-forgeO-lp2048 served 256 256 14336 2048 14336 16384 llm forgeO:0.25
+cs-nodither-lp2048 served 256 256 14336 2048 14336 16384 llm nodither
 cs-forgeO-s4 served 256 256 4096 128 1024 16384 llm forge:0:0.25
 cs-forge-s4 served 256 256 4096 128 1024 16384 llm forge:2:0.25
 cs-skip-s4 served 256 256 4096 128 1024 16384 llm skip:5
