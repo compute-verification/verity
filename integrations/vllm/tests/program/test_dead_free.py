@@ -162,22 +162,34 @@ def test_token_select_groups_v1_refuses_groups_wider_than_its_logits():
         bind(DF.TokenSelectGroupsV1, C=16, G=17).signature()
 
 
-def _grouped(V: int, C: int, G: int, row: list[int]) -> tuple[int]:
+def _grouped(V: int, C: int, G: int, row: list[int], ev=evaluate) -> tuple[int]:
     """``row``'s token by groups: `TokenSelectGroups_v1{C, G}` over each C logits (the last unit the rest, one group if that is
     narrower than G), then `TokenSelectCombine_v2{V, G}` over logits[0] and every group's partial."""
     assert C % G == 0, "a unit's groups are the combine's chunks of G only when every unit but the last is whole groups"
     best, idx = [], []
     for lo, hi in b1.chunks(V, C):
-        out = evaluate(bind(DF.TokenSelectGroupsV1, C=hi - lo, G=min(G, hi - lo)), row[lo:hi])
+        out = ev(bind(DF.TokenSelectGroupsV1, C=hi - lo, G=min(G, hi - lo)), row[lo:hi])
         best += out[:len(out) // 2]
         idx += out[len(out) // 2:]
-    return evaluate(bind(DF.TokenSelectCombineV2, V=V, C=G), row[0], best, idx)
+    return ev(bind(DF.TokenSelectCombineV2, V=V, C=G), row[0], best, idx)
 
 
-def _chunked(V: int, C: int, row: list[int]) -> tuple[int]:
+def _chunked(V: int, C: int, row: list[int], ev=evaluate) -> tuple[int]:
     """``row``'s token as the window selects it now: `TokenSelectChunk_v2` over each C logits, then `TokenSelectCombine_v2{V, C}`."""
-    parts = [evaluate(bind(DF.TokenSelectChunkV2, C=hi - lo), row[lo:hi]) for lo, hi in b1.chunks(V, C)]
-    return evaluate(bind(DF.TokenSelectCombineV2, V=V, C=C), row[0], [p[0] for p in parts], [p[1] for p in parts])
+    parts = [ev(bind(DF.TokenSelectChunkV2, C=hi - lo), row[lo:hi]) for lo, hi in b1.chunks(V, C)]
+    return ev(bind(DF.TokenSelectCombineV2, V=V, C=C), row[0], [p[0] for p in parts], [p[1] for p in parts])
+
+
+def _memo():
+    """`evaluate` that remembers each specialization's outputs by its inputs (`bind` shares one specialization per binding)."""
+    seen: dict = {}
+
+    def ev(fn, *args):
+        key = (fn, *(tuple(a) if isinstance(a, list) else a for a in args))
+        if key not in seen:
+            seen[key] = evaluate(fn, *args)
+        return seen[key]
+    return ev
 
 
 @pytest.mark.parametrize("V,C,G,CC", [(2, 1, 1, 2), (48, 48, 16, 48), (200, 48, 16, 64), (200, 64, 16, 64), (257, 32, 16, 64),
@@ -199,9 +211,10 @@ def _first_max(row: list[int]) -> int:
 
 @pytest.mark.slow
 def test_token_select_by_groups_is_the_chunked_select_at_llama_vocabulary():
-    """Llama-3's V in 48 units of 167 groups of 16, against the window's chunks of 768 (about 8 s a row): normals, a maximum tied
-    across a unit boundary that is no chunk's and one across a group boundary inside a unit, +0 and -0 tied across a unit
-    boundary both ways round, a NaN unit head ahead of the maximum, a NaN logits[0], and all -inf but the last logit."""
+    """Llama-3's V in 48 units of 167 groups of 16, against the window's chunks of 768 (about 12 s, the rows sharing all but a few
+    units): normals, a maximum tied across a unit boundary that is no chunk's and one across a group boundary inside a unit, +0
+    and -0 tied across a unit boundary both ways round, a NaN unit head ahead of the maximum, a NaN logits[0], and all -inf but
+    the last logit."""
     V, C, BIG = LLAMA_V, LLAMA_C, 0x4400
     noise = _bf16(RNG.normal(0, 1, V))
 
@@ -216,8 +229,9 @@ def test_token_select_by_groups_is_the_chunked_select_at_llama_vocabulary():
              (2 * C - 1, put({2 * C - 1: 0x8000, 2 * C: 0x0000}, [NEG_ONE] * V)),
              (0, [NAN] + noise[1:]),
              (V - 1, [NEG_INF] * (V - 1) + [NEG_ONE])]
+    ev = _memo()
     for want, row in cases:
-        assert _grouped(V, C, LLAMA_G, row) == _chunked(V, 768, row) == (want,), want
+        assert _grouped(V, C, LLAMA_G, row, ev) == _chunked(V, 768, row, ev) == (want,), want
 
 
 def _unit(fn, cuts: dict[str, int]) -> tuple[int, int]:
