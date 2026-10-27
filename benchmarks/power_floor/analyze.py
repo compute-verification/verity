@@ -75,7 +75,7 @@ def energies(rows: list[dict]) -> dict:
     by = {d["label"]: d for d in rows}
     base = by["sleep"]["power_w"]
     out = {"p_sleep": base, "p_idle": by.get("idle", {}).get("power_w"), "p_none": by.get("none", {}).get("power_w"),
-           "single": {}, "pairs": {}, "frac": {}, "gemm": {}, "lgc": {}}
+           "single": {}, "pairs": {}, "frac": {}, "gemm": {}, "lgc": {}, "rows": rows}
     for lab, d in by.items():
         if d.get("kind") == "gemm":
             g = dict(power_w=d["power_w"], mac_per_s=d["mac_per_s"], pj_mac_total=d["power_w"] / d["mac_per_s"] * 1e12,
@@ -130,8 +130,10 @@ def energies(rows: list[dict]) -> dict:
     return out
 
 
-def floors(en: dict, modes=(0, 1, 2)) -> dict:
-    """The least energy a unit of each 𝓜 resource over the operand modes given, at the run's clock (pJ)."""
+def floors(en: dict, modes=(0, 1, 2), clocks: bool = False) -> dict:
+    """The least energy a unit of each 𝓜 resource over the operand modes given (pJ), at the run's clock, or with
+    `clocks` over the locked clocks too (the sweep measures the tensor pipe only: the lane pipes and shared memory
+    take the tensor pipe's ratio of its least to its run-clock energy, an estimate)."""
     f = {"issue": 0.0}
     for role, (res, per, _) in PER.items():
         if res is None:
@@ -141,7 +143,52 @@ def floors(en: dict, modes=(0, 1, 2)) -> dict:
             continue
         v = min(es) / per  # per unit of the resource
         f[res] = min(f.get(res, v), v)
+    if clocks:
+        mma = "wgmma" if any(k.startswith("wgmma") for k in en["single"]) else "imma"
+        swept = [r["e"] for k, r in en["lgc"].items() if f"-{mma}-" in k and "e" in r and int(k[-1]) in modes]
+        if swept and "tensor" in f:
+            ratio = min(swept) / f["tensor"]
+            f = {k: v * min(ratio, 1.0) for k, v in f.items()}
     return f
+
+
+USE = {  # role -> {𝓜 resource: units per counted unit} (issue left out: e_issue is 0)
+    "imma": {"tensor": 1.0}, "wgmma": {"tensor": 1.0}, "dp4a": {"imad": 0.25}, "ffma": {}, "int": {"alu": 1.0},
+    "lds": {"smem": 1.0}, "ldg": {"dram": 0.25},
+}
+
+
+def uses_of(d: dict, card: str) -> dict | None:
+    """A measured config's resource uses a second (the least its counted work needs); None where a role isn't priced."""
+    u: dict = {}
+    if d.get("kind") == "gemm":
+        return {"tensor": d["mac_per_s"], "smem": d["mac_per_s"] * CARDS[card]["stage"]}
+    if d.get("kind") != "pipe":
+        return {}
+    for side in ("a", "b"):
+        role = d.get(f"role_{side}")
+        if side == "b" and role == d.get("role_a"):
+            break
+        if role in ("none", "sleep"):
+            continue
+        if role not in USE:
+            return None
+        for r, k in USE[role].items():
+            u[r] = u.get(r, 0.0) + k * d.get(f"rate_{side}", 0.0)
+    return u
+
+
+def falsify(rows: list[dict], card: str, e: dict, p0: float) -> list[dict]:
+    """The configs whose measured board power is below what the premise says they need: P0 + Σ e_r·use_r."""
+    bad = []
+    for d in rows:
+        u = uses_of(d, card)
+        if u is None or "power_w" not in d:
+            continue
+        need = p0 + sum(e.get(r, 0.0) * v for r, v in u.items()) * 1e-12
+        if need > d["power_w"] * 1.0 + 1e-9:
+            bad.append(dict(label=d["label"], power_w=d["power_w"], premise_w=need))
+    return bad
 
 
 # ---- the LP --------------------------------------------------------------------------------------------------------
@@ -159,26 +206,29 @@ def routes(card: str, lookups: bool = True) -> list[tuple[str, dict]]:
     return rs
 
 
-def capacity(card: str, e: dict | None = None, p0: float = 0.0, fixed: dict | None = None) -> dict:
+def capacity(card: str, e: dict | None = None, p0: float = 0.0, fixed: dict | None = None, fmax: float | None = None) -> dict:
     """Max MAC/s on 𝓜 at f_max over the routes, with the power row Σ e_r·use_r ≤ P_max − p0 if e is given (pJ a unit;
     `issue` in lanes). `fixed`: resource uses a second the honest prover holds already (rates and, with e, energy)."""
+    # x in TMAC/s, so a pJ a MAC is a W per TMAC/s (HiGHS drops coefficients under 1e-9: J a MAC would vanish)
     c = CARDS[card]
     rs = routes(card)
     n = len(rs)
-    tick = c["sms"] * c["fmax"]
+    tick = c["sms"] * (fmax or c["fmax"]) / 1e12
     A, b = [], []
     for r in RES:
         A.append([u.get(r, 0.0) for _, u in rs])
-        b.append(c["rho"][r] * tick - (fixed or {}).get(r, 0.0))
+        b.append(c["rho"][r] * tick - (fixed or {}).get(r, 0.0) / 1e12)
     if e is not None:
         er = {**{r: 0.0 for r in RES}, **e}
-        A.append([sum(er.get(r, 0.0) * u.get(r, 0.0) for r in RES) * 1e-12 for _, u in rs])
+        A.append([sum(er.get(r, 0.0) * u.get(r, 0.0) for r in RES) for _, u in rs])
         held = sum(er.get(r, 0.0) * v for r, v in (fixed or {}).items()) * 1e-12
         b.append(c["pmax"] - p0 - held)
+    if min(b) < 0:
+        return dict(mac_per_s=0.0, by_route={}, infeasible=True)
     sol = linprog(-np.ones(n), A_ub=np.array(A), b_ub=b, bounds=[(0, None)] * n, method="highs")
     if sol.status != 0:
         return dict(mac_per_s=0.0, by_route={}, infeasible=True)
-    x = sol.x
+    x = sol.x * 1e12
     return dict(mac_per_s=float(x.sum()), by_route={k: float(v) for (k, _), v in zip(rs, x) if v > 1e6})
 
 
@@ -194,11 +244,14 @@ def epsilon(card: str, en: dict, honest_mac_s: float, honest_mhz: float) -> dict
                           model=tensor_only / rate["mac_per_s"]))
     stage = c["stage"]
     honest_use = dict(tensor=honest_mac_s, smem=honest_mac_s * stage, issue=honest_mac_s * c["mma_issue"])
-    variants = {"strict (all modes, zero operands included)": (0, 1, 2), "random operands (mode 1)": (1,)}
+    variants = {"strict over data and clock (zero operands, least clock)": ((0, 1, 2), True),
+                "strict over data, run clock": ((0, 1, 2), False),
+                "random operands, run clock": ((1,), False)}
     out["power"] = {}
-    for name, modes in variants.items():
-        e = floors(en, modes)
-        for p0name, p0 in (("P0 0", 0.0), ("P0 idle", en.get("p_idle") or 0.0)):
+    p0_min = min([r.get("p_sleep_here", 1e9) for r in en["lgc"].values()] + [en.get("p_idle") or 1e9])
+    for name, (modes, clk) in variants.items():
+        e = floors(en, modes, clk)
+        for p0name, p0 in (("P0 0", 0.0), ("P0 least idle", p0_min)):
             cap = capacity(card, e, p0)
             beside = capacity(card, e, p0, fixed=honest_use)
             beside_rate = capacity(card, None, 0.0, fixed=honest_use)
@@ -208,7 +261,23 @@ def epsilon(card: str, en: dict, honest_mac_s: float, honest_mhz: float) -> dict
                 binds=cap["mac_per_s"] < rate["mac_per_s"] * (1 - 1e-9),
                 eps=1 - honest_mac_s / cap["mac_per_s"] if cap["mac_per_s"] else None,
                 hidden_beside_honest=beside["mac_per_s"], hidden_beside_honest_rates_only=beside_rate["mac_per_s"],
-                hidden_by_route=beside["by_route"])
+                hidden_by_route=beside["by_route"],
+                falsified_by=falsify(en["rows"], card, e, p0))
+    # per clock: the card runs at f ≤ f_max and pays the random-operand energies measured at f (the tensor pipe's
+    # sweep; the other resources scaled by its ratio), P0 the resident-idle board at f. C = max over f.
+    mma = "wgmma" if any(k.startswith("wgmma") for k in en["single"]) else "imma"
+    rnd_run = floors(en, (1,))
+    per_f = {}
+    for k, r in en["lgc"].items():
+        if k.endswith(f"-{mma}-1") and "e" in r:
+            f = r["mhz"] * 1e6
+            e_f = {kk: v * r["e"] / rnd_run["tensor"] for kk, v in rnd_run.items()}
+            cap_f = capacity(card, e_f, r["p_sleep_here"], fmax=f)
+            per_f[round(r["mhz"])] = dict(capacity=cap_f["mac_per_s"], e_tensor=r["e"], p0=r["p_sleep_here"])
+    if per_f:
+        best = max(per_f.values(), key=lambda v: v["capacity"])
+        out["per_clock_random"] = dict(points=per_f, capacity=best["capacity"], eps=1 - honest_mac_s / best["capacity"],
+                                       falsified_by="zero-operand configs (as the run-clock random floors)")
     # where the premise starts to pay: floors at s times the random-operand energies, P0 the idle board
     rnd = floors(en, (1,))
     out["by_scale"] = {}
@@ -245,6 +314,8 @@ def main() -> None:
         report[run.name] = res
         print_run(res)
     if a.json:
+        for r in report.values():
+            r["energies"].pop("rows", None)
         a.json.write_text(json.dumps(report, indent=1))
 
 
@@ -288,6 +359,15 @@ def print_run(res: dict) -> None:
             print(f"   {name}: C {p['capacity']:.3e} pub {p['pub_vs_tensor']:.3f} binds {p['binds']} ε {p['eps']:.3f}; "
                   f"hidden beside honest {p['hidden_beside_honest']:.3e} (rates only "
                   f"{p['hidden_beside_honest_rates_only']:.3e}); floors pJ: {fl}")
+        for name, p in ep["power"].items():
+            fb = p["falsified_by"]
+            if fb:
+                print(f"   {name}: falsified by {len(fb)} configs, e.g. " + ", ".join(
+                    f"{x['label']} ({x['power_w']:.0f} W < {x['premise_w']:.0f} W)" for x in fb[:4]))
+        if "per_clock_random" in ep:
+            pc = ep["per_clock_random"]
+            print(f"   per clock, random operands: C {pc['capacity']:.3e} ε {pc['eps']:.3f}; " + ", ".join(
+                f"{f} MHz {v['capacity']:.3e}" for f, v in sorted(pc["points"].items())))
         print("   floors at s × random-operand energy, P0 idle: " + "; ".join(
             f"s {s}: ε {v['eps']:.3f} (pub {v['pub_vs_tensor']:.3f})" for s, v in ep["by_scale"].items()))
 
