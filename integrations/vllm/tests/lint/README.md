@@ -61,6 +61,15 @@ A renamed file keeps its findings, but the repository lint reads no history, so 
 (`python3 tests/lint/test_repo_ruff.py --move OLD NEW`, in the same change): a rename that leaves them behind is refused,
 naming each entry and that command. A file the PR doesn't touch is never linted. If ruff can't run where drive runs the
 gate, the gate can't judge, and the sync leaves the PR out.
+It holds direct environment reads the same way (the vLLM coordinator, 27 Oct 01:30Z: configuration in one place).
+`tests/lint/test_repo_env_reads.py` counts each tracked `*.py` file's reads (`os.environ[...]`, `.get`, `.setdefault`, a
+`.pop` whose value is used, an `in` test, `os.getenv`, through any alias) outside `integrations/vllm/` (P07 is its settings
+rule) and `archive/`, against `tests/lint/allowlists/repo_env_reads.json` (`{"file", "count"}`, each file's largest count
+over `main`, `next` and the admitted PRs), and fails only when a file reads more than its entry allows. A settings registry
+is exempt: a module named `settings.py`, or one the list marks `{"file", "registry": true}`. The gate refuses a PR that adds
+a read to a file it changes, naming each, with the fix: read it through the area's settings registry (the template is
+`integrations/vllm/verity_vllm/settings.py`), or create one. A mark counts from the PR's base, so it lands before the reads
+it exempts, and a rename moves the file's entry (`python3 tests/lint/test_repo_env_reads.py --move OLD NEW`), as for ruff.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too** (the vLLM coordinator, 25 Oct 11:20Z). In `integrations/vllm`, a change may add no more
