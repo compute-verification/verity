@@ -1,4 +1,4 @@
-"""Stage MIXED BATCH, Program side on CPU — **padded baseline (experimental)**, lane `pad` (R16, BRIEF §7B).
+"""Stage MIXED BATCH, Program side on CPU — **padded baseline (experimental)**.
 
 The lifted fixed WORKLOAD Program: GP-01's `WorkloadProgram` compose — unchanged — over lifted request components
 (`lifted.lifted_workload`).  Two declared requests share ONE lifted weights Input; A stops early (its transcript emits the declared EOS
@@ -6,7 +6,7 @@ The lifted fixed WORKLOAD Program: GP-01's `WorkloadProgram` compose — unchang
 (the frozen `Serve_v2{TINY, LP=4, STEPS=8}` as each request's component — the same lowering/codec/compose as a derived flat body):
 
   * the population is `Σ_r cap_r` sampling events fixed by the manifest, composed by the SAME code that composes the unlifted
-    workload; per request the address map is the unlifted rows + that request's own guard rows (PAD-03); the chronology programs
+    workload; per request the address map is the unlifted rows + that request's own guard rows; the chronology programs
     every request for `cap` steps whatever its transcript; the digest is a function of the manifest + EOS set + LAG, of nothing served;
   * NO CROSS-REQUEST POISONING: with A stopping, every gate of B's call equals B's gate in the UNLIFTED workload (all Active, bit for
     bit), and A's Active prefix equals A's unlifted gates; A's ⊥ is confined to A's own steps `≥ a_A` (per-request state: A's K/V rows
@@ -16,12 +16,11 @@ The lifted fixed WORKLOAD Program: GP-01's `WorkloadProgram` compose — unchang
     assign_inactive(B's committed tokens)` (B's events are committed Active where the poisoned Program says ⊥); a ⊥ smuggled into the
     shared weights is refused at the prescribed boundary, and bypassed it deactivates BOTH requests' event 0 — again refused by name
     against each request's own committed tokens (a corrupt input cannot look like a legitimate stop);
-  * the S-migration hook (LIFTING-STATUS P9, CANDIDATE PAD-04 wiring): `n_live_t` as Program nodes at the workload root equals
+  * the S-migration hook (P9, the candidate wiring): `n_live_t` as Program nodes at the workload root equals
     `Σ_r LIsActive(tok_in_{r,t})` read off the components' OWN guard nodes at every engine step, drops by exactly one at `a_A`, follows
     arrivals, and `S_t = LSplitsForSMS<142>(n_live_t)` is Active while any request is live and ⊥ when none is; both `LAG ∈ {0, 1}`.
 
-What it does NOT establish: anything about a real B2 record (the `mixedstop` workload in `out/gen/r16/pad/workloads/` waits on the
-DP-pad-02 ruling and a Commit, like DENSE B1's record half).
+What it does NOT establish: anything about a real B2 record (the `mixedstop` workload waits on a Commit, like DENSE B1's record half).
 """
 from __future__ import annotations
 
@@ -60,7 +59,7 @@ def _requests(component, arrivals=(0, 0)):
 
 @pytest.fixture(scope="module")
 def wl_u(component):
-    return W.WorkloadProgram(_requests(component), lag=0)  # R17-1: lag is a required static of Workload_v1 (moe a96a2071b); the unlifted reference is used for fn/inputs/transcripts
+    return W.WorkloadProgram(_requests(component), lag=0)  # lag is a required static of Workload_v1; the unlifted reference is used for fn/inputs/transcripts
 
 
 @pytest.fixture(scope="module")
@@ -133,7 +132,7 @@ def test_the_lifted_workload_is_gp01s_compose_over_lifted_components_with_a_fixe
     root = wl_l.program.root.body
     calls = root.nodes[wl_l._K:]
     assert [n.name for n in calls] == ["request[A]", "request[B]"] and wl_l._K == wl_u._K  # one shared lifted weights Input set + 2 prompts
-    gg = L.continuation_gate_count(CAP, len(EOS), 0)  # F-r17b-43: the R17-1 guard + the Continuation_v1 controller (3·cap)
+    gg = L.continuation_gate_count(CAP, len(EOS), 0)  # the activity guard + the Continuation_v1 controller (3·cap)
     for r_l, r_u in zip(wl_l.requests, wl_u.requests):
         c_l, c_u = r_l.component, r_u.component
         assert c_l.fn.id.startswith("LiftedRequest_v2{") and c_l.fn.bindings["LAG"] == 0 and c_l.fn.bindings["EOS"] == EOS
@@ -142,7 +141,7 @@ def test_the_lifted_workload_is_gp01s_compose_over_lifted_components_with_a_fixe
         assert c_l.body_gates == c_u.body_gates + gg and c_l.n_nodes == c_u.n_nodes + 2 * (CAP - 1) + len(EOS) + 2 + 3 * CAP
         # every declared event is a step of the lifted body: exactly CAP segments (GP-01's `component_steps_equal_cap`).  Slot t's
         # Continuation_v1 controller nodes (is_eos_t, out_t, emit_{t+1}) follow its sampled token, so they fall into the NEXT step's
-        # segment; the LAST slot's (is_eos, out; no transition) close the last step's segment (F-r17b-43: no (cap+1)-th segment)
+        # segment; the LAST slot's (is_eos, out; no transition) close the last step's segment (no (cap+1)-th segment)
         assert len(c_l.step_nodes) == CAP and c_l.step_gates[-1][1] == c_l.body_gates
         assert [n.name for n in c_l.fn.body.nodes[c_l.step_nodes[-1][1] - 2:c_l.step_nodes[-1][1]]] == [f"slot={CAP}/is_eos", f"slot={CAP}/out"]
         assert [(n, L.lift_type(t)) for n, t in c_u.params] == list(c_l.params)
@@ -192,7 +191,7 @@ def test_a_stops_early_and_b_continues_with_every_gate_of_b_bit_equal_to_the_unl
     a_A = L.activity_prefix(ol["A"], EOS, CAP)
     assert a_A == 4 and ol["A"] == Y_RAW[:4] + [BOT32] * (CAP - 4) == L.assign_inactive("A", Y_RAW[:4], EOS, CAP, lag=0)
     assert ol["B"] == ou["B"] == L.assign_inactive("B", ou["B"], EOS, CAP, lag=0)  # B: every event Active, the unlifted tokens
-    # B's WHOLE call: every unlifted node's gates equal the lifted node's gates (PAD-03's map), all Active
+    # B's WHOLE call: every unlifted node's gates equal the lifted node's gates (the deletion rule's map), all Active
     for rid, a_r in (("B", CAP), ("A", a_A)):
         c_u = next(r for r in wl_u.requests if r.request_id == rid).component
         c_l = next(r for r in wl_l.requests if r.request_id == rid).component
@@ -237,7 +236,7 @@ def test_a_s_bot_is_confined_to_its_own_steps_from_a_r_on_and_b_s_state_is_never
         G = _call_gate_base(wl_l, rid)
         bl = c.fn.body
         skip = {bl.offsets[k] for k in c.fn.guard_nodes if bl.nodes[k].name == "bot32"}  # the guard's ⊥ constant is not state
-        # F-r17b-43: the Continuation_v1 controller words (`slot=<t>/…`) are the designated-output side, not the step's state; they are
+        # the Continuation_v1 controller words (`slot=<t>/…`) are the designated-output side, not the step's state; they are
         # counted separately below (they sit in the segment AFTER their token, so they would skew the per-step K/V growth constant)
         skip |= {bl.offsets[k] for k, n in enumerate(bl.nodes) if (n.name or "").startswith("slot=")}
         per_step = []
@@ -245,7 +244,7 @@ def test_a_s_bot_is_confined_to_its_own_steps_from_a_r_on_and_b_s_state_is_never
             words = [tl[G + g] for g in range(lo, hi) if g not in skip]
             per_step.append(sum(1 for x in words if L.is_bot(32, x) or L.is_bot(16, x)))  # token cone (32) and K/V / activation (16) ⊥ words
         assert len(per_step) == CAP and [n > 0 for n in per_step] == [s >= a_r for s in range(CAP)], (rid, per_step)
-        # F-r17b-43: the Continuation_v1 controller words are confined too -- the request's OWN `slot=<t>/out` is ⊥ exactly for the
+        # the Continuation_v1 controller words are confined too -- the request's OWN `slot=<t>/out` is ⊥ exactly for the
         # non-emitted slots t > a_r (LAG 0: the EOS slot itself is emitted); `emit`/`is_eos` are Boolean words, never ⊥; B (no EOS) has none
         names = [n.name or "" for n in bl.nodes]
         outs = {t: tl[G + bl.offsets[names.index(f"slot={t}/out")]] for t in range(1, CAP + 1)}
@@ -260,7 +259,7 @@ def test_a_s_bot_is_confined_to_its_own_steps_from_a_r_on_and_b_s_state_is_never
             # probability for that position are ⊥ per head per layer), so the ⊥ count grows by the same constant from step to step
             diffs = {b - a for a, b in zip(per_step[a_r:], per_step[a_r + 1:])}
             # measured constant on TINY: 28 words per additional ⊥ row = 24 (numerically 2·NL·NH·3, the K/V reads; the per-read decomposition
-            # is not asserted) + 4 (v0.6 A9.3: the per-position constants a longer attention owns are ⊥ inside a disabled step too)
+            # is not asserted) + 4 (the per-position constants a longer attention owns are ⊥ inside a disabled step too)
             assert len(diffs) == 1 and diffs.pop() == 28, per_step[a_r:]
 
 
@@ -330,7 +329,7 @@ def test_negative_a_bot_smuggled_into_the_shared_weights_is_refused_at_the_bound
 
 
 # ---------------------------------------------------------------------------------------------------------
-# T-M5: the S-migration hook as Program nodes (P9; CANDIDATE PAD-04 wiring)
+# T-M5: the S-migration hook as Program nodes (P9; the candidate wiring)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -404,7 +403,7 @@ def test_the_live_count_hook_equals_the_components_own_input_activity_and_drops_
         acts[rid] = a
     assert acts["B"] == [1] * CAP and acts["A"] == [1] * n_exec + [0] * (CAP - n_exec)
     assert counts == [acts["A"][s] + acts["B"][s] for s in range(CAP)]
-    # S_t: Active(32) at 142 SMs for n ∈ {1, 2} (stoch's table: 142 SMs, 4 → 32 is the first breakpoint), never ⊥ while B is live
+    # S_t: Active(32) at 142 SMs for n ∈ {1, 2} (vLLM's split table: 142 SMs, 4 → 32 is the first breakpoint), never ⊥ while B is live
     assert [L.payload(L.SPLITS_BITS, x) for x in S] == [32] * CAP and all(L.is_active(L.SPLITS_BITS, x) for x in S)
 
 
@@ -425,7 +424,7 @@ def test_the_hook_follows_declared_arrivals_and_S_is_bot_when_no_request_is_live
     assert per2["A"] == per2["B"] == Y_RAW[:4] + [BOT32] * (CAP - 4)
     assert [L.payload(L.N_LIVE_BITS, x) for x in n2] == [2] * 4 + [0] * (CAP - 4)
     assert all(L.is_active(L.N_LIVE_BITS, x) for x in n2)  # the COUNT is Active(0), never ⊥ (it is a value of the Program)
-    assert [L.is_bot(L.SPLITS_BITS, x) for x in S2] == [False] * 4 + [True] * (CAP - 4)  # the SPLIT COUNT is ⊥: no event (PAD-04)
+    assert [L.is_bot(L.SPLITS_BITS, x) for x in S2] == [False] * 4 + [True] * (CAP - 4)  # the SPLIT COUNT is ⊥: no event
     # structural refusals of the hook
     with pytest.raises(ValueError, match="requests"):
         L.live_count_prim(65)
@@ -433,7 +432,7 @@ def test_the_hook_follows_declared_arrivals_and_S_is_bot_when_no_request_is_live
         lifted_compose.lifted_workload(_requests(component), EOS, lag=3, boundary_prefix=BOUNDARY)
 
 
-# F-pad-19 (padrev M-0245): GP-01's populations have UNEQUAL caps (its standard B2 fixture is cap 3 / cap 2). The hook takes one cap per request.
+# GP-01's populations have UNEQUAL caps (its standard B2 fixture is cap 3 / cap 2). The hook takes one cap per request.
 
 D_MAX_B = 3
 CAP_B = D_MAX_B + 1
@@ -452,7 +451,7 @@ def test_f_pad_19_the_hook_takes_one_cap_per_request_and_refuses_a_served_length
     for lag in (0, 1):
         wl = lifted_compose.lifted_workload(reqs, EOS, lag=lag, boundary_prefix=BOUNDARY)
         wl_u = W.WorkloadProgram(reqs, lag=lag)
-        # ONE cap for both is refused by name -- 9 would read B's out[4..8] (padrev measured an UNNAMED IndexError), 4 would truncate A's schedule
+        # ONE cap for both is refused by name -- 9 would read B's out[4..8] (an UNNAMED IndexError), 4 would truncate A's schedule
         for one_cap in (CAP, CAP_B):
             with pytest.raises(ValueError, match="F-pad-19"):
                 Program(bind(LWorkloadS, WL=wl.fn, EOS=EOS, LAG=lag, SMS=SMS, ARR=(0, 0), CAP=one_cap))
