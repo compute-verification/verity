@@ -5,6 +5,9 @@ the refusals the runtime makes by name, the record, and the state directory acro
 from __future__ import annotations
 
 import json
+import socket
+import struct
+import threading
 import tomllib
 
 import pytest
@@ -12,9 +15,9 @@ import pytest
 import deploy_example as X
 from verity.core.deploy import manifest as M
 from verity.core.deploy.channels import Playback
-from verity.core.deploy.runtime import run
+from verity.core.deploy.runtime import RUNTIME, run
 from verity.core.deploy.transcript import Transcript
-from verity.core.wire import PUBLIC, REFUSALS, Refused, handshake
+from verity.core.wire import PUBLIC, REFUSALS, Message, Refused, handshake
 
 SEED = b"deploy-core worked example"
 BOTH = ["challenger", "responder"]
@@ -113,6 +116,41 @@ def test_an_answer_corrupted_is_refused_by_name():
     assert names <= set(REFUSALS) | {"wrong"} and names & set(REFUSALS), names
 
 
+def test_a_party_told_of_a_frame_the_wire_refuses_finishes_on_it():
+    """The challenger is told `Refused` with the wire's name and detail and finishes on it itself: its finish is its own
+    (`output`, where the runtime's would be `private`), and the refused frame is kept as `private`."""
+    r = run(X.config(), BOTH, "simulated", None, protocols=X.PROTOCOLS, keys=X.keys(*BOTH), verify=X.verify,
+            seed=SEED, adversaries={("responder", "challenger"): {"seed": 2, "after": 2, "corrupt": 1.0}})
+    out = r.outcomes["challenger"]
+    assert out["refused"] == "malformed" and out["outcome"]["channel"] == "responder" and out["outcome"]["detail"]
+    t = r.transcripts["challenger"]
+    assert (t.entries[-1].dir, t.entries[-1].kind) == ("finish", "output")
+    assert [e.kind for e in t if e.dir == "in" and e.channel == "responder"] == ["private"]
+
+
+def test_a_peer_that_resets_its_stream_is_recorded_in_the_transcript_and_the_result(tmp_path):
+    """The responder's end accepts the challenger's connection and resets it: the challenger is told `Closed` with what
+    failed on the stream, which its transcript keeps, and the run's result names it."""
+    server = socket.create_server(("127.0.0.1", 0))
+
+    def reset() -> None:
+        conn, _ = server.accept()
+        conn.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+        conn.close()
+
+    t = threading.Thread(target=reset)
+    t.start()
+    r = run(X.config(), ["challenger"], "live", tmp_path, protocols=X.PROTOCOLS, keys=X.keys("challenger"),
+            verify=X.verify, seed=SEED, dial_to={"responder": "%s:%d" % server.getsockname()[:2]})
+    t.join()
+    server.close()
+    how = r.ended["challenger"]["responder"]
+    assert how.startswith(("ConnectionResetError on ", "BrokenPipeError on ")), how
+    told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
+    assert told == [Message("Closed", {"how": how})]
+    assert r.outcomes["challenger"]["refused"] == "closed" and r.summary()["ended"] == r.ended
+
+
 def test_a_corrupted_handshake_is_refused_by_name():
     r = run(X.config(), BOTH, "simulated", None, protocols=X.PROTOCOLS, keys=X.keys(*BOTH), verify=X.verify, seed=SEED,
             adversaries={("responder", "challenger"): {"seed": 1, "corrupt": 1.0}})
@@ -141,6 +179,8 @@ def test_an_undeclared_message_is_refused():
     assert r.outcomes["responder"]["refused"] == "undeclared"
     assert "Verdict" in r.outcomes["responder"]["outcome"]["detail"]
     assert r.outcomes["challenger"]["refused"] == "closed"
+    told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
+    assert told == [Message("Closed", {"how": "end"})] and r.ended == {}
     sent = [e for e in r.transcripts["responder"] if e.dir == "out" and e.channel == "challenger"]
     assert sent == []
 

@@ -206,7 +206,7 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     # `engine_kwargs_for` (R16 sys: the hot worker computes the same keyword set to decide reuse vs restart).
     env0 = engine_env.snapshot()
     kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target, execution=execution)
-    from vllm import LLM  # noqa: E402  (after apply_env)
+    from vllm import LLM  # after apply_env
 
     from verity_vllm.engine import sparse_mla, topp_pin
     sparse_mla.arm()

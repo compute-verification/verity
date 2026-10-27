@@ -12,10 +12,10 @@ from verity.ml.definitions.registry.prims import f32_of
 
 def scale_products(x_s: np.ndarray, w_s: np.ndarray) -> np.ndarray:
     """The f32 words a host committer commits as `ScaledMmFp8BlockSharedScale_v1`'s scale products: `F32Mul_v1(x_s[kb], w_s[nb][kb])`
-    for every weight block nb and k block kb, computed by the IR (`evaluate_batch` on `F32Mul_v1`), NaN payloads included.  `x_s` is one
+    for every weight block nb and k block kb, computed by the evaluator (`evaluate_batch` on `F32Mul_v1`), NaN payloads included.  `x_s` is one
     token row's K/G activation scales ([K/G], or [R, K/G] for R rows) and `w_s` the checkpoint's [N/G, K/G] block scales, both as u32
     words; returns [N/G, K/G] (or [R, N/G, K/G]) u32 words.  numpy's array multiply is `F32Mul_v1` on every product but a NaN, whose
-    payload it takes from the other operand: those lanes go through the IR's evaluator."""
+    payload it takes from the other operand: those lanes go through the evaluator."""
     from verity.ml.circuits.evaluation import evaluate_batch
     xs = np.asarray(x_s, dtype=np.uint32)
     ws = np.asarray(w_s, dtype=np.uint32)
@@ -25,7 +25,7 @@ def scale_products(x_s: np.ndarray, w_s: np.ndarray) -> np.ndarray:
     a, b = (np.ascontiguousarray(v).reshape(-1) for v in np.broadcast_arrays(rows, ws[None, :, :]))
     out = (a.view(np.float32) * b.view(np.float32)).view(np.uint32)      # RN-even: F32Mul_v1 on every product that is not a NaN
     nan = ((out & 0x7F800000) == 0x7F800000) & ((out & 0x7FFFFF) != 0)
-    if nan.any():                                                          # a NaN's payload is the IR's, never numpy's operand choice
+    if nan.any():                                                          # a NaN's payload is the evaluator's, never numpy's operand choice
         out[nan] = evaluate_batch(P.F32Mul, a[nan], b[nan]).astype(np.uint32)
     return out.reshape(xs.shape[:-1] + ws.shape)
 

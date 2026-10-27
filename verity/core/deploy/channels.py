@@ -12,13 +12,15 @@ and channel:
 
 A pipe never parses: the runtime parses what `take` returns with the wire (`verity.core.wire`), as adversarial. A stream
 that ends inside a frame, or announces one past its bounds, yields the bytes it has as the frame, which the wire refuses
-by name, and the pipe ends there.
+by name, and the pipe ends there. A stream that fails (a reset, a send to a peer gone) keeps what failed as `ended`,
+which the runtime records: in the `Closed` it tells the party, so in its transcript, and in the run's result.
 """
 
 from __future__ import annotations
 
 import bisect
 import random
+import select
 import socket
 from collections import deque
 from typing import Protocol
@@ -44,11 +46,18 @@ class Pipe(Protocol):
     def closed(self) -> bool:
         """Nothing more will arrive."""
 
+    @property
+    def ended(self) -> str | None:
+        """What failed on the stream, the first time it did (`"ConnectionResetError on receiving: ..."`); None while
+        nothing has, which a stream its peer ended cleanly keeps."""
+
     def close(self) -> None: ...
 
 
 class MemoryPipe:
     """One end of an in-process pipe: what `send` sends arrives at the other end `latency_ns` later in `time`."""
+
+    ended = None
 
     def __init__(self, time: VirtualTime, latency_ns: int = 0) -> None:
         self.time, self.latency_ns = time, latency_ns
@@ -94,26 +103,34 @@ class MemoryPipe:
 
 
 class TcpPipe:
-    """A frame stream over a connected socket. `take` reads what has arrived without blocking."""
+    """A frame stream over a connected socket. `take` reads what has arrived without blocking. A send that fails is kept
+    as `ended`, not raised: the peer is gone, and the stream still yields what it sent before it went."""
 
     def __init__(self, sock: socket.socket, max_head: int = MAX_HEAD, max_body: int = 1 << 32) -> None:
         if sock.family in (socket.AF_INET, socket.AF_INET6):
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.setblocking(True)
         self.sock, self._reader, self._eof, self._closed = sock, FrameReader(max_head, max_body), False, False
+        self.ended: str | None = None
+
+    def _failed(self, doing: str, e: OSError) -> None:
+        if self.ended is None:
+            self.ended = f"{type(e).__name__} on {doing}: {e}"
 
     def send(self, frame: bytes) -> None:
         if self._closed:
             raise OSError("this end of the stream is closed")
-        self.sock.sendall(frame)
+        try:
+            self.sock.sendall(frame)
+        except OSError as e:
+            self._failed("sending", e)
 
     def _fill(self) -> None:
-        while not self._eof:
+        while not self._eof and select.select([self.sock], [], [], 0)[0]:
             try:
-                data = self.sock.recv(1 << 20, socket.MSG_DONTWAIT)
-            except (BlockingIOError, InterruptedError):
-                return
-            except OSError:
+                data = self.sock.recv(1 << 20)
+            except OSError as e:
+                self._failed("receiving", e)
                 data = b""
             if not data:
                 self._eof = True
@@ -156,9 +173,9 @@ class TcpPipe:
             self._closed = True
             try:
                 self.sock.shutdown(socket.SHUT_WR)
-                self._fill()
-            except OSError:
-                pass
+            except OSError as e:
+                self._failed("closing", e)
+            self._fill()
             self.sock.close()
 
 
@@ -187,11 +204,10 @@ class TcpListen:
         if self._shut:
             return None
         if self.pipe is None:
-            self.server.setblocking(False)
-            try:
-                conn, _ = self.server.accept()
-            except (BlockingIOError, InterruptedError):
+            if not select.select([self.server], [], [], 0)[0]:
                 return None
+            self.server.setblocking(False)
+            conn, _ = self.server.accept()
             self.server.close()
             self.pipe = TcpPipe(conn, *self._bounds)
             for f in self._held:
@@ -221,13 +237,14 @@ class TcpListen:
     def closed(self) -> bool:
         return self._shut or (self.pipe is not None and self.pipe.closed)
 
+    @property
+    def ended(self) -> str | None:
+        return None if self.pipe is None else self.pipe.ended
+
     def peer_gone(self) -> None:
         """The process that was to connect has ended: what it left in the backlog is still read, and with nothing
         there the listener closes."""
-        try:
-            self._accept()
-        except OSError:
-            pass
+        self._accept()
         if self.pipe is None:
             self.close()
 
@@ -246,6 +263,8 @@ class Playback:
     arrive here in order; each frame sent here must be its next `in` frame, else `send` raises `Refused('divergence')`.
     The recorded handshake is not played: the live party's end runs none. A transcript that kept only the digest of a
     frame it sent on the channel can't play it (`Refused('elided')`)."""
+
+    ended = None
 
     def __init__(self, recorded: Transcript, channel: str) -> None:
         self.recorded, self.channel = recorded.party, channel
@@ -308,6 +327,10 @@ class Tee:
     @property
     def closed(self) -> bool:
         return self.pipe.closed
+
+    @property
+    def ended(self) -> str | None:
+        return self.pipe.ended
 
     def close(self) -> None:
         self.pipe.close()
@@ -373,6 +396,10 @@ class Adversary:
     @property
     def closed(self) -> bool:
         return self.pipe.closed
+
+    @property
+    def ended(self) -> str | None:
+        return self.pipe.ended
 
     def close(self) -> None:
         self.pipe.close()

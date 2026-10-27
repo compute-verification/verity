@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import itertools
-import os
 import socket
 import threading
 import types
@@ -16,6 +15,7 @@ import types
 import pytest
 
 import pous_test_signer as ts
+import settings
 from verity.core.deploy import sources as S
 from verity.core.deploy.party import Finish
 from verity.core.deploy.runtime import ProtocolDef, run
@@ -167,7 +167,7 @@ def test_large_fill_frames_are_kept_as_digests_and_the_challenger_replays(tmp_pa
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="about two minutes for a 2 GiB fill: VERITY_POUS_SLOW=1")
+@pytest.mark.skipif(not settings.SLOW, reason="about two minutes for a 2 GiB fill: VERITY_POUS_SLOW=1")
 def test_a_two_gib_fill_on_host_memory():
     """The deployment layer streams a whole 2 GiB fill to a prover on host memory a window at a time, its transcripts
     a digest a frame, and the session is accepted."""
