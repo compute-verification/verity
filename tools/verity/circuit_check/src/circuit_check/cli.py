@@ -154,7 +154,13 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
                 return CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins)
             tasks.append(("template", s, tpl))
         else:
-            tasks.append(("definition", s, lambda s=s: CK.check_definition(TG.definition(s), opts, memo=memo(), pins=pins, as_call=as_call)))
+            try:
+                fn = TG.definition(s)
+            except Exception:  # noqa: BLE001  (its check raises it again, by name, and an errored check is never stored)
+                tasks.append(("definition", s, lambda s=s: CK.check_definition(TG.definition(s), opts, memo=memo(), pins=pins, as_call=as_call)))
+                continue
+            tasks.append(("definition", s, lambda fn=fn: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=as_call),
+                          {"units": sorted(TG.BINDINGS.get(fn.id, ())), "roots": [fn]}))
     return tasks
 
 
