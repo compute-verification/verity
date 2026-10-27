@@ -1,3 +1,6 @@
+import json
+import sys
+
 import pytest
 from rho import analysis, circuits, instances, lean
 from rho.classes import REFERENCE, structure
@@ -103,3 +106,19 @@ def test_the_measured_s_times_moves_the_bound_by_u_over_w_on_the_share_counted_a
     c = one.families[0].combined
     assert set(structure(REG, C.structure).cites()) <= set(c.cites) and c.status == f.combined.status
 
+
+def test_periods_sets_the_step_beside_the_flop_model_and_evaluates_with_its_design(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import periods
+
+    name = "reference-remote-h200"
+    monkeypatch.setattr(sys, "argv", ["periods.py", "--scenario", name, "--measured", STEP, "--out", str(tmp_path)])
+    periods.main()
+    text = capsys.readouterr().out
+    assert text.index("\n## The measured design\n") < text.index("\n## The lower bound\n")
+    doc = json.loads((tmp_path / "periods.json").read_text(), parse_constant=lambda c: pytest.fail(f"JSON has {c}"))
+    assert doc["measured"]["s_x"] == C.s_x and doc["measured"]["u_over_w"] == circuits.compare(REG, STEP).u_over_w(C.s_x)
+    at = circuits.in_place(REG, STEP)
+    for x in doc["rows"]:
+        assert x["overhead"] == analysis.result(at.override(periods.choices(name, x["fleet"], x["period"])), name).lo
+        assert any(r["what"] == "draft:no-straddle" and r["at"][1] < r["at"][0] for r in x["ranking"])
