@@ -104,7 +104,7 @@ def test_clean_fixture_is_ok_and_every_star_member_counts_as_used():
 
 @pytest.mark.slow
 def test_b64_shape_is_counted_exactly():
-    """The #23 shape: 64 requests x 129 steps x 16 layers = 132,096 `*` identities against ~900k map entries (3 planes + 1 dense here:
+    """The B64 shape: 64 requests x 129 steps x 16 layers = 132,096 `*` identities against ~900k map entries (3 planes + 1 dense here:
     64 x 129 x (16 x 3 + 1) = 404,544 entries).  Pre-fix this scan was ~1.2e11 tuple compares (hours); the index makes it linear."""
     pop, bm = _fixture(64, 129, 16)
     cov = coverage_check(pop, bm)

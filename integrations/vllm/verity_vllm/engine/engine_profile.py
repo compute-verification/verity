@@ -152,7 +152,7 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager:
         # request's never computes those positions itself (its KV reads there are the other request's
         # values, its boundary has no step for them). Stock production keeps caching; the B0/B1 rows
         # bind every position of a request to that request's own steps. Cross-request KV identity
-        # is the R3 (prefix cache) row's rule.
+        # is a prefix-cache workload's rule.
         kw["enable_prefix_caching"] = False
     return kw
 
@@ -376,8 +376,7 @@ def build_manifest(
                                          max_num_batched_tokens=max_num_batched_tokens,
                                          tensor_parallel_size=tensor_parallel_size,
                                          quantization=quantization).items() if k not in ("model", "tokenizer")}
-    # state rows (W10, R2/R3/R4): declared scheduler / cache overrides are part of the profile
-    # (they change the profile id) and are replayed under the same values (state_rows.py)
+    # declared engine overrides are part of the profile (they change the profile id) and are replayed under the same values
     if engine_overrides:
         kw.update(engine_overrides)
     doc = {
