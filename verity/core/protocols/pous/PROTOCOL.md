@@ -52,14 +52,14 @@ ideal-permutation model only, and none bounds an adversary at the reference `Π�
   else. The memory challenger issues `k` uniform block indices, all at once or one at a time. Each answer is due within
   the deadline, so the responder is `(D, Q)`-bounded, with no outside help. Whenever a challenge arrives the adversary's
   state is at most `ρ|C|` bits; `W` and `pp` are free.
-- **Deployment: help is accounted, not excluded.** No guarantee assumes trusted prover hardware (Daniel, 12 Oct 2026),
+- **Deployment: help is accounted, not excluded.** No guarantee assumes trusted prover hardware,
   so nothing attests the prover's machine and nothing asks that its responder be isolated. The game's "no outside
   help" is read through the help-accounted row of console's actual-circuit model, the model a certificate cites under
   the id `perfect-isolation` (kept from the earlier model, since certificates pin it): on PoUS's challenge schedule,
   some challenge tick `t_j` has `mem_X(t_j) + 2^e·h ≥ S` for the audited location `X`, where `h` is the help `X`
-  received. It is proved at `e = 0` for a location that does no arithmetic modulo `p` (PR #1860), for challenges on a
+  received. It is proved at `e = 0` for a location that does no arithmetic modulo `p`, for challenges on a
   fixed schedule. PoUS keeps sending each challenge when the last answer arrives, and the model's bridge is to cover
-  that schedule (Daniel, 12 Oct); that bridge is not written yet. An accepted audit bounds what `X` held plus what it
+  that schedule; that bridge is not written yet. An accepted audit bounds what `X` held plus what it
   was helped, never `X`'s memory alone.
 - **Requirement.** `Pr[every answer correct and on time] ≤ δ + ε_crypto`. The honest prover stores `C` and answers by
   lookup.
@@ -83,7 +83,7 @@ The concrete primitives are those of POUS `docs/p3-instantiation.md`. Each set o
 (`params.codec`), and every function that takes a codec defaults to it. P2 (`schemes/p2.py`, experimental) is a
 `protocol.Scheme` and not a codec: see "The generic protocol".
 
-The secure-first scheme is the band graph with in-degree `d = 12` (Daniel, 28 Sep 2026, 01:10Z; POUS
+The secure-first scheme is the band graph with in-degree `d = 12` (POUS
 `docs/band-vs-dense.md`), superseding the dense choice of `docs/scheme-choice-e2e.md`. Dense stays selectable
 (`dense.POINT_64K`).
 
@@ -267,8 +267,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   counts are gaps in the storage profile. P2 (`schemes/p2.py`) is **experimental**:
   - It is the squaring-based scheme: two big-integer squarings per 2,056-byte block to decode.
   - It follows the P2 spec (`p2/PROTOCOL.md`, v4: the POUS store's `docs/efficient-crypto/p2-spec-draft.md`, frozen
-    v1, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, with SHA-512 for every hash since Daniel's
-    ruling of 6 Oct 2026) in its maps and values:
+    v1, relayed in `note:20261004T1836Z-report-relay-p2-spec-v1-frozen`, with SHA-512 for every hash) in its maps and values:
     - the payload is 2,054 bytes per block, which is the spec's profile `p2-2054B`, and the manifest names it;
     - every block, payload and key is a fixed-width, unsigned, big-endian integer;
     - the tweak is rejection-sampled below p, never reduced.
@@ -295,8 +294,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
     model `RingDeviceAt` and the coin commitments' hiding at that count (`p2.WIDE_CLAIMS`).
   - SeqRoot sets `call_ns` (`ROOT_CALL_NS` = 854,029 ns), half the fastest 16,448-bit root with 8 cores of one chiplet
     cooperating, which the spec allows. No root may fit within twice `Δ + RTT`. v1's 1 ms RTT allowance
-    (`Δ + RTT = 1.5 ms`) kept only 1.14× of that margin, so spec v1.1 (`p2/PROTOCOL.md` §12), Daniel's ruling of
-    2026-10-04, keeps w = 16,448 and caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 354 µs, so
+    (`Δ + RTT = 1.5 ms`) kept only 1.14× of that margin, so spec v1.1 (`p2/PROTOCOL.md` §12) keeps w = 16,448 and caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS` = 354 µs, so
     `Δ + RTT ≤ 854 µs`.
     - The single-core floor is the timing red team's Zen 5 core at 5.7 GHz with full-rate IFMA and its best
       Toom-4/Karatsuba plan: τ_F = 361.55 ns per squaring (`regate.py` at w = 16,448).
@@ -426,7 +424,7 @@ requirement.
 
 ## The streamed-label wipe (experimental, `streamed_wipe`)
 
-A proof of secure erasure for a memory wipe (Daniel's tier 3, 19 Oct 2026), in place of the permutation-based retention
+A proof of secure erasure for a memory wipe, in place of the permutation-based retention
 for wipes: C8, the ideal-permutation premise, is false at the reference Feistel10-SHAKE256 `Π₂`, where 1.53% of the fill
 rebuilds any label (verity#1122, art:7617c8017e80). Here the labels need no permutation and no graph. They are the
 auditor's own PRF outputs, so a label the server didn't keep is a label it can't answer, and a server that kept its
@@ -936,8 +934,8 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   `HonestPassesAccepts` prove that the honest full-state server passes P2's ring audit, and the end-to-end event, with
   probability 1.
 
-`P2RingAuditSecure` is also derived from the per-round conjecture `P2RingRoundSecure p ε₀ D Q L` (Daniel's ruling of
-12 Oct, item 5): at every block count from `2^19` to `2^25`, at a boundary where the server holds at most `⌊ρ·|C|⌋`
+`P2RingAuditSecure` is also derived from the per-round conjecture `P2RingRoundSecure p ε₀ D Q L`:
+at every block count from `2^19` to `2^25`, at a boundary where the server holds at most `⌊ρ·|C|⌋`
 bits, a uniform challenge is answered with probability at most `1 − p` given the earlier answers, outside an event of
 mass `k·ε₀` over `k` rounds (one `ε₀` per round, the same at every block count). `Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure` gives `P2RingAuditSecure` from it when
 `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`p = 0.043` with `ε₀ = 2^-137` suffices; `p < 0.04291` doesn't), and
@@ -950,7 +948,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 
 - `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and
   its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its host never restores an
-  earlier copy: `trusted-host` (pending network-accounting's widening, Daniel decision 2)) and the coins drawn
+  earlier copy: `trusted-host`) and the coins drawn
   online;
 - `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
   round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the floor
@@ -966,8 +964,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 Two gaps stood between these statements and the deployed verifier:
 
 - G-1, one session per audit: the check's half is fixed in code; one session per id is the memory challenger's
-  `SessionLog` under its host presumption, which `trusted-host` covers as network-accounting widens it
-  (pending network-accounting's widening, Daniel decision 2). Every session names its setup: a `SessionCommitment`'s
+  `SessionLog` under its host presumption, which `trusted-host` covers. Every session names its setup: a `SessionCommitment`'s
   `binding` has no default, the `MemoryChallenger` refuses one that is not a 64-byte root, and the harness's memory
   challenger (`benchmarks/pous/memory_challenger/live.py`) binds every session to the root the setup publishes for the
   `C*` its digests describe (`VerifierKey.from_row_digests`). Every session is also its audit's: its id (`session`, in
@@ -977,7 +974,7 @@ Two gaps stood between these statements and the deployed verifier:
   so a session that never runs has used its id too. A used id is refused, a log that is missing or unreadable refuses
   every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
-  `trusted-host` (`verity.core.claims`; Daniel decision 2): "the auditor's device runs its stated code, timing
+  `trusted-host` (`verity.core.claims`): "the auditor's device runs its stated code, timing
   included, on a host the prover doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
   host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
@@ -1001,7 +998,7 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
   `M1Meets`.
 - Retracted: `InvertibleLabels`, which was N10's statement. It is false (`N10Refuted`).
 
-## Provisional, waiting on Daniel
+## Provisional
 
 - `|C| ≥ |W|` in `Meets` (so `|pp| ≤ 0.05·|W|`): otherwise a scheme can keep `W` in the free `pp`.
 - `ε_crypto ≤ 2^-128`: an unbounded `ε` makes the requirement vacuous.

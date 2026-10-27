@@ -4,8 +4,8 @@ A verifier with no hardware at the site certifies, window by window, how many re
 node made. The node's memory is its GPUs' HBM and its host's DRAM. No prover hardware is trusted: the host, its CPUs
 and its NICs are all part of the prover. Each window's challenge and its openings coin are live coins from the
 challenger, committed before the session. Inside a window the passes' seeds are Fiat–Shamir: each is derived from the
-window's challenge and the prover's previous root, so the passes are chained. Daniel allowed that for this protocol on
-12 Oct, because a live coin a pass is impractical at its rate (`AGENTS.md`, "Live coins only"). Appendix A is the
+window's challenge and the prover's previous root, so the passes are chained. That is allowed for this protocol,
+because a live coin a pass is impractical at its rate (`AGENTS.md`, "Live coins only"). Appendix A is the
 live-coin design and what it would cost.
 
 The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (seeds, plans, receipts and trees),
@@ -61,7 +61,7 @@ at a stated squaring ceiling, passes \(\mu_{\text{host}}\) and \(\mu_{\text{link
 them; a protocol carries no policy parameter), and reads \(\mu_{\text{carrier}}\) off the property's verdict. `ledger` takes the rebuild model as a `Rebuild(codec, squarings_per_s)` and refuses one of another
 codec than the record's, or a bare fraction. The stated ceiling is the node's, the sum over its devices: 1.67 ×
 `kv.cu`'s 1.499·10^10 squarings a second at 1,024 bits for each RTX PRO 6000 with its share of the host
-(ra-squaring-ceiling's rule, #1887, on `kv.cu`'s FOLD 6, Daniel's card e2a13d4a; 1.567 × 5.13·10^10 at 512 bits),
+(`kv.cu`'s FOLD 6; 1.567 × 5.13·10^10 at 512 bits),
 2.003·10^11 for the node's eight. There, and at the node's measured \(R\) of 12.92 TB/s, \(\mu_{\text{rebuild}}\) is
 0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
 `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
@@ -133,7 +133,7 @@ the store spans the node. A store on one GPU leaves the other GPUs and host DRAM
 of HBM reads 5.57–5.60% in the worst stated window (§10). Every window under 1% needs the store over every tier, host
 DRAM holding its share.
 
-**Which \(R\) is the headline** (Daniel, 13 Oct). γ is reported twice: against the node's specified read bandwidth,
+**Which \(R\) is the headline.** γ is reported twice: against the node's specified read bandwidth,
 which is the headline, and against the measured one beside it. The figures above are at the measured \(R\) = 12.92
 TB/s. The node is specified at 13.60 TB/s (the RTX PRO 6000 Server Edition's 1.597 TB/s a GPU and 16 channels of
 DDR5-6400), which no measured kernel reaches, so at spec every reading also carries that gap:
@@ -157,7 +157,7 @@ compressible allocation, since the hardware compresses 128-byte units, one codec
 (the red team's runs r20261015-062054-6945 and r20261015-062750-5541). Other work's reads are bounded in bus time, not in logical bytes (MEM-22).
 
 What the record says is conservation: correct receipts, at least \((1-\gamma)\) of the declared capacity. The prover
-is one undifferentiated resource of capacity \(R\) (Daniel, 12 Oct, #1884): the guarantee is over whatever reads the
+is one undifferentiated resource of capacity \(R\): the guarantee is over whatever reads the
 node made, with no identity assumption about which hardware made them.
 
 No round-trip floor is assumed. The chain orders a session's passes by itself, so the round trip appears only at the
@@ -233,7 +233,7 @@ verifier's record keeps the binding: the model's name and `checkpoint_sha512`, t
 decision is also Lean (`lean/RemoteAudit/Store.lean`), and reading the files is Python only (§8).
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
-`codec.DEFAULT` (Daniel, 12 Oct, #1884). The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
+`codec.DEFAULT`. The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
 The prime is kv/v0's at 1,024 bits and the one ra-squaring-ceiling measured. \(p = 2^{512} - 569\) unmasked (`p512/k2`)
 stays available as the upgrade path. A registration may name any of them (or more rounds), and the session's `Params`
 must name the same. Each is byte-exact with `verity/word-codec/kv/v0`, the KV kernel's codec (ra-codec-mix's `kv.py`,
@@ -547,8 +547,8 @@ the block's bytes after the seed. The queries a grinding prover makes are counte
 and under a registration that binds \(z\), PoUW's noise for the pass (§8).
 
 **The two receipt kinds.** The registration names one (`receipts.KINDS`), and `Params.receipt` must name the same.
-Every receipt of its sessions is of that kind, the weights' and the KV pages' alike (§8). sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for
-(Daniel, 12 Oct, #1884). block-sha512 is kept as a second kind, for comparison only; it is not the stated receipt.
+Every receipt of its sessions is of that kind, the weights' and the KV pages' alike (§8). sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for.
+block-sha512 is kept as a second kind, for comparison only; it is not the stated receipt.
 sketch-sha512 is ra-codec-tensor's `sketch_receipt.py` (#1916, at 5b8decfc5; at 64 rows, f666d887b), byte for byte:
 the suite pins its numpy outputs at both row counts, and `receipts.SketchReceipter` computes the same in pure Python.
 Each kind's receipt is 64 bytes, so leaves, salts and the tree don't change. The difference is what is hashed after
@@ -575,7 +575,7 @@ What each kind rests on:
   sectors of 32 bytes having been obtained, except for a guess. A query made without one of them is right with
   chance at most \(g/2^{256}\) per query, \(g\) the largest fiber of one sector under the signs. The signs bind
   that far except with \(\Pr_S[g < \text{fib}_S]\). Four conditions come with it:
-  - **The store is held as its blocks** (`rate-sketch-verbatim`, restated by Daniel on 13 Oct). In every tier the
+  - **The store is held as its blocks** (`rate-sketch-verbatim`). In every tier the
     prover holds the store only as its blocks, any number of copies anywhere, and any device may compute from the
     blocks it reads, every such read counted. A layout from which sketches cost less to read than the blocks, such as
     a table of precomputed sketches, is outside it. That exclusion is needed: Lean shows such a table passes every
@@ -592,8 +592,8 @@ What each kind rests on:
     for a column dependency (`RateAuditTensorSketch`), at 256 bytes a block, and \(r^* = 27\).
 
   Under the default the sketch is of \(E_j\) alone, which is #1849's digest of the tile, \(\text{dig}_S(e_t)\), so
-  the statement applies as it is. Binding \(z\) is the registration's opt-in (`bind`), PoUW's join (Daniel, 12 Oct:
-  the guarantee is conservation over one undifferentiated resource, with no identity to bind). Under it \(z\) enters
+  the statement applies as it is. Binding \(z\) is the registration's opt-in (`bind`), PoUW's join (the
+  guarantee is conservation over one undifferentiated resource, with no identity to bind). Under it \(z\) enters
   before the sketch, \(e = E_j \oplus \text{spread}(z)\), as §8's third rule requires, and XOR with a fixed \(z\)
   permutes each sector, so each sector's fiber is the same. But #1849's digest is of the tile alone, so that form
   needs #1849 restated over the block and \(z\) together, and it is not part of the stated guarantee. The verifier's
@@ -680,7 +680,7 @@ any of these counts: it charges a key to every compression.
 None of this moves γ: \(\delta_s\) adds to the failure probability, not to the reads certified. The ledger adds
 \(\delta_s\) to the memory line's δ and to γ's error (`ledger.sketch`), not to a term of γ. That δ is the profile's
 δ, AuditRO's \(2^{-41}\) a pass and \(\delta_s\): over one node's 10-minute horizon at 50 passes a second,
-\(2^{-40} + 2^{-26.13} + 2^{-30.19} = 2^{-26.04}\) (\(2^{-26.13}\) at \(F = 1\)). Daniel's claim at \(2^{-40}\) (§10) is
+\(2^{-40} + 2^{-26.13} + 2^{-30.19} = 2^{-26.04}\) (\(2^{-26.13}\) at \(F = 1\)). The stated claim at \(2^{-40}\) (§10) is
 the openings' δ; the line's total is above it on the slack alone, whatever \(F\).
 
 What each costs on the GPU (#1916): one RTX PRO 6000 (sm_120, 2,092 MHz), an 8 GiB pass of 2,097,152 blocks, best of
@@ -735,7 +735,7 @@ fragment cut that `gemm_blocks` builds splits every 128-byte word across 4 vecto
 it. A kernel that keeps it needs a layout of its own, one whose every vector is still one whole registered block (a
 fixed permutation of the block's bytes, which the verifier applies to the opened block before its sketch), named in
 `LAYOUTS` and here before any of its receipts is credited. ra-codec-tensor proposes the permutation its fused GEMM
-can produce, and it is added as a named layout with its check and vectors (Daniel, 13 Oct). Until then the fused
+can produce, and it is added as a named layout with its check and vectors. Until then the fused
 GEMM's vectors are refused: store-order/v0 is the only layout.
 
 **\(z_{(i,j)}\)**, under a registration that binds \(z\) only, is PoUW's noised output of the tile the prover computes
@@ -1442,7 +1442,7 @@ window \(t\)'s share of correct receipts. Set that to δ: except with δ, the wr
 correct receipts. The same event bounds every window's share by itself: \(f_t < \bar d \sum_u s_u / s_t\), about
 \(\ln(1/\delta)/s_t\), with no union over the windows.
 
-Daniel's claim is that hybrid (#1884): short by under 0.15% over a 10-minute horizon (for \(\mu_{\text{sample}}\),
+The stated claim is that hybrid: short by under 0.15% over a 10-minute horizon (for \(\mu_{\text{sample}}\),
 below) and by under 1% in every window (for the whole \(\gamma_t\)), at \(2^{-40}\), with the window stated at
 \(T\) = 60 s and 33,273 openings (13 Oct). For \(\mu_{\text{sample}}\) it
 needs \(d \ge 2{,}773\) openings a window and \(d \cdot n \ge 18{,}470\) over the horizon's \(n\) windows. The stated
@@ -1497,8 +1497,7 @@ whose share a block depends on the store's size (`timing.store_floor` solves for
 at \(g\) = 50 µs, no \(T\) meets 1% below 458.4 GB (54.6 GB a GPU). The suite checks the closed form against `ledger`
 on a 20-minute window, 2% either side of it.
 
-**The horizon's 0.15%** is stated for its pooled \(\mu_{\text{sample}}\), with the whole γ reported beside it (Daniel,
-13 Oct: the default put to him, which applied with no objection by its deadline). The pooled
+**The horizon's 0.15%** is stated for its pooled \(\mu_{\text{sample}}\), with the whole γ reported beside it. The pooled
 \(\mu_{\text{sample}}\) is 0.0083% at every stated and optional \(T\), and the whole γ 0.67% at best.
 \(\mu_{\text{chip}}\) (the node's \(S_{\text{chip}}\) over its store, 0.39% at 94 GB a GPU over every tier) exceeds
 0.15% by itself, and λ (37.9 bits a 4 KiB block, 0.116%) does with \(\mu_{\text{rebuild}}\). Neither λ nor
@@ -1623,7 +1622,7 @@ rejected `disagreement`.
 - The record (`Session.record`) is §7's, with `block_bytes` 8,224, `codec` `p2-16448/v4` and layout `p2-unit4/v0`.
   `audit.Rebuild` refuses a P2 codec, so `audit.ledger` refuses a P2 record: \(\mu_{\text{rebuild}}\) at P2's encode
   waits on `WorkHardnessP2` and `SquaringCeilingP2`, drafted (not decided) in Accounting's assumptions, which need the
-  H200's squaring rate at 16,448 bits measured. Claims are Daniel's.
+  H200's squaring rate at 16,448 bits measured.
 - The sketch bound at units is `SketchBoundSession` at \(m = 257\) sectors, drafted as `SketchBoundP2`:
   \(\delta_s = Q/2^{96} + (Q + P)(\varepsilon + N/2^{512}) + (Q + P)^2/2^{257}\) at `SketchRank 16 257 12 ε`, with
   \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
@@ -1692,5 +1691,5 @@ trusted floor, the overlap charges the whole round trip, and live coins cost 5.4
 0.25%.
 
 **The rate.** A coin a pass is a committed, released message every 20–50 ms per node, each with its hm96 opening,
-for every node audited. That is the rate Daniel called impractical. The chain needs one challenge and one openings
+for every node audited. That rate is impractical. The chain needs one challenge and one openings
 coin a window.
