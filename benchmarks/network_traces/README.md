@@ -265,7 +265,8 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
   schedule: it enters the compute audit's terms, which go into JointPeriod.
 - The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
-- No faulty term with every unit drawn, and D_j = 1.
+- No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
+  which the certifier doesn't meet at D_j = 1: an offset the prover chooses within a bucket reaches the client.
 
 The two forms:
 - The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
@@ -280,7 +281,7 @@ The scale:
 - Each machine has one network certifier in front of all its compute, serving at the run's rate.
 - The weights are Llama-3.2-1B's 1,235,814,400 BF16 parameters: 1.98·10^10 bits, 2.47 GB.
 
-**`prog` as registered today (the record's K)**, bits, and the share of the weights:
+**`prog` as registered today (the record's K)**, bits, and the share of the weights (the jitter term 0, assumed (J)):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
@@ -295,7 +296,7 @@ As registered today, K passes the size of the weights within one machine-week, s
 monitoring period.
 
 **`prog` only at its anchored entries (conditional on the generator-form lowering, LEAN-49)**, bits, and the share of
-the weights:
+the weights (the jitter term 0, assumed (J)):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
@@ -315,6 +316,8 @@ K also rests on these conditions:
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
+- The jitter term is 0 at D_j = 1, assumed (J), which the certifier doesn't meet: an offset the prover chooses within
+  a bucket reaches the client.
 - At d951's light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
   anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
   a machine-week either way.
@@ -344,6 +347,9 @@ Pr[window i accepted ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind,
 and the secrets of a covert sender whose every window meets `WindowGood` number at most 2^K, where
 
 K = log2 #S_s + Σ_c log2(cap_c + 1) + Σ_i [#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i·log2 D_j].
+
+The report takes D_j = 1, so its jitter term is 0: assumed (J), `NetTiming.JitterBounded`, which the certifier
+doesn't meet at D_j = 1: an offset the prover chooses within a bucket reaches the client.
 
 `NetTiming.periodLeak_le_sum` (#4324) sums the windows' failures by a union bound:
 
