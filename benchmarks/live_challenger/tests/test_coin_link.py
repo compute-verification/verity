@@ -32,9 +32,9 @@ import coin_link as L  # noqa: E402
 FAST = ["--bucket-ms", "5", "--window", "20", "--slack-ms", "600000", "--cell-bytes", "1024", "--coin-cells", "2"]
 
 
-def link(out: Path, port: int, *extra: str, env=None) -> subprocess.Popen:
+def link(out: Path, port: int, *extra: str) -> subprocess.Popen:
     return subprocess.Popen([sys.executable, "-I", str(LINK), "--out", str(out), "--port", str(port), *FAST, *extra],
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
 
 def test_a_session_through_the_link_exempts_exactly_its_coins_and_counts_the_rest(tmp_path):
@@ -63,7 +63,7 @@ def test_a_session_through_the_link_exempts_exactly_its_coins_and_counts_the_res
         json.dumps({"type": "commitment", "commitment": commitment.to_json()}, sort_keys=True, separators=(",", ":")))
 
 
-def test_the_tunnel_goes_straight_to_the_peer_and_its_end_stops_the_link(tmp_path):
+def test_the_tunnel_goes_straight_to_the_peer_and_its_end_stops_the_link(tmp_path, monkeypatch):
     """With `--peer`, the link listens first, then opens `ssh -N -R PORT:LISTEN` with no jump or proxy to the peer's
     line of the peers file; when that tunnel ends first, the link stops and says so. A peers line that names a jump host
     or a proxy, and an out/ with no challenger record, are refused before anything listens."""
@@ -77,8 +77,8 @@ def test_the_tunnel_goes_straight_to_the_peer_and_its_end_stops_the_link(tmp_pat
     peers = tmp_path / "peers"
     peers.write_text("vy-nebius-1 research@10.0.0.2\nvy-jump -J bastion research@10.0.0.3\n"
                      "vy-proxy -o 'ProxyCommand nc %h %p' research@10.0.0.4\n")
-    env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}
-    relay = link(out, port, "--peer", "vy-nebius-1", "--peers", str(peers), env=env)
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
+    relay = link(out, port, "--peer", "vy-nebius-1", "--peers", str(peers))
     listen = int(relay.stdout.readline().split(":")[1])
     _, err = relay.communicate()
     argv = json.loads((tmp_path / "ssh.json").read_text())
@@ -90,7 +90,7 @@ def test_the_tunnel_goes_straight_to_the_peer_and_its_end_stops_the_link(tmp_pat
     proc.wait()
 
     for peer in ("vy-jump", "vy-proxy"):
-        relay = link(out, port, "--peer", peer, "--peers", str(peers), env=env)
+        relay = link(out, port, "--peer", peer, "--peers", str(peers))
         stdout, err = relay.communicate()
         assert relay.returncode == 2 and stdout == "" and "routes through another host" in err
     relay = link(tmp_path / "empty", port)
