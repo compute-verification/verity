@@ -156,8 +156,9 @@ vacuous until NET-68's whole-window circuit lands. That is a layout and compiler
 network-accounting, with vllm's compiler part as VLLM-103 under it.
 - The window's circuit becomes the whole window under a step-indexed scan router. `Fits` is structural, and arrival
   steps and prompt lengths stay private (#4087 landed; #4102, #4108 and #4175 are open).
-- The start cadence is ASK-122, top's #ask-daniel card for Daniel. If each second's admission count is public, the
-  first token comes at 2.1 s. The default publishes only each window's count, once per 60-bucket window, at 7.1 s. A
+- The start cadence is fixed slots a network timestep (ASK-122, Daniel, 26 Oct): a timestep of 16 buckets (1.6 s)
+  with 4 Program slots, 8 a link-window, nothing of the admissions public (`ingress_scan.Class`), and the first token
+  at D = 2.7 s (vllm's pick, 26 Oct). A
   first token within 1 s is out under every option.
 
 Until then, vllm's #4061 has `records_audit` label the bound vacuous whenever #`freeInputs` exceeds the declared charge.
@@ -341,7 +342,7 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
   - on a TP Commit, `Capped` over `advice_windows.Traced`: the Build's Programs of record, refused unless they are of record.
     On a declared run it emits exactly what a correct compiler emits. I2 doesn't compile a TP rank's Programs yet.
   - on a single-GPU Commit, `Capped` over `I2Compiler`: I2's `predict.steps.compile_steps` (v0) on the advice, under φ from the
-    row's declared inputs (`score.phi_of`: the row id, the served workload file, refused unless its digest is the record's, and
+    workload's declared inputs (`score.phi_of`: its row id, the served workload file, refused unless its digest is the record's, and
     the checkpoint's `config.json`), with each request's prompt and sampling from the record. Its digest names I2's code
     (`code_identity`: `verity` and `verity_vllm` as git lists them, docs and ignored build outputs aside), φ, the seed and ℓ.
     A Program's body is read from the Build dir whose `result.json` names I2's digest, refused where none does, and held to
@@ -354,13 +355,14 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
     Llama-3.2-1B's TP1 Commit r20261024-055630-5377, I2's four Programs equal the Build's `build_request_LP*` digests
     (`commit.json`'s and the audit summary's `i2`).
   - on a served window, the same over φ of the served engine as vllm's advice compiler (#3619) compiles under (`phi_of_serve`:
-    `serve.json`'s model, revision, target profile and execution label, the checkpoint's `config.json`), the server's default
-    seed, and each request's body as that compiler gives it (`serve_ingress`: the sampling fields its ingress record says it
-    brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named as `verity-vllm advice` registers it
-    (`served_identity`: `compile_steps` by module path, its digest over `source_identity.code_identity`, which covers
-    `integrations/vllm` and `verity`), so the audit runs on a tree whose two are the server's. `prove_path.py compiler
-    --serve-run DIR` prints the binding's compiler. I2's Programs are held to the ones vllm's advice compiler wrote into the
-    row dir (`manifest.json`, by I1 id).
+    `serve.json`'s model, revision, target profile and execution label, the checkpoint's `config.json`), the public default
+    seed (`registered_seed`: `engine.served_seed.DEFAULT_SEED`; a run whose `serve.json` records another or none is refused,
+    as vllm's advice compiler refuses it), and each request's body as that compiler gives it (`serve_ingress`: the sampling
+    fields its ingress record says it brought, with its prompt ids, by its I1 id: its `user`, else its HTTP id). It is named
+    as `verity-vllm advice` registers it (`served_identity`: `compile_steps` by module path, its digest over
+    `source_identity.code_identity`, which covers `integrations/vllm` and `verity`), so the audit runs on a tree whose two are
+    the server's. `prove_path.py compiler --serve-run DIR` prints the binding's compiler. I2's Programs are held to the ones
+    vllm's advice compiler wrote into the row dir (`manifest.json`, by I1 id).
 - **A served window** binds the root serve-openai published: the advice is committed once, by the server, and the prover
   commits the window under the published binding. Before any commit and before the draw (folded into the source check a5
   gates the draw on), `serve_check` holds the published records to the verifier's own and refuses by name: another window

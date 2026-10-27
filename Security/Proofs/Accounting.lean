@@ -1,3 +1,4 @@
+import Proofs.Accounting.Defs
 import Proofs.Accounting.Memory
 import Proofs.Accounting.Device
 import Proofs.Accounting.Adversary
@@ -55,6 +56,7 @@ import Proofs.Accounting.RemoteHeld.Sketch
 import Proofs.Accounting.RemoteHeld.SketchLine
 import Proofs.Accounting.RemoteHeld.SketchP2
 import Proofs.Accounting.RemoteHeld.Line
+import Proofs.Accounting.RemoteHeld.Component
 import Proofs.Accounting.Requirement
 import Proofs.Accounting.RequirementPouw
 import Proofs.Accounting.Sanity

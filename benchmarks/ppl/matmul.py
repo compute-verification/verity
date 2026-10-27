@@ -80,8 +80,8 @@ class Run:
         return (self.seed + 1) * 1_000_003 + self.li + self.window * 7_919_003
 
     def gen(self, device) -> torch.Generator:
-        """The attention's coins for this (seed, layer, window), drawn in the order the steps ask (tonight's
-        `attention.py` stream: K's dither bits, then V's, per KV group)."""
+        """The attention's coins for this (seed, layer, window), drawn in the order the steps ask (K's dither bits,
+        then V's, per KV group)."""
         if self._gen is None:
             self._gen = torch.Generator(device=device).manual_seed(self.attention_noise_seed())
         return self._gen
@@ -175,8 +175,8 @@ class MM:
 
     def coins(self, shape, levels: int = 2) -> torch.Tensor:
         """Fresh coins of the given shape, uniform on {0, ..., levels - 1} (bits by default; a b-bit dither takes
-        levels = 2^b). Linears: one stream per (seed, layer, linear, window), the tag tonight's `linears_layerwise.py`
-        uses; attention: the (seed, layer, window) stream, in draw order."""
+        levels = 2^b). Linears: one stream per (seed, layer, linear, window); attention: the (seed, layer, window)
+        stream, in draw order."""
         if self.kind == "linear":
             n = self._draws[0]
             self._draws[0] += 1
