@@ -79,7 +79,7 @@ while read -r name rest; do
   ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $rest true 2>/dev/null || echo "pod_setup: peer $name unreachable from here" >&2
 done < "$PEERS"
 # One check slot over the pod's CPUs, so `slot.py` runs one check at a time: with no slots file it runs each check as it comes,
-# and two circuit-checks side by side OOM-killed a 256 GB pod (the layout move's shard 5, 5 Oct). A slots file in place is kept.
+# and two circuit-checks side by side can OOM-kill a 256 GB pod. A slots file in place is kept.
 SLOTS=${CHECK_SLOTS:-/workspace/research/locks/slots}
 if [ ! -e "$SLOTS" ]; then
   mkdir -p "$(dirname "$SLOTS")"

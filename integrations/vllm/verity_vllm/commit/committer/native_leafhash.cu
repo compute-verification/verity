@@ -1,4 +1,4 @@
-// [R16 sys SYS-05] Device-side weight registration: the SAME leaves and the SAME tree as native_host.register_weights' host path
+// Device-side weight registration: the SAME leaves and the SAME tree as native_host.register_weights' host path
 // (verity_vllm.commit.scheme.pos_leaf over CHUNK-byte position-identified leaves, scheme.fold: node / lift rule), computed on the
 // GPU where the parameters already live.  The host path hashes 256-byte leaves in Python (~0.9 us per leaf + the fold): 2.5 GB of weights =
 // 10 M leaves = 17-24 s per registration, 120 s for a 7B model, and a Commit registers twice (before the workload, again at the C2 replay
