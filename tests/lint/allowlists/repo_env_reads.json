@@ -151,6 +151,7 @@
     {"file": "benchmarks/pouw/served_h1/coins.py", "count": 5},
     {"file": "benchmarks/pouw/served_h1/producer.py", "count": 1},
     {"file": "benchmarks/pouw/served_h1/serve.py", "count": 3},
+    {"file": "benchmarks/pouw/served_zk/rows_bench.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_emu8.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_fp_exact.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_lane_refs.py", "count": 2},

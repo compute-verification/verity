@@ -205,7 +205,7 @@ def main() -> int:
     vp, u64, P = C.c_void_p, C.c_uint64, C.POINTER
     image, rimage = Path(args.cubin).read_bytes(), Path(args.rows_cubin).read_bytes()
     dev = R.Dev(image)
-    refused = dev.identity(settings.PEARLC_EXPECT_UUID)
+    refused = dev.identity(os.environ.get("PEARLC_EXPECT_UUID"))  # the Pearl-C runner's variable, declared with kernels' settings
     calls, reps, prefill = settings.CALLS, settings.REPS or 30, settings.PREFILL
     res: dict = {"schema": "verity-pouw/served-zk-rows-bench/v0",
                  "run": os.path.basename((settings.RESEARCH_RUN_DIR or "").rstrip("/")) or "local",

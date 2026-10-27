@@ -70,7 +70,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("NVCC_APPEND_FLAGS", str, None, VALUE, "flags nvcc appends to every compile (a filler arm sets its own)"),
     S("VERITY_POUW_CUDA_BUILD", str, None, WHERE, "vllm_bench's NCP-2 committer's build directory"),
     S("VERITY_POUW_CUDA_ARCH", str, None, VALUE, "the architecture vllm_bench's NCP-2 committer compiles for"),
-    S("VLLM_ENABLE_V1_MULTIPROCESSING", str, None, VALUE, "vLLM's engine-core process; vllm_bench sets 0, one process"),
+    S("VLLM_ENABLE_V1_MULTIPROCESSING", str, None, WHERE, "vLLM's engine core in a process of its own; vllm_bench sets 0, "
+                                                          "so its hooks and profiles see the engine in theirs"),
     # ---- nvfp4_sm120/ (nvf4_bench.py, fp8_bench.py)
     S("NVF4_EXPECT_UUID", str, None, WHERE, "the GPU UUID nvf4_bench refuses any other than"),
     S("FP8_EXPECT_UUID", str, None, WHERE, "the GPU UUID fp8_bench refuses any other than"),
@@ -97,7 +98,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("PROFILE", str, None, DEBUG, "set: one launch of each kernel between cuProfilerStart and Stop (ncu)"),
     S("REPS", int, None, VALUE, "the timed repetitions; unset, nvf4_bench's 20 and served_zk/rows_bench's 30"),
     # ---- served_zk/, hidden_zk/, h1_prove/, h1_lanes/
-    S("PEARLC_EXPECT_UUID", str, None, WHERE, "the GPU UUID served_zk/rows_bench refuses any other than"),
     S("CALLS", int, 32, VALUE, "served_zk/rows_bench's timed calls"),
     S("PREFILL", int, 8192, VALUE, "served_zk/rows_bench's prefill tokens"),
     S("HZ_STAGE", str, "fast", VALUE, "how a hidden-ZK unit's witness is staged: fast, or the reference"),
