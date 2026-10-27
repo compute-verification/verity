@@ -31,13 +31,6 @@ open FlockComplete.JsonRT (WfObj wfObj_mkObj same_mkObj same_of_good getObjVal?_
   streamList_distinct roundObj roundList roundList_distinct good_recordObj good_linkObj good_streamObj good_roundObj
   good_arr_str dk_cases proofObj Distinct get?_mkObj)
 
-/-- A key of the record unlike another, literal or `spec.dk`'s. -/
-local macro "key_ne" : tactic =>
-  `(tactic| first
-    | decide
-    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
-    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
-
 /-! ## In-place maps -/
 
 theorem wfObj_mapKey {j : Json} (h : WfObj j) (k : String) (g : Json → Json) : WfObj (mapKey k g j) := by
@@ -87,15 +80,30 @@ theorem same_round (spec : SessionSpec) (h : ByteArray → ByteArray) (k : ℕ) 
   · intro key v hm
     simp only [roundList, List.mem_cons, List.mem_nil_iff, or_false, Prod.mk.injEq] at hm
     rcases hm with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-    · exact keep2 (by key_ne) _ _ hd (by simp [roundList]) hg
-    · exact keep2 (by key_ne) _ _ hd (by simp [roundList]) hg
-    · exact keep2 (by key_ne) _ _ hd (by simp [roundList]) hg
+    · exact keep2
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ hd (by simp [roundList]) hg
+    · exact keep2
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ hd (by simp [roundList]) hg
+    · exact keep2
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ hd (by simp [roundList]) hg
     · have hco : (roundObj spec h k r).getObjVal? "coins" = .ok (Json.arr (r.coins.map FlockComplete.f128J)) :=
         getObjVal?_mkObj hd (by simp [roundList])
       rw [getObjVal?_mapKey_self, getObjVal?_mapKey_self, hco]
       exact ⟨_, rfl, same_of_good (good_arr_str (c.vals r.n))⟩
-    · exact keep2 (by key_ne) _ _ hd (by simp [roundList]) hg
-    · exact keep2 (by key_ne) _ _ hd (by simp [roundList]) hg
+    · exact keep2
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ hd (by simp [roundList]) hg
+    · exact keep2
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ hd (by simp [roundList]) hg
   · intro key v hc
     have hk := ne_of_contains_false hc (k' := "coins")
       (v := Json.arr ((c.vals r.n).map FlockComplete.f128J)) (by simp [roundList])
@@ -142,11 +150,26 @@ theorem same_stream (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : 
   · intro key v hm
     simp only [streamList, List.mem_cons, List.mem_nil_iff, or_false, Prod.mk.injEq] at hm
     rcases hm with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-    · exact keep2 (by key_ne) _ _ hd (by simp [streamList]) hg
-    · exact keep2 (by key_ne) _ _ hd (by simp [streamList]) hg
-    · exact keep2 (by key_ne) _ _ hd (by simp [streamList]) hg
-    · exact keep2 (by key_ne) _ _ hd (by simp [streamList]) hg
-    · exact keep2 (by key_ne) _ _ hd (by simp [streamList]) hg
+    · exact keep2
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ hd (by simp [streamList]) hg
+    · exact keep2
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ hd (by simp [streamList]) hg
+    · exact keep2
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ hd (by simp [streamList]) hg
+    · exact keep2
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ hd (by simp [streamList]) hg
+    · exact keep2
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ hd (by simp [streamList]) hg
     · have hro : (streamObj spec h rootB (q, rs)).getObjVal? "rounds" =
           .ok (Json.arr ((Array.range rs.size).map fun k => roundObj spec h k rs[k]!)) :=
         getObjVal?_mkObj hd (by simp [streamList])
@@ -220,18 +243,60 @@ theorem same_record {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) 
     simp only [recordList, List.mem_cons, List.mem_nil_iff, or_false, Prod.mk.injEq] at hm
     rcases hm with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
       ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-    · exact keep5 (by key_ne) (by key_ne) (by key_ne) _ _ _ _ _ hd (by simp [recordList]) hg
-    · exact keep5 (by key_ne) (by key_ne) (by key_ne) _ _ _ _ _ hd (by simp [recordList]) hg
-    · exact keep5 (by key_ne) (by key_ne) (by key_ne) _ _ _ _ _ hd (by simp [recordList]) hg
-    · exact keep5 (by key_ne) (by key_ne) (by key_ne) _ _ _ _ _ hd (by simp [recordList]) hg
-    · exact keep5 (by key_ne) (by key_ne) (by key_ne) _ _ _ _ _ hd (by simp [recordList]) hg
+    · exact keep5
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ _ _ _ hd (by simp [recordList]) hg
+    · exact keep5
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ _ _ _ hd (by simp [recordList]) hg
+    · exact keep5
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ _ _ _ hd (by simp [recordList]) hg
+    · exact keep5
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ _ _ _ hd (by simp [recordList]) hg
+    · exact keep5
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ _ _ _ hd (by simp [recordList]) hg
     · -- the link
       have hl : (recordObj spec h #[rb] P S F).getObjVal? "link" = .ok (linkObj spec h #[rb] P) :=
         getObjVal?_mkObj hd (by simp [recordList])
       rw [getObjVal?_mapKey_ne _ _ hLS, getObjVal?_mapKey_self, getObjVal?_mapKey_ne _ _ hLS, getObjVal?_mapKey_self,
         getObjVal?_mapKey_ne _ _ hPL.symm, hl]
       exact ⟨_, rfl, same_link ht h rb P⟩
-    · exact keep5 (by key_ne) (by key_ne) (by key_ne) _ _ _ _ _ hd (by simp [recordList]) hg
+    · exact keep5
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ _ _ _ hd (by simp [recordList]) hg
     · -- the streams
       have hs : (recordObj spec h #[rb] P S F).getObjVal? "streams" =
           .ok (Json.arr ((spec.repStreams.zip S).map (streamObj spec h #[rb]))) :=
@@ -243,7 +308,14 @@ theorem same_record {spec : SessionSpec} {t : String} (ht : spec.tables = #[t]) 
       refine .arr (by simp [hsz]) fun i h₁ h₂ => ?_
       simp only [Array.getElem_map, Array.getElem_zip]
       exact hst i (by simp at h₁; omega) (by simp at h₂; omega)
-    · exact keep5 (by key_ne) (by key_ne) (by key_ne) _ _ _ _ _ hd (by simp [recordList]) hg
+    · exact keep5
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          (by first | decide | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString])
+                    | (rcases dk_cases ‹SessionSpec› with e | e <;> simp [e, toString] <;> decide))
+          _ _ _ _ _ hd (by simp [recordList]) hg
     · -- the proof digests
       have hp : (recordObj spec h #[rb] P S F).getObjVal? s!"proof_{spec.dk}" =
           .ok (Json.arr ((spec.repStreams.zip F).map (proofObj spec h))) :=

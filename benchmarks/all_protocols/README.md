@@ -64,9 +64,16 @@ every machine of a census deployment, the pooled total first and the per-window 
   tampered period must reject). `eps` sums its terms' δ (each audit's, and in the rows form each link-window's scan's),
   so each term is decided at δ over their count (`term_delta`) and an accepted answer's `eps` is δ itself. The session
   stays in the runner's scratch; `$OUT/certifier-session/` gets each run's deployment, calibration and client
-  certificates only, and `summary.json` counts, N2's exit and its leak scan. Its `stubbed` names what the verdict still
-  stands on: the records are the certifier-only path's, not the network certifier's own cells; the device runs beside
-  the server, not on the auditor's machine through the gate; and the output tie is computed in the clear, not proved.
+  certificates and out records only, and `summary.json` counts, N2's exit and its leak scan. Its `stubbed` names what
+  the verdict still stands on: the records are the certifier-only path's, not the network certifier's own cells; the
+  device runs beside the server, not on the auditor's machine through the gate; and the output tie is computed in the
+  clear, not proved, unless the runner ties it (`--tie`): then the network certifier commits the output it relayed in
+  each link-window as the registered value `out` and signs its head with its session's own key at the link-window's
+  close (`certifier_serve.py --out-program`, `out_commit.commit_out`; the record public, the rows and salts the
+  prover's), the verifier pins its root from that record alone under the deployment's certifier key and session
+  (`check_out`), each output unit's `o0` reads it, the integrity audit proves the output class (every unit with an
+  uncut registered read of an output port) whole beside its work draw, and Lean's registered reads refuse an output
+  unit whose row doesn't open the signed root; the clear check is then a diagnostic.
   `CERTIFIER_PATH=warden` takes the network certifier's own cells instead (`warden_serve.py rehearse --ids --prompts
   --window-per-group`, the gate's scan rehearsal, a period's link-windows its group's in `groups.json`), honest and with
   the stub's tampers (`WARDEN_TAMPER`, default `late,byte`), publishing the gate's public files alone to
@@ -84,6 +91,9 @@ every machine of a census deployment, the pooled total first and the per-window 
   aren't its model's. `--registered` has the loop read its weights as registered values, committed once a run.
   `--pouw h1` (until ALLP-H1LOOP's `serve --pouw h1` lands) also serves PoUW's H1 window and audits it with
   `verity_torch_loop.pouw_audit` before the legs.
+  `--tie` ties the outputs to the certified ones (`verity_all_protocols/tie.py`) under a work law (default `work:64`, any
+  other refused), and `--tie-tamper W,...` with `CERTIFIER_TAMPER=byte` ties those windows to a relay with one output
+  byte changed on the egress, which must reject.
 
 | name | protocol | leg file | owner | state |
 | --- | --- | --- | --- | --- |
