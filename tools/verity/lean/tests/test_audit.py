@@ -1856,9 +1856,10 @@ def test_a_property_of_an_acceptance_has_an_honest_witness_that_the_deployment_i
 
 def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only_shrinks():
     """The guarantees in scope when the rule came are listed under `unwitnessed` with their statements' hashes: one whose
-    statement changed carries its witnesses (the hash no longer matches); an entry of a witnessed guarantee, of one out of
-    scope, or of no guarantee fails. `--update` keeps an entry while it matches (re-keyed when the guarantee moved),
-    drops every other, and adds none, so a new guarantee in scope fails until it has witnesses."""
+    statement changed carries its witnesses (the hash no longer matches); an entry of one out of scope fails, and one beside
+    the witnesses it would exempt, or of a witness, does nothing, the witnesses checked as ever. An entry may exempt one
+    half (`missing`) of a guarantee listing the other. `--update` keeps an entry while it matches (re-keyed when the
+    guarantee moved), drops every other, and adds none, so a new guarantee in scope fails until it has witnesses."""
     pol, f = witnessed()
     h = f["pins"]["P.sound"]["type_sha256"]
     bare = {**POLICY, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": h}}, "unwitnessed": {"P.sound": h}}
@@ -1870,10 +1871,26 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
         "witnesses: P.sound changed since `unwitnessed` listed it, and the rule holds it to witnesses (it reads the claim "
         "P.Holds), so it carries them now: prove `P.sound_honest : P.Compiled d …`")
     assert A.unwitnessed_kept(changed, f, {}) == {}
-    assert witness_codes({**pol, "unwitnessed": {"P.sound": h}}, f) == ["witnesses.unwitnessed-both"]
+    assert witness_codes({**pol, "unwitnessed": {"P.sound": h}}, f) == []
+    assert witness_codes(*witnessed(honest={"body": wbody("P.Other")}, unwitnessed={"P.sound": h})) == \
+        ["witnesses.honest-uncovered"]
     assert A.unwitnessed_kept({**pol, "unwitnessed": {"P.sound": h}}, f, {}) == {}
+    half = {"type_hash": h, "missing": "nontrivial", "why": "PRF-212 / #4867: not yet closed"}
+    honest_only = {**pol, "witnesses": {"P.sound": {"honest": ["P.sound_honest"]}}, "unwitnessed": {"P.sound": half}}
+    assert witness_codes(honest_only, f) == []
+    assert A.unwitnessed_kept(honest_only, f, {}) == {"P.sound": half}
+    assert witness_codes({**honest_only, "unwitnessed": {"P.sound": half | {"missing": "honest"}}}, f) == \
+        ["witnesses.witness-form"]
+    assert witness_codes(*witnessed(honest={"body": wbody("P.Other")}, unwitnessed={"P.sound": half},
+                                    witnesses={"P.sound": {"honest": ["P.sound_honest"]}})) == ["witnesses.honest-uncovered"]
+    assert witness_codes({**pol, "unwitnessed": {"P.sound": half}}, f) == []
+    assert A.unwitnessed_kept({**pol, "unwitnessed": {"P.sound": half}}, f, {}) == {}
+    assert witness_codes({**bare, "unwitnessed": {"P.sound": half}}, f) == ["witnesses.unwitnessed-half"]
+    assert witness_codes({**honest_only, "unwitnessed": {"P.sound": half | {"type_hash": sha("other")}}}, f) == \
+        ["witnesses.unwitnessed-changed"]
+    assert witness_codes({**bare, "unwitnessed": {"P.sound": {"type_hash": h}}}, f) == ["witnesses.form"]
     became = {**pol, "unwitnessed": {"P.sound_honest": f["pins"]["P.sound_honest"]["type_sha256"]}}
-    assert witness_codes(became, f) == ["witnesses.unwitnessed-both"]
+    assert witness_codes(became, f) == []
     assert A.unwitnessed_kept(became, f, {}) == {}
     flight = {**bare, "unwitnessed": {"P.sound": h, "P.ahead": sha("a guarantee a PR ahead on next brings")}}
     assert witness_codes(flight, f) == []
@@ -1956,14 +1973,22 @@ def test_an_honest_witness_at_a_verifier_that_accepts_everything_fails():
 def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beating_its_bound():
     """LEAN-66 (top 21:52Z): a guarantee concluding a bound over a partition or a covering and reading no acceptance (NCI's
     exclusion, training's serving-block bound) is of the `exclusion` kind: its honest witnesses conclude its premises at
-    the deployed partition and parameters, and its nontrivial one is `¬ (… ≤ …)` at an explicit circuit, without the named
-    premise. A statement that only reads a partition, or reads a verifier's acceptance as well, is no exclusion."""
+    the deployed partition and parameters, and its nontrivial one states, at an explicit circuit, (each other premise
+    holds) ∧ ¬ (a named premise) ∧ ¬ (the bound), its conjuncts in any order (lean 27 Oct, #5100 and #5132); a bare
+    `¬ bound` reads no premise and fails. A statement that only reads a partition, or reads a verifier's acceptance as
+    well, is no exclusion."""
     cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
     covers = {"binder": "hc", "type": "P.Covers", "closed": True, "named": "P.Covers", "module": "P.Assumptions"}
     g = {"reads": [cover], "premises": [COMPILED, {"binder": "hc", "head": "P.Covers", "module": "P.Assumptions"}],
          "hypotheses": [covers],
          "body": wbody("LE.le", binders=["∀", "→", "→"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
-    beats = {"body": wbody("LE.le", negated=True)}
+
+    def neg(inner):
+        return {"head": "Not", "defs": [], "refl": False, "assumed": False, "negated": True, "inner": inner}
+
+    def nt(*conjuncts, **more):
+        return {"body": wbody("And", conclusion=list(conjuncts))} | more
+    beats = nt(wk("P.Compiled"), neg("P.Covers"), neg("LE.le"))
     pol, f = witnessed(g, nontrivial=beats)
     pol["assumptions"] = {**pol["assumptions"], "P.Covers": {"owner": "@network-accounting"}}
     assert A.witness_scope("P.sound", pol, f["pins"]["P.sound"]) == (
@@ -1973,15 +1998,31 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
     assert witness_codes({**pol, "witnesses": as_kind}, f) == []
     assert witness_codes({**pol, "witnesses": {"P.sound": {**as_kind["P.sound"], "kind": "acceptance"}}}, f) == \
         ["witnesses.witness-form"]
-    keeps = witnessed(g, nontrivial=beats | {"body": wbody("LE.le", negated=True, binders=["→"]),
-                                             "hypotheses": [covers]})[1]
+    assert witness_codes(*witnessed(g, nontrivial=nt(neg("LE.le"), wk("P.Compiled"), neg("P.Covers")))) == []
+    bare = witnessed(g, nontrivial={"body": wbody("LE.le", negated=True, conclusion=[neg("LE.le")])})[1]
+    assert A.witness_failures(pol, bare, WOWN) == [
+        "witnesses: P.sound_nontrivial drops no premise of P.sound: an exclusion's nontrivial lemma states, at an "
+        "explicit circuit, (each other premise holds) ∧ ¬ (the dropped premise) ∧ ¬ (the bound), one conjunct `¬ P …` "
+        "with P one of P.Compiled, P.Covers; a bare `¬ bound` reads none"]
+    no_bound = witnessed(g, nontrivial=nt(wk("P.Compiled"), neg("P.Covers")))[1]
+    assert witness_codes(pol, no_bound) == ["witnesses.nontrivial-form"]
+    other = witnessed(g, nontrivial=nt(neg("P.Covers"), neg("LE.le")))[1]
+    assert A.witness_failures(pol, other, WOWN) == [
+        "witnesses: P.sound_nontrivial concludes nothing of P.Compiled at its circuit: P.sound's premises other than the "
+        "one it drops (P.Covers) hold there, each a conjunct of its conclusion"]
+    keeps = witnessed(g, nontrivial=beats | {"hypotheses": [covers]})[1]
     assert A.witness_failures(pol, keeps, WOWN) == [
-        "witnesses: P.sound_nontrivial, P.sound's `nontrivial` witness, takes P.Covers, which P.sound rests on: an "
-        "exclusion's nontrivial lemma drops the named premise, and an explicit circuit then beats the bound: it assumes "
-        "nothing beyond named assumptions the lock lists"]
+        "witnesses: P.sound_nontrivial, P.sound's `nontrivial` witness, takes P.Covers, the premise it drops: an "
+        "exclusion's nontrivial lemma drops the named premise, and an explicit circuit then beats the bound"]
+    regions = {"binder": "hr", "head": "Eq", "module": "Init.Core"}
+    eq = witnessed(g | {"premises": [*g["premises"], regions]}, nontrivial=beats)
+    assert witness_codes(pol, eq[1]) == ["witnesses.nontrivial-premises"]
+    assert witness_codes(pol, witnessed(g | {"premises": [*g["premises"], regions]},
+                                        nontrivial=nt(wk("P.Compiled"), wk("Eq", []), neg("P.Covers"), neg("LE.le")))[1]) == []
     missing = A.witness_failures({**pol, "witnesses": {}}, f, WOWN)[0]
-    assert "`P.sound_nontrivial : ¬ LE.le at c₀ …` (an explicit circuit c₀ beats the bound once P.Compiled, " \
-           "P.Covers is dropped, taking none of it)" in missing and '"kind": "exclusion"' in missing
+    assert "`P.sound_nontrivial : (each other premise at c₀) ∧ ¬ (P.Compiled or P.Covers) c₀ … ∧ ¬ LE.le c₀ …` (an " \
+           "explicit circuit c₀ beats the bound once one named premise is dropped)" in missing and \
+           '"kind": "exclusion"' in missing
     both = witnessed(g | {"reads": [cover, HOLDS]})
     assert A.witness_scope("P.sound", both[0], both[1]["pins"]["P.sound"])[0] == "acceptance"
     gate = witnessed(g | {"body": wbody("P.Covering.load", binders=["∀"])})
