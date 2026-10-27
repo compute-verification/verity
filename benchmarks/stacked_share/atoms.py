@@ -31,7 +31,7 @@ from verity.ml.circuits.defs import REGISTRY, bind  # noqa: E402
 
 def registry() -> Any:
     """The registry modules whose Definitions the atoms bind (imported for their registration), and `int8_exact`."""
-    from verity_vllm.program.registry import act, b1, int8_exact, moe  # noqa: F401
+    from verity.ml.definitions.registry import act, b1, int8_exact, moe  # noqa: F401
 
     return int8_exact
 

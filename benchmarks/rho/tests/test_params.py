@@ -21,8 +21,8 @@ def test_every_range_holds_its_value():
 def test_an_override_of_a_key_that_does_not_exist_is_an_error():
     with pytest.raises(KeyError, match="no parameter"):
         REG.override({"fleet.reference-h200.drak": 0.1})
-    assert REG.override({"fleet.reference-h200.dark": 0.1})["fleet.reference-h200.dark"] == 0.1
-    assert REG["fleet.reference-h200.dark"] != 0.1
+    assert REG.override({"fleet.reference-h200.eps_dark": 0.1})["fleet.reference-h200.eps_dark"] == 0.1
+    assert REG["fleet.reference-h200.eps_dark"] != 0.1
 
 
 def test_a_table_with_a_key_its_class_lacks_is_refused():

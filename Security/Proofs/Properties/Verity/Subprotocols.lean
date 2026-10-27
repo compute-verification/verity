@@ -376,7 +376,9 @@ theorem target_eq (a : Audit) : V.Target a = V.TargetFor (V.Verdict a) a := rfl
 
 /-- **A subprotocol's target from its component-level bound.** -/
 theorem sound_of (a : Audit) (h : V.ComponentBound a) : V.Target a := fun θ F c σ =>
-  le_trans (Game.prob_mono (fun _ ⟨⟨_, _, hc⟩, hh⟩ => ⟨hc, hh⟩) _ σ) (h θ F c σ)
+  le_trans (Game.prob_mono (p := fun o => V.Verdict a o ∧ ¬ V.Holds θ F c σ a o)
+    (q := fun o => ComponentAccepts a o.sent ∧ ¬ V.Holds θ F c σ a o)
+    (fun _ ⟨⟨_, _, hc⟩, hh⟩ => ⟨hc, hh⟩) _ σ) (h θ F c σ)
 
 /-- **PoUW's target from its component-level bound** (ONE-16's). -/
 theorem pouwSound_of (h : V.ComponentBound .pouw) : V.PouwSound := V.sound_of .pouw h
@@ -533,7 +535,7 @@ rest of the event where it meets `FinderCR`, `ComponentBound`'s event at `σ` is
 theorem bound {δ : ℝ} (hs : k.atCode.Sound (V.certOf θ) k.price a δ)
     (hδ : ENNReal.ofReal δ ≤ V.delta θ a (V.cost θ F c σ)) (hb : V.FinderCR a θ F c σ → k.BreakBound) :
     Game.prob (fun o => ComponentAccepts a o.sent ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ := by
-  unfold Vocab.error
+  unfold Vocab.error Accounting.condError
   split_ifs with hcr
   · classical
     show _ ≤ V.delta θ a (V.cost θ F c σ) + V.loss a θ ((V.live θ F c).collides sha512Msg a σ)

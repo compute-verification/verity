@@ -15,12 +15,13 @@ from pathlib import Path
 import pytest
 
 import research.queue as Q
+from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP
 from research.queue import QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
-from test_drive_postland import _registry
+from test_drive_postland import _registry, _tree
 from test_queue import World, _git
-from test_queue_drive import Harness, _failed_run, _steps_run, _tip
+from test_queue_drive import Harness, _failed_run, _live_run, _steps_run, _tip
 
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
 
@@ -237,6 +238,102 @@ def test_a_moved_lean_check_that_regenerated_locks_runs_again_on_the_rebuilt_com
     assert not h.tick().startswith("landed")
     assert len(h.launched) == 2 and h.launched[1][0] == new, h.launched
     assert h.d.q.load_state()["drive"]["lean"][new]["state"] is None
+
+
+def _lock_landing(world, monkeypatch, tmp_path, above: dict[str, str], lock: str | None = None) -> tuple[Review, str, str]:
+    """#1 (a Lean change with its lock) checked and landed with the records its check regenerated, `{"records": 2}`, while a
+    check stacked at `next`'s top for #2 (a Lean change in the same package: without its lock, or stacked on #1 with ``lock``
+    as its lock) runs; its run dir holds ``above``'s records.  (the harness, that check's run id, the commit it ran on)"""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    h.d.regenerate_locks = True
+    world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
+    world.gh.put(2, world.change({"pkg/B.lean": "theorem b : True := trivial\n", **({"pkg/lean-audit.json": lock} if lock else {})},
+                                 base=world.gh.prs[1].head if lock else "origin/main"))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    h.review(1)
+    h.tick()
+    h.tick()
+    one, top = h.q.chain()[0].commit, _tip(world)
+    assert [c for c, *_ in h.launched] == [one, top], world.logs        # #1's, and one stacked at the top for #2
+    first, second = h.lean_ids()
+    runs = {first: _live_run(tmp_path, first, one, {"pkg": '{"records": 2}\n'})[1],
+            second: _live_run(tmp_path, second, top, above)[1]}
+    h.d.fetch = lambda r, names: runs[r](r, names) if r in runs else None
+    h.run_state[first] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, first, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #1"), world.logs
+    assert _subject(world, "main").startswith("Lock records regenerated for #1") and _git(world.origin, "rev-parse", "main^") == one
+    world.gh.prs.pop(1)                                                 # GitHub closes it as merged
+    return h, second, top
+
+
+@pytest.mark.parametrize("records", ['{"records": 3}\n', '{"records": 2}\n'])
+def test_a_landing_with_regenerated_locks_rebuilds_next_on_its_lock_commit_and_the_check_above_moves_with_it(
+        world, monkeypatch, tmp_path, records):
+    """26 Oct 22:40Z: drive landed 17 PRs with a `Lock records regenerated` commit on top, `main` was no commit of `next`, and the
+    next sync merged all 93 members again: a passed Lean check at 41 and the running ones above went with their commits (CI-167
+    item 2; 20:47Z too).  `next` is rebuilt on the lock commit at once, each member with its merge's tree and those records, the
+    next sync keeps them, and the check above, running on, moves to its commit's image and lands it with its own records: the
+    tree it checked with them, which the lock gate checks against the commit it ran on.  When its records are the ones below,
+    the image holds them already, and it lands as it is."""
+    h, rid, top = _lock_landing(world, monkeypatch, tmp_path, {"pkg": records})
+    lock, new = _main(world), _tip(world)
+    assert _git(world.origin, "rev-parse", f"{new}~2") == lock                  # #2's image, then #3's, on the lock commit
+    assert _git(world.origin, "diff", "--name-only", top, new) == "pkg/lean-audit.json"
+    assert _git(world.origin, "show", f"{new}:pkg/lean-audit.json") == '{"records": 2}'
+    lean = h.d.q.load_state()["drive"]["lean"]
+    assert top not in lean and lean[new]["carried"] == {"from": top, "files": ["pkg/lean-audit.json"]}, lean
+    assert lean[new]["state"] is None and h.cancelled == []
+    logged = len(world.logs)
+    h.tick()
+    assert any("2 PR(s) above `main`, kept 2, merged 0" in x for x in world.logs[logged:]), world.logs[logged:]
+    assert _tip(world) == new and h.cancelled == [] and list(h.d.q.load_state()["drive"]["lean"]) == [new]
+    h.review(2)
+    h.review(3)
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #3"), world.logs
+    main = _main(world)
+    assert len(h.launched) == 2 and _git(world.origin, "show", f"{main}:pkg/lean-audit.json") == records.strip()
+    assert _git(world.origin, "diff", "--name-only", top, main) == "pkg/lean-audit.json"
+    if records == '{"records": 2}\n':
+        assert main == new
+        return
+    assert _git(world.origin, "rev-parse", "main^") == new
+    kw = {"tool": "check", "kinds": merge.produced(h.q.workdir, "check"), "command": merge.declared_command(h.q.workdir, "check"),
+          "deferred": rid, "fetch": h.d.fetch}
+    assert merge.regenerated_parent(world.origin, main, h.q.store, ran=top, **kw) == rid
+    assert merge.regenerated_parent(world.origin, main, h.q.store, **kw) is None     # it didn't run on the parent
+
+
+def test_a_member_above_whose_merge_changes_the_regenerated_lock_keeps_its_own_record_and_its_place(world, monkeypatch, tmp_path):
+    """In the S1 tail most Lean changes above a landing change its lock too: each keeps its merge's record, so the rebuild
+    doesn't stop there, and a check above it, of the same tree, covers its image as it is."""
+    h, rid, top = _lock_landing(world, monkeypatch, tmp_path, {}, lock='{"records": 5}\n')
+    lock, new = _main(world), _tip(world)
+    assert _git(world.origin, "rev-parse", f"{new}~2") == lock and _tree(world, new) == _tree(world, top)
+    assert h.d.q.load_state()["drive"]["lean"][new]["carried"] == {"from": top, "files": []}
+    logged = len(world.logs)
+    h.review(2)
+    h.review(3)
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #3"), world.logs
+    assert any("kept 2, merged 0" in x for x in world.logs[logged:]) and _main(world) == new and len(h.launched) == 2
+
+
+def test_a_moved_check_that_didnt_regenerate_the_records_below_it_covers_nothing(world, monkeypatch, tmp_path):
+    """The image holds the lock commit's records, and a check that passed without regenerating them checked a tree with other
+    ones: it covers nothing, and the commit is checked again."""
+    h, rid, top = _lock_landing(world, monkeypatch, tmp_path, {})
+    lock, new = _main(world), _tip(world)
+    h.review(2)
+    h.review(3)
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert not h.tick().startswith("landed"), world.logs
+    assert _main(world) == lock and len(h.launched) == 3 and h.launched[2][0] == new, h.launched
+    assert any(f"{rid} ran on {top[:12]} and didn't regenerate pkg/lean-audit.json" in x for x in world.logs), world.logs
 
 
 def test_the_lean_check_stops_below_a_member_that_came_onto_next_within_the_settle_ticks(world, monkeypatch):
@@ -1383,6 +1480,243 @@ def _passed_hand_check(world, monkeypatch) -> tuple[Review, str, str]:
     h.tick()
     assert h.d.q.load_state()["drive"]["lean"][top]["state"] == "passed" and _tip(world) == top, world.logs
     return h, top, rid
+
+
+def test_a_passed_lean_check_of_a_reviewed_prefix_lands_it_though_a_new_head_below_conflicts_and_its_own_commit_failed(
+        world, monkeypatch):
+    """26 Oct 18:55Z: ci's hand check of b43f74a3 passed over S1's 124 reviewed PRs, and in the same tick #4745's new head, below
+    it, rebuilt `next` from 51 up and conflicted: the pass left `next` with its commit, and nothing landed.  Below it, #4439's
+    own commit had failed its Lean check, which also held everything above it though the pass checked the tree that lands."""
+    _registry(world, "lane-1")
+    h = Review(world, monkeypatch, nonlean_first=False)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}", "x.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.tick()
+    own, _, top = (m.commit for m in h.q.chain())
+    assert h.launched == [(top, "m1", False)]
+    h.run_state[h.lean_ids()[0]] = ("done", 1, None)
+    h.tick()
+    assert h.launched[1] == (own, "m1", False), h.launched
+    h.run_state[h.lean_ids()[1]] = ("done", 1, None)
+    h.tick()
+    assert [p for p in h.posts if "of its own commit" in p and "@lane-1" in p], h.posts
+    h.d.hand_lean(top, "ci")
+    (rid,) = h.lean_ids()[2:]
+    world.gh.put(2, world.change({"b.txt": "2\n", "x.txt": "2\n"}))       # a new head that conflicts with #1, marked ready
+    old = h.q.chain()
+    assert not h.tick().startswith("landed") and h.q.chain() == old, world.logs
+    h.clock += 600
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    out = h.tick()
+    assert out.startswith("landed #3"), (out, world.logs)
+    assert _main(world) == top and len(h.launched) == 3
+    assert any(f"the Lean check {rid} of {top[:12]} passed" in s for s in world.logs), world.logs
+
+
+def test_a_passed_lean_check_holds_next_until_it_lands_and_an_ejection_below_it_rebuilds_next(world, monkeypatch):
+    h = Review(world, monkeypatch, baseline=False, nonlean_first=False)    # nothing lands before `main`'s own run
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.tick()
+    one, two, top = (m.commit for m in h.q.chain())
+    admitted = world.gh.prs[2].head
+    h.d.hand_lean(top, "ci")
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("nothing lands before")
+    h.q.first = (3,)
+    world.gh.put(2, world.change({"b.txt": "two\n"}))                      # its owner pushes, and marks the new head
+    h.tick()
+    assert [m.commit for m in h.q.chain()] == [one, two, top], world.logs  # the pass keeps them, `--first` too
+    world.gh.ready.discard((2, world.gh.prs[2].head))
+    world.gh.ready.discard((2, admitted))                                  # #2 ejected, both heads
+    h.q.first = ()
+    h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 3] and chain[0].commit == one and top not in {m.commit for m in chain}, world.logs
+
+
+def test_an_eject_off_drive_leaves_next_under_a_running_lean_check_and_records_the_ejection(world, monkeypatch, capsys):
+    """26 Oct 19:41Z: compute-accounting's `research queue eject 4573`, of a PR not on `next`, rebuilt all 132 members of `next`
+    ("kept 0, merged 132"), and verity-agents[bot] force-pushed it, dropping two running hand Lean checks."""
+    import research.drive as D
+    from research.cli import main as research_main
+
+    h = Review(world, monkeypatch, nonlean_first=False)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.gh.put(9, head := world.change({"c.txt": "9\n"}), ready=False)    # open, never on `next`
+    h.review(1)
+    h.tick()
+    one = h.q.chain()[0].commit
+    assert h.launched == [(one, "m1", False)], world.logs
+    monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
+    monkeypatch.setattr(D, "merge_thread_post", lambda *a, **k: True)
+    monkeypatch.delenv("RESEARCH_DRIVE")
+    refs = lambda: _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
+    before = refs()
+    assert research_main(["queue", "eject", "9", "--reason", "x", "--by", "compute-accounting", "--workdir", str(h.q.workdir),
+                          "--remote", str(world.origin), "--repo", "o/verity", "--store", str(world.tmp / "store")]) == 0
+    assert refs() == before and "drive's next tick rebuilds `next` without it" in capsys.readouterr().out
+    state = h.q.load_state()
+    assert state["ejected"]["9"]["head"] == head and state["ejected"]["9"]["by"] == "compute-accounting"
+    (mark,) = world.store.labels(label_target(9, head), key=vocab.READY)
+    assert mark.value is False and mark.by == "compute-accounting"
+    assert state["drive"]["lean"][one]["state"] is None
+    with pytest.raises(QueueError, match="moved only by drive's App"):
+        h.q.sync()                                                          # nor any other caller
+    assert refs() == before
+    monkeypatch.setenv("RESEARCH_DRIVE", "1")
+    h.tick()
+    assert h.q.chain()[0].commit == one and h.cancelled == [], world.logs
+
+
+def test_a_hand_sync_on_drive_keeps_next_up_to_drives_running_and_passed_lean_checks(world, monkeypatch):
+    h = Review(world, monkeypatch, nonlean_first=False)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 3]
+    h.d.hand_lean(chain[1].commit, "ci")
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    h.tick()
+    assert h.d.q.load_state()["drive"]["lean"][chain[1].commit]["state"] == "passed"
+    world.gh.put(1, world.change({"a.txt": "one\n"}))                       # a new head at the bottom, marked
+    hand = world.queue(nonlean_first=False)
+    assert hand.hand_sync() is None and hand.hold == 2
+    assert [m.commit for m in hand.chain()[:2]] == [m.commit for m in chain[:2]], world.logs
+    world.queue(nonlean_first=False).sync()                                 # without drive's hold it rebuilds from the bottom
+    assert [m.pr for m in h.q.chain()] == [2, 3, 1], world.logs
+
+
+def test_a_hand_sync_waits_for_a_running_lean_check_whose_prefix_holds_an_ejected_member(world, monkeypatch):
+    """CI-190 (3): drive's tick waits for such a check to end before the rebuild takes its commit off `next`; a hand sync, which
+    had no such step, rebuilt from the ejected member and threw the check away."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    for n in (1, 2):
+        h.review(n)
+    h.tick()
+    top = _tip(world)
+    assert h.launched == [(top, "m1", False)], world.logs
+    world.gh.ready.discard((1, world.gh.prs[1].head))                      # #1 ejected below the running check
+    why = world.queue(nonlean_first=False).hand_sync()
+    assert why and f"waits for the Lean check of {top[:12]}" in why and _tip(world) == top
+
+
+def test_research_queue_drive_refuses_off_drive_and_pushes_nothing(world, monkeypatch, capsys):
+    """CI-190 (1): a tick lands onto `main` and rebuilds `next`, which only drive's App may move."""
+    import research.merge as M
+    from research.cli import main as research_main
+
+    calls = []
+
+    def gh(repo, *args):
+        calls.append(args)
+        assert args[:2] == ("pr", "list"), args
+        return "[]"
+
+    monkeypatch.setattr(M, "_gh_cli", gh)                                   # the branch sweep's, which runs before the sync
+    monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    monkeypatch.delenv("RESEARCH_DRIVE")
+    refs = lambda: _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
+    before = refs()
+    assert research_main(["queue", "drive", "--on", "m1", "--workdir", str(world.tmp / "q" / "verity"), "--remote",
+                          str(world.origin), "--repo", "o/verity", "--store", str(world.tmp / "store"), "--rules",
+                          str(world.dev / "ci" / "queue.toml")]) == 1
+    assert "/data/infra/drive.sh once" in capsys.readouterr().err and refs() == before and calls == []
+
+
+def test_a_member_that_doesnt_compile_under_a_passed_lean_check_lets_its_pushed_fix_in(world, monkeypatch):
+    """CI-190: a passed Lean check held #2's old head on `next` (`_landable`) after `_compiles` cut below it and `_eject` left
+    it for its owner's fix, so drive landed #1 and then logged "nothing lands: #2 ... waits" every tick."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(2, broken := world.change({"pkg/bad.py": "def (:\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.tick()
+    top = _tip(world)
+    assert h.launched == [(top, "m1", False)], world.logs
+    world.gh.put(2, world.change({"pkg/bad.py": "x = 1\n"}, base=broken))   # its owner's fix, on top, marked
+    h.review(2)
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #1"), world.logs
+    assert any("not ejecting #2" in s for s in world.logs), world.logs
+    out = h.tick()
+    assert out.startswith("landed #3"), (out, world.logs)
+    assert _git(world.origin, "show", "main:pkg/bad.py") == "x = 1"
+
+
+def test_a_cut_below_a_lean_change_under_a_passed_lean_check_waits_for_a_lean_check_of_what_lands(world, monkeypatch):
+    """CI-191: #1 and #2 both change pkg's lock, and #2 doesn't compile; a Lean check of #1 + #2 + #3 passed, `_compiles` cut
+    below #2, and drive landed #1 alone on that check, a tree no Lean check ever saw."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    h.d.max_lean_checks = 1                                                # one check holds both Lean changes
+    world.gh.put(1, one := world.change({"pkg/lean-audit.json": '{"a": 1}'}))
+    world.gh.put(2, world.change({"pkg/lean-audit.json": '{"a": 1, "b": 2}', "pkg/bad.py": "def (:\n"}, base=one))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.tick()
+    top, below = _tip(world), _main(world)
+    assert h.launched == [(top, "m1", False)], world.logs
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    out = h.tick()
+    assert not out.startswith("landed") and _main(world) == below, (out, world.logs)
+    own = h.q.chain()[0].commit
+    assert h.launched[1] == (own, "m1", False) and top not in h.d.q.load_state()["drive"]["lean"], world.logs
+    (again,) = h.lean_ids()[1:]
+    h.run_state[again] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, again, {LEAN_STEP: "passed"})]
+    out = h.tick()
+    assert out.startswith("landed #"), (out, world.logs)
+    assert _git(world.origin, "show", "main:pkg/lean-audit.json") == '{"a": 1}'
+    assert f"research queue drive: landed #1 #3 on `main` at {_main(world)[:12]} (check {again})" in world.logs, world.logs
+
+
+def test_drives_own_pushes_of_main_refuse_off_drive_and_in_shadow_too(world, monkeypatch):
+    """CI-191 (a): `_land` and `_revert` push `main` whoever calls them; off drive they refuse before anything, `--shadow` too,
+    which never reaches them."""
+    h = Review(world, monkeypatch, baseline=False)                         # nothing lands before `main`'s own run
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert not h.tick().startswith("landed")
+    refs = lambda: _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
+    before = refs()
+    monkeypatch.delenv("RESEARCH_DRIVE")
+    with pytest.raises(QueueError, match="moved only by drive's App"):
+        h.d.land_reviewed(h.q.load_state()["drive"], dry_run=False)
+    _move_main(world, {"z.txt": "z\n"})
+    h.q.fetch()
+    before, moved = refs(), _main(world)
+    with pytest.raises(QueueError, match="moved only by drive's App"):
+        h.d._revert([moved])
+    h.q.shadow = True
+    with pytest.raises(QueueError, match="moved only by drive's App"):
+        h.d._revert([moved])
+    assert refs() == before
+    h.q.shadow = False
+    monkeypatch.setenv("RESEARCH_DRIVE", "1")
+    assert h.d._revert([moved]) == "pushed" and _git(world.origin, "rev-parse", "main^1") == moved
 
 
 def test_lean_check_refuses_a_commit_whose_recorded_lean_check_passed_naming_its_run(world, monkeypatch):

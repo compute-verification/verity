@@ -147,6 +147,61 @@ def test_a_manifest_listed_after_the_plan_rescues_its_blobs(env):
     assert gc.load_marks(marks) == {}
 
 
+class PutDuringDeletes(FsRemote):
+    """Runs `hook(key)` after each delete: a put that lands while the deletes run."""
+
+    def __init__(self, root, hook):
+        super().__init__(root)
+        self.hook = hook
+
+    def delete(self, key: str) -> bool:
+        out = super().delete(key)
+        self.hook(key)
+        return out
+
+
+def _due(b, cache, marks, notes, *datas: bytes):
+    blobs = [blob(b, d) for d in datas]
+    for x in blobs:
+        artifact(b, "run-record/v1", x, age_days=40)
+    gc.apply(FsRemote(b), gc.plan(FsRemote(b), cache, [notes], now=NOW), cache, marks, now=NOW)
+    return blobs
+
+
+def test_each_batch_of_deletes_follows_a_fresh_listing(env):
+    """ci, 26 Oct: one listing before 395,277 deletes left hours in which a put reusing a candidate blob went unseen."""
+    b, notes, cache, marks = env
+    blobs = sorted(_due(b, cache, marks, notes, b"first", b"second"))
+    later = NOW + gc.GRACE_S
+    p = gc.plan(FsRemote(b), cache, [notes], now=later)
+    put = []
+    r = PutDuringDeletes(b, lambda k: put or put.append(artifact(b, "run-record/v1", blobs[1], meta={"put": "between"})))
+    out = gc.apply(r, p, cache, marks, now=later, batch=1)
+    assert out["deleted"] == 1 and out["rescued"] == 1 and out["listings"] == 3 and out["lost_count"] == 0
+    assert not present(b, blobs[0][0]) and present(b, blobs[1][0])
+
+
+def test_a_blob_deleted_under_a_put_in_its_own_batch_is_reported_lost(env):
+    b, notes, cache, marks = env
+    gone, = _due(b, cache, marks, notes, b"gone")
+    later = NOW + gc.GRACE_S
+    put = []
+    r = PutDuringDeletes(b, lambda k: put or put.append(artifact(b, "run-record/v1", gone, meta={"put": "during"})))
+    out = gc.apply(r, gc.plan(FsRemote(b), cache, [notes], now=later), cache, marks, now=later)
+    assert out["deleted"] == 1 and out["lost"] == [gone[0]] and out["lost_count"] == 1
+
+
+def test_a_put_that_uploads_the_blob_again_loses_nothing(env):
+    b, notes, cache, marks = env
+    again, = _due(b, cache, marks, notes, b"again")
+    later = NOW + gc.GRACE_S
+    put = []
+    r = PutDuringDeletes(b, lambda k: k.endswith(".parts.json") and not put and put.append(
+        (blob(b, b"again"), artifact(b, "run-record/v1", again, meta={"put": "during"}))))
+    out = gc.apply(r, gc.plan(FsRemote(b), cache, [notes], now=later), cache, marks, now=later)
+    assert out["deleted"] == 1 and out["lost_count"] == 0 and present(b, again[0])
+
+
 def test_an_unreadable_manifest_or_citing_tree_deletes_nothing(env, tmp_path):
     b, notes, cache, _ = env
     artifact(b, "run-record/v1", blob(b, b"x"), age_days=40)

@@ -1,6 +1,6 @@
 # Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW),
-# space (PoUS's run check), bandwidth (the remote bandwidth session) and communication (the network certifier over the
-# period, `verity/certifier/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
+# space (PoUS's run check), bandwidth (the remote bandwidth session), communication (the network certifier over the
+# period, `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
 # drives. Code: no Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite"]
@@ -36,6 +36,11 @@ path = "../pouw/lean/check"
 name = "network_check"
 path = "../network/lean"
 
+# The registration check onsite runs before composing: NCI's check of record (`NciCheck.Protocol`, `verity/nci/v1`).
+[[require]]
+name = "nci_check"
+path = "../network/nci/lean"
+
 # Space: PoUS's check of a run, on the memory challenger's Lean.
 [[require]]
 name = "pous_check"
@@ -46,10 +51,10 @@ path = "../pous/check"
 name = "remote_audit"
 path = "../remote_bandwidth/lean"
 
-# NCI's check of record (`NciCheck.Protocol`), the registration check onsite runs before composing.
+# The wipe: the memory challenger's streamed-label wipe verdict (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`).
 [[require]]
-name = "nci_check"
-path = "../network/nci/lean"
+name = "core_memory_challenger"
+path = "../../devices/memory_challenger/lean"
 
 [[lean_lib]]
 name = "CoreOnsite"

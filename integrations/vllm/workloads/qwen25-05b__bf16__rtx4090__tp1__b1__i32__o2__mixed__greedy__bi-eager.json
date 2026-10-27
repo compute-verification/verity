@@ -12,7 +12,7 @@
   "target": {
    "protocols": [
     "pouw:ncp-v2",
-    "sampled-proofs:vllm-v1"
+    "sampled-proofs:rows-sha512"
    ]
   }
  },

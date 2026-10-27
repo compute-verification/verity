@@ -95,7 +95,7 @@ def census(fn: Any, dyn: Sequence[bool], ranges: Sequence[P.Range] | None = None
 
 def int8_census(shapes: Sequence[tuple[str, dict, tuple[bool, ...]]] = SHAPES) -> dict[str, dict]:
     """`census` of each exact-int8 Definition at its shape, with property/v1's own class counts beside it (`stacking.count`)."""
-    from verity_vllm.program.registry import int8_exact as I8
+    from verity.ml.definitions.registry import int8_exact as I8
 
     out = {}
     for name, statics, dyn in shapes:

@@ -5,7 +5,7 @@
 # holds it to the Python reference in `scripts/nci_reference.py`.
 # `nci-check` runs `NciCheck.Desc`, the check at the size of the description, then θ's provenance (`NciCheck.Baseline`),
 # and `nci-check --unrolled` the reference. `nci` is the same check as the core protocol `verity/nci/v1`
-# (`NciCheck.Protocol`), the component onsite composes.
+# (`NciCheck.Protocol`), onsite's registration check.
 name = "nci_check"
 defaultTargets = ["NciCheck", "nci-difftest", "nci-desc-difftest", "nci-desc-liveness", "nci-desc-fuzz", "nci-baseline-difftest",
   "nci-check", "nci"]

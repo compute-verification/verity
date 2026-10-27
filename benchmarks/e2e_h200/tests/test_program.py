@@ -1,5 +1,5 @@
-"""The served step's `Program` (`e2e_h200.program`): evaluated node by node on a driven step's inputs, every family's output is
-the driver's committed table, and it returns the step's token and K and V rows."""
+"""The served step's `Program` (`e2e_h200.program`): evaluated node by node on a driven step's inputs, its absent K and V rows
+NaNs, every family's output is the driver's committed table, and it returns the step's token and K and V rows."""
 from __future__ import annotations
 
 import numpy as np
@@ -19,6 +19,8 @@ from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided
 from verity_torch_loop import weights as SW
 
 BATCH, STEPS = 2, 4
+#: an absent K or V row's words: a NaN, which reaches the step's output unless the padded units mask keys n and past
+ABSENT = 0x7FC0
 PROMPTS = np.array([list(b"hi"), list(b"ok")])
 
 
@@ -74,7 +76,7 @@ def inputs(shape, w: Weights, rp: Replayer, step: int, b: int) -> list[np.ndarra
             bits(np.array([t], np.int32))]
     kv = [rp.kv(step, i, b) for i in range(shape.layers)]
     for j in (0, 1):
-        rows = np.zeros((shape.layers, PV_K, shape.head_dim), np.uint16)
+        rows = np.full((shape.layers, PV_K, shape.head_dim), ABSENT, np.uint16)
         for i, pair in enumerate(kv):
             rows[i, :len(pair[j])] = pair[j]
         out.append(bits(rows))

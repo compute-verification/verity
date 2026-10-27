@@ -11,7 +11,9 @@ public, reason, verdict}, and writes into the directory ``out``:
 * ``pouw.answer.json``: the answer's canonical line;
 * ``pouw.detail.json``: what the loop served (units, K, MACs, max_tokens), labelled not certified; the certified work W
   (the accepted window's ``work.credited``, MACs); ε at each δ of `QUOTE_DELTAS`, what the window's draw establishes
-  over W (`window.eps_at`; null when nothing is drawn or no ε <= 1 is established); and which verifiers answered.
+  over W (`window.eps_at`; null when nothing is drawn or no ε <= 1 is established); which verifiers answered; and an H1
+  window's operands (`operands.stated`: their root X, each value's root, and what they don't establish yet, among it
+  the A rows' tie to the served x rows, a gather, CIR-100), null when it names none.
 
 **The H1 window** (the loop's ``--pouw h1`` mode): when ``<period_dir>/pouw/registration.json`` exists, the case is that
 window's. Its commitment is that one-stage registration, and its evidence the proof service's answer for it,
@@ -42,6 +44,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity.core.protocols.pouw import core_check as CC
+from verity.core.protocols.pouw import operands as OP
 from verity.core.protocols.pouw import window as Wd
 
 LEAN_ENV = "VERITY_POUW_CHECK"
@@ -58,17 +61,20 @@ LIVE_PARAM = getattr(CC, "LIVE_PARAM", None)
 
 
 def served(period_dir: Path) -> dict:
-    """What the period's loop served, from its records: the template, its units, K, MACs, and each request's max_tokens
-    (its decode steps, requests in order of their labels)."""
+    """What the period's loop served, from its records: its linear template (``K=``; the wired circuit's quantize
+    templates do no MACs), the circuit's units, K, MACs (K a per-coordinate unit, K·N a wired one), and each request's
+    max_tokens (its decode steps, requests in order of their labels: a wired record's ``requests``)."""
     circuit = json.loads((period_dir / "circuit.json").read_text())
-    [(template, units)] = circuit["templates"]
-    k = int(re.search(r"\{K=([0-9]+)", template).group(1))
+    shapes = [(t, n, re.search(r"\{K=([0-9]+)(?:,N=([0-9]+))?", t)) for t, n in circuit["templates"]]
+    [(template, k)] = {(t, int(m.group(1))) for t, _n, m in shapes if m}
+    macs = sum(n * int(m.group(1)) * int(m.group(2) or 1) for _t, n, m in shapes if m)
     steps: dict[str, set[int]] = defaultdict(set)
     for member in json.loads((period_dir / "index.json").read_text())["members"]:
         for _, _, label in member["labels"]:
-            steps[label["request"]].add(label["step"])
+            for r in label.get("requests") or [label["request"]]:
+                steps[r].add(label["step"])
     order = sorted(steps, key=lambda r: (len(r), r))
-    return {"template": template, "units": units, "k": k, "macs": units * k,
+    return {"template": template, "units": sum(n for _t, n, _m in shapes), "k": k, "macs": macs,
             "max_tokens": [len(steps[r]) for r in order]}
 
 
@@ -162,6 +168,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict:
     detail = {"node": node, "protocol": CC.ID, "window": "h1", "served": work,
               "certified_work": w, "W": w["credited"] if w else 0, "quotes": quotes(c, answer),
               "evidence": str(evidence.relative_to(period_dir)) if evidence.exists() else None,
-              "answered_by": ["core_check"] + (["pouw-check"] if lean is not None else [])}
+              "answered_by": ["core_check"] + (["pouw-check"] if lean is not None else []),
+              "operands": OP.stated(json.loads((period_dir / H1_DIR / "registration.json").read_text())["window"])}
     (out / "pouw.detail.json").write_text(json.dumps(detail, indent=1, sort_keys=True) + "\n")
     return answer

@@ -2,7 +2,6 @@ import Definitions.Accounting.Guarantees.JointLive
 import Proofs.Core.Game.Prob
 import Proofs.Core.Circuit
 import Proofs.Pouw.PearlC.WholeCircuit
-import Proofs.Pouw.PearlC.WholeCircuit
 
 /-!
 # Proof of the joint guarantee over a causal game
@@ -11,7 +10,8 @@ Each subprotocol's per-period guarantee over the causal game (`PeriodLive.Sound`
 of the whole game, so at a strategy the union bound over the subprotocols, the periods, the wipes and the memory terms
 sums the errors (`prob_exists_le`, `Verity.Game.prob_or_le`). Nothing here reads how the coins interleave: that is in
 each subprotocol's own guarantee. With `ecr/sha-512` at each finder, each loss is read at the finder's expected calls
-(`JointPeriodLiveECR`).
+(`JointPeriodLiveECR`). A subprotocol whose own guarantee holds outside a break event gets its `Sound` with the break
+charged at its finder (`Live.sound_of_break`), not folded into its acceptance.
 
 The honest prover's extractor reads an evaluation, in which every unit is correct (`correct_eval`), and the commitment
 opens every gate to it, so no unit is unbound and the integrity claim holds at every nonnegative share
@@ -48,7 +48,7 @@ theorem Live.prob_exists_univ_le {O ι : Type} [Fintype ι] (p : ι → O → Pr
 
 /-- **The joint guarantee over a period played as a causal game** (`Accounting.Guarantees.JointPeriodLive`). -/
 theorem JointPeriodLive : Accounting.Guarantees.JointPeriodLive := by
-  intro ι α _ d C O G r H c δ loss h s
+  intro ι α _ d C O G r c err h s
   exact (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun a _ => h a s)
 
 /-- A finder meeting `ecr/sha-512` within `q` expected calls outputs a collision with probability at most
@@ -62,10 +62,31 @@ theorem Live.pr_le_of_expectedCR {H : Claims.Msg → Claims.Msg} {F : Claims.Fin
 (`Accounting.Guarantees.JointPeriodLiveECR`). -/
 theorem JointPeriodLiveECR : Accounting.Guarantees.JointPeriodLiveECR := by
   intro ι α _ d C O G r H c δ loss q h hmono hcr hq s
-  refine (JointPeriodLive ι α d C O G r H c δ loss h s).trans (Finset.sum_le_sum fun a _ => ?_)
-  show δ a + loss a (ENNReal.ofReal ((r.finder a s).Pr H)) ≤ _
+  refine (JointPeriodLive ι α d C O G r c (fun a s => r.error H a (δ a s) (loss a) s) h s).trans
+    (Finset.sum_le_sum fun a _ => ?_)
+  show δ a s + loss a (ENNReal.ofReal ((r.finder a s).Pr H)) ≤ _
   exact add_le_add le_rfl
     (hmono a (ENNReal.ofReal_le_ofReal (Live.pr_le_of_expectedCR (hcr a s) (hq a s))))
+
+/-- **A subprotocol's break, charged at its finder.** A subprotocol whose own guarantee bounds its failure outside an
+event `Break s` of the run (a root opened two ways, a forged release; PoUS's `RealizesSpaceOfPeriodHeld` reads its
+acceptance as `Accepts ∧ ¬ Break`) has its per-period guarantee at `PeriodLive.error`, once the break's probability at
+every strategy is at most its loss at the probability that its finder, built from that strategy, outputs a collision:
+the break is charged as its own term rather than folded into the acceptance. -/
+theorem Live.sound_of_break {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {O : Type}
+    {G : Game O} (r : PeriodLive d α C G) (H : Claims.Msg → Claims.Msg) (c : Certificates) (a : Audit)
+    (δ : Strategy G → ℝ≥0∞) (loss : ℝ≥0∞ → ℝ≥0∞) (Break : Strategy G → O → Prop)
+    (hoff : ∀ s, prob (fun o => r.accepts a o ∧ ¬ Break s o ∧ ¬ r.Holds c s a o) G s ≤ δ s)
+    (hbreak : ∀ s, prob (Break s) G s ≤ loss (r.collides H a s)) :
+    r.Sound c a (fun s => r.error H a (δ s) loss s) := by
+  intro s
+  show _ ≤ δ s + loss (r.collides H a s)
+  calc prob (fun o => r.accepts a o ∧ ¬ r.Holds c s a o) G s
+      ≤ prob (fun o => (r.accepts a o ∧ ¬ Break s o ∧ ¬ r.Holds c s a o) ∨ Break s o) G s :=
+        prob_mono (fun o ⟨ha, hn⟩ => (Classical.em (Break s o)).elim Or.inr fun hb => Or.inl ⟨ha, hb, hn⟩) G s
+    _ ≤ prob (fun o => r.accepts a o ∧ ¬ Break s o ∧ ¬ r.Holds c s a o) G s + prob (Break s) G s :=
+        prob_or_le _ _ G s
+    _ ≤ δ s + loss (r.collides H a s) := add_le_add (hoff s) (hbreak s)
 
 /-- **No unit is unbound** in a transcript that is an evaluation and that the openings open at every gate. -/
 theorem Live.unbound_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
@@ -178,7 +199,7 @@ theorem JointPeriodLive_nontrivial : Accounting.Guarantees.JointPeriodLive_nontr
 /-- **The joint guarantee over a horizon of periods played as one causal game**
 (`Accounting.Guarantees.JointHorizonLive`). -/
 theorem JointHorizonLive : Accounting.Guarantees.JointHorizonLive := by
-  intro ι α _ d m C O G r H c δ loss h s
+  intro ι α _ d m C O G r c err h s
   calc prob (fun o => ∃ j a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s
       ≤ ∑ j, prob (fun o => ∃ a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s :=
         Live.prob_exists_univ_le _ G s
@@ -189,11 +210,11 @@ theorem JointHorizonLive : Accounting.Guarantees.JointHorizonLive := by
 /-- **The joint guarantee over a horizon of server-time blocks and their wipes, played as one causal game**
 (`Accounting.Guarantees.JointHorizonBlocksLive`). -/
 theorem JointHorizonBlocksLive : Accounting.Guarantees.JointHorizonBlocksLive := by
-  intro ι α _ _ d B C O G S H c fw δ loss εWipe δPous h hW hM s
-  have hA := JointHorizonLive ι α d B C O G S.block H c δ loss h s
-  have hW' : prob (fun o => ∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ ∑ b, εWipe b :=
+  intro ι α _ _ d B C O G S c fw err εWipe δPous h hW hM s
+  have hA := JointHorizonLive ι α d B C O G S.block c err h s
+  have hW' : prob (fun o => ∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ ∑ b, εWipe b s :=
     (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun b _ => hW b s)
-  have hM' : prob (fun o => ∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o) G s ≤ ∑ b, δPous b :=
+  have hM' : prob (fun o => ∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o) G s ≤ ∑ b, δPous b s :=
     (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun b _ => hM b s)
   calc _ ≤ _ := prob_or_le _ _ G s
     _ ≤ _ := add_le_add le_rfl (prob_or_le _ _ G s)

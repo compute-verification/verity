@@ -6,10 +6,10 @@ their ported components' packages, with no Mathlib:
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`);
   `registered id R s components`, the same after a registration check `R`, on the registration the component `s`
-  commits to (`Registered.lean`); the stub components
-  (`Stubs.lean`); and the `#guard`s that pin both rules (`Guards.lean`).
+  commits to (`Registered.lean`); both over blobs (`Blobs.lean`); the stub components (`Stubs.lean`); and the `#guard`s
+  that pin both rules (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): integrity, work, space, bandwidth and
-  communication, after NCI's registration check.
+  communication.
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): integrity and work.
 
 The rule and the formats are written once, over any list of components, and the two products are values
@@ -38,13 +38,44 @@ component's `answer` on its case, then decides, reject first:
 On acceptance the product makes public each component's public outputs and keeps each one's profile, both as JSON objects
 keyed by the component's id. On rejection or undecided nothing is public.
 
-### A registration check
+`Properties.Composition` (`Security/Properties/Composition.lean`, proved in `Security/Proofs/Properties/Composition.lean`)
+states the accept row against this code. `answerAccepts` covers every `Core.Protocol`: what `answer` accepts decodes,
+and its check accepts it. `acceptMeans` covers `Core.Composition.check`: what it accepts fits the composition, every
+component accepts its own case, and the commitment is `bind` of the components' digests.
 
-Onsite checks the registration before composing, in its commit phase: `registered "verity/onsite/v0"
-NciCheck.Protocol.protocol SampledProofs.OneStage.protocol.id components`. NCI's check of record is a registration
-check, not a component (Daniel's ruling: onsite has six subprotocols, and NCI is none of them), and the registration it
-checks is the one sampled proofs' one-stage audit commits to: one registration digest in both. Its formats are the
-product's with the registration's beside the components':
+## Components
+
+| component | onsite | remote | `Core.Protocol` | id |
+| --- | --- | --- | --- | --- |
+| communication (the network certifier over the period: its link-windows certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
+| work (PoUW's window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
+| integrity (sampled proofs' one-stage audit on the proofs themselves, which it reads as blobs) | yes | yes | `SampledProofs.OneStageZk.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
+| space (PoUS's check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
+| bandwidth (the remote bandwidth session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
+| the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../devices/memory_challenger/lean`) | `verity/wipe/v0` |
+
+Until its port lands, a component is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port
+replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package
+a `[[require]]` of each product, keeping each list in the order of its ids (`ordered`, which each product's `#guard`
+checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
+own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's
+own difftest or its period hook. Every component of both products is ported; NCI is a registration check, not a component, and
+the trial's reconciling is not a component yet.
+
+A component that reads blobs (`Core.BlobProtocol`, the content-addressed files beside its three byte strings: integrity's
+proof files) makes the product one too: `productB` (`CoreComposition/Blobs.lean`) hands the caller's blobs to every
+component, those that read none ignore them (`Protocol.withoutBlobs`), and on the blobs it is `product` of its
+components on them (`productB_on`). `onsite check P C E [BLOB ...]` reads them after the evidence, and a `serve` case
+carries them as hex under `blobs`.
+
+## A registration check
+
+`registered id R s components` checks a registration before composing, in its commit phase, and `registeredB` is the
+same over blobs. Onsite is one, with NCI's check of record as `R` (`NciCheck.Protocol.protocol`, `verity/nci/v1`):
+`registeredB "verity/onsite/v0" NciCheck.Protocol.protocol
+SampledProofs.OneStageZk.protocol.id components`, whose registration is the one sampled proofs' one-stage audit commits
+to, one registration digest in both. NCI is a registration check, not a component (Daniel's ruling: onsite has six
+subprotocols, and NCI is none of them). Its formats are the product's with the registration's beside the components':
 
 | input | format |
 | --- | --- |
@@ -59,53 +90,26 @@ whatever the components answer (`mismatch`: `registration: R checked D, s commit
 Otherwise it answers as the product of the components does under the commitment's first 64 bytes, and the registration
 adds nothing to what is public or kept.
 
-`Properties.Composition` (`Security/Properties/Composition.lean`, proved in `Security/Proofs/Properties/Composition.lean`)
-states the accept row against this code. `answerAccepts` covers every `Core.Protocol`: what `answer` accepts decodes,
-and its check accepts it. `acceptMeans` covers `Core.Composition.check`: what it accepts fits the composition, every
-component accepts its own case, and the commitment is `bind` of the components' digests. `acceptRegistration` covers
-`Core.Composition.checkRegistered`: what it accepts, the registration check accepted on the registration's case, the
-commitment ends in the registration's digest, a case of the committing component's commits to that digest, and the
-rest is what `acceptMeans` concludes. At onsite, NCI accepted the registration sampled proofs' one-stage audit commits
-to.
-
-## Components
-
-| component | onsite | remote | `Core.Protocol` | id |
-| --- | --- | --- | --- | --- |
-| communication (the network certifier over the period: its link-windows certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
-| work (PoUW's window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
-| integrity (sampled proofs' one-stage audit) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
-| space (PoUS's check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
-| bandwidth (the remote bandwidth session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
-
-Until its port lands, a component is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port
-replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package
-a `[[require]]` of each product, keeping each list in the order of its ids (`ordered`, which each product's `#guard`
-checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
-own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's
-own difftest or its period hook. Every component of both products is ported. Onsite's registration check is NCI's
-(`NciCheck.Protocol.protocol`, `nci_check`, `../network/nci/lean`, `verity/nci/v1`: the declaration's isolation units
-each read at most `α` novel bits per gate); the trial's reconciling is not a component yet.
-
 ## The difftest
 
 `uv run tools/verity/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
 `tests/reference.py`: the trial's composition rule from #1036 (`cursor/protocol-interfaces-c3b2` at 46820ebcb, vendored,
 with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), and
-each component's own Python (PoUW's `core_check.case`; sampled proofs' one-stage difftest's `answer`, `one_stage` behind
-the protocol's decoders; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
-certificates and one-stage's answers, on small signed periods from its `build`; for onsite's registration check, the
-NCI protocol's difftest's `reference`, `nci_reference.check_baseline` behind the protocol's decoders), which that
-component's own difftest holds its Lean to; for space and bandwidth, their Python verifiers' answers on small periods of their hooks
+each component's own Python (PoUW's `core_check.case`; for integrity, v2's framing over sampled proofs' one-stage
+difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2 decides without a session's proof; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
+certificates and one-stage's answers, on small signed periods from its `build`; the wipe's mirror,
+`wipe_protocol_case.answer`, on signed wipes from its `case`), which that component's own difftest holds its Lean to;
+for space and bandwidth, their Python verifiers' answers on small periods of their hooks
 (`tests/periods.py`: `pous.period.run` signed at S1's deployed parameters, honest and cheating, and
 `remote_bandwidth.period.run`, honest, cheating and unverified), whose Lean their packages' difftests hold to those
 verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_protocol.py`).
 Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or fails to decode
-(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), onsite's
-registration is on the registration record and log sampled proofs' case commits to three times in four (an honest
-declaration with its θ and provenance dropped) and on NCI's own otherwise, and the composition's inputs, onsite's
-registration or the case itself are often broken. The port follows top's rule where the
+(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), every case hands
+the components the same blobs (integrity's circuit and public file), and the composition's inputs, its blobs or the case
+itself are often broken. Integrity accepts only on a session's proof, which no case carries (its cases are audits with no
+session, undecided when their draw drew nothing, and audits whose sessions' files are in no blob), so no product
+accepts in the difftest until a v2 case with a proof does. The port follows top's rule where the
 trial's differs, and the reference is changed to match (`verdict`; the trial's, reduced to answers, is `trial_verdict`):
 
 - **Reject dominates.** In the trial a missing statement leaves the product with no verdict even when another component's
