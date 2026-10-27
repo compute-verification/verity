@@ -375,6 +375,37 @@ def test_a_sweeps_reads_stop_at_its_budget_and_its_actions_still_go(monkeypatch)
     assert asked == [("GET", 60), ("GET", 30.0), ("POST", 60)]
 
 
+def test_the_agents_listing_halves_its_page_on_each_503_down_to_its_floor(monkeypatch):
+    """27 Oct: GET /v1/agents 503'd at the fixed page of 25 from ~00:00Z while 10 answered, and every sweep failed for 3.5 h."""
+    class Resp:
+        def __init__(self, doc):
+            self.doc = doc
+
+        def __enter__(self):
+            return io.BytesIO(json.dumps(self.doc).encode())
+
+        def __exit__(self, *a):
+            return False
+
+    limits = []
+
+    def urlopen(req, timeout=None):
+        q = W.urllib.parse.parse_qs(W.urllib.parse.urlparse(req.full_url).query)
+        limits.append(n := int(q["limit"][0]))
+        if n > 3:
+            raise W.urllib.error.HTTPError(req.full_url, 503, "Service Unavailable", {}, io.BytesIO(b""))
+        return Resp({"items": [{"id": f"bc-{len(limits)}"}], "nextCursor": None if "cursor" in q else "c1"})
+
+    monkeypatch.setattr(W.urllib.request, "urlopen", urlopen)
+    api = W.Api("k")
+    assert [a["id"] for a in api.agents()] == ["bc-3", "bc-4"]
+    assert limits == [W.AGENTS_PAGE, W.AGENTS_PAGE // 2, 2, 2] and api.page == 2
+    monkeypatch.setattr(W.urllib.request, "urlopen", lambda req, timeout=None: (_ for _ in ()).throw(
+        W.urllib.error.HTTPError(req.full_url, 503, "Service Unavailable", {}, io.BytesIO(b""))))
+    with pytest.raises(W.urllib.error.HTTPError):
+        list(api.agents())
+
+
 def test_a_run_read_that_times_out_skips_its_agent_and_the_sweep_goes_on(tmp_path):
     """An IDLE agent's run read (`Watch.read`) caught only HTTP errors, so a timeout there, or a spent read budget, failed the
     whole sweep and left status.json stale."""
