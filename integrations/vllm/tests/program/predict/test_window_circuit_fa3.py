@@ -143,11 +143,11 @@ def _refusals(message: str) -> Counter:
                     reason="int8 Llama-3.2-1B on sm_90 at 4,32,4, minutes on a pod; set VERITY_VLLM_FA3_LLAMA_1B=1")
 def test_int8_llama_3_2_1b_on_sm_90_waits_on_its_readers_alone():
     """int8 Llama-3.2-1B's window circuit on the H200 (exact-int8 linears, FA3's heads at D 64 and kBlockN 192) at the default
-    grain and 4,32,4 is refused for three readers alone: each first block's ``v``, read a slice at a time of the value
-    projection; the norm's ``x``, which o_proj's and down_proj's slices write as other row counts; and the token select's
-    combine, past 256 rows. Its unwired lowering's heads are `Attention_v20`'s Calls (no whole `AttentionHead_v4`, no
-    guarded full block). Its numbers (the refusals by kind, the unwired units, templates and registered reads, the heads'
-    census, peak RSS) are printed as a JSON line."""
+    grain and 4,32,4 is refused for two readers alone: each first block's ``v``, read a slice at a time of the value
+    projection, and the norm's ``x``, which o_proj's and down_proj's slices write as other row counts (the token select's
+    group units and combine are within 256 rows). Its unwired lowering's heads are `Attention_v20`'s Calls (no whole
+    `AttentionHead_v4`, no guarded full block). Its numbers (the refusals by kind, the unwired units, templates and
+    registered reads, the heads' census, peak RSS) are printed as a JSON line."""
     config = {**json.loads(LLAMA_1B.read_text()), "quantization_config": dict(INT8_EXACT_QUANT)}
     reg, cls = _registered({**H200, "int8_exact": "linears"}, config), WindowClass(4, 32, 4)
     with pytest.raises(Unexpressible) as refused:
@@ -163,5 +163,5 @@ def test_int8_llama_3_2_1b_on_sm_90_waits_on_its_readers_alone():
                       "units": sum(circuit.units.values()), "templates": len(circuit.templates),
                       "reads": len(circuit.registered.reads), "heads": dict(heads),
                       "max_rss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1)}, sort_keys=True), flush=True)
-    assert set(kinds) == {("AttnBlockFirst_v1", "v"), ("RMSNormFusedCuda_v2", "x"), ("TokenSelectCombine_v2", "rows")}
+    assert set(kinds) == {("AttnBlockFirst_v1", "v"), ("RMSNormFusedCuda_v2", "x")}
     assert set(heads) <= {"AttnBlockFirst_v1", "AttnBlock_v4{CHECK=false}", "AttnHeadEnd_v1"}

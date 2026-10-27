@@ -9,8 +9,7 @@
   with a block's state in one row (`L3b`) too;
 * at the class of record, every lever leaves the commit's compressions no larger and every step of the plan lowers them,
   and the plan from ``L1 + L2`` on leaves no pad pass at any traffic, once Llama-3.2-1B's class circuit lowers (until its
-  readers' Definitions land, the window refuses its key blocks' values, o_proj's quantizer, a norm and the select's
-  combine by name);
+  readers' Definitions land, the window refuses its key blocks' values, o_proj's quantizer and a norm by name);
 * serving's stream commit is its stream's 4 KiB rows under both schedules, its FA3 interiors the hand count of each launch,
   and ``F`` leaves out exactly those;
 * the H200's AND tables are `BS.compile`'s counts.
