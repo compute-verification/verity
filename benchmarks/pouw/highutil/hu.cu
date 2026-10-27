@@ -2,12 +2,12 @@
 // V31-GPU's no-fold prover (v31.cu, vendored unmodified) or plain cuBLASLt, driven block by block by period.py over
 // stdin and stdout.
 //
-//   hu CFG ROW LP T RMAX ACTKEY
+//   hu CFG ROW LP T RMAX
 //
-// CFG holds shapes.txt (a line `NAME M N K` a layer, in call order), B-NAME.bin (the layer's registered N x K int8 weights)
-// and params-NAME.bin (its CGP1 params). ACTKEY (16 hex digits) keys the activations: call c's A is act_value(ACTKEY, c,
-// i K + k), generated on the GPU beside the other layers' GEMMs once the previous call of its layer has read its A
-// (period.py's act_rows is its twin). RMAX bounds a block's steps (a step is one call of each layer).
+// CFG holds shapes.txt (a line `NAME M N K NB` a layer, in call order), A-NAME.bin and B-NAME.bin (the layer's registered
+// operands for NB transformer blocks, block-major: NB x M x K and NB x N x K int8) and params-NAME.bin (its CGP1 params).
+// Both operands stay on the GPU; step g's calls read block g mod NB. RMAX bounds a block's steps (a step is one call of
+// each layer).
 //
 // Commands, a line each:
 //   block B G0 R ARM CHEAT SEEDS ROOTS   R steps from global step G0; ARM proto (v31's call, its commit beside the next
@@ -17,6 +17,8 @@
 //                                        every tree is on the host. Answers `done B GPU_MS HOST_MS FLAGS SM_MHZ`.
 //   paths B PICKS OUT                    PICKS: u32 (step in block, layer, leaf) triples; OUT: each one's siblings,
 //                                        leaves first (64 bytes a level). Answers `paths B COUNT`.
+//   dump LAYER TILE DIR                  the layer's last protocol call's tile: the A and B rows it read, its words, O
+//                                        and leaves (period.py diag). Answers `dumped LAYER TILE call C`.
 //   quit
 // v31.cu's CUTLASS baseline names phc_prepared even when it isn't linked in; its header declares it
 #include "../harness/native/cutlass_api.h"
@@ -28,28 +30,6 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-
-HD u64 fmix64(u64 z) {
-  z ^= z >> 30; z *= 0xBF58476D1CE4E5B9ull;
-  z ^= z >> 27; z *= 0x94D049BB133111EBull;
-  return z ^ (z >> 31);
-}
-// entry e = i K + k of call c's A: a sum of four bytes, scaled (sd ~9, |a| <= 32), and one entry in 1024 a full-range
-// outlier, so A's rows look like an absmax-quantized activation's and rarely wrap at V +-80
-HD int act_value(u64 key, u64 call, u64 e) {
-  const u64 h = fmix64(key ^ ((call << 32 | e) * 0x9E3779B97F4A7C15ull));
-  const int s = (int)(h & 255) + (int)((h >> 8) & 255) + (int)((h >> 16) & 255) + (int)((h >> 24) & 255) - 510;
-  if (((h >> 32) & 1023) == 0) { const int o = (int)(int8_t)(uint8_t)(h >> 40); return o < -127 ? -127 : o; }
-  return s >> 4;
-}
-__global__ void act_kernel(int8_t* A, u64 total, u64 key, u64 call) {
-  const u64 e0 = ((u64)blockIdx.x * blockDim.x + threadIdx.x) * 16;
-  if (e0 >= total) return;
-  alignas(16) int8_t v[16];
-#pragma unroll
-  for (int j = 0; j < 16; j++) v[j] = (int8_t)act_value(key, call, e0 + j);
-  *reinterpret_cast<int4*>(A + e0) = *reinterpret_cast<const int4*>(v);
-}
 
 // a tree node as the device holds it (8 u64 words) to its digest's 64 bytes
 static void put_node(FILE* f, const uint8_t* p) {
@@ -74,35 +54,34 @@ static Consts consts_with(const Consts& base, const uint8_t* ks) {
 
 struct Layer {
   std::string name;
-  int m, n, k;
+  int m, n, k, nb;
   Ctx c;
   Lt lt;
+  int8_t *As = nullptr, *Bs = nullptr;   // the NB blocks' operands
   size_t lvb = 0;            // one call's levels, bytes
   int depth = 0;
   uint8_t* host = nullptr;   // pinned: RMAX calls' levels
   Dom* dom = nullptr;        // pinned: the layer's CD[0]
-  u64 a_call = ~0ull;        // the call whose A the layer's buffer holds (or is being generated)
   u64 last_call = 0;         // the layer's last protocol call, and its step in its block
   int last_step = 0;
-  cudaEvent_t ev_read, ev_gen, ev_cm, ev_cp;
+  cudaEvent_t ev_cm, ev_cp;
 };
 
 int main(int argc, char** argv) {
-  if (argc != 7) {
-    fprintf(stderr, "usage: hu CFG ROW LP T RMAX ACTKEY\n");
+  if (argc != 6) {
+    fprintf(stderr, "usage: hu CFG ROW LP T RMAX\n");
     return 2;
   }
   const std::string cfg = argv[1];
   const int row = atoi(argv[2]), lp = atoi(argv[3]), t = atoi(argv[4]), rmax = atoi(argv[5]);
-  const u64 actkey = strtoull(argv[6], nullptr, 16);
   std::vector<Layer*> L;
   {
     std::ifstream f(cfg + "/shapes.txt");
     std::string name;
-    int m, n, k;
-    while (f >> name >> m >> n >> k) {
+    int m, n, k, nb;
+    while (f >> name >> m >> n >> k >> nb) {
       Layer* l = new Layer;
-      l->name = name; l->m = m; l->n = n; l->k = k;
+      l->name = name; l->m = m; l->n = n; l->k = k; l->nb = nb;
       L.push_back(l);
     }
   }
@@ -110,10 +89,9 @@ int main(int argc, char** argv) {
   const int NL = (int)L.size();
   int lo, hi;
   CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
-  cudaStream_t s0, s1, sg, cs;   // compute (high), commit, activations, tree copies
+  cudaStream_t s0, s1, cs;   // compute (high), commit, tree copies
   CK(cudaStreamCreateWithPriority(&s0, cudaStreamNonBlocking, hi));
   CK(cudaStreamCreateWithPriority(&s1, cudaStreamNonBlocking, lo));
-  CK(cudaStreamCreateWithPriority(&sg, cudaStreamNonBlocking, lo));
   CK(cudaStreamCreateWithPriority(&cs, cudaStreamNonBlocking, lo));
   void *symC, *symCD;
   CK(cudaGetSymbolAddress(&symC, C));
@@ -124,8 +102,12 @@ int main(int argc, char** argv) {
     if (c.nb != 2) { fprintf(stderr, "%s: room for %d copies of the values, want 2\n", l->name.c_str(), c.nb); return 3; }
     CK(cudaStreamSynchronize(c.s1));
     c.s0 = s0; c.s1 = s1;
-    const auto b = readfile(cfg + "/B-" + l->name + ".bin", (size_t)l->n * l->k);
-    CK(cudaMemcpy(c.B, b.data(), b.size(), cudaMemcpyHostToDevice));
+    for (auto [kind, rows, dst] : {std::tuple{"A", l->m, &l->As}, std::tuple{"B", l->n, &l->Bs}}) {
+      const auto x = readfile(cfg + "/" + kind + "-" + l->name + ".bin", (size_t)l->nb * rows * l->k);
+      *dst = dalloc<int8_t>(x.size());
+      CK(cudaMemcpy(*dst, x.data(), x.size(), cudaMemcpyHostToDevice));
+    }
+    c.A = l->As; c.B = l->Bs;
     const Consts again = consts_with(c.cm.hc, c.params.ks);
     if (memcmp(&c.cm.hc, &again, sizeof(Consts))) {
       fprintf(stderr, "%s: consts_with doesn't rebuild the committer's constants\n", l->name.c_str());
@@ -137,7 +119,7 @@ int main(int argc, char** argv) {
     CK(cudaHostAlloc((void**)&l->dom, sizeof(Dom), cudaHostAllocDefault));
     *l->dom = c.cm.hd;
     lt_setup(l->lt, l->m, l->n, l->k, c.A, c.B, c.O[0], s0);
-    for (cudaEvent_t* e : {&l->ev_read, &l->ev_gen, &l->ev_cm, &l->ev_cp}) {
+    for (cudaEvent_t* e : {&l->ev_cm, &l->ev_cp}) {
       CK(cudaEventCreateWithFlags(e, cudaEventDisableTiming));
       CK(cudaEventRecord(*e, s0));
     }
@@ -157,13 +139,6 @@ int main(int argc, char** argv) {
     printf(" free_gb %.1f\n", fr / 1e9);
     fflush(stdout);
   }
-  auto gen = [&](Layer* l, u64 call) {
-    const u64 total = (u64)l->m * l->k;
-    CK(cudaStreamWaitEvent(sg, l->ev_read));
-    act_kernel<<<(unsigned)((total / 16 + 255) / 256), 256, 0, sg>>>(l->c.A, total, actkey, call);
-    CK(cudaEventRecord(l->ev_gen, sg));
-    l->a_call = call;
-  };
   std::string line;
   while (std::getline(std::cin, line)) {
     std::istringstream in(line);
@@ -196,7 +171,7 @@ int main(int argc, char** argv) {
       fflush(stdout);
       continue;
     }
-    if (cmd == "dump") {   // dump LAYER TILE DIR: the layer's last call's tile (A regenerated, words, O, leaves)
+    if (cmd == "dump") {
       int li, tile;
       std::string dir;
       in >> li >> tile >> dir;
@@ -204,10 +179,9 @@ int main(int argc, char** argv) {
       Ctx& c = l->c;
       const int b = (c.ovl - 1) & 1, tm = tile / c.tiles_n, tn = tile % c.tiles_n;
       CK(cudaDeviceSynchronize());
-      int8_t* a = dalloc<int8_t>((size_t)l->m * l->k);
-      act_kernel<<<(unsigned)(((u64)l->m * l->k / 16 + 255) / 256), 256, 0, s0>>>(a, (u64)l->m * l->k, actkey, l->last_call);
       gk::Dump d(dir);
-      d.bytes("A", a + (size_t)tm * TILE * l->k, (size_t)TILE * l->k, s0);
+      d.bytes("A", c.A + (size_t)tm * TILE * l->k, (size_t)TILE * l->k, s0);
+      d.bytes("B", c.B + (size_t)tn * TILE * l->k, (size_t)TILE * l->k, s0);
       d.bytes("words", c.words[b] + (size_t)tile * c.S * TILE * TILE, (size_t)c.S * 32768, s0);
       std::vector<int> o((size_t)TILE * TILE);
       for (int r = 0; r < TILE; r++)
@@ -218,7 +192,6 @@ int main(int argc, char** argv) {
       f = fopen((dir + "/leaves.bin").c_str(), "wb");
       for (int x = 0; x < c.lpt; x++) put_node(f, l->host + l->lvb * l->last_step + 64 * ((size_t)tile * c.lpt + x));
       fclose(f);
-      CK(cudaFree(a));
       printf("dumped %d %d call %llu\n", li, tile, (unsigned long long)l->last_call);
       fflush(stdout);
       continue;
@@ -249,9 +222,9 @@ int main(int argc, char** argv) {
       for (int li = 0; li < NL; li++) {
         Layer* l = L[li];
         Ctx& c = l->c;
-        const u64 call = (u64)(g0 + s) * NL + li;
-        if (l->a_call != call) gen(l, call);
-        CK(cudaStreamWaitEvent(s0, l->ev_gen));
+        const u64 call = (u64)(g0 + s) * NL + li, blk_t = (u64)(g0 + s) % l->nb;
+        c.A = l->As + blk_t * l->m * l->k;
+        c.B = l->Bs + blk_t * l->n * l->k;
         if (proto) {
           const size_t j = (size_t)s * NL + li;
           CK(cudaStreamWaitEvent(s1, l->ev_cp));
@@ -262,7 +235,6 @@ int main(int argc, char** argv) {
           CK(cudaStreamWaitEvent(s0, c.ev_done[b]));
           c.compute(s0, b, cheat_layer < 0 || cheat_layer == li ? ch : Cheat{});
           CK(cudaEventRecord(c.ev_comp[b], s0));
-          CK(cudaEventRecord(l->ev_read, s0));
           c.commit_ovl(b);
           l->last_call = call;
           l->last_step = s;
@@ -272,9 +244,7 @@ int main(int argc, char** argv) {
           CK(cudaEventRecord(l->ev_cp, cs));
         } else {
           lt_run(l->lt, c.A, c.B, c.O[0], s0);
-          CK(cudaEventRecord(l->ev_read, s0));
         }
-        gen(l, call + NL);
       }
       const gk::Sample smp = nv.sample();
       if (smp.sm_mhz) mhz.push_back(smp.sm_mhz);

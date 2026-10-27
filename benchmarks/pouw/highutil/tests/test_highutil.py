@@ -1,6 +1,6 @@
-"""HIGHUTIL's period on the CPU: the activations' twin of hu.cu's generator, the pick draw, ε, and whole periods at small
-shapes through v31.py's reference prover (`period.RefDriver`) with an in-process coin source: an honest period is
-accepted, a skipping prover's is refused."""
+"""HIGHUTIL's period on the CPU: the pick draw, ε, the operand openings, and whole periods at small shapes through v31.py's
+reference prover (`period.RefDriver`) with an in-process coin source: an honest period is accepted, and a skipping
+prover's, a tampered root's and a swapped operand's are refused."""
 from __future__ import annotations
 
 import hashlib
@@ -14,40 +14,6 @@ import pytest
 
 import period as P
 
-MASK = (1 << 64) - 1
-
-
-def act_value(key: int, call: int, e: int) -> int:
-    """hu.cu's act_value, in Python integers."""
-    def fmix(z: int) -> int:
-        z ^= z >> 30
-        z = z * 0xBF58476D1CE4E5B9 & MASK
-        z ^= z >> 27
-        z = z * 0x94D049BB133111EB & MASK
-        return z ^ (z >> 31)
-    h = fmix(key ^ (((call << 32 | e) * 0x9E3779B97F4A7C15) & MASK))
-    s = sum((h >> (8 * b)) & 255 for b in range(4)) - 510
-    if (h >> 32) & 1023 == 0:
-        o = (h >> 40) & 255
-        o = o - 256 if o > 127 else o
-        return max(o, -127)
-    return s >> 4
-
-
-def test_activations_are_hu_cu_s_generator_entry_by_entry():
-    key, call, k = 0x0123456789ABCDEF, 77, 4096
-    a = P.act_rows(key, call, range(5, 9), k)
-    for r in range(4):
-        for c in (0, 1, 17, 4095):
-            assert a[r, c] == act_value(key, call, (5 + r) * k + c)
-    big = P.act_rows(key, call, range(0, 64), k).astype(np.int64)
-    outliers = np.abs(big) > 32
-    assert 0 < outliers.mean() < 2 / 1024
-    assert big.min() >= -127 and big.max() <= 127
-    # every outlier is one of the generator's (bits 32..41 zero), so the scalar twin agrees on them too
-    r, c = np.argwhere(outliers)[0]
-    assert big[r, c] == act_value(key, call, int(r) * k + int(c))
-
 
 def test_eps_skip_at_delta_one_percent():
     assert math.isclose(P.eps_skip(2048), math.log(100) / (P.ETA * 2048))
@@ -55,7 +21,8 @@ def test_eps_skip_at_delta_one_percent():
 
 
 def test_picks_are_the_coin_s_and_weigh_each_mac_equally():
-    P.configure({"layers": [list(x) for x in P.LAYERS], "m": 16384})
+    P.configure({"layers": [["qkv", 6144, 4096], ["o", 4096, 4096], ["up", 28672, 4096], ["down", 4096, 14336]], "m": 16384,
+                 "nb": 32})
     coin, receipt = b"\x01" * 64, b"\x02" * 64
     a = P.picks(coin, "p", 3, receipt, 300, 400, 32768)
     assert a == P.picks(coin, "p", 3, receipt, 300, 400, 32768)
@@ -67,6 +34,13 @@ def test_picks_are_the_coin_s_and_weigh_each_mac_equally():
         _, n, k = P.LAYERS[p.layer]
         sh = P.shape(n, k, 32768)
         assert 0 <= p.step < 300 and 0 <= p.i < 16384 and 0 <= p.j < n and 1 <= p.s <= sh.S
+
+
+def test_seeded_activations_look_quantized_and_rarely_reach_full_range():
+    a = P.seeded_activations(64, 4096, 5).astype(np.int64)
+    assert a.min() >= -127 and a.max() <= 127
+    assert 0 < (np.abs(a) > 32).mean() < 2 / 1024
+    assert 7 < a[np.abs(a) <= 32].std() < 11
 
 
 @dataclass
@@ -124,20 +98,35 @@ def small(tmp_path_factory):
     prep = json.loads((cfg / "prep.json").read_text())
     P.configure(prep)
     secret = b"\x07" * 64
-    trees = [P.WeightTree.build(name, np.fromfile(cfg / f"B-{name}.bin", dtype=np.int8).reshape(n, k), secret[:32] + name.encode())
-             for name, n, k in P.LAYERS]
-    actkey = 0x5EED
-    drv = P.RefDriver(cfg, prep["row"], actkey)
+    trees = P.operand_trees(cfg, secret, _Serial())
+    drv = P.RefDriver(cfg, prep["row"])
     work = tmp_path_factory.mktemp("work")
-    return P.Period(drv, _Coins(), trees, cfg, prep["row"], actkey, b"\x09" * 64, secret, work, _Serial())
+    return P.Period(drv, _Coins(), trees, cfg, prep["row"], prep["source"], secret, work, _Serial())
+
+
+def test_every_operand_row_opens_against_its_root_and_no_other(small):
+    P.configure(json.loads((small.cfg / "prep.json").read_text()))
+    for (kind, li, t), tree in small.trees.items():
+        name, n, k = P.LAYERS[li]
+        rows = P.M if kind == "A" else n
+        X = P.operand(small.cfg, kind, li, t)
+        j = (7 * li + 3 * t + 1) % rows
+        op = tree.opening(X, j)
+        assert P.operand_reason(kind, name, t, rows, k, tree.root, j, op) is None
+        other = small.trees[(kind, li, 1 - t)]
+        assert P.operand_reason(kind, name, t, rows, k, other.root, j, op)
+        bad = (bytes([op[0][0] ^ 1]) + op[0][1:],) + op[1:]
+        assert P.operand_reason(kind, name, t, rows, k, tree.root, j, bad)
 
 
 def test_an_honest_period_is_accepted(small):
-    """The whole period at small shapes: coins, seeds, commits, paths, answers and the verifier's checks."""
+    """The whole period at small shapes, over both blocks of the model: coins, seeds, commits, paths, answers and the
+    verifier's checks."""
     r = small.proto("t-honest", P.Plan(2, 2, 12))
     assert r["accepted"], r["verdict"]
     assert r["credited_macs"] == r["macs"] == 4 * P.step_macs() and r["q"] == 12
     assert r["verdict"].startswith("ACCEPT")
+    assert len(r["registration"]["operand_roots"]["A"][0]) == P.NB == 2
 
 
 def test_a_skipping_prover_is_refused(small):
@@ -160,3 +149,18 @@ def test_a_tampered_root_is_refused(small, monkeypatch):
     r = small.proto("t-root", P.Plan(1, 1, 24))
     first = [p for p in r["failures"] if "layer=0" in p]
     assert not r["accepted"] and first
+
+
+class _FirstBlockOnly(P.RefDriver):
+    """A prover that runs every step on block 0's operands, never the registered block 1's."""
+
+    def block_of(self, step: int) -> int:
+        return 0
+
+
+def test_computing_on_another_block_s_operands_is_refused(small, monkeypatch):
+    """The block-1 step's roots commit values its registered operands don't produce, so its picks fail (all 24 picks
+    missing that step: 2^-24)."""
+    monkeypatch.setattr(small, "drv", _FirstBlockOnly(small.cfg, small.row))
+    r = small.proto("t-swap", P.Plan(1, 2, 24))
+    assert not r["accepted"] and 0 < r["failed"] < 24, r["verdict"]

@@ -2,15 +2,17 @@
 (verity/core/protocols/pouw/accel/PROTOCOL.md v3.2) on V31-GPU's prover, with live coins, and the certified share of the
 GPU's tensor peak that the periods establish.
 
-**The workload.** Llama-3-8B's four linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x
-14336) at M = 16,384, s8 x s8 with int32 accumulation, called back to back (a step is one call of each). B is the layer's
-weights, seeded (`weights`, v31.py's ``llm`` rows) and registered before any coin. A is a seeded activation, fresh each
-call: call c's A is `act_rows` (hu.cu's act_value, generated on the GPU beside the other layers' GEMMs), keyed by a key
-the registration commits to and the verifier is shown once the period's roots are in. Chaining the layers would
-requantize each O into the next A, a full non-GEMM pass, so the activations are seeded instead.
+**The workload.** Llama-3.1-8B's linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x
+14336) at M = 16,384, s8 x s8 with int32 accumulation, called back to back. A step is one transformer block's four calls,
+and step g runs block g mod NB, so NB = 32 consecutive steps are the prefill's every linear. B is the published
+checkpoint's weights (verity-int8/Llama-3.1-8B-INT8 at its pinned revision, q k v and gate up fused as served; `prep
+--checkpoint`, the shards' SHA-256 in the registration). A is the s8 input each linear gets in a W8A8 forward of that
+checkpoint over 16 x 1,024 tokens of wikitext-2 (`capture.py`), so each call computes what the model computes on that
+batch, and the periods replay that one prefill. Both operands are committed before any coin: a frame-v3-sha512 tree a
+(operand, layer, block), its rows hm96 rows (`OperandTree`), whose roots the registration carries. `prep --seeded`
+seeds both instead (v31.py's ``llm`` rows for B), for tests and shapes the checkpoint doesn't have.
 
-**A period** (`Period.run`): the registration (the layers' weight roots, the activation key's commitment, the period's
-shape, W_reg) is the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then
+**A period** (`Period.proto`): the registration (the operand roots, the operands' source, the period's shape, W_reg) is the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then
 its sampling blocks run in one sequence. Block b's operand-root receipt is H(registration, b, block b-1's value-root
 receipt), and its seeds coin opens after it. Each call's five v31 seeds (dA, dB, U, V, P) are
 ``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``. The GPU runs the block's calls, each committed under a
@@ -20,8 +22,8 @@ blocks of b (`picks`): a call by its MACs, a cell uniformly, a segment by its le
 Each pick's tree paths come off the host copy of its call's tree before the next block overwrites it.
 
 **The verifier** (`verify_pick`), after the period: the prover's answer (`answer`: the opened rows recomputed from the
-tile's operands and coins, their salts and paths, and B's row with its weight opening) against v31.py's
-``check_block``, on the verifier's own seeds from the coins, its own A row from the revealed key, and the call's root.
+tile's operands and coins, their salts and paths, and A's and B's rows with their operand openings) against v31.py's
+``check_block``, on the verifier's own seeds from the coins, the opened operand rows and the call's root.
 Credit is all-or-nothing: the period's MACs if every pick passes, else none. ε_skip = ln(1/δ)/(ηQ) at δ = 1%.
 
 **Deviations from v3.2**, each named in the report: the picks are a fixed Q W_b / W_reg a block, not ``poisson:Q``;
@@ -29,8 +31,10 @@ the coins are 64-byte session coins expanded here, not the challenger's streamed
 (the challenger's release log records what each coin opened after); and the checks run in the clear, the stand-in for
 the Definition and C-Flock --zk.
 
-    period.py prep CFG [--row 32768] [--seed S]          weights, params and shapes for hu
-    period.py run CFG HU OUT [--coins local|gate:USER@HOST ...] [--plan PLAN]
+    period.py prep CFG (--checkpoint DIR | --seeded) [--row 32768] [--nb 32]   weights, params and shapes for hu
+    capture.py CFG --checkpoint DIR                                           the activations (on the GPU)
+    period.py diag CFG HU OUT                                                 one step's tiles against v31.py
+    period.py run CFG HU OUT [--coins local|gate:USER@HOST ...] [--blocks --steps --q --periods --negative]
 """
 from __future__ import annotations
 
@@ -66,10 +70,15 @@ from verity.ml.randomness import derive  # noqa: E402
 
 LAYERS = (("qkv", 6144, 4096), ("o", 4096, 4096), ("up", 28672, 4096), ("down", 4096, 14336))
 M = 16384
+NB = 32       # transformer blocks: step g runs block g mod NB
 LP, T = 256, 3
 TILE = v31.TILE
 SCHEME = "verity/highutil/period/v1"
-WEIGHTS_TAG = "verity/highutil/weights/v1"
+OPERANDS_TAG = "verity/highutil/operands/v1"
+CHECKPOINT = {"repo": "verity-int8/Llama-3.1-8B-INT8", "revision": "723d342ac443b040931242c768df342b0f6f15a7"}
+#: hu's layers from the checkpoint's modules, fused as served: (name, the modules whose rows it stacks)
+FUSED = (("qkv", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")), ("o", ("self_attn.o_proj",)),
+         ("up", ("mlp.gate_proj", "mlp.up_proj")), ("down", ("mlp.down_proj",)))
 ETA = 1 - 2.8e-5
 DELTA = 0.01
 #: θ's sm_120 INT8 dense tensor peak (benchmarks/pouw/machine_model `theta --device sm_120`): 1,024 MACs a clock an SM,
@@ -104,42 +113,47 @@ def eps_skip(q: int, delta: float = DELTA) -> float:
     return math.log(1 / delta) / (ETA * q)
 
 
-# ------------------------------------------------------------------------------------------------------ activations
-def fmix64(z: np.ndarray) -> np.ndarray:
-    z = z ^ (z >> np.uint64(30))
-    z = z * np.uint64(0xBF58476D1CE4E5B9)
-    z = z ^ (z >> np.uint64(27))
-    z = z * np.uint64(0x94D049BB133111EB)
-    return z ^ (z >> np.uint64(31))
-
-
-def act_rows(key: int, call: int, rows: range, k: int) -> np.ndarray:
-    """Rows `rows` of call `call`'s A (K columns), hu.cu's act_value entry by entry."""
-    with np.errstate(over="ignore"):
-        e = np.arange(rows.start, rows.stop, dtype=np.uint64)[:, None] * np.uint64(k) + np.arange(k, dtype=np.uint64)[None, :]
-        h = fmix64(np.uint64(key) ^ (((np.uint64(call) << np.uint64(32)) | e) * np.uint64(0x9E3779B97F4A7C15)))
-    s = sum(((h >> np.uint64(8 * b)) & np.uint64(255)).astype(np.int64) for b in range(4)) - 510
-    out = np.maximum(((h >> np.uint64(40)) & np.uint64(255)).astype(np.uint8).view(np.int8).astype(np.int64), -127)
-    return np.where(((h >> np.uint64(32)) & np.uint64(1023)) == 0, out, s >> 4).astype(np.int8)
-
-
-# ---------------------------------------------------------------------------------------------------------- weights
-def weights(n: int, k: int, seed: int) -> np.ndarray:
+# --------------------------------------------------------------------------------------------------------- operands
+def seeded_weights(n: int, k: int, seed: int) -> np.ndarray:
     """v31.py's ``llm`` weights: Gaussian rows quantized to +-127 by their absolute maximum."""
     b = np.random.default_rng(seed).standard_normal(size=(n, k), dtype=np.float32)
     return np.clip(np.rint(127 * b / np.abs(b).max(axis=1, keepdims=True)), -127, 127).astype(np.int8)
 
 
-def weight_domain(name: str, n: int, k: int) -> CommitmentDomain:
-    return CommitmentDomain(identity_digest_sha512(WEIGHTS_TAG, {"layer": name, "n": n, "k": k}), -1, RangeIndexedDomain(0, n),
-                            hash="sha512")
+def seeded_activations(m: int, k: int, seed: int) -> np.ndarray:
+    """A sum of four bytes, scaled (sd ~9, |a| <= 32), one entry in 1024 a full-range outlier: an absmax-quantized
+    activation's look, so A's rows rarely wrap at V +-80."""
+    g = np.random.default_rng(seed)
+    a = (g.integers(0, 256, size=(4, m, k), dtype=np.int16).sum(axis=0) - 510) >> 4
+    out = g.random((m, k)) < 1 / 1024
+    a[out] = g.integers(-127, 128, size=int(out.sum()))
+    return a.astype(np.int8)
+
+
+def operand_file(cfg: Path, kind: str, name: str) -> Path:
+    return cfg / f"{kind}-{name}.bin"
+
+
+def operand(cfg: Path, kind: str, li: int, t: int) -> np.ndarray:
+    """Block t's A (M x K) or B (N x K) of layer li, from its file (NB of them, block-major)."""
+    name, n, k = LAYERS[li]
+    rows = M if kind == "A" else n
+    return np.memmap(operand_file(cfg, kind, name), dtype=np.int8, mode="r", offset=t * rows * k, shape=(rows, k))
+
+
+def operand_domain(kind: str, name: str, t: int, rows: int, k: int) -> CommitmentDomain:
+    return CommitmentDomain(identity_digest_sha512(OPERANDS_TAG, {"operand": kind, "layer": name, "block": t, "rows": rows, "k": k}),
+                            -1, RangeIndexedDomain(0, rows), hash="sha512")
 
 
 @dataclass
-class WeightTree:
-    """A layer's registered weights: B's rows as hm96 rows (salts prf_salt(kw, row)) in one frame-v3-sha512 tree."""
+class OperandTree:
+    """A registered operand, block t's A or B of a layer: its rows as hm96 rows (salts prf_salt(kw, row)) in one
+    frame-v3-sha512 tree."""
+    kind: str
     name: str
-    n: int
+    t: int
+    rows: int
     k: int
     kw: bytes
     levels: tuple
@@ -149,45 +163,100 @@ class WeightTree:
         return self.levels[-1][0]
 
     @staticmethod
-    def build(name: str, B: np.ndarray, kw: bytes) -> WeightTree:
-        n, k = B.shape
-        dom = weight_domain(name, n, k)
-        hs = [v31.leaf_h(B[p].tobytes(), v31.cref.prf_salt(kw, p)) for p in range(n)]
-        return WeightTree(name, n, k, kw, tree_levels(dom, [row_leaf(dom, p, h, V2) for p, h in enumerate(hs)]))
+    def build(kind: str, name: str, t: int, X: np.ndarray, kw: bytes) -> OperandTree:
+        rows, k = X.shape
+        dom = operand_domain(kind, name, t, rows, k)
+        hs = [v31.leaf_h(X[p].tobytes(), v31.cref.prf_salt(kw, p)) for p in range(rows)]
+        return OperandTree(kind, name, t, rows, k, kw, tree_levels(dom, [row_leaf(dom, p, h, V2) for p, h in enumerate(hs)]))
 
-    def opening(self, B: np.ndarray, j: int) -> tuple[bytes, bytes, tuple[bytes, ...]]:
-        """(row, salt, path) of B's row j."""
-        return (B[j].tobytes(), v31.cref.prf_salt(self.kw, j),
+    def opening(self, X: np.ndarray, j: int) -> tuple[bytes, bytes, tuple[bytes, ...]]:
+        """(row, salt, path) of row j."""
+        return (X[j].tobytes(), v31.cref.prf_salt(self.kw, j),
                 tuple(self.levels[d][(j >> d) ^ 1] for d in range(len(self.levels) - 1)))
 
 
-def weight_reason(name: str, n: int, k: int, root: bytes, j: int, row: bytes, salt: bytes, path: tuple) -> str | None:
-    h = v31.leaf_h(row, salt)
-    if len(row) != k or not verify_opening(weight_domain(name, n, k), Commitment(root, n), Opening(j, h, path), V2,
-                                           VerificationLimits()):
-        return f"B row {j} doesn't open against the registered weight root"
+def operand_reason(kind: str, name: str, t: int, rows: int, k: int, root: bytes, j: int, opening: tuple) -> str | None:
+    row, salt, path = opening
+    if len(row) != k or not verify_opening(operand_domain(kind, name, t, rows, k), Commitment(root, rows),
+                                           Opening(j, v31.leaf_h(row, salt), tuple(path)), V2, VerificationLimits()):
+        return f"{kind} row {j} doesn't open against the registered {kind} root of {name} block {t}"
     return None
 
 
+def _tree(job: tuple) -> OperandTree:
+    cfg, kind, li, t, kw, workload = job
+    configure(workload)
+    return OperandTree.build(kind, LAYERS[li][0], t, np.asarray(operand(Path(cfg), kind, li, t)), kw)
+
+
+def operand_trees(cfg: Path, secret: bytes, pool) -> dict[tuple[str, int, int], OperandTree]:
+    """Every operand's tree, keyed (kind, layer, block), each under its own salt key."""
+    workload = {"layers": [list(x) for x in LAYERS], "m": M, "nb": NB}
+    jobs = [(str(cfg), kind, li, t, H("verity/highutil/operand-salts/v1", secret, kind.encode(), u64(li), u64(t)), workload)
+            for kind in ("A", "B") for li in range(len(LAYERS)) for t in range(NB)]
+    return {(j[1], j[2], j[3]): tr for j, tr in zip(jobs, pool.map(_tree, jobs))}
+
+
 def configure(prep: dict) -> None:
-    """The workload a config was prepared for (its layers and M; the 8B shapes unless a test made it smaller)."""
-    global LAYERS, M
-    LAYERS, M = tuple(tuple(x) for x in prep["layers"]), prep["m"]
+    """The workload a config was prepared for (its layers, M and NB; the 8B shapes unless a test made it smaller)."""
+    global LAYERS, M, NB
+    LAYERS, M, NB = tuple(tuple(x) for x in prep["layers"]), prep["m"], prep["nb"]
+
+
+def checkpoint_weights(d: Path, name: str, modules: tuple[str, ...], t: int) -> np.ndarray:
+    from safetensors import safe_open
+    idx = json.loads((d / "model.safetensors.index.json").read_text())["weight_map"]
+    parts = []
+    for mod in modules:
+        key = f"model.layers.{t}.{mod}.weight"
+        with safe_open(str(d / idx[key]), framework="np") as f:
+            parts.append(f.get_tensor(key))
+    w = np.concatenate(parts)
+    if w.dtype != np.int8:
+        raise SystemExit(f"{d}: {name} block {t} is {w.dtype}, not int8")
+    return w
 
 
 def cmd_prep(a: argparse.Namespace) -> int:
     d = Path(a.cfg)
     d.mkdir(parents=True, exist_ok=True)
     if a.small:
-        configure({"layers": [["a", 256, 768], ["b", 128, 1536]], "m": 256})
+        configure({"layers": [["a", 256, 768], ["b", 128, 1536]], "m": 256, "nb": 2})
+    else:
+        configure({"layers": [list(x) for x in LAYERS], "m": M, "nb": a.nb})
+    if a.checkpoint:
+        ck = Path(a.checkpoint)
+        if ck.name != CHECKPOINT["revision"]:
+            raise SystemExit(f"{ck}: not the pinned revision {CHECKPOINT['revision']}")
+        if [x[0] for x in LAYERS] != [x[0] for x in FUSED]:
+            raise SystemExit("--checkpoint: the 8B layers only")
+        shards = sorted(set(json.loads((ck / "model.safetensors.index.json").read_text())["weight_map"].values()))
+        digests = {}
+        for s in shards:
+            with open(ck / s, "rb") as f:
+                digests[s] = hashlib.file_digest(f, "sha256").hexdigest()
+        source = {"weights": {**CHECKPOINT, "shards_sha256": digests, "fused": [[n, list(ms)] for n, ms in FUSED]},
+                  "activations": "capture.py (capture.json)"}
+    else:
+        source = {"weights": "seeded", "activations": "seeded", "seed": a.seed}
     lines = []
     for li, (name, n, k) in enumerate(LAYERS):
         sh = shape(n, k, a.row)
-        weights(n, k, a.seed * 16 + li).tofile(d / f"B-{name}.bin")
+        with open(operand_file(d, "B", name), "wb") as f:
+            for t in range(NB):
+                w = checkpoint_weights(Path(a.checkpoint), name, FUSED[li][1], t) if a.checkpoint else \
+                    seeded_weights(n, k, (a.seed * 16 + li) * 64 + t)
+                if w.shape != (n, k):
+                    raise SystemExit(f"{name} block {t}: {w.shape}, not {(n, k)}")
+                w.tofile(f)
+        if not a.checkpoint:
+            with open(operand_file(d, "A", name), "wb") as f:
+                for t in range(NB):
+                    seeded_activations(M, k, (a.seed * 16 + li) * 64 + 32 + t).tofile(f)
         (d / f"params-{name}.bin").write_bytes(v31.params_file(sh, os.urandom(64)))
-        lines.append(f"{name} {M} {n} {k}")
+        lines.append(f"{name} {M} {n} {k} {NB}")
     (d / "shapes.txt").write_text("\n".join(lines) + "\n")
-    (d / "prep.json").write_text(json.dumps({"seed": a.seed, "row": a.row, "layers": LAYERS, "m": M}))
+    (d / "prep.json").write_text(json.dumps({"row": a.row, "layers": LAYERS, "m": M, "nb": NB, "source": source}))
     return 0
 
 
@@ -252,15 +321,15 @@ def _cheated(cheat: str) -> int | None:
 
 def answer(job: dict) -> dict:
     """The prover's answer to one pick: the opened rows (recomputed from the tile's operands and coins, as committed), each
-    with its salt, leaf digest and path, and A's and B's rows with B's weight opening."""
+    with its salt, leaf digest and path, and A's and B's rows with their operand openings."""
     sh = shape(job["n"], job["k"], job["row"], job["m"])
     tl = v31.Shape(TILE, TILE, sh.k, sh.lp, sh.t, sh.row)
     seeds = v31.seeds_from(job["seeds"])
-    i, j = job["i"], job["j"]
+    i, j, t = job["i"], job["j"], job["t"]
     tm, tn = i // TILE, j // TILE
     ia, ja = range(tm * TILE, tm * TILE + TILE), range(tn * TILE, tn * TILE + TILE)
-    A = act_rows(job["actkey"], job["call"], ia, sh.k)
-    B = np.fromfile(job["bfile"], dtype=np.int8, count=TILE * sh.k, offset=tn * TILE * sh.k).reshape(TILE, sh.k)
+    A = np.fromfile(job["afile"], dtype=np.int8, count=TILE * sh.k, offset=(t * sh.m + tm * TILE) * sh.k).reshape(TILE, sh.k)
+    B = np.fromfile(job["bfile"], dtype=np.int8, count=TILE * sh.k, offset=(t * sh.n + tn * TILE) * sh.k).reshape(TILE, sh.k)
     c = v31.Coins.rows(sh, seeds, ia, ja)
     f = v31.form(tl, A, B, c)
     skip = _cheated(job["cheat"])
@@ -273,27 +342,28 @@ def answer(job: dict) -> dict:
         row = v31.row_bytes(tl, words, obuf, pos - tile * sh.lpt)
         salt = v31.cref.prf_salt(job["ks"], pos)
         rows[pos] = (row, salt, v31.leaf_h(row, salt), tuple(path))
-    return {"rows": rows, "A": A[i - tm * TILE], "B": B[j - tn * TILE], "B_opening": job["B_opening"]}
+    return {"rows": rows, "A": A[i - tm * TILE], "B": B[j - tn * TILE], "A_opening": job["A_opening"],
+            "B_opening": job["B_opening"]}
 
 
 def verify_pick(job: dict, ans: dict) -> str | None:
-    """The verifier's checks of one pick (None: passed): B's row against the registered weight root, then v31.py's
-    check_block on the verifier's own seeds, its own A row and the call's root."""
+    """The verifier's checks of one pick (None: passed): A's row i and B's row j against the registered operand roots of
+    the call's block, then v31.py's check_block on the verifier's own seeds, those rows and the call's root."""
     sh = shape(job["n"], job["k"], job["row"], job["m"])
-    i, j, s = job["i"], job["j"], job["s"]
-    brow, bsalt, bpath = ans["B_opening"]
-    why = weight_reason(job["name"], sh.n, sh.k, job["weight_root"], j, brow, bsalt, bpath)
-    if why or brow != ans["B"].tobytes():
-        return why or "the answer's B row isn't its opened row"
+    i, j, s, t = job["i"], job["j"], job["s"], job["t"]
+    for kind, x, rows in (("A", i, sh.m), ("B", j, sh.n)):
+        op = ans[f"{kind}_opening"]
+        why = operand_reason(kind, job["name"], t, rows, sh.k, job["operand_roots"][kind], x, op)
+        if why or op[0] != ans[kind].tobytes():
+            return why or f"the answer's {kind} row isn't its opened row"
     seeds = v31.seeds_from(job["verifier_seeds"])
     c = v31.Coins.rows(sh, seeds, range(i, i + 1), range(j, j + 1))
     one = v31.Coins(_RowView(c.dA), _RowView(c.dB), _RowView(c.U), _RowView(c.V), c.perm)
-    A_row = act_rows(job["verifier_actkey"], job["call"], range(i, i + 1), sh.k)[0]
     want = set(positions(sh, Pick(0, 0, 0, i, j, s)))
     if set(ans["rows"]) != want:
         return f"the answer opens leaves {sorted(ans['rows'])}, not {sorted(want)}"
-    return v31.check_block(sh, seeds, job["root"], i, j, s, {"rows": ans["rows"], "A": A_row, "B": np.frombuffer(brow, np.int8)},
-                           one)
+    return v31.check_block(sh, seeds, job["root"], i, j, s, {"rows": ans["rows"], "A": np.frombuffer(ans["A_opening"][0], np.int8),
+                                                             "B": np.frombuffer(ans["B_opening"][0], np.int8)}, one)
 
 
 def prove_and_verify(job: dict) -> tuple[int, str | None]:
@@ -307,8 +377,8 @@ def prove_and_verify(job: dict) -> tuple[int, str | None]:
 class Driver:
     """hu.cu over its stdin and stdout."""
 
-    def __init__(self, hu: str, cfg: Path, row: int, rmax: int, actkey: int, log: Path) -> None:
-        self.p = subprocess.Popen([hu, str(cfg), str(row), str(LP), str(T), str(rmax), f"{actkey:016x}"], stdin=subprocess.PIPE,
+    def __init__(self, hu: str, cfg: Path, row: int, rmax: int, log: Path) -> None:
+        self.p = subprocess.Popen([hu, str(cfg), str(row), str(LP), str(T), str(rmax)], stdin=subprocess.PIPE,
                                   stdout=subprocess.PIPE, stderr=open(log, "ab"), text=True, bufsize=1)
         self.ready = self._line("ready")
 
@@ -338,11 +408,13 @@ class RefDriver:
     """hu's commands on the CPU through v31.py's reference prover (``period.py run CFG ref ...``, and the tests): the same
     values, roots and paths at small shapes, so the period's coins, picks, answers and verifier run without a GPU."""
 
-    def __init__(self, cfg: Path, row: int, actkey: int) -> None:
-        self.cfg, self.row, self.actkey = cfg, row, actkey
-        self.B = [np.fromfile(cfg / f"B-{name}.bin", dtype=np.int8).reshape(n, k) for name, n, k in LAYERS]
+    def __init__(self, cfg: Path, row: int) -> None:
+        self.cfg, self.row = cfg, row
         self.levels: dict[tuple[int, int], list] = {}
         self.ready = ["ready", "ref"]
+
+    def block_of(self, step: int) -> int:
+        return step % NB
 
     def block(self, b: int, g0: int, steps: int, arm: str, cheat: str, seeds: Path, roots: Path) -> dict:
         if arm == "plain":
@@ -354,9 +426,10 @@ class RefDriver:
             for li, (_, n, k) in enumerate(LAYERS):
                 r = rec[384 * (s * NL + li):384 * (s * NL + li + 1)]
                 sh = shape(n, k, self.row)
-                A = act_rows(self.actkey, (g0 + s) * NL + li, range(M), k)
+                t = self.block_of(g0 + s)
                 bad = kind if kind != "none" and (not at or int(at) == li) else None
-                pv, _ = v31.prove(sh, A, self.B[li], v31.seeds_from(r[:320]), r[320:], 0, bad)
+                pv, _ = v31.prove(sh, np.asarray(operand(self.cfg, "A", li, t)), np.asarray(operand(self.cfg, "B", li, t)),
+                                  v31.seeds_from(r[:320]), r[320:], 0, bad)
                 self.levels[(s, li)] = pv.cm.levels
                 out.append(pv.cm.root)
         roots.write_bytes(b"".join(out))
@@ -427,18 +500,18 @@ class Plan:
 
 
 class Period:
-    def __init__(self, drv: Driver, coins: Coins | None, trees: list[WeightTree], cfg: Path, row: int, actkey: int,
-                 actsalt: bytes, secret: bytes, work: Path, pool: ProcessPoolExecutor) -> None:
+    def __init__(self, drv: Driver, coins: Coins | None, trees: dict[tuple[str, int, int], OperandTree], cfg: Path, row: int,
+                 source: dict, secret: bytes, work: Path, pool: ProcessPoolExecutor) -> None:
         self.drv, self.coins, self.trees, self.cfg, self.row = drv, coins, trees, cfg, row
-        self.actkey, self.actsalt, self.secret, self.work, self.pool = actkey, actsalt, secret, work, pool
+        self.source, self.secret, self.work, self.pool = source, secret, work, pool
         self.g = 0   # the next global step
 
     def registration(self, pid: str, plan: Plan) -> tuple[bytes, dict]:
-        reg = {"period": pid, "m": M, "layers": [list(x) for x in LAYERS], "lp": LP, "t": T, "row": self.row,
+        reg = {"period": pid, "m": M, "nb": NB, "layers": [list(x) for x in LAYERS], "lp": LP, "t": T, "row": self.row,
                "blocks": plan.blocks, "steps_per_block": plan.steps, "q": plan.q, "first_step": self.g,
-               "W_reg": plan.blocks * plan.steps * step_macs(),
-               "weight_roots": [t.root.hex() for t in self.trees],
-               "activations": H("verity/highutil/activations/v1", self.actsalt, u64(self.actkey)).hex()}
+               "W_reg": plan.blocks * plan.steps * step_macs(), "source": self.source,
+               "operand_roots": {kind: [[self.trees[(kind, li, t)].root.hex() for t in range(NB)] for li in range(len(LAYERS))]
+                                 for kind in ("A", "B")}}
         return H("verity/highutil/registration/v1", json.dumps(reg, sort_keys=True).encode()), reg
 
     def plain(self, pid: str, plan: Plan) -> dict:
@@ -518,31 +591,32 @@ class Period:
         finally:
             client.close()
         ev = self.coins.evidence(session, reg_digest.hex(), openings, self.work / f"challenger-{pid}")
-        # the verifier: its own seeds from the coins it was given, the revealed activation key against the registration
-        vkey_ok = H("verity/highutil/activations/v1", self.actsalt, u64(self.actkey)).hex() == reg["activations"]
+        # the verifier: its own seeds from the coins it was given, the operand roots it registered
         jobs = []
-        Bmm = [np.memmap(self.cfg / f"B-{name}.bin", dtype=np.int8, mode="r", shape=(n, k)) for name, n, k in LAYERS]
         cheat_layer = int(cheat.split("@")[1]) if "@" in cheat else None
         for idx, (p, pos, paths) in enumerate(all_picks):
             name, n, k = LAYERS[p.layer]
             g0 = reg["first_step"] + p.block * plan.steps
-            call = (g0 + p.step) * NL + p.layer
+            call, t = (g0 + p.step) * NL + p.layer, (g0 + p.step) % NB
             seeds = seeds_of[p.block][p.step * NL + p.layer]
-            tree = self.trees[p.layer]
+            ta, tb = self.trees[("A", p.layer, t)], self.trees[("B", p.layer, t)]
             jobs.append({"index": idx, "name": name, "m": M, "n": n, "k": k, "row": self.row, "i": p.i, "j": p.j, "s": p.s,
-                         "call": call, "seeds": seeds, "ks": salt_key(self.secret, call), "actkey": self.actkey,
-                         "bfile": str(self.cfg / f"B-{name}.bin"), "cheat": cheat.split("@")[0]
-                         if cheat_layer in (None, p.layer) else "none",
-                         "positions": pos, "paths": paths, "B_opening": tree.opening(Bmm[p.layer], p.j),
-                         "weight_root": tree.root, "verifier_seeds": seeds, "verifier_actkey": self.actkey,
-                         "root": roots_of[p.block][p.step * NL + p.layer]})
+                         "t": t, "call": call, "seeds": seeds, "ks": salt_key(self.secret, call),
+                         "afile": str(operand_file(self.cfg, "A", name)), "bfile": str(operand_file(self.cfg, "B", name)),
+                         "cheat": cheat.split("@")[0] if cheat_layer in (None, p.layer) else "none",
+                         "positions": pos, "paths": paths,
+                         "A_opening": ta.opening(operand(self.cfg, "A", p.layer, t), p.i),
+                         "B_opening": tb.opening(operand(self.cfg, "B", p.layer, t), p.j),
+                         "operand_roots": {"A": bytes.fromhex(reg["operand_roots"]["A"][p.layer][t]),
+                                           "B": bytes.fromhex(reg["operand_roots"]["B"][p.layer][t])},
+                         "verifier_seeds": seeds, "root": roots_of[p.block][p.step * NL + p.layer]})
         t_v = time.monotonic()
         fails = [(i, why) for i, why in self.pool.map(prove_and_verify, jobs, chunksize=4) if why]
         t_verify = time.monotonic() - t_v
         flags = 0
         for r in blocks:
             flags |= r["flags"]
-        ok = not fails and vkey_ok and not flags and ev.get("trusted") and not ev.get("bad_openings")
+        ok = not fails and not flags and ev.get("trusted") and not ev.get("bad_openings")
         macs = plan.blocks * plan.steps * step_macs()
         first = all_picks[fails[0][0]][0] if fails else None
         line = (f"{'ACCEPT' if ok else 'REFUSE'} period {pid}: {plan.blocks} blocks x {plan.steps} steps "
@@ -550,7 +624,6 @@ class Period:
                 f"{len(jobs) - len(fails)} passed, {len(fails)} failed"
                 + (f"; first: block {first.block} step {first.step} {LAYERS[first.layer][0]} ({first.i}, {first.j}, s {first.s}): "
                    f"{fails[0][1]}" if fails else "")
-                + ("" if vkey_ok else "; the revealed activation key isn't the registered one")
                 + (f"; GPU flags {flags}" if flags else "")
                 + ("" if ev.get("trusted") and not ev.get("bad_openings") else f"; coins: {ev.get('error') or ev.get('bad_openings')}"))
         return {"period": pid, "arm": "proto", "cheat": cheat, "registration": reg, "registration_digest": reg_digest.hex(),
@@ -569,23 +642,26 @@ def cmd_run(a: argparse.Namespace) -> int:
     configure(prep)
     row = prep["row"]
     plan = Plan(a.blocks, a.steps, a.q)
-    secret, actsalt = os.urandom(64), os.urandom(64)
-    actkey = int.from_bytes(os.urandom(8), "big")
-    t = time.monotonic()
-    trees = []
-    for name, n, k in LAYERS:
-        trees.append(WeightTree.build(name, np.fromfile(cfg / f"B-{name}.bin", dtype=np.int8).reshape(n, k),
-                                      hashlib.sha512(b"verity/highutil/weight-salts/v1\0" + secret + name.encode()).digest()))
-    print(f"weight roots in {time.monotonic() - t:.1f} s: " + " ".join(f"{x.name} {x.root.hex()[:16]}" for x in trees), flush=True)
+    secret = os.urandom(64)
+    source = dict(prep["source"])
+    if (cfg / "capture.json").exists():
+        source["capture"] = json.loads((cfg / "capture.json").read_text())
+    missing = [str(operand_file(cfg, "A", name)) for name, _, _ in LAYERS if not operand_file(cfg, "A", name).exists()]
+    if missing:
+        raise SystemExit(f"no activations: {missing} (capture.py writes them)")
     work = Path(tempfile.mkdtemp(prefix="highutil-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
     coins = Coins(a.coins, Path(a.main), a.peer, a.challenger_key, a.gate_key)
-    drv = RefDriver(cfg, row, actkey) if a.hu == "ref" else Driver(a.hu, cfg, row, plan.steps, actkey, out / "hu.log")
-    print("hu " + " ".join(drv.ready), flush=True)
-    results = []
+    results, drv = [], None
     workers = a.workers or max(1, len(os.sched_getaffinity(0)) - 4)
     try:
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            per = Period(drv, coins, trees, cfg, row, actkey, actsalt, secret, work, pool)
+            t = time.monotonic()
+            trees = operand_trees(cfg, secret, pool)
+            print(f"{len(trees)} operand roots in {time.monotonic() - t:.1f} s: "
+                  + " ".join(f"{k}{li}.{tb} {x.root.hex()[:16]}" for (k, li, tb), x in trees.items() if tb == 0), flush=True)
+            drv = RefDriver(cfg, row) if a.hu == "ref" else Driver(a.hu, cfg, row, plan.steps, out / "hu.log")
+            print("hu " + " ".join(drv.ready), flush=True)
+            per = Period(drv, coins, trees, cfg, row, source, secret, work, pool)
             # warm-up: one plain block, so the clocks and caches settle before anything is timed
             drv.block(0, 0, min(plan.steps, 50), "plain", "none", work / "none", work / "none")
             schedule = [("proto", "none"), ("plain", "none")] * a.periods + ([("proto", a.negative)] if a.negative else [])
@@ -597,11 +673,12 @@ def cmd_run(a: argparse.Namespace) -> int:
                     f.write(json.dumps(r, default=str) + "\n")
                 print(r.get("verdict") or f"plain period {pid}: {r['steps']} steps in {r['wall_s']:.3f} s", flush=True)
     finally:
-        drv.close()
+        if drv:
+            drv.close()
         for p in work.glob("challenger-*"):
             shutil.copytree(p, out / "challenger" / p.name.removeprefix("challenger-"), dirs_exist_ok=True)
         shutil.rmtree(work, ignore_errors=True)
-    summary = summarize(results, plan)
+    summary = summarize(results, plan, source)
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     print(json.dumps(summary, indent=1))
     neg = [r for r in results if r["arm"] == "proto" and r["cheat"] != "none"]
@@ -610,35 +687,35 @@ def cmd_run(a: argparse.Namespace) -> int:
 
 
 def cmd_diag(a: argparse.Namespace) -> int:
-    """One protocol step on the GPU with seeds and salt keys of its own (no coins), then two tiles of each layer's call
-    against v31.py's reference: the GPU's A (regenerated) against `act_rows`, its words and O against the tile's values,
-    and its leaves against the reference's leaves under the call's salt key."""
+    """One protocol step on the GPU (a block of the model other than the first) with seeds and salt keys of its own (no
+    coins), then two tiles of each layer's call against v31.py's reference: the A and B rows the GPU read against the
+    files', its words and O against the tile's values, and its leaves against the reference's under the call's salt key."""
     cfg, out = Path(a.cfg), Path(a.out)
     prep = json.loads((cfg / "prep.json").read_text())
     configure(prep)
     row, NL = prep["row"], len(LAYERS)
-    actkey = int.from_bytes(os.urandom(8), "big")
+    rng = np.random.default_rng(a.seed)
+    g0 = NB - 1 if NB > 1 else 0
     work = Path(tempfile.mkdtemp(prefix="highutil-diag-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
-    drv = Driver(a.hu, cfg, row, 1, actkey, out / "hu-diag.log")
+    drv = Driver(a.hu, cfg, row, 1, out / "hu-diag.log")
     rec = [os.urandom(384) for _ in range(NL)]
     (work / "seeds").write_bytes(b"".join(rec))
-    drv.block(0, 0, 1, "proto", "none", work / "seeds", work / "roots")
-    rng = np.random.default_rng(a.seed)
+    drv.block(0, g0, 1, "proto", "none", work / "seeds", work / "roots")
     rep = []
     for li, (name, n, k) in enumerate(LAYERS):
         sh = shape(n, k, row)
         tl = v31.Shape(TILE, TILE, k, LP, T, row)
-        B = np.fromfile(cfg / f"B-{name}.bin", dtype=np.int8).reshape(n, k)
         for tile in (0, int(rng.integers(sh.tiles))):
             d = work / f"{name}-{tile}"
             drv.p.stdin.write(f"dump {li} {tile} {d}\n")
             drv._line("dumped")
             tm, tn = divmod(tile, n // TILE)
             ia, ja = range(tm * TILE, tm * TILE + TILE), range(tn * TILE, tn * TILE + TILE)
-            A = act_rows(actkey, li, ia, k)
+            A = np.asarray(operand(cfg, "A", li, g0 % NB)[tm * TILE:(tm + 1) * TILE])
+            B = np.asarray(operand(cfg, "B", li, g0 % NB)[tn * TILE:(tn + 1) * TILE])
             seeds, ks = v31.seeds_from(rec[li][:320]), rec[li][320:]
             c = v31.Coins.rows(sh, seeds, ia, ja)
-            f = v31.form(tl, A, B[tn * TILE:(tn + 1) * TILE], c)
+            f = v31.form(tl, A, B, c)
             v = v31.values(tl, f)
             words, obuf = v31.words_buffer(tl, v.T), v31.o_buffer(v.O)
             dom = sh.domain()
@@ -646,19 +723,19 @@ def cmd_diag(a: argparse.Namespace) -> int:
             bad = sum(row_leaf(dom, tile * sh.lpt + j, v31.leaf_h(v31.row_bytes(tl, words, obuf, j),
                                                                   v31.cref.prf_salt(ks, tile * sh.lpt + j)), V2)
                       != g[64 * j:64 * j + 64] for j in range(sh.lpt))
-            rep.append({"layer": name, "tile": tile, "A_equal": (d / "A.bin").read_bytes() == A.tobytes(),
-                        "words_equal": (d / "words.bin").read_bytes() == words, "O_equal": (d / "O.bin").read_bytes() == obuf,
+            rep.append({"layer": name, "block": g0 % NB, "tile": tile, "A_equal": (d / "A.bin").read_bytes() == A.tobytes(),
+                        "B_equal": (d / "B.bin").read_bytes() == B.tobytes(), "words_equal": (d / "words.bin").read_bytes() == words, "O_equal": (d / "O.bin").read_bytes() == obuf,
                         "leaves": sh.lpt, "leaves_bad": bad})
             print(json.dumps(rep[-1]), flush=True)
     drv.close()
     shutil.rmtree(work, ignore_errors=True)
-    ok = all(r["A_equal"] and r["words_equal"] and r["O_equal"] and not r["leaves_bad"] for r in rep)
+    ok = all(r["A_equal"] and r["B_equal"] and r["words_equal"] and r["O_equal"] and not r["leaves_bad"] for r in rep)
     (out / "diag.json").write_text(json.dumps({"exact": ok, "tiles": rep}, indent=1))
     print(f"diag: {'exact' if ok else 'DIFFERS'}", flush=True)
     return 0 if ok else 1
 
 
-def summarize(results: list[dict], plan: Plan) -> dict:
+def summarize(results: list[dict], plan: Plan, source: dict | None = None) -> dict:
     honest = [r for r in results if r["arm"] == "proto" and r["cheat"] == "none"]
     plain = [r for r in results if r["arm"] == "plain"]
     neg = [r for r in results if r["arm"] == "proto" and r["cheat"] != "none"]
@@ -669,7 +746,8 @@ def summarize(results: list[dict], plan: Plan) -> dict:
     wall = sum(r["wall_s"] for r in honest)
     mhz = [b["sm_mhz"] for r in results for b in r["blocks"] if b["sm_mhz"]]
     out = {
-        "workload": {"m": M, "layers": [list(x) for x in LAYERS], "step_macs": step_macs(), "lp": LP, "t": T},
+        "workload": {"m": M, "nb": NB, "layers": [list(x) for x in LAYERS], "step_macs": step_macs(), "lp": LP, "t": T,
+                     "source": source},
         "plan": plan.__dict__, "periods": len(honest),
         "accepted": sum(r["accepted"] for r in honest),
         "credited_macs": credited, "wall_s": wall,
@@ -699,8 +777,13 @@ def main(argv: list[str]) -> int:
     p = sub.add_parser("prep")
     p.add_argument("cfg")
     p.add_argument("--row", type=int, default=32768)
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--checkpoint", help=f"{CHECKPOINT['repo']}'s snapshot directory at {CHECKPOINT['revision'][:10]} (B; "
+                                        "capture.py writes A)")
+    g.add_argument("--seeded", action="store_true", help="seeded A and B")
+    g.add_argument("--small", action="store_true", help="two small layers at M 256, two blocks, seeded (tests)")
+    p.add_argument("--nb", type=int, default=32, help="transformer blocks")
     p.add_argument("--seed", type=int, default=1)
-    p.add_argument("--small", action="store_true", help="two small layers at M 256 (tests)")
     p.set_defaults(fn=cmd_prep)
     p = sub.add_parser("run")
     p.add_argument("cfg")
