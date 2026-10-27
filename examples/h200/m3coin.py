@@ -2,7 +2,7 @@
 auditor.py`) under the lane's own gate key, reserved for this machine, opened at the registration's digest, and one coin
 opened after that root; the drawn units are a `subset:K` of the registered population derived from that coin alone.
 
-    python benchmarks/e2e_h200/m3coin.py --registration REG.json --gate-key KEY --gate research@HOST --peer NAME --out DIR
+    python examples/h200/m3coin.py --registration REG.json --gate-key KEY --gate research@HOST --peer NAME --out DIR
 
 ``REG.json`` is m3reg's record, or a step registration (`replay_bundle.STEP_FORMAT`, M3 proper), whose digest is
 `replay_bundle.step_digest`'s; for one, ``receipt.json`` (the step's receipt, as `prove_bundle.py --step` reads it) is written
@@ -32,7 +32,7 @@ from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 from verity.ml import randomness as R
 
-sys.path[:0] = [str(Path(__file__).resolve().parent), str(Path(__file__).resolve().parents[1] / "e2e_demo")]
+sys.path[:0] = [str(Path(__file__).resolve().parent), str(Path(__file__).resolve().parent / "interfaces")]
 import m3reg as REG  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as OR  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402

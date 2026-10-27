@@ -1,7 +1,7 @@
 """M3's drawn H200 units checked on CPU from their bytes alone (PRF-172): `m3draw.py open`'s ``drawn.json`` and ``drawn.bin``,
 held to the registration (`m3reg.py`) and the live coin (`m3coin.py`).
 
-    python benchmarks/e2e_h200/m3check.py --drawn DIR --registration REG.json --coin coin.json [--payload BIN] [--out FILE]
+    python examples/h200/m3check.py --drawn DIR --registration REG.json --coin coin.json [--payload BIN] [--out FILE]
 
 * **The draw.** The registration's digest is its record's. The coin's units are
   ``derive(coin, DOMAIN, {"registration": digest}).subset(k, population)`` again. They are the opened units, in order.

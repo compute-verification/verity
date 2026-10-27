@@ -2,10 +2,10 @@
 tree DRAWPROVE's ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member window of the block, registered
 ``subset:1``) and ``blocks/<g>/bundle.{json,bin}`` (`replay_bundle` v2, one unit, its draw the step's live one).
 
-    python benchmarks/e2e_h200/m3bundle.py weights --state DIR --registration REG.json --draw DRAW.json --out OPEN.json
-    python benchmarks/e2e_h200/m3bundle.py replay --private DIR --secret FILE --registered ROOTS.json \\
+    python examples/h200/m3bundle.py weights --state DIR --registration REG.json --draw DRAW.json --out OPEN.json
+    python examples/h200/m3bundle.py replay --private DIR --secret FILE --registered ROOTS.json \\
         --registration REG.json --draw DRAW.json [run flags as m3draw.py's]
-    python benchmarks/e2e_h200/m3bundle.py build --private DIR --registration REG.json --draw DRAW.json \\
+    python examples/h200/m3bundle.py build --private DIR --registration REG.json --draw DRAW.json \\
         --receipt RECEIPT.json --weights OPEN.json --out TREE [--workers W]
 
 * **Which block.** Drawn g is slot ``g // units_per_slot``'s layout unit ``g % units_per_slot`` (`replay_bundle.block_of`),
@@ -46,7 +46,7 @@ from typing import Any
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE), str(HERE.parent / "e2e_demo")]
+sys.path[:0] = [str(HERE), str(HERE / "interfaces")]
 import kv_reads as KV  # noqa: E402
 import m3draw as M3  # noqa: E402
 from e2e_h200.commit import _slots, layout as commit_layout  # noqa: E402

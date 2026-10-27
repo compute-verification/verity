@@ -2,8 +2,8 @@
 can rebuild, register their roots, and after the auditor's live coin re-run the same steps, hold every slot root and step root
 to the registered ones, and write the drawn units' values and openings.
 
-    python benchmarks/e2e_h200/m3draw.py commit --out OUT --secret FILE --new-secret [run flags]
-    python benchmarks/e2e_h200/m3draw.py open --out OUT --secret FILE --registered ROOTS.json --draw DRAW.json [run flags]
+    python examples/h200/m3draw.py commit --out OUT --secret FILE --new-secret [run flags]
+    python examples/h200/m3draw.py open --out OUT --secret FILE --registered ROOTS.json --draw DRAW.json [run flags]
 
 * **The salt keys.** Step t's salt key is ``SHA-512("e2e-h200/m3draw/salt-key/v1" 0 || secret || t)[:32]``, the secret 64 bytes
   from the operating system's generator, written once by ``commit --new-secret`` to ``--secret`` (mode 0600, outside the run

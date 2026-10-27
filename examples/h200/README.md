@@ -44,7 +44,7 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | Replay | `e2e_h200/units.py`: one family a unit kind of the map, each through compositions of `replay.py`'s templates (main's Definitions where they exist) until the map's own exist; a row's attention reads its slot's K and V rows at the steps that wrote them; a fixture coin draws K a family | templates for the whole map; the sampling plan through `replay.draw` |
 | PoUW | `--subcircuit e2e_h200.percall:kraqwxsc` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraqwxsc build (`percall:kraq` is the earlier build), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled units held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its two blockers are named in the record (`percall.CREDIT`) | J10-R's lane Definitions and Credit.window over the tile stratum; window_salt's live salt and the real roots (`percall.STANDS_IN`) |
 | Network | `e2e_h200/engine.py`: the loop as network's demo endpoint's engine (`demo_endpoint.py --engine e2e_h200.engine:frozen`): each sequence its own slot and positions, no EOS (8 prompt ids, 24 generated) | — |
-| Bundle and record | `record.py`: provisional v0 schemas | `verity/drawn-unit-bundle/v1` and `verity/block-record/v1` (`benchmarks/e2e_demo`) |
+| Bundle and record | `record.py`: provisional v0 schemas | `verity/drawn-unit-bundle/v1` and `verity/block-record/v1` (`examples/h200/interfaces`) |
 | Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the staged path's P2 store; bandwidth not run; sampled proofs are the replay and the opening | MEM-67/69, CMP-97, NET-72, C-Flock `--zk` and Lean |
 
 `e2e_h200/served_weights.py` is the demo's seeded weights and their registration root (CMP-95 interface 1), for any decoder
@@ -61,23 +61,23 @@ independent CPU decode step; the suite holds the driver's rows equal to `cpu_ste
 ## Commands
 
 ~~~text
-uv run python benchmarks/e2e_h200/run.py --out /tmp/e2e                         # the small shape, CPU, resident, slots commit
-uv run python benchmarks/e2e_h200/run.py --out /tmp/e2e --batch 8 --requests 24 --prompt-bytes 8 --generate 24   # continuous batching
-uv run python benchmarks/e2e_h200/run.py --out /tmp/e2e --tamper l1.wup         # exits 3: the opened slots' roots don't replay
-uv run python benchmarks/e2e_h200/run.py --out /tmp/e2e --shape tiny --weights staged --store p2-encode --workers 8 --commit host
-uv run python benchmarks/e2e_h200/run.py --out OUT --shape h200 --seed demo --device cuda --batch 4096 --steps 32 \
+uv run python examples/h200/run.py --out /tmp/e2e                         # the small shape, CPU, resident, slots commit
+uv run python examples/h200/run.py --out /tmp/e2e --batch 8 --requests 24 --prompt-bytes 8 --generate 24   # continuous batching
+uv run python examples/h200/run.py --out /tmp/e2e --tamper l1.wup         # exits 3: the opened slots' roots don't replay
+uv run python examples/h200/run.py --out /tmp/e2e --shape tiny --weights staged --store p2-encode --workers 8 --commit host
+uv run python examples/h200/run.py --out OUT --shape h200 --seed demo --device cuda --batch 4096 --steps 32 \
     --prompt-bytes 8 --micro-batch 1024 --workers "$(nproc)" --open 2 --draw 1     # the skeleton at batch 4,096 (ATTN_REF_CUBIN set)
-bash benchmarks/e2e_h200/percall_job.sh                                         # the skeleton at f = 1 on the H200 (its header: the research run)
-PYTHONPATH=benchmarks/e2e_h200 python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:tiny
-uv run python benchmarks/e2e_h200/run.py --out OUT --shape h200 --seed demo --device cuda \
+bash examples/h200/percall_job.sh                                         # the skeleton at f = 1 on the H200 (its header: the research run)
+PYTHONPATH=examples/h200 python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:tiny
+uv run python examples/h200/run.py --out OUT --shape h200 --seed demo --device cuda \
     --weights-file W --weights-manifest M --workers "$(nproc)"                   # serve the loaded W (the file network's sink), checked first
-E2E_H200_SEED=demo E2E_H200_WEIGHTS_FILE=W E2E_H200_WEIGHTS_MANIFEST=M PYTHONPATH=benchmarks/e2e_h200 \
+E2E_H200_SEED=demo E2E_H200_WEIGHTS_FILE=W E2E_H200_WEIGHTS_MANIFEST=M PYTHONPATH=examples/h200 \
     python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:frozen   # the endpoint on it
-PYTHONPATH=benchmarks/e2e_h200 python -m e2e_h200.weights_commit commit --shape h200 --seed demo \
+PYTHONPATH=examples/h200 python -m e2e_h200.weights_commit commit --shape h200 --seed demo \
     --program DIGEST --state STATE --out OUT/registration.json        # the H200 weights registration (STATE private)
-PYTHONPATH=benchmarks/e2e_h200 python -m e2e_h200.weights_commit open --state STATE --seed demo \
+PYTHONPATH=examples/h200 python -m e2e_h200.weights_commit open --state STATE --seed demo \
     --op l0.wup --coordinate N                                        # a ScaledMm proof block's reads opened: OPEN or REFUSED
-PYTHONPATH=benchmarks/e2e_h200 python -m e2e_h200.served_weights manifest --shape h200 --seed text:verity/cmp92/h200/weights/v1 \
+PYTHONPATH=examples/h200 python -m e2e_h200.served_weights manifest --shape h200 --seed text:verity/cmp92/h200/weights/v1 \
     --digests --out M                                                 # the served weights' manifest (also write|root|fixture)
 ~~~
 

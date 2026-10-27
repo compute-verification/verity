@@ -30,5 +30,5 @@ inputs = [
     "benchmarks/pous/p2_v1/__init__.py",
     "benchmarks/pous/p2_v1/reference.py",
     # the drawn-unit bundle's cross-step reads `kv_reads.py` opens and checks (`replay_bundle.open_reads`, `check_reads`)
-    "benchmarks/e2e_demo/verity_e2e_demo",
+    "examples/h200/interfaces/verity_e2e_demo",
 ]

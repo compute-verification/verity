@@ -6,7 +6,7 @@
 # PHASE=replay (inputs roots.json, step-registration.json, draw.json) keeps the drawn slots beside the secret; PHASE=build
 # (receipt.json, weights-open.json besides) writes the step tree to $OUT/tree on the CPU (m3bundle.py).
 #   research run --on vy-dc-h200-2 --project verity --source . --cwd source --timeout 5400 --env PHASE=commit \
-#     -- bash benchmarks/e2e_h200/m3proper_job.sh
+#     -- bash examples/h200/m3proper_job.sh
 set -euo pipefail
 PHASE=${PHASE:?}
 SECRET_DIR="$HOME/.local/state/m3proper-1de3"
@@ -25,7 +25,7 @@ LEASE=(gpu-lease 1 --wait --mem-gb 0 -- bash -c 'nvidia-smi --query-gpu=name,uui
 if [ "$PHASE" = commit ]; then
   mkdir -p "$SECRET_DIR"; chmod 700 "$SECRET_DIR"
   NEW=(--new-secret); [ -e "$SECRET" ] && NEW=()  # a secret an earlier attempt wrote and no run committed under
-  "${LEASE[@]}" uv run --no-sync python benchmarks/e2e_h200/m3draw.py commit --out "$OUT/m3" --secret "$SECRET" "${NEW[@]}" \
+  "${LEASE[@]}" uv run --no-sync python examples/h200/m3draw.py commit --out "$OUT/m3" --secret "$SECRET" "${NEW[@]}" \
     --workers "$(nproc)" "${FLAGS[@]}"
   stat -c '%a %s %n' "$SECRET"
   research keep --owner @compute-accounting --expires 14d --priority keep --root "$HOME" \
@@ -34,12 +34,12 @@ elif [ "$PHASE" = replay ]; then
   research keep --owner @compute-accounting --expires 14d --priority keep --root "$HOME" \
     --why "M3 proper's prover-held salt secret (CMP-161, r20261026-233451-2217's roots)" "$SECRET_DIR" || true
   I="$RESEARCH_RUN_DIR/inputs"
-  "${LEASE[@]}" uv run --no-sync python benchmarks/e2e_h200/m3bundle.py replay --private "$SECRET_DIR/m3bundle" --secret "$SECRET" \
+  "${LEASE[@]}" uv run --no-sync python examples/h200/m3bundle.py replay --private "$SECRET_DIR/m3bundle" --secret "$SECRET" \
     --registered "$I/roots.json" --registration "$I/step-registration.json" --draw "$I/draw.json" --workers "$(nproc)" "${FLAGS[@]}"
   ls -la "$SECRET_DIR/m3bundle"
 else
   I="$RESEARCH_RUN_DIR/inputs"
-  uv run --no-sync python benchmarks/e2e_h200/m3bundle.py build --private "$SECRET_DIR/m3bundle" --registration "$I/step-registration.json" \
+  uv run --no-sync python examples/h200/m3bundle.py build --private "$SECRET_DIR/m3bundle" --registration "$I/step-registration.json" \
     --draw "$I/draw.json" --receipt "$I/receipt.json" --weights "$I/weights-open.json" --out "$OUT/tree" --workers "$(nproc)"
 fi
 ls -la "$OUT"/*

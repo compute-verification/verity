@@ -2,8 +2,8 @@
 every tensor of a decoder of any `Shape` (the H200 demo's frozen shape `H200`, Phase 1's CPU model `PHASE1`), and the
 registration of those tensors as core's registered values (``one_stage.registered``), computed in parallel.
 
-No torch: memory-accounting's encoder and the H200 demo run it with `benchmarks/e2e_h200` on their path
-(``PYTHONPATH=benchmarks/e2e_h200 python -m e2e_h200.served_weights ...``).
+No torch: memory-accounting's encoder and the H200 demo run it with `examples/h200` on their path
+(``PYTHONPATH=examples/h200 python -m e2e_h200.served_weights ...``).
 
 * **The model** (`Shape`): a pre-norm decoder with learned absolute positions, ``heads`` query heads of ``head_dim`` and
   ``kv_heads`` KV heads (1: MQA), a ReLU MLP of width ``mlp``, a byte vocabulary, W8A8 linears (s8 codes, an f32 scale per
@@ -603,7 +603,7 @@ def fixture() -> dict[str, Any]:
     stream's length and first 64 bytes, the first and last rows of layer 0's tensors and of those outside the layers, and
     SHA-256 of every tensor's
     (`first_rows`, as compact JSON). `H200`'s whole manifest, with each tensor's SHA-256 under `DEMO_SEED`, is an artifact
-    of the evidence store (``benchmarks/e2e_h200/README.md``)."""
+    of the evidence store (``examples/h200/README.md``)."""
     out: dict[str, Any] = {"format": "verity/seeded-weights/fixture/v1", "seed": TEST_SEED.hex(),
                            "salt_key": TEST_SALT_KEY.hex(), "program": TEST_PROGRAM, "shapes": {}}
     for s in (TINY, PHASE1):

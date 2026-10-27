@@ -3,7 +3,7 @@
 # fixtures, and builds a fresh bundle from the torch loop's window.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "../../integrations/torch_loop"]
+pythonpath = [".", "../../../integrations/torch_loop"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
