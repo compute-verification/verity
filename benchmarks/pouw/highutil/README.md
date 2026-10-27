@@ -10,11 +10,16 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
   docstring has the protocol and the deviations from v3.2). `period.py run CFG ref OUT` runs it all on the CPU at the
   small shapes `prep --small` writes, through v31.py's reference prover.
 - The period's GPU driver (`period.GpuDriver`) runs each layer's calls through V31-GPU's binding (`v31lib.Prover` over
-  `libv31.so`, one Prover a layer on a thread of its own, each call's commit beside the next call's compute), with
-  both operands of every transformer block on the GPU and each call's tree copied to host memory for the openings.
-  Under `V31_LTW=1` (run.sh's default) a call at S = 1 takes cuBLASLt's int32 X W'^T in place of v31's GEMM; the plain
-  arm is cuBLASLt (`torch._int_mm`) on the same calls.
-- `run.sh`: the build, the config and the periods under a GPU lease (`research run`; its header has the command).
+  `libv31.so`, one Prover a layer, all driven by one thread since the binding's contexts share their streams, each
+  call's commit beside the next call's compute), with both operands of every transformer block on the GPU. L is 16,384,
+  so every layer has one segment (S = 1), and under `V31_LTW=1` (run.sh's default) a call at S = 1 takes cuBLASLt's int32
+  X W'^T in place of v31's GEMM; the plain arm is cuBLASLt (`torch._int_mm`) on the same calls.
+- `hu_lib.cu` builds `libv31.so` from `v31.cu` with two functions more, so the host never waits on the device inside a
+  block: `hu_point_b` points a call's weights at the block's device tensor (no `v31_set_b` copy and wait), and
+  `hu_levels_async` copies each call's tree to page-locked memory behind its commit (no `v31_root` and `v31_levels`
+  wait), for the roots and the openings after the check coin.
+- `run.sh`: the build, the config and the periods under a GPU lease (`research run`; its header has the command), and
+  with `NSYS=1` each arm's kernel timeline (`timeline.py`: GEMM share, busy share, idle gaps).
 - `v31.cu`, `v31.py` and `v31lib.py` are vendored unmodified from compute-research's V31-GPU, branch
   `cursor/compute-research-v31-gpu-ea24` at 17a5bac0e8 (its accel_v31 directory), sha256 7ad2ea0d37c1..., 7288206a8e11...
   and fd7b48ed743a...; `run.sh` records the hashes. Fixes belong upstream there, then a fresh copy here.
