@@ -21,6 +21,8 @@ COUNT += 6  # the step's blocks: `torch_attention`'s 2, `torch_loss`'s 2 rows, `
 
 COUNT += 1  # `torch_embedding`'s forward, `EmbeddingTorch_v1`
 
+COUNT += 11  # `torch_embedding`'s EmbeddingBackwardTied_v2, the ids sorted once, and its 10 parts
+
 COUNT += 10  # `torch_clip`'s, clip_grad_norm_ on bf16 grads
 
 COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2` (CIR-107), a line of its own

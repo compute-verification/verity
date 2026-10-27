@@ -159,7 +159,82 @@ def test_the_models_match_torch_to_rounding(M) -> None:
     assert (np.abs(model - ref) <= (roundings[:, None] + 0.01) * 2.0 ** -8 * size).all()
 
 
+# --- version 2 of the tied gradient --------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("n", range(1, 13))
+def test_the_sort_net_sorts_every_01_input(n) -> None:
+    """By the 0-1 principle, a comparator network that sorts every 0/1 input sorts every input."""
+    x = (np.arange(1 << n)[:, None] >> np.arange(n)) & 1
+    for s in TE.sort_net(n):
+        a, b = np.array(s).T
+        x[:, a], x[:, b] = np.minimum(x[:, a], x[:, b]), np.maximum(x[:, a], x[:, b])
+    assert (np.diff(x, axis=1) >= 0).all()
+
+
+def test_the_sort_net_at_4096_ids_is_batchers() -> None:
+    stages = TE.sort_net(4096)
+    assert (sum(map(len, stages)), len(stages)) == (139263, 78)
+    assert all(len({i for p in s for i in p}) == 2 * len(s) for s in stages)
+
+
+def test_the_sort_orders_rows_by_id_then_position() -> None:
+    """Ids V and 2^32 - 1 sort as V, after the vocabulary's, each key the position's bits under the id's."""
+    rng = np.random.default_rng(8)
+    M, V = 37, 9
+    t = rng.integers(0, V, M).astype(np.uint32)
+    t[[3, 20]] = V, 0xFFFFFFFF
+    g = rng.integers(0, 1 << 16, (M, H)).astype(np.uint16)
+    order = np.lexsort((np.arange(M), np.minimum(t, V)))
+    keys = np.arange(M)[order] | (np.minimum(t, V)[order].astype(np.int64) << TE.position_bits(M))
+    got = evaluate_words(bind(TE.EmbeddingBackwardSort, M=M, V=V, H=H), t[None], g[None])
+    _same(np.asarray(got).reshape(-1), np.concatenate([keys, g[order].reshape(-1)]))
+
+
+def test_the_route_takes_each_present_row_to_its_slot() -> None:
+    """Present rows at random places, their slots ascending among 50 with gaps, z and e as EmbeddingBackwardSegmentRun_v1 makes
+    them; an absent place's row and shift, random, land nowhere."""
+    rng = np.random.default_rng(9)
+    M, V = 23, 50
+    NP, NV = TE.position_bits(M), TE.id_bits(V)
+    p = rng.random(M) < 0.5
+    slots = np.sort(rng.choice(V, p.sum(), replace=False))
+    z, rank = np.cumsum(~p) - ~p, np.cumsum(p) - p
+    e = np.zeros(M, np.int64)
+    e[p] = slots - rank[p]
+    s = np.where(p, z | (e << NP), rng.integers(0, 1 << (NP + NV), M))
+    x = rng.integers(0, 1 << 16, (M, H)).astype(np.uint16)
+    got = evaluate_words(bind(TE.EmbeddingBackwardRoute, M=M, V=V, H=H), p[None].astype(np.uint8), s[None], x[None])
+    want = np.zeros((V, H), np.uint16)
+    want[slots] = x[p]
+    _same(got, want)
+
+
+def tied_case(rng, M: int, V: int):
+    """`case`'s first M tokens, their ids mod V and two outside [0, V) (V and 2^32 - 1), and the LM head's dW with specials."""
+    t, g = case(rng, max(M, 38))
+    t, g = t[:M] % V, g[:M]
+    if M > 2:
+        t[[M // 3, M // 2]] = V, 0xFFFFFFFF
+    w = TK.bf16(np.asarray(rng.normal(0, 1, (V, H)), np.float32).view(np.uint32))
+    w[0, 0], w[V - 1, 1] = 0x8000, 0x7FC0
+    return t, g, w
+
+
+@pytest.mark.parametrize("M,V", [(1, 3), (5, 2), (70, 9), (70, 200), pytest.param(TE.FEATURE_MAX + 1, 9, marks=pytest.mark.slow)])
+def test_the_sorted_tied_gradient_is_v1s(M, V) -> None:
+    """`EmbeddingBackwardTied_v2` is v1's function, numerics.torch_blocks' model: the feature kernel at M = 70 (entry 2's 25
+    tokens, a run across a chunk), a vocabulary far larger than the tokens, one token, and the sort path at the least M it runs
+    at (about 25 s)."""
+    t, g, w = tied_case(np.random.default_rng(M + V), M, V)
+    st = dict(M=M, V=V, H=H)
+    got = evaluate_words(bind(TE.EmbeddingBackwardTiedV2, **st), t[None], g[None], w[None])
+    _same(got, TB.MODELS["EmbeddingBackwardTied_v2"](st, t[None], g[None], w[None]))
+
+
 @pytest.mark.parametrize("d,statics", [
+    (TE.EmbeddingBackwardTiedV2, {"M": 0, "V": 8, "H": 4}), (TE.EmbeddingBackwardRoute, {"M": 4, "V": 0, "H": 2}),
+    (TE.EmbeddingBackwardSegmentStep, {"V": 9, "NP": 25, "FEATURE": 0}), (TE.EmbeddingBackwardSortedRun, {"N": 4, "FEATURE": 2}),
+    (TE.EmbeddingBackwardMove, {"NS": 65, "H": 2, "J": 0}), (TE.EmbeddingBackwardSwap, {"KB": 0, "H": 2}),
     (TE.EmbeddingBackwardTorch, {"M": TE.FEATURE_MAX}), (TE.EmbeddingBackwardTorch, {"M": True}),
     (TE.EmbeddingBackwardFeature, {"M": TE.FEATURE_MAX + 1}), (TE.EmbeddingBackwardFeature, {"M": 0}),
     (TE.EmbeddingBackwardFeatureChunk, {"N": 33}), (TE.EmbeddingBackwardFeatureChunk, {"N": 0}),
