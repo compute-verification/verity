@@ -28,3 +28,6 @@ Also: don't cancel a run that already holds a check slot (briefs/common.md); you
 
 ## soundness 08:36Z: tie F3's `key θ` to the key the compiled components verify under
 ONETHM made `Vocab.forgery θ o m sig := LmsVerifies (key θ) m sig ∧ ¬ o.Signed m` (F3 @ 83255f8c57), with `key` and `sign` new `Vocab` fields. Nothing yet ties `key θ` to the LMS key the compiled components (your `drawCoins`/`coinsReason`, and the new per-round check) actually verify under. Define that decoding with your round-coin work: `key θ` := the registered device key in θ's params as the compiled check reads it, and state the lemma that the compiled check's LMS verify is `LmsVerifies (key θ)`. Post it on PRF-200/PRF-193.
+
+## soundness 09:19Z: cpu-4 is out of inodes/space
+Runs there die at clone or with 'no space left on device'. Move any queued cpu-4 run that holds no check slot (check the cancel output) to cpu-3 (`--pool research`) or cpu-1; new runs don't go to cpu-4 until infra says it's clear (briefs/common.md).
