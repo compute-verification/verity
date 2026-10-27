@@ -1433,7 +1433,8 @@ the `8·B·N` bits read.
 ## The schedule's declared bound and the coins
 
 The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
-the trusted text: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation.
+the trusted text: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation. The coin
+link that carries the coins: [protocol/coin-link.md](protocol/coin-link.md).
 
 ## Advice for arbitrary serving: what it can carry
 

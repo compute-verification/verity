@@ -275,7 +275,10 @@ The two terms of the charge the capacity bounds leave open are fixed in the trus
   scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
   `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;
 - the challenger's coins (D7), an ingress link whose timing is charged on the ingress grid and whose content costs
-  0 bits.
+  0 bits. The coin link (`coin_link`, run by `benchmarks/live_challenger/coin_link.py`) carries a window's session
+  between the prover and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
+  grids, exempts only the verified, expected, once-only coin openings, and counts everything else
+  (`protocol/coin-link.md`).
 
 ~~~python
 from verity.core.protocols.certifier.audit import Audit
