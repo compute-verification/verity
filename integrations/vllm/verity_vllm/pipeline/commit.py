@@ -23,7 +23,7 @@ versions.json.  Every number is MEASURED unless the key says otherwise.
     PYTHONPATH=. verity-vllm commit \
         --workload workloads/workload_cov_b0_b1_c256.json --pairs 5 --committer native_host --out /workspace/cp/cmt3/b0_b1
 
-PROTOCOL SUMMARY (Commit stage entry: the instrumented runs + the fail-closed X-03 verdict)
+PROTOCOL SUMMARY (Commit phase entry: the instrumented runs + the fail-closed X-03 verdict)
   Purpose: run the row's workload on ONE engine in interleaved (control, instrumented) pairs; the instrumented arm commits every
     required value through the committer (row_pod: native_collect_v2b + the FA2/FA3 M1 tap); the verdict is then computed from the
     committed bytes -- the checks: required-value coverage (`coverage`), openings, local replay (`C2`: oracle compare vs the Match
@@ -65,7 +65,7 @@ from typing import Any
 from verity_vllm import protocols as PO
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm import settings  # noqa: E402 (after the process clock, like the imports around it)
-from verity_vllm.config import group, option
+from verity_vllm.config import group, option, workload_arg
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
 prof.apply_env()
@@ -921,7 +921,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
            "deferred_n": len(deferred), "deferred_received_n": len(handed), "deferred_verified": sum(ok[n_sf:]),
            "deferred_families": sorted({value_family(o.identity.get("name", "")) for o in ops[n_sf:]}),
            # [rev F-r17b-13] the received POSITIONS (every one is in `picks`, opened + verified above); the verdict compares the union of the
-           # in-run stages' deferred positions with these, not the counts
+           # in-run phases' deferred positions with these, not the counts
            "deferred_received_positions": [list(p) for p in handed], "deferred_received_digest": _positions_digest(handed),
            "steps_opened": steps_opened, "source": source, "freed": freed, "retained_device_after": retained_after,
            "replay_run_root": replay_root, "replay_root_equal": (replay_root == rc.run_root.hex()) if replay_root else None,
@@ -958,7 +958,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
             _st = {l.split(":")[0]: int(l.split()[1]) for l in f if l.startswith(("VmRSS:", "VmHWM:"))}
         res["host_rss_gb_after"] = round(_st["VmRSS"] / 1e6, 2)
         # [R17 fp8, R17-16 (i)] the process's kernel high-water mark AFTER the replay -- the in-process peak the bounded HOST BOUND must
-        # cover (the replay stage is where a bounded arm peaks); sampler-independent (try 4's external sampler followed another process)
+        # cover (the replay phase is where a bounded arm peaks); sampler-independent (try 4's external sampler followed another process)
         res["host_rss_hwm_gb"] = round(_st["VmHWM"] / 1e6, 2)
     except (OSError, StopIteration, KeyError):
         pass
@@ -1048,7 +1048,7 @@ def staging_environ(args: Options) -> None:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", default="workloads/workload_cov_b0_b1_c256.json")
+    workload: str = option("--workload", type=workload_arg, default="workloads/workload_cov_b0_b1_c256.json")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     case: str | None = option("--case", default=None)
     out: str = option("--out")
@@ -1059,7 +1059,7 @@ class Options:
     chunk: int = option("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
-    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="[R16 sys SYS-05] where the weights registration hashes: host (default; Python pos_leaf per 256-B leaf, 17-24 s for " "a 1B model, ~120 s for 7B, twice per Commit), device (same leaves + tree on the GPU, verity_vllm.commit.committer.leafhash), " "device-checked (both, per-tensor equality asserted; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
+    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="where the weights registration hashes: host (default; Python on the CPU), device (the same leaves and per-tensor trees " "on the GPU: rows-sha512's hiding rows by native_rows.cu, verity_vllm.commit.committer.weights_rows; vllm-v1's pos_leaf leaves by " "native_leafhash.cu, verity_vllm.commit.committer.leafhash), device-checked (both, each tensor's device root compared with its host " "root and a mismatch refused; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
     hash_threads: int = option("--hash-threads", env="HASH_THREADS", type=int, default=2, help="hashlib worker threads (pod CPU tune 17:30Z: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
     pinned_populate_threads: int | None = option("--pinned-populate-threads", env="VERITY_PINNED_POPULATE_THREADS", type=int, default=None, help="helper threads that fault a fresh exact pinned block's pages in (MADV_POPULATE_WRITE) before the caller registers it (default: commit.committer.pinned_pool.POPULATE_THREADS; recorded as pinned_populate_threads); 0 = the registration faults them in")
     openings: int = option("--openings", type=int, default=64)
@@ -1569,7 +1569,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f" -> peak phase {_admit.get('peak_phase')} MiB; "
                       f"cgroup {((host_cap or 0) >> 20) or None} MiB; margin "
                       f"{(_admit['margin_bytes'] or 0) >> 20 if host_cap else None} MiB ({round(100 * (_admit['margin_frac'] or 0), 1) if host_cap else None} %)", flush=True)
-                # [R17-29 planner / Daniel M-0309] the dominant contributor by name, on the print and on any refusal -- never merely "predicted OOM"
+                # the dominant contributor by name, on the print and on any refusal -- never merely "predicted OOM"
                 print(f"[delta] bounded staging DOMINANT CONTRIBUTOR ({kind}): {(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
                 (out / f"host_admission_{kind}.json").write_text(json.dumps(_admit, indent=1, default=str) + "\n")
                 (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")   # + cap, admission_of_record, bound
@@ -1754,7 +1754,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     decl = None
     decls: dict[str, dict] = {}
     prev_digests: dict = {}
-    replay_cache: dict[str, dict[str, Any]] = {}      # [R16 sys] --replay-cache: full-key -> pair 0's C2 record (this Commit stage only)
+    replay_cache: dict[str, dict[str, Any]] = {}      # [R16 sys] --replay-cache: full-key -> pair 0's C2 record (this Commit phase only)
     deferred: dict[int, dict[str, Any]] = {}          # --replay-deferred: pair -> its replay bundle's context
     # [R17-1 / F-moe-r17-03] the Program's declared stop rule + LAG, read once for every consumer of every pair (population, composition,
     # linkage, replay); recorded in versions so the finalizer reads the same fact the Commit counted on
@@ -2161,7 +2161,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if served is not None:
                     row["commit"]["value_correspondence"].update(_sc2["value_correspondence"])
                 if getattr(args, "match_dir", None):
-                    # [R15 COORD M-0111 (2), manbind] LIVE C2 = oracle-compare: every bound identity's committed bytes against the Match stage's
+                    # [R15 COORD M-0111 (2), manbind] LIVE C2 = oracle-compare: every bound identity's committed bytes against the Match phase's
                     # value record of the SAME attempt (separate process + acquisition path); any mismatch fails the verdict naming the identity.
                     # [rev-cb M-0301 R3] the oracle must be THIS workload's Match record: request ids / prompt lengths / caps are checked by name
                     # before any value compare (a foreign oracle = FAIL 'foreign oracle', never a value mismatch that happens to point the right way).
@@ -2337,7 +2337,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             for rw in step_rows:
                 f.write(json.dumps(rw, default=str) + "\n")
 
-    # [R16 compiled unit B -- Daniel M-0776 (3): repeated graph replay must be covered, not only compilation/warm-up] re-read the code
+    # repeated graph replay must be covered, not only compilation/warm-up: re-read the code
     # objects LOADED in this process after the LAST measured run and compare with the build-time snapshot (compile + autotune + capture):
     # the CUDA graphs replay the launchers that existed at capture, so an unchanged executed set (no new module / kernel / binary / config)
     # is the evidence that the artifact identity recorded at build is the identity of every replayed and eager step of every run

@@ -43,7 +43,7 @@ def build(package: Path = PACKAGE) -> Path:
     path."""
     if shutil.which("lake") is None:
         raise LeanError("lake is not on the PATH, so remote-audit-verifier cannot be built: put elan's bin on the PATH "
-                        "(tools/verity/lean/setup.sh), pass --lean-exe, or run with --verdict python")
+                        "(tools/verity/lean/setup.sh), or pass --lean-exe")
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)

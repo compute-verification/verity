@@ -304,6 +304,18 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
     assert rc != 0 and "give the STATE" in err
 
 
+def test_a_dry_run_writes_nothing_to_linear_and_prints_what_it_would_do(fake, registry, routes_dirs, capsys, lin):
+    """27 Oct 05:17Z (INF-285): a triage worker's --dry-run posted 58 comments, since only Slack sends were suppressed."""
+    lin.subscribers["I1"] = []
+    infra = inbox(fake, routes_dirs, "infra")
+    rc, out, _ = run(capsys, "linear", "state", "INF-1", "In Progress", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would move INF-1 to In Progress" and lin.moved == []
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "picked up", "--as", "proofs", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would comment on INF-1 as proofs: picked up"
+    assert lin.sent("commentCreate") == [] and bells(fake, infra) == []
+    rc, out, _ = run(capsys, "linear", "place", "INF-1", "Runs", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would place INF-1 in Runs"
+
 def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_its_author(fake, registry, routes_dirs, capsys, lin):
     """No one subscribes to Linear comments (each would echo its author), so a lane polled its issues instead (COMM-30)."""
     lin.subscribers["I1"] = []
@@ -424,8 +436,9 @@ def child(updated: str, commented: str | None = None) -> dict:
     return {"updatedAt": updated, "comments": {"nodes": [{"createdAt": commented}] if commented else []}}
 
 
-def pr(n: int, status: str) -> dict:
-    return {"url": f"https://github.com/compute-verification/verity/pull/{n}", "sourceType": "github", "metadata": {"status": status, "number": n}}
+def pr(n: int, status: str, closed: str | None = None) -> dict:
+    return {"url": f"https://github.com/compute-verification/verity/pull/{n}", "sourceType": "github",
+            "metadata": {"status": status, "number": n, **({"closedAt": closed} if closed else {})}}
 
 
 AUDITED = [
@@ -456,6 +469,12 @@ AUDITED = [
     issue("INF-21", "Todo", updatedAt="2026-10-11T19:00:00Z", children={"nodes": [child("2026-10-18T19:00:00Z")]}),
     issue("INF-22", "Todo", updatedAt="2026-10-11T19:00:00Z", comments={"nodes": [{"createdAt": "2026-10-18T19:00:00Z"}]}),
     issue("INF-23", startedAt="2026-10-17T00:00:00Z", children={"nodes": [child("2026-10-17T00:00:00Z", "2026-10-17T01:00:00Z")]}),
+    issue("INF-24", attachments={"nodes": [pr(7, "merged", "2026-10-19T17:00:00Z"), pr(8, "closed", "2026-10-19T18:00:00Z")]},
+          comments={"nodes": [{"createdAt": "2026-10-19T18:30:00Z"}]}),                             # the piece left, named after
+    issue("INF-25", attachments={"nodes": [pr(9, "merged", "2026-10-19T18:00:00Z")]},
+          comments={"nodes": [{"createdAt": "2026-10-19T17:30:00Z"}]}),                             # landed: commented before
+    issue("INF-26", attachments={"nodes": [pr(10, "merged", "2026-10-19T17:00:00Z"), pr(11, "closed")]},
+          comments={"nodes": [{"createdAt": "2026-10-19T18:30:00Z"}]}),                             # landed: #11's close unknown
 ]
 
 
@@ -467,7 +486,7 @@ def test_the_audit_finds_each_kind_once_on_its_issue_and_nothing_on_the_rest(tmp
     assert [(f["issue"], f["kind"]) for f in found] == [
         ("DAN-1", "lane"), ("INF-2", "orphan"), ("INF-3", "milestone"), ("INF-4", "undated"), ("INF-5", "overdue"),
         ("INF-6", "quiet"), ("INF-8", "stale"), ("INF-9", "title"), ("INF-10", "title"), ("INF-11", "landed"),
-        ("INF-18", "title"), ("INF-23", "quiet")]
+        ("INF-18", "title"), ("INF-23", "quiet"), ("INF-25", "landed"), ("INF-26", "landed")]
     assert {f["issue"]: f["lane"] for f in found}["DAN-1"] == linear.NO_LANE
     by = {(f["issue"], f["kind"]): f for f in found}
     assert by[("INF-2", "orphan")] == {"issue": "INF-2", "url": "https://linear.app/x/issue/INF-2", "title": "The auditor-only host",
@@ -484,13 +503,14 @@ def test_the_audit_finds_each_kind_once_on_its_issue_and_nothing_on_the_rest(tmp
                                                "INF-4 --due YYYY-MM-DD`), or move it to Backlog")
     assert "(`research msg linear edit INF-5 --due YYYY-MM-DD`)" in by[("INF-5", "overdue")]["fix"]
     assert by[("INF-11", "landed")]["fix"].startswith("every attached PR is merged or closed (#1, #2): move it to Done")
+    assert by[("INF-25", "landed")]["fix"].endswith("(`research msg linear comment INF-25 TEXT`)")
     assert by[("DAN-1", "lane")]["fix"] == "team DAN has no handle: add `lane:<owner>`"
-    assert len(fake.sent("pageInfo")) == 7 and all("first: 4," in q for q, _, _ in fake.sent("pageInfo"))
+    assert len(fake.sent("pageInfo")) == 8 and all("first: 4," in q for q, _, _ in fake.sent("pageInfo"))
     assert all("children(first: 50, orderBy: updatedAt) { nodes { updatedAt comments(first: 1, orderBy: createdAt)" in q
                for q, _, _ in fake.sent("pageInfo"))                                                  # one field, no pass per issue
     assert fake.audited == {"state": {"type": {"in": ["triage", "unstarted", "started"]}}}
     assert linear.tally(found) == {"-": {"lane": 1}, "infra": {"orphan": 1, "milestone": 1, "undated": 1, "overdue": 1, "quiet": 2,
-                                                                "stale": 1, "title": 3, "landed": 1}}
+                                                                "stale": 1, "title": 3, "landed": 3}}
     linear.Linear(KEY, fake, cache=tmp_path / "t").audit({}, ["INF", "infra"], now=AUDIT_NOW)
     assert fake.audited["team"] == {"or": [{"key": {"in": ["INF", "infra"]}}, {"name": {"in": ["INF", "infra"]}}]}
 

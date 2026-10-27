@@ -1,7 +1,7 @@
-"""Cross-check: the registered composites, evaluated gate by gate by the IR oracle, against the validated
+"""Cross-check: the registered composites, evaluated gate by gate by the reference evaluator, against the validated
 C++/CPU models of the numerics lane (`verity.ml.definitions.numerics`) on random and adversarial inputs.
 
-This is conformance evidence for the *definitions* (the IR body reproduces the frozen model the lane
+This is conformance evidence for the *definitions* (the circuit body reproduces the frozen model the lane
 measured bit-exact against production); correspondence against captured production values is the
 separate `verity_vllm.correspondence.capture_identities` tool.
 """
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll
