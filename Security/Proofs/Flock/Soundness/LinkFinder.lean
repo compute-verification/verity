@@ -346,6 +346,7 @@ noncomputable def outOf (x : τ × List τ) : Option (List UInt8 × List UInt8) 
 
 /-- **Every success of the finder outputs a collision**, when every reading comes with an opening of its value (`hop`)
 and two openings of different values collide (`hcol`). -/
+omit [Fintype Val] in
 theorem outOf_spec {Dh : Type} {Hc : List UInt8 → Dh} (Good : O → Prop) (val : O → Val)
     (hop : ∀ e v, v ∈ rd e → Good (op e v) ∧ val (op e v) = v)
     (hcol : ∀ o o', Good o → Good o' → val o ≠ val o' →

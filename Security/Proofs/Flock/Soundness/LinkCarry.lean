@@ -90,10 +90,12 @@ theorem expect_mixG (F : τ₁ ⊕ τ₂ → ℝ) :
 
 variable {Val : Type} [Fintype Val] [DecidableEq Val] (rd₁ : τ₁ → Finset Val) (rd₂ : τ₂ → Finset Val)
 
+omit [Fintype Val] [DecidableEq Val] in
 theorem pRd_mixG (v : Val) :
     pRd (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) (Sum.elim rd₁ rd₂) v = (pRd T₁ s₁ rd₁ v + pRd T₂ s₂ rd₂ v) / 2 :=
   expect_mixG T₁ s₁ T₂ s₂ _
 
+omit [Fintype Val] [DecidableEq Val] in
 theorem sRd_mixG :
     sRd (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) (Sum.elim rd₁ rd₂) = (sRd T₁ s₁ rd₁ + sRd T₂ s₂ rd₂) / 2 :=
   expect_mixG T₁ s₁ T₂ s₂ _
@@ -104,7 +106,8 @@ theorem massAt_le_two_mix (X : Val) :
       massAt T₂ s₂ rd₂ X ≤ 2 * massAt (mixG T₁ T₂) (mixStrat T₁ s₁ T₂ s₂) (Sum.elim rd₁ rd₂) X := by
   have hs : ∑ v, (pRd T₁ s₁ rd₁ v + pRd T₂ s₂ rd₂ v) / 2 =
       ((∑ v, pRd T₁ s₁ rd₁ v) + ∑ v, pRd T₂ s₂ rd₂ v) / 2 := by
-    rw [← Finset.sum_div, Finset.sum_add_distrib]
+    rw [← Finset.sum_add_distrib, div_eq_mul_inv, Finset.sum_mul]
+    simp only [div_eq_mul_inv]
   have e₁ : pRd T₁ s₁ rd₁ X ≤ ∑ v, pRd T₁ s₁ rd₁ v :=
     Finset.single_le_sum (fun v _ => pRd_nonneg T₁ s₁ rd₁ v) (Finset.mem_univ X)
   have e₂ : pRd T₂ s₂ rd₂ X ≤ ∑ v, pRd T₂ s₂ rd₂ v :=
@@ -127,23 +130,28 @@ open Classical in
 /-- **A value of `V` pulled back into `Val`**: its preimage under `e`, else the default. -/
 noncomputable def pull (e : Val → V) (w : V) : Val := if h : ∃ v, e v = w then Classical.choose h else default
 
+omit [DecidableEq Val] [Fintype V] in
 include he in
 theorem pull_spec (v : Val) : pull e (e v) = v := by
   unfold pull
   rw [dite_eq_left_of_eq_true (eq_true ⟨v, rfl⟩)]
   exact he (Classical.choose_spec (⟨v, rfl⟩ : ∃ v', e v' = e v))
 
+omit [Fintype Val] [DecidableEq Val] [Inhabited Val] [Fintype V] in
 include he in
 theorem image_eq_singleton_iff (S : Finset Val) (v : Val) : S.image e = {e v} ↔ S = {v} := by
   rw [← Finset.image_singleton e v]
   exact (Finset.image_injective he).eq_iff
 
+omit [Fintype Val] [DecidableEq Val] [Inhabited Val] [Fintype V] in
 include he in
 theorem pRd_image (v : Val) : pRd T sT (fun x => (rd x).image e) (e v) = pRd T sT rd v := by
   unfold pRd
   refine congrArg (fun f => expect f T sT) (funext fun x => ?_)
-  simp only [ind, image_eq_singleton_iff he]
+  unfold ind
+  exact if_congr (image_eq_singleton_iff he _ _) rfl rfl
 
+omit [Fintype Val] [DecidableEq Val] [Inhabited Val] [Fintype V] in
 theorem pRd_image_out {w : V} (hw : ∀ v, e v ≠ w) : pRd T sT (fun x => (rd x).image e) w = 0 := by
   unfold pRd
   have h0 : ∀ x, ind (fun x => (rd x).image e = {w}) x = 0 := fun x => by
@@ -154,6 +162,7 @@ theorem pRd_image_out {w : V} (hw : ∀ v, e v ≠ w) : pRd T sT (fun x => (rd x
     simp only [ind, h, ↓reduceIte]
   rw [show (ind fun x => (rd x).image e = {w}) = fun _ => (0 : ℝ) from funext h0, expect_const]
 
+omit [Fintype Val] [DecidableEq Val] [Inhabited Val] [Fintype V] in
 include he in
 theorem rRd_image : rRd T sT (fun x => (rd x).image e) = rRd T sT rd := by
   unfold rRd
@@ -219,8 +228,8 @@ theorem outMix_spec {Dh : Type} {Hc : List UInt8 → Dh} (he₁ : Function.Injec
     (hcol₁₂ : ∀ o o', G₁ o → G₂ o' → e₁ (val₁ o) ≠ e₂ (val₂ o') →
       (col₁₂ o o').1 ≠ (col₁₂ o o').2 ∧ Hc (col₁₂ o o').1 = Hc (col₁₂ o o').2)
     (x : (τ₁ ⊕ τ₂) × List (τ₁ ⊕ τ₂)) (hS : Succ (rdMix rd₁ rd₂ e₁ e₂) x) :
-    Coll Hc (outOf (rdMix rd₁ rd₂ e₁ e₂) (opMix op₁ op₂ e₁ e₂) (colMix col₁ col₂ col₁₂) x) :=
-  outOf_spec (rdMix rd₁ rd₂ e₁ e₂) (opMix op₁ op₂ e₁ e₂) (colMix col₁ col₂ col₁₂)
+    Coll Hc (outOf (rdMix rd₁ rd₂ e₁ e₂) (opMix e₁ e₂ op₁ op₂) (colMix col₁ col₂ col₁₂) x) :=
+  outOf_spec (rdMix rd₁ rd₂ e₁ e₂) (opMix e₁ e₂ op₁ op₂) (colMix col₁ col₂ col₁₂)
     (fun o => Sum.elim G₁ G₂ o) (fun o => Sum.elim (fun o => e₁ (val₁ o)) (fun o => e₂ (val₂ o)) o)
     (fun x w hw => match x, hw with
       | .inl x, hw => by
