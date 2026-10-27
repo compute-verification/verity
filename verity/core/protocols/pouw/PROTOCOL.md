@@ -1637,7 +1637,7 @@ site that fills none (decode's few tokens); the vLLM integration serving the com
 ## ACCEL (protocol v3.2)
 
 ACCEL, credit for a served model's int8 matmuls from committed noised prefix sums, is specified in
-`verity/core/protocols/pouw/accel/PROTOCOL.md` while it is experimental.
+`verity/core/protocols/pouw/dither/PROTOCOL.md` while it is experimental.
 
 ## Not here yet
 
