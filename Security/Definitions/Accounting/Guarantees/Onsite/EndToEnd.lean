@@ -1,4 +1,4 @@
-import Definitions.Accounting.Assumptions.Onsite
+import Definitions.Accounting.Assumptions.Coverage
 import Definitions.Nci.Assumptions.Threads
 
 /-!

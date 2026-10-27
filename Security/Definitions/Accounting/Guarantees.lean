@@ -33,7 +33,7 @@ import Definitions.Accounting.Guarantees.JointBlocksAbstract
 import Definitions.Accounting.Guarantees.Localization
 import Definitions.Accounting.Guarantees.Memory
 import Definitions.Accounting.Guarantees.Overhead
-import Definitions.Accounting.Guarantees.Onsite
+import Definitions.Accounting.Guarantees.Onsite.EndToEnd
 import Definitions.Accounting.Guarantees.PerRun
 import Definitions.Accounting.Guarantees.Pouw
 import Definitions.Accounting.Guarantees.PouwWork

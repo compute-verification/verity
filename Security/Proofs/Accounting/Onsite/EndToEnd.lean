@@ -1,4 +1,4 @@
-import Definitions.Accounting.Guarantees.Onsite
+import Definitions.Accounting.Guarantees.Onsite.EndToEnd
 import Proofs.Accounting.Actual.Dampener
 import Proofs.Accounting.JointLive
 
