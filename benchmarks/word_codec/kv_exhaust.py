@@ -83,6 +83,13 @@ def shape(lib: B.Lib) -> dict:
     return dict(zip(("heads", "kv_heads", "head_dim", "tlw", "tle", "tt", "part", "mw", "mma", "mt"), a))
 
 
+def rc_shape(lib: B.Lib) -> dict:
+    """kv.cu's receipt shape (`kv_rc_shape`); `forms` & 4 where the build runs form 13 (`codec_tensor/step.py`)."""
+    a = (ctypes.c_int * 7)()
+    lib.so.kv_rc_shape(ctypes.cast(a, ctypes.c_void_p))
+    return dict(zip(("rt", "lag", "zw", "mdw", "mt", "steps", "forms"), a))
+
+
 def forms_of(sh: dict, only=None) -> list[int]:
     """The forms a build runs: the tensor-core ones where whole words fill a head."""
     mma = [3, 4, 5, 6, 7, 8, 9, 12]
