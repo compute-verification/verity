@@ -433,7 +433,7 @@ def ln_bound(a: int, b: int, up: bool) -> Fraction:
     return Fraction(ceil(v * q) if up else floor(v * q), q)
 
 
-def escape_parts(n: int, k: int, x: int) -> tuple[int, int]:
+def acceptance_parts(n: int, k: int, x: int) -> tuple[int, int]:
     """prod_{i < t} (n - s - i) and prod_{i < t} (n - i), t = min(x, k), s = max(x, k), whose ratio is
     C(n - x, k) / C(n, k) = C(n - k, x) / C(n, x), for x <= n - k."""
     a = b = 1
@@ -465,14 +465,14 @@ def max_harm_check(rows: Iterable[tuple[int, int, float | Fraction, int, int, in
             raise ValueError("a row takes more than size - k")
         if not lo <= hi <= top:
             raise ValueError("a row needs lo <= hi <= size - k")
-        a, b = escape_parts(n, k, take)
+        a, b = acceptance_parts(n, k, take)
         num, den = num * a, den * b
         lower += take * h
         if lo > 0 and h < lam * ln_bound(n - lo + 1, top - lo + 1, True):
             raise ValueError("an increment before a row's lo may cost more than its harm")
         if hi < top and lam * ln_bound(n - hi, top - hi, False) < h:
             raise ValueError("an increment from a row's hi on may cost less than its harm")
-        a, b = escape_parts(n, k, lo)
+        a, b = acceptance_parts(n, k, lo)
         gain = max(Fraction(0), h - lam * ln_bound(n - lo, top - lo, False)) if lo < hi else Fraction(0)
         upper += lo * h - lam * ln_bound(b, a, False) + (hi - lo) * gain
     if num * delta.denominator < delta.numerator * den:
@@ -507,10 +507,10 @@ def max_harm(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | F
     def used(lam: float) -> float:
         return fsum(-_log_miss(n, x, k) for (n, k, _), x in zip(floats, counts(lam)))
 
-    def escapes(xs: list[int]) -> bool:
+    def accepted(xs: list[int]) -> bool:
         num = den = 1
         for (n, k, _), x in zip(rows, xs):
-            a, b = escape_parts(n, k, x)
+            a, b = acceptance_parts(n, k, x)
             num, den = num * a, den * b
         return num * d.denominator >= d.numerator * den
 
@@ -521,7 +521,7 @@ def max_harm(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | F
         mid = (lo + hi) / 2
         lo, hi = (lo, mid) if used(2.0 ** mid) <= budget else (mid, hi)
     lam, scale, step = 2.0 ** hi, 1.0, 2.0 ** -40
-    while not escapes(takes := counts(lam * scale)):
+    while not accepted(takes := counts(lam * scale)):
         scale, step = scale * (1 + step), step * 4
     cert, exact = [], Fraction(lam)
     for (n, k, h), x, take in zip(rows, counts(lam), takes):
@@ -886,7 +886,7 @@ def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
 
 
 __all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "Plan", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "certify", "density_bound", "density_exact",
-           "escape_parts", "fill", "for_budget", "for_target", "frontier", "ln_bound", "ln_upper", "max_harm",
+           "Objective", "Plan", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts", "certify", "density_bound",
+           "density_exact", "fill", "for_budget", "for_target", "frontier", "ln_bound", "ln_upper", "max_harm",
            "max_harm_check", "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
            "template_cost", "touched", "weigh", "work_law"]
