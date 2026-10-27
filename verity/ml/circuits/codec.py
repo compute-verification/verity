@@ -16,10 +16,10 @@ the program digest hashes are RFC 8785 (JCS) of the descriptor without `annotati
 descriptor is held to (strings ASCII without DEL, integers of magnitude at most 2^53 - 1, no floats; `jcs_domain_error`).
 
 Schemas (`schema` field): `verity-ir/descriptor/v0` writes every body verbatim; `verity-ir/descriptor/v1`
-(the default since 2026-09-08) writes the same program with flat concatenations, the reference-sequence alias
+(the default) writes the same program with flat concatenations, the reference-sequence alias
 and interned callee ids / types (see `SCHEMA_V1` below). Both decode. The digest is a function of the
 encoding, so it differs between the schemas for one program; `descriptor_equivalence` is the test that two
-descriptors denote the same circuit (veritor's docs/vllm-poc/descriptor-codec.md).
+descriptors denote the same circuit.
 """
 
 from __future__ import annotations
@@ -333,8 +333,8 @@ def _walk(program, done: Callable[[str, FunctionDefinition], None]) -> dict[str,
     duplicates: list[tuple[str, FunctionDefinition]] = []
     # One entry per distinct duplicate OBJECT, not per visit: a workload Program composed from request components decoded
     # separately refers to every shared definition through a re-decoded object from EVERY node that calls it, so the per-visit
-    # list held one entry per node (OLMoE B2: 146,523 visits of 95 distinct objects) and the identity check below re-encoded
-    # the definitions verbatim that many times (compose > 45 min; 8 s with the dedup; same descriptor).  [veritor R15 GP01-DUP]
+    # list held one entry per node (on a large workload, over a thousand visits an object) and the identity check below
+    # re-encoded the definitions verbatim that many times.
     dup_objects: set[tuple[str, int]] = set()
     visited: dict[int, FunctionDefinition] = {}  # a second visit of the same object changes nothing
 

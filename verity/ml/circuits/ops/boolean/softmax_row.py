@@ -1,5 +1,5 @@
 """A head's attention scores and their softmax as one Boolean Definition, one proof block a head writing its probability row:
-the attention of CMP-92's transformer (`sampled_proofs.one_stage.partition`'s size classes: T bf16 outputs, class 16·T rounded
+the attention of the e2e demo's transformer (`sampled_proofs.one_stage.partition`'s size classes: T bf16 outputs, class 16·T rounded
 up).
 
     QkSoftmaxRow_v1{T, D, DOT}   (q: Array<D, Array<16, Value<1>>>, k: Array<T, Array<D, Array<16, Value<1>>>>)

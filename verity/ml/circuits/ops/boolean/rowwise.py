@@ -1,5 +1,5 @@
-"""CMP-92's row ops as Boolean Definitions split so that each outputs at most 16 bits (a proof unit's outputs, the 16-bit forms
-of CIR-100's fallback): a bf16 row's softmax, the embedding's coordinate, and the 16-bit halves of RMSNorm's f32 parts.
+"""The e2e demo's row ops as Boolean Definitions split so that each outputs at most 16 bits (a proof unit's outputs, the
+16-bit fallback forms): a bf16 row's softmax, the embedding's coordinate, and the 16-bit halves of RMSNorm's f32 parts.
 
     SoftmaxMax_v1{N}                   (x: Array<N, Array<16, Value<1>>>) -> Array<16, Value<1>>
     SoftmaxRecip_v1{N, HALF}           (x: Array<N, Array<16, Value<1>>>, m: Array<16, Value<1>>) -> Array<16, Value<1>>

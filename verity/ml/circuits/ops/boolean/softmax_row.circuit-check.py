@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    """The fused unit on the H200's step at D = 64, at CMP-92's longest attention row, T = 32 (its context, in both phases), and
+    """The fused unit on the H200's step at D = 64, at the e2e demo's longest attention row, T = 32 (its context, in both phases), and
     at T = 1, a request's first position; the softmax alone at N = 1 (at N = 32 it is inside the fused unit's T = 32); the
     padded unit at T = 32, M3's one attention statement for every key count; and the masked softmax at N = 4, small enough
     to pin."""

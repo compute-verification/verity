@@ -243,7 +243,7 @@ def F32FmaSubFtz(a: int, b: int, c: int) -> int:
     return ftz_bits(f32_fma_bits(ftz_bits(a), ftz_bits(b), ftz_bits(c) ^ 0x80000000))
 
 
-# --- version 2: every NaN result the GPU's `F32_NAN_PTX` (the L40S / H100 probe art:e5dd6ce9..., every build, ftz on and off);
+# --- version 2: every NaN result the GPU's `F32_NAN_PTX` (measured on the L40S and H100, every build, ftz on and off);
 # equal to `_v1` on every other word ------------------------------------------------------------------------------------------
 
 

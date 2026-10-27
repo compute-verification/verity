@@ -10,8 +10,8 @@ sixteen) -- as a fixed set of predicates over integer witness columns, of exactl
              a w-bit range check is ceil(w/16) lookups into 16-bit range tables (plus one `lin` split when w > 16)
 
 Every *honest* witness value is a non-negative integer below 2^40 (the largest: the K-bit remainder scale, K = W + 10).
-That does **not** make the predicates sound over a 40-bit field (WP2 checker lane, 2026-09-21, z3 at real widths --
-`verity_numerical.checker.search`, run r20260921-232849-093c): the remainder columns `r`, `r_s` are never range-checked
+That does **not** make the predicates sound over a 40-bit field (z3 at real widths,
+`verity_numerical.checker.search`): the remainder columns `r`, `r_s` are never range-checked
 themselves, only their scaled products `rinv = r * invpow`, `rsinv = r_s * invpow_s`, so over F_p with p ~ 2^40 a
 dishonest `r >= 2^d` whose product wraps below p into [0, 2^A) is accepted (`align_state` over F_p40 as stated: SAT;
 over Goldilocks with `r` range-checked: UNSAT), and `aligned` carries no tight quotient bound ``q < 2^(A-d)``, which a

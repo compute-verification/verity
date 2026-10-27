@@ -47,10 +47,8 @@ own, so Lean's `Accounting.Gates.roleOf` puts its steps at `Site.other`.
 K mod k products. The s8 Definitions also refuse K >= `S8_K_LIMIT` = 2^17 (`integer.exact_k_limit`), where an s8 x s8 sum can
 leave s32 and the step clamps: below it the accumulator word is the exact sum, in any k order.
 
-Provenance: veritor `verity.ir/registry/b1.py` `DotBf16V2` / `GemmCoordinateV2` / `GemmV2` and the binding records
-`GEMM_AMPERE` (b1.py) / `GEMM_HOPPER` (hopper.py).  The `_v1` forms, which named the Ampere step in their bodies, were not
-carried over: the static form is the definition the proof work targets, and their bodies would now name a different
-primitive id (see `prims.AmpereBF16TcDot16`).
+There are no `_v1` forms: they named the Ampere step in their bodies, which would now name a different primitive id (see
+`prims.AmpereBF16TcDot16`), and the static form is the definition the proof work targets.
 """
 from __future__ import annotations
 

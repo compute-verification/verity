@@ -16,8 +16,8 @@ from verity.ml.circuits.silicon.cast import bf16_is_nan, f32_is_nan
 
 F32, BF16, I32, S8, U16, BIT = Value(32), Value(16), Value(32), Value(8), Value(16), Value(1)
 #: the GPU's canonical FP32 NaN: max.f32 / min.f32 of two NaNs, and every NaN result of add, sub, mul, div and fma (`fp32`'s `_v2`), an
-#: invalid operation and a NaN operand alike, no operand's payload, sign or signalling bit kept (the L40S / H100 probe
-#: art:e5dd6ce9fa74e7ca4538b848943d8bb555f2adac528277848395dbf4cdff66a5: every build, PTX and C++ operators, ftz on and off)
+#: invalid operation and a NaN operand alike, no operand's payload, sign or signalling bit kept (measured on the L40S and H100:
+#: every build, PTX and C++ operators, ftz on and off)
 F32_NAN_PTX = 0x7FFFFFFF
 
 __all__ = ["BIT", "BF16", "F32", "I32", "S8", "U16", "Bf16GtStrict", "BitAnd", "BitNot", "BitOr", "F32BitsShl23", "F32Eq",

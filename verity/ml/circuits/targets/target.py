@@ -45,7 +45,7 @@ one output coordinate ``y[j]`` of a BF16 GEMM, ``K`` a positive multiple of 16.
 Transition unit versus verification unit
 ========================================
 
-Two objects, deliberately distinct (closed 2026-09-21):
+Two objects, deliberately distinct:
 
 * The **backend transition unit** is one 16-product update with an *arbitrary* finite incoming accumulator ``c``:
   ``tc_dot16(c, x[16s:16s+16], W[16s:16s+16])`` -- two grouped sums, ``c`` joining the first.  A numerical proof
@@ -62,8 +62,8 @@ References and the log of disagreements
 
 * :data:`HAWKEYE_PIN` pins the source-close reference (Hawkeye's simulator, commit ``30703fcb``); the
   parameters above are the ones it recovers on the A100, re-measured bit-exactly on both the RTX 4090 (sm_89) and
-  the A100 (sm_80) over 25,698,304 finite elements each (12,065,535 with a nonzero accumulator; runs
-  ``r20260921-231618-ea24`` and ``r20260921-232750-56c5``, log entries D2 and D9) and on the 7,713 all-finite
+  the A100 (sm_80) over 25,698,304 finite elements each (12,065,535 with a nonzero accumulator; log entries
+  D2 and D9) and on the 7,713 all-finite
   structured A100 cases.
 * :data:`DISCREPANCY_LOG` records every place where the paper, the simulator, Verity's reference and the hardware
   disagree or are silent, with an owner and what would resolve it.  Nothing in it is resolved by editing a
@@ -97,8 +97,8 @@ Explicitly unresolved (not part of the target)
 * **Other dtypes.** FP8 (E4M3) pipelines exist in ``silicon`` and now have *draft* targets below
   (:data:`FP8_HOPPER_WGMMA`, :data:`FP8_ADA_MMA`); nothing about them is frozen.
 
-Draft targets (silicon Phase 0, 2026-09-22)
-===========================================
+Draft targets
+=============
 
 A :class:`Target` carries a ``status``: ``"frozen"`` (:data:`FIRST`: every backend proves it, it changes only by
 re-versioning) or ``"draft"`` (a relation stated precisely enough to generate vectors against, owned by the silicon
@@ -117,7 +117,7 @@ much hardware stands behind the model the target computes with.
 * :data:`FP8_ADA_MMA` -- ``sm89.mma.m16n8k32.e4m3`` (pinned: veritor RTX 4090, 24,898,304 elements), model
   :data:`verity.ml.circuits.silicon.models.ADA_E4M3_M16N8K32` (two groups of 16, the same 14-bit adder and floor).  Same program,
   same domain, same absent epilogue; a different grouping and so a different function.
-* :data:`FP8_SM120_MMA` (lane vllm-sm120-tc-gemm, 2026-09-30) -- ``sm120.mma.m16n8k32.e4m3`` (pinned: RTX PRO 6000, its
+* :data:`FP8_SM120_MMA` -- ``sm120.mma.m16n8k32.e4m3`` (pinned: RTX PRO 6000, its
   conformance device, 25,041,024 elements / 0 mismatches; one QMMA.16832 per tile), model
   :data:`verity.ml.circuits.silicon.models.BLACKWELL_SM120_E4M3_M16N8K32`: one group of 32 in
   the 26-bit adder of the sm_120 BF16 pipeline, so the accumulator is not truncated.  Same program, domain and absent
@@ -126,14 +126,14 @@ much hardware stands behind the model the target computes with.
   (``tc_dot32`` / ``tc_dot32_0`` with 8-bit operand arguments); their digests are recorded here but **no guest is
   bound to them** and no ``typed-obligation/v0`` lowering has been produced -- the reference vectors are model
   replays (``verity/ml/circuits/silicon/captures/vectors/``, schema ``verity/tc-reference-vector/v0``), not authenticated obligations.
-* :data:`BF16_HOPPER` (lane b-hopper, 2026-09-22) -- ``sm90.mma.m16n8k16.bf16`` (pinned: Hawkeye H100, re-measured
+* :data:`BF16_HOPPER` -- ``sm90.mma.m16n8k16.bf16`` (pinned: Hawkeye H100, re-measured
   25.7M elements / 0 mismatches; the ``wgmma`` BF16 path runs the same pipeline), model
   :data:`verity.ml.circuits.silicon.models.HOPPER_BF16_M16N8K16` (one group of 16, the 26-bit adder, floor -133; exact BF16
   products).  FIRST's program and epilogue -- ``GemmCoordinate<K>`` with ``f32_to_bf16`` -- so the Hopper row of the
   table is the same function as the Ampere row up to the step; the family is
   ``veritor.tc-bf16.hopper_bf16_m16n8k16@1`` (:func:`verity_sp1.proofs.families.make_tc_bf16_gate_set`), FIRST's
   vocabulary with the steps on the Hopper pipeline.  Native peak: the H100 SXM5 dense BF16 rate (989.4 TFLOPS).
-* :data:`NVFP4_SM120` -- ``sm120.mma.m16n8k64.e2m1.nvf4`` (pinned: RTX 5090, lanes fp4-re / fp4-proof), model
+* :data:`NVFP4_SM120` -- ``sm120.mma.m16n8k64.e2m1.nvf4`` (pinned: RTX 5090), model
   :data:`verity.ml.circuits.silicon.models.BLACKWELL_SM120_NVF4` (``BlockScaledAlignAdd``: exact E2M1 x E2M1 group dots over four
   groups of 16, one UE4M3 scale byte per 16-element block on A and on B, the five-way align-add anchored on the leading
   participating group's scale exponent (27 fraction bits), the accumulator's 36-bit window, truncation toward zero,
@@ -144,7 +144,7 @@ much hardware stands behind the model the target computes with.
   binary32 are outside; an NVFP4 chain from ``c_0 = 0`` cannot leave binary32).  Consumer die: the evidence is
   ``mma.sync kind::mxf4nvf4`` on the RTX 5090; B200 ``tcgen05.mma`` cannot be assumed.
 * Not covered by any draft: ``sm90.mma.m16n8k32.e4m3`` (the Hopper legacy path -- unprobed; whether it is Hopper's
-  one group of 32 or Ada's two of 16 is the probe lane's first question), E5M2 (hypotheses only), and the MXFP4
+  one group of 32 or Ada's two of 16 is the first thing a probe must settle), E5M2 (hypotheses only), and the MXFP4
   instruction ``sm120.mma.m16n8k64.e2m1.mxf4`` (pinned; the same adder with UE8M0 scales over blocks of 32, no target).
 
 Native peak: what a target's overhead is measured against
@@ -193,7 +193,7 @@ __all__ = [
 ]
 
 #: The tensor-core gate families' names and versions (the frozen SP1 backend's ``verity_sp1.proofs.families`` builds them).
-#: The ``veritor.*`` ids below are grandfathered and the prefix is FROZEN (CIR-12, circuits, 14 Oct 2026): each spelling is
+#: The ``veritor.*`` ids below are grandfathered and the prefix is FROZEN: each spelling is
 #: baked into a ``*_FAMILY_DIGEST`` pin, fixtures and recorded runs, so it stays; no new family is created under
 #: ``veritor.*`` — a new family takes a fresh id, and ``tests/test_targets_frozen_families.py`` fails on any other.
 TC_AMPERE_BF16_NAME = "veritor.tc-ampere-bf16"
