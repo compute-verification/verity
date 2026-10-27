@@ -5,37 +5,37 @@ import Proofs.Properties.NetworkCertifier.Period
 import Proofs.Properties.Verity.Network.Coupling
 
 /-!
-# NET-85: the network certifier's per-window bound at its compiled component, from named steps
+# The network certifier's per-window bound at its compiled component, from named steps
 
-`Verity.Subprotocol.NetworkWindowLe R A` (ONE-12's `window_le` at the verdict `A`) bounds, at each window `i` and
+`Verity.Subprotocol.NetworkWindowLe R A` (`window_le` at the verdict `A`) bounds, at each window `i` and
 each value `ξ` of the other coins, the probability over the network audit's own coin that `A` holds while window `i`
 fails its good event (`NetTiming.WindowGood`) by the sampled verifier's `PrBad` at the leak relation at the network
 certifier's rows (`Rlt`). `windowLe` proves it with `A` onsite's network component accepting what the prover sent,
 from these steps (`Verity.Network.networkWindowLe` takes it to any `A` that implies that acceptance, a coupling's
 verdict at the code `Vocab.Coupling.verdict` among them):
 
-| step | content | owner |
+| step | content | state |
 | --- | --- | --- |
 | S1 | an accepted period accepted every link-window (`periodAcceptMeans`) | proved |
-| S2 | Period runs one-stage v2 on each window's case (`PeriodRunsV2`) | network-accounting (PERIOD-V2), open |
-| S3 | v2's acceptance is `--zk`'s on every session (`V2AcceptMeans`) | proofs, ONE-3p |
-| S4 | the sessions' coins are the live coins (`WindowCoinsLive`) | proofs, ONE-4 |
-| S5 | the accepted sessions are an accepting sampled run (`SessionIsSampledRun`) | proofs |
-| S6 | the realization is the compiled run's (`NetworkCouples`) | lean, ONE-12's bridge |
+| S2 | Period runs one-stage v2 on each window's case (`PeriodRunsV2`) | open |
+| S3 | v2's acceptance is `--zk`'s on every session (`V2AcceptMeans`) | open |
+| S4 | the sessions' coins are the live coins (`WindowCoinsLive`) | open |
+| S5 | the accepted sessions are an accepting sampled run (`SessionIsSampledRun`) | open |
+| S6 | the realization is the compiled run's (`NetworkCouples`) | open |
 | S7 | a uniform coin map's event is below the run's (`pr_le_of_coins`) | proved |
 | S8 | `WindowGood` past the leak relation, on acceptance (`windowGood_of_accepts`) | proved, from premises |
-| ρ | the trace holds the registered values (`WindowValuesRegistered`) | proved where no window registers values (`windowValuesRegistered_of_empty`); else open, network-accounting |
+| ρ | the trace holds the registered values (`WindowValuesRegistered`) | proved where no window registers values (`windowValuesRegistered_of_empty`); else open |
 
 S8 rests on S1, S2, S6 and `trusted-host` (`R.trusted`: the record is the device's code's, `obs_eq_record`), the ρ gap,
-and two premises: the window's statement registered as `sw i` (`WindowRegistersAs`, proofs: one-stage's registration
-checks), and the network certifier's record covering the horizon (`RecordCovers`, network-accounting, open). For the
+and two premises: the window's statement registered as `sw i` (`WindowRegistersAs`: one-stage's registration
+checks), and the network certifier's record covering the horizon (`RecordCovers`, open). For the
 rows format that is two facts per bucket (`recordCovers_of_rows`); for one-stage v2's clock form it is the window's
 statuses alone (`recordCovers_of_clock`), which N2's head check gives only off its soundness error and up to a forgery
 under the device's key (`ClockStatusComplete`). With the device certifying only complete records (B), the period's
 in-the-clear certificate check gives it off the forger's event (`recordCoversOff_of_certified`), and the bound gains
 that event's probability (`windowLeOff`).
 
-The realization's fields the steps read beyond `RealizesCommOfPeriodLeakAccepted`'s are `WindowRuns`', in ONE-8's
+The realization's fields the steps read beyond `RealizesCommOfPeriodLeakAccepted`'s are `WindowRuns`', in the
 `SampledSession` form: each a property of the deployed run, which the named steps tie to the compiled component.
 -/
 
@@ -54,7 +54,7 @@ inputs pinned. -/
 abbrev Rlt (R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S lay k δ decode reg Dj n) : Rel Wit :=
   RLeakTap H D.commit D.parse D.partition L Kₒ S lay k δ (fun m => AsReg m.prog (lay m) (k m) (reg m)) Dj R.tops
 
-/-- **The network audit's runs at each window**: what NET-85's steps read of the deployed run at a realization `R`,
+/-- **The network audit's runs at each window**: what the named steps read of the deployed run at a realization `R`,
 beyond its fields.
 
 * `v2 ξ i`: one-stage v2 accepts window `i`'s case at the coins `ξ` (S2's conclusion, S3's hypothesis);
@@ -78,35 +78,35 @@ def WindowRuns.record (W : WindowRuns R) (ξ : (i : I) → Ω i) (i : Fin n) : L
 
 /-! ## The named steps -/
 
-/-- **S2 (network-accounting, NET-85; open): the period check runs one-stage v2 on each window's case.** Where onsite's
+/-- **S2 (open): the period check runs one-stage v2 on each window's case.** Where onsite's
 network component accepts at `ξ`, one-stage v2 accepted window `i`'s case. Today's `NetworkCheck.Period` reads each
 window's one-stage answer from the evidence the prover sends (`PeriodWindowProved`, `PeriodRowsProved`) and runs no
-verifier on it, so this needs Period to run `OneStageZk.checkBlobs` on each window's case: PERIOD-V2 (#4873), on
-#4637's blob interface (on `main`) and #4772's blob product. -/
+verifier on it, so this needs Period to run `OneStageZk.checkBlobs` on each window's case, over the core interface's
+blobs and the blob product. -/
 def PeriodRunsV2 (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) : Prop :=
   ∀ ξ i, ComponentAccepts .network (s ξ) → W.v2 ξ i
 
-/-- **S3 (proofs, ONE-3p, PRF-206): v2's acceptance is flock-verify `--zk`'s on every session**, at window `i`'s case:
-`Properties.SampledProofs.OneStageZk.AcceptMeans` (on `soundness-one3p-fdea`). -/
+/-- **S3: v2's acceptance is flock-verify `--zk`'s on every session**, at window `i`'s case:
+`Properties.SampledProofs.OneStageZk.AcceptMeans`. -/
 def V2AcceptMeans (W : WindowRuns R) : Prop :=
   ∀ ξ i, W.v2 ξ i → W.session ξ i
 
-/-- **S4 (proofs, ONE-4, PRF-200): the sessions' coins are the challenger's live coins.** At each window and each value
+/-- **S4: the sessions' coins are the challenger's live coins.** At each window and each value
 of the other coins, the network audit's own uniform coin gives the prover's tape and the sampled verifier's coins
 uniformly. -/
 def WindowCoinsLive (W : WindowRuns R) : Prop :=
   ∀ ξ i (q : R.Tape ξ i × (Fin (D.V.k (R.stmt ξ i)) → Coin) → Prop), Pouw.pr (fun x => q (W.coins ξ i x)) = Claims.Pr q
 
-/-- **S5 (proofs: the one-stage twin of ONE-9p's `Verity.Recursive.acc_of_accepts`): the accepted sessions are an
+/-- **S5 (the one-stage twin of `Verity.Recursive.acc_of_accepts`): the accepted sessions are an
 accepting run of the sampled verifier.** Where every session of window `i`'s proof is accepted at the coins `ξ` with the
 network audit's own coin `x`, the sampled verifier's run at the window's statement, against its prover at the tape and
-coins `x` gives, accepts. Were ONE-12's bridge restated over C-Flock's game instead, ONE-8's coupling would give this,
-with the bridge's KS assumption changed: a claims change, Daniel's. -/
+coins `x` gives, accepts. Were the bridge restated over C-Flock's game instead, the `SampledSession` coupling would give
+this, with the bridge's KS assumption changed: a claims change. -/
 def SessionIsSampledRun (W : WindowRuns R) : Prop :=
   ∀ ξ i x, W.session (Function.update ξ (r.own .network) x) i →
     (Claims.run H (R.prover ξ i) D.V (R.stmt ξ i) (W.coins ξ i x).1 (W.coins ξ i x).2).out = .acc
 
-/-- **S6 (lean, ONE-12's bridge): the realization is the compiled run's**, in ONE-8's `SampledSession.Couples` form:
+/-- **S6 (the bridge): the realization is the compiled run's**, in the `SampledSession.Couples` form:
 
 * `stmt`: window `i`'s statement is fixed before the network audit's own coin (its registration);
 * `wit`: the realization's witness is in the leak relation wherever the window's statement has a witness there;
@@ -120,7 +120,7 @@ structure NetworkCouples (R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S 
   obs : ∀ ξ, R.obs ξ = (R.run R.device (W.sched ξ, W.srv ξ)).2
   windows : ∀ ξ p c e, NetworkPeriod (s ξ) p c e → n ≤ p.windows
 
-/-- **The ρ gap (open: lean's or network-accounting's): the trace holds the registered values at the registered
+/-- **The ρ gap (open): the trace holds the registered values at the registered
 inputs.** Where onsite's network component accepts at `ξ` and the realization's witness is in the leak relation, the
 trace it opens holds window `i`'s registered values `ρ i` at the registered inputs: the gap `PeriodLeakAccepted` names,
 which the registration's commitment binds (`Commitment.Binds`) once `ρ i` is what it committed. -/
@@ -141,7 +141,7 @@ theorem windowValuesRegistered_of_empty {s : ((i : I) → Ω i) → Sent}
   intro ξ i st hca hst _ g hg
   simp [h ξ i st hca hst] at hg
 
-/-- **S8's registration premise (proofs: one-stage's registration checks, R1–R6, at the window's case).** Where v2
+/-- **S8's registration premise (one-stage's registration checks, R1–R6, at the window's case).** Where v2
 accepted window `i`'s case at `ξ` and the period onsite's network case decodes to registers window `i` under a
 registration naming the period's Program (the one field of it the period check reads, S1's `PeriodWindowProgram`),
 the window's statement is registered as `sw i`: the same program, design, layout, horizon, registered inputs and
@@ -150,7 +150,7 @@ def WindowRegistersAs (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) : Pro
   ∀ ξ (i : Fin n) p c e rg st, W.v2 ξ i → NetworkPeriod (s ξ) p c e → c.windows[i.val]? = some rg →
     PeriodWindowProgram p rg → D.parse (R.stmt ξ i) = some st → SameRegistration D lay k reg (R.sw i) st
 
-/-- **S8's coverage premise (network-accounting; open).** Where onsite's network component accepts at `ξ`, the network
+/-- **S8's coverage premise (open).** Where onsite's network component accepts at `ξ`, the network
 certifier's record of window `i` covers its registered horizon `k (sw i)`: that many steps, each with every status
 complete and its jitter class below `Dj`. Today's period check reads neither statuses nor jitter. For the rows format
 it is two facts per bucket (`recordCovers_of_rows`); at one-stage v2's clock form, whose record is untimed and whose
@@ -231,7 +231,7 @@ theorem record_covers {n : ℕ} {s : WardenSchedule κ} {a : κ → Arrivals Cel
 
 end ClockFormat
 
-/-- **The clock form (network-accounting: the deployed record).** The realization's record format is the clock form
+/-- **The clock form (the deployed record).** The realization's record format is the clock form
 `F` (`record`); each window is its registered horizon's steps (`horizon`: Period registers every window at the declared
 grid, whose T the network certifier runs, and N2's head check holds each head's T to that grid's); and the jitter bound
 is at least 1 (`jitter`: Period v2's `paramsOf` refuses a declared jitter below 1), above the untimed record's 0. -/
@@ -287,7 +287,7 @@ at `ξ`, the period accepted a certificate of every boundary link of every windo
 def CertifiedOnAccept (s : ((i : I) → Ω i) → Sent) {Cert : Type} (C : CertRuns R Cert) : Prop :=
   ∀ ξ (i : Fin n) c, ComponentAccepts .network (s ξ) → ∃ x, C.accepted ξ i c x
 
-/-- **B: the device certifies only a complete record, under `trusted-host`** (network-accounting: `Issuer.certify`
+/-- **B: the device certifies only a complete record, under `trusted-host`** (`Issuer.certify`
 lists an incomplete record's link-window in `refused` and signs nothing for it). Where the period accepted `x` as window
 `i`'s certificate of boundary link `c` and the device certified `x`, the device certified its record of that
 link-window, so that link's status in its record of window `i` is complete. -/
@@ -299,7 +299,7 @@ def SignedComplete (W : WindowRuns R) (F : ClockFormat R.Conn R.Cell L Kₒ S) {
 /-- **The forger's event** at `ξ`: the period accepted a certificate the device never certified. Its fixed finder
 outputs the first such certificate: an LMS forgery under the device's key over its message (`euf-cma/lms-sha512-n64`),
 or, where the device signed that message for another certificate's fields, two `certificate_message` inputs with one
-SHA-512 digest (`ecr/sha-512`). Both claims apply outside the theorem, each to its own fixed finder (Daniel, 26 Oct). -/
+SHA-512 digest (`ecr/sha-512`). Both claims apply outside the theorem, each to its own fixed finder. -/
 def CertForged {Cert : Type} (C : CertRuns R Cert) (ξ : (i : I) → Ω i) : Prop :=
   ∃ (i : Fin n) (c : Fin Kₒ) (x : Cert), C.accepted ξ i c x ∧ ¬ C.signed ξ x
 
@@ -362,7 +362,7 @@ theorem pr_le_add_off {α : Type} [Fintype α] {A B : α → Prop} {b : ℝ} (h 
   (Pouw.pr_mono fun x hx => (em (B x)).elim Or.inr fun hb => Or.inl ⟨hx, hb⟩).trans
     ((Pouw.pr_or_le (fun x => A x ∧ ¬ B x) B).trans (add_le_add h le_rfl))
 
-/-- **NET-85: the network certifier's per-window bound at its compiled component**
+/-- **The network certifier's per-window bound at its compiled component**
 (`Verity.Subprotocol.NetworkWindowLe`, unfolded, at the component's acceptance), from S2–S6, the ρ gap and S8's two
 premises, with S1, S7 and S8 proved here. At each window and each value of the other coins, an accepted run of the
 network audit with window `i` not good maps, through the live coin map (S4), to an accepting run of the sampled

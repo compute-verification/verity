@@ -2,14 +2,14 @@ import Proofs.Properties.Verity.Subprotocols
 import Proofs.Properties.Verity.Network.Window
 
 /-!
-# ONE-12's refinement at the code, from NET-85's steps
+# The network certifier's refinement at the code, from the named steps
 
-`Verity.Subprotocol.NetworkWindowLe R A` (ONE-12's refinement) follows from `Verity.Network.windowLe` at any verdict
+`Verity.Subprotocol.NetworkWindowLe R A` (the network certifier's refinement) follows from `Verity.Network.windowLe` at any verdict
 `A` under which onsite's network component accepts what the prover sent (`networkWindowLe`). In the game, `A` is a
 coupling's verdict at the code (`Vocab.Coupling.verdict`), whose first conjunct is that acceptance
 (`networkWindowLe_verdict`). So the network certifier at the code (`Verity.Subprotocol.network_atCode`, at the
 coupling's run, `Vocab.Coupling.atCode`) rests on the bridge's assumptions (`KS`, `Commitment.Binds`,
-`Flock.ListWithin`, and `trusted-host` in the realization) and NET-85's named steps (`network_atCode_of_steps`): S2–S6,
+`Flock.ListWithin`, and `trusted-host` in the realization) and the named steps (`network_atCode_of_steps`): S2–S6,
 the ρ gap and S8's two premises (`Proofs.Properties.Verity.Network.Window`). At a coupling, that is the per-period
 guarantee `Vocab.networkSound_of_coupling` reads (`coupling_atCode_of_steps`).
 -/
@@ -23,7 +23,7 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circui
   [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ} {lay : Stmt → Layout L S}
   {k : Stmt → ℕ} {δ : ℝ} {decode : List (ℕ × Col) → List T} {reg : Stmt → Finset ℕ} {Dj n : ℕ}
 
-/-- **NET-85: ONE-12's refinement at a verdict `A` under which onsite's network component accepts what the prover sent
+/-- **The network certifier's refinement at a verdict `A` under which onsite's network component accepts what the prover sent
 (`s`), from its named steps.** -/
 theorem networkWindowLe {r : PeriodRun d α C Ω} {K : ℝ}
     {R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S lay k δ decode reg Dj n}
@@ -34,7 +34,7 @@ theorem networkWindowLe {r : PeriodRun d α C Ω} {K : ℝ}
     NetworkWindowLe R A := fun ξ i =>
   le_trans (Pouw.pr_mono fun _ hx => ⟨hA _ hx.1, hx.2⟩) (windowLe W h2 h3 h4 h5 h6 hρ hreg hcov ξ i)
 
-/-- **NET-85 in the game**: ONE-12's refinement at a coupling's verdict at the code, with the steps at what the prover
+/-- **The refinement in the game**: the network certifier's refinement at a coupling's verdict at the code, with the steps at what the prover
 sent at the outcome the coins lead to. -/
 theorem networkWindowLe_verdict {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
     (q : V.Coupling .network θ F c σ) {K : ℝ}
@@ -47,7 +47,7 @@ theorem networkWindowLe_verdict {V : Vocab d α} {θ F c : ByteArray} {σ : Game
     (hcov : RecordCovers W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) : NetworkWindowLe R q.verdict :=
   networkWindowLe (fun _ h => h.1) W h2 h3 h4 h5 h6 hρ hreg hcov
 
-/-- **The network certifier at the code from NET-85's steps**: `Verity.Subprotocol.network_atCode` with
+/-- **The network certifier at the code from the named steps**: `Verity.Subprotocol.network_atCode` with
 `NetworkWindowLe` from `networkWindowLe`. -/
 theorem network_atCode_of_steps {r : PeriodRun d α C Ω} (c : Certificates) (p : Price)
     (R : RealizesCommOfPeriodLeakAccepted r c.K H D L Kₒ S lay k δ decode reg Dj n) (hks : KS H D)
@@ -66,7 +66,7 @@ theorem network_atCode_of_steps {r : PeriodRun d α C Ω} (c : Certificates) (p 
   network_atCode c p R hks hb hδ hdec εks εbind εtap herr hbind htap
     (networkWindowLe hA W h2 h3 h4 h5 h6 hρ hreg hcov)
 
-/-- **A network coupling's guarantee at the code from NET-85's steps**: the coupled run at the verdict at the code
+/-- **A network coupling's guarantee at the code from the named steps**: the coupled run at the verdict at the code
 (`Vocab.Coupling.atCode`) meets `CommOfPeriodLeakAccepted`'s bound at the published certificates and the coupling's
 price, the per-period guarantee `Vocab.networkSound_of_coupling` reads, from the bridge's assumptions and the steps at
 what the prover sent at the outcome the coins lead to. -/
