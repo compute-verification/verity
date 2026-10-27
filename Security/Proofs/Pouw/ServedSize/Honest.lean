@@ -1,3 +1,4 @@
+import Definitions.Core.Boolean
 import Proofs.Pouw.ServedSize
 import Proofs.Pouw.PeriodJ10R.Honest
 
@@ -25,6 +26,7 @@ open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Proper
 open Properties.Pouw.ServedSize.SecurityProofs Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposePeriod
+open Verity.Circuit (bitZ)
 
 /-! ## The declared Boolean circuit and its blocks -/
 
@@ -40,7 +42,7 @@ theorem twoBits_right {n : ℕ} {a b : Fin n} (hab : a ≠ b) (p q : Bool) : two
 theorem twoBits_other {n : ℕ} {a b x : Fin n} (ha : x ≠ a) (hb : x ≠ b) (p q : Bool) : twoBits a b p q x = 0 := by
   rw [twoBits, if_neg ha, if_neg hb]
 
-theorem bitZ_ofBool (p : Bool) : Circuit.bitZ (BitVec.ofBool p) = if p then 1 else 0 := by
+theorem bitZ_ofBool (p : Bool) : bitZ (BitVec.ofBool p) = if p then 1 else 0 := by
   cases p <;> decide
 
 /-- **C-Flock's `and a b` of two distinct gates is an AND gate**: its bit at the four values of `a` and `b` sums to
@@ -49,8 +51,8 @@ theorem isAnd_of_and (B : Verity.Boolean.Circuit) {g a b : Fin B.N} (hg : B.op g
     B.toCircuit.IsAnd g := by
   refine ⟨by simp [Verity.Boolean.Circuit.toCircuit, hg, Verity.Boolean.Op.isInput], ?_⟩
   rintro ⟨S, c, -, h⟩
-  have key : ∀ p q, Circuit.bitZ (BitVec.ofBool (p && q)) =
-      c + ∑ x ∈ S, Circuit.bitZ (twoBits a b p q x) := by
+  have key : ∀ p q, bitZ (BitVec.ofBool (p && q)) =
+      c + ∑ x ∈ S, bitZ (twoBits a b p q x) := by
     intro p q
     have hpq := h (twoBits a b p q)
     have hop : B.toCircuit.op g (twoBits a b p q) = BitVec.ofBool (p && q) := by
@@ -61,8 +63,8 @@ theorem isAnd_of_and (B : Verity.Boolean.Circuit) {g a b : Fin B.N} (hg : B.op g
       cases p <;> cases q <;> decide
     rw [hop] at hpq
     exact hpq
-  have hsum : ∀ x, Circuit.bitZ (twoBits a b true true x) + Circuit.bitZ (twoBits a b true false x) +
-      Circuit.bitZ (twoBits a b false true x) + Circuit.bitZ (twoBits a b false false x) = 0 := by
+  have hsum : ∀ x, bitZ (twoBits a b true true x) + bitZ (twoBits a b true false x) +
+      bitZ (twoBits a b false true x) + bitZ (twoBits a b false false x) = 0 := by
     intro x
     by_cases hxa : x = a
     · rw [hxa, twoBits_left, twoBits_left, twoBits_left, twoBits_left]
@@ -73,27 +75,27 @@ theorem isAnd_of_and (B : Verity.Boolean.Circuit) {g a b : Fin B.N} (hg : B.op g
       · rw [twoBits_other hxa hxb, twoBits_other hxa hxb, twoBits_other hxa hxb, twoBits_other hxa hxb]
         decide
   have hc : ∀ c : ZMod 2, c + c = 0 := by decide
-  have h1 : (1 : ZMod 2) = c + ∑ x ∈ S, Circuit.bitZ (twoBits a b true true x) := by
+  have h1 : (1 : ZMod 2) = c + ∑ x ∈ S, bitZ (twoBits a b true true x) := by
     rw [← key true true]; decide
-  have h2 : (0 : ZMod 2) = c + ∑ x ∈ S, Circuit.bitZ (twoBits a b true false x) := by
+  have h2 : (0 : ZMod 2) = c + ∑ x ∈ S, bitZ (twoBits a b true false x) := by
     rw [← key true false]; decide
-  have h3 : (0 : ZMod 2) = c + ∑ x ∈ S, Circuit.bitZ (twoBits a b false true x) := by
+  have h3 : (0 : ZMod 2) = c + ∑ x ∈ S, bitZ (twoBits a b false true x) := by
     rw [← key false true]; decide
-  have h4 : (0 : ZMod 2) = c + ∑ x ∈ S, Circuit.bitZ (twoBits a b false false x) := by
+  have h4 : (0 : ZMod 2) = c + ∑ x ∈ S, bitZ (twoBits a b false false x) := by
     rw [← key false false]; decide
-  have hS : ∑ x ∈ S, (Circuit.bitZ (twoBits a b true true x) + Circuit.bitZ (twoBits a b true false x) +
-      Circuit.bitZ (twoBits a b false true x) + Circuit.bitZ (twoBits a b false false x)) = 0 :=
+  have hS : ∑ x ∈ S, (bitZ (twoBits a b true true x) + bitZ (twoBits a b true false x) +
+      bitZ (twoBits a b false true x) + bitZ (twoBits a b false false x)) = 0 :=
     Finset.sum_eq_zero fun x _ => hsum x
   rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_add_distrib] at hS
   have h10 : (1 : ZMod 2) = 0 := by
     calc (1 : ZMod 2) = 1 + 0 + 0 + 0 := by decide
-      _ = (c + ∑ x ∈ S, Circuit.bitZ (twoBits a b true true x)) +
-          (c + ∑ x ∈ S, Circuit.bitZ (twoBits a b true false x)) +
-          (c + ∑ x ∈ S, Circuit.bitZ (twoBits a b false true x)) +
-          (c + ∑ x ∈ S, Circuit.bitZ (twoBits a b false false x)) := by rw [← h1, ← h2, ← h3, ← h4]
-      _ = (c + c) + (c + c) + (∑ x ∈ S, Circuit.bitZ (twoBits a b true true x) +
-          ∑ x ∈ S, Circuit.bitZ (twoBits a b true false x) + ∑ x ∈ S, Circuit.bitZ (twoBits a b false true x) +
-          ∑ x ∈ S, Circuit.bitZ (twoBits a b false false x)) := by ring
+      _ = (c + ∑ x ∈ S, bitZ (twoBits a b true true x)) +
+          (c + ∑ x ∈ S, bitZ (twoBits a b true false x)) +
+          (c + ∑ x ∈ S, bitZ (twoBits a b false true x)) +
+          (c + ∑ x ∈ S, bitZ (twoBits a b false false x)) := by rw [← h1, ← h2, ← h3, ← h4]
+      _ = (c + c) + (c + c) + (∑ x ∈ S, bitZ (twoBits a b true true x) +
+          ∑ x ∈ S, bitZ (twoBits a b true false x) + ∑ x ∈ S, bitZ (twoBits a b false true x) +
+          ∑ x ∈ S, bitZ (twoBits a b false false x)) := by ring
       _ = 0 := by rw [hc, hS]; decide
   exact absurd h10 (by decide)
 
@@ -131,9 +133,12 @@ theorem op_gateOf {N : ℕ} (t : Fin N) : (andCircuit N).op (gateOf t) = .and in
 theorem isAnd_gateOf {N : ℕ} (t : Fin N) : (andDecl N).D.IsAnd (gateOf t) :=
   isAnd_of_and (andCircuit N) (op_gateOf t) fun h => absurd (congrArg Fin.val h) (by simp [in0, in1])
 
+theorem gateOf_output {N : ℕ} (t : Fin N) : gateOf t ∈ (andDecl N).D.outputs :=
+  Finset.mem_filter.mpr ⟨Finset.mem_univ _, show 2 ≤ t.val + 2 by omega⟩
+
 theorem creditSize_gateOf {N : ℕ} (t : Fin N) :
-    creditSize Declaration.D (andDecl N) {gateOf t} = 1 := by
-  unfold creditSize Circuit.andSize
+    Verity.creditSize Verity.Declaration.D (andDecl N) {gateOf t} = 1 := by
+  unfold Verity.creditSize Verity.Circuit.andSize
   rw [Finset.filter_singleton, if_pos (isAnd_gateOf t), Finset.card_singleton]
 
 /-- **The honest map**: block `t` is AND gate `t + 2`, and word `i` is its one bit, that gate. The lowering is the
@@ -162,8 +167,7 @@ def blocks (N : ℕ) : BlockMap (circuit N) N Verity.Declaration.D (andDecl N) w
     intro g hg
     rw [Finset.mem_singleton] at hg
     subst hg
-    refine Finset.mem_filter.mpr ⟨Finset.mem_singleton_self _, Or.inl ?_⟩
-    exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, show 2 ≤ t.val + 2 by omega⟩
+    exact Finset.mem_filter.mpr ⟨Finset.mem_singleton_self _, Or.inl (gateOf_output t)⟩
 
 /-- **Every block's credit size is `1`**: its one gate is an AND gate. -/
 theorem size_blocks {N : ℕ} (t : Fin N) : (blocks N).size t = 1 :=
@@ -341,8 +345,8 @@ theorem served_size_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccept
     rw [zeroCone_eq, wordsOf_eq, min_self, mul_zero, mul_zero, add_zero, one_mul,
       mul_comm (tileCount σ sT : ℝ) (n : ℝ), mul_div_mul_right _ _ hN', div_lt_one (Nat.cast_pos.mpr hn)]
     exact hΛ
-  haveI : Nonempty (Ω1 σ sT) := ⟨(Classical.choice (paths_nonempty _), (1, ()))⟩
-  haveI : Nonempty (Paths (Ω1 σ sT) n) := paths_nonempty n
+  have : Nonempty (Ω1 σ sT) := ⟨(Classical.choice (paths_nonempty _), (1, ()))⟩
+  have : Nonempty (Paths (Ω1 σ sT) n) := paths_nonempty n
   refine not_prob_le (fun x => ⟨trivial, ?_⟩) (by rw [add_zero, mul_zero, add_zero]; exact hδs1)
   rw [rightSize_none]
   · unfold creditFloor epsSkip
