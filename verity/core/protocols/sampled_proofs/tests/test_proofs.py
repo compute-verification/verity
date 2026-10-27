@@ -33,22 +33,22 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:408690b5428fd1601a203143a5f10e0bcd43e2a435a0b642087c0c0dbb557ba8"
+FIXTURE = "art:24527d5ae8b148c977da764eda8ca6cc055120cd93ce8341d7458426e2cf7a7d"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
 #: the fixture's registered roots: every port of the circuit is registered (`Flock.Registered.checkComplete`)
 REGISTERED_ROOTS = {
-    "cs": {"value": "cs_table", "root": "0ad0988e660c21c93f2fbf0c69a90f7d8059b6b82e1d04ae1571d07b2353d898"
-                                        "253fcbaa4df6c63c1448e0749ae2671fe0ef2a6affd770ae9c30198a27e9cca4"},
-    "x": {"value": "x", "root": "112a4ebd3bd01cc4cc09459bdd4843e2a6f6334551f4e0b784fc886f9b5f22ca"
-                                "21cb9fe908d48c5efe1df9a0cb6e957ed1cf6d63349cf9588eb856aa23912e8c"},
-    "out": {"value": "rope_out", "root": "9a5618ef08d2c12d410b0ecd4bdd3e135181d655c1723cb176a9dcbbe2f9c8b6"
-                                         "bf183870bc20fbf0746ee9ca0c13a15090de772d352184d03d61386c69602301"},
+    "cs": {"value": "cs_table", "root": "06308122d2143b72585e38c436ea45fbe130c2a9083c2ddf88afdddd0ed88bdb"
+                                        "417469004e0d60e4966a151ba5a57e0a644ef1f51ec7765129fd05af5d8021d8"},
+    "x": {"value": "x", "root": "12ecb1fe8bc2d318955ed3a8b8bc70b522767c52e9b0523808066311d3dbb3d5"
+                                "84f64e66a9deed8117cb6379979c3f9c5d6f3d4dedcc1b4a06bd2edaa6e55c27"},
+    "out": {"value": "rope_out", "root": "e63174f8784682a59ef377f4875aec5f183fe0dafc1c8e7dbf1d641b7d98a720"
+                                         "b03a6c71915795f2a10f5e6caefa1034849f39be28e3cc8ae33aad0f912bdc90"},
 }
 #: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
-DRAWN = (0, 2, 6, 7, 8, 9, 13, 15, 18, 22, 25, 26, 27, 29, 30, 31)
+DRAWN = (0, 1, 4, 5, 6, 8, 9, 11, 12, 16, 18, 19, 21, 22, 29, 31)
 #: `verify --zk`'s last refusal, of a shared-row public file (`KsScope.TABLES_WHY`)
 TABLES = ("refused: a shared-row public file (header shared_rows) under --zk: a statement form the soundness proof does "
           "not cover")
