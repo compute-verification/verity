@@ -1,6 +1,8 @@
 """Dither v3.1's CPU reference (benchmarks/pouw/accel_v31/v31.py): the binding identity, the row layout, and the stub
 challenger's verdicts on an honest call and on calls that skip a noise tile or forge committed values; and Dither's
-no-fold call (`Fill`) against dither.py's known answers, with its verdicts, sample check and table; and both shapes' bound
+no-fold call (`Fill`) against dither.py's known answers, with its verdicts, sample check and table; O at 16 bits and a
+gate-up call's A′ laid out, packed and committed as dither.py does, the SiLU table, the sample check's A′, and
+fill_dither.py's checks on a device that is dither.py itself (honest, and forging A′); and both shapes' bound
 on t = min(L, K) / L'. perm_kernel launches within its launch bounds, and with VERITY_POUW_V31_LIB naming a libv31.so built
 for the GPU in hand, the GPU forms W' at L' 1,024 and 2,048 under the permutation perm_kernel writes."""
 from __future__ import annotations
@@ -20,6 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "accel_v31"))
 import fill_dither
 import v31
 import v31lib
+
+from verity.core.protocols.pouw.circuit import dither
 
 
 def _call(sh: v31.Shape, kind: str = "llm", seed: int = 3):
@@ -355,9 +359,11 @@ def test_both_shapes_refuse_t_past_8():
     assert v31.Fill(128, 128, 4096, 512, 8192).S == 1
     for line in v31lib.GATES.strip().splitlines():
         _, kind, *dims = line.split()[:8]
-        v31.Fill(*map(int, dims), kind == "served")
+        v31.Fill(*map(int, dims), kind != "fill", 16 if kind == "served16" else 32)
     for line in fill_dither.CASES.strip().splitlines():
-        v31.Fill(*map(int, line.split()[1:7]), line.split()[7] == "served")
+        dims, kind = list(map(int, line.split()[1:7])), line.split()[7]
+        v31.Fill(*dims, *fill_dither.KINDS[kind])
+        dither.Shape(*dims, *fill_dither.KINDS[kind])
     for dims, served in v31lib.PIPELINE:
         v31.Fill(*dims, served)
 
@@ -403,6 +409,194 @@ def test_fill_sample_rebuilds_a_tile_and_the_params(tmp_path, capsys, served):
     capsys.readouterr()
 
 
+#: (m, n, k, lp, L, row), O's width, A′: an A′ row in two leaves, the second short; one short leaf; O16 alone; A′ at O32
+LAYOUTS = [((256, 768, 1024, 256, 512, 256), 16, True), ((128, 256, 768, 256, 768, 1024), 16, True),
+           ((256, 256, 1024, 128, 512, 2048), 16, False), ((128, 512, 1024, 256, 1024, 1024), 32, True)]
+
+
+@pytest.mark.parametrize("dims,ow,act", LAYOUTS)
+def test_fill_layout_is_dithers(dims, ow, act):
+    """v31's Fill lays out O at 16 bits and a gate-up call's A′ (after each tile-row's tiles, an A′ row's last leaf short)
+    as dither.Shape does: every leaf's span, the opened leaves, the label and the domain."""
+    f, sh = v31.Fill(*dims, True, ow, act), dither.Shape(*dims, o=True, ow=ow, act=act)
+    assert (f.leaves, f.nbytes, f.label(), f.lpt, f.stride, f.apr) == (sh.leaves, sh.nbytes, sh.label(), sh.lpt, sh.stride, sh.apr)
+    assert f.domain().domain_id == sh.domain().domain_id
+    assert [f.span(p) for p in range(f.leaves)] == [sh.leaf_span(p) for p in range(sh.leaves)]
+    for i, j in [(0, 0), (127, 129), (f.m - 1, f.n - 1), (5, f.n // 2 - 1), (f.m - 1, f.n // 2)]:
+        assert f.opened(i, j, f.S) == sorted(sh.opened(i, j, sh.S)) and f.o_leaf(i, j) == sh.o_leaf(i, j)
+        if act and j < f.I:
+            assert f.act_leaf(i, j) == sh.act_leaf(i, j)
+
+
+def test_fill_buffer_and_root_are_dithers_with_a_prime():
+    """A gate-up call's values (T, O at 16 bits, A′ from dither's map under the default scalars) through v31's fill_buffer
+    and fill_commit are dither.values_buffer's bytes and dither.commit's root."""
+    dims = (128, 256, 512, 128, 256, 256)
+    f, sh = v31.Fill(*dims, True, 16, True), dither.Shape(*dims, o=True, ow=16, act=True)
+    rng = np.random.default_rng(4)
+    A, B = (rng.integers(-127, 127, size=(r, f.k)).astype(np.int8) for r in (f.m, f.n))
+    seeds = v31.served_seeds(rng.bytes(64), rng.bytes(64), 2)
+    T, O = v31.fill_values(f, A, B, v31.Coins.expand(f, seeds))
+    sa, sw = (list(map(int, x)) for x in v31lib.act_scales(f.m, f.n))
+    Td, Od = dither.values(sh, seeds, A, B)
+    assert np.array_equal(O, np.array(Od))
+    sc = dither.act_scales(sh, Od, sa, sw)
+    Ap = dither.acts(sh, Od, sc)
+    want = dither.values_buffer(sh, Td, Od, Ap)
+    values = v31.fill_buffer(f, T, O, np.array(Ap, dtype=np.int8))
+    assert values == want
+    ks = rng.bytes(64)
+    assert v31.fill_commit(f, values, ks, 3 * f.leaves).root == dither.commit(sh, want, dither.salts(ks, 3 * f.leaves)).root
+
+
+def test_silu_table_is_dithers_silu():
+    """act_kernel's SiLU table holds bf16(silu_f32(f32(g))) for every bf16 word g (NaN 0x7FFF), little-endian, so
+    SiLU·mul by 1.0 reads it back unchanged."""
+    t = np.frombuffer(v31.silu_table(), "<u2")
+    assert t.shape == (65536,)
+    assert (t[0x0000], t[0x8000], t[0x3F80], t[0x7F80], t[0xFF80], t[0x7FC0]) == (0, 0x8000, 0x3F3B, 0x7F80, 0x7FFF, 0x7FFF)
+    assert all(dither.silu_mul(g, 0x3F80) == t[g] for g in range(0, 65536, 97))
+
+
+def test_fill_sample_checks_a_prime(tmp_path, capsys):
+    """`v31 fill-bench`'s sample files of a gate-up call: each sampled tile's gate tile of A′ by dither's map, its
+    tile-row's A′ leaves, and four whole rows (O from D with its sums and shifts) with their amax; one A′ byte off is
+    refused."""
+    f = v31.Fill(128, 256, 1024, 256, 512, 2048, True, 16, True)
+    sh = dither.Shape(128, 256, 1024, 256, 512, 2048, o=True, ow=16, act=True)
+    rng = np.random.default_rng(8)
+    A, B = (rng.integers(-127, 127, size=(r, f.k)).astype(np.int8) for r in (f.m, f.n))
+    seeds = v31.served_seeds(rng.bytes(64), rng.bytes(64), 1)
+    T, O = v31.fill_values(f, A, B, v31.Coins.expand(f, seeds))
+    sa, sw = v31lib.act_scales(f.m, f.n)
+    sc = dither.act_scales(sh, O.tolist(), list(map(int, sa)), list(map(int, sw)))
+    Ap = np.array(dither.acts(sh, O.tolist(), sc), dtype=np.int8)
+    ks, off = rng.bytes(64), 2 * f.leaves
+    cm = v31.fill_commit(f, v31.fill_buffer(f, T, O, Ap), ks, off)
+    s = tmp_path / "s"
+    s.mkdir()
+    (s / "seeds.bin").write_bytes(v31.fill_seeds_bytes(seeds))
+    (s / "params.bin").write_bytes(v31.fill_params(f, ks))
+    tiles, orows = [0, 1], [[0, 1, 70, 127], [0, 1, 9, 127]]
+    (s / "sample.json").write_text(json.dumps({"m": f.m, "n": f.n, "k": f.k, "lp": f.lp, "L": f.L, "row": f.row, "o": True,
+                                               "ow": 16, "act": True, "off": off, "tiles": tiles, "orows": orows,
+                                               "root": cm.root.hex()}))
+    for name, x in (("xw", sw), ("rb", np.zeros(f.n, "<u4")), ("sb", np.zeros(f.n, "<u4"))):
+        (s / f"{name}.bin").write_bytes(x.tobytes())
+    tl = f.n // v31.TILE * f.lpt
+    for i, tile in enumerate(tiles):
+        tm, tn = divmod(tile, f.n // v31.TILE)
+        tg = tn % (f.n // v31.TILE // 2)
+        tu, a0 = tg + f.n // v31.TILE // 2, f.span(f.tile_base(tile))[0]
+        files = {"A": A[tm * 128:(tm + 1) * 128], "B": B[tn * 128:(tn + 1) * 128], "act": Ap[tm * 128:(tm + 1) * 128],
+                 "amax": np.array(sc.amax[tm * 128:(tm + 1) * 128], "<u2"), "xs": sa[tm * 128:(tm + 1) * 128],
+                 "Bg": B[tg * 128:(tg + 1) * 128], "Bu": B[tu * 128:(tu + 1) * 128],
+                 "D": O[orows[i]].astype("<u4"), "rasa": np.zeros(8, "<u4")}
+        for name, x in files.items():
+            (s / f"t{i}_{name}.bin").write_bytes(np.ascontiguousarray(x).tobytes())
+        (s / f"t{i}_words.bin").write_bytes(cm.values[a0:a0 + f.lpt * f.row])
+        (s / f"t{i}_leaves.bin").write_bytes(b"".join(cm.levels[0][f.tile_base(tile):f.tile_base(tile) + f.lpt]))
+        (s / f"t{i}_aleaves.bin").write_bytes(b"".join(cm.levels[0][tm * f.stride + tl:(tm + 1) * f.stride]))
+    assert v31.main(["v31", "fill-sample", str(s)]) == 0
+    rep = json.loads((s / "sample-check.json").read_text())
+    assert all(t["act_exact"] and t["act_cells"] == 128 * 128 and t["act_rows_tied"] == 4 for t in rep["tiles"])
+    act = bytearray((s / "t1_act.bin").read_bytes())
+    act[9 * f.I + 3] ^= 1
+    (s / "t1_act.bin").write_bytes(bytes(act))
+    assert v31.main(["v31", "fill-sample", str(s)]) == 1
+    rep = json.loads((s / "sample-check.json").read_text())
+    assert rep["tiles"][1]["act_cells_bad"] == 1 and rep["tiles"][1]["act_leaves_bad"] == 1 and rep["tiles"][1]["act_rows_bad"] == 1
+    capsys.readouterr()
+
+
+class _DitherProver:
+    """v31lib.Prover's calls as fill_dither.py makes them, every value from dither.py itself: an honest device, or one that
+    forges A′ (forgeA) or forms it from O + 2^16 in every other tile (forgeH)."""
+
+    ptrs: dict[int, np.ndarray] = {}
+
+    def __init__(self, m, n, k, lp=256, L=4096, row=1024, *, served=False, ow=32, act=False, lib=None):
+        self.sh, self.f = dither.Shape(m, n, k, lp, L, row, o=served, ow=ow, act=act), v31.Fill(m, n, k, lp, L, row, served, ow, act)
+        self.ks, self.calls, self.st = bytes(range(64)), {}, {}
+        if act:
+            self.sa, self.sw = v31lib.act_scales(m, n)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        pass
+
+    def set_weights(self, B):
+        self.B = B
+
+    def load_a(self, A):
+        self.ptrs[id(A)] = A
+        return id(A)
+
+    def prove(self, seeds, a_ptr=None, cheat="none"):
+        sh, c = self.sh, len(self.calls)
+        A = self.ptrs[a_ptr] if a_ptr is not None else np.array(dither.pad_rows(seeds, sh.k, range(sh.m)), np.int8)
+        self.padb = A.tobytes()
+        T, O = dither.values(sh, seeds, A, self.B)
+        Ap = amax = None
+        if sh.act:
+            Oa = [list(r) for r in O]
+            if cheat.startswith("forgeH"):
+                for t in range(0, sh.tiles, 2):
+                    tm, tn = divmod(t, sh.n // 128)
+                    for i in range(tm * 128, tm * 128 + 128):
+                        Oa[i][tn * 128:tn * 128 + 128] = [(x + 0x10000) & 0xFFFFFFFF for x in Oa[i][tn * 128:tn * 128 + 128]]
+            sc = dither.act_scales(sh, Oa, list(map(int, self.sa)), list(map(int, self.sw)))
+            Ap, amax = dither.acts(sh, Oa, sc), sc.amax
+            if cheat.startswith("forgeA"):
+                Ap[::2] = [[(x + 128) % 255 - 127 for x in r] for r in Ap[::2]]
+        buf = dither.values_buffer(sh, T, O, Ap)
+        self.calls[c] = {"off": c * sh.leaves}
+        self.st[c] = (buf, dither.commit(sh, buf, dither.salts(self.ks, c * sh.leaves)), Ap, amax)
+        return c
+
+    def root(self, c):
+        return self.st[c][1].root
+
+    def values(self, c):
+        return self.st[c][0]
+
+    def pad(self):
+        return self.padb
+
+    def act(self, c):
+        return np.array(self.st[c][2], np.int8), np.array(self.st[c][3], "<u2")
+
+    def act_ptr(self, c):
+        a = np.array(self.st[c][2], np.int8)
+        self.ptrs[id(a)] = a
+        return id(a)
+
+    def open(self, c, positions):
+        return [self.st[c][1].open(int(p)) for p in positions]
+
+
+@pytest.mark.parametrize("line", [
+    pytest.param("a 128 256 768 256 768 1024 act none 1", marks=pytest.mark.slow),
+    "x 128 768 256 256 256 256 act none 0",
+    "fa 128 256 768 256 768 1024 act forgeA:0.5 0",
+    "fh 128 256 768 256 768 1024 act forgeH:0.5 0"])
+def test_fill_dither_accepts_dithers_own_values_and_refuses_a_forged_a_prime(monkeypatch, line):
+    """fill_dither.py's checks on a device whose every value is dither.py's: accepted, the whole call with its consumer on
+    A′ as opened from the producer's root and a call whose A′ rows take two leaves; refused, A′ forged in every other row
+    and A′ formed from O + 2^16 (O's committed low halves honest), by the cells, the whole rows and the verifier's blocks."""
+    monkeypatch.setattr(v31lib, "Prover", _DitherProver)
+    r = fill_dither.run_case(None, line, 32, 8, 8, np.random.default_rng(5))
+    assert r["good"], fill_dither.describe(r)
+    if r["cheat"].startswith("forgeA"):
+        assert r["cells_equal"] < r["cells"]
+    elif r["cheat"].startswith("forgeH"):   # every row's gate cells are in the forged tile: its amax moves
+        assert r["act_rows_amax_equal"] == 0 and r["blocks_pass"] < r["blocks"]
+    elif line.endswith(" 1"):
+        assert r["consumer"]["ok"] and r["values_equal"] and r["act_equal"]
+
+
 def test_fill_table(tmp_path, capsys):
     names = ("lt", "cutlass", "coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit", "ovl")
     arms = {a: {"ms": ms, "mhz": 2000} for a, ms in zip(names, (2.0, 1.9, 0.01, 0.02, 0.03, 0.1, 0.2, 2.05, 1.2, 2.1))}
@@ -417,10 +611,12 @@ def test_fill_table(tmp_path, capsys):
     no_row = dict(fused, fused_leaves=0, fused_blocks=129 * 28672, lminb=4, sahead=1)
     words = dict(fused, rp=5, S=4, W=3, wgw=1, r5w=0, leaves=10 * 28672)
     tst = dict(words, r5w=1, tst=1)
-    lines = (line, later, served, fused, no_row, words, tst)
+    act = dict(tst, ow=16, act=14336, arms=dict(tst["arms"], act={"ms": 0.4, "mhz": 1980}))
+    lines = (line, later, served, fused, no_row, words, tst, act)
     (tmp_path / "b.jsonl").write_text("x\n" + "\n".join(json.dumps(x) for x in lines) + "\n")
     assert v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")]) == 0
-    row, row2, row3, row4, row5, row6, row7 = capsys.readouterr().out.splitlines()[-7:]
+    row, row2, row3, row4, row5, row6, row7, row8 = capsys.readouterr().out.splitlines()[-8:]
+    assert "| served o16 act r16384 hi k1 s1 wg256 rp5 tst |" in row8 and "| 0.010, 0.020, -, 0.100, 0.200, 2.050, 0.400, 1.200 |" in row8
     assert "| served r16384 hi k1 s1 wg256 rp5 r5w0 |" in row6 and row6.endswith("| 30.0% / 33.1% |")
     assert "| served r16384 hi k1 s1 wg256 rp5 tst |" in row7
     assert row.endswith("| - | - | - |") and row3.endswith("| - | - | - |")
@@ -429,10 +625,10 @@ def test_fill_table(tmp_path, capsys):
     assert row.startswith("| 8b-up | 16384 x 28672 x 4096 | 4096 | 1 | r1024 hi k1 s1 | 2.000 | 1.900 | 2.100 | 1.050 | 1.105 |"
                           " 1.060 | - |")
     assert "| 1.070 | - | 1.700 |" in row
-    assert "| 95.2% | 0.010, 0.020, 0.030, 0.100, 0.200, 2.050, 1.200 |" in row
+    assert "| 95.2% | 0.010, 0.020, 0.030, 0.100, 0.200, 2.050, -, 1.200 |" in row
     assert "| r1024 hi k1 s1 p2 ltw |" in row2 and "| 1.070 | 1.020 | 1.700 |" in row2
     assert "| served r16384 hi k1 s1 |" in row3 and "| 1.250 | 1.300 | - | - | 1.700 |" in row3
-    assert "| 80.0% | 0.010, 0.020, -, 0.100, 0.200, 2.050, 1.200 |" in row3
+    assert "| 80.0% | 0.010, 0.020, -, 0.100, 0.200, 2.050, -, 1.200 |" in row3
 
 
 def test_perm_kernel_launches_within_its_bounds():

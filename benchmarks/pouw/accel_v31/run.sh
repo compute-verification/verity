@@ -32,7 +32,9 @@
 # `v31 fill-bench` over FILL_SHAPES (default Llama 3 8B's QKV, O, gate-up and down at m 16384) beside cuBLASLt and
 # CUTLASS; fill-sample on each shape's sampled tiles; fill-table. VARIANTS here default to "row=1024,cprio=hi,sched=1
 # row=8192,cprio=hi,sched=1" (row: the leaf row, dither.Shape.row); served=1 benches the served call (O committed, T_S
-# implied: dither.Shape(o=True); its params named served-*); with gemm=1 (a -DV31_WG build) its D comes from wg_proto.cuh's
+# implied: dither.Shape(o=True); its params named served-*; ow=16 commits O's low halves, dither.Shape.ow, and a
+# FILL_SHAPES entry NAME:M:N:K:act is a gate-up call, its A′ formed after the GEMM and committed after each tile-row's
+# tiles, dither.Shape.act, with the bench's act arm); with gemm=1 (a -DV31_WG build) its D comes from wg_proto.cuh's
 # GEMM, rp=4 hashing its O rows in the GEMM's producer warpgroup (rp=5: and a hash warpgroup of its own, r5h its
 # registers, and the prefix-sum rows in the GEMM of the prefix sums unless r5w=0; tst=1 its stores through shared memory
 # with TMA), and the bench adds wgmma.linear's arm (wgl).
@@ -46,7 +48,7 @@
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 7), wcw (256), ccta (1), pf (0), diag (0), sched (0), ltw (0), served (0),
-# gemm (0), wgbn (256), cm (0), wgg (16), rp (0), r5h (96), r5w (1), tst (0), hall (0), hchunk (0), wgw (1), lminb (5), sahead (0) (v31.cu's
+# ow (32), gemm (0), wgbn (256), cm (0), wgg (16), rp (0), r5h (96), r5w (1), tst (0), hall (0), hchunk (0), wgw (1), lminb (5), sahead (0) (v31.cu's
 # Knobs) and nreg (the GEMM's
 # register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's), default row=8192; REPS
 # (default 7); Q, the proof blocks a
@@ -80,7 +82,7 @@ knob() { local v; v=$(tr ',' '\n' <<< "$1" | sed -n "s/^$2=//p" | tail -1); echo
 knob_env() {
   echo "V31_CPRIO=$(knob "$1" cprio lo) V31_CARVE=$(knob "$1" carve 100) V31_DYN=$(knob "$1" dyn 1) V31_WRAP=$(knob "$1" wrap 2)" \
     "V31_WCW=$(knob "$1" wcw 256) V31_CCTA=$(knob "$1" ccta 1) V31_PF=$(knob "$1" pf 0) V31_DIAG=$(knob "$1" diag 0)" \
-    "V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0) V31_SERVED=$(knob "$1" served 0)" \
+    "V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0) V31_SERVED=$(knob "$1" served 0) V31_OW=$(knob "$1" ow 32)" \
     "V31_GEMM=$(knob "$1" gemm 0) V31_WGBN=$(knob "$1" wgbn 256) V31_CM=$(knob "$1" cm 0) V31_WGG=$(knob "$1" wgg 16)" \
     "V31_RP=$(knob "$1" rp 0) V31_R5H=$(knob "$1" r5h 96) V31_HALL=$(knob "$1" hall 0) V31_HCHUNK=$(knob "$1" hchunk 0)" \
     "V31_WGW=$(knob "$1" wgw 1) V31_R5W=$(knob "$1" r5w 1) V31_TST=$(knob "$1" tst 0)" \
@@ -143,8 +145,8 @@ if [ "$MODE" = fill ]; then
       sv=(); [ "$(knob "$v" served 0)" = 1 ] && sv=(--served)
       # shellcheck disable=SC2086
       $PY $D/v31.py fill-params "$W/fparams" $FILL_SHAPES --lp "$LP" --L "$L" --row "$(knob "$v" row 1024)" "${sv[@]}" \
-        2>> "$O/prep.err"
-      echo "fill-params $(knob "$v" row 1024)${sv[*]} L$L rc $?" >> "$O/rc.txt"
+        --ow "$(knob "$v" ow 32)" 2>> "$O/prep.err"
+      echo "fill-params $(knob "$v" row 1024)${sv[*]} ow$(knob "$v" ow 32) L$L rc $?" >> "$O/rc.txt"
     done
   done
   # the GPU steps, a lease each (LEASE_ONCE=1: all of them under one lease, LEASE's). First a canary, one call of the

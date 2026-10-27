@@ -16,7 +16,8 @@ clock, 132 SMs, 1,830 MHz).
 Its arm of record is the one a call of the protocol runs: a served call's seeds are per call (`dither.seeds(coin, receipt,
 call)`), so `ovl_w`, the weight side every call; a filler's is `ovl_pad`, its pad and every coin a call. Its split is a
 serial call's parts with those seeds: tensor `gemm` (served: cuBLASLt's O, then the protocol GEMM over k < (S - 1) L),
-hashing `coins`, `coins_w`, `pad` and `commit`, other `form_a` and `form_b`. Where the lines time wgmma.linear (`wgl`, a
+hashing `coins`, `coins_w`, `pad` and `commit`, other `form_a`, `form_b` and `act` (a gate-up call's A′ formed from its
+O, which only an `:act` shape runs; wgmma.linear's step leaves SiLU·mul out). Where the lines time wgmma.linear (`wgl`, a
 -DV31_WG build's served bench), gamma_u is against its step from the same lines.
 
     python3 h200_step.py BENCH.jsonl ... [--wgmma 3.06]
@@ -34,7 +35,8 @@ MODELS = {"mqa16k52": CALLS, "8b": {(6144, 4096): 32, (4096, 4096): 32, (28672, 
 WGMMA = {"mqa16k52": 3.06}
 RHO = 4096 * 132 * 1.83e9
 ARMS = ("lt", "plain", "coins", "form", "wrap", "gemm", "commit", "call", "ovl")
-FILL_ARMS = ("lt", "coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit", "call", "ovl", "ovl_w", "ovl_pad", "wgl")
+FILL_ARMS = ("lt", "coins", "coins_w", "pad", "form_a", "form_b", "gemm", "act", "commit", "call", "ovl", "ovl_w", "ovl_pad",
+             "wgl")
 
 
 def rows(paths: list[str]) -> list[dict]:
@@ -61,13 +63,13 @@ def fill_steps(lines: list[dict], m: int = 16384, calls: dict[tuple[int, int], i
     for key, by in sorted(groups.items()):
         if set(by) != set(calls):
             continue
-        ms = {a: [by[nk]["arms"].get(a, {}).get("ms") for nk in calls] for a in FILL_ARMS}
+        ms = {a: [by[nk]["arms"].get(a, {"ms": 0.0} if a == "act" else {}).get("ms") for nk in calls] for a in FILL_ARMS}
         sec = {a: None if None in v else sum(calls[nk] * x for nk, x in zip(calls, v)) / 1e3 for a, v in ms.items()}
         part = lambda *arms: sum(sec[a] or 0.0 for a in arms)  # noqa: E731
         rec = "ovl_w" if key[3] else "ovl_pad"
         mhz = [by[nk]["arms"][rec]["mhz"] for nk in calls if by[nk]["arms"].get(rec, {}).get("mhz")]
         out[key] = {"s": sec, "record": rec, "step": sec[rec], "tensor": part("gemm"),
-                    "hashing": part("coins", "coins_w", "pad", "commit"), "other": part("form_a", "form_b"),
+                    "hashing": part("coins", "coins_w", "pad", "commit"), "other": part("form_a", "form_b", "act"),
                     "macs": sum(calls[nk] * m * nk[0] * nk[1] for nk in calls),
                     "mhz": (min(mhz), max(mhz)) if mhz else None}
     return out
@@ -145,7 +147,8 @@ def main() -> int:
                   else f"gamma_u {step / ref:.3f} against wgmma's {ref} s, " if ref and step else "")
             print(f"summary: {model} no-fold {'served' if o else 'filler'} L {L} L' {lp} row {row} {var}: step "
                   f"{f(step)} s ({v['record']}), {vs}gamma_lt {f(step / lt if step else None)} against cuBLASLt's "
-                  f"{lt:.3f} s; tensor {v['tensor']:.3f}, hashing {v['hashing']:.3f}, other {v['other']:.3f} s serial")
+                  f"{lt:.3f} s; tensor {v['tensor']:.3f}, hashing {v['hashing']:.3f}, other {v['other']:.3f} s serial"
+                  + (f" (A′ {v['s']['act']:.3f} s)" if v["s"]["act"] else ""))
     if not found:
         print("summary: no complete step (a bench shape is missing)")
     return 0 if found else 1

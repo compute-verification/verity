@@ -77,8 +77,11 @@ class Lib:
         vp, u8p, u64p, i, u64 = ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_uint64), ctypes.c_int, ctypes.c_uint64
         sig = {
             "v31_error": ([], ctypes.c_char_p),
-            "v31_create": ([i, i, i, i, i, i, i, ctypes.c_char_p, i], vp),
+            "v31_create": ([i, i, i, i, i, i, i, i, i, ctypes.c_char_p, i], vp),
             "v31_info": ([vp, u64p], i),
+            "v31_set_act": ([vp, vp, vp, vp], i),
+            "v31_act": ([vp, u64, vp, vp], i),
+            "v31_act_ptr": ([vp, u64, ctypes.POINTER(vp)], i),
             "v31_set_b": ([vp, vp], i),
             "v31_point_b": ([vp, vp], i),
             "v31_load_a": ([vp, vp, ctypes.POINTER(vp)], i),
@@ -107,23 +110,29 @@ class Lib:
 
 class Prover:
     """One shape's GPU prover: m x n output cells at contraction k, noise period lp, segments of L, leaf rows of `row`
-    bytes, served calls or a filler's. `params_dir` keeps its CGP1 file (default a temporary one)."""
+    bytes, served calls (O at `ow` bits; `act`: a gate-up call's A′ too, under the map's scalars `sa` and `sw`, f32
+    words, default `act_scales`') or a filler's. `params_dir` keeps its CGP1 file (default a temporary one)."""
 
     def __init__(self, m: int, n: int, k: int, lp: int = 256, L: int = 4096, row: int = 1024, *, served: bool = False,
-                 lib: str | Lib, device: int = 0, ks: bytes | None = None, params_dir: str | None = None):
-        self.f = v31.Fill(m, n, k, lp, L, row, served)
+                 ow: int = 32, act: bool = False, lib: str | Lib, device: int = 0, ks: bytes | None = None,
+                 params_dir: str | None = None, sa=None, sw=None):
+        self.f = v31.Fill(m, n, k, lp, L, row, served, ow, act)
         self.lib = lib if isinstance(lib, Lib) else Lib(lib)
         self.ks = os.urandom(64) if ks is None else ks
         d = Path(params_dir or tempfile.gettempdir())
         d.mkdir(parents=True, exist_ok=True)
-        self.params_path = d / f"v31lib-{os.getpid()}-{id(self):x}-{v31.fill_params_name(m, n, k, lp, L, row, served)}"
+        name = v31.fill_params_name(m, n, k, lp, L, row, served, ow, act)
+        self.params_path = d / f"v31lib-{os.getpid()}-{id(self):x}-{name}"
         self.params_path.write_bytes(v31.fill_params(self.f, self.ks))
         os.chmod(self.params_path, 0o600)
-        self.h = self.lib.create(m, n, k, lp, L, row, int(served), str(self.params_path).encode(), device)
+        self.h = self.lib.create(m, n, k, lp, L, row, int(served), ow, int(act), str(self.params_path).encode(), device)
         if not self.h:
             raise RuntimeError(f"libv31: {self.lib.error().decode()}")
         self.B: np.ndarray | None = None
         self.calls: dict[int, dict] = {}
+        if act:
+            dsa, dsw = act_scales(m, n)
+            self.set_act(dsa if sa is None else sa, dsw if sw is None else sw, silu_lut())
 
     def close(self) -> None:
         if self.h:
@@ -138,10 +147,31 @@ class Prover:
         self.close()
 
     def info(self) -> dict:
-        out = (ctypes.c_uint64 * 14)()
+        out = (ctypes.c_uint64 * 18)()
         self.lib.check(self.lib.info(self.h, out))
-        return dict(zip(("m", "n", "k", "lp", "L", "row", "S", "tiles", "lpt", "leaves", "depth", "calls", "W", "o"),
-                        map(int, out)))
+        return dict(zip(("m", "n", "k", "lp", "L", "row", "S", "tiles", "lpt", "leaves", "depth", "calls", "W", "o", "ow", "I",
+                         "apr", "nbytes"), map(int, out)))
+
+    def set_act(self, sa, sw, lut: bytes | None = None) -> None:
+        """A′'s map: s_a (m f32 words) and s_w (n f32 words), kept as `sa` and `sw`, and the SiLU table (`silu_lut`)."""
+        sa, sw = (np.ascontiguousarray(x, dtype="<u4") for x in (sa, sw))
+        if sa.shape != (self.f.m,) or sw.shape != (self.f.n,):
+            raise ValueError(f"s_a is m = {self.f.m} words and s_w n = {self.f.n}, not {sa.shape} and {sw.shape}")
+        t = None if lut is None else ctypes.create_string_buffer(lut, len(lut))
+        self.lib.check(self.lib.set_act(self.h, sa.ctypes.data_as(ctypes.c_void_p), sw.ctypes.data_as(ctypes.c_void_p), t))
+        self.sa, self.sw = sa, sw
+
+    def act(self, c: int) -> tuple[np.ndarray, np.ndarray]:
+        """Call c's A′ (m x I int8) and its rows' amax (m bf16 words)."""
+        a, am = np.zeros((self.f.m, self.f.I), np.int8), np.zeros(self.f.m, "<u2")
+        self.lib.check(self.lib.act(self.h, c, a.ctypes.data_as(ctypes.c_void_p), am.ctypes.data_as(ctypes.c_void_p)))
+        return a, am
+
+    def act_ptr(self, c: int) -> int:
+        """Call c's A′ on the device (m x I int8), a consumer's A for `prove` (valid until the call two after c)."""
+        dev = ctypes.c_void_p()
+        self.lib.check(self.lib.act_ptr(self.h, c, ctypes.byref(dev)))
+        return int(dev.value)
 
     def set_weights(self, B) -> None:
         """The weights: an n x k int8 array, kept for the answers' B rows (weights on the device: `point_weights`)."""
@@ -205,7 +235,7 @@ class Prover:
         self.lib.check(self.lib.open(self.h, c, parr, len(pos), rows, paths))
         off = self.calls[c]["off"]
         r, pa = rows.raw, paths.raw
-        return [(r[x * row:(x + 1) * row], v31.cref.prf_salt(self.ks, off + p),
+        return [(r[x * row:x * row + self.f.span(p)[1]], v31.cref.prf_salt(self.ks, off + p),
                  tuple(pa[64 * (x * depth + d):64 * (x * depth + d + 1)] for d in range(depth))) for x, p in enumerate(pos)]
 
     def answer(self, c: int, i: int, j: int, s: int) -> dict:
@@ -215,8 +245,8 @@ class Prover:
         return {"rows": dict(zip(pos, self.open(c, pos))), "B": None if self.B is None else self.B[j]}
 
     def values(self, c: int) -> bytes:
-        """Call c's committed values (dither.values_buffer: leaves x row bytes)."""
-        buf = ctypes.create_string_buffer(self.f.leaves * self.f.row)
+        """Call c's committed values (dither.values_buffer)."""
+        buf = ctypes.create_string_buffer(self.f.nbytes)
         self.lib.check(self.lib.values(self.h, c, buf))
         return buf.raw
 
@@ -244,9 +274,28 @@ call_seeds = v31.call_seeds
 served_seeds = v31.served_seeds
 
 
+def act_scales(m: int, n: int) -> tuple[np.ndarray, np.ndarray]:
+    """A′'s default scalars: s_a and s_w in [1, 2) / 127 (f32 words), varied by row and column."""
+    def f(c: int) -> np.ndarray:
+        return ((1 + (np.arange(c) * 37 % 256) / 256) / 127).astype(np.float32).view("<u4")
+
+    return f(m), f(n)
+
+
+_LUT: list[bytes] = []
+
+
+def silu_lut() -> bytes:
+    """v31.silu_table, made once a process."""
+    if not _LUT:
+        _LUT.append(v31.silu_table())
+    return _LUT[0]
+
+
 # ------------------------------------------------------------------------------------------------------------- gate
 # NAME KIND M N K LP L ROW A CHEAT. KIND fill (A pad: the filler's pad; llm/uniform: a served operand through the filler's
-# path) or served (A llm/uniform, through the context's device copy). CHEAT none, a cheat the verifier must refuse, or
+# path), served (A llm/uniform, through the context's device copy) or served16 (the same, O at 16 bits: dither.Shape's ow;
+# A′ is fill_dither.py's, against dither.py itself). CHEAT none, a cheat the verifier must refuse, or
 # rootless: an honest served call the prover must refuse at its root (a row of A + d_A spans -128 .. 128)
 GATES = """
 f-pad-k fill 256 256 4096 512 4096 1024 pad none
@@ -278,30 +327,36 @@ cs-forge-s4 served 256 256 4096 128 1024 16384 llm forge:2:0.25
 cs-skip-s4 served 256 256 4096 128 1024 16384 llm skip:5
 cs-nodither served 256 256 4096 512 4096 16384 llm nodither
 cs-nodither-s4 served 256 256 4096 128 1024 16384 llm nodither
+s16-k served16 256 256 4096 512 4096 16384 llm none
+s16-s4 served16 256 256 4096 128 1024 16384 llm none
+s16-row1k served16 256 512 2048 128 1024 1024 llm none
+s16-big served16 512 1024 8192 512 4096 16384 llm none
+cs16-forgeO served16 256 256 4096 512 4096 16384 llm forgeO:0.25
+cs16-forge-s4 served16 256 256 4096 128 1024 16384 llm forge:2:0.25
 """
 
 
 def _forged(f: v31.Fill, cheat: str) -> tuple[int, int, int] | None:
     """A forge cheat's (offset in a tile's values, length, tile stride): forge_kernel's T_S0 (S0 >= 1) or O (forgeO,
-    forge:0) of tiles 0, stride, .."""
+    forge:0; at O's width) of tiles 0, stride, .."""
     if not cheat.startswith("forge"):
         return None
     parts = cheat.split(":")
     s0 = 0 if parts[0] == "forgeO" else int(parts[1])
     frac = float(parts[-1]) if len(parts) > (1 if parts[0] == "forgeO" else 2) else 1.0
     stride = max(1, int(1 / frac + 0.5))
-    return ((s0 - 1) * 32768, 32768, stride) if s0 else (f.W * 32768, 65536, stride)
+    return ((s0 - 1) * 32768, 32768, stride) if s0 else (f.W * 32768, f.ow // 8 * 16384, stride)
 
 
 def gate_case(lib: Lib, name: str, served: bool, m: int, n: int, k: int, lp: int, L: int, row: int, a_kind: str,
-              cheat: str, q: int, rng: np.random.Generator) -> dict:
+              cheat: str, q: int, rng: np.random.Generator, ow: int = 32) -> dict:
     """One gate: a call on fresh coins (64-byte coins drawn after the operands are fixed, the stand-in for the challenger's
     opening), the GPU's values, pad and tree against the reference, then q proof blocks from a check coin drawn after the
-    root, answered from the GPU's own openings."""
-    f = v31.Fill(m, n, k, lp, L, row, served)
+    root, answered from the GPU's own openings. A served call commits O at `ow` bits."""
+    f = v31.Fill(m, n, k, lp, L, row, served, ow)
     A, B = v31.operands(f, rng, "llm" if a_kind == "pad" else a_kind)
-    rep: dict = {"name": name, "o": served, "shape": f.label(), "S": f.S, "W": f.W, "A": a_kind, "cheat": cheat}
-    with Prover(m, n, k, lp, L, row, served=served, lib=lib) as p:
+    rep: dict = {"name": name, "o": served, "ow": ow, "shape": f.label(), "S": f.S, "W": f.W, "A": a_kind, "cheat": cheat}
+    with Prover(m, n, k, lp, L, row, served=served, ow=ow, lib=lib) as p:
         p.set_weights(B)
         seeds = served_seeds(os.urandom(64), os.urandom(64), 0) if served else call_seeds(os.urandom(64), os.urandom(64))
         a_ptr = None
@@ -334,7 +389,7 @@ def gate_case(lib: Lib, name: str, served: bool, m: int, n: int, k: int, lp: int
             at, ln, stride = fg
             w, changed = bytearray(values), 0
             for t in range(0, f.tiles, stride):
-                a = t * f.lpt * f.row + at
+                a = f.span(f.tile_base(t))[0] + at
                 changed += g_values[a:a + ln] != w[a:a + ln]
                 w[a:a + ln] = g_values[a:a + ln]
             values, rep["forged_tiles_changed"] = bytes(w), changed
@@ -430,7 +485,7 @@ def gate_point_levels(lib: Lib, rng: np.random.Generator) -> dict:
             equal.append(buf.byteswap().tobytes() == v31.levels_bytes(v31.fill_commit(f, values, p.ks, x * f.leaves).levels))
         kept = holder.pad() == B[0].tobytes()
         with ThreadPoolExecutor(1) as other:
-            rc = other.submit(lib.info, p.h, (ctypes.c_uint64 * 14)()).result()
+            rc = other.submit(lib.info, p.h, (ctypes.c_uint64 * 18)()).result()
     return {"name": "point-levels", "levels_equal": equal, "holder_kept": kept, "thread_refused": rc == -1,
             "good": all(equal) and kept and rc == -1}
 
@@ -455,7 +510,8 @@ def cmd_gate(a: argparse.Namespace) -> int:
         name, kind, m, n, k, lp, L, row, ak, cheat = line.split()
         if only and kind not in only:
             continue
-        rep = gate_case(lib, name, kind == "served", int(m), int(n), int(k), int(lp), int(L), int(row), ak, cheat, a.q, rng)
+        rep = gate_case(lib, name, kind != "fill", int(m), int(n), int(k), int(lp), int(L), int(row), ak, cheat, a.q, rng,
+                        16 if kind == "served16" else 32)
         (out / f"fill-{name}.json").write_text(json.dumps(rep, indent=1))
         detail = ("root refused" if "root_refused" in rep else
                   f"{'pad ' + str(rep['pad_equal']) + ', ' if 'pad_equal' in rep else ''}values {rep['values_equal']}, "
@@ -483,7 +539,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("--out", default=".")
     p.add_argument("--q", type=int, default=64)
     p.add_argument("--seed", type=int, default=1)
-    p.add_argument("--only", default="", help="the gates of these kinds only (fill, served; comma-separated)")
+    p.add_argument("--only", default="", help="the gates of these kinds only (fill, served, served16; comma-separated)")
     a = ap.parse_args(argv[1:])
     return {"gate": cmd_gate}[a.cmd](a)
 

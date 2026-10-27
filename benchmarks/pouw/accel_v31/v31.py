@@ -44,8 +44,9 @@ mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments 
     python3 v31.py table BENCH.jsonl ...        gamma beside D6 v1.1's prediction, shape by shape
     python3 v31.py timeline TRACE.csv           a kernel timeline of serial and overlapped calls (run.sh's MODE=nsys, and
                                                 MODE=fill's FILL_NSYS with --gemm gemm --from bits_kernel)
-    python3 v31.py fill-params DIR NAME:M:N:K ... [--L L] [--served]   CGP1 params of Dither's no-fold calls for
-                                                `v31 fill-bench` (served: O committed; else the filler's)
+    python3 v31.py fill-params DIR NAME:M:N:K[:act] ... [--L L] [--served] [--ow 16]   CGP1 params of Dither's no-fold
+                                                calls for `v31 fill-bench` (served: O committed, at --ow bits, and A′ on
+                                                an :act shape, with the SiLU table silu-bf16.bin; else the filler's)
     python3 v31.py fill-sample DIR              a fill-bench shape's two sampled tiles against the no-fold reference
     python3 v31.py fill-table BENCH.jsonl ...   the no-fold call's gamma over cuBLASLt and CUTLASS, and where its time goes
 
@@ -73,6 +74,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "commit_gpu"))
 import reference as cref
 
 from verity.core.protocols.pouw.circuit import dither
+from verity.ml.circuits.ops import fp32 as F
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.limits import VerificationLimits
@@ -595,7 +597,8 @@ K_LIMIT = 1 << 17
 @dataclass(frozen=True)
 class Fill:
     """A no-fold call: m x n output cells at contraction k, noise period lp (L'), segments of L, leaf rows of `row` bytes,
-    O committed (`o`: a served call; a filler's commits none) (dither.Shape)."""
+    O committed (`o`: a served call; a filler's commits none) at `ow` bits, and a gate-up call's A′ (`act`) after each
+    tile-row's tiles (dither.Shape)."""
 
     m: int
     n: int
@@ -604,8 +607,14 @@ class Fill:
     L: int = 2048
     row: int = 1024
     o: bool = False
+    ow: int = 32
+    act: bool = False
 
     def __post_init__(self) -> None:
+        if self.ow not in (16, 32) or ((self.ow != 32 or self.act) and not self.o):
+            raise ValueError(f"O16 and A′ are a served call's, at 16 or 32 bits, not ow {self.ow} act {self.act} o {self.o}")
+        if self.act and self.n % (2 * TILE):
+            raise ValueError(f"A′: n a multiple of {2 * TILE} (gate tiles pair with up tiles), not {self.n}")
         if self.m % TILE or self.n % TILE or self.m <= 0 or self.n <= 0:
             raise ValueError(f"m and N multiples of {TILE}, not {self.m} x {self.n}")
         if self.lp % 32 or self.lp <= 0 or self.k % self.lp:
@@ -639,22 +648,58 @@ class Fill:
 
     @property
     def row_o(self) -> int:
-        return 65536 // self.row if self.o else 0
+        return self.ow // 8 * 16384 // self.row if self.o else 0
 
     @property
     def lpt(self) -> int:
         return self.W * self.row_w + self.row_o
 
     @property
+    def I(self) -> int:  # noqa: E743
+        return self.n // 2 if self.act else 0
+
+    @property
+    def apr(self) -> int:
+        return -(-self.I // self.row)
+
+    @property
+    def stride(self) -> int:
+        """Leaves a tile-row: its tiles, then its 128 rows' A′."""
+        return self.n // TILE * self.lpt + TILE * self.apr
+
+    @property
     def leaves(self) -> int:
-        return self.tiles * self.lpt
+        return self.m // TILE * self.stride
+
+    @property
+    def nbytes(self) -> int:
+        return self.tiles * self.lpt * self.row + self.m * self.I
 
     def seg(self, s: int) -> tuple[int, int]:
         return (s - 1) * self.L, min(s * self.L, self.k)
 
     def label(self) -> dict:
-        return {"m": self.m, "n": self.n, "k": self.k, "lp": self.lp, "t": self.L // self.lp, "row": self.row,
-                "leaves": self.leaves}
+        return ({"m": self.m, "n": self.n, "k": self.k, "lp": self.lp, "t": self.L // self.lp, "row": self.row,
+                 "leaves": self.leaves} | ({"ow": self.ow} if self.ow != 32 else {}) | ({"act": self.I} if self.act else {}))
+
+    def tile_base(self, t: int) -> int:
+        tm, tn = divmod(t, self.n // TILE)
+        return tm * self.stride + tn * self.lpt
+
+    def act_leaf(self, i: int, j: int) -> tuple[int, int]:
+        """(leaf position, byte offset) of A′ at gate cell (i, j), j < I."""
+        tm, r = divmod(i, TILE)
+        return tm * self.stride + self.n // TILE * self.lpt + r * self.apr + j // self.row, j % self.row
+
+    def span(self, pos: int) -> tuple[int, int]:
+        """(byte offset in the values, length) of leaf pos's row (dither.Shape.leaf_span)."""
+        tm, q = divmod(pos, self.stride)
+        tiles = self.n // TILE * self.lpt
+        start = tm * (tiles * self.row + TILE * self.I)
+        if q < tiles:
+            return start + q * self.row, self.row
+        r, c = divmod(q - tiles, self.apr)
+        return start + tiles * self.row + r * self.I + c * self.row, min(self.row, self.I - c * self.row)
 
     def domain(self) -> CommitmentDomain:
         return CommitmentDomain(identity_digest_sha512(SERVED_TAG if self.o else FILL_TAG, self.label()), -1,
@@ -669,21 +714,24 @@ class Fill:
             raise ValueError(f"T_{s} isn't committed (segments 1 .. {self.W})")
         t, c = self.tile_of(i, j)
         per = self.row // 2
-        return t * self.lpt + (s - 1) * self.row_w + c // per, 2 * (c % per)
+        return self.tile_base(t) + (s - 1) * self.row_w + c // per, 2 * (c % per)
 
     def o_leaf(self, i: int, j: int) -> tuple[int, int]:
-        """(leaf position, byte offset) of O at cell (i, j)."""
+        """(leaf position, byte offset) of O at cell (i, j), ow / 8 bytes."""
         if not self.o:
             raise ValueError("a filler call commits no O")
         t, c = self.tile_of(i, j)
-        per = self.row // 4
-        return t * self.lpt + self.W * self.row_w + c // per, 4 * (c % per)
+        per = self.row // (self.ow // 8)
+        return self.tile_base(t) + self.W * self.row_w + c // per, self.ow // 8 * (c % per)
 
     def opened(self, i: int, j: int, s: int) -> list[int]:
-        """The leaves proof block (i, j, s) opens: T_s's (s <= W), T_{s-1}'s (s > 1), and at s = S O's."""
+        """The leaves proof block (i, j, s) opens: T_s's (s <= W), T_{s-1}'s (s > 1), and at s = S O's (and a gate cell's
+        A′)."""
         pos = [self.word_leaf(i, j, s)[0]] if s <= self.W else []
         pos += [self.word_leaf(i, j, s - 1)[0]] if s > 1 else []
-        return sorted(set(pos + ([self.o_leaf(i, j)[0]] if s == self.S and self.o else [])))
+        last = s == self.S and self.o
+        pos += [self.o_leaf(i, j)[0]] if last else []
+        return sorted(set(pos + ([self.act_leaf(i, j)[0]] if last and self.act and j < self.I else [])))
 
 
 served_seeds = dither.seeds
@@ -733,16 +781,24 @@ def fill_values(f: Fill, A: np.ndarray, B: np.ndarray, c: Coins, skip: int | Non
     return T, imatmul(Ad, Bd) & 0xFFFFFFFF
 
 
-def fill_buffer(f: Fill, T: np.ndarray, O: np.ndarray | None = None) -> bytes:
-    """dither.values_buffer: per tile, its T_1 .. T_W (u16) and then its O (u32), cells row-major, little-endian."""
+def fill_buffer(f: Fill, T: np.ndarray, O: np.ndarray | None = None, Ap: np.ndarray | None = None) -> bytes:
+    """dither.values_buffer: per tile, its T_1 .. T_W (u16) and then its O (u32, or u16 at ow 16), cells row-major,
+    little-endian; with A′ (m x I int8), each tile-row's tiles and then its 128 rows of A′."""
     tm, tn = f.m // TILE, f.n // TILE
     w = T[:f.W].astype("<u2").reshape(f.W, tm, TILE, tn, TILE).transpose(1, 3, 0, 2, 4).reshape(tm * tn, -1)
     parts = [w.view(np.uint8)]
     if f.o:
         if O is None:
             raise ValueError("a served call commits O: pass it")
-        parts.append(O.astype("<u4").reshape(tm, TILE, tn, TILE).transpose(0, 2, 1, 3).reshape(tm * tn, -1).view(np.uint8))
-    return np.ascontiguousarray(np.concatenate(parts, axis=1)).tobytes()
+        o = (O & ((1 << f.ow) - 1)).astype("<u4" if f.ow == 32 else "<u2")
+        parts.append(o.reshape(tm, TILE, tn, TILE).transpose(0, 2, 1, 3).reshape(tm * tn, -1).view(np.uint8))
+    tiles = np.ascontiguousarray(np.concatenate(parts, axis=1)).reshape(tm, -1)
+    if not f.act:
+        return tiles.tobytes()
+    if Ap is None or Ap.shape != (f.m, f.I):
+        raise ValueError(f"this call commits A′ (m x I = {f.m} x {f.I}): pass it")
+    a = np.ascontiguousarray(Ap.astype(np.int8)).view(np.uint8).reshape(tm, -1)
+    return np.concatenate([tiles, a], axis=1).tobytes()
 
 
 @dataclass
@@ -758,7 +814,8 @@ class FillCommitted:
         return self.levels[-1][0]
 
     def row(self, pos: int) -> bytes:
-        return self.values[pos * self.f.row:(pos + 1) * self.f.row]
+        off, n = self.f.span(pos)
+        return self.values[off:off + n]
 
     def salt(self, pos: int) -> bytes:
         return cref.prf_salt(self.ks, self.off + pos)
@@ -770,8 +827,8 @@ class FillCommitted:
 def fill_commit(f: Fill, values: bytes, ks: bytes, off: int = 0) -> FillCommitted:
     """The call's values (`fill_buffer`) under its root, leaf pos salted prf_salt(ks, off + pos) (dither.commit under
     dither.salts(ks, off))."""
-    if len(values) != f.leaves * f.row:
-        raise ValueError(f"the call's values are {f.leaves * f.row} bytes, not {len(values)}")
+    if len(values) != f.nbytes:
+        raise ValueError(f"the call's values are {f.nbytes} bytes, not {len(values)}")
     cm = FillCommitted(f, ks, values, off)
     dom = f.domain()
     cm.levels = [list(lv) for lv in tree_levels(dom, [row_leaf(dom, p, leaf_h(cm.row(p), cm.salt(p)), V2)
@@ -801,6 +858,8 @@ def fill_check(f: Fill, seeds: dict[str, bytes], root: bytes, i: int, j: int, s:
     (PouwDitherBlock); for a served call's s = S (PouwDitherLast), O against (A + d_A)(B + d_B)^T mod 2^32 and T_{S-1}
     against X W'^T over k < (S - 1) L mod 2^16. ans: {"rows": {pos: (row, salt, path)}, "A": A's row i (the pad's when
     absent), "B": B's row j}."""
+    if f.act:
+        raise ValueError("a gate cell's A′ check is dither.check_last's (fill_dither.py), not this mirror's")
     dom, cmt, lim = f.domain(), Commitment(root, f.leaves), VerificationLimits()
     rows = {}
     for pos, (row, salt, path) in ans["rows"].items():
@@ -827,8 +886,8 @@ def fill_check(f: Fill, seeds: dict[str, bytes], root: bytes, i: int, j: int, s:
             p, o = f.o_leaf(i, j)
             if p not in rows:
                 return f"leaf {p} of O wasn't opened"
-            if (int.from_bytes(rows[p][o:o + 4], "little") - int((fm.Ad[0] * fm.Bd[0]).sum())) % (1 << 32):
-                return "O isn't (A + d_A)(B + d_B)^T mod 2^32"
+            if (int.from_bytes(rows[p][o:o + f.ow // 8], "little") - int((fm.Ad[0] * fm.Bd[0]).sum())) % (1 << f.ow):
+                return f"O isn't (A + d_A)(B + d_B)^T mod 2^{f.ow}"
             lo = f.seg(s)[0]
             if lo and (word(s - 1) - int((fm.X[0, :lo] * fm.Wp[0, :lo]).sum())) % (1 << 16):
                 return f"T_{s - 1} isn't X W'^T over k < (S - 1) L mod 2^16"
@@ -861,8 +920,23 @@ def fill_verdict(f: Fill, seeds: dict[str, bytes], root: bytes, picks: list[tupl
     return ok, fails, line
 
 
-def fill_params_name(m: int, n: int, k: int, lp: int, L: int, row: int, o: bool = False) -> str:
-    return f"{'served' if o else 'fill'}-{m}x{n}x{k}-lp{lp}-L{L}-r{row}.bin"
+def fill_params_name(m: int, n: int, k: int, lp: int, L: int, row: int, o: bool = False, ow: int = 32,
+                     act: bool = False) -> str:
+    return f"{'served' if o else 'fill'}-{m}x{n}x{k}-lp{lp}-L{L}-r{row}{'-o16' if ow == 16 else ''}{'-act' if act else ''}.bin"
+
+
+def silu_table() -> bytes:
+    """A′'s SiLU on every bf16 gate word g, as v31.cu's act_kernel reads it: bf16(silu_f32(f32(g))) RN with NaN 0x7FFF
+    (dither.silu_mul's first conversion), 65536 little-endian u16."""
+    return np.array([F.f32_to_bf16_rn_bits(dither.silu_f32(F.bf16_to_f32_bits(g)), F.BF16_NAN_F2FP) for g in range(1 << 16)],
+                    dtype="<u2").tobytes()
+
+
+def fill_shape(s: str) -> tuple[int, int, int, bool]:
+    """A fill shape NAME:M:N:K[:act] (act: the gate-up call, A′ committed)."""
+    act = s.endswith(":act")
+    m, n, k = (int(x) for x in s.removesuffix(":act").split(":")[-3:])
+    return m, n, k, act
 
 
 def params_ks(p: bytes) -> bytes:
@@ -875,11 +949,64 @@ def cmd_fill_params(a: argparse.Namespace) -> int:
     d = Path(a.dir)
     d.mkdir(parents=True, exist_ok=True)
     for s in a.shapes:
-        m, n, k = (int(x) for x in s.split(":")[-3:])
+        m, n, k, act = fill_shape(s)
         L = a.L or k
-        f = Fill(m, n, k, a.lp, L, a.row, a.served)
-        (d / fill_params_name(m, n, k, a.lp, L, a.row, a.served)).write_bytes(fill_params(f, os.urandom(64)))
+        f = Fill(m, n, k, a.lp, L, a.row, a.served, a.ow if a.served else 32, act and a.served)
+        (d / fill_params_name(m, n, k, a.lp, L, a.row, f.o, f.ow, f.act)).write_bytes(fill_params(f, os.urandom(64)))
+        if f.act and not (d / "silu-bf16.bin").exists():
+            (d / "silu-bf16.bin").write_bytes(silu_table())
     return 0
+
+
+def sample_act(f: Fill, d: Path, idx: int, tile: int, A: np.ndarray, seeds: dict[str, bytes], ks: bytes, off: int,
+               orows: list[int]) -> dict:
+    """A sampled tile's tile-row A′ against dither.py's map: the gate tile's 128 x 128 cells (its O and its up tile's from
+    A, B's gate and up rows and the coins; amax the GPU's), every leaf of the tile-row's A′ rows, and four whole rows (O
+    from the GPU's D with its sums and shifts, tied to the reference at the tile's columns) with their amax
+    (dither.abs_max over the row's SiLU·mul) and every A′ cell."""
+    tm, tn = divmod(tile, f.n // TILE)
+    tg = tn % (f.n // TILE // 2)
+    tu, I, r0 = tg + f.n // TILE // 2, f.I, tm * TILE
+
+    def rd(name: str, dt) -> np.ndarray:
+        return np.frombuffer((d / f"{name}.bin").read_bytes(), dtype=dt)
+
+    ga, amax = rd(f"t{idx}_act", np.int8).reshape(TILE, I), rd(f"t{idx}_amax", "<u2").astype(int)
+    xs, xw = rd(f"t{idx}_xs", "<u4").astype(int), rd("xw", "<u4").astype(int)
+    Bg, Bu = (rd(f"t{idx}_{x}", np.int8).reshape(TILE, f.k) for x in ("Bg", "Bu"))
+    rows = range(r0, r0 + TILE)
+    cg, cu = (Coins.rows(f, seeds, rows, range(t * TILE, (t + 1) * TILE)) for t in (tg, tu))
+    Ad = A.astype(np.int64) + cg.dA
+    Og, Ou = (imatmul(Ad, Bx.astype(np.int64) + cx.dB) & 0xFFFFFFFF for Bx, cx in ((Bg, cg), (Bu, cu)))
+    cells_bad = sum(dither.act_word(int(Og[r, c]), int(Ou[r, c]), int(xs[r]), int(xw[tg * TILE + c]),
+                                    int(xw[tg * TILE + c + I]), int(amax[r])) != int(ga[r, tg * TILE + c]) & 0xFF
+                    for r in range(TILE) for c in range(TILE))
+    dom, g_al = f.domain(), (d / f"t{idx}_aleaves.bin").read_bytes()
+    leaves_bad = 0
+    for r in range(TILE):
+        for c in range(f.apr):
+            pos = tm * f.stride + f.n // TILE * f.lpt + r * f.apr + c
+            chunk = ga[r, c * f.row:min((c + 1) * f.row, I)].tobytes()
+            x = r * f.apr + c
+            leaves_bad += row_leaf(dom, pos, leaf_h(chunk, cref.prf_salt(ks, off + pos)), V2) != g_al[64 * x:64 * x + 64]
+    D, rasa = rd(f"t{idx}_D", "<u4").astype(np.uint64).reshape(4, f.n), rd(f"t{idx}_rasa", "<u4").astype(np.uint64)
+    rb, sb = rd("rb", "<u4").astype(np.uint64), rd("sb", "<u4").astype(np.uint64)
+    tied = amax_bad = rows_bad = 0
+    for x, i in enumerate(orows):
+        O = (D[x] + sb * rasa[2 * x] + rasa[2 * x + 1] * rb) & 0xFFFFFFFF
+        r = i - r0
+        tied += (np.array_equal(O[tg * TILE:(tg + 1) * TILE], Og[r].astype(np.uint64))
+                 and np.array_equal(O[tu * TILE:(tu + 1) * TILE], Ou[r].astype(np.uint64)))
+        hs = [dither.silu_mul(dither.dequant(int(O[j]), int(xs[r]), int(xw[j])),
+                              dither.dequant(int(O[j + I]), int(xs[r]), int(xw[j + I]))) for j in range(I)]
+        am = dither.abs_max(hs)
+        amax_bad += am != int(amax[r])
+        rows_bad += any(dither.requant(h, am) != int(ga[r, j]) & 0xFF for j, h in enumerate(hs))
+    out = {"act_cells": TILE * TILE, "act_cells_bad": int(cells_bad), "act_leaves": TILE * f.apr,
+           "act_leaves_bad": int(leaves_bad), "act_rows": len(orows), "act_rows_tied": int(tied), "act_amax_bad": int(amax_bad),
+           "act_rows_bad": int(rows_bad)}
+    out["act_exact"] = not cells_bad and not leaves_bad and tied == len(orows) and not amax_bad and not rows_bad
+    return out
 
 
 def cmd_fill_sample(a: argparse.Namespace) -> int:
@@ -888,8 +1015,9 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
     d = Path(a.dir)
     meta = json.loads((d / "sample.json").read_text())
     o = bool(meta.get("o", False))
-    f = Fill(meta["m"], meta["n"], meta["k"], meta["lp"], meta["L"], meta["row"], o)
-    tl = Fill(TILE, TILE, f.k, f.lp, f.L, f.row, o)
+    ow, act = (int(meta.get("ow", 32)), bool(meta.get("act", False))) if o else (32, False)
+    f = Fill(meta["m"], meta["n"], meta["k"], meta["lp"], meta["L"], meta["row"], o, ow, act)
+    tl = Fill(TILE, TILE, f.k, f.lp, f.L, f.row, o, ow)
     seeds = fill_seeds_from((d / "seeds.bin").read_bytes(), o)
     p = (d / "params.bin").read_bytes()
     ks, off = params_ks(p), int(meta.get("off", 0))
@@ -904,12 +1032,15 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
         g_leaves = (d / f"t{idx}_leaves.bin").read_bytes()
         bad = 0
         for j in range(f.lpt):
-            pos = tile * f.lpt + j
+            pos = f.tile_base(tile) + j
             leaf = row_leaf(dom, pos, leaf_h(words[j * f.row:(j + 1) * f.row], cref.prf_salt(ks, off + pos)), V2)
             bad += leaf != g_leaves[64 * j:64 * j + 64]
-        rep["tiles"].append({"tile": tile, "words_equal": (d / f"t{idx}_words.bin").read_bytes() == words, "leaves": f.lpt,
-                             "leaves_bad": bad})
-    rep["exact"] = rep["params_match"] and all(t["words_equal"] and not t["leaves_bad"] for t in rep["tiles"])
+        t = {"tile": tile, "words_equal": (d / f"t{idx}_words.bin").read_bytes() == words, "leaves": f.lpt, "leaves_bad": bad}
+        if act:
+            t |= sample_act(f, d, idx, tile, A, seeds, ks, off, meta["orows"][idx])
+        rep["tiles"].append(t)
+    rep["exact"] = rep["params_match"] and all(t["words_equal"] and not t["leaves_bad"] and t.get("act_exact", True)
+                                               for t in rep["tiles"])
     print(json.dumps(rep))
     (d / "sample-check.json").write_text(json.dumps(rep, indent=1))
     return 0 if rep["exact"] else 1
@@ -934,11 +1065,12 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
 
     print("| shape | m x N x K | L | S | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | / CUTLASS | gamma ovl_w | / CUTLASS "
           "| gamma ovl_pad | gamma nomem | gamma call | gamma gemm | tensor duty | coins, coins_w, pad, form_a, form_b, gemm, "
-          "commit ms | wgl ms | gamma ovl_w / wgl | rows hashed in the GEMMs: rows / chunks |")
+          "act, commit ms | wgl ms | gamma ovl_w / wgl | rows hashed in the GEMMs: rows / chunks |")
     print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         ms = r["arms"]
-        variant = (("served " if r.get("o") else "") + f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
+        variant = (("served " if r.get("o") else "") + ("o16 " if r.get("ow") == 16 else "") + ("act " if r.get("act") else "")
+                   + f"r{r['row']} {r['cprio']} k{r['ccta']} s{r['sched']}"
                    + (f" p{r['pf']}" if r.get("pf") else "") + (" ltw" if r.get("ltw") else "")
                    + (f" wg{r.get('wbn', '')}" if r.get("wg") else "") + (f" rp{r['rp']}" if r.get("wg") and r.get("rp") else "")
                    + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
@@ -954,7 +1086,8 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
                 fused += f" / {100 * r['fused_blocks'] / (rows_all * r['row_blocks']):.1f}%"
         cut = g(ms["cutlass"]["ms"]) if "cutlass" in ms else "-"
         gcut, gcut_w = (r.get("gamma_ovl_cutlass"), r.get("gamma_ovl_w_cutlass")) if "cutlass" in ms else (None, None)
-        parts = ", ".join(g(ms[x]["ms"]) if x in ms else "-" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
+        parts = ", ".join(g(ms[x]["ms"]) if x in ms else "-"
+                          for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "act", "commit"))
         duty = r.get("gamma_ovl_w") if r.get("o") else r["gamma_ovl"]
         print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {g(ms['lt']['ms'])} | {cut} | "
               f"{g(ms['ovl']['ms'])} | {g(r['gamma_ovl'])} | {g(gcut)} | {g(r.get('gamma_ovl_w'))} | {g(gcut_w)} | "
@@ -1329,11 +1462,12 @@ def main(argv: list[str]) -> int:
     p.add_argument("--from", dest="start", default="", help="drop kernels before this one's first launch (fill: bits_kernel)")
     p = sub.add_parser("fill-params")
     p.add_argument("dir")
-    p.add_argument("shapes", nargs="+", help="[name:]M:N:K")
+    p.add_argument("shapes", nargs="+", help="[name:]M:N:K[:act] (act: a served gate-up call, A′ committed)")
     p.add_argument("--lp", type=int, default=256)
     p.add_argument("--L", type=int, default=2048, help="the segment length (0: K), at most 8 L' below K")
     p.add_argument("--row", type=int, default=1024)
     p.add_argument("--served", action="store_true", help="served calls (O committed, dither.TAG), not the filler's")
+    p.add_argument("--ow", type=int, default=32, choices=(16, 32), help="served: O's committed bits")
     p = sub.add_parser("fill-sample")
     p.add_argument("dir")
     p = sub.add_parser("fill-table")

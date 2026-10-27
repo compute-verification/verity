@@ -1345,6 +1345,91 @@ __global__ void forge_kernel(uint16_t* words, int* O, int S, int s0, int stride,
     else O[(size_t)(tm * TILE + c / TILE) * N + tn * TILE + c % TILE] = (int)h;
   }
 }
+// forgeA: A′ of every stride-th row overwritten with hash noise (O honest)
+__global__ void forge_act_kernel(int8_t* act, int I, int stride, u32 seed) {
+  const size_t r = (size_t)blockIdx.x * stride;
+  for (int j = threadIdx.x; j < I; j += blockDim.x) act[r * I + j] = (int8_t)mix32(seed ^ mix32((u32)(r * I + j)));
+}
+// forgeH: D + 2^16 at every cell of every stride-th tile, before A′ is formed from it: O's low halves (O16) unchanged, A′
+// mapped from a wrong 32-bit O
+__global__ void forge_high_kernel(int* D, int stride, int tiles_n, int N) {
+  const size_t tile = (size_t)blockIdx.x * stride;
+  const int tm = (int)(tile / tiles_n), tn = (int)(tile % tiles_n);
+  u32* d = reinterpret_cast<u32*>(D);
+  for (int c = threadIdx.x; c < TILE * TILE; c += blockDim.x) d[(size_t)(tm * TILE + c / TILE) * N + tn * TILE + c % TILE] += 0x10000u;
+}
+
+// ---------------------------------------------------------------- A′ (dither.Shape.act): a gate-up call's consumer operand
+// dither.py's map on its words. bf16_rn: f32 to bf16 RN-even, every NaN 0x7FFF (F2fpBf16 and SiluMulBf16_v2's conversions)
+DEV u32 bf16_rn(float f) {
+  const u32 u = __float_as_uint(f);
+  if ((u & 0x7F800000u) == 0x7F800000u && (u & 0x7FFFFFu)) return 0x7FFFu;
+  return ((u + 0x7FFFu + ((u >> 16) & 1u)) >> 16) & 0xFFFFu;
+}
+// dither.dequant: RN_bf16(RN32(RN32(RN32(z) s_a) s_w)), z the s32 word
+DEV u32 dequant_w(u32 z, float xa, float xw) { return bf16_rn(__fmul_rn(__fmul_rn(__int2float_rn((int)z), xa), xw)); }
+// dither.silu_mul: bf16(f32(lut[g]) (f32(u) + 0)), lut[g] = bf16(silu_f32(f32(g))) (dither.silu_f32's table, from the host)
+DEV u32 silu_mul_w(u32 g, u32 u, const uint16_t* __restrict__ lut) {
+  const float s = __uint_as_float((u32)__ldg(lut + g) << 16), uf = __fadd_rn(__uint_as_float(u << 16), 0.0f);
+  return bf16_rn(__fmul_rn(s, uf));
+}
+// dither.requant's code at its row's scale: cvt.rni.sat.s8.f32 of RN(h / scale), NaN 0, as a byte
+DEV u32 requant_w(u32 h, float scale) {
+  const float q = __fdiv_rn(__uint_as_float(h << 16), scale);
+  if (isnan(q)) return 0;
+  return (u32)min(127, max(-128, __float2int_rn(q))) & 0xFFu;
+}
+DEV uint4 ld4u(const int* p) { return __ldg(reinterpret_cast<const uint4*>(p)); }
+// A′ of a gate-up call ([gate | up], I = N / 2), a CTA a row i: h_j = silu_mul(dequant(O_ij), dequant(O_i,j+I)) for j < I
+// into shared memory (2 I bytes) with the row's amax = max |h_j| (dither.abs_max), then A′_ij = requant(h_j, amax) into
+// act (m x I) and amax into amax[i]. O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (ServedSrc's); xa: s_a, a row's, xw: s_w, a
+// column's (f32).
+__global__ void __launch_bounds__(256) act_kernel(const int* __restrict__ D, const int* __restrict__ ra, const int* __restrict__ sa,
+                                                  const int* __restrict__ rb, const int* __restrict__ sb, int N, int I,
+                                                  const float* __restrict__ xa, const float* __restrict__ xw,
+                                                  const uint16_t* __restrict__ lut, int8_t* __restrict__ act,
+                                                  uint16_t* __restrict__ amax) {
+  extern __shared__ uint16_t hs[];
+  __shared__ u32 red[8];
+  const u64 i = blockIdx.x;
+  const int* d = D + i * (u64)N;
+  const u32 a = (u32)__ldg(ra + i), s = (u32)__ldg(sa + i);
+  const float x = __ldg(xa + i);
+  u32 mx = 0;
+  for (int j0 = 4 * threadIdx.x; j0 < I; j0 += 4 * blockDim.x) {
+    const uint4 dg = ld4u(d + j0), du = ld4u(d + I + j0), bg = ld4u(rb + j0), bu = ld4u(rb + I + j0), tg = ld4u(sb + j0),
+                tu = ld4u(sb + I + j0);
+    const float4 wg = __ldg(reinterpret_cast<const float4*>(xw + j0)), wu = __ldg(reinterpret_cast<const float4*>(xw + I + j0));
+    const u32 g[4] = {dg.x + tg.x * a + s * bg.x, dg.y + tg.y * a + s * bg.y, dg.z + tg.z * a + s * bg.z, dg.w + tg.w * a + s * bg.w};
+    const u32 u[4] = {du.x + tu.x * a + s * bu.x, du.y + tu.y * a + s * bu.y, du.z + tu.z * a + s * bu.z, du.w + tu.w * a + s * bu.w};
+    const float fg[4] = {wg.x, wg.y, wg.z, wg.w}, fu[4] = {wu.x, wu.y, wu.z, wu.w};
+    u32 h[4];
+#pragma unroll
+    for (int e = 0; e < 4; ++e) {
+      h[e] = silu_mul_w(dequant_w(g[e], x, fg[e]), dequant_w(u[e], x, fu[e]), lut);
+      mx = max(mx, h[e] & 0x7FFFu);
+    }
+    *reinterpret_cast<uint2*>(hs + j0) = make_uint2(h[0] | h[1] << 16, h[2] | h[3] << 16);
+  }
+  for (int o = 16; o; o >>= 1) mx = max(mx, __shfl_xor_sync(0xFFFFFFFFu, mx, o));
+  if (!(threadIdx.x & 31)) red[threadIdx.x >> 5] = mx;
+  __syncthreads();
+  mx = red[0];
+  for (int w = 1; w < (int)(blockDim.x >> 5); ++w) mx = max(mx, red[w]);
+  const u32 ab = mx << 16;
+  const float scale = ab != 0 && ab <= 0x7F800000u ? __fdiv_rn(__uint_as_float(ab), 127.0f) : 1.0f;
+  for (int j0 = 16 * threadIdx.x; j0 < I; j0 += 16 * blockDim.x) {
+    const uint4 p = *reinterpret_cast<const uint4*>(hs + j0), q = *reinterpret_cast<const uint4*>(hs + j0 + 8);
+    const u32 w[8] = {p.x, p.y, p.z, p.w, q.x, q.y, q.z, q.w};
+    u32 o[4];
+#pragma unroll
+    for (int e = 0; e < 4; ++e)
+      o[e] = requant_w(w[2 * e] & 0xFFFFu, scale) | requant_w(w[2 * e] >> 16, scale) << 8 |
+             requant_w(w[2 * e + 1] & 0xFFFFu, scale) << 16 | requant_w(w[2 * e + 1] >> 16, scale) << 24;
+    *reinterpret_cast<uint4*>(act + i * (u64)I + j0) = make_uint4(o[0], o[1], o[2], o[3]);
+  }
+  if (!threadIdx.x) amax[i] = (uint16_t)mx;
+}
 
 // ---------------------------------------------------------------- the committed rows
 // pf (hash_after_block's prefetch of the next 128-byte chunk, V31_PF): 1 into L1, 2 into L2
@@ -1424,42 +1509,112 @@ struct LtRow {
 };
 // A served call's rows (dither.Shape(o=True)): per tile its W prefix-sum rows (the prefix-sum buffer, W tile-segments a
 // tile), then its O rows: cells c0 + off / 4 .. + 3 of the tile, O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (serve_rows_kernel: rb
-// carries K tau_j; D = a' b'^T from cuBLASLt). One source for both kinds, so a warp whose leaves straddle them diverges only
-// in its loads; the pointers are the tile's first row and column. LIVE: D or the prefix-sum buffer is being written by the
-// kernel that reads it (RP 4's and 5's hash warps), so its loads are coherent (ld.ca), never the read-only path.
+// carries K tau_j; D = a' b'^T from cuBLASLt), or at o16 (dither.Shape.ow 16) cells c0 + off / 2 .. + 7, each O's low half.
+// One source for both kinds, so a warp whose leaves straddle them diverges only in its loads; the pointers are the tile's
+// first row and column. LIVE: D or the prefix-sum buffer is being written by the kernel that reads it (RP 4's and 5's hash
+// warps), so its loads are coherent (ld.ca), never the read-only path.
 template <bool LIVE = false> struct ServedSrcT {
   const uint8_t* w;   // a prefix-sum row, or null: an O row
   const int *D, *ra, *sa, *rb, *sb;
   u64 N;
-  u32 c0, pfm;
+  u32 c0, pfm, o16;
   DEV const int* at(u32 off) const {
-    const u32 c = c0 + off / 4;
+    const u32 c = c0 + (o16 ? off / 2 : off / 4);
     return D + (u64)(c >> 7) * N + (c & 127);
   }
-  DEV uint4 ld16(u32 off) const {
-    if (w) return LIVE ? __ldca(reinterpret_cast<const uint4*>(w + off)) : ldg16(w + off);
-    const u32 c = c0 + off / 4, r = c >> 7, col = c & 127;
+  DEV uint4 o4(u32 r, u32 col) const {
     const uint4* dp = reinterpret_cast<const uint4*>(D + (u64)r * N + col);
     const uint4 d = LIVE ? __ldca(dp) : __ldg(dp);
     const uint4 b = __ldg(reinterpret_cast<const uint4*>(rb + col)), t = __ldg(reinterpret_cast<const uint4*>(sb + col));
     const u32 a = (u32)__ldg(ra + r), s = (u32)__ldg(sa + r);
     return make_uint4(d.x + t.x * a + s * b.x, d.y + t.y * a + s * b.y, d.z + t.z * a + s * b.z, d.w + t.w * a + s * b.w);
   }
-  DEV void pf(u32 off) const { pf_to(w ? w + off : reinterpret_cast<const uint8_t*>(at(off)), pfm); }
+  DEV uint4 ld16(u32 off) const {
+    if (w) return LIVE ? __ldca(reinterpret_cast<const uint4*>(w + off)) : ldg16(w + off);
+    if (!o16) {
+      const u32 c = c0 + off / 4;
+      return o4(c >> 7, c & 127);
+    }
+    const u32 c = c0 + off / 2, r = c >> 7, col = c & 127;
+    const uint4 x = o4(r, col), y = o4(r, col + 4);
+    return make_uint4(__byte_perm(x.x, x.y, 0x5410), __byte_perm(x.z, x.w, 0x5410), __byte_perm(y.x, y.y, 0x5410),
+                      __byte_perm(y.z, y.w, 0x5410));
+  }
+  DEV void pf(u32 off) const {
+    if (w) { pf_to(w + off, pfm); return; }
+    pf_to(reinterpret_cast<const uint8_t*>(at(off)), pfm);
+    if (o16) pf_to(reinterpret_cast<const uint8_t*>(at(off + 64)), pfm);   // 128 row bytes: 64 cells, 256 bytes of D
+  }
 };
 using ServedSrc = ServedSrcT<>;
+// A′'s bytes of a leaf (a gate-up call's, dither.Shape.act): lb bytes of one row of the m x I int8 buffer, 16-byte aligned;
+// zero past lb (an opening's short row)
+struct ActSrc {
+  const uint8_t* p;
+  u32 lb, pfm;
+  DEV uint4 ld16(u32 off) const { return off < lb ? ldg16(p + off) : make_uint4(0, 0, 0, 0); }
+  DEV void pf(u32 off) const { pf_to(p + off, pfm); }
+};
+// The leaves: per tile-row tm its tiles_n tiles' lpt leaves each, then (apr > 0: a gate-up call's A′) its 128 rows' A′,
+// apr leaves a row, row bytes each but the row's last, which holds the rest of its I bytes (dither.Shape.stride, leaf_span).
+// The last chunk hashes under its own P(8 alen) (mida, its chaining value) when it is short.
 struct ServedRow {
   const uint8_t* words;
   const int *D, *ra, *sa, *rb, *sb;
   u64 lpt, wrows, N, tiles_n;
   u32 row, W, pf;
+  u32 o16 = 0, apr = 0;
+  u64 I = 0;
+  const int8_t* act = nullptr;
+  const u64* mida = nullptr;
+  DEV u64 stride() const { return tiles_n * lpt + (u64)TILE * apr; }
+  DEV u64 base(u64 t) const { return apr ? (t / tiles_n) * stride() + (t % tiles_n) * lpt : t * lpt; }
   template <bool LIVE = false> DEV ServedSrcT<LIVE> src(u64 pos) const {
-    const u64 t = pos / lpt, j = pos % lpt, tm = t / tiles_n, tn = t % tiles_n;
+    const u64 st = stride(), tm = pos / st, q = pos % st, tn = q / lpt, j = q % lpt, t = tm * tiles_n + tn;
     const bool w = j < wrows;
     return ServedSrcT<LIVE>{w ? words + t * W * 32768ull + j * row : nullptr, D + tm * TILE * N + tn * TILE, ra + tm * TILE,
-                            sa + tm * TILE, rb + tn * TILE, sb + tn * TILE, N, w ? 0u : (u32)((j - wrows) * row / 4), pf};
+                            sa + tm * TILE, rb + tn * TILE, sb + tn * TILE, N,
+                            w ? 0u : (u32)((j - wrows) * row / (o16 ? 2 : 4)), pf, o16};
   }
-  DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, src(pos), row, x, pf != 0); }
+  // leaf pos's A′ chunk (a = its index among its tile-row's A′ leaves), its length and chaining value after P
+  DEV ActSrc act_src(u64 tm, u64 a) const {
+    const u64 r = a / apr, c = a % apr;
+    return ActSrc{reinterpret_cast<const uint8_t*>(act) + (tm * TILE + r) * I + c * row,
+                  c + 1 < apr ? row : (u32)(I - (apr - 1) * (u64)row), pf};
+  }
+  DEV const u64* act_cv(const ActSrc& s) const { return s.lb == row ? C.mid_P : mida; }
+  // whether leaf pos is an A′ row: (tm, a) set
+  DEV bool act_of(u64 pos, u64& tm, u64& a) const {
+    if (!apr) return false;
+    const u64 st = stride(), q = pos % st, tl = tiles_n * lpt;
+    if (q < tl) return false;
+    tm = pos / st;
+    a = q - tl;
+    return true;
+  }
+  DEV void digest(u64 pos, u64* x) const {
+    u64 tm, a;
+    if (act_of(pos, tm, a)) {
+      const ActSrc s = act_src(tm, a);
+      hash_after_block(act_cv(s), s, s.lb, x, pf != 0);
+      return;
+    }
+    hash_after_block(C.mid_P, src(pos), row, x, pf != 0);
+  }
+  // an opening's 16-byte piece of leaf pos's row
+  DEV uint4 piece(u64 pos, u32 off) const {
+    u64 tm, a;
+    if (act_of(pos, tm, a)) return act_src(tm, a).ld16(off);
+    return src(pos).ld16(off);
+  }
+  // (byte offset in dither.values_buffer, length) of leaf pos's row
+  DEV void span(u64 pos, u64& off, u32& len) const {
+    const u64 st = stride(), tm = pos / st, q = pos % st, tl = tiles_n * lpt, start = tm * (tl * row + (apr ? TILE * I : 0));
+    if (q < tl) { off = start + q * row; len = row; return; }
+    const u64 r = (q - tl) / apr, c = (q - tl) % apr;
+    off = start + tl * row + r * I + c * row;
+    len = c + 1 < apr ? row : (u32)(I - (apr - 1) * (u64)row);
+  }
 };
 
 // hash_after_block's SHA-512 chunks b0 .. of the row (x: the chaining value after the first b0), at most budget of them,
@@ -1500,7 +1655,7 @@ DEV u32 hash_blocks(u64* x, const Src& src, u32 lb, u32 b0, bool pf, const Stop&
   return end;
 }
 // RP 4's and 5's hasher (wg_proto.cuh's H) on a served call's rows off .. off + lpo - 1 of each commit tile: row j of commit
-// tile ct is leaf ct lpt + off + j (off wrows: its O rows, in the GEMM of D; 0: every row, in the GEMM of the prefix sums,
+// tile ct is leaf base(ct) + off + j (off wrows: its O rows, in the GEMM of D; 0: every row, in the GEMM of the prefix sums,
 // which runs after it). Its chaining value goes to xd[pos] and flag[pos] = epoch << 10 | the SHA-512 chunks hashed (all of
 // them, or as many as the hash warps did before the consumers were done); FusedRow takes the leaf phase on from there, and
 // hashes from the first chunk whatever carries another epoch (rows no hash warp reached, a forged copy). A visit hashes at
@@ -1513,7 +1668,7 @@ struct FusedLeaves {
   u32 epoch, lpo, chunk, off;
   DEV unsigned lpt() const { return lpo; }
   template <class Stop> DEV bool operator()(unsigned long long ct, unsigned j, const Stop& stop, unsigned budget) const {
-    const u64 pos = ct * row.lpt + off + j;
+    const u64 pos = row.base(ct) + off + j;
     const u32 nblk = row_blocks(row.row), f = __ldcg(flag + pos);
     u32 b0 = 0;
     u64 x[8];
@@ -1537,6 +1692,11 @@ struct FusedRow {
   const u32* flag;
   u32 epoch;
   DEV void digest(u64 pos, u64* x) const {
+    u64 tm, a;
+    if (row.act_of(pos, tm, a)) {   // no hash warp reaches A′'s rows
+      row.digest(pos, x);
+      return;
+    }
     const u32 f = __ldg(flag + pos);
     u32 b = 0;
     if (f >> 10 == epoch) {
@@ -1893,7 +2053,8 @@ template <class T> static T* dalloc(size_t n) {
 }
 
 struct Cheat {
-  int kind = 0;   // 0 none, 1 skip, 2 forge (T_s0; Fill: s0 0 O), 3 forgeO, 4 nodither (Fill: d_A and d_B zero)
+  int kind = 0;   // 0 none, 1 skip, 2 forge (T_s0; Fill: s0 0 O), 3 forgeO, 4 nodither (Fill: d_A and d_B zero), 5 forgeA
+                  // (Fill: A′ of every 1/frac-th row), 6 forgeH (Fill: O + 2^16 in every 1/frac-th tile, A′ formed from it)
   int tau = 0, s0 = 0;
   double frac = 1.0;
 };
@@ -1901,6 +2062,12 @@ static Cheat parse_cheat(const std::string& s) {
   Cheat c;
   if (s == "none" || s.empty()) return c;
   if (s == "nodither") { c.kind = 4; return c; }
+  if (!s.compare(0, 6, "forgeA") || !s.compare(0, 6, "forgeH")) {
+    c.kind = s[5] == 'A' ? 5 : 6;
+    const char* f = strchr(s.c_str(), ':');
+    if (f) c.frac = atof(f + 1);
+    return c;
+  }
   if (!s.compare(0, 5, "skip:")) { c.kind = 1; c.tau = atoi(s.c_str() + 5); return c; }
   if (!s.compare(0, 6, "forge:")) {
     c.kind = 2;
@@ -1915,7 +2082,8 @@ static Cheat parse_cheat(const std::string& s) {
     if (f) c.frac = atof(f + 1);
     return c;
   }
-  fprintf(stderr, "cheat %s: none | skip:TAU | forge:S0[:FRAC] | forgeO[:FRAC] | nodither\n", s.c_str());
+  fprintf(stderr, "cheat %s: none | skip:TAU | forge:S0[:FRAC] | forgeO[:FRAC] | forgeA[:FRAC] | forgeH[:FRAC] | nodither\n",
+          s.c_str());
   exit(2);
 }
 
@@ -2373,6 +2541,15 @@ struct Fill {
   Lt lt{};
   bool ltw = false;
   bool o = false;                     // a served call (set before setup)
+  int ow = 32;                        // served: O's committed bits, 32 or 16 (dither.Shape.ow; set before setup)
+  bool act = false;                   // a gate-up call: A′ committed after each tile-row (dither.Shape.act; set before setup)
+  int I = 0, apr = 0, row_o = 0;      // A′'s cells a row (n / 2), its leaves a row, and O's leaves a tile
+  u64 stride = 0, nbytes = 0;         // leaves a tile-row, and the call's value bytes (dither.Shape.stride, nbytes)
+  int8_t* actb[2] = {};               // A′ (m x I int8), a copy each
+  uint16_t* amaxb[2] = {};            // its rows' amax (bf16), a copy each
+  float *xs = nullptr, *xw = nullptr; // the map's s_a (m) and s_w (n), f32 (set_act)
+  uint16_t* lut = nullptr;            // bf16(silu_f32(f32(g))) of every bf16 word g (set_act)
+  u64* mida = nullptr;                // the chaining value after P(8 alen), an A′ row's last chunk's (alen bytes)
   int8_t *Ap = nullptr, *Bp = nullptr;          // served: a' and b' (read by the compute alone)
   int *ra[2] = {}, *sa[2] = {}, *rb[2] = {}, *sb[2] = {};   // their row sums and shifts, a copy each (its O rows read them)
   int* bad = nullptr;                 // bad[copy]: a row of A + d_A spans -128 .. 128; bad[2 + copy]: one of B + d_B
@@ -2418,27 +2595,36 @@ struct Fill {
 #endif
 
   // "": fine; else why the shape can't be committed
-  static std::string bad_shape(int m, int n, int k, int lp, int L, int row) {
+  static std::string bad_shape(int m, int n, int k, int lp, int L, int row, bool o = false, int ow = 32, bool act = false) {
     if (m <= 0 || n <= 0 || k <= 0 || m % TILE || n % TILE || k % BK || lp <= 0 || lp % BK || k % lp || lp > 4096 || L <= 0 ||
         L % lp || row <= 0 || row % 16 || 32768 % row)
       return "shape m " + std::to_string(m) + " n " + std::to_string(n) + " k " + std::to_string(k) + " L' " + std::to_string(lp) +
              " L " + std::to_string(L) + " ROW " + std::to_string(row) +
              ": m, n, K, L' multiples of 128, L' | K, L' <= 4096, L a multiple of L', ROW | 32768 and a multiple of 16";
     if (k >= (1 << 17)) return "K " + std::to_string(k) + ": below 2^17 (dither.K_LIMIT)";
-    const u64 lv = (u64)(m / TILE) * (n / TILE) * (((k + L - 1) / L) * (32768 / row) + 65536 / row);
+    if (ow != 32 && ow != 16) return "O is committed at 32 or 16 bits, not " + std::to_string(ow);
+    if ((ow != 32 || act) && !o) return "O16 and A′ are a served call's (V31_SERVED=1)";
+    if (act && (n % (2 * TILE) || n > 200 * 1024)) return "A′: n a multiple of 256 (gate tiles pair with up tiles), at most 204800";
+    const u64 S = (k + L - 1) / L, lpt = (o ? S - 1 : S) * (32768 / row) + (o ? (u64)ow / 8 * 16384 / row : 0),
+              apr = act ? ((u64)n / 2 + row - 1) / row : 0, lv = (u64)(m / TILE) * ((n / TILE) * lpt + TILE * apr);
     if (lv > (1ull << 32)) return "more than 2^32 leaves";
     return "";
   }
   void setup(int m_, int n_, int k_, int lp_, int L_, int row_, const Params& params, int dom, cudaStream_t c0 = nullptr,
              cudaStream_t c1 = nullptr) {
     m = m_; n = n_; k = k_; lp = lp_; L = L_; row = row_;
-    const std::string why = bad_shape(m, n, k, lp, L, row);
+    const std::string why = bad_shape(m, n, k, lp, L, row, o, ow, act);
     if (!why.empty()) { fprintf(stderr, "%s\n", why.c_str()); exit(2); }
     S = (k + L - 1) / L; NT = k / lp; kb64 = (k + 511) / 512 * 64;
     Wn = o ? S - 1 : S;
     tiles_n = n / TILE; tiles = (m / TILE) * tiles_n;
-    lpt = Wn * (32768 / row) + (o ? 65536 / row : 0);
-    leaves = (u64)tiles * lpt;
+    row_o = o ? ow / 8 * 16384 / row : 0;
+    lpt = Wn * (32768 / row) + row_o;
+    I = act ? n / 2 : 0;
+    apr = act ? (I + row - 1) / row : 0;
+    stride = (u64)tiles_n * lpt + (u64)TILE * apr;
+    leaves = (u64)(m / TILE) * stride;
+    nbytes = (u64)tiles * lpt * row + (u64)m * I;
     CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
     pair = gemm_pair(tiles_n);
     items = tiles >> pair;
@@ -2478,6 +2664,7 @@ struct Fill {
       bad = dalloc<int>(4);
       CK(cudaMemset(bad, 0, 16));
     }
+    if (act) act_setup(params);
     for (int b = 0; b < 2; b++) {
       if (ltw || o) D[b] = dalloc<int>((size_t)m * n);
       if (!ltw && Wn > 0) words[b] = dalloc<uint16_t>((size_t)tiles * Wn * TILE * TILE);
@@ -2505,7 +2692,9 @@ struct Fill {
                     (void*)words[1], (void*)D[0], (void*)D[1], (void*)vbuf, (void*)maps, (void*)gctr, (void*)pl.ctl,
                     (void*)pl.claim, (void*)opos, (void*)obuf, (void*)Ap, (void*)Bp, (void*)ra[0], (void*)sa[0], (void*)rb[0],
                     (void*)sb[0], (void*)ra[1], (void*)sa[1], (void*)rb[1], (void*)sb[1], (void*)bad, (void*)xd[0],
-                    (void*)xd[1], (void*)xf[0], (void*)xf[1], (void*)wsa, (void*)wsw, (void*)pls.ctl, (void*)pls.claim})
+                    (void*)xd[1], (void*)xf[0], (void*)xf[1], (void*)wsa, (void*)wsw, (void*)pls.ctl, (void*)pls.claim,
+                    (void*)actb[0], (void*)actb[1], (void*)amaxb[0], (void*)amaxb[1], (void*)xs, (void*)xw, (void*)lut,
+                    (void*)mida})
       cudaFree(p);
     if (ltw || o) lt_free(lt);
     for (int b = 0; b < 2; b++) {
@@ -2529,6 +2718,43 @@ struct Fill {
   bool weights_stale() const {
     return !wformed || memcmp(wseed[0], seeds.w[S_DB], 64) || memcmp(wseed[1], seeds.w[S_U], 64) || memcmp(wseed[2], seeds.w[S_P], 64);
   }
+  // A′'s buffers, the map's default scalars (s_a and s_w in [1, 2) / 127 from a hash of the index; set_act replaces them
+  // and gives the SiLU table) and mida: P(8 alen) from the IV, P the params' P(8 ROW) with its length rewritten
+  void act_setup(const Params& params) {
+    for (int b = 0; b < 2; b++) { actb[b] = dalloc<int8_t>((size_t)m * I); amaxb[b] = dalloc<uint16_t>(m); }
+    xs = dalloc<float>(m); xw = dalloc<float>(n); lut = dalloc<uint16_t>(65536); mida = dalloc<u64>(8);
+    CK(cudaMemset(lut, 0, 2 * 65536));
+    std::vector<float> hs(m), hw(n);
+    for (int i = 0; i < m; i++) hs[i] = (1.f + (float)(mix32(2u * i) & 255u) / 256.f) / 127.f;
+    for (int j = 0; j < n; j++) hw[j] = (1.f + (float)(mix32(2u * j + 1u) & 255u) / 256.f) / 127.f;
+    CK(cudaMemcpy(xs, hs.data(), 4 * (size_t)m, cudaMemcpyHostToDevice));
+    CK(cudaMemcpy(xw, hw.data(), 4 * (size_t)n, cudaMemcpyHostToDevice));
+    uint8_t P[128];
+    memcpy(P, params.P, 128);
+    const size_t at = strnlen(reinterpret_cast<const char*>(P), 112) + 1;
+    if (sha::be64(P + at) != 8ull * row) { fprintf(stderr, "A′: the params' P isn't P(8 ROW), ROW %d\n", row); exit(2); }
+    sha::put_be64(P + at, 8ull * ((u64)I - (u64)(apr - 1) * row));
+    u64 w[16], st[8];
+    sha::iv(st);
+    words_of(P, w, 16);
+    sha::compress(st, w);
+    CK(cudaMemcpy(mida, st, 64, cudaMemcpyHostToDevice));
+    CK(cudaFuncSetAttribute(act_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, 2 * I));
+  }
+  // the map's scalars (f32 words; null: unchanged) and SiLU table (65536 bf16 words; null: unchanged), from the host
+  void set_act(const u32* sa_, const u32* sw_, const uint16_t* lut_) {
+    CK(cudaStreamSynchronize(s0));
+    if (sa_) CK(cudaMemcpy(xs, sa_, 4 * (size_t)m, cudaMemcpyHostToDevice));
+    if (sw_) CK(cudaMemcpy(xw, sw_, 4 * (size_t)n, cudaMemcpyHostToDevice));
+    if (lut_) CK(cudaMemcpy(lut, lut_, 2 * 65536, cudaMemcpyHostToDevice));
+  }
+  // copy b's A′ and amax from its D (O's 32-bit words, its sums and shifts)
+  void act_run(cudaStream_t st, int b) {
+    act_kernel<<<m, 256, 2 * I, st>>>(D[b], ra[b], sa[b], rb[b], sb[b], n, I, xs, xw, lut, actb[b], amaxb[b]);
+  }
+  // tile t's first byte in the values (dither.values_buffer) and its first leaf
+  u64 tile_byte(int t) const { return (u64)(t / tiles_n) * ((u64)tiles_n * lpt * row + (u64)TILE * I) + (u64)(t % tiles_n) * lpt * row; }
+  u64 tile_leaf(int t) const { return (u64)(t / tiles_n) * stride + (u64)(t % tiles_n) * lpt; }
   void coins(cudaStream_t st, bool pad, bool wside) {
     if (pad) {
       const u64 bp = (u64)m * k / 64;
@@ -2719,7 +2945,8 @@ struct Fill {
   LtRow ltrow(int b) const { return LtRow{D[b], (u64)lpt, (u64)n, (u64)tiles_n, (u32)row, (u32)kn.pf}; }
   ServedRow servedrow(int b) const {
     return ServedRow{reinterpret_cast<const uint8_t*>(words[b]), D[b], ra[b], sa[b], rb[b], sb[b], (u64)lpt,
-                     (u64)Wn * (32768 / row), (u64)n, (u64)tiles_n, (u32)row, (u32)Wn, (u32)kn.pf};
+                     (u64)Wn * (32768 / row), (u64)n, (u64)tiles_n, (u32)row, (u32)Wn, (u32)kn.pf, ow == 16 ? 1u : 0u,
+                     (u32)apr, (u64)I, actb[b], mida};
   }
   void leaves_nodes(int b, cudaStream_t st) {
     if (nomem) pl.leaves_nodes(cm[b], NoMemRow{(u32)row}, kn.ccta, st);
@@ -2732,6 +2959,7 @@ struct Fill {
   void poison(int b, cudaStream_t st) {
     if (D[b]) gk::poison(D[b], (size_t)m * n * 4, st);
     if (words[b]) gk::poison(words[b], (size_t)tiles * Wn * 32768, st);
+    if (actb[b]) { gk::poison(actb[b], (size_t)m * I, st); gk::poison(amaxb[b], 2 * (size_t)m, st); }
   }
   // copy b's committed values (testing): leaves x ROW bytes, leaf pos's row at pos ROW (dither.values_buffer); words[b]
   // itself, or the rows gathered into vbuf
@@ -2764,6 +2992,7 @@ struct Fill {
     if (o && !a) { fprintf(stderr, "a served call takes the caller's A\n"); exit(2); }
     if ((ch.kind == 2 || ch.kind == 3) && (ch.kind == 3 ? 0 : ch.s0) > Wn) { fprintf(stderr, "forge: S0 above W\n"); exit(2); }
     if ((ch.kind == 3 || (ch.kind == 2 && !ch.s0)) && !D[0]) { fprintf(stderr, "forge of O: a served call's\n"); exit(2); }
+    if ((ch.kind == 5 || ch.kind == 6) && !act) { fprintf(stderr, "forgeA, forgeH: a call that commits A′\n"); exit(2); }
     const int b = (int)(calls & 1);
     if (pend == b) flush();
     CK(cudaEventSynchronize(ev_done[b]));
@@ -2806,6 +3035,12 @@ struct Fill {
         forge_kernel<<<(tiles + stride - 1) / stride, 256, 0, s0>>>(words[b], nullptr, Wn, s0f, stride, tiles_n, n, 0xF0F0u);
       xep[b] = epoch(s0);   // RP 4's digests are of the rows before the forge: the leaf phase hashes them again
     }
+    if (act) {   // A′ where SiLU·mul runs, after the GEMM; the leaf phase hashes its rows
+      const int every = std::max(1, (int)std::lround(1.0 / ch.frac));
+      if (ch.kind == 6) forge_high_kernel<<<(tiles + every - 1) / every, 256, 0, s0>>>(D[b], every, tiles_n, n);
+      act_run(s0, b);
+      if (ch.kind == 5) forge_act_kernel<<<(m + every - 1) / every, 256, 0, s0>>>(actb[b], I, every, 0xA5A5A5A5u);
+    }
     CK(cudaEventRecord(ev_comp[b], s0));
     if (kn.sched == 1) pend = b;
     else commit_ovl(b);
@@ -2836,13 +3071,23 @@ struct LtPiece {
 };
 struct ServedPiece {
   ServedRow r;
-  DEV uint4 piece(u64 pos, u32 off) const { return r.src(pos).ld16(off); }
+  DEV uint4 piece(u64 pos, u32 off) const { return r.piece(pos, off); }
 };
 // testing: the leaves' rows gathered into one buffer, a 16-byte piece a thread
 template <class P>
 __global__ void values_kernel(P src, u64 n, int row, uint8_t* __restrict__ out) {
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x, q = (u64)row / 16;
   if (t < n * q) *reinterpret_cast<uint4*>(out + 16 * t) = src.piece(t / q, (u32)(16 * (t % q)));
+}
+// the same for a served call's rows at their spans (dither.values_buffer: an A′ row's last chunk is short)
+__global__ void served_values_kernel(ServedRow r, u64 n, uint8_t* __restrict__ out) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x, q = (u64)r.row / 16, pos = t / q;
+  const u32 c = (u32)(16 * (t % q));
+  if (t >= n * q) return;
+  u64 off;
+  u32 len;
+  r.span(pos, off, len);
+  if (c < len) *reinterpret_cast<uint4*>(out + off + c) = r.piece(pos, c);
 }
 // a thread a (position, 16-byte piece) of the rows, then a (position, level) of the paths
 template <class P>
@@ -2886,11 +3131,11 @@ void Fill::open(int b, const u64* pos, int np, uint8_t* rows, uint8_t* paths) {
 }
 const uint8_t* Fill::values_of(int b) {
   if (!ltw && !o) return reinterpret_cast<const uint8_t*>(words[b]);
-  if (!vbuf) vbuf = dalloc<uint8_t>(leaves * row);
+  if (!vbuf) vbuf = dalloc<uint8_t>(nbytes);
   const u64 th = leaves * (row / 16);
   const unsigned g = (unsigned)((th + 255) / 256);
   if (ltw) values_kernel<<<g, 256, 0, so>>>(LtPiece{ltrow(b)}, leaves, row, vbuf);
-  else values_kernel<<<g, 256, 0, so>>>(ServedPiece{servedrow(b)}, leaves, row, vbuf);
+  else served_values_kernel<<<g, 256, 0, so>>>(servedrow(b), leaves, vbuf);
   CK(cudaStreamSynchronize(so));
   return vbuf;
 }
@@ -3237,10 +3482,26 @@ static int cmd_once(const std::string& pdir, int lp, int t, int row, const std::
   return c.flags() ? 4 : 0;
 }
 
-// v31.py fill_params_name: "served-" (a served call, V31_SERVED=1) or "fill-"
-static std::string fill_params_name(int m, int n, int k, int lp, int L, int row, bool o) {
+// v31.py fill_params_name: "served-" (a served call, V31_SERVED=1) or "fill-", then "-o16" (V31_OW=16) and "-act" (A′)
+static std::string fill_params_name(int m, int n, int k, int lp, int L, int row, bool o, int ow = 32, bool act = false) {
   return std::string(o ? "served-" : "fill-") + std::to_string(m) + "x" + std::to_string(n) + "x" + std::to_string(k) + "-lp" +
-         std::to_string(lp) + "-L" + std::to_string(L) + "-r" + std::to_string(row) + ".bin";
+         std::to_string(lp) + "-L" + std::to_string(L) + "-r" + std::to_string(row) + (ow == 16 ? "-o16" : "") +
+         (act ? "-act" : "") + ".bin";
+}
+// a fill shape NAME:M:N:K[:act] (act: the gate-up call, A′ committed); false when it doesn't parse
+static bool fill_shape(const std::string& sh, char* name, int& m, int& n, int& k, bool& act) {
+  if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) != 4) return false;
+  const size_t c = sh.rfind(':');
+  act = sh.compare(c, std::string::npos, ":act") == 0;
+  return true;
+}
+// the SiLU table v31.py fill-params writes beside the params (65536 bf16 words)
+static std::vector<uint16_t> read_silu(const std::string& pdir) {
+  const auto v = readf(pdir + "/silu-bf16.bin");
+  if (v.size() != 2 * 65536) { fprintf(stderr, "%s/silu-bf16.bin: %zu bytes, want 131072\n", pdir.c_str(), v.size()); exit(2); }
+  std::vector<uint16_t> t(65536);
+  memcpy(t.data(), v.data(), v.size());
+  return t;
 }
 // One shape's Fill call twice, each committed before the next is issued, then V31_ONCE_OVL (default 6) back-to-back calls
 // (each committed beside the next one's compute), nothing timed: what a profiler watches (run.sh's FILL_NSYS). V31_SERVED=1:
@@ -3248,11 +3509,15 @@ static std::string fill_params_name(int m, int n, int k, int lp, int L, int row,
 static int cmd_fill_once(const std::string& pdir, int lp, int Lspec, int row, const std::string& sh) {
   char name[64];
   int m, n, k;
-  if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) != 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
+  bool act;
+  if (!fill_shape(sh, name, m, n, k, act)) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
   const int L = Lspec > 0 ? Lspec : k, novl = env_int("V31_ONCE_OVL", 6);
   Fill f;
   f.o = env_int("V31_SERVED", 0) != 0;
-  f.setup(m, n, k, lp, L, row, read_params(pdir + "/" + fill_params_name(m, n, k, lp, L, row, f.o)), 0);
+  f.ow = f.o ? env_int("V31_OW", 32) : 32;
+  f.act = act && f.o;
+  f.setup(m, n, k, lp, L, row, read_params(pdir + "/" + fill_params_name(m, n, k, lp, L, row, f.o, f.ow, f.act)), 0);
+  if (f.act) f.set_act(nullptr, nullptr, read_silu(pdir).data());
   int8_t* A = dalloc<int8_t>((size_t)m * k);
   gen_kernel<<<m, 256, 0, f.s0>>>(A, k, 1u, true);
   gen_kernel<<<n, 256, 0, f.s0>>>(f.B, k, 2u, false);
@@ -3276,8 +3541,10 @@ static int cmd_fill_once(const std::string& pdir, int lp, int Lspec, int row, co
 }
 
 // Two sampled tiles of a call (copy b), for `v31.py fill-sample`: the seeds (dither order), the params (Ks with them),
-// whether it's served and its salt offset, A's and B's rows of each tile, its values (the tile's leaf rows) and its leaves
-// (level 0)
+// whether it's served (O's bits, A′) and its salt offset, A's and B's rows of each tile, its values (the tile's leaf rows)
+// and its leaves (level 0). With A′: the map's s_w (xw), and per tile its tile-row's A′ rows, their amax, s_a and leaves,
+// B's rows of the gate tile and its up tile (the sampled tile's pair), and four whole rows of D with their sums and shifts
+// (rb, sb: O's whole rows, which amax is over)
 static void fill_samples(Fill& f, int b, const std::string& dir, const std::string& pfile, const std::vector<uint8_t>& sd,
                          const int8_t* A, u32 pick) {
   gk::Dump d(dir);
@@ -3285,23 +3552,52 @@ static void fill_samples(Fill& f, int b, const std::string& dir, const std::stri
   const auto p = readf(pfile);
   writef(dir + "/params.bin", p.data(), p.size());
   const int picks[2] = {0, (int)(mix32(pick) % (u32)f.tiles)};
+  int rows[2][4];
+  for (int i = 0; i < 2; i++) {
+    const int r0 = picks[i] / f.tiles_n * TILE;
+    rows[i][0] = r0; rows[i][1] = r0 + 1; rows[i][2] = r0 + 2 + (int)(mix32(pick ^ (u32)(7 + i)) % 125u); rows[i][3] = r0 + 127;
+  }
   std::vector<u64> root(8);
   CK(cudaMemcpy(root.data(), f.cm[b].levels + 8 * (f.levels_count() - 1), 64, cudaMemcpyDeviceToHost));
   FILE* fp = fopen((dir + "/sample.json").c_str(), "w");
-  fprintf(fp, "{\"m\": %d, \"n\": %d, \"k\": %d, \"lp\": %d, \"L\": %d, \"row\": %d, \"o\": %s, \"off\": %llu, \"tiles\": [%d, %d], "
-          "\"root\": \"", f.m, f.n, f.k, f.lp, f.L, f.row, f.o ? "true" : "false", (unsigned long long)f.off[b], picks[0], picks[1]);
+  fprintf(fp, "{\"m\": %d, \"n\": %d, \"k\": %d, \"lp\": %d, \"L\": %d, \"row\": %d, \"o\": %s, \"ow\": %d, \"act\": %s, "
+          "\"off\": %llu, \"tiles\": [%d, %d], \"orows\": [[%d, %d, %d, %d], [%d, %d, %d, %d]], \"root\": \"",
+          f.m, f.n, f.k, f.lp, f.L, f.row, f.o ? "true" : "false", f.ow, f.act ? "true" : "false", (unsigned long long)f.off[b],
+          picks[0], picks[1], rows[0][0], rows[0][1], rows[0][2], rows[0][3], rows[1][0], rows[1][1], rows[1][2], rows[1][3]);
   for (int i = 0; i < 64; i++) fprintf(fp, "%02x", (unsigned)(root[i / 8] >> (56 - 8 * (i % 8))) & 0xFF);
   fprintf(fp, "\"}\n");
   fclose(fp);
   const uint8_t* v = f.values_of(b);
   const size_t tb = (size_t)f.lpt * f.row;
+  if (f.act) {
+    d.bytes("xw", f.xw, 4 * (size_t)f.n, f.s0);
+    d.bytes("rb", f.rb[b], 4 * (size_t)f.n, f.s0);
+    d.bytes("sb", f.sb[b], 4 * (size_t)f.n, f.s0);
+  }
   for (int i = 0; i < 2; i++) {
     const int tile = picks[i], tm = tile / f.tiles_n, tn = tile % f.tiles_n;
     const std::string s = "t" + std::to_string(i) + "_";
     d.bytes(s + "A", A + (size_t)tm * TILE * f.k, (size_t)TILE * f.k, f.s0);
     d.bytes(s + "B", f.B + (size_t)tn * TILE * f.k, (size_t)TILE * f.k, f.s0);
-    d.bytes(s + "words", v + (size_t)tile * tb, tb, f.s0);
-    d.digests(s + "leaves", f.cm[b].levels + 8 * (size_t)tile * f.lpt, f.lpt, f.s0);
+    d.bytes(s + "words", v + f.tile_byte(tile), tb, f.s0);
+    d.digests(s + "leaves", f.cm[b].levels + 8 * f.tile_leaf(tile), f.lpt, f.s0);
+    if (!f.act) continue;
+    const int tg = tn % (f.tiles_n / 2), tu = tg + f.tiles_n / 2;
+    d.bytes(s + "act", f.actb[b] + (size_t)tm * TILE * f.I, (size_t)TILE * f.I, f.s0);
+    d.bytes(s + "amax", f.amaxb[b] + (size_t)tm * TILE, 2 * (size_t)TILE, f.s0);
+    d.bytes(s + "xs", f.xs + (size_t)tm * TILE, 4 * (size_t)TILE, f.s0);
+    d.digests(s + "aleaves", f.cm[b].levels + 8 * ((u64)tm * f.stride + (u64)f.tiles_n * f.lpt), (size_t)TILE * f.apr, f.s0);
+    d.bytes(s + "Bg", f.B + (size_t)tg * TILE * f.k, (size_t)TILE * f.k, f.s0);
+    d.bytes(s + "Bu", f.B + (size_t)tu * TILE * f.k, (size_t)TILE * f.k, f.s0);
+    CK(cudaStreamSynchronize(f.s0));
+    std::vector<int> dr((size_t)4 * f.n), rs(8);
+    for (int r = 0; r < 4; r++) {
+      CK(cudaMemcpy(dr.data() + (size_t)r * f.n, f.D[b] + (size_t)rows[i][r] * f.n, 4 * (size_t)f.n, cudaMemcpyDeviceToHost));
+      CK(cudaMemcpy(&rs[2 * r], f.ra[b] + rows[i][r], 4, cudaMemcpyDeviceToHost));
+      CK(cudaMemcpy(&rs[2 * r + 1], f.sa[b] + rows[i][r], 4, cudaMemcpyDeviceToHost));
+    }
+    writef(dir + "/" + s + "D.bin", dr.data(), 4 * dr.size());
+    writef(dir + "/" + s + "rasa.bin", rs.data(), 4 * rs.size());
   }
 }
 
@@ -3313,7 +3609,9 @@ static void fill_samples(Fill& f, int b, const std::string& dir, const std::stri
 // with the weight side a period's (v3.2); ovl, back-to-back calls each committed beside the next call's compute, the
 // weight side a period's; ovl_w, the same with the weight side every call (the run of record's per-call weight coins);
 // ovl_pad, the filler's call (the pad and every coin a call); ovl_nomem, ovl with each leaf's bytes made in registers
-// (NoMemRow: the commit's compressions without its loads). Call c salts from c leaves. One JSON line a shape.
+// (NoMemRow: the commit's compressions without its loads). Call c salts from c leaves. One JSON line a shape. V31_OW=16:
+// O committed at 16 bits; a shape NAME:M:N:K:act, the gate-up call, forms A′ after its GEMM (in every call arm) and
+// commits it, and adds the act arm (A′ alone, from a call's D).
 static int cmd_fill_bench(int reps, const std::string& out, const std::string& pdir, int lp, int Lspec, int row,
                           const std::vector<std::string>& shapes) {
   gk::Nvml nv(0);
@@ -3321,15 +3619,20 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
   CK(cudaGetDeviceProperties(&prop, 0));
   std::mt19937_64 rng(std::random_device{}());
   const bool served = env_int("V31_SERVED", 0) != 0;
+  const int ow = env_int("V31_OW", 32);
   for (const auto& sh : shapes) {
     char name[64];
     int m, n, k;
-    if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) != 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
+    bool act;
+    if (!fill_shape(sh, name, m, n, k, act)) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
     const int L = Lspec > 0 ? Lspec : k;
-    const std::string pfile = pdir + "/" + fill_params_name(m, n, k, lp, L, row, served);
+    const std::string pfile = pdir + "/" + fill_params_name(m, n, k, lp, L, row, served, served ? ow : 32, act && served);
     Fill f;
     f.o = served;
+    f.ow = served ? ow : 32;
+    f.act = act && served;
     f.setup(m, n, k, lp, L, row, read_params(pfile), 0);
+    if (f.act) f.set_act(nullptr, nullptr, read_silu(pdir).data());
     int8_t* A = dalloc<int8_t>((size_t)m * k);
     int *D = dalloc<int>((size_t)m * n), *D2 = dalloc<int>((size_t)m * n);
     gen_kernel<<<m, 256, 0, f.s0>>>(A, k, (u32)rng(), true);
@@ -3399,6 +3702,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
              f.coins(s, false, false);
              f.form(s, A, false, 0);
              f.gemm(s, 0);
+             if (f.act) f.act_run(s, 0);
              f.set_ks(0, s);
              f.pl.salts(f.cm[0], f.kn.ccta, s, f.leaves);
              f.leaves_nodes(0, s);
@@ -3408,6 +3712,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
         {"ovl_w", [&](cudaStream_t s, int r) { ovl(s, r, A, true); }},
         {"ovl_nomem", [&](cudaStream_t s, int r) { f.nomem = true; ovl(s, r, A, false); f.nomem = false; }},
     };
+    if (f.act) arms.push_back({"act", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) f.act_run(s, 0); }});
     if (!served) {
       arms.push_back({"pad", [&](cudaStream_t s, int r) {
                         const u64 bp = (u64)m * k / 64;
@@ -3483,13 +3788,15 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
            "\"hall\": %d, \"hchunk\": %d, \"r5h\": %d, \"r5w\": %d, \"tst\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, "
            "\"fused_leaves\": %lld, "
-           "\"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
+           "\"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, \"ow\": %d, \"act\": %d, \"a_leaves\": %llu, "
+           "\"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
            f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk,
            f.kn.rp == 5 ? f.r5h : 0, f.r5w ? 1 : 0, f.tst ? 1 : 0, f.wgw ? 1 : 0,
-           f.kn.lminb, f.kn.sahead ? 1 : 0, fused, f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
+           f.kn.lminb, f.kn.sahead ? 1 : 0, fused, (unsigned long long)f.tiles * f.row_o, fused_blocks, nblk, f.o ? f.ow : 0,
+           f.I, (unsigned long long)f.m * f.apr);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     const double l = at("lt");
@@ -3547,11 +3854,12 @@ extern "C" {
 const char* v31_error() { return g_err.c_str(); }
 
 // A context for calls of m x n x k at noise period lp (L'), segments of L and leaf rows of row bytes, served calls (O
-// committed, T_S implied) or a filler's, committed under the CGP1 params file's domain and salted under its Ks
-// (v31lib.Prover writes it), on CUDA device dev. Null on failure.
-void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const char* params_path, int dev) {
+// committed at ow bits, T_S implied; act: a gate-up call's A′ committed too, its map's scalars and SiLU table from
+// v31_set_act) or a filler's, committed under the CGP1 params file's domain and salted under its Ks (v31lib.Prover writes
+// it), on CUDA device dev. Null on failure.
+void* v31_create(int m, int n, int k, int lp, int L, int row, int served, int ow, int act, const char* params_path, int dev) {
   if (foreign()) return nullptr;
-  const std::string bad = Fill::bad_shape(m, n, k, lp, L, row);
+  const std::string bad = Fill::bad_shape(m, n, k, lp, L, row, served != 0, ow, act != 0);
   if (!bad.empty()) { fail(bad); return nullptr; }
   if (g_dev >= 0 && dev != g_dev) { fail("one device a process: contexts are on device " + std::to_string(g_dev)); return nullptr; }
   if (g_live && row != g_row) { fail("one ROW a process: live contexts use " + std::to_string(g_row)); return nullptr; }
@@ -3572,6 +3880,8 @@ void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const 
   CK(cudaDeviceSynchronize());   // Committer::init rewrites C, which a running salt phase reads
   LibCtx* c = new LibCtx;
   c->f.o = served != 0;
+  c->f.ow = ow;
+  c->f.act = act != 0;
   c->f.setup(m, n, k, lp, L, row, read_params(params_path), dom, g_s0, g_s1);
   c->dom = dom;
   c->own_b = c->f.B;
@@ -3582,12 +3892,42 @@ void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const 
   return c;
 }
 
-// m n k lp L row S tiles lpt leaves depth calls W o, as u64 (W the committed prefix-sum segments: S - 1 served, S filler)
+// m n k lp L row S tiles lpt leaves depth calls W o ow I apr nbytes, as u64 (W the committed prefix-sum segments: S - 1
+// served, S filler; I A′'s cells a row, 0 without it)
 int v31_info(void* h, uint64_t* out) {
   V31_FILL(h);
-  const uint64_t v[14] = {(u64)f.m, (u64)f.n, (u64)f.k, (u64)f.lp, (u64)f.L, (u64)f.row, (u64)f.S, (u64)f.tiles, (u64)f.lpt,
-                          f.leaves, (u64)f.cm[0].depth, f.calls, (u64)f.Wn, (u64)f.o};
+  const uint64_t v[18] = {(u64)f.m, (u64)f.n, (u64)f.k, (u64)f.lp, (u64)f.L, (u64)f.row, (u64)f.S, (u64)f.tiles, (u64)f.lpt,
+                          f.leaves, (u64)f.cm[0].depth, f.calls, (u64)f.Wn, (u64)f.o, (u64)f.ow, (u64)f.I, (u64)f.apr,
+                          f.nbytes};
   memcpy(out, v, sizeof v);
+  return 0;
+}
+
+// A′'s map: s_a (m f32 words), s_w (n f32 words) and the SiLU table (65536 bf16 words), each from host memory or null
+// (unchanged; a context starts with s_a and s_w in [1, 2) / 127 and an all-zero table)
+int v31_set_act(void* h, const uint32_t* sa, const uint32_t* sw, const uint16_t* lut) {
+  V31_FILL(h);
+  if (!f.act) return fail("this context commits no A′");
+  f.set_act(sa, sw, lut);
+  return 0;
+}
+// Call c's A′ (m x I int8) and its rows' amax (m bf16 words), into host memory (either null: skipped)
+int v31_act(void* h, uint64_t c, int8_t* act, uint16_t* amax) {
+  V31_FILL(h);
+  if (!f.act) return fail("this context commits no A′");
+  const int b = f.ready(c);
+  if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
+  if (act) CK(cudaMemcpy(act, f.actb[b], (size_t)f.m * f.I, cudaMemcpyDeviceToHost));
+  if (amax) CK(cudaMemcpy(amax, f.amaxb[b], 2 * (size_t)f.m, cudaMemcpyDeviceToHost));
+  return 0;
+}
+// Call c's A′ on the device (m x I int8, valid until the call two after it is issued): a consumer's A, no copy
+int v31_act_ptr(void* h, uint64_t c, void** dev) {
+  V31_FILL(h);
+  if (!f.act) return fail("this context commits no A′");
+  const int b = f.ready(c);
+  if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
+  *dev = f.actb[b];
   return 0;
 }
 
@@ -3625,13 +3965,18 @@ int v31_load_a(void* h, const void* A, void** dev) {
 // pointer to m x k int8, ready on the caller's side; null: the pad, a filler's only). Returns at once with the call's index
 // in *call; the compute and commit run on the device. Waits first for call c - 2's commit, whose copy this call takes (its
 // values can't be opened after). cheat (testing): "none", "skip:TAU" (noise tile TAU of X zeroed), "forge:S0[:FRAC]" (T_S0
-// of every 1/FRAC-th tile overwritten; served, S0 0: O), "forgeO[:FRAC]" (forge:0) or "nodither" (d_A and d_B zero).
+// of every 1/FRAC-th tile overwritten; served, S0 0: O), "forgeO[:FRAC]" (forge:0), "nodither" (d_A and d_B zero), and
+// with A′ "forgeA[:FRAC]" (A′ of every 1/FRAC-th row overwritten) or "forgeH[:FRAC]" (A′ formed from O + 2^16 in every
+// 1/FRAC-th tile, O's committed low halves unchanged).
 int v31_prove(void* h, const uint8_t* seeds, uint64_t off, const void* a_dev, const char* cheat, uint64_t* call) {
   V31_FILL(h);
   const std::string cs = cheat ? cheat : "none";
-  if (cs != "none" && cs != "nodither" && cs.compare(0, 5, "skip:") && cs.compare(0, 6, "forge:") && cs.compare(0, 6, "forgeO"))
-    return fail("cheat " + cs + ": none | skip:TAU | forge:S0[:FRAC] | forgeO[:FRAC] | nodither");
+  if (cs != "none" && cs != "nodither" && cs.compare(0, 5, "skip:") && cs.compare(0, 6, "forge:") && cs.compare(0, 6, "forgeO") &&
+      cs.compare(0, 6, "forgeA") && cs.compare(0, 6, "forgeH"))
+    return fail("cheat " + cs + ": none | skip:TAU | forge:S0[:FRAC] | forgeO[:FRAC] | forgeA[:FRAC] | forgeH[:FRAC] | nodither");
   const Cheat ch = parse_cheat(cs);
+  if ((ch.kind == 5 || ch.kind == 6) && (!f.act || ch.frac <= 0)) return fail("forgeA, forgeH: a call that commits A′, FRAC > 0");
+  if (ch.kind == 6 && f.ow != 16) return fail("forgeH: O committed at 16 bits (at 32 the forged O is committed too)");
   if (ch.kind == 1 && (ch.tau < 0 || ch.tau >= f.NT)) return fail("skip: a noise tile 0 .. K / L' - 1");
   if (ch.kind == 2 && (ch.s0 < (f.o ? 0 : 1) || ch.s0 > f.Wn || ch.frac <= 0))
     return fail(f.o ? "forge: S0 in 0 (O) .. W, FRAC > 0" : "forge: S0 in 1 .. S, FRAC > 0");
@@ -3682,13 +4027,13 @@ int v31_open(void* h, uint64_t c, const uint64_t* pos, int np, uint8_t* rows, ui
   return 0;
 }
 
-// Testing: call c's committed values (leaves x row bytes, dither.values_buffer: per tile its W prefix-sum segments, then its O
-// rows when served), or the A operand its last call formed from (the pad, m x k bytes)
+// Testing: call c's committed values (nbytes, dither.values_buffer: per tile its W prefix-sum segments, then its O rows
+// when served; with A′, each tile-row's tiles then its 128 rows of A′)
 int v31_values(void* h, uint64_t c, uint8_t* out) {
   V31_FILL(h);
   const int b = f.ready(c);
   if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
-  CK(cudaMemcpy(out, f.values_of(b), (size_t)f.leaves * f.row, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(out, f.values_of(b), (size_t)f.nbytes, cudaMemcpyDeviceToHost));
   return 0;
 }
 // Call c's every tree level (leaves first, (2 width - 1) nodes of 8 native u64 words) into page-locked dst on the commit
