@@ -832,10 +832,10 @@ def select(j):
 
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its draw's
-    checked proof blocks. The population's strata are `partition.strata`'s, each unit a replay unit of one proof block, its
-    gates (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes
-    (`program.is_input`), each its own replay unit. A replay unit's slot is its index in that order, and the checked proof
-    blocks are `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
+    checked proof blocks. The population's strata are `partition.strata`'s, each unit a proof block, its gates
+    (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes (`program.is_input`),
+    each its own proof block. A proof block's slot is its index in that order, and the checked proof blocks are
+    `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
     out = select(j)
     j = _json(j)
     program = PROGRAMS[PO.program_sha512(j["program"])]
@@ -847,8 +847,8 @@ def slots(j):
               for g in range(body.offsets[k], body.offsets[k] + (node.n if node.form in ("batch", "scan") else 1) * node.fn.gates)]
     classes = [pop, [inputs] if inputs else []]
     proved = set(DR.proved(out["draw"]))
-    rus = [r for c in classes for s in c for r in s]
-    return {"checked": [[v, 0] for v, r in enumerate(rus) if r["unit"] is None or r["unit"] in proved], "classes": classes}
+    blocks = [b for c in classes for s in c for b in s]
+    return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
 
 
 def bound(j):
@@ -3031,7 +3031,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
-    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the replay units' gates and
+    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the proof blocks' gates and
     the input class's are every gate of the program once; and the checked proof blocks are the drawn units' slots and
     every input slot, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
@@ -3041,10 +3041,10 @@ def test_the_slots_follow_the_strata(pieces):
     out = slots(copy.deepcopy(case))
     assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
     assert [[r["unit"] for r in s] for s in out["classes"][0]] == [[0, 1, 5, 6, 7, 8], [2, 3, 4], [9]]
-    rus = [r for c in out["classes"] for s in c for r in s]
-    gates = sorted(g for r in rus for lo, hi in r["pus"] for g in range(lo, hi))
+    blocks = [b for c in out["classes"] for s in c for b in s]
+    gates = sorted(g for b in blocks for lo, hi in b["pus"] for g in range(lo, hi))
     assert gates == list(range(PROGRAMS[PO.program_sha512(desc)].circuit.size))
-    units = [r["unit"] for r in rus]
+    units = [b["unit"] for b in blocks]
     drawn = [units.index(u) for u in select(case)["draw"]["units"]]
     assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
 
