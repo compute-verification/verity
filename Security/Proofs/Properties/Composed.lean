@@ -68,25 +68,20 @@ theorem checkRegistered_check {id : String} {R : Protocol} {s : String} {cs : Li
     {ps : List Named} {b d : ByteArray} {k : Case} {ev : List Case} {pub prof : Keyed}
     (h : checkRegistered id R s cs (n, ps) (b, d) (k, ev) = .accept pub prof) :
     Core.Composition.check id cs ps b ev = .accept pub prof := by
-  first | unfold checkRegistered at h | simp only [checkRegistered] at h
+  unfold checkRegistered at h
   unfold Core.Composition.check
   split at h
-  · first | cases h | (dsimp only at h; cases h) | simp at h
-  split at h
-  · first | cases h | (dsimp only at h; cases h) | simp at h
-  split at h
-  · first | cases h | (dsimp only at h; cases h) | simp at h
-  split at h
-  · first | cases h | (dsimp only at h; cases h) | simp at h
-  split at h
-  · first | cases h | (dsimp only at h; cases h) | simp at h
-  split at h
-  · cases h
-  · rename_i answers hrun
-    rw [hrun]
-    split at h
-    · cases h
-    · exact h
+  rename_i h1 h2 h3
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj h1
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj h2
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj h3
+  repeat' (split at h)
+  all_goals first | (cases h; done) | skip
+  all_goals
+    rename_i answers hrun _
+    first
+    | (rw [hrun]; exact h)
+    | simp_all
 
 /-- **A registered composition with v2 among its components accepts only v2's case `Accepted`.** -/
 theorem registeredAccepted (id : String) (R : Protocol) (s : String) (cs0 : List BlobProtocol)
