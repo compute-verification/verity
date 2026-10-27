@@ -22,7 +22,9 @@ COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2` (CIR-107), a 
 
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
 
-COUNT += 3  # io_shell's `ScanSlots_v1`, `OutCollect_v1` and `SlotEntry_v1`, a line of its own so it merges with any other change to the count
+COUNT += 3  # io_shell's `ScanSlots_v2` (boolean_io_shell's), `OutCollect_v1` and `SlotEntry_v1`, a line of its own so it merges with any other change to the count
+
+COUNT -= 1  # io_shell's `SlotRow_v1`, which `ScanSlots_v2` gives the first position's slot in place of
 
 COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiLU five) and `torch_optim`'s 7
 
