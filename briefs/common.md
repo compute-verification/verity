@@ -59,3 +59,6 @@ Never merge origin/next into a branch: drive then treats the PR as carrying ever
 
 ## main moved (27 Oct, 18:25Z)
 main is at 69dcbb8d6c71 (#4928, #5075 too): many PRs landed (#5300, #5309 with the gate's wider reuse, and many that were only on next). Merge origin/main into your branch, never next, before your next records run; many conflicts with next go away.
+
+## Full tilt, and no moves (27 Oct, 20:10Z)
+Daniel is restructuring the repository himself today: no directory moves or renames until his restructure lands. Edits inside files go ahead. Dates moved in: F2 (every subprotocol proved and marked) Wed 06:00Z; F3 (Verity.Soundness, no subprotocol premise, marked) Wed 13:00Z. Don't wait idle on a run: write the next piece while it runs.
