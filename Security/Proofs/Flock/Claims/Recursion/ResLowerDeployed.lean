@@ -922,7 +922,8 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
   simp only [↓reduceIte] at hd'
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd'
   have hi : tags.isTmpl = false := by
-    obtain ⟨-, -, -, -, -, -, hfl | ⟨tu, -, -, htu⟩⟩ := FlockSoundness.Discharge.Hidden.parseCommit_untyped ht s.parse
+    obtain ⟨pre, c₀, -, -, -, -, hfl | ⟨tu, -, -, htu⟩⟩ :=
+      FlockSoundness.Discharge.Hidden.parseCommit_untyped ht s.parse
     · exact hfl.1
     · rw [hnt] at htu
       cases htu
@@ -1155,17 +1156,19 @@ theorem slotOut_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit
   have hb := div_lt_blocks_two hn2 hnbl
   subst hc0
   obtain ⟨S', ns', nv', -, hn⟩ := FlockVBridge.OfVStar.check_part_at P.recResiduals hres hshp hholo
+  have hnt := FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2
+  have hU := L.built_flat hnt
   have hin : ∀ j < (p.sts[0].c.unit.outGroups.getD 0 default).bits.size, ∀ t < 16,
       (p.sts[0].c.unit.outGroups.getD 0 default).col * Flock.WORD + 16 * j + t < 2 ^ p.sts[0].c.unit.unitLog := by
-    obtain ⟨hcol, hsz', -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid L.unit_built hn
-    have hcp : (FlockSoundness.Rows.ofNet L.unit_built).nIn + (FlockSoundness.Rows.ofNet L.unit_built).nComp =
-        p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one L.unit_built
-    have hfit := (FlockSoundness.built_fit L.unit_built).1
+    obtain ⟨hcol, hsz', -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid hU hn
+    have hcp : (FlockSoundness.Rows.ofNet hU).nIn + (FlockSoundness.Rows.ofNet hU).nComp =
+        p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one hU
+    have hfit := (FlockSoundness.built_fit hU).1
     intro j hj t ht
     rw [hsz'] at hj
     have := hlt (16 * j + t) (by omega)
     omega
-  exact slotOut_table ht' hh hd (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2) hv1 ho hin L regs hz1 (Array.findIdx?_eq_some_iff_getElem.1 hqo).1 hoout hb
+  exact slotOut_table ht' hh hd hnt hv1 ho hin L regs hz1 (Array.findIdx?_eq_some_iff_getElem.1 hqo).1 hoout hb
 
 /-- **Check 5's tie at one instance of a staged `rec-residuals` part**: `resTie_layR` with check 5's public rows from
 the statement's setup. The setup ran `RecCoins.check` at the part's table, so `checkResiduals` at its inner session
