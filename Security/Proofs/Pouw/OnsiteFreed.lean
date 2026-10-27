@@ -313,13 +313,13 @@ noncomputable def freeAnswer {I : Type} (f : TAlg I (Fin 1 → Word × Unit)) : 
 noncomputable def fitAnswers (A : Prover tw twRound 2) : Prover tw twRound 2 :=
   withPrograms A A.commit A.work fun b => freeAnswer (A.answer b)
 
-theorem fitAnswers_transcript (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDraw × Fin 2) :
-    (fitAnswers A).transcript o x = A.transcript o x :=
+theorem fitAnswers_transcript (A : Prover tw twRound 2) (o : twRound.Orc)
+    (x : Fin 2 → twRound.Draw × twRound.Chk) : (fitAnswers A).transcript o x = A.transcript o x :=
   withPrograms_transcript A (fc := A.commit) (fw := A.work) (fa := fun b => freeAnswer (A.answer b))
     (fun _ _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) o x
 
-theorem fitAnswers_timedUse (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDraw × Fin 2) :
-    (fitAnswers A).timedUse o x = A.timedUse o x :=
+theorem fitAnswers_timedUse (A : Prover tw twRound 2) (o : twRound.Orc)
+    (x : Fin 2 → twRound.Draw × twRound.Chk) : (fitAnswers A).timedUse o x = A.timedUse o x :=
   funext (withPrograms_timedUse A (fa := fun b => freeAnswer (A.answer b)) o x)
 
 theorem fitAnswers_dev (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDraw × Fin 2) :
