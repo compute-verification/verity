@@ -17,7 +17,7 @@ Two cross-checks, each of whose disagreements exits 1 before anything is written
 - with --replay PATH (the CMP-96 CPU replay, examples/h200/replay.py of #4460), every pool word is also computed by
   that file's references of circuits' templates (RmsSumSqPart_v1 ... ArgmaxCombine_v1, unit by unit as the replay reads
   them);
-- with `verity.ml.circuits.ops.rows` (CIR-104) installed, or its file given as --rows PATH, every argmax pool's tokens by
+- with `verity.ml.circuits.ops.rows` installed, or its file given as --rows PATH, every argmax pool's tokens by
   `rows.argmax` (Argmax_v1{V}) and the add pool by `rows.add_row` (Bf16AddRow_v1{N}).
 
   uv run python benchmarks/torch_gpu/units/fixture.py CHECK [--replay PATH] [--rows PATH] [--no-sweep]   (env PROCS,
@@ -379,7 +379,7 @@ ROWS = "verity.ml.circuits.ops.rows"
 
 
 def load_rows(path: str | None):
-    """`ops.rows` (CIR-104) and where it came from: the installed module, else the file at ``path`` loaded in its place in
+    """`ops.rows` and where it came from: the installed module, else the file at ``path`` loaded in its place in
     `verity.ml.circuits.ops` (its relative imports read main's fp32, prims and scalar), else (None, None)."""
     try:
         return importlib.import_module(ROWS), "installed"

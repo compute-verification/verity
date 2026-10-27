@@ -493,8 +493,7 @@ def _cell(name: str, values: Mapping[str, V], quiet: str | None = None, fmt=_fmt
 
 def serve_noise_line(values: Mapping[str, V], quiet: str | None = None) -> str:
     """Per-call noise's serving overhead as the seconds it adds a step, with both ratios (module docstring)."""
-    def c(n, fmt=_fmt):
-        return _cell(n, values, quiet, fmt)
+    c = lambda n, fmt=_fmt: _cell(n, values, quiet, fmt)
 
     def runs(name: str) -> str:
         v = values.get(name)
