@@ -530,9 +530,14 @@ theorem readAt_of {Ω : Type} {T : Trace Ω} {node : Node} {rec : Ω → Record}
   rw [← hNr]
   linarith
 
+/-- **The trace of record is over the registration's blocks**: `Registered` holds of it, with no premise. -/
+theorem registered_ofRecord {Ω : Type} (T : Trace Ω) (node : Node) (rec : Ω → Record) :
+    Registered (ofRecord T node rec) node := rfl
+
 /-- **The memory line of record, in bits read** (`LineHeld`), proved. -/
 theorem lineHeld : LineHeld := by
-  intro node κ X Cm _ prf rest recs correct com T R δs δnet r F O I hp hcov hk hC hI hL hR hCnt hN
+  intro node κ X Cm _ prf rest recs correct com T R δs δnet r F O I hp hcov hk hC hI hL hR hCnt
+  have hN := registered_ofRecord T node r
   have hH := holdsAnd (sketchBound_of_covered hk hC hI)
     (Draw.pooledDraw prf rest F com (ofRecord T node r) R (delta_nonneg node) receiptMax_lt hL hR hCnt)
   refine le_trans (Pouw.pr_mono fun ω hω => ⟨hω.1, fun h => hω.2 fun hq => ?_⟩) hH
@@ -612,11 +617,10 @@ theorem pr_held_le_read {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {r
       : ℚ) : ℝ) = node.rebuildBurst + node.diskBurst + Bl)
     (hsq : SquaringCeiling (ofRecord T node rec) node.squarings node.encode node.rebuildBurst)
     (hd : Disks (ofRecord T node rec) node.disk node.diskBurst) (hS : ChipCeiling (ofRecord T node rec) node.chipBlocks)
-    (hr : Routed (ofRecord T node rec)) (hp : Paced (ofRecord T node rec) (recordPace node rec))
-    (hN : Registered (ofRecord T node rec) node) (Q : Ω → Prop) :
+    (hr : Routed (ofRecord T node rec)) (hp : Paced (ofRecord T node rec) (recordPace node rec)) (Q : Ω → Prop) :
     Pouw.pr (fun ω => Verified node (rec ω) ∧ ¬ (Q ω → HeldAt (ofRecord T node rec) ω node (rec ω) i)) ≤
       Pouw.pr (fun ω => Verified node (rec ω) ∧ ¬ (Q ω → ReadAt (ofRecord T node rec) ω node (rec ω))) :=
   Pouw.pr_mono fun _ hω => ⟨hω.1, fun h => hω.2 fun hq =>
-    heldAt_of_read i hi hβl hl hcr hcb hsq hd hS hr hp hN hω.1 hω.1 (h hq)⟩
+    heldAt_of_read i hi hβl hl hcr hcb hsq hd hS hr hp (registered_ofRecord T node rec) hω.1 hω.1 (h hq)⟩
 
 end Properties.RemoteAudit.Line.SecurityProofs

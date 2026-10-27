@@ -95,7 +95,6 @@ def LineHeldAtComponent : Prop :=
     SketchBoundAt (ofRecord T node r) O δs → Covered (ofRecord T node r) O I →
     IngressCounted (ofRecord T node r) I δnet → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
-    Registered (ofRecord T node r) node →
     Pouw.pr (fun ω => Plays node (r ω) (a ω) (b ω) (e ω) ∧
         ¬ (Quiet (ofRecord T node r) I.counted ω → ReadAt (ofRecord T node r) ω node (r ω))) ≤
       δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
@@ -155,9 +154,9 @@ def paceBy {Ω : Type} (sum : Node → Record → Option RemoteAudit.Session.Sum
   released ω g := released (groupsBy sum node (rec ω)) node.windows g
   ended ω g := ended (groupsBy sum node (rec ω)) g
 
-/-- `ofRecord` at a verifier's verdict `ver`. -/
+/-- `ofRecord` at a verifier's verdict `ver`: the trace over the registration's blocks, accepting where `ver` does. -/
 def traceBy {Ω : Type} (T : Trace Ω) (node : Node) (ver : Node → Record → Prop) (rec : Ω → Record) : Trace Ω :=
-  { T with accepts := fun ω => ver node (rec ω) }
+  { overBlocks T node.blocks with accepts := fun ω => ver node (rec ω) }
 
 /-- **`LineHeld` at a verifier**: its node, trace, records, premises and bound verbatim, with `ver` for the verdict in
 the event and the trace (`Verified`) and `sum` for the record the line and its paced session read
@@ -174,7 +173,6 @@ def LineHeldBy (ver : Node → Record → Prop) (sum : Node → Record → Optio
     SketchBoundAt (traceBy T node ver r) O δs → Covered (traceBy T node ver r) O I →
     IngressCounted (traceBy T node ver r) I δnet → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
-    Registered (traceBy T node ver r) node →
     Pouw.pr (fun ω => ver node (r ω) ∧
         ¬ (Quiet (traceBy T node ver r) I.counted ω → ReadBy sum (traceBy T node ver r) ω node (r ω))) ≤
       δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
@@ -200,7 +198,6 @@ def LineHeldAtComponentBy (acc : Node → Record → ByteArray → ByteArray →
     SketchBoundAt (traceBy T node ver r) O δs → Covered (traceBy T node ver r) O I →
     IngressCounted (traceBy T node ver r) I δnet → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
-    Registered (traceBy T node ver r) node →
     Pouw.pr (fun ω => acc node (r ω) (a ω) (b ω) (e ω) ∧
         ¬ (Quiet (traceBy T node ver r) I.counted ω → ReadBy sum (traceBy T node ver r) ω node (r ω))) ≤
       δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +

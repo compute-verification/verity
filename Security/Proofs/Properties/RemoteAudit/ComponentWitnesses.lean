@@ -53,6 +53,26 @@ theorem lineHeld_iff : LineHeld ↔ LineHeldBy Verified Record.summary := Iff.rf
 
 /-! ## The premises at an honest node -/
 
+/-- A trace read over its own registered blocks is itself. -/
+theorem overBlocks_self {Ω : Type} (T : Trace Ω) : overBlocks T T.blocks = T := by
+  have h : ∀ s : Finset (Fin T.blocks),
+      (Finset.univ.filter fun j : Fin T.blocks => (j : ℕ) ∈ s.image Fin.val) = s := fun s => by
+    ext j
+    rw [Finset.mem_filter, Finset.mem_image]
+    exact ⟨fun ⟨_, a, ha, e⟩ => Fin.ext e ▸ ha, fun hj => ⟨Finset.mem_univ j, j, hj, rfl⟩⟩
+  unfold overBlocks
+  simp only [h]
+  all_goals rfl
+
+/-- The honest trace is over the node's registered blocks, so its trace of record is it with the Lean verifier's
+verdict. -/
+theorem ofRecord_honest {Ω : Type} (node : Node) (passes : ℕ) (tick : Ω → ℕ → ℕ) (rec : Ω → Record) :
+    ofRecord (honestTrace node passes tick) node rec =
+      { honestTrace node passes tick with accepts := fun ω => Verified node (rec ω) } := by
+  show { overBlocks (honestTrace node passes tick) (honestTrace node passes tick).blocks with
+      accepts := fun ω => Verified node (rec ω) } = _
+  rw [overBlocks_self]
+
 theorem covers_univ {Ω : Type} (T : Trace Ω) (h : ∀ ω p, T.plan ω p = univ) : Covers T := fun ω _ p _ => h ω p
 
 theorem covered_noOutside {Ω : Type} (T : Trace Ω) (I : Ingress Ω) : Covered T (noOutside T) I :=
@@ -114,9 +134,9 @@ the prover's whose schedule is honest (`HonestSchedule`), the honest trace (`hon
 memory at every tick, nothing on a chip, rebuilt or read in, every receipt correct), no outside device (`noOutside`),
 nothing but the verifier's messages entering it as its certifiers count (`quietIngress`), correct receipts holding
 every receipt a draw can have and the sampler's fallbacks 0, every premise holds: `Paced` at the record's groups,
-`Covers`, `SketchBoundAt` at 0, `Covered`, `IngressCounted` at 0, the draw's `Live` at every commitment, `Refused`,
-`Counted` and `Registered`; and the bound's terms the prover could raise are 0: each draw's distinguisher has no
-advantage on its coin function and each hiding term is 0. -/
+`Covers`, `SketchBoundAt` at 0, `Covered`, `IngressCounted` at 0, the draw's `Live` at every commitment, `Refused`
+and `Counted`; and the bound's terms the prover could raise are 0: each draw's distinguisher has no advantage on its
+coin function and each hiding term is 0. -/
 theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
     (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax) (recs : Cm → Coins node.draws κ X → Record)
     (com : Coins node.draws κ X → Cm) (R : Receipts node.draws κ X) (passes : ℕ)
@@ -133,12 +153,12 @@ theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Finty
       (ofRecord (honestTrace node passes tick) node (played recs com)) R ∧
     Counted ((recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play com)
       (ofRecord (honestTrace node passes tick) node (played recs com)) ∧
-    Registered (ofRecord (honestTrace node passes tick) node (played recs com)) node ∧
     (∀ t, Pous.StreamedWipe.prfAdvantage (prf t)
       (((recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play
         (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t) = 0) ∧
     ∀ t, (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).hide com prf (node.delta : ℝ) t = 0 := by
   obtain ⟨hW, htick, hsize, hgs⟩ := hS
+  rw [ofRecord_honest]
   have hc : ∀ D : Session node.draws receiptMax (fun _ => node.params.samples) κ X,
       (∀ t ω, D.correct t ω = Finset.range (receiptMax + 1)) → ∀ t ω, range (D.size t ω : ℕ) ⊆ D.correct t ω :=
     fun D h t ω => by
@@ -147,7 +167,7 @@ theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Finty
   refine ⟨?_, covers_univ _ fun _ _ => rfl,
     sketch_zero _ _ fun ω p _ => ⟨tick ω p, le_refl _, htick ω p, Finset.union_empty _⟩, covered_noOutside _ _,
     ingressCounted_quiet _, fun c t ω ω' _ _ => ⟨Fin.ext (congrArg (min · receiptMax) (hsize c c ω ω' t)), rfl⟩,
-    refused_honest _ (hc _ fun _ _ => rfl) prf _ R, counted_of _ _ fun _ _ => Finset.Subset.refl _, rfl,
+    refused_honest _ (hc _ fun _ _ => rfl) prf _ R, counted_of _ _ fun _ _ => Finset.Subset.refl _,
     fun t => Accounting.SecurityProofs.Remote.Draw.prfAdvantage_honest _ (hc _ fun _ _ => rfl) prf _ t,
     fun t => ?_⟩
   · intro ω hv
@@ -216,6 +236,7 @@ theorem lineHeld_honest (node : Node) {Ω : Type} (passes : ℕ) (tick : Ω → 
   obtain ⟨sm, gs, ws, -, -, -, hln⟩ := Properties.RemoteAudit.Line.SecurityProofs.lineOf_ok hline
   have hw : (0 : ℝ) ≤ l.wrong := by exact_mod_cast (lineChecked _ _ _ _ _ _ _ _ _ _ hln).2.2.2.2.2.2.2.2
   have hr : ∀ P, (ofRecord (honestTrace node passes tick) node rec).reads ω P = P * node.blocks := fun P => by
+    rw [ofRecord_honest]
     unfold Trace.reads
     rw [Finset.sum_const_nat fun p _ => read_full _ ω p rfl rfl (htick ω p) (Finset.union_empty _),
       Finset.card_range]
@@ -250,10 +271,10 @@ theorem verified_of_not_readBy {Ω : Type} {T : Trace Ω} {ω : Ω} {node : Node
 /-- **The bound holds at any acceptance in the event**: at the deployed verdict and record, whatever `acc` is. -/
 theorem lineHeldAtComponentBy_record (acc : Node → Record → ByteArray → ByteArray → ByteArray → Prop) :
     LineHeldAtComponentBy acc Verified Record.summary := by
-  intro node κ X Cm _ prf rest recs correct com T R δs δnet a b e r F O I hP hCv hSk hCov hIc hLive hRef hCnt hReg
+  intro node κ X Cm _ prf rest recs correct com T R δs δnet a b e r F O I hP hCv hSk hCov hIc hLive hRef hCnt
   exact le_trans (Pouw.pr_mono fun ω h => ⟨verified_of_not_readBy h.2, h.2⟩)
     (Properties.RemoteAudit.Line.SecurityProofs.lineHeld node κ X Cm prf rest recs correct com T R δs δnet O I hP hCv
-      hSk hCov hIc hLive hRef hCnt hReg)
+      hSk hCov hIc hLive hRef hCnt)
 
 /-! ## A verifier that accepts everything -/
 
@@ -461,8 +482,28 @@ theorem toy_reads {Ω : Type} (ω : Ω) : (Toy.trace (Ω := Ω)).reads ω 4 = 1 
     omega
   simp [Trace.reads, Finset.sum_range_succ, h0, hp 1 le_rfl, hp 2 (by norm_num), hp 3 (by norm_num)]
 
+/-- The toy trace is over the toy node's one registered block, so at any verdict its trace of record is it with that
+verdict. -/
+theorem traceBy_toy {Ω : Type} (ver : Node → Record → Prop) :
+    traceBy (Toy.trace (Ω := Ω)) Toy.node ver (fun _ => Toy.rec) =
+      { Toy.trace (Ω := Ω) with accepts := fun _ => ver Toy.node Toy.rec } := by
+  show { overBlocks (Toy.trace (Ω := Ω)) (Toy.trace (Ω := Ω)).blocks with
+      accepts := fun _ => ver Toy.node Toy.rec } = _
+  rw [overBlocks_self]
+
+theorem toy_covers {Ω : Type} (ver : Node → Record → Prop) :
+    Covers (traceBy (Toy.trace (Ω := Ω)) Toy.node ver fun _ => Toy.rec) := by
+  rw [traceBy_toy]
+  exact covers_univ _ fun _ _ => rfl
+
+theorem toy_reads_by {Ω : Type} (ver : Node → Record → Prop) (ω : Ω) :
+    (traceBy (Toy.trace (Ω := Ω)) Toy.node ver fun _ => Toy.rec).reads ω 4 ≤ 3 := by
+  rw [traceBy_toy]
+  exact (toy_reads ω).trans_le (by norm_num)
+
 theorem toy_paced {Ω : Type} (ver : Node → Record → Prop) :
     Paced (traceBy (Toy.trace (Ω := Ω)) Toy.node ver fun _ => Toy.rec) (paceBy Toy.sum Toy.node fun _ => Toy.rec) := by
+  rw [traceBy_toy]
   intro ω _
   refine ⟨fun a b hab => ?_, ?_, ?_, fun g hg => ?_, fun a b _ => ?_, fun g hg => ?_, fun g hg p h1 h2 => ?_⟩
   · show (if a = 0 then 0 else 10) ≤ (if b = 0 then 0 else 10)
@@ -499,8 +540,10 @@ theorem toy_paced {Ω : Type} (ver : Node → Record → Prop) :
 
 theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
     (O : Outside (traceBy (Toy.trace (Ω := Ω)) Toy.node ver fun _ => Toy.rec)) :
-    SketchBoundAt (traceBy (Toy.trace (Ω := Ω)) Toy.node ver fun _ => Toy.rec) O 0 :=
-  sketch_zero _ O fun _ p hp => by
+    SketchBoundAt (traceBy (Toy.trace (Ω := Ω)) Toy.node ver fun _ => Toy.rec) O 0 := by
+  revert O
+  rw [traceBy_toy]
+  exact fun O => sketch_zero _ O fun _ p hp => by
     change p < 1 at hp
     obtain rfl : p = 0 := by omega
     refine ⟨0, ?_, ?_, ?_⟩
@@ -533,12 +576,12 @@ theorem lineHeld_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
   refine ⟨Toy.sm, fun h => ?_⟩
   have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
     (fun _ _ _ => ∅) (fun _ => ()) Toy.trace Toy.receipts 0 0 (noOutside _) (quietIngress _) (toy_paced _)
-    (covers_univ _ fun _ _ => rfl) (toy_sketch _ _) (covered_noOutside _ _) (ingressCounted_quiet _)
-    (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _) rfl
+    (toy_covers _) (toy_sketch _ _) (covered_noOutside _ _) (ingressCounted_quiet _)
+    (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t) (counted_of _ _ fun _ _ => Finset.Subset.refl _)
   refine absurd hb (not_le.2 ?_)
   rw [Pouw.pr_eq_one]
   · norm_num [binding_empty, toy_delta]
-  · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω ((toy_reads ω).trans_le (by norm_num)) (hq fun _ _ _ _ _ => rfl)⟩
+  · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω (toy_reads_by _ ω) (hq fun _ _ _ _ _ => rfl)⟩
 
 /-- **`LineHeldAtComponent` fails at a verifier that accepts everything.** With an acceptance and a verdict that hold
 of every record and one summary recorded for every record, the toy node meets every premise at `δs = δnet = 0`, while
@@ -549,13 +592,13 @@ theorem lineHeldAtComponent_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
   refine ⟨Toy.sm, fun h => ?_⟩
   have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
     (fun _ _ _ => ∅) (fun _ => ()) Toy.trace Toy.receipts 0 0 (fun _ => .empty) (fun _ => .empty) (fun _ => .empty)
-    (noOutside _) (quietIngress _) (toy_paced _) (covers_univ _ fun _ _ => rfl) (toy_sketch _ _)
+    (noOutside _) (quietIngress _) (toy_paced _) (toy_covers _) (toy_sketch _ _)
     (covered_noOutside _ _) (ingressCounted_quiet _) (fun _ t => isEmptyElim t) (fun _ _ t => isEmptyElim t)
-    (counted_of _ _ fun _ _ => Finset.Subset.refl _) rfl
+    (counted_of _ _ fun _ _ => Finset.Subset.refl _)
   refine absurd hb (not_le.2 ?_)
   rw [Pouw.pr_eq_one]
   · norm_num [binding_empty, toy_delta]
-  · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω ((toy_reads ω).trans_le (by norm_num)) (hq fun _ _ _ _ _ => rfl)⟩
+  · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω (toy_reads_by _ ω) (hq fun _ _ _ _ _ => rfl)⟩
 
 /-- **The line credits only what the passes read**: on one node, record and summary, the line's bits-read claim holds
 of a trace whose four passes each read the store in node memory, and fails of the same trace with node memory emptied
