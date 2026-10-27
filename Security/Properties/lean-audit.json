@@ -1917,29 +1917,23 @@
     "                      (Properties.RemoteAudit.Component.honestTrace node passes tick) node",
     "                      (Properties.RemoteAudit.Line.played recs com)))",
     "                  (And",
-    "                    (Properties.RemoteAudit.Line.Registered",
-    "                      (Properties.RemoteAudit.Line.ofRecord",
-    "                        (Properties.RemoteAudit.Component.honestTrace node passes tick) node",
-    "                        (Properties.RemoteAudit.Line.played recs com))",
-    "                      node)",
-    "                    (And",
-    "                      (∀ (t : Fin node.draws),",
-    "                        Eq",
-    "                          (Pous.StreamedWipe.prfAdvantage (prf t)",
-    "                            (((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
-    "                                      Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
-    "                                  (Accounting.Remote.Draw.Committed.junk com t)).distinguisher",
-    "                              prf node.delta.cast t))",
-    "                          0)",
-    "                      (∀ (t : Fin node.draws),",
-    "                        Eq",
-    "                          ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
-    "                                Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).hide",
-    "                            com prf node.delta.cast t)",
-    "                          0))))))))))"
+    "                    (∀ (t : Fin node.draws),",
+    "                      Eq",
+    "                        (Pous.StreamedWipe.prfAdvantage (prf t)",
+    "                          (((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                                    Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "                                (Accounting.Remote.Draw.Committed.junk com t)).distinguisher",
+    "                            prf node.delta.cast t))",
+    "                        0)",
+    "                    (∀ (t : Fin node.draws),",
+    "                      Eq",
+    "                        ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                              Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).hide",
+    "                          com prf node.delta.cast t)",
+    "                        0)))))))))"
    ],
    "assumptions": [],
-   "type_hash": "dc27343751cea2cbfd3d30dd188636caee2cf4d368c21cc2376bfb9fab30c951"
+   "type_hash": "e5a75a3f1a0d00b71e9da0ad0d8f08d2ed530546c88adea262984d818a034e22"
   },
   "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial": {
    "owner": "@memory-accounting",
@@ -10886,14 +10880,14 @@
    ]
   },
   "Properties.RemoteAudit.Component": {
-   "digest": "57e357388916df5a371203be26686c8ce046ea563321e57d68f9529aaee9113f",
+   "digest": "e0534fec93eaf967b4c80256eda85bcaca65217f5a94f01728e2d76118a33304",
    "definitions": {
     "Properties.RemoteAudit.Component.AcceptIsVerified": "3d8cf07c5d4048e1fa199d06cf8967e8ffa7cee6ba894cb8399930f9253272c9",
     "Properties.RemoteAudit.Component.AcceptIsVerifiedFor": "48f18dab159c590a6c1e9617c6ffe7cacfc12b9ebcbddfccd8143ed6ff740bd3",
     "Properties.RemoteAudit.Component.HonestSchedule": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9",
-    "Properties.RemoteAudit.Component.LineHeldAtComponent": "dd6af9c8335512f9d64b4872c47e85a59d46a9df9125c66ab3726541bdc2de5c",
-    "Properties.RemoteAudit.Component.LineHeldAtComponentBy": "2adfeacf25f29d8ab4afd2d306c4c9dbc38dc3b70e310545ce468840d0828c4b",
-    "Properties.RemoteAudit.Component.LineHeldBy": "54c099abf52fd97d2ec688c500a24a50f9549cf95c78ead09af72e389e125d74",
+    "Properties.RemoteAudit.Component.LineHeldAtComponent": "6030763bf5f882f670fe7aa25c2bfe2839752285b84c2cc0e91ac64ea1f10b18",
+    "Properties.RemoteAudit.Component.LineHeldAtComponentBy": "b787de9594f2438bfb8a8b8eeece95c46595914eb759fa6d306f0282914c8b1d",
+    "Properties.RemoteAudit.Component.LineHeldBy": "af78dddf146ca9aaa29991c7fcbffd6d0d5a85e8716ffc556514476d0c881f99",
     "Properties.RemoteAudit.Component.Plays": "ee66d2cde65b5574f859694c368778d0d4024f07f62797dc30790d8884c50206",
     "Properties.RemoteAudit.Component.ReadBy": "a69f62343d85088d345e2a4f852bc7bbbc1b912bfddf15b52a3cf5fdc5872924",
     "Properties.RemoteAudit.Component.groupsBy": "c422573c8504cb5d96410147effa3b08d13b6cf1fe738820e95d196be6ac3aed",
@@ -10904,7 +10898,7 @@
     "Properties.RemoteAudit.Component.noOutside": "f8d878bb2ce8ec8ab5cb844f5020baa0e4ceaf5495459af75d66c57ea328802e",
     "Properties.RemoteAudit.Component.paceBy": "31dce4163cfcff95c96f914a302db8e5d9c31d30fb40c5ab6ce9e37712433aad",
     "Properties.RemoteAudit.Component.quietIngress": "a590d1aa2c72d01771c1d03a9c3d3a3556b0fa395968ae545b552b485ab91aff",
-    "Properties.RemoteAudit.Component.traceBy": "1c49d7ee287ca50628f2de14d27642d2998974c81ea25ce47866a0f341a70377"
+    "Properties.RemoteAudit.Component.traceBy": "4fc13f9a75ccbf7219be2a663d477537e0c260852796eea5be7a775317c53e23"
    },
    "guarantees": [
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
@@ -10919,10 +10913,10 @@
    ]
   },
   "Properties.RemoteAudit.Line": {
-   "digest": "259e0f707004424d489eb89a4fddccca488e1db39784b345edc0be86df46c9ab",
+   "digest": "c625d3ffaacedd4c9f41fe44510e52935ab52be8fb9d6097d971ef1ddf2cccf2",
    "definitions": {
     "Properties.RemoteAudit.Line.LineChecked": "1c5505e0b300c71854bafd0ede4feac0aea5016477e28030deb3bc4f7989742a",
-    "Properties.RemoteAudit.Line.LineHeld": "3091d92cc729015b9bcdc1c82adc7e41fc24adc55736a885a443c9ef423c7b34",
+    "Properties.RemoteAudit.Line.LineHeld": "bb007d8cddb4727763aa9f4bbfff0b02dde4bff25f4f624d9f90dcacf135f4f2",
     "Properties.RemoteAudit.Line.LineRegistered": "0a19ed5ecb3e46cc1cdec14b2943b045ca768feddbd06f60a7b96dc1543f79fc",
     "Properties.RemoteAudit.Line.ReadAt": "4535720ca195dedf2c277f34ef9e6921ca5e4695a704dd34b41dc4074c2a4b7a",
     "Properties.RemoteAudit.Line.StretchBound": "81d15d41252aa8d919aeb78bacb4b616b3eadb2ce5f86146d0fad010ac89cc97"
