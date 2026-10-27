@@ -10,15 +10,15 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, PoUS, the remote bandwidth audit and the network certifier, each a
-    Python verifier until its Lean (its `lean/`) is its verifier of record; NCI is Lean only. `claims`
-    holds the security claims' ids, `service/flock/` C-Flock's Lean verifier of record and the ZK server
+    package per protocol: sampled proofs, PoUW, PoUS, the remote bandwidth audit and the network
+    certifier, each a Python verifier until its Lean verifier (its `lean/`) replaces it; NCI is Lean only. `claims`
+    holds the security claims' ids, `service/flock/` C-Flock's Lean verifier and the ZK server
     (`Flock.Firewall`), `service/firewall/` the ZK server's release side, and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
     (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof system,
-    with its verifier's specification in `verifier/`). Until each protocol's verifier of record is Lean, the units its
+    with its verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its
     Python verifier reads are on the soundness path: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`,
     `ml.kernels`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which only shrinks). The rest
     can't affect soundness.
@@ -36,7 +36,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill).
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
-`verity.ml` code; until its protocol's verifier of record is Lean, a Python verifier keeps only the edges into `verity.ml`
+`verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
 that `CORE_ML_EDGES` lists. `verity.ml` never imports `verity.core` (`ML_IMPORTS_CORE` names the exceptions).
 Inside `verity` each unit imports only what `ALLOWED` lists, and `verity` imports no other distribution of the workspace.
 Nothing outside `infra/` imports it (`INFRA_IMPORTERS`), and nothing under `verity/` imports an integration (`KNOWN` in
@@ -85,7 +85,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   sessions: each staged statement is fixed before any session draws coins and gets exactly one session, with its own live
   coins in its own firewall pass; no statement reads another session's transcript or coins; every session is recorded and
   every verdict counts (provisional).
-- **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier of record works in
+- **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
   (`NciCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
@@ -97,7 +97,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
   and later from a separate physical calibration.
-- **Lean is the definition and the verifier of record.** Python in `verity.ml` mirrors it for the prover's
+- **Lean is the definition and the verifier.** Python in `verity.ml` mirrors it for the prover's
   speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
   Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
 - **Soundness and zero knowledge in Lean; completeness may be Python.** What a guarantee says about a cheating
