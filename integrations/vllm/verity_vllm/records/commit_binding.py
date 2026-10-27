@@ -138,7 +138,7 @@ class MatchAccountLink:
     lag_attested: bool
     problems: tuple[str, ...]
     match_dir: str | None                             # no Match record beside the Commit (a config run)
-    tokens_json: MatchTokensLeg | None                # the leg isn't beside the Commit
+    tokens_json: MatchTokensLeg | None                # no Match `capture/tokens.json` beside the Commit
     global_match: GlobalMatchLeg | None               # likewise
 
     @classmethod
