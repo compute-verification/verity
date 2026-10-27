@@ -6289,6 +6289,9 @@
    "assumptions": [],
    "type_hash": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b"
   },
+  "Flock.SecurityProofs.SampledKSLiveV5": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.SamplingClaimsStated : Flock.Guarantees.SamplingClaimsStated"],
@@ -12246,6 +12249,7 @@
    "Accounting.SecurityProofs.Gates.EncodeChainRefuted": "frozen (no-function): A counterexample to the named conjecture EncodeChainHardness, a circuit of the gate model with no budgeted gate that computes more words of the codec than its units allow, inside the conjecture's floor at every field of whole bytes with room for them, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs, proved by V2's assembly at keyProgP; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each unit's public input bits), under RecordCustodyZKJP, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServed": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Nci.SecurityProofs.DampenerRemotePeriodStated": "frozen (no-function): It states no property: it reads Nci.Guarantees.DampenerRemotePeriod, so the lock records its text, and it leaves when DampenerRemotePeriod's own theorem is proved and listed.",
