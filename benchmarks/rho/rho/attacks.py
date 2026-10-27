@@ -22,6 +22,7 @@ from typing import Literal
 from rho.classes import (
     E1,
     FINDINGS,
+    HELD,
     Allowance,
     Argument,
     FlopBudget,
@@ -144,6 +145,42 @@ class Tile:
         return lambda budget: tile(budget.inputs, *values) * scale
 
 
+def held_layers(k: float, layer_bits: float, products: float, entry: float, gradient: float, per_param: float,
+                step_tokens: float, layers: int) -> float:
+    """The most counted products one block finishes holding `n` contiguous layers' updates (`n · layer_bits`) and
+    receiving, for each of at most a step's tokens (which share the weights it holds), the token's entry and its exit
+    gradient: `max_n c n P min((k − n · layer_bits) / (entry + gradient), T_step)`, with `P` a layer's forward products a
+    token and `c` the counted products a weight a token."""
+    best = 0.0
+    for n in range(1, layers + 1):
+        room = k - n * layer_bits
+        if room <= 0:
+            break
+        best = max(best, per_param * n * products * min(room / (entry + gradient), step_tokens))
+    return best
+
+
+@dataclass(frozen=True)
+class HeldLayers:
+    """Every block holds whole layers (`held_layers`): it computes their activations from each token's entry (`β_x d`
+    bits, the replay-consistent coder's rate) and their forward and Dgrad products, Dgrad from the token's exit gradient
+    (`β_g d` bits), with the layers' updates at `layer_bits` (`b_w` a parameter, `Shard`'s convention). It is what
+    breaks `ActivationRate` at the serving block (`HELD`). Its count is the held layers' own products, not converted:
+    Dgrad needs the exit gradient, so it doesn't run at the forward's rate, and the first layers' cheaper blocks aren't
+    credited."""
+
+    name: str = "held-layers"
+    side: Literal["bound", "attack"] = "attack"
+    cites: tuple[str, ...] = (HELD,)
+
+    def allowance(self, p: Profile) -> Allowance:
+        lb, kf, fpt, layers, bx, bg, d, c, steps = need(
+            p, "layer_bits", "kappa_forward", "flops_per_token", "layers", "beta_x", "beta_g", "residual_width",
+            "per_param", "step_tokens")
+        products = kf * fpt / (2 * layers)
+        return lambda budget: held_layers(budget.inputs, lb, products, bx * d, bg * d, c, steps, layers)
+
+
 @dataclass(frozen=True)
 class Point:
     """A measured execution's block: `bits` novel bits and `flops` FLOPs (`None`: any compute), which did the
@@ -188,7 +225,7 @@ C1 = ("draft:C1-cheapest-execution", "art:b63ecfa5ae31d7f33979db8cc5d955113f9d7f
 PHI = 6.7e9
 
 ATTACKS: Mapping[str, Argument] = {a.name: a for a in (
-    Comply(), StateFits(), Shard(), Tile(),
+    Comply(), StateFits(), Shard(), Tile(), HeldLayers(),
     Measured("measured-full", ("full",), (Point(2e7, PHI * 2e7, 6.8e5), Point(8e6, PHI * 8e6, 1.25e6)), C1),
     Measured("measured-frozen-prefix", ("frozen-prefix",),
              (Point(2e7, PHI * 2e7, 4.9e5), Point(8e6, PHI * 8e6, 1.22e6)), C1),

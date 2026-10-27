@@ -117,8 +117,22 @@ credible_bits = { value = inf, unit = "bit", source = "Nci.Guarantees.ReferenceT
 lean = "draft:E1-activation-rate"
 standing = "assumed"
 beyond = "contested"
-evidence = ["art:ff2237e531a9", "note:training-20261024T2310Z-draft-tvi-e1-sections", "note:training-20261024T2336Z-report-tvi-findings"]
-credible_bits = { value = 1.1e9, unit = "bit", source = "E1 P0: past one step's data a block replays the step and with it the activations; the cheap-input prefix below is classes.expensive_share", status = "derived" }
+evidence = ["art:ff2237e531a9", "note:training-20261024T2310Z-draft-tvi-e1-sections", "note:training-20261024T2336Z-report-tvi-findings", "note:training-20261027T0600Z-finding-activation-rate-serving"]
+credible_bits = { value = 1.1e9, unit = "bit", source = "E1 P0: past one step's data a block replays the step and with it the activations; the cheap-input prefix below is classes.expensive_share; past one layer's update a block holding whole layers computes their activations from its entries (attacks.HeldLayers), so the classes citing it give no cap there (classes.unheld_share)", status = "derived" }
+
+[premise.held-rate]
+lean = "Nci.Ldl.Assumptions.HeldRate"
+standing = "assumed"
+beyond = "contested"
+evidence = ["note:training-20261027T0600Z-finding-activation-rate-serving"]
+credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: its held-weight side is UpdateHardness's b, which one step's data replays from the registered weights (E1 P0); its entry side is beta_x d, premise.e1-activation-rate's price of a token's crossing, which no construction has undercut", status = "derived" }
+
+[premise.evaluates-blocks]
+lean = "Nci.Ldl.Assumptions.EvaluatesBlocks"
+standing = "supported"
+beyond = "supported"
+evidence = []
+credible_bits = { value = inf, unit = "bit", source = "Nci.Ldl.Assumptions.EvaluatesBlocks: a capability of the decoder the bound fixes (it evaluates a block from its index and unregistered input bits), not a property of the data", status = "derived" }
 
 [premise.e1-h-gamma]
 lean = "draft:E1-H-gamma"

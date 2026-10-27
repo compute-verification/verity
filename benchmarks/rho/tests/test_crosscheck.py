@@ -30,6 +30,10 @@ computed. What is matched, and what each side does differently:
 * **The whole update.** Once a window's K holds every layer's update at 2.5 bits a parameter both drop the physical
   bound: rho when x reaches 1, at K ≥ (L − 1) layer_bits = 3.93e12, mine at K ≥ 2.5 n_total = 4e12. NVL72's window
   (8.3e12) is past both, so onsite NVL72 is the remote cut in both.
+* **One layer's update.** rho drops fan's bound sooner, once K holds one layer's update (6.4e10 at 2.5 bits a
+  parameter): a block holding whole layers computes their activations from its entries, so E1's activation rate is false
+  there (`classes.unheld_share`, the held-layers attack). Mine still prices the H200 window (3,545), so rho's onsite
+  H200 fan is the remote cut, and the window's formula is compared with the activation rate held as mine holds it.
 * **I_cert.** rho's certified ingress is `intake` α Φ with α = k/Γ, the declared intake at full use; mine is the
   location's share of the committed requests' input tokens at σ = 1, Φ/φ_F. They agree at matched Γ. At rho's own policy
   α Φ is 20/17 of mine, since the session's 2e7 bits over 1M tokens are 20 bits a token. rho also adds the certifier's
@@ -47,10 +51,12 @@ computed. What is matched, and what each side does differently:
 """
 
 import math
+from dataclasses import replace
 
 import pytest
+from rho import classes
 from rho.params import Registry
-from rho.scenario import Result, build, evaluate, evaluate_named
+from rho.scenario import Result, Scenario, build, evaluate, evaluate_named
 
 #: FLOP an inference block does per novel bit: 2 N_active per 17-bit token
 PHI_F = 2 * 49e9 / 17
@@ -108,6 +114,13 @@ def cheap(k: float, layer_bits: float, layers: int) -> float:
     return min(1.0, (math.floor(k / layer_bits) + 1) / layers)
 
 
+def activation_rate_held(s: Scenario) -> Scenario:
+    """`s` with fan's bound under E1's activation rate past one layer's update, as mine takes it: `expensive_share` in
+    place of `unheld_share`."""
+    fan = replace(classes.CLASSES["fanout-priced"], share=classes.expensive_share)
+    return replace(s, bounds=tuple(fan if b.name == fan.name else b for b in s.bounds))
+
+
 @pytest.mark.parametrize("fleet", ["h200", "nvl72"])
 @pytest.mark.parametrize(("argument", "family", "mine"), [
     ("fanout-priced", {}, MINE["remote fan"]),
@@ -122,9 +135,9 @@ def test_remote_at_no_residual_matches_mine(fleet, argument, family, mine):
 
 
 def test_onsite_h200_fanout_priced_is_mine_but_for_whole_layers():
-    """The window binds: 1/g = κ_forward C (1 − x) β_x / (2 aOut K), mine's form. Its compute and inputs (R = 5 GB a GPU,
-    I_cert at σ = 1, 1 kb/s of side channels) are mine within 0.1%, and with rho's whole-layer x in place of my
-    continuous one (0.1475 against 0.1393, 0.95%) so is 1/g."""
+    """With the activation rate held, the window binds: 1/g = κ_forward C (1 − x) β_x / (2 aOut K), mine's form. Its
+    compute and inputs (R = 5 GB a GPU, I_cert at σ = 1, 1 kb/s of side channels) are mine within 0.1%, and with rho's
+    whole-layer x in place of my continuous one (0.1475 against 0.1393, 0.95%) so is 1/g."""
     s = build(matched("world-h200", onsite=True), "reference-onsite-h200")
     budget = s.regime.budget(s.context)
     assert math.isclose(s.context.units.flops(budget.gates), MINE["C h200"], rel_tol=1e-3)
@@ -132,8 +145,16 @@ def test_onsite_h200_fanout_priced_is_mine_but_for_whole_layers():
     p = s.families[0].profile(s.model, s.run)
     x = cheap(budget.inputs, p.layer_bits, p.layers)
     assert math.isclose(x, (math.floor(MINE["x h200"] * p.layers) + 1) / p.layers)
-    rho = inverse_g(evaluate(s), "fanout-priced")
+    rho = inverse_g(evaluate(activation_rate_held(s)), "fanout-priced")
     assert math.isclose(rho * (1 - MINE["x h200"]) / (1 - x), MINE["onsite fan h200"], rel_tol=1e-3)
+
+
+def test_onsite_h200_fanout_priced_is_the_remote_cut_once_a_layer_fits():
+    """The H200 window holds a layer's update, so rho gives fan no cap there and onsite H200 is the remote cut."""
+    s = build(matched("world-h200", onsite=True), "reference-onsite-h200")
+    p = s.families[0].profile(s.model, s.run)
+    assert s.regime.budget(s.context).inputs > p.layer_bits
+    assert math.isclose(inverse_g(evaluate(s), "fanout-priced"), MINE["remote fan"], rel_tol=1e-3)
 
 
 def test_onsite_h200_threaded_is_the_remote_cut():
@@ -144,10 +165,10 @@ def test_onsite_h200_threaded_is_the_remote_cut():
 
 
 def test_at_its_defaults_rho_differs_from_mine_by_the_named_factors():
-    """rho's own onsite H200 fan-out-priced 1/g is mine (3,545) times 3 κ_forward (0.894), its serving block's gates
-    over mine (Φ's rounding), β_x/0.66 (1.32), mine's K over its own (1.75: 5 GB a server against 5 GB a GPU, the timing
-    channel, ingress at 20-bit tokens) and (1 − x)/(1 − x_mine) (1.07, x at 5 of 61 layers): nothing else, within
-    0.1%."""
+    """With the activation rate held, rho's own onsite H200 fan-out-priced 1/g is mine (3,545) times 3 κ_forward
+    (0.894), its serving block's gates over mine (Φ's rounding), β_x/0.66 (1.32), mine's K over its own (1.75: 5 GB a
+    server against 5 GB a GPU, the timing channel, ingress at 20-bit tokens) and (1 − x)/(1 − x_mine) (1.07, x at 5 of
+    61 layers): nothing else, within 0.1%."""
     reg = Registry.load()
     s = build(reg, "reference-onsite-h200")
     budget = s.regime.budget(s.context)
@@ -155,7 +176,8 @@ def test_at_its_defaults_rho_differs_from_mine_by_the_named_factors():
     factors = (3 * p.kappa_forward * s.context.units.flops(budget.gates) / MINE["C h200"] * p.beta_x / 0.66
                * MINE["K h200"] / budget.inputs * (1 - cheap(budget.inputs, p.layer_bits, p.layers))
                / (1 - MINE["x h200"]))
-    assert math.isclose(inverse_g(evaluate(s), "fanout-priced"), MINE["onsite fan h200"] * factors, rel_tol=1e-3)
+    rho = inverse_g(evaluate(activation_rate_held(s)), "fanout-priced")
+    assert math.isclose(rho, MINE["onsite fan h200"] * factors, rel_tol=1e-3)
     assert math.isclose(MINE["K h200"] / budget.inputs, 1.75, rel_tol=5e-3)
     assert (1 - cheap(budget.inputs, p.layer_bits, p.layers)) == 1 - 5 / 61
 

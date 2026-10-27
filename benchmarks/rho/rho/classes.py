@@ -9,12 +9,13 @@ the Lean statement it instantiates first, then its named assumptions; `lean.weak
 The statements are about inference blocks of `c` gates reading `k` novel bits; here `k` is `budget.inputs`. Adding a
 class is one more `Argument` in `CLASSES`: a premise set, the profile fields it reads, and its count.
 
-**Counted sets.** Each statement counts its own products: the covering family and the partial-sum and E1 bounds count
-each (weight, token) pair of the forward pass once, `Keyed` counts Dgrad too at `c = 2`, and the cover and thread
+**Counted sets.** Each statement counts its own products: the covering family and the partial-sum, E1 and pair bounds
+count each (weight, token) pair of the forward pass once, `Keyed` counts Dgrad too at `c = 2`, and the cover and thread
 theorems count whatever products their certificate covers. A count on a set `S` is `κ / κ_S` times as many of the
 profile's counted products (`counted`), and where a premise covers only a share of `S` at `k` (the layers deep enough to
-be chained, the layers whose inputs aren't cheap) the count is divided by that share, with no cap where it is 0. Both
-conversions are exact over a whole cover, and per block they assume each block does a representative mix of products.
+be chained, the layers whose inputs aren't cheap) the count is divided by that share, with no cap where it is 0 (E1's
+activation rate once a layer's update fits, `unheld_share`). Both conversions are exact over a whole cover, and per
+block they assume each block does a representative mix of products.
 
 **Units.** The statements, and the attacks' constructions, are in the FLOP model: a block's compute in FLOPs
 (`FlopBudget`), its count in counted products. `per_block` turns one into the exclusion layer's per-block cap
@@ -187,6 +188,13 @@ def expensive_share(k: float, layer_bits: float, layers: int) -> float:
     return 1 - min(1.0, (math.floor(k / layer_bits) + 1) / layers)
 
 
+def unheld_share(k: float, layer_bits: float, layers: int) -> float:
+    """`expensive_share` while no layer's update fits in `k` bits, and 0 (no cap) once one does. A block holding whole
+    layers computes their activations from the entries it receives, any layers and not only the first, so a rate per
+    activation (`ActivationRate`, E1's) is false there (`HELD`)."""
+    return expensive_share(k, layer_bits, layers) if k < layer_bits else 0.0
+
+
 def cover(k: float, b: float) -> float:
     """`CoverTraining`: `α₀ b s ≤ (α²Γ + bα) size(d)`, so a block of `k` novel bits finishes at most `k²/b + k`."""
     return k * k / b + k
@@ -280,8 +288,16 @@ def threaded_checked(k: float, b_a: float, b_w: float, d: float, e: float, c: fl
 def fanout_priced(k: float, aout: float, beta_x: float) -> float:
     """E1's Proposition 3, sharpened: each activation meets at most `aOut` counted products and costs a block `β_x`
     fresh bits, so a block of `k` bits finishes at most `aOut · k / β_x` (the priced form's `min{h_w, P_col} h_x / β_x`
-    at `P_col = aOut p̄ ≤ h_w`, `h_x ≈ k`). `β_x` is the replay-consistent rate, `≤ (h_tok + F) / d`."""
+    at `P_col = aOut p̄ ≤ h_w`, `h_x ≈ k`). `β_x` is the replay-consistent rate, `≤ (h_tok + F) / d`. Its class has no
+    cap once a layer's update fits (`unheld_share`)."""
     return aout * k / beta_x
+
+
+def pair(k: float, b: float, beta_x: float, width: float) -> float:
+    """`PairBound`: with each (weight, entry) pair counted once and `HeldRate` at `βw = b` a held weight and
+    `βe = β_x d` an entry, a block of `k` bits finishes at most `k² / (4 b β_x d)` forward products (AM–GM on
+    `|W_I| |S_I|`), whatever activations it computes inside from the layers it holds."""
+    return k * k / (4 * b * beta_x * width)
 
 
 def fanout_split(k: float, aout: float, beta_x: float, gamma: float, price: float, price_max: float) -> float:
@@ -310,7 +326,10 @@ def output_premise(k: float, map_width: float, map_width_min: float, b: float, b
 
 E1 = "note:training-20261024T2310Z-draft-tvi-e1-sections"
 FINDINGS = "note:training-20261024T2336Z-report-tvi-findings"
+#: the held-layers attack on `ActivationRate` at the serving block, and `HeldRate`, what survives it
+HELD = "note:training-20261027T0600Z-finding-activation-rate-serving"
 DEPTH = ("layers", "layer_weights")
+UNHELD = ("layer_bits", "layers")
 
 CLASSES: Mapping[str, Argument] = {a.name: a for a in (
     Formula("cover", ("Nci.Cover.Guarantees.CoverTraining", "Nci.Cover.Assumptions.UpdateHardness",
@@ -355,12 +374,14 @@ CLASSES: Mapping[str, Argument] = {a.name: a for a in (
                          "Nci.Assumptions.BaselineRegistered", "Nci.Guarantees.ReferenceThreaded",
                          "Nci.Assumptions.ReferenceLayered"),
             ("b_a", "b_w", "thread_d", "thread_e", "thread_c", "thread_k"), threaded_checked),
-    Formula("fanout-priced", ("draft:E1-Prop3", "draft:E1-activation-rate", E1, FINDINGS),
-            ("fanout", "beta_x"), fanout_priced, counts="kappa_forward", share=expensive_share,
-            share_reads=("layer_bits", "layers")),
-    Formula("fanout-split", ("draft:E1-Prop3-prime", "draft:E1-activation-rate", "draft:E1-H-gamma", E1),
+    Formula("fanout-priced", ("draft:E1-Prop3", "draft:E1-activation-rate", E1, FINDINGS, HELD),
+            ("fanout", "beta_x"), fanout_priced, counts="kappa_forward", share=unheld_share, share_reads=UNHELD),
+    Formula("fanout-split", ("draft:E1-Prop3-prime", "draft:E1-activation-rate", "draft:E1-H-gamma", E1, HELD),
             ("fanout", "beta_x", "gamma", "price", "price_max"), fanout_split, counts="kappa_forward",
-            share=expensive_share, share_reads=("layer_bits", "layers")),
+            share=unheld_share, share_reads=UNHELD),
+    Formula("pair", ("Nci.Ldl.Guarantees.PairBound", "Nci.Ldl.Assumptions.HeldRate",
+                     "Nci.Ldl.Assumptions.EvaluatesBlocks", HELD),
+            ("b", "beta_x", "residual_width"), pair, counts="kappa_forward", share=expensive_share, share_reads=UNHELD),
     Formula("accumulator", ("draft:E1-Cor4a", "draft:E1-R", E1),
             ("h_eff", "b_ps", "step_tokens"), accumulator, counts="kappa_wgrad"),
     Formula("output-premise", ("draft:E1-Prop6b", "draft:E1-output-premise", E1, FINDINGS),

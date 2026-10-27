@@ -22,6 +22,7 @@ model = "deepseek-v4-pro"
 kind = "pretrain"
 tokens = { value = 3.3e13, unit = "token", source = "ruling: Daniel 25 Oct work reference (33T tokens)", status = "ruled" }
 compute = { value = 9.7e24, unit = "FLOP", source = "ruling: Daniel 25 Oct, 6 x 49e9 x 33e12", status = "ruled" }
+step_tokens = { value = 9.44e7, unit = "token", source = "ruling: Daniel 25 Oct work reference, one V4-Pro optimizer step is a 94.4M-token batch (run.v4-step)", status = "ruled" }
 
 [run.v4-step]
 model = "deepseek-v4-pro"
