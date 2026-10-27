@@ -1,5 +1,4 @@
-"""negatives: what network accounting of arbitrary vLLM usage must refuse, beside honest traffic (G-B of
-note:network-accounting/20261024T0429Z-draft-arbitrary-vllm-plan), each a pure function on a run's artifacts that
+"""negatives: what network accounting of arbitrary vLLM usage must refuse, beside honest traffic, each a pure function on a run's artifacts that
 writes a tampered copy, and each naming the check that refuses it by its refusal code.
 
     python benchmarks/network_traces/negatives.py table [--markdown]
@@ -506,7 +505,7 @@ def _relaid(steps: list[list], r: int, request, prompt_len: int) -> list[list]:
 
 
 def prompt_split(advice, request: int | None = None):
-    """Request `request`'s and the next one's prompt lengths swapped, their total kept (REDTEAM phase 6's split: (338,
+    """Request `request`'s and the next one's prompt lengths swapped, their total kept (as (338,
     16) served, (16, 338) advised): by default the first request whose prompt is longer than the next one's, else the
     first whose prompt is shorter, each prefilled to the other's length and decoded on from there (`_relaid`), the
     rest as served, so every output is honest's, released in its bucket. Where the two take different frames under
@@ -864,7 +863,7 @@ def n2_advice(advice, request_frames, received: list[int], certified=None, cells
 
 def stated(advised):
     """`n2_advice`'s (link, tie) under a tie the prover states, every ingress window accepted on its own advice: what
-    N2-ADVICE's counts decide without IoTieRequest (REDTEAM phase 7)."""
+    N2-ADVICE's counts decide without IoTieRequest."""
     link, tie = advised
     return link, replace(tie, accepted=(True,) * len(tie.accepted))
 

@@ -1,10 +1,9 @@
 """The native collector's JIT build is keyed by WHAT IT COMPILES, never by mtimes.
 
-torch.utils.cpp_extension.load() decides "up to date" by comparing the .so's mtime with the sources'.  record_v5/ship.sh PRESERVES source
-mtimes, and /workspace/cp/nc_build is one pod-wide directory: on cp-big an .so built 22:15:25Z from the previous tree's sources was adopted
-by the r17-int-3 ship (its native_collect.cpp is dated 21:35:09Z) -- every Commit there died at the first plan-hit step
-(`Collector.plan_version` absent, rc 134) while the B0 canary, which hits no plan, passed.  Two rules, both torch-free so the laptop and the
-pod CPU gate test them:
+torch.utils.cpp_extension.load() decides "up to date" by comparing the .so's mtime with the sources'.  A ship that PRESERVES source
+mtimes into one pod-wide build directory (/workspace/cp/nc_build) lets an .so built from another tree's sources look newer than this
+tree's sources, and load() adopts it: every Commit then dies at the first plan-hit step (`Collector.plan_version` absent, rc 134) while a canary that hits no plan passes.  Two rules,
+both torch-free so the laptop and the pod CPU gate test them:
 
   * `source_set_digest()`   sha256 over the source files (bytes, in a fixed order), the compiler flags and the torch/CUDA version strings;
     `keyed_build_dir(bd, digest)` = `<bd>/<digest12>` -- a different source set can never find another's .so, shared dirs are safe,

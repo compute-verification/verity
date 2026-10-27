@@ -631,7 +631,7 @@ def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT, temp
     """The request every session of a served plan sends: exactly `tokens` tokens (`max_tokens`, never stopped early:
     `ignore_eos`), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
     applies its own generation config to a request that omits them. No `min_tokens`: it masks the EOS logit, which the
-    served Program's sampling doesn't model, so vllm's advice refuses it."""
+    served Program's sampling doesn't model, so the vLLM integration's advice refuses it."""
     return {"model": model, "prompt": prompt, "max_tokens": tokens, "stream": True,
             "ignore_eos": True, "temperature": temperature, "top_p": top_p}
 
@@ -720,7 +720,7 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
     F = frames or tokens
     if body.get("ignore_eos") is not True or not isinstance(tokens, int) or tokens < 1 or "min_tokens" in body:
         raise ValueError("a served plan's body asks for exactly its tokens (max_tokens, ignore_eos) and no min_tokens, "
-                         f"which vllm's advice refuses: not {body}")
+                         f"which the vLLM integration's advice refuses: not {body}")
     if F < tokens:
         raise ValueError(f"F, a response's frames, is at least the body's {tokens} tokens, not {F}")
     lengths = sorted({r["events"] for r in probed["responses"]})
@@ -1684,7 +1684,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--delta-buckets", type=int,
                        help="the latency budget D (default: 4 × the slowest + 0.5 s, or the most that fits down to 2 ×)")
         q.add_argument("--profile", choices=PROFILES, default=PROFILES[0],
-                       help="N2's profile: the planned egress occupancy, or the served profile (NET-54), whose egress "
+                       help="N2's profile: the planned egress occupancy, or the served profile, whose egress "
                             "counts derive from the ingress head's")
         q.add_argument("--traffic", choices=TRAFFIC, default=TRAFFIC[0],
                        help="fixed: one body every session (--tokens, --prompt-tokens, --in-flight, --profile); varied: "

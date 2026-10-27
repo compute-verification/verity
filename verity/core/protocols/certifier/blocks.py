@@ -1,4 +1,4 @@
-"""Daniel's blocks (CMP-92) as network accounting reads them: which proof units each server runs, the server-time block a
+"""The blocks as network accounting reads them: which proof units each server runs, the server-time block a
 circuit is, and its transfer gates, every row that crosses a server block's boundary, each a row of a value the network
 certifier on that server's uplink committed and signed (`transfer_rows`). The verifier pins a transfer value's root from
 that certificate alone (`pins`), so with every other input row wired, the circuit's free inputs (the window interface's
@@ -31,7 +31,7 @@ a row, the size of the commitment the certifier makes of it row by row), never o
 
 - the servers each a new name on a new uplink (one network certifier an uplink), their units together a partition of
   every template's units ("all": the one server's);
-- each inference block on one server (NET-92; Daniel, 26 Oct: a server's ingress and egress carry only its inference
+- each inference block on one server (a server's ingress and egress carry only its inference
   blocks' declared inputs and outputs, and an inference block runs on a single server, so which server may read its
   input bits is unambiguous): the record's inference entries (``blocks.inference``, the window interface's
   `InferenceEntry`, each unit's (slot, step)) tile every template's units, and no (slot, step) has units on two servers;
@@ -149,7 +149,7 @@ def _pattern(d: Any, keys: Sequence[str], what: str, cut: bool = False) -> Patte
 
 @dataclass(frozen=True)
 class Server:
-    """A server block: proof units ``units`` (each ``(tid, at, n)``) on uplink ``uplink``, which one network certifier
+    """A server block: proof blocks ``units`` (each ``(tid, at, n)``) on uplink ``uplink``, which one network certifier
     watches."""
 
     name: str
@@ -282,7 +282,7 @@ def _one_server(doc: Mapping[str, Any], tpl: Mapping[str, tuple[Any, Any, int]],
     if inference is None:
         if len(servers) > 1:
             raise ValueError(f"{len(servers)} servers over a circuit record that states no inference block "
-                             "(blocks.inference): an inference block runs on one server (NET-92), and with two servers "
+                             "(blocks.inference): an inference block runs on one server, and with two servers "
                              "or more the record's inference entries are what say which")
         return
     entries = inference.get("entries") if isinstance(inference, Mapping) else None
@@ -326,7 +326,7 @@ def _one_server(doc: Mapping[str, Any], tpl: Mapping[str, tuple[Any, Any, int]],
             if q[4] != r[4] and q[2] < r[3] and r[2] < q[3]:
                 raise ValueError(f"inference block (slot {r[0]}, step {max(q[2], r[2])}): units of {q[5]} on server "
                                  f"{q[4]} and of {r[5]} on server {r[4]}; an inference block runs on one server, the one "
-                                 "that may read its inputs (NET-92)")
+                                 "that may read its inputs")
         live.append(r)
 
 

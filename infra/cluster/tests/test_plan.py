@@ -110,7 +110,7 @@ def test_quiet_job_waits_for_a_session_it_may_not_stop_and_the_node_backfills_me
 
 
 def test_a_one_gpu_window_clears_the_node_of_fill_but_starts_beside_a_session_it_may_not_stop():
-    """Rule 3's partial window, as `gpu-lease --timed` runs today (infra's and PoUW's rulings until the 7 Oct clamp)."""
+    """Rule 3's partial window, as `gpu-lease --timed` runs it until the clamp."""
     session = alloc(job("s-1", gpus=1, kind="session", priority="session", preempt="never", max_s=900), (0,), "0-1")
     fill = alloc(job("f-1", gpus=1, priority="fill", max_s=3000), (1,), "2-3")
     acts = plan(one(), "n1", [session, fill], [job("w-1", gpus=1, priority="timed", quiet=True, max_s=600)], T0)

@@ -858,10 +858,17 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     warnings.  ``memo`` shares the word query's `word.unit_rule` results and the entries across calls;
     ``lower_whole=False`` leaves the Boolean lowering to a template's proof blocks; ``as_call`` says whether the partition
     invariant applies (default: its family is a Call of a served Program, `circuit_check.targets.is_call`).  A Boolean Definition held as a Call is judged by `Q_word` v2
-    (`partition`), a word Definition by v1."""
+    (`partition`), a word Definition by v1.  A by-calls root (`circuit_check.targets.is_by_calls`) is checked by its calls
+    alone (`circuit_check.by_calls`)."""
+    from .targets import is_by_calls
+
+    t = resolve(fn)
+    if is_by_calls(t):
+        from . import by_calls
+
+        return by_calls.check(t)
     memo = {} if memo is None else memo
     pins = load_pins() if pins is None else pins
-    t = resolve(fn)
     done = memo.setdefault("entries", {})
     if as_call is None:
         from .targets import family, is_call
@@ -1108,7 +1115,7 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
     try:
         from verity.ml.definitions import cross_call
     except ImportError:
-        out["cross_call"] = {"checked": False, "reason": "verity.ml.definitions.cross_call is not on this tree (PR #98)"}
+        out["cross_call"] = {"checked": False, "reason": "verity.ml.definitions.cross_call is not on this tree"}
     else:
         x = cross_call.check_program(lambda: iter_instance_rows(str(inst)), strict=False)
         out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}
@@ -1144,7 +1151,8 @@ def summarize(entries: Iterable[dict]) -> dict:
     """Totals over entries: failures by name, new (`ok` is no new failure) and known (`circuit_check.known`, with the cause),
     warnings' counts by check and by Definition (a finding two entries share, such as a template's Definition checked on its own
     too, once), ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two proof blocks, with its count, and
-    ``q_call_refused``: each Definition `Q_call` v1 does not apply to, with why."""
+    ``q_call_refused``: each Definition `Q_call` v1 does not apply to, with why; ``by_calls``: each root checked by its calls
+    (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on."""
     from .known import known
     entries = list(entries)
     fails: dict[str, dict] = {}
@@ -1160,21 +1168,29 @@ def summarize(entries: Iterable[dict]) -> dict:
         by_check[k] += w["count"]
         by_def.setdefault(k, Counter())[w["definition"]] += w["count"]
     new = [f["name"] for f in fails if known(f) is None]
-    across, refused = {}, {}
+    across, refused, by_calls = {}, {}, {}
     for e in entries:
         p = e.get("partition") or {}
         if p.get("q_word") == 2 and p.get("recomputed_across"):
             across[e.get("definition") or e.get("target")] = p["recomputed_across"]
         if "inapplicable" in (p.get("q_call") or {}):
             refused[e.get("definition") or e.get("target")] = p["q_call"]["inapplicable"].get("why")
+        if e.get("mode") == "by-calls":
+            by_calls[e.get("definition") or e.get("target")] = sorted({c["binding"] for c in (e.get("by_calls") or {}).get("callees", [])
+                                                                     if c.get("binding")})
     return {"ok": not new, "failures": len(fails), "failure_names": [f["name"] for f in fails], "new_failures": new,
             "recomputed_across": dict(sorted(across.items())), "q_call_refused": dict(sorted(refused.items())),
+            "by_calls": dict(sorted(by_calls.items())),
             "known_failures": {f["name"]: known(f) for f in fails if known(f) is not None},
             "warnings": {k: {"total": v, "definitions": len(by_def[k]), "by_definition": dict(by_def[k].most_common())}
                          for k, v in by_check.most_common()}}
 
 
 def report(targets: list[dict], opts: Options) -> dict:
+    """The report over ``targets``, each by-calls root with its callees' targets' verdicts (`circuit_check.by_calls.joined`)."""
+    from .by_calls import joined
+
+    targets = joined(targets)
     return {"schema": SCHEMA, "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}, "summary": summarize(targets),
             "targets": targets}
 
