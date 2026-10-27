@@ -1,4 +1,4 @@
-"""A TP Commit served on CPU, for the TP serving rows' tests and the one-stage audit's TP run (`benchmarks/one_stage/a5.py --tp-commit`):
+"""A TP Commit served on CPU, for the TP serving rows' tests and the one-stage audit's TP run (`examples/one_stage/a5.py --tp-commit`):
 ``world`` ranks, each the toy deferred Commit of `tests.pipeline.served_rope` with its own weights and its act rows ``SiluMul_v2{I}``
 (GLM-5.3's Definition), committed under rows-sha512 as `tp-commit` commits a rank, each rank's window written by
 `pipeline.tp.serving_rows.write` as a vLLM rank writes it, under the SHA-512 TP run root of the ranks' roots (`tp.run_root`), beside

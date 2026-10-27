@@ -42,7 +42,7 @@ from verity.ml.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "one_stage"))
+sys.path.insert(0, str(HERE.parents[2] / "examples" / "one_stage"))
 import records_audit as RA  # noqa: E402
 
 K = 64
