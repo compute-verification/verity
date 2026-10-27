@@ -67,8 +67,8 @@ first coin.
   carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
   such line is refused. The certifier on this host owns that link and counts it (`coin_link.py`,
   `verity.core.protocols.certifier.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
-  (`coin_link_argv`, `stop_link`), and a link that refuses to start or ends first (its tunnel did) ends the session
-  (`watch_link`). It listens on another port of this host's loopback, opens `ssh -N -R` from the peer's port to it,
+  (`coin_link_argv`, `stop_link`), and a link that refuses to start, doesn't listen within `START_SECONDS` (it is
+  killed: `first_line`) or ends first (its tunnel did) ends the session (`watch_link`). It listens on another port of this host's loopback, opens `ssh -N -R` from the peer's port to it,
   straight to the peer's own sshd, relays each connection to serve.py re-cut into cells and re-clocked on its grids,
   exempts only the coin openings that open against the session's committed coin root, counts everything else, and
   writes `coin-link.json`, which the `end` entry's `files` seals. The hop from the certifier to the server crosses the
@@ -223,7 +223,10 @@ first coin.
   request says otherwise; recorded in every request and passed on every one. `certifier_serve.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
   a certifier rehearsal makes two keys (the certifier's and the challenger's) and a warden rehearsal one, which
-  `warden_minutes` counts. The rehearsal draws each serve's session itself (32 fresh random bytes, `--session`), as
+  `warden_minutes` counts. A warden rehearsal's key signs `WARDEN_WINDOW_LEAVES` one-time signatures a link-window,
+  after a load's heads, and its signer refuses every window past its 2^H: so a request whose `warden_windows` its
+  height can't sign is refused, with the least height that can (`warden_height`; the gate's most requests at the
+  scan's schedule take 13). The rehearsal draws each serve's session itself (32 fresh random bytes, `--session`), as
   the challenger it plays: the challenger here draws none, since a rehearsal is none of its windows.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, `end`'s, and `serve.py`'s record and close,
@@ -319,6 +322,13 @@ KEYGEN_LEAVES_S = 4096
 #: `WARDEN_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s link-windows, past the 745 that
 #: memory-accounting's whole-node wipe needs (H200-GATE, 27 Oct)
 WARDEN_REQUESTS = (4, 1700)
+#: the one-time signatures a warden rehearsal's key gives a link-window: a certificate for each of its three links'
+#: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
+#: (`warden_serve.Publisher.keep` and `attest`)
+WARDEN_WINDOW_LEAVES = 5
+#: a warden rehearsal's link-window without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
+#: buckets of 100 ms)
+WARDEN_WINDOW_MS = 60_000
 WARDEN_TOKENS = (16, 256)
 #: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
 #: `WARDEN_RATE` a second drawn from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
@@ -365,6 +375,8 @@ SECRET = "secret"
 OPEN_REQUEST = "open.json"
 OUT_FILES = ("record.json", "key.json", "releases.jsonl", "hellos.jsonl", "challenger.json", "address.json", "serve.log",
              "coin-link.json", "coin-link.log")
+#: how long serve.py has, once started, to sign its record (`await_commitment`), and the coin link to listen
+START_SECONDS = 60.0
 #: how long the coin link has, once told to stop, to run to the end of its link-window (D7's T·τ, 60 s) and write its
 #: record, before it is killed
 LINK_STOP_SECONDS = 90.0
@@ -1150,6 +1162,36 @@ def _minutes(arrivals_s: int, height: int) -> int:
     return -(-(arrivals_s + 3 * WARDEN_TAIL_S + 2 ** height // KEYGEN_LEAVES_S) // 60)
 
 
+def warden_windows(requests: int, scan: bool = True) -> int:
+    """The most link-windows a warden rehearsal of `requests` requests runs (`warden_serve.rehearse` counts its
+    traffic's last arrival and tail): `warden_minutes`'s arrivals and three tails, in link-windows of the scan's
+    schedule with `scan` and of `WARDEN_WINDOW_MS` otherwise."""
+    window_ms = SCAN["--window"] * SCAN["--bucket-ms"] if scan else WARDEN_WINDOW_MS
+    return -(-(round(requests / WARDEN_RATE) + 3 * WARDEN_TAIL_S) * 1000 // window_ms)
+
+
+def warden_height(windows: int, heads: int = 0) -> int:
+    """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's) and then
+    `windows` link-windows at `WARDEN_WINDOW_LEAVES` each."""
+    return max(REHEARSAL_HEIGHT[0], (heads + WARDEN_WINDOW_LEAVES * windows - 1).bit_length())
+
+
+def load_heads(shape: str) -> int:
+    """The heads a load of `shape` signs before the rehearsal's first window: one a value (`load_relay.manifest`)."""
+    lr = _load_relay()
+    return len(lr.manifest(lr.SHAPES[shape]))
+
+
+def warden_key(windows: int, height: int, what: str, heads: int = 0) -> None:
+    """Refuses a warden rehearsal whose key at `height` can't sign its `windows` link-windows after a load's `heads`,
+    with the least height that can (`warden_height`)."""
+    if height < (least := warden_height(windows, heads)):
+        load = f" after the load's {heads} heads" if heads else ""
+        raise Refused(f"--height {height}: {what} take {windows} link-windows, "
+                      f"{heads + WARDEN_WINDOW_LEAVES * windows} one-time signatures ({WARDEN_WINDOW_LEAVES} a "
+                      f"window{load}), past the key's {1 << height}: give --height {least} or more, or fewer --requests")
+
+
 def scan_group_windows(tokens: int) -> int:
     """The link-windows a `--window-per-group` group takes at the scan's schedule, each request answered by at most
     `tokens` id events (`warden_serve.group_windows`, which `test_warden_serve` holds this to)."""
@@ -1210,6 +1252,8 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
         raise Refused(f"--minutes {minutes}: {requests} requests take {least} minutes (arrivals at {WARDEN_RATE} a "
                       f"second, a {WARDEN_TAIL_S} s tail, the window they end in, the check and the key at height "
                       f"{a.height}){_after_load(spent)}: give --minutes {least + spent} or more, or fewer --requests")
+    warden_key(warden_windows(requests, a.scan), a.height, f"{requests} requests",
+               load_heads(loaded["load"]["shape"]) if load else 0)
     return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "requests": requests,
             "height": a.height} | a.sampling | given | loaded
 
@@ -1313,11 +1357,14 @@ def warden_prompts(req: dict, data: bytes) -> bytes:
     spent = req.get("load", {}).get("minutes", 0)
     if req.get("window_per_group"):
         least, what = warden_group_minutes(-(-requests // n), tokens, height), f"{-(-requests // n)} groups"
+        windows = -(-requests // n) * scan_group_windows(tokens)
     else:
         least, what = warden_minutes(requests, height), f"{requests} requests"
+        windows = warden_windows(requests)
     if minutes - spent < least:
         raise Refused(f"--minutes {minutes}: {what} take {least} minutes (with the check and the key at height "
                       f"{height}){_after_load(spent)}: give --minutes {least + spent} or more, or fewer --requests")
+    warden_key(windows, height, what, load_heads(req["load"]["shape"]) if "load" in req else 0)
     req.update(requests=requests, prompts={"count": n, "ids": sum(map(len, prompts))})
     return json.dumps(prompts, separators=(",", ":")).encode()
 
@@ -1744,6 +1791,21 @@ def stop_link(proc: subprocess.Popen, seconds: float = LINK_STOP_SECONDS) -> int
         return proc.wait()
 
 
+def first_line(proc: subprocess.Popen, seconds: float) -> bytes | None:
+    """`proc`'s first line of output (empty if it exited first), or None if it printed none within `seconds`, in which
+    case its process group is killed."""
+    got: list[bytes] = []
+    reader = threading.Thread(target=lambda: got.append(proc.stdout.readline()), daemon=True)
+    reader.start()
+    reader.join(seconds)
+    if got:
+        return got[0]
+    with suppress(ProcessLookupError):
+        os.killpg(proc.pid, signal.SIGKILL)
+    reader.join()
+    return None
+
+
 def watch_link(link: subprocess.Popen, serve: subprocess.Popen, served: threading.Event, ended: list[str]) -> None:
     """Wait for the coin link. Should it exit before `served` is set (its tunnel ended), stop serve.py, since no coin
     can reach the peer any more, and say so in `ended`."""
@@ -1771,7 +1833,8 @@ def commitment_of(out: Path) -> str | None:
     return None if record is None else record.commitment.root.hex()
 
 
-def await_commitment(host: Host, session: str, active: Callable[[str], bool], seconds: float = 60.0) -> str | None:
+def await_commitment(host: Host, session: str, active: Callable[[str], bool],
+                     seconds: float = START_SECONDS) -> str | None:
     """The session's commitment root once serve.py has signed its record (before it listens), or None if its unit stopped
     first or `seconds` passed."""
     deadline = time.monotonic() + seconds
@@ -1798,8 +1861,9 @@ def released_of(out: Path) -> tuple[dict[str, int] | None, int | None]:
 def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], datetime], argv: list[str] | None = None,
         wait: Callable[[subprocess.Popen, float], int] | None = None, link: list[str] | None = None) -> dict:
     """Serve the admitted session (serve.py, which takes `sign.lock` for each of its signatures) through its coin link,
-    started once serve.py listens and stopped once it exits (a link that refuses to start or ends first ends the
-    session: `watch_link`), then append its `end` entry and delete its secret. Its
+    started once serve.py listens and stopped once it exits (a link that refuses to start, doesn't listen within
+    `START_SECONDS` or ends first ends the session: `first_line`, `watch_link`), then append its `end` entry and delete
+    its secret. Its
     client closed it when serve.py exited 0 and its signed close (`challenger.json`) says so (`ended` null). The link is
     `coin_link_argv`'s; a caller that brings its own serve.py (`argv`: a local gate's, a test's) brings its own `link`,
     None for none, its client then reaching serve.py's port itself."""
@@ -1827,9 +1891,13 @@ def run(host: Host, session: str, *, signer, pinned: str, now: Callable[[], date
             with open(out / "coin-link.log", "wb") as log:
                 linked = subprocess.Popen(link, stdout=subprocess.PIPE, stderr=log, stdin=subprocess.DEVNULL,
                                           start_new_session=True)
-                listening = linked.stdout.readline()
-                log.write(listening)
-            if listening.startswith(b"listening "):
+                listening = first_line(linked, START_SECONDS)
+                log.write(listening or b"")
+            if listening is None:
+                why = (f"the coin link didn't listen within {START_SECONDS:g} s, so it was killed and no coin could reach "
+                       f"the peer (coin-link.log)")
+                os.killpg(proc.pid, signal.SIGTERM)
+            elif listening.startswith(b"listening "):
                 watcher = threading.Thread(target=watch_link, args=(linked, proc, served, link_ended), daemon=True)
                 watcher.start()
             else:

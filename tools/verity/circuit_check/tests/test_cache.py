@@ -1212,7 +1212,8 @@ def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
     """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
     computes: an edit to it reuses every target and the task list (so adding a peak never makes
     `circuit-check --all` run cold), and so does an edit to the known failures (`cache.KNOWN`,
-    which decide only the summary), while an edit to the checker's code still reruns them all."""
+    which decide only the summary) or to the checker's docstrings and comments (`cache.version`), while an edit to the
+    checker's code still reruns them all."""
     import shutil
 
     root = _tree(tmp_path)
@@ -1228,5 +1229,30 @@ def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
         p.write_text(p.read_text() + "\n# another known failure\n")
     out = _run(root, CHECKER)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
-    (checker / "checks.py").write_text((checker / "checks.py").read_text() + "\n# another version of the checker\n")
+    checks = checker / "checks.py"
+    checks.write_text(checks.read_text().replace('"""The checks,', '"""Reworded: the checks,', 1) + "\n# a comment\n")
+    out = _run(root, CHECKER)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
+    checks.write_text(checks.read_text() + "\n_ANOTHER_VERSION_OF_THE_CHECKER = 1\n")
     assert _run(root, CHECKER)["hits"] == []
+
+
+def test_the_checker_s_version_is_its_code_not_its_prose(tmp_path, monkeypatch):
+    """`cache.version`: an edit to a docstring, a comment or the layout of the checker's modules keeps its version, so it
+    reruns no target, while an edit to their code, or to a file of it that is no module, changes it."""
+    from circuit_check import cache as CC
+
+    monkeypatch.setattr(CC, "_HERE", tmp_path)
+    mod, data = tmp_path / "checks.py", tmp_path / "data.json"
+    src = '"""The checks."""\n\n\ndef f(x):\n    """Twice ``x``."""\n    return 2 * x  # doubled\n'
+    mod.write_text(src)
+    data.write_text("{}")
+    here = CC.version()
+    mod.write_text('"""The checks, reworded."""\n# a new comment\n\ndef f(x):\n    """``x`` doubled."""\n\n    return 2 * x\n')
+    assert CC.version() == here
+    mod.write_text(src.replace("2 * x", "3 * x"))
+    assert CC.version() != here
+    mod.write_text(src)
+    assert CC.version() == here
+    data.write_text('{"a": 1}')
+    assert CC.version() != here
