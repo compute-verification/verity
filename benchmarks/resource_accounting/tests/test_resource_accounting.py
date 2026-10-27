@@ -373,7 +373,7 @@ def test_the_hosted_harness_s_argv_has_its_out_replaced():
 
 
 def test_q_cert_is_the_granted_rate_and_t_holds_the_rtt_at_p2_s_cap_under_the_floor():
-    """An accepted window at the red team's grant certifies PROTOCOL.md §6's 741,353,308 bytes of a 2^19-block store at
+    """An accepted window at the red team's grant certifies PROTOCOL.md §1's 741,353,308 bytes of a 2^19-block store at
     the RTX PRO 6000's S_chip, error 2^-40.42; an uncertified tag has no Q_cert; a chain without windows certifies none;
     and the T a remote verifier would grant holds the RTT at P2's cap one ns under the rebuild floor."""
     from verity.core.protocols.bandwidth import audit
