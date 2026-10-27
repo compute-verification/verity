@@ -6,6 +6,7 @@ import re
 import stat
 import urllib.error
 import urllib.parse
+from datetime import UTC, datetime
 
 import pytest
 
@@ -303,6 +304,18 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
     assert rc != 0 and "give the STATE" in err
 
 
+def test_a_dry_run_writes_nothing_to_linear_and_prints_what_it_would_do(fake, registry, routes_dirs, capsys, lin):
+    """27 Oct 05:17Z (INF-285): a triage worker's --dry-run posted 58 comments, since only Slack sends were suppressed."""
+    lin.subscribers["I1"] = []
+    infra = inbox(fake, routes_dirs, "infra")
+    rc, out, _ = run(capsys, "linear", "state", "INF-1", "In Progress", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would move INF-1 to In Progress" and lin.moved == []
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "picked up", "--as", "proofs", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would comment on INF-1 as proofs: picked up"
+    assert lin.sent("commentCreate") == [] and bells(fake, infra) == []
+    rc, out, _ = run(capsys, "linear", "place", "INF-1", "Runs", "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would place INF-1 in Runs"
+
 def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_its_author(fake, registry, routes_dirs, capsys, lin):
     """No one subscribes to Linear comments (each would echo its author), so a lane polled its issues instead (COMM-30)."""
     lin.subscribers["I1"] = []
@@ -526,8 +539,8 @@ def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_th
     would read its unread team as clean."""
     reg = json.loads(registry.read_text())
     for h in reg["handles"]:
-        if h["handle"] in ("soundness", "training"):
-            h["linear"] = {"soundness": "HASH", "training": "TRN"}[h["handle"]]
+        if h["handle"] in ("kernels", "training"):
+            h["linear"] = {"kernels": "HASH", "training": "TRN"}[h["handle"]]
     registry.write_text(json.dumps(reg))
     lin.visible = [k for k in linear.owners(reg) if k not in ("HASH", "TRN")]
     lin.open = [issue("INF-2", "Todo", project=None, projectMilestone=None)]
@@ -537,14 +550,15 @@ def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_th
     assert rc == 1 and rep["unread"] == ["HASH", "TRN"] and [f["issue"] for f in rep["findings"]] == ["INF-2"]
     assert err.strip() == "linear audit: the app can't read team(s) HASH, TRN, so their issues aren't audited"
     n = len(lin.sent("pageInfo"))
-    rc, out, err = run(capsys, "linear", "audit", "soundness", "TRN", *now)
+    rc, out, err = run(capsys, "linear", "audit", "kernels", "TRN", *now)
     assert rc == 0 and out.strip() == "0 finding(s)" and "HASH, TRN" in err and len(lin.sent("pageInfo")) == n   # no audit of every team
-    rc, out, err = run(capsys, "linear", "audit", "soundness", "infra", *now)
+    rc, out, err = run(capsys, "linear", "audit", "kernels", "infra", *now)
     assert rc == 1 and "INF-2 orphan" in out and "team(s) HASH," in err and lin.audited["team"]["or"][0] == {"key": {"in": ["INF"]}}
     assert linear.Linear(KEY, FakeLinear()).unread(["inf", "Infra", "COMMS", "HASH"]) == ["HASH"]   # a key or a name, any case
 
 
-def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, lin):
+def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, lin, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime(2026, 10, 27, 7, 10, tzinfo=UTC))
     rc, out, _ = run(capsys, "linear", "place", "TOP-1", "E2E", "toy", "--milestone", "M3")
     assert rc == 0 and out.strip() == "TOP-1 placed in E2E toy deployment on one H200 / M3 · composed"
     assert lin.updated == [("I1", {"projectId": "PJ1", "projectMilestoneId": "MS3"})]
@@ -554,7 +568,7 @@ def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, li
     (_, v, _), = lin.sent("issueCreate")
     assert rc == 0 and v["i"]["parentId"] == "P1" and v["i"]["projectMilestoneId"] == "MS3" and v["i"]["title"] == "One host"
     assert out.startswith("linear: INF-1 https://linear.app/x/issue/INF-1 under CMP-92")
-    assert re.fullmatch(r"<!subteam\^SINFRA\|@infra> top 06:55Z \(sent \d\d:\d\dZ\): one host", fake.messages[COORD][-1]["text"].removesuffix(LINKED))  # Slack: the first line, as it was
+    assert re.fullmatch(r"<!subteam\^SINFRA\|@infra> top 06:55Z \(sent 07:10Z\): one host", fake.messages[COORD][-1]["text"].removesuffix(LINKED))  # Slack: the first line, as it was
     rc, _, _ = run(capsys, "send", "--as", "top", "--to", "@infra", "--title", "The host", "--text", "one host")
     assert rc == 0 and lin.sent("issueCreate")[-1][1]["i"]["title"] == "The host" and "parentId" not in lin.sent("issueCreate")[-1][1]["i"]
     root = fake.messages[COORD][-1]["ts"]

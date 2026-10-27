@@ -13,9 +13,9 @@ A spec-level reference for network accounting's timing channel:
   against the digest its certificate signs), with a host-side verifier of record (no proof of the
   check yet) that compares no grid in the clear. Its claim is counts only: on every link-window the head check holds
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
-  is at the profile. Holding the frames, the rest of the egress grid, is N3's, which is a design and the simulator's
-  behaviour (`benchmarks/network_sim`), not a protocol: a prototype in the clear, in no proof-service Spec, so the claim
-  stays counts only until N3 is a proof-service unit with Selection `All`. The network verdict of record is
+  is at the profile. Nothing here holds the frames, the rest of the egress grid (N3, the content check prototyped in
+  `benchmarks/network_sim`, is retired, superseded by the step-indexed scan, `ingress_scan` and `egress`, outside this
+  protocol). The network verdict of record is
   `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share credit: every window of the
   egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
@@ -320,8 +320,8 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
 counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
-the declared sync), beside the proved timing bound, while N3, the content check, is the design (Daniel's provisional
-call on ASK-70, 19 Oct).
+the declared sync), beside the proved timing bound (Daniel's provisional call on ASK-70, 19 Oct). N3, the content check,
+is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
 N2's verifier of record, `LinkWindows.verify`, decides each link-window on a `--zk` proof of N2's registered unit
 (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of C-Flock's Lean

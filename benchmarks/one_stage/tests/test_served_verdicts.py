@@ -3,11 +3,14 @@ the window it audits holds the most requests and none carried across windows; a 
 with its issue and given no verdict; and sampled proofs' accepted answer composes, with the others missing, to a pending
 block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing
 composes to reject with no block record. PoUW's development piece checks the window's gate session and credits nothing,
-and the gate is refused while the lane has a period open."""
+and the gate is refused while the lane has a period open. `served_verdicts.sh`'s window circuits gate on every class of
+CLASSES, and the class of record's count after them gates nothing."""
 from __future__ import annotations
 
 import io
 import json
+import os
+import subprocess
 import sys
 import tarfile
 from pathlib import Path
@@ -209,3 +212,60 @@ def test_the_gate_is_refused_while_the_lane_has_a_period_open(tmp_path, monkeypa
     main.write_text("cc" * 20 + "\n")
     ok, line = S.gate_ready(GATE, "vllm", main)
     assert ok and line.startswith("GATE ready: lane vllm's open period None;") and "NOT on the verifier's" in line
+
+
+FAKE_PROVE_PATH = '''import json, sys
+a = sys.argv[1:]
+assert a[0] == "window-circuit"
+c = a[a.index("--class") + 1] if "--class" in a else "record"
+answer = json.load(open("answers.json"))[c]
+if answer != "count":
+    print("prove_path.py window-circuit: refused at", c, file=sys.stderr)
+    sys.exit({"refuse": 2, "expire": 124}[answer])
+open(a[a.index("--out") + 1], "w").write("{}")
+print(json.dumps({"bits": 772, "count": {"free": 3, "inputs": 10, "registered": 7, "units": 1}}))
+'''
+
+
+def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[str], list[str]]:
+    """`served_verdicts.sh circuits 0` in a toy tree whose prove_path.py counts a class, refuses it, or exits 124 as
+    `timeout` does when a count runs out of time (``answers``, by class), under a `timeout` that records the limit it got:
+    the exit status, the verdict lines, and the limits in order."""
+    tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
+    for d in (tree / "benchmarks" / "prove_path", bin_, venv, tmp_path / "serve"):
+        d.mkdir(parents=True)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_PROVE_PATH)
+    (tree / "answers.json").write_text(json.dumps(answers))
+    (tmp_path / "serve" / "weights_registration.json").write_text("{}")
+    for path, body in ((venv / "python", f'exec {sys.executable} "$@"'),
+                       (bin_ / "timeout", f'echo "$1" >> {tmp_path}/limits; shift; exec "$@"')):
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o755)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent),
+           "D": str(tmp_path / "serve"), "OUT": str(tmp_path / "out"), "CLASSES": classes}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "circuits", "0"], cwd=tree, env=env,
+                        check=False).returncode
+    return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), (tmp_path / "limits").read_text().split()
+
+
+def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeout_fails_nothing(tmp_path):
+    rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "record": "expire"})
+    assert rc == 0 and limits == ["30m", "2h"], (rc, lines)
+    assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
+                               "weights registration's pins; ")
+    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=2h (exit 124): no count"]
+
+
+@pytest.mark.parametrize("classes, answers, refused", [
+    ("4,32,4 8,64,4", {"4,32,4": "count", "8,64,4": "refuse", "record": "count"}, "WINDOW-CIRCUIT class 8,64,4 refused (exit 2): "),
+    ("4,32,4", {"4,32,4": "expire", "record": "count"}, "WINDOW-CIRCUIT class 4,32,4 timed out after WC_TIMEOUT=30m"),
+    ("record", {"record": "expire"}, "WINDOW-CIRCUIT class record timed out after WC_TIMEOUT=30m"),
+])
+def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classes, answers, refused):
+    """Each class of CLASSES gates, not just one of them, whatever the class of record's measurement says; CLASSES that
+    names `record` gates on it under WC_TIMEOUT and doesn't measure it again."""
+    rc, lines, limits = _circuits(tmp_path, classes, answers)
+    assert rc != 0 and sum(line.startswith(refused) for line in lines) == 1, lines
+    assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
+    measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
+    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "2h")

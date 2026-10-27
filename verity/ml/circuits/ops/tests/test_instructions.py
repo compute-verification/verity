@@ -72,31 +72,31 @@ def test_pinned_instructions_and_their_models() -> None:
         "sm80.mma.m16n8k16.bf16": AMPERE_BF16_M16N8K16,
         "sm89.mma.m16n8k16.bf16": ADA_BF16_M16N8K16,
         "sm89.mma.m16n8k32.e4m3": ADA_E4M3_M16N8K32,
-        "sm89.mma.m16n8k32.e5m2": ADA_E5M2_M16N8K32,             # lane tc-probe-fp8 2026-09-22: 25.0M + 141k, 0 mismatches
-        "sm90.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,          # lane tc-probe-fp8 2026-09-22: 25.7M, 0 mismatches
-        "sm90.wgmma.m64n8k16.bf16": HOPPER_BF16_WGMMA_K16,       # lane wgmma-bf16 2026-09-26: 2 x 26.4M (SS, RS) + chains, 0 mismatches
+        "sm89.mma.m16n8k32.e5m2": ADA_E5M2_M16N8K32,  # RTX 4090
+        "sm90.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,  # H100
+        "sm90.wgmma.m64n8k16.bf16": HOPPER_BF16_WGMMA_K16,  # H100, A from shared memory and from registers
         "sm90.wgmma.m64n8k32.e4m3": HOPPER_E4M3_K32,
-        "sm90.wgmma.m64n8k32.e5m2": HOPPER_E5M2_K32,             # lane tc-probe-fp8 2026-09-22: 25.5M, 0 mismatches
-        "sm120.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,          # lane fp4-5090: the 5090 keeps Hopper's BF16 datapath
-        "sm120.mma.m16n8k32.e4m3": BLACKWELL_SM120_E4M3_M16N8K32,  # lane vllm-sm120-tc-gemm 2026-09-30: RTX PRO 6000, 25.0M, 0 mismatches
-        "sm120.mma.m16n8k32.e5m2": BLACKWELL_SM120_E5M2_M16N8K32,  # the same lane's sweeps on two PRO 6000 dies: 25.0M + 6.4M, 0 mismatches
-        "sm100.tcgen05.mma.e2m1.nvf4": BLACKWELL_SM100_NVF4,       # lane tcgen05 2026-09-23: B200, 16.5M, 0 mismatches, any FP32 acc
-        "sm100.tcgen05.mma.e2m1.mxf4": BLACKWELL_SM100_MXF4,       # lane tcgen05 2026-09-23: B200, 12.9M, 0 mismatches (both kinds)
-        "sm100.tcgen05.mma.bf16": HOPPER_BF16_WGMMA_K16,           # lane circuits 2026-10-18: B200, 42.4M + 17.8M + chains, 0 mismatches
-        "sm100.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,          # lane circuits 2026-10-19: B200, 25.8M, 0 mismatches (FA2's step there)
-        "sm120.mma.m16n8k64.e2m1.nvf4": BLACKWELL_SM120_NVF4,      # lane fp4-proof 2026-09-22: 5090, 17.3M (fp4-re + fresh seed), 0 mismatches
-        "sm120.mma.m16n8k64.e2m1.mxf4": BLACKWELL_SM120_MXF4,      # lane fp4-proof 2026-09-22: 5090, 14.4M, 0 mismatches
-        "sm120.mma.m16n8k32.s8": BLACKWELL_SM120_S8_M16N8K32,      # lane compute-accounting 2026-10-15: RTX PRO 6000, 10.2M, 0 mismatches
-        "sm90.wgmma.m64n8k32.s8": HOPPER_SM90_S8_K32,              # lane compute-accounting 2026-10-19: H200, 10.3M, 0 mismatches
-        "sm90.mma.m16n8k32.s8": HOPPER_SM90_S8_K32,                # the same run: 10.2M, 0 mismatches
-        "sm90.wgmma.m64n64k32.s8": HOPPER_SM90_S8_K32,             # lane kernels 2026-10-26: H200, 10.3M, 0 mismatches
-        "sm90.wgmma.m64n128k32.s8": HOPPER_SM90_S8_K32,            # the same run: 10.4M, 0 mismatches
-        "sm90.wgmma.m64n256k32.s8": HOPPER_SM90_S8_K32,            # the same run: 10.6M, 0 mismatches
-        "sm100.tcgen05.mma.s8": BLACKWELL_SM100_S8_K32,            # lane compute-accounting 2026-10-19: B200, 10.3M, 0 mismatches
-        "sm100.mma.m16n8k32.s8": BLACKWELL_SM100_S8_K32,           # the same run: 10.2M, 0 mismatches
+        "sm90.wgmma.m64n8k32.e5m2": HOPPER_E5M2_K32,  # H100
+        "sm120.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,  # the 5090 keeps Hopper's BF16 datapath
+        "sm120.mma.m16n8k32.e4m3": BLACKWELL_SM120_E4M3_M16N8K32,  # RTX PRO 6000
+        "sm120.mma.m16n8k32.e5m2": BLACKWELL_SM120_E5M2_M16N8K32,  # two RTX PRO 6000 dies
+        "sm100.tcgen05.mma.e2m1.nvf4": BLACKWELL_SM100_NVF4,  # B200, any FP32 accumulator
+        "sm100.tcgen05.mma.e2m1.mxf4": BLACKWELL_SM100_MXF4,  # B200 (both kinds)
+        "sm100.tcgen05.mma.bf16": HOPPER_BF16_WGMMA_K16,  # B200
+        "sm100.mma.m16n8k16.bf16": HOPPER_BF16_M16N8K16,  # B200 (FA2's step there)
+        "sm120.mma.m16n8k64.e2m1.nvf4": BLACKWELL_SM120_NVF4,  # RTX 5090
+        "sm120.mma.m16n8k64.e2m1.mxf4": BLACKWELL_SM120_MXF4,  # RTX 5090
+        "sm120.mma.m16n8k32.s8": BLACKWELL_SM120_S8_M16N8K32,  # RTX PRO 6000
+        "sm90.wgmma.m64n8k32.s8": HOPPER_SM90_S8_K32,  # H200
+        "sm90.mma.m16n8k32.s8": HOPPER_SM90_S8_K32,  # H200
+        "sm90.wgmma.m64n64k32.s8": HOPPER_SM90_S8_K32,  # H200
+        "sm90.wgmma.m64n128k32.s8": HOPPER_SM90_S8_K32,  # H200
+        "sm90.wgmma.m64n256k32.s8": HOPPER_SM90_S8_K32,  # H200
+        "sm100.tcgen05.mma.s8": BLACKWELL_SM100_S8_K32,  # B200
+        "sm100.mma.m16n8k32.s8": BLACKWELL_SM100_S8_K32,  # B200
     }
-    # registry <= computed level (lane pin-bf16): the sm120 FP4 pair flipped to "pinned" only once benchmarks/tc_probe/trust.py
-    # computed PINNED (P2 closed by fp4-proof's fresh-seed sweeps), and each points at its published dossier
+    # registry <= computed level: the sm120 FP4 pair is "pinned" only because benchmarks/tc_probe/trust.py computed PINNED
+    # (P2 closed by the fresh-seed sweeps), and each points at its published dossier
     for iid in ("sm120.mma.m16n8k64.e2m1.nvf4", "sm120.mma.m16n8k64.e2m1.mxf4", "sm120.mma.m16n8k32.e4m3", "sm120.mma.m16n8k32.e5m2",
                 "sm120.mma.m16n8k32.s8", "sm90.wgmma.m64n8k32.s8", "sm90.wgmma.m64n64k32.s8", "sm90.wgmma.m64n128k32.s8",
                 "sm90.wgmma.m64n256k32.s8", "sm90.mma.m16n8k32.s8", "sm100.tcgen05.mma.s8",
@@ -149,7 +149,7 @@ def test_mnemonics_come_from_the_source_repos_or_are_none() -> None:
 def test_block_scaled_ids_carry_their_scale_format() -> None:
     assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.nvf4"].scale == "ue4m3"
     assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.mxf4"].scale == "ue8m0"
-    assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.mxf4"].status == "pinned"   # registry <= computed level (P2 closed by lane fp4-proof)
+    assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.mxf4"].status == "pinned"   # registry <= computed level (P2 closed by the fresh-seed sweeps)
     assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.mxf4"].ptx.endswith(".scale_vec::2X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0")
     assert INSTRUCTIONS["sm120.mma.m16n8k64.e2m1.mxf4"].model is BLACKWELL_SM120_MXF4
     assert INSTRUCTIONS["sm100.tcgen05.mma.e2m1.nvf4"].scale == "ue4m3"
@@ -158,7 +158,7 @@ def test_block_scaled_ids_carry_their_scale_format() -> None:
 
 
 def test_sm100_models_are_the_sm120_parameters_under_their_own_name() -> None:
-    """Lane tcgen05's finding: the B200's tcgen05.mma computes the RTX 5090's words.  The registry keeps separate model objects
+    """The B200's tcgen05.mma computes the RTX 5090's words.  The registry keeps separate model objects
     (named for the architecture they were measured on); this pins that their numerics are identical field by field."""
     from dataclasses import fields
 
