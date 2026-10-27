@@ -3504,6 +3504,35 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     const gk::Timing tm = gk::timed_items(arms, reps, f.s0, nv);
     CK(cudaGetLastError());
     gk::summary(tm, arms, stderr);
+    // the lt, gemm, ovl and wgl arms' power (w): each arm's calls back to back for V31_POWER_MS (default 1500; 0: none),
+    // after a fifth of that as a lead-in, NVML's energy over their event time
+    std::vector<double> watts(arms.size(), NAN);
+    const double pms = env_int("V31_POWER_MS", 1500);
+    for (size_t a = 0; pms > 0 && nv.energy_mj() && a < arms.size(); a++) {
+      const std::string& nm = arms[a].name;
+      if (nm != "lt" && nm != "gemm" && nm != "ovl" && nm != "wgl") continue;
+      std::vector<double> v;
+      for (const auto& it : tm.items)
+        if (it.arm == (int)a) v.push_back(it.ms / it.calls);
+      const double per = gk::median(v);
+      if (!(per > 0)) continue;
+      arms[a].enqueue(f.s0, std::max(1, (int)std::ceil(0.2 * pms / per)));
+      CK(cudaStreamSynchronize(f.s0));
+      cudaEvent_t e0, e1;
+      CK(cudaEventCreate(&e0));
+      CK(cudaEventCreate(&e1));
+      const unsigned long long j0 = nv.energy_mj();
+      CK(cudaEventRecord(e0, f.s0));
+      arms[a].enqueue(f.s0, std::max(1, (int)std::ceil(pms / per)));
+      CK(cudaEventRecord(e1, f.s0));
+      CK(cudaEventSynchronize(e1));
+      const unsigned long long j1 = nv.energy_mj();
+      float ms = 0;
+      CK(cudaEventElapsedTime(&ms, e0, e1));
+      watts[a] = (double)(j1 - j0) / ms;
+      cudaEventDestroy(e0);
+      cudaEventDestroy(e1);
+    }
     // the timed schedule's own values: two overlapped calls into poisoned buffers, the last one's tiles to NAME-ovl
     for (int b = 0; b < 2; b++) {
       f.poison(b, f.s0);
@@ -3567,8 +3596,8 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            f.kn.lminb, f.kn.sahead ? 1 : 0, SHA_ADD, SHA_ROT, SHA_ROLL, SX_FORM, fused,
            f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
-      printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"cmhz\": %s}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a],
-             jn(gk::median(cmhz[a])).c_str());
+      printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"cmhz\": %s, \"w\": %s}", a ? ", " : "", arms[a].name.c_str(), med[a],
+             mhz[a], jn(gk::median(cmhz[a])).c_str(), jn(watts[a]).c_str());
     const double l = at("lt");
     printf("}, \"gamma_ovl\": %s, \"gamma_ovl_w\": %s, \"gamma_ovl_pad\": %s, \"gamma_ovl_nomem\": %s, \"gamma_call\": %s, "
            "\"gamma_gemm\": %s, ",

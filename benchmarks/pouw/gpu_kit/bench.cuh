@@ -100,6 +100,7 @@ class Nvml {
     auto init = reinterpret_cast<int (*)()>(dlsym(lib_, "nvmlInit_v2"));
     auto by_uuid = reinterpret_cast<int (*)(const char*, void**)>(dlsym(lib_, "nvmlDeviceGetHandleByUUID"));
     clock_ = reinterpret_cast<int (*)(void*, int, unsigned*)>(dlsym(lib_, "nvmlDeviceGetClockInfo"));
+    energy_ = reinterpret_cast<int (*)(void*, unsigned long long*)>(dlsym(lib_, "nvmlDeviceGetTotalEnergyConsumption"));
     void* r = dlsym(lib_, "nvmlDeviceGetCurrentClocksEventReasons");
     reasons_ = reinterpret_cast<int (*)(void*, unsigned long long*)>(
         r ? r : dlsym(lib_, "nvmlDeviceGetCurrentClocksThrottleReasons"));
@@ -122,10 +123,18 @@ class Nvml {
     if (reasons_) reasons_(h_, &s.throttle);
     return s;
   }
+  // the GPU's energy since the driver loaded, mJ (0: unknown); NVML updates it periodically, so a power is its difference
+  // over a window of a second or more
+  unsigned long long energy_mj() const {
+    unsigned long long e = 0;
+    if (h_ && energy_) energy_(h_, &e);
+    return e;
+  }
 
  private:
   void* lib_ = nullptr;
   void* h_ = nullptr;
+  int (*energy_)(void*, unsigned long long*) = nullptr;
   int (*clock_)(void*, int, unsigned*) = nullptr;
   int (*reasons_)(void*, unsigned long long*) = nullptr;
   std::string uuid_;
