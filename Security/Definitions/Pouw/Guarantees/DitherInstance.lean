@@ -44,8 +44,9 @@ with its dual price `μ` at the sampling blocks' honest use: with `WorkSound`'s 
   (`W_b ≤ W_mac · macs b`, `W_b = W_mm + W_sha + W_ans`: an outside machine that returns the root saves the block's
   hashing too, RT-PROTO-2 P18). A bit across the boundary carries the coin of at most `n_max` MACs when the
   challenger issues the dither bits as a signed coin stream (RT-PROTO P2, the coordinator's 06:20Z decision;
-  `n_max = N` for a static call, `d_v` for PV). The counts exclude the challenger's signed coin stream, and the caps
-  are set at served traffic (P18). Without a streamed side, about 1 kbit carries a whole sampling block, and
+  `n_max = N` for a static call, `d_v` for PV). The counts exclude the challenger's coin stream and nothing else, as
+  `CertifierSeesImports` defines it (RT-POOL RP5), a replica on several nodes has one pair of counts (RP9), and the
+  caps are set at served traffic (P18). Without a streamed side, about 1 kbit carries a whole sampling block, and
   `OutsourceWithinEgress` at this `β` is false;
 * the deadlines from the auditor's clocks (`Timed`, RT-PROTO P5, RT-PROTO-2 P13 and P25), in each sampling block's
   commit, challenge and response phases:
@@ -59,8 +60,9 @@ with its dual price `μ` at the sampling blocks' honest use: with `WorkSound`'s 
   - the period is refused if the network certifier saw a root arrive later than `Δ` after its block's coins, or a
     selected block's answer later than `τ_ans` after its check coin. An answer may arrive after later blocks' coins;
   - an operand root arrives no sooner than its commit phase after the previous block's work (`CommitAfterWork`), a
-    root no sooner than its work (`RootAfterCoin`), a selected answer no sooner than its block's work and its own run
-    (`AnswerAfterWork`), and the period's length `T` is at least 0.
+    root no sooner than its work after its coins (`RootAfterCoin`), a selected answer no sooner than its own run after
+    its block's dither coins (`AnswerAfterWork`), and the period's length `T` is at least 0. These three are the
+    node's wall time in the model, which no verdict reads; the orderings among the signed times are `Timed`'s checks.
 
   No count of sampling blocks or of selected ones is a hypothesis: the blocks' commit phases and work run one block at
   a time, so they fit in `T` at any `nsb`. The answers run beside later blocks, and no answer's use is counted, only
@@ -79,7 +81,7 @@ capacity (`TimedWorkFits`) and ran its selected answers within the period (`Answ
 buy.
 
 The other devices are resources of `G` at their rates in 𝓜 (RT-PROTO P9): the honest optimum and the capacity count
-them, and `SAKMatmul` and `ShaSpeed` hold at the dual price over them too. That they are all of the processors the
+them, and `SAKMatmul` and `SAKSha` hold at the dual price over them too. That they are all of the processors the
 cards reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. `Q` calls use at least the
 capacity of one card resource `r` a public compression uses (`cap_r ≤ Q callUse_r`, `CallsAtPub`), whatever the
 price. -/
@@ -101,9 +103,9 @@ def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Ve
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
     (∀ b, SAKMatmul G P μ (Reg b) (fun _ => pubCost e μ pb.mm (macs b))
       (fun _ => ηw * (Wmm b + Wsha b + Wans b) / Wmm b) κdmm) →
-    ShaSpeed G P nsb Reg μ (fun b => pubCost e μ pb.sha (comps b))
+    SAKSha G P nsb Reg μ (fun b => pubCost e μ pb.sha (comps b))
       (fun b => ηw * (Wmm b + Wsha b + Wans b) / Wsha b) κdsha κsha →
-    OutsourceWithinEgress G μ (nmax * Wmac) → ServiceSound G P nsb Reg verdict dev κS →
+    OutsourceWithinEgress G μ (nmax * Wmac) → ProofSystemSound G P nsb Reg verdict dev κS →
     CertifierSeesImports G P nsb dev cin cout → CommitAfterWork G P nsb dev t opArrive →
     RootAfterCoin G P nsb dev t arrive → AnswerAfterWork G P nsb dev sel t ansAt →
     ExtractAdv G P nsb Reg sel Q Badv ξ κx →
@@ -131,7 +133,7 @@ read at is the card's own, the one its runs refine to, and the trust base's mode
 theorem and in the lock.
 
 Open: `G` is still any accelerator that is the devices at `x` (`OnCard`), not the canonical card-level accelerator
-whose programs are exactly the card's; the witness that `SAKMatmul` and `ShaSpeed` hold at such a `G`, with free
+whose programs are exactly the card's; the witness that `SAKMatmul` and `SAKSha` hold at such a `G`, with free
 guesses (RT-LEAN-2 L38), is WORKSOUND-WIT's. A sampling block's commitment reads the oracle, which the card has no instruction
 for (ABSORB-THM's realization, R-ACCEL-7). -/
 def WorkSoundOnCard (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=

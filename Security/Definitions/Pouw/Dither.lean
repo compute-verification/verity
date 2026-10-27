@@ -15,10 +15,10 @@ The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound
 * **a round** of a commit-then-check protocol (`RoundProto`): the words the prover computes after the first coin, their
   commitment (the SHA-512 Merkle root over the words' leaves), and the check, parametric in the protocol (R-ACCEL-2),
   with the no-fold protocol as one instance (`NoFold`, `noFoldRound`) whose knobs are parameters, so protocol v1 and
-  v2 are instances;
+  v2 are instances, and the served sampling block, checked where its selection coin picks it (`ditherSelected`);
 * **a round program's moments** (`wordsMoment`, `commitMoment`): the moment bounds of the two "public best" premises,
   SAK(matmul) on the words and SHA-512's speed on their commitment (`Definitions.Pouw.Assumptions.Dither`'s
-  `SAKMatmul`, `ShaSpeed`), in units of priced cost, outside a degenerate set of dithers;
+  `SAKMatmul`, `SAKSha`), in units of priced cost, outside a degenerate set of dithers;
 * **a monitoring period's prover** sampling block by sampling block, in the commit, challenge and response phases
   (`Prover`): each block's operands committed before its coins (its instance, adapted: chosen after the earlier
   blocks' coins), what it sends (`Prover.transcript`), its timed use and oracle calls (`Prover.timedUse`,
@@ -64,8 +64,8 @@ structure Accel where
   /-- A run's wall time, seconds. -/
   wall : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
   /-- The bits a run exchanges with machines outside the period's devices, in either direction (what the network
-  certifier counts, into and out of the devices), other than the challenger's signed coin stream (RT-PROTO-2 P18,
-  RT-POOL RP27). -/
+  certifier counts, into and out of the devices), other than the challenger's coin stream, which
+  `Assumptions.CertifierSeesImports` defines exactly (RT-PROTO-2 P18, RT-POOL RP5, RP27). -/
   ext : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
   /-- The oracle calls a run makes: SHA-512 evaluations through the machine's oracle-call step. -/
   calls : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
@@ -134,7 +134,8 @@ of the words the commitment binds (`ExtractAdv` links them).
 * `commit o T` is the honest commitment, the Merkle root over `T`'s leaves; no premise asks a prover to compute it for
   every `T` (W1).
 * The round's check may select no cell: a round is checked independently with a live Bernoulli coin inside `Chk`, at a
-  probability set from its public shape (RT-PROTO-2 P15, P20), and `ok` and `opens` hold where it isn't selected.
+  probability set from its public shape (RT-PROTO-2 P15, P20), and `ok` and `opens` hold where it isn't selected
+  (`ditherSelected`, the served design; `noFoldRound` checks its cells on every coin).
 
 The commitment's hash is the random oracle `Orc` (a uniform table: SHA-512 as a random oracle, the named use pending
 Daniel), which `commit`, `opens` and `accept` read. The proof layer (C-Flock's proofs of the opened words) is the
@@ -157,7 +158,8 @@ structure RoundProto where
 
 attribute [instance] RoundProto.instDraw RoundProto.instChk RoundProto.instOrc
 
-/-- A word: integers mod `2^32`. -/
+/-- A word: integers mod `2^32`. Protocol v3.2's proof block checks a 16-bit `T_s` instead (RT-POOL RP18,
+`Guarantees.Dither.WorkSound`'s Open). -/
 abbrev Word : Type := ZMod (2 ^ 32)
 
 /-- **The no-fold protocol's knobs** (PROTO-DESIGN, R-ACCEL-2): `A` is `n × m`, `B` is `m × n'` with `m = nb · L`,
@@ -219,6 +221,26 @@ def noFoldRound (k : NoFold) : RoundProto where
 def noFoldHonest (k : NoFold) (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) : (noFoldRound k).Tr :=
   fun i j b => noFoldWord k (k.noise a d) i j b
 
+/-- **The served Dither sampling block: selected or not** (RT-PROTO-2 P15, P20; SAK-LB F2). The no-fold round at its
+knobs `k`, its check coin carrying a selection coin `Sel` beside the cells' coin: the block is checked where its
+selection coin is `picked`, with probability `π = Pr[picked]`, and then on the `s` cells its cells' coin selects, as
+in `noFoldRound`; where it isn't picked, `ok`, `opens` and `accept` hold with no cell checked. The selection is decided
+by the check coin, issued after the block's commitment, so `WorkSound`'s `sel` is `picked` of its first part, and an
+unselected block is never answered. `π` is one probability for the period's blocks, which share the knobs' shape
+(`n`, `n'`, `nb`, `L`, `s`), so a probability proportional to a block's public cost is one `π` here. -/
+def ditherSelected (k : NoFold) (Sel : Type) [Fintype Sel] (picked : Sel → Prop) : RoundProto where
+  Inst := (noFoldRound k).Inst
+  Draw := k.Draw
+  Chk := Sel × k.Chk
+  Orc := k.Orc
+  Tr := (noFoldRound k).Tr
+  Root := k.Root
+  commit := k.merkle
+  ok a d c T := picked c.1 → (noFoldRound k).ok a d c.2 T
+  opens o r c T := picked c.1 → (noFoldRound k).opens o r c.2 T
+  Ans := (noFoldRound k).Ans
+  accept o a d c r y := picked c.1 → (noFoldRound k).accept o a d c.2 r y
+
 end Round
 
 section Moments
@@ -276,7 +298,7 @@ the boundary. Sampling block `b`, in the order of its coins:
   computes between them and the block's commitment, and returns the commitment and the state after it. The
   challenger then issues the block's check coin `c` (whether the block is selected, and which of its proof blocks a
   selected block proves), and `absorb b` writes it into the state. `absorb` is a function, not a program: it reads no
-  oracle and uses nothing. Whatever it computes is advice to later blocks' programs, and `SAKMatmul` and `ShaSpeed`
+  oracle and uses nothing. Whatever it computes is advice to later blocks' programs, and `SAKMatmul` and `SAKSha`
   hold at every advice of the size `ExtractAdv` gives, so it buys the prover nothing they don't already allow;
 * **the response phase**: `answer b` answers the check from the state after the block's work and every coin of the
   period (CMP-154). It is off the state path, since no later program reads it, so it may run beside later sampling
@@ -395,8 +417,8 @@ end Prover
 
 /-- **The service's verdict on a period** (RT-LEAN-2 L29): what the verifier accepts, from the oracle, the verifier's
 coins, the transcript (`Prover.transcript`) and the readings `Obs` of the auditor's devices (the network certifier's
-signed counts). It reads no code: the sampling blocks' checks run inside C-Flock's zero-knowledge proofs (`ServiceSound` ties
-it to `Prover.Accepted`). -/
+signed counts). It reads no code: the sampling blocks' checks run inside C-Flock's zero-knowledge proofs
+(`ProofSystemSound` ties it to `Prover.Accepted`). -/
 abbrev Verdict (P : RoundProto) (k : ℕ) (Obs : Type) : Type :=
   P.Orc → (Fin k → P.Draw × P.Chk) → (Fin k → P.Inst × P.Root × P.Ans) → Obs → Prop
 
