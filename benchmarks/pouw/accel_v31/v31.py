@@ -748,7 +748,9 @@ D6 = {
 
 def cmd_table(a: argparse.Namespace) -> int:
     """`v31 bench`'s JSON lines beside D6's predictions: gamma overlapped (and serial, and the GEMM alone) and the ratio,
-    with the variant (ROW, the commit stream's priority, the carveout, the GEMM's tile counter) and the arms' ms."""
+    with the variant (ROW, the commit stream's priority, the carveout, the GEMM's tile counter, the wrap kernel and its
+    columns a CTA, the commit's CTAs an SM, the GEMM's register cap; a line without them ran wrap_kernel and the small
+    path at 208) and the arms' ms."""
     rows = []
     for path in a.files:
         for line in Path(path).read_text().splitlines():
@@ -760,7 +762,9 @@ def cmd_table(a: argparse.Namespace) -> int:
     for r in rows:
         model, pred = D6.get((r["k"], r["n"]), ("", float("nan")))
         ms = r["arms"]
-        variant = f"r{r.get('row', '?')} {r.get('cprio', 'hi')} c{r.get('carve', -1)} d{r.get('dyn', 0)}"
+        wrap = f"w{r['wrap']}/{r['wcw']}" if r.get("wrap", 1) == 2 else "w1"
+        variant = (f"r{r.get('row', '?')} {r.get('cprio', 'hi')} c{r.get('carve', -1)} d{r.get('dyn', 0)} {wrap} "
+                   f"k{r.get('ccta', 0)} n{r.get('maxnreg', 208)}")
         parts = ", ".join(f"{ms[x]['ms']:.3f}" if x in ms else "-" for x in ("form", "wrap", "gemm", "commit"))
         print(f"| {r['shape']} | {model} | {r['m']} x {r['n']} x {r['k']} | {variant} | {ms['lt']['ms']:.3f} | {ms['ovl']['ms']:.3f} | "
               f"{r['gamma_ovl']:.2f} | {r['gamma_call']:.2f} | {r['gamma_gemm']:.2f} | {pred:.2f} | {r['gamma_ovl'] / pred:.2f} | "

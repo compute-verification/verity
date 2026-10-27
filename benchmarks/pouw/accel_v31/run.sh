@@ -14,8 +14,10 @@
 # (a node's lane runs go through a slot of its gpu pool; the GPUs come from gpu-lease inside, for the GPU work alone)
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench (default bench); SHAPES: bench's NAME:M:N:K list
-# (default D6's static shapes at m 8192); VARIANTS: bench's ROW:CPRIO:CARVE:DYN list (default 8192:lo:100:1; v31.cu's
-# Knobs); REPS (default 7); Q, the proof blocks a verdict opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
+# (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
+# cprio (lo), carve (100), dyn (1), wrap (2), wcw (256), ccta (1) (v31.cu's Knobs) and nreg (the GEMM's register cap, a
+# build of its own; default v31.cu's), default row=8192; REPS (default 7); Q, the proof blocks a verdict opens (default
+# 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
 # uv run -q --no-project --with numpy python: the node's python3 has no numpy); LEASE, the command that leases the GPU
 # (default gpu-lease 1 --wait --max-min 25 --; a timed run passes "gpu-lease 8 --wait --timed --max-min 30 --" under
@@ -28,25 +30,37 @@ PY=${PY:-uv run -q --no-project --with numpy python}
 export PYTHONPATH=.
 GENCODE=${GENCODE:-arch=compute_120a,code=sm_120a}
 LP=${LP:-256} T=${T:-3} ROW=${ROW:-1024} Q=${Q:-64} REPS=${REPS:-7} MODE=${MODE:-bench}
-VARIANTS=${VARIANTS:-8192:lo:100:1}
+VARIANTS=${VARIANTS:-row=8192}
 W=$(mktemp -d /dev/shm/accel-v31.XXXXXX)
 export W
 trap 'rm -rf "$W"' EXIT
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 [ -n "${HYPOTHESIS:-}" ] && printf '%s\n' "$HYPOTHESIS" > "$O/hypothesis.txt"
 : > "$O/rc.txt"
+# knob VARIANT KEY DEFAULT: the variant's KEY, else DEFAULT
+knob() { local v; v=$(tr ',' '\n' <<< "$1" | sed -n "s/^$2=//p" | tail -1); echo "${v:-$3}"; }
+export -f knob
 
-nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 -o "$W/v31" $D/v31.cu -lcuda -lcublasLt \
-  > "$O/build.log" 2>&1
+build() {   # BIN LOG [nvcc flags]
+  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 "${@:3}" -o "$1" $D/v31.cu -lcuda \
+    -lcublasLt > "$2" 2>&1
+}
+build "$W/v31" "$O/build.log"
 echo "build rc $?" >> "$O/rc.txt"
 [ -x "$W/v31" ] || { cat "$O/rc.txt"; tail -20 "$O/build.log"; exit 1; }
+for n in $(for v in $VARIANTS; do knob "$v" nreg ""; done | sort -u); do
+  build "$W/v31-n$n" "$O/build-n$n.log" -DV31_MAXNREG="$n"
+  echo "build n$n rc $?" >> "$O/rc.txt"
+done
 
 # gates: NAME M N K OPERANDS CHEAT [LP T ROW]. Honest ones cover a partial last segment (K 1280), wrap-heavy operands
-# (uniform), zeros, a third Z digit (K 20480: 208 NT >= 2^14), a third Y digit (K 32768: 128 NT >= 2^14), L' 512 at t 2,
-# rows of 2, 8 and 32 KiB; the cheats skip a noise tile, forge one tile's T_1, or one tile's O (of 4 tiles).
+# (uniform; at N 384 wrap2's 128 columns a CTA, at N 512 its 256), zeros, a third Z digit (K 20480: 208 NT >= 2^14), a
+# third Y digit (K 32768: 128 NT >= 2^14), L' 512 at t 2, rows of 2, 8 and 32 KiB; the cheats skip a noise tile, forge
+# one tile's T_1, or one tile's O (of 4 tiles). The gates run v31.cu's default knobs.
 GATES=${GATES:-"
 g-llm 256 256 1536 llm none
 g-uniform 256 384 1280 uniform none
+g-uniform512 256 512 1536 uniform none
 g-zero 128 128 768 zero none
 g-dz3 128 128 20480 llm none
 g-dy3 128 256 32768 llm none
@@ -77,13 +91,10 @@ V4-n512-k7168:8192:512:7168 V4-n16384-k4096:8192:16384:4096 V4-n7168-k16384:8192
 V4-n2048-k7168:8192:2048:7168 V4-n1024-k7168:8192:1024:7168 V4-n8192-k1536:8192:8192:1536 V4-n384-k7168:8192:384:7168"}
 export SHAPES
 if [ "$MODE" = bench ]; then
-  for v in $VARIANTS; do
-    r=${v%%:*}
-    [ -f "$W/params.$r" ] && continue
+  for r in $(for v in $VARIANTS; do knob "$v" row 8192; done | sort -u); do
     # shellcheck disable=SC2086
     $PY $D/v31.py params "$W/params" $SHAPES --lp "$LP" --t "$T" --row "$r" 2>> "$O/prep.err"
     echo "params r$r rc $?" >> "$O/rc.txt"
-    : > "$W/params.$r"
   done
 fi
 export LP T ROW REPS MODE VARIANTS
@@ -121,11 +132,12 @@ if [ "$MODE" = bench ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
       ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/smi.csv" 2>&1 &
     smi=$!
     for v in $VARIANTS; do
-      IFS=: read -r row cprio carve dyn <<< "$v"
-      tag=r$row-${cprio:-lo}-c${carve:-100}-d${dyn:-1}
+      tag=$(tr ',' '-' <<< "$v" | tr -d '=')
+      n=$(knob "$v" nreg "")
       mkdir -p "$W/bench/$tag"
-      V31_CPRIO=${cprio:-lo} V31_CARVE=${carve:-100} V31_DYN=${dyn:-1} \
-        "$W/v31" bench "$REPS" "$W/bench/$tag" "$W/params" "$LP" "$T" "$row" $SHAPES > "$O/bench-$tag.jsonl" 2> "$O/bench-$tag.err"
+      V31_CPRIO=$(knob "$v" cprio lo) V31_CARVE=$(knob "$v" carve 100) V31_DYN=$(knob "$v" dyn 1) V31_WRAP=$(knob "$v" wrap 2) \
+        V31_WCW=$(knob "$v" wcw 256) V31_CCTA=$(knob "$v" ccta 1) "$W/v31${n:+-n$n}" bench "$REPS" "$W/bench/$tag" "$W/params" \
+        "$LP" "$T" "$(knob "$v" row 8192)" $SHAPES > "$O/bench-$tag.jsonl" 2> "$O/bench-$tag.err"
       echo "bench $tag rc $?" >> "$O/rc.txt"
     done
     kill $smi'

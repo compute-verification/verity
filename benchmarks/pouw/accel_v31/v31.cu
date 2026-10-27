@@ -13,8 +13,9 @@
 //            of L = t L' inner indices every thread stores its accumulators' low 16 bits (T_s) to the words buffer; then
 //            the tail stages subtract P_A P_B^T stage by stage at their digit's weight (128^d), and the epilogue adds
 //            256 dO: O = T_S + 256 dO - Z_X U^T - V Y_W^T = (A + d_A)(B + d_B)^T mod 2^32
-//   commit   commit_gpu's small path (salt_small, leaf_small, level kernels: CTAs that fit beside the GEMM's) over the
-//            call's rows: hm96-sha512/row/v2 rows of ROW bytes in one frame-v3-sha512 tree, salts prf_salt(Ks, pos)
+//   commit   commit_gpu's small path (CTAs that fit beside the GEMM's) over the call's rows: hm96-sha512/row/v2 rows of ROW
+//            bytes in one frame-v3-sha512 tree, salts prf_salt(Ks, pos); its salt and leaf phases in at most V31_CCTA
+//            CTAs an SM (salt_persist, leaf_persist), so a GEMM CTA finds room beside them
 //
 // Modes (DIR from `v31.py gpu-prep`, PDIR from `v31.py params`):
 //   v31 gate DIR M N K LP T ROW CHEAT     one call on DIR's operands and seeds into poisoned buffers, dumped for
@@ -148,6 +149,7 @@ struct FormArgs {
   int8_t* P;              // the tail rows (rows x TL)
   int* flag;              // 1: a wrap list overflowed; 2: a top digit left int8
   int rows, K, lp, nt, kb64, dz, dy, cap, TL;
+  int* off;               // B side: row j's wraps of noise tile tau are its list's [off[j (nt + 1) + tau], ... + tau + 1)
 };
 // A side: a CTA of L' threads takes 16 rows; thread c the column c of every noise tile. Z_X[i, pi_tau(c)] += A~[i, tau L' + c]
 // through shared atomics; X^T in 16-byte columns of the 16 rows.
@@ -202,6 +204,11 @@ __global__ void form_b_kernel(FormArgs f) {
   if (c < 16) scnt[c] = 0;
   __syncthreads();
   for (int tau = 0; tau < f.nt; ++tau) {
+    if (f.off) {
+      __syncthreads();
+      if (c < 16) f.off[(j0 + c) * (f.nt + 1) + tau] = min(scnt[c], f.cap);
+      __syncthreads();
+    }
     const int k = tau * lp + c, pc = f.perm[(size_t)tau * lp + c];
     u32 bp[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 #pragma unroll
@@ -224,6 +231,7 @@ __global__ void form_b_kernel(FormArgs f) {
   }
   __syncthreads();
   if (c < 16) f.cnt[j0 + c] = min(scnt[c], f.cap);
+  if (f.off && c < 16) f.off[(j0 + c) * (f.nt + 1) + f.nt] = min(scnt[c], f.cap);
 #pragma unroll
   for (int r = 0; r < 16; ++r) {
     int8_t* p = f.P + (j0 + r) * f.TL;
@@ -240,6 +248,8 @@ struct WrapArgs {
   const int *listA, *cntA, *listB, *cntB;
   int* dO;               // m x N
   int m, n, capA, capB;
+  const int* offB;       // FormArgs::off of the B side
+  int lp, nt;
 };
 template <class F> DEV void bytes16(const uint4& v, F&& f) {
   const u32 w[4] = {v.x, v.y, v.z, v.w};
@@ -292,6 +302,108 @@ __global__ void __launch_bounds__(256) wrap_kernel(WrapArgs a) {
   }
   __syncthreads();
   for (int e = t; e < TILE * TILE; e += 256) a.dO[(i0 + (e >> 7)) * a.n + j0 + (e & 127)] = acc[(e >> 7) * 129 + (e & 127)];
+}
+
+DEV void cp_async16(uint32_t dst, const void* src) {
+  asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" ::"r"(dst), "l"(src) : "memory");
+}
+DEV void cp_async_wait_all() { asm volatile("cp.async.wait_all;" ::: "memory"); }
+
+// The same dO over 128 rows x CW columns a CTA (2 CW threads). X w_W^T by columns: noise tile by noise tile, the tile's
+// L' rows of X^T (128 bytes each, 16-byte chunks swizzled by k & 7) go to shared memory, and thread (column l, half h)
+// adds s X[i, k] for its column's wraps in the tile (FormArgs::off) to its 64 rows. It adds v = x ^ 0x80 (s = 1) or
+// x ^ 0x7F (s = -1), both 0..255, in 16-bit lanes (two rows a register), and the constant -128 or -127 once a wrap;
+// at most 256 wraps between flushes, so no lane carries. Then w_X B~^T by rows (rare) from global memory into dO.
+template <int CW>
+__global__ void __launch_bounds__(2 * CW, CW == 128 ? 2 : 1) wrap2_kernel(WrapArgs a) {
+  extern __shared__ __align__(16) uint8_t xs[];
+  const int t = threadIdx.x, l = t % CW, h = t / CW, lp = a.lp, nt = a.nt;
+  const size_t i0 = (size_t)blockIdx.y * TILE, j0 = (size_t)blockIdx.x * CW;
+  const int* L = a.listB + (j0 + l) * a.capB;
+  const int* off = a.offB + (j0 + l) * (nt + 1);
+  int* dcol = a.dO + (i0 + 64 * h) * a.n + j0 + l;
+  u32 acc[32];
+#pragma unroll
+  for (int i = 0; i < 32; ++i) acc[i] = 0;
+  int cst = 0, since = 0;
+  bool first = true;
+  auto flush = [&]() {
+    int* p = dcol;
+    const size_t n = a.n;
+#pragma unroll
+    for (int w = 0; w < 16; ++w) {
+      const int v[4] = {(int)(acc[2 * w] & 0xFFFF), (int)(acc[2 * w + 1] & 0xFFFF), (int)(acc[2 * w] >> 16), (int)(acc[2 * w + 1] >> 16)};
+#pragma unroll
+      for (int b = 0; b < 4; ++b) {
+        *p = (first ? 0 : *p) + v[b] + cst;
+        p += n;
+      }
+      acc[2 * w] = acc[2 * w + 1] = 0;
+    }
+    cst = 0; since = 0; first = false;
+  };
+  const uint32_t xb = (uint32_t)__cvta_generic_to_shared(xs);
+  int o0 = off[0];
+  for (int tau = 0; tau < nt; ++tau) {
+    __syncthreads();
+    for (int e = t; e < lp * 8; e += 2 * CW) {
+      const int kk = e >> 3, c = e & 7;
+      cp_async16(xb + kk * 128 + ((c ^ (kk & 7)) << 4), a.XT + (size_t)(tau * lp + kk) * a.m + i0 + 16 * c);
+    }
+    cp_async_wait_all();
+    __syncthreads();
+    const int o1 = off[tau + 1];
+    for (int q = o0; q < o1;) {
+      if (since == 256) flush();
+      const int qe = min(o1, q + 256 - since);
+      since += qe - q;
+      for (; q < qe; ++q) {
+        const int e = __ldg(L + q), kk = (e >> 1) - tau * lp;
+        const u32 mask = e & 1 ? 0x7F7F7F7Fu : 0x80808080u;
+        cst += e & 1 ? -127 : -128;
+        const uint8_t* row = xs + kk * 128;
+        const int sw = kk & 7;
+#pragma unroll
+        for (int u = 0; u < 4; ++u) {
+          const uint4 v = *reinterpret_cast<const uint4*>(row + (((4 * h + u) ^ sw) << 4));
+          const u32 w[4] = {v.x ^ mask, v.y ^ mask, v.z ^ mask, v.w ^ mask};
+#pragma unroll
+          for (int i = 0; i < 4; ++i) {
+            acc[2 * (4 * u + i)] += __byte_perm(w[i], 0, 0x4240);
+            acc[2 * (4 * u + i) + 1] += __byte_perm(w[i], 0, 0x4341);
+          }
+        }
+      }
+    }
+    o0 = o1;
+  }
+  flush();
+  __syncthreads();
+  const int r = t & 127, g = t >> 7;
+  const int na = a.cntA[i0 + r];
+  if (na == 0) return;
+  const int* LA = a.listA + (i0 + r) * a.capA;
+#pragma unroll 1
+  for (int half = 0; half < 2; ++half) {
+    const size_t c0 = j0 + 64 * g + 32 * half;
+    int v[32];
+#pragma unroll
+    for (int i = 0; i < 32; ++i) v[i] = 0;
+    for (int q = 0; q < na; ++q) {
+      const int e = __ldg(LA + q);
+      const uint4* p = reinterpret_cast<const uint4*>(a.BtT + (size_t)(e >> 1) * a.n + c0);
+      const int s = e & 1 ? -1 : 1;
+#pragma unroll
+      for (int u = 0; u < 4; ++u) halves8(__ldg(p + u), [&](int i, int x) { v[8 * u + i] += s * x; });
+    }
+    int4* d = reinterpret_cast<int4*>(a.dO + (i0 + r) * a.n + c0);
+#pragma unroll
+    for (int u = 0; u < 8; ++u) {
+      int4 x = d[u];
+      x.x += v[4 * u]; x.y += v[4 * u + 1]; x.z += v[4 * u + 2]; x.w += v[4 * u + 3];
+      d[u] = x;
+    }
+  }
 }
 
 // ---------------------------------------------------------------- TMA, mbarrier, ldmatrix, mma.sync (floored_gemm's)
@@ -648,6 +760,114 @@ struct V31Row {
   }
 };
 
+// ---------------------------------------------------------------- the commit in at most cap CTAs an SM
+// commit_gpu's small path launches a CTA for every 128 leaves, and up to 5 of them sit on an SM, so a GEMM CTA launched
+// beside the commit waits for an SM to drain while the commit's next CTAs take each freed slot. salt_persist and
+// leaf_persist do the same work (salt_small's and leaf_small's, block by block) in at most cap CTAs an SM: a CTA claims
+// one of its SM's slots (claim[smid] = epoch << 8 | count, epoch new each launch) or leaves at once, and the claimants take
+// 128-leaf blocks from ctl[0] until none are left. The last CTA out zeroes the counters for the next launch; launches that
+// share ctl run in one stream's order.
+struct Persist {
+  u32* ctl;     // [0] the next block, [1] the CTAs out, [2 + b] CTA b's current block
+  u32* claim;   // a word an SM (smid & 1023)
+  u32 epoch, cap, nvb;
+};
+DEV u32 smid() {
+  u32 s;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(s));
+  return s;
+}
+DEV bool persist_claim(const Persist& p) {
+  bool got = false;
+  if (threadIdx.x == 0) {
+    u32* w = p.claim + (smid() & 1023);
+    u32 old = *reinterpret_cast<volatile u32*>(w);
+    for (;;) {
+      const u32 c = old >> 8 == p.epoch ? old & 255 : 0;
+      if (c >= p.cap) break;
+      const u32 seen = atomicCAS(w, old, p.epoch << 8 | (c + 1));
+      if (seen == old) { got = true; break; }
+      old = seen;
+    }
+  }
+  return __syncthreads_or(got);
+}
+// the CTA's next block (nvb or more: none left), the same for every thread
+DEV u32 persist_next(const Persist& p) {
+  volatile u32* slot = p.ctl + 2 + blockIdx.x;
+  __syncthreads();
+  if (threadIdx.x == 0) *slot = atomicAdd(p.ctl, 1u);
+  __syncthreads();
+  return *slot;
+}
+DEV void persist_done(const Persist& p) {
+  if (threadIdx.x == 0 && atomicAdd(p.ctl + 1, 1u) == gridDim.x - 1) { p.ctl[0] = 0; p.ctl[1] = 0; }
+}
+// fold_cta for block vb
+DEV void fold_vb(int dom, u64* levels, u64 width, u32 cnt, int L, u64 vb) {
+  const u32 t = threadIdx.x;
+  for (int l = 1; l <= L; ++l) {
+    __syncthreads();
+    const u32 m = cnt >> l;
+    if (t < m) {
+      const u64 i = vb * m + t;
+      const u64* in = level_at(levels, width, l - 1);
+      u64 Lc[8], Rc[8], o[8];
+      ld8(in + 16 * i, Lc);
+      ld8(in + 16 * i + 8, Rc);
+      node(dom, l - 1, i, Lc, Rc, o);
+      st8(level_at(levels, width, l) + 8 * i, o);
+    }
+  }
+}
+DEV int log2_cnt(u32 cnt) {
+  int L = 0;
+  while ((1u << L) < cnt) ++L;
+  return L;
+}
+// salt_small<true> (slot 0) a block at a time: S and F for positions below n, the pads up to width, and the subtrees of
+// blocks that hold only pads (nvb = ceil(width / 128))
+__global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
+    salt_persist(Persist p, int dom, const uint4* __restrict__ Tg, u64 n, u64 width, u64* __restrict__ S, u64* __restrict__ F,
+                 u64* levels) {
+  const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
+  if (persist_claim(p))
+    for (u32 vb; (vb = persist_next(p)) < p.nvb;) {
+      const u64 pos = (u64)vb * SMALL_THREADS + threadIdx.x;
+      if (pos < n) {
+        salt_one<true, false, true>(pos, nullptr, reinterpret_cast<const uint8_t*>(Tg), S);
+        u64 f[8];
+        frame_first(dom, pos, f);
+        st8(F + 8 * pos, f);
+      } else if (pos < width) {
+        u64 o[8];
+        pad(dom, pos, o);
+        st8(levels + 8 * pos, o);
+      }
+      if ((u64)vb * cnt >= n) fold_vb(dom, levels, width, cnt, log2_cnt(cnt), vb);
+    }
+  persist_done(p);
+}
+// leaf_small (g = 1, no bc, no fused top) a block at a time (nvb = ceil(n / 128))
+template <class Row>
+__global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
+    leaf_persist(Persist p, int dom, Row row, const u64* __restrict__ S, const u64* __restrict__ F, u64 n, u64 width,
+                 u64* levels) {
+  const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
+  if (persist_claim(p))
+    for (u32 vb; (vb = persist_next(p)) < p.nvb;) {
+      const u64 pos = (u64)vb * SMALL_THREADS + threadIdx.x;
+      if (pos < n) {
+        u64 x[8], out[8];
+        row.digest(pos, x);
+        leaf_from_digest<0>(dom, pos, x, S, out, nullptr, F);
+        st8(levels + 8 * pos, out);
+      }
+      fold_vb(dom, levels, width, cnt, log2_cnt(cnt), vb);
+    }
+  persist_done(p);
+}
+
 // ---------------------------------------------------------------- synthetic operands
 // v31.py's `llm` operands on the device: rows of Student-t(3) activations or Gaussian weights quantized to +-127 by their
 // absolute maximum (a CTA a row; the values regenerated from their hash for the second pass)
@@ -798,17 +1018,22 @@ static std::string env_str(const char* name, const char* dflt) {
 }
 // The knobs a bench line records. V31_CARVE: every kernel's preferred shared-memory carveout (percent; < 0 leaves the
 // driver's choice), so commit_gpu's small-path CTAs (no shared memory) can sit beside a GEMM CTA; V31_DYN: the GEMM takes
-// its tiles from a counter; V31_CPRIO: the commit stream's priority against the compute stream's (hi, lo or eq).
+// its tiles from a counter; V31_CPRIO: the commit stream's priority against the compute stream's (hi, lo or eq); V31_WRAP:
+// the wrap correction's kernel (1: wrap_kernel, 2: wrap2_kernel), V31_WCW its columns a CTA (256 where N allows, or 128);
+// V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small).
 struct Knobs {
-  int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1);
+  int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
+      ccta = env_int("V31_CCTA", 1);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
   if (pct < 0) return;
-  const void* ks[] = {(const void*)gemm_kernel<true>, (const void*)gemm_kernel<false>, (const void*)wrap_kernel,
-                      (const void*)form_a_kernel,     (const void*)form_b_kernel,      (const void*)bits_kernel,
-                      (const void*)noise_kernel,      (const void*)perm_kernel,        (const void*)salt_small<true>,
-                      (const void*)leaf_small<V31Row, 0>, (const void*)level_kernel,   (const void*)top_small};
+  const void* ks[] = {(const void*)gemm_kernel<true>,  (const void*)gemm_kernel<false>,  (const void*)wrap_kernel,
+                      (const void*)wrap2_kernel<128>,  (const void*)wrap2_kernel<256>,   (const void*)form_a_kernel,
+                      (const void*)form_b_kernel,      (const void*)bits_kernel,         (const void*)noise_kernel,
+                      (const void*)perm_kernel,        (const void*)salt_small<true>,    (const void*)leaf_small<V31Row, 0>,
+                      (const void*)level_kernel,       (const void*)top_small,           (const void*)salt_persist,
+                      (const void*)leaf_persist<V31Row>};
   for (const void* k : ks) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
 }
 
@@ -821,7 +1046,8 @@ struct Ctx {
   int16_t* BtT;
   uint8_t *dA, *dB;
   uint16_t* perm;
-  int *listA, *cntA, *listB, *cntB, *dO, *flag;
+  int *listA, *cntA, *listB, *cntB, *offB, *dO, *flag;
+  int wcw = 128;
   uint16_t* words[2] = {nullptr, nullptr};
   int* O[2] = {nullptr, nullptr};
   Maps *maps_proto, *maps_plain;
@@ -833,6 +1059,7 @@ struct Ctx {
   Knobs kn;
   u32* gctr = nullptr;
   u32 gbase = 0;
+  u32 *pctl = nullptr, *pclaim = nullptr, epoch = 0;
 
   void setup(int m_, int n_, int k_, int lp_, int t_, int row_, const std::string& params_path, int cap, int want_nb) {
     m = m_; n = n_; k = k_; lp = lp_; t = t_; row = row_;
@@ -858,6 +1085,11 @@ struct Ctx {
     set_carveout(kn.carve);
     gctr = dalloc<u32>(1);
     CK(cudaMemset(gctr, 0, 4));
+    if (kn.ccta < 0 || kn.ccta > 8) { fprintf(stderr, "V31_CCTA: 0 to 8\n"); exit(2); }
+    pctl = dalloc<u32>(2 + 2 * 8 * (size_t)nsm);
+    pclaim = dalloc<u32>(1024);
+    CK(cudaMemset(pctl, 0, 4 * (2 + 2 * 8 * (size_t)nsm)));
+    CK(cudaMemset(pclaim, 0, 4096));
     const size_t mk = (size_t)m * k, nk = (size_t)n * k, mn = (size_t)m * n;
     A = dalloc<int8_t>(mk); B = dalloc<int8_t>(nk); X = dalloc<int8_t>(mk); XT = dalloc<int8_t>(mk); W = dalloc<int8_t>(nk);
     BtT = dalloc<int16_t>(nk);
@@ -865,6 +1097,8 @@ struct Ctx {
     dA = dalloc<uint8_t>((size_t)m * kb64); dB = dalloc<uint8_t>((size_t)n * kb64);
     perm = dalloc<uint16_t>((size_t)NT * lp);
     listA = dalloc<int>((size_t)m * capA); cntA = dalloc<int>(m); listB = dalloc<int>((size_t)n * capB); cntB = dalloc<int>(n);
+    offB = dalloc<int>((size_t)n * (NT + 1));
+    wcw = kn.wcw == 256 && n % 256 == 0 ? 256 : 128;
     PA = dalloc<int8_t>((size_t)m * TL); PB = dalloc<int8_t>((size_t)n * TL);
     dO = dalloc<int>(mn); flag = dalloc<int>(1);
     CK(cudaMemset(flag, 0, 4));
@@ -888,6 +1122,8 @@ struct Ctx {
     CK(cudaFuncSetAttribute(gemm_kernel<true>, cudaFuncAttributeMaxDynamicSharedMemorySize, Ring::SMEM));
     CK(cudaFuncSetAttribute(gemm_kernel<false>, cudaFuncAttributeMaxDynamicSharedMemorySize, Ring::SMEM));
     CK(cudaFuncSetAttribute(wrap_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, TILE * 129 * 4));
+    CK(cudaFuncSetAttribute(wrap2_kernel<128>, cudaFuncAttributeMaxDynamicSharedMemorySize, lp * 128));
+    CK(cudaFuncSetAttribute(wrap2_kernel<256>, cudaFuncAttributeMaxDynamicSharedMemorySize, lp * 128));
     for (int b = 0; b < 2; b++) {
       CK(cudaEventCreateWithFlags(&ev_comp[b], cudaEventDisableTiming));
       CK(cudaEventCreateWithFlags(&ev_done[b], cudaEventDisableTiming));
@@ -899,10 +1135,10 @@ struct Ctx {
       for (int i = 0; i < 8; i++) seeds.w[s][i] = sha::be64(b + 64 * s + 8 * i);
   }
   FormArgs fa() const {
-    return FormArgs{A, dA, V, perm, X, XT, listA, cntA, PA, flag, m, k, lp, NT, kb64, dz, dy, capA, TL};
+    return FormArgs{A, dA, V, perm, X, XT, listA, cntA, PA, flag, m, k, lp, NT, kb64, dz, dy, capA, TL, nullptr};
   }
   FormArgs fb() const {
-    return FormArgs{B, dB, U, perm, W, BtT, listB, cntB, PB, flag, n, k, lp, NT, kb64, dz, dy, capB, TL};
+    return FormArgs{B, dB, U, perm, W, BtT, listB, cntB, PB, flag, n, k, lp, NT, kb64, dz, dy, capB, TL, offB};
   }
   GArgs gargs(int b, bool proto) const {
     return GArgs{proto ? maps_proto : maps_plain, words[b], dO, O[b], m, n, k, L, S, proto ? TT : 0, 8, lp, dz,
@@ -926,7 +1162,10 @@ struct Ctx {
     form_b_kernel<<<n / 16, lp, 16 * lp, st>>>(fb());
   }
   void wrap(cudaStream_t st) {
-    wrap_kernel<<<dim3(n / TILE, m / TILE), 256, TILE * 129 * 4, st>>>(WrapArgs{XT, BtT, listA, cntA, listB, cntB, dO, m, n, capA, capB});
+    const WrapArgs w{XT, BtT, listA, cntA, listB, cntB, dO, m, n, capA, capB, offB, lp, NT};
+    if (kn.wrap == 1) wrap_kernel<<<dim3(n / TILE, m / TILE), 256, TILE * 129 * 4, st>>>(w);
+    else if (wcw == 256) wrap2_kernel<256><<<dim3(n / 256, m / TILE), 512, lp * 128, st>>>(w);
+    else wrap2_kernel<128><<<dim3(n / 128, m / TILE), 256, lp * 128, st>>>(w);
   }
   // launches that share gctr run in one stream's order, so each one's base is the tiles launched before it
   void gemm(cudaStream_t st, int b, bool proto) {
@@ -945,9 +1184,25 @@ struct Ctx {
       forge_kernel<<<(tiles + stride - 1) / stride, 256, 0, st>>>(words[b], O[b], S, ch.kind == 2 ? ch.s0 : 0, stride, tiles_n, n, 0xF0F0u);
     }
   }
-  void salts(cudaStream_t st) { cm.salts<true>(nullptr, st); }
+  // a capped launch over nvb blocks: twice the CTAs the caps allow, so SMs whose first CTAs land late still get theirs
+  Persist persist(u64 nvb) {
+    epoch = (epoch + 1) & 0xFFFFFF;
+    return Persist{pctl, pclaim, epoch, (u32)kn.ccta, (u32)nvb};
+  }
+  unsigned persist_grid(u64 nvb) const { return (unsigned)std::min<u64>(nvb, 2ull * kn.ccta * nsm); }
+  void salts(cudaStream_t st) {
+    if (!kn.ccta) { cm.salts<true>(nullptr, st); return; }
+    const u64 nvb = (cm.width + SMALL_THREADS - 1) / SMALL_THREADS;
+    salt_persist<<<persist_grid(nvb), SMALL_THREADS, 0, st>>>(persist(nvb), cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels);
+  }
   void leaves_nodes(cudaStream_t st, int b) {
-    cm.leaves(rowsrc(b), st);
+    if (!kn.ccta) {
+      cm.leaves(rowsrc(b), st);
+    } else {
+      const u64 nvb = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS;
+      leaf_persist<V31Row><<<persist_grid(nvb), SMALL_THREADS, 0, st>>>(persist(nvb), cm.dom, rowsrc(b), cm.S, cm.F, cm.n,
+                                                                        cm.width, cm.levels);
+    }
     cm.nodes(st);
   }
   void commit(cudaStream_t st, int b) {
@@ -975,6 +1230,11 @@ struct Ctx {
     return f;
   }
   size_t levels_count() const { return 2 * cm.width - 1; }
+  std::vector<u64> root() const {
+    std::vector<u64> r(8);
+    CK(cudaMemcpy(r.data(), cm.levels + 8 * (levels_count() - 1), 64, cudaMemcpyDeviceToHost));
+    return r;
+  }
 };
 
 static std::vector<uint8_t> readfile(const std::string& p, size_t want) {
@@ -987,8 +1247,10 @@ struct KAttr { const char* name; const void* fn; };
 static void kernel_attrs(FILE* f) {
   const KAttr ks[] = {{"gemm_proto", (const void*)gemm_kernel<true>}, {"gemm_plain", (const void*)gemm_kernel<false>},
                       {"form_a", (const void*)form_a_kernel}, {"form_b", (const void*)form_b_kernel},
-                      {"wrap", (const void*)wrap_kernel}, {"bits", (const void*)bits_kernel},
-                      {"leaf_small", (const void*)leaf_small<V31Row, 0>}, {"salt_small", (const void*)salt_small<true>}};
+                      {"wrap", (const void*)wrap_kernel}, {"wrap2_128", (const void*)wrap2_kernel<128>},
+                      {"wrap2_256", (const void*)wrap2_kernel<256>}, {"bits", (const void*)bits_kernel},
+                      {"leaf_small", (const void*)leaf_small<V31Row, 0>}, {"salt_small", (const void*)salt_small<true>},
+                      {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist}};
   fprintf(f, "{");
   for (size_t i = 0; i < sizeof ks / sizeof ks[0]; i++) {
     cudaFuncAttributes a;
@@ -1074,8 +1336,7 @@ static void dump_samples(Ctx& c, const std::string& dir, const std::string& pfil
   f = fopen((dir + "/sample.json").c_str(), "w");
   fprintf(f, "{\"m\": %d, \"n\": %d, \"k\": %d, \"lp\": %d, \"t\": %d, \"row\": %d, \"tiles\": [%d, %d], \"root\": \"", c.m, c.n,
           c.k, c.lp, c.t, c.row, picks[0], picks[1]);
-  std::vector<u64> root(8);
-  CK(cudaMemcpy(root.data(), c.cm.levels + 8 * (c.levels_count() - 1), 64, cudaMemcpyDeviceToHost));
+  const std::vector<u64> root = c.root();
   for (int i = 0; i < 64; i++) fprintf(f, "%02x", (unsigned)(root[i / 8] >> (56 - 8 * (i % 8))) & 0xFF);
   fprintf(f, "\"}\n");
   fclose(f);
@@ -1124,6 +1385,15 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
     c.commit(c.s0, 0);
     CK(cudaStreamSynchronize(c.s0));
     CK(cudaGetLastError());
+    // the capped commit's root against commit_gpu's small path on the same rows (gpu-sample checks only the sampled leaves)
+    if (c.kn.ccta) {
+      const std::vector<u64> r1 = c.root();
+      const int cc = c.kn.ccta;
+      c.kn.ccta = 0;
+      c.commit(c.s0, 0);
+      c.kn.ccta = cc;
+      if (c.root() != r1) { fprintf(stderr, "%s: V31_CCTA %d's root isn't the small path's\n", name, cc); return 4; }
+    }
     const int fl = c.flags();
     const u64 wa = sum_counts(c.cntA, m), wbn = sum_counts(c.cntB, n);
     dump_samples(c, out + "/samples/" + name, pfile, (u32)rng());
@@ -1165,10 +1435,10 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
     printf("{\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"lp\": %d, \"t\": %d, \"row\": %d, \"S\": %d, \"dz\": %d, \"dy\": %d, "
            "\"leaves\": %llu, \"gpu\": \"%s\", \"sms\": %d, \"grid\": %d, \"copies\": %d, \"wrap_rate_A\": %.6f, \"wrap_rate_B\": %.6f, "
            "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d, \"splitk\": %d, \"candidates\": %d}, \"steady\": %s, "
-           "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"arms\": {",
+           "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"wrap\": %d, \"wcw\": %d, \"ccta\": %d, \"maxnreg\": %d, \"arms\": {",
            name, m, n, k, lp, t, row, c.S, c.dz, c.dy, (unsigned long long)c.leaves, prop.name, c.nsm, c.grid, c.nb,
            (double)wa / ((double)m * k), (double)wbn / ((double)n * k), lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand,
-           tm.steady ? "true" : "false", c.kn.carve, c.kn.dyn, c.kn.cprio.c_str());
+           tm.steady ? "true" : "false", c.kn.carve, c.kn.dyn, c.kn.cprio.c_str(), c.kn.wrap, c.wcw, c.kn.ccta, V31_MAXNREG);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     printf("}, \"gamma_call\": %.4f, \"gamma_ovl\": %.4f, \"gamma_gemm\": %.4f, \"plain_over_lt\": %.4f, \"kernels\": ", med[7] / med[0],
