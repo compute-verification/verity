@@ -14,7 +14,7 @@ labeled run, `served.py` the served arm's runs).
 - `served_arm.py` and `served_arm.sh`: the served arm, the Commit at 4 KiB rows against compiled and eager stock in one run
   (the specs `*-rtx-served-arm`). With `PIN_BUILD` (a Build of record's `build.json`) every arm compiles the Build's
   kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs.
-- `run.sh`: `verity bench served_commit`, one spec's sweep in one process. Its header has the `research run` command.
+- `run.sh`: `verity bench served_commit`, one spec's sweep in one process; `SPEC` names the spec.
 - `tp_decode.py` and `tp_decode.sh`: one Commit arm against stock in one TP engine, eager (GLM-5.3 TP8).
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
   serving on a high-priority stream over the worker's hashing, the finalize profile, NVTX ranges; `-base` and `-batch`
@@ -30,10 +30,8 @@ labeled run, `served.py` the served arm's runs).
   `granularity.py` lists, from a Build's request Programs, the Call boundaries a per-block or per-layer proof block would
   keep, with their bytes and hashing time, and `layout_bytes.py` a run's committed bytes by buffer category (estimates; no
   scheme).
-- The specs: `benchmarks/specs/qwen3-8b-bf16-h200-served.toml` (the default) and
-  `benchmarks/specs/llama32-1b-bf16-h200-served.toml`, with their `-b200-` twins, each on the sweep
-  `benchmarks/specs/served.toml` (B1, B8, B32 and B64, 512-token prompts, mixed traffic, greedy and stochastic), stock
-  against `served-commit-rows`.
+- The specs: the served arm's, `benchmarks/specs/*-rtx-served-arm*.toml` (one RTX PRO 6000 each, on the width sweep).
+  `run.sh` and `prof.sh` take any served spec as `SPEC`, with its arms, sweep and reps unless their arguments name others.
 
 The engines are vLLM's serving defaults (`serving_defaults`: torch.compile, full and piecewise CUDA graphs, no batch
 invariance), and each arm is gated token for token against `stock` before anything is timed. The acquisition under CUDA
