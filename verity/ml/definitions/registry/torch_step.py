@@ -47,7 +47,7 @@ act), ``up.dx``/``.dw``, ``act.dx`` (SiluTorchBackward_v1), ``gate.dx``/``.dw``,
 ``ln2.dx``/``.dw``, ``h2.grad`` (the layer output's gradient plus ln2's dx), ``o.dx``/``.dw``, ``attn.dx``
 (EagerAttentionTorchBackward_v1: dq, dk, dv), ``v.dx``/``.dw``, ``k.dx``/``.dw``, ``q.dx``/``.dw``, ``kv.dx`` (v's dX plus
 k's), ``qkv.dx`` (that plus q's), ``ln1.dx``/``.dw`` and ``x.grad`` (h2's gradient plus ln1's dx), the gradient of the layer's
-input; and ``embed.dw``, EmbeddingBackwardTied_v1 of layer 0's input gradient and lm_head's dW.
+input; and ``embed.dw``, EmbeddingBackwardTied_v2 of layer 0's input gradient and lm_head's dW.
 
 **The optimizer**, the recipe's ``clip_grad_norm_(params, max_norm, foreach=True)`` on the bf16 gradients, then
 ``master.grad = p.grad.float()``, ``AdamW(masters, foreach=True).step()`` and ``p.copy_(master)``: ``clip``
@@ -381,7 +381,7 @@ class _Step:
             dln1, d["ln1"] = self.norm_backward(n + "ln1", dy1, f["x"], w["ln1"], f["r1"], f["hb1"])
             dh = self.add(n + "x.grad", dh2, dln1)
             grads |= {f"l{i}.{k}.w": d[k] for k in LAYER}
-        grads["embed.w"] = B.call(bind(TE.EmbeddingBackwardTied, M=M, V=V, H=H), p["ids"], dh, dlm_w, name="embed.dw")
+        grads["embed.w"] = B.call(bind(TE.EmbeddingBackwardTiedV2, M=M, V=V, H=H), p["ids"], dh, dlm_w, name="embed.dw")
 
         names = [w for w, _, _ in weights(self.L)]
         g = [_flat(grads[f"{w}.w"]) for w in names]
