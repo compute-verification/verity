@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MEM-94's GPU smoke (pous_gpu.py) on one H200; cwd = the source tree's root:
+# The PoUS option's GPU smoke (pous_gpu.py) on one H200; cwd = the source tree's root:
 #
 #   research run --on vy-dc-h200-3 --project verity --campaign e2e-24h --source . --cwd source --timeout 90m \
 #     --env GPU_LEASE_WHO=memory-accounting -- bash integrations/vllm/tests/protocols/pous_gpu.sh
