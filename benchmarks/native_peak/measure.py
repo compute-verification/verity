@@ -451,7 +451,7 @@ def try_nvfp4_cublaslt_gemm(n: int, device: str, warmup: int, reps: int) -> dict
         variants.append(("_scaled_mm blockwise scales", lambda: torch._scaled_mm(a, b, scale_a=sa, scale_b=sb, out_dtype=torch.float32)))
         for name, cand in variants:
             try:
-                out = cand()
+                cand()
                 torch.cuda.synchronize()
                 fn, rec["variant"] = cand, name
                 break

@@ -29,7 +29,9 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
-- `fixtures/artifacts.json`: every replicated fixture by `art:` id. `tests/`: invariants of the whole tree.
+- `fixtures/artifacts.json`: every replicated fixture by `art:` id. `tests/`: invariants of the whole tree. The archived
+  proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
+  archive` restores them.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
   messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill).
 
@@ -38,7 +40,9 @@ Dependencies point inward (`tests/test_boundaries.py`; every list it holds only 
 that `CORE_ML_EDGES` lists. `verity.ml` never imports `verity.core` (`ML_IMPORTS_CORE` names the exceptions).
 Inside `verity` each unit imports only what `ALLOWED` lists, and `verity` imports no other distribution of the workspace.
 Nothing outside `infra/` imports it (`INFRA_IMPORTERS`), and nothing under `verity/` imports an integration (`KNOWN` in
-`tests/test_integration_boundaries.py`).
+`tests/test_integration_boundaries.py`). `benchmarks/` is measurement only: nothing outside it imports its code, by
+package name or by a path put on `sys.path` or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a
+protocol uses reaches it through a card file citing an `art:` id.
 
 `verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|example NAME`, `verity --help`.
 

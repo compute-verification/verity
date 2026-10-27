@@ -173,8 +173,8 @@ def _side(root: Path, base: str, name: str, before: bool, top: bool = True) -> s
 
 
 def test_a_merge_of_two_branches_each_adding_a_lake_dependency_gets_the_manifests_lake_writes_and_fresh_pins(lake_repo):
-    """0fcc (top, 8 Oct): #1524 and #1497 each added a path dependency to `security_properties`, git merged the manifests' text,
-    and `security_proofs`' manifest held neither. The merge reruns `lake update` in both packages, `base` first, takes OURS for
+    """Two branches that each add a path dependency to `security_properties` merge the manifests' text, and a dependent
+    package's manifest would hold neither. The merge reruns `lake update` in both packages, `base` first, takes OURS for
     the conflicted manifests before it, and the pin of top's manifest is rewritten by its command, not found stale later."""
     root, base = lake_repo
     x, y = _side(root, base, "x", True), _side(root, base, "y", False, top=False)

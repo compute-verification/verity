@@ -1,5 +1,5 @@
 """On one CUDA device: how much of the serve-time commit (`slots_gpu`, this directory's call) hides behind ALLP-H200's
-served step (`benchmarks/e2e_h200`'s `Driver` at the frozen shape, resident weights), as JSON to ``--out``/overlap.json
+served step (`examples/h200`'s `Driver` at the frozen shape, resident weights), as JSON to ``--out``/overlap.json
 and a summary to ``--out``/summary.txt.
 
 Today's loop (`e2e_h200.driver.Driver.step_slots`) streams each group (the embedding, a layer, the head) to the commit's
@@ -56,7 +56,7 @@ import numpy as np
 import torch
 
 HERE = Path(__file__).resolve().parent
-E2E = HERE.parents[1] / "e2e_h200"
+E2E = HERE.parents[2] / "examples" / "h200"
 sys.path[:0] = [str(HERE), str(E2E)]
 import slots as S
 import slots_gpu as G
@@ -69,7 +69,7 @@ from e2e_h200.weights import Weights
 MODES = ("serve", "commit", "serial", "low", "high", "equal", "low-thread", "high-thread")
 OVERLAPPED = ("low", "high", "equal", "low-thread", "high-thread")
 RUNS = ("serve", "commit:shared", "serial:shared", "low:shared", "high:shared", "equal:shared", "low:families:2")
-#: CMP-149: the commit's share of the 3.78 s served step at 4,096 slots, at most 25%
+#: the target: the commit's share of the 3.78 s served step at 4,096 slots, at most 25%
 TARGET_S = 0.95
 #: an out-of-range priority: CUDA clamps it to the device's highest
 HIGH = -(1 << 20)
@@ -151,21 +151,6 @@ class Smi:
     def stop(self) -> None:
         if self.proc is not None:
             self.proc.terminate()
-
-
-def load_layout(path: Path) -> S.Layout:
-    """circuits' Layout JSON (`slots._layout_json`), equal groups shared (CIR-113's loader)."""
-    doc, memo = json.loads(path.read_text()), []
-
-    def group(g: dict) -> S.Group:
-        for raw, built in memo:
-            if raw == g:
-                return built
-        built = S.Group(tuple(g["sources"]),
-                        tuple(tuple(S.Row(tuple(S.Part(*p) for p in r)) for r in u) for u in g["units"]))
-        memo.append((g, built))
-        return built
-    return S.Layout(doc["name"], tuple(group(g) for g in doc["groups"]))
 
 
 def describe(layout: S.Layout) -> dict[str, Any]:
@@ -321,7 +306,7 @@ class Threaded(Pipelined):
 
 
 def prompts_for(run_id: str, batch: int, p: int) -> np.ndarray:
-    """`benchmarks/e2e_h200/run.py`'s prompts."""
+    """`examples/h200/run.py`'s prompts."""
     h = hashlib.sha512(b"e2e-h200/prompts-fixture\0" + run_id.encode()).digest()
     rng = np.random.Generator(np.random.PCG64(int.from_bytes(h[:16], "big")))
     return rng.integers(32, 127, size=(batch, p), dtype=np.int64)
@@ -593,7 +578,7 @@ def roots_equal(runs: list[dict]) -> dict[str, bool]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--shared", type=Path, help="circuits' shared-row Layout JSON (CIR-113)")
+    ap.add_argument("--shared", type=Path, help="circuits' shared-row Layout JSON")
     ap.add_argument("--runs", nargs="+", default=list(RUNS), help="MODE:LAYOUT[:STEPS], MODE one of " + ", ".join(MODES))
     ap.add_argument("--shape", default="h200")
     ap.add_argument("--batch", type=int, default=4096)
@@ -606,7 +591,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--table-seed", type=int, default=20261026, help="the commit-alone run's stand-in tables")
     ap.add_argument("--run-id", default="e2e-h200-overlap")
     ap.add_argument("--skip", type=float, default=1.0, help="seconds of each run the telemetry statistics skip")
-    ap.add_argument("--leaf-minb", type=int, default=0, help="the plan's leaf kernel blocks an SM (0: the plan's default)")
+    ap.add_argument("--leaf-minb", type=int, default=0, help="the plan's leaf kernel CTAs an SM (0: the plan's default)")
     ap.add_argument("--host-lag", action="store_true",
                     help="overlapped runs: the forward's host waits for the side stream's reads LAG groups back (Pipelined.host_lag)")
     a = ap.parse_args(argv)
@@ -658,7 +643,7 @@ def main(argv: list[str] | None = None) -> int:
         nonlocal current
         if current is None or current[0] != lay:
             drop(False)
-            layout = load_layout(a.shared) if lay == "shared" else CM.layout(shape) if lay == "families" else None
+            layout = S.load(a.shared) if lay == "shared" else CM.layout(shape) if lay == "families" else None
             if layout is None:
                 raise SystemExit(f"--runs: {lay!r} is shared or families")
             current = (lay, layout)

@@ -1,5 +1,5 @@
 """J10-R's per-call-noise units (`PouwH1Tile_v5` / `_v6`'s receipt; h1u.cu's kh_seeds_j10r, kh_units_multi_j10r and
-kh_units_multi_j10r_sm) at the frozen shape's linears (s8_simple's SHAPES: width 16384, one KV head, MLP 65536) and
+kh_units_multi_j10r_sm) at the frozen shape's linears (`LINEARS`: width 16384, one KV head, MLP 65536) and
 M = 4,096 and 16,384 token rows, one call a linear, every row live:
 
     python j10r90.py check  --lib NAME=PATH ... --out OUT [--ms 4096,16384] [--linears q,kv,o,up,down,head] [--picks 24]
@@ -16,7 +16,7 @@ the base build's, the sampled units' receipts (the unit grid's corners, its midd
 the units write as 0xA5A5A5A5, up to 8) equal to j10r_units.call_receipts' and their seeds to seeds.call_seed and
 receipt_seed; the same call
 by kh_units_multi_j10r_sm on every SM equal on every word; the no-write control (zero units) refused; one bit of the row
-workspace moving exactly row block 0's units, and one bit of unit 0's seed_c moving unit 0 alone (unitsbench.j10r_gate's
+workspace moving exactly row tile 0's units, and one bit of unit 0's seed_c moving unit 0 alone (unitsbench.j10r_gate's
 faults, through the rows and units launches alone; under H1U_JW, whose column pass alone reads the call's seed_c, one
 bit of unit 0's sigma_R moving unit 0 alone and one bit of the call's seed_c moving every unit); the workspace the
 build's own size (j10r_ws.py), no launch writing the sentinel tail past it, and under H1U_JW its last bytes written
@@ -27,11 +27,12 @@ verify (a CPU node, check's out/ as DIR): every sampled unit's receipt and z aga
 its 32 rows of A and of B regenerated: v5 on every sampled unit, v6 (stream=True) on the first --v6 of each call; z on
 PAIRS through the Definition and on every cell of the tile against the int64 product. Exit 4 on any mismatch.
 
-time (on the GPU): plain INT8 as s8_simple runs it, torch._int_mm and the f32 epilogue as four eager kernels,
+time (on the GPU): plain INT8, s8_linear's `int_mm.linear` with its eager epilogue: torch._int_mm and the f32
+epilogue as four eager kernels,
 against each build's J10-R call (seeds, rows and units: kh_units_multi_j10r_sm on every SM, the served launch), arms
 interleaved rep by rep; overhead = units / plain and gamma = (plain + units) / plain, a call and summed over a layer's
 linears (q, kv, o, up, down; the head once a step). With --wgmma, KP2-S8's wgmma.linear (the fastest exact plain INT8 on
-the H200, #4463 and #4520) at its tuned config is a second plain arm in the same rotation, its bf16 output equal to
+the H200) at its tuned config is a second plain arm in the same rotation, its bf16 output equal to
 plain's on every cell. After the reps every build's receipts are compared word for word with the base's.
 """
 from __future__ import annotations
@@ -50,16 +51,15 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
-sys.path.insert(0, str(HERE.parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import j10r_units as J10R
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
 
-#: the frozen shape's linears (n, k), s8_simple's SHAPES (MQA decoder: width 16384, 256 query heads of 64, 1 KV head,
+#: the frozen shape's linears (n, k), KS8-SIMPLE's SHAPES (#4472; MQA decoder: width 16384, 256 query heads of 64, 1 KV head,
 #: MLP 65536, 256 tokens)
 LINEARS = {"q": (16384, 16384), "kv": (128, 16384), "o": (16384, 16384), "up": (65536, 16384), "down": (16384, 65536),
            "head": (256, 16384)}
@@ -128,7 +128,7 @@ def digest(row) -> bytes:
 # -- on the GPU --------------------------------------------------------------------------------------------------------
 
 class JCall:
-    """One call's J10-R state on one build (unitsbench.MultiJ10R's entry): A [M, K] with every row block live, B, the
+    """One call's J10-R state on one build (unitsbench.MultiJ10R's entry): A [M, K] with every row tile live, B, the
     seed data and each unit's [seed_c, sigma_R]."""
 
     def __init__(self, lib, a: torch.Tensor, b: torch.Tensor, c: dict):
@@ -282,7 +282,7 @@ def gate(lib, jc: JCall, out: torch.Tensor, first: torch.Tensor | None, picks: l
         r["fault_call_seed_moved"], r["fault_call_seed_want"] = int(cm.numel()), jc.units
         r["fault_call_seed_conforming"] = cm.numel() == jc.units
     out.copy_(keep)
-    del keep
+    keep = None
     r.update({"ws_bytes": int(mu.rws[0].numel()), "ws_end_written": ws_end, "ws_tail_written": mu.tail_written()})
     r["ok"] = (r["poison_left"] == 0 and r["bad_words"] == 0 and r["vs_base_bad_words"] in (None, 0)
                and r["seed_bad"] == 0 and r["sm_poison_left"] == 0 and r["sm_vs_units_bad_words"] == 0
@@ -349,14 +349,6 @@ def check(args) -> int:
     return 0 if doc["ok"] else 4
 
 
-def scale(acc: torch.Tensor, sx: torch.Tensor, sw: torch.Tensor) -> torch.Tensor:
-    """s8_simple.scale: bf16((f32(acc) * sx[i]) * sw[j]), four eager kernels."""
-    y = acc.to(torch.float32)
-    y.mul_(sx[:, None])
-    y.mul_(sw[None, :])
-    return y.to(torch.bfloat16)
-
-
 def wgmma_of(d: str):
     """The s8 wgmma kernel's wgmma.linear: its wgmma.py and configs.py from DIR beside build.sh's ship
     (s8_wgmma.cubin, sass.json, MANIFEST.sha256), and a (M, N, K) -> Cfg pick by its tuned table as its run.py's
@@ -376,6 +368,8 @@ def wgmma_of(d: str):
 
 
 def time_(args) -> int:
+    sys.path.append(str(Path(__file__).resolve().parents[2] / "torch_gpu" / "s8_linear"))
+    import int_mm as IM
     import unitsbench as U
     from hb_kbench import Clock
     libs = libs_of(args.lib)
@@ -386,20 +380,19 @@ def time_(args) -> int:
     W, wpick = wgmma_of(args.wgmma) if args.wgmma else (None, None)
     plains = ["plain"] + (["wgmma"] if W else [])
     doc = {"schema": "j10r90/time/v1", "device": clock.name, "sms": torch.cuda.get_device_properties(0).multi_processor_count,
-           "libs": dict(v.partition("=")[::2] for v in args.lib), "plain": "s8_simple: torch._int_mm + scale",
+           "libs": dict(v.partition("=")[::2] for v in args.lib), "plain": "int_mm.linear (eager)",
            **({"wgmma": "KP2-S8's wgmma.scaled_mm at its tuned table's config", "wgmma_identity": W.lib().identity()}
               if W else {}),
            "units": "kh_seeds_j10r + kh_units_multi_j10r_sm at 1/1", "reps": args.reps,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "calls": []}
     e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
     for c in calls(args.ms, args.linears):
-        key = f"{c['linear']}.{c['m']}"
         a = operand_all(c["a_seed"], c["m"], c["k"])
         b = operand_all(c["b_seed"], c["n"], c["k"])
         g = torch.Generator(device="cuda").manual_seed(c["b_seed"])
         sx = (torch.rand(c["m"], device="cuda", generator=g) + 0.5) / 127
         sw = (torch.rand(c["n"], device="cuda", generator=g) + 0.5) * 0.02 / 127
-        arms: dict = {"plain": lambda: scale(torch._int_mm(a, b.t()), sx, sw)}
+        arms: dict = {"plain": lambda: IM.linear(a, sx, b, sw, "eager")}
         if W:
             cfg = wpick(c["m"], c["n"], c["k"])
             yw = torch.empty((c["m"], c["n"]), dtype=torch.bfloat16, device="cuda")
@@ -446,7 +439,7 @@ def time_(args) -> int:
                "vs_base_bad_words": same, "poison_left": left}
         print(json.dumps({k: v for k, v in rec.items() if k not in ("ms", "sm_mhz")}), flush=True)
         doc["calls"].append(rec)
-        del keep, arms, a, b
+        keep = arms = a = b = None
         torch.cuda.empty_cache()
         (out / "j10r90-time.json").write_text(json.dumps(doc, indent=1))
     doc["layer"] = {}

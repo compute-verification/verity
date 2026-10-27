@@ -288,7 +288,7 @@ SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
     with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's train position, so the train that lands
-    next takes the next slot; CI-110) and --twin for one of a check's twins."""
+    next takes the next slot) and --twin for one of a check's twins."""
     by = os.environ.get("RESEARCH_LANE") or os.environ.get("RESEARCH_AGENT_URL")
     rank = os.environ.get("CHECK_SLOT_RANK", "")
     return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),
@@ -313,7 +313,7 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
 
 
 #: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
-#: only=trains, and vy-nebius-1's went with its draining, 23 Oct; CI-152)
+#: only=trains)
 AUTO = ("vy-nebius-2",)
 #: where a lane's own recorded check goes when it names no machine (`nested_record`): a pool any lane takes, one of
 #: research.auto's SPILL
@@ -322,7 +322,7 @@ LANE_POOL = ("vy-nebius-cpu-1", "research")
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
 FULL_CHECK_S = 9000
-#: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
+#: a lane's own test run, which no landing needs (a PR lands on an eyeball review)
 LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
@@ -612,7 +612,7 @@ LEAN_SLOT_WRAP = [sys.executable, str(ROOT / "tools" / "verity" / "check" / "lea
 
 def lean_regenerates() -> bool:
     """Whether this tree's lean-audit job takes `--regenerate`: a package whose only failures are record differences passes,
-    and its report names the regenerated lock, which drive commits onto the train it lands (CI-64).  Read from the job, so a
+    and its report names the regenerated lock, which drive commits onto the train it lands.  Read from the job, so a
     tree from before it runs as it always did."""
     try:
         return '"--regenerate"' in (LEAN_JOBS / "lean_audit.py").read_text()
@@ -767,7 +767,7 @@ def _version(v: str) -> tuple[int, ...]:
 
 def upstream_smoke(w: Path) -> list[tuple[str, list[str], dict]]:
     """One real replay per upstream binary that `vectors.json` gives a stored honest session (a set without lookup tables):
-    (its PR #83 commit, the command `agree.py` would run, the verdict expected), over the unpacked build and inputs in ``w``."""
+    (its pinned commit, the command `agree.py` would run, the verdict expected), over the unpacked build and inputs in ``w``."""
     import argparse
 
     spec = importlib.util.spec_from_file_location("check_flock_agree", FLOCK_VERIFIER / "agree.py")
@@ -925,8 +925,8 @@ def record(argv: list[str]) -> int:
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
     gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`) waits for a slot of that
-    machine's NAME pool instead of its merge-check slots (`pool_env`)."""
-    on = base = pool = None
+    machine's NAME pool instead of its merge-check slots (`pool_env`); `--timeout S` is the run's (`research run --timeout`, custody 24 h)."""
+    on = base = pool = timeout = None
     agreement = priority = False
     rest = []
     it = iter(argv)
@@ -941,10 +941,12 @@ def record(argv: list[str]) -> int:
             agreement = True
         elif x == "--priority":
             priority = True
+        elif x == "--timeout":
+            timeout = next(it)
         else:
             rest.append(x)
     try:
-        pooled = pool_env(pool, on, priority)
+        pooled = pool_env(pool, on, priority) + (["--timeout", timeout, "--custody-ttl", "24h"] if timeout else [])
     except ValueError as e:
         print(f"check: --pool {e}", file=sys.stderr)
         return 2
@@ -992,8 +994,8 @@ def record(argv: list[str]) -> int:
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
     # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
-    # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake
-    # (CI-170, 25 Oct: Flock/RecSparse.olean missing), so each runs in its own clone of it
+    # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake,
+    # so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
            "--cwd", "clone" if on else "source", *(x for p in PACK_FILES for x in ("--declared-output", p)), *pooled]
     env = dict(os.environ)
@@ -1466,7 +1468,7 @@ def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, sto
     blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  The closing
     train's check (cb20, 10 Oct) failed `lean-suites` after its launch on #1716's rec-coins fixture, preserved privately and
     never exported: node 1 fetches from the public export and its own store, and had it in neither.  A copy put in the node's
-    store keeps a train moving before the export (top, 10 Oct).  Raises when the public export is needed and there is none."""
+    store keeps a train moving before the export.  Raises when the public export is needed and there is none."""
     from concurrent.futures import ThreadPoolExecutor
 
     from research.store.fetchset import public_url

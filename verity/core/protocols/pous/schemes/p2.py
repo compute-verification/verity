@@ -8,8 +8,7 @@ big-integer squarings.  Two codecs differ only in how a block's keys are expande
 - `p2-16448/v4`: counter-mode SHA-512 with the spec's v4 framing, the expander its setup assumption P2-EXP-IO names
   (decision F4).
 - `p2-16448/v2`: ChaCha8 from a SHAKE256 seed per segment.  It is **nonconforming** to F4, which adds a reduced-round
-  assumption, but its keys cost about 1% of the decode's multiply work on the device, and `benchmarks/pous`'s `p2-gpu`
-  arm measures it.  It is kept for that.
+  assumption, but its keys cost about 1% of the decode's multiply work on the device.
 
 ~~~text
 p          2^w − c0, prime, p ≡ 3 mod 4           registered: w = 16448, c0 = 21065 (`p2-p16448-c21065`, 2,056-byte blocks)

@@ -1,10 +1,10 @@
 """J10 banded noise served (kernels-j10; measured only, nothing here is served or credited): sbench.py through hb_sbench.py,
 plus each credited one-stream arm's twin on J10 banded noise at bands of G column tiles, paired with it in one run. Every
-banded arm's gate holds it to CA's banded reference itself (#2866, `banded.banded_reference` under the tree
+banded arm's gate holds it to CA's banded reference itself (`banded.banded_reference` under the tree
 `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and requires it; its check docs carry `j10b_ref.CA_LABEL`.
 
     dither-1s-hbk-bG     (H200, B200) dither-1s-hbk with h1u.cu's kh_one_peel_band at G in place of kh_one_peel, from the
-                         same .so (HB_H1U_KSPLIT): h1j_noise hashes each band's row blocks once, into its leader's
+                         same .so (HB_H1U_KSPLIT): h1j_noise hashes each band's row tiles once, into its leader's
                          workspace region, and every unit's columns. Gated as dither-1s-hbk (hb_peel.check, its tokens
                          equal to exact's on the gate and every rep), with the receipts reference h1r_launch_band at G
                          (j10rtx.BandH1R), the CPU units' rows from their band leader's seed_j (j10b_ref.rows_of: in
@@ -33,9 +33,8 @@ import sys
 from contextlib import contextmanager
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-os.environ.setdefault("HB_DITHER_DIR", str(HERE))
-sys.path.insert(0, str(HERE))
+os.environ.setdefault("HB_DITHER_DIR", str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hb_sbench as HS  # puts its arms on sbench.build
 import j10b_ref as JB
 import sbench

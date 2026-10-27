@@ -624,7 +624,7 @@ def accept_one(name: str, work: Path) -> dict:
 
 def loops_of(text: str) -> dict:
     """{kernel: opcode histogram of its innermost timed loop} (w1_price.py's reader)."""
-    import w1_price as W  # noqa: PLC0415
+    import w1_price as W
     return W.loops_of(text)
 
 
@@ -1037,7 +1037,7 @@ def work_per_launch(form, g: dict, iters: int) -> tuple[float, float, float]:
 
 
 def clock_label(samples: list, launch_mhz: list[float], locked_mhz: float | None) -> str:
-    import w1_price as W  # noqa: PLC0415
+    import w1_price as W
     return W.clock_label(samples, launch_mhz, locked_mhz)
 
 

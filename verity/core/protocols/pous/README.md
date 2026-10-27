@@ -169,8 +169,8 @@ each file's SHA-512 and, by width, each entry's (`ENTRY_SHA512`, which `PousChec
   wire's: the setup salt (24 bytes from `setup.draw_salt`, not 32 from `verity/pous/p2-setup/v4`), the key prefix (it
   frames the 24-byte salt), the leaf (`0x00 ‖ tag_s ‖ u16le(v) ‖ R`, not `0x00 ‖ salt ‖ u64be(s) ‖ u16be(v) ‖ R`) and
   the challenges (`verity/pous/audit-challenge/v1`, not `verity/pous/p2-audit-challenge/v4`). `PousCheck.Keys` and
-  `Merkle` hold both forms. `p2-16448/v2`'s ChaCha8 keys don't conform to F4; `benchmarks/pous`' `p2-gpu` arm measures
-  them.
+  `Merkle` hold both forms. `p2-16448/v2`'s ChaCha8 keys don't conform to F4; they cost about 1% of the device's
+  decode work.
 - **SeqRoot** sets `schemes.p2.ROOT_CALL_NS = 854,029`: half the fastest cooperating 16,448-bit root,
   `16,486 × 361.55 ns ÷ 3.490 ≈ 1,708.1 µs`, from the timing red team's modelled Zen 5 floor (361.55 ns a squaring) and
   the 8-core speedup measured on one Zen 4 chiplet (3.490×). `RTT_ALLOWANCE_CAP_NS = 354,000` is the largest whole µs
@@ -305,8 +305,10 @@ challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` run
 makes the prover the cheat that keeps prior content in place of the fill's first labels (one label past the published
 figure, which must reject), and its `placement` `simulated` stands a challenger on the prover's node in for one on its
 own host. The run's record names what the bound doesn't cover (`uncertified`: the links leaving the node that no
-network certifier counts, the node's memory outside the declared tiers, an egress signed `UNCOUNTED`) and carries the
-session's window, `t0` and `t1` on the challenger's clock, which a network certifier counts the egress over.
+network certifier counts, the node's memory outside the declared tiers, a GPU's driver reserve when NVML gave no
+total (the run declares the larger of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`),
+an egress signed `UNCOUNTED`) and carries the session's window, `t0` and `t1` on the challenger's clock, which a
+network certifier counts the egress over.
 
 | Module | What it holds |
 |---|---|
