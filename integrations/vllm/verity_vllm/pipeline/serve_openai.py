@@ -3,7 +3,7 @@
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1]
-        [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
+        [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
         [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
@@ -39,7 +39,8 @@ request's connection as it comes. The HTTP side is an asyncio server on its own 
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
 certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`;
-``serve.json``'s ``step_rows``). Under ``--required-manifest`` the engine schedules as the bench row declares (`serve_row`).
+``serve.json``'s ``step_rows``). Under ``--required-manifest`` the engine schedules as the row's Build of record declares
+(`serve_row`).
 
 With the Commit on (the default), the server's committer (`serve_seal.committer`) commits every engine step exactly as it does
 a declared workload, values retained on host, and a `commit.served_record.SamplerInputsSource` binds each sampled row's seed and position. A
@@ -60,7 +61,8 @@ body's ``user``, its release and its place among the engine's adds, the runner's
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
 `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
-and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
+and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
+writes (``verity-vllm predict row``; `serve_seal.row_refusal` refuses any other, a traced Build's among them). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
 recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). Each
@@ -203,10 +205,9 @@ class Options:
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "
                                             "(0: leave Python's)")
     required_manifest: str | None = option("--required-manifest", default=None,
-                                           help="rows-sha512: the bench row's required manifest (its manifest.json), which the Commit of "
-                                                "record's committer parts and the sealed binding map are built from")
-    programs_root: str | None = option("--programs-root", default=None,
-                                       help="the Build's row dir of the manifest's partition and attention record (default: the manifest's dir)")
+                                           help="rows-sha512: the row's required manifest, DIR/manifest.json of its Build of record "
+                                                "(`verity-vllm predict row --out DIR`), which the Commit of record's committer parts, "
+                                                "the sealed binding map and the engine's scheduler are built from")
     hidden_so: str | None = option("--hidden-so", default=None, help="rows-sha512: the attention hidden tap (as the Commit's --hidden-so)")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB (as the Commit's)")
@@ -651,8 +652,6 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(why)
     if why := SH.refusal(opts) or SR.refusal(opts):
         raise UsageError(why)
-    if opts.required_manifest and not Path(opts.required_manifest).is_file():
-        raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if opts.commit and opts.gpu_tree and which("ninja") is None:
         raise UsageError("--gpu-tree JIT-builds its kernel with ninja, which is not on PATH: put the environment's bin (where its "
                          f"ninja is) on PATH{', or pass --no-gpu-tree' if opts.scheme == SS.V1 else ''}")

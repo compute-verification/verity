@@ -24,6 +24,7 @@ from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
+from tests.pipeline import predicted
 from tests.pipeline.test_commit_coins import GATE, KEY, PEER, _Auditor
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving, records, serve_concurrently
 from tests.protocols import challenger_host as CH
@@ -227,7 +228,7 @@ def test_commit_windows_open_the_arm_on_the_installed_committer_and_close_it_fir
 def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp_path):
     """Among them a token budget the rows-sha512 Commit's step-input port can't take (whole 512-id rows), with H1 or
     without, so H1's own 32-row rule is met by every T the Commit takes."""
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
 
     def refusal(*more: str) -> str | None:
         opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more],

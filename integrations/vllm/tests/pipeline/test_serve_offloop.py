@@ -28,6 +28,7 @@ try:
 except ModuleNotFoundError:
     pytest.skip("could not import 'torch'", allow_module_level=True)
 
+from tests.pipeline import predicted
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, events, records
 
 A = {0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]}
@@ -585,7 +586,7 @@ def test_a_draining_loop_refuses_new_requests_and_ends_once_idle():
 
 
 def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
     base = ["--model", "m", "--revision", "r", "--out", str(tmp_path / "new" / "dir"), "--seal", "--window-gb", "10", "--disk-floor-gb", "300",
             "--required-manifest", str(man)]
     opts = cli.parse("serve-openai", base, environ={})
