@@ -351,7 +351,7 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     if srv.p2.isSome then throwThe String "the verifier holds one P2 store"
     let held ← ofV (P2Session.heldOf bytes)
     let chunk ← ofV (nat req "chunk")
-    pure (held.toJson, { srv with p2 := some held, p2Chunk := max 1 chunk })
+    pure (held.json, { srv with p2 := some held, p2Chunk := max 1 chunk })
   | "p2_session" =>
     let line ← readBytes stdin (← ofV (nat req "bytes"))
     let notBeforeNs ← ofV (nat req "not_before_ns")

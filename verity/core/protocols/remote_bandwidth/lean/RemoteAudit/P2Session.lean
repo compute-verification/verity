@@ -82,7 +82,7 @@ def heldOf (bytes : ByteArray) : V Held := do
   pure { reg, plan }
 
 /-- What the verifier's process answers on holding it: the digest, the store's units, and the plan's runs and units. -/
-def Held.toJson (h : Held) : Json :=
+def Held.json (h : Held) : Json :=
   Json.mkObj [("digest", .str (hexOf h.reg.digest)),
     ("plan", .arr (h.plan.runs.map fun (f, c) => .arr #[toJson f, toJson c])), ("plan_units", toJson h.plan.length),
     ("units", toJson h.reg.units)]

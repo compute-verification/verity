@@ -748,7 +748,7 @@ def p2OpeningFn (j : Json) : V Json := do
 "coins", "chunk", "events"}`, the registration file's bytes and the prover's request line (lowercase hex), the session's
 2W coins, the draws a thread checks, and its events: `start` and `boundary` `{"now"}`, `close` `{"t", "now"}`, `root`
 `{"t", "i", "now", "line"}` and `openings` `{"t", "line"}` (each line lowercase hex, as the prover sent it), and `fail`.
-The held store (`Held.toJson`), every event's result (`resultJ`) and the answer (`P2Session.answer`); a registration
+The held store (`Held.json`), every event's result (`resultJ`) and the answer (`P2Session.answer`); a registration
 or a request refused is `{"refused": "registration"}` or `{"refused": "request"}`. -/
 def p2SessionFn (j : Json) : V Json := do
   let .ok held := P2Session.heldOf (← hex j "registration") | pure (Json.mkObj [("refused", .str "registration")])
@@ -769,7 +769,7 @@ def p2SessionFn (j : Json) : V Json := do
       | k => throw s!"no P2 event kind {k}"
     results := results.push (resultJ r)
     s := s'
-  pure (Json.mkObj [("held", held.toJson), ("results", .arr results), ("answer", P2Session.answer held s)])
+  pure (Json.mkObj [("held", held.json), ("results", .arr results), ("answer", P2Session.answer held s)])
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
