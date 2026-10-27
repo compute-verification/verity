@@ -552,8 +552,7 @@ private def HONEST_SEED : ByteArray := ⟨Array.replicate 64 0⟩
 theorem honest_keygen :
     ∃ k, Lms.keygen Lms.deployed HONEST_SEED = .ok k ∧ ∃ I, Lms.key Lms.deployed I HONEST_SEED = .ok k := by
   have hI : ((Sha512.hash ("verity/lms/v0/I".toUTF8 ++ HONEST_SEED)).extract 0 16).size = 16 := by
-    rw [ByteArray.size_extract, Tree.hash_size]
-    rfl
+    simp [ByteArray.size_extract, Tree.hash_size]
   obtain ⟨k, hk⟩ := Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed hI HONEST_SEED
   have hs : HONEST_SEED.size = Lms.deployed.N := rfl
   refine ⟨k, ?_, _, hk⟩
@@ -562,9 +561,8 @@ theorem honest_keygen :
 
 /-! ## A wipe that is no run -/
 
-private theorem unencoded_values : ∃ err, unencoded.batches.mapM StreamedWipe.Batch.value = .error err := by
-  refine ⟨_, ?_⟩
-  rw [Array.mapM_eq_mapM_toList] <;> rfl
+private theorem unencoded_values : ∃ err, unencoded.batches.mapM StreamedWipe.Batch.value = .error err :=
+  ⟨_, by rw [Array.mapM_eq_mapM_toList] <;> rfl⟩
 
 private theorem unencoded_root :
     ∃ err, StreamedWipe.recordsRoot unencoded.commitment.session unencoded.batches = .error err := by
