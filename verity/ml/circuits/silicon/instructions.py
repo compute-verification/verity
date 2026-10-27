@@ -20,10 +20,11 @@ part of the interface and do not change when a status does.  ``ptx`` is recorded
 recorded the mnemonic (``None`` otherwise -- never invented); ``shape`` is ``(m, n, k)`` of the *modelled*
 instruction, which for the ``wgmma`` families is the N=8 member of the same instruction class as the measured
 ``n64`` one (an accumulator coordinate's semantics do not depend on N).  ``evidence`` entries are free-text
-pointers (repository paths, veritor/autoproof records).  The ``art:`` ids they cite are :data:`EVIDENCE_IDS`
+pointers (repository paths, veritor/autoproof records).  The store ids they cite are :data:`EVIDENCE_IDS`
 (``instructions_evidence.json``), keyed by instruction id and then by role.  An evidence string names each role it
-cites in backticks (``tc_evidence``); ``dossier`` is the trust dossier.  An evidence string that is a model's
-``validated`` names the roles of that model's entry in :data:`verity.ml.circuits.silicon.integer.EVIDENCE_IDS`.
+cites in backticks (``run``, or a dotted path into a nested role such as ``canonical.h100``); ``dossier`` is the trust
+dossier.  An evidence string that is a model's ``validated`` names the roles of that model's entry in
+:data:`verity.ml.circuits.silicon.integer.EVIDENCE_IDS`.
 """
 from __future__ import annotations
 
@@ -55,7 +56,7 @@ __all__ = ["EVIDENCE_IDS", "INSTRUCTIONS", "Instruction", "Status", "instruction
 
 Status = Literal["pinned", "hypothesis", "unprobed"]
 
-#: Instruction id -> role -> the ``art:`` id its evidence names by that role.
+#: Instruction id -> role -> the store ids (run, ``art:``) or GPU UUID or dataset its evidence names by that role.
 EVIDENCE_IDS: dict[str, dict] = json.loads(Path(__file__).with_name("instructions_evidence.json").read_text())
 
 
@@ -90,77 +91,77 @@ class Instruction:
             raise ValueError(f"{self.id}: shape k {self.shape[2]} is not the model's k {self.model.k}")
 
 
-# --- evidence (free text; the art: ids are EVIDENCE_IDS) --------------------------------------------------------------
+# --- evidence (free text; the store ids are EVIDENCE_IDS) -------------------------------------------------------------
 
 _ADA_4090 = (
     "veritor gpu/tensor-core-semantics: RTX 4090 (sm_89, driver 580.159.03), one mma.sync per record, "
     "24,898,304/24,898,304 elements bit-exact over 194,518 tiles (results/validate_{bf16,e4m3}_final.json)"
 )
 _A100_RUN = (
-    "a verity run (A100 80GB, sm_80): 25,698,304 finite elements, 12,065,535 with nonzero "
+    "the verity `run` (A100 80GB, sm_80): 25,698,304 finite elements, 12,065,535 with nonzero "
     "accumulators, 0 mismatches against silicon.tc_dot (verity/ml/circuits/silicon/discrepancy_log.json D2, D9)"
 )
-_ADA_RUN = "a verity run (RTX 4090, sm_89): the same 25,698,304 elements, 0 mismatches (D2, D9)"
+_ADA_RUN = "the verity `run` (RTX 4090, sm_89): the same 25,698,304 elements, 0 mismatches (D2, D9)"
 _GOLDEN_BF16 = "verity/ml/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json (360 records)"
 _GOLDEN_E4M3 = "verity/ml/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json"
 _H100_PROBE = "verity on an H100 80GB HBM3 (cc 9.0, driver 570.211.01, nvcc 12.4.131), one PTX op per tile, seed 20260902"
-_H100_WGMMA_E4M3 = (_H100_PROBE + ": wgmma.mma_async.sync.aligned.m64n8k32.f32.e4m3.e4m3 / 1x QGMMA.64x8x32.F32.E4M3.E4M3, "
+_H100_WGMMA_E4M3 = (_H100_PROBE + ": the `run` of wgmma.mma_async.sync.aligned.m64n8k32.f32.e4m3.e4m3 / 1x QGMMA.64x8x32.F32.E4M3.E4M3, "
                     "descriptor (LBO,SBO)=(128,256) K-major no-swizzle, 25,554,432 elements, 0 mismatches; adder-width residual survives at 2^-13 and "
                     "truncates at 2^-14 in all 30 slots k=2..31 (one group of 32, 14-bit adder); zero products: D == C & ~0x3ff for 262,144/262,144")
-_H100_WGMMA_E5M2 = (_H100_PROBE + ": wgmma ... f32.e5m2.e5m2 / 1x QGMMA.64x8x32.F32.E5M2.E5M2, 25,554,432 elements, "
+_H100_WGMMA_E5M2 = (_H100_PROBE + ": the `run` of wgmma ... f32.e5m2.e5m2 / 1x QGMMA.64x8x32.F32.E5M2.E5M2, 25,554,432 elements, "
                     "0 mismatches against the e4m3 pipeline with exact e5m2 products")
-_H100_MMA_BF16 = (_H100_PROBE + ": mma.sync.aligned.m16n8k16 bf16 / 1x HMMA.16816.F32.BF16, 25,698,304 elements, 0 mismatches "
+_H100_MMA_BF16 = (_H100_PROBE + ": the `run` of mma.sync.aligned.m16n8k16 bf16 / 1x HMMA.16816.F32.BF16, 25,698,304 elements, 0 mismatches "
                   "against HOPPER_BF16_M16N8K16; AMPERE_BF16_M16N8K16 fails 30,927 of a 192,000-element subset")
-_H100_MMA_FP8 = (_H100_PROBE + ": an e4m3 and an e5m2 run, 25,040,128 elements each: ptxas 12.4 lowers "
+_H100_MMA_FP8 = (_H100_PROBE + ": the `e4m3` and `e5m2` runs, 25,040,128 elements each: ptxas 12.4 lowers "
                  "mma.sync.aligned.m16n8k32 FP8 on sm_90a to 12x F2FP unpack + 2x HMMA.16816.F32 (the BF16 K=16 pipeline over k=0,1 mod 4 and k=2,3 mod 4 "
                  "with zero accumulators) + IEEE FP32 FADD of the partials and of C; that lowering model gives 0 mismatches, HOPPER_E4M3_K32 fails 74%/62%, "
                  "ADA_E4M3_M16N8K32 fails 76%/63%; D == C for zero products (no 14-bit accumulator truncation)")
-_ADA_E4M3_RUN = ("a verity run (RTX 4090): 25,040,128 elements + 141,824 FP8-family words, 0 mismatches against "
+_ADA_E4M3_RUN = ("the verity `run` (RTX 4090): 25,040,128 elements + 141,824 FP8-family words, 0 mismatches against "
                  "ADA_E4M3_M16N8K32; adder-width probe: 14-bit / (16,16) signature measured directly; zero products: D == C & ~0x3ff (one signed-zero exception, "
                  "C=0x800001a9 -> +0)")
-_ADA_E5M2_RUN = ("two verity runs (RTX 4090): 25,040,128 + 141,824 elements, 0 mismatches "
+_ADA_E5M2_RUN = ("the verity `runs` (RTX 4090): 25,040,128 + 141,824 elements, 0 mismatches "
                  "against the Ada e4m3 pipeline with exact e5m2 products; SASS 1x QMMA.16832.F32.E5M2.E5M2")
 _RTX5090_BF16 = (
-    "a verity run (RTX 5090 cc 12.0, driver 570.153.02, nvcc 12.8.93, -arch=sm_120a, "
+    "the verity `run` (RTX 5090 cc 12.0, driver 570.153.02, nvcc 12.8.93, -arch=sm_120a, "
     "SASS HMMA.16816.F32.BF16): 204,800/204,800 elements agree with HOPPER_BF16_M16N8K16, 48,569 disagree with the Ampere/Ada pipeline"
 )
 _RTX5090_NVF4 = (
-    "a verity run (RTX 5090, our harness benchmarks/tc_probe_fp4, OMMA.SF UE4M3.4X, one MMA per tile): "
+    "the verity `run` (RTX 5090, our harness benchmarks/tc_probe_fp4, OMMA.SF UE4M3.4X, one MMA per tile): "
     "autoproof probe3 vectors replayed 1601/1601; 1,736,704 swept elements with +0 accumulators (263,781 hot-clip firings, full UE4M3 "
-    "code sweep), 0 mismatches; probe2 unscaled 1400/1400"
+    "code sweep), 0 mismatches; probe2 unscaled 1400/1400 (the `probe2` run)"
 )
 _RTX5090_FP4_RE = (
-    "the verity nvf4 and mxf4 runs -- RTX 5090 cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, one "
+    "the verity runs `nvf4` (nvf4) and `mxf4` (mxf4) -- RTX 5090 cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, one "
     "mma.sync per output element with arbitrary finite FP32 accumulators: BlockScaledAlignAdd (scale-exponent anchor "
     "frac_bits 27, accumulator window 36 on the exponent field, grid floor 2^-174, every zero +0) reproduces 8,339,456 "
     "nvf4 and 7,389,184 mxf4 words (captures replayed, fit runs, fresh-seed confirmation runs) with 0 "
     "mismatches; autoproof model5 is the recorded control (D16 -0 accumulators, D17 opposite-sign accumulators 37..42 "
     "binades below the leading exponent, D18 ue8m0 scales, D13 underflow sign, D19 subnormal-regime anchor and floor). "
     "Record-only family `specials`: NaN accumulators -> 0x7FFFFFFF, +-inf -> itself, sums leaving binary32 -> +-inf "
-    "(ue8m0 only). Snapshot dataset fp4-evidence-v2."
+    "(ue8m0 only). Snapshot dataset `dataset`."
 )
 _H100_FP8 = (
-    "veritor docs/data/tc-fp8-2026-09-08 (H100 80GB HBM3, driver 580.126.09, triton 3.7.1): "
+    "veritor's `dataset` (H100 80GB HBM3, driver 580.126.09, triton 3.7.1): "
     "wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 / SASS QGMMA.64x64x32.F32.E4M3.E4M3, 16 families, "
     "35,289 tiles x3 reps, 144,543,744 words, 0 mismatches against HOPPER_E4M3_K32; fit grid leaves groups=(32,) "
     "and width=14 unique, floor only bounded to [-152, -126] -- replica verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json"
 )
 _H100_BF16 = (
-    "veritor docs/data/tc-hopper-2026-09-07 (H100, driver 580.178.04): wgmma.mma_async.sync.aligned.m64n128k16."
+    "veritor's `dataset` (H100, driver 580.178.04): wgmma.mma_async.sync.aligned.m64n128k16."
     "f32.bf16.bf16 / HGMMA.64x128x16.F32.BF16, 307,281,920 words, 0 mismatches against groups=(16,), width 26, "
     "floor -133 (verity.ml.circuits.silicon.total.HOPPER_BF16_WGMMA_K16) -- the wgmma path, not mma.sync"
 )
 _H100_WGMMA_BF16 = (
-    "benchmarks/tc_probe on an H100 80GB HBM3 (driver 580.126.09, nvcc 12.4.131, -arch=sm_90a, GPU-d5e245b4-5429-c607-9efb-a3578c7334e2): one "
+    "benchmarks/tc_probe on an H100 80GB HBM3 (driver 580.126.09, nvcc 12.4.131, -arch=sm_90a, GPU `device`): one "
     "wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16 per tile, SASS 1x "
     "HGMMA.64x8x16.F32.BF16, against the total semantics (specials asserted).  A from shared memory (SS) `ss` "
     "and from registers (RS) `rs`: each 26,361,344 swept elements in 14 families, 2,876,928 "
     "elements of four back-to-back wgmma on one accumulator (K = 64: the chain of single steps), veritor's 44,046 records replayed, "
-    "0 mismatches; the Ampere pipeline misses 3.15M.  Words identical to the first pair (same "
+    "0 mismatches; the Ampere pipeline misses 3.15M.  Words identical to the `first_pair` (same "
     "seeds).  Canary `canary` (26,624, 0)"
 )
 _H100_MMA_EQ_WGMMA = (
-    "a run on a second H100 80GB HBM3 (GPU-7e095246-1454-01f4-2b76-197d7ab9d18b, driver 580.126.09): "
+    "`second_h100.run` (a second H100 80GB HBM3, GPU `second_h100.device`, driver 580.126.09): "
     "mma.sync.m16n8k16 bf16, 25,833,472 swept elements, specials included, 0 mismatches against HOPPER_BF16_WGMMA_K16's total step; the "
     "specials words equal the wgmma runs' word for word; veritor's 44,046 wgmma-recorded words re-executed through mma.sync, 0 mismatches"
 )
@@ -186,7 +187,7 @@ _B200_TCGEN05 = (
     "(model5, signed underflow) miss on the B200 by the same counts as on the RTX 5090"
 )
 _B200_STAGE0 = (
-    "stage 0: ptxas 12.9 refuses mma.sync kind::mxf4nvf4 / .block_scale / kind::f8f6f4 for sm_100a "
+    "stage 0 `stage0`: ptxas 12.9 refuses mma.sync kind::mxf4nvf4 / .block_scale / kind::f8f6f4 for sm_100a "
     "('mma with block scale not supported on .target sm_100a'; the same PTX assembles for sm_120a), so the consumer "
     "instruction does not exist on the B200; CUTLASS 3.9.2 example 72a (nvfp4 GEMM, sm_100a) lowers to UTCOMMA.2CTA.4X "
     "(cta_group::2) with UTMALDG/UTCCP/UTCBAR -- the probe's cta_group::1 UTCOMMA is the single-CTA form of the same opcode; "
@@ -194,7 +195,7 @@ _B200_STAGE0 = (
 )
 
 _B200_BF16 = (
-    "benchmarks/tc_probe on an NVIDIA B200 (cc 10.0, GPU-2e39ef52-bf0d-0527-f3f1-5a27025bb6ff, driver 580.173.02, nvcc 13.0 V13.0.88, "
+    "benchmarks/tc_probe `run` on an NVIDIA B200 (cc 10.0, GPU `device`, driver 580.173.02, nvcc 13.0 V13.0.88, "
     "-gencode arch=compute_100a,code=sm_100a)"
 )
 _B200_TCGEN05_BF16 = (
@@ -207,7 +208,7 @@ _B200_TCGEN05_BF16 = (
     "1,365,596 / 512,378 of them"
 )
 _B200_MMA_BF16 = (
-    "benchmarks/tc_probe on an NVIDIA B200 (the same B200, driver and nvcc as sm100.tcgen05.mma.bf16's probe; seed 20261019): one "
+    "benchmarks/tc_probe `run` on an NVIDIA B200 (the same B200, driver and nvcc as run `same_b200`; seed 20261019): one "
     "mma.sync.m16n8k16 per tile, SASS 1x HMMA.16816.F32.BF16. The full canonical family "
     "set, 25,833,472 asserted elements, 0 mismatches against HOPPER_BF16_M16N8K16 (tc-evidence `tc_evidence`); "
     "the 6,144 specials, outside that model's domain, are 0 mismatches under HOPPER_BF16_WGMMA_K16's total semantics; Ampere's "
@@ -216,10 +217,10 @@ _B200_MMA_BF16 = (
 )
 
 _PIN_FP4 = (
-    "fresh-seed tc_probe_fp4 sweeps on a second RTX 5090 die (GPU-1257f022-5d0f-1ea9-7922-bc7bc7959672, driver 570.195.03, -arch=sm_120a; label "
-    "device=), all 20 probe families plus the D16/D17 tiles and specials of the verity nvf4 and mxf4 runs: nvf4 "
+    "fresh-seed tc_probe_fp4 sweeps on a second RTX 5090 die (GPU `fresh_seed.device`, driver 570.195.03, -arch=sm_120a; label "
+    "device=), all 20 probe families plus the D16/D17 tiles and specials of the `nvf4` and `mxf4` runs: nvf4 `fresh_seed.nvf4` "
     "10,657,792 elements, 0 mismatches for BlockScaledAlignAdd (autoproof-model5 misses 192,196), "
-    "mxf4 9,658,368 elements, 0 mismatches; with the verity nvf4 and mxf4 runs the anchor totals 17.29M (nvf4) and 14.42M "
+    "mxf4 `fresh_seed.mxf4` 9,658,368 elements, 0 mismatches; with the `nvf4` and `mxf4` runs the anchor totals 17.29M (nvf4) and 14.42M "
     "(mxf4) zero-mismatch elements, so P2 (>= 1e7) holds and the trust assessment computed PINNED for both.  This is "
     "mma.sync kind::mxf4nvf4 on a consumer die; B200 tcgen05.mma is a separate instruction (sm100.*)"
 )
@@ -227,24 +228,24 @@ _PIN_BF16 = (
     "full canonical family set -- randn/uniform/subnormal/cancellation/mixed/near-overflow/signed-zero, "
     "tiny_acc_zero_products, zero_acc_tiny_cancellation, zero_products_nonzero_acc, acc_only_lsb_walk, specials, adder_width_cancellation -- "
     "25,833,472 asserted elements per anchor, 0 mismatches, SASS 1x HMMA.16816.F32.BF16, GPU UUID recorded (label device=): A100 "
-    "(sm80), RTX 4090 (sm89, + golden and mma_special replays), H100 (sm90), "
-    "RTX 5090 (sm120); canaries (3-25 s).  Silicon facts: every BF16 pipeline passes all "
+    "`canonical.a100` (sm80), RTX 4090 `canonical.rtx4090` (sm89, + golden and mma_special replays), H100 `canonical.h100` (sm90), "
+    "RTX 5090 `canonical.rtx5090` (sm120); `canaries` (3-25 s).  Silicon facts: every BF16 pipeline passes all "
     "32 accumulator bits through unchanged with zero products (D == C for 65,536/65,536); the adder-width residual survives at 2^-24 and is dropped "
     "at 2^-25 inside the pair's k-group of 8 and is never dropped in the other group on sm_80/sm_89 ((8,8), 25 bits), and survives at 2^-25 / is "
     "dropped at 2^-26 in every slot k=2..15 on sm_90/sm_120 ((16,), 26 bits)"
 )
 _PRO6000_FP8 = (
     "benchmarks/tc_probe on an RTX PRO 6000 Blackwell Server "
-    "Edition (cc 12.0, driver 580.173.02, SM clock locked at 2,100 MHz, CUDA 13.0 V13.0.88, -arch=sm_120a; compile check: "
-    "one QMMA.16832 per tile kernel), one mma.sync per tile, seed 20260931, 14 families"
+    "Edition (cc 12.0, driver 580.173.02, SM clock locked at 2,100 MHz, CUDA 13.0 V13.0.88, -arch=sm_120a; compile check "
+    "`compile_check`: one QMMA.16832 per tile kernel), one mma.sync per tile, seed 20260931, 14 families"
 )
-_PRO6000_E4M3 = (_PRO6000_FP8 + ": a run (GPU-83455c5b-f2a1-c810-0a97-a01ddf05c4ba, SASS QMMA.16832.F32.E4M3.E4M3), "
+_PRO6000_E4M3 = (_PRO6000_FP8 + ": `run` (GPU `device`, SASS QMMA.16832.F32.E4M3.E4M3), "
                  "25,041,024 elements, 0 mismatches against BLACKWELL_SM120_E4M3_M16N8K32; Ada's pipeline misses 19,033,876 and the sm_90 "
                  "two-HMMA lowering 3,049,017")
-_PRO6000_E5M2 = (_PRO6000_FP8 + ": a run (GPU-6fbd6701-ccfb-e008-dc6e-986175046bc7, SASS QMMA.16832.F32.E5M2.E5M2), "
+_PRO6000_E5M2 = (_PRO6000_FP8 + ": `run` (GPU `device`, SASS QMMA.16832.F32.E5M2.E5M2), "
                  "25,041,024 elements, 0 mismatches against BLACKWELL_SM120_E5M2_M16N8K32; Ada's pipeline with e5m2 products misses 15,747,373")
-_PRO6000_E5M2_SECOND = "a second PRO 6000 die (GPU-5f1149a4-e5f5-1007-ec78-7cd350a69a4f): 6,440,960 elements, 0 mismatches"
-_PRO6000_MXF4 = ("benchmarks/tc_probe_fp4 on an RTX PRO 6000 Blackwell Server Edition (GPU-a98a36f6-1393-7cad-32ea-e9f7ec25376a, "
+_PRO6000_E5M2_SECOND = "a second PRO 6000 die: `second_die.run` (GPU `second_die.device`), 6,440,960 elements, 0 mismatches"
+_PRO6000_MXF4 = ("benchmarks/tc_probe_fp4 `pro6000.run` (RTX PRO 6000 Blackwell Server Edition, GPU `pro6000.device`, "
                  "driver 580.173.02, CUDA 13.0 V13.0.88 "
                  "-arch=sm_120a, SASS one OMMA.SF.16864.F32.E2M1.E2M1.E8 per tile kernel): 1,089,536 gated elements, 0 mismatches against "
                  "BLACKWELL_SM120_MXF4; its 90,112 record-only elements (a 0xFF scale byte, sums leaving binary32, NaN and infinite "
@@ -360,7 +361,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             a_dtype="tf32", b_dtype="tf32", acc_dtype="f32", scale=None,
             model=None,
             status="unprobed",
-            evidence=("A run on an H200 fitted HopperTf32WgmmaDot8_v1 alone: one group of 8 exact TF32 products, "
+            evidence=("The `run` on an H200 fitted HopperTf32WgmmaDot8_v1 alone: one group of 8 exact TF32 products, "
                       "a 26-bit adder and floor -133; B is rounded RNE from FP32 to TF32 (A was widened BF16 and exact in TF32). "
                       "The end-to-end mHC capture was NO-GO because the old Definition truncated B and used the wrong NaN word in "
                       "the separate squared sum; integrations/vllm/tests/properties/dsv4_mhc_capture_gpu.py reruns the gate",),
@@ -432,7 +433,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             status="pinned",
             evidence=(_RTX5090_FP4_RE, _AUTOPROOF, _AUTOPROOF_UNSCALED, _RTX5090_NVF4, _PIN_FP4,
                       "model agrees for arbitrary finite FP32 accumulators (D12's zero-init limitation lifted; D16 and D17 resolved by "
-                      "the verity nvf4 and mxf4 runs); NaN/inf accumulators and sums leaving binary32 are outside the model's domain (recorded)"),
+                      "the `nvf4` and `mxf4` runs); NaN/inf accumulators and sums leaving binary32 are outside the model's domain (recorded)"),
         ),
         _i(
             # autoproof did not probe UE8M0 scales; the mnemonic below is the one ptxas 12.8 accepts on sm_120a (kind::mxf4nvf4
@@ -464,8 +465,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
             anchor_device="NVIDIA RTX PRO 6000 Blackwell Server Edition",
             evidence=(BLACKWELL_SM120_S8_M16N8K32.validated,
                       "SASS IMMA.16832.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,243,968 elements: "
-                      "tc-evidence `tc_evidence`",
-                      "census: IMMA.16832 at 1,023.6 MACs/SM/clk (QMMA.16832: 1,023.8), 16 SMSP cycles "
+                      "run `tc_evidence.run` (tc-evidence `tc_evidence.art`)",
+                      "census `census`: IMMA.16832 at 1,023.6 MACs/SM/clk (QMMA.16832: 1,023.8), 16 SMSP cycles "
                       "per warp MMA, dependent latency 27.2 cycles"),
         ),
         # --- the int8 grid's instruction on the datacenter cards ------------------------------------------------
@@ -482,7 +483,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             anchor_device="NVIDIA H200",
             evidence=(HOPPER_SM90_S8_K32.validated,
                       "SASS IGMMA.64x8x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,254,336 elements: "
-                      "tc-evidence `tc_evidence`"),
+                      "run `tc_evidence.run` (tc-evidence `tc_evidence.art`)"),
         ),
         # The N an s8 GEMM's warpgroup tile issues (the sm_90a s8 GEMM's m64n{64,128,256}k32).
         # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store;
@@ -498,7 +499,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             anchor_device="NVIDIA H200",
             evidence=(HOPPER_SM90_S8_K32.validated,
                       "SASS IGMMA.64x64x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,330,112 elements: "
-                      "tc-evidence `tc_evidence`"),
+                      "run `tc_evidence.run` (tc-evidence `tc_evidence.art`)"),
         ),
         _i(
             id="sm90.wgmma.m64n128k32.s8",
@@ -511,7 +512,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             anchor_device="NVIDIA H200",
             evidence=(HOPPER_SM90_S8_K32.validated,
                       "SASS IGMMA.64x128x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,428,416 elements: "
-                      "tc-evidence `tc_evidence`"),
+                      "run `tc_evidence.run` (tc-evidence `tc_evidence.art`)"),
         ),
         _i(
             id="sm90.wgmma.m64n256k32.s8",
@@ -524,7 +525,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             anchor_device="NVIDIA H200",
             evidence=(HOPPER_SM90_S8_K32.validated,
                       "SASS IGMMA.64x256x32.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,616,832 elements: "
-                      "tc-evidence `tc_evidence`"),
+                      "run `tc_evidence.run` (tc-evidence `tc_evidence.art`)"),
         ),
         _i(
             id="sm90.mma.m16n8k32.s8",
@@ -537,7 +538,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             anchor_device="NVIDIA H200",
             evidence=(HOPPER_SM90_S8_K32.validated,
                       "SASS IMMA.16832.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,243,968 elements: "
-                      "tc-evidence `tc_evidence`"),
+                      "run `tc_evidence.run` (tc-evidence `tc_evidence.art`)"),
         ),
         _i(
             id="sm100.tcgen05.mma.s8",
@@ -550,7 +551,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             status="pinned",
             evidence=(BLACKWELL_SM100_S8_K32.validated,
                       "SASS UTCIMMA, one per tile kernel; 0 mismatches over 10,334,208 elements: "
-                      "tc-evidence `tc_evidence`"),
+                      "run `tc_evidence.run` (tc-evidence `tc_evidence.art`)"),
         ),
         _i(
             id="sm100.mma.m16n8k32.s8",
@@ -562,7 +563,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             status="pinned",
             evidence=(BLACKWELL_SM100_S8_K32.validated,
                       "SASS IMMA.16832.S8.S8.SAT, one per tile kernel; 0 mismatches over 10,243,968 elements: "
-                      "tc-evidence `tc_evidence`"),
+                      "run `tc_evidence.run` (tc-evidence `tc_evidence.art`)"),
         ),
         # --- Blackwell datacenter (sm_100) ------------------------------------------------------------------------
         _i(
@@ -587,7 +588,7 @@ INSTRUCTIONS: dict[str, Instruction] = {
             model=BLACKWELL_SM100_NVF4,
             status="pinned",  # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store
             evidence=(_B200_TCGEN05, _B200_STAGE0,
-                      "SASS UTCOMMA.4X, one per tile kernel; 0 mismatches over 16,461,824 elements: four runs, in order 303,104; "
+                      "SASS UTCOMMA.4X, one per tile kernel; 0 mismatches over 16,461,824 elements: the `runs`, in order 303,104; "
                       "6,463,488 + probe3 1,601/1,601; 1,134,592, K=128 chain; "
                       "8,560,640; the sm_120 model's parameters carry over unchanged"),
         ),
@@ -603,8 +604,8 @@ INSTRUCTIONS: dict[str, Instruction] = {
             model=BLACKWELL_SM100_MXF4,
             status="pinned",  # benchmarks/tc_probe/trust.py computed PINNED (P1-P5) from the store
             evidence=(_B200_TCGEN05, _B200_STAGE0,
-                      "SASS UTCOMMA, one per tile kernel; 0 mismatches over 12,898,304 elements: kind::mxf4 "
-                      "(3,956,736 and 3,956,736), kind::mxf4nvf4 2X (3,956,736 and "
+                      "SASS UTCOMMA, one per tile kernel; 0 mismatches over 12,898,304 elements: kind::mxf4 `mxf4` "
+                      "(3,956,736 and 3,956,736), kind::mxf4nvf4 2X `mxf4nvf4_2x` (3,956,736 and "
                       "1,028,096, K=128 chain); the signed-underflow alternative misses 14,710 / 14,384 / "
                       "14,734 / 5,535 (D13 holds on sm_100)"),
         ),
