@@ -15,8 +15,8 @@ is the credit priced less the units the network certifier admits (`Accounting.Re
 `W ≤ m·p(tc)·credit − u·p(tc)·K/b_unit`), each right word of a unit the device didn't outsource cost `m` multiply-adds
 of priced work (`Accounting.Assumptions.WordCostsMacs`, `m` the fewest any credited word stands for, `u` a unit's), and
 the device outsourced at most `K/b_unit` units (`Accounting.Assumptions.HelpWithinCertifier`). It takes the source's
-bound as a hypothesis over the source's own event, so it restates neither bound, and needs no time credit (RT4-LOGIC-6's
-Compose line): the joint period's claim is priced ops.
+bound as a hypothesis over the source's own event, so it restates neither bound, and needs no time credit (Compose's
+time line): the joint period's claim is priced ops.
 
 H1's instance is `Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod`, and its H200 one at INT8
 `WorkOfH1CheckedCreditPeriodH200`. Any other source that credits words, a period of v5/v6 tiles among them, takes the

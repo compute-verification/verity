@@ -4,7 +4,7 @@ import PouwWindow.Lanes
 /-!
 # A leaf's 33 statements' ports at the served tile
 
-`PouwWindow.Lanes` (INT-TIE's layout, held to `h1zy.statement_ports` by its difftest) states, at a leaf's tile and
+`PouwWindow.Lanes` (the statements' layout, held to `h1zy.statement_ports` by its difftest) states, at a leaf's tile and
 contraction, which port of each of the 33 statements holds each of the Definition's inputs and its output, at which
 bits of the port's row, and where the verifier opens that row (`Source`). At the served 32 × 32 leaf (`servedTile K`):
 
