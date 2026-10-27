@@ -27,6 +27,13 @@ is its link points, released after the SHA-512 of its record's `root_b_sha512` d
 (`OneStageZk.sessionUses_points`, `OneStageZk.pointsAfter_ok`). Its record names exactly `TABLES` there
 (`OneStageZk.roundsOk_tables`), so where each digest is its root's SHA-512 (`Flock.Record.decode`'s S5), that hash is
 `LiveHash.pointsHash` of the roots (`OneStageZk.sessionUses_pointsHash`).
+
+Every use a session's record lists is its decoded record's (`OneStageZk.sessionUses_decoded`): its link points, then
+each stream's rounds in the record's order, each round released after the SHA-512 of its request, at its stream's
+chain over the decoded digests and with its decoded coin count (`OneStageZk.decodedUses`), the record's hex of each
+use's coins reading as the decoded F128s one for one. So where `roundCoins` returns each use's release, session 0's
+decoded link points and round coins are the F128s `coinF128s` reads from those releases, in the record's order
+(`session0_coins`, `decodes_coins`).
 -/
 
 open Lean (Json)
@@ -313,6 +320,130 @@ theorem loop_mono {α σ ε : Type} (R : σ → σ → Prop) (hrefl : ∀ s, R s
     | done b => cases hn; exact h1
     | yield b => exact htrans _ _ _ h1 (loop_mono R hrefl htrans f hf l b s' hn)
 
+/-- `l`'s elements, one step each, take `s` to `s'`, each step `P`. -/
+inductive Steps {α σ : Type} (P : α → σ → σ → Prop) : List α → σ → σ → Prop
+  | nil (s : σ) : Steps P [] s s
+  | cons {x : α} {l : List α} {s s₁ s' : σ} : P x s s₁ → Steps P l s₁ s' → Steps P (x :: l) s s'
+
+/-- A loop whose every step that returns yields a state its step relates: its run is those steps. -/
+theorem steps_of_forIn {α σ ε : Type} {f : α → σ → Except ε (ForInStep σ)} (P : α → σ → σ → Prop)
+    (hf : ∀ x s r, f x s = .ok r → ∃ s₁, r = .yield s₁ ∧ P x s s₁) :
+    ∀ (l : List α) (s s' : σ), forIn l s f = .ok s' → Steps P l s s'
+  | [], s, s', h => by
+    rw [List.forIn_nil] at h
+    cases h
+    exact .nil s
+  | x :: l, s, s', h => by
+    rw [List.forIn_cons] at h
+    cases hx : f x s with
+    | error e => rw [hx] at h; cases h
+    | ok r =>
+      rw [hx] at h
+      obtain ⟨s₁, rfl, hp⟩ := hf x s r hx
+      exact .cons hp (steps_of_forIn P hf l s₁ s' h)
+
+/-- A list `mapM` returns relates each element to its value by any relation each call's return implies. -/
+theorem list_mapM_rel {α β ε : Type} {f : α → Except ε β} {R : α → β → Prop}
+    (hf : ∀ x b, f x = .ok b → R x b) : ∀ (l : List α) (l' : List β), l.mapM f = .ok l' → List.Forall₂ R l l'
+  | [], l', h => by
+    simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h; subst h; exact .nil
+  | x :: l, l', h => by
+    rw [List.mapM_cons] at h
+    simp only [bind, Except.bind, pure, Except.pure] at h
+    split at h
+    · cases h
+    · rename_i b hb
+      split at h
+      · cases h
+      · rename_i t ht
+        cases h
+        exact .cons (hf x b hb) (list_mapM_rel hf l t ht)
+
+/-- What `hexes` reads is a list of strings, as they are. -/
+theorem hexes_ok {j : Json} {w : String} {cs : Array String} (h : hexes j w = .ok cs) :
+    ∃ xs : Array Json, j = .arr xs ∧ List.Forall₂ (fun x c => x = .str c) xs.toList cs.toList := by
+  unfold hexes at h
+  split at h
+  · rename_i xs
+    refine ⟨xs, rfl, ?_⟩
+    rw [Array.mapM_eq_mapM_toList] at h
+    simp only [Functor.map, Except.map] at h
+    split at h
+    · cases h
+    · rename_i l hl
+      cases h
+      refine list_mapM_rel (fun x c hx => ?_) _ _ hl
+      split at hx
+      · cases hx; rfl
+      · cases hx
+  · cases h
+
+/-- A round's use as `usesOf` reads it, after the stream's chain so far: its digest `d` and its coins `cs`, released
+after the SHA-512 of its request at the chain's next value, which the step carries on. -/
+def RoundStep (slot : Nat) (name : String) (r : Json)
+    (s s' : List (Challenger.Use × Array String) × ByteArray) : Prop :=
+  ∃ sha d cs w, getD r "msg_sha512" = .str sha ∧ Flock.unhex sha = .ok d ∧ hexes (getD r "coins") w = .ok cs ∧
+    s' = (s.1 ++ [(⟨Hello.slotStream slot name, Flock.Sha512.hash (roundRequest name (Flock.Sha512.hash (s.2 ++ d))
+      cs.size), (cs.size + 3) / 4⟩, cs)], Flock.Sha512.hash (s.2 ++ d))
+
+/-- A stream's uses as `usesOf` reads them: its name, its rounds, and their uses from an empty chain. -/
+def StreamStep (slot : Nat) (s : Json) (out out' : List (Challenger.Use × Array String)) : Prop :=
+  ∃ name rs st, getD s "stream" = .str name ∧ getD s "rounds" = .arr rs ∧
+    Steps (RoundStep slot name) rs.toList (out, .empty) st ∧ out' = st.1
+
+/-- **What `usesOf` reads**: the record's link points, released after `pointsAfter` of its link, then each stream's
+uses, a step each (`StreamStep`). -/
+theorem usesOf_steps {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
+    (h : usesOf slot record = .ok us) :
+    ∃ j ps pts a ss, Flock.JsonParse.parse record = .ok j ∧ getD (getD j "link") "points" = .arr ps ∧
+      ps.foldlM (m := V) (fun acc p => return acc ++ (← hexes p "a link point")) #[] = .ok pts ∧
+      pointsAfter (getD j "link") = .ok a ∧ getD j "streams" = .arr ss ∧
+      Steps (StreamStep slot) ss.toList [(⟨Hello.slotStream slot POINTS, a, (pts.size + 3) / 4⟩, pts)] us := by
+  unfold usesOf at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  rename_i _ j hj _ ps hps _ pts hpts _ a ha _ ss hss _ out heq
+  cases h
+  refine ⟨j, ps, pts, a, ss, ?_, hps, hpts, ha, hss, ?_⟩
+  · cases hp : Flock.JsonParse.parse record with
+    | error e => rw [hp] at hj; cases hj
+    | ok j' => rw [hp] at hj; cases hj; rfl
+  rw [← Array.forIn_toList] at heq
+  refine steps_of_forIn _ (fun s o r hr => ?_) _ _ _ heq
+  repeat' split at hr
+  all_goals first
+    | (cases hr; done)
+    | (simp [throw, throwThe, MonadExceptOf.throw] at *; done)
+    | skip
+  rename_i name hname _ _ _ rs hrs _ st hst
+  cases hr
+  refine ⟨_, rfl, name, rs, st, hname, hrs, ?_, rfl⟩
+  rw [← Array.forIn_toList] at hst
+  refine steps_of_forIn _ (fun r t o hr => ?_) _ _ _ hst
+  repeat' split at hr
+  all_goals first
+    | (cases hr; done)
+    | (simp [throw, throwThe, MonadExceptOf.throw] at *; done)
+    | skip
+  rename_i sha hsha _ _ cs hcs _ d hd
+  cases hr
+  exact ⟨_, rfl, sha, d, cs, _, hsha, hd, hcs, rfl⟩
+
+/-- What each step keeps, a run keeps. -/
+theorem steps_inv {α σ : Type} {P : α → σ → σ → Prop} (I : σ → Prop) (hP : ∀ x s s', P x s s' → I s → I s') :
+    ∀ {l : List α} {s s' : σ}, Steps P l s s' → I s → I s'
+  | _, _, _, .nil _, h => h
+  | _, _, _, .cons hp t, h => steps_inv I hP t (hP _ _ _ hp h)
+
+/-- `usesOf`'s uses grow by uses of the slot's families: each stream's rounds append one use each, after what's read. -/
+theorem usesOf_grows {slot : Nat} (I : List (Challenger.Use × Array String) → Prop)
+    (hI : ∀ out name u cs, I out → u.label = Hello.slotStream slot name → I (out ++ [(u, cs)]))
+    {ss : List Json} {out us : List (Challenger.Use × Array String)} (h : Steps (StreamStep slot) ss out us)
+    (hout : I out) : I us :=
+  steps_inv I (fun _ _ _ ⟨name, _, st, _, _, hst, e⟩ hs => e ▸ steps_inv (fun st => I st.1)
+    (fun _ _ _ ⟨_, _, cs, _, _, _, _, e'⟩ ht => e' ▸ hI _ name _ cs ht rfl) hst hs) h hout
+
 /-- A session's uses are its record's (`usesOf`), and its record's streams and rounds are what they are read from
 (`roundsOk`). -/
 theorem usesOf_of_sessionUses {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
@@ -332,34 +463,12 @@ theorem usesOf_of_sessionUses {slot : Nat} {record : String} {us : List (Challen
 /-- Every use session `slot` makes of the challenger's coins is of one of its own families, `slot/<slot>/…`. -/
 theorem sessionUses_label {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
     (h : sessionUses slot record = .ok us) : ∀ x ∈ us, ∃ n, x.1.label = Hello.slotStream slot n := by
-  let P : List (Challenger.Use × Array String) → Prop := fun l => ∀ x ∈ l, ∃ n, x.1.label = Hello.slotStream slot n
-  have hrefl : ∀ a, P a → P a := fun _ h => h
-  have htrans : ∀ a b c, (P a → P b) → (P b → P c) → P a → P c := fun _ _ _ h1 h2 h => h2 (h1 h)
-  have happ : ∀ a y n, P a → y.1.label = Hello.slotStream slot n → P (a ++ [y]) := by
-    intro a y n ha hy x hx
-    rcases List.mem_append.1 hx with hx | hx
-    · exact ha x hx
-    · rw [List.mem_singleton.1 hx]; exact ⟨n, hy⟩
-  replace h := (usesOf_of_sessionUses h).1
-  unfold usesOf at h
-  simp only [bind, Except.bind, pure, Except.pure] at h
-  repeat' split at h
-  all_goals first | (cases h; done) | skip
-  rename_i heq
-  cases h
-  rw [← Array.forIn_toList] at heq
-  refine loop_mono (fun a b => P a → P b) hrefl htrans _ ?_ _ _ _ heq ?_
-  · intro x s r hr hs
-    repeat' split at hr
-    all_goals first | (cases hr; done) | (simp [throw, throwThe, MonadExceptOf.throw] at *; done) | skip
-    rename_i heq2
-    cases hr
-    rw [← Array.forIn_toList] at heq2
-    refine loop_mono (fun a b => P a → P b) hrefl htrans _ ?_ _ _ _ heq2 hs
-    intro y t q hq ht
-    repeat' split at hq
-    all_goals first | (cases hq; done) | (simp [throw, throwThe, MonadExceptOf.throw] at *; done) | skip
-    all_goals (cases hq; exact happ _ _ _ ht rfl)
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, hs⟩ := usesOf_steps (usesOf_of_sessionUses h).1
+  refine usesOf_grows (fun l => ∀ x ∈ l, ∃ n, x.1.label = Hello.slotStream slot n)
+    (fun out name u cs hout hu x hx => ?_) hs ?_
+  · rcases List.mem_append.1 hx with hx | hx
+    · exact hout x hx
+    · rw [List.mem_singleton.1 hx]; exact ⟨name, hu⟩
   · intro x hx
     rw [List.mem_singleton.1 hx]
     exact ⟨_, rfl⟩
@@ -690,32 +799,13 @@ theorem sessionUses_points {slot : Nat} {record : String} {us : List (Challenger
     (h : sessionUses slot record = .ok us) :
     ∃ j a pts, Flock.JsonParse.parse record = .ok j ∧ pointsAfter (getD j "link") = .ok a ∧
       us.head? = some (⟨Hello.slotStream slot POINTS, a, (pts.size + 3) / 4⟩, pts) := by
-  replace h := (usesOf_of_sessionUses h).1
-  unfold usesOf at h
-  simp only [bind, Except.bind, pure, Except.pure] at h
-  repeat' split at h
-  all_goals first | (cases h; done) | skip
-  rename_i _ j hj _ _ _ _ pts _ _ a ha _ _ _ _ _ heq
-  cases h
-  rw [← Array.forIn_toList] at heq
-  obtain ⟨t, rfl⟩ := loop_mono (fun x y => ∃ t, y = x ++ t) (fun _ => ⟨[], by simp⟩)
-    (fun _ _ _ ⟨t1, e1⟩ ⟨t2, e2⟩ => ⟨t1 ++ t2, by rw [e2, e1, List.append_assoc]⟩) _ (fun x s r hr => by
-      repeat' split at hr
-      all_goals first
-        | (cases hr; done)
-        | (simp [throw, throwThe, MonadExceptOf.throw] at *; done)
-        | skip
-      rename_i heq2
-      cases hr
-      rw [← Array.forIn_toList] at heq2
-      exact loop_mono (fun x y => ∃ t, y = x ++ t) (fun _ => ⟨[], by simp⟩)
-        (fun _ _ _ ⟨t1, e1⟩ ⟨t2, e2⟩ => ⟨t1 ++ t2, by rw [e2, e1, List.append_assoc]⟩) _ (fun y t q hq => by
-          repeat' split at hq
-          all_goals first
-            | (cases hq; done)
-            | (simp [throw, throwThe, MonadExceptOf.throw] at *; done)
-            | (cases hq; exact ⟨_, rfl⟩)) _ _ _ heq2) _ _ _ heq
-  exact ⟨j, a, pts, mapError_ok hj, ha, rfl⟩
+  obtain ⟨j, _, pts, a, _, hj, _, _, ha, _, hs⟩ := usesOf_steps (usesOf_of_sessionUses h).1
+  refine ⟨j, a, pts, hj, ha, usesOf_grows (fun l => l.head? = some (⟨Hello.slotStream slot POINTS, a,
+    (pts.size + 3) / 4⟩, pts)) (fun out _ _ _ hout _ => ?_) hs rfl⟩
+  cases out with
+  | nil => cases hout
+  | cons x t => exact hout
+
 
 /-- **A record `roundsOk` passes names exactly `TABLES`** in its link's root_B digests, in key order. -/
 theorem roundsOk_tables {record : String} (h : roundsOk record = .ok ()) :
@@ -912,6 +1002,295 @@ theorem sessionUses_pointsHash_of_decode {slot : Nat} {record : String} {us : Li
   first
     | (simpa [ht] using hstr)
     | (simp only [ht] at hstr; exact hstr)
+
+/-- A round as `Flock.Record.decode` reads it from its record: its digest under `msg_<dk>` and its coins. -/
+def RoundDec (spec : Flock.SessionSpec) (r : Json) (rd : Flock.Round) : Prop :=
+  ∃ h, Flock.Record.str r s!"msg_{spec.dk}" = .ok h ∧ Flock.unhex h = .ok rd.sha ∧
+    ∃ cs, Flock.Record.arr r "coins" = .ok cs ∧ Flock.Record.f128s cs = .ok rd.coins
+
+/-- A stream as `Flock.Record.decode` reads it from its record: its name and its rounds, in order. -/
+def StreamDec (spec : Flock.SessionSpec) (s : Json) (sr : Flock.StreamRec) : Prop :=
+  Flock.Record.str s "stream" = .ok sr.name ∧
+    ∃ rs, Flock.Record.arr s "rounds" = .ok rs ∧ List.Forall₂ (RoundDec spec) rs.toList sr.rounds.toList
+
+/-- **What `Flock.Record.decode` reads of the link points and the streams**: each point list's F128s, and each
+stream's name and rounds in the record's order (`StreamDec`). -/
+theorem decode_fields {spec : Flock.SessionSpec} {text : String} {sess : Flock.Session}
+    (h : Flock.Record.decode spec text = .ok sess) :
+    ∃ j l, Flock.JsonParse.parse text = .ok j ∧ Flock.Record.fld j "link" = .ok l ∧
+      (∃ ps, Flock.Record.arr l "points" = .ok ps ∧
+        List.Forall₂ (fun p pt => ∃ a, p.getArr? = .ok a ∧ Flock.Record.f128s a = .ok pt) ps.toList sess.points.toList) ∧
+      ∃ ss, Flock.Record.arr j "streams" = .ok ss ∧ List.Forall₂ (StreamDec spec) ss.toList sess.streams.toList := by
+  revert sess
+  show FlockSoundness.Refine.Ret (Flock.Record.decode spec text) _
+  rw [Flock.Record.decode.eq_def]
+  cases hp : Flock.JsonParse.parse text with
+  | error e => intro sess h; cases h
+  | ok j =>
+    simp only []
+    rw [pure_bind]
+    ret_walk [Flock.Record.fld, Flock.Record.arr, Array.mapM]
+    all_goals
+      refine ⟨j, _, rfl, by assumption, ⟨_, by assumption,
+        (Claims.Bridge.Custody.mapM_forall₂ (by assumption)).imp fun p pt h => ?_⟩,
+        ⟨_, by assumption, (Claims.Bridge.Custody.mapM_forall₂ (by assumption)).imp fun s sr h => ?_⟩⟩
+    all_goals try dsimp only at h
+    all_goals first
+      | (split at h
+         · exact ⟨_, by assumption, h⟩
+         · cases h)
+      | skip
+    all_goals
+      obtain ⟨name, hn, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨rs, hrs, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨rounds, hro, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+      obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      refine ⟨hn, rs, hrs, (Claims.Bridge.Custody.mapIdxM_forall₂ hro).imp fun r rd ⟨k, h⟩ => ?_⟩
+      repeat' walk_step
+      all_goals
+        simp only [pure, Except.pure, Except.ok.injEq] at h
+        subst h
+        exact ⟨_, by assumption, by assumption, _, by assumption, by assumption⟩
+
+
+theorem getD_of_str {j : Json} {k x : String} (h : Flock.Record.str j k = .ok x) : getD j k = .str x := by
+  unfold Flock.Record.str at h
+  obtain ⟨v, hv, h⟩ := FlockSoundness.Refine.ebind_ok h
+  rw [getD_of_fld hv]
+  cases v <;> first | (cases h; done) | (simp only [Json.getStr?] at h; cases h; rfl)
+
+theorem getD_of_arr {j : Json} {k : String} {a : Array Json} (h : Flock.Record.arr j k = .ok a) :
+    getD j k = .arr a := by
+  unfold Flock.Record.arr at h
+  obtain ⟨v, hv, h⟩ := FlockSoundness.Refine.ebind_ok h
+  rw [getD_of_fld hv]
+  cases v <;> first | (cases h; done) | (simp only [Json.getArr?] at h; cases h; rfl)
+
+/-- The record's F128 hex `hs` reads as the F128s `xs`, one for one. -/
+def Decodes (hs : Array String) (xs : Array Flock.F128) : Prop :=
+  List.Forall₂ (fun h x => Flock.f128OfHex h = .ok x) hs.toList xs.toList
+
+theorem forall₂_flip {α β γ : Type} {R : α → β → Prop} {S : α → γ → Prop} {T : β → γ → Prop}
+    (H : ∀ a b c, R a b → S a c → T b c) :
+    ∀ {l₁ : List α} {l₂ : List β} {l₃ : List γ}, List.Forall₂ R l₁ l₂ → List.Forall₂ S l₁ l₃ → List.Forall₂ T l₂ l₃
+  | _, _, _, .nil, .nil => .nil
+  | _, _, _, .cons h₁ t₁, .cons h₂ t₂ => .cons (H _ _ _ h₁ h₂) (forall₂_flip H t₁ t₂)
+
+theorem forall₂_append {α β : Type} {R : α → β → Prop} :
+    ∀ {l₁ l₂ : List α} {m₁ m₂ : List β}, List.Forall₂ R l₁ m₁ → List.Forall₂ R l₂ m₂ →
+      List.Forall₂ R (l₁ ++ l₂) (m₁ ++ m₂)
+  | _, _, _, _, .nil, h => h
+  | _, _, _, _, .cons h t, h₂ => .cons h (forall₂_append t h₂)
+
+theorem forall₂_length {α β : Type} {R : α → β → Prop} :
+    ∀ {l₁ : List α} {l₂ : List β}, List.Forall₂ R l₁ l₂ → l₁.length = l₂.length
+  | _, _, .nil => rfl
+  | _, _, .cons _ t => congrArg (· + 1) (forall₂_length t)
+
+/-- Hex strings `hexes` reads from a list that `Flock.Record.f128s` decodes are the hex of its F128s. -/
+theorem hexes_f128s {j : Json} {w : String} {cs : Array String} {a : Array Json} {ys : Array Flock.F128}
+    (h : hexes j w = .ok cs) (ha : j = .arr a) (hf : Flock.Record.f128s a = .ok ys) : Decodes cs ys := by
+  obtain ⟨xs, hx, hxs⟩ := hexes_ok h
+  rw [hx] at ha
+  cases ha
+  unfold Flock.Record.f128s at hf
+  refine forall₂_flip (fun x c y hxc hy => ?_) hxs (Claims.Bridge.Custody.mapM_forall₂ hf)
+  subst hxc
+  exact hy
+
+/-- The uses of a stream's rounds the record decodes to, from the stream's chain `a`: each round's coins released
+after the SHA-512 of its request at the chain's next value and its F128 count. -/
+def roundUses (slot : Nat) (name : String) : ByteArray → List Flock.Round → List (Challenger.Use × Array Flock.F128)
+  | _, [] => []
+  | a, r :: rs =>
+    (⟨Hello.slotStream slot name, Flock.Sha512.hash (roundRequest name (Flock.Sha512.hash (a ++ r.sha)) r.coins.size),
+      (r.coins.size + 3) / 4⟩, r.coins) :: roundUses slot name (Flock.Sha512.hash (a ++ r.sha)) rs
+
+/-- A session's uses of the challenger's coins as the record decodes: its link points, released after `after`, then
+each stream's rounds in the record's order. -/
+def decodedUses (slot : Nat) (after : ByteArray) (sess : Flock.Session) : List (Challenger.Use × Array Flock.F128) :=
+  (⟨Hello.slotStream slot POINTS, after, (sess.points.flatten.size + 3) / 4⟩, sess.points.flatten) ::
+    sess.streams.toList.flatMap fun s => roundUses slot s.name .empty s.rounds.toList
+
+/-- A use and the record's hex of its coins, against a use and the F128s they decode to. -/
+def Corr (x : Challenger.Use × Array String) (y : Challenger.Use × Array Flock.F128) : Prop :=
+  x.1 = y.1 ∧ Decodes x.2 y.2
+
+theorem dk_sha512 {spec : Flock.SessionSpec} (hs : spec.sha512Digests = true) :
+    s!"msg_{spec.dk}" = "msg_sha512" := by
+  rw [show spec.dk = "sha512" by simp [Flock.SessionSpec.dk, hs]]
+  rfl
+
+/-- A stream's rounds as `usesOf` reads them are the uses of its decoded rounds (`roundUses`), from the same chain. -/
+theorem rounds_corr {spec : Flock.SessionSpec} (hs : spec.sha512Digests = true) (slot : Nat) (name : String) :
+    ∀ {rl : List Json} {rds : List Flock.Round} {out : List (Challenger.Use × Array String)} {a : ByteArray}
+      {st : List (Challenger.Use × Array String) × ByteArray} {D : List (Challenger.Use × Array Flock.F128)},
+      Steps (RoundStep slot name) rl (out, a) st → List.Forall₂ (RoundDec spec) rl rds → List.Forall₂ Corr out D →
+      List.Forall₂ Corr st.1 (D ++ roundUses slot name a rds)
+  | [], [], _, _, _, _, .nil _, .nil, hc => by simpa [roundUses] using hc
+  | r :: rl, rd :: rds, out, a, st, D, .cons hstep hrest, .cons hrd hds, hc => by
+    obtain ⟨sha, d, cs, w, hsha, hd, hcs, rfl⟩ := hstep
+    obtain ⟨h', hstr, hun, cs', harr, hf⟩ := hrd
+    rw [dk_sha512 hs] at hstr
+    rw [getD_of_str hstr] at hsha
+    cases hsha
+    rw [hd] at hun
+    cases hun
+    have hdec := hexes_f128s hcs (getD_of_arr harr) hf
+    have hsz : cs.size = rd.coins.size := by
+      simpa using forall₂_length hdec
+    have := rounds_corr hs slot name hrest hds (D := D ++ [(⟨Hello.slotStream slot name,
+      Flock.Sha512.hash (roundRequest name (Flock.Sha512.hash (a ++ rd.sha)) rd.coins.size), (rd.coins.size + 3) / 4⟩,
+      rd.coins)]) (forall₂_append hc (.cons ⟨by simp only [hsz], hdec⟩ .nil))
+    simpa [roundUses, hsz, List.append_assoc] using this
+
+/-- The streams' uses as `usesOf` reads them are their decoded rounds' uses, stream by stream. -/
+theorem streams_corr {spec : Flock.SessionSpec} (hs : spec.sha512Digests = true) (slot : Nat) :
+    ∀ {sl : List Json} {srs : List Flock.StreamRec} {out us : List (Challenger.Use × Array String)}
+      {D : List (Challenger.Use × Array Flock.F128)},
+      Steps (StreamStep slot) sl out us → List.Forall₂ (StreamDec spec) sl srs → List.Forall₂ Corr out D →
+      List.Forall₂ Corr us (D ++ srs.flatMap fun s => roundUses slot s.name .empty s.rounds.toList)
+  | [], [], _, _, _, .nil _, .nil, hc => by simpa using hc
+  | s :: sl, sr :: srs, out, us, D, .cons hstep hrest, .cons hsd hds, hc => by
+    obtain ⟨name, rs, st, hname, hrs, hsteps, rfl⟩ := hstep
+    obtain ⟨hstr, rs', harr, hrd⟩ := hsd
+    rw [getD_of_str hstr] at hname
+    cases hname
+    rw [getD_of_arr harr] at hrs
+    cases hrs
+    have := streams_corr hs slot hrest hds (rounds_corr hs slot sr.name hsteps hrd hc)
+    simpa [List.append_assoc] using this
+
+/-- The link points' hex `usesOf` gathers decodes to the decoded point lists, concatenated. -/
+theorem points_corr : ∀ {pl : List Json} {pts : List (Array Flock.F128)} {acc out : Array String}
+    {A : List Flock.F128},
+    pl.foldlM (m := V) (fun acc p => return acc ++ (← hexes p "a link point")) acc = .ok out →
+    List.Forall₂ (fun p pt => ∃ a, p.getArr? = .ok a ∧ Flock.Record.f128s a = .ok pt) pl pts →
+    List.Forall₂ (fun h x => Flock.f128OfHex h = .ok x) acc.toList A →
+    List.Forall₂ (fun h x => Flock.f128OfHex h = .ok x) out.toList (A ++ (pts.map (·.toList)).flatten)
+  | [], [], acc, out, A, h, .nil, hA => by
+    simp only [List.foldlM_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simpa using hA
+  | p :: pl, pt :: pts, acc, out, A, h, .cons ⟨a, hg, hf⟩ hrest, hA => by
+    rw [List.foldlM_cons] at h
+    obtain ⟨acc', h1, h⟩ := FlockSoundness.Refine.ebind_ok h
+    obtain ⟨v, hv, h1⟩ := FlockSoundness.Refine.ebind_ok h1
+    simp only [pure, Except.pure, Except.ok.injEq] at h1
+    subst h1
+    have hp : p = .arr a := by
+      cases p <;> first | (cases hg; done) | (simp only [Json.getArr?] at hg; cases hg; rfl)
+    have hdec := hexes_f128s hv hp hf
+    have := points_corr h hrest (by simpa using forall₂_append hA hdec)
+    simpa [List.append_assoc] using this
+
+/-- **A session's uses are its decoded record's**: where `usesOf` reads the uses `us` from a record that
+`Flock.Record.decode` decodes at a statement of SHA-512 digests, they are its link points, released after what
+`pointsAfter` reads, and then each stream's rounds in the record's order, each round released after the SHA-512 of its
+request at its stream's chain over the decoded digests and its decoded coins' count; each use's hex reads as the
+decoded F128s, one for one. -/
+theorem usesOf_decoded {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
+    (h : usesOf slot record = .ok us) {spec : Flock.SessionSpec} {sess : Flock.Session}
+    (hd : Flock.Record.decode spec record = .ok sess) (hs : spec.sha512Digests = true) :
+    ∃ j a, Flock.JsonParse.parse record = .ok j ∧ pointsAfter (getD j "link") = .ok a ∧
+      List.Forall₂ Corr us (decodedUses slot a sess) := by
+  obtain ⟨j, ps, pts, a, ss, hj, hps, hpts, ha, hss, hsteps⟩ := usesOf_steps h
+  obtain ⟨j', l, hj', hl, ⟨ps', hps', hpd⟩, ss', hss', hsd⟩ := decode_fields hd
+  rw [hj] at hj'
+  cases hj'
+  refine ⟨j, a, hj, ha, ?_⟩
+  rw [getD_of_fld hl, getD_of_arr hps'] at hps
+  cases hps
+  rw [getD_of_arr hss'] at hss
+  cases hss
+  rw [← Array.foldlM_toList] at hpts
+  have hp := points_corr hpts hpd (A := []) .nil
+  have hpe : sess.points.flatten.toList = (sess.points.toList.map (·.toList)).flatten := by
+    simp [Array.toList_flatten]
+  have hsz : pts.size = sess.points.flatten.size := by
+    have := forall₂_length hp
+    simp only [Array.length_toList, List.nil_append] at this
+    rw [this, ← Array.length_toList, hpe]
+  have := streams_corr hs slot hsteps hsd (D := [(⟨Hello.slotStream slot POINTS, a, (sess.points.flatten.size + 3) / 4⟩,
+    sess.points.flatten)]) (.cons ⟨by rw [hsz], by unfold Decodes; rw [hpe]; simpa using hp⟩ .nil)
+  simpa [decodedUses] using this
+
+
+theorem forall₂_getElem? {α β : Type} {R : α → β → Prop} :
+    ∀ {l₁ : List α} {l₂ : List β}, List.Forall₂ R l₁ l₂ → ∀ {j : Nat} {b : β}, l₂[j]? = some b →
+      ∃ a, l₁[j]? = some a ∧ R a b
+  | _, _, .nil, _, _, h => by cases h
+  | _, _, .cons hab t, 0, _, h => by
+    simp only [List.getElem?_cons_zero, Option.some.injEq] at h
+    subst h
+    exact ⟨_, rfl, hab⟩
+  | _, _, .cons _ t, j + 1, _, h => by
+    simp only [List.getElem?_cons_succ] at h ⊢
+    exact forall₂_getElem? t h
+
+theorem mem_zip_of_getElem? {α β : Type} :
+    ∀ {l₁ : List α} {l₂ : List β} {i : Nat} {a : α} {b : β}, l₁[i]? = some a → l₂[i]? = some b →
+      (a, b) ∈ l₁.zip l₂
+  | [], _, _, _, _, h, _ => by cases h
+  | _ :: _, [], _, _, _, _, h => by cases h
+  | x :: l₁, y :: l₂, 0, a, b, ha, hb => by
+    simp only [List.getElem?_cons_zero, Option.some.injEq] at ha hb
+    subst ha hb
+    exact List.mem_cons_self
+  | x :: l₁, y :: l₂, i + 1, a, b, ha, hb => by
+    simp only [List.getElem?_cons_succ] at ha hb
+    exact List.mem_cons_of_mem _ (mem_zip_of_getElem? ha hb)
+
+theorem roundUses_coins (slot : Nat) (name : String) : ∀ (a : ByteArray) (rs : List Flock.Round),
+    ∀ d ∈ roundUses slot name a rs, d.1.coins = (d.2.size + 3) / 4
+  | _, [], d, hd => by cases hd
+  | a, r :: rs, d, hd => by
+    rcases List.mem_cons.1 hd with rfl | hd
+    · rfl
+    · exact roundUses_coins slot name _ rs d hd
+
+/-- Each use the record decodes to reads `⌈n/4⌉` coins of 64 bytes for its `n` F128s. -/
+theorem decodedUses_coins {slot : Nat} {a : ByteArray} {sess : Flock.Session} :
+    ∀ d ∈ decodedUses slot a sess, d.1.coins = (d.2.size + 3) / 4 := by
+  intro d hd
+  rcases List.mem_cons.1 hd with rfl | hd
+  · rfl
+  · obtain ⟨s, -, hs⟩ := List.mem_flatMap.1 hd
+    exact roundUses_coins slot s.name _ _ d hs
+
+/-- `usesOf_decoded` with the link points' release named: where the session's first use is released after `P`. -/
+theorem usesOf_decoded_at {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
+    (h : usesOf slot record = .ok us) {spec : Flock.SessionSpec} {sess : Flock.Session}
+    (hd : Flock.Record.decode spec record = .ok sess) (hs : spec.sha512Digests = true) {P : ByteArray}
+    (hP : ∃ pts, us.head? = some (⟨Hello.slotStream slot POINTS, P, (pts.size + 3) / 4⟩, pts)) :
+    List.Forall₂ Corr us (decodedUses slot P sess) := by
+  obtain ⟨j, a, -, -, hc⟩ := usesOf_decoded h hd hs
+  obtain ⟨pts, hhd⟩ := hP
+  have e : a = P := by
+    unfold decodedUses at hc
+    cases hc with
+    | cons hx _ =>
+      simp only [List.head?_cons, Option.some.injEq] at hhd
+      subst hhd
+      exact (congrArg Challenger.Use.after hx.1).symm
+  rw [e] at hc
+  exact hc
+
+/-- **A session's uses are its decoded record's coins**: where `sessionUses` reads the uses `us` from a record that
+`Flock.Record.decode` decodes at a statement of the tables `TABLES` with SHA-512 digests, they are its link points,
+released after `LiveHash.pointsHash` of the decoded roots, then each stream's rounds in the record's order, each released
+after the SHA-512 of its request at its stream's chain over the decoded digests and its decoded coin count; each use's
+hex reads as the decoded F128s, one for one (`decodedUses`). -/
+theorem sessionUses_decoded {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
+    (h : sessionUses slot record = .ok us) {spec : Flock.SessionSpec} {sess : Flock.Session}
+    (hd : Flock.Record.decode spec record = .ok sess) (ht : spec.tables = TABLES) (hs : spec.sha512Digests = true) :
+    List.Forall₂ Corr us (decodedUses slot (Flock.Guarantees.LiveHash.pointsHash sess.rootB) sess) :=
+  usesOf_decoded_at (usesOf_of_sessionUses h).1 hd hs (sessionUses_pointsHash_of_decode h hd ht hs)
 
 theorem setupOne_tags {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Json} {program : Option ByteArray} {st : Flock.Stmt}
@@ -1371,5 +1750,69 @@ theorem f128OfHex_coin {hs : Array String} {ξ : ByteArray} (h : SampledProofs.O
 
 theorem bytesOfBits_size (l : List Bool) : (PlayDevice.bytesOfBits l).size = l.length / 8 := by
   simp [PlayDevice.bytesOfBits, ByteArray.size]
+
+/-- **The decoded F128s are the release's coins**: where the record's hex `hs` decodes to the F128s `xs` and
+`coinsMismatch` finds no reason for `hs` against a release's bytes, written from its bits `l`, at least `128` bits an
+F128, the `i`th F128 is the `i`th that `coinF128s` reads from `l`. -/
+theorem decodes_coins {hs : Array String} {xs : Array Flock.F128} (hd : SampledProofs.OneStageZk.Decodes hs xs)
+    {l : List Bool} (h : SampledProofs.OneStageZk.coinsMismatch hs (PlayDevice.bytesOfBits l) = none)
+    (hl : 128 * hs.size ≤ l.length) :
+    xs = Array.ofFn fun i : Fin xs.size =>
+      FlockLevel3.GF128.val (coinF128s xs.size (fun t => l.getD t.val false) i) := by
+  unfold SampledProofs.OneStageZk.Decodes at hd
+  have hsz : xs.size = hs.size := by
+    have := List.Forall₂.length_eq hd
+    simpa using this.symm
+  refine Array.ext (by simp) fun i hi1 hi2 => ?_
+  have hi : i < hs.size := by rw [← hsz]; exact hi1
+  have hx : Flock.f128OfHex hs[i] = .ok xs[i] := by
+    have := (List.forall₂_iff_get.1 hd).2 i (by simpa using hi) (by simpa using hi1)
+    simpa using this
+  have hc := f128OfHex_coin h xs.size (fun n => l.getD n false) (by rw [bytesOfBits_size]; omega)
+    (fun j hj => bytesOfBits_get l (by omega)) ⟨i, hi1⟩ hi
+  rw [Array.getElem_ofFn]
+  exact Except.ok.inj (hx.symm.trans hc)
+
+/-- **Session 0's link points and round coins are the challenger's releases, in the record's order**: where v2's
+round-coins check names no reason and session 0's record decodes at a statement of the tables `TABLES` with SHA-512
+digests, its decoded uses (`decodedUses`: the link points after `LiveHash.pointsHash` of the decoded roots, then each
+stream's rounds after the SHA-512 of their requests over the stream's chain) are the uses `roundCoins` reads after the
+draw's, in order; and where `roundCoins` returns, for each use, the bytes of a release of at least `512` bits a coin,
+each decoded use's F128s are the F128s `coinF128s` reads from its release's bits. -/
+theorem session0_coins {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
+    {e : SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs} (h : SampledProofs.OneStageZk.roundsWhy p c e bs = none)
+    {s0 : SampledProofs.OneStageZk.Session} {rest : List SampledProofs.OneStageZk.Session}
+    (hs0 : e.sessions.toList = s0 :: rest) :
+    ∃ key label w opened uses order groups coins ξs, p.base.challenger = some (key, label) ∧
+      p.base.verifier.windowRoot = some w ∧
+      SampledProofs.getD (SampledProofs.getD e.base.coins "segment") "openings" = .arr opened ∧
+      SampledProofs.Challenger.roundCoins key w uses order groups coins = .ok ξs ∧
+      uses[0]? = some ⟨label, c.digest, opened.size⟩ ∧
+      ∃ b record, bs.get s0.record s!"session {s0.name}'s record" = .ok b ∧ String.fromUTF8? b = some record ∧
+        ∀ (spec : Flock.SessionSpec) (sess : Flock.Session), Flock.Record.decode spec record = .ok sess →
+          spec.tables = SampledProofs.OneStageZk.TABLES → spec.sha512Digests = true →
+          (∀ i (u : SampledProofs.Challenger.Use), uses[i]? = some u →
+            ∃ l : List Bool, ξs[i]? = some (PlayDevice.bytesOfBits l) ∧ 512 * u.coins ≤ l.length) →
+          ∀ j d, (SampledProofs.OneStageZk.decodedUses 0 (Flock.Guarantees.LiveHash.pointsHash sess.rootB) sess)[j]? =
+              some d →
+            ∃ l : List Bool, uses[j + 1]? = some d.1 ∧ ξs[j + 1]? = some (PlayDevice.bytesOfBits l) ∧
+              d.2 = Array.ofFn fun i : Fin d.2.size =>
+                FlockLevel3.GF128.val (coinF128s d.2.size (fun t => l.getD t.val false) i) := by
+  obtain ⟨key, label, w, opened, uses, wants, order, groups, coins, ξs, hc, hw, hop, hrc, hmis, hS⟩ :=
+    SampledProofs.OneStageZk.roundsWhy_spec h
+  obtain ⟨b, record, us0, hb, hrec, hus, -, hu0, -, hj, -⟩ := hS s0 rest hs0
+  refine ⟨key, label, w, opened, uses, order, groups, coins, ξs, hc, hw, hop, hrc, hu0, b, record, hb, hrec,
+    fun spec sess hd ht hsd hξ j d hdj => ?_⟩
+  obtain ⟨u, hu, hud⟩ := SampledProofs.OneStageZk.forall₂_getElem?
+    (SampledProofs.OneStageZk.sessionUses_decoded hus hd ht hsd) hdj
+  obtain ⟨huse, what, hwant⟩ := hj j u hu
+  obtain ⟨l, hξj, hl⟩ := hξ (j + 1) u.1 huse
+  have hm := hmis _ (SampledProofs.OneStageZk.mem_zip_of_getElem? hξj hwant) what u.2 rfl
+  have hcoins := SampledProofs.OneStageZk.decodedUses_coins d (List.mem_of_getElem? hdj)
+  have hsz : u.2.size = d.2.size := by
+    have := SampledProofs.OneStageZk.forall₂_length hud.2
+    simpa using this
+  rw [hud.1, hcoins] at hl
+  refine ⟨l, by rw [← hud.1]; exact huse, hξj, decodes_coins hud.2 hm (by omega)⟩
 
 end Verity
