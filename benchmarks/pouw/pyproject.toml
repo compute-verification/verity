@@ -25,15 +25,17 @@ verity-exact-kit = { workspace = true }
 # reads the lifted PoUW guarantees' sources and Security's lock. The PoUW × C-Flock statement's Guarantees definition is
 # in Proofs (`reads_exempt` in the lock). Of `verity`, the difftest harness, vLLM's integration and `research`, what the
 # tests import, in place of those trees; the Lean the served challenger's `lake build` reads is keyed by the binaries it
-# builds (`artifacts`), and the C++ the tests compile is this suite's own. benchmarks/pouw/receipts, filler and
+# builds (`artifacts`), and the C++ the tests compile is this suite's own but for the SHA-512 pearl_c/sha512.cuh includes
+# (sha512_rows' sha512x.cuh). benchmarks/pouw/receipts, filler and
 # machine_model are suites of their own, which this suite's tests read (test_receipts_adopters, test_opcode_probe),
 # so they're named here. The theory scripts (`theory/`) import the exact kit's package. test_dither_a_step_chunks
 # imports dither_one (and forms.py through dither_fused) on the CPU. test_contents reads the README,
 # which holds no table (`contents.py` prints them). test_dither_zy_h1zy imports int8_exact, which imports
 # verity_vllm.program.frontend's kernel_readback (the program files named below), and its CUDA tests import dither-a
 # (benchmarks/hash/dither's dither_a.py and the modules it imports, and exactlin.py): its files alone, not their kernels'
-# CUDA sources. test_served_h1_producer's H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose
-# ChaCha20 is verity.ml.windows.rows' (the commit files named below: serving_rows and what it imports).
+# CUDA sources, and dither's registry (settings.py), which they read their variables through. test_served_h1_producer's
+# H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose ChaCha20 is verity.ml.windows.rows'
+# (the commit files named below: serving_rows and what it imports).
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
@@ -45,6 +47,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier",
           "verity/core/difftest", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/kernels", "verity/ml/randomness", "verity/ml/flock/python", "verity/ml/windows",
+          "tools/config/verity_config",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
           "integrations/vllm/verity_vllm/commit/__init__.py", "verity/ml/windows/hiding.py",
           "verity/ml/windows/rows.py", "integrations/vllm/verity_vllm/errors.py",
@@ -112,12 +115,12 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "Security/Proofs/Pouw/PearlC/FlockTile/Statement.lean", "Security/lean-audit.json",
           "Security/Proofs/Accounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "benchmarks/pouw/receipts", "benchmarks/pouw/filler",
-          "benchmarks/pouw/machine_model", "benchmarks/pouw/README.md",
+          "benchmarks/pouw/machine_model", "benchmarks/pouw/README.md", "benchmarks/torch_gpu/sha512_rows/sha512x.cuh",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "benchmarks/hash/dither/j10r_ws.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
-          "benchmarks/hash/dither/hb_side.py", "benchmarks/hash/exactlin/exactlin.py",
+          "benchmarks/hash/dither/hb_side.py", "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py"]
 # one process: 2,100 s beside a loaded check (r20261025-021824-ba9f), too near suites.py's SUITE_TIMEOUT_S
