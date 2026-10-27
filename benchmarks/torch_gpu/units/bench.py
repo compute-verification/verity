@@ -6,7 +6,7 @@ At each B of TIME_B, each unit and torch's nearest op, interleaved rep by rep, u
 - median_ms: the GPU's time.  A torch.cuda._sleep ahead of the start event keeps the stream busy while the host queues
   the launch, so the events bracket the kernels and nothing of the host; ``covered`` says the start event was still
   queued when the host had queued the end event (if not, the host's time leaked in);
-- host_ms: the start event on an idle stream, then the launch (the ruler of the first H200 session, which counts the
+- host_ms: the start event on an idle stream, then the launch (the ruler of the first H200 run, which counts the
   host's ~0.05 ms of a launch).
 Then a step row twice: ``summed_ms``, the units' medians times their counts at a decode step (STEP), and ``measured_ms``,
 that step's launches queued in a decode step's order (per layer: RMSNorm, quantizer of 16384, softmax at n = 32,
