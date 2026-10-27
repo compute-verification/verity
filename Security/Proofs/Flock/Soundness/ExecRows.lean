@@ -9,11 +9,11 @@ import Properties.Flock.Circuit.Rows
 /-!
 # The rows the verifier parses, as the audit's `Rows`
 
-The executable's parser (`Flock.Net.parse`) holds every expanded circuit's rows to #144's order
-(`Net.checkOrder`, PR #147): a computed row, `inCols ≤ r < constPos`, reads in `A` and in `B` only
+The executable's parser (`Flock.Net.parse`) holds every expanded circuit's rows to an order
+(`Net.checkOrder`): a computed row, `inCols ≤ r < constPos`, reads in `A` and in `B` only
 the constant or an earlier column that is not input padding (`RowOrder`). `checkOrder_ok` turns an
 accepted check into that property, and `Rows.ofOrdered` builds the audit's `Rows` from rows that
-have it, with `topo` proved: what #144 named, the parser now checks.
+have it, with `topo` proved: the parser checks it.
 -/
 
 namespace FlockSoundness
@@ -96,7 +96,7 @@ theorem parse_built {lines : Array String} {net : Net} (h : Net.parse lines = .o
     exact ite_throw_ok (ite_throw_ok h)
 
 /-- **The parser orders every net it accepts**: the rows it stored as `A` and `B` have `RowOrder`,
-so #144's `Rows.topo` for a parsed net is an executable check, not a hypothesis. -/
+so `Rows.topo` for a parsed net is an executable check, not a hypothesis. -/
 theorem parse_rowOrder {lines : Array String} {net : Net} (h : Net.parse lines = .ok net) :
     ∃ ra rb, RowOrder (net.inWords * WORD) net.constPos ra rb ∧
       Sparse.ofRows ra (2 ^ net.unitLog) = .ok net.a ∧ Sparse.ofRows rb (2 ^ net.unitLog) = .ok net.b :=
