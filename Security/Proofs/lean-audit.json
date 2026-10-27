@@ -36,7 +36,7 @@
   "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.SampledProofs",
   "Proofs.Properties.SampledProofs.Halt",
-  "Proofs.Properties.Pous.TimedAudit",
+  "Proofs.Properties.Pous.Merkle",
   "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup",

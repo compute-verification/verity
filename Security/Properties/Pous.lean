@@ -51,6 +51,17 @@ def Decodes (q : P2.Params) (salt : ByteArray) (C : Array (Array ByteArray)) (W 
 def leaves (salt : ByteArray) (C : Array (Array ByteArray)) : Array ByteArray :=
   (C.toList.mapIdx fun s seg => seg.toList.mapIdx fun v block => Merkle.packageLeaf salt s v block).flatten.toArray
 
+/-- The inner nodes' inputs of `Merkle.mth leaves lo n`: what SHA-512 hashes for the tree beyond the leaves. -/
+def nodeInputs (leaves : Array ByteArray) (lo n : Nat) : List ByteArray :=
+  if h : n ≤ 1 then []
+  else
+    have := Merkle.split_lt (n := n) (by omega)
+    have := Merkle.split_pos n
+    (ByteArray.mk #[1] ++ Merkle.mth leaves lo (Merkle.split n) ++
+        Merkle.mth leaves (lo + Merkle.split n) (n - Merkle.split n)) ::
+      (nodeInputs leaves lo (Merkle.split n) ++ nodeInputs leaves (lo + Merkle.split n) (n - Merkle.split n))
+termination_by n
+
 /-- `C*` decodes canonically, under the server's salt, to some `W` whose commitment is the server's. -/
 def DecodesToCommitment (q : P2.Params) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) : Prop :=
   ∃ W, Decodes q c.salt C W ∧ Commit.commit q W = .ok c.w

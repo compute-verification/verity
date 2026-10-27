@@ -1,5 +1,5 @@
 import Properties.Pous.EndToEnd
-import Proofs.Properties.Pous.TimedAudit
+import Proofs.Properties.Pous.Merkle
 import Proofs.Properties.Pous.MemoryChallenger
 import Proofs.Properties.Pous.Setup
 

@@ -1,6 +1,5 @@
 import PousCheck.Run
 import Properties.Pous
-import Properties.Pous.TimedAudit
 import Properties.Pous.MemoryChallenger
 import Properties.Identity
 import Definitions.Pous.Assumptions.P2

@@ -27,7 +27,6 @@
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
-  "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
   "Properties.Pous.Period",
@@ -312,7 +311,6 @@
   "Properties.NetworkPeriod",
   "Properties.SampledProofs",
   "SampledProofs",
-  "Properties.Pous.TimedAudit",
   "PousCheck",
   "Properties.Pous.MemoryChallenger",
   "MemoryChallenger",
@@ -888,12 +886,6 @@
    "signature": ["PousCheck.Properties.SecurityProofs.publishesRoot : PousCheck.Properties.PublishesRoot"],
    "assumptions": [],
    "type_hash": "9e37b17a2c12a29fe835857c63299bb9b88aff6578a04e0d53da2bb680c0ce16"
-  },
-  "PousCheck.Properties.SecurityProofs.timedAuditAccepts": {
-   "owner": "@memory-accounting",
-   "signature": ["PousCheck.Properties.SecurityProofs.timedAuditAccepts : PousCheck.Properties.TimedAuditAccepts"],
-   "assumptions": [],
-   "type_hash": "0f53ba049259791adadc5f1d70c663732dd8fd92cf36ccfdd2d5758122d1bbd4"
   },
   "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": {
    "owner": "@network-accounting",
@@ -2479,10 +2471,6 @@
    "PousCheck.Properties.SecurityProofs.deployed": {
     "function": "PousCheck.P2.Params.deployed",
     "outcome": "none"
-   },
-   "PousCheck.Properties.SecurityProofs.timedAuditAccepts": {
-    "function": "PousCheck.TimedAudit.verdict",
-    "outcome": "accept"
    },
    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns": {
     "function": "NetworkCheck.Check.protocol.check",
