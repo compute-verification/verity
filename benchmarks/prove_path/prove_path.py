@@ -1325,6 +1325,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     import numpy as np
     from verity_vllm.check.oracle_compare import OpenedReader
     from verity_vllm.check.replay.index import ProgramIndex
+    from verity_vllm.check.replay.opening import CommittedStore
     from verity_vllm.pipeline import cpu_replay as CPU
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict import window_rows as WRS
@@ -1369,7 +1370,8 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             raise ValueError(f"weight {label}: no tensor of the committed weights holds its elements [{lo}, {hi})")
         return w
 
-    store = OpenedReader(r.store, r.run)
+    bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
+    store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
     slots, rows = [], []
     for k in range(cls.slots):
