@@ -7,8 +7,8 @@
   after the draw each reject by name, with no public outputs or profile;
 * an audit that left nothing behind is the leg's error, not a verdict;
 * an audit record decided at δ = 0.01 (a float in the record) is the exact ratio 1/100 in the profile;
-* the audit's case for onsite is handed on as ``sampled-proofs.case.json``, with whether `OneStage.check`'s Python on it
-  gave the leg's verdict and bound;
+* the audit's case for onsite, v2's (`SampledProofs.OneStageZk`), is handed on as ``sampled-proofs.case.json``, or why
+  there is none; the v1 case beside it, with whether `OneStage.check`'s Python on it gave the leg's verdict and bound;
 * the records kept in ``$OUT`` hold no prover's file;
 * two audits at once hold different blocks of ports;
 * opt-in (``VERITY_ALL_PROTOCOLS_TOOLS=tools.json``, the built executables `run.sh` writes; minutes): two windows of the
@@ -79,6 +79,15 @@ def test_refusals_reject_by_name(tmp_path, summary, rec, why):
     assert a["commitment"] == R.digest(REG)
 
 
+def test_a_refused_audit_record_names_leans_refusals(tmp_path):
+    why = {f"lean-verify/m{k}": f"registered reads: port o0: table row 0 does not open out's registered root at "
+                                f"position {k}" for k in range(5)}
+    summary = {"checks_before_draw": {"registration": True}, "audit": {"why": {**why, "draw": None}}}
+    a = I.answer(write(tmp_path / "a", summary, record(False, proved=False)), REG)
+    assert a["verdict"] == "reject" and a["reason"].startswith("audit record: proved; lean-verify/m0: registered reads")
+    assert "position 2" in a["reason"] and "position 3" not in a["reason"] and a["reason"].endswith("and 2 more")
+
+
 def test_an_audit_that_left_nothing_is_an_error(tmp_path):
     with pytest.raises(RuntimeError, match="no summary"):
         I.answer(tmp_path, REG)
@@ -102,8 +111,15 @@ def test_the_case_is_handed_on_with_its_check(tmp_path):
     out = tmp_path / "out"
     out.mkdir()
     a = {"verdict": "accept", "public": {"bound": 3}}
-    assert I.case_check(work, a, out)["agree"] is True
-    assert json.loads((out / "sampled-proofs.case.json").read_text()) == case
+    (work / "window" / "case-v2-error.txt").write_text("ValueError: this audit drew 2 members\n")
+    got = I.case_check(work, a, out)
+    assert got["agree"] is True and got["case"] is None and got["v2_error"].endswith("drew 2 members")
+    assert not (out / "sampled-proofs.case.json").exists(), "onsite reads no v1 case"
+    assert json.loads((out / "sampled-proofs.v1.case.json").read_text()) == case
+    v2 = {"blobs": ["/w/circuit.txt"], "commitment": "aa", "evidence": "cc", "params": {"delta": "1/100", "proofs": {}}}
+    (work / "window" / "case-v2.json").write_text(json.dumps(v2))
+    assert I.case_check(work, a, out)["case"] == "sampled-proofs.case.json"
+    assert json.loads((out / "sampled-proofs.case.json").read_text()) == v2
     assert I.case_check(work, {"verdict": "accept", "public": {"bound": 4}}, out)["agree"] is False
     assert I.case_check(work, {"verdict": "reject", "public": None}, out)["agree"] is False
     assert I.case_check(tmp_path / "none", a, out) is None
@@ -140,7 +156,8 @@ def test_two_windows_through_the_verifier_of_record(tmp_path):
     assert rc == 0
     honest, tampered = (r["protocols"]["integrity"] for r in reports)
     check = json.loads((tmp_path / "out" / "w0" / "integrity" / "case-check.json").read_text())
-    assert check["agree"] and (tmp_path / "out" / "w0" / "integrity" / "sampled-proofs.case.json").exists()
+    assert check["agree"] and (tmp_path / "out" / "w0" / "integrity" / "sampled-proofs.v1.case.json").exists()
+    assert (tmp_path / "out" / "w0" / "integrity" / "sampled-proofs.case.json").exists() or check["v2_error"]
     assert honest["verdict"] == "accept"
     assert honest["answer"]["profile"]["levels"][0]["size"] == reports[0]["loop"]["population"]
     assert tampered["verdict"] == "reject"

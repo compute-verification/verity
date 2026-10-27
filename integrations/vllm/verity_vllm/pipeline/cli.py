@@ -65,7 +65,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
     "hot": ("verity_vllm.pipeline.hot", "hot Commit worker"),
     "instances-form": ("verity_vllm.program.instances_form", "stored form of instances.jsonl operand references"),
-    "kernel-identity": ("verity_vllm.check.kernel_identity", "generated-kernel identity"),
+    "kernel-identity": ("verity_vllm.engine.kernel_identity", "generated-kernel identity"),
     "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
     "libdevice-sampling": ("verity_vllm.program.libdevice_sampling", "libdevice sampler transcription check"),
     "m1-capture": ("verity_vllm.pipeline.m1_capture", "capture the observation log under the observer"),

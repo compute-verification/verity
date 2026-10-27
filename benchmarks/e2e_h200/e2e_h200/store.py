@@ -17,12 +17,16 @@ Stores:
   gmpy2: tiny shapes only) or loaded from a file of raw rows (`load`), the form memory-accounting's store ships in.
 * `GeneratorStore`: no store; ``stage`` regenerates the tensor from the seed. The FIXTURE for running the frozen shape's
   compute before C* is on the card; the record says so.
+* `FileStore`: W itself, the file network's load sink writes (NET-76), read in place. Before it serves, every tensor's
+  bytes are checked against the manifest's sha256 (``verity/seeded-weights/manifest/v1``, `SW.manifest`), and it refuses
+  (`Mismatch`) a file whose size, model, tensors or any tensor's sha256 isn't the manifest's.
 """
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from multiprocessing import get_context
 from multiprocessing.shared_memory import SharedMemory
 from pathlib import Path
@@ -235,6 +239,68 @@ class P2Store(Store):
                 raise Refused(f"{name}: the decode kernel flagged a block the reference refuses")
             return out.view(torch.int8).view(n, k)
         return _into(np.frombuffer(self._bytes(base, length), dtype=np.int8).reshape(n, k), dst)
+
+
+class Mismatch(ValueError):
+    """A weights file that isn't the manifest's W."""
+
+
+#: bytes a hash update reads at once (hashlib drops the GIL on each)
+HASH_CHUNK = 1 << 26
+
+
+def _sha256(buf: np.ndarray) -> str:
+    h = hashlib.sha256()
+    for lo in range(0, buf.size, HASH_CHUNK):
+        h.update(buf[lo:lo + HASH_CHUNK])
+    return h.hexdigest()
+
+
+class FileStore(Store):
+    """W in a file (`SW.stream`'s bytes), checked against its manifest before it serves, read through a read-only map."""
+    kind = "w-file"
+
+    def __init__(self, weights: Weights, path: str | Path, manifest: str | Path | dict, workers: int = 1) -> None:
+        self.weights, self.path = weights, Path(path)
+        doc = manifest if isinstance(manifest, dict) else json.loads(Path(manifest).read_text())
+        model = SW.model_id(weights.shape, weights.seed)
+        if doc.get("format") != SW.MANIFEST or doc.get("model") != model:
+            raise Mismatch(f"the manifest is {doc.get('format')!r} of {doc.get('model')!r}, not {SW.MANIFEST} of "
+                           f"the served weights' {model}: serve the seed the file was written from")
+        size = self.path.stat().st_size
+        if not doc.get("stream_bytes") == size == weights.nbytes:
+            raise Mismatch(f"{self.path} is {size} bytes, the manifest's W {doc.get('stream_bytes')}, the shape's "
+                           f"{weights.nbytes}")
+        want = {t["name"]: t for t in doc.get("tensors", [])}
+        if list(want) != list(weights.t) or any((want[n]["offset"], want[n]["nbytes"]) != (t.offset, t.nbytes)
+                                                for n, t in weights.t.items()):
+            raise Mismatch(f"the manifest's tensors aren't {weights.shape.name}'s, in its stream order and offsets")
+        self.w = np.memmap(self.path, np.uint8, "r")
+        names = list(weights.t)
+        with ThreadPoolExecutor(max(1, workers)) as ex:
+            got = dict(zip(names, ex.map(lambda n: _sha256(self._raw(n)), names)))
+        bad = [n for n in names if got[n] != want[n]["sha256"]]
+        if bad:
+            raise Mismatch(f"{len(bad)} of {len(names)} tensors of {self.path} aren't the manifest's sha256: "
+                           f"{', '.join(bad[:8])}{' ...' if len(bad) > 8 else ''}")
+        self.checked = len(names)
+
+    def _raw(self, name: str) -> np.ndarray:
+        t = self.weights.t[name]
+        return self.w[t.offset:t.offset + t.nbytes]
+
+    def load(self, name: str) -> np.ndarray:
+        t = self.weights.t[name]
+        a = self._raw(name).view({"s8": np.int8, "f32": "<f4", "bf16": "<u2"}[t.dtype])
+        a = a.astype(a.dtype.newbyteorder("="))
+        return a.reshape(-1) if t.rows == 1 else a.reshape(t.rows, t.cols)
+
+    def stage(self, name: str, dst: Any | None = None) -> Any:
+        return _into(self._raw(name).view(np.int8).reshape(self.weights.dims[name]), dst)
+
+    def describe(self) -> dict:
+        return {"kind": self.kind, "path": str(self.path), "tensors_checked": self.checked,
+                "check": "every tensor's sha256 the manifest's"}
 
 
 def _into(codes: np.ndarray, dst: Any | None) -> Any:

@@ -46,6 +46,16 @@ path = "../pous/check"
 name = "remote_audit"
 path = "../remote_bandwidth/lean"
 
+# Sampled proofs' choice of form: one-stage v2's audit or the recursive audit, V*'s compiled check (`VStar.Recursive`).
+[[require]]
+name = "core_vstar_recursive"
+path = "../../service/vstar/recursive"
+
+# NCI's check of record (`NciCheck.Protocol`), the registration check onsite runs before composing.
+[[require]]
+name = "nci_check"
+path = "../network/nci/lean"
+
 [[lean_lib]]
 name = "CoreOnsite"
 

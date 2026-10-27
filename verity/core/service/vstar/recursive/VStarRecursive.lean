@@ -1,2 +1,2 @@
 import VStarRecursive.Protocol
-import VStarRecursive.Integrity
+import VStarRecursive.Sampled

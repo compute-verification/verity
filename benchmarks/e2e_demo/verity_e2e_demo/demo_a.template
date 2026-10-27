@@ -9,14 +9,21 @@
 The block: steps ⟨BLOCK_STEPS⟩ on server ⟨BLOCK_SERVER⟩, run ⟨RECORD_RUN⟩. Demo A's composed verdict over sampled
 proofs, PoUW and network accounting: **⟨DEMO_A_VERDICT⟩**.
 
+### Visible failures
+
+The draw stays uniform over every unit. A drawn unit that can't be proved (one landing in a PoUW tile lane) is a
+failure of the block, with no redraw, and the verdict above counts it:
+
+⟨VISIBLE_FAILURES⟩
+
 **What was committed.** ⟨COMMITTED_ROWS⟩ hm96 rows (⟨COMMITTED_BYTES⟩ bytes) in frame-v3-sha512 trees, one subtree per
 sequence slot, under the block root ⟨BLOCK_ROOT⟩, and the weights under their registration root ⟨REGISTRATION_ROOT⟩.
 Every value is committed under a hiding leaf.
 
 **What was checked.** A handful: k = ⟨DRAWN_UNITS⟩ units, drawn uniformly over the whole partition (⟨UNITS_TOTAL⟩
 units across ⟨SUBCIRCUIT_COUNT⟩ subcircuits, PoUW's tiles among them) by the challenger's live coins
-(⟨CHALLENGER_RUN⟩). Every drawn unit was proved by C-Flock --zk behind the firewall, in ⟨ZK_SESSIONS⟩ sessions
-(⟨PROVE_RUN⟩). The Lean verifier answered **⟨LEAN_VERDICT⟩**.
+(⟨CHALLENGER_RUN⟩). Every drawn unit but the visible failures was proved by C-Flock --zk behind the firewall, in
+⟨ZK_SESSIONS⟩ sessions (⟨PROVE_RUN⟩). The Lean verifier answered **⟨LEAN_VERDICT⟩**.
 With one bit of a drawn unit's committed values flipped, it answered **⟨FLIP_VERDICT⟩** (⟨FLIP_RUN⟩).
 
 **The guarantee, at δ = 1%.** By ⟨BOUND_CITATION⟩: except with probability δ + ε_ks + ε_bind (ε_ks = ⟨EPS_KS⟩,
@@ -28,7 +35,7 @@ With one bit of a drawn unit's committed values flipped, it answered **⟨FLIP_V
   except with ⟨POUW_ERROR⟩. The block's one draw establishes ε = ⟨POUW_EPS⟩ at δ = 1%, over ⟨POUW_COVERAGE⟩ of the
   block's static INT8 MACs, and a certified share of ⟨POUW_CERTIFIED_SHARE⟩ at ρ = ⟨POUW_RHO⟩.
 - Network accounting: at most K = ⟨NET_K⟩ bits leaked, except with ⟨NET_ERROR⟩.
-- Each protocol's error, summed as JointHorizon states it (⟨JOINT_HORIZON_STATUS⟩): sampled proofs ⟨INTEGRITY_ERROR⟩,
+- Each protocol's error, summed as JointHorizonLive states it (⟨JOINT_HORIZON_STATUS⟩): sampled proofs ⟨INTEGRITY_ERROR⟩,
   PoUW ⟨POUW_ERROR⟩ and network accounting ⟨NET_ERROR⟩, ⟨DEMO_A_ERROR_SUM⟩ in all.
 
 Said plainly: proving this block cost ⟨Y⟩× the block's own GPU time (⟨PROVING_GPU_S⟩ GPU-seconds of proving against
@@ -47,6 +54,10 @@ Said plainly: proving this block cost ⟨Y⟩× the block's own GPU time (⟨PRO
 
 Serving overhead, beside proving cost and never folded into it: the commits take ⟨SERVE_COMMIT_S⟩ s of a
 ⟨SERVE_STEP_S⟩ s step (⟨SERVE_COMMIT_SHARE⟩), and per-call noise adds ⟨SERVE_NOISE_SHARE⟩ to the plain INT8 GEMM.
+
+Serving the block on the H200: ⟨STEP_S_B512⟩ s a step at batch 512 (⟨ROW_SLOT_NS_B512⟩ ns per
+row-slot) and ⟨STEP_S_B1024⟩ s at batch 1,024 (⟨ROW_SLOT_NS_B1024⟩ ns per row-slot); kernels' faster step takes batch
+512 to ⟨STEP_S_KERNELS⟩ s.
 
 ## 3. Computed from the same theorem and the measured costs, not run
 
