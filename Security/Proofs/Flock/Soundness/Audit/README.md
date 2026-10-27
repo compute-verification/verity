@@ -6,8 +6,8 @@ partition, any sampling design, and any per-unit proof system. The derivations a
 
 **The model.** The prover registers `R` (its roots); the verifier draws units from its own randomness after registration;
 one batched session proves the drawn units (`audit`). The **committed trace** `X` is an analysis function of the
-prover's state at registration (its registration and its session strategy for every draw), so the draw is independent of
-its faulty proof blocks; nobody computes it. A unit is **faulty** in `X` (the Lean's `wrong`) when its committed outputs differ
+prover's state at registration (its registration and its session strategy for every sample), so the sample is
+independent of its faulty proof blocks; nobody computes it. A unit is **faulty** in `X` (the Lean's `wrong`) when its committed outputs differ
 from its gates applied to its committed inputs (`Partition.Correct`). Every bound holds for every prover strategy
 (`Game.prob … σ`), the form `table_sound_exec` takes. The Lean's names predate the Glossary's: a `Law` is a sampling
 design, its `escape` (here $e_L(B)$) is the acceptance probability $P_a(B)$, and $\delta_{link}$ (`LinkSound`) is the
@@ -21,21 +21,21 @@ so their meaning rests on `X` being the committed values. At the oracle layer `X
 string, which the instantiation defines and `LinkSound` ties to the extractor. A consumer who opens values under the
 roots gets `X`'s values up to that opening's own binding term, which the audit does not count.
 
-**Theorems, one-stage** (`Audit/OneStage.lean`), with $e_L(B)$ the probability that the draw misses $B$:
+**Theorems, one-stage** (`Audit/OneStage.lean`), with $e_L(B)$ the probability that the sample misses $B$:
 
 - `audit_le`: $\Pr[\text{accept} \wedge E(X, S)] \le \Pr_S[E(X, S) \wedge S \cap \mathrm{wrong}(X) = \emptyset] +
-  \varepsilon_{ks} + \delta_{link}$ for every event $E$ on the committed trace and the draw;
+  \varepsilon_{ks} + \delta_{link}$ for every event $E$ on the committed trace and the sample;
 - `audit_profile`: $\Pr[\text{accept} \wedge \mathrm{wrong}(X) \in \mathcal B] \le \sup_{B \in \mathcal B} e_L(B) +
   \varepsilon_{ks} + \delta_{link}$;
 - `audit_count`: $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks} + \delta_{link}$;
 - `audit_drawn`: drawn units are correct up to $\varepsilon_{ks} + \delta_{link}$, even for a consumer who looks after
-  the draw;
+  the sample;
 - `audits_seq`: audits in sequence fail with at most the sum of their bounds, each holding from every history. Nested,
   this is the lifetime union bound, with every term against a prover that took part in all the audits;
-- `Partition.audit_cone`: for committed wires $T$ fixed before the draw, $\Pr[\text{accept} \wedge X_T \ne
+- `Partition.audit_cone`: for committed wires $T$ fixed before the sample, $\Pr[\text{accept} \wedge X_T \ne
   \mathrm{eval}_C(a)_T] \le \max_{u \in \mathrm{cone}(T)} (1 - \pi_u) + \varepsilon_{ks} + \delta_{link} + \delta_{in}$;
 - `Partition.audit_cone_count`: at least $j$ faulty proof blocks in a cone;
-- `Partition.audit_covered`: a cone inside the draw, for wires chosen even after the draw: $\varepsilon_{ks} +
+- `Partition.audit_covered`: a cone inside the sample, for wires chosen even after the sample: $\varepsilon_{ks} +
   \delta_{link} + \delta_{in}$;
 - `Partition.oracle_count`, `oracle_profile`, `oracle_drawn`, `oracle_cone`: the same at the oracle layer, from
   `SessionSound ε` and `InputsSound δ_in`, with $\delta_{link} = 0$.
@@ -52,7 +52,7 @@ $S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \
 size $j$ with that size's probability times the member's own $\binom{|B|-|W|}{j}/\binom{|B|}{j}$ (`share_escape`,
 `share_escape_total`). **The horizon escape** (`Audit/Horizon.lean`): over $T$ periods, each a fresh uniform
 $kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier draws
-escapes every draw with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`horizon_escape`), at most
+escapes every sample with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`horizon_escape`), at most
 $\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`horizon_escape_prod`); at $\delta$, the escaped total
 reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$ (`horizon_escape_log`, in `Claims.Pr`, which is outside the audit layer:
 `Claims/Sampling/HorizonPr.lean`).
@@ -66,13 +66,13 @@ period is accepted with at least $M$ short with probability at most $p^M$ (`prCo
 period's own coins decide gets only the count bounds.
 `subset_exec_escape_le` (`ExecDraw.lean`, beside the executable's
 other checks, since it imports `Flock.Draw`), **the running sampler**: over a uniform byte stream, the verifier's
-executable `Flock.Draw.subset k n` returns a draw missing $B$ with probability at most `subset_escape`'s
+executable `Flock.Draw.subset k n` returns a sample missing $B$ with probability at most `subset_escape`'s
 $\binom{n-|B|}{k}/\binom{n}{k}$, through its rejection sampler, its `HashMap` Fisher–Yates and its `Array.qsort`.
 `stratified_exec_escape_le` (`ExecStratified.lean`): the executable `Flock.Draw.stratified`, on strata that describe
 $\sigma$'s (`ExecStrata`), misses $B$ with probability at most `Law.stratified`'s acceptance probability, the product
 over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e theorems at the executable's sampling design
 (`execStratified`), the count curve bounded by `Law.stratified`'s `miss`. `execStrata_of_ofJson`
-(`ExecStrataOf.lean`): the strata of a draw file `UnitDraw.ofJson` accepts describe some assignment's (`ExecStrata`), each
+(`ExecStrataOf.lean`): the strata of a sample file `UnitDraw.ofJson` accepts describe some assignment's (`ExecStrata`), each
 stratum's `k` at most its size, so those two hypotheses follow from the verifier accepting. The `FailClosed` claims take
 neither: their law is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
 (`liveStrata_of_ofJson`: non-empty at an accepted draw file's law). `drawOS_subset_escape_le`,
@@ -88,7 +88,7 @@ at most `Law.stratified`'s acceptance probability plus the $\eta$ of A4 (`Assump
 uniform window secret (A5). `keyedWindow_audit_of_record` and `keyedWindow_extraction_audit_of_record` put it through
 the window pins (`audit_window_split_of_record_of_le_slack`, and at the compiled layer
 `extraction_audit_window_split_of_record_of_le_slack`): the 0.1% event has probability at most
-$2^{-40} + \eta + \varepsilon_{ks} + \delta_{link}$. The key's context is the receipt digest, so the real game's draw
+$2^{-40} + \eta + \varepsilon_{ks} + \delta_{link}$. The key's context is the receipt digest, so the real game's sample
 depends on the registration: `auditReg` (`Audit/RegDraw.lean`), and `prob_auditReg` moves each of its strategies to the
 game whose sampling design is fixed at its registration, which `keyedWindowReg_extraction_audit_of_record` reads.
 
@@ -118,7 +118,7 @@ stratum draws at least $K w_s n_s / W$ units, or all of them. `sum_workK_le`: at
 `workK_rest`: a stratum that does no work draws $\min(n_s, f_s)$. `work_escape_le_count`: when those strata have floors
 of at least the stratified sampling design's sizes at $C$ (`countK`, which `countK_eq` shows is `stratumK C n_s N`), a
 set's acceptance probability under the work sampling design is at most its units' in them under the stratified one at
-$C$ (`choose_div_anti`: the hypergeometric acceptance probability falls as the draw grows), and `audit_work_rest` and
+$C$ (`choose_div_anti`: the hypergeometric acceptance probability falls as the sample grows), and `audit_work_rest` and
 `extraction_audit_work_rest` carry any such integrity profile to the audit. `work_escape_le`, **the work bound**: a set
 $B$ of units doing $W_B$ of the work has acceptance probability at most $((W - W_B)/W)^K$, from the per-stratum
 hypergeometric and weighted AM-GM over the work shares. `audit_work` and `extraction_audit_work` bound
@@ -149,7 +149,7 @@ round's own coins, and the prover may stop after any round. A sampling design me
 \pi_u)$: `bernoulli_design` ($\pi_u = q$), `subset_design` ($k/n$), `stratified_design` ($k_s/n_s$, the closed form of
 `stratified_escape_le_exp`) and `work_design` ($K w_u / W$). `harm_budget`: for harms $h \ge 0$ and any $\lambda \ge 0$
 with $\lambda h_u \le \pi_u$, $\Pr[\text{accept} \wedge \sum_t h(B_t) \ge H] \le e^{-\lambda H} + \sum_t
-\mathrm{err}_t$, where $\mathrm{err}_t$ bounds the probability that round $t$'s draw hits $B_t$ and the round still
+\mathrm{err}_t$, where $\mathrm{err}_t$ bounds the probability that round $t$'s sample hits $B_t$ and the round still
 passes (`Play.Drawn`, indexed by the rounds left after it); `harm_budget_rate` takes $\lambda = \min_{h_u > 0} \pi_u /
 h_u$. `harm_count`: under Bernoulli($q$) draws, an accepted run with $K$ or more faulty proof blocks summed over its rounds has
 probability at most $(1-q)^K + \sum_t \mathrm{err}_t$, tight for one round (`harm_count_tight`); `harm_count_kstar`
@@ -190,7 +190,7 @@ such as an executable draw; `audit_window_of_le_slack` and, at the compiled laye
 keyed draw needs, and `audit_window_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-unit
 terms, with `extraction_audit_window_split_of_record_of_le_slack` at the compiled layer. `audit_window_of_record`:
 $2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_window_split_of_record`: the same for the per-call
-split with y's floors, the sampling design the PoUW window runs (`PlanDraw.lean`). The product design assumes each call's draw is under a distinct
+split with y's floors, the sampling design the PoUW window runs (`PlanDraw.lean`). The product design assumes each call's sample is under a distinct
 context.
 
 **Theorems, two-stage** (`Audit/TwoStage.lean`):
@@ -291,9 +291,9 @@ The hypotheses are the lowerings.
   `KnowledgeSound.toExtraction` and `LinkSound.toExtraction`);
 - `flock_batched_knowledgeSound`: **ε_ks is discharged** for the compiled Flock audit in the protocol's batched session
   of several tables (`batchedSession`, `sessionB`), with the leaf layer registered. Each drawn unit is read from one
-  table of the plan (`tab`). The knowledge term is, after each draw, the largest over the plan's tables of the table's
+  table of the plan (`tab`). The knowledge term is, after each sample, the largest over the plan's tables of the table's
   $\varepsilon_c^-(\sigma) + K\,\mathrm{Adv}_0(\sigma) + N_0/(eK)$ computed in the session (`joint_le_B'`, from
-  `session_knowledge_sound`), averaged over the draw (`ksAvgB`);
+  `session_knowledge_sound`), averaged over the sample (`ksAvgB`);
 - `flock_compiled_knowledgeSound`: the same for one table on its own (`sessionC`), from
   `table_knowledge_sound_joint_tight`: $\mathbb E_\omega[\varepsilon_c^-(\sigma_\omega) + K\,\mathrm{Adv}_0(\sigma_\omega)
   + N_0/(eK)]$, which is $\varepsilon_c^- + t\cdot2^{-244.7}$ at the best $K$ under the generic collision bound. Neither

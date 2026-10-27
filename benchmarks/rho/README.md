@@ -1,4 +1,4 @@
-# rho: the overhead's lower bound on training
+# rho: the slowdown lower bound on training
 
 This package computes, for each scenario and monitoring period, a lower bound on the **overhead** a training run pays
 under the regime: `overhead(𝒢, 𝒜′, η)` (`glossary/README.md`, Notation), the size of the actual circuit that reaches a
@@ -8,10 +8,10 @@ Every number it reads is a parameter with a public source and a status, so a bou
 parameter, and the package shows how the bound moves with each one.
 
 A scenario is one choice from every part: a fleet (its location and dark share), a regime (the envelopes that run), the
-NCI registration policy, a monitoring period (the horizon), a run (the target and its model), the algorithm families the
+inference-only policy, a monitoring period (the horizon), a run (the target and its model), the algorithm families the
 adversary may use, and the bounds and attacks applied. For each one the package reports:
 
-- **the overhead's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. It comes
+- **the slowdown lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. It comes
   with its status, where its named premises stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a named
   `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the time it
   implies;
@@ -59,9 +59,9 @@ A bound is argued in three parts, as the Notation states it, and each module's d
   is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its `units.basis`).
 - **Protocol soundness**, the envelopes (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
   sampled proofs, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the uncertified gates
-  by route: `undecl.*`, `skip.*`, `break.*`, `exfil.faulty`) and its `δ_a`, split into `δ_coin` and `δ_crypto`. The NCI
-  check is the registration (`Policy`). A regime is the envelopes that run, and builds the serving blocks with their
-  cuts.
+  by route: `undecl.*`, `skip.*`, `break.*`, `exfil.faulty`) and its `δ_a`, split into `δ_coin` and `δ_crypto`. The
+  policy's check is the registration (`Policy`). A regime is the envelopes that run, and builds the serving blocks with
+  their cuts.
 - **The exclusion bound** (`classes.py`, `attacks.py`, `theorem.py`): the training classes as per-block caps
   `q_T(c, k)`, the attacks as constructions, and the serving-block bound: each serving block's least cut
   (`theorem.local`), summed over blocks (`theorem.overhead`), with the minimum of global bounds beside it
@@ -125,9 +125,9 @@ uncertified or dark gates at a structure whose `s_×` is above 1, with the struc
 ## Names
 
 The package, its command and its outputs (`benchmarks/rho`, `verity bench rho`, `rho.md`, `rho.json`) and the
-identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` all name the overhead;
+identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` all name the slowdown;
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. Lean's `Nci.Guarantees.DampenerRemote` and
-`tiers.py`'s `dampener` are their owners' names for the remote composition's overhead. The glossary's `ρ` is the ACCEL
+`tiers.py`'s `dampener` are their owners' names for the remote composition's slowdown. The glossary's `ρ` is the ACCEL
 model's resource rate, not this number.
 
 ## Extending

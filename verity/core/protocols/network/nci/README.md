@@ -16,9 +16,9 @@ An inference episode (a chat session) reads little fresh input, say 100 KB of pr
 divides into inference blocks with a small fresh-input budget (`Nci.Guarantees.Inference`). A training episode (an RL
 rollout) reads an enormous amount, say 1 TB of new parameters, so training that runs through inference blocks gets
 only their yields q(c, k): a pricing argument says how much of a block's fresh-input budget each counted object of a
-necessary subcomputation needs. The overhead lower bound sums those yields with free compute, at the hardware's rate,
+necessary subcomputation needs. The slowdown lower bound sums those yields with free compute, at the hardware's rate,
 and with the server-block yields that the memory wipe, proof of useful space (PoUS) and network certification bound (`GLOSSARY.md`, "Size, credit and
-the overhead lower bound"). Its numbers come from [`benchmarks/rho`](../../../../../benchmarks/rho/README.md), whose
+the slowdown lower bound"). Its numbers come from [`benchmarks/rho`](../../../../../benchmarks/rho/README.md), whose
 scenarios register a policy as if it were a subprotocol.
 
 ## The Lean
@@ -29,7 +29,7 @@ scenarios register a policy as if it were a subprotocol.
 - **The guarantees**, `Security/Definitions/Nci/Guarantees/`, each proved in `Security/Proofs/Nci/` as
   `Nci.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
-  `Nci.Guarantees.DampenerRemote` and its relatives state the remote composition's overhead in the older form.
+  `Nci.Guarantees.DampenerRemote` and its relatives state the remote composition's slowdown in the older form.
 - **The registered information's provenance**, `Nci.Assumptions.BaselineRegistered`: every θ entry is registered
   public data, never an earlier run's output.
 

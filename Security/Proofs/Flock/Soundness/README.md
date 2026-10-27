@@ -101,7 +101,7 @@ link term per audit.
   `K = √(N₀/(e·Adv₀))` this is at most `ε_c⁻ + t·2^-244.7` (m = 33).
 - **`session_knowledge_sound`** (`Session.lean`) is the same form for one table inside a batched session.
   - The session is the protocol's (PROTOCOL.md §5). `Commit` carries every level-0 cap before any coin, the link
-    points are one draw, and then every table runs concurrently in any order. The rest of the session is arbitrary.
+    points are one sample, and then every table runs concurrently in any order. The rest of the session is arbitrary.
   - The extractor reruns everything after `Commit`.
   - `ε_c⁻` and `Adv₀` are the table's terms computed in the session (`epsS`, `adv₀S`).
   - It rests on `session_sound_of_table`, the compiled bound for any level-0 table in the session. The oracle

@@ -35,12 +35,12 @@ rows and never published.
    (`tp.serving_rows.source`: `served_programs`, `compiler` and `advice` among its codes, with R2 against the recompiled
    population). The compile unit below replaces the opening and the recompile. Nothing else in the audit changes.
 4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_draw`), as `pouw.credit.draw_root`
-   checks that the credit bits came before the draw coin. The digest of the registration the verifier opens the advice under
-   covers its `compiler` and `advice` root. That digest must be the one the draw's receipt names: the stream writes the receipt
+   checks that the credit bits came before the sampling coin. The digest of the registration the verifier opens the advice under
+   covers its `compiler` and `advice` root. That digest must be the one the sample's receipt names: the stream writes the receipt
    when it receives the registration, and its `select` reads the verifier's coins only after that (a5's
-   `verifier-coins-before-the-registration`). A registration whose advice root postdates the draw is refused
+   `verifier-coins-before-the-registration`). A registration whose advice root postdates the sample is refused
    (`advice-root-after-the-draw`): the same advice re-committed after the coins, under fresh salts and so a fresh root, passes
-   every check before the draw with its new opening, and `advice_before_draw` refuses it with `after-the-draw`.
+   every check before the sample with its new opening, and `advice_before_draw` refuses it with `after-the-draw`.
 5. **The compiler is total.** `compile_advice` takes any input and returns either the requests or a `ValueError` naming why.
    The refusal depends only on the input, so two runs give the same one. It refuses, in order:
    - not bytes;
@@ -64,11 +64,11 @@ rows and never published.
 7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose units hold
    transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` law draws every unit of theirs beside
    K of the rest, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
-   of them, a draw trading one away, and a registration drawing them as the rest. Until the compiler lists the I/O shell's
+   of them, a sample trading one away, and a registration drawing them as the rest. Until the compiler lists the I/O shell's
    units, a stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
 
 What doesn't change:
-- the draw: the service's rule, the partition file's law, on live coins read after the receipt, with ε surfaced at δ by the
+- the sample: the service's rule, the partition file's law, on live coins read after the receipt, with ε surfaced at δ by the
   outcome;
 - the per-member `--zk` sessions behind the firewall;
 - Lean's verdicts, the audit record and the Lean `Run.run` agreement.
@@ -81,7 +81,7 @@ reads and its named assumptions.
 **A `--zk` session's acceptance, read in the sampling relation.** `Flock.SecurityProofs.SampledKSLiveV3`
 (`Security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `flock-verify verify --zk` accepts the transcript and the
 files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
-and the sampled-proofs run passes the registration's population, the committed transcript, read as the sampling witness, is
+and the sampled-proofs run passes the registration's population, the committed trace, read as the sampling witness, is
 outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + δ_link. It takes no hypothesis on the files.
 It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier of record reads. Its named assumptions
 are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, and SHA-512's collision resistance.
@@ -195,7 +195,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   routing over public row programs keeps the advice private. The clear map is a stepping stone.
 - **What it retires:** the opening handed to the verifier (`audit --opening`, `advice_windows.of_opening`), the verifier's
   recompile, and, with the routing form, `served_programs` in the clear.
-- **What stays:** `advice_before_draw`, which still holds ρ to the registration the draw followed.
+- **What stays:** `advice_before_draw`, which still holds ρ to the registration the sample followed.
 
 ## The pieces
 
@@ -225,13 +225,13 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
     whose two are the server's. Its digest is the single-GPU one (`I2Compiler.digest`) with that code in place of this
     tree's: it covers φ (`serve.json`'s model and revision, that pin's `config.json`, the target and the execution), the
     default seed, ℓ and the transfer gates, so a `serve.json` whose model, revision, target or execution differs from the
-    one the advice was registered under names another compiler, refused before the draw (`serve_check`'s `compiler`), and
+    one the advice was registered under names another compiler, refused before the sample (`serve_check`'s `compiler`), and
     one recording another default seed is refused outright (`registered_seed`). `prove_path.py compiler --serve-run DIR`
     prints the binding's compiler. I2's Programs are held to the ones vllm's advice compiler wrote into the row dir
     (`manifest.json`, by I1 id).
 - **A served window** binds the root serve-openai published: the advice is committed once, by the server, and the prover
-  commits the window under the published binding. Before any commit and before the draw (folded into the source check a5
-  gates the draw on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
+  commits the window under the published binding. Before any commit and before the sample (folded into the source check
+  a5 gates the sample on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
   (`window`), a compiler whose digest carries no cap (`cap`) or isn't the verifier's (`compiler`), another advice root
   (`advice`), a published root that isn't 64 bytes of a `rows-sha512` store (`sha512`) or isn't the row dir's run root
   (`run_root`), and a registration naming another Commit (`commit`). Its negatives run beside the audit's. `serve-standin`

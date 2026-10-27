@@ -38,8 +38,8 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
 | `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the unit draw (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, drawn after the prover's message; under `--zk`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
-| `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's coin server wrote for the live session (`RecordsLiveZK`), and its draw file the one `flock-verify draw` printed for the verifier's own draw (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each draw of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
-| `Assumptions.RecordCustodyExec` (`…ExecH`); `Zk.RecordCustodyZKLaw` (`…ZKHLaw`, `…ZKJLaw`, `…ZKHJLaw`) | `live-verifier` | none: as `RecordCustodyZK`, with `DrawOk` (`DrawOkZK`, and forms) at each draw of the law | `SoundExec*`'s and `SoundZ*`'s `hCust` |
+| `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's coin server wrote for the live session (`RecordsLiveZK`), and its sample file the one `flock-verify draw` printed for the verifier's own sample (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each sample of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
+| `Assumptions.RecordCustodyExec` (`…ExecH`); `Zk.RecordCustodyZKLaw` (`…ZKHLaw`, `…ZKJLaw`, `…ZKHJLaw`) | `live-verifier` | none: as `RecordCustodyZK`, with `DrawOk` (`DrawOkZK`, and forms) at each sample of the law | `SoundExec*`'s and `SoundZ*`'s `hCust` |
 | none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P`, as do `ZkHidden.zk_session_viewH`, `zk_session_viewHJ` and `zk_session_composedHJ` |
 
 Both collision-resistance `Prop`s are **per finder, and per prover**. Some finder outputs a collision after no
@@ -155,7 +155,7 @@ coins.
     session's stream plus two reps per table at `rounds_log = 9`: `N = (1 + 2J)·512`, so `N·2^-256 < 2^-245` at J = 1.
   - *What the bound needs.* The salts are uniform and independent, one per leaf, never reused. The key is independent
     of the salts, drawn after the prover's nonce, and never reused across sessions. Both come from `/dev/urandom`, which
-    is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the draw at `Hello`. The
+    is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the sample at `Hello`. The
     test-only `seed-injection` hooks (`inject_coin_tape`, `inject_coin_edit`) are outside A6. Unlike the opening order,
     this is checkable from the record: the backend identity carries `seed_injection`, the statement digest pins it
     (`Flock/Tags.lean`), and it is false in every proving build (`check_build.sh`).
@@ -172,7 +172,7 @@ and two verifications; a one-run finder's `qS` one run and one verification; `qT
 | Term | Form | Theorem | Bound |
 |---|---|---|---|
 | the compiled theorem | `SHA512CRStrict` | `table_sound_compiled_strict` (`CompiledCR`) | `tableError + √(2^{log N₀}·2Q₀·qF²/2^513) + Σ_{r<2} Σ_ℓ √(2^{log N_ℓ}·Q_ℓ·qF²/2^513) + qS²/2^513` |
-| `ε_ks`, the knowledge term | `SHA512CRStrict` | `ksBoundAccB_le_strict`, `ksAvgBE_le_strict` (`TableCR`, `hKS`) | `ksAvgStrict`: per table `ksStrict = tableError + Σ_{r<2} Σ_ℓ √(2^{log N_ℓ}·Q_ℓ·qF²/2^513) + qS²/2^513 + √(k·qF²/2^513)`, over `1 − N₀/(ek)`, its largest after each draw averaged over the draw |
+| `ε_ks`, the knowledge term | `SHA512CRStrict` | `ksBoundAccB_le_strict`, `ksAvgBE_le_strict` (`TableCR`, `hKS`) | `ksAvgStrict`: per table `ksStrict = tableError + Σ_{r<2} Σ_ℓ √(2^{log N_ℓ}·Q_ℓ·qF²/2^513) + qS²/2^513 + √(k·qF²/2^513)`, over `1 − N₀/(ek)`, its largest after each sample averaged over the sample |
 | `δ_tree`, the serving roots' binding | `SHA512CRStrict` | `tree_le_strict`, `TreeRewind.le` (`tr`, `hT`) | `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` (`DESIGN.md` §1) |
 | `δ_reg`, the registered reads' path binding | `SHA512CRStrict` | `Reads.prob_off_le` (`hR`) | `qR²/2^513` |
 | `δ_link`, the link term | `SHA512CRExpected` | `flock_batched_linkSoundE` (`LinkCR`, `hCR`) | `linkBoundE`, finite at the provers whose link finders satisfy it |
@@ -213,7 +213,7 @@ budget `qR`).
   (`pp : ProgPlaces`);
 - **the hash** is SHA-512 (`Refine.H512`, `Refine.enc512`), for the session's leaves and nodes and for the rows' commit
   strings, with the rows' value binding (`flock_e2e_count_hm96`);
-- **the draw** is the live one (`Law.execOS`: `Flock.Draw.drawOS`'s stratified draw on a byte source `src`), under A3
+- **the sample** is the live one (`Law.execOS`: `Flock.Draw.drawOS`'s stratified draw on a byte source `src`), under A3
   (`hA3`).
 
 It is proved under the assumptions its footprint lists. Its bound is `miss(K) + ksAvgStrict + δ_link + δ_tree`.
@@ -223,7 +223,7 @@ intended to prove, or a numeric condition on the bound's parameters.
 
 | Hypothesis | Kind | What it is |
 |---|---|---|
-| `hKS` (`StrictCR.TableCR`), `hT` (`StrictCR.Finder.CR`) | hardness | `SHA512CRStrict` of SHA-512 (`cr/sha-512`), for the knowledge finders of each table after each draw at budgets `qF`, `qS`, and for `tr`'s finder at budget `qT` |
+| `hKS` (`StrictCR.TableCR`), `hT` (`StrictCR.Finder.CR`) | hardness | `SHA512CRStrict` of SHA-512 (`cr/sha-512`), for the knowledge finders of each table after each sample at budgets `qF`, `qS`, and for `tr`'s finder at budget `qT` |
 | `hCR` (`LinkCR`) | hardness | `SHA512CRExpected` of SHA-512 (`ecr/sha-512`), for the prover's link finders |
 | `hA3` (`UniformRandomBytes`) | platform | A3 (`uniform/io-getrandombytes`), for the unit draw's byte source |
 | none: the round coins | platform | A6 (`uniform/flock-coin-server`), the coin server's OS randomness: each round's coins uniform, drawn after the prover's message (under `--zk`: committed at `Hello` and opened after it, plus `N·2^-256`; A6, tree coins). The model embodies it (next row), so no hypothesis states it |

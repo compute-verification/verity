@@ -6,7 +6,7 @@ committed, noised checked values. An accepted run establishes a credited size S 
 behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof service registers each commit period, draws its
 proof blocks with live coins, proves them in zero knowledge (C-Flock `--zk`) and verifies them; PoUW states what each
 commit period commits, the Program each drawn proof block must pass, and what the outcome credits. It carries no policy
-parameter: it surfaces the ε at δ its draw established.
+parameter: it surfaces the ε at δ its sample established.
 
 ## PoUW in the remote protocol
 
@@ -26,8 +26,8 @@ The verifier is Lean, three Lake packages under `lean/`:
   protocol composes. `PouwCheck.check` decides one commit period from its registration (the commitment) and the proof
   service's answer to it (the evidence); `PouwCheck.Credit` decides what a served commit period, and a credit period
   (below), credits. Its executable is `pouw-check` (`id | check | serve`, the core interface's commands).
-- `lean/window` (`pouw_window`): what a commit period registers and makes public: its grid level, its draw size K′, its
-  fixed length, its committed entries and side trees, and its round coins (`PouwWindow.Grid`, `PouwWindow.Draw`,
+- `lean/window` (`pouw_window`): what a commit period registers and makes public: its grid level, its sample size K′,
+  its fixed length, its committed entries and side trees, and its round coins (`PouwWindow.Grid`, `PouwWindow.Draw`,
   `PouwWindow.Length`, `PouwWindow.Public`, `PouwWindow.Entry`, `PouwWindow.Side`, `PouwWindow.Rounds`).
 - `lean/commit` (`pouw_commit`): PoUW's commitments: tagged bindings, frames, rows, epoch coins and draws, all SHA-512.
 
@@ -46,7 +46,7 @@ A **commit period** is the served steps one commitment covers. The code and the 
 3. The activation rows and the commit period's entries are committed under one root, and the commit period registers its
    level on the grid, its sampling design (a uniform subset of K′ of its N tiles, K′ the least K that misses a wrong
    share ε of the credited work with probability at most δ) and its fixed length before any draw.
-4. The draw coin is opened once, after the registration's receipt, and draws the proof blocks, one tile each.
+4. The sampling coin is opened once, after the registration's receipt, and draws the proof blocks, one tile each.
 5. Each drawn proof block is proved in zero knowledge over the circuit its tile template pins (`PouwCheck.Tile`), and
    opened against the committed entries (`PouwCheck.Opening`).
 6. `PouwCheck.check` gives the verdict. A served commit period is credited only if every step accepts. A credit period
@@ -131,7 +131,7 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the d
 - `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`: the
   Python references the Lean is held to, and the reference rules not yet ported.
 - `circuit/`: PoUW as `verity.ml.circuits` Programs: the tile and lane Definitions, the compile pass over a served Program
-  (`compile`) and the draw plan (`plan`). Each Definition has its `circuit-check` sidecar.
+  (`compile`) and the sampling plan (`plan`). Each Definition has its `circuit-check` sidecar.
 - `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
   `lean/window/README.md` map each Lean module to its Python.
 - `PROTOCOL.md`: the experimental spec, until the Lean covers it.

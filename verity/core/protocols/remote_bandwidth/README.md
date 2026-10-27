@@ -60,7 +60,7 @@ read over each stretch of a paced session's groups, from their timings, the stor
 rates and bursts and the wrong receipts, in exact rationals. The Lean computes it (`lean/RemoteAudit/Line.lean`, its
 W from `Pooled.lean`), as the verifier process's `line_record` request, off the Lean verifier's record of the session
 (`lineOfRecordAt`: its groups' passes, its windows' receipts and draws and its registered blocks the record's, each
-window's draws refused unless `min(s, U_t)`; drawn g > 1 windows a coin, its draws' receipts and draws, each `g`
+window's samples refused unless `min(s, U_t)`; drawn g > 1 windows a coin, its samples' receipts and samples, each `g`
 windows' summed and refused unless `min(s, U)` and below 2^64, and at one window in flight no line), refused unless
 the record is of the node's registration given with it (`lineOfRegistered`), with the auditor's times and each
 group's reads by kind beside it; and

@@ -25,18 +25,18 @@ It is sound for the example and not zero-knowledge; C-Flock behind the firewall 
 
 - **Declared circuit**: the circuit the developer claims, growing as it declares: C = B(a_1 ‖ … ‖ a_k), for a registered
   builder B that is prefix-extending (the blocks before are unchanged).
-- **Declaration block**: what one declaration appends, B applied to a_k.
+- **Execution block**: what one declaration appends, B applied to a_k.
 - **Declaration period**: the span of time one declaration covers. Monitoring period ⊃ declaration period ⊇ sampling
   period ⊃ tick; here a declaration period is one sampling period, and a monitoring period is three of them.
 - **Declaring**, and one act of it, **a declaration**: the developer reports the **declared advice** a_k, B appends the
-  declaration block, and the block's values are committed before the period's audit coins.
+  execution block, and the block's values are committed before the period's audit coins.
 
 ## (a) The lifecycle as run
 
 Every party is a sans-IO party of the deployment layer (`verity/core/deploy/`), run by `runtime.run` in simulated mode:
 in one process, on seeded coin sources and virtual clocks, with the manifest's channels and latencies. The model is two
 4x4 int8 matmuls (`forward`: y = sat(W2 relu(W1 x) >> 7) >> 7) with a 16-bit running state; one request is one proof
-block, the Boolean Definition `LifecycleRequest` (5,200 AND gates), and a declaration block is `LifecycleBlock(N)`: N units
+block, the Boolean Definition `LifecycleRequest` (5,200 AND gates), and an execution block is `LifecycleBlock(N)`: N units
 chained through the state wire. The monitoring period is three declaration periods of 3, 4 and 2 requests.
 
 1. **Hardware registration** (`Hardware`; `check_registration(layout, registration)`). The site is one `Layout`: cards
@@ -56,7 +56,7 @@ chained through the state wire. The monitoring period is three declaration perio
    way in: it carries each request in (`Ingress`) and its response out (`Egress`) and commits to each frame under its own
    salts. The developer's tape decides what only run time decides: the batching.
 4. **Declaration k** (`Declare`; `declare`, `check_declaration`). The developer reports the declared advice a_k (a unit
-   count, then each unit's batch), and B appends the declaration block, padded to PoUW's grid (`pad(real + 1)`, one
+   count, then each unit's batch), and B appends the execution block, padded to PoUW's grid (`pad(real + 1)`, one
    filler at least), and places it (`placement`, `Requirement.Placement`'s shape: each unit's device leaf, theta's memory
    leaf, and the layout's head they are placed on). The verifier refuses by name: `advice-cap`, `advice` (B doesn't
    parse it), `prefix` (it doesn't extend the circuit so far), `placement-off-layout` (another head, or a leaf no entry
@@ -118,7 +118,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `placement`: B's plan puts a unit on gpu2 before its entry | operation | refused `placement-off-layout` |
 | `unreported`: one request served and left out of the advice | operation | onsite: the certifier's count; remote: accepted, uncredited |
 | `advice-cap`: 33 bits of advice | declaration | refused `advice-cap` |
-| `recommit`: a second commitment after the draw | declaration | refused `recommit` |
+| `recommit`: a second commitment after the sample | declaration | refused `recommit` |
 | `wrong-value`: every output of block 2 off by one | audit | sampled proofs, and PoUW, which reads it (onsite also the I/O check) |
 | `io-mismatch`: the wire carries other outputs than the committed ones | audit | the certifier's frames, onsite |
 | `lost-theta`: an answer with a row that isn't theta's | audit | PoUS, onsite |
@@ -134,7 +134,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `Card`, `Loc`, `Link`, `Registration` | developer | the site's hardware | one entry of the log, chained to its head | missing: written in the example |
 | `Layout` (`genesis`, `add`, `device`, `boundary`, `accounting(ticks)`) | everyone | the log's entries | the site; each subprotocol's accounting | missing: written in the example (pieces: `Security/Definitions/Accounting/Physical.lean`'s `Hardware`, `Accounting/Device.lean`, the deploy manifest's machines and links) |
 | `check_registration(layout, registration, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | missing: written in the example |
-| `Builder` (`descriptor`, `of`, `digest`, `grow`) | developer, verifier | a_1 ‖ … ‖ a_k | the declaration blocks | missing: written in the example |
+| `Builder` (`descriptor`, `of`, `digest`, `grow`) | developer, verifier | a_1 ‖ … ‖ a_k | the execution blocks | missing: written in the example |
 | `placement`, `check_placement` | developer, verifier | B, a block, the layout's head | `Requirement.Placement`'s data, or a refusal by name | missing: written in the example |
 | `register`, `check_baseline` | developer, verifier | product, theta, B, state0 | `Baseline` (roots and B's descriptor) | missing: written in the example |
 | `operate` | developer | requests, theta, state, tape | `Served` | the integration's (here the toy model) |
@@ -154,14 +154,14 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 
 ## (c) What this exposes
 
-- **The declared circuit has no one digest, and Lean's `Declaration` holds one circuit.** Each declaration block has its
+- **The declared circuit has no one digest, and Lean's `Declaration` holds one circuit.** Each execution block has its
   own Program digest, and the record chain binds them in order; `codec.program_digest` of B(a_1 ‖ … ‖ a_k) as one Program
   is not prefix-incremental. `Security/Definitions/Core/Declaration.lean`'s `Declaration` is the declared circuit so far,
-  and its file says one Program is the circuit of record: d.D, one `Circuit`, is here every declaration block composed
+  and its file says one Program is the circuit of record: d.D, one `Circuit`, is here every execution block composed
   along the state wire (block k's state input is block k − 1's state output, not an input gate), which the spec has no
   operation for; d.θ, the registered information, is theta's and the initial state's input gates. `Baseline` is d before any block,
   and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
-- **State crosses declaration blocks as a committed value.** A drawn unit at the start of block k opens block k − 1's
+- **State crosses execution blocks as a committed value.** A drawn unit at the start of block k opens block k − 1's
   last row (or the registered initial state), so one unit's statement reads three commitments. `Core.Protocol`'s answer carries
   one commitment: the cross-block read and the chain live outside every subprotocol, in `check_declaration` and
   `account`, and `fork` passes every subprotocol. Nothing composes declarations into a monitoring period; the example
@@ -195,7 +195,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
   credited units): 1.0 % over the three declarations, 10^-6017 over a week of declarations like these. The theorem from
   a declaration's audit to the period's is the layer the modular math still needs.
 - **Per-declaration subprotocol checks don't exist yet.** PoUW's `core_check` and PoUS's and the bandwidth audit's verifiers take
-  whole-run cases; the example writes one answer each a declaration. Only sampled proofs draws from the declaration
+  whole-run cases; the example writes one answer each a declaration. Only sampled proofs draws from the execution
   block; the memory challenger draws theta rows.
 - **The advice is charged but the toy's circuit doesn't depend on it beyond the count.** Batching enters B only as
   validation; a batched matmul would make B's output depend on it.
@@ -209,7 +209,7 @@ In a noun-based layout, each part of the example goes where its noun is:
 - `verity/registration`: `Layout`, its entries, `check_registration` and the projections; the registered information (`register`,
   `check_baseline`), B's registered descriptor and `grow`, and `placement`; `declare` and `check_declaration` too, as
   what is registered over time.
-- `verity/circuits`: the units, the declaration blocks and the declared circuit as blocks chained by state wires, with a
+- `verity/circuits`: the units, the execution blocks and the declared circuit as blocks chained by state wires, with a
   digest of the chain (today's `verity.ml.circuits`).
 - `verity/commitments`: `commit`, `opens`, the row and frame commitments (today split between `one_stage.registered`,
   `verity.ml.commitments` and the certifier's own).
