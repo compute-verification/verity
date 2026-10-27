@@ -113,7 +113,9 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     """Every unit is filled: an embedding read's row is the table's at its token and its opening (row, salt and path, as
     `gates.embedding.arguments` encodes them) opens to the table's root, its verdict 1; each token select's chunks, ``x0``
     and combine give the node's token, and its mask the token for an occupied slot; each feed holds its token and carried
-    slot, each slot row its row opened. With no served values every unit is computed or evaluated."""
+    slot, each slot row its row opened; each head's first key block (`Attention_v20`'s cut) is evaluated, and its end's
+    Definition on that block's state is the node's value, the row kernel's. With no served values every unit is computed
+    or evaluated."""
     low, fields, tables, _w, slots = window
     rows = WR.Rows(low, slots, tables)
     assert {int(x) for v in rows.source.values() for x in v} == {WR.COMPUTED, WR.EVALUATED}
@@ -153,6 +155,15 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
             assert _i32(rows.outs[mask[0]][0][mask[1]]) == [token]
             (_, _, r), = P.outs[j]
             assert _i32(rows.outs[r.tid][0][r.unit]) == [token]
+        assert len(P.heads) == 2 * (CLASS.prompt + CLASS.outputs - 1)
+        for j, (plan, calls) in P.heads.items():
+            (first, _), (end, _) = plan
+            (ft, fu), (et, eu) = calls
+            assert first.name == "AttnBlockFirst" and end.name == "AttnHeadEnd" and rows.source[ft][fu] == WR.EVALUATED
+            l, o = (np.ascontiguousarray(rows.outs[ft][k][fu:fu + 4]).view("<u4") for k in (1, 2))
+            node = np.asarray(evaluate_batch(end, l, o)).reshape(4, -1).astype(np.uint16)
+            assert np.array_equal(node, rows.outs[et][0][eu:eu + 4])
+            assert np.array_equal(node.reshape(-1), WR._words(s.values[j])) and node.any()
 
 
 def test_a_chunks_best_is_its_first_maximum_above_minus_infinity():

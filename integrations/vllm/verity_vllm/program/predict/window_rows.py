@@ -16,6 +16,9 @@ function of the window's values:
   unit ``logits[0]``;
 - each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
   core's ``one_stage.registered.Registered`` of ``row-seg`` rows or one like it);
+- each attention cut by key block (`window_circuit.CUTS`), every Call of a head but its last (the node's output) its
+  Definition on the node's operands (`evaluate_batch`): the head's query, its KV group's keys and values in the Call's
+  range, and the earlier Calls' running state;
 - each `AllGather_v1` the concatenation of its parts, read through the circuit's wires once their writers hold them.
 
 `Rows.record` gives a `Window` each template's units in runs of one step and one source (`SOURCES`: served, computed, or
@@ -32,6 +35,7 @@ import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.refs import runs
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.definitions.numerics.rows import ROWS
@@ -371,6 +375,32 @@ class Rows:
                 raise ValueError(f"node {j}: chunks of {lo} logits, not its {len(logits)}")
             self._put(*x0, "o0", logits[:1].astype(np.uint16).reshape(1, 1), EVALUATED)
             self._put(*mask, "o0", _i32([IO.mask_reference(S.row[0], int(S.values[j][0][0]))]), EVALUATED)
+        for j, (plan, calls) in P.heads.items():
+            self._heads(nodes[j], plan, calls, S)
+
+    def _heads(self, node: Any, plan: Any, calls: Sequence[tuple[str, int]], S: Slot) -> None:
+        """An attention cut by key block: every Call but its last (whose output is the node's) its Definition on the node's
+        operands, a unit a head: the head's query, its KV group's keys and values in the Call's range, and earlier Calls'
+        rows."""
+        s = node.fn.bindings
+        T, NH, KVH, D = s["T"], s["NH"], s["KVH"], s["D"]
+        q, kc, vc = (S.operand(a) for a in node.args)
+        g = np.arange(NH) // (NH // KVH)
+        ops = {"q": q.reshape(NH, D), "k": kc.reshape(T, KVH, D), "v": vc.reshape(T, KVH, D)}
+        got: list[dict[str, np.ndarray]] = []
+        for (fn, ports), (tid, u) in zip(plan[:-1], calls):
+            args = []
+            for _port, (kind, x) in ports:
+                args.append(ops["q"] if kind == "q" else got[x[0]][x[1]] if kind == "state"
+                            else ops[kind][x[0]:x[1]][:, g].transpose(1, 0, 2).reshape(NH, -1))
+            flat, at, outs = np.asarray(evaluate_batch(fn, *args)).reshape(NH, -1), 0, {}
+            lay = self.lays[tid]
+            for (o, words), w in zip(lay.outs, lay.widths[len(lay.rows):]):
+                k = words * 16 // w
+                outs[o] = flat[:, at:at + k].astype(f"<u{w // 8}")
+                self._put(tid, u, o, outs[o].view("<u2").reshape(NH, words), EVALUATED)
+                at += k
+            got.append(outs)
 
     def _gathers(self) -> None:
         """Each `AllGather_v1` unit's output, its parts' rows in order, once every part's writer holds its row: the gathers
