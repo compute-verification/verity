@@ -18,6 +18,10 @@ instructions onto it; MODEL-COVER (CMP-166) owns the per-opcode table and its so
 | `exact` | (P1)'s range: an integer MMA is exact while `|C| + Σ|a·b| < 2^exact` |
 | `text` | code space, instructions (device memory at 16 bytes an instruction) |
 
+The table refines the device model (`Card.toDevice`, `Accounting.Device`): at a tick of `τ` seconds the device's
+on-chip and device-memory bits are the stores', and its tensor MACs, lane ops, oracle queries and device-memory bits
+a tick are the rates', rounded up; a run that meets the model stays within them summed over a window (`fits_toDevice`).
+
 Resources: `tensor` (s8 MACs), `issue` (warp instructions), `alu`, `imad`, `shfl`, `f64` and `sfu` lanes, `smem`
 (bank words), `l2` (words read) and `dram` (words).
 

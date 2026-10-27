@@ -1,7 +1,9 @@
 import Definitions.Core.Assumptions.Accel
 import Mathlib.Algebra.Order.Monoid.Canonical.Basic
+import Mathlib.Tactic.GCongr
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Positivity
+import Mathlib.Tactic.Ring
 
 /-!
 # The machine 𝓜: an honest semantics, the rate bound, and the coverage premise's refusal
@@ -9,7 +11,8 @@ import Mathlib.Tactic.Positivity
 * `s8Open`: a semantics with one MMA opcode, `s8` by `s8` into 32-bit accumulators, computing `C + Σ a·b` exactly
   (`intDot`), the deployed kernels' `wgmma`. It meets (P1) on every card (`s8Open_exact`) and (P2)
   (`s8Open_productForm`), so the headline's hypotheses on the semantics are met.
-* `units_le_of_fits`: a run meeting the model uses each resource at most at its rate over its seconds.
+* `units_le_of_fits`: a run meeting the model uses each resource at most at its rate over its seconds, and so at most
+  the device model's limits over a window of ticks (`fits_toDevice`, the table's refinement of `Accounting.Device`).
 * `cardWithinAccel_fails` (the nontrivial lemma): the coverage premise refuses a card that changes its memory in no
   time. Every instruction uses part of an issue slot (`use_issue_pos`), so a run of zero seconds runs none and leaves
   the memory as it was (`run_mem_of_issue_zero`).
@@ -85,6 +88,23 @@ variable {m : Machine}
 theorem units_le_of_fits {Θ : Type} [DecidableEq Θ] (P : m.Prog Θ) (σ : m.State Θ) (sched : List Θ) (T : ℚ≥0)
     (h : Fits P σ sched T) (r : Res) : units (run P σ sched).2 r ≤ m.card.ρ r * T :=
   le_self_add.trans (h.2 r)
+
+/-- **The table refines the device model**: a run meeting the model in `len` ticks of `τ` seconds uses at most the
+device's tensor MACs, lane ops (32 an issue slot) and device-memory bits summed over the window (`Card.toDevice`). -/
+theorem fits_toDevice {Θ : Type} [DecidableEq Θ] (P : m.Prog Θ) (σ : m.State Θ) (sched : List Θ) (τ : ℚ≥0)
+    (len : ℕ) {ι : Type} (cap : ι → ℕ) (h : Fits P σ sched (len * τ)) :
+    units (run P σ sched).2 .tensor ≤ len * ((m.card.toDevice τ cap).rate .tc : ℚ≥0) ∧
+      32 * units (run P σ sched).2 .issue ≤ len * ((m.card.toDevice τ cap).rate .cuda : ℚ≥0) ∧
+      32 * units (run P σ sched).2 .dram ≤ len * ((m.card.toDevice τ cap).bw : ℚ≥0) := by
+  have key : ∀ (r : Res) (k : ℚ≥0), k * units (run P σ sched).2 r ≤ len * (⌈k * m.card.ρ r * τ⌉₊ : ℚ≥0) := by
+    intro r k
+    calc k * units (run P σ sched).2 r ≤ k * (m.card.ρ r * (len * τ)) := by
+          gcongr; exact units_le_of_fits P σ sched _ h r
+      _ = len * (k * m.card.ρ r * τ) := by ring
+      _ ≤ len * (⌈k * m.card.ρ r * τ⌉₊ : ℚ≥0) := by gcongr; exact Nat.le_ceil _
+  have h1 := key .tensor 1
+  simp only [one_mul] at h1
+  exact ⟨h1, key .issue 32, key .dram 32⟩
 
 theorem port_issue (s : Store) : port s .issue = 0 := by cases s <;> rfl
 

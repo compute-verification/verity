@@ -1,12 +1,15 @@
 import Definitions.Core.Accel.Isa
+import Definitions.Accounting.Device
 import Mathlib.Algebra.Field.Rat
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # A card's numbers (trusted)
 
 A card is a table of numbers (`Card`): each store's words, each resource's rate a second (the SMs × a SM's units a
 clock × the clock's ceiling), the tensor units a MAC of each format uses, the range P1 holds in, and its code space.
-Nothing else of the card is in the model: what its instructions compute is `Open`, the card's semantics.
+Nothing else of the card is in the model: what its instructions compute is `Open`, the card's semantics. The table
+refines the device model (`Card.toDevice`): the device's limits are the table's numbers at a tick.
 
 **Units** (`Card.use`), the same on every card: an MMA tile `m·n·k · weight` tensor units (a 2:4 sparse tile
 `m·n·(k/2) · weight`) and an issue slot; a lane function `1/32` of a slot and a lane of its pipe; a move `max k 1 / 32` of
@@ -79,6 +82,20 @@ def Exact (x : Open) : Prop :=
       2 ^ c.exact →
     x.dot o k acc a b = (BitVec.ofInt 32 ((BitVec.ofNat 32 acc).toInt +
       (List.zipWith (fun p q => (x.fa o).intVal p * (x.fb o).intVal q) a b).sum)).toNat
+
+/-- **The card as the device model's device** (`Accounting.Device`), at ticks of `τ` seconds: on-chip state the
+registers', shared memory's and L2's bits, device memory its bits, and a tick's tensor MACs (`s8` MACs), lane ops (32 an
+issue slot), oracle queries (an issue slot each at most: a call uses a public compression's issue slots, G3) and
+device memory's bits, each rounded up. The side channels `cap` are the host links', not the card's. -/
+def toDevice {ι : Type} (τ : ℚ≥0) (cap : ι → ℕ) : Accounting.Device ι where
+  chip := 32 * (c.size .reg + c.size .smem + c.size .l2)
+  mem := 32 * c.size .dram
+  rate
+    | .tc => ⌈c.ρ .tensor * τ⌉₊
+    | .cuda => ⌈32 * c.ρ .issue * τ⌉₊
+    | .oracle => ⌈c.ρ .issue * τ⌉₊
+  bw := ⌈32 * c.ρ .dram * τ⌉₊
+  cap := cap
 
 end Card
 
