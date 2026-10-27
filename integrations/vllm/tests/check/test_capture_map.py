@@ -1,6 +1,6 @@
 """The GLM-5.3 capture map (`manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json`) against the meta-device inventory of
-the same `config.json` at TP8 for the map's target (`verity-vllm meta-inventory`, run r20261003-072626-b966, ranks 0-7, with
-the default dynamic dense-FP8 kernel facts refreshed from the pinned source and H200 GO run r20261013-115825-d357):
+the same `config.json` at TP8 for the map's target (`verity-vllm meta-inventory`, ranks 0-7, with
+the default dynamic dense-FP8 kernel facts refreshed from the pinned source and an H200 GO run):
 every module the pinned vLLM builds has exactly one entry, so a module the map misses fails here; every tap reads tensors of
 the shape the inventory gives a rank; each rank built for the target's profile and switches; and the counts the H200 runbook
 cites are pinned."""

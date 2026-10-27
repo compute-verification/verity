@@ -3,7 +3,7 @@ import Definitions.Accounting.PouwWork
 /-!
 # PoUW's named premises on one node (trusted)
 
-The premises of CMP-12's converged model (v3.1) that its PoUW work lower bound takes, over `Accounting.PouwWork`'s
+The premises of the converged model (v3.1) that its PoUW work lower bound takes, over `Accounting.PouwWork`'s
 vocabulary on the actual circuit. Each is a `Prop` about one strategy `S` and the verifier `P`, taken as a hypothesis by
 `Accounting.Guarantees.PouwLocalOff`, never an `axiom`. Their v3.1 names are A2 (`Detection`), A2b (`Luck`) and A5
 (`HelpBound`). They are under `shape.premises`. A3 (`FloorOff`), an open conjecture, is in

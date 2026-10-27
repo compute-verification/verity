@@ -1,4 +1,4 @@
-"""VLLM-87: the batched int8 attention (`int8_ops.paged_attention` and `window_attention`: one ``kv_quant_batch`` /
+"""The batched int8 attention (`int8_ops.paged_attention` and `window_attention`: one ``kv_quant_batch`` /
 ``kv_quant_window_batch`` and one ``window_rows_batch`` for the whole step) against the per-request reference
 (`int8_attention.reference_paged`: `kv_quant` and `window_rows` one request and one KV head at a time), word for word on the
 CPU, over random batches that mix decode rows, chunked-prefill chunks and whole prompts over varied windows and GQA groups.

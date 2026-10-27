@@ -208,7 +208,7 @@ def test_a_recorded_session_is_counted_at_close_as_the_lean_ends_it(server, name
 
 def test_a_registration_that_binds_tiles_is_refused_as_the_lean_refuses_it(server) -> None:
     """A registration that would bind PoUW's tile outputs: for a node with one live, refused and counted, as any second
-    registration is; for one with none, refused by both registries outright (the Lean covers receipts of blocks
+    registration is; for one with none, refused by both registries outright (the Lean covers receipts of chunks
     alone), drawing nothing."""
     v = recorded("honest")
     bound = v["ops"][0] | {"bind": True}

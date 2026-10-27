@@ -6,9 +6,9 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    """CMP-92's two phases at the loop's EPS, 1e-5: Phase 1's row (width 128) as one unit, and Phase 2's (width 16,384) in the
-    two-level form, chunks of 128 words and groups of 64 chunk sums, so G = 2; and CIR-109's fused output unit at Phase 2's
-    chunk (C = 128, its 128 chunk sums in G = 2 groups), with the chunk sums 32 a unit (C = 4096, K = 128)."""
+    """The e2e demo's two phases at EPS = 1e-5: Phase 1's row (width 128) as one proof block, and Phase 2's (width 16,384) in
+    the two-level form, chunks of 128 words and groups of 64 chunk sums, so G = 2; and the fused output proof block at Phase 2's
+    chunk (C = 128, its 128 chunk sums in G = 2 groups), with the chunk sums 32 a proof block (C = 4096, K = 128)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import rmsnorm as R
 

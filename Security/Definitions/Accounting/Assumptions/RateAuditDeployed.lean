@@ -15,7 +15,7 @@ hypothesis, never an `axiom`:
   measured rate times the pass duration; `PIDevice.TimeBudget.squaringCeiling` derives this assumption at the sum of
   their rates.
 * `SketchRank ks m r ε`: the probability that some sector's signs block has rational rank below `r` is at most `ε`.
-  Its numeric value is computed outside Lean (art:d3c891e4).
+  Its numeric value is computed outside Lean.
 * `SketchHashBudget A qtot`: across a pass's `G` grinding candidates, the oracle queries total at most `qtot`, the
   node's hash budget for the pass.
 -/
@@ -33,8 +33,8 @@ sector's `ks × 32` block below rational rank `r` with probability at most `ε`:
 
 The finite probability is exact; only its numerical evaluation is outside Lean. At the deployed 16 rows the chosen
 rank is `r = 12`, where `ε = 128 · Pr[rank_ℚ(16 × 32 block) ≤ 11] ≤ 2^(-96.25)`: evaluated, with the per-compression
-reading `2^(-96) + ε = 2^(-95.12)`, by the standalone seeded script of art:d3c891e4 (exact rational arithmetic through
-the F2 rank law, with exhaustive and seeded self-checks; the script and its output are the artifact, and
+reading `2^(-96) + ε = 2^(-95.12)`, by a standalone seeded script (exact rational arithmetic through
+the F2 rank law, with exhaustive and seeded self-checks; the script and its output are an evidence artifact, and
 `verity/core/protocols/remote_bandwidth/tests/test_sketch_reading.py` holds the in-suite falsification tests). At 64
 rows it is `r = 27`. -/
 def SketchRank (ks m r : ℕ) (ε : ℝ≥0∞) : Prop :=
@@ -71,7 +71,7 @@ host CPUs, the chip being everything on the node that computes), times the pass'
 `cost` and `WorkHardness`'s `c_root` are priced in. The ceiling is the adversary's best measured rate, not the honest
 one: at the stated codec's 1,024-bit words (masked `p = 2^1024 − 105`, `k = 3`) the stated ceiling is about 1.485×
 the reference kernel's rate on the GPU, 1.67× with the host's share, against 1.68× on the GPU on the conservative
-reading (lane ra-squaring-ceiling, verity#1887; Daniel's card e2a13d4a, 18 Oct). With
+reading. With
 `WorkHardness b rounds c_root cost` it bounds the bits a pass completes by `b·F/(rounds·c_root)`
 (`Accounting.Rate.Deployed.rebuildBits`), the term `μ_rebuild`.
 

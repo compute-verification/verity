@@ -1,4 +1,4 @@
-"""The per-row s8 quantizer in CIR-100's form (#4433's ops.quant; the CMP-96 replay's RowAbsMax_v1, QuantS8Scale_v1 and
+"""The per-row s8 quantizer in circuits' form (`ops.quant`; the CPU replay's RowAbsMax_v1, QuantS8Scale_v1 and
 QuantS8Pair_v1): units_quant (a CTA a row, up to 16384 words) or units_quant4 (a cluster of four CTAs a row, 65536 words),
 and its twin.
 

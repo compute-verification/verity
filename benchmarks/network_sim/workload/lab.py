@@ -1,5 +1,4 @@
-"""The lab's Program: the workload's messages as the network certifier's sessions and server-sent events, and N3 over the
-records the certifiers publish.
+"""The lab's Program: the workload's messages as the network certifier's sessions and server-sent events.
 
 On the mock datacenter (`../mockdc.py`) every block is a server behind the certifier's proxy on its uplink, and the client
 on the outside host is the only peer of every link (`lab_run`). The proxy carries requests in and server-sent events out,
@@ -26,45 +25,26 @@ so φ's messages are recast:
 
 A message from block X to block Y therefore crosses X's certifier in an event of X's response, and Y's in Y's request: the
 client relays it. Every byte on every link is a function of the placement and the committed values.
-
-**N3** (`check`), in the clear like `n3.check`, whose first two steps it shares: the placement registers and is causal, each
-unit's values register, and every crossing value opens at its source unit. Then, per block: the k-th frame the certifier
-released on the block's egress is the canonical event of the chunk the opened values declare at position k, and none
-is missing; and its ingress frames, cut into requests by their lengths, are the requests the opened values declare, in
-session order. When a frame crossed is the certifier's audit's to check, not N3's. The codes are `n3.check`'s
-`program`, `placement`, `hardware` and `values`, and per link (`BLOCK:responses`, `BLOCK:requests`): `malformed` (not
-a whole `DATA` frame on stream 0, or on egress not a canonical event), `fill` (a frame whose fill isn't zero),
-`unexplained` (an event or request past the Program's), `content` (an event or request that isn't the declared one)
-and `missing` (a declared event or request that wasn't recorded).
 """
 from __future__ import annotations
 
 import bisect
 import struct
 from collections import defaultdict
-from collections.abc import Iterator, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from verity.core.protocols.certifier.active import (
-    CANONICAL_STREAM,
-    DATA,
     HEADER,
     LENGTH,
     TOKEN_BYTES,
-    Requests,
-    decode_frame,
-    encode_frame,
     event,
-    event_data,
     event_placement,
     request_frame_count,
 )
-from verity.core.protocols.certifier.grid import Record, row_count
-from verity.ml.circuits.codec import program_digest
 
 from . import framing as F
 from . import model as M
-from . import n3
 from . import placement as P
 from .hardware import OUTSIDE, Hardware
 
@@ -188,96 +168,3 @@ class Lab:
         chunk, which is what the proxy frames."""
         return b"id: %d\n" % position + event(self.token(block, position, payload))
 
-
-def released(records: Sequence[Record]) -> Iterator[bytes]:
-    """The frames a link's records released, in window and bucket order."""
-    for rec in sorted(records, key=lambda r: r.window):
-        for row in rec.grid:
-            yield from row[:row_count(row)]
-
-
-def _frame(f: bytes, B: int) -> tuple[str, bytes | None]:
-    """A recorded frame's payload, or why it isn't a whole `DATA` frame on `CANONICAL_STREAM` with zero fill."""
-    if len(f) != B or HEADER.unpack_from(f)[:2] != (DATA, CANONICAL_STREAM) or HEADER.size + HEADER.unpack_from(f)[2] > B:
-        return "malformed", None
-    _, _, payload = decode_frame(f)
-    if encode_frame(DATA, CANONICAL_STREAM, payload, B) != f:
-        return "fill", None
-    return "", payload
-
-
-def check(public: dict, witness: dict, records: dict[str, Sequence[Record]]) -> n3.Report:
-    """N3 over the certifiers' raw records, `records[block]` holding both of the block's links' (`EGRESS`, `INGRESS`)."""
-    report = n3.Report()
-    model = M.build(public.get("workload", "mlp"), public["spec"])
-    if program_digest(model.program) != public["program"]:
-        report.add("program", "", "the public digest isn't the spec's Program's")
-    hw = Hardware.from_json(public["hardware"])
-    placement = n3.placement_of(public, witness, model, hw, report)
-    if placement is None:
-        return report
-    edges = P.crossings(model, placement, hw)
-    lab = Lab(model, hw, placement, F.messages(edges), public["frame_bytes"])
-    opened = n3.open_values(public, witness, placement, hw, edges, model.value_bits, report)
-    payloads = {s: F.encode(m, opened) for s, m in lab.messages.items() if all(e.value in opened for e in m.edges)}
-    report.stats.update(messages=len(lab.messages), sessions=sum(len(ss) for ss in lab.sessions.values()),
-                        events=sum(len(es) for es in lab.events.values()))
-    for b in lab.blocks:
-        recs = records.get(b, [])
-        _egress(lab, b, [r for r in recs if r.link == EGRESS], payloads, report)
-        _ingress(lab, b, [r for r in recs if r.link == INGRESS], payloads, report)
-    return report
-
-
-def _egress(lab: Lab, block: str, records: Sequence[Record], payloads: dict[int, bytes], report: n3.Report) -> None:
-    where, declared, n = f"{block}:{EGRESS}", lab.events[block], 0
-    for p, f in enumerate(released(records)):
-        report.stats["frames"] += 1
-        n += 1
-        why, payload = _frame(f, lab.frame_bytes)
-        if not why and event_data(payload) is None:
-            why = "malformed"
-        if why:
-            report.add(why, where, f"frame {report.stats['frames'] - 1} recorded")
-            continue
-        if p >= len(declared):
-            report.add("unexplained", where, f"an event at position {p}, past the Program's {len(declared)}")
-            continue
-        _, m, _ = declared[p]
-        if (m is None or m.stream in payloads) and payload != event(lab.token(block, p, lab.payload(block, p, payloads))):
-            report.add("content", where, f"the event at position {p} ({'padding' if m is None else f'message {m.stream}'}) "
-                                         "isn't the declared one")
-            continue
-        report.stats["explained"] += 1
-    if n < len(declared):
-        report.add("missing", where, f"{len(declared) - n} declared events, the first at position {n}")
-
-
-def _ingress(lab: Lab, block: str, records: Sequence[Record], payloads: dict[int, bytes], report: n3.Report) -> None:
-    where, room = f"{block}:{INGRESS}", lab.frame_bytes - HEADER.size
-    sessions = {s.stream: s for s in lab.sessions[block]}
-    split, got, ended = Requests(), defaultdict(bytes), set()
-    for f in released(records):
-        report.stats["frames"] += 1
-        why, payload = _frame(f, lab.frame_bytes)
-        if not why and len(payload) != room:
-            why = "malformed"
-        if why:
-            report.add(why, where, f"frame {report.stats['frames'] - 1} recorded")
-            continue
-        used = LENGTH.size * (not split.left)
-        stream, data, end = split.feed(payload)
-        if end and any(payload[used + len(data):]):
-            report.add("fill", where, f"the fill after the request on stream {stream} isn't zero")
-        got[stream] += data
-        if end:
-            ended.add(stream)
-    for stream in sorted(got.keys() - sessions.keys()):
-        report.add("unexplained", where, f"a request on stream {stream}, past the Program's {len(sessions)} sessions")
-    for stream, s in sessions.items():
-        if stream not in ended:
-            report.add("missing", where, f"the request of session {s.name}")
-        elif all(m.stream in payloads for m in s.inbound) and got[stream] != lab.request(s, payloads):
-            report.add("content", where, f"the request of session {s.name} isn't the declared one")
-        else:
-            report.stats["requests"] += 1

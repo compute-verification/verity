@@ -25,8 +25,7 @@ that takes fewer than `2^b_a` values over the runs. Each is charged `b_a`, and t
 `WeightsIncompressible` does (weights committed in `θ`, a low-rank update, updates rebuilt from fewer bits), and where
 thread values are redundant at rate above `b_a`.
 
-**Falsified** (19 Oct 2026, Linear CMP-56, note:compute-accounting/20261019T0725Z-finding-nci-falsify,
-art:32d42058ab76d8012ef741449665e9e1c2a444fa7158bcb03cbf2457b97944dd) at FP4 at `b_a = 4`, under the standard threading.
+**Falsified** at FP4 at `b_a = 4`, under the standard threading.
 If each FP4 thread value is a gate holding its E2M1 value (15 values), one weight-gradient product `δ_t[i] · x_t[j]`
 reads two thread values and no weight, is charged 8 bits, and its reads take at most 225 < 2⁸ values. If the gates hold
 E2M1 codes (16 with `-0`) and each block's scale sits in its own gate, an NVFP4 or MXFP4 block's codes always include

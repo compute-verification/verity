@@ -1,4 +1,4 @@
-"""N2's advised counts (`advised`) on real served advice: window 5 of run r20261024-105002-1042, LLAMA32_1B served by
+"""N2's advised counts (`advised`) on real served advice: window 5 of a run, LLAMA32_1B served by
 vLLM, its advice written by `verity-vllm advice` (`fixtures/served_window.json`). The advice's clock is the engine's:
 each kept output's release is the bucket of τ = 0.1 s from the window's first step, with no certifier on the path, so
 every request's first output is released in the bucket it arrived in (bucket 0: the four requests arrived 16 to 41 ms

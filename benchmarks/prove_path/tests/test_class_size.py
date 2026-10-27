@@ -1,18 +1,19 @@
 """class_size (V3b): a window class's padded size, projected from one Program lowered at a small probe class.
 
 * the lowering projected from a probe of 3 positions is, template for template, TINY's exact lowering at a class of 7
-  positions (`window_circuit.class_circuit`), and at TINY of 2,048 positions at a class of 261, past two key blocks of 128:
-  every template but the heads and their key gathers is a fixed count a position, `TokenFeed_v1` one a prompt position and
-  `SlotRow_v1` one a Program;
-* v19's heads (#4263), at a block of 3 keys: a head over T keys is its first block, ceil(T / 3) - 1 full ones (none
+  positions (`window_circuit.class_circuit`), at a class of two lanes (its scan state row another), and at TINY of 2,048
+  positions at a class of 261, past two key blocks of 128: every template but the heads and their key gathers is a fixed
+  count a position, `TokenFeed_v1` one a prompt position, `ScanSlots_v1`, `SlotRow_v1` and `SlotEntry_v1` one a Program and
+  `OutCollect_v1` one a position;
+* v19's heads, at a block of 3 keys: a head over T keys is its first block, ceil(T / 3) - 1 full ones (none
   guarded: a one-row decode's FA2 guards its first visited block only) and its end; its keys reach it through one gather a
   full block, shared, and its first block's own where that block is neither one key nor full;
 * with ``VERITY_PROVE_PATH_CLASS_OF_RECORD=1``, the class of record at Llama-3.2-1B lowers exactly, within C-Flock's block,
   as the projection says;
 * a probe that doesn't divide evenly is refused, and so is a template `size` has no measurement for; m is the log of the
   cells;
-* a gather's k_log is its rows' (its parts and its output, an hm96 slot each), circuits' composed values at every W they
-  composed, and a gather of 256 parts needs a block of 2^28 bits, which `size` refuses as C-Flock does;
+* a gather's k_log is its rows' (its parts and its output, an hm96 slot each), as composed at every W measured, and a
+  gather of 256 parts needs a block of 2^28 bits, which `size` refuses as C-Flock does;
 * with no ``--class``, ``prove_path.py`` takes the class of record.
 """
 from __future__ import annotations
@@ -54,9 +55,10 @@ def _census(cls: WindowClass, config: dict = TINY, grain: Grain = GRAIN) -> dict
 
 
 def test_the_lowering_projected_from_a_probe_is_the_exact_lowering_at_a_larger_class():
-    probe, at = _census(PROBE), WindowClass(1, 5, 3)
+    probe, at, two = _census(PROBE), WindowClass(1, 5, 3), WindowClass(2, 5, 3)
     assert PROBE.positions == 3 and at.positions == 7
     assert CZ.project(probe, PROBE, at) == _census(at)
+    assert CZ.project(probe, PROBE, two) == _census(two) and "ScanSlots_v1{NS=4550,NP=5,IDB=17,K0=12,K=45}" in _census(two)
 
 
 @pytest.mark.slow
@@ -93,10 +95,10 @@ def test_v19s_heads_are_key_blocks_with_their_gathers():
                     reason="the class of record at Llama-3.2-1B: 368M units, some 22 minutes and 42 GB on a pod; set "
                            "VERITY_PROVE_PATH_CLASS_OF_RECORD=1")
 def test_the_class_of_record_lowers_at_llama_3_2_1b(monkeypatch):
-    """The class of record (8 slots of 1,087 positions) at Llama-3.2-1B's geometry and CIR-95's grain lowers whole: no unit
-    past 256 rows in and out (`Grain.rows`), so none past C-Flock's 2^27-bit block (`size` refuses one), and its census is 8
-    times the projection of one Program from a probe of 3 positions. Its numbers (nodes, units, wires, peak RSS, then ANDs
-    and m) are printed as JSON lines."""
+    """The class of record (8 slots of 1,087 positions) at Llama-3.2-1B's geometry and `window_circuit`'s grain lowers whole:
+    no unit past 256 rows in and out (`Grain.rows`), so none past C-Flock's 2^27-bit block (`size` refuses one), and its
+    census is 8 times the projection of one Program from a probe of 3 positions. Its numbers (nodes, units, wires, peak RSS,
+    then ANDs and m) are printed as JSON lines."""
     reg = _registered(json.loads(LLAMA_1B.read_text()))
     built, program = WC.class_program(reg, CLASS_OF_RECORD), WC.class_program
     monkeypatch.setattr(WC, "class_program", lambda r, cls: built if cls == CLASS_OF_RECORD else program(r, cls))
@@ -134,11 +136,14 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured():
     assert CZ.measured("TokenFeed_v1{NP=1024,FIRST=false}")[:2] == (62, 23)
     assert CZ.measured("TokenFeed_v1{NP=2048,FIRST=true}")[:2] == (30, 24)
     assert (CZ.measured("SlotRow_v1{NP=1024}")[:2], CZ.measured("SlotMask_v1{}")[:2]) == ((0, 23), (32, 22))
+    assert [CZ.measured(lab)[:2] for lab in ("ScanSlots_v1{NS=9353,NP=1024,IDB=17,K0=12,K=45}", "OutCollect_v1{KO=64,FIRST=true}",
+                                             "OutCollect_v1{KO=64,FIRST=false}", "SlotEntry_v1{KO=64,IDB=17,NP=1024}")] == [
+        (0, 23), (155, 22), (2_141, 22), (5_676, 22)]
 
 
 def test_window_circuit_and_class_size_default_to_the_class_of_record():
     """Without ``--class``, ``window-circuit`` and ``class-size`` take the class of record, the certifier run of record's
-    envelope at ASK-122's fixed slots (8 slots, 4 at each of buckets 0 and 16, EVERY 16; 1,024 prompt ids, 64 outputs); a
+    envelope at the fixed slots (8 slots, 4 at each of buckets 0 and 16, EVERY 16; 1,024 prompt ids, 64 outputs); a
     given class is read as SLOTS,PROMPT,OUTPUTS[,LANES,EVERY], every slot at one boundary without LANES."""
     import prove_path as PP
 

@@ -1,8 +1,6 @@
-"""Lane `ov-moe` patterns: the OLMoE fused-MoE block as PAIR-MAJOR Computes over quarantine definitions.
+"""Patterns of the OLMoE fused-MoE block as PAIR-MAJOR Computes over quarantine definitions.
 
-Wave 1 (`gen_moe_patterns.MoEBlockScope`, retired in P6) resolved `vllm.moe_forward*` as one recognised `Unsupported` and wrote the
-mechanism note.  This module is the constructive half of the answer to "is MoE just routing + grouped-GEMM Definitions
-under the existing Program machinery?": the block IS representable with the existing operand kinds (`PerRow`, `Gather`
+The block is representable with the existing operand kinds (`PerRow`, `Gather`
 with *public* indices, `Shared`) once the unit of computation is the (token, slot) PAIR p = t*TOPK + k and the expert
 index is an ordinary I32 *value operand* of the pair body (the gather over the expert axis happens inside the body,
 cf. `Embedding_v1`).  Nothing in the fold reads device data to resolve dataflow: the A-row of pair p is hidden row
@@ -15,8 +13,8 @@ Resolution of the scope (`MoEFusedExperts`), in fold order:
   1. `_moe_C.topk_softmax`             -> Compute(MoeRouterTopK_v1{E,TOPK,VPT}, rows=M): logits[M,E] -> (weights[M,TOPK] f32, ids[M,TOPK] i32)
   2. `_moe_C.moe_align_block_size`     -> Transparent(noop) claiming the kernel: its outputs (sorted_token_ids, expert_ids,
                                           num_tokens_post_padded) are a SCHEDULE — they decide which pairs a CTA processes
-                                          together and never enter the arithmetic of an output word (§4 of the wave-1
-                                          mechanism note; the Tier A comparison of 3./5. is the check of that claim).
+                                          together and never enter the arithmetic of an output word (the
+                                          Tier A comparison of 3./5. is the check of that claim).
                                           Absent on the naive path (M <= 2: `naive_block_assignment=True`).
   3. `fused_moe_kernel` (w13)          -> Compute(MoeExpertGemm_v1{E,K=H,N=2I}, rows=M*TOPK):
                                           (Gather(hidden, p//TOPK), PerRow(ids.flat), Shared(w13)) -> PerRow(cache1 as [M*TOPK, 2I])
@@ -86,7 +84,7 @@ def _depth(root: TreeNode, target: TreeNode) -> int:
 def moe_subtree_census(node: TreeNode) -> dict[str, Any]:
     """Every event of the scope with its tensor metadata: dispatcher ops with input/output views, Triton launches with
     grid / constexprs / num_warps / num_stages and their tensor arguments.  Serialisable (plain dicts) so it survives
-    the resolution report's JSON.  (Wave 1's `gen_moe_patterns.moe_subtree_census`, moved here when that module retired in P6.)"""
+    the resolution report's JSON."""
     ops: list[dict[str, Any]] = []
     launches: list[dict[str, Any]] = []
     for n in node.walk():
@@ -107,8 +105,7 @@ K_ROUTER = "topkGating"
 #: `_moe_C.moe_align_block_size` dispatches on the pair count (vllm csrc/moe/moe_align_sum_kernels.cu): one
 #: `moe_align_block_size_small_batch_expert_kernel` launch below ~1024 pairs (`topk_ids.numel() < 1024 && E <= 64`:
 #: every decode step), else the two-kernel sorted path `moe_align_block_size_kernel` + `count_and_sort_expert_tokens_kernel`
-#: (a 155-token prefill = 1240 pairs; census grid [2,1,1]x1024 and [5,1,1]x256).  All three compute the same schedule
-#: (lane cov-moe, 2026-09-17: the prefill pair was census residue — G1 FAIL, 32 kernels — under the single-name claim).
+#: (a 155-token prefill = 1240 pairs; census grid [2,1,1]x1024 and [5,1,1]x256).  All three compute the same schedule.
 K_ALIGN = "moe_align_block_size_small_batch_expert_kernel"
 K_ALIGN_KERNELS = (K_ALIGN, "moe_align_block_size_kernel", "count_and_sort_expert_tokens_kernel")
 K_FUSED = "fused_moe_kernel"
@@ -167,19 +164,19 @@ class MoEFusedExperts:
     name = "moe.fused_experts.pairwise"
     config: dict[str, Any]
     router_vpt: dict[int, int] = field(default_factory=lambda: dict(ROUTER_VPT_BY_E))
-    #: [R19 qwen3] the router the scope must carry: `renormalize=False` -> `MoeRouterTopK_v1` (OLMoE, `norm_topk_prob=false`);
+    #: the router the scope must carry: `renormalize=False` -> `MoeRouterTopK_v1` (OLMoE, `norm_topk_prob=false`);
     #: `renormalize=True` -> `MoeRouterTopKNorm_v1` (Qwen3-MoE, `norm_topk_prob=true`: the TOPK probabilities rescaled to sum 1, same ids).
     #: A profile states ONE of them (the checkpoint's `norm_topk_prob`, `C["NORM_TOPK_PROB"]`); the other value observed is Unsupported.
     renormalize: bool = False
     #: the router's statement: None = kernel order, "ordered" = `MoeRouterTopKOrdered[Norm]_v1`, the same function (`MoEFusedExpertsOrdered`);
     #: a class attribute, not a field, so the default construction's pattern fields are unchanged
     router = None
-    #: [R19 qwen3, TP] patterns for descendants of the scope that are neither the six MoE kernels nor scope glue -- vLLM's `FusedMoE`
+    #: patterns for descendants of the scope that are neither the six MoE kernels nor scope glue -- vLLM's `FusedMoE`
     #: issues the tensor-parallel all-reduce of the routed sum INSIDE `vllm.moe_forward` when `reduce_results=True`; a rank profile puts
     #: its `TpCollective` here so the collective is resolved (and its Compute appended after `MoeSum`) instead of making the whole scope
     #: `unexplained child vllm.all_reduce`.  Empty for TP1 (nothing else may appear under the scope).
     scope_patterns: tuple = ()
-    #: [R19 qwen3] the fused_moe_kernel tiling this profile pins (κ; default = the module constants).  A profile whose capture shows another
+    #: the fused_moe_kernel tiling this profile pins (κ; default = the module constants).  A profile whose capture shows another
     #: tiling pins it HERE (from the rank log), never by loosening the check: an unpinned tiling is Unsupported with the observed values.
     fused_pins: dict[str, Any] = field(default_factory=lambda: dict(FUSED_MOE_PINS))
     fused_num_warps: int = FUSED_MOE_NUM_WARPS
@@ -205,7 +202,7 @@ class MoEFusedExperts:
         ins = node.input_views()
         sx = bound_args(node).get("shared_experts_input")
         if sx is not None:
-            # [R19 qwen3] a shared-experts branch (Qwen2-MoE / DeepSeek-style) is not the block these Definitions state: refuse by name
+            # a shared-experts branch (Qwen2-MoE / DeepSeek-style) is not the block these Definitions state: refuse by name
             return unsupported(node, "MoE scope has a shared_experts_input: shared experts are not modelled", shared_experts_input=repr(sx))
         hidden = next((v for v in ins if v.rank == 2 and v.shape[1] == H), None)
         if hidden is None:
@@ -231,7 +228,7 @@ class MoEFusedExperts:
                 return r
         keep = {router.id, up.id, down.id, silu.id, msum.id} | {a.id for a in aligns} | {g.id for g in gates} | {o.id for o in own}
         keep |= set().union(*(set(n.ids()) for n in (router, up, down, silu, msum, *aligns, *gates, *own)))
-        # [R19 qwen3, TP] descendants the scope patterns own (the in-scope all-reduce of a rank): resolved here, kept out of the glue walk
+        # descendants the scope patterns own (the in-scope all-reduce of a rank): resolved here, kept out of the glue walk
         extra: list[Compute] = []
         if self.scope_patterns:
             for d in find_descendants(node, lambda n: n.id not in keep and not n.is_triton):
@@ -462,7 +459,7 @@ class MoEFusedExpertsPadded(MoEFusedExperts):
         if (dot := T.moe_expert_dot(target_of(ctx)[0])) is not None:
             return unsupported(node, f"padded construction on a target whose fused_moe_kernel runs the k16 step {dot.id}: MoeFfnFixedL_v1's "
                                "expert bodies run the Ampere one", dot=dot.id)
-        from verity.ml.definitions.registry import moe_pad as MP  # noqa: PLC0415  (the padded Definitions register on first use, as vocab.py's kind does)
+        from verity.ml.definitions.registry import moe_pad as MP  # the padded Definitions register on first use, as vocab.py's kind does
         if self.renormalize:
             return unsupported(node, "padded construction with renormalize=True: MoeFfnFixedL_v1 states the MoeRouterTopK_v1 (unnormalised) router only",
                                renormalize=True)
@@ -564,7 +561,7 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
     `use_fp8_w8a8` with `group_n == group_k == G`, A_scale `[rows, K/G]` and B_scale `[E, cdiv(N, G), K/G]` row-major, the tiling pins as
     above, and `BLOCK_SIZE_K` dividing G.  At block 128 vLLM fuses the SiLU with the second quant (`silu_and_mul_per_block_quant`,
     `triton_moe.py:474-485`), which this scope refuses by its shape.  DOT is the launch tile's e4m3 step
-    (`targets.moe_expert_fp8_launch_dot`; #1944's `fp8_moe.sm90_dot` on tuned cc 9.0 launches); a target or tile with no registered
+    (`targets.moe_expert_fp8_launch_dot`; `fp8_moe.sm90_dot` on tuned cc 9.0 launches); a target or tile with no registered
     step refuses by name.  The record must attest `TritonExperts` (`header_moe_experts_class`): vLLM's FP8 MoE oracle may
     select another experts class, whose arithmetic these Definitions do not state."""
 
@@ -653,7 +650,7 @@ class MoEFusedExpertsFp8(MoEFusedExperts):
 
     def _fp8_parts(self, node: TreeNode, ctx: StepContext, r: Group) -> Group | Unsupported:
         """`r` with each expert GEMM replaced by its activation quant, then its block-FP8 pair form."""
-        from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant  # noqa: PLC0415  (registry.fp8 loads with an FP8 scope only)
+        from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant  # registry.fp8 loads with an FP8 scope only
         C, G = self.config, self.group
         E, TOPK, H, I = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"]
         up, down = find_descendants(node, lambda n: n.is_triton and triton_name(n) == K_FUSED)

@@ -1,8 +1,8 @@
 """Serve a workload on the mock datacenter and check it: each block's server in its network namespace, behind the network
 certifier's proxy on its uplink, and the client on the outside host, with the lab's Program (`lab.Lab`) on every link;
-then the certifier's audit, N3 (`lab.check`), N2's served verdict on each link-window and the answers.
+then the certifier's audit, N2's served verdict on each link-window and the answers.
 
-    python -m workload.lab_run run --out DIR [--layers 4] [--tamper b1:flip-bit --expect refused] [--local]
+    python -m workload.lab_run run --out DIR [--layers 4] [--tamper b2:late --expect refused] [--local]
 
 Run it from `benchmarks/network_sim/`, or with it on `PYTHONPATH`, in a Python with torch. The workload is placed on the
 lab's declaration as `mockdc.lab` builds it, at the certifiers' cadence (`hardware`): its blocks are the units, their
@@ -44,27 +44,22 @@ modeled under (`calibrate_run`).
 
 **Checks.** The certifier's audit (`active_replay.audit_configuration` with `audit.Audit`) on each block's raw and committed
 records, in its live mode, whose Program is the block's event log anchored at each request's release as the ingress
-records show it: the timing. N3 over the same raw records (`lab.check`): the content. N3Window_v5 with the canonical
-framing's templates (`n3_canonical.verdicts` on `n3_unit.lab_windows`) on each of them: the content as the proof block
-checks it, every frame its direction's template on the committed outboxes. N2's served verdict on each block's link
-(`n2_verdicts`): each link-window's published records, their heads signed by a stand-in certifier (the lab's proxy
-signs nothing), through the proof service's stream on live coins and N2's verifier of record, so the counts only. And
-the answers against the Program evaluated in one process.
+records show it: the timing. N2's served verdict on each block's link (`n2_verdicts`): each link-window's published
+records, their heads signed by a stand-in certifier (the lab's proxy signs nothing), through the proof service's stream
+on live coins and N2's verifier of record, so the counts only. And the answers against the Program evaluated in one
+process.
 
-**Tampering** (`--tamper BLOCK:MODE`): `flip-bit` flips the first bit of the block's first outbound message, which N3
-refuses while the certifier, whose timing is honest, and N2, which reads counts only, accept; `late` holds the block's
-first response past every δ of Σ_sync, which the certifier refuses (`coverage-never-established`) and N2 refuses on
-its window; `extra` writes one more empty event after the block's last response, which N3 refuses (`unexplained`) and
-N2 refuses on its window, since its egress counts aren't the ones its ingress counts derive. A block can't write into
-a frame's fill: the proxy frames its events.
+**Tampering** (`--tamper BLOCK:MODE`): `late` holds the block's first response past every δ of Σ_sync, which the
+certifier refuses (`coverage-never-established`) and N2 refuses on its window; `extra` writes one more empty event after
+the block's last response, which N2 refuses on its window, since its egress counts aren't the ones its ingress counts
+derive. A block can't write into a frame's fill: the proxy frames its events.
 
 **Outputs** in `--out`: `report.json` (the calibration); per block `BLOCK/`, with `plan.json`, the proxy's records and log,
 the block's `server.json`, `server.events.gz` and `result.json`, the client's `peer.json` and the certifier's `audit.json`;
-`outside.json`, `public.json`, `witness.json`, `n3.json`, `n3_v5.json` (v5's verdict on each window), `n2.json` (N2's
-served verdict on each block's link) and `summary.json`: per block the certifier's verdicts and timing, N3's verdict,
-v5's and N2's, and the answers against the reference. The exit status is 0 when every process exited cleanly and the
-run is what `--expect` says: `accepted` (every block's certifier audit accepts, N3 holds, v5 and N2 accept every window
-and the answers are the reference's) or `refused` (the tampered block's certifier audit, N3, v5 or N2 refuses).
+`outside.json`, `n2.json` (N2's served verdict on each block's link) and `summary.json`: per block the certifier's
+verdicts and timing and N2's, and the answers against the reference. The exit status is 0 when every process exited
+cleanly and the run is what `--expect` says: `accepted` (every block's certifier audit accepts, N2 accepts every window
+and the answers are the reference's) or `refused` (the tampered block's certifier audit or N2 refuses).
 """
 from __future__ import annotations
 
@@ -92,6 +87,7 @@ import graph
 import records
 from datacenter import Cadence
 from verity.core.protocols.certifier import calibration
+from verity.core.protocols.certifier import certificate as CT
 from verity.core.protocols.certifier.active import CANONICAL_STREAM, DATA, PAD, decode_frame, event_data, \
     request_frames
 from verity.core.protocols.certifier.active import event as canonical_event
@@ -100,21 +96,20 @@ from verity.core.protocols.certifier.certificate import Direction, parameters_di
 from verity.core.protocols.certifier.schedule import ClockSync
 from verity.core.protocols.certifier.served import Admission, ServedProfile, derive
 from verity.core.protocols.certifier.service import LEAVES, LinkWindows
+from verity.ml.commitments import hm96
+from verity.ml.crypto import lms
 
 from . import framing as F
 from . import lab as L
 from . import model as M
-from . import n3_canonical as C
-from . import n3_unit as U
 from . import values as V
 from .block import Context
 from .hardware import OUTSIDE, Hardware
-from .run import statement
 
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
 FABRIC_MS = 10  # the model's delay between a proxy and the client, each way
 PATHS = [*mockdc.PATHS, str(mockdc.ROOT / "integrations" / "vllm")]
-TAMPERS = ("flip-bit", "late", "extra")
+TAMPERS = ("late", "extra")
 
 
 # The plan: the Program timed, the run modeled, the certifier calibrated on the model.
@@ -317,13 +312,9 @@ class Server:
             await asyncio.to_thread(self.ctx.model.evaluate, self.values, s.gates)
             self.log["compute_ms"].append(round((time.monotonic() - t0) * 1000, 3))
             payloads = {m.stream: F.encode(m, self.values) for m in s.outbound}
-            if self.tamper in ("flip-bit", "late") and s.outbound and not tampered:
+            if self.tamper == "late" and s.outbound and not tampered:
                 tampered = True
-                if self.tamper == "flip-bit":
-                    first = payloads[s.outbound[0].stream]
-                    payloads[s.outbound[0].stream] = bytes([first[0] ^ 1]) + first[1:]
-                else:
-                    await asyncio.sleep(max(0.0, origin + received + self.hold * self.tau - time.monotonic()))
+                await asyncio.sleep(max(0.0, origin + received + self.hold * self.tau - time.monotonic()))
             positions = self.lab.positions(self.block, s.index)
             events = [self.lab.event(self.block, p, self.lab.payload(self.block, p, payloads)) for p in positions]
             if self.tamper == "extra" and s is self.sessions[-1]:
@@ -615,22 +606,38 @@ def launch(args, dc, out: Path, config: dict, lab: L.Lab, report: dict, setup: a
     return codes
 
 
+def _seeded(seed: bytes, n: int) -> bytes:
+    return hashlib.shake_256(seed).digest(n)
+
+
 def n2_verdicts(lab: L.Lab, setup: ar.Setup, plans: dict[str, dict], published: dict[str, list], run: str) -> dict:
     """N2's served verdict on each block's link (`service.LinkWindows` with the served profile of the block's (F, F_in)
     and the run's windows): each window's two records as the proxy published them, their heads signed under the block's
-    name by a stand-in certifier (`n3_unit.Certifier`: the lab's proxy signs nothing), committed, registered, drawn and
-    delivered on the challenger's live coins, and checked by N2's verifier of record under the window's declared sync;
-    then the link's network verdict, the AND over its windows. A window without both records ends the registrations,
-    so it and every later window are refused. `served_counts` is the served counts' check alone on each window
-    registered. The verdicts are computed after the run, on the host, with no proof to time: the stream's clock is held
-    at 0, so no outcome is late."""
+    name by a stand-in certifier (an LMS key of the deployed N = 64, W = 1 drawn from a seed, in a zero session: the
+    lab's proxy signs nothing), committed, registered, drawn and delivered on the challenger's live coins, and checked by
+    N2's verifier of record under the window's declared sync; then the link's network verdict, the AND over its windows.
+    A window without both records ends the registrations, so it and every later window are refused. `served_counts` is
+    the served counts' check alone on each window registered. The verdicts are computed after the run, on the host, with
+    no proof to time: the stream's clock is held at 0, so no outcome is late."""
     windows = plans[lab.blocks[0]]["windows"]
-    signer = U.Certifier.toy(2 * windows * len(lab.blocks), b"lab-n2")
+    H = max(4, (2 * windows * len(lab.blocks) - 1).bit_length())
+    key = lms.keygen(lms.Params(64, 1, H), hashlib.sha512(b"lab-n2/lms").digest())
+    public, session, signed = CT.LmsKey(key.params, lms.public_key(key)), bytes(lms.SESSION_BYTES), [0]
+
+    def certify(head: CT.RecordHead) -> CT.CertifiedRecord:
+        n, signed[0] = signed[0], signed[0] + 1
+        salt = _seeded(b"lab-n2/salt_c/" + n.to_bytes(8, "big"), CT.SALT_BYTES)
+        digest = CT.certificate_digest(salt, head.digest())
+        message = CT.certificate_message(public.key_id, session, head.link, head.direction, head.window, digest)
+        signature = lms.sign_at(key, n, message).encode()
+        return CT.CertifiedRecord(head, salt, CT.Certificate(public.key_id, head.link, head.direction, head.window,
+                                                             digest, signature))
+
     ends = ((L.EGRESS, Direction.EGRESS, setup.egress_params, parameters_digest(setup.egress_params, setup.sync_set)),
             (L.INGRESS, Direction.INGRESS, setup.ingress_params, parameters_digest(setup.ingress_params)))
     out = {}
     for b in lab.blocks:
-        lw = LinkWindows(b, setup.egress_params, setup.sync_set, signer.public, run, signer.session,
+        lw = LinkWindows(b, setup.egress_params, setup.sync_set, public, run, session,
                          ingress=setup.ingress_params, served=ServedProfile(*lab.fixlen[b], windows),
                          proof_deadline=WINDOW_BUCKETS * BUCKET_MS / 1000)
         stream = lw.stream(budget=windows, delta=2.0 ** -40, challenger=f"{run}/{b}", clock=lambda: 0.0)
@@ -642,7 +649,9 @@ def n2_verdicts(lab: L.Lab, setup: ar.Setup, plans: dict[str, dict], published: 
                 break
             heads = [record_head(b, d, w, records[link, w].grid, records[link, w].status, g, digest)
                      for link, d, g, digest in ends]
-            opening = lw.commit(w, *map(signer.certify, heads), U._salts(f"lab-n2/{b}/{w}".encode(), LEAVES))
+            salts = [_seeded(f"lab-n2/{b}/{w}".encode() + i.to_bytes(8, "big"), hm96.SHA512.salt_bytes)
+                     for i in range(LEAVES)]
+            opening = lw.commit(w, *map(certify, heads), salts)
             reg = lw.register(stream, lw.registration(opening, previous))
             previous, draw = reg.digest, stream.select(reg)
             stream.deliver(draw, [lw.session(opening, draw)])
@@ -702,28 +711,14 @@ def run(args) -> int:
                      "comparisons": {k: c[k] for k in ("records_are_run_shapers", "hands_are_the_rules",
                                                        "frames_log_is_the_programs", "wire_is_the_records",
                                                        "released_not_the_programs", "releases_off_model")}}
-    results = {u: json.loads(p.read_text()) if p.exists() else {"values": None, "answers": None}
-               for u, p in [*((b, out / b / "result.json") for b in lab.blocks), (OUTSIDE, out / "outside.json")]}
-    public, witness = statement(ctx, results)
-    n3 = L.check(public, witness, published)
-    for key, obj in (("public", public), ("witness", witness), ("n3", n3.to_json())):
-        (out / f"{key}.json").write_text(json.dumps(obj, indent=1))
-    v5_setup, v5_windows = U.lab_windows(public, witness, published, grids=(setup.egress_params, setup.ingress_params),
-                                         sync_set=setup.sync_set)
-    v5 = C.verdicts(v5_setup, v5_windows)
-    (out / "n3_v5.json").write_text(json.dumps(v5, indent=1))
+    outside = out / "outside.json"
+    answers = json.loads(outside.read_text())["answers"] if outside.exists() else None
     n2 = n2_verdicts(lab, setup, plans, published, name)
     (out / "n2.json").write_text(json.dumps(n2, indent=1))
     for b in lab.blocks:
-        mine = [v for v in n3.violations if v.where.split(":")[0] in (b, "")]
-        blocks[b]["n3"] = {"accepted": not mine, "violations": [f"{v.code} {v.where}: {v.detail}" for v in mine]}
-        blocks[b]["n3_v5"] = C.summary([r for r in v5 if r["port"].split(":")[0] == b])
         blocks[b]["n2"] = n2[b]
-    answers = results[OUTSIDE]["answers"]
-    accepted = all(x["certifier"]["accepted"] and x["n3"]["accepted"] and not x["n3_v5"]["refused"]
-                   and x["n2"]["accepted"] for x in blocks.values()) and answers == reference
-    summary = {"workload": args.workload, "spec": config["spec"], "blocks": blocks, "n3": n3.to_json() | {"violations": None},
-               "answers": answers, "reference": reference, "answers_equal": answers == reference, "accepted": accepted,
+    accepted = all(x["certifier"]["accepted"] and x["n2"]["accepted"] for x in blocks.values()) and answers == reference
+    summary = {"workload": args.workload, "spec": config["spec"], "blocks": blocks, "answers": answers, "reference": reference, "answers_equal": answers == reference, "accepted": accepted,
                "delta_buckets": D, "session_compute_ms": {k: round(v * 1000, 3) for k, v in compute.items()},
                "windows": plans[lab.blocks[0]]["windows"], "exit": codes, "local": args.local,
                "grid": {"bucket_ms": BUCKET_MS, "window_buckets": WINDOW_BUCKETS, "frame_bytes": FRAME_BYTES,
@@ -737,25 +732,18 @@ def run(args) -> int:
         late = x["tick_late_ms_max"]
         print(f"{b}{' (' + x['tamper'] + ')' if x['tamper'] else ''} certifier audit "
               f"{'ACCEPTED' if x['certifier']['accepted'] else 'REFUSED (' + ', '.join(failed) + ')'}; "
-              f"N3 {'holds' if x['n3']['accepted'] else 'REFUSED (' + '; '.join(x['n3']['violations'][:3]) + ')'}; "
-              f"N3 v5 {'REFUSED (' + ', '.join(x['n3_v5']['refused']) + ')' if x['n3_v5']['refused'] else 'ACCEPTED'} "
-              f"on {x['n3_v5']['accepted']} of {x['n3_v5']['windows']} windows; "
               f"N2 served {'ACCEPTED' if x['n2']['accepted'] else 'REFUSED (windows ' + str(x['n2']['refused']) + ')'} "
               f"on {x['n2']['windows']} windows at F = {x['n2']['profile'][0]}, F_in = {x['n2']['profile'][1]}; "
               f"latest tick {max((v for v in late.values() if v is not None), default=0):.1f} ms late against "
               f"{x['slack_ms']:.0f} ms of slack, "
               f"{sum(x['ticks_over_slack'].values())} over")
-    s = n3.stats
-    print(f"N3 {'holds' if n3.ok else 'fails'}: {s['frames']} frames recorded, {s['explained']} of {s['events']} events "
-          f"and {s['requests']} of {s['sessions']} requests explained, against {s['values']} opened values")
     print(f"answers {answers} {'equal' if answers == reference else 'differ from'} the reference {reference}")
     clean = not any(codes.values())
     if not clean:
         print(f"a process failed: {codes}", file=sys.stderr)
     if args.expect == "refused":
         t = blocks[tamper[0]] if tamper is not None else None
-        hit = t is not None and not (t["certifier"]["accepted"] and t["n3"]["accepted"] and not t["n3_v5"]["refused"]
-                                     and t["n2"]["accepted"])
+        hit = t is not None and not (t["certifier"]["accepted"] and t["n2"]["accepted"])
         print(f"run {'REFUSED' if not accepted else 'ACCEPTED'}; the tampered block {'is' if hit else 'is not'} refused")
         return 0 if clean and hit else 1
     print(f"run {'ACCEPTED' if accepted else 'REFUSED'}")

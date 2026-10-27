@@ -173,7 +173,7 @@ $\Pr[\text{accept} \wedge \mathrm{work}(B \cup \mathrm{unsound}(B)) \ge T] \le (
 $B = \mathrm{wrong}(X)$; `audit_work_closure_harm`: likewise for a faulty proof block's harm; `audit_work_closure_of_record`:
 $2^{-40}$ at $K = 27{,}713$ for unsound work of at least 0.1%.
 
-**Theorems, windows of calls** (`Audit/Window.lean`; X-SPC-105, X-SPC-106): a window is one stratified sampling design
+**Theorems, windows of calls** (`Audit/Window.lean`): a window is one stratified sampling design
 over its (call, template) strata, the calls drawn independently. `Covers σ k w K`: every stratum draws at least its
 share $K w_s n_s / W$, or all its units. `stratified_escape_le_of_covers`: then
 $\mathrm{escape}(B) \le ((W - W_B)/W)^K$, for any such sampling design. `covers_work`: the work sampling design covers
@@ -190,7 +190,7 @@ such as an executable draw; `audit_window_of_le_slack` and, at the compiled laye
 keyed draw needs, and `audit_window_split_of_record_of_le_slack`, its record form, $2^{-40} + \eta$ plus the per-unit
 terms, with `extraction_audit_window_split_of_record_of_le_slack` at the compiled layer. `audit_window_of_record`:
 $2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_window_split_of_record`: the same for the per-call
-split with y's floors, the sampling design #364 runs. The product design assumes each call's draw is under a distinct
+split with y's floors, the sampling design the PoUW window runs (`PlanDraw.lean`). The product design assumes each call's draw is under a distinct
 context.
 
 **Theorems, two-stage** (`Audit/TwoStage.lean`):
@@ -256,7 +256,7 @@ fine unit per gate, with a uniform `k₂`-subset of each drawn chain's gates in 
   $q = \binom{n_v - 1}{k_2}/\binom{n_v}{k_2} = 1 - k_2/n_v$;
 - `naive_two_level_unsound`: if the second stage leaves a gate undrawn and the first draws anything, that exceeds
   $\mathrm{miss}_{L_1}(K)$, the bound that one-stage over the coarse partition (and the `m`-dependent reading of
-  the retired Python `TwoStageLaw.profile`, ASK-25, at $m = n_v$) would give. Nested sampling dilutes;
+  the retired Python `TwoStageLaw.profile`, at $m = n_v$) would give. Nested sampling dilutes;
 - `late_interior_insecure`: with the interior committed after the fine draw (`twoStageLate`), a faulty chain is accepted
   with probability 1.
 
@@ -304,7 +304,7 @@ The hypotheses are the lowerings.
 
 **The audit's circuit `C`** is abstract in these theorems. For a program it is the rows the verifier parses
 (`Prog.circuit`, `Lowering.lean`, `../README.md` §1.5): each unit an instance of its template's `Rows`, one `Op.row` gate per
-computed row. No hypothesis relates those rows to another circuit (Daniel, Sep 30: the circuit is chosen on the untrusted side,
+computed row. No hypothesis relates those rows to another circuit (the circuit is chosen on the untrusted side,
 and the lowering does no optimizing); what a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`,
 `../Certificate.lean`; `../ASSUMPTIONS.md`). The decoder is **per drawn unit**: two drawn units that share a wire hold it in their own columns, and only
 the link makes the readings agree.

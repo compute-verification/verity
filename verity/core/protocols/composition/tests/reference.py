@@ -1,5 +1,5 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
-vendored from #1036's trial, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
+of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
 `Core.Protocol.case` and `answer` decode a case), and each component's own Python: PoUW's `core_check.case`
 (`verity/pouw/v1`), the network certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python
 mirror over the certifier's certificates and one-stage's answers,
@@ -11,22 +11,19 @@ proofs themselves (`verity/sampled-proofs/one-stage/v2`) `one_stage_zk`: v2's fr
 (`verity/remote-bandwidth/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each component's own difftest holds its Lean to that Python; this one holds the composition of them.
 
-The rule is the trial's onsite and remote over their components' statements, from danielreuter/verity#1036, branch
-`cursor/protocol-interfaces-c3b2` at 46820ebcb, which no branch this one builds on carries:
+The trial's rule, onsite's and remote's over their components' statements:
 
-* `trial/verity/protocols/onsite.py` and `remote.py`: a product's fields are its components, and its verifier is the list
-  of their verifiers' actors;
-* `trial/verity/run.py`: an actor that raises records `Raised`, and what it would have established is missing: "whatever
-  reads it waits for it forever: a missing statement fails closed";
-* `trial/verity/primitives/events.py` `gather`, which `Reconcile.verifier` (`accounting/reconcile.py`) uses to wait for
-  each resource's statement and `Nci.verifier` (`compliance/nci.py`) for the stream and the balance: a statement with
-  reasons explains nothing, and the epoch complies only with no reasons.
+* a product's fields are its components, and its verifier is the list of their verifiers' actors;
+* an actor that raises records `Raised`, and what it would have established is missing: whatever reads it waits for it
+  forever, so a missing statement fails closed;
+* the product waits for each component's statement (`gather`): a statement with reasons explains nothing, and the epoch
+  complies only with no reasons.
 
 Reduced to answers: a component that accepts records a statement with no reasons, one that rejects a statement with
 reasons, and one that is undecided no statement yet. `trial_verdict` is that reduction, with one change already made:
 every component's reasons fail the product. Of the components' statements the trial's NCI fails the epoch on work's
 reasons alone (integrity's reach it through them), and space's or communication's reasons only zero their explained usage
-in the balance. The port follows top's rule (Oct 7, binding), `verdict`, which changes the reduction in one place more:
+in the balance. The port follows the composition's rule, `verdict`, which changes the reduction in one place more:
 
 * **reject dominates**: in the trial a missing statement leaves the product with no verdict even when another component's
   statement has failed (`gather` waits on), so a prover could hide a rejection by leaving another component undecided;
@@ -91,10 +88,19 @@ def trial_verdict(verdicts: list[str]) -> str:
 
 
 def verdict(verdicts: list[str]) -> str:
-    """Top's rule, which the port follows: any rejection rejects, then any undecided component leaves it undecided."""
+    """The composition's rule, which the port follows: any rejection rejects, then any undecided component leaves it undecided."""
     if REJECT in verdicts:
         return REJECT
     return UNDECIDED if UNDECIDED in verdicts else ACCEPT
+
+
+def fitted_verdicts(answers: Callable[[], Any]) -> list[str]:
+    """The components' verdicts in ``answers()``, else none when the case doesn't fit the composition."""
+    try:
+        out = answers()
+    except (Reject, KeyError, TypeError):
+        return []
+    return [] if isinstance(out, str) else [a["verdict"] for _, a in out]
 
 
 @dataclass(frozen=True)
@@ -323,12 +329,10 @@ class Product:
 
     def verdicts(self, case: Any) -> list[str]:
         """The components' verdicts on a case that fits the composition, else none."""
-        try:
-            case, blobs = self.split(case)
-            answers = self.run(self.params(case["params"]), self.evidence(P.unhex(case["evidence"])), blobs)
-        except (Reject, KeyError, TypeError):
-            return []
-        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+        def answers():
+            c, blobs = self.split(case)
+            return self.run(self.params(c["params"]), self.evidence(P.unhex(c["evidence"])), blobs)
+        return fitted_verdicts(answers)
 
 
 @dataclass(frozen=True)
@@ -398,14 +402,12 @@ class Registered:
 
     def verdicts(self, case: Any) -> list[str]:
         """The components' verdicts on a case whose components fit the composition, else none."""
-        try:
-            case, blobs = Product.split(case)
-            _, ps = self.params(case["params"])
-            _, ev = self.evidence(P.unhex(case["evidence"]))
-            answers = self.product.run(ps, ev, blobs)
-        except (Reject, KeyError, TypeError):
-            return []
-        return [] if isinstance(answers, str) else [a["verdict"] for _, a in answers]
+        def answers():
+            c, blobs = Product.split(case)
+            _, ps = self.params(c["params"])
+            _, ev = self.evidence(P.unhex(c["evidence"]))
+            return self.product.run(ps, ev, blobs)
+        return fitted_verdicts(answers)
 
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids, onsite's after its

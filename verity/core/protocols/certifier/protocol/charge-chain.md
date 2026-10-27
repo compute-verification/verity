@@ -54,7 +54,7 @@ a code position.
   it. The carried decisions at the front of window row 1's `dec` were charged by the window that loaded them.
   `code_v1` codes the decisions in session order, the order the loads append them, and a slot with en 0 changes
   nothing (the tests check this on the fixture's 41 windows at D = 32). So the load's charge is `code_v1`'s. A per-ask
-  charge, the compile slice's before #3886, is the same only when no decision carries: it codes a carried decision in
+  charge, the compile slice's earlier one, is the same only when no decision carries: it codes a carried decision in
   the window that reads it.
 - **The carry, in order:** `n0[3]` and `n1[3]` (15 bits each, `code_v1.KT`'s counts, both halved once
   2·(n0 + n1) + 2 would pass 2^16), `run` (2 bits, min(run, 2)), then 4 zero bits: 96. `run` is `code_v1`'s context,
@@ -69,8 +69,8 @@ a code position.
 - **The end check** is in the same unit: its ok (each model's and the count's, the finish's, and carry' = row 1)
   joins ``code``, and bits ≤ c_w is ``charge``. `ReplayClose` checks no charge.
 - **The reference** is `charge_chain.reference_link` (`arith_encode.reference_charge` with carry' = row 1), and the
-  circuit is `build_link`. ENC-REPLAY's 228 carried bits (coder 68, KT counts 3 × 24 each for n0 and n1, `pc` 2,
-  position 14) become 0 bits in the state row, and #3801's rows don't change.
+  circuit is `build_link`. The replay's 228 carried bits (coder 68, KT counts 3 × 24 each for n0 and n1, `pc` 2,
+  position 14) become 0 bits in the state row, and the chain's rows don't change.
 
 **Cost.** `ChargeCount_v1{N}` and 96 ANDs (the carry-out's equality and the ok): 19,632 at N = 2, 50,760 at N = 14
 (pinned), 97,159 at the class's D = 32, and 1,256,873 per ask at its P·A = 486. In a lowering, `ChargeCount_v1` adds copies of the words it carries from one
@@ -194,7 +194,7 @@ coder's first state (`sum_owt_codeAll_le`), a weight being an interval's width o
 difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 random instances (`lean/scripts/window_vectors.py`).
 
-**The slice.** The compile slice's class runs inside the pool bound with the warden's ingress, so its windows send no
+**The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its windows send no
 hits and no order entries. It keeps `ChargeLink_v1{D}` over `replay-charge` as above, and nothing in its wiring changes.
 A class whose windows send hits or order entries does the following:
 - It calls `window_charge.build_link(C, N, H, O, book, row_in, row_out, en, bits, hen, short, oen, p, r)` over
@@ -209,7 +209,8 @@ A class whose windows send hits or order entries does the following:
 - Its H and O are fixed per class, like D. A window that sends more hits or entries than its slots can't be charged,
   so that window's unit fails.
 
-**Cost** (`size`, ANDs; pinned in `window_charge.circuit-check.json`):
+**Cost** (`size`, ANDs). `window_charge.circuit-check.json` pins C-Flock's lowering, which adds one row for each commit
+copy of the carry: 53,734 at `{1, 1, 1}` and 40,280 at `{2, 2, 0}`.
 
 | unit | ANDs |
 |---|---|

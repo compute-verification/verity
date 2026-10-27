@@ -1,8 +1,8 @@
-// P2 v1's per-block keys on the GPU: K = SHAKE256(prefix || u64be(segment) || u64be(block) || "K")[0:W/8] and t from the same
-// with "t" (its first candidate), one thread per block, both written as big-endian rows like `gpu.Kernels.keys`.
+// P2 v1's per-label keys on the GPU: K = SHAKE256(prefix || u64be(segment) || u64be(label) || "K")[0:W/8] and t from the same
+// with "t" (its first candidate), one thread per label, both written as big-endian rows like `gpu.Kernels.keys`.
 //
-// Every block's message shares the prefix, so the host absorbs the prefix's whole rate blocks once (the midstate) and bakes the
-// rest of it, each purpose byte and the padding into the last block's words; a thread xors in its segment and block, then
+// Every label's message shares the prefix, so the host absorbs the prefix's whole rate blocks once (the midstate) and bakes the
+// rest of it, each purpose byte and the padding into the last block's words; a thread xors in its segment and label, then
 // permutes once to absorb and again for each further rate block of the W/8 bytes it squeezes (16 permutations at 2,056 bytes). Squeezed words go through
 // shared memory so that each warp writes 136-byte runs of its 32 rows.
 #pragma once
@@ -54,14 +54,14 @@ __host__ __device__ __forceinline__ void keccak_f(uint64_t st[25]) {
 }
 
 // The state after the prefix's whole rate blocks; the last block's words per purpose (the prefix's tail, the purpose byte,
-// SHAKE's padding); where segment || block go in it.
+// SHAKE's padding); where segment || label go in it.
 struct Mid {
   uint64_t st[25];
   uint64_t last[2][RW];
   int at;
 };
 
-// Mid for this prefix, or false when its tail and the 17 bytes per block don't fit one rate block.
+// Mid for this prefix, or false when its tail and the 17 bytes per label don't fit one rate block.
 inline bool midstate(const uint8_t *prefix, int plen, Mid &m) {
   const int full = plen / RATE, tail = plen % RATE;
   if (tail + 17 + 1 > RATE) return false;
@@ -98,7 +98,7 @@ constexpr int WARPS = 4;
 constexpr int OUT_WORDS = P2_BITS / 64;   // W/8 bytes
 static_assert(P2_BITS % 64 == 0, "rows of whole 64-bit words");
 
-// rows k and t (each W/64 64-bit words, the SHAKE output bytes in order) of blocks idx0 + r, r < rows <= 32, lane r
+// rows k and t (each W/64 64-bit words, the SHAKE output bytes in order) of labels idx0 + r, r < rows <= 32, lane r
 // expanding row r; st_ is the warp's 32 * RW words of staging
 __device__ __forceinline__ void keys_rows(const Mid &mid, uint64_t idx0, uint32_t rows, uint64_t per_segment,
                                           uint64_t *__restrict__ kout, uint64_t *__restrict__ tout, uint64_t *st_,
@@ -111,7 +111,7 @@ __device__ __forceinline__ void keys_rows(const Mid &mid, uint64_t idx0, uint32_
     uint64_t x = 0;
 #pragma unroll
     for (int i = 0; i < 8; i++) {
-      const int o = 8 * w + i - mid.at;   // byte o of u64be(seg) || u64be(block)
+      const int o = 8 * w + i - mid.at;   // byte o of u64be(seg) || u64be(label)
       if (o >= 0 && o < 16) x |= ((o < 8 ? seg >> (56 - 8 * o) : blkno >> (56 - 8 * (o - 8))) & 0xFF) << (8 * i);
     }
     sb[w] = x;
@@ -138,7 +138,7 @@ __device__ __forceinline__ void keys_rows(const Mid &mid, uint64_t idx0, uint32_
   }
 }
 
-// rows k and t (each [count, W/64]) for blocks first .. first + count - 1, 32 rows a warp, the grid striding over them
+// rows k and t (each [count, W/64]) for labels first .. first + count - 1, 32 rows a warp, the grid striding over them
 __global__ void __launch_bounds__(32 * WARPS, P2K_MINB) keys_kernel(const __grid_constant__ Mid mid, uint64_t first, uint32_t count,
                                                           uint64_t per_segment, uint64_t *__restrict__ kout,
                                                           uint64_t *__restrict__ tout) {

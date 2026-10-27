@@ -152,9 +152,9 @@ private theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
 /-! ## The public header's draw -/
 
 set_option maxHeartbeats 4000000 in
-/-- The public file's header is a parsed object. -/
+/-- The public file's header is a rebuilt object (`Flock.norm` of what `Json.parse` read). -/
 private theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
-    (h : HmRow.loadPublic tags c f = .ok pop) : (∃ t, Json.parse t = .ok pop.header) ∧ ∃ m, pop.header = .obj m := by
+    (h : HmRow.loadPublic tags c f = .ok pop) : (∃ j, pop.header = Flock.norm j) ∧ ∃ m, pop.header = .obj m := by
   unfold HmRow.loadPublic at h
   dsimp only at h
   simp only [throw_bind'] at h
@@ -165,7 +165,7 @@ private theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {p
     have hpj := ‹(pure _ : V Json) = Except.ok _›
     simp only [pure, Except.pure, Except.ok.injEq] at hpj
     subst hpj
-    exact ⟨⟨_, by assumption⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
+    exact ⟨⟨_, rfl⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
 
 set_option maxHeartbeats 4000000 in
 /-- `HmRow.drawn` puts the draw in the population's header. -/
@@ -190,12 +190,12 @@ private theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : S
 
 /-- **The statement's header names its draw**: a draw's statement over a loaded public file has that draw as its
 `unit_draw`. -/
-private theorem unitDraw_of (S : JsonSpec) {tags : Tags} {c : Circuit} {pf : ByteArray} {pop pub : Public} {d : Json}
+private theorem unitDraw_of {tags : Tags} {c : Circuit} {pf : ByteArray} {pop pub : Public} {d : Json}
     (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
     pub.header.getObjVal? "unit_draw" = .ok d := by
-  obtain ⟨⟨t, ht⟩, m, hm⟩ := loadPublic_header hl
-  have hw := S.parse_wf _ _ ht
-  rw [hm] at hw
+  obtain ⟨⟨j, hj⟩, m, hm⟩ := loadPublic_header hl
+  have hw := FlockDeploy.wf_norm j
+  rw [← hj, hm] at hw
   cases hw with
   | obj hwf _ => exact drawn_header hwf hm hd
 
@@ -334,7 +334,7 @@ theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpe
     simp [Readable.Read.coins, hzk, FlockSoundness.Discharge.ZkExec.zkCoins]
   rw [hco] at hhello
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 hdr
-  have hu := unitDraw_of S hl (hd d hdd)
+  have hu := unitDraw_of hl (hd d hdd)
   have hU : spec.unitDraw = some d := by
     rw [hspec]
     simp [Flock.Stmt.spec, hu, Except.toOption]

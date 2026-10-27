@@ -1,4 +1,4 @@
-// The gate's reference for the one-stream z (h1u.cu's kh_one; CA's PouwH1Tile_v3): z = X W-hat^T mod 2^32, X = A + b
+// The gate's reference for the one-stream z (h1u.cu's kh_one; PouwH1Tile_v3): z = X W-hat^T mod 2^32, X = A + b
 // (mod 2^8, the s8 the MMA reads) and W-hat = B + c, which v3's O' - sum_d 128^d D_d + 256 X (wb+ - wb-)^T equals for
 // every int8 B. Computed another way: no peel, no digits, no wrap bits, no MMA. One warp a unit of the selected row
 // blocks, lane r its row r; the noise from full SHA-512 compressions of NOISE_TAG || seed_j || u64be t (not the
@@ -99,8 +99,8 @@ __global__ void __launch_bounds__(32) hz_ref_k(const int8_t* __restrict__ A, con
   atomicAdd(counts + 2, xw);
 }
 
-// zref [rows, N] s32 (written at the selected row blocks only), counts [3] u64 (added to), probe [33] s32 (written when
-// row block 0 is selected); seeds as kh_seeds writes them, 16 words a unit
+// zref [rows, N] s32 (written at the selected row tiles only), counts [3] u64 (added to), probe [33] s32 (written when
+// row tile 0 is selected); seeds as kh_seeds writes them, 16 words a unit
 extern "C" int hz_ref(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
                       const void* rsel, int* zref, void* counts, int* probe, void* stream) {
   if (K % 512 || rows % 32 || N % 32) return 2;

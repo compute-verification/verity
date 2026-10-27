@@ -6,7 +6,7 @@ skips a Lean build whose package isn't there. So a directory move that misses on
 
 Paths resolve against `git ls-files`: a tracked file, or a directory holding one. What a gate names that is never tracked
 (build output, a file a shipped tree is given, a directory of entry files that holds none yet) is in `EXEMPT` with its
-reason, or is gitignored.
+reason, or is gitignored. A suite's inputs may also name a fixture `fixtures/artifacts.json` registers for fetching.
 """
 from __future__ import annotations
 
@@ -27,7 +27,6 @@ EXEMPT = {
     ("tools/verity/check/pyproject.toml", "READY.json"): "the commit record check.py's shipped tree is given (`check.py`), never tracked",
     ("tools/verity/circuit_check/src/circuit_check/known.py", "tools/verity/circuit_check/src/circuit_check/known/pieces"):
         "KNOWN_PIECES' entry files, none while no lowering piece differs from its primitive; git keeps no empty directory",
-    ("tools/research/src/research/mergequeue.py", "verity/check"): "the commit status GitHub's merge queue requires, not a path",
 }
 #: the gate tooling whose module-level path constants are checked: what `check`, `research merge`, the queue and the audit read
 TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/research/src/research/", "tools/verity/circuit_check/src/")
@@ -104,12 +103,22 @@ def _suite_tables() -> dict[str, dict]:
     return out
 
 
+@functools.cache
+def registered() -> frozenset[str]:
+    """The paths `fixtures/artifacts.json` registers. A fetched one is never tracked, and `suites.py` keys a suite whose inputs
+    cover it on its id."""
+    doc = json.loads((ROOT / "fixtures" / "artifacts.json").read_text(encoding="utf-8"))
+    return frozenset(v.rstrip("/") for k, v in doc.items() if k.startswith("art:") and isinstance(v, str))
+
+
 def test_every_suite_input_and_artifact_is_in_this_tree():
     """A suite's inputs key its pass cache: one that isn't there keys nothing, and a test that skips on a missing file then
-    passes with nothing checked. An artifact is a Lake build's output, so its package must be here."""
+    passes with nothing checked. A registered fixture, or a path inside one, keys its id. An artifact is a Lake build's
+    output, so its package must be here."""
     tables = _suite_tables()
     assert "verity/ml/circuits/pyproject.toml" in tables
-    bad = [(f, i) for f, t in tables.items() for i in t.get("inputs", []) if (f, i) not in EXEMPT and not resolves(i)]
+    bad = [(f, i) for f, t in tables.items() for i in t.get("inputs", []) if (f, i) not in EXEMPT and not resolves(i)
+           and not any(i.rstrip("/") == r or i.startswith(r + "/") for r in registered())]
     bad += [(f, a) for f, t in tables.items() for a in t.get("artifacts", [])
             if not (ROOT / a.split("/.lake/")[0] / "lakefile.toml").is_file()]
     assert not bad, f"declared suite inputs or artifacts that aren't in this tree: {bad}"

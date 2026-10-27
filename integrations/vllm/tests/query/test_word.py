@@ -1,5 +1,5 @@
 """`Q_word_v1{X,W,R=no-recompute}` (`verity.ml.definitions.word`): every computation gate certified by exactly one unit, cross-unit reads
-only through committed values (`verity.ml.circuits.partition.validate_unit_cut`), wiring and constants as structure, the widths as the IR's own
+only through committed values (`verity.ml.circuits.partition.validate_unit_cut`), wiring and constants as structure, the widths as the circuit's own
 |out(S)| where no wiring sits between units, the committed interior values of a norm, a Gemm and FA2 attention, failures by name, and
 the rule cache (`word.use_rule_cache`, the manifest CLI's `--unit-rule-cache`): a read rule is the computed one, keyed by the Definition's content, the query, the limits and
 the code, and the manifest is the same with it."""

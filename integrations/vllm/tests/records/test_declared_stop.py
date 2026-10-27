@@ -4,7 +4,7 @@ document as the parsed JSON.
 
 `data/global_program.json` is a real record: GM-01's global Program of the regression row
 `llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager` (`global_match_global_program.json`,
-`tests/regression/fixtures.toml`, sha256 ec2f476bb5cf...), byte for byte.  The G6 runs are GM-01's toy
+`tests/regression/files.toml`, sha256 ec2f476bb5cf...), byte for byte.  The G6 runs are GM-01's toy
 (`tests.check.test_global_match`), with the Program's two blocks rewritten to each writer's shape and to each way G6 reads them.
 """
 from __future__ import annotations

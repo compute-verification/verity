@@ -209,7 +209,7 @@ theorem κ_lt_one {D : Deploy Coin Col T} {x : Msg} (h : ToyNumbers D x) : κ D 
 
 /-- No finder finds a collision of the injective hash `id`. -/
 theorem finder_pr_id (F : Finder) : F.Pr id = 0 := by
-  simp [Finder.Pr, Claims.Pr, Collision]
+  simp [Finder.Pr, Claims.Pr, Collision, Hash.Collision]
 
 theorem prB_id [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Ω : Type} [Fintype Ω] [Nonempty Ω] (V : Verifier Coin)
     (P : Prover Ω) (x : Msg) : PrB id V P x = 0 := by

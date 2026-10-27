@@ -1,6 +1,6 @@
 """What honest inference needs from the circuit for frontier open models, and where their dynamic memory comes from: one
 decode token-step and one prefill token of each model of `frontier_models.json`, at its reference node and workload, in
-nonlinear units by class and by role, with the stacked share f of `share.py`. Nonlinear units are #4622's gate model's
+nonlinear units by class and by role, with the stacked share f of `share.py`. Nonlinear units are the gate model's
 (`Accounting.Gates`): only linear maps with coefficients fixed before the coins are free (a weight times an activation),
 every product of two run-dependent values is a data product, a unit, and every other nonlinear operation a unit as
 property/v1 (`verity.ml.circuits.stacking`) counts it.
@@ -15,7 +15,7 @@ one unit each, from the shapes; a product an fp term already charges, as SwiGLU'
 primitive) is refused by property/v1 (`Xor3x16`, `DsaTopKOrderCheck` unlisted), so its row selection is costed as gathers,
 each selected row's words and its index bits. Each term of a composition is one of them times its instances a token, under a
 role; `compose` builds them, `evaluate` sums them, and `check_anchor` holds the composition of Llama-3.1-8B to the units the
-int8 census measured on its whole Program (art:dc25549e).
+int8 census measured on its whole Program.
 
 The reference profile is exact int8: every linear an `Int8RowQuant` (or the row's shared quantization) and a `ScaledMmS8`, its
 dots the s8 family's (free: a weight times an activation; attention's, two run values, are data products), the LM head an int8
@@ -32,7 +32,7 @@ compute-bound. R_cap is the larger of the two phases' unit rates, and
 
 at E a word in nonlinear units (`E_WORD`), with f again for the decode rate alone, for the softmax's work a key at
 property/v1's floor (`softmax_floor`), for that with every requantization and linear epilogue at one rounding an element too
-(`exact_floor`; no floor removes a data product), and before #4622 (property/v1's units without data products, at
+(`exact_floor`; no floor removes a data product), and before data products (property/v1's units without them, at
 `E_BEFORE`). `sweep` gives f again as the pool's context takes the workload's ``sweep`` values.
 
     python frontier.py --atoms-needed > atoms-needed.json            # the atoms atoms.py counts
@@ -53,12 +53,12 @@ from typing import Any, Iterable, Mapping, Sequence
 
 HERE = Path(__file__).resolve().parent
 CLASSES = ("roundings", "compare_select", "gathers", "folds", "products")
-#: E a word in nonlinear units (#4622's gate model, note:20261026T0110Z-report-s5-lowerbounds), at p1024, k = 3, S = 1,021:
+#: E a word in nonlinear units, at p1024, k = 3, S = 1,021:
 #: conjectured, `SquaringFloor` and `ChainSum` at 2^-40 (k S (2L - 1 + L - d), L = 128); best found, the seam square's 16,544
 #: nonlinear units a squaring times a word's k S squarings
 E_WORD = {"conjectured": 1_145_562, "best found": 16_544 * 3 * 1021}
-#: the conjectured E in property/v1's budgeted units before #4622 (`EncodeChainHardness`, since falsified), for the "before"
-#: column: f as this census had it, without data products
+#: the conjectured E in property/v1's budgeted units (`EncodeChainHardness`, since falsified), for the "before" column:
+#: f as this census had it, without data products
 E_BEFORE = {"conjectured": 364_497}
 LIFETIMES = {"10 min": 600, "1 h": 3600}
 R_IN = 100_000
@@ -100,7 +100,7 @@ MODELED: dict[str, dict[str, int]] = {
 #: a modeled MoE dispatch reads one expert index a slot: ceil(log2(E + 1)) gather bits (property/v1's ``range`` kind), when the
 #: registry's `MoeExpertRow_v1` isn't counted
 FP, CS, GA = "model:fp", "model:cs", "model:gather"
-#: a data product: a lane whose two multiplicands both depend on run data, one nonlinear unit (#4622's ``dataProducts``),
+#: a data product: a lane whose two multiplicands both depend on run data, one nonlinear unit (``dataProducts``),
 #: counted from the shapes (the attention row's 2 S D a head is `products_pass.py`'s measured 16,384 at D = 128, S = 64)
 PRODUCT = "model:product"
 

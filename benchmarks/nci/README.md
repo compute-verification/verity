@@ -16,7 +16,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 
 | Path | Holds |
 | --- | --- |
-| `sources/<topic>.json` | sources filed under their first topic, each with `findings`: `claim` (ours), `quote` (verbatim), `location`, `quantities`, `grade`, `bears_on`. A fetched fixture (`fixtures/artifacts.json`), since it would put the tree over its data budget: `research data fetch-fixtures benchmarks/nci/sources` brings it; after an edit, `research data put --kind fixture/v1 --tree benchmarks/nci/sources --preserve`, the new id in the registry, then an INF issue asking infra to export it (only the control pod holds the export key) |
+| `sources/<topic>.json` | sources filed under their first topic, each with `findings`: `claim` (ours), `quote` (verbatim), `location`, `quantities`, `grade`, `bears_on`. A fetched fixture (`fixtures/artifacts.json`), since it would put the tree over its data budget: `research data fetch-fixtures benchmarks/nci/sources` brings it; after an edit, `research data put --kind fixture/v1 --tree benchmarks/nci/sources --preserve` and the new id in the registry (the control pod exports it once the PR is admitted) |
 | `parameters.json` | parameters, each with estimates: `low`, `central`, `high`, `confidence`, `evidence` (finding ids), `merge` |
 | `calibrations.json` | a policy (`K` bits a block may read besides committed parameters, `Gamma` gates per block, `b_tok`) and the model it is calibrated to |
 | `rows.json` | the board's rows: method, configuration, state representation, calculator inputs (a number or `estimate-id:low|central|high`), notes, sources, demonstrated capability |
@@ -30,7 +30,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
 | `covering_priced.py` | Kimi K2's dampener rho under the covering bound's forms (one cost, two costs, a price per weight, the priced additive form) at bf16, FP8 and FP4, from per-class weight prices; `python benchmarks/nci/covering_priced.py [--prices FILE.json] [--dgrad]`; `--baselines [--prices FILE.json ...]` gives the priced form's gain over the uniform form under each `c_w` a registration (the weights alone, or with the optimizer state) makes selectable, per price source |
 | `prices_olmoe.json` | a price file for `covering_priced.py --prices`: per-role prices of an updated weight measured on OLMoE-1B-7B-0924's checkpoints (AdamW, 64 experts, top-8), the routed experts (`mlp_in`, `mlp_out`) apart from a dense MLP (`dense_mlp_in`, `dense_mlp_out`); its `about`, `runs` and `method` say how |
-| `prices_olmo2.json` | a price file for `covering_priced.py --prices`: per-class prices of an updated weight measured on OLMo-2 7B and 13B at early, mid and late stage 1 (art:6e9f8284…), theta's forward codes (`points`) and with its fp32 master (`points_optimizer`), and the theta-selectable tiers over the block matrices; its `about` and `runs` say how |
+| `prices_olmo2.json` | a price file for `covering_priced.py --prices`: per-class prices of an updated weight measured on OLMo-2 7B and 13B at early, mid and late stage 1, theta's forward codes (`points`) and with its fp32 master (`points_optimizer`), and the theta-selectable tiers over the block matrices; its `about` and `runs` say how |
 | `tiers.py` | compute efficiency eta and the compute dampener D under the verification stack, per tier; `python benchmarks/nci/tiers.py [--json]` |
 | `exposure.py` | what eta is most exposed to: ranges, tornados, elasticities, thresholds on 1/eta, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
@@ -57,8 +57,8 @@ Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`
 Agents writing from memory produce plausible but wrong citations. Every source here was found and checked by a
 web-search agent.
 
-- An auditor re-fetched a seeded random sample of 40 of the first 611 findings (2026-10-17). All 40 quotes were
-  verbatim; three findings were corrected, and those carry an `audit` field saying what changed.
+- An auditor re-fetched a seeded random sample of the findings. A finding the audit corrected carries an `audit` field
+  saying what changed.
 - The scaling corpus (findings marked `from_review: scaling-corpus`) was checked by its agent's script against the
   fetched pages but not yet audited.
 
@@ -306,28 +306,6 @@ Three caps keep the library's lower bounds valid. Each was added because a query
 - an activation's charge is at most the bits a compressed boundary carries per value;
 - a block that holds the whole state is charged no more per token than the novel data it reads.
 
-## The board today
-
-Under `kimi-k2-1m-raw` (K = 2e7 bits, a 1M-token session at 32B active parameters):
-
-| Row | Lower (proven) | Upper (construction) |
-| --- | --- | --- |
-| `pretrain-full` | 9.6e4 | 1.4e7 (shard) |
-| `rl-full-weights` | 6.2e4 | 3.7e6 (shard) |
-| `rl-rank1-lora-all-experts` | 4 | 6.3e4 (shard) |
-| `mezo-seed-finetune` | 1 | 2.4e3 (decode-shard) |
-| `zo-seed-pool` | 1 | about 3 (fit) |
-| `rl-tinylora`, `context-playbook` | 1 | about 1 (fit) |
-
-Each row's numbers move with the calibration. Under the 11 MB calibration every seed-based row fits in a block, at
-1.2–3.5. Coded prompts raise full-weight training's lower bound about 5x.
-
-The widest brackets are the research targets:
-
-- **`rl-rank1-lora-all-experts`** (4 to 6.3e4) decides whether frontier RL escapes.
-- **The seed-based rows.** Their lower bound is 1, so their cost is whatever the best construction pays.
-- **`pretrain-full`**. The proven bound (9.6e4) and the construction (1.4e7) are 150x apart.
-
 ## What the committed parameters may hold
 
 Today the policy puts no limit on θ, the values committed before monitoring. That matters most for seed-based training.
@@ -363,22 +341,6 @@ training on smuggled data stays bounded, not closed.
 **The proof gap.** The thread guarantees say nothing about a developer whose data is in θ, since their premise
 `BaselineRegistered` fails. The fix to pursue states the guarantee with a term for the committed data, degrading by
 at most the bits of data the budgets allow.
-
-## What changed from the prior draft's appendix
-
-The prior review's citations all resolve, but these uses don't hold up. Each item cites its finding:
-
-- **TT-LoRA MoE.** Its "rank 5" is a tensor-train rank (33,920 parameters), and it trails rank-16 LoRA rather than
-  matching it (`kunwar-2025-ttloramoe/2`, `/3`).
-- **Wang et al. (OREO)** covers math and ALFWorld, not coding (`wang-2024-oreo/1`).
-- **Song et al.'s coverage result** is for offline contrastive methods only (`song-2024-onlinedata/1`).
-- **Rinberg et al.**
-  - The 33x is a lossy rewrite; the lossless result is about 11x (`rinberg-2026-haikutoopus/2`, `/3`).
-  - The 250–1667x buys part of a capability gap, not compressed responses (`rinberg-2026-haikutoopus/4`).
-- **Zhang et al.** is an empirical study whose gains are at about 2x (`zhang-2025-promptcompression/1`).
-- **Brown et al.'s 16–100x** is measured only at 1.5B. At 7B, about 10x costs 22 MMLU points
-  (`brown-2026-weight-theft/7`, `/8`).
-- **Unsourced claims.** "Updates compressible 50–100x" and the DeepSeek-V4-Pro LoRA sizes have no source here.
 
 ## Not yet here
 

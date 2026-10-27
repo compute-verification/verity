@@ -1,5 +1,5 @@
-"""`tools/agent-guard/oom_watch.py` records each OOM kill on an agent VM with the worktree its victim ran in (INF-55 f): on 18 Oct
-the kernel killed four of circuits' worker processes on its coordinator VM, and the ring buffer had lost the earlier kills."""
+"""`tools/agent-guard/oom_watch.py` records each OOM kill on an agent VM with the worktree its victim ran in,
+before the kernel's ring buffer loses it."""
 import importlib.util
 import json
 import subprocess

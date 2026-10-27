@@ -9,10 +9,9 @@ the interface the compiler, the encoders and the tie to the certified I/O code a
 `verity/advice/v0`. The module's docstring carries the same layout and its split by window.
 
 **The charge, and what is committed.** The content advice `A_c` of the accepted-runs bound, `A_c + W·log2 #Σ_sync +
-n·log2 D`, is the advice's length under ENC-CODE's compression, not v0's. v0 is the committed form, as hm96 hiding
-rows, and the form the compiler reads. The red team measured v0 at 10.6 Mbit for a 60 s llama8b-shape window, 3.5 times
-the egress token ids. The advice is private: a compile unit, always proved in zero knowledge, states that the committed
-Programs are compile(advice) under the advice's hiding root, with the compiler's digest registered (PRF-143). The
+n·log2 D`, is the advice's length under the residual code's compression (`code_v1`), not v0's. v0 is the committed form, as hm96 hiding
+rows, and the form the compiler reads. The advice is private: a compile unit, always proved in zero knowledge, states that the committed
+Programs are compile(advice) under the advice's hiding root, with the compiler's digest registered. The
 advice's root is registered before the live draw, and the compiler refuses every ill-formed advice up to the public cap
 deterministically; v0's validity is that unit's first part (`advice_check`, below).
 
@@ -127,24 +126,4 @@ egress window it can show in:
 
 So windows 0 … m − 1 hold every record their frames read, and the parts sum to `total_bits`. An advice with no outputs
 is wholly window 0's. A per-window charge over the first m windows covers at least these records. The charge itself
-is ENC-CODE's (above).
-
-**Left to the other workstreams**, which v0 doesn't settle:
-- **Per-window parts.** v0 is one string, and `bits_by_window` divides its records among windows by a rule computed
-  from the decoded advice, so the prover can't choose the split. But the header's counts and widths depend on later
-  windows, and the records a window holds aren't one contiguous, self-delimiting part. A per-window bound that
-  counts each window's part as its own string (the red team's A5 and attack 9, #3489) needs an encoding that sends
-  each window's part self-delimited (its step and request counts as `uvar`s, with widths registered or per part). That
-  costs a few bits a window, and it is ENC-CODE's and N2-ADVICE's to choose.
-- **The order within a bucket.** Several requests' frames released in one bucket can go out in any order, a channel of
-  up to log2 n_t! bits a bucket that neither the advice nor the timing term charges. The tie to the certified I/O
-  (IO-TIE) has to fix a canonical order, for example by id then output index.
-- **One frame per kept output.** Each kept output is to be one egress frame, the HTTP head folded into the first and
-  `[DONE]` into the last, and a chunk into which vLLM merged tokens split back per token (the variable-length served
-  link, CERT-VARLEN).
-- **The id.** The shim's `user` names the session today; it has to name the request, unique within a session
-  (CERT-VARLEN).
-- **Equal tokens at a source.** The compiler has to hold a source run's tokens equal to the hitting request's, or the
-  hit wires in another prompt's KV (circuits' COMPILER).
-- **Arrival before admission.** A request's first row has to follow its certified arrival, which the tie to the
-  certified ingress checks.
+is the residual code's (above).

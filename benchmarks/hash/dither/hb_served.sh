@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Dither's served standard number on the H200 and the B200: the fused served linear (h1f.cu, h1c.cu, dither_fused.py,
 # dither_one.py) and the served bench (sbench.py) from the run's source tree. A tree with hb_sbench.py and its hb_*.py
-# (kernels-dither-cut and later) serves them from itself; an older one (kernels-dither-rtx's) needs them sent with --send,
-# as the example below does. DITHER_NSYS=prof captures sbench's prof op instead of the gate (steps.py, stepprof.py), and an
+# serves them from itself; an older one needs them sent with --send, as the example below does. DITHER_NSYS=prof captures sbench's prof op instead of the gate (steps.py, stepprof.py), and an
 # exact-fused or -xl arm runs only after exactlin's kgate.py passes in the same lease (HB_KGATE=0|1 overrides).
 # Two modes, so no CPU phase runs on a dc node:
 #   build ARCH[,ARCH]  (vy-nebius-2) libh1c.so, libh1f.so and libh1o.so for each arch into $OUT/lib/ARCH, their SASS and resource
@@ -28,21 +27,21 @@
 # order is the int8-exact path's: sbench disables vLLM's first choice, CutlassInt8ScaledMMLinearKernel, which refuses int8
 # on sm_100a ("Int8 not supported on SM100") and sm_120. On sm_90a hb_sbench.py's stock-cutlass arm keeps it (vLLM's
 # default there). Every arm samples without FlashInfer's JIT sampler, as served_h1 and native.sh do.
-# hb_sbench.py adds five arms: stock-cutlass (sm_90a); dither-hb, dither-side's receipts on this lane's kh_unit_ws
-# (hb_side.py and an h1u .so from job.sh's build on this branch, both sent; HB_H1U names the .so); dither-1s-hb,
-# dither-1s with this lane's one-stream kh_one in place of h1o_units (hb_one.py and hb_side.py, the same .so);
+# hb_sbench.py adds five arms: stock-cutlass (sm_90a); dither-hb, dither-side's receipts on h1u.cu's kh_unit_ws
+# (hb_side.py and an h1u .so from job.sh's build, both sent; HB_H1U names the .so); dither-1s-hb,
+# dither-1s with h1u.cu's one-stream kh_one in place of h1o_units (hb_one.py and hb_side.py, the same .so);
 # dither-1s-hbp, dither-1s-hb peeled (kh_one_peel: z = A B^T, y today's; hb_peel.py's gate, sent too), from the .so
 # HB_H1U_PEEL names if it's set (the fastest peeled build need not be the fastest unpeeled one); and dither-1s-hbk,
 # dither-1s-hbp on the unit's K split (an H1U_KSPLIT build, the .so HB_H1U_KSPLIT names). The
-# dither-1s arms' gate also runs CA's H1V3 h1tile.reference: this source's own (PouwH1Tile_v4, ungated, z = A B^T) unless
-# H1V3_SHA names a commit (one before the peel, as bd702a2c46, z = X (B + c)^T, holds an unpeeled arm's z to CA's code
+# dither-1s arms' gate also runs H1V3's h1tile.reference: this source's own (PouwH1Tile_v4, ungated, z = A B^T) unless
+# H1V3_SHA names a commit (one before the peel, as bd702a2c46, z = X (B + c)^T, holds an unpeeled arm's z to H1V3's code
 # directly; against a peeled tree that z is compared through the CPU's unpeel), and dither-1s-hbp's and -hbk's the tree
 # with the peel's too, the source's unless H1V3_PEEL_SHA names one; each from a sent h1v3-SHA.tar.gz (`git archive SHA
 # verity | gzip`; a --cwd source tree has no history), else the source's git.
 # Inside the lease everything runs on the leased GPU's NUMA node (numabind.py: that node's CPUs among the run's, and its
 # memory; the source's, else one sent), or unbound with DITHER_NUMA=0 or without numactl, a node or numabind.py;
 # env/numa.json, the `numa:` line and summary.json's "numa" say which.
-# Env: HB_WHO (the lease owner, default kernels-dither-hb), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
+# Env: HB_WHO (the lease owner, default dither/ and the run's id), DITHER_NSYS=1 (sbench's nsys capture of the gate's kernels; kernels.py counts each dither arm's inside its NVTX
 # range, so the source must be dither-rtx's f2c0071c7c or later; HB_KEEP_SQLITE=1 keeps its sqlite, gzipped), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (default /workspace/cp/venv312), NVCC (default CUDA 13.0's),
 # POUW_CHALLENGER and POUW_CHALLENGER_SESSION, or DITHER_CHALLENGERS (the windows' coins off the node, sessions from
@@ -169,8 +168,8 @@ S=$(mktemp -d "${TMPDIR:-/tmp}/dither-hb-served.XXXXXX")
 export VLLM_CACHE_ROOT=$S/vllm-cache TORCHINDUCTOR_CACHE_DIR=$S/inductor-cache
 trap 'rm -rf "$S"' EXIT
 export DITHER_H1C=$INPUTS/libh1c.so DITHER_H1F=$INPUTS/libh1f.so DITHER_H1O=$INPUTS/libh1o.so VLLM_DISABLE_COMPILE_CACHE=1 VLLM_USE_FLASHINFER_SAMPLER=0
-# CA's H1V3: the dither gates run its h1tile.reference(stream=True) on a few units (DITHER_H1V3_TREE), and hb_peel's
-# (dither-1s-hbp and -hbk) the tree with the peel's too (HB_H1V3_PEEL_TREE); a -bG arm's gate reads CA's banded reference
+# H1V3: the dither gates run its h1tile.reference(stream=True) on a few units (DITHER_H1V3_TREE), and hb_peel's
+# (dither-1s-hbp and -hbk) the tree with the peel's too (HB_H1V3_PEEL_TREE); a -bG arm's gate reads credit's banded reference
 # in their place. Both trees are this source's own (PouwH1Tile_v4, ungated) unless H1V3_SHA or H1V3_PEEL_SHA names a commit
 h1v3_tree() {  # SHA DIR [PREFIX]: DIR/verity from the sent PREFIX-SHA.tar.gz (h1v3), else this repository's git; exit 14 without one
   local p=${3:-h1v3}
@@ -209,7 +208,7 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   || { echo "hb_served: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
 # coins off the node: every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
 # {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own session from
-# infra's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on this
+# the challenger's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on this
 # node, HEX the root of the coin commitment its challenger signed, which its hello must answer, R its --rounds when not
 # 16384), waited for with ss -ltn
 # before the lease (never a probe connect: a challenger serves the first connection whose hello it accepts); none: in-process
@@ -226,7 +225,7 @@ for at in $ats; do
 done
 echo "coins ${ats:-in-process (not certified)}" | tee -a "$OUT/env/wrapper.txt"
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=$FI HF_HOME=${HF_HOME:-/workspace/hf}
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/$DITHER HB_DITHER_DIR=$ROOT/$DITHER
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/$DITHER HB_DITHER_DIR=$ROOT/$DITHER
 NSYS=()
 if [ "${DITHER_NSYS:-}" = 1 ] || [ "${DITHER_NSYS:-}" = prof ]; then
   NSYS=("$CUDA/bin/nsys" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none
@@ -248,7 +247,7 @@ if [ ${#NUMA[@]} = 0 ]; then
   echo "numa: unbound (no numabind.py in the source or inputs)"
 fi
 echo "hb_served: asking for one GPU at $(date -u +%H:%M:%SZ)"
-GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- "${NUMA[@]}" bash -c '
+GPU_LEASE_WHO=${HB_WHO:-dither/${RESEARCH_RUN_ID:-local}} gpu-lease 1 --wait "${lease[@]}" -- "${NUMA[@]}" bash -c '
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.before.csv"
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \

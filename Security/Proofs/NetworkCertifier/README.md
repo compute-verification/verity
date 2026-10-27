@@ -351,7 +351,7 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
 to the certifier program (`verity/core/protocols/certifier/lean/`, Lean core only, `NetworkCertifier`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
-(`tests/test_lean_packages.py`) and so `Models/` cannot name the program:
+(`tests/test_lean_packages.py`) and so `Definitions/` cannot name the program:
 
 - `CodeExpectedRow`: `NetworkCertifier.expectedRow` is `expectedRow` for clock syncs with the same δ and ρ and frames with the same
   payloads, anchors and logical indices (the difftest's `rows`, `diff` and `mismatch`);

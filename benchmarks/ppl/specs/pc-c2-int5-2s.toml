@@ -1,4 +1,4 @@
-description = "PPL-COMPILE C2: Dither's 1-bit coins on the format's grid, every linear and lm_head: int5 (-16..16, exact in E4M3) per token and per output row, both operands dithered with fresh bits, after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
+description = "C2: Dither's 1-bit coins on the format's grid, every linear and lm_head: int5 (-16..16, exact in E4M3) per token and per output row, both operands dithered with fresh bits, after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
 
 [[linear]]
 step = "smooth"
