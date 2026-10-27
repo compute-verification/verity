@@ -1,41 +1,26 @@
-"""The toy's machine for sampled proofs' parties, and the command that runs them: `verity run CONFIG --party ROLE` on the toy
-(`integrations/torch_loop`).
+"""The toy's machine for sampled proofs' parties (`verity.core.protocols.sampled_proofs.parties`, which say what each
+does), and the command that runs them: `verity run CONFIG --party ROLE` on the toy (`integrations/torch_loop`).
 
     python -m verity_all_protocols.parties CONFIG --state DIR (--local | --party ROLE ...) [--at ROLE=HOST:PORT ...]
         [--tools FILE] [--tamper I,...]
 
-The parties, their messages and their table are core's (`verity.core.protocols.sampled_proofs.parties`); this module
-gives each the capabilities this machine provides (`capabilities`), over the parties' shared state ``DIR``:
+`Machine` gives each party its capabilities over the shared state ``DIR``: ``serve`` (`runner.loop_window` into
+``STATE/blocks/w<i>/``, its public files in ``STATE/public/w<i>/``), ``pin`` (the Lean ``flock-firewall``, also in
+``STATE/firewall/ready.json``), ``host`` (`benchmarks/one_stage/challenger_party.py` under ``STATE/challenger/host``),
+``audit`` (`legs/sampled_proofs.py` on that host's coins, into ``STATE/record/w<i>/sampled-proofs/``), ``component``
+(``STATE/record/w<i>/<name>/``) and ``product`` (onsite's ``product IDS check``). ``STATE/tools.json`` (`build.sh`'s)
+is built there on first use, and ``STATE/main.txt`` is main's first-parent history, which the challenger's pin is on.
 
-* the workers' ``serve``: the toy serves sampling block ``i`` (`runner.loop_window`: the verifier's registration of its
-  circuit, then the loop) into ``STATE/blocks/w<i>/``, where the rows and salts stay, its public files in
-  ``STATE/public/w<i>/``; the block's registration is its ``registration.json``.
-* the firewall's ``pin``: the Lean ``flock-firewall`` every outer proof of a drawn member goes through, one at a time
-  (`runner.ONE_AT_A_TIME`), by its SHA-512, also in ``STATE/firewall/ready.json``.
-* the challenger's ``host``: a development challenger host under ``STATE/challenger/host``
-  (`benchmarks/one_stage/challenger_party.py`), answering the audit's open and finish on loopback TCP.
-* the verifier's ``audit``: the block's one-stage audit (`legs/sampled_proofs.py`: ``records_audit`` and the Lean verifier
-  of record, its prover sessions behind the pinned firewall) on that host's coins, into
-  ``STATE/record/w<i>/sampled-proofs/`` (``answer.json`` and ``case.json``); ``component``: another component's
-  ``STATE/record/w<i>/<name>/answer.json`` and ``case.json``; ``product``: onsite's ``product IDS check``.
-
-``--local`` runs the four parties in one run of the deployment layer (`runtime.run`, live). ``--party ROLE`` runs only
-those, the others meeting them over TCP: the challenger, the firewall and the workers each listen at their ``--at``
-address for the verifier, which dials them, so the verifier starts once they listen; every process of a run is given
-the same ``--at``, since the addresses are the deployment's. The channels authenticate with party keys made for the
-run (development keys: the configuration names none). Each run's transcripts and record are under
-``STATE/runs/<here>/`` (``local``, or the parties the process runs, joined by ``+``), the deployment layer's state.
-
-``coins`` is ``simulated`` under ``--local`` or when the configuration places the challenger on a machine a prover's
-party is on (its host is then the prover's, so `trusted-nebius-host` is unmet), else ``development``. The verifier's
-lines (core's), with the research run's id as ``run``, are printed as ``VERDICT {...}`` and appended to
-``STATE/record/verdicts.jsonl``: 0 when every block's product accepts, 1 when one rejects, 2 otherwise; another
-party's process exits 0 when its party finished unrefused, else 2.
-
-``STATE/tools.json`` names the built executables (`build.sh`'s), built there on first use. ``STATE/main.txt`` is main's
-first-parent history (``git rev-list --first-parent origin/main``), which the challenger's pin must be on. ``--tamper``:
-those blocks' workers record outputs that are not the model's (``serve --tamper``), and the prover skips its
-self-check, so a drawn member's proof is of a false witness: a cheating prover, for the demonstration.
+``--local`` runs the four parties in one live run of the deployment layer; ``--party ROLE`` runs those, and the
+challenger, the firewall and the workers each listen for the verifier at their ``--at`` address (every process given
+the same ones), the verifier dialing them once they listen. The channels' handshakes are signed with keys made for the
+run. Each run's transcripts and record are under ``STATE/runs/<here>/`` (``local``, or the parties here joined by
+``+``). The coins are ``simulated`` under ``--local`` or when the configuration puts the challenger on a prover's
+machine (`trusted-nebius-host` unmet), else ``development``. The verifier's lines, with the research run's id as
+``run``, are printed as ``VERDICT {...}`` and appended to ``STATE/record/verdicts.jsonl``: exit 0 when every block's
+product accepts, 1 when one rejects, 2 otherwise; another party's process exits 0 when it finished unrefused, else 2.
+``--tamper``: those blocks' workers record outputs that are not the model's and the prover skips its self-check, a
+cheating prover for the demonstration.
 """
 from __future__ import annotations
 
