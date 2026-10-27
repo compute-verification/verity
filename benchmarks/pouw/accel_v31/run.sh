@@ -22,7 +22,7 @@
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
-# cprio (lo), carve (100), dyn (1), wrap (2; 1 to 5), wcw (256), ccta (1), pf (0), diag (0) (v31.cu's Knobs) and nreg (the GEMM's
+# cprio (lo), carve (100), dyn (1), wrap (2; 1 to 5), wcw (256), ccta (1), pf (0), diag (0), sched (0) (v31.cu's Knobs) and nreg (the GEMM's
 # register cap, a build of its own; default v31.cu's), default row=8192; REPS (default 7); Q, the proof blocks a verdict
 # opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
@@ -50,7 +50,8 @@ knob() { local v; v=$(tr ',' '\n' <<< "$1" | sed -n "s/^$2=//p" | tail -1); echo
 # knob_env VARIANT: its knobs as v31.cu's environment
 knob_env() {
   echo "V31_CPRIO=$(knob "$1" cprio lo) V31_CARVE=$(knob "$1" carve 100) V31_DYN=$(knob "$1" dyn 1) V31_WRAP=$(knob "$1" wrap 2)" \
-    "V31_WCW=$(knob "$1" wcw 256) V31_CCTA=$(knob "$1" ccta 1) V31_PF=$(knob "$1" pf 0) V31_DIAG=$(knob "$1" diag 0)"
+    "V31_WCW=$(knob "$1" wcw 256) V31_CCTA=$(knob "$1" ccta 1) V31_PF=$(knob "$1" pf 0) V31_DIAG=$(knob "$1" diag 0)" \
+    "V31_SCHED=$(knob "$1" sched 0)"
 }
 export -f knob knob_env
 
