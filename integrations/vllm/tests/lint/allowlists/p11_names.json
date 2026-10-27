@@ -124,8 +124,6 @@
     {"file": "verity/ml/definitions/registry/moe.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 3},
     {"file": "verity/ml/definitions/registry/moe.py", "kind": "doc-round", "symbol": "MoeRouterTopKNorm", "detail": "R1N"},
     {"file": "verity/ml/definitions/registry/moe_pad.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 3},
-    {"file": "verity_vllm/program/quarantine/collective/__init__.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
-    {"file": "verity_vllm/program/quarantine/dense/__init__.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
     {"file": "verity_vllm/program/quarantine/dense/add_scalar_bf16.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/quarantine/dense/add_scalar_f32.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/quarantine/dense/add_widened_bf16.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
