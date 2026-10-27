@@ -1,8 +1,8 @@
-// R11 collector v2 (native worker step): copy of the R9 cmt-hidden kernels (out/gen/r9/cmt-hidden/src/hidden_gpu_tree.cu, namespace
-// block lines 13-154) with extern "C" launchers instead of the torch wrappers + PYBIND11_MODULE, so native_collect.cpp can run the whole
-// per-step commitment with the GIL released.  Same header/prefix rules, same leaf and node bytes -> same roots; the parent's hash is
-// tree_parent, which tree_levels_kernel shares to build up to ten levels in one launch, a block an aligned slice.
-// R9 cmt-hidden: GPU-resident commitment over the M1 hidden-value stream / the H1 thread digests.
+// The native worker step's commitment kernels: a copy of hidden_gpu_src/hidden_gpu_tree.cu's kernels with extern "C" launchers instead
+// of the torch wrappers + PYBIND11_MODULE, so native_collect.cpp can run the whole per-step commitment with the GIL released.  Same
+// header/prefix rules, same leaf and node bytes -> same roots; the parent's hash is tree_parent, which tree_levels_kernel shares to build
+// up to ten levels in one launch, a block an aligned slice.
+// GPU-resident commitment over the M1 hidden-value stream / the H1 thread digests.
 //   chunk_leaves : one thread per 64-word chunk -> SHA-256(16-word header(chunk index, tag, geometry) || 64 stream words)
 //                  (bit-identical to hidden_stream.commit_stream's leaves)
 //   tree_level   : one thread per parent -> production node rule  h(NODE_PREFIX || left || u64be(32) || right)

@@ -2,7 +2,7 @@
 difftest's `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces).
 
 A stratum's population is `M` positions whose layout is private. Before the draw coin the prover commits a calls table,
-call `c` an offset and its live rows, each row `width` units (column tiles) wide; the verifier draws positions `r < M`
+call `c` an offset and its live rows, each row `width` proof blocks (column tiles) wide; the verifier draws positions `r < M`
 from its own coins. A drawn position is proved by a witness `(c, j, t)` that the opening checks inside the proof: call
 `c` covers `r` (`offset <= r < offset + rows * width`) and `r - offset = j * width + t` (`witness`).
 

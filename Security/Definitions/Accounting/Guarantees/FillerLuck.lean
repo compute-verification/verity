@@ -4,8 +4,8 @@ import Definitions.Accounting.Assumptions.TS
 /-!
 # The filler's per-check luck (trusted)
 
-Decision 47 (RS-E-REF r6 Part VI.2, Lemma P2) over `Accounting.Filler`, each `def G : Prop` proved as
-`Accounting.SecurityProofs.FillerLuck.G` in `Proofs.Accounting.FillerLuck`:
+Lemma P2 over `Accounting.Filler`, each `def G : Prop` proved as `Accounting.SecurityProofs.FillerLuck.G` in
+`Proofs.Accounting.FillerLuck`:
 
 * `ParityLuck`: Lemma P2 at a cell, in any word ring read mod 2 and any column of uniform parity: a value with `R`
   two-sided products equals the cell's word with probability at most `luck (K − R) = ½ + 2^(−(K−R)/2−1)`.
@@ -32,20 +32,19 @@ namespace Accounting.Guarantees.FillerLuck
 
 open Accounting.Filler Accounting.TS Pouw.RelativeSecurity
 
-/-- **Lemma P2 at a cell** (RS-E-REF r6 VI.2.2). Let the row's bits `x ∈ {0,1}^K` be uniform and the column's noise `y`
-uniform on `Y`, with its entries' parity uniform. A value with `R` two-sided products over `A`, its factors any
-functions of their side, equals the cell's word `Σ_k x_k·c_k(y)` with probability at most
-`luck (K − R) = ½ + 2^(−(K−R)/2−1)`, at every `K`. -/
+/-- **Lemma P2 at a cell**. Let the row's bits `x ∈ {0,1}^K` be uniform and the column's noise `y` uniform on `Y`, with
+its entries' parity uniform. A value with `R` two-sided products over `A`, its factors any functions of their side,
+equals the cell's word `Σ_k x_k·c_k(y)` with probability at most `luck (K − R) = ½ + 2^(−(K−R)/2−1)`, at every `K`. -/
 def ParityLuck : Prop :=
   ∀ {Y A : Type} [Fintype Y] [CommRing A] (φ : A →+* ZMod 2) {K : ℕ} (c : Y → Fin K → A) (R : ℕ)
     (P : (Fin K → ZMod 2) → Y → A),
     ParityBalanced φ c → Products R P →
       prob (fun xy : (Fin K → ZMod 2) × Y => P xy.1 xy.2 = cellWord c xy.1 xy.2) ≤ luck (K - R)
 
-/-- **The filler's cell check** (decision 47). On a tile of rows `ρ` and columns `ν` with the round's noise uniform, a
-cell `(r, s)` whose run word takes `R` two-sided products in the cell projection is right with probability at most
-`luck (K − R)`: at pfill-bits (`popcount(a & b)`, B on `{0,1}`) and at pfill-bU (`A·u`, B's entries `uOf` of uniform
-bytes), in the s32 word and over `ℤ`. -/
+/-- **The filler's cell check**. On a tile of rows `ρ` and columns `ν` with the round's noise uniform, a cell `(r, s)`
+whose run word takes `R` two-sided products in the cell projection is right with probability at most `luck (K − R)`: at
+pfill-bits (`popcount(a & b)`, B on `{0,1}`) and at pfill-bU (`A·u`, B's entries `uOf` of uniform bytes), in the s32
+word and over `ℤ`. -/
 def FillerCellLuck : Prop :=
   ∀ (K : ℕ) {ρ ν : Type} [Fintype ρ] [Fintype ν] [DecidableEq ρ] [DecidableEq ν] (r : ρ) (s : ν) (R : ℕ),
     (∀ W : Noise K ρ ν (Fin K → ZMod 2) → ZMod (2 ^ 32), CellProducts W r s R →
