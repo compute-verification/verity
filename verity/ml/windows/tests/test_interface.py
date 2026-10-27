@@ -1,10 +1,10 @@
 """What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
 Verity's Definitions, a unit's rows are its Definition's bit rows as C-Flock stages them, a window tiles the partition and
-commits under the window-domain rule, a label in a circuit with blocks is its run's class structure (whole (slot, step)
-spans, their step and slot and a form of the window's), an integration's outputs are checked against the Definitions
-before it commits, a wire pattern wires whole members unit by unit under its writers' salts, a cut port's rows are each
-wired from their own
-writer, a registered read's ports are tables of the registered rows under the value's salts, every other input row is
+commits under the window-domain rule, a label in a circuit with blocks is its run's class structure (its bounds where
+the units change inference block, its step and slot and a form of the window's), an integration's outputs are checked
+against the Definitions before it commits, a wire pattern wires whole members unit by unit under its writers' salts, a
+cut port's rows are each wired from their own writer, a registered read's ports are tables of the registered rows under
+the value's salts, every other input row is
 declared registered, ingress or free and counted from the description, and the verifier's window (and its registered
 reads) is rebuilt from the circuit record alone, its members stated by cap, wires, cuts and reads. A window written under
 core's registration, and `of_records` against it, are the records audit's tests
@@ -155,17 +155,17 @@ def test_labels_are_opaque_runs_of_each_members_units():
         I.Window(I.Circuit("test", ((COORD, 10),)), RUN, LAW, 4).record(COORD, ins, outs, object())
 
 
-#: twelve coordinates at 3 steps of 2 slots, two units a (slot, step) span: [0, 2) slot 0 step 0, [2, 4) slot 1 step 0,
+#: twelve coordinates at 3 steps of 2 slots, two units an inference block: [0, 2) slot 0 step 0, [2, 4) slot 1 step 0,
 #: [4, 6) slot 0 step 1, and so on
-SPANS = I.Blocks(2, 3, (I.InferenceEntry(TID, 0, (3, 2, 2), ("step", "slot", "-"), 0),))
+STEPS_SLOTS = I.Blocks(2, 3, (I.InferenceEntry(TID, 0, (3, 2, 2), ("step", "slot", "-"), 0),))
 FORMS = ("node", "evaluated")
-#: each span a run, labelled by its step, slot and form
+#: each inference block's units a run, labelled by its step, slot and form
 HONEST = [(2, {"step": t, "slot": s, "form": FORMS[t % 2]}) for t in range(3) for s in range(2)]
 
 
 def labelled(runs: list[tuple[int, object]], forms: tuple[str, ...] = FORMS) -> I.Window:
-    """A window of `SPANS`' twelve coordinates in members of 4, each run ``(units, label)`` recorded in turn."""
-    win = I.Window(I.Circuit("test", ((COORD, 12),), blocks=SPANS), RUN, LAW, 4, forms=forms)
+    """A window of `STEPS_SLOTS`' twelve coordinates in members of 4, each run ``(units, label)`` recorded in turn."""
+    win = I.Window(I.Circuit("test", ((COORD, 12),), blocks=STEPS_SLOTS), RUN, LAW, 4, forms=forms)
     (ins, outs), at = values(12), 0
     for n, label in runs:
         win.record(COORD, [a[at:at + n] for a in ins], [a[at:at + n] for a in outs], label)
@@ -174,8 +174,8 @@ def labelled(runs: list[tuple[int, object]], forms: tuple[str, ...] = FORMS) -> 
 
 
 def test_a_label_in_a_circuit_with_blocks_is_its_runs_class_structure():
-    """A labelled run is whole (slot, step) spans of its template's inference entries, labelled by their step and slot and a
-    form of the window's: the honest labelling commits what the unlabelled window does, and the index shows only the spans'
+    """A labelled run starts and ends where its template's units change inference block, labelled by its step and slot and
+    a form of the window's: the honest labelling commits what the unlabelled window does, and the index shows only those
     bounds and the members', an unlabelled stretch of runs one run."""
     win = labelled(HONEST)
     assert win.close(salt_key=bytes(32)).roots == labelled([(12, None)]).close(salt_key=bytes(32)).roots
@@ -190,8 +190,8 @@ def test_a_label_in_a_circuit_with_blocks_is_its_runs_class_structure():
 
 
 @pytest.mark.parametrize("runs, forms, why", [
-    ([(3, {"step": 0})], FORMS, "starts and ends where one of its template's (slot, step) spans does"),
-    ([(1, None), (2, {"step": 0})], FORMS, "starts and ends where one of its template's (slot, step) spans does"),
+    ([(3, {"step": 0})], FORMS, "starts and ends where its template's units change inference block"),
+    ([(1, None), (2, {"step": 0})], FORMS, "starts and ends where its template's units change inference block"),
     ([(4, {"step": 0, "slot": 0})], FORMS, "its units are at slot [0, 1], not its label's 0"),
     ([(2, {"step": 1, "slot": 0})], FORMS, "its units are at step [0], not its label's 1"),
     ([(2, {"step": 0, "slot": 0, "request": 3})], FORMS, "class structure, never a value"),
@@ -200,7 +200,7 @@ def test_a_label_in_a_circuit_with_blocks_is_its_runs_class_structure():
     ([(2, {"step": "0"})], FORMS, "class structure, never a value"),
     ([(2, {"slot": True})], FORMS, "class structure, never a value"),
     ([(2, [0, 0])], FORMS, "class structure, never a value"),
-], ids=["cuts-a-span", "starts-inside-a-span", "two-slots-as-one", "another-step", "extra-key", "form-outside-forms",
+], ids=["ends-inside-a-block", "starts-inside-a-block", "two-slots-as-one", "another-step", "extra-key", "form-outside-forms",
         "window-without-forms", "step-a-string", "slot-a-bool", "not-a-mapping"])
 def test_a_label_that_is_not_its_runs_class_structure_is_refused(runs, forms, why):
     with pytest.raises(ValueError, match=re.escape(why)):

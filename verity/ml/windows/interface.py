@@ -22,10 +22,11 @@ at a time, in four records:
 
 An integration may label each run of units it records (``label``): the window's ``index.json``, whose SHA-512 the
 registration binds. A label is class structure, never a value. In a circuit with blocks, a labelled run starts and ends
-where one of its template's (slot, step) spans does (the inference entries'), and its label names at most the run's
-``step`` and ``slot`` and its ``form``, one of the window's ``forms`` (`LABEL_KEYS`, `Window.record`); the index writes an
-unlabelled stretch of runs as one run, so every bound it shows is a span's, a member's or a template's. A circuit without
-blocks states no spans, and its labels are opaque JSON. Verity reads a label only to refuse it.
+where its template's units change inference block (their (slot, step), the inference entries'), and its label names at
+most the run's ``step`` and ``slot`` and its ``form``, one of the window's ``forms`` (`LABEL_KEYS`, `Window.record`); the
+index writes an unlabelled stretch of runs as one run, so every bound it shows is such a change, a member's or a
+template's. A circuit without blocks states no inference blocks, and its labels are opaque JSON. Verity reads a label
+only to refuse it.
 
 The verifier's window comes from the records alone (`of_records`: ``circuit.json`` held to the registration's digest),
 never from the integration's code. A unit's rows are its Definition's bit rows: one row per parameter, the little-endian
@@ -830,16 +831,16 @@ class Blocks:
         return server_ends(self.network, units)
 
     @functools.cached_property
-    def _entries(self) -> dict[str, tuple[list[int], list[InferenceEntry]]]:
+    def _by_template(self) -> dict[str, tuple[list[int], list[InferenceEntry]]]:
         by: dict[str, list[InferenceEntry]] = {}
         for e in sorted(self.inference, key=lambda e: e.at):
             by.setdefault(e.template, []).append(e)
         return {t: ([e.at for e in es], es) for t, es in by.items()}
 
     def slots_steps(self, template: str, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray]:
-        """Template ``template``'s units ``[lo, hi)`` (which `check`'s tiling covers): each one's slot and step, its
-        inference block."""
-        starts, es = self._entries.get(template, ([], []))
+        """Template ``template``'s units ``[lo, hi)`` (which `check`'s tiling covers): each one's inference block, its slot
+        and its step."""
+        starts, es = self._by_template.get(template, ([], []))
         slot, step = np.empty(hi - lo, dtype=np.int64), np.empty(hi - lo, dtype=np.int64)
         k = max(bisect.bisect_right(starts, lo) - 1, 0)
         while k < len(es) and es[k].at < hi:
@@ -1521,7 +1522,7 @@ class Window:
         all of one unit count, under the integration's ``label`` (JSON). -> their indices among the template's units.
         An input may be None, the same for all of a template's units: its rows are committed by reference (`close`), so a
         parameter every row of which is wired or a registered read is never held. In a circuit with blocks, a label is
-        refused (ValueError) unless the run starts and ends where one of the template's (slot, step) spans does
+        refused (ValueError) unless the run starts and ends where the template's units change inference block
         (`Blocks.slots_steps`) and the label names only `LABEL_KEYS`: the ``step`` and ``slot`` of all its units, ints,
         and its ``form``, one of the window's ``forms``."""
         tid = descriptor_id(template)
@@ -1554,8 +1555,9 @@ class Window:
         block = slot * self.circuit.blocks.steps + step
         first, last = at - lo, at - lo + n - 1
         if (at > 0 and block[first - 1] == block[first]) or (at + n < total and block[last + 1] == block[last]):
-            raise ValueError(f"{what}: a labelled run starts and ends where one of its template's (slot, step) spans does "
-                             "(the circuit's inference entries); record each span, or whole spans, as a run")
+            raise ValueError(f"{what}: a labelled run starts and ends where its template's units change inference block, "
+                             "(slot, step) (the circuit's inference entries); record each such stretch, or several whole, "
+                             "as a run")
         for key, got in (("step", step), ("slot", slot)):
             seen = np.unique(got[first:last + 1]).tolist()
             if key in label and seen != [label[key]]:
