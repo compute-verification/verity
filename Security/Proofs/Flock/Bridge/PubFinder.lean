@@ -18,7 +18,7 @@ reads, and no others:
 
 `tableCRZ_of_mix`: where every member succeeds with probability at most `p`, each table's finders meet `cr/sha-512`'s
 strict bound at the budget `√(p·2^513)`, whose `q²/2^513` is `p`. `linkFinderPrZC_le_mix`: each link finder's collision
-probability is at most `p`. The family is ONE9-D2's (`LiveAt.crFam`, PRF-205) at `SampledKSLivePub`'s own parameters.
+probability is at most `p`.
 -/
 
 namespace Flock.Bridge

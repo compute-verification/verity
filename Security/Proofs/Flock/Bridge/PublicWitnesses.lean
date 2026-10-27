@@ -2,7 +2,7 @@ import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Soundness.Game.Prob
 
 /-!
-# `SampledKSLivePub`'s honest and nontrivial lemmas (LEAN-66)
+# `SampledKSLivePub`'s honest and nontrivial lemmas
 
 * **Honest** (`sampledKSLivePub_honest`): the hypotheses of `SampledKSLivePub` on the analysis' parameters hold at the
   deployed ones (`Bridge.kDep`, `ρ = 1/2`, `M = R_w = 2^192`), and there `δ + f(p) < 1` for `p ≤ 2^-200`
@@ -274,7 +274,7 @@ def SampledKSLivePubAll : Prop :=
           (Fintype.card (Bridge.PubIx dj y₀ P vb L (reg σ)) * B.Pr Claims.Sampling.sha512Msg))
 
 open Classical in
-/-- **`SampledKSLivePub`'s nontrivial lemma** (LEAN-66): `SampledKSLivePub` at the verifier that accepts everything is
+/-- **`SampledKSLivePub`'s nontrivial lemma**: `SampledKSLivePub` at the verifier that accepts everything is
 false at any setting of its file-level fields whose circuit has no port (so its commitment opens nothing) and returns a
 computed gate, with every unit drawn (`k_d = n`, `K₀ ≥ 1`), at most `2^40` committed wires, the deployed parameters
 (`k = ⌈2^24/e⌉`, `R_w = M = 2^192`, `ρ = 1/2`) and a prover whose finder `B^τ` has `K·Pr[B^τ] ≤ 2^-200`. There the
@@ -357,7 +357,7 @@ theorem sampledKSLiveV2_honest {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Fi
     fun S R j => (rateZ_le_m1w _ j (planZHJ_M1W dj y₀ S R j) _).trans Bridge.rateM1_kDep⟩
 
 open Classical in
-/-- **`SampledKSLiveV2`'s nontrivial lemma** (LEAN-66): at the verifier that accepts everything, V2's conclusion fails.
+/-- **`SampledKSLiveV2`'s nontrivial lemma**: at the verifier that accepts everything, V2's conclusion fails.
 At any setting of its file-level fields whose circuit has no port and returns a computed gate, with every unit drawn
 (`k_d = n`, `K₀ ≥ 1`), at most `2^40` committed wires and the deployed parameters (`sampledKSLiveV2_honest`), V2's
 additive bound is below `Pr[True ∧ ¬ RelS] = 1` (`Bridge.not_relS_unopened`, `Bridge.exceeds_of_not`) at every prover

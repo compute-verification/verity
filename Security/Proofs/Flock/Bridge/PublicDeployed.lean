@@ -4,7 +4,7 @@ import Proofs.Flock.Bridge.Public
 # `SampledKSLivePub`'s error is below 1 at the deployment's parameters
 
 `SampledKSLivePub` bounds a cheating prover's success by `δ + f(K·Pr[B^τ])` (`Bridge.deltaPub`, `Bridge.lossPub`),
-which says something only below 1. At the parameters ONE-19 deploys, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and
+which says something only below 1. At the deployed parameters, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and
 `M = R_w = 2^192`, it is:
 
 * `rateM1_kDep`: `SampledKSLivePub`'s rate hypothesis holds, `2^23/(e·kDep) ≤ 1/2`;
