@@ -2,9 +2,10 @@
 
 One in-process engine (`verity_vllm.LLM`, the pinned model) serves `--requests` requests whose prompts run from 16 to
 `--max-prompt` tokens (log-uniform), whose `max_tokens` vary and stop at the model's EOS before it, a share of them sampled at
-temperature 0.8 (half of those with a client seed), arriving at seeded engine steps while others decode, with `--gaps` idle gaps
-(each a window boundary).  A small `--max-batched-tokens` chunks the long prompts; `--kv-bytes` shrinks the KV cache until the
-scheduler preempts.  `engine.step_trace` records every step.  It writes, under `--out`:
+temperature 0.8 (half of those with a client seed, the rest under the served default, `engine.served_seed.DEFAULT_SEED`),
+arriving at seeded engine steps while others decode, with `--gaps` idle gaps (each a window boundary).  A small
+`--max-batched-tokens` chunks the long prompts; `--kv-bytes` shrinks the KV cache until the scheduler preempts.
+`engine.step_trace` records every step.  It writes, under `--out`:
 
     step_trace.jsonl   the scheduler's step trace
     requests.jsonl     each request's id, the `user` it was sent as, its prompt and output token ids and finish: the engine's own
@@ -13,7 +14,7 @@ scheduler preempts.  `engine.step_trace` records every step.  It writes, under `
     advice/            `verity-vllm advice` on the above
 
     cd integrations/vllm; PYTHONPATH=.:../..:../../tools/research/src /workspace/jobs/venv312/bin/python tools/advice_run.py \\
-        --out DIR [--model REPO --revision SHA] [--requests 48] [--seed 0] [--execution bi-eager] [--default-seed N]
+        --out DIR [--model REPO --revision SHA] [--requests 48] [--seed 0] [--execution bi-eager]
 """
 from __future__ import annotations
 
@@ -74,14 +75,13 @@ def main() -> int:
     ap.add_argument("--kv-bytes", type=int, default=None)
     ap.add_argument("--execution", default=None, help="the engine's execution label (engine.served.EXECUTIONS), such as bi-eager")
     ap.add_argument("--max-tokens", default="8,16,32,64,128,200", help="the max_tokens values requests draw from")
-    ap.add_argument("--default-seed", type=int, default=None,
-                    help="the seed a stochastic request without a client seed is sampled with, as a server fills one in")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
 
     from verity_vllm import LLM
     from verity_vllm.engine.engine_driver import external_id
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
     from verity_vllm.engine.step_trace import StepTrace
 
     kw = {"max_num_seqs": a.max_seqs, "max_num_batched_tokens": a.max_batched_tokens}
@@ -93,10 +93,9 @@ def main() -> int:
     from vllm import SamplingParams
     tok = llm.vllm.get_tokenizer()
     reqs = traffic(tok, a.requests, random.Random(a.seed), a.max_prompt, a.gaps, [int(x) for x in a.max_tokens.split(",")])
-    if a.default_seed is not None:
-        for r in reqs:
-            if r.temperature and r.seed is None:
-                r.seed = a.default_seed
+    for r in reqs:
+        if r.temperature and r.seed is None:
+            r.seed = DEFAULT_SEED
     trace = StepTrace(out / "step_trace.jsonl", request_id=external_id, clock=time.time).install(llm)
     done: dict[str, object] = {}
 
@@ -141,7 +140,7 @@ def main() -> int:
     from verity_vllm.program.frontend.target_profile import TargetProfile
     (out / "run.json").write_text(json.dumps({
         "model": a.model, "revision": a.revision, "engine_kwargs": kw, "engine_record": llm.engine_record, "args": vars(a),
-        "target": TargetProfile.from_device().to_json(), "execution": a.execution, "default_seed": a.default_seed,
+        "target": TargetProfile.from_device().to_json(), "execution": a.execution, "default_seed": DEFAULT_SEED,
         "commit_record": "requests.jsonl: the engine's own outputs; no committer installed", "finishes": finishes,
         "steps_traced": trace.executed, "wall_s": timing.get("wall_s") if isinstance(timing, dict) else None}, indent=1, default=str) + "\n")
     print(f"[advice-run] {len(done)} requests finished {finishes}, {trace.executed} steps traced -> {out}", flush=True)
