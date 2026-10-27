@@ -278,7 +278,7 @@ def layout(fn: Any) -> RowLayout:
 def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None) -> tuple[list[tuple[str, str, int, list[str]]],
                                                                          list[tuple[str, tuple[int, ...]]]]:
     """``fn``'s rows as C-Flock's `UnitStager` takes them, ``(in_rows, out_rows)``: one ``hm96-sha512/row/v2`` row per parameter,
-    or per row of a cut one (`RowLayout.cut`), then one per return field."""
+    or per row of a cut one (`Layout.cut`), then one per return field."""
     lay = layout(fn)
     return [(p, V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)], [(V2, (j,)) for j in range(len(lay.outs))]
 
