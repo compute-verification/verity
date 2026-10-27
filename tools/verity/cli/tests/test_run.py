@@ -1,6 +1,6 @@
 """`verity config` and `verity run` (`verity_cli.run`, `verity.core.deploy.config`): the configuration's refusals by name,
-its hash, the example reproduced by `config new`, and runs of step 0's table: its entries in this process, and core's
-sampled-proofs parties in the deployment layer's live run, on the toy's machine with stand-in capabilities and a
+its hash, the example reproduced by `config new`, and runs of a step-0 table (`step0.py`): its entries in this process,
+and core's sampled-proofs parties in the deployment layer's live run, on a machine with stand-in capabilities and a
 stand-in product executable, every party on in-memory channels, so no build, GPU, network or clock is involved."""
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ from verity.core.protocols.sampled_proofs import parties as SP
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG
 from verity_cli import run as R
 
-ROOT = Path(__file__).resolve().parents[4]
-EXAMPLE = ROOT / "examples" / "toy_network" / "config.toml"
-REG = R.registry()
-D = sys.modules[R.REGISTRY[1]]
+EXAMPLE = Path(__file__).parent / "fixtures" / "config.toml"
+TABLE = (Path(__file__).parent, "step0")
+REG = R.registry(TABLE)
+D = sys.modules[TABLE[1]]
 COMMIT = "a" * 40
 
 
@@ -165,7 +165,7 @@ def case(verdict: str) -> dict:
 
 
 class StandIn(D.Machine):
-    """The toy's machine with every capability but the product a stand-in. ``verdicts[(who, period)]`` is what that
+    """`step0.Machine` with every capability but the product a stand-in. ``verdicts[(who, period)]`` is what that
     component's check answers (``accept`` by default; ``silent``: nothing; ``raise``: a fault; ``unavailable``: a step
     it can't do), or for ``workers`` whether they serve; a case's evidence is its verdict, so the stand-in product
     accepts only over accepting components."""
@@ -340,11 +340,20 @@ def test_a_state_of_another_configuration_is_refused(tmp_path, capsys):
     assert rc == 2 and "refused state" in capsys.readouterr().err
 
 
+def test_verity_run_with_no_table_is_refused_by_name(tmp_path, capsys):
+    path = tmp_path / "config.toml"
+    path.write_text(K.render(config()))
+    assert R.run_main([str(path), "--state", str(tmp_path / "state")]) == 2
+    assert "refused no-table" in capsys.readouterr().err
+    assert R.config_main(["check", str(path)]) == 2
+    assert "refused no-table" in capsys.readouterr().out
+
+
 def test_the_table_holds_what_the_listed_components_need():
     assert REG.components["certifier"].needs <= REG.workloads["toy"].provides
-    assert os.path.basename(D.__file__) == "deployment.py"
+    assert os.path.basename(D.__file__) == "step0.py"
     live = {p for ps in D.PARTIES.values() for p, e in ps.items() if e == D.LIVE} | {
         p for w, (decl, e) in D.WORKLOADS.items() if e == D.LIVE for p in decl.parties}
-    assert live == set(D.P.ROLES)
+    assert live == set(D.ROLES)
     decided_live = {c for c, ps in D.PARTIES.items() if ps.get("verifier") == D.LIVE}
     assert decided_live - {"sampled-proofs"} == set(D.CHECKS)

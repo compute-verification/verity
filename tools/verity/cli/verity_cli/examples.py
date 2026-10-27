@@ -30,8 +30,8 @@ RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}|art:[0-9a-f]{64}")
 NAME = re.compile(r"[a-z0-9_]+")
 PROOF = re.compile(r"\w+(\.\w+)*\.SecurityProofs\.\w+(\.\w+)*")
 KEYS = {"protocol", "workload", *AXES, "placement", "evidence"}
-#: the retired single ladder's `level` -> (run, proof), read from a file that gives neither axis: #4928 adds
-#: `examples/toy_network` with `level = 1` below this change on `next`. Remove once no example.toml says `level`.
+#: the retired single ladder's `level` -> (run, proof), read from a file that gives neither axis. Remove once no
+#: example.toml says `level`.
 LEVEL = {0: ("moved", "none"), 1: ("runs", "none"), 2: ("placed", "none"), 3: ("placed", "stated"), 4: ("placed", "proved"),
          5: ("placed", "measured")}
 EVIDENCE = {"runs", "tests", "guarantee", "honest", "nontrivial", "proof", "premises"}
