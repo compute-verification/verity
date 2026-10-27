@@ -60,7 +60,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from . import compose as C, runner as RN
+from . import compose as C, runner as RN, settings as S
 from .table import load
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -138,7 +138,7 @@ def firewall(config: Mapping[str, Any], state: Path, local: bool) -> int:
 def workers(config: Mapping[str, Any], state: Path, local: bool) -> int:
     """Serve each sampling block of the toy into ``STATE/blocks`` (module docstring)."""
     w, t = workload(config), tools(state)
-    run = os.environ.get("RESEARCH_RUN_ID") or "local"
+    run = S.run_id()
     a = SimpleNamespace(law=config.get("service", {}).get("law", RN.LAW), cap=w["cap"],
                         requests=",".join(map(str, w["requests"])), steps=w["steps"], pouw=None, weights=None,
                         tamper=set(w["tamper"]), windows=w["blocks"], node=os.uname().nodename, delta=None, tools=t)
@@ -181,10 +181,9 @@ def verifier(config: Mapping[str, Any], state: Path, local: bool) -> int:
         print(f"verifier: no challenger is listening ({address}): run --party challenger first", file=sys.stderr)
         return 2
     ch = {"mode": "loopback:" + json.loads(address.read_text())["address"], "main": str(main_history(state))}
-    os.environ.setdefault("RAYON_NUM_THREADS", str(os.cpu_count() or 1))
-    os.environ.setdefault("RUST_MIN_STACK", str(64 << 20))
+    S.prover_defaults()
     leg = load("sampled-proofs").leg
-    run = os.environ.get("RESEARCH_RUN_ID") or "local"
+    run = S.run_id()
     lines = []
     for block in sorted((state / "blocks").glob("w*/period.json"), key=lambda p: int(p.parent.name[1:])):
         i = int(block.parent.name[1:])
@@ -193,7 +192,7 @@ def verifier(config: Mapping[str, Any], state: Path, local: bool) -> int:
         out.mkdir(parents=True, exist_ok=True)
         try:
             ans = leg(block.parent, os.uname().nodename, out, challenger=ch)
-        except Exception as e:  # noqa: BLE001: a leg that can't decide is the block's error, never a verdict
+        except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as e:
             ans = {"verdict": "error", "reason": f"{type(e).__name__}: {e}"[:2000]}
         (out / "answer.json").write_text(json.dumps(ans, sort_keys=True))
         if (out / "sampled-proofs.case.json").exists():
@@ -233,8 +232,7 @@ def run_local(config_path: Path, config: Mapping[str, Any], state: Path) -> int:
     main_history(state)
     p = subprocess.Popen([sys.executable, "-m", "verity_all_protocols.parties", str(config_path), "--state", str(state),
                           "--party", "challenger"], stdout=subprocess.PIPE, text=True, cwd=ROOT,
-                         env={**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(Path(__file__).parents[1]),
-                                                                                       os.environ.get("PYTHONPATH")]))})
+                         env=S.child_env(Path(__file__).parents[1]))
     try:
         for line in p.stdout:
             print(line, end="", flush=True)

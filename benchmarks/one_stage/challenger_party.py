@@ -37,8 +37,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import a5_coins as AC  # noqa: E402
-from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
+import a5_coins as AC
+from verity.core.protocols.sampled_proofs import remote as R
 
 #: the longest request line a client may send
 MAX_LINE = 1 << 16
