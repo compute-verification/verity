@@ -664,8 +664,8 @@ def test_a_scan_window_is_its_audit_records_answer_and_a_refused_one_a_reject(tm
 def test_a_rows_case_is_the_rows_forms():
     import warden_serve as WS
 
-    schedule = {"bucket_ms": 100, "cell_bytes": 512, "delay": 21, "egress_cells": 65, "ingress_buckets": 12,
-                "ingress_cells": 47, "lanes": 4, "queue": 4, "slots": 4, "window": 32}
+    schedule = {"bucket_ms": 100, "cell_bytes": 512, "delay": 21, "egress_cells": 65, "every": 8,
+                "ingress_buckets": 12, "ingress_cells": 47, "lanes": 4, "queue": 4, "slots": 4, "window": 32}
     dep = {"key": {"params": [64, 1, 6], "public": "ab" * 24, "key_id": "ab" * 16}, "params": schedule,
            "session": "cd" * 32}
 
