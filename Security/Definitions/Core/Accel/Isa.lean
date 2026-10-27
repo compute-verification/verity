@@ -263,7 +263,8 @@ structure Open where
   dot : Mma → ℕ → Dot
   dotSp : Mma → ℕ → Dot
 
-/-- **(P2) at the semantics `x`**: every MMA opcode's dot, dense and 2:4 sparse, has the product form (`ProductForm`). -/
+/-- **(P2) at the semantics `x`**: every MMA opcode's dot, dense and 2:4 sparse, has the product form
+(`ProductForm`). -/
 def Open.ProductForm (x : Open) : Prop :=
   ∀ (o : x.Mma) (k : ℕ), Accel.ProductForm (x.fa o) (x.fb o) k (x.dot o k) ∧
     Accel.ProductForm (x.fa o) (x.fb o) (k / 2) (x.dotSp o k)
