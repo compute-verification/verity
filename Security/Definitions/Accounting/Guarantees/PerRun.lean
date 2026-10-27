@@ -42,10 +42,10 @@ unpriced statements stay: a compute guarantee on the work alone gives the priced
 
 **Not the joint guarantee's sources.** PoUW's per-run forms bound an adversary within `q` oracle calls under `TT`
 (`CallsWithin`), the Pearl-C forms rest on `GγPerCoin`, a conjecture, and `AuditRO` is in the random-oracle model. The
-joint guarantee over a period (`Accounting.Guarantees.JointPeriod`, `JointHorizonBlocks`) takes every prover strategy,
-with PoUW's named random-oracle premises the one exception, so it takes none of them: its PoUW term is to be the
-per-component bound CMP-145 is stating for PoUW (not on `main` yet), and its PoUB term is the remote bandwidth audit's
-session (`Accounting.Guarantees.Bridge.BandwidthOfRemoteLinePeriod`).
+joint guarantee over a causal game (`Accounting.Guarantees.JointPeriodLive`, `JointHorizonBlocksLive`) takes every
+prover strategy, with PoUW's named random-oracle premises the one exception, so it takes none of them: its PoUW term is
+to be the per-component bound CMP-145 is stating for PoUW (not on `main` yet), and its PoUB term is the remote
+bandwidth audit's session (`Accounting.Guarantees.Bridge.BandwidthOfRemoteLineLive`).
 
 Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G`
 (`Proofs.Accounting.PerRunPouw`, `Proofs.Accounting.PerRunJoint`, `Proofs.Accounting.PerRunPriced` and
