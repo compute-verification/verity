@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import Callable, Iterable
 
-Progression = tuple  # head... , base: tuple[int, ...], delta: tuple[int, ...], count: int
+Prog = tuple  # head... , base: tuple[int, ...], delta: tuple[int, ...], count: int
 
 
 def _add(base: tuple, delta: tuple, k: int) -> tuple:
@@ -49,7 +49,7 @@ class _Acc:
     __slots__ = ("out", "open")
 
     def __init__(self) -> None:
-        self.out: list[Progression] = []
+        self.out: list[Prog] = []
         self.open: tuple | None = None   # (space, idx, lo, hi)
 
     def _close(self) -> None:
@@ -102,21 +102,21 @@ class _Acc:
         self.out[-1] = (sp, b0, d0, c0 + (count - 5))         # runs 4 .. count-2 closed into it
         self.open = (space,) + _add(base, delta, count - 1)     # the last run stays open
 
-    def splice(self, progs: list[Progression]) -> None:
+    def splice(self, progs: list[Prog]) -> None:
         """A finished greedy list pushed into an EMPTY accumulator, in one list copy: by the prefix property pushing its runs one by one
         leaves the list without its last run closed and that run open (its runs are maximal: no two consecutive ones are contiguous)."""
         sp, base, delta, c = progs[-1]
         self.out = progs[:-1] + ([(sp, base, delta if c > 2 else (0,) * len(base), c - 1)] if c > 1 else [])
         self.open = (sp,) + _add(base, delta, c - 1)
 
-    def finish(self) -> list[Progression]:
+    def finish(self) -> list[Prog]:
         if self.open is not None:
             self._close()
             self.open = None
         return self.out
 
 
-def _walk(acc: _Acc, j, alias: Callable[[int, int], list[Progression]] | None) -> None:
+def _walk(acc: _Acc, j, alias: Callable[[int, int], list[Prog]] | None) -> None:
     """The refs JSON of one operand, in reference order (`refs_from_json` / `_decode_refs` shapes)."""
     if "affine" in j:
         space, idx, base, count = j["affine"]
@@ -160,7 +160,7 @@ def _scattered_strided(acc: _Acc, space: str, idx: int, base: int, inner: int, o
         acc.progression(space, (idx, b, b + 1), (0, inner_stride, inner_stride), last)
 
 
-def from_json(j, alias: Callable[[int, int], list[Progression]] | None = None) -> list[Progression]:
+def from_json(j, alias: Callable[[int, int], list[Prog]] | None = None) -> list[Prog]:
     """Compact operand from its refs JSON.  `alias(k, a)` returns the compact operand `a` of node `k` (v1 descriptors)."""
     acc = _Acc()
     _walk(acc, j, alias)
@@ -241,7 +241,7 @@ def _walk_refs(acc: _Acc, r) -> None:
         raise TypeError(f"from_refs: not a fold Refs object: {tr.__name__}")
 
 
-def from_refs(r) -> list[Progression]:
+def from_refs(r) -> list[Prog]:
     """Compact operand from the fold's own Refs object: == `from_json(r.to_json())` == `from_runs(runs(r))` for every Refs (the tests
     hold all three equal), without materialising the JSON tree."""
     acc = _Acc()
@@ -249,7 +249,7 @@ def from_refs(r) -> list[Progression]:
     return acc.finish()
 
 
-def from_runs(runs: Iterable[tuple]) -> list[Progression]:
+def from_runs(runs: Iterable[tuple]) -> list[Prog]:
     """Compact form of a run list (the reference definition: what `from_json` must equal on the expanded runs)."""
     acc = _Acc()
     for space, idx, lo, hi in runs:
@@ -487,7 +487,7 @@ def rle_runs(mapped_runs: list[tuple], n_base: int) -> list[tuple]:
 
 def lean_root(desc: dict, registry) -> dict:
     """The root body of a descriptor as compact instances WITHOUT building its Node / Coll / Refs objects (codec.decode_program builds
-    them for every root node, then compare.RootView expanded their runs and dropped the IR).  Every non-root definition is decoded exactly
+    them for every root node, then compare.Prog expanded their runs and dropped the IR).  Every non-root definition is decoded exactly
     as decode_program does (they are the Definitions' small bodies: their spec ids come from the same SpecializedDefinition objects,
     `_spec_id`, so the spec strings are the record's).  Returns {"nodes": [(k, fid, form, args, out_str, n)], "n_nodes", "params"}.
     Root-body semantics mirrored from codec.decode_program: v1 `alias` = the compact operand of an earlier node (flattened concat
@@ -552,12 +552,12 @@ def lean_root(desc: dict, registry) -> dict:
 
     get(root_fid)
     b = ddefs[root_fid]["body"]
-    args_of: list[list[list[Progression]]] = []   # node k -> compact operands (alias targets)
+    args_of: list[list[list[Prog]]] = []   # node k -> compact operands (alias targets)
     out_nodes = []
     spec_cache: dict = {}
     out_cache: dict = {}
 
-    def alias(k: int, a: int) -> list[Progression]:
+    def alias(k: int, a: int) -> list[Prog]:
         if k >= len(args_of):
             raise ValueError(f"alias to node {k} before it is defined")
         return args_of[k][a]
