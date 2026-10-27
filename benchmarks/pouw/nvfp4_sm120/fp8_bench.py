@@ -15,7 +15,7 @@ What differs from nvf4_bench.py:
    gate's negative control, against ADA_E4M3_M16N8K32 (two groups of 16 in a 14-bit adder), which must differ somewhere.
    The model gate fails closed: it fails when verity can't be imported.
 3. Baselines of the harness's kind 1 (FP8 E4M3, per-tensor scales): CUTLASS (default the two the harness's gate run
-   r20260930-124211-a304 tuned fastest), cuBLASLt from HARNESS_LIB and LT2_LIB, and PLAIN_LIB's kind-1 entries.
+   tuned fastest), cuBLASLt from HARNESS_LIB and LT2_LIB, and PLAIN_LIB's kind-1 entries.
 
   python3 fp8_bench.py --model-cache DIR   (no GPU: the model's words for every gated shape into DIR)
   python3 fp8_bench.py CUBIN   (env: FP8_EXPECT_UUID, KERNELS="f8256_o_ew", SHAPE="8192 16384", MODEL_CACHE=DIR, and

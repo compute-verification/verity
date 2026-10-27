@@ -1,12 +1,12 @@
-"""The certified share σ of a GPU's capacity, from a scored filler run's measured entries (FILLER, decision 77).
+"""The certified share σ of a GPU's capacity, from a scored filler run's measured entries.
 
 Each entry of a run's score.json is one served step beside its filler: the step's time, the served and filler MACs in
 it, and the SM clock. Their certified load, pooled over the step and the GPU's 4 × SMs SMSPs (a receipt attests no
-placement), is read by machine_model's `capacity` (note:20261017T0652Z-draft-filler §3): filler MMAs with their fold's
-lane instructions, lane-chain steps if the filler ran any, and served MMAs, at f_max (decision 74) and at the run clock.
+placement), is read by machine_model's `capacity`: filler MMAs with their fold's
+lane instructions, lane-chain steps if the filler ran any, and served MMAs, at f_max and at the run clock.
 
 With --lfill it reads dcap's lfill lines instead (capfill_fold_probe.sh): each one's window beside the pump alone and
-beside the pump and the lane filler (lines from a -DPF_LANE build, retired after r20261017-072934-dd50, carry its lane
+beside the pump and the lane filler (lines from a -DPF_LANE build, now retired, carry its lane
 instructions a pump MMA as pf_lane). With --dfill, dcap's dfill lines (capfill_co_probe.sh): the step beside the pump on a
 split, or co-scheduled on every SM. With --fstep, dcap's fstep lines (capfill_fstep_probe.sh): the step through flin
 beside the pump, co-scheduled on every SM.
@@ -28,7 +28,7 @@ sys.path.insert(0, str(HERE.parent / "machine_model"))
 from verity_machine_model import capacity as C  # noqa: E402
 from verity_machine_model import eps as E  # noqa: E402
 
-F_MAX_MHZ = 2430.0  # sm_120's maximum SM clock, the credit's (decision 74)
+F_MAX_MHZ = 2430.0  # sm_120's maximum SM clock, the credit's
 SMS = 188
 MACS_A_MMA = 4096
 

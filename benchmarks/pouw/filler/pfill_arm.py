@@ -1,15 +1,15 @@
-"""HC-PROVED's arms (approach pouw/filler-proved): pfill, a DRAM-free filler in Theorem E's own setting, so its floor is
-proved without CH (note:20261016T0456Z-draft-hc-proved). Every MMA's operands are fresh i.i.d. ±1 noise expanded on chip
+"""The proved-floor arms: pfill, a DRAM-free filler in Theorem E's own setting, so its floor is
+proved without CH. Every MMA's operands are fresh i.i.d. ±1 noise expanded on chip
 from the round's coins and the tile id (A_M = B_M = 0), each MMA's output is a whole prefix sum (k32 on IMMA, k64 on the
 e2m1 tile's OMMA), and every one is folded at once into the receipt. pfill-k's noise is {0,1} bits instead of ±1,
-and pfill-bu's is bits on A and {±1, ..., ±64} on B (FILL-SEC). The kernel is `pfill.cuh` behind dcap.cu's dfill ABI
+and pfill-bu's is bits on A and {±1, ..., ±64} on B. The kernel is `pfill.cuh` behind dcap.cu's dfill ABI
 (dcap.cu's default filler on this branch); an arm picks the tile's kind at build time through NVCC_APPEND_FLAGS
 (-DPFILL_E2M1, -DPFILL_BITS, -DPFILL_BU or nothing), which score.py's nvcc inherits, since it builds after loading the
 arm. Placement is FILL v1's
 per-point split: on a green split the filler adds ≤ 0.4% to the split's own cost, so decode's slowdown is the split's,
 whatever runs on the filler's SMs.
 
-  research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=HC-PROVED \\
+  research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \\
     -- python3 benchmarks/pouw/filler/score.py benchmarks/pouw/filler/pfill_arm.py:PFillE2m1Ram
 """
 
@@ -66,9 +66,8 @@ class PFillDuo(PFillRam):
     filler: Filler | None = Filler(W=8, NC=2, S=256, chunk_log2=19, noise="pm1")
 
 
-#: HC-POWER's POWER_SPLIT (cursor/hc-power-ea24 benchmarks/pouw/filler/hc_power.py): the largest split its split-only sweep
-#: with the scorer's gc_split kept at step + filler <= 1.040 at every scored decode point (r20261016-050639-8537,
-#: r20261016-052600-c1e9), the split's own cost whatever runs on the filler's SMs.
+#: POWER_SPLIT: the largest split its split-only sweep with the scorer's gc_split kept at step + filler <= 1.040 at
+#: every scored decode point, the split's own cost whatever runs on the filler's SMs.
 POWER_SPLIT = {(1, 2048): 108, (1, 8192): 108, (1, 32768): 108, (32, 1024): 92, (32, 2048): 108, (32, 8192): 124,
                (32, 24576): 132, (48, 16384): 132, (128, 2048): 92, (128, 6144): 108, (132, 5120): 60, (144, 5120): 60,
                (256, 1024): 60, (256, 2048): 60, (256, 3072): 60}
@@ -76,8 +75,8 @@ POWER_SPLIT = {(1, 2048): 108, (1, 8192): 108, (1, 32768): 108, (32, 1024): 92, 
 
 @dataclass
 class PFillPowerSplit(PFillRam):
-    """pfill-ram on HC-POWER's power-split placement: its 15 decode splits, and 4 filler SMs during prefill (the linears
-    on 184, gc_split's only prefill split under 5%; prefill is power-capped and pays its SM share, r20261016-051754-e025)."""
+    """pfill-ram on the power-split placement: its 15 decode splits, and 4 filler SMs during prefill (the linears
+    on 184, gc_split's only prefill split under 5%; prefill is power-capped and pays its SM share)."""
 
     name: str = "pfill-power-split"
     lineage: dict = field(default_factory=lambda: {
@@ -116,7 +115,7 @@ class PFillE2m1Ram(PFillRam):
 class PFillK(PFillPowerSplit):
     """pfill-power-split's tile on {0,1} bits (-DPFILL_BITS): every A and B entry its SHA-512 bit as the s8 byte 0 or 1,
     the same s8 IMMA m16n8k32 with C = 0, each s32 word popcount(a & b) folded unscaled into the same ram receipt.
-    Theorem K's setting (note:20261016T0341Z-draft-fullfloor-s-r5 §3.6): {0,1} data with targets Σ_k a b at coefficient 1
+    Theorem K's setting: {0,1} data with targets Σ_k a b at coefficient 1
     in the bits, integer operands affine in the bits, s32 reads unscaled; the noise-only case (x = 0) of round 6's
     dither ⌊x/s⌋ + b. Theorem E's c = ½ covers {0,1} as it does ±1."""
 
@@ -143,12 +142,12 @@ class PhaseFill:
     tiles: int = 1
 
 
-#: (B, L) -> (split SMs, phase filler or None) from pfill_phase_screen.py's s2 and s4 (r20261016-085255-cdd2,
-#: r20261016-090209-21c7; 8-warp blocks were 1.08-1.30 everywhere, 2-warp 1.12-2.0): at most ~1.04 at every scored point
-#: and at least a tile below each point's cliff (where the phase outlasts attention and o waits on it). The phase pays
-#: at B >= 128; at B 32-48 and 256/1K pfill-k's split alone does as well per slowdown, and 1/32K and 32/8K take lighter
-#: splits for margin (pfill-k's read 1.046 there; 1/32K at 100 read 1.046 again in r20261016-091121-7bfc, 92 screened
-#: 1.027). 192/2K (robust, unscored) read 1.054 there with 4 tiles, so it keeps the split alone.
+#: (B, L) -> (split SMs, phase filler or None) from pfill_phase_screen.py's s2 and s4 (8-warp blocks were 1.08-1.30
+#: everywhere, 2-warp 1.12-2.0): at most ~1.04 at every scored point and at least a tile below each point's cliff (where
+#: the phase outlasts attention and o waits on it). The phase pays at B >= 128; at B 32-48 and 256/1K pfill-k's split
+#: alone does as well per slowdown, and 1/32K and 32/8K take lighter splits for margin (pfill-k's read 1.046 there;
+#: 1/32K at 100 read 1.046 again, 92 screened 1.027). 192/2K (robust, unscored) read 1.054 there with 4 tiles, so it
+#: keeps the split alone.
 PHASE_K = {
     (1, 2048): (108, None), (1, 8192): (108, None), (1, 32768): (92, None),
     (8, 16384): (108, None),
@@ -164,7 +163,7 @@ PHASE_K = {
 
 @dataclass
 class PFillKPhase(PFillK):
-    """pfill-k on the leader's placement (HC-SCHED's fill-v1-phase-att, SCORER's port): its split, re-chosen per point,
+    """pfill-k on the leader's placement (psched's fill-v1-phase-att, SCORER's port): its split, re-chosen per point,
     plus pfill-k's own dfill_p at 4 warps (-DPF_PW=4) forked into each decode layer's attention on the step's SMs, at the
     graph's highest node priority, joined before o. Prefill keeps pfill-k's 4-SM split. Run through psched_score.py:
 
@@ -203,9 +202,9 @@ def _flin(sms, lm=1, aps=1):
 
 
 #: (B, L) -> (split SMs, FILL's step with no filler warps or None for cuBLASLt's): FILL's FusedPump rows (fused_arm.py
-#: TABLE_PUMP; r20261016-092208-bbfb, every gate under v3: 0.92-1.005 at B <= 32 on 48 step SMs, 0.962 at 128/2K on 88,
+#: TABLE_PUMP; every gate under v3: 0.92-1.005 at B <= 32 on 48 step SMs, 0.962 at 128/2K on 88,
 #: 1.019-1.020 at 132/5K and 144/5K on 112) where they give the pump more SMs than POWER_SPLIT, POWER_SPLIT elsewhere
-#: (48/16K 132, 128/6K 108, B 256 60: FusedPump's 116, 92 and 44 are fewer). s7 (r20261016-093616-d1ed): POWER_SPLIT's
+#: (48/16K 132, 128/6K 108, B 256 60: FusedPump's 116, 92 and 44 are fewer). s7: POWER_SPLIT's
 #: B >= 128 rows are at cuBLASLt's cliff (every larger split 1.050-1.121).
 FUSED_K = {
     (1, 2048): _flin(140, aps=0), (1, 8192): _flin(140, aps=0), (1, 32768): _flin(140), (8, 16384): _flin(140),
@@ -254,8 +253,8 @@ class PFillKFused(PFillK):
         return None if phase == "prefill" else self._row(b, l)[1]
 
 
-#: FUSED_K with the pump on 84 SMs at 132/5K and 144/5K and 108 at 128/2K: screens s8 and s9 (r20261016-095959-2f47,
-#: r20261016-100916-3701), 1.032-1.033 at 132/5K and 144/5K on 104 step SMs over four rows, 0.998 at 128/2K on 80. The
+#: FUSED_K with the pump on 84 SMs at 132/5K and 144/5K and 108 at 128/2K: screens s8 and s9,
+#: 1.032-1.033 at 132/5K and 144/5K on 104 step SMs over four rows, 0.998 at 128/2K on 80. The
 #: step's SMs come in eights, so the next pump size, 92 at 132/5K (1.041 twice) and 116 at 128/2K (1.034), sits closer
 #: to the gate than prefill's split; lm_head through flin (1.032) and the linears on cuBLASLt (1.088) gain nothing there.
 FUSED_K2 = {**FUSED_K, (128, 2048): _flin(108, lm=0), (132, 5120): _flin(84, lm=0), (144, 5120): _flin(84, lm=0)}
@@ -298,7 +297,7 @@ class PFillKFused3(PFillKFused2):
     table = FUSED_K3
 
 
-#: FUSED_K3 with the next pump size where its slowdown repeats inside prefill's margin (s8-s10, r20261016-103903-fd41):
+#: FUSED_K3 with the next pump size where its slowdown repeats inside prefill's margin (s8-s10):
 #: 128/2K 116 (1.034 x2), 128/6K 116 on FILL's step (1.035, 1.030), 32/24K 140 (1.040 x2), 144/5K 92 (1.039). B 256
 #: stays on cuBLASLt's 60: FILL's step there reads 1.08-1.11 with flin's linears and gains nothing with cuBLASLt's.
 FUSED_K4 = {**FUSED_K3, (128, 2048): _flin(116, lm=0), (128, 6144): _flin(116, lm=0), (32, 24576): _flin(140),
@@ -342,7 +341,7 @@ class PFillBUDuoFused4(PFillKFused4):
 
 
 #: FUSED_K4 rows as (split SMs, FILL's step or None, phase filler or None), with pfill-k-phase's phase filler at the two
-#: B 256 points where it beat fused4's pump (r20261016-091121-7bfc against r20261016-104450-c197): on cuBLASLt's 60-SM
+#: B 256 points where it beat fused4's pump: on cuBLASLt's 60-SM
 #: split, 256/2K with 5 tiles a block read 1.41e14 MAC/s at 1.038 and 256/3K with 8 read 1.48e14 at 1.023, the split
 #: alone 1.00e14.
 FUSED_PHASE_K4 = {**{k: (*v, None) for k, v in FUSED_K4.items()},
@@ -379,7 +378,7 @@ class PFillBUDuoFPhase(PFillBUDuoFused4):
 @dataclass
 class PFillBUDuoFPhase2(PFillBUDuoFPhase):
     """pfill-bu-duo-fphase with 6 duo tiles at 256/3K: duo's phase tile runs at 0.85 of XOR-in's alone, so its 8 read
-    1.052 there (r20261016-121820-8853), past the cliff XOR-in's 9 reach (1.057, s11); 6 take about XOR-in's 7."""
+    1.052 there, past the cliff XOR-in's 9 reach (1.057, s11); 6 take about XOR-in's 7."""
 
     name: str = "pfill-bu-duo-fphase2"
     lineage: dict = field(default_factory=lambda: _fused_lineage(
@@ -391,7 +390,7 @@ class PFillBUDuoFPhase2(PFillBUDuoFPhase):
 
 @dataclass
 class PFillBUDuoFPhase3(PFillBUDuoFPhase):
-    """pfill-bu-duo-fphase2 with 7 duo tiles at 256/3K: 6 read 1.021 (r20261016-123823-c9af), and 7 take about XOR-in's
+    """pfill-bu-duo-fphase2 with 7 duo tiles at 256/3K: 6 read 1.021, and 7 take about XOR-in's
     8.2 tile-times, between XOR-in's 8 (1.020) and its cliff at 9 (1.057, s11)."""
 
     name: str = "pfill-bu-duo-fphase3"
@@ -404,13 +403,12 @@ class PFillBUDuoFPhase3(PFillBUDuoFPhase):
 
 @dataclass
 class PFillBU(PFillPowerSplit):
-    """pfill-power-split's ram tile as pfill-bU (-DPFILL_BU, note:20261016T0710Z-draft-filler-floor-r2 §5): A's entries
-    their SHA-512 bits as s8 0 or 1, B's U = (t & 0x7F) - 64 + ((t >> 6) & 1) from one digest byte t an entry (uniform on
-    {±1, ..., ±64}), 512 blocks a tile, on the same s8 IMMA m16n8k32 with C = 0, each s32 word in [-2048, 2048] folded
-    unscaled into the same ram receipt at K = L = 32. Theorem K's setting as RS-E-REF r4 refereed it
-    (note:20261015T1931Z-draft-theorem-e-referee Part IV): straight-line, cell-pure, int MMAs, unscaled s32 reads,
-    operands affine in their bits (U's weights 1, 2, ..., 32, 65 on the odd parity bits t_0, t_6), every prefix word
-    committed. dgate adds the uniformity check of U and A; -mpopcnt is for the host reference's seven popcounts a word."""
+    """pfill-power-split's ram tile as pfill-bU (-DPFILL_BU): A's entries their SHA-512 bits as s8 0 or 1, B's U = (t &
+    0x7F) - 64 + ((t >> 6) & 1) from one digest byte t an entry (uniform on {±1, ..., ±64}), 512 blocks a tile, on the
+    same s8 IMMA m16n8k32 with C = 0, each s32 word in [-2048, 2048] folded unscaled into the same ram receipt at K = L
+    = 32. Theorem K's setting as refereed: straight-line, cell-pure, int MMAs, unscaled s32 reads, operands affine in
+    their bits (U's weights 1, 2, ..., 32, 65 on the odd parity bits t_0, t_6), every prefix word committed. dgate adds
+    the uniformity check of U and A; -mpopcnt is for the host reference's seven popcounts a word."""
 
     name: str = "pfill-bu"
     lineage: dict = field(default_factory=lambda: {
@@ -434,8 +432,7 @@ def _fold_lineage(parent: str, noise_tag: str, receipt: str, hypothesis: str) ->
 class PFillBUDuo(PFillBU):
     """pfill-bU with duo receipts (NC 2, three ops a word): a fold proved to have no all-state kernel at one, two or
     three words (four at key_ok keys, DuoQuadNoKernel; longer runs open), so the receipt reads every word, where ram's
-    reads a pair only through Q = a0 d0 + d1
-    (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)."""
+    reads a pair only through Q = a0 d0 + d1."""
 
     name: str = "pfill-bu-duo"
     lineage: dict = field(default_factory=lambda: _fold_lineage(
@@ -446,10 +443,10 @@ class PFillBUDuo(PFillBU):
 
 @dataclass
 class PFillBULi(PFillBU):
-    """pfill-bU with P2-FF r9's LOP3+IMAD receipts (NC 4 built with -DPFILL_LI, two ops a pair as ram's:
-    y <- (y ^ d0 ^ k0) a0 + d1;  y <- (y ^ d2 ^ k1) a1 + d3, keys under key_ok_r9;
-    note:20261016T1117Z-draft-fullfloor-s-r9). It reads every word given (HO), no hand-off sharing a row or column,
-    which bU's hashed rows give (pfill_ref.ho_ok). Provisional while RS-E-REF r7 referees r9 (`fold_status`)."""
+    """pfill-bU with the r9 LOP3+IMAD receipts (NC 4 built with -DPFILL_LI, two ops a pair as ram's:
+    y <- (y ^ d0 ^ k0) a0 + d1;  y <- (y ^ d2 ^ k1) a1 + d3, keys under key_ok_r9).
+    It reads every word given (HO), no hand-off sharing a row or column,
+    which bU's hashed rows give (pfill_ref.ho_ok). Provisional while r9 is refereed (`fold_status`)."""
 
     name: str = "pfill-bu-li"
     lineage: dict = field(default_factory=lambda: _fold_lineage(
@@ -460,9 +457,9 @@ class PFillBULi(PFillBU):
 
 @dataclass
 class PFillBUXin13(PFillBU):
-    """pfill-bU with P2-FF r9's XOR-in (13, 19) receipts (NC 4 built with -DPFILL_XIN13, three ops a pair:
+    """pfill-bU with the r9 XOR-in (13, 19) receipts (NC 4 built with -DPFILL_XIN13, three ops a pair:
     y <- (rotl(y, 13) ^ d0) a0 + d1;  y <- (rotl(y, 19) ^ d2) a1 + d3, keys under key_ok_r9): every word read with no
-    layout premise, the served GEMM's fold. Provisional while RS-E-REF r7 referees r9 (`fold_status`)."""
+    layout premise, the served GEMM's fold. Provisional while r9 is refereed (`fold_status`)."""
 
     name: str = "pfill-bu-xin13"
     lineage: dict = field(default_factory=lambda: _fold_lineage(
@@ -484,8 +481,7 @@ class PFillKDuo(PFillK):
 
 def fold_share(lineage: dict) -> float:
     """The share of committed words the arm's receipt certifies: ½ for ram (it reads a pair only through Q = a0 d0 +
-    d1), 1 for duo, LOP3+IMAD and XOR-in (13, 19) (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2,
-    note:20261016T1117Z-draft-fullfloor-s-r9)."""
+    d1), 1 for duo, LOP3+IMAD and XOR-in (13, 19)."""
     mech = lineage.get("mechanism") or []
     return 0.5 if any(t.startswith("receipt:ram") for t in mech) else 1.0
 
@@ -494,8 +490,8 @@ R9_RECEIPTS = ("receipt:li-k32", "receipt:xin13-k32")
 
 
 def fold_status(lineage: dict) -> str | None:
-    """'provisional' for a receipt fold whose argument is under referee: P2-FF r9's LOP3+IMAD and XOR-in (13, 19), until
-    RS-E-REF r7 rules."""
+    """'provisional' for a receipt fold whose argument is under referee: the r9 LOP3+IMAD and XOR-in (13, 19), until
+    its referee rules."""
     return "provisional" if set(lineage.get("mechanism") or []) & set(R9_RECEIPTS) else None
 
 

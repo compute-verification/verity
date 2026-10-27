@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# What ptxas does with each instruction form A7's menu has no verdict for (note:20261019T0456Z-draft-rt-machine,
-# RT-MACHINE-2/3/5): a one-instruction PTX kernel a form, assembled for one target, and the SASS opcodes it becomes.
-# CPU only; no GPU. One JSON line a form in $OUT/isa_accept.jsonl: accepted or not, ptxas's message, the SASS opcodes.
+# What ptxas does with each instruction form A7's menu has no verdict for: a one-instruction PTX kernel a form,
+# assembled for one target, and the SASS opcodes it becomes. CPU only; no GPU. One JSON line a form in
+# $OUT/isa_accept.jsonl: accepted or not, ptxas's message, the SASS opcodes.
 #
 #   research run --on auto --cwd source -- bash benchmarks/pouw/opcode_probe/isa_accept.sh [sm_120a ...]
 set -uo pipefail
@@ -79,7 +79,7 @@ forms+=(
  st.global.u32 [rp], d;"
 )
 # Two words in one lane instruction: a 64-bit XOR, add or shift that one SASS instruction did would fold two words for
-# one slot (RT-MACHINE-8's two-word premise); mad.wide.u32 is the IMAD.WIDE that does write two words.
+# one slot (the two-word premise); mad.wide.u32 is the IMAD.WIDE that does write two words.
 forms+=(
   xor_b64 "
  .reg .b64 a, b, c, t, d; ld.global.b64 a, [rp]; ld.global.b64 b, [rp+8]; ld.global.b64 c, [rp+16];

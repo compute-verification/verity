@@ -1,5 +1,4 @@
-"""RT-ALGO round 3: J10's shared-noise forms against H1 + fx1's after-coin work, bit-exact on main's `h1tile` and
-`segment` (note:compute-accounting/20261019T0845Z-draft-rt-algo-r3).
+"""J10's shared-noise forms against H1 + fx1's after-coin work, bit-exact on `h1tile` and `segment`.
 
 A call is M rows of A (committed before the coin) and N rows of B (registered), at contraction K = 32 KS. Its noise is
 per call row (K dither bits b and the digit coins z) and per call column (K coin bits c and U's 32 values), and a 32 × 32
@@ -47,7 +46,7 @@ def _bytes(rng: random.Random, n: int = 64) -> bytes:
 
 
 def _synthetic_weights(rng: random.Random, n: int, k: int) -> list[list[int]]:
-    """Synthetic int8 weights, Gaussian with sigma 32 clipped at ±127: about 4.7% with |B| > 63, near SERVE-H1's
+    """Synthetic int8 weights, Gaussian with sigma 32 clipped at ±127: about 4.7% with |B| > 63, near served_h1's
     measured 4.66% on served weights. They are not served weights, so the wrap densities below are modeled."""
     return [[max(-127, min(127, round(rng.gauss(0.0, 32.0)))) for _ in range(k)] for _ in range(n)]
 
@@ -193,7 +192,7 @@ def forms(M: int, N: int, K: int, rng: random.Random) -> tuple[list[Form], dict]
     out.append(Form("mix32-prf", "a cheap well-mixed PRF (mix32 counter mode) per (row, k) and (column, k): not SHA-512",
                     rows, cols))
 
-    # the column streams seeded once a window, without the step's A root (JOINT-POUW's unsound variant)
+    # the column streams seeded once a window, without the step's A root (the joint-PoUW model's unsound variant)
     seed_win = SD.seed(salt, 7, bytes(64), rootB)
     _r, cols_w = H.noise(seed_win, lay)
     out.append(Form("window-cols", "column streams seeded once a window without root(A): known before A is committed",
@@ -541,7 +540,7 @@ def check_luck_correlation(rng, S=96, K=128):
 
 def gen_cost(M: int, N: int, K: int) -> dict:
     """SHA-512 compressions a 32 × 32 unit: per-unit (h1tile today) and J10-R (streams a call row and column, seeds and
-    σ_R a call, 32 key blocks a unit kept), and JOINT-POUW's noise-only model of both."""
+    σ_R a call, 32 key blocks a unit kept), and the joint-PoUW noise-only model of both."""
     lay = H.Layout(TILE, TILE, K)
     rb, cb = lay.rb, lay.cb
     units = M * N / (TILE * TILE)
@@ -553,18 +552,18 @@ def gen_cost(M: int, N: int, K: int) -> dict:
             "joint_pouw_ratio": round(16 * (1 / M + 1 / N), 4)}
 
 
-#: int8 Llama-3.1-8B's linears a layer as (K, N), at 32 layers and 20k tokens/s: JOINT-POUW's window model
+#: int8 Llama-3.1-8B's linears a layer as (K, N), at 32 layers and 20k tokens/s: the joint-PoUW window model
 #: (benchmarks/sampling_plan/joint_pouw.py at 8e436d9a89, `LINEARS`, `CALLS`, `tokens_per_s`)
 LLAMA_CALLS = ((4096, 6144), (4096, 4096), (4096, 28672), (14336, 4096))
 LLAMA_LAYERS, TOKENS_PER_S = 32, 20_000
-#: SERVE-H1's per-unit kernel: a K = 4096 unit's 612 compressions in 89.6 ns
-#: (note:compute-accounting/20261018T2005Z-draft-serve-h1)
+#: served_h1's per-unit kernel: a K = 4096 unit's 612 compressions in 89.6 ns
 COMPRESSION_S = 89.6e-9 / 612
 
 
 def serve_b(T: int) -> dict:
     """Hashing time a token over plain time at T tokens a step: per unit, J10-R, and J10-R without σ_R's 32 key blocks a
-    unit, the terms JOINT-POUW's shared model counts (it reports 2.92 per unit, 0.188 shared at T = 256, 0.736 at 64)."""
+    unit, the terms the joint-PoUW shared model counts (it reports 2.92 per unit, 0.188 shared at T = 256, 0.736 at
+    64)."""
     tot = {"per_unit": 0.0, "j10": 0.0, "j10_noise": 0.0}
     for K, N in LLAMA_CALLS:
         g = gen_cost(T, N, K)
@@ -576,7 +575,7 @@ def serve_b(T: int) -> dict:
 
 def check_generation_cost():
     """J10-R a unit at K = 4096: 9216 (1/M + 1/N) noise blocks + 32 keys, against 612; at decode (M = 32) half (kernels'
-    'halves it'). A token's hashing at T = 256: JOINT-POUW's per-unit and shared figures reproduce within 8% from the
+    'halves it'). A token's hashing at T = 256: the joint-PoUW per-unit and shared figures reproduce within 8% from the
     stream counts alone, and the 32 key blocks a unit it leaves out add about 0.126."""
     g256 = gen_cost(256, 4096, 4096)
     g32 = gen_cost(32, 4096, 4096)
