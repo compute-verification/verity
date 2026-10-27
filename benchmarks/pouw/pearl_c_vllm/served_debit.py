@@ -406,7 +406,8 @@ def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) 
     `path` as it is known.  Raises if a cross-checked tile's batch and scalar replays differ."""
     tile, records = job["tile"], job["records"]
     prior = resumed(opts.get("resume") or [], job["sha256"])
-    tile_of = lambda item: item if isinstance(item, int) else item[0]
+    def tile_of(item):
+        return item if isinstance(item, int) else item[0]
     got: dict = {}
     for item in picks:
         t = prior.get(_item_key(item))
@@ -526,7 +527,8 @@ def _bernstein_upper(x: float, w_max: float, total: float, delta: float) -> floa
     """An upper limit on the mean work-weighted rate μ/W of independent tiles from their observed weighted failures x:
     Bernstein's lower tail, P[X <= μ - t] <= exp(-t² / (2·w_max·μ + 2·w_max·t/3)), solved for the largest μ it allows."""
     L = math.log(1 / delta)
-    ok = lambda mu: mu <= x or (mu - x) ** 2 <= L * (2 * w_max * mu + 2 * w_max * (mu - x) / 3)
+    def ok(mu):
+        return mu <= x or (mu - x) ** 2 <= L * (2 * w_max * mu + 2 * w_max * (mu - x) / 3)
     lo, hi = x, total
     for _ in range(100):
         mid = (lo + hi) / 2

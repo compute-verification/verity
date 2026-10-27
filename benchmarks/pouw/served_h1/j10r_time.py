@@ -135,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
                 forms = [f for f in ("v1", "j10r") if f"{pair}_{f}" in work]
                 for f in (forms if rep % 2 == 0 else forms[::-1]):
                     times[f"{pair}_{f}"].append(_clock(work[f"{pair}_{f}"]))
-        del full_v1, sink_v1
+        full_v1 = sink_v1 = None
         torch.cuda.empty_cache()
         row = {"n": n, "k": k, "units": u, "blocks_v1": u * nb_v1, "blocks_j10r": nb_j,
                "same_stream": same_stream, "same_receipts": same_receipts, "times": {}}

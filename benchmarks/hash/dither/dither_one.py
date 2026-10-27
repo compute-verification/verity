@@ -836,7 +836,7 @@ def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
     # commitments against commit.py
     bits = np.arange(t) < m
     wrows = CR.word_rows(CR.words(bits))
-    a_cpu, s_cpu, z_cpu, cm = {}, {}, {}, []
+    a_cpu, s_cpu, z_cpu = {}, {}, {}
     for w in range(L):
         n, k = win.nk[w]
         q, sc = g["a"][w].cpu().numpy(), g["sa"][w].cpu().numpy()

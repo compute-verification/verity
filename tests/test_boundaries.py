@@ -5,7 +5,7 @@
     workloads' Definitions (ml.definitions) on the catalog and the kernels, and the protocols' circuit builders
     (ml.protocols) on the catalog and their protocols;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
-    ``ALLOWED``, and no third-party package;  a verifier imports no ml (Daniel, 18 Oct): until a protocol's verifier of
+    ``ALLOWED``, and no third-party package;  a verifier imports no ml: until a protocol's verifier of
     record is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
     ``SOUNDNESS_PATH``, and both only shrink;  ml never imports core;  no unit imports
     another distribution of the workspace (C-Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
@@ -53,7 +53,7 @@ ALLOWED = {
     "ml.private_circuits": {"ml.circuits"},
     # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads
     "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
-    # 2026-10-24 (Daniel): integrations are frontends. An integration hands Verity a window: its circuit, the values it
+    # Integrations are frontends. An integration hands Verity a window: its circuit, the values it
     # commits in a `verity.ml.commitments` scheme and registers before any coin, and the drawn units' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
@@ -75,14 +75,13 @@ ALLOWED = {
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
-    # 2026-10-12 (memory accounting's remote bandwidth program): the remote audit commits receipts in frame-v3-sha512
+    # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
-    # proof service's one challenger's (`sampled_proofs.challenger`, MEM-43).
-    # 2026-10-26 (memory accounting, the owner's ruling of 25 Oct, 6:47 PM PDT: the real bandwidth audit is over the
-    # P2-encoded weights store): a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
+    # proof service's one challenger's (`sampled_proofs.challenger`).
+    # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs", "core.protocols.pous"},
-    # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.
+    # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).
     "core.protocols.pouw": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness", "core.protocols.profile",
                             "core.protocols.sampled_proofs"},
     # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
@@ -143,8 +142,8 @@ ML_IMPORTS_CORE = {
                                 "`io_tie`, ...) and are stated over its advice, warden and link-window layout in core "
                                 "(`advice`, `warden`, `active`, `served_rows`)",
 }
-#: A verifier imports no ``verity.ml`` code (Daniel, 18 Oct; AGENTS.md "Design rules"): Lean is the definition and the
-#: verifier of record, and ml's Python mirrors it.  Until a protocol's verifier of record is its Lean (the 8 Oct procedure,
+#: A verifier imports no ``verity.ml`` code (AGENTS.md "Design rules"): Lean is the definition and the
+#: verifier of record, and ml's Python mirrors it.  Until a protocol's verifier of record is its Lean (the switch procedure,
 #: ``.agents/skills/friction/SKILL.md``), its Python verifier keeps the ml edges ``ALLOWED`` gave it on 18 Oct, frozen here,
 #: and gains none; a core unit not listed has none.  When ``ALLOWED`` drops an edge, drop it here too.
 CORE_ML_EDGES = {
@@ -338,7 +337,7 @@ def _core_ml_growth(allowed: dict[str, set[str]]) -> list[str]:
 
 
 def test_core_gains_no_edge_into_ml() -> None:
-    """No core unit gains an ml edge, and core's reach into ml doesn't grow (Daniel, 18 Oct): the edges only shrink, each
+    """No core unit gains an ml edge, and core's reach into ml doesn't grow: the edges only shrink, each
     with its protocol's switch to Lean."""
     grown = _core_ml_growth(ALLOWED)
     assert not grown, f"{grown}: {LEAN_OF_RECORD}"
