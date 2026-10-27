@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 #: notes store (cite it from here by ``note:<id>``).
 ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "PROTOCOL.md", "DESIGN.md", "SKILL.md",
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
-#: The Glossary's second file, at the root only: no directory holds a glossary.
+#: The one glossary, at the root only: no directory holds a glossary.
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 #: Layout/spec documents left in place by the 2026-09-22 migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
