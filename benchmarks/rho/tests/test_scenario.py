@@ -26,14 +26,15 @@ def test_every_scenario_evaluates_below_its_best_attack_unless_a_premise_is_name
 
 
 def test_a_bound_refuted_at_a_block_does_not_bound_it_and_is_still_reported_alone():
-    """partial-sum's `ActivationReads` is refuted past 4·10⁹ bits, so on its own it binds NVL72's serving cut (`k_S`
-    far past that) at a standing of refuted, at 30 times the lower bound. Every bound at once takes no cap from it at
-    that block, its standing doesn't reach the lower bound's, and the lower bound is still at least every bound alone
-    whose premises aren't refuted."""
-    f = evaluate_named(REG, "reference-onsite-nvl72-elementary").families[0]
-    ps = next(e for e in f.bounds if e.argument == "partial-sum")
-    assert ps.premise == "refuted" and {s.cut for s in ps.overhead.serving.values()} == {"serving"}
-    assert f.lo < ps.rho / 10 and f.combined.premise != "refuted"
+    """Refuting E1's activation rate only past its credible size (1.1·10⁹ bits) leaves fanout-priced, which on its own
+    binds onsite H200's serving cut (`k_S` far past that), refuted there, at about 300 times the lower bound. Every
+    bound at once takes no cap from it at that block, its standing doesn't reach the lower bound's, and the lower bound
+    is still at least every bound alone whose premises aren't refuted."""
+    reg = REG.override({"premise.e1-activation-rate.beyond": "refuted"})
+    f = evaluate_named(reg, "reference-onsite-h200").families[0]
+    fp = next(e for e in f.bounds if e.argument == "fanout-priced")
+    assert fp.premise == "refuted" and {s.cut for s in fp.overhead.serving.values()} == {"serving"}
+    assert f.lo < fp.rho / 10 and f.combined.premise != "refuted"
     assert all(e.rho <= f.lo * (1 + 1e-9) for e in f.bounds if e.overhead and e.premise != "refuted")
 
 
