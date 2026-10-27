@@ -36,7 +36,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
       (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
       (`silicon`, the exact hardware semantics) and `targets`.
-    - `kernels` (with `hash_gpu/`): fast code, each kernel checked against its Definition.
+    - `kernels`: fast code, each kernel checked against its Definition.
     - `commitments` (with Merkle multiproofs, `multiproof`), shared hash code (`crypto`), and the one challenge derivation
       (`randomness`).
     - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
@@ -380,7 +380,8 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
     lock with its own record;
   - every file is built, and every declaration is replayed through the kernel.
 - **The lock.** A guarantee (ARCHITECTURE.md "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
-  statement and every definition the statement reads; those records are the lock.
+  statement, every definition the statement reads, and each named assumption it takes with a digest of it and what it
+  reads, wherever its module lies; those records are the lock.
   - When a changed record lands on `main`, Daniel gets a DM showing it. That DM is the check: nobody signs off and nothing
     waits on it.
   - A guarantee that only moved sends nothing (`--update --moved MOVES.json`).

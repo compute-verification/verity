@@ -910,6 +910,24 @@ class Circuit:
         raise KeyError(f"{tid}: no template of {self.name}")
 
 
+def read_shape(circuit: Circuit, value: str) -> dict[str, Any]:
+    """Registered parameter ``value``'s rows as the circuit's reads fix them, the shape an outside committer (a network
+    certifier's output value, `out_commit.OutShape`) commits it at: ``words``, the row width of the port every read of it
+    names; ``rows``, its leaves over that; 16-bit leaves in ``hm96-sha512/row/v2`` rows (`unit_rows`). Refused
+    (ValueError) when no read names it, two read it at two widths, or its leaves aren't whole rows."""
+    lays = circuit.layouts
+    widths = {dict(lays[r.reader][0].rows + lays[r.reader][0].outs)[r.port] for r in circuit.reads if r.param == value}
+    leaves = (circuit.registered.params if circuit.registered is not None else {}).get(value)
+    if not widths or leaves is None:
+        raise ValueError(f"{circuit.name}: no registered read of {value!r}")
+    if len(widths) != 1:
+        raise ValueError(f"{circuit.name}: {value!r} is read at {sorted(widths)} words a row, not one width")
+    (w,) = widths
+    if leaves % w:
+        raise ValueError(f"{circuit.name}: {value!r}'s {leaves} leaves aren't whole rows of {w} words")
+    return {"value": value, "words": w, "rows": leaves // w, "word_bits": 16, "row_schema": V2}
+
+
 def members(circuit: Circuit, cap: int) -> tuple[CS.Member, ...]:
     """The window's members: each template's units in the partition's order, cut where a wire's reader units begin or end and
     where a server block's units begin or end (`Circuit.server_ends`), in chunks ``<descriptor id>/c<j>`` of at most ``cap``
@@ -952,7 +970,8 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
     """`members` of ``templates`` (``(Definition, units)``) under their population ``program`` and ``query``. A member's row
     is wired on all its units or on none (`rows.Member.wired`), so a template's units are cut at every wire's ends first, and
     a member's units are one server's, so they are cut at ``servers``' ends too (by template, `server_ends`). A registered
-    read covers whole members (`_reads_of`), and a member it covers is a shared-row member: each read port's table the
+    read covers whole members (`_reads_of`), so they are cut at every read's ends, and a member it covers is a shared-row
+    member: each read port's table the
     registered rows its units read, each other input row's its units' own rows."""
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
@@ -970,7 +989,8 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
         rows = tuple((p, w) for p, w, _ in lay.cut(kv))
         schemas = tuple((p, V2) for p, _ in rows + lay.outs)
         mine = sorted(by.get(tid, ()), key=lambda w: w.at)
-        ends = sorted({0, n, *(x for w in mine for x in (w.at, w.at + w.reader_units)), *(servers or {}).get(tid, ())})
+        ends = sorted({0, n, *(x for w in mine for x in (w.at, w.at + w.reader_units)), *(servers or {}).get(tid, ()),
+                       *(x for r in reads if r.reader == tid for x in (r.at, r.at + r.reader_units))})
         live: list[Wire] = []
         nxt, j = 0, 0
         for a, b in zip(ends, ends[1:]):
@@ -1186,7 +1206,8 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     `SampledProofs.Wires`' ``wiredBits``), its registered reads of input rows (a read of an output port fills none, `Read`),
     table reads and openings of a pinned parameter (``registered``) and its ingress (``ingress``); ``free`` the rest, which
     only the prover chose. ``pins`` are the verifier's own, never the record's: the registered parameters, by the names the
-    record gives them, whose roots it fixed before the run. A read of any other parameter, or a table read or opening of a
+    record gives them, whose roots it fixed before the run, a pin ``P`` naming ``P`` and every ``P/…`` (a registration of
+    several parameters: a model's weights, one a weight and row width). A read of any other parameter, or a table read or opening of a
     table over one, is free, since a root the prover commits after serving constrains nothing; with no pins (a bare string
     is none) every registered read is free. Refused unless the declarations are well-formed for the record's templates (`check_wires`,
     `check_inputs`), so no row counts twice."""
@@ -1204,9 +1225,13 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     inputs = sum(16 * sum(w for _, w in lay.rows) * n for lay, n in lays.values())
     wired = sum(w.units * row_bits(w.reader, w.port) for w in wires)
     reg, pins = reg or Registered({}), frozenset(() if isinstance(pins, str) else pins)
-    pinned = {t.name for t in reg.tables if t.param in pins}
+
+    def fixed(param: str) -> bool:
+        return param in pins or param.split("/", 1)[0] in pins
+
+    pinned = {t.name for t in reg.tables if fixed(t.param)}
     registered = (sum(r.units * row_bits(r.reader, r.port) for r in reg.reads
-                      if r.param in pins and r.port in dict(lays[r.reader][0].rows))
+                      if fixed(r.param) and r.port in dict(lays[r.reader][0].rows))
                   + sum(r.units * 16 * dict(lays[r.reader][0].rows)[r.port] for r in reg.roots if r.table in pinned)
                   + sum(o.units * 16 * dict(lays[o.reader][0].rows)[p] for o in reg.openings if o.table in pinned
                         for p in o.ports))

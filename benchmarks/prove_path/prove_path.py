@@ -45,9 +45,9 @@ Two kinds of committed run:
     prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
         [--cap-bits L] [--transfer-gate T ...] [--vllm-python PY]
     prove_path.py window-circuit --serve-run DIR --window K --row-dir DIR --advice FILE --out FILE [--cap N] [--description] \\
-        [--class SLOTS,PROMPT,OUTPUTS] [--pin NAME ...] [--hf-config F] [--target F] [--cap-bits L]
-    prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE [--class SLOTS,PROMPT,OUTPUTS] \\
-        [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
+        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME ...] [--hf-config F] [--target F] [--cap-bits L]
+    prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
+        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -80,14 +80,17 @@ Two kinds of committed run:
   from the records its integration hands Verity alone (``circuit.json``, the registration and the values, the advice's
   opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
 * **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
-  class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 1,024 prompt ids and 64
-  outputs, the certifier run of record's envelope): its record (or ``--description``, its description) and its input
+  class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 4 at each of buckets 0
+  and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at ASK-122's fixed slots; every slot's
+  Program whatever the window's requests, each placed at the window's first boundary): its record (or ``--description``,
+  its description) and its input
   count at the verifier's pins (``--pin``, the parameters whose roots it fixed before the run; a registered read of any
   other is free), which ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
   unit's rows as the record's members (V3c).
 * **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class
   Program of the window's registration lowered at the small class ``--probe`` and projected with v19's heads
-  (`class_size.project`), its units, ANDs and m a Program, at the window's Program count and at the class's slots.
+  (`class_size.project`), its units, ANDs and m a Program and at the class's slots (the window's circuit, whatever its
+  requests).
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -524,9 +527,11 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
     """φ of a served engine as vllm's advice compiler (#3619's) registers it (the formula its Build compiles the request Programs under):
-    the pinned model (``serve.json``'s ``model`` and ``revision``, the checkpoint's ``config.json``, default unsloth/Llama-3.2-1B's),
-    the serving device's target profile (``serve.json``'s ``target``, else the file ``target``) and the engine's execution label
-    (``execution``, else ``engine.execution``); no workload."""
+    the pinned model (``serve.json``'s ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the
+    pin's config of record, as `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins
+    unsloth/Llama-3.2-1B's), the serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran
+    included, else the file ``target``) and the engine's execution label (``execution``, else ``engine.execution``); no workload."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.program.predict.phi import Phi
 
     prof = json.loads(Path(target).read_text()) if target else serve.get("target")
@@ -536,7 +541,7 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     execution = serve.get("execution") or (serve.get("engine") or {}).get("execution")
     if not isinstance(execution, str) or not execution:
         raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
-    hf = json.loads(Path(hf_config or LLAMA32_1B_CONFIG).read_text())
+    hf = json.loads(Path(hf_config or pinned_hf_config(serve["model"], serve["revision"]) or LLAMA32_1B_CONFIG).read_text())
     return Phi(model={"repo": serve["model"], "revision": serve["revision"], "hf_config": hf}, target=dict(prof), execution=execution)
 
 
@@ -1190,7 +1195,8 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
 
 
 def window_class_of(arg: str | None) -> Any:
-    """``--class`` or ``--probe``'s SLOTS,PROMPT,OUTPUTS as a `window_circuit.WindowClass`, None the class of record."""
+    """``--class`` or ``--probe``'s SLOTS,PROMPT,OUTPUTS[,LANES,EVERY] as a `window_circuit.WindowClass`, None the class of
+    record."""
     from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, WindowClass
 
     return CLASS_OF_RECORD if arg is None else WindowClass(*(int(x) for x in arg.split(",")))
@@ -1198,7 +1204,7 @@ def window_class_of(arg: str | None) -> Any:
 
 def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's advice through I2 as its window class's one Circuit (V3: `window_circuit.window_circuit` at
-    ``--class``, a class Program a request flattened into units, every input row wired, registered or ingress), written to
+    ``--class``, a class Program a slot flattened into units, every input row wired, registered or ingress), written to
     ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
     length in bits and the record's input count at the verifier's pins (``--pin``)."""
@@ -1225,25 +1231,25 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
 def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's padded size at its class ``--class`` (`class_size`): one class Program of the window's registration
     lowered at the small class ``--probe`` (`window_circuit.class_circuit`, exact), projected to ``--class`` with v19's heads
-    (`class_size.project`) and priced (`class_size.size`) a Program, at the window's Program count (the requests its advice
-    compiles to) and at the class's slots. -> the probe's census and the three sizes."""
+    (`class_size.project`) and priced (`class_size.size`) a Program and at the class's slots, the window's circuit whatever
+    its requests (ASK-122). -> the probe's census, the requests its advice compiles to and the two sizes."""
     from dataclasses import asdict
 
     import class_size as CZ
     from verity_vllm.program.predict.window_circuit import class_circuit
 
     compiler = compiler_of_args(a)
-    programs = len(compile_advice(compiler, Path(a.advice).read_bytes()))
+    requests = len(compile_advice(compiler, Path(a.advice).read_bytes()))
     probe, cls = window_class_of(a.probe), window_class_of(a.window_class)
     t0 = time.time()
     seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1))
     lowered = time.time() - t0
     try:
         one = CZ.project(seen, probe, cls)
-        sizes = {"program": CZ.size(one), "window": CZ.size(one, programs), "cap": CZ.size(one, cls.slots)}
+        sizes = {"program": CZ.size(one), "window": CZ.size(one, cls.slots)}
     except ValueError as e:
         raise ValueError(f"{e} (the probe's census: {json.dumps(seen, sort_keys=True)})") from None
-    return {"class": asdict(cls), "positions": cls.positions, "programs": programs,
+    return {"class": asdict(cls), "positions": cls.positions, "requests": requests,
             "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
 
 
@@ -1299,7 +1305,8 @@ def main(argv: list[str] | None = None) -> int:
                        "its window --window from the sealed row dir --row-dir (bundle default <row dir>/commit/replay_bundle_p0)")
         p.add_argument("--window", type=int, help="with --serve-run: the closed Commit window K")
         p.add_argument("--target", help="with --serve-run: the serving device's target profile (JSON), where serve.json records none")
-        p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default unsloth/Llama-3.2-1B's)")
+        p.add_argument("--hf-config", help="with --bundle or --serve-run: the checkpoint's config.json (default with --serve-run the "
+                                           "served pin's config of record, `pinned_hf_config`; else unsloth/Llama-3.2-1B's)")
         p.add_argument("--opening", help="the advice's opening (advice_windows.opening): commit writes it, the prover's private file; "
                        "audit reads it, the named gap. A served window's is the server's (default advice/w<K>/private/opening.json)")
         p.add_argument("--cap-bits", type=int, default=CAP_BITS, help="ℓ, the public cap on the advice's length in bits, "
@@ -1368,8 +1375,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--window", type=int, required=True)
     p.add_argument("--probe", default="1,2,2", help="the class SLOTS,PROMPT,OUTPUTS one Program is lowered at exactly")
     for name in ("window-circuit", "class-size"):
-        sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS "
-                                       "(`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 8,1024,64)")
+        sub.choices[name].add_argument("--class", dest="window_class", help="the window class SLOTS,PROMPT,OUTPUTS[,LANES,"
+                                       "EVERY] (`window_circuit.WindowClass`; by default `CLASS_OF_RECORD`, 8,1024,64,4,16)")
     sub.choices["audit"].add_argument("--builds", help="with --bundle or --serve-run: where the verifier traces its own Build of "
                                       "each Program I2 compiles (own_builds; default OUT/builds), never a row dir")
     for name in ("audit", "circuit"):

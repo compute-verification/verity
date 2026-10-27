@@ -53,7 +53,7 @@ from typing import Any
 from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
 from verity_vllm.commit.served_record import Record, base_id, served_rows, window_commit
-from verity_vllm.pipeline.serve_seal import committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
+from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
 SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
@@ -81,7 +81,7 @@ def advice_trace(out: Path, engine: Any) -> Any:
 
 #: the records the gates' tie-run reads by run id, mirrored into the run's $OUT (the served rows' salts stay in the serve dir)
 MIRRORED = ("serve.json", "requests.jsonl", "windows.jsonl", "seals.jsonl", "step_trace.jsonl", "advice_trace.jsonl", "pauses.jsonl",
-            "summary.json")
+            "summary.json", "remote_session.json", "memory_map.jsonl")
 
 
 def gc_of(rc: Any) -> dict[str, Any] | None:
@@ -132,6 +132,19 @@ class Mirror:
         if data or not have:
             with open(d, "ab" if have else "wb") as g:
                 g.write(data)
+
+
+def records_mirror(out: Path, dst: str | None) -> Mirror | None:
+    """`Mirror` of ``out``'s records into ``--copy-records-to`` (None without one, or when it is ``out``)."""
+    if not dst or Path(dst).resolve() == Path(out).resolve():
+        return None
+    return Mirror(out, dst)
+
+
+def disk_record(windows: CommitWindows | None) -> dict[str, Any] | None:
+    """serve.json's disk floor: the filesystem it watches, its floor and what was free at the start."""
+    d = windows.disk if windows is not None else None
+    return None if d is None else {"path": str(d.path), "floor_gb": d.floor / GB, "free_gb_at_start": round(d.free() / GB, 1)}
 
 
 def param_of(params: Any, name: str) -> Any:
@@ -550,6 +563,13 @@ class CommitWindows:
         if root not in self._extras:
             self._extras[root] = extras_of(com, rc)
         return self._extras[root]
+
+    def read_extras(self) -> None:
+        """`_extras_of` the committer's registered weights, read now rather than at the first seal: before a remote session
+        holds the weights encoded where the engine holds them (`serve_remote`), so each seal carries the bytes committed."""
+        reg = getattr(self.com, "weights", None)
+        if self.seal is not None and reg is not None:
+            self._extras_of(self.com, SimpleNamespace(weight_registration=reg))
 
     def _land(self, rec: Mapping[str, Any], job: tuple[Any, Any, dict[str, Any]], here: tuple[float, float] | None = None) -> None:
         """The window's seal into ``rec["seal"]["row_dir"]`` and then its line in seals.jsonl: on the sealer's thread, in window
