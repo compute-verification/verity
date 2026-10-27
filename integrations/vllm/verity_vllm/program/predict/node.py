@@ -34,8 +34,8 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
 
-from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, decoder, drive, launch_batch
-from .common import Unexpressible, _arr_shape, _Launch, _Peers, _Stochastic
+from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder, drive, launch_batch
+from .common import Unexpressible, _arr_shape, _Launch, _Peers, _Stochastic, launch_rows
 from .phi import Phi
 
 
@@ -242,6 +242,8 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
                 raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance, {len(phi.requests)} "
                                     f"requests), whose kernel choices the {nets[r].model_class} decoder reads at its own rows")
             model.launch = _Launch(batch)
+        if wrapper == "request" and isinstance(model, _Model):
+            model.ctx = launch_rows(phis[r], LP, T)
         models.append(model)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
     toks: list[list[Coll] | None] = [None] * world
