@@ -10,9 +10,9 @@ ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` or ``tests/
 ``**/*allowlist*.json`` holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json``
 and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own
 count and is not compared.  ``tests/lint`` is the repository's: ``test_repo_ruff.py`` holds every tracked file outside the
-integration's ruff lint to ``allowlists/repo_ruff.json`` under the root ``ruff.toml``, which
+integration's ruff lint (and ``archive/``) to ``allowlists/repo_ruff.json`` under the root ``ruff.toml``, which
 ``integrations/vllm/ruff.toml`` extends, a count per (file, rule) whose kind is its ``rule``, and its counted lints (``COUNTED``)
-hold every tracked ``*.py`` file outside ``integrations/vllm/`` (which has its own rules) to a count per
+hold every tracked ``*.py`` file outside ``integrations/vllm/`` (which has its own rules) and ``archive/`` to a count per
 file, all one kind: ``test_repo_env_reads.py`` its direct environment reads (``allowlists/repo_env_reads.json``, beside the
 settings registries it marks, ``{"file", "registry": true}``, a declaration rather than an exception, so a mark is never
 counted) and ``test_repo_silent_excepts.py`` its except handlers that swallow what they catch
@@ -47,7 +47,7 @@ that moves with its code counts as kept, and deleting a stale ``noqa`` pays for 
 
 The top change's Python is linted too (the vLLM coordinator, 26 Oct 22:45Z: drive lands before the suites run, so a new
 finding would land and be reverted), when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the change
-adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files) is checked by ruff
+adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files, and ``archive/``) is checked by ruff
 under the base's root ``ruff.toml``, as it is before the change and after it, and the change fails when any (file, rule) count
 grows, naming each new finding ``file:line RULE message``.  (file, rule) is the repository's ruff lint's key too, so a
 finding moved within its file passes both.  A renamed file's before is its old path's (``git diff -M``), so a move keeps its

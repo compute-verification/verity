@@ -52,7 +52,7 @@ like source: the base's lint code, run on the PR's tree, must find nothing the P
 lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
 extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds
 the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
-tracked file outside this lint's), except that it counts findings per (file, rule), an entry
+tracked file outside this lint's and `archive/`), except that it counts findings per (file, rule), an entry
 `{"file", "rule", "count"}` pooled by rule, and a count above what a tree finds doesn't fail: its list may hold the findings of
 PRs queued on `next` that a tree doesn't have yet, and `python3 tests/lint/test_repo_ruff.py --prune` lowers what a tree no
 longer finds. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
@@ -60,7 +60,7 @@ PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `tools/veri
 it, so the merge queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).
 It lints the PR's own Python too (the vLLM coordinator, 26 Oct 22:45Z: drive lands before the suites run): ruff, under `main`'s
-root `ruff.toml`, on each `*.py` file the PR adds or modifies outside this lint's files, before and after, and
+root `ruff.toml`, on each `*.py` file the PR adds or modifies outside this lint's files and `archive/`, before and after, and
 a PR whose (file, rule) count grows is refused, naming each new finding `file:line RULE message`. Fix the code; the list
 never takes a new finding. (file, rule) is the repository lint's key too, so a finding moved to another function passes both.
 A renamed file keeps its findings, but the repository lint reads no history, so its entries move with it
@@ -70,7 +70,7 @@ gate, the gate can't judge, and the sync leaves the PR out.
 It holds direct environment reads the same way (the vLLM coordinator, 27 Oct 01:30Z: configuration in one place).
 `tests/lint/test_repo_env_reads.py` counts each tracked `*.py` file's reads (`os.environ[...]`, `.get`, `.setdefault`, a
 `.pop` whose value is used, an `in` test, `os.getenv`, through any alias) outside `integrations/vllm/` (P07 is its settings
-rule), against `tests/lint/allowlists/repo_env_reads.json` (`{"file", "count"}`, each file's largest count
+rule) and `archive/`, against `tests/lint/allowlists/repo_env_reads.json` (`{"file", "count"}`, each file's largest count
 over `main`, `next` and the admitted PRs), and fails only when a file reads more than its entry allows. A settings registry
 is exempt: a module named `settings.py`, or one the list marks `{"file", "registry": true}`. The gate refuses a PR that adds
 a read to a file it changes, naming each, with the fix: read it through the area's settings registry (the template is

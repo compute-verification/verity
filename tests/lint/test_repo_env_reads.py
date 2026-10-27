@@ -1,9 +1,9 @@
-"""Direct environment reads in every tracked Python file outside ``integrations/vllm/``, held to
+"""Direct environment reads in every tracked Python file outside ``integrations/vllm/`` and ``archive/``, held to
 ``allowlists/repo_env_reads.json``: S1 of the quality rollout (the vLLM coordinator, 27 Oct 01:30Z), so no area adds one
 while its owner builds the settings registry that declares each variable once.
 
-The integration has its own settings rule (P7, ``integrations/vllm/tests/lint/test_p07_declared_inputs.py``), so it isn't
-held here (``LEFT_OUT``).  A read is ``os.environ[...]``, ``os.environ.get(...)``,
+The integration has its own settings rule (P7, ``integrations/vllm/tests/lint/test_p07_declared_inputs.py``) and ``archive/``
+is kept but not developed, so neither is held here (``LEFT_OUT``).  A read is ``os.environ[...]``, ``os.environ.get(...)``,
 ``os.environ.setdefault(...)``, ``os.getenv(...)``, a membership test (``"X" in os.environ``), and ``os.environ.pop(...)``
 whose value is used, through any alias (``from os import environ``, ``import os as o``, ``env = os.environ``), ``os.environb``
 and ``os.getenvb`` alike.  A write, a delete, and passing ``os.environ`` whole (to a subprocess, ``dict(...)``, ``.copy()``)
@@ -38,8 +38,8 @@ from pathlib import Path, PurePosixPath
 NAME = "repo_env_reads"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
-#: the integration's own settings rule holds it
-LEFT_OUT = ("integrations/vllm/",)
+#: the integration's own settings rule holds it, and the archive isn't developed
+LEFT_OUT = ("integrations/vllm/", "archive/")
 #: a settings registry's module name: reads belong there
 REGISTRY = "settings.py"
 TEMPLATE = "integrations/vllm/verity_vllm/settings.py"
