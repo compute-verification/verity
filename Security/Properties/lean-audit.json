@@ -237,6 +237,12 @@
    "owner": "@compute-accounting",
    "digest": "7a9c1d1ba0b3a64096b784547d140044584bb90f16a3c91fd3ad8fd86dc63572"
   },
+  "Properties.Pouw.Served.FixedAreRight": {
+   "owner": "@compute-research"
+  },
+  "Properties.Pouw.Served.FixedBeforeSalt": {
+   "owner": "@compute-research"
+  },
   "Properties.RemoteAudit.Line.Registered": {
    "owner": "@memory-accounting",
    "digest": "7c773414aca257d4e824b995ad666c83efa6f99c5da980456cf89fd6cdb80f3d"
