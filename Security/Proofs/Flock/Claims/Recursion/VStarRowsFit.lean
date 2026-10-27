@@ -119,7 +119,7 @@ theorem flatPieces_tops {r : XR} {rs : Array RecVStar.SchedRound} {j : ℕ}
 theorem rowsFit_of_getElem? {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {h : List (Msg × Msg)}
     {i : ℕ}
     (hl : (HpEarly.flatPieces ((DeployedR.layR OpenRows.elemR).pieceAt x i)).length = (roundRows I w ρ h i).length)
-    (hk : ∀ k (v : ℕ × (Msg × List HmNets.Lin)), (HpEarly.flatPieces ((DeployedR.layR OpenRows.elemR).pieceAt x i))[k]? = some v →
+    (hk : ∀ (k : ℕ) (v : ℕ × (Msg × List HmNets.Lin)), (HpEarly.flatPieces ((DeployedR.layR OpenRows.elemR).pieceAt x i))[k]? = some v →
       ∃ (st : _root_.VStar.Stmt) (c : Circuit) (src : _root_.VStar.In.Src) (pin : _root_.VStar.In.PartIn)
         (nm : String) (q n : ℕ) (ps : List ℕ) (rw : _root_.VStar.In.Row),
         partAt x v.1 = some (st, c) ∧ srcOf I x w ρ h = some src ∧
@@ -228,7 +228,7 @@ theorem rowsFit_tops {Ir : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (Ir.
       have hAlen : ((List.range ((rs.getD (j % rs.size) default).2.1).size).flatMap (capFlat r rs j)).length =
           ((List.range ((rs.getD (j % rs.size) default).2.1).size).flatMap (capSlots r rs j)).length :=
         flatMap_length_congr _ _ (capFlat_length r rs j) _
-      have hA : ∀ k (v : ℕ × (Msg × List HmNets.Lin)),
+      have hA : ∀ (k : ℕ) (v : ℕ × (Msg × List HmNets.Lin)),
           ((List.range ((rs.getD (j % rs.size) default).2.1).size).flatMap (capFlat r rs j))[k]? = some v →
           ∃ (st : _root_.VStar.Stmt) (c : Circuit) (src : _root_.VStar.In.Src) (pin : _root_.VStar.In.PartIn)
             (nm : String) (q n : ℕ) (ps : List ℕ) (rw : _root_.VStar.In.Row),
