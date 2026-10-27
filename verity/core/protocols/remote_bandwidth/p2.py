@@ -155,9 +155,8 @@ def register(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
 
 def stored(view: log.View, store: str, blocks: int) -> bytes:
     """The node whose P2 store of `blocks` blocks the registration log registers as `store`, read from an accepted
-    log's view: the memory leaf of that id, in a host, whose id is the node, holding the blocks' bytes.  The log holds
-    a P2 store's hardware alone: its W is PoUS's setup's, committed by a plain hash the verifier reads W to check, not
-    a value of θ."""
+    log's view: the store's hardware, the memory leaf of that id, in a host, whose id is the node, holding the blocks'
+    bytes."""
     x = view.site.loc(store)
     if x is None or x.kind != "memory":
         raise ValueError(f"the registration log registers no memory leaf {store}")

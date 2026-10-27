@@ -67,11 +67,9 @@ def Registration.make? (node : ByteArray) (w c0 : Nat) (expander : String) (bloc
   if !Kind.sketch.rowsOk rows then throw "sketch-sha512's rows are 16 or 64"
   pure { node, blocksPerSegment, segments, commitment, salt, root, rows }
 
-/-- N, the store's blocks. -/
 /-- `p2.stored`: the node whose P2 store of `blocks` blocks the registration log registers as `store`, read from an
-accepted log's view: the memory leaf of that id, in a host, whose id is the node, holding the blocks' bytes. The log
-holds a P2 store's hardware alone: its `W` is PoUS's setup's, committed by a plain hash the verifier reads `W` to check,
-not a value of θ. -/
+accepted log's view: the store's hardware, the memory leaf of that id, in a host, whose id is the node, holding the
+blocks' bytes. -/
 def stored? (v : Core.Registration.View) (store : String) (blocks : Nat) : Except String ByteArray := do
   let some x := (v.site.loc? store).filter (·.kind == .memory)
     | throw s!"the registration log registers no memory leaf {store}"
@@ -81,6 +79,7 @@ def stored? (v : Core.Registration.View) (store : String) (blocks : Nat) : Excep
   if !(1 ≤ node.size && node.size ≤ 64) then throw "a node's id is 1 to 64 bytes"
   pure node
 
+/-- N, the store's blocks. -/
 def Registration.blocks (r : Registration) : Nat := r.blocksPerSegment * r.segments
 
 /-- U, the store's units: what its plans range over. -/
