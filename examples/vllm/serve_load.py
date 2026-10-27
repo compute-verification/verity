@@ -15,7 +15,7 @@ finished and the engine has idled. One JSON line a request goes to ``--out``: it
 endpoint's tokens from ``/tokenize``) cut to a length log-uniform in ``--prompt-range``, so prompts share cached prefixes;
 ``max_tokens`` uniform in 1 … ``--max-tokens``, greedy, a seed of its own, streamed; ``user`` ``varied.<j>``. With
 ``--release RUN`` request j carries ``x-verity-release: j`` and ``x-verity-release-run: RUN`` (its place in the arrival
-order, as the warden numbers its releases), and is sent up to ``--jitter-ms`` after its arrival, so the frontend may read
+order, as the network certifier numbers its releases), and is sent up to ``--jitter-ms`` after its arrival, so the frontend may read
 the bodies out of release order.
 """
 from __future__ import annotations

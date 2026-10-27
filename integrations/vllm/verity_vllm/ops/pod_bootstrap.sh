@@ -246,12 +246,12 @@ r["identities"] = {"python": sys.version.split()[0], "executable": sys.executabl
                    "tree": {"integration_root": root, "verity_core": core, "research": research},
                    "native": {k: r["checks"][k].get("value") for k in ("hidden_gpu_so", "fa2_tap_so", "fa3_tap_so") if k in r["checks"]}}
 r["ok"] = all(c["ok"] for c in r["checks"].values())
-# ---- measurements [r19-int-20]: the pod's non-GPU admission resources, MEASURED at bootstrap and recorded beside the checks.  Advisory:
+# ---- measurements: the pod's non-GPU admission resources, MEASURED at bootstrap and recorded beside the checks.  Advisory:
 # none fails the bootstrap (a slow or small pod can still compute); the launcher and the attempt's conditions read them.  Why each:
-#   network  -- vyv-l40s2b (EUR-IS-2) moved 2.6 MB/s to /vault and 6-8 MiB/s to R2 while its neighbours did 84-287 MiB/s (F-r19-mirror-3;
-#               R2 probe 16:30Z): a 30 GB row landed on the one pod that could not ship its evidence.  One 64 MiB download + one 16 MiB
+#   network  -- one pod can move a few MB/s to /vault and R2 while its neighbours do hundreds, and a 30 GB workload placed there can't
+#               ship its evidence.  One 64 MiB download + one 16 MiB
 #               upload against Cloudflare's public speed endpoint (a User-Agent is required: the default python-urllib UA is refused 403).
-#   disk     -- the container overlay is an unmodelled admission resource (F-r19-int-14): l40s4 filled under two rows' captures.
+#   disk     -- the container overlay is an unmodelled admission resource: two workloads' captures can fill it.
 #   memory   -- the cgroup ceiling, not the host's RAM, is what a Match / Commit is admitted against (351 vs 1511 GiB on tp2).
 import shutil, time, urllib.request
 UA = {"User-Agent": "verity-pod-readiness/1 (python-urllib)"}
