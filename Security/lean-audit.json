@@ -3589,22 +3589,6 @@
    "assumptions": [],
    "type_hash": "8d59a240309c77494b87bfc8a5307e99f2f94d62d4e2d67c0e293db89008af9a"
   },
-  "Accounting.SecurityProofs.JointHorizonBlocksLive_honest": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_honest : Accounting.Guarantees.JointHorizonBlocksLive_honest"
-   ],
-   "assumptions": [],
-   "type_hash": "3b9588440ea5f34e91fd6cbea0037c23cb6a531dfb9536f60caa65c36ac449ce"
-  },
-  "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial : Accounting.Guarantees.JointHorizonBlocksLive_nontrivial"
-   ],
-   "assumptions": [],
-   "type_hash": "7202e198e9a7c97840d078e9433f09a204fb617249ce1cb4e95efad8ac08a0f9"
-  },
   "Accounting.SecurityProofs.JointHorizonLive": {
    "owner": "@lean",
    "signature": ["Accounting.SecurityProofs.JointHorizonLive : Accounting.Guarantees.JointHorizonLive"],
@@ -12174,12 +12158,10 @@
    "NetTiming.SecurityProofs.SampledLeakRegistered": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS and Commitment.Binds at each deployment, and the registration's openings RegOpens), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_registered's statement with sampledLeak_reg's count, at the registered inputs' registration values (AsReg at regVal) rather than the trace's, a disagreement being a collision Breg finds.",
    "Flock.SecurityProofs.SampledKSLiveV2": "frozen (no-function): the network certifier chain's theorem, proved; it reads SampledKSLiveV2 (Security/Proofs/Flock/Bridge/Canon.lean), the sampled statement at RowsOk circuit files (row/v1, row/v2 and row-seg/v1 ports) at the constants and canonAt, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": "frozen (no-function): It carries C-Flock's integrity audit over a horizon of windows (Flock.Guarantees.IntegrityHorizon) to the sampled audit's per-period guarantee (PeriodRun.Sound) of an abstract period of the device model whose verdict is a field of the run, not a Lean function, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityPeriod, Security/Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointHorizonBlocksLive_honest": "completeness: JointHorizonBlocksLive's honest lemma: at the honest deployed horizon in any causal game (Accounting.Honest.honestBlocks: one H200 of vy-dc-h200-2, the honest wipe of r20261026-003454-bfd2 at the foreign bits it published, P2's deployed store and read deadline, the commitment opening each gate to the evaluation the extractor reads) every verdict accepts on every run, and each of its hypotheses holds as written at error 0 (PeriodLive.Sound at fun _ => 0, the wipe's and the memory term's bounds at 0), so each holds at every error. It states facts of an instance of the device model, not a property of a Lean function, and bounds Verity.Game.prob events, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial": "lemma: JointHorizonBlocksLive's nontrivial lemma: at the idle horizon in any causal game (Accounting.Honest.idleBlocks), a node that reads nothing under verdicts that accept everything, claimed at the honest node's certificates, the conclusion's event has probability 1 at every strategy, above any errors summing to less than 1. A counterexample at an instance of the device model, not a property of a Lean function.",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded for the deployed committed play, whose prover may compute window t's roots from the coin commitment (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
    "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive": "frozen (no-function): It carries a bound on the remote bandwidth audit's session (the session accepts while its line credits more bits read than the node read from its registered store; Properties.RemoteAudit.Line.LineHeld's bits-read form, once stated), taken as a hypothesis at every strategy of the causal game, to PoUB's per-period guarantee's event (PeriodLive.Sound at .poub) of an abstract live period of the device model whose verdict is a field of the run, not a Lean function, through a realization whose fields are properties of the deployed run (Accounting.RealizesBandwidthOfRemoteLineLive, Security/Definitions/Accounting/JointBridge/BandwidthOfRemoteLineLive.lean): read_le, the registered store's reads within the bandwidth account's, is the modelling link. It bounds a Verity.Game.prob event, which shape.events does not list.",
-   "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_honest": "completeness: BandwidthOfRemoteLineLive's honest lemma: at each block of the honest node in any causal game as long as the honest remote bandwidth session of r20261026-180902-bc3d, with the bandwidth certificate the bits that session credited as read, the period realizes a session that accepts and credits exactly what the node read, and the session's bound holds at error 0 at every strategy. Facts of an instance of the device model, not a property of a Lean function.",
+   "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_honest": "completeness: BandwidthOfRemoteLineLive's honest lemma: at each block of the honest node in any causal game as long as the honest remote bandwidth session, with the bandwidth certificate the bits that session credited as read, the period realizes a session that accepts and credits exactly what the node read, and the session's bound holds at error 0 at every strategy. Facts of an instance of the device model, not a property of a Lean function.",
    "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_nontrivial": "lemma: BandwidthOfRemoteLineLive's nontrivial lemma: at an idle block of positive length in any causal game under a PoUB verdict that accepts everything, claimed at the honest node's bandwidth certificate, PoUB's event has probability 1 at every strategy, so the conclusion fails at every error below 1. A counterexample at an instance of the device model, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.EncodeChainRefuted": "frozen (no-function): A counterexample to the named conjecture EncodeChainHardness, a circuit of the gate model with no budgeted gate that computes more words of the codec than its units allow, inside the conjecture's floor at every field of whole bytes with room for them, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet.",
@@ -12202,7 +12184,7 @@
    "Flock.SecurityProofs.JointStratifiedHorizon": "frozen (hash,world-unlisted,scope): It is zk_session_soundH_custody's one-table hidden-output session with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.JointPeriodLive": "frozen (no-function): The union bound over a period played as a causal game (Verity.Game, R5): each audit's per-period guarantee, at an error that is a function of the strategy, is a hypothesis over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonLive": "frozen (no-function): Like JointPeriodLive, over a horizon of periods in one causal game: each period's per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointHorizonBlocksLive": "frozen (no-function): Like JointHorizonLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts, and each wipe's published foreign bits and surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointHorizonBlocksLive": "frozen (no-function): Like JointHorizonLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": "frozen (no-function): It carries C-Flock's integrity audit of one server-time block (Flock.Guarantees.IntegrityBlock) to block b's sampled audit's per-period guarantee (PeriodRun.Sound) in a horizon of blocks of the device model whose verdicts are fields of the run, not Lean functions, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityBlock, Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
    "NetTiming.SecurityProofs.PeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes the sampled leak bound at the network certifier's rows (NetTiming.TapProof.sampledLeak_tap: RLeakTap, the observations the network certifier registers at the transfer gates under the statement's roots, TapOpens, with Claims.Sampling.KS and Commitment.Binds at each deployment) with the read-back of its record (tap_cells_read), over the network certifier's code (tapCode: the active warden's code wardenCode and the record of its cells, in any record format TapRecord whose cells read back on the schedules it holds, TapRecord.fits, which every schedule in Ss meets, hfit; the Python network certifier's rows are one, RowsFormat.tapRecord) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the network certifier's code, not runs of the network check's code or of a compiled warden program, and, where the network certifier registers its observations at every window (TapOpens, an antecedent), it counts the secrets whose every window meets its good event (WindowGood: RLeakTap at the extracted witness and the registration's values at the prover's registered inputs), with each window's failure bounded on its own (Btap the collisions with the network certifier's openings) and no union over the monitoring period's live coins yet.",
    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's period of sampled audits (RealizesCommOfPeriodLeakAccepted), from PeriodLeakAccepted's per-window conjunct and the union bound over the windows: the verdicts and the claim are fields of the run (Security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
@@ -13416,8 +13398,6 @@
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_honest",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
@@ -14283,9 +14263,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_honest",
-    "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_nontrivial",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_honest",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial"
+    "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_nontrivial"
    ]
   },
   "Definitions.Accounting.Guarantees.Localization": {
@@ -15234,8 +15212,6 @@
     "Accounting.SecurityProofs.DerivedStateResidual",
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_honest",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
@@ -15314,8 +15290,6 @@
     "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_honest",
     "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_nontrivial",
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_honest",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.JointPeriodLiveECR",
@@ -15347,9 +15321,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_honest",
-    "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_nontrivial",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_honest",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial"
+    "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_nontrivial"
    ]
   },
   "Definitions.Accounting.JointPeriod": {
@@ -15396,8 +15368,6 @@
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_honest",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.JointPeriodLiveECR",
@@ -17470,8 +17440,6 @@
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "Accounting.SecurityProofs.Compose.BindingOfECR",
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_honest",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.JointPeriodLiveECR",
@@ -18747,8 +18715,6 @@
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_honest",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.JointPeriodLiveECR",
@@ -19003,8 +18969,6 @@
     "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_honest",
     "Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLineLive_nontrivial",
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_honest",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.JointPeriodLiveECR",
@@ -19197,8 +19161,6 @@
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_honest",
-    "Accounting.SecurityProofs.JointHorizonBlocksLive_nontrivial",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.JointPeriodLiveECR",

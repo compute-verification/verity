@@ -210,9 +210,9 @@ theorem JointHorizonLive : Accounting.Guarantees.JointHorizonLive := by
 /-- **The joint guarantee over a horizon of server-time blocks and their wipes, played as one causal game**
 (`Accounting.Guarantees.JointHorizonBlocksLive`). -/
 theorem JointHorizonBlocksLive : Accounting.Guarantees.JointHorizonBlocksLive := by
-  intro ι α _ _ d B C O G S c err εWipe δPous h hW hM s
+  intro ι α _ _ d B C O G S c fw err εWipe δPous h hW hM s
   have hA := JointHorizonLive ι α d B C O G S.block c err h s
-  have hW' : prob (fun o => ∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives o) G s ≤ ∑ b, εWipe b s :=
+  have hW' : prob (fun o => ∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ ∑ b, εWipe b s :=
     (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun b _ => hW b s)
   have hM' : prob (fun o => ∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o) G s ≤ ∑ b, δPous b s :=
     (Live.prob_exists_univ_le _ G s).trans (Finset.sum_le_sum fun b _ => hM b s)

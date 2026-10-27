@@ -118,10 +118,8 @@ game.** On any device and any `B` blocks read off the run of one causal game `G`
 suppose, over `G` at every strategy `s`:
 
 * each subprotocol `a` of block `b` has its per-period guarantee at certificates `c b` and error `err b a`;
-* the wipe that opens block `b` is accepted while more than the foreign bits its verdict publishes plus the unfilled
-  state survive beyond the committed carried state with probability at most `ε_wipe b s` (the streamed wipe's bound,
-  `Pous.Guarantees.StreamedWipe` at what `verity/wipe/v0` publishes: `StreamedWipeMeetsFamily` and
-  `StreamedWipeMeetsReads`, through `Verity.Wipe.SurvivorBound`);
+* the wipe that opens block `b` is accepted while more than `f · fill + 2λ` bits of foreign content plus the unfilled
+  state survive beyond the committed carried state with probability at most `ε_wipe b s`;
 * block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory exceeds
   `0.07 · U + S_chip + c` with probability at most `δ_PoUS b s`.
 
@@ -132,17 +130,17 @@ $$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \varepsilon_{\mathrm{wipe},b}(s) 
 it) is outside the integrity bound. -/
 def JointHorizonBlocksLive : Prop :=
   ∀ (ι α : Type) [Fintype ι] [Fintype α] (d : Device ι) (B : ℕ) (C : Fin B → Verity.Circuit) (O : Type)
-    (G : Verity.Game O) (S : BlocksLive d α B C G) (c : Fin B → Certificates)
+    (G : Verity.Game O) (S : BlocksLive d α B C G) (c : Fin B → Certificates) (fw : ℝ)
     (err : Fin B → Audit → Verity.Game.Strategy G → ℝ≥0∞) (εWipe δPous : Fin B → Verity.Game.Strategy G → ℝ≥0∞),
     (∀ b a, (S.block b).Sound (c b) a (err b a)) →
     (∀ b (s : Verity.Game.Strategy G),
-      Verity.Game.prob (fun o => (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives o) G s ≤ εWipe b s) →
+      Verity.Game.prob (fun o => (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ εWipe b s) →
     (∀ b (s : Verity.Game.Strategy G),
       Verity.Game.prob (fun o => (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o) G s ≤ δPous b s) →
     ∀ s : Verity.Game.Strategy G,
       Verity.Game.prob (fun o =>
           (∃ b a, (S.block b).accepts a o ∧ ¬ (S.block b).Holds (c b) s a o) ∨
-          (∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives o) ∨
+          (∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) ∨
           (∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o)) G s ≤
         ∑ b, ∑ a, err b a s + ∑ b, εWipe b s + ∑ b, δPous b s
 
