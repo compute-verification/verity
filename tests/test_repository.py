@@ -24,6 +24,8 @@ ROOT = Path(__file__).resolve().parents[1]
 #: notes store (cite it from here by ``note:<id>``).
 ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "PROTOCOL.md", "DESIGN.md", "SKILL.md",
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
+#: The Glossary's second file, at the root only: no directory holds a glossary (Daniel, 26 Oct).
+ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 #: Layout/spec documents left in place by the 2026-09-22 migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
     "archive/direct/V2_AIR.md",
@@ -62,13 +64,11 @@ BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, the vLLM checkpoint
-#: manifest (append-only; most of its readers don't read the sibling manifests yet), three vLLM workload specs and two vLLM
-#: logs. Each is capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them silently. A test
-#: fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
+#: manifest (append-only; most of its readers don't read the sibling manifests yet) and three vLLM workload specs. Each is
+#: capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over
+#: BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
-    "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
-    "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
     "integrations/vllm/manifests/checkpoints.json": 320 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
@@ -96,6 +96,7 @@ def _tracked() -> list[str]:
 
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
+                 and p not in ROOT_ONLY_MD
                  and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
                  and not p.startswith(tuple(SPLIT_DOCUMENT_DIRS))]
     assert not offenders, (

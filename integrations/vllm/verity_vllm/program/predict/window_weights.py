@@ -1,4 +1,4 @@
-"""The window circuit's weights (`window_circuit`, VLLM-113): each weight a port reads is its own registered parameter at the
+"""The window circuit's weights (`window_circuit`): each weight a port reads is its own registered parameter at the
 port's row width (`window_builder.weight_param`: ``weights/<label>@<words>``), and a weight is a value like any other, its
 rows committed under the committer's secret salts (`weight_value`), a hiding commitment.
 
@@ -8,11 +8,11 @@ checkpoint's pinned shards' (the checkpoint tie is the committer's own check). T
 root it computes: it holds the registration to its own weights record's shapes (`weights_record`, each weight parameter's
 value, leaves, words and domain and no root; `registration_pins`), so what it learns of the weights is each weight's size
 and its hiding root. `verity-vllm advice --weights-of-record` records the registration's roots as each window's, and a
-window's committer commits the words it serves under the same key (`weight_values`, VLLM-125), so a weight served otherwise
+window's committer commits the words it serves under the same key (`weight_values`), so a weight served otherwise
 has another root and its reads are free (`interface.input_count`). The rotary table has no root (its words are the engine's
 libm's, held to the analytic table only within a bound), so its reads stay free. That the registered weights are a named
 checkpoint's is the committer's word until a zero-knowledge registration proof ties them to the checkpoint's public
-shards (VLLM-131).
+shards.
 """
 from __future__ import annotations
 
@@ -140,7 +140,7 @@ def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: s
 
 
 def weight_values(registered: Any, served: Any, key: bytes, grain: Grain = _GRAIN) -> dict[str, G.Registered]:
-    """The weights a committer serves, committed (VLLM-125's committer, a window's or the registration's): each weight
+    """The weights a committer serves, committed (a window's committer or the registration's): each weight
     parameter the class circuit registers at ``grain`` whose field ``served`` names (its words, as `check.weights_of_record`
     composes the field), its `weight_value` under ``key`` at its nonce (`weight_nonces`). So a window's root for a weight
     is the registered one (`weights_registration`) exactly when it serves the registered words, and the verifier's pin
@@ -229,5 +229,5 @@ def registration_pins(registration: Any, record: dict[str, Any]) -> dict[str, st
     return pins
 
 
-__all__ = ["WEIGHTS_CLASS", "WEIGHTS_NONCE", "record_words", "registration_pins", "weight_nonces", "weight_value", "weight_values",
-           "weights_record", "weights_registration"]
+__all__ = ["WEIGHTS_CLASS", "WEIGHTS_NONCE", "Grain", "record_words", "registration_pins", "weight_nonces", "weight_value",
+           "weight_values", "weights_record", "weights_registration"]
