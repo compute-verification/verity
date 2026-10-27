@@ -267,6 +267,7 @@
   "PouwCheck.Rounds",
   "PouwCheck.Credit",
   "PouwCheck.Period",
+  "PouwCheck.Fill",
   "CoreProtocol.Ratio",
   "CoreProtocol.Profile",
   "CoreProtocol.Protocol",
