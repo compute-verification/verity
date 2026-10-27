@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import time
 
-from verity_vllm.records.commit_run import SCHEMA
+from verity_vllm.records.commit_run import SCHEMA, CommitRun
 
 _T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
@@ -409,6 +409,36 @@ def cuda_residue(base: dict[int, tuple[int, str]], now: dict[int, tuple[int, str
             except Exception:  # noqa: BLE001
                 pass
     return {"count": len(new), "mib": round(sum(v[0] for v in new.values()) / 2**20, 1), "largest": holders}
+
+
+V1 = "vllm-v1"
+
+
+def scheme_refusal(args: Any, wl: dict[str, Any]) -> str | None:
+    """Why the Commit can't commit under ``--commit-scheme`` (None: it can), serve-openai's rule (`serve_seal.scheme_refusal`):
+    vllm-v1 commits SHA-256 (32-byte roots), which only a recorded run's readers take, so it only commits again the recorded vllm-v1
+    Commit ``--of-record`` names, one whose ``runs.jsonl`` records committed runs under 32-byte run roots alone, of the workload's model."""
+    of_record = getattr(args, "of_record", None)
+    if of_record and args.commit_scheme != V1:
+        return f"--of-record names a recorded {V1} Commit to commit again under --commit-scheme {V1}, not under {args.commit_scheme}"
+    if args.commit_scheme != V1:
+        return None
+    if not of_record:
+        return (f"--commit-scheme {V1} commits SHA-256 (32-byte roots), which only a recorded run's readers take: commit under {SR.NAME}, "
+                f"the default, or name the recorded {V1} Commit this one commits again with --of-record RUN_DIR (its runs.jsonl)")
+    try:
+        runs = [r for r in CommitRun.load_lines(Path(of_record) / "runs.jsonl") if r.commit is not None and r.commit.run_root]
+    except (OSError, ValueError) as e:
+        return f"--of-record {of_record}: not a recorded Commit ({type(e).__name__}: {e})"
+    if not runs:
+        return f"--of-record {of_record}: its runs.jsonl records no committed run"
+    if any(len(r.commit.run_root) != 2 * 32 for r in runs):
+        return (f"--of-record {of_record} committed {SR.NAME} ({SR.ROOT_BYTES}-byte run roots), not {V1}: commit under {SR.NAME} "
+                f"(drop --commit-scheme {V1} and --of-record)")
+    models = {r.entry.get("model") for r in runs}
+    if wl.get("model") and models != {wl["model"]}:
+        return f"--of-record {of_record} committed {sorted(map(str, models))}, not {wl['model']}: a Commit under {V1} commits its recorded run's model again"
+    return None
 
 
 def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
@@ -1024,7 +1054,8 @@ class Options:
     out: str = option("--out")
     pairs: int = option("--pairs", type=int, default=5)
     committer: str = option("--committer", default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | native_collect* | native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
-    commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME, "vllm-v1"), help="the commitment scheme: rows-sha512 (default; the windowed worker, native_collect_v2b with --window-mb > 0, 64-byte roots) or vllm-v1 by name (any other committer, an old record's configuration)")
+    commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME, V1), help="the commitment scheme: rows-sha512 (default; the windowed worker, native_collect_v2b with --window-mb > 0, 64-byte roots) or vllm-v1 by name, only to commit again the recorded vllm-v1 Commit --of-record names (`scheme_refusal`)")
+    of_record: str | None = option("--of-record", default=None, metavar="RUN_DIR", help="with --commit-scheme vllm-v1: the recorded vllm-v1 Commit this one commits again (its --out, whose runs.jsonl run roots are 32 bytes), of the workload's model")
     chunk: int = option("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
@@ -1214,6 +1245,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
     settings.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
+    if (why := scheme_refusal(args, wl)) is not None:
+        raise SystemExit(why)
     engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
              hot_job=(_HOT or {}).get("jobs"))
