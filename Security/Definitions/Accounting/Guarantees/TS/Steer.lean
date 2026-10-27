@@ -21,10 +21,10 @@ STEER-PROOF's route B, each `def G : Prop` proved as
   it (a function of `κ` and every other coin). If each segment's noise has point mass at most `μ` (HMU's
   `CoinPointMass` gives `μ` for the dither forms, `2^{-32}` for a uniform word), the chance that some `κ` zeroes some
   `n` segments is at most `|K|·C(G, n)·μ^n`.
-* `GrindUnion`: the same under decision 101's per-matmul seeds `SHA-512(coin ‖ root(A) ‖ root(B))`, where a cheater
-  re-rolls a root for free through its hiding blinds: `T` hash queries get `T` fresh seeds (the random-oracle model),
-  the noise query `q` needs may depend on every other answer but not its own, and the chance that some query zeroes
-  some `n` segments is at most `T·C(G, n)·μ^n`.
+* `GrindUnion`: the same under per-matmul seeds `SHA-512(coin ‖ root(A) ‖ root(B))`, where a cheater re-rolls a root for
+  free through its hiding blinds: `T` hash queries get `T` fresh seeds (the random-oracle model), the noise query `q`
+  needs may depend on every other answer but not its own, and the chance that some query zeroes some `n` segments is at
+  most `T·C(G, n)·μ^n`.
 -/
 
 namespace Accounting.Guarantees.TS

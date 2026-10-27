@@ -1,5 +1,5 @@
-"""The KV cache's read and write sides at an HBM-exhaustion shape (the rulings of 12 Oct: HBM holds the encoded weights,
-the KV cache and filler, and every step reads all of it), on one GPU: `kv.cu`'s libraries (`--lib NAME=PATH`, built with
+"""The KV cache's read and write sides at an HBM-exhaustion shape (HBM holds the encoded weights, the KV cache and
+filler, and every step reads all of it), on one GPU: `kv.cu`'s libraries (`--lib NAME=PATH`, built with
 KV_QHEADS the model's query heads) gated, then timed. Writes `kv-exhaust.json` and `kv.log` under `--out`, and in a
 `research run` its `result.json`.
 

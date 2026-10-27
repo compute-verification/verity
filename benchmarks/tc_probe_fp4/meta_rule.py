@@ -34,6 +34,7 @@ import numpy as np
 
 import probe as P
 import sparse as S
+from verity_config.settings import SHARED
 
 INSTRUCTIONS = {"sp_nvf4_meta": "sp_nvf4", "sp_mxf4_meta": "sp_mxf4"}
 K_STORED, K_LOGICAL, CHUNKS = S.K_STORED, S.K_LOGICAL, S.CHUNKS
@@ -125,7 +126,7 @@ class FakeMeta:
 
     def identity(self) -> dict:
         return {"device": f"FAKE SILICON ({self.model_name})", "compute_capability": "fake", "driver": None, "gpu_uuid": "GPU-fake",
-                "backend": "fake", "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "backend": "fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -301,7 +302,7 @@ def main(args) -> int:
     arch = args.arch or "sm_120a"
     if args.chain != 1:
         raise SystemExit("--chain is not defined for the sparse rows")
-    if args.fake_silicon and os.environ.get("RESEARCH_RUN_ID"):
+    if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
         raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
     if args.fake_silicon and not P.shutil.which(P.nvcc_bin()):
         so, nvcc = None, "not built (fake silicon)"
@@ -441,7 +442,7 @@ def main(args) -> int:
     results["clocks_end"] = dev.clocks(identity.get("gpu_uuid"))
     results["rule"] = {str(m): offs for m, offs in sorted(rule.items())}
     rc = finish()
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         pa = results["part_a"]
         result = {

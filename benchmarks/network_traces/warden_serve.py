@@ -44,16 +44,18 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         [--temperature T] [--top-p P]
     python warden_serve.py fake --listen HOST:PORT [--token-ms 20] [--id-payload P]
     python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
-        --windows N [--start-in 5] [--load-heads FILE] [schedule]
+        --windows N [--start-in 5] [--load-heads FILE] [--paced-ms 50] [schedule]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
     python warden_serve.py check --run DIR
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
-        [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--load-store DIR --load-sinks HOST:PORT,...
+        [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
-  the origin, the listener), runs the warden for `--windows` windows, and writes `warden.json` (each connection's
-  outcome, the tick lateness, the refusals and their windows). Each window's records go to `requests.records`,
+  the origin, the listener), runs the warden for `--windows` windows, each bucket released by its pacer `--paced-ms`
+  after its boundary (`warden`'s "The pacer"; 0: written on the warden's loop), and writes `warden.json` (each
+  connection's outcome, the tick lateness and each tick's (`ticks_ms`), the refusals and their windows, and each
+  bucket's pacer report, `paced`). Each window's records go to `requests.records`,
   `responses.records` and `fails.records` (each failed connection's reason, witness), and each is certified
   (`certificate.Issuer`, with the warden's parameters digest) into `certified.jsonl`, except a window in which the
   warden refused a connection, whose records and rows it certifies and signs none of (`warden`'s "Admission"). Each window of the wire's two records is also committed as
@@ -736,10 +738,11 @@ def prepare_process(params: WardenParams) -> dict:
 async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
                 session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
                 announce=cs._announce, probe: bool = False, process: dict | None = None,
-                load_heads: Path | None = None) -> dict:
+                load_heads: Path | None = None, paced_ms: float = cs.PACED_MS) -> dict:
     """One run of the warden on the host's clock (the module docstring's `serve`), its records published by a
     `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when given, its
-    threads sampled by `stall_probe` when `probe`. Returns what `warden.json` holds, with `process`, what
+    threads sampled by `stall_probe` when `probe`, each bucket released by its pacer `paced_ms` after its boundary
+    (`Warden(paced=…)`; 0: written on its loop). Returns what `warden.json` holds, with `process`, what
     `prepare_process` did. The loop's errors are kept, not logged: the ticker writes no file."""
     out.mkdir(parents=True, exist_ok=True)
     loop = asyncio.get_running_loop()
@@ -749,7 +752,8 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     publish = PublisherProcess(out, key, session, params, load_heads=load_heads)
     origin = time.monotonic() + start_in
     warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
-                    publish=publish, withhold=publish.withhold, release=publish.release, slack=slack)
+                    publish=publish, withhold=publish.withhold, release=publish.release, slack=slack,
+                    paced=paced_ms / 1000 if paced_ms else None)
     server = await asyncio.start_server(warden.handle, *listen)
     sampler = stall_probe.start(out / "stalls.json", origin, {"warden": os.getpid(), "publisher": publish.process.pid},
                                 {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
@@ -769,7 +773,12 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
            "refused_windows": sorted(warden.refused_windows), "ticks": warden.ticks,
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
            "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
-           "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors}
+           "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors,
+           "ticks_ms": [round(x, 3) for x in lateness]}
+    if warden.paced is not None:
+        log["paced"] = {"ms": paced_ms, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
+                        "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3),
+                                      round(r.end * 1000, 3), r.written] for r in warden.releases]}
     (out / "warden.json").write_text(json.dumps(log, indent=1))
     announce({"served": True, "out": str(out)})
     return log
@@ -1115,7 +1124,8 @@ def rehearse(args) -> int:
             serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0",
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
-                                             str(args.start_in), "--slack", str(args.slack), *_flags(args),
+                                             str(args.start_in), "--slack", str(args.slack), "--paced-ms",
+                                             str(args.paced_ms), *_flags(args),
                                              *(["--load-heads", str(out / "load-heads.json")] if load else [])],
                                        stdout=subprocess.PIPE, stderr=log, text=True)
             procs.append(serving)
@@ -1175,6 +1185,9 @@ def parser() -> argparse.ArgumentParser:
     for q in (s, r):
         q.add_argument("--start-in", type=float, default=5.0, help="the origin, seconds after the warden is up")
         q.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
+        q.add_argument("--paced-ms", type=float, default=cs.PACED_MS,
+                       help="when the warden's pacer releases each bucket, ms after its boundary (past the slack, "
+                            "before the next boundary); 0: the warden writes each bucket on its loop")
         for field in dataclasses.fields(WardenParams):
             q.add_argument(f"--{field.name.replace('_', '-')}", type=int, default=SCHEDULE[field.name])
     s.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT")
@@ -1259,7 +1272,8 @@ def main(argv=None) -> int:
             os.environ.pop(name, None)
         asyncio.run(serve(params, args.out, upstream=args.upstream, listen=args.listen, key=args.key,
                           session=session, windows=args.windows, start_in=args.start_in, slack=args.slack,
-                          probe=args.stall_probe, process=process, load_heads=args.load_heads))
+                          probe=args.stall_probe, process=process, load_heads=args.load_heads,
+                          paced_ms=args.paced_ms))
         return 0
     if args.command == "client":
         ar._quiet_runtime()

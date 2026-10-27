@@ -10,8 +10,8 @@
 #   check/                fixture.py's pools, words and sweep digests from the twins (needs verity: run under uv); REPLAY
 #                         names the CPU replay for fixture.py's cross-check (default the tree's examples/h200/replay.py),
 #                         ROWS an ops/rows.py to load in place of the installed one
-#   the unit modules, lib.py, bench.py, check.py, toolchain.txt (nvcc --version and the command lines), source.txt (the
-#   commit), MANIFEST.sha256
+#   the unit modules, lib.py, bench.py, check.py, settings.py (their registry, which they find beside them),
+#   toolchain.txt (nvcc --version and the command lines), source.txt (the commit), MANIFEST.sha256
 # Usage: bash benchmarks/torch_gpu/units/build.sh [OUT]   (default /tmp/units-ship; CUDA names the toolkit, default the first
 #        of /usr/local/cuda-13.0, /usr/local/cuda with nvcc; CUBIN_ONLY=1 stops after the checks and needs no uv; PROCS the
 #        fixture's processes)
@@ -40,7 +40,7 @@ for A in 90a 120a; do
   tail -3 "$OUT/harness-gate.sm_$A.txt"
   echo "nvcc ${FLAGS[*]} -o units.sm_$A.cubin units.cu" >> "$OUT/toolchain.txt"
 done
-cp "$HERE"/{words,lib,rmsnorm,quant,softmax,argmax,relu,add,sweep,bench,check}.py "$OUT/"
+cp "$HERE"/{words,lib,rmsnorm,quant,softmax,argmax,relu,add,sweep,bench,check,settings}.py "$OUT/"
 { git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}"
   git -C "$ROOT" status --porcelain -- benchmarks/torch_gpu/units verity 2>/dev/null || true; } > "$OUT/source.txt"
 REPLAY=${REPLAY:-$ROOT/examples/h200/replay.py}

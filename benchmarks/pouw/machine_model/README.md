@@ -269,7 +269,7 @@ A new design is a file with its own name, title and summary, and a `base` if it 
 
 ## ε in the tensor–scalar model
 
-`eps` reports two layers that are never mixed (Daniel, 17 Oct 06:29Z). The protocol with 100% checking, every word and
+`eps` reports two layers that are never mixed. The protocol with 100% checking, every word and
 operand verified, has the core ε (`--checking full`, the default):
 
     1 − ε_core = (1 − ε_skip − ε_mand − ε_machine)(1 − ε_sched)(1 − ε_clock)

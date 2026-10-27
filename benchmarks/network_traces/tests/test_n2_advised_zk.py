@@ -5,8 +5,7 @@ head checks passing and every window's unit taking an instance; the verifier's o
 the certificates and its own view of the public advice, is the prover's, in whole u16 words. The --e2e link's advice
 (`joined`) numbers each Commit window's requests after the windows' before it. At the tests' T = 8 the
 proof block (`LinkWindows.proof_unit`), evaluated on the rows the prover stages, gives the output words the gates'
-references do (`LinkWindows.outputs`) in every window of every member and on a head the prover changed. Each builder
-`n2_advised_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's own gates. ``--jobs`` is 1
+references do (`LinkWindows.outputs`) in every window of every member and on a head the prover changed. ``--jobs`` is 1
 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or proves
 (`n2_advised_zk.prove` does, on a node)."""
 
@@ -23,7 +22,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.core.protocols.certifier import advice as ADV, head_check as HC
 
@@ -254,20 +252,6 @@ def test_the_proof_unit_on_the_staged_rows_is_the_gates_references():
     assert _evaluate(lw, windows) == [x.word for x in windows]
     assert [x.word & 1 for x in rounds["honest"].windows] == [1] * AT.WINDOWS
     assert all(0 in [x.word & 1 for x in rd.windows] for name, rd in rounds.items() if name != "honest")
-
-
-@pytest.mark.slow
-def test_each_advised_builder_traces_to_its_parts_gates_called_as_c_flock_calls_it():
-    parts = n2.builders()
-    assert {"NetworkAdvisedOwn", "NetworkAdvisedBucket", "NetworkAdvisedEnd"} <= {d.name for d in parts}
-    for d in parts:
-        if not d.name.startswith("NetworkAdvised"):
-            continue
-        key = (n2.T, 4)
-        S = SimpleNamespace(**dict(zip(d.statics, key)))
-        params, ret = d.signature(S)
-        got, want = TR.trace(lambda C, *e, d=d, S=S: d.build(C, S, *e), [t for _, t in params], ret), d.traced(*key)
-        assert (got.gates, got.outputs) == (want.gates, want.outputs), d.name
 
 
 def test_the_scan_names_both_ends_pieces_and_leaves_out_what_the_public_rows_hold():

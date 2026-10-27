@@ -1,8 +1,8 @@
 # The H200 example: the walking skeleton
 
-The GPU serving loop of the one-H200 demo: steps of the frozen MQA shape (`shape.FROZEN`, `verity_torch_loop.weights`'s `H200`) on
-the plain INT8 weights, loaded once into the card's memory and resident across steps (`--weights staged` decodes them from
-the store into staging instead), every op's output committed through the per-step commit call, drawn slots
+The GPU serving loop of the one-H200 demo: steps of the frozen MQA shape (`shape.FROZEN`, `served_weights`'s `H200`) on the
+plain INT8 weights, loaded once into the card's memory and resident across steps (`--weights staged` decodes them from the
+store into staging instead), every op's output committed through the per-step commit call, drawn slots
 opened by replaying their requests and drawn units replayed bit for bit against the Definitions, each subprotocol run against the
 step or named, and a replay bundle and block record written. `verity example h200 --out OUT [...]` runs it
 (`run.py --help`).
@@ -13,13 +13,12 @@ path's store, the network certifier's digests are a fixture, and the bandwidth a
 interfaces between its subprotocols, the drawn-unit replay bundle and the block record, a suite of its own (its README).
 
 It is an example, not an integration: it composes pieces from several owners (memory's store and decode call, kernels'
-GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run, and
-`integrations/torch_loop` stays the CPU loop of `verity.ml.windows.interface`. When the real pieces land they replace the
-fixtures here, one module each, and the record's `stands_in_for` fields go to `null`.
+GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run. When the real pieces land
+they replace the fixtures here, one module each, and the record's `stands_in_for` fields go to `null`.
 
 ## Workload and placement
 
-The workload is the frozen MQA shape on ALLP-IFACE's seeded INT8 weights (`verity_torch_loop.weights`), with `--shape
+The workload is the frozen MQA shape on ALLP-IFACE's seeded INT8 weights (`e2e_h200/served_weights.py`), with `--shape
 tiny|small|slice` for CPU runs; it isn't an integration yet (`example.toml`: `workload = "none"`). Every party runs in the
 one run on one GPU node (`vy-dc-h200-2` for `percall_job.sh`): the driver and its commit call on the prover's side, and the
 replay and the opening on the verifier's, on fixture coins. Where the run of record's parties ran, the example's rung on the

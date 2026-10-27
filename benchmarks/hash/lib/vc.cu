@@ -2,9 +2,9 @@
 // (benchmarks/pouw/commit_gpu/sha512.cuh, included by path); the rest is vendored from three seeds, each piece re-pointed
 // from __constant__ memory to kernel parameters (__grid_constant__) so that plans of many domains run back to back on one
 // stream with no symbol copy:
-//   * native_rows.cu (circuits, cursor/commit-speed-21f3 934d0bcbd): LeafK / NodeK, the frame leaf, pad and node templates,
+//   * native_rows.cu (934d0bcbd): LeafK / NodeK, the frame leaf, pad and node templates,
 //     hash_after_block, salt_prf, salt_digest, the nibble-table mask, the leaf, the level kernels and the host builder;
-//   * sharaw.cu (hash, cursor/verity-hash-15ad 4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8,
+//   * sharaw.cu (4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8,
 //     sr_data), with commit_gpu's tree schedule (a level a launch while a level is wider than 512 nodes, then one block for
 //     the rest); sr_data's fold and climb (k_leaf_fold), its nodes by length or (sm_100) through compress_compact /
 //     node_rt; sr_leaf4 (k_leaf_spec) with mask_roll;
@@ -218,7 +218,7 @@ template <bool SH> DEV void ld_dig(const u64* p, u64* d, int n) {
 }
 // a unit's digest over its s segment digests (words; SH, in shared memory) from the Q state, into out (byte order); an even
 // s's all-padding last block through kw_pad, its schedule from the host, when given. k_rows_seg passes it: on sm_120 its fold
-// compressing that block of constants came out wrong for some rows (37cc862b6's probe, r20261018-232746-4eed).
+// compressing that block of constants came out wrong for some rows.
 template <bool SH> DEV void seg_fold(const u64* qst, const u64* dig, u32 s, uint8_t* out, const u64* kw_pad) {
   u64 st[8], w[16];
   cpy8(st, qst);
