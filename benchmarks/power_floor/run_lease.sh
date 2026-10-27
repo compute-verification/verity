@@ -65,26 +65,72 @@ pipes() {  # pipes PREFIX SECS WARM: the whole table at the GPU's current clocks
   one "$p$MMA-1-again" "$MMA" "$MMA" 1 "$s" "$w"
 }
 
-pipes "" "$S" "$W"
-
-# The clock sweep, where clocks may be set: the tensor pipe, FFMA and the resident-idle floor at each locked clock.
-if sudo -n nvidia-smi -i "$UUID" -lgc "${PF_CLOCKS_FIRST:-1500},${PF_CLOCKS_FIRST:-1500}" >"$OUT/lgc.txt" 2>&1; then
+# Clocks may be set only where `sudo -n nvidia-smi` is allowed. Every exit puts the GPU back: locked at PF_RELOCK_MHZ
+# (the Nebius nodes' vy-clocks lock, 2100), else reset to the defaults.
+restore() {
   if [ -n "${PF_RELOCK_MHZ:-}" ]; then
-    trap 'sudo -n nvidia-smi -i "$UUID" -lgc "$PF_RELOCK_MHZ,$PF_RELOCK_MHZ" >>"$OUT/lgc.txt" 2>&1; kill $SMI 2>/dev/null' EXIT
+    sudo -n nvidia-smi -i "$UUID" -lgc "$PF_RELOCK_MHZ,$PF_RELOCK_MHZ" >>"$OUT/lgc.txt" 2>&1
   else
-    trap 'sudo -n nvidia-smi -i "$UUID" -rgc >>"$OUT/lgc.txt" 2>&1; kill $SMI 2>/dev/null' EXIT
+    sudo -n nvidia-smi -i "$UUID" -rgc >>"$OUT/lgc.txt" 2>&1
   fi
+  nvidia-smi -i "$UUID" -q -d CLOCK >"$OUT/nvsmi-restored.txt" 2>&1
+}
+armed=0
+arm() {
+  [ $armed = 1 ] && return 0
+  sudo -n nvidia-smi -i "$UUID" -q -d CLOCK >/dev/null 2>&1 || return 1
+  trap 'restore; kill $SMI 2>/dev/null' EXIT
+  trap 'exit 143' TERM INT
+  armed=1
+}
+
+# The clock sweep: the tensor pipe, FFMA, the GEMMs and the resident-idle floor at each locked clock.
+sweep() {
   for f in ${PF_CLOCKS:-1980 1755 1500 1200 900}; do
-    sudo -n nvidia-smi -i "$UUID" -lgc "$f,$f" >>"$OUT/lgc.txt" 2>&1 || continue
+    arm && sudo -n nvidia-smi -i "$UUID" -lgc "$f,$f" >>"$OUT/lgc.txt" 2>&1 || {
+      echo "sudo -n nvidia-smi -lgc $f refused" >>"$OUT/lgc.txt"
+      continue
+    }
     one "lgc$f-sleep" sleep sleep 0 10 4
     one "lgc$f-$MMA-1" "$MMA" "$MMA" 1 10 4
     one "lgc$f-$MMA-0" "$MMA" "$MMA" 0 10 4
     one "lgc$f-ffma-1" ffma ffma 1 10 4
     one "lgc$f-gemm-1" gemm 1 10 4
   done
-else
-  echo "sudo -n nvidia-smi -lgc refused: no clock sweep" >>"$OUT/lgc.txt"
-fi
+}
+
+# At the default clocks (the power cap holds the board, not a lock): the pipes the public best uses, alone and beside
+# the tensor pipe, and the GEMMs.
+cap() {
+  arm && sudo -n nvidia-smi -i "$UUID" -rgc >>"$OUT/lgc.txt" 2>&1 || {
+    echo "sudo -n nvidia-smi -rgc refused: no default-clock phase" >>"$OUT/lgc.txt"
+    return
+  }
+  nvidia-smi -i "$UUID" -q -d CLOCK,POWER,PERFORMANCE >"$OUT/nvsmi-default.txt" 2>&1
+  one "cap-gemm-1" gemm 1 "$S" "$W"
+  one "cap-sleep" sleep sleep 0 "$S" "$W"
+  one "cap-idle" idle 10
+  for m in 1 0 2; do one "cap-$MMA-$m" "$MMA" "$MMA" $m "$S" "$W"; done
+  one "cap-gemm-0" gemm 0 "$S" "$W"
+  for r in dp4a ffma int lds; do one "cap-$r-1" $r $r 1 "$S" "$W"; done
+  one "cap-dp4a-0" dp4a dp4a 0 "$S" "$W"
+  one "cap-$MMA+sleep-1" "$MMA" sleep 1 "$S" "$W"
+  for b in dp4a ffma int lds ldg sha; do one "cap-$MMA+$b-1" "$MMA" $b 1 "$S" "$W"; done
+  one "cap-$MMA+dp4a-0" "$MMA" dp4a 0 "$S" "$W"
+  one "cap-dp4a+ffma-1" dp4a ffma 1 "$S" "$W"
+  one "cap-gemm-1-again" gemm 1 "$S" "$W"
+}
+
+case ${PF_PLAN:-full} in
+  full)
+    pipes "" "$S" "$W"
+    sweep
+    ;;
+  cap)
+    cap
+    PF_CLOCKS=${PF_CAP_CLOCKS:-2430 2250 2100} sweep
+    ;;
+esac
 nvidia-smi -i "$UUID" -q >"$OUT/nvsmi-after.txt" 2>&1
 rm -f "$LINE"
 exit 0

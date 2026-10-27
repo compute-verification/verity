@@ -8,10 +8,12 @@
 #     --wait-max 1800 --run-max 2400 -- bash benchmarks/power_floor/run.sh
 #
 # $OUT gets energy.jsonl (energy.cu's line a config, with its label), phases.jsonl (each config's start and end, UTC),
-# smi_trace.csv (nvidia-smi every 50 ms on the leased GPU), volt/ (nvidia-smi -q -d VOLTAGE,CLOCK mid-window), the
+# smi_trace.csv (nvidia-smi every 50 ms on the leased GPU), volt/ (nvidia-smi -q -d VOLTAGE,CLOCK,POWER mid-window), the
 # nvidia-smi -q snapshots before and after, energy.sass and build.log. PF_SECS (15) is a window, PF_WARM (6) the warm-up
-# before it. Where `sudo -n nvidia-smi -lgc` is allowed (not under the Nebius lockout) a clock sweep follows (PF_CLOCKS,
-# MHz), and the GPU is put back as it was (PF_RELOCK_MHZ: lock it there; unset: nvidia-smi -rgc).
+# before it, PF_LEASE_ON the GPU to wait for (gpu-lease --on). PF_PLAN=full (the default): every config at the GPU's
+# clocks, then a clock sweep (PF_CLOCKS, MHz); PF_PLAN=cap: the default clocks (nvidia-smi -rgc: the power cap holds the
+# board), then PF_CAP_CLOCKS (2430 2250 2100). Clocks change only where `sudo -n nvidia-smi` is allowed, and every exit
+# puts the GPU back: locked at PF_RELOCK_MHZ (2100 on the Nebius nodes, vm_setup.sh's vy-clocks), else nvidia-smi -rgc.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -30,4 +32,5 @@ trap 'rm -rf "$WORK"' EXIT
 "$NVCC" -O3 -std=c++17 "${ARCH[@]}" -lineinfo -o "$WORK/energy" "$HERE/energy.cu" -lcublasLt -ldl -lpthread \
   >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }
 cuobjdump -sass "$WORK/energy" >"$OUT/energy.sass" 2>&1
-gpu-lease 1 --wait --max-min "${PF_LEASE_MIN:-30}" -- bash "$HERE/run_lease.sh" "$WORK/energy" "$MMA"
+gpu-lease 1 --wait ${PF_LEASE_ON:+--on "$PF_LEASE_ON"} --max-min "${PF_LEASE_MIN:-30}" -- \
+  bash "$HERE/run_lease.sh" "$WORK/energy" "$MMA"
