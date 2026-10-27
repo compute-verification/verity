@@ -1,5 +1,9 @@
 {
  "definitions": {
+  "LogSoftmaxAt_v1": {
+   "and": 1545,
+   "type": "399b822b948ce52de11ada2ed6555ee896dc8bbe4980c67ca3b277c400e332e33bab2eff0c3b6842a74885b4ed99474952611012db70edcae02db77c6b65428f"
+  },
   "LogSoftmaxLaneMax_v1{KL=3}": {
    "and": 1782,
    "type": "faeaf0499d747340c58f77ef475562a7947647e615da546233b862354af2c9d08a41e3cb4c27357942adddc6c62c0a09bec7a93ab73b66621e76456df6fb160b"
