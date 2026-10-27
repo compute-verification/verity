@@ -18,7 +18,8 @@ times `(a/b)²^j`, and `1/(1 − (a/b)²) ≤ 9/8` at `a/b ≤ 1/3`). `ln x` spl
 The figures: `pooledCount` rounds `ln(1/δ)`'s upper bound up over `q` (`pooledCount_ge`); `least` returns its upper
 end or a value that passes its test (`least_spec`), `choose` is `Nat.choose` (`choose_eq`), and `shortOk`'s test,
 divided through, is `pooledShort_log`'s hypothesis at its `z` (`shortOk_spec`); `clog2 x` is at least `log2 x`
-(`clog2_spec`).
+(`clog2_spec`). Each is proved for a ratio with its positivity and range as hypotheses (`lnBrackets_of`,
+`integrityPeriod_of`, `pooledShort_of`, `horizonLeak_of`), and the property, which takes none, instantiates it.
 -/
 
 namespace Properties.Onsite
@@ -150,7 +151,9 @@ theorem split_eq (n m : ℕ) (hm : 0 < m) (hmn : m ≤ n) :
   congr 1
   field_simp <;> ring
 
-theorem lnBrackets : LnBrackets := by
+theorem lnBrackets_of : ∀ x : Ratio, 0 < x.den → x.den ≤ x.num →
+    ((Pooled.ln x).1 : ℝ) / 2 ^ Pooled.PREC ≤ Real.log ((x.num : ℝ) / x.den) ∧
+      Real.log ((x.num : ℝ) / x.den) ≤ ((Pooled.ln x).2 : ℝ) / 2 ^ Pooled.PREC := by
   intro x hd hdn
   rcases x with ⟨n, d⟩
   simp only at hd hdn
@@ -201,7 +204,7 @@ theorem lnBrackets : LnBrackets := by
 /-- `pooledCount q δ` is at least `ln(1/δ)/q`. -/
 theorem pooledCount_ge (q δ : Ratio) (hq : 0 < q.num) (hqd : 0 < q.den) (hδ : 0 < δ.num) (hδd : δ.num ≤ δ.den) :
     Real.log (1 / ((δ.num : ℝ) / δ.den)) / ((q.num : ℝ) / q.den) ≤ pooledCount q δ := by
-  have hb := (lnBrackets ⟨δ.den, δ.num⟩ hδ hδd).2
+  have hb := (lnBrackets_of ⟨δ.den, δ.num⟩ hδ hδd).2
   simp only at hb
   have hqn : (0 : ℝ) < q.num := by exact_mod_cast hq
   have hqd' : (0 : ℝ) < q.den := by exact_mod_cast hqd
@@ -218,11 +221,13 @@ theorem pooledCount_ge (q δ : Ratio) (hq : 0 < q.num) (hqd : 0 < q.den) (hδ : 
     _ = _ := by ring
 
 theorem integrityHorizonCovers : IntegrityHorizonCovers := by
-  intro q δ hq hqd hδ hδd w hw
-  have h := lt_of_lt_of_le (not_le.mp hw) (pooledCount_ge q δ hq hqd hδ hδd)
-  have : w < pooledCount q δ := by exact_mod_cast h
-  unfold faultyBlocks
-  omega
+  intro a b c e
+  refine le_trans (pooledCount_ge ⟨a + 1, b + 1⟩ ⟨c + 1, c + 1 + e⟩ (Nat.succ_pos a) (Nat.succ_pos b) (Nat.succ_pos c)
+    (Nat.le_add_right _ _)) ?_
+  have h : pooledCount ⟨a + 1, b + 1⟩ ⟨c + 1, c + 1 + e⟩ ≤ faultyBlocks ⟨a + 1, b + 1⟩ ⟨c + 1, c + 1 + e⟩ + 1 := by
+    unfold faultyBlocks
+    omega
+  exact_mod_cast h
 
 /-- `least` returns its upper end, or a value that passes its test. -/
 theorem least_spec (ok : ℕ → Bool) : ∀ fuel lo hi, least ok fuel lo hi = hi ∨ ok (least ok fuel lo hi) = true
@@ -250,7 +255,8 @@ theorem choose_eq (n k : ℕ) : Pooled.choose n k = n.choose k := by
   · exact (Nat.choose_eq_zero_of_lt h).symm
   · exact foldl_choose n k
 
-theorem integrityPeriodCovers : IntegrityPeriodCovers := by
+theorem integrityPeriod_of : ∀ (n kd : ℕ) (e : Ratio), 0 < e.den → Pooled.threshold n kd e ≤ n →
+    ((n - Pooled.threshold n kd e).choose kd : ℝ) / (n.choose kd : ℝ) ≤ (e.num : ℝ) / e.den := by
   intro n kd e he hK
   have hdef : threshold n kd e = least (fun k => decide (Pooled.choose (n - k) kd * e.den ≤
       e.num * Pooled.choose n kd)) (fuel (n + 1)) 0 (n + 1) := rfl
@@ -276,8 +282,8 @@ theorem shortOk_spec (U : ℕ) (p δ z : Ratio) (M : ℕ) (hp : 0 < p.den) (hδ 
         Real.log ((z.num : ℝ) / z.den) ≤ M := by
   simp only [shortOk, Bool.and_eq_true, decide_eq_true_eq] at h
   obtain ⟨⟨hz0, hz⟩, hN⟩ := h
-  have hH := (lnBrackets ⟨δ.den, δ.num⟩ hδ hδd).2
-  have hL := (lnBrackets z hz0 hz.le).1
+  have hH := (lnBrackets_of ⟨δ.den, δ.num⟩ hδ hδd).2
+  have hL := (lnBrackets_of z hz0 hz.le).1
   simp only at hH
   generalize (Pooled.ln ⟨δ.den, δ.num⟩).2 = H at hH hN
   generalize (Pooled.ln z).1 = L at hL hN
@@ -316,7 +322,11 @@ theorem shortOk_spec (U : ℕ) (p δ z : Ratio) (M : ℕ) (hp : 0 < p.den) (hδ 
   rw [e1]
   linarith
 
-theorem pooledShortCovers : PooledShortCovers := by
+theorem pooledShort_of : ∀ (U : ℕ) (p δ : Ratio), 0 < p.den → 0 < δ.num → δ.num ≤ δ.den →
+    Pooled.shortCount U p δ ≤ U →
+    ∃ z : ℝ, 1 < z ∧
+      ((z - 1) * U * ((p.num : ℝ) / p.den) + Real.log (1 / ((δ.num : ℝ) / δ.den))) / Real.log z ≤
+        Pooled.shortCount U p δ := by
   intro U p δ hp hδ hδd hM
   unfold shortCount at hM ⊢
   split_ifs at hM ⊢ with h0 h1
@@ -339,7 +349,12 @@ theorem clog2_spec (x : ℕ) : x ≤ 2 ^ clog2 x := by
     have := (Nat.log2_lt h1).mp (Nat.lt_add_one _)
     omega
 
-theorem horizonLeakCovers : HorizonLeakCovers := by
+theorem horizonLeak_of : ∀ (B every units : ℕ) (q δ : Ratio), 0 < q.num → 0 < q.den → 0 < δ.num → δ.num ≤ δ.den →
+    Real.log (1 / ((δ.num : ℝ) / δ.den)) ≤ ((q.num : ℝ) / q.den) * (Pooled.leakBits B every units q δ).2.1 ∧
+      (∀ N ≤ B * units, (N + 1) ^ (Pooled.leakBits B every units q δ).2.1 *
+        2 ^ (Pooled.BLOCK_BITS * (Pooled.leakBits B every units q δ).2.1) ≤
+          2 ^ (Pooled.leakBits B every units q δ).2.2) ∧
+      (Pooled.leakBits B every units q δ).1 = B * every + (Pooled.leakBits B every units q δ).2.2 := by
   intro B every units q δ hq hqd hδ hδd
   refine ⟨?_, fun N hN => ?_, rfl⟩
   · have h := pooledCount_ge q δ hq hqd hδ hδd
@@ -361,5 +376,27 @@ theorem horizonLeakCovers : HorizonLeakCovers := by
           rw [← pow_mul, ← pow_add]
           congr 1
           ring
+
+theorem lnBrackets : LnBrackets := fun a d =>
+  lnBrackets_of ⟨d + 1 + a, d + 1⟩ (Nat.succ_pos d) (Nat.le_add_right _ _)
+
+theorem integrityPeriodCovers : IntegrityPeriodCovers := by
+  intro n kd num d
+  by_cases h : n < threshold n kd ⟨num, d + 1⟩
+  · exact Or.inl h
+  · exact Or.inr (integrityPeriod_of n kd ⟨num, d + 1⟩ (Nat.succ_pos d) (by omega))
+
+theorem pooledShortCovers : PooledShortCovers := by
+  intro U pn pd c e
+  by_cases h : U < shortCount U ⟨pn, pd + 1⟩ ⟨c + 1, c + 1 + e⟩
+  · exact Or.inl h
+  · exact Or.inr (pooledShort_of U ⟨pn, pd + 1⟩ ⟨c + 1, c + 1 + e⟩ (Nat.succ_pos pd) (Nat.succ_pos c)
+      (Nat.le_add_right _ _) (by omega))
+
+theorem horizonLeakCovers : HorizonLeakCovers := by
+  intro B every units a b c e
+  obtain ⟨h1, h2, h3⟩ := horizonLeak_of B every units ⟨a + 1, b + 1⟩ ⟨c + 1, c + 1 + e⟩ (Nat.succ_pos a)
+    (Nat.succ_pos b) (Nat.succ_pos c) (Nat.le_add_right _ _)
+  exact ⟨h1, h2 _ le_rfl, h3⟩
 
 end Properties.Onsite
