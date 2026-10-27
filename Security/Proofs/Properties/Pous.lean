@@ -4,8 +4,8 @@ import Definitions.Pous.P2.Cost
 /-!
 # Proofs of the PoUS setup check's properties (`Properties.Pous`), and what is not a claim
 
-Proved: `deployed : Deployed`, the registered point's numbers, by reduction (`rfl`, `decide`). Open: `AcceptsDecodes` and
-`PublishesRoot`.
+Proved: `deployed : Deployed`, the registered point's numbers, by reduction (`rfl`, `decide`). `AcceptsDecodes` and
+`PublishesRoot` are proved in `Proofs.Properties.Pous.Setup`.
 
 Stated here, open, and claims of no one:
 
