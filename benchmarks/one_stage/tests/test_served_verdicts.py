@@ -1,15 +1,22 @@
 """`served_verdicts.py`'s window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
 the window it audits holds the most requests and none carried across windows; a subprotocol with no piece is named missing
-with its issue and given no verdict; and sampled proofs' accepted answer composes, with the others missing, to a pending
-block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing
-composes to reject with no block record. The wipe composes only when its answer accepts on the record's server. PoUW's development piece checks the window's gate session and credits nothing,
-and the gate is refused while the lane has a period open. The period the served windows join opens, through infra's own
-gate, on the Program serve-openai declared and the circuit files built for it, as core's credit reads them, and is
-refused on files of anything else. `served_verdicts.sh`'s window circuits gate on every class of
-CLASSES, and the class of record's count after them gates nothing."""
+with the command it lacks and given no verdict, one that refused to run is missing, and one that ran out of its limit or
+wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to a pending block record that
+`block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
+block record. The record accepts only when every subprotocol accepted on its node, and names each one missing, rejecting,
+malformed or about another server. The wipe composes only when its answer accepts on the record's server. PoUW's
+development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
+open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
+the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
+`served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
+gates nothing. Its load, `serve_load.py --varied`, writes each request's send, first-token and done times beside its
+record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
+import argparse
+import importlib.util
 import io
+import itertools
 import json
 import os
 import shlex
@@ -29,6 +36,9 @@ import served_verdicts as S
 from verity_e2e_demo import block_record as BR
 
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
+_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "examples" / "vllm" / "serve_load.py")
+SL = importlib.util.module_from_spec(_SL)
+_SL.loader.exec_module(SL)
 
 
 def _write(d: Path, name: str, rows: list[dict]) -> None:
@@ -70,22 +80,65 @@ def test_a_failed_seal_or_commit_or_check_is_refused(tmp_path):
         S.pick(d, slots=4)
 
 
-def test_a_subprotocol_with_no_piece_is_named_missing_with_its_issue(tmp_path, capsys):
+def test_a_subprotocol_with_no_piece_is_named_missing_with_the_command_it_lacks(tmp_path, capsys):
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env={})
     lines = capsys.readouterr().out.splitlines()
     assert [g["verdict"] for g in got.values()] == ["missing"] * 4
     assert [line.split(" (")[0] for line in lines] == ["MISSING PoUW", "MISSING the bandwidth audit", "MISSING PoUS",
                                                        "MISSING the network certifier"]
-    assert all(issue in "\n".join(lines) for issue in ("VLLM-33 G1", "VLLM-33 G2", "MEM-94", "NET-83", "INF-263"))
+    for line, (cmd, owner) in zip(lines, (("POUW_CMD", "compute-accounting"), ("BANDWIDTH_CMD", "memory-accounting"),
+                                          ("POUS_CMD", "memory-accounting"), ("CERTIFIER_CMD", "network-accounting"))):
+        assert f"({cmd} unset; {owner}): " in line
     assert not (tmp_path / "pieces").exists()
 
 
+def _reject(protocol: str) -> dict:
+    return {"protocol": protocol, "verdict": "reject", "reason": "no", "commitment": None, "public": None, "profile": None}
+
+
 def test_a_piece_that_ran_gives_its_answer_and_one_that_wrote_none_errs(tmp_path, capsys):
-    env = {"POUS_CMD": 'echo \'{"verdict": "reject", "reason": "no"}\' > "$3/answer.json"', "CERTIFIER_CMD": "true"}
-    got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env)
+    env = {"POUS_CMD": f"echo '{json.dumps(_reject('verity/pous/p2/v4/run'))}' > \"$3/answer.json\"",
+           "CERTIFIER_CMD": "true", "BANDWIDTH_CMD": 'echo \'{"verdict": "reject", "reason": "no"}\' > "$3/answer.json"'}
+    got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="vy-dc-h200")
     assert got["pous"] == {"verdict": "reject", "reason": "no", "rc": 0}
     assert got["certifier"]["verdict"] == "error" and "wrote no answer" in got["certifier"]["reason"]
-    assert (got["pouw"]["verdict"], got["bandwidth"]["verdict"]) == ("missing", "missing")
+    assert got["bandwidth"]["verdict"] == "error" and "not a core answer" in got["bandwidth"]["reason"]
+    assert got["pouw"]["verdict"] == "missing"
+    assert json.loads((tmp_path / "pieces" / "pous" / S.RAN).read_text()) == {"server": "vy-dc-h200", "rc": 0,
+                                                                              "limit": S.PIECE_TIMEOUT}
+    assert {k: S.piece_row(k, tmp_path / "pieces")["verdict"] for k in S.PIECES} == {
+        "work": "missing", "bandwidth": "error", "space": "reject", "communication": "error"}
+
+
+def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tmp_path):
+    """Each piece runs under `timeout` at ``<COMPONENT>_TIMEOUT``, else ``PIECE_TIMEOUT``: one that runs out of it (exit
+    124, which the fake `timeout` gives for the limit ``0``) errs naming the limit, and one that writes ``refused.txt``
+    instead of an answer is missing with the refusal as why."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "timeout").write_text(f'#!/bin/sh\necho "$3" >> {tmp_path}/limits\n[ "$3" = 0 ] && exit 124\nshift 3\nexec "$@"\n')
+    (bin_ / "timeout").chmod(0o755)
+    env = {"PATH": f"{bin_}:{os.defpath}", "PIECE_TIMEOUT": "7m", "BANDWIDTH_TIMEOUT": "0", "BANDWIDTH_CMD": "true",
+           "POUS_CMD": 'echo "PoUS REFUSED: the card has a compute process" > "$3/refused.txt"; exit 3'}
+    got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="n")
+    assert (tmp_path / "limits").read_text().split() == ["0", "7m"]
+    assert got["bandwidth"] == {"verdict": "error", "rc": 124,
+                                "reason": "its piece ran (exit 124, out of time at 0) and wrote no answer; "
+                                          "its log is bandwidth/piece.log"}
+    assert got["pous"] == {"verdict": "missing", "rc": 3,
+                           "why": "its piece refused to run: PoUS REFUSED: the card has a compute process"}
+
+
+def test_a_piece_that_left_a_file_that_is_not_json_errs_about_no_server_and_the_next_piece_still_runs(tmp_path):
+    env = {"BANDWIDTH_CMD": f"echo '{json.dumps(_reject('verity/remote-bandwidth/v0'))}' > \"$3/answer.json\"; "
+                            "echo '{' > \"$3/served.json\"",
+           "POUS_CMD": f"echo '{json.dumps(_reject('verity/pous/p2/v4/run'))}' > \"$3/answer.json\""}
+    got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="n")
+    assert got["bandwidth"]["verdict"] == "error"
+    assert got["bandwidth"]["reason"].startswith("its piece left a file that isn't JSON: JSONDecodeError")
+    assert got["pous"] == {"verdict": "reject", "reason": "no", "rc": 0}
+    row, at = S.piece("bandwidth", tmp_path / "pieces")
+    assert (row["verdict"], row["owner"], at) == ("error", "memory-accounting", (None, "real"))
 
 
 def _accepted() -> dict:
@@ -105,10 +158,12 @@ def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
     assert BR.check(rec) == {}
     assert rec["legs"]["integrity"]["quantity"]["value"] == 2 and rec["server_time"] == [{"server": "vy-dc-h200", "steps": [5, 11]}]
     assert (line["composed"], line["record_missing"]) == ("pending", ["bandwidth", "certifier", "pous", "pouw", "wipe"])
-    assert line["missing"] == {"PoUW": "VLLM-33 G1", "the bandwidth audit": "VLLM-33 G2", "PoUS": "MEM-94",
-                               "the network certifier": "NET-83", "the wipe": "MEM-96"}
-    assert report["protocols"]["work"] == {"verdict": "missing", "owner": "vllm-serve-arms", "issue": "VLLM-33 G1",
-                                           "why": S.PIECES["work"][4]}
+    assert {name: why.split(" unset: ")[0] for name, why in line["missing"].items()} == {
+        "PoUW": "POUW_CMD", "the bandwidth audit": "BANDWIDTH_CMD", "PoUS": "POUS_CMD", "the network certifier": "CERTIFIER_CMD",
+        "the wipe": "WIPE_CMD"}
+    assert report["protocols"]["work"] == {"verdict": "missing", "owner": "compute-accounting",
+                                           "why": f"POUW_CMD unset: {S.PIECES['work'][3]}"}
+    assert line["elsewhere"] == {} and "unserved" not in line
 
 
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
@@ -165,7 +220,83 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
     elif case == "unserved":
         assert rec["legs"]["wipe"] is None and "the wipe" not in line["missing"]
     else:
-        assert rec["legs"]["wipe"] is None and line["missing"]["the wipe"] == "MEM-96"
+        assert rec["legs"]["wipe"] is None
+        assert line["missing"]["the wipe"] == "its piece refused to run: WIPE REFUSED: the card has a compute process"
+
+
+#: an accepted core answer of each piece's subprotocol, its public outputs the block record's leg certificate
+ACCEPTS = {
+    "pouw": {"protocol": "verity/pouw/v1", "public": {"work": {"level": 3, "n": 4, "credited_tiles": 2, "credited": 8192}},
+             "profile": {"delta": "1/1000000"}},
+    "bandwidth": {"protocol": "verity/remote-bandwidth/v0", "public": {"eps": "1/1000000", "q_bytes": 6963200}, "profile": {}},
+    "pous": {"protocol": "verity/pous/p2/v4/run", "public": {"certified": True, "eps": "1/1000000", "s_bits": 1 << 30},
+             "profile": {}},
+    "certifier": {"protocol": "verity/certifier/v0", "public": {"K": 15764, "eps": "1/100", "windows": 1}, "profile": {}},
+    "wipe": {k: WIPE_ACCEPT[k] for k in ("protocol", "public", "profile")},
+}
+COMPONENTS = ("pouw", "bandwidth", "pous", "certifier", "wipe")
+
+
+@pytest.mark.parametrize("case, piece", [("accept", None)] + [
+    (case, piece) for case in ("missing", "reject", "elsewhere", "malformed") for piece in COMPONENTS])
+def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_names_each_that_does_not(
+        tmp_path, monkeypatch, capsys, case, piece):
+    """Every piece's answer accepted on the record's node (each piece's `RAN`, which a `SERVED` naming no server leaves it
+    about, and the wipe's `SERVED`): the composed verdict is ``accept``, with nothing missing, and its reason names each
+    subprotocol's accept. One piece with no answer leaves it ``pending`` and names that piece missing with
+    why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
+    no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    pieces = tmp_path / "pieces"
+    for comp in COMPONENTS:
+        (d := pieces / comp).mkdir(parents=True)
+        if comp == piece and case == "missing":
+            continue
+        a = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS[comp]}
+        if comp == piece and case == "reject":
+            a = {**a, "verdict": "reject", "reason": "a read came back late", "public": None, "profile": None}
+        if comp == piece and case == "malformed":
+            a = {**a, "public": {"unrelated": 1}}
+        (d / "answer.json").write_text(json.dumps(a))
+        server = "vy-dc-h200-2" if comp == piece and case == "elsewhere" else "vy-dc-h200"
+        if comp == "wipe" or server != "vy-dc-h200":
+            (d / S.SERVED).write_text(json.dumps({"server": server}))
+        elif comp == "bandwidth":
+            (d / S.SERVED).write_text(json.dumps({"served": {"window": 1}, "scope": "beside the served window"}))
+        if comp != "wipe":
+            (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    (tmp_path / "serve").mkdir()
+    rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
+                 "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"),
+                 "--node", "vy-dc-h200"])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    leg, runner = piece, {v[1]: k for k, v in S.PIECES.items()} | {"wipe": "wipe"}
+    name = S.NAMES[runner[piece]] if piece else None
+    if case in ("reject", "malformed"):
+        assert rc == 1 and (line["composed"], line["by"], line["block_record"]) == ("reject", [name], None)
+        assert line["verdicts"][name] == ("reject" if case == "reject" else "error")
+        assert not (tmp_path / "record" / "block-record.json").exists()
+        report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
+        row = next(r for k, r in report["protocols"].items() if S.NAMES[k] == name)
+        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {leg} leg: KeyError")
+        return
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert rc == 0 and line["check"] == {} == BR.check(rec)
+    if case == "accept":
+        assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("accept", [], {}, {})
+        assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
+        assert rec["composed"]["onsite"]["reason"] == "; ".join(f"{n}: accept" for n in S.NAMES.values())
+        return
+    assert line["composed"] == "pending" and line["record_missing"] == [leg]
+    if case == "missing":
+        what = S.WIPE[3] if piece == "wipe" else S.PIECES[runner[piece]][3]
+        assert line["missing"] == {name: f"{piece.upper()}_CMD unset: {what}"}
+        assert rec["legs"][leg] is None and line["elsewhere"] == {}
+    else:
+        assert line["missing"] == {} and line["elsewhere"] == {name: "vy-dc-h200-2"}
+        assert rec["legs"][leg]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [leg]
 
 
 SID = "s20261026T221500Z-ab12"
@@ -224,10 +355,18 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     assert tree == tmp_path / "pieces" / "pouw" / "session" / SID and SID in ledger and '"commit"' in pins
     assert (main, key) == (tmp_path / "main.txt", "ff" * 64)
     row = S.piece_row("work", tmp_path / "pieces")
-    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", S.DEV_WHY, "accept")
-    _report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
+    why = f"{S.DEV_WHY}; core's credit refuses the window (budget) the window is in no period"
+    assert (row["verdict"], row["why"], row["development"]["verdict"]) == ("missing", why, "accept")
+    report, rec, line = S.record(_rows(_accepted(), tmp_path / "pieces"), window=1, steps=(0, 4), node="n", run="r")
     assert line["composed"] == "pending" and "pouw" in line["record_missing"] and line["development"] == {"PoUW": "accept"}
-    assert BR.check(rec) == {}
+    assert line["verdicts"]["PoUW"] == S.DEV_VERDICT == "development run, credits nothing" and line["missing"]["PoUW"] == why
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert BR.check(rec) == {} and rec["composed"]["onsite"] == report["composed"]
+    reason = rec["composed"]["onsite"]["reason"]
+    assert reason.startswith(f"sampled proofs: accept; PoUW: {why}; ")
+    for name, cmd in (("the bandwidth audit", "BANDWIDTH"), ("PoUS", "POUS"), ("the network certifier", "CERTIFIER"),
+                      ("the wipe", "WIPE")):
+        assert f"; {name}: missing: {cmd}_CMD unset: " in reason
     env = {"POUW_CMD": f"cp {tmp_path}/pieces/pouw/development.json \"$3/\""}
     got = S.pieces(d, 1, tmp_path / "again", env=env)
     out = capsys.readouterr().out
@@ -329,10 +468,10 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
 
 def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeout_fails_nothing(tmp_path):
     rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "record": "expire"})
-    assert rc == 0 and limits == ["30m", "2h"], (rc, lines)
+    assert rc == 0 and limits == ["30m", "20m"], (rc, lines)
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
-    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=2h (exit 124): no count"]
+    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=20m (exit 124): no count"]
 
 
 @pytest.mark.parametrize("classes, answers, refused", [
@@ -347,7 +486,7 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert rc != 0 and sum(line.startswith(refused) for line in lines) == 1, lines
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
-    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "2h")
+    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "20m")
 
 
 DIGEST = "5e" * 64
@@ -482,3 +621,88 @@ def test_the_program_is_built_off_the_server_as_serve_openai_declares_and_writes
         S.program(tmp_path / "like", "x", 0, 0, like=run)
     with pytest.raises(ValueError, match="no declared linears for 'other'"):
         S.program(tmp_path / "other", "other", 512, 16)
+
+
+
+class _Response:
+    """`urlopen`'s response, read whole or line by line; reading line i sets ``now[0]`` to ``times[i]``, and reading past the
+    last line to ``end``."""
+
+    def __init__(self, lines: list[bytes], now: list[float] | None = None, times: list[float] = (), end: float = 0.0) -> None:
+        self.lines, self.now, self.times, self.end = lines, now, list(times), end
+
+    def __enter__(self) -> _Response:
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+    def read(self) -> bytes:
+        return b"".join(self.lines)
+
+    def __iter__(self):
+        for i, line in enumerate(self.lines):
+            if self.now is not None:
+                self.now[0] = self.times[i]
+            yield line
+        if self.now is not None:
+            self.now[0] = self.end
+
+
+def _sse(*events: dict | bytes) -> list[bytes]:
+    """serve-openai's stream of ``events``, as `urlopen`'s response yields it: each event's data line, then its blank line."""
+    return [x for e in events for x in (b"data: " + (e if isinstance(e, bytes) else json.dumps(e).encode()) + b"\n", b"\n")]
+
+
+def test_serve_load_times_a_request_at_its_send_its_first_output_id_and_its_end(monkeypatch):
+    """A streamed request's first token is the first event carrying output ids, not the stream's opening event, and its end
+    comes once the stream is read past [DONE]; its ids and finish are what they were. An unstreamed one has no first token."""
+    now = [1.0]
+    lines = _sse({"choices": [{"text": "", "token_ids": None}]}, {"choices": [{"token_ids": [7]}]},
+                 {"choices": [{"token_ids": [8], "finish_reason": "length"}]}, b"[DONE]")
+    stream = _Response(lines, now, times=[2, 2, 3, 3, 4, 4, 5, 5], end=6.0)
+    monkeypatch.setattr(SL.urllib.request, "urlopen", lambda req, timeout=None: stream)
+    times: dict = {}
+    assert SL.post(0, {"stream": True}, times=times, clock=lambda: now[0]) == {"token_ids": [7, 8], "finish_reason": "length"}
+    assert times == {"send": 1.0, "first_token": 3.0, "done": 6.0}
+    whole = _Response([json.dumps({"choices": [{"token_ids": [7]}]}).encode()])
+    monkeypatch.setattr(SL.urllib.request, "urlopen", lambda req, timeout=None: whole)
+    times = {}
+    assert SL.post(0, {}, times=times, clock=lambda: now[0]) == {"choices": [{"token_ids": [7]}]} and set(times) == {"send", "done"}
+
+
+def test_serve_load_varied_writes_each_requests_timings_beside_its_record(tmp_path, monkeypatch):
+    """A varied run's timings file beside its record: its release run and wall-clock start, and one entry a request in
+    release order, its times on the injected clock from the run's start (send, then first token, then done) and its
+    streamed ids counted; the record's lines are what they were."""
+    ticks = itertools.count()
+
+    def clock() -> float:
+        return float(next(ticks))
+
+    def urlopen(req, timeout=None):
+        b = json.loads(req.data)
+        if req.full_url.endswith("/tokenize"):
+            return _Response([json.dumps({"tokens": [128000] + [1000 + ord(c) for c in b["prompt"]]}).encode()])
+        ids = list(range(500, 500 + b["max_tokens"]))
+        return _Response(_sse({"choices": [{"text": "", "token_ids": None}]},
+                              *({"choices": [{"token_ids": [t], "finish_reason": "length" if t == ids[-1] else None}]} for t in ids),
+                              b"[DONE]"))
+
+    monkeypatch.setattr(SL.urllib.request, "urlopen", urlopen)
+    out = tmp_path / "load.jsonl"
+    a = argparse.Namespace(port=0, model="m", varied=3, rate=2.0, prompt_range="16:24", max_tokens=4, seed=1, release="run",
+                           jitter_ms=0.0, out=str(out))
+    assert SL.run_varied(a, clock=clock, wall=lambda: 1.7e9, sleep=lambda s: None) == 0
+    rows = [json.loads(line) for line in out.read_text().splitlines()]
+    assert SL.timings_path(out) == tmp_path / "load.timings.json"
+    doc = json.loads(SL.timings_path(out).read_text())
+    assert set(doc) == {"clock", "release_run", "start_unix", "requests"} and (doc["release_run"], doc["start_unix"]) == ("run", 1.7e9)
+    assert [set(r) for r in rows] == [{"user", "release", "at_s", "delay_s", "prompt", "max_tokens", "response"}] * 3
+    assert [(t["user"], t["release"], t["at_s"]) for t in doc["requests"]] == [(r["user"], r["release"], r["at_s"]) for r in rows]
+    assert [r["release"] for r in rows] == [0, 1, 2]
+    for t, r in zip(doc["requests"], rows):
+        assert set(t) == {"user", "release", "at_s", "send_s", "first_token_s", "done_s", "tokens", "ok"} and t["ok"]
+        assert 0 < t["send_s"] < t["first_token_s"] < t["done_s"]
+        assert r["response"] == {"token_ids": list(range(500, 500 + r["max_tokens"])), "finish_reason": "length"}
+        assert t["tokens"] == r["max_tokens"]
