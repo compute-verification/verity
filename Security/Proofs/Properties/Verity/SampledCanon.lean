@@ -1791,16 +1791,19 @@ theorem session0_coins {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.
       ∃ b record, bs.get s0.record s!"session {s0.name}'s record" = .ok b ∧ String.fromUTF8? b = some record ∧
         ∀ (spec : Flock.SessionSpec) (sess : Flock.Session), Flock.Record.decode spec record = .ok sess →
           spec.tables = SampledProofs.OneStageZk.TABLES → spec.sha512Digests = true →
-          (∀ i (u : SampledProofs.Challenger.Use), uses[i]? = some u →
+          (∀ (i : Nat) (u : SampledProofs.Challenger.Use), uses[i]? = some u →
             ∃ l : List Bool, ξs[i]? = some (PlayDevice.bytesOfBits l) ∧ 512 * u.coins ≤ l.length) →
-          ∀ j d, (SampledProofs.OneStageZk.decodedUses 0 (Flock.Guarantees.LiveHash.pointsHash sess.rootB) sess)[j]? =
+          ∀ (j : Nat) (d : SampledProofs.Challenger.Use × Array Flock.F128),
+            (SampledProofs.OneStageZk.decodedUses 0 (Flock.Guarantees.LiveHash.pointsHash sess.rootB) sess)[j]? =
               some d →
             ∃ l : List Bool, uses[j + 1]? = some d.1 ∧ ξs[j + 1]? = some (PlayDevice.bytesOfBits l) ∧
               d.2 = Array.ofFn fun i : Fin d.2.size =>
                 FlockLevel3.GF128.val (coinF128s d.2.size (fun t => l.getD t.val false) i) := by
   obtain ⟨key, label, w, opened, uses, wants, order, groups, coins, ξs, hc, hw, hop, hrc, hmis, hS⟩ :=
     SampledProofs.OneStageZk.roundsWhy_spec h
-  obtain ⟨b, record, us0, hb, hrec, hus, -, hu0, -, hj, -⟩ := hS s0 rest hs0
+  have hS0 := hS s0 rest hs0
+  unfold SampledProofs.OneStageZk.Session0 at hS0
+  obtain ⟨b, record, us0, hb, hrec, hus, -, hu0, -, hj, -⟩ := hS0
   refine ⟨key, label, w, opened, uses, order, groups, coins, ξs, hc, hw, hop, hrc, hu0, b, record, hb, hrec,
     fun spec sess hd ht hsd hξ j d hdj => ?_⟩
   obtain ⟨u, hu, hud⟩ := SampledProofs.OneStageZk.forall₂_getElem?
