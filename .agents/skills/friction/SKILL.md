@@ -20,7 +20,8 @@ bundle (`git bundle create B origin/BASE..BRANCH`, `research data put --kind evi
 art id, the branch and its head sha.
 
 Friction in shared infrastructure (Linear, Slack and `research msg`, `research run`, the queue, notes, the store) is usually
-everyone's: ask in the workflow thread first, `research msg reply --thread 1792037552.043289`, one question per post,
+everyone's: ask in the workflow thread first, `research msg reply --thread TS` with its `RULES_THREAD` in
+`infra/control/top_watch.py`, one question per post,
 starting with the tool's name. The tool's owner decides, makes the answer stick in code or its skill, and replies
 `settled: <PR or section>`.
 

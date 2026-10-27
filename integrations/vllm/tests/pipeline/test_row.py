@@ -297,7 +297,7 @@ def test_a_moved_capture_refuses_the_commit_by_name(tmp_path, missing):
 
 # ---------------------------------------------------------------------------------------------------------------- Build: derives
 
-#: request derives of the 2026-09-29 epoch's stored Builds: (row, LP, T, decoder layers, measured peak RSS in MiB)
+#: request derives of stored Builds: (row, LP, T, decoder layers, measured peak RSS in MiB)
 EPOCH_DERIVES = (("#11", 4096, 511, 16, 124529), ("#75", 1024, 127, 48, 43974), ("#74", 1024, 127, 36, 34107), ("#74", 817, 120, 36, 26893),
                  ("#57", 1024, 127, 26, 21118), ("#67", 1024, 127, 16, 14071), ("#67", 1024, 28, 16, 11067))
 
@@ -639,8 +639,7 @@ def test_a_manifest_of_other_policies_is_rebuilt_either_way(tmp_path):
 
 
 def test_a_passing_commit_verifies_the_manifest_it_ran_over(tmp_path, monkeypatch):
-    """`commit` read `commit_prepare`'s local manifest once the two were split: every passing single-GPU Commit raised NameError
-    before its manifest check and verdict (r20261017-204707-7b27, Llama-3.2-1B B1)."""
+    """`commit` reads `commit_prepare`'s local manifest: a passing single-GPU Commit reaches its manifest check and verdict."""
     r, man, verified = _row(tmp_path), _tap_manifest(tmp_path / "manifest.json"), []
     (tmp_path / "tap.so").write_bytes(b"")
     r.hidden_so, r.B, r.I, r.O = str(tmp_path / "tap.so"), 1, 256, 32
@@ -877,7 +876,7 @@ def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_a
 
 @pytest.mark.parametrize("argv, leg", [((), 7200), (("--fold-timeout", "100"), 100)])
 def test_a_tp_fold_match_bounds_each_leg_and_gives_the_whole_four_legs(tmp_path, monkeypatch, argv, leg):
-    """tp-fold-match's ``--timeout`` bounds each subprocess, and a rank runs three in turn before the cross-rank leg: one leg's limit
+    """tp-fold-match's ``--timeout`` bounds each subprocess, and a rank runs three in turn before the cross-rank check: one stage's limit
     on the whole would stop a fold that fits its own (a GLM-5.3 B8 rank folds for ~100 min of the default 120)."""
     t = _tp_row(tmp_path, GLM53, "--match-phase", "cpu", *argv)
     t.fold_profile = "derived_GLM53_tp8"
@@ -946,10 +945,10 @@ def _b8_cpu_half(tmp_path: Path, monkeypatch, *argv: str, mem_gb: str) -> tuple[
 
 @pytest.mark.parametrize("mem_gb, ranks, folds", [("450", 1, 2), ("1000", 2, 6), ("1300", 3, 4)])
 def test_a_tp_fold_match_is_sized_to_the_runs_memory(tmp_path, monkeypatch, mem_gb, ranks, folds):
-    """GLM-5.3 B8's fold Match held 339 GiB a rank in GM-01 (with the shared X-09) beside folds near 40 GB, and took 17 h one GM-01 at
-    a time (r20261019-162751-9b01): every rank at once overfills any host, and four legs of 7200 s stop it at 8 h.  Sized to research
-    run's --mem-gb, as many GM-01 legs run at once as fit beside one fold (one at 450 GB, two at 1000, three at 1300, as the GLM v2
-    tree placed them by hand), and as many folds as the rest holds; a leg's limit grows with the rank's Programs, and the whole
+    """GLM-5.3 B8's fold Match held 339 GiB a rank in GM-01 (with the shared X-09) beside folds near 40 GB, and takes 17 h one GM-01 at
+    a time: every rank at once overfills any host, and four stages of 7200 s stop it at 8 h.  Sized to research
+    run's --mem-gb, as many GM-01 stages run at once as fit beside one fold (one at 450 GB, two at 1000, three at 1300),
+    and as many folds as the rest holds; a stage's limit grows with the rank's Programs, and the whole
     tp-fold-match gets the rounds those widths take."""
     t, seen = _b8_cpu_half(tmp_path, monkeypatch, mem_gb=mem_gb)
     t.match()

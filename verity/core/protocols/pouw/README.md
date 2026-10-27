@@ -1,109 +1,150 @@
 # PoUW (`verity.core.protocols.pouw`)
 
-Proof of useful work: certifies that a served model's declared matmuls were computed, by sampled proofs over committed,
-noised checked values. One protocol carries several named schemes behind one interface (`protocol.PoUWScheme`,
-`schemes.get`). The proof service registers an audit window, draws its proof blocks with live coins, proves and verifies
-them; PoUW states what each window commits, the Program each drawn proof block must pass, and what the outcome credits.
-What the draw established is ε at δ; PoUW carries no policy parameter.
+Proof of useful work: certifies that a served model's declared matrix products were computed, by sampled proofs over
+committed, noised checked values. An accepted run establishes a credited size S of noised matrix products, at least
+(1 − ε)·S of their AND gates computed right, except with probability δ. One protocol carries several named schemes
+behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof service registers each commit period, samples its
+proof blocks with live coins, proves them in zero knowledge (C-Flock `--zk`) and verifies them; PoUW states what each
+commit period commits, the Program each sampled proof block must pass, and what the outcome credits. It carries no policy
+parameter: it surfaces the ε at δ its sampling established.
 
-Lean is the source of truth. The verifier is the three Lake packages under `lean/`; the Python modules of the
-same names are their references, held to them by the difftests. The guarantees are in `Security/`, and every name below
-is listed in `Security/lean-audit.json`.
+## PoUW in the remote protocol
 
-## Outline
+The remote protocol, for an auditor with no devices at the datacenter, composes two subprotocols: sampled proofs'
+one-stage audit and PoUW's commit-period check (`Core.Remote.components` in
+`verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v0`). It accepts only when both components accept
+their own cases and its commitment binds both components' commitments; either one's rejection rejects it
+(`Core.Composition.product`, `verity/core/protocols/composition/README.md`). PoUW's half of the remote demo has no
+runner yet: the remote demo, `verity example vllm`, runs the sampled-proofs half. The remote protocol's front door is
+`verity/core/protocols/remote/`; PoUW is also a component of the onsite protocol (`verity/core/protocols/onsite`).
 
-A window goes through these steps; each names the Lean that decides it.
+## What runs
 
-1. **Weights.** Each weight's rows are committed, and the weights' root binds every weight root
-   (`PouwCommit.Rows`, `PouwCommit.Bindings`; `PouwCheck.weightsRoot`).
-2. **Salt.** The window's salt is a live coin of the challenger, opened once after the root it follows: a live window's
-   after its open root (`PouwCheck.Rounds`' `saltCheck`, `PouwCheck.WindowSalt`), a Pearl-C pass's from a salt-only
-   session on its salt epoch's root (`PouwCheck.Pass`' `liveSaltCheck`), a certified window's from the network
-   certifier's reveal (`PouwCheck.Pass`' `certifiedSalt`, `pouwSalt`).
-3. **Commitments.** The activation rows, the entries of the window root and their side trees (`PouwCommit`;
-   `PouwWindow.Entry`, `PouwWindow.Side`, `PouwWindow.Record`), and the window statement on the entry rows
-   (`PouwWindow.Statement`). A workload of record serves at a public fixed length (`PouwWindow.Length`).
-4. **Registration.** The window registers its level on the grid and its sampling design subset:K′ before the draw
-   (`PouwWindow.Grid`, `PouwWindow.Draw`, `PouwWindow.Public`); the proof service refuses a registration after the
-   deadline (`SampledProofs.Stream`).
-5. **Draw.** The draw coin is opened once, after the registration's receipt, under the challenger key the deployment
-   pins (`PouwCheck.Pass`' `drawCheck`), and the units are one uniform K′-subset of the window's N tiles
-   (`Flock.Draw.subset`). A live window's round coins open after their round roots (`PouwCheck.Rounds`'
-   `roundsCheck`, `PouwWindow.Rounds`).
-6. **Proofs.** Each drawn unit is proved in zero knowledge in sessions of the verifier's own public inputs
-   (`PouwWindow.Inputs`, `PouwWindow.Lanes`, `PouwWindow.KnownRows`), under a template the verifier pins
-   (`PouwCheck.Tile`), and opened against the window's entries (`PouwCheck.Opening`).
-7. **Verdict and credit.** `PouwCheck.check` is the window's verdict over the registration and the service's answer
-   (`PouwCheck.Check`, `PouwCheck.Inputs`, `PouwCheck.Protocol`). A served window's credit and its period's are
-   `PouwCheck.Credit`, on each drawn unit's verdict (`PouwCheck.Verified`, `PouwCheck.LiveVerified`) over the circuit
-   files its period's open committed (`PouwCheck.CommittedFiles`).
-8. **Period.** A period earns all or nothing: `PouwCheck.Period` (`pouw-period`, onsite's work component) credits it
-   only when every window between its open and its close is credited, and refuses by name every window in a form its
-   guarantee doesn't cover. Filler windows on idle tensor pipes (`PouwCheck.Fill`) are reported beside the period's
-   work, and never decided on: no guarantee covers the fill yet, and the credit's `gaps` says so.
+The verifier is Lean, three Lake packages under `lean/`:
 
-The packages, and their module tables: `lean/check/README.md` (`pouw_check`), `lean/window/README.md` (`pouw_window`),
-and `lean/commit` (`pouw_commit`: tagged bindings, frames, rows, coins and draws). Their properties are
-`Properties.Pouw` (`Security/Properties/Pouw.lean` and `Security/Properties/Pouw/`).
+- `lean/check` (`pouw_check`): `PouwCheck.protocol`, the `Core.Protocol` with id `verity/pouw/v1` that the remote
+  protocol composes. `PouwCheck.check` decides one commit period from its registration (the commitment) and the proof
+  service's answer to it (the evidence); `PouwCheck.Credit` decides what a served commit period, and a credit period
+  (below), credits. Its executable is `pouw-check` (`id | check | serve`, the core interface's commands).
+- `lean/window` (`pouw_window`): what a commit period registers and makes public: its grid level, its sample size K′,
+  its fixed length, its committed entries and side trees, its statement, its proof blocks' public inputs and its round
+  coins (`PouwWindow.Grid`, `PouwWindow.Draw`, `PouwWindow.Length`, `PouwWindow.Public`, `PouwWindow.Entry`,
+  `PouwWindow.Side`, `PouwWindow.Record`, `PouwWindow.Statement`, `PouwWindow.Inputs`, `PouwWindow.Lanes`,
+  `PouwWindow.KnownRows`, `PouwWindow.Rounds`).
+- `lean/commit` (`pouw_commit`): PoUW's commitments: tagged bindings, frames, rows, epoch coins and samples, all
+  SHA-512 (`PouwCommit.Rows`, `PouwCommit.Bindings`).
 
-## Guarantees
+The Python modules of the same names (`core_check.py`, `credit.py`, `window.py`, `coins.py`, `audit.py`) are their
+references, held to them by the difftests (`lean/check/tests`, `lean/window/tests`, `lean/commit/tests`).
+`verifier.py` is the entry the Python side calls: `verifier.lean(fn, value)` runs the Lean, and `verifier.coins(n)` is
+the challenger's entropy, which the Lean reads from the operating system. `RECORD_VERDICT` (`"lean"`) is the switch, and
+setting it to `"python"` is the one line that undoes it.
 
-Each guarantee G is stated in `Security/Definitions/Pouw` and proved in `Security/Proofs/Pouw` as
-`Pouw.SecurityProofs.G : Pouw.Guarantees.G`.
+A **commit period** is the served steps one commitment covers. The code and the Lean call it a window (`window.py`,
+`PouwWindow`, `credit.window`), and keep the name until a format version. In one commit period:
 
-- **The audit game:** `Pouw.SecurityProofs.Theorem1`, `Pouw.SecurityProofs.WorkWeightedSampling` and
-  `Pouw.SecurityProofs.EndToEnd` (a scheme with no γ_0 gets only the sampling half); `Pouw.SecurityProofs.GammaFromTT`.
-- **The deadline:** `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline`, `Pouw.SecurityProofs.SpareCapacityAtDeadline`,
-  `Pouw.SecurityProofs.PearlCSampledByDeadline` and its sm_120 instances.
-- **The schemes' γ:** NCP's `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1` and the other NCP guarantees;
-  Pearl-C's γ and sampled guarantees, one per device record, cast and shape (the served point is
-  `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192`, with its sampled twin
-  `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192`), and the row seed's reduction
+1. The weights' root binds every weight's committed rows (`PouwCheck.weightsRoot`), and a credit period's open signs
+   it.
+2. The salt is a live coin of the challenger, opened once after the root it follows (`PouwCheck.Rounds`' `saltCheck`,
+   `PouwCheck.WindowSalt`; a Pearl-C pass's from a salt-only session, `PouwCheck.Pass`' `liveSaltCheck`), or, for a
+   certified commit period, the network certifier's salt (`certifiedSalt`, `pouwSalt`; `salt.py`).
+3. The activation rows and the commit period's entries are committed under one root, and the commit period registers its
+   level on the grid, its sampling design (a uniform subset of K′ of its N tiles, K′ the least K that misses a wrong
+   share ε of the credited work with probability at most δ) and its fixed length before any sampling. The proof
+   service refuses a registration after the deadline (`SampledProofs.Stream`).
+4. The sampling coin (the code's draw coin) is opened once, after the registration's receipt, under the challenger key
+   the deployment pins (`PouwCheck.Pass`' `drawCheck`), and samples the proof blocks, one tile each, as one uniform
+   K′-subset (`Flock.Draw.subset`). A live commit period's round coins open after their round roots (`roundsCheck`).
+5. Each sampled proof block is proved in zero knowledge over the circuit its tile template pins (`PouwCheck.Tile`),
+   and opened against the committed entries (`PouwCheck.Opening`).
+6. `PouwCheck.check` gives the verdict (`PouwCheck.Check`, `PouwCheck.Inputs`, `PouwCheck.Protocol`), on each sampled
+   proof block's verdict (`PouwCheck.Verified`, `PouwCheck.LiveVerified`). A served commit period is credited only if
+   every step accepts. A credit period
+   (the code's period, `credit.period_credit`) is the commit periods between an open, which signs the weights' root and
+   commits the circuit files (`PouwCheck.CommittedFiles`), and a close; it counts only closed and complete.
+
+How it is run: the difftests run the Lean against the Python on generated cases
+(`uv run tools/verity/check/suites.py verity/core/protocols/pouw/lean/check`, and likewise `lean/window` and
+`lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside sampled proofs'
+(`verity/core/protocols/composition/tests/test_composition_difftest.py`); `benchmarks/pouw/served_zk/of_record.py` runs
+each check of a served commit period through the Lean and its Python reference and records the Lean's verdict.
+
+## Schemes
+
+A scheme turns one declared matrix product's committed operand rows into each tile's checked values, its leaf and its
+useful output; everything else (commitments, salt, sampling, openings) is the protocol's and the same for every scheme.
+
+- **Pearl-C** (`pearl-c-h100-v0`, `pearl-c-h100-v1`, `pearl-c-sm120-v1`, and their `-h3` forms, `schemes/pearl_c.py`):
+  Pearl's FP8 (E4M3) proof of useful work, the GEMM-based scheme Pearl publishes (`pearl-fp8-v4`,
+  `schemes/pearl_kw.py`), adopted as a PoUW scheme, with its noisy clean-up pinned bit for bit so that the useful output
+  is a checked value. It runs on the H100 and on the RTX PRO 6000 Blackwell (sm_120). The `-h3` forms hash with SHA-512
+  throughout; the others keep Pearl's BLAKE3 hashing.
+- **Pearl-C4** (`pearl-c-nvfp4-v0`, `schemes/pearl_c4.py`): Pearl-C with the FP8 product replaced by sm_120's
+  block-scaled FP4, NVFP4 only.
+- **NCP** (`ncp-v1`, `schemes/ncp.py`): noise-cancelling polarization over int7 activations.
+- **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
+
+Each scheme module's docstring states its steps and roundings, with pinned vectors under `tests/vectors`.
+
+## Security assumptions and guarantees
+
+Guarantees are stated in `Security/Definitions/Pouw` and proved in `Security/Proofs/Pouw`, as
+`Pouw.SecurityProofs.G : Pouw.Guarantees.G`; `Security/lean-audit.json` lists each proved one with what its statement
+reads. Proved:
+
+- **The audit game:** `Pouw.SecurityProofs.Theorem1` (if a scheme's γ holds with error η and the audit misses more than
+  a share ε_s of the reference work with probability at most δ_s, then the verifier accepts while the work done is below
+  (1 − γ)(1 − ε_s)·W with probability at most δ_s + η), `Pouw.SecurityProofs.WorkWeightedSampling`,
+  `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GammaFromTT`.
+- **The deadline:** `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline`, `Pouw.SecurityProofs.SpareCapacityAtDeadline` and
+  `Pouw.SecurityProofs.PearlCSampledByDeadline`.
+- **The schemes' γ:** NCP's `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1`; Pearl-C's at the served point,
+  `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its sampled twin
+  `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192`; the row seed's reduction
   `Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut`; the barrier `Pouw.SecurityProofs.Barrier.Generic`.
-- **The relative security of the served credit:** `Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged`,
-  `Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap` and their floors.
+- **The served credit's relative security:** `Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged` and
+  `Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap`.
 - **Compute accounting reads PoUW** through `Accounting.SecurityProofs.ComputeOfPouw`,
   `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
   `Accounting.SecurityProofs.PouwLocalOff`.
-- **The period check** is held to `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, over the served work alone.
 
-The named premises they rest on include the schemes' conjectures (`Pouw.NCP.Assumptions.TTNCP_U`,
-`Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1` and Pearl-C's other TT_OUT forms), the seeded noise's forms
-(`Pouw.PearlC.RowSeedNoise`, `Pouw.PearlC.CodeSeedNoise`), the receipt clock (`Pouw.Assumptions.HonestClock`), the
-drawn tile's proof (`Pouw.PearlC.Assumptions.TileProofSound`), and the claims `trusted-host`, `live-verifier`,
-`cr/sha-512` and `prf/sha-512` (`verity.core.claims`). Dither, PoUW's no-fold protocol, is experimental and has its own
-spec, `dither/PROTOCOL.md`.
+Stated, open: a commit period's ε from its calls' (`Pouw.Guarantees.WindowEps`, and `Pouw.Guarantees.ServiceEscapes` for
+the deployed sampling, `Security/Definitions/Pouw/Guarantees/Window.lean`); Dither's guarantees
+(`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and per-model instances
+(`Security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole is stated yet; `Properties.Composition` (`Security/Properties/Composition.lean`) proves the composition's accept
+rule against its code.
+
+The guarantees rest on named assumptions, each a hypothesis of the statement: the schemes' conjectures, stated and not
+proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
+`Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1`; Pearl-C4's `Pouw.PearlC.Assumptions.TTOutFp4Sm120W1`), the seeded noise's forms
+(`Pouw.PearlC.RowSeedNoise`, `Pouw.PearlC.CodeSeedNoise`), the receipt clock (`Pouw.Assumptions.HonestClock`), the sampled
+tile's proof (`Pouw.PearlC.Assumptions.TileProofSound`), and the claims `trusted-host`, `live-verifier`, `cr/sha-512`
+and `prf/sha-512` (`verity.core.claims`).
 
 ## Core API
 
 ~~~python
-from verity.core.protocols.pouw import core_check, credit, period_check, window, verifier
-from verity.core.protocols.pouw import schemes
+from verity.core.protocols.pouw import audit, core_check, credit, schemes, verifier, window
 
-verdict = core_check.check(params, commitment, evidence)   # one audit window, as `pouw-check` answers (the Lean verifier)
-answer = period_check.answer(params, commitment, evidence)  # one period, as `pouw-period` answers
-outcome = credit.window(key, ledger, pins, main, ...)      # a served window's credited set and its drawn units' outcome
-period = credit.period_credit(key, ledger, pins, main, name, windows, verify, ...)   # a period, closed and complete
-passes = credit.pearl_c_period_credit(key, ledger, pins, main, name, passes, earlier, ...)   # a Pearl-C period
-work = window.bucket(n_real)                               # the window's level: credited tiles g_ℓ and padded N
-k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the subset draw that establishes ε at δ
+scheme = schemes.get("pearl-c-sm120-v1-h3")                 # a configured PoUWScheme
+root = audit.weights_root(weight_roots)                    # the weights' root a credit period's open signs
+verdict = core_check.check(params, commitment, evidence)   # one commit period, as `pouw-check` answers
+outcome = credit.window(key, ledger, pins, main, ...)      # a served commit period's credited set and its sampled proof blocks' outcome
+period = credit.period_credit(key, ledger, pins, main, name, windows, verify, ...)   # a credit period, closed and complete
+work = window.bucket(n_real)                               # the grid level: credited tiles and padded N
+k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the sample size that establishes ε at δ
 item = window.sampling(eps, delta, work, tile_work)        # the registered sampling design
-scheme = schemes.get("pearl-c-sm120-v1-h3")                # a configured PoUWScheme
+passes = credit.pearl_c_period_credit(key, ledger, pins, main, name, passes, earlier, ...)   # a Pearl-C credit period
 ~~~
-
-`verifier.lean(fn, value)` runs the Lean verifier (`RECORD_VERDICT`), and `verifier.coins(n)` is the
-challenger's entropy, read by the Lean from the operating system.
 
 ## Where things are
 
-- `protocol`, `schemes/`: the `PoUWScheme` interface and the named schemes (`ncp-v1`, `pearl-fp8-v4`, the Pearl-C family,
-  `pearl-c-nvfp4-v0`); each scheme module's docstring states its steps and roundings, with pinned vectors under
-  `tests/vectors`.
-- `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `period_check`, `fill`, `identifier`, `registration`,
-  `weights`, `operands`: the references the Lean is held to, and the reference rules not yet ported.
+- `protocol`, `schemes/`: the `PoUWScheme` interface and the named schemes.
+- `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`: the
+  Python references the Lean is held to, and the reference rules not yet ported.
 - `circuit/`: PoUW as `verity.ml.circuits` Programs: the tile and lane Definitions, the compile pass over a served Program
-  (`compile`) and the draw plan (`plan`). Each Definition has its `circuit-check` sidecar.
-- `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest.
+  (`compile`) and the sampling plan (`plan`). Each Definition has its `circuit-check` sidecar.
+- `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
+  `lean/window/README.md` map each Lean module to its Python.
 - `dither/`: Dither, experimental, with its `PROTOCOL.md`.
-- `tests/`: the package's suite. `benchmarks/pouw/` is the measuring side and the clear reference lifecycle
-  (`benchmarks/pouw/clear`); nothing here imports it.
+- `tests/`: the package's suite. `benchmarks/pouw/` is the measuring side; nothing here imports it.

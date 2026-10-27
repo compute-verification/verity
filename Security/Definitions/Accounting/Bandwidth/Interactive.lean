@@ -5,7 +5,7 @@ import Definitions.Accounting.Bandwidth.Relay
 
 `Relay.lean`'s game, except that the chip may also send bits to the side sources, and a side source answers each read
 as a function of the store, the oracle and every bit the chip has sent so far. This is the rest of the prover as the
-chip sees it in the actual-circuit model (`note:console/20261012T0645Z-draft-actual-circuit-model`, section 6): a peer,
+chip sees it in the actual-circuit model: a peer,
 the host or a network that sees what the chip sends (the seed, partial tags, which blocks it wants) and answers
 adaptively. Sends are not bounded, so the chip may send any number `e` of bits that depend on the seed. Every bit the
 chip reads from a side source still counts against `c`. Its on-chip state and device memory are still laid out from

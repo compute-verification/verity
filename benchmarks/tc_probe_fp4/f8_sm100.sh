@@ -17,7 +17,7 @@ PY=${PYTHON:-python3}
 keep() {
   command -v research >/dev/null && research keep "$1" --owner @compute-accounting --expires 2026-10-26 --priority normal \
     --regenerate "research run --on vy-dc-b200 -- bash benchmarks/tc_probe_fp4/f8_sm100.sh" \
-    --why "lane B200-FP8: operands and captured D words, re-scored by f8_sm100.sh eval" || echo "f8_sm100.sh: not kept: $1" >&2
+    --why "B200 FP8 capture: operands and captured D words, re-scored by f8_sm100.sh eval" || echo "f8_sm100.sh: not kept: $1" >&2
 }
 
 if [ "${1:-}" = eval ]; then

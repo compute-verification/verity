@@ -366,7 +366,7 @@ The other options:
 `machine-model headline`'s ε, and the Lean headline guarantees exported from this data
 (`Accounting.Guarantees.TS.Sm120SheetHeadline` and `Sm120MeasuredHeadline`), bound work done by the node (ASK-65 = A,
 19 Oct): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at least (1 − ε) of the
-credited work. The device that did it is left to the attribution layer. The floor argument places no work: every
+work the window credits. The device that did it is left to the attribution layer. The floor argument places no work: every
 credited word is a fresh function of the post-coin noise, so it was computed after the coin, but nothing ties a
 committed tile to the GPU that computed it. The transcript is a Merkle root over tile digests, so a helper holding the
 salt ships one 64-byte digest a tile. The model prices the work on one device's rows, which makes ε a share of the
@@ -375,7 +375,7 @@ credited time `T_cred` on that device, not of that device's own time.
 A per-GPU reading of ε comes only through the attribution layer, under two conditions:
 
 - **LOC's host deduction** (decision 37, LOC: the node runs its own verified compute): what the host CPU can compute
-  of the credited work exactly is deducted from the GPUs' credit. On int8 that is AMX for a tile's products and AVX-512
+  of the work the window credits is deducted exactly from the GPUs' credit. On int8 that is AMX for a tile's products and AVX-512
   for the fold and credited fillers, each bit-exact.
 - **The peer-GPU premise**: every billable GPU on the node is credited each window, so no uncredited peer computes a
   credited GPU's tiles over NVLink. Otherwise the node is the unit.

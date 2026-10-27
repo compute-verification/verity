@@ -555,6 +555,7 @@
         "tests/",
         "fixtures/",
         "examples/README.md",
+        "examples/lifecycle/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
