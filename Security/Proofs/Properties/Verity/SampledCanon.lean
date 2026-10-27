@@ -15,7 +15,9 @@ uses' runs in turn, each release its family and root (`Challenger.runs_blocks`).
 challenger's coins is `OneStageZk.roundsWhy_spec`: the draw's use, then session 0's (`OneStageZk.Session0`), the
 order and groups it asks of them, every coin a record holds the challenger's, and every later use a later session's
 family (`OneStageZk.sessionUses_label`), which no family of session 0's is (`Hello.slotStream_inj`). Each F128 a
-record holds reads as its coin's 16 bytes, two big-endian words (`OneStageZk.f128_of_record`).
+record holds reads as its coin's 16 bytes, two big-endian words (`OneStageZk.f128_of_record`). A session's first use
+is its link points, released after the SHA-512 of its record's `root_b_sha512` digests in key order
+(`OneStageZk.sessionUses_points`, `OneStageZk.pointsAfter_ok`).
 -/
 
 open Lean (Json)
@@ -462,6 +464,106 @@ theorem f128_of_record {hs : Array String} {ξ : ByteArray} (h : coinsMismatch h
       .ok ⟨beWord (ξ.extract (16 * i) (16 * i + 16)) 8, beWord (ξ.extract (16 * i) (16 * i + 16)) 0⟩ := by
   rw [← coinsMismatch_none h i hi]
   exact f128OfHex_hexOf _ (by simp only [ByteArray.size_extract]; omega)
+
+theorem list_mapM_ok {α β ε : Type} {f : α → Except ε β} :
+    ∀ {l : List α} {ys : List β}, l.mapM f = .ok ys →
+      ys.length = l.length ∧ ∀ i (hi : i < l.length) (hy : i < ys.length), f l[i] = .ok ys[i]
+  | [], ys, h => by
+    simp only [List.mapM_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h; exact ⟨rfl, fun i hi => absurd hi (Nat.not_lt_zero _)⟩
+  | x :: l, ys, h => by
+    rw [List.mapM_cons] at h
+    cases hx : f x with
+    | error e => rw [hx] at h; cases h
+    | ok y =>
+      rw [hx] at h
+      cases hl : l.mapM f with
+      | error e => rw [hl] at h; cases h
+      | ok zs =>
+        rw [hl] at h
+        cases h
+        obtain ⟨hlen, hall⟩ := list_mapM_ok hl
+        refine ⟨by simp [hlen], fun i hi hy => ?_⟩
+        cases i with
+        | zero => exact hx
+        | succ i => exact hall i (by simpa using hi) (by simpa using hy)
+
+theorem array_mapM_ok {α β ε : Type} {f : α → Except ε β} {xs : Array α} {ys : Array β}
+    (h : xs.mapM f = .ok ys) : ys.size = xs.size ∧ ∀ i (hi : i < xs.size) (hy : i < ys.size), f xs[i] = .ok ys[i] := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  cases hl : xs.toList.mapM f with
+  | error e => rw [hl] at h; cases h
+  | ok zs =>
+    rw [hl] at h
+    cases h
+    obtain ⟨hlen, hall⟩ := list_mapM_ok hl
+    refine ⟨by simpa using hlen, fun i hi hy => ?_⟩
+    have := hall i (by simpa using hi) (by simpa using hy)
+    simpa using this
+
+theorem match_ok {ε α β : Type} {X : Except ε α} {g : α → β} {a : β}
+    (h : (match X with | .error e => .error e | .ok v => .ok (g v) : Except ε β) = .ok a) :
+    ∃ v, X = .ok v ∧ a = g v := by
+  cases X with
+  | error e => cases h
+  | ok v => cases h; exact ⟨v, rfl, rfl⟩
+
+/-- **What the link points are released after**: `pointsAfter` of a record's link is the SHA-512 of the digests its
+`root_b_sha512` holds in key order, each 64 bytes of hex. -/
+theorem pointsAfter_ok {link : Json} {a : ByteArray} (h : pointsAfter link = .ok a) :
+    ∃ ds : Array ByteArray, ds.size = (entries (getD link "root_b_sha512")).size ∧
+      (∀ i (hi : i < (entries (getD link "root_b_sha512")).size) (hd : i < ds.size), ∃ s,
+        (entries (getD link "root_b_sha512"))[i].2 = .str s ∧ s.length = 128 ∧ Flock.unhex s = .ok ds[i]) ∧
+      a = Flock.Sha512.hash (ds.foldl (· ++ ·) .empty) := by
+  unfold pointsAfter at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  split at h
+  · obtain ⟨ds, hds, rfl⟩ := match_ok h
+    obtain ⟨hsz, hall⟩ := array_mapM_ok hds
+    refine ⟨ds, hsz, fun i hi hd => ?_, rfl⟩
+    have he := hall i hi hd
+    generalize (entries (getD link "root_b_sha512"))[i] = e at he ⊢
+    obtain ⟨t, x⟩ := e
+    cases x with
+    | str s =>
+      dsimp only at he
+      split at he
+      · rename_i hlen
+        exact ⟨s, rfl, beq_iff_eq.1 hlen, he⟩
+      · cases he
+    | _ => cases he
+  · cases h
+
+/-- **A session's first use is its link points**, released after `pointsAfter` of its record's link. -/
+theorem sessionUses_points {slot : Nat} {record : String} {us : List (Challenger.Use × Array String)}
+    (h : sessionUses slot record = .ok us) :
+    ∃ j a pts, Flock.JsonParse.parse record = .ok j ∧ pointsAfter (getD j "link") = .ok a ∧
+      us.head? = some (⟨Hello.slotStream slot POINTS, a, (pts.size + 3) / 4⟩, pts) := by
+  unfold sessionUses at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  rename_i _ j hj _ _ _ _ pts _ _ a ha _ _ _ _ _ heq
+  cases h
+  rw [← Array.forIn_toList] at heq
+  obtain ⟨t, rfl⟩ := loop_mono (fun x y => ∃ t, y = x ++ t) (fun _ => ⟨[], by simp⟩)
+    (fun _ _ _ ⟨t1, e1⟩ ⟨t2, e2⟩ => ⟨t1 ++ t2, by rw [e2, e1, List.append_assoc]⟩) _ (fun x s r hr => by
+      repeat' split at hr
+      all_goals first
+        | (cases hr; done)
+        | (simp [throw, throwThe, MonadExceptOf.throw] at *; done)
+        | skip
+      rename_i heq2
+      cases hr
+      rw [← Array.forIn_toList] at heq2
+      exact loop_mono (fun x y => ∃ t, y = x ++ t) (fun _ => ⟨[], by simp⟩)
+        (fun _ _ _ ⟨t1, e1⟩ ⟨t2, e2⟩ => ⟨t1 ++ t2, by rw [e2, e1, List.append_assoc]⟩) _ (fun y t q hq => by
+          repeat' split at hq
+          all_goals first
+            | (cases hq; done)
+            | (simp [throw, throwThe, MonadExceptOf.throw] at *; done)
+            | (cases hq; exact ⟨_, rfl⟩)) _ _ _ heq2) _ _ _ heq
+  exact ⟨j, a, pts, mapError_ok hj, ha, rfl⟩
 
 end SampledProofs.OneStageZk
 
