@@ -10,7 +10,6 @@
     total_fp8     the same total rules for the Hopper E4M3 k32 step (wgmma m64nNk32 f32.e4m3.e4m3; measured on H100)
     cast          FP32 <-> BF16 word casts
     fp32          IEEE binary32 add, mul, fma, div and sqrt on words, ties to even, no FTZ (the scalar FP32 pipe)
-    relation      the step as a minimal algebraic relation (witness columns, mul/lin/lookup predicates) and its census
     tc_step       one ``GroupSum`` step as an exact GF(2) circuit over `verity.ml.circuits.boolean.forms`
     fp4           one NVFP4 ``BlockScaledAlignAdd`` step as an exact GF(2) circuit
     fp            exact f32 / bf16 arithmetic as GF(2) circuits

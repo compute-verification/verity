@@ -14,7 +14,7 @@ open scoped ENNReal
 
 theorem incl_le_one {n : ℕ} (L : Law n) (u : Fin n) : L.incl u ≤ 1 := by
   classical
-  unfold Law.incl prCoin
+  unfold Verity.Law.incl prCoin
   refine (avg_mono fun ω => ?_).trans (avg_const (C := L.Ω) 1).le
   split_ifs <;> simp
 

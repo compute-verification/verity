@@ -1,7 +1,7 @@
 // Attention's two BF16 GEMMs on sm_90a (H100, H200) and sm_120a (RTX PRO 6000), each output word exactly
 // GemmCoordinate_v2{K, GEMM_HOPPER}: K/16 `mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32` steps in ascending k from
 // a +0 accumulator, then one `cvt.rn.bf16.f32`.  Both cards' mma.sync BF16 step is Hopper's (sm90.mma.m16n8k16.bf16, pinned;
-// the PRO 6000's capture of sm120.mma.m16n8k16.bf16 agrees with it).  Softmax is its own unit: QK^T's words come out, PV's
+// the PRO 6000's capture of sm120.mma.m16n8k16.bf16 agrees with it).  Softmax is its own Definition: QK^T's words come out, PV's
 // P goes in.
 //
 //   attn_qk_d{64,128}[_h8|_h16|_s16|_ref]   S[b,h,q,j] = GemmCoordinate{K=D}(Q[b,h,q,:], K[b,kv(h),j,:])     for j < len(b,q)
@@ -20,7 +20,7 @@
 // B), and a CTA's warps stride over its key tiles (QK^T) or d tiles (PV).  In the _h8 kernels they are one query of 8
 // heads that share a KV head (8 divides 2^gshift; grid: Mq, any Y, B): CTA y runs the head groups y, y + Y, ..., its
 // warps take every warps-th of them, and a warp runs every tile of its group (QK^T: each key tile, with the group's Q loaded
-// once; PV: each d tile, with P loaded once a key block), so a decode step reads each key and value once for 8 heads.  The
+// once; PV: each d tile, with P loaded once a key segment), so a decode step reads each key and value once for 8 heads.  The
 // _h16 kernels run head groups of 16 (16 divides 2^gshift) the same way, with the heads as the tile's 16 rows instead.  The
 // _s16 kernels are _h16's tiles where every query sees at most S16_KEYS = 32 keys and PV's kp is at most 32 (the H200
 // model's decode step): a warp loads the shared operand once for all of its groups of one KV head (K's 4 key tiles, V's 2
@@ -33,11 +33,11 @@
 // time where the buffer's strides and base allow, and its PV O's rows 16 bytes a lane where they allow that (store_o).
 // A word's products depend only on its row of A and column of B, so keys past a column's length are zero
 // codes in both operands, as the Definition pads them: P is loaded as zero there, and V too.  V is shared by the tile's
-// columns, and in the query-tiled kernels they can stop at different keys, so in a 16-key block each distinct stopping
+// columns, and in the query-tiled kernels they can stop at different keys, so in a 16-key segment each distinct stopping
 // point gets its own mma with V zeroed past it, and each column takes its word from the mma of its own; a column whose keys
-// ended before the block keeps its accumulator unless the block is below kpv, so its chain is its own kp/16 steps.  The _h8
-// kernels' columns share one length, so each block is one mma.
-// The _ref kernels are the slow reference path (attn_ref's kernels before HASH-32), tuned for nothing: a CTA takes 8
+// ended before the segment keeps its accumulator unless the segment is below kpv, so its chain is its own kp/16 steps.  The _h8
+// kernels' columns share one length, so each segment is one mma.
+// The _ref kernels are the slow reference path, tuned for nothing: a CTA takes 8
 // columns (QK^T: keys; PV: d) of one KV head and sequence (grid: column tiles, Hkv, B), its warps take turns over the
 // (16 query heads of that KV head, query row) pairs, and every operand word is gathered on its own, so a tile's rows share
 // one query and its chain is that query's.
@@ -165,7 +165,7 @@ __device__ __forceinline__ void pv(const AttnArgs& a) {
             const uint32_t Bf[2] = {pack(p[0], p[1]), pack(p[2], p[3])};
             const int ma = min(max(La - k0, 0), 16), mb = min(max(Lb - k0, 0), 16);
             float next[4] = {acc[0], acc[1], acc[2], acc[3]};
-            for (int j = 0; j < 8; ++j) {  // warp-uniform: one mma per distinct count of the block's keys a column sees
+            for (int j = 0; j < 8; ++j) {  // warp-uniform: one mma per distinct count of the segment's keys a column sees
                 const int m = min(max(w.seen(j) - k0, 0), 16);
                 bool again = m == 0 && k0 >= a.kpv;
                 for (int i = 0; i < j; ++i) again |= min(max(w.seen(i) - k0, 0), 16) == m;

@@ -632,7 +632,7 @@ def _q(v: Fraction) -> str:
 
 
 def _uniform_words(fam: Family) -> str:
-    return "".join(f" and the uniform `{k}` ({om}, a UR pair: RT-HOPPER-7)" for k, om in fam.uniform.items())
+    return "".join(f" and the uniform `{k}` ({om}, a UR pair)" for k, om in fam.uniform.items())
 
 
 MOVES = ("-rt3-wideh", "-rt3", "-wideh")          # RT4-SHEET-13's and -14's counted moves of a lane route's LI
@@ -650,20 +650,19 @@ def _menu_text(names: list[str], counted: list[str]) -> str:
     if any(not n.startswith("li-bulk") for n in members):
         raise SystemExit(f"counted folds {members}: the Definitions docstring names the moves of LI and li-bulk's "
                          "members only; describe the others in `_menu_text`")
-    text = (f"programs ({', '.join(loops)}: the checkpoint's bit-exact loops, RT2-HOPPER-9, -11, RT3-DC-1, -4 and "
-            "RT4-SHEET-7")
+    text = f"programs ({', '.join(loops)}: the checkpoint's bit-exact loops"
     if not (bulk or counted):
         return text.replace("programs", "bit-exact programs", 1) + ")"
     if bulk:
         text += (f"; {', '.join(bulk)}: li's XOR through the stores, a bulk XOR with the key slab and a load back, at "
-                 "its measured cost, RT4-SHEET-17 and -21")
+                 "its measured cost")
     if counted:
         text += "; and the counted folds, none built, which ♭ never folds by: "
         text += "; ".join(
-            ([f"{', '.join(moved)}, RT4-SHEET-13's and -14's moves, each lane route and the fold with LI's 64 LOP3 a "
+            ([f"{', '.join(moved)}, the counted moves: each lane route and the fold with LI's 64 LOP3 a "
               "segment as a memory round trip of three issue slots (ATOM.E.XOR and two LD.E back), its 64 IMAD as "
               "IMAD.WIDE, or both"] if moved else [])
-            + ([f"{', '.join(members)}, li-bulk's BT1024 and trimmed W = ∞ members, RT4-SHEET-22"] if members else []))
+            + ([f"{', '.join(members)}, li-bulk's BT1024 and trimmed W = ∞ members"] if members else []))
     return text + ")"
 
 
@@ -725,7 +724,7 @@ def render_sheet(fam: Family, r: Reading) -> str:
         + _uniform_words(fam)
         + f"; the vector classes CUDA's lane classes and both readings' catch-alls "
         f"({', '.join(k for k in x.vec if k in CATCH_ALLS)}: A6 counts a vector word's instructions in them, and an "
-        "instruction no class names, IMAD.WIDE among them, counts in the catch-all, RT4-SHEET-14)"
+        "instruction no class names, IMAD.WIDE among them, counts in the catch-all)"
         + "; the fold routes the design's fold"
         + (f" and its {len(x.fold_names)} other {_menu_text(x.fold_names, x.counted)} on lanes, and alone on the uniform datapath "
            "at the least of their counts; "

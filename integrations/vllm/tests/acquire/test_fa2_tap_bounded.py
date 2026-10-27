@@ -1,4 +1,4 @@
-"""[R18 tap, F-r17-23] The bounded FA2 M1 tap: sequence-group splitting of a multi-sequence launch into ONE capped device buffer.
+"""The bounded FA2 M1 tap: sequence-group splitting of a multi-sequence launch into ONE capped device buffer.
 
 Torch-free.  Two halves:
 

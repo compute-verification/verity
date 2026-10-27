@@ -31,7 +31,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.program.prefix_plan import cached_of, shape, shape_name
 
@@ -137,7 +137,7 @@ def _spec(workload: dict[str, Any], v: list) -> str:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("workload")
+    workload: str = option("workload", type=workload_arg)
     LP: int | None = option("LP", nargs="?", type=int, default=None)
     T: int | None = option("T", nargs="?", type=int, default=None)
     C: int = option("C", nargs="?", type=int, default=0)

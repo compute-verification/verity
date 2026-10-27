@@ -28,7 +28,10 @@ negatives.
   the dense layers' 861 per rank, by `subset:512`), or by default the CPU TP stand-in
   (`integrations/vllm/tests/pipeline/served_tp.py`). A member's whole population is one M0 statement, whose shape takes at most
   `2^(35 - k_log)` instances: 2,048 at I=1536 (`k_log` 24) and 8,192 at I=256 (`k_log` 22), so a rank's `SiluMul_v2{I=256}`
-  (172,200 routed-expert and 21,525 shared-expert units) is not a member.
+  (172,200 routed-expert and 21,525 shared-expert units) is not a member. Each session's `circuit.txt` files and lookup tables
+  go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
+  `integrations/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each tree's
+  art id, so the run can be verified again from the store.
 - `a5_row_tables.py` (`a5_tp.sh` with `STANDIN=row-tables`): A5 on a window with row tables, which no TP window of record has
   yet: `integrations/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
@@ -104,11 +107,10 @@ negatives.
   per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
   staged unit: the cost of c drawn units in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
-- `prove_bundle.sh`: a drawn-unit replay bundle (`benchmarks/e2e_demo`, `verity/drawn-unit-bundle/v2`) proved by
-  `prove_bundle.py`. `prove_bundle.py make` writes the torch loop's window under the fixture's test key and the bundle of
-  its draw: the fixture's `FIXTURE_DRAW`, or with `PB_K=K` a live one over a window registered `subset:K`, the
-  challenger's receipt of the registration and then Lean `flock-verify draw --registration` of the registered law's
-  units over the whole partition on its own coins. The bundle is held to the prover's window: its own check (the draw's
+- `prove_bundle.sh`: a drawn-unit replay bundle (`examples/h200/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
+  `prove_bundle.py`: `PB_BUNDLE` of the window `PB_WINDOW`, else the store's `BUNDLE_WINDOW` (a W8A8 MLP's window under a
+  test key, its tampered twin and the interfaces' bundle of four drawn units under the window's registered `subset:4`).
+  `tests/test_prove_bundle.py` holds that bundle to the window's public part (`tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's draw to be live. The bundle is held to the prover's window: its own check (the draw's
   law the registered one among it), its run, registration and partition, each drawn member's public body and a live
   draw's receipt and record. Each drawn member is one `prove --zk` session behind the Lean firewall, one at a time, served the bundle's
   draw, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `zk_mutants.py`'s one-bit
