@@ -82,6 +82,14 @@
    "owner": "@memory-accounting",
    "digest": "9d865547ca23af09cf67e3ad5149642660839a871ec3c4cb85abd72829fdb257"
   },
+  "Accounting.Assumptions.ServingBridge": {
+   "owner": "@training",
+   "digest": "b6ef891d87e18f7307680da83a88e43866bc770192b0c90a06688805c0cff4e6"
+  },
+  "Accounting.Assumptions.ServingCoverage": {
+   "owner": "@training",
+   "digest": "35d9d6fd1e2bf38fb869a66fefe1a0dc1962d4f88435a656eedeb877c5b25490"
+  },
   "Accounting.Assumptions.SketchHashBudget": {
    "owner": "@memory-accounting",
    "digest": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77"
@@ -637,6 +645,14 @@
   "Accounting.ServingBlocks.InferenceBlocks": {
    "owner": "@training",
    "digest": "c2c5ddfebd8de50ec6c08ba3c9acae0e934e3ed0dc25e6fa8307704e419c60bf"
+  },
+  "Accounting.ServingBlocks.OperationBodies": {
+   "owner": "@training",
+   "digest": "b32dd98d6e401f335a8940ccb13e58ff9c64439b2ebda2265c4ae9f6f35548d3"
+  },
+  "Accounting.ServingBlocks.Overlap": {
+   "owner": "@training",
+   "digest": "39ca4a60bde57a084d35293484eafdb933d63532bca41e07fc5779e234c73dcb"
   },
   "Accounting.ServingBlocks.PerBlockCap": {
    "owner": "@training",
@@ -2081,22 +2097,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Accounting.Assumptions.ServingBridge": {
-   "owner": "@training",
-   "digest": "b6ef891d87e18f7307680da83a88e43866bc770192b0c90a06688805c0cff4e6"
-  },
-  "Accounting.Assumptions.ServingCoverage": {
-   "owner": "@training",
-   "digest": "35d9d6fd1e2bf38fb869a66fefe1a0dc1962d4f88435a656eedeb877c5b25490"
-  },
-  "Accounting.ServingBlocks.OperationBodies": {
-   "owner": "@training",
-   "digest": "b32dd98d6e401f335a8940ccb13e58ff9c64439b2ebda2265c4ae9f6f35548d3"
-  },
-  "Accounting.ServingBlocks.Overlap": {
-   "owner": "@training",
-   "digest": "39ca4a60bde57a084d35293484eafdb933d63532bca41e07fc5779e234c73dcb"
   }
  },
  "meaning": [
