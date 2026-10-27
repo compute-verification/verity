@@ -3,8 +3,8 @@
 #
 #   The request Program's per-event split count S_r[s] = splits_for(n_live(arrive_r + s)) is computed from the DECLARED chronology
 #   (arrivals + caps of the whole population).  N3 declares a WRONG chronology — one batch-mate's arrival moved — builds the first
-#   request's Program from that manifest (CPU: derive_step on meta), and compares it against the row's REAL fold with the row's own
-#   Match tool (cb_a.batch_decomp, the other shapes' Programs from the row's Build).  The Match must FAIL: the fold's launches carry the
+#   request's Program from that manifest (CPU: derive_step on meta), and compares it against the workload's REAL fold with its own
+#   Match tool (cb_a.batch_decomp, the other shapes' Programs from its Build).  The Match must FAIL: the fold's launches carry the
 #   S vLLM chose for the realized batch, the mutated Program declares another S at the affected events (spec-id inequality, named).
 #   A negative PASSES (as a negative) iff batch_decomp reports the first request canonical-unequal on GumbelTopPTokenSelect spec ids.
 #   Nothing is served again and nothing is retried; every artefact stays under $OUT/N3/.

@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Pod runtime for the Verity x vLLM integration (research/infra; no Verity semantics): ONE Python 3.12 environment (torch cu129, vLLM
 # d9105ea80, numpy, safetensors),
-# the native taps (hidden_gpu chunk tree, FA2 matReq tap; FA3 on sm_90; the default-on row taps), the pinned checkpoints, and a readiness record.
+# the native taps (hidden_gpu chunk tree, FA2 matReq tap; FA3 on sm_90; the default-on workload taps), the pinned checkpoints, and a readiness record.
 #
 #   research run --on <machine> --project verity --source <verity checkout> -- bash -c "cd integrations/vllm && bash verity_vllm/ops/pod_bootstrap.sh [--cases B0[,B1]] [--out DIR] [--cpu|--gpu] [--dry-run]"
 #
 # Idempotent: every step checks before it builds.  Runs from this directory (the shipped tree's integrations/vllm).  Fails closed with
 # a named class (BOOTSTRAP_FAIL_<step>) and exits 3; the readiness record (readiness.json) is written whether or not every check passed.
 # Env: WORK (/workspace), VENV ($WORK/venv312), HF_HOME ($WORK/hf), FA2_TAP_HDIMS (64,96,128,256), MAX_JOBS (nproc), CUDA_HOME,
-# ROW_TAPS (1: build the taps a row runs by default -- the guarded-max FA2 / FA3 builds, the norm and router taps; 0 skips them, and a
-# row on this pod then needs GUARDED_MAX_TAP=0 NORM_TAP=0 ROUTER_TAP=0).
+# ROW_TAPS (1: build the taps a workload runs by default -- the guarded-max FA2 / FA3 builds, the norm and router taps; 0 skips
+# them, and a workload on this pod then needs GUARDED_MAX_TAP=0 NORM_TAP=0 ROUTER_TAP=0).
 #
 # PROTOCOL SUMMARY (pod readiness; runs once per pod, before any row_pod.sh)
-#   Purpose: make a fresh pod able to run rows from THIS shipped tree: venv312 (Python 3.12) + the sha256-pinned vLLM d9105ea80 cu129
+#   Purpose: make a fresh pod able to run workloads from THIS shipped tree: venv312 (Python 3.12) + the sha256-pinned vLLM d9105ea80 cu129
 #     wheel + torch cu129, the pinned checkpoints (manifests/checkpoints.json: sha256 per safetensors shard), the native taps
 #     (hidden_gpu chunk tree, FA2 matReq tap, FA3 tap on cc 9.0) and a mechanical readiness record.
 #   Inputs: --cases B0[,B1] (checkpoint roles of checkpoints.json), --out DIR, --cpu | --gpu (force a mode), --dry-run; the env above.
