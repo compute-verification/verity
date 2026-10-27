@@ -21,6 +21,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 * `Flock.SecurityProofs.IntegrityBlockCarried`: `CarriedBlocks.integrity_on` at block `b`'s sessions.
 * `CarriedBlocks.run_ofServer`: with no carried leaf the run is `ServerBlocks.run`, so the carried statements read
   `ServerBlocks`' records there.
+* `Flock.SecurityProofs.IntegrityBlock_of_IntegrityBlockCarried`: `IntegrityBlockCarried` at `CarriedBlocks.ofServer`
+  is `IntegrityBlock`, so the carried form strengthens it.
 -/
 
 namespace FlockSoundness.Game
