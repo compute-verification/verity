@@ -111,23 +111,36 @@ theorem seqRounds_ret {M : IdealModel} {σ α ι : Type} (f : M.Qry → M.Ans) (
       · exact ⟨rfl, i, hstep j s i⟩
       · exact ih.2 e he
 
+theorem honestStrategy_pre (o : Unit × Unit) (W : Bits sch.n) (pp : Bits sch.t) (C : sch.Code)
+    (ω : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω) :
+    honestStrategy.pre o W pp C ω = List.ofFn (codeEquiv sch.B sch.ℓ C) := by
+  simp only [honestStrategy]
+
+theorem honestStrategy_step (o : Unit × Unit) (sc : MemoryChallenger.SessionCommitment) (W : Bits sch.n)
+    (pp : Bits sch.t) (j : ℕ) (σ : List Bool) (i : Fin sch.B) :
+    honestStrategy.step o sc W pp j σ i = .ret ((codeEquiv sch.B sch.ℓ).symm (fun k => σ.getD k.val false) i, σ) := by
+  simp only [honestStrategy]
+
 theorem periodHeldHonest : PeriodHeldHonest := by
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · intro P hs
     have key : ∀ (o : Unit × Unit) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)
         (I : Fin 105 → Fin (2 ^ 19)) (v : ByteArray × ByteArray),
         (P.answers honestStrategy o x I v =
-            (List.ofFn I).map fun i => (codeEquiv sch.B sch.ℓ).symm
-              (fun k => (List.ofFn (codeEquiv sch.B sch.ℓ (sch.enc (P.W o) x.1 ()).2)).getD k.val false) i) ∧
+            (List.ofFn I).map fun i => (codeEquiv sch.B sch.ℓ).symm (fun k =>
+              (honestStrategy.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1).getD k.val
+                false) i) ∧
           ∀ e ∈ P.trace honestStrategy o x I v,
-            e.1 = List.ofFn (codeEquiv sch.B sch.ℓ (sch.enc (P.W o) x.1 ()).2) ∧
-              ∃ i, e.2 = .ret ((codeEquiv sch.B sch.ℓ).symm
-                (fun k => (List.ofFn (codeEquiv sch.B sch.ℓ (sch.enc (P.W o) x.1 ()).2)).getD k.val false) i,
-                List.ofFn (codeEquiv sch.B sch.ℓ (sch.enc (P.W o) x.1 ()).2)) :=
+            e.1 = honestStrategy.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1 ∧
+              ∃ i, e.2 = .ret ((codeEquiv sch.B sch.ℓ).symm (fun k =>
+                (honestStrategy.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1).getD k.val
+                  false) i,
+                honestStrategy.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1) :=
       fun o x I v => seqRounds_ret ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)
         (fun (σ : List Bool) (i : Fin sch.B) => (codeEquiv sch.B sch.ℓ).symm (fun k => σ.getD k.val false) i)
         (honestStrategy.step o (commitmentOf P.sid (P.pub o).root v) (P.W o) (sch.enc (P.W o) x.1 ()).1)
-        (fun _ _ _ => rfl) 0 (List.ofFn I) (List.ofFn (codeEquiv sch.B sch.ℓ (sch.enc (P.W o) x.1 ()).2))
+        (honestStrategy_step o (commitmentOf P.sid (P.pub o).root v) (P.W o) (sch.enc (P.W o) x.1 ()).1) 0
+        (List.ofFn I) (honestStrategy.pre o (P.W o) (sch.enc (P.W o) x.1 ()).1 (sch.enc (P.W o) x.1 ()).2 x.1)
     refine ⟨fun o x I v _ => ⟨fun _ e he => ?_, fun B hB e he => ?_⟩, fun o x _ => ?_⟩
     · obtain ⟨-, i, hi⟩ := (key o x I v).2 e he
       rw [hi]
@@ -135,18 +148,21 @@ theorem periodHeldHonest : PeriodHeldHonest := by
     · have h0 : (0 : ℕ) ∈ (honestRun.win .capacity).ticks := by
         simp [honestRun, periodRun, Accounting.Window.ticks, K]
       have h1 : FULL ≤ B := hB 0 h0
-      have hl : e.1.length = FULL := by
-        rw [((key o x I v).2 e he).1]
-        exact List.length_ofFn
+      have hl : e.1.length = sch.B * sch.ℓ := by
+        rw [((key o x I v).2 e he).1, honestStrategy_pre, List.length_ofFn]
+      have hF : sch.B * sch.ℓ = FULL := rfl
       omega
     · obtain ⟨v, hv⟩ := Pous.EndToEnd.SecurityProofs.coinView_some P.sid hs x.2.1
         (Pous.EndToEnd.SecurityProofs.splitAll x.2.2).1
       refine ⟨(Pous.EndToEnd.SecurityProofs.splitAll x.2.2).1, v,
         ⟨fun j => Pous.EndToEnd.SecurityProofs.uniformOn_split (x.2.2 j), hv⟩, ?_⟩
-      rw [(key o x _ v).1, List.map_ofFn]
-      congr 1
-      funext j
-      simp
+      have hfun : (fun k : Fin (sch.B * sch.ℓ) =>
+          (List.ofFn (codeEquiv sch.B sch.ℓ (sch.enc (P.W o) x.1 ()).2)).getD k.val false) =
+          codeEquiv sch.B sch.ℓ (sch.enc (P.W o) x.1 ()).2 := by
+        funext k
+        simp
+      rw [(key o x _ v).1, honestStrategy_pre, hfun, List.map_ofFn]
+      simp only [Equiv.symm_apply_apply, Function.comp_def]
   · show (0 : ℝ) < (HONEST_S : ℝ) * ((K : ℕ) : ℝ)
     norm_num [HONEST_S, K]
   · rw [S_eq]
