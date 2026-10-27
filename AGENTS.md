@@ -50,9 +50,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per example: its workload, placement, commands and level of doneness; a milestone is a set of
-  (example, level) pairs, which top keeps (`examples/README.md`). Among them is `one_stage/`, the one-stage audit end to
-  end.
+- `examples/`: one directory per example: its workload, placement, commands and doneness; a milestone is (example,
+  run, proof) triples, which top keeps (`examples/README.md`). Among them is `one_stage/`, the one-stage audit end to end.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
   - `benchmarks/tc_probe/`, `benchmarks/tc_probe_fp4/`, `benchmarks/native_peak/`: GPU probes.
@@ -105,7 +104,7 @@ check, `verity check tests|lean|circuits` runs only those parts, and `verity ben
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
-research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the whole check; --record: an Attempt
+research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the whole check
 research status RUN  # check back on a run (`research run` returns once it starts); --wait: only a run under 20 min
 ~~~
 
@@ -210,12 +209,11 @@ the standing rulings stated nowhere else.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
-  all compute: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks one. The
-  datacenter's size (from
-  `benchmarks/census/`) and the window's length are stated parameters, and a figure scaled from one machine says which
-  parts are proved and which are scaled. Give each bound as its pooled total over the period and as a share of the
-  compute it covers, beside the per-window figure, never the per-window figure alone: a per-window δ that looks weak is
-  not the result.
+  all compute, in AND gates: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks
+  one. The datacenter's size (from `benchmarks/census/`) and the window's length are stated parameters, and a figure
+  scaled from one machine says which parts are proved and which are scaled. Give each bound as its pooled total over the
+  period and as a share of the compute it covers, beside the per-window figure, never instead of it: a per-window δ that
+  looks weak is not the result.
 
 ## Tests
 
@@ -267,7 +265,8 @@ multi-core CPU pod. It covers:
   run sends the upstream build then.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
-unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
+unchanged. `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit
+in M's NAME pool.
 
 Landing (Daniel, 24 Oct 06:05Z): PRs land on an eyeball review, and the full check runs after landing. A part's verdict is
 reused only while a hash of its declared inputs (the read guard enforces them), the base image and the code that decides it (a

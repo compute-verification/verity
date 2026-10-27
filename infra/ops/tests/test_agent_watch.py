@@ -1331,6 +1331,44 @@ def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
         "the ACTIVE read before a restart of the watch counts (state.json)"
 
 
+def test_a_worker_whose_parent_got_its_task_result_is_not_recorded_idle_and_one_resumed_later_is(tmp_path):
+    """INF-277: a worker that ended its turn by reporting back (its parent's Task call completed as it stopped) needs no one,
+    whether the result streams in before the IDLE read or while the record is held; resumed (its Task call running again) and
+    stopped without a result, it is recorded as before."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})")
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", "2026-10-18T19:31:00Z")}, notes=notes)
+    w.sweep(lambda r: None)
+    clock.t += 6 * 60
+    api.workers[W1_] = worker("IDLE", W.iso(clock.t - 30))
+    w.child(CO, {"name": "task", "status": "completed", "args": {"agentId": W1_}}, clock.t)
+    for _ in range(W.BURST_QUIET_S // 60 + 2):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert records(tmp_path) == [], "reported back: nobody must act"
+    w.child(CO, {"name": "task", "status": "running", "args": {"agentId": W1_}}, clock.t)
+    api.workers[W1_] = worker("ACTIVE", W.iso(clock.t))
+    w.sweep(lambda r: None)
+    clock.t += 10 * 60
+    api.workers[W1_] = worker("IDLE", W.iso(clock.t - 30))
+    w.sweep(lambda r: None)
+    clock.t += 60
+    w.child(CO, {"name": "task", "status": "completed", "args": {"agentId": W1_}}, clock.t)
+    for _ in range(W.BURST_QUIET_S // 60 + 2):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert records(tmp_path) == [], "a result that streams in while the record is held drops it"
+    w.child(CO, {"name": "task", "status": "running", "args": {"agentId": W1_}}, clock.t)
+    api.workers[W1_] = worker("ACTIVE", W.iso(clock.t))
+    w.sweep(lambda r: None)
+    clock.t += 10 * 60
+    api.workers[W1_] = worker("IDLE", stopped := W.iso(clock.t - 30))
+    for _ in range(W.BURST_QUIET_S // 60 + 2):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert [(r["kind"], r["at"]) for r in records(tmp_path)] == [("worker_idle", stopped)], "no result: rung as before"
+
+
 def test_a_worker_first_seen_idle_is_not_recorded(tmp_path):
     """Idle before the watch knew it: it may have reported back hours ago."""
     notes = tmp_path / "notes"
@@ -1743,6 +1781,9 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
                                   "lane": "zk-port"},
         "r20261018-195500-0004": {"agent": "", "name": "", "handle": "vllm", "role": "lane", "node": "vy-nebius-2",
                                   "what": "slot --by vllm --", "rc": 1, "state": "failed", "after": "30 s", "lane": "vllm"}}
+    assert {r["run"]: r.get("sender_status") for r in ended(tmp_path) if r["role"] != "unknown"} == {
+        "r20261018-195000-0002": "IDLE", "r20261018-195500-0003": "ACTIVE", "r20261018-195500-0004": "unknown"}, \
+        "the sender's status at its run's end, for the relay to ring only a sender not in a turn (INF-277)"
     assert status(tmp_path)[CO]["watch_state"] != "run_ended", "a research run's end is not the agent's state"
     for _ in range(3):
         clock.t += 5 * 60

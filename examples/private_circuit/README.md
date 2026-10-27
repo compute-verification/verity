@@ -10,7 +10,7 @@ verified by the Lean verifier.
 - **Placement:** one CPU node holds both parties, the prover (`flock-circuit prove --zk`) and the Lean verifier
   (`flock-verify`): `pod.sh` on vy-nebius-1's CPUs.
 - **Command:** `pod.sh`, below.
-- **Owner:** proofs. Its rung on the ladder is `example.toml`.
+- **Owner:** proofs. Where it stands on the run and proof axes is its `example.toml`.
 
 - `universal.py`: the driver; its docstring says what it builds, what it checks and what a row records.
 - `pod.sh`: the entry point on a CPU node. It builds `flock-circuit` and `flock-verify` once per `FLOCK_WORK`, from this

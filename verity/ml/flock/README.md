@@ -14,7 +14,7 @@ and what the merge gate runs per family: `../../../archive/README.md`.
   - `templates/`: one lowering per subcircuit template; `ir_frame.py` (`verity/flock-ir-frame/v3`) and `ir_sampling.py`
     (`verity/flock-ir-sampling/v1`): their frame-v3 statements.
   - `partition_units.py`: every unit class of an arbitrary partition (`verity.ml.circuits.units`) lowered and checked against the
-    reference evaluator; `boolean_export.py`: a served row's leaf templates, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
+    reference evaluator; `boolean_export.py`: a served workload's leaf templates, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
     circuits (a derived format, not a statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
     export, the docs site and the prover's layouts share.
   - M0: `circuit.py` (`verity/flock-circuit`), a lowered template proved with its serving rows committed in the circuit,

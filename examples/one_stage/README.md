@@ -10,7 +10,7 @@ negatives.
 - **Placement:** one CPU pod holds every party: the prover (M0) and the verifier's draw and Lean verifier (`pod.sh`). The
   GPU half (`a5_glm53_commit.sh`) runs on a GPU host.
 - **Command:** `pod.sh`, below.
-- **Owner:** proofs. Its rung on the ladder is `example.toml`.
+- **Owner:** proofs. Where it stands on the run and proof axes is its `example.toml`.
 
 The cost jobs (`zk_cost.py`, `zk_cost.sh`, `zk_cost_cpu.sh`, `a8_cost.py`, `a8_gpu.sh`) are measurement. They are here
 while they import or run the drivers (`zk_cost.py` imports `a0` and `a6`, `a8_gpu.sh` runs `a8.py`).
@@ -63,8 +63,8 @@ while they import or run the drivers (`zk_cost.py` imports `a0` and `a6`, `a8_gp
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
 - `examples/vllm/commit.sh` (the vLLM example's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
-  bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the row's Build and Match of record, a config-run Commit that seals
-  `commit/replay_bundle_p0/` (a single-GPU row defers only as a config run), its replay on CPU, and the row dir in the evidence
+  bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
+  `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
 - `benchmarks/one_stage/served_verdicts.sh`, with `served_verdicts.py` and its test
   (`benchmarks/one_stage/tests/test_served_verdicts.py`, in a suite of its own), stayed behind when this directory moved:
