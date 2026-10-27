@@ -141,6 +141,7 @@ theorem minority_le {a b K : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hK : b * a ≤ 
 end Target
 
 open Target
+open Claims (Ex Pr Ex_nonneg Ex_mono Ex_div Pr_nonneg Pr_mono Pr_le_one Pr_false)
 
 /-- An event no play after `θ`, `F` and `c` meets has probability zero. -/
 theorem prob_play_eq_zero (ns : List ℕ) (θ F c : ByteArray) (p : Outcome → Prop)
@@ -262,12 +263,12 @@ theorem weight_mul_le (q : Dep) (V : Vocab d α) {θ F c : ByteArray} {σ : Game
 /-- **A drawn unbound unit gives a wire bit off the plurality**: where the witness's reading is correct on, and opened
 at, every unit the draw holds (`hread`), a drawn unit unbound in `X` has a wire where `X` differs from the reading, at
 some bit. -/
-theorem unbound_drawn (V : Vocab d α) {θ F c : ByteArray} {Xr X : (V.circuitOf F).Transcript} {u : Fin (V.units F)}
-    (hc : (V.partsOf F).Correct Xr u) (ho : ∀ g ∈ (V.partsOf F).io u, V.Opens θ F c g (Xr g))
-    (hu : u ∈ Accounting.unbound (V.partsOf F) (V.Opens θ F c) X) :
-    ∃ g ∈ (V.partsOf F).io u, ∃ i < (V.circuitOf F).w g, (Xr g).getLsbD i = !(X g).getLsbD i := by
+theorem unbound_drawn (V : Vocab d α) {θ F c : ByteArray} {Xw Xe : (V.circuitOf F).Transcript} {u : Fin (V.units F)}
+    (hc : (V.partsOf F).Correct Xw u) (ho : ∀ g ∈ (V.partsOf F).io u, V.Opens θ F c g (Xw g))
+    (hu : u ∈ Accounting.unbound (V.partsOf F) (V.Opens θ F c) Xe) :
+    ∃ g ∈ (V.partsOf F).io u, ∃ i < (V.circuitOf F).w g, (Xw g).getLsbD i = !(Xe g).getLsbD i := by
   classical
-  have hg : ∃ g ∈ (V.partsOf F).io u, X g ≠ Xr g := by
+  have hg : ∃ g ∈ (V.partsOf F).io u, Xe g ≠ Xw g := by
     by_contra hall
     push_neg at hall
     have hu' := (Finset.mem_filter.1 hu).2
@@ -280,7 +281,7 @@ theorem unbound_drawn (V : Vocab d α) {θ F c : ByteArray} {Xr X : (V.circuitOf
   push_neg at hall
   refine hne (BitVec.eq_of_getLsbD_eq fun i hi => ?_)
   have := hall i hi
-  cases h₁ : (X g).getLsbD i <;> cases h₂ : (Xr g).getLsbD i <;> simp_all
+  cases h₁ : (Xe g).getLsbD i <;> cases h₂ : (Xw g).getLsbD i <;> simp_all
 
 /-- **One draw's share**: at the draw `ξ`, the probability over the session's tape and coins that the recursive
 configuration's verdict holds is at most the draw's miss of the unbound units (one where `ξ` misses them), plus
@@ -311,10 +312,10 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
       ∑ g, ∑ i ∈ Finset.range ((V.circuitOf F).w g),
         Pr (wEvent q V S readX g i (!(q.extract V S readX g).getLsbD i) ξ) := by
   classical
-  set X := q.extract V S readX with hXdef
-  set U := Accounting.unbound (V.partsOf F) (V.Opens θ F c) X with hUdef
+  set Xe := q.extract V S readX with hXdef
+  set U := Accounting.unbound (V.partsOf F) (V.Opens θ F c) Xe with hUdef
   have hsum0 : 0 ≤ ∑ g, ∑ i ∈ Finset.range ((V.circuitOf F).w g),
-      Pr (wEvent q V S readX g i (!(X g).getLsbD i) ξ) :=
+      Pr (wEvent q V S readX g i (!(Xe g).getLsbD i) ξ) :=
     Finset.sum_nonneg fun _ _ => Finset.sum_nonneg fun _ _ => Pr_nonneg _
   have hc0 : 0 ≤ (q.tCost V S : ℝ) * (2 : ℝ) ^ (-lam) := by positivity
   by_cases hex : ∃ s, RecVerdict V (S.out ξ s)
@@ -356,7 +357,7 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
           ((Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧
             ¬ q.R.ext (S.x ξ) (q.E.eval FlockDeploy.sha512 (S.P ξ) (S.x ξ) s.1 s.2.1 s.2.2).1) ∨
           ∃ g ∈ Finset.univ, ∃ i ∈ Finset.range ((V.circuitOf F).w g),
-            wEvent q V S readX g i (!(X g).getLsbD i) ξ s) := by
+            wEvent q V S readX g i (!(Xe g).getLsbD i) ξ s) := by
         refine Pr_mono fun s hs => ?_
         have hacc := (verdict_run q hG V S hlive ξ (s.1, s.2.1) hs).2
         by_cases hR : q.R.ext (S.x ξ) (q.E.eval FlockDeploy.sha512 (S.P ξ) (S.x ξ) s.1 s.2.1 s.2.2).1
@@ -373,9 +374,9 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
           (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧
             ¬ q.R.ext (S.x ξ) (q.E.eval FlockDeploy.sha512 (S.P ξ) (S.x ξ) s.1 s.2.1 s.2.2).1) +
         Pr (fun s : q.Sample V S ξ => ∃ g ∈ Finset.univ, ∃ i ∈ Finset.range ((V.circuitOf F).w g),
-            wEvent q V S readX g i (!(X g).getLsbD i) ξ s) := pr_or_le _ _
+            wEvent q V S readX g i (!(Xe g).getLsbD i) ξ s) := pr_or_le _ _
     _ ≤ q.tCost V S * (2 : ℝ) ^ (-lam) + ∑ g, ∑ i ∈ Finset.range ((V.circuitOf F).w g),
-          Pr (wEvent q V S readX g i (!(X g).getLsbD i) ξ) := by
+          Pr (wEvent q V S readX g i (!(Xe g).getLsbD i) ξ) := by
         refine add_le_add hbad ?_
         refine le_trans (pr_exists_finset_le Finset.univ _) (Finset.sum_le_sum fun g _ => ?_)
         exact pr_exists_finset_le _ _
