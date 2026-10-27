@@ -89,13 +89,12 @@ from __future__ import annotations
 
 import hashlib
 import struct
-from functools import lru_cache
-from types import SimpleNamespace
-from typing import Callable, Sequence
+from typing import Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ONE, ZERO, OR, and_reduce, const_bits, maj, mux, or_reduce
+from verity.ml.circuits.boolean.trace import part as _part
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
@@ -341,26 +340,6 @@ def _sha(C, data: list[list]) -> list[list]:
 
 
 # --- the parts ---------------------------------------------------------------------------------------------------------------
-
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str) -> CompositeDefinition:
-    """A Definition traced from ``build(C, S, *elements)`` once per binding of ``statics``, which C-Flock lowers by ``build``."""
-
-    @lru_cache(maxsize=None)
-    def traced(*key) -> TR.Traced:
-        S = SimpleNamespace(**dict(zip(statics, key)))
-        params, ret = signature(S)
-        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
-
-    def body(B, S, *colls):
-        params, ret = signature(S)
-        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
-
-    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    # a lowering passes the statics only to a Definition that has some (`ir_lower._boolean_activation`)
-    d.build = build if statics else (lambda C, *e: build(C, SimpleNamespace(), *e))  # type: ignore[attr-defined]
-    d.traced = traced  # type: ignore[attr-defined]
-    return d
-
 
 def _f(S):
     return Array(S.N, BIT)

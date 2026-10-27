@@ -79,9 +79,14 @@ def advice_trace(out: Path, engine: Any) -> Any:
     return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time).install(engine)
 
 
+#: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
+#: request value (the network certifier's users are request indexes, ``user-<i>``), so it can leave the node with
+#: advice_trace.jsonl, windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
+REQUEST_USERS = "request_users.jsonl"
+
 #: the records the gates' tie-run reads by run id, mirrored into the run's $OUT (the served rows' salts stay in the serve dir)
-MIRRORED = ("serve.json", "requests.jsonl", "windows.jsonl", "seals.jsonl", "step_trace.jsonl", "advice_trace.jsonl", "pauses.jsonl",
-            "summary.json", "remote_session.json", "memory_map.jsonl")
+MIRRORED = ("serve.json", "requests.jsonl", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "step_trace.jsonl",
+            "advice_trace.jsonl", "pauses.jsonl", "summary.json", "remote_session.json", "memory_map.jsonl")
 
 
 def gc_of(rc: Any) -> dict[str, Any] | None:
@@ -632,8 +637,9 @@ class CommitWindows:
         return [self.ledgers.pop(e) for e in [e for e, led in self.ledgers.items() if led.finished]]
 
     def _check_finished(self, finished: Sequence[Ledger]) -> None:
-        """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl."""
-        with open(self.out / "requests.jsonl", "a") as fh:
+        """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl, and its
+        engine id and ``user`` a line of `REQUEST_USERS`."""
+        with open(self.out / "requests.jsonl", "a") as fh, open(self.out / REQUEST_USERS, "a") as fu:
             for led in finished:
                 eid = led.engine_id
                 rr = self.record.requests.get(eid)
@@ -646,6 +652,7 @@ class CommitWindows:
                     self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"],
                                          "cache_hit": int(rec["check"].get("cache_hit") or 0)})
                 fh.write(json.dumps(rec) + "\n")
+                fu.write(json.dumps({"engine_id": rec["engine_id"], "user": rec["user"]}) + "\n")
 
     def summary(self) -> dict[str, Any]:
         """The windows closed so far; ``closing`` those whose finalize, off the loop, has yet to run (their requests unchecked)."""

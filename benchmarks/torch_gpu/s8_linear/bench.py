@@ -8,7 +8,7 @@ around every item), each gated in this run before it is timed:
                   (`configs.CONFIGS` or --configs, else its default; bf16 out, the Definition's epilogue): y into 0xA5 equal
                   to `run.reference` (run.py's gate holds that to the Definition's twin on every cell)
     exact_triton  on sm_90, int8_fused (Triton) the same way: the second exact kernel
-    simple        int_mm.py's `linear` (run.py's `--kernel int_mm`, KS8-SIMPLE's path, HASH-11): torch._int_mm's s32 sums,
+    simple        int_mm.py's `linear` (run.py's `--kernel int_mm`): torch._int_mm's s32 sums,
                   then the fused epilogue; gated like exact: the path the exact kernel must beat
     lt            cuBLASLt int8, s32 out, autotuned: its top 32 heuristic algorithms (`lt.Plan`), each gated (z equal to
                   torch._int_mm's) and timed in a pre-pass of 3 interleaved items, the fastest kept
@@ -18,8 +18,8 @@ around every item), each gated in this run before it is timed:
                   M a multiple of 16, its words counted against the Definition's
 DRAM read bandwidth is measured in the run, before and after (a streaming read of 4 GiB, `read_kernel`, interleaved with a
 copy), and the s8 tensor-core peak is the card's, `--peak-tops`, by default PEAKS' measured reading for the arch: sm_90's
-1,942.7 TOPS (the H200's best second of dense s8 wgmma, r20261019-053910-d2c9) beside its data sheet's 1,979 at 1,830 MHz,
-sm_120's 807.5 (mma.sync at locked 2100 MHz, r20260930-062850-de8e). crossing.json records every reading (`peak_readings`); a
+1,942.7 TOPS (the H200's best second of dense s8 wgmma) beside its data sheet's 1,979 at 1,830 MHz,
+sm_120's 807.5 (mma.sync at locked 2100 MHz). crossing.json records every reading (`peak_readings`); a
 fraction of peak scales by their ratio. A model's layer set is its linears (`fixture.MODELS`) at the same M.
 
 crossing.json, per arm and model (layer set) and per linear:
@@ -80,15 +80,15 @@ def bandwidth(clock, reps: int) -> dict:
     n = BW_BYTES // 4
     src = torch.randint(0, 1 << 30, (n,), dtype=torch.int32, device="cuda")
     dst = torch.empty_like(src)
-    block, iters = 4096, 16
-    grid = triton.cdiv(n, block * iters)
+    tile, iters = 4096, 16
+    grid = triton.cdiv(n, tile * iters)
     out = torch.empty(grid, dtype=torch.int32, device="cuda")
-    fns = {"read": lambda: read_kernel[(grid,)](src, out, n, BLOCK=block, ITERS=iters, num_warps=8),
+    fns = {"read": lambda: read_kernel[(grid,)](src, out, n, BLOCK=tile, ITERS=iters, num_warps=8),
            "copy": lambda: dst.copy_(src)}
     med, us, meta = kbench.timed(fns, reps, clock, 1)
     doc = {"read_gbs": BW_BYTES / med["read"] / 1e3, "copy_gbs": 2 * BW_BYTES / med["copy"] / 1e3, "us": med,
            "sm_clock_mhz": meta["clocks"]}
-    del src, dst, out
+    src = dst = out = None
     torch.cuda.empty_cache()
     return doc
 

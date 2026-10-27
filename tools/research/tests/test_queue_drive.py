@@ -446,3 +446,16 @@ def _live_run(tmp_path, rid: str, commit: str, records: dict[str, str | None]):
         fetched.append((r, names))
         return (d, {"dir": str(d), "tree_sha": commit}) if r == rid else None
     return d, fetch, fetched
+
+
+def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_cache(tmp_path):
+    """Drive's after-landing run reuses no suite or Lean pass (`after_landing_no_cache`) but circuit-check's per-target ones: a
+    cold `circuit-check --all` (~4 h) outlasted every after-landing run from 24 Oct, so `main` was never verified."""
+    from research.drive import train_launch
+
+    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "verity" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
+    extra = {"agreement": False, "no_cache": True, "circuit_cache": True, "no_regenerate": True}    # `start_postland`'s
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", extra.pop("agreement"), deferred="pytest,circuit-check", **extra)
+    assert ids == ["r20261027-120000-aaaa"]
+    assert f"argv: {'c' * 40} m1 --deferred pytest,circuit-check --no-cache --circuit-cache --no-regenerate" in tail, tail
