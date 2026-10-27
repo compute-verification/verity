@@ -44,9 +44,9 @@ KEY = "ab" * 64
 LANE = "memory-accounting"
 RUN = "v20261021T130000Z-ab12"
 SSH = "-i /nonexistent/test-gate-key -o IdentitiesOnly=yes research@192.0.2.1"
-BASE = ["run", "--peer", "vy-nebius-2", "--port", "7951", "--period", "memory-line-1", "--pin", KEY]
+BASE = ["run", "--peer", "gpu-node", "--port", "7951", "--period", "memory-line-1", "--pin", KEY]
 PACED = [*BASE, "--paced", "2:8000:40:2", "4:16000:40:2"]
-SESSIONS = ["run", "--peer", "vy-nebius-2", "--port", "7958", "--period", "memory-line-1", "--pin", KEY,
+SESSIONS = ["run", "--peer", "gpu-node", "--port", "7958", "--period", "memory-line-1", "--pin", KEY,
             "--sessions", "3", "--windows", "7", "--window-ms", "1000", "--samples", "2773", "--minutes", "30",
             "--jitter-ms", "2.5", "--quantile", "p99", "--lifetime", "4"]
 ROLE = "SYNTHETIC_BF16"
@@ -56,7 +56,8 @@ BOUND = [*PACED, "--model", ROLE, "--engines", "2", "--arena-blocks", "7"]
 @pytest.fixture
 def svc(tmp_path) -> H.Host:
     settings = json.loads((PACKAGING / "verifier.json").read_text())
-    settings["challenger"]["ssh"] = SSH
+    settings["challenger"].update(ssh=SSH, peer="auditor-host")
+    settings["peers"] = {"gpu-node": next(iter(settings["peers"].values()))}
     (tmp_path / "verifier.json").write_text(json.dumps(settings))
     (tmp_path / "var" / "runs").mkdir(parents=True)
     host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl",
@@ -115,12 +116,12 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
     doc = json.loads(out)
     assert rc == 0, doc
     assert (doc["run"], doc["by"], doc["pinned"], doc["peer"], doc["listen"]) == (
-        RUN, LANE, PIN, "vy-nebius-2", "127.0.0.1:7951")
+        RUN, LANE, PIN, "gpu-node", "127.0.0.1:7951")
     assert units.started == [f"vy-verifier@{RUN}.service"]
     req = json.loads((svc.runs / RUN / "request.json").read_text())
     assert {k: v for k, v in req.items() if k != "argv"} == {
         "run": RUN, "by": LANE, "requested_utc": "2026-10-21T13:00:00Z", "pinned": PIN,
-        "pin_log": {"line": 0, "utc": "2026-10-21T13:00:00Z"}, "peer": "vy-nebius-2", "port": 7951,
+        "pin_log": {"line": 0, "utc": "2026-10-21T13:00:00Z"}, "peer": "gpu-node", "port": 7951,
         "period": "memory-line-1", "pin": KEY, "paced": ["2:8000:40:2", "4:16000:40:2"]}
     argv = req["argv"]
     assert argv == doc["argv"]
@@ -129,7 +130,7 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
     assert dict(zip(argv[3:i:2], argv[4:i:2])) == {
         "--host": "127.0.0.1", "--port": "7951", "--out": str(svc.runs / RUN / "out"), "--registry": str(svc.registry),
         "--transcript": str(svc.scratch / RUN / "transcripts"), "--challenger": "gate",
-        "--challenger-ssh": SSH, "--challenger-peer": "vy-auditor-1", "--challenger-pin": KEY,
+        "--challenger-ssh": SSH, "--challenger-peer": "auditor-host", "--challenger-pin": KEY,
         "--challenger-period": "memory-line-1", "--challenger-main": str(svc.main), "--host-bytes": "1843153879040",
         "--ingress-bytes-per-s": "4400000000.0"}
     assert argv[i:] == ["--paced", "2:8000:40:2", "4:16000:40:2"]
@@ -190,7 +191,7 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
     assert (a.model, a.checkpoint, a.pin, a.arena_blocks) == (None, None, None, None)
     assert (a.out, a.registry, a.transcript) == (svc.runs / RUN / "out", svc.registry, svc.scratch / RUN / "transcripts")
     assert (a.challenger, a.challenger_ssh, a.challenger_peer, a.challenger_pin, a.challenger_period,
-            a.challenger_main) == ("gate", SSH, "vy-auditor-1", KEY, "memory-line-1", svc.main)
+            a.challenger_main) == ("gate", SSH, "auditor-host", KEY, "memory-line-1", svc.main)
     assert (a.host_bytes, a.ingress_bytes_per_s, a.hbm_bytes, a.lean_exe, a.host) == (
         1843153879040, 4.4e9, V.HBM_BYTES, None, "127.0.0.1")
     for spec in a.paced or []:
@@ -286,7 +287,7 @@ def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
     *[([*PACED, flag, value], f"unrecognized arguments: {flag}") for flag, value in [
         ("--host-bytes", "1"), ("--ingress-bytes-per-s", "1"), ("--hbm-bytes", "1"), ("--disk-bytes-per-s", "1"),
         ("--link-bytes-per-s", "1"), ("--challenger", "serve"), ("--challenger-ssh", "research@198.51.100.1"),
-        ("--challenger-peer", "vy-nebius-2"), ("--challenger-key", "/tmp/k"), ("--challenger-params", "4,4"),
+        ("--challenger-peer", "gpu-node"), ("--challenger-key", "/tmp/k"), ("--challenger-params", "4,4"),
         ("--challenger-main", "/tmp/main"),
         ("--out", "/tmp/out"), ("--registry", "/tmp/r.json"), ("--transcript", "/tmp/t"), ("--lean-exe", "/bin/sh"),
         ("--host", "0.0.0.0"), ("--check-workers", "1"), ("--delta-log2", "-1"), ("--pings", "1"),
@@ -300,7 +301,7 @@ def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
     ([*BASE, "--sessions", "2", "--window", "1"], "unrecognized arguments: --window"),
     (PACED[:1] + PACED[3:], "required: --peer"),
     # the peer, the port, the period and the pin
-    (["run", "--peer", "vy-nebius-1", *PACED[3:]], "--peer 'vy-nebius-1'"),
+    (["run", "--peer", "cpu-node", *PACED[3:]], "--peer 'cpu-node'"),
     (["run", "--peer", "../etc", *PACED[3:]], "--peer '../etc'"),
     *[([*PACED[:3], "--port", port, *PACED[5:]], f"--port '{port}'")
       for port in ("7811", "7899", "7950", "7959", "07951", "7951.0", "0x1f0f", "22")],
@@ -505,7 +506,7 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
     assert argv[:2] == ["put", "--kind"] and argv[2] == "verifier-run/v1" and argv[-3:] == [
         "--tree", str(svc.runs / RUN), "--preserve"]
     assert json.loads(argv[argv.index("--meta") + 1]) == {
-        "run": RUN, "by": LANE, "pinned": PIN, "peer": "vy-nebius-2", "period": "memory-line-1",
+        "run": RUN, "by": LANE, "pinned": PIN, "peer": "gpu-node", "period": "memory-line-1",
         "requested_utc": "2026-10-21T13:00:00Z", "end": {"rc": 0, "ended_utc": "2026-10-21T13:30:00Z"}, "replay": None}
 
 
@@ -564,7 +565,7 @@ def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_
     assert rc == 0 and st["listening"] and not st["active"] and st["end"]["rc"] == 0 and st["replay"] is None
 
     import auditor_line
-    line = auditor_line.analyse(o, host_bytes=1843153879040, pin=None, period=None, heads=None, peer="vy-auditor-1")
+    line = auditor_line.analyse(o, host_bytes=1843153879040, pin=None, period=None, heads=None, peer="auditor-host")
     assert line["registration"] == v["registration"]["digest"]
     assert [(r["k"], r["accepted"], r["skipped"]) for r in line["sessions"]] == [
         (0, True, "no challenger log: coins drawn in the verifier's process")]
@@ -680,7 +681,7 @@ def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
 
 def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path, monkeypatch):
     """`exec_party` with a party that never exits (no prover joined): its timer kills it and its parent, and the log records
-    why. Killing the parent alone (runuser, on vy-auditor-2) left the party listening and holding the pipe."""
+    why. Killing the parent alone (runuser, on an auditor host) left the party listening and holding the pipe."""
     armed: list[float] = []
 
     class Timer:
