@@ -95,8 +95,7 @@ __device__ __forceinline__ void nblock(const u64* sd, u64 t, u64 nt0, u64 nt1, u
   w[13] = 0;
   w[14] = 0;
   w[15] = 96 * 8;
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s[j] = sx::IV_DEV[j];
+  sx::iv(s);
   sx::compress<0, 2>(s, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
@@ -137,8 +136,7 @@ __device__ __forceinline__ void unit_seed(const H1Call& C, u64 p, const u64* __r
   for (int j = 0; j < 8; ++j) w[4 + j] = salt[j] ^ p;
 #pragma unroll
   for (int j = 0; j < 4; ++j) w[12 + j] = C.roots[j] ^ p;
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s[j] = sx::IV_DEV[j];
+  sx::iv(s);
   sx::compress<0, 2>(s, w);
 #pragma unroll
   for (int j = 0; j < 4; ++j) w[j] = C.roots[4 + j] ^ p;
@@ -206,7 +204,9 @@ __device__ __forceinline__ void sha_round(u64 v[8], u64 k, u64 w) {
   v[0] = t1 + t2;
 }
 
-// a noise chunk's state after rounds 0 .. 10, which read only the tag and the seed (words 0 .. 10): one a unit
+// a noise chunk's state after rounds 0 .. 10, which read only the tag and the seed (words 0 .. 10): one a unit.  This
+// and nblock_mid read the IV from constant memory (sx::IV_DEV): with sx::iv's immediates version 2 runs 2-4% slower at
+// T = 64, where nblock (version 1's) runs 1% faster with them
 __device__ __forceinline__ void noise_mid(const u64* sd, u64 nt0, u64 nt1, u64 nt2, u64 mid[8]) {
 #pragma unroll
   for (int j = 0; j < 8; ++j) mid[j] = sx::IV_DEV[j];
