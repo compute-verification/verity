@@ -78,11 +78,14 @@ $LEASE bash -c '
   r=$?
   echo "period rc $r" >> "$O/rc.txt"
   if [ "$NSYS" = 1 ]; then
-    nsys profile -o "$O/nsys-period" --force-overwrite true --trace cuda $PY $D/period.py run "$W/cfg" "$W/hu" "$W/nsys-out" \
-      --coins local --main "$MAIN" --blocks 1 --steps 100 --q 64 --periods 1 --negative "" > "$O/nsys.log" 2>&1
-    echo "nsys rc $?" >> "$O/rc.txt"
-    nsys stats --report cuda_gpu_kern_sum --format csv -o "$O/nsys-kern" "$O/nsys-period.nsys-rep" >> "$O/nsys.log" 2>&1
-    nsys export --type sqlite -o "$O/nsys-period.sqlite" "$O/nsys-period.nsys-rep" >> "$O/nsys.log" 2>&1
+    for arm in plain proto; do
+      nsys profile -o "$O/nsys-$arm" --force-overwrite true --trace cuda $PY $D/period.py run "$W/cfg" "$W/hu" "$W/nsys-$arm" \
+        --coins local --main "$MAIN" --blocks 1 --steps 64 --q 64 --periods 1 --negative "" --arms $arm >> "$O/nsys.log" 2>&1
+      echo "nsys $arm rc $?" >> "$O/rc.txt"
+      nsys stats --report cuda_gpu_kern_sum --format csv -o "$O/nsys-$arm" "$O/nsys-$arm.nsys-rep" >> "$O/nsys.log" 2>&1
+      nsys export --type sqlite -o "$O/nsys-$arm.sqlite" "$O/nsys-$arm.nsys-rep" >> "$O/nsys.log" 2>&1
+      $PY $D/timeline.py "$O/nsys-$arm.sqlite" > "$O/timeline-$arm.json" 2>> "$O/nsys.log"
+    done
   fi
   kill $smi 2>/dev/null
   exit $r

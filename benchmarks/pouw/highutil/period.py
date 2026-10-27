@@ -664,7 +664,8 @@ def cmd_run(a: argparse.Namespace) -> int:
             per = Period(drv, coins, trees, cfg, row, source, secret, work, pool)
             # warm-up: one plain block, so the clocks and caches settle before anything is timed
             drv.block(0, 0, min(plan.steps, 50), "plain", "none", work / "none", work / "none")
-            schedule = [("proto", "none"), ("plain", "none")] * a.periods + ([("proto", a.negative)] if a.negative else [])
+            arms = [x for x in ("proto", "plain") if a.arms in ("both", x)]
+            schedule = [(x, "none") for x in arms] * a.periods + ([("proto", a.negative)] if a.negative else [])
             for x, (arm, cheat) in enumerate(schedule):
                 pid = f"{a.tag}-{x:02d}-{arm}" + ("" if cheat == "none" else "-" + cheat.replace(":", "").replace("@", "l"))
                 r = per.proto(pid, plan, cheat) if arm == "proto" else per.plain(pid, plan)
@@ -683,6 +684,8 @@ def cmd_run(a: argparse.Namespace) -> int:
     print(json.dumps(summary, indent=1))
     neg = [r for r in results if r["arm"] == "proto" and r["cheat"] != "none"]
     honest = [r for r in results if r["arm"] == "proto" and r["cheat"] == "none"]
+    if a.arms == "plain":
+        return 0
     return 0 if honest and all(r["accepted"] for r in honest) and all(not r["accepted"] for r in neg) else 1
 
 
@@ -799,6 +802,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("--q", type=int, default=2048)
     p.add_argument("--periods", type=int, default=2, help="protocol periods, each followed by a plain one")
     p.add_argument("--negative", default="skip:2@2", help="the cheating period's v31 cheat (`@L`: layer L only); empty: none")
+    p.add_argument("--arms", choices=("both", "proto", "plain"), default="both", help="one arm only (a profile of it)")
     p.add_argument("--tag", default="hu")
     p.add_argument("--workers", type=int, default=0)
     p.set_defaults(fn=cmd_run)
