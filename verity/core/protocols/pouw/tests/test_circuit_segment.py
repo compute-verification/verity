@@ -270,7 +270,7 @@ def test_a_warp_receipt_past_a_leaf_takes_the_next():
 
 
 def test_the_served_receipt_is_not_injective_at_a_state():
-    """#2438's `DuoReceiptNotInjective` on this module's duo keys (word 0's): from one state two words give one served
+    """`DuoReceiptNotInjective` (`Security/Proofs/Pouw/Receipt.lean`) on this module's duo keys (word 0's): from one state two words give one served
     receipt y ^ rotl(z, 16) and two full states, which only a checkpoint of the whole state (`PouwWarpCheck_v2`) tells
     apart."""
     y, z = 0x247A23F6, 0xC48C9971

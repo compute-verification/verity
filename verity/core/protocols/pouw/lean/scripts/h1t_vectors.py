@@ -1,6 +1,6 @@
 """Conformance vectors for `Definitions.Pouw.Fp8Atom.H1T`: H-1T's forming map, salt fields and checked chain, as Lean data.
 
-    PYTHONPATH=<verity> python scripts/h1t_vectors.py <copy of internal/pouw/hardness> [--out DIR]
+    PYTHONPATH=<verity> python scripts/h1t_vectors.py <hardness vectors directory> [--out DIR]
 
 The expected values come from an exact transcription of `docs/pouw/hardness-shaped-matrices.md` §3.1 over fractions,
 with the atom from `verity.ml.circuits.silicon` (`tc_dot_total_e4m3` on `HOPPER_E4M3_K32`) and the chain in numpy float32. Before

@@ -93,7 +93,7 @@ def test_the_statement_set_and_its_reads():
 
 
 def test_every_statements_partials_are_registered_reads_and_an_unregistered_row_does_not_open():
-    """A port the verifier's registered reads (``own``) don't name is free in the checked relation (RT4-LOGIC-29c), so in
+    """A port the verifier's registered reads (``own``) don't name is free in the checked relation, so in
     each of the 33 statements every port reading the partials is a registered read of the after-draw tree at its row."""
     for kind, ln in LL.statements(32, 32):
         got = {p: r for p, (v, r) in LL.reads(32, 32, kind, ln).items() if v == LL.PARTIALS}
