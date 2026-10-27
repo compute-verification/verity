@@ -49,7 +49,7 @@ from verity.core.deploy.config import Channel, Component, Refused, Workload
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.sampled_proofs.one_stage.draw import parse_law
 
-from . import compose as C, parties as P, runner as RN, tie as T
+from . import compose as C, parties as P, runner as RN, settings as S, tie as T
 from .table import check_answer, load
 
 Entry = Callable[[Mapping[str, Any], Path, bool], int]
@@ -167,7 +167,7 @@ def network_certifier(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
     """The network certifier at step 0 (module docstring): the run's periods relayed through it before the workers
     serve, each period's requests in a link-window of their own, and each link-window's output committed at the
     reading circuit's out shape (``serve --circuit-only --tie``) and signed under its session's key."""
-    os.environ.setdefault("CERTIFIER_TAMPER", "")
+    S.setdefault(S.CERTIFIER)
     run, a = run_of(state), _loop(cfg, state, True)
     shape = RN.serve([*RN.shape_of(0, run["run"], a), "--circuit-only"])["out_shape"]
     (state / BLOCKS).mkdir(parents=True, exist_ok=True)
@@ -181,8 +181,7 @@ def certifier_verifier(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
     period's window, after sampled proofs' verifier, whose answer and audit it reads; its answer and case in
     ``record/w<I>/certifier/``. A leg that raises leaves its error there (``error.txt``) and an error answer, and the
     entry returns 1."""
-    os.environ.setdefault("RAYON_NUM_THREADS", str(os.cpu_count() or 1))
-    os.environ.setdefault("RUST_MIN_STACK", str(64 << 20))
+    S.setdefault(S.RUST)
     leg, failed = load("certifier").leg, 0
     for i in range(run_of(state)["periods"]):
         block, rec = state / BLOCKS / f"w{i}", state / RECORD / f"w{i}"
@@ -197,7 +196,7 @@ def certifier_verifier(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
             if not (rec / "integrity").exists():
                 (rec / "integrity").symlink_to("sampled-proofs")
             ans = check_answer(leg(block, os.uname().nodename, out))
-        except Exception as e:  # noqa: BLE001: a leg that can't decide is the period's error, never a verdict
+        except Exception as e:  # noqa: BLE001  (a leg that can't decide is the period's error, never a verdict)
             (out / "error.txt").write_text(traceback.format_exc())
             ans, failed = {"verdict": "error", "reason": f"{type(e).__name__}: {e}"[:2000]}, 1
         (out / "answer.json").write_text(json.dumps(ans, indent=1, sort_keys=True))
@@ -230,10 +229,8 @@ SERVICES = {"challenger": Service("CHALLENGER ", P.stop)}
 # --- the verdict -------------------------------------------------------------------------------------------------------
 
 def _json(path: Path) -> dict[str, Any] | None:
-    try:
-        return json.loads(path.read_text())
-    except (OSError, ValueError):
-        return None
+    """``path``'s JSON, or None when its party wrote none; one it can't read raises, the period's error."""
+    return json.loads(path.read_text()) if path.exists() else None
 
 
 def compose(cfg: Mapping[str, Any], state: Path, period: int,

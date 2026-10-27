@@ -55,6 +55,8 @@ from typing import Any
 
 from verity.core.deploy import config as K
 
+from . import settings
+
 ROOT = Path(__file__).resolve().parents[4]
 #: step 0's static table: the directory on its import path, and its module
 REGISTRY = (ROOT / "benchmarks" / "all_protocols", "verity_all_protocols.deployment")
@@ -248,7 +250,7 @@ def begin(cfg: Mapping[str, Any], state: Path, periods: int, machine: str, hooks
             raise K.Refused("state", f"{state} holds the run of configuration {run['configuration'][:16]}… at "
                                      f"{run['periods']} periods, not {digest[:16]}… at {periods}")
         return run
-    run = {"run": os.environ.get("RESEARCH_RUN_ID") or "local", "periods": periods, "configuration": digest,
+    run = {"run": settings.run_id(), "periods": periods, "configuration": digest,
            "hooks": sorted(hooks), "parties": placed(cfg), "machine": machine}
     state.mkdir(parents=True, exist_ok=True)
     f.write_text(json.dumps(run, indent=1, sort_keys=True))
@@ -344,7 +346,7 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
             before = files(state)
             try:
                 started[p] = runner.start(p, reg.services[p].ready)
-            except Exception as e:  # noqa: BLE001: a service that never got ready failed, and the run stops
+            except Exception as e:  # noqa: BLE001  (a service that never got ready failed, and the run stops)
                 _failed(state, p, e)
                 failed.append(p)
             ready[p] = files(state)
@@ -356,7 +358,7 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
             before = files(state, services)
             try:
                 rc = runner.run(p)
-            except Exception as e:  # noqa: BLE001: a party that raises failed, and the verdict is still composed
+            except Exception as e:  # noqa: BLE001  (a party that raises failed, and the verdict is still composed)
                 _failed(state, p, e)
                 rc = 1
             transcribe(state, p, changed(before, files(state, services)))
@@ -375,7 +377,7 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
     for i in range(run["periods"]):
         try:
             got = reg.compose(cfg, state, i)
-        except Exception as e:  # noqa: BLE001: no product to run is the period's error, never a verdict
+        except Exception as e:  # noqa: BLE001  (no product to run is the period's error, never a verdict)
             got = {"components": {c: "error" for c in cfg["protocols"]}, "product": None, "verdict": "error",
                    "reason": f"the product: {type(e).__name__}: {e}"[:2000]}
         line = {"block": i, "coins": coins, **got, "run": run["run"], "simulated": list(premises)}
