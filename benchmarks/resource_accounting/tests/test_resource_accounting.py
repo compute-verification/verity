@@ -127,8 +127,8 @@ def test_the_table_derives_every_column_from_the_run_and_the_code():
     assert ("not a per-run covert bound: a per-run compute residual holds only conditional on BudgetAbort for the deployed "
             "cost model (Daniel's decision 9; #1821's CovertResidualPerRun, and #1827") in md
     assert "Note: first fetches are charged to the bandwidth account, not compute (Daniel's ruling)" in md
-    assert ("larger FP32 price at the point's (n, k) (pearlCDomainDevNK, pearlCDomainDevShapes): cube8192 (8192, 8192) "
-            "0.36949%; llama31_8b's layout, the max over its linears, 0.38912%.") in md
+    assert ("larger FP32 price at the point's (n, k) (#1809): cube8192 (8192, 8192) 0.36949%; llama31_8b's layout, the max "
+            "over its linears, 0.38912%.") in md
     assert "sidecar" not in md
     assert ("Every arm ran beside a sidecar, an idle CUDA context in a second process held through the run (ready in 2.0 s)"
             in R.markdown({**_doc(), "sidecar": {"pid": 7, "ready_s": 2.04, "rc": 0}}, {}, "fixture"))
