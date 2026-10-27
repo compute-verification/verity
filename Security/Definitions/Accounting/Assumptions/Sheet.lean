@@ -32,29 +32,29 @@ on it: nothing checks a clock, an offset or a lock at run time but the prover's 
 variable {K P : Type} [Fintype K] [DecidableEq P]
 
 /-- `accounting-sheet-clock` (assumed; `fmax` from each device's source). **A1 CLOCK**: the run's SM clock is positive
-and at most `fmax`. sm_120's 2430 MHz is the maximum SM clock its driver reports (nvidia-smi on the RTX PRO 6000
-Server Edition, SPEC's P1), not a data sheet's, and the same die boosts to 2617 MHz as the Workstation Edition; the
-B200's sheet gives none either, so its `fmax` is its driver's reported maximum too, and the H200's 1980 MHz is EPS1
-DC's measured f_max at default clocks (its sheet quotes TOPS at 1830 MHz, RT4-SHEET-8). A driver's report and a
-measurement are the device's own, which decision 96 doesn't take as a source, so A1 is assumed there. So is the
-absence of a clock offset: nothing checks it at run time, and the clock is the prover's configuration. Our nodes' driver allows none (NVML's allowed
-offset range `[0, 0]`, r20261019-121222-faa3), but a prover picks its own VBIOS and driver (RT2-LOGIC-7). -/
+and at most `fmax`. sm_120's 2430 MHz is the maximum SM clock its driver reports (nvidia-smi on the RTX PRO 6000 Server
+Edition, SPEC's P1), not a data sheet's, and the same die boosts to 2617 MHz as the Workstation Edition; the B200's
+sheet gives none either, so its `fmax` is its driver's reported maximum too, and the H200's 1980 MHz is EPS1 DC's
+measured f_max at default clocks (its sheet quotes TOPS at 1830 MHz). A driver's report and a measurement are the
+device's own, not a source for a sheet, so A1 is assumed there. So is the absence of a clock offset: nothing checks it
+at run time, and the clock is the prover's configuration. Our nodes' driver allows none (NVML's allowed offset range
+`[0, 0]`), but a prover picks its own VBIOS and driver. -/
 def SheetClock (S : Sheet K P) (Q : Run K) : Prop := 0 < Q.clock ∧ Q.clock ≤ S.fmax
 
 /-- `accounting-sheet-dispatch` (architecture whitepapers; A2u in no vendor document). **A2 DISPATCH**: an SMSP issues
 at most one warp instruction a cycle, whatever its pipe, so the run's warp instructions per SMSP are at most its cycles
 per SMSP (whitepapers Volta through Blackwell: four partitions an SM, each with one warp scheduler and one dispatch
-unit). **A2u**: the classes `K` include the uniform-datapath instructions, each taking an issue slot; no vendor
-document states it (decision 84's issue ceiling). **Catch-all**: every warp instruction takes at least one issue slot,
-whether or not its class is listed, so `K` counts every warp instruction the run issues, one no other class names in
-the device's catch-all class, priced at its issue slot (`NOROW` alone on sm_120 and on the H200's and B200's sheets,
-`UNLISTED` on the measured issue row on their measured readings DC-90-ri and DC-100-ri, and on DC-90-ri on the JI90
-lines too, its instructions timed beside the IGMMA, r20261021-070616-d06c; the exporters' `CATCH_ALL`). sm_120's is a vector class, so A6 reads such an instruction as a lane head of at most two words a lane;
-one with a wider destination is assumed to be a memory access (`LDL.128`, `LD.128`), which heads no vector word. The
-DC readings' are neither writers nor vector classes, so they head no word. A reading whose classes have none leaves an
-unlisted instruction free on every row, as sm_120's measured
-reading does. **Bulk count**: a bulk or TMA instruction (`cp.async.bulk`, `cp.reduce.async.bulk` and their tensor
-forms) of size `S` counts `S/99 KB` in sm_120's UTMABIG (A5b), at most one, so `K` holds it in at most its slot. -/
+unit). **A2u**: the classes `K` include the uniform-datapath instructions, each taking an issue slot; no vendor document
+states it. **Catch-all**: every warp instruction takes at least one issue slot, whether or not its class is listed, so
+`K` counts every warp instruction the run issues, one no other class names in the device's catch-all class, priced at
+its issue slot (`NOROW` alone on sm_120 and on the H200's and B200's sheets, `UNLISTED` on the measured issue row on
+their measured readings DC-90-ri and DC-100-ri, and on DC-90-ri on the JI90 lines too, its instructions timed beside the
+IGMMA; the exporters' `CATCH_ALL`). sm_120's is a vector class, so A6 reads such an instruction as a lane head of at
+most two words a lane; one with a wider destination is assumed to be a memory access (`LDL.128`, `LD.128`), which heads
+no vector word. The DC readings' are neither writers nor vector classes, so they head no word. A reading whose classes
+have none leaves an unlisted instruction free on every row, as sm_120's measured reading does. **Bulk count**: a bulk or
+TMA instruction (`cp.async.bulk`, `cp.reduce.async.bulk` and their tensor forms) of size `S` counts `S/99 KB` in
+sm_120's UTMABIG (A5b), at most one, so `K` holds it in at most its slot. -/
 def SheetDispatch (Q : Run K) : Prop := ∑ k, Q.n k ≤ Q.cycles
 
 /-- `accounting-sheet-tensor` (data sheets and whitepapers). **A3 TENSOR**: the tensor cores do at most the sheet's
@@ -102,7 +102,7 @@ def SheetWords (Z : Model K R T L U F X) (A : Anatomy K T L U) : Prop :=
 
 /-- `accounting-sheet-semantics` (PTX ISA). **A7 SEMANTICS**: each instruction computes the function its ISA defines
 and writes nothing else; whether a unit multiplies, and in which format, is read off its definition. Lean has no model
-of instruction semantics, so it is stated as what RT-ISA's reconciliation reads off the definitions
+of instruction semantics, so it is stated as what the ISA reconciliation reads off the definitions
 (`benchmarks/pouw/theory/isa_escape.py`, with A3): no unit outside the menu heads a fresh word (`NoSum`), and a side
 unit's words cost at least its per-word vector, read off its definition and priced on the sheet's rows
 (`SideUnits`). -/

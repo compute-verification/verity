@@ -19,7 +19,7 @@ of three things.
 * (c) A value uniquely fixed by what is already committed or public (`Item.fixed`): by the public schedule (the contract
   derives the value itself, and holds the items to the schedule's order), by the public statement (the value the public
   input names), or by the firewall's own values (its level-0 recheck, its opening, the values it computes from its pads,
-  under names the public input lists). Under D8 (a) the last three are today's Rust, which the transcript reports and
+  under names the public input lists). Under D8 (a) the last three are the current Rust, which the transcript reports and
   this contract does not recompute.
 
 What the contract holds a transcript to is the verifier's public input (`PublicInput`), never the transcript's own
@@ -27,7 +27,7 @@ copy of it. The tape's salts are pairwise distinct as bytes, and so are its pads
 salt or pad the workers saw under one number is not used under another.
 
 Coins go to the workers exactly as the challenger sent them (`Item.coins`), and only after every commitment the schedule
-owes (`State.owed`): in the inner phase each round's coins are live, drawn after its commitments, as `RecursiveSound`'s game
+owes (`State.owed`): in the inner phase each round's coins are live, drawn after its commitments, as `RecursiveKS`'s game
 and `RecursiveZK` draw them. A public input may also declare the challenger's commitments to its coins
 (`PublicInput.coins`): for each stream, one per round, the hm96-sha512 commit string `b ‖ c` (`commitBC`, the commit items'
 commitment) of the round's coin message (`coinMsg`: the stream, the round and the coins) under a salt of the challenger's.

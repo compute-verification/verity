@@ -207,26 +207,24 @@ def inputsOf (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (bs : Cor
   { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables := tablesOf bs, partition := some p.partition,
     program := some p.program }
 
-/-- The verifier's registered reads, as `verifyCmd` derives them from its registered file: its own ports, whether it
-holds every port's reads (`complete`), the reads it knows, and the registered parameters. -/
+/-- The verifier's registered reads, as `verifyCmd` derives them from its registered file: its own ports, the reads it
+knows, and the registered parameters. -/
 structure Reads where
   registered : Option (Array Flock.Registered.Port)
-  complete : Bool
   known : Array (String × Array (Array Nat × ByteArray))
   params : Array String
 
 def readsOf : Option Json → V Reads
-  | none => pure ⟨none, false, #[], #[]⟩
+  | none => pure ⟨none, #[], #[]⟩
   | some j => do
     let own ← Flock.Registered.ofJson j
     let known ← Flock.Registered.knownOf j
     Flock.Registered.checkKnownAll own known
-    pure ⟨some own, ← Flock.Registered.completeOf j, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
-      ← Flock.Registered.paramsOf j⟩
+    pure ⟨some own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j), ← Flock.Registered.paramsOf j⟩
 
 /-- The checks `verifyCmd` makes on a session's tables once they are set up, before `Zk.shapeOk`. -/
 def setupChecks (I : Flock.Witness.Inputs) (rd : Reads) (sts : Array Flock.Stmt) : V Unit := do
-  if rd.complete then sts.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c (rd.registered.getD #[])
+  if let some own := rd.registered then sts.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c own
   sts.forM fun (st : Flock.Stmt) => Flock.Registered.checkCover st.c I.program I.partition rd.registered rd.params
   sts.forM fun (st : Flock.Stmt) => Flock.KnownRead.check st.c rd.known
   Flock.RecSetup.checks none none I.tags I.tables sts I.circuitFile I.partition I.program rd.registered none none none

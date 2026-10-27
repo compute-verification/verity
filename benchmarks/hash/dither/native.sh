@@ -28,7 +28,7 @@ rc=0
 for arm in "${arms[@]}"; do
   env_arm=()
   [ "$arm" = vllm-int8-triton ] && env_arm=(VLLM_DISABLED_KERNELS=CutlassInt8ScaledMMLinearKernel)
-  GPU_LEASE_WHO=kernels-dither-hb gpu-lease 1 --wait "${lease[@]}" -- env "${env_arm[@]}" \
+  GPU_LEASE_WHO=dither/${RESEARCH_RUN_ID:-local} gpu-lease 1 --wait "${lease[@]}" -- env "${env_arm[@]}" \
     "$PY" "$HERE/numabind.py" "$OUT/numa.$arm.json" bash -c '
     q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
     nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$OUT/clocks.'"$arm"'.before.csv"
