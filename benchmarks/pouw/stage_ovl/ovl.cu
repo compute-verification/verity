@@ -38,7 +38,7 @@
 //   litec, litecprio, litecrrW, liteconly: the same, the stand-in chained as the tree is (a thread a segment, a thread a
 //             row, each CTA's 128-leaf levels, one CTA for the levels above: ~40 dependent compressions a stage at 2K)
 //   cg, cgeq, cgrrW, cgonly: hhi, eq, rrW and hashonly with each commitment commit_gpu's small path (benchmarks/pouw/commit_gpu: CTAs of 128
-//             threads, no shared memory) over the stage's operand as tile leaves of CG_R rows x 32 values (Decision 46),
+//             threads, no shared memory) over the stage's operand as tile leaves of CG_R rows x 32 values,
 //             sha512/row/v2 rows, hm96-sha512 leaves with derived salts in a frame-v3-sha512 tree of the stage's own domain
 //             (the CGP1 files DIR/cg-M-R-t.bin); layer 0's salts with the frame-leaf first blocks and pads at the chunk's
 //             start, layer l+1's salts for stage t on the chunk's salt stream after layer l's commitment of stage t.

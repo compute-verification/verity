@@ -1,5 +1,5 @@
 """RT-ALGO round 3: J10's shared-noise forms against H1 + fx1's after-coin work, bit-exact on main's `h1tile` and
-`segment` (note:compute-accounting/20261019T0845Z-draft-rt-algo-r3).
+`segment` (/20261019T0845Z-draft-rt-algo-r3).
 
 A call is M rows of A (committed before the coin) and N rows of B (registered), at contraction K = 32 KS. Its noise is
 per call row (K dither bits b and the digit coins z) and per call column (K coin bits c and U's 32 values), and a 32 × 32
@@ -558,7 +558,7 @@ def gen_cost(M: int, N: int, K: int) -> dict:
 LLAMA_CALLS = ((4096, 6144), (4096, 4096), (4096, 28672), (14336, 4096))
 LLAMA_LAYERS, TOKENS_PER_S = 32, 20_000
 #: SERVE-H1's per-unit kernel: a K = 4096 unit's 612 compressions in 89.6 ns
-#: (note:compute-accounting/20261018T2005Z-draft-serve-h1)
+#: (/20261018T2005Z-draft-serve-h1)
 COMPRESSION_S = 89.6e-9 / 612
 
 

@@ -1,4 +1,4 @@
-"""The price of hashed seeds' grinding (GRIND, decision 112; Derived): ε_grind per family, model, regime and kind.
+"""The price of hashed seeds' grinding (Derived): ε_grind per family, model, regime and kind.
 
     uv run benchmarks/pouw/grind_price.py [--md OUT] [--json OUT]
 
@@ -31,7 +31,7 @@ must exceed 3.
 **h sensitivities.** At h bits a unit (compile's unit, a tile), π* = log₂(T/δ)/h tiles a seed group; h = 0.415 is
 p = ¾'s log₂(4/3).
 
-**Deployed attention's floor (ATTN-NOISE, note:compute-accounting/20261018T0634Z-draft-attn-noise §5).** H1's QKᵀ and P·V
+**Deployed attention's floor (/20261018T0634Z-draft-attn-noise §5).** H1's QKᵀ and P·V
 (one seed a matmul, a head) lose a unit's floor when one operand row's noise is matched. That is visible after the seed,
 so the cheater picks the matched rows: each of N rows of b bits read by u units has moment 1 − 2^{-b} + 2^{-b}e^{θu},
 and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`; `visible_premium`,

@@ -1,4 +1,4 @@
-// Uniform-datapath probe (compute-accounting, note:20261016T0439Z-draft-issue-uniform).
+// Uniform-datapath probe (compute-accounting).
 //
 // VF2 (RS-MODEL §13) prices a uniform-datapath instruction at 0.594 SMSP-cycles, assuming it takes the SM's dispatch
 // slot. If a uniform instruction co-issues on a separate port (takes NO vector slot), 0.594 exceeds real cost and VF2 is

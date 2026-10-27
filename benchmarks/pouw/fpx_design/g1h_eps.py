@@ -1,4 +1,4 @@
-"""FPX-G1H: g1 on H1 (co32c-u16, decision 82; `dither-c-peel-fx1`, the RTX PRO 6000's record) on the machine model:
+"""FPX-G1H: g1 on H1 (co32c-u16; `dither-c-peel-fx1`, the RTX PRO 6000's record) on the machine model:
 its ε, with g1's served correction priced as the record prices co32c's recombination, and its γ against plain FP8 and
 plain NVFP4.
 

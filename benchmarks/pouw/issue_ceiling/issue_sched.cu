@@ -1,6 +1,6 @@
-// Round-2 scheduling probe (compute-accounting, note:20261016T0300Z-draft-issue-ceiling-r2).
+// Round-2 scheduling probe (compute-accounting).
 //
-// Round 1 (note:20261016T0150Z-draft-issue-ceiling) interleaved a tensor MMA with a lane op inside ONE warp, which
+// Round 1 interleaved a tensor MMA with a lane op inside ONE warp, which
 // serialises issue: at 8 ops a MMA the IMMA kept only 0.756 of its alone MAC rate. RS-MODEL §9 fitted joint capacity
 // rows to that point and lifted τ 0.205 -> 0.239 — but only if no schedule does better. The s8 tensor pipe is
 // throughput-bound (~1 IMMA per 16 SMSP-cycles), so a co-resident lane warp could in principle fill the ~15 free issue

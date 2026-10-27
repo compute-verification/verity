@@ -1,4 +1,4 @@
-"""pfill's PF_ROUNDS cost dial (note:20261017T0320Z-draft-eps1-fold): the NC 4 absorb folds each committed word
+"""pfill's PF_ROUNDS cost dial: the NC 4 absorb folds each committed word
 PF_ROUNDS times. The default (and -DPF_ROUNDS=1) take the single-absorb path, byte-identical to the fold of record;
 -DPF_ROUNDS=R>1 re-folds the same word R times (a serial u32 chain the GPU measures the cost of a round), which moves the
 receipt but leaves the GPU and the host dfill_ref bit-exact. Here, on pfill.cuh's host tile built with g++: the default

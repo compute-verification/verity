@@ -10,7 +10,7 @@
 # (nvidia-smi every 100 ms), phases.jsonl and the nvidia-smi -q snapshots. POWER_SECS (25) is each kernel's time;
 # POWER_RELOCK_MHZ (2100, vm_setup.sh's vy-clocks lock) the clock the GPU is locked back to. The clock changes run as
 # `sudo -n nvidia-smi`; where sudo refuses them (the vy-lockout's allowlist has no clock rule) the default phase is skipped
-# (rgc.txt, r20261017-033131-4e67).
+# (rgc.txt).
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

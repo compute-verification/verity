@@ -1,13 +1,13 @@
 """Instructions a word, from each arm's timed loop: every opcode of one iteration (gpu_kit's SASS reader), the words a
 thread makes an iteration, and the duo fold's share (LOP3, IMAD, SHF.L.W, IADD3 a word) taken out. For the x arms (design
 A's depth-k bit product, no word a segment) a "word" is a lane-word, 32 bit-products, and x = 4 × its instructions is
-the warp instructions per 4,096 bit-products (note:20261017T0030Z-draft-checked-strip).
+the warp instructions per 4,096 bit-products.
 
   python count.py BINARY [--json OUT]           # the table, and every loop's full histogram
   python count.py BINARY --pin expect.json      # also gate every kernel with its whole histogram as --expect
 
 A thread's instruction is one issue slot of a warp that serves 32 lanes, so the counts a thread are lane-instructions a
-word as the brief counts them (note:20261017T0310Z-report-eps1-program, q*).
+word as the brief counts them (q*).
 """
 from __future__ import annotations
 

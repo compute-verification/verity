@@ -1,4 +1,4 @@
-// RT2-HOPPER (note:20261019T1140Z-draft-rt2-hopper) on the H200 (sm_90a), two probes in one binary.
+// RT2-HOPPER on the H200 (sm_90a), two probes in one binary.
 //
 // `exact`: li's fold (segment._li_absorb: y <- (y ^ d0 ^ LK[c][h]) * LA[c][h] + d1, 8 chains a lane, li_entries) over U
 // units of 128 words a lane, with the warp checkpoint (the XOR of the warp's 8·32 chain states, redux.sync.xor) in four
@@ -21,7 +21,7 @@
 // the first lane warp ended (one LDS an iteration), so the joint phase's tensor and lane rates are both exact.
 //
 // `lirate`: the fold with the lane alone on every SM, each checkpoint placement in one loop, its cycles a unit a
-// warp-slot (whether a REDG costs one issue slot and nothing else, as RT2-HOPPER-1's REDG routes take it).
+// warp-slot (whether a REDG costs one issue slot and nothing else, as 's REDG routes take it).
 #define main sm90_wgmma_main
 #include "../dc/probes/sm90_wgmma.cu"
 #undef main

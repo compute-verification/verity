@@ -116,11 +116,11 @@ over the block's `clock64` cycles from `OP_BEGIN` to `OP_END`; the median block,
 
 ## The known-invalid probes
 
-- `bad_ldsm_merged`: round 7's LDSM loop (r20261016-112703-0297), one address set every iteration and no
+- `bad_ldsm_merged`: round 7's LDSM loop, one address set every iteration and no
   `#pragma unroll 1`. ptxas unrolled it, so the gate refuses it by `loops`: 3 loops between the clock reads, 1 declared.
 - `bad_stsm_conflict`: round 7's STSM addresses, a 128-B lane stride, so each 8-row phase lands on 4 banks. The gate
   refuses it by `smem`: 32 of 32 accesses conflict, 8-way.
-- `dsm_red_add64_self`: VF3h's ROW_ATOME64 form (r20261016-145213-5ed0), `red.shared::cluster.add.u64` at the own rank.
+- `dsm_red_add64_self`: VF3h's ROW_ATOME64 form, `red.shared::cluster.add.u64` at the own rank.
   Every 64-bit ATOM.E but EXCH and CAS carries a QSPC + ATOMS.CAST.SPIN.64 fallback loop, so the gate refuses it by
   `loops`: 8 loops nested in the timed loop. ATOME64 is timed by its EXCH.64 and CAS.64 forms.
 

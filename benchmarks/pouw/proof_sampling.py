@@ -1,7 +1,7 @@
 """The proof draw under Daniel's one-σ order: the cheater's best response and the minimax draw (cmp-13, SAMPLING).
 
 A round's s proofs are whole dot products (DPs), drawn i.i.d. from a distribution ρ over the round's DPs. The cheater
-knows σ before it evaluates (SPEC note:20261017T0324Z-draft-eps1-spec §2.6) and picks, in each round:
+knows σ before it evaluates and picks, in each round:
 
 - deficient DPs, each of which passes a drawn proof with probability ≤ p over σ (Theorem S's luck);
 - steering attacks: a producer row's noise-active coordinates (R_i ≠ 0, plus one outlier) written wrong so that the
@@ -17,8 +17,8 @@ closure, r producer DPs proved at random noise-active coordinates of each drawn 
 steered consumer as if it had failed (`closure`); at any coordinates of the row, it detects with the row's wrong
 fraction (`closure_any`). ε_luck + ε_adapt = luck factor × (saving / S).
 
-Inputs are SPEC's and SKIP's (note:20261017T0340Z-draft-skip) shapes and Theorem S's constants. The proof cost is the
-proofs team's (PRF-57): C-Flock's `--zk` CPU prover by session size, one session at a time per site, one per table
+Inputs are SPEC's and SKIP's shapes and Theorem S's constants. The proof cost is the
+proofs team's: C-Flock's `--zk` CPU prover by session size, one session at a time per site, one per table
 until PRF-48. A round is 12.6 s, so proving keeps up only if a session batches enough rounds (`Cost.batch`); a round
 that waits for its own proofs is longer, and ε grows with it (`unbatched`). Run `uv run
 benchmarks/pouw/proof_sampling.py` for the table.
@@ -458,7 +458,7 @@ def session_s(dps: float) -> tuple[float, float]:
 
 
 def sessions_s(dps: float) -> float:
-    """Wall seconds to prove `dps` DPs in back-to-back sessions of at most 256 (PRF-57's sweet spot)."""
+    """Wall seconds to prove `dps` DPs in back-to-back sessions of at most 256 ('s sweet spot)."""
     full, rest = divmod(dps, ZK_SESSION[1][0])
     return full * ZK_SESSION[1][2] + (session_s(rest)[1] if rest > 0 else 0.0)
 
@@ -490,11 +490,11 @@ class Cost:
 
     @property
     def wall_s(self) -> float:
-        """One multi-table session a round (PRF-48)."""
+        """One multi-table session a round."""
         return session_s(self.dps)[1]
 
     def keep_up_s(self, rounds: int, today: bool = False) -> float:
-        """Wall seconds to prove `rounds` rounds' draws: as one multi-table batch (PRF-48), or `today` one per table."""
+        """Wall seconds to prove `rounds` rounds' draws: as one multi-table batch, or `today` one per table."""
         if not today:
             return sessions_s(rounds * self.dps)
         out = 0.0
@@ -563,7 +563,7 @@ def table(cs: list[Cell], strategies: list[str], draws: list[int], closure_r: in
     """ε and Λ, the worst cell per model and design, against the round's proof cost (each column's worst cell).
 
     ε is at S = 48,000 rounds of 12.6 s, which holds when sessions batch enough rounds to keep up (the batch columns);
-    "unbatched" is ε when every round waits for its own session (PRF-48's one multi-table session a round).
+    "unbatched" is ε when every round waits for its own session ('s one multi-table session a round).
     """
     groups: dict[str, list[Cell]] = {}
     for c in cs:

@@ -1,4 +1,4 @@
-"""RT2-FP: S14's packed slots (SLOT-LEMMA, #2755) against ε_machine's own lanes route, and premise (M) against F1.
+"""RT2-FP: S14's packed slots against ε_machine's own lanes route, and premise (M) against F1.
 
 #2755 (`benchmarks/pouw/theory/isa_escape_joint.py` at a3a9fea37c) prices a packed slot, w committed words through one
 slot's output, each extracted at e lane instructions, against the credited route alone: a word's load is
@@ -11,8 +11,8 @@ which is #2755's `per_word` at w → ∞ with e = q*. A packed word's load is 1/
 when e ≥ (1 − 1/w)·q*, and A6's e ≥ 1/2 gives that at q* = 1/2 for every w.
 
 This checks the domination by exact LP on #2755's rows (every device, fold, reading and q*), decodes a radix-64 two-row
-packing bit-exactly (a realization of #2755's credited-row window on words of spread under 64), and puts F1's measured
-sm_120 rates (r20260930-111747-26f3) on the shallow forms #2755 grades "M unmeasured". #2755's constants (`MMA_ISSUE`,
+packing bit-exactly (a realization of 's credited-row window on words of spread under 64), and puts F1's measured
+sm_120 rates on the shallow forms #2755 grades "M unmeasured". #2755's constants (`MMA_ISSUE`,
 `JI3E`, the steps) are copied so this runs from main. Stdlib only.
 Run: `python benchmarks/pouw/rt2_fp/slot_pack.py [--json OUT]`.
 """
@@ -34,7 +34,7 @@ FOLDS = {"0": Q(0), "1/2": Q(1, 2), "FOLD-OPT 3": Q(3), "7/2": Q(7, 2), "fx1 4":
 WS = (Q(3, 2), Q(2), Q(3), Q(4), Q(8), Q(32))
 ES = (Q(1, 2), Q(2, 3), Q(3, 4), Q(1), Q(5, 3), Q(2), Q(3))
 
-# F1 (r20260930-111747-26f3, art:3d41a851…, sm_120 at locked 2100 MHz): MACs an SM-clock, and a slot's physical
+# F1 (sm_120 at locked 2100 MHz): MACs an SM-clock, and a slot's physical
 # positions (a 2:4 shape's half its logical k; F1 counts a sparse form's nonzero products: sp s8 k64 = dense s8 k32).
 F1 = {
     ("s8", False, "m16n8k32"): ("s8_k32", "1022.6734254939101", 32),

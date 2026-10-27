@@ -71,7 +71,7 @@ LOADS = {"lds32": ("D_LDS32", "LDS", "LDS32", True), "lds64": ("D_LDS64", "LDS.6
          "tld4": ("D_TLD4", "TLD.LZ", "TLD4w", False), "tld4n": ("D_TLD4N", "TLD.LZ", "TLD4w", False),
          "ldg256": ("D_LDG256", "LDG.E.ENL2.256", None, False),
          "ldsm4": ("D_LDSM4", "LDSM.16.M88.4", "LDSM_X4", True), "sts128": ("D_STS128", "STS.128", "STS128", True)}
-#: the loads of the mem family (its seeded grid as r20261017-063107-835c ran it)
+#: the loads of the mem family (its seeded grid as ran it)
 MEM_LOADS = ("lds32", "lds64", "lds128", "ldsu8", "ldg32", "ldgnc32", "ldg64", "ldg128", "tld1", "tld2", "tld4", "tld4n")
 PATS = {"line": "P_LINE", "bcast": "P_BCAST", "quad": "P_QUAD"}
 #: an L2-resident load (mem.cuh's FB_L2, a block's 256 KB region): (enum, SASS opcode). The .NA and .STRONG.GPU forms skip
@@ -312,7 +312,7 @@ def sampled_mem(seed: int, n: int) -> list[dict]:
 
 
 #: the fine sweep: lane beside IMMA.16832 and the q range around the frontier of the rows the first batch beat or came
-#: within 1% of (r20261017-060543-cc28: R1/KFFMA0 by FFMA, KW20/KDMUL0, KALU64*, KALU*, KSEL3, EIMAD5, EHFMA25, KIMADW*)
+#: within 1% of (R1/KFFMA0 by FFMA, KW20/KDMUL0, KALU64*, KALU*, KSEL3, EIMAD5, EHFMA25, KIMADW*)
 FINE = {"ffma": range(80, 193, 8), "fmul": range(80, 193, 8), "iadd64": range(36, 97, 4), "iadd3": range(16, 129, 8),
         "imad": range(22, 51, 2), "hfma2": range(22, 51, 2), "imadw": range(40, 97, 4), "sel": range(14, 41, 2),
         "dfma": range(1, 7), "dmul": range(1, 7)}
@@ -525,7 +525,7 @@ def targeted_jipair() -> list[dict]:
     return out
 
 
-#: the forms the jifine break (r20261017-093644-cef3) didn't reach, and the three it beat with its worst program each
+#: the forms the jifine break didn't reach, and the three it beat with its worst program each
 R4_FORMS = ("i16816", "h16816", "h1684t", "isp16832", "isp16864", "hsp16832", "qsp16864", "q16832", "qsf16832",
             "osf16864")
 R4_REPEAT = (("i16832", 2), ("h16816f16", 3), ("h1688t", 3))
@@ -683,7 +683,7 @@ def targeted_rt4() -> list[dict]:
 
 def targeted_rt5() -> list[dict]:
     """RT-FACET r3: r2's unroll on every other MMA form, whose VF3s-16 hull is still FACET-BREAK r4's unroll-1 programs
-    (r20261017-100812-180b): FMUL beside each at unroll 8 and 16 on 2 and 3 accumulators, 96-128 lane ops a 8 MMAs, 2
+   : FMUL beside each at unroll 8 and 16 on 2 and 3 accumulators, 96-128 lane ops a 8 MMAs, 2
     warps a SMSP, and 4 at the vector end (128 on 2 accumulators)."""
     out: list[dict] = []
     for form in R4_FORMS + ("h16816f16", "h1688t"):
@@ -696,7 +696,7 @@ def targeted_rt5() -> list[dict]:
     return out
 
 
-#: the forms r3 (r20261017-193742-1973) took past VF3s-16 at its grid's edge (128 lane ops, unroll 16), and the rest
+#: the forms r3 took past VF3s-16 at its grid's edge (128 lane ops, unroll 16), and the rest
 RT6_BEAT = ("isp16864", "hsp16832", "qsp16864", "isp16832", "i16816", "qsf16832")
 RT6_REST = ("h16816", "h16816f16", "h1684t", "h1688t", "q16832", "osf16864")
 

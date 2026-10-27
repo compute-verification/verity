@@ -1,7 +1,7 @@
 """gpu_kit: the bank model, the dump format, the twin compare, and the timing gate on real sm_120a SASS.
 
 The SASS fixtures (`fixtures/gpu_kit/*.nvdisasm.txt`) are `nvdisasm -c` listings cut to a few kernels: `round7_lm` is
-RS-W′'s round-7 lm.cubin (r20261016-112703-0297), whose LDSM loop ptxas merged and whose STSM addresses conflict 8-way;
+RS-W′'s round-7 lm.cubin, whose LDSM loop ptxas merged and whose STSM addresses conflict 8-way;
 the others are `opcode_probe/probes/*.cu` built with nvcc 13.0 for sm_120a. `*.list.json` are those binaries' `--list`
 tables (the shared-memory offsets the bank check reads), cut to the same kernels.
 """
@@ -274,7 +274,7 @@ def test_a_tmem_read_must_be_an_ldtm():
 
 
 def test_an_elect_loop_is_one_trip_and_listed():
-    """ptxas wraps UBLKRED (sm_120, r20261017-033329-80d9) in an ELECT loop that runs once per active lane."""
+    """ptxas wraps UBLKRED (sm_120) in an ELECT loop that runs once per active lane."""
     fn = {f["name"]: H.Function(f) for f in H.parse_nvdisasm(ELECT_LISTING)}["blkred"]
     rec = G.judge_kernel(fn, [{"UBLKRED*": 1}])
     assert rec["ok"], rec["reasons"]

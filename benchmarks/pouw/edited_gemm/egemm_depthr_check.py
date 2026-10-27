@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FOLD depth-R same-word binding (note:20261017T0320Z-draft-eps1-fold, correction 2).
+"""Depth-R same-word binding of the fold.
 
 The served-GEMM scalar-only dial absorbs the SAME committed word R times through the XOR-in(13,19) fold with the SAME keys
 every round (benchmarks/pouw/edited_gemm/egemm.cu's EG_ROUNDS; receipt_folds_r9.xorin_step iterated). This closes the open
@@ -7,7 +7,7 @@ piece: the R-round fold still binds the word with no new luck term. Binding is t
 -- on the full 2^n state space, no nonzero change to the committed word's four s32 limbs leaves the R-fold output fixed on
 every state (an "all-state collapse" is a kernel element = a break).
 
-The theorem, and why same-word depth-R is NOT g3-chains' open case (note:20261016T2051Z-draft-g3-chains):
+The theorem, and why same-word depth-R is NOT g3-chains' open case:
   * Runs of >= 3 are open only in the alternating shape (T, R, T, R, split), which g3-chains shows needs the per-round
     keys/words to ALTERNATE (pairs 1 and 3 carry a key near +-1; pairs 0, 2 do not). The scalar-only dial folds the
     IDENTICAL word with the IDENTICAL keys every round, so it cannot realize the alternation. Hence at ODD depth there is

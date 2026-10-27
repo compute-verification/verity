@@ -66,7 +66,7 @@ time)
   STEPS=" ${STEPS//,/ } "
   [[ $STEPS == *" exact "* ]] && { "$B" exact 64 >"$OUT/exact.jsonl" 2>&1 || rc=1; }
   [[ $STEPS == *" msp "* ]] && [ -x "$WORK/msp90" ] && { "$WORK/msp90" >"$OUT/msp90.jsonl" 2>&1 || rc=1; }
-  # the JP*90 rows' block-timed points beside their exact (until) twins and the tensor alone (RT-BLACKWELL-16's test)
+  # the JP*90 rows' block-timed points beside their exact (until) twins and the tensor alone ('s test)
   [[ $STEPS == *" joint "* ]] && { "$B" probe --time wg_s8_n256_a1 wgspec_lop3_r256 wgU_lop3 wgspec_imad_r256 wgU_imad \
     wgspec_lop3_r64 wgspec_imad_r64 wgmix_lop3_r256 wgmix_imad_r256 --reps 5 >"$OUT/joint.jsonl" 2>&1 || rc=1; }
   [[ $STEPS == *" roles "* ]] && { "$B" roles 4096 3 >"$OUT/roles.jsonl" 2>&1 || rc=1; }

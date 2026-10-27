@@ -180,7 +180,7 @@ def test_the_joint_row_waits_for_the_search_to_converge(tmp_path: Path):
 
 
 def test_a_lane_below_issue_withholds_every_joint_line(tmp_path: Path):
-    # IADD3 with three register reads beside FFMA: 0.671 a SMSP-cycle (r20261017-072121-3924), so the mixed points
+    # IADD3 with three register reads beside FFMA: 0.671 a SMSP-cycle, so the mixed points
     # would sit on register reads, not on the issue facet
     out = _run(tmp_path, 0.671)
     fails = json.loads((out / "sm80.json").read_text())["gate_failures"]

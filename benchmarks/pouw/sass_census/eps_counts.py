@@ -33,7 +33,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-#: eps_budget.py's sm_120 values (BC-KERNEL r2 runs r20261017-090559-fd46 / -092503-35ff; D2S-KERNEL r3 -113844-b913)
+#: eps_budget.py's sm_120 values (BC-KERNEL r2 runs / -092503-35ff; D2S-KERNEL r3 -113844-b913)
 RECORDED = {"tail": {"IMMA": 4.0, "IMAD": 4.0, "ALU": 11.5}, "serve": 4.4,
             "vfold": {2048: 0.6884, 8192: 0.7265, 32768: 0.7221}}
 SHAPES = (2048, 8192, 32768)

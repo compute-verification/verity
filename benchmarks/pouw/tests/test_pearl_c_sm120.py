@@ -127,7 +127,7 @@ def test_gemms_fit_sm120_shared_memory():
 
 
 def test_k32_is_the_transposed_grid_of_column_pairs_and_leaves_every_product_unchanged():
-    """form_s5's codes and the lines' transposed F lines in K32 order (the pous root's 10:29Z ruling): within each aligned
+    """form_s5's codes and the lines' transposed F lines in K32 order (the pous root's ruling): within each aligned
     32, position 8q + 2b + s holds column 8b + 2q + s; the kernel's k32 and the fixture's are the same map, an involution,
     and a product over k of two operands both in K32 order is the unpermuted one's, word for word, on both device records."""
     t = np.arange(96)

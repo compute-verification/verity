@@ -281,13 +281,13 @@ def b1_fit() -> None:
 TRUE_LOOPS = (290.36, 268.60)
 # The toml's 122.41 is the model's plain GEMM on DC-90 (lanes beside the tensor, JI90_2), not a time on the clock: a MMA
 # alone takes 4 / 0.0312468 = 128.01 SMSP-cycles (census IGMMA_S8_N256 M), so a loop at fraction f takes 128.01 / f
-# (RT-HOPPER-10).
+#.
 PLAIN, ALONE = 122.41, 4 / 0.0312468
 
 
 def honest_true() -> None:
-    """γ and ε when honest's measured time is the loop that folds the wgmma's own accumulators (RT-HOPPER-8), each loop
-    at the toml's convention (122.41 / f) and on the clock (128.01 / f, RT-HOPPER-10)."""
+    """γ and ε when honest's measured time is the loop that folds the wgmma's own accumulators, each loop
+    at the toml's convention (122.41 / f) and on the clock (128.01 / f)."""
     with tempfile.TemporaryDirectory() as t:
         d = scratch(Path(t), rs=False)
         p = d / "honest" / "dc90-licpw-redux-l32.toml"

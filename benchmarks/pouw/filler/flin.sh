@@ -6,7 +6,7 @@
 # the decode step with its linears through flin (fstep). The round's coins are drawn once per run (coins.txt). Clocks are
 # read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=FILL \
+#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/filler/flin.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/flin.sh"'
 #
 # FL_FLIN ("M:FW:NC:THR[:PDL] ..."; "none" skips), FL_STEP ("B:L:FW:NC:THR:AFW[:PDL[:FILL_SMS[:LT[:FP[:ANC[:APS[:ALZ[:LM[:ST]]]]]]]]] ..."), PDL 0

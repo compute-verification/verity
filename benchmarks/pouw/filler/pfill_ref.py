@@ -5,7 +5,7 @@ and B on {±1, ..., ±64}, -DPFILL_BU). Written from the matrices with hashlib's
 with its own; `dcap dgate` holds the GPU to that `dfill_ref`, and tests/test_pfill_ref.py holds this file to that
 reference built with g++ (pfill_host.cpp).
 
-The cheats of note:20261016T0917Z-draft-fullfloor-s-r8 §1.2 are here too, each as the words it hands the same fold:
+The cheats against the folds are here too, each as the words it hands the same fold:
 `q_receipt` computes Q = a0 d0 + d1 a pair with one product a pair (ram's step reads nothing else), and
 `packed_receipt` gets both words of a pair from one packed product (4 A)(33 B0 + B1) and a table (±1 and {0,1} only)."""
 
@@ -187,7 +187,7 @@ def fold(c0: int, c1: int, tile: int, nc: int, steps: int, cw: np.ndarray, kind:
 
 
 def ho_ok(c0: int, c1: int, tile: int, steps: int, kind: int = S8, w: int = W) -> bool:
-    """(HO), LI's layout premise (note:20261016T1117Z-draft-fullfloor-s-r9): no hand-off of a lane's chain, (d1, d2) in a
+    """(HO), LI's layout premise: no hand-off of a lane's chain, (d1, d2) in a
     step or (d3, the next step's d0), joins two words whose rows or columns are equal or complementary (either lets one
     product make both words, the complement's through the other operand's sum). Rows: g and g + 8 of a fragment, and
     g + 8 of fragment f with g of f + 4 (chain f % 4's next); columns: 8 j + 2 t with 8 j + 2 t + 1, and that with

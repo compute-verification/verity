@@ -282,10 +282,10 @@ UNOWNED = "none yet: compute-accounting's coordinator"
 #: headline FOLD-OPT until its owner lands the class (a `loads.CLASS_RULES` rule and its census lines on π*'s rows) or a
 #: catch-all priced on them. The witnesses are census_cover_sass.json's runs: cpw_routes r20261019-192718-5d46 (RTX PRO
 #: 6000), rt3_dc r20261019-183610-89bd (H200) and r20261019-192247-8771 (B200), and red_generic r20261020-001850-def6
-#: (its H200 and B200 SASS, art:9463456f9f).
+#:.
 CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     # sm_120, unclassed. On DS-120, #2791's CATCH_ALL["sm_120"] (A2's NOROW, 1 at DS_issue) covers each; the measured
-    # reading (VF3r-16 at JI3s_0, #2791's VF3s-16 at JI3t_0) has neither a class nor a catch-all for any of them.
+    # reading (VF3r-16 at JI3s_0, 's VF3s-16 at JI3t_0) has neither a class nor a catch-all for any of them.
     ("sm_120", "STG.E.64"): (RT3_120, "cpw_routes modes 2 and 7's state-word stores; facet_break uc's stg64"),
     ("sm_120", "STS.64"): (RT3_120, "facet_break uc's sts64 probe"),
     ("sm_120", "ST.E.128"): (RT3_120, "facet_break uc's st128 probe, a generic store"),
@@ -312,7 +312,7 @@ CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     ("sm_120", "STS"): (RT3_120, "facet_break uc's sts32 probe: STS32"),
     ("sm_120", "ISETP.NE.AND"): (UNOWNED, "cpw_routes mode 9's thread-0 test: ISETP"),
     ("sm_120", "REDUX.XOR"): (UNOWNED, "cpw_routes modes 2 and 7's warp XOR (LI-CP-W's honest route): REDUX"),
-    # sm_120, classed, no line on the measured reading's π* row (JI3s_0 on main, JI3t_0 on #2791); 1 at DS_issue
+    # sm_120, classed, no line on the measured reading's π* row (JI3s_0 on main, JI3t_0 on); 1 at DS_issue
     ("sm_120", "UNI64"): (UNOWNED, "228 bit-slice attack variants' XU on UNI64, which is on UP alone (#2791's OFF_MENU)"),
     ("sm_120", "TMA512"): (UNOWNED, "attack (ii)'s TMA gather and dither-duo-l32's [per_mma]"),
     ("sm_120", "TMAred512"): (UNOWNED, "attack (ii)'s TMA reduce-add"),

@@ -1,6 +1,6 @@
 """RT2-FP: FP8-g1's and W4A8-g1's committed values against the int8 records' operand ranges, and the served identity.
 
-FPX-DESIGN (note:20261019T0817Z-report-fpx-design, #2710) credits g1 at the int8 record's ε because the one int8 GEMM
+FPX-DESIGN credits g1 at the int8 record's ε because the one int8 GEMM
 of R + b is the record's transcript. That needs every operand g1 commits or feeds the MMA to lie where the record's own
 operands do, and the served output to be that GEMM less its rank-one terms. This checks both, on each record's ranges
 as main's kernels state them:

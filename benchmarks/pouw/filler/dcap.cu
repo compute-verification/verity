@@ -1,4 +1,4 @@
-// What share of one RTX PRO 6000's int8 tensor capacity Llama-3.1-8B's matmuls use, decode and prefill (CAP, cmp-13).
+// What share of one RTX PRO 6000's int8 tensor capacity Llama-3.1-8B's matmuls use, decode and prefill.
 //
 // Nominal work is the int8 MACs the served matmuls execute: per token, the linears (qkv 4096x6144, o 4096x4096,
 // gate_up 4096x28672, down 14336x4096, 32 layers, and lm_head 4096x128256 in decode) and attention (QK^T and P.V,

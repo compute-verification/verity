@@ -54,7 +54,7 @@ POUW_WINDOW, WINDOWS = 2, 4
 SCHEME = C.PearlC(k_min=K, forming="v1", device=DEVICES["sm120"], hashing="h3")
 MATMUL = Matmul(5, Shape(16, K, N), 2)
 RUN = "r-salt-bind"
-#: the runner's record of a request served at the verifier's fixed length under ignore_eos (ASK-39)
+#: the runner's record of a request served at the verifier's fixed length under ignore_eos
 SERVED = {"ignore_eos": True, "max_tokens": [SC.MAX_TOKENS], "served": [SC.MAX_TOKENS]}
 #: the network certifier's LMS key and the challenger's, which the certifier registers, and the certifier run's id
 CERTIFIER, CHALLENGER = (lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(s).digest())

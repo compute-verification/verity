@@ -378,7 +378,7 @@ def check_reference(v: dict | None = None) -> int:
 # ---- the existing implementations ---------------------------------------------------------------------------------------
 
 def p2ff_r9(rf, v: dict | None = None) -> int:
-    """P2-FF r9's twin (receipt_folds_r9.py, art:91c156a1…): its key rules and its two steps (numpy)."""
+    """P2-FF r9's twin (receipt_folds_r9.py): its key rules and its two steps (numpy)."""
     import numpy as np
 
     v = v or load()

@@ -1,4 +1,4 @@
-"""FILL's fused arm (cmp-13, approach pouw/filler-fused): the decode step's own kernels carry the filler. Its linears run
+"""FILL's fused arm: the decode step's own kernels carry the filler. Its linears run
 through flin (dcap.cu's flin.cuh: a warp-specialized int8 GEMM whose filler warps run FILL's DRAM-free chain while its
 consumers wait on memory) and its attention blocks carry filler warps too, on a green split's step SMs, beside FILL v1's
 filler pumped on the rest. filler-arm/v1 can't place a filler inside serving's kernels, so the arm's `placement` is its
@@ -37,9 +37,9 @@ class FusedStep:
     ST: int = 0
 
 
-#: (B, L) -> (split SMs, fused step): FILL's round-2 picks (note:20261016T0420Z-draft-filler-in-decode §0), each at
+#: (B, L) -> (split SMs, fused step): FILL's round-2 picks, each at
 #: slowdown <= 1.04 over runs 8-16 and 20-22 and holdouts 1-3 against the whole-GPU cuBLASLt step, then holdout 4
-#: r20261016-072512-ea9f (every pick <= 1.040, fresh coins); suite points between them take `point_lookup`'s row
+#: (every pick <= 1.040, fresh coins); suite points between them take `point_lookup`'s row
 TABLE = {
     (1, 2048): (108, FusedStep(AFW=4, ANC=4, APS=0, ALZ=0)),
     (8, 2048): (108, FusedStep()), (8, 32768): (108, FusedStep()),
@@ -100,9 +100,9 @@ class Fused:
         return CO_PREFILL if phase == "prefill" else self.filler
 
 
-#: round 3's picks over TABLE (screens r20261016-081436-04e3, -082545-6a39 and -083352-fc74): lm_head through flin at
+#: round 3's picks over TABLE (two screens): lm_head through flin at
 #: B <= 64 (+0.003-0.022 of peak, the step no slower: flin's lm_head beats cuBLASLt's at M = 32) but B 32 L 1K (+0.005
-#: slowdown at 1.024-1.030 without it, r20261016-085926-5760, where prefill's 1.043 already sits), not at M = 128 (<= +0.004 for +0.002-0.006 slowdown);
+#: slowdown at 1.024-1.030 without it, where prefill's 1.043 already sits), not at M = 128 (<= +0.004 for +0.002-0.006 slowdown);
 #: B 1 L 32K its own row, persistent attention and the pump on 100 SMs (the 2K row read 1.045 under the scorer there, this
 #: one 0.999). Not taken: FLIN_LAZY 2/4 (+2-10% slowdown) and flin's filler warps at B >= 132 (1:4, 2:2, 2:4: +0.008-0.015
 #: of peak for +2.3-4.5%, the pump's trade is ~4x better).
@@ -132,7 +132,7 @@ def _pump(sms, lm=1, aps=1, lt=0):
 
 
 #: FILL's step with no filler warps (flin's GEMM, persistent attention, lm_head through flin at B <= 64) beside the pump
-#: alone: screens r20261016-090707-4181, -091213-6491 and -091824-6c9f, every row <= 1.025 (B <= 32 holds 0.92-0.96
+#: alone: three screens, every row <= 1.025 (B <= 32 holds 0.92-0.96
 #: on 48 step SMs and breaks to 1.08-1.13 on 40)
 TABLE_PUMP = {
     (1, 2048): _pump(140, aps=0), (1, 32768): _pump(140), (8, 2048): _pump(140), (8, 32768): _pump(140),
@@ -197,7 +197,7 @@ class FusedPumpK(FusedPump):
 
 #: pfill-bU's chunk (pfill_arm.PFillBU's shape) with duo's receipt (NC 2), or one of P2-FF r9's at NC 4: XOR-in (13, 19)
 #: (-DPFILL_XIN13) or LOP3+IMAD (-DPFILL_LI). Each takes 1024 fragments a warp a tile: a tile's B hashing and its
-#: barriers then stall a block a quarter as often, 0.772 of peak alone at S 256, 0.795 at 1024 (r20261016-131052-7d48)
+#: barriers then stall a block a quarter as often, 0.772 of peak alone at S 256, 0.795 at 1024
 BU_DUO_FILLER = A.Filler(W=8, NC=2, S=1024, chunk_log2=19, noise="bitsU", fold="duo")
 BU_XIN13_FILLER = A.Filler(W=8, NC=4, S=1024, chunk_log2=19, noise="bitsU", fold="xor-in-13")
 BU_LI_FILLER = A.Filler(W=8, NC=4, S=1024, chunk_log2=19, noise="bitsU", fold="lop3-imad")
@@ -239,8 +239,8 @@ def _bu_lineage(receipt: str, hypothesis: str) -> dict:
 class FusedPumpBUXin13(FusedPumpBU):
     """FusedPumpBU with P2-FF r9's XOR-in (13, 19) for duo (FILL-SEC's drop-in, NC 4 built with -DPFILL_XIN13, three ops
     a pair, keys under pf_key_ok_r9): every word read with no layout premise. It replaces XOR-in (7, 19), whose step
-    boundary's ±128 is an int8 ratio (note:20261016T1117Z-draft-fullfloor-s-r9). Provisional while RS-E-REF r7 referees
-    r9."""
+    boundary's ±128 is an int8 ratio. Provisional while r9 is
+    refereed."""
 
     name: str = "fill-fused-pump-bu-xin13"
     lineage: dict = field(default_factory=lambda: _bu_lineage(
@@ -273,9 +273,9 @@ def _warp(sms, fw, st=32, lm=1, aps=1):
 
 
 #: pfill-k's filler warps (dfill_k_warp) in flin's blocks with FLIN_STOP 32, beside the pfill-k pump, at every point where
-#: they fit (screened <= 1.02, the linears' filler >= 0.005 of peak), else FusedPump's pump-only row: screens
-#: r20261016-101145-5599, -101145-9539, -101929-96e9, -101809-f488, -102445-ba19 and -102552-0fce. No attention filler
-#: warps (a pfill-k step outlasts an attention launch: 32/2K FW 8 + AFW 8 2.02 against FW 8 alone 1.37, r20261016-100011-22d1);
+#: they fit (screened <= 1.02, the linears' filler >= 0.005 of peak), else FusedPump's pump-only row: six
+#: screens. No attention filler
+#: warps (a pfill-k step outlasts an attention launch: 32/2K FW 8 + AFW 8 2.02 against FW 8 alone 1.37);
 #: none at 96/8K (stop 32 1.021, stop 64 never steps) or B >= 132 (1.04-1.07 at 2 warps, stops 32-64, on 44-76 SMs).
 TABLE_WARP_K = {
     (1, 2048): _warp(100, 4, aps=0), (1, 32768): _warp(100, 4), (8, 2048): _warp(108, 4), (8, 32768): _warp(116, 4),

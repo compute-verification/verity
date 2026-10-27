@@ -1,4 +1,4 @@
-// Idle tensor time in tensor-parallel decode over PCIe, and the DRAM-free filler inside it (HC-COMM, cmp-13).
+// Idle tensor time in tensor-parallel decode over PCIe, and the DRAM-free filler inside it.
 //
 // A proxy of one Llama-3.1-70B decode step at tensor parallelism TP on one node, one process a rank with every leased GPU
 // visible (rank r runs on device r), as vLLM's workers run. Per layer, in vLLM's order: norm + quantize, qkv (column-parallel,
@@ -44,8 +44,8 @@
 
 #include <map>
 
-// The fold the TP filler path (tp_dfill_k) and the deferred pass commit their receipts with (decision 43, the filler
-// receipt break). Default duo (NC 2): it binds every word under Theorem K (c = 1 at φ 0.9), provisionally: the binding
+// The fold the TP filler path (tp_dfill_k) and the deferred pass commit their receipts with (the filler receipt
+// break). Default duo (NC 2): it binds every word under Theorem K (c = 1 at φ 0.9), provisionally: the binding
 // is proved for runs of one to four words (Lean Pouw.SecurityProofs.Receipt.DuoQuadNoKernel), and five or more words
 // and the served receipt's projected form are open. -DTP_NC=4 is the ram
 // fold, which binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words (round 8, P2-FF). At NC 4 one
@@ -306,8 +306,8 @@ __global__ void __launch_bounds__(32 * PF_W * KF_G, 1)
   tp_dfill_k<NC>(c0, c1, epoch, slot, nslots, tiles, maxcap, S, poll, flag, rec, qrec, cnt, total);
 }
 
-// ---------------------------------------------------------------- decision 36's deferred noised pass
-// The decode half of decision 36: the step serves clean, stores its operands, and the noised products are computed later,
+// ---------------------------------------------------------------- the deferred noised pass
+// Decode's deferred pass: the step serves clean, stores its operands, and the noised products are computed later,
 // batched over a sub-round of T tokens. This pass is those noised products: an int8 m16n8k32 IMMA (C = RZ) over the stored
 // operands, with the adopted noise formed on load (the served side dithered, X = ⌊x/s⌋ + b; the other peeled with U). It is
 // "receipts only" (the design's allowed simplification): each k32 output is folded unaccumulated into the same ram receipt
@@ -591,7 +591,7 @@ struct PFill {  // the phase filler
   }
 };
 
-struct DPass {  // decision 36's deferred noised pass
+struct DPass {  // the deferred noised pass
   bool on = false;
   int Sd = 8;        // fragments a warp a chunk; Sd = T / (PF_W * 16), so a chunk is PF_W * Sd * 16 token-rows
   int T = 1024;      // the sub-round's tokens
@@ -760,7 +760,7 @@ static void enqueue_step(Rank& R, const std::vector<Lt>& p, const Lt& lm, int ki
                                                                 R.dp.dtotal);
 }
 
-// the dalone arm: a step's whole deferred quota drained on every SM with no decode and no gaps — decision 36's decode cost
+// the dalone arm: a step's whole deferred quota drained on every SM with no decode and no gaps — the deferred pass's decode cost
 // without the gaps (dtotal[1])
 static void enqueue_dalone(Rank& R) {
   cudaStream_t st = R.d.st;
@@ -1028,13 +1028,13 @@ static int run_point(Rank& R, int B, int L, int reps) {
   lin += (double)B * (T_VOCAB / R.tp) * T_HID;
   const double att = 2.0 * T_LAYERS * B * (T_HQ / R.tp) * T_HD * (double)L;
   const double served = lin + att;
-  // per-shard storage decision 36's decode half holds: the served-side operand of each deferred product kept over the
+  // per-shard storage the deferred pass holds: the served-side operand of each deferred product kept over the
   // sub-round (the weights are resident, the KV cache is the served cache). Per token per layer, int8: the four linears'
   // input widths (LK[j]) plus attention's Q ((HQ/tp)·HD); the lm_head input once. Independent of B and of L (the cache
   // read isn't re-stored); it scales with the sub-round's tokens (R.dp.T) and so is the cost of a larger T.
   const double store_tok_layer = (double)R.LK[0] + R.LK[1] + R.LK[2] + R.LK[3] + (double)(T_HQ / R.tp) * T_HD;
   const double defer_store = (store_tok_layer * T_LAYERS + (double)T_HID) * (double)R.dp.T;
-  // decision 36's deferred demand a step = the step's own served MACs (each clean step makes one step's noised products,
+  // the deferred demand a step = the step's own served MACs (each clean step makes one step's noised products,
   // batched over the sub-round); the chunk quota rounds that to whole chunks
   if (R.dp.on) {
     const unsigned long long dpairs = (unsigned long long)(served / 16384.0 + 0.5);  // served MACs / (4096 MAC/MMA · 4 MMA/pair)
@@ -1346,7 +1346,7 @@ static int rank_main(int r, int tp, const ncclUniqueId& id, int argc, char** arg
   f.grid = R.d.sms - getenv_i("TPC_RESERVE", 8);
   f.nslots = 2 * T_LAYERS + 2;
   if (f.on && pf_setup(f)) return 1;
-  // decision 36's deferred pass (needs the filler's grid), before the KV pool so its operands fit
+  // the deferred pass (needs the filler's grid), before the KV pool so its operands fit
   if (getenv_i("TPC_DEFER", 1) && f.on && dp_setup(R)) return 1;
   // the KV pool: what is left, less room for cuBLASLt and NCCL
   size_t fr, tot;

@@ -101,7 +101,7 @@ rows of 2 R C words, no y) is refused by the verifier's own check of the registr
 draw.
 
 Every per-window registered value (each call's A table and z table, and ``ok``) is registered under the window's open root
-(PRF-127: `h1unit.open_root`, a stand-in, as this harness has no auditor's ledger), and only the weights' b/<K> under none;
+(`h1unit.open_root`, a stand-in, as this harness has no auditor's ledger), and only the weights' b/<K> under none;
 the verifier computes the root itself and refuses a commitment that registers its tables without it
 (``unrooted-registration``). Window credit's last two steps (`credit_registration`: the layout of the descriptor, each
 session's ok held to the verifier's own, `credit._ok_held`, one accepted outcome per drawn unit, and
@@ -210,7 +210,7 @@ def check_registration(win: SimpleNamespace, com: dict) -> list[str]:
     and z table (its tiles' records), the tables the verifier's Program names (`h1unit.program_tables`), each its own
     width of 16-bit leaves (`h1unit.value_words`), under that digest's domains (`h1unit.registered_domain`), each table's
     binding the window's open root, which the verifier computes itself (`h1unit.window_open_root`) and the commitment
-    records, and b/<K>'s none (PRF-127), with the commitment's roots."""
+    records, and b/<K>'s none, with the commitment's roots."""
     k, prog, why = com["unit"]["k"], win.obj["program"], []
     if com.get("program_sha512") != prog:
         why.append(f"it registers under Program {com.get('program_sha512')}, not the verifier's {prog}")

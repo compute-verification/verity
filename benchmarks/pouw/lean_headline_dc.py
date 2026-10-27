@@ -9,7 +9,7 @@
 `instance()` refuses. The bound is the larger of the folded branch, at w* and φ* on π* with p = 7/8, and the unfolded
 one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three things differ from sm_120's and sm_80's instances:
 
-- a design credits only work a check reads (RT-LOGIC-12): a filler at p = 0 (pinned receipts) would enter Y whole at
+- a design credits only work a check reads: a filler at p = 0 (pinned receipts) would enter Y whole at
   χ*, its load on π*, and one at p = 1 enters ♭ not at all. The H200's ffill is at p = 1, since no check reads its
   chains, and the B200's fold is the plain LI-CP-W redux `PouwWarpCheck` recomputes, so χ* is 0 on every instance,
   the form `headline_of_branches` proves;
@@ -52,7 +52,7 @@ pair (`Reading.pair`), the statement's ε literal with the B_♭ it is a fractio
 (`CATCH_ALL`), as sm_120's sheet does: every warp instruction no class of the reading prices counts there, at its issue
 slot, NOROW's DS_issue on a sheet and UNLISTED's measured issue line on DC-90-ri and DC-100-ri, and on DC-90-ri also
 the JI90 lines every timed scalar class carries: LD.E and IMAD.WIDE, the instructions it counts there, were timed
-beside the IGMMA (r20261021-070616-d06c; RT4-SHEET-14). A class no run has timed is read at its issue slot alone (A2's
+beside the IGMMA. A class no run has timed is read at its issue slot alone (A2's
 reading, the coordinator's ruling of 20 Oct 03:12Z), and measured rows replace that once a run times it: on DC-90-ri
 ATOME32 (the generic-address red's ATOM.E), ATOMS32, REDG32, LDS128 and REDUX carry the JI90 lines (d06c,
 r20261021-074303-da7f), while the stores (STS32, STS128, STG32, STG128) and ISETP are still the issue row alone, as
@@ -146,11 +146,11 @@ class Family:
 # DC-90-ri's joint rows price every tensor form but honest's IGMMA_S8_N256 at the scalar coefficient (rows.csv: "a
 # lower bound on their issue cost"), and no certificate prices them otherwise (M gives a GMMA 32 SMSP-cycles to
 # IGMMA's 62.7 on JI90_0), so its measured menu is the machine model's: honest's form, the rest off it (NoSum).
-# The H200's design credits ffill at p = 1, since no check reads its chains (RT-LOGIC-12, decision 99). With UNLISTED,
-# ATOME32 and REDUX on the JI90 lines (r20261021-070616-d06c, r20261021-074303-da7f), `setup`'s floor on DC-90-ri
+# The H200's design credits ffill at p = 1, since no check reads its chains. With UNLISTED,
+# ATOME32 and REDUX on the JI90 lines, `setup`'s floor on DC-90-ri
 # heads every word on the IGMMA and folds by the generic CP_RED2 and CP_RED8, both built: ♭ never folds by a counted
 # route (`counted`), while the cheater's menu holds them all. A uniform instruction heads up to 2 words
-# (UIMAD.WIDE.U32 writes a UR pair, RT-HOPPER-7), so UNI's ω is 2.
+# (UIMAD.WIDE.U32 writes a UR pair), so UNI's ω is 2.
 # The measured reading and its twin read ln(8/7) ≥ 2/15 (`LN_P_M`), as sm_120's measured headline does. The twin is
 # the same reading under (I3) `ScalarRoute` at q = q_T = 3/5 (`accounting-ts-scalar-route`, assumed), the least floor
 # of denominator at most 5 at which the bound reaches its floor (from q ≈ 0.5884 up; at 10/17 it is above it): a twin
@@ -170,7 +170,7 @@ CATCH_ALL = {"sm_90": "NOROW", "sm_100": "NOROW", "DC-90-ri": "UNLISTED", "DC-10
 # word does li's multiply: RT4-SHEET-14) counts in the reading's catch-all, so both catch-alls are vector classes, as
 # sm_120's 64-bit lane classes are (`VEC_64`). The vector classes are one list for a family's sheet and measured files.
 CATCH_ALLS = frozenset(CATCH_ALL.values())
-# A run that times the catch-all's instructions beside the tensor (LD.E and IMAD.WIDE on the H200, r20261021-070616-d06c)
+# A run that times the catch-all's instructions beside the tensor (LD.E and IMAD.WIDE on the H200)
 # gives it the census's joint-issue lines, which every timed scalar class carries at one coefficient a row
 SCALAR_REF, JOINT_ISSUE = "FFMA", re.compile(r"JI\d+_\d+")
 

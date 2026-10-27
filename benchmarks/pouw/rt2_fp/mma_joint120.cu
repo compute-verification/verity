@@ -1,7 +1,7 @@
-// RT2-FP-12 and -13 (note:20261019T1100Z-draft-rt2-fp): does a second MMA form run beside sm_120's IMMA? #2755's (M)
+// RT2-FP-12 and -13: does a second MMA form run beside sm_120's IMMA? #2755's (M)
 // and the JI3 rows charge every MMA form in one sum with IMMA's, so either is false on a run where both keep their alone
 // rates. RT2-FP-12 times DMMA.8x8x4 (charged 8 SMSP-cycles); RT2-FP-13 times QMMA.16832 E4M3 (charged 16), the form
-// FP8-g1's levels fit in one pass (#2770). This is RT-ISA's H200 joint (unpriced90.cu, cursor/rt-isa-ea24 @ 16e2cb2e0d)
+// FP8-g1's levels fit in one pass. This is RT-ISA's H200 joint (unpriced90.cu, cursor/rt-isa-ea24 @ 16e2cb2e0d)
 // on sm_120a, with mma.sync IMMA m16n8k32 s8 as the tensor form; for each second form X:
 //   s_imma        IMMA.16832 on all 32 warps: F1's and RT-MACHINE's reference
 //   i_w8          IMMA on warps 0-7 of 16, alone in the joint's block: t's unit

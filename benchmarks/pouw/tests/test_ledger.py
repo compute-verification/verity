@@ -351,7 +351,7 @@ def test_a_pin_whose_signature_isn_t_its_name_is_an_error():
 
 
 @pytest.mark.parametrize("statement, path, reading, published, at", [
-    # the panel's published figures (30 Sep 16:00Z), each from its pin, the larger of the two prices;
+    # the panel's published figures (30 Sep), each from its pin, the larger of the two prices;
     # v1's at its cap then, 1/400
     ("pearl-c-sm120/v1", "cast-32.06", "forming-credited", "0.77888%", "8"),
     ("pearl-c-sm120/v1", "cast-16", "forming-credited", "0.60019%", "1047/125"),
@@ -693,7 +693,7 @@ def test_an_arm_that_dumps_its_own_transcripts_has_no_harness_poisoning_to_its_n
 
 
 def test_a_run_time_choice_of_code_is_part_of_the_variant_s_id(tmp_path):
-    """GPU 2's pilot finding (18:00Z): PEARLC_A_FORMS picks kernels from one binary at run time, so the forms shared an id."""
+    """GPU 2's pilot finding: PEARLC_A_FORMS picks kernels from one binary at run time, so the forms shared an id."""
     d = kernel_dir(tmp_path)
     base = dict(family="pearl-c", device="sm120", schemes={"s"}, sources=["run.py", "k.cu"], root=d, binaries=[d / "k.cubin"])
     plain, fold, nodes = (L.variant_record(**base, config=c) for c in (None, {"PEARLC_A_FORMS": "p,fold"},
@@ -710,7 +710,7 @@ def test_a_run_time_choice_of_code_is_part_of_the_variant_s_id(tmp_path):
 
 
 def test_the_runner_publishes_the_records_verify_declares_with_the_same_ids(tmp_path):
-    """The pilot's gap (18:26Z): under `research run --on` the store key is the runner's, not the workload's. verify.py
+    """The pilot's gap: under `research run --on` the store key is the runner's, not the workload's. verify.py
     declares its records in outputs.json, and the runner's typed_outputs puts the same manifests `ledger.publish` would."""
     from research.store.attempt import typed_outputs
 

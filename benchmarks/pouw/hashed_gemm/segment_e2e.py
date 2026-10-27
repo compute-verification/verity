@@ -31,7 +31,7 @@ rows o' + 8 (c >> 1) + (c & 1) of B's leaf, o' = 32 (wn % 2) + 2 q (8 offsets).
 
     PouwI8Add_v1     (a, u: Value<8>) -> Value<8>                  a + u mod 2^8 (A' from A and U)
     PouwI8Pm1_v1     (b: Value<8>, f: Value<1>) -> Value<8>        b + 1 - 2 f mod 2^8 (B' from B and F's sign bit)
-    PouwI8AddBit_v1  (b: Value<8>, d: Value<1>) -> Value<8>        b + d mod 2^8 (B' from B and decision 29's dither bit)
+    PouwI8AddBit_v1  (b: Value<8>, d: Value<1>) -> Value<8>        b + d mod 2^8 (B' from B and 's dither bit)
     PouwSegDot_v1    (acc: Value<32>, a, b: Array<32, Value<8>>) -> Value<32>      acc + sum_k a_k b_k mod 2^32, int8 a and b
     PouwSel8_v1      (s: Value<1>, w: Value<8>) -> Value<8>        w if s else 0
     PouwXor8_v1      (x, y: Value<8>) -> Value<8>                  x ^ y

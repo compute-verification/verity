@@ -1,4 +1,4 @@
-// RT-B200-EMP (MM red, 24h push 19 Oct): A2u, the issue ceiling with the uniform datapath included, tested where it
+// A2u, the issue ceiling with the uniform datapath included, tested where it
 // could fail on sm_100a (B200): every SMSP's issue saturated by lane instructions while warp 0 keeps the tensor pipe
 // saturated with tcgen05.mma and issues K warp-uniform chain instructions an iteration.
 //

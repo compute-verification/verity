@@ -30,7 +30,7 @@ def test_the_reference_meets_every_vector():
 
 
 def test_xin13_matches_fill_sec_r5s_drop_in_values():
-    """The chains FILL-SEC r5 checked pfill's -DPFILL_XIN13 build against P2-FF's twin with (note:20261016T1200Z-draft-pfill-r9-folds)."""
+    """The chains FILL-SEC r5 checked pfill's -DPFILL_XIN13 build against P2-FF's twin with."""
     want = {0: (0x0F64F41C, 0xD07F70C5, 0x965BAAEA), 5: (0x961AD57B, 0xA920F01A, 0x713A93F6),
             1023: (0xB6EE0819, 0x4D1BAFF2, 0x8751D122)}
     words = [tuple(w & F.M32 for w in d) for d in C.R5_WORDS]

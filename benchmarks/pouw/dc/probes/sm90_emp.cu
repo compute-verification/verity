@@ -3,8 +3,8 @@
 // control before it is timed (probe.cuh). Accumulators stay in registers; A and B come from one shared tile through
 // no-swizzle K-major descriptors (dc.cuh).
 //
-// The one facet the census never measured (the WATCH, isa_escape.py; note:20261017T1834Z-draft-rt-isa, decision 88): a
-// uniform-datapath instruction's issue cost beside a SATURATED asynchronous wgmma. RT-ISA r2 (sm90_async.cu, uwgh) put
+// The one facet the census never measured (isa_escape.py): a
+// uniform-datapath instruction's issue cost beside a SATURATED asynchronous wgmma. sm90_async.cu's uwgh put
 // the uniform chain beside a saturated wgmma and found it nearly free -- but its vector issue sat idle, so "free" there
 // is only the scheduler filling empty issue slots, not a second instruction a cycle. A2/A2u say an SMSP issues at most
 // one warp instruction a cycle, uniform included: the sum over EVERY class of warp instructions a SMSP-cycle is <= 1.

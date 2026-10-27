@@ -56,7 +56,7 @@ NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, a
 NT, BM, BM_D, RASTER = 256, 128, 64, 8
 #: a caller with more real rows than this (a prefill's) pads them to BM rather than BM_D, so the chain runs on the mainloop:
 #: a served prefill step's chains took 18.9 ms at 640 rows there against 31.7 ms at 656 rows on 64 x 64 tiles
-#: (r20261024-171936-c297); at fewer rows the mainloop's 128 x 128 tiles leave SMs idle
+#:; at fewer rows the mainloop's 128 x 128 tiles leave SMs idle
 MAINLOOP_ROWS = 512
 ML_NT = 384                  # mainloop_sm120.cuh's block: a TMA producer warpgroup and 8 consumer warps
 WK_WARPS, WK_CL = 16, 4      # words_k's block (warps) and cluster (blocks) per m16 x n8 tile (pearl_c_sm120.cu)
@@ -586,7 +586,7 @@ class Pipeline:
         i < m_real's under its own line key, the rest under line_a), its counter left zero.  Mode 1 (`rows_a`) stops after
         A's level 0 and the rows' lines, and `pd_tree` does the rest.  Every shape's on one kernel, the variant without
         PD_GROUP (a bit pd_commit doesn't read): the decode step's other commit kernel had its code fetched cold once a
-        layer (979's at gate_up, 110.3 µs against 851's 98.3 at qkv, r20261024-104625-7b57)."""
+        layer (979's at gate_up, 110.3 µs against 851's 98.3 at qkv)."""
         d, b, kk, v, s = self.dev, self.b, self.keys, self.pd & ~PD_GROUP, self.k // 256
         d.launch(f"pd_commit_{v}", self.m_real, 32 * (cdiv(s, 32) * 2 + 2), d.pd_smem[v],
                  p=(b["xa"], b["rowdig_a"], b["tree_a"], b["seeds_a"], b["lkeys_a"], kk["unit"], kk["dom_a"], kk["salt_key"],

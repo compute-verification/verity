@@ -355,7 +355,7 @@ def test_clock_gate():
 def test_margin_per_point():
     """filler-scorer/v3's margin readout: the limit less each point's slowdown, with its worst and best rounds', so a
     point whose rounds reach the limit shows it has none even where its median passes (decode 32/1K, whose serving alone
-    reads 7.69 or 7.75 ms by process, r20261016-071637-cb1f)."""
+    reads 7.69 or 7.75 ms by process)."""
     stats = all_points(slow=1.02)
     thin = row("step", 32, 1024, "split", alone_ms=10.0, arm_ms=10.41, fill_sms=92)
     thin["blocks"][0]["arm"]["reps"] = [[10.6, 2000.0, 300.0]] * 3
@@ -578,7 +578,7 @@ def test_program_facts_read_the_filler_wherever_it_is_called_from():
 
 
 def test_a_store_only_dfill_k_function_may_take_the_receipt_pointers():
-    """A dfill_k device function that writes global memory (dfill_k_put, coordinator 11:05Z) holds stores and address
+    """A dfill_k device function that writes global memory (dfill_k_put) holds stores and address
     arithmetic only and stores its arguments as they came; an MMA function that stores, a put that computes, combines or
     calls, is refused. A dfill_k kernel (the split filler) is its own driver's and isn't held to it."""
     def facts(put_body=PUT_BODY, warp_body=WARP_BODY):
@@ -718,7 +718,7 @@ XIN = [IMMA4, "SHF.L.W.U32.HI R9, R9, 0x7, R9", "LOP3.LUT R9, R9, R28, RZ, 0x3c,
        "SHF.L.W.U32.HI R9, R9, 0x13, R9", "LOP3.LUT R9, R9, R30, RZ, 0x3c, !PT", "IMAD R9, R9, R21, R31", "EXIT"]
 DUO = [IMMA4] + [x for w in (28, 29, 30, 31) for x in (f"LOP3.LUT R9, R9, R{w}, R22, 0x96, !PT", "IMAD R9, R9, R20, R10",
                                                      "IADD3 R10, R9, R11, RZ")] + ["EXIT"]
-#: P2-FF r9's folds (note:20261016T1117Z-draft-fullfloor-s-r9) as the scratch -DPFILL_XIN13 and -DPFILL_LI builds of
+#: The r9 folds as the scratch -DPFILL_XIN13 and -DPFILL_LI builds of
 #: c259a89b5's pfill.cuh compile them: XOR-in at rotations 13 and 19; LOP3+IMAD's y ^ d0 ^ k0 in one LOP3, no shift
 XIN13 = [IMMA4, "SHF.L.W.U32.HI R9, R9, 0xd, R9", "LOP3.LUT R9, R9, R28, RZ, 0x3c, !PT", "IMAD R9, R9, R20, R29",
          "SHF.L.W.U32.HI R9, R9, 0x13, R9", "LOP3.LUT R9, R9, R30, RZ, 0x3c, !PT", "IMAD R9, R9, R21, R31", "EXIT"]
@@ -756,7 +756,7 @@ def test_the_fold_reads_from_the_sass_of_the_instantiation_that_runs():
 
 
 def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
-    """Decision 43: duo reads in full and XOR-in at Theorem K's proved half (RS-E-REF r7), each only where declared and
+    """duo reads in full and XOR-in at Theorem K's proved half, each only where declared and
     the SASS, the NC and the recorded NVCC_APPEND_FLAGS confirm it; ram reads half; undeclared or unconfirmed reads as
     ram where the build shows any
     fold v5 reads, else no fold (no theorem entry); the folded fraction is the entry's times the share."""
@@ -811,11 +811,11 @@ def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
 
 
 def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_provisionally():
-    """P2-FF r9's folds (coordinator 12:10Z): XOR-in (13, 19) and LOP3+IMAD read where declared and confirmed, told
+    """The r9 folds: XOR-in (13, 19) and LOP3+IMAD read where declared and confirmed, told
     apart from the superseded XOR-in (7, 19) by the state's funnel-shift rotation into each XOR (through a move); XORs
     and addends at rotations no fold lists read as ram; each of the three is provisional, which the filler's certified
-    status and the score's flags carry. All three read at Theorem K's proved half, 0.45, with 0.9 if P2-FF r10's
-    select-charging lemma lands as the entry's secondary readout, never its fraction (coordinator 13:09Z, RS-E-REF r7);
+    status and the score's flags carry. All three read at Theorem K's proved half, 0.45, with 0.9 if the r10
+    select-charging lemma lands as the entry's secondary readout, never its fraction;
     ram and duo have no such readout. duo reads in full and provisionally (its binding is proved up to four words);
     ram reads proved."""
     def ff(nc, body):
@@ -865,7 +865,7 @@ def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_pro
     assert (ram_e["fraction"], ram_e["if_fold"], duo_e["fraction"], duo_e["if_fold"]) == (0.45, None, 0.9, None)
     ram = S.certified_v5(ram_e)
     assert ram["filler"]["status"] == "proved" and not S.score(all_points(), ram)["flags"]
-    # duo's binding is proved for runs of one to four words only (coordinator 16:50Z): provisional, and flagged
+    # duo's binding is proved for runs of one to four words only: provisional, and flagged
     duo = S.certified_v5(duo_e)
     assert duo["filler"]["fraction"] == 0.9
     assert duo["filler"]["status"] == f"provisional (fold duo: {S.FOLDS['duo']['provisional']})"
@@ -913,8 +913,8 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
 
 
 def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
-    """Coordinator 12:10Z and 14:42Z: the deferred pass's shown share s and displacement come from measurement, TP's s
-    and d (lost MACs a ms of the whole pass) fitted by TP, batch and context to HC-COMM r3 (ram) and r6 (duo) jointly
+    """The deferred pass's shown share s and displacement come from measurement, TP's s
+    and d (lost MACs a ms of the whole pass) fitted by TP, batch and context to rounds 3 (ram) and 6 (duo) jointly
     (each point's residual reported, the filler's remaining share among them), one GPU's share from STAGE-COST (B 32,
     held flat) and its displacement u(1 − s), u the larger of TP 2's r3 fit and the MAC-for-MAC rule; read at B and L
     clamped to the points."""

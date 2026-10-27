@@ -500,7 +500,7 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
 def test_a_pass_registered_again_on_another_stream_is_refused(served):
     """Windows credited together hold each call index of their salt once (`credit.passes_distinct`): the same pass
     registered again on another stream would credit every call twice under the same seeds and tickets, so it is refused
-    (``repeated-call``) and not held, while the first stays (CMP-84)."""
+    (``repeated-call``) and not held, while the first stays."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
@@ -860,7 +860,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
 def test_a_deployments_challenger_key_is_infras_published_pin(tmp_path):
     """`Deployment.pinned` takes the challenger key from infra's published pin (`CHALLENGER_KEY_PIN`; the fixture is its
     payload's bytes): vy-challenger-1's LMS key at W = 1, H = 20, whose SHA-512 is `CHALLENGER_KEY_SHA512`, stated whole.
-    A record of any other key is refused even when it names its own key's SHA-512: the key infra retired (RT4-INT-18), a
+    A record of any other key is refused even when it names its own key's SHA-512: the key infra retired, a
     tampered public key, or the pinned key under another named SHA-512; so is a record of another schema or form."""
     pin = Path(__file__).parent / "fixtures" / "challenger-key.json"
     assert hashlib.sha256(pin.read_bytes()).hexdigest() == \

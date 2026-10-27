@@ -1,9 +1,9 @@
-"""Dither's skippable share of honest work as served, per model, context, phase and design (SKIP, cmp-13; Derived).
+"""Dither's skippable share of honest work as served, per model, context, phase and design (Derived).
 
     uv run python benchmarks/pouw/eps_budget.py [--json OUT] [--md OUT]
 
-ε_skip = (honest work a cheater can skip) / (the cheater's unavoidable work), the brief's definition
-(note:20261017T0013Z-report-epsilon-program). Each component of honest work is classified per design as unavoidable (a
+ε_skip = (honest work a cheater can skip) / (the cheater's unavoidable work), the brief's definition.
+Each component of honest work is classified per design as unavoidable (a
 transcript Verify recomputes, a commitment, a draw, noise the cheater must expand, a value a check recomputes from the
 transcript) or skippable (unchecked: the strip of a low-rank noise, a product served plain, the vector work only a
 served output needs). The cheater is the zero instance (A* = B* = 0, chosen before the draw), which makes every strip,
@@ -78,46 +78,45 @@ class Shape:
 MODELS = {"llama-3.1-8b": Shape(4096, 32, 32, 8, 128, 14336, 128256, 1),
           "llama-3.1-70b": Shape(8192, 80, 64, 8, 128, 28672, 128256, 2)}
 
-#: Rates, each measured (with its note) unless marked estimate.
+#: Rates, each measured unless marked estimate.
 RATES = {
-    "peak": 188 * 1014 * 2.092e9,   # IMMA s8 MAC/s at the read clock (FP-EXACT, note:20261016T1931Z)
-    "eta_lin": 0.80,     # prefill int8 GEMMs alone, 32 layers x 6 stages at 2K: 46.4 ms (STAGE-COST r20261016-095504-5463)
-    "eta_att": 0.70,     # fused int8 attention, 60-70% of int8 peak (STAGE-COST r20261016-100833-1b7c)
-    "eta_dec": 0.71,     # decode's noised products batched, 0.97 µs a token-layer (STAGE-COST, same run)
-    "r_receipt": 1.638,  # edited GEMM kernels / plain at S = 128: 1.668 (COMMIT-GPU r5 r20261016-183051-a379), less the
-                         # 2-atom tail's 0.030 (EGEMM r20261016-090505-596b: 4 atoms 0.024 ms of 0.405 at o_proj)
+    "peak": 188 * 1014 * 2.092e9,   # IMMA s8 MAC/s at the read clock
+    "eta_lin": 0.80,     # prefill int8 GEMMs alone, 32 layers x 6 stages at 2K: 46.4 ms
+    "eta_att": 0.70,     # fused int8 attention, 60-70% of int8 peak
+    "eta_dec": 0.71,     # decode's noised products batched, 0.97 µs a token-layer (stage_cost)
+    "r_receipt": 1.638,  # edited GEMM kernels / plain at S = 128: 1.668, less the
+                         # 2-atom tail's 0.030 (egemm: 4 atoms 0.024 ms of 0.405 at o_proj)
     "tail": 1.9,         # a strip MAC costs 1.9 mainloop MACs (that 4-atom tail: 0.006 ms an atom against 32/4096 of 0.405)
     "tail_pv": 2.8,      # adopted P·V's tail stage, mainloop MACs a strip product: 2.6-2.8, apv - cc against cf's time
-                         # a mainloop IMMA, latency-exposed (BC-KERNEL r2, runs r20261017-092503-35ff and
-                         # r20261017-094903-3733, note:20261017T0837Z-draft-bc-kernel-r2)
+                         # a mainloop IMMA, latency-exposed (the checked kernels' timing)
     "tail_pv_served": 0.7,   # of it, the 4th IMMA (64·S_diag), which only the served output needs: 2.0-2.1 without it
     "t_vsum": 0.0103e-3 / (8 * 2048 * 128),  # s an entry (KV head, key, channel), adopted P·V's sums DG, S and X(0):
-                         # BC-KERNEL r2's linear vsum, 0.0103 ms at 8B 2K, latency-bound at 13.5% issue (same run 4)
+                         # the checked kernels' linear vsum, 0.0103 ms at 8B 2K, latency-bound at 13.5% issue
     "t_apv_serve": 4.4 / 128 / (4 * 188 * 2.092e9),  # s a cell, adopted P·V's served f over a plain epilogue: 4.4 warp
-                         # instructions a 128-cell tile (exact ncu counts, r20261017-092503-35ff), one a SMSP-cycle
-    # The floor credit's model prices of the same work, SMSP-cycles (`floor_skip`; SPEC §2.9): honest's latency above
+                         # instructions a 128-cell tile (exact ncu counts), one a SMSP-cycle
+    # The floor credit's model prices of the same work, SMSP-cycles (`floor_skip`): honest's latency above
     # them goes to γ, which the measured prices above still feed
-    "c_tail_pv": 1.57 * 21.47 / 4096,   # a strip product: BC-KERNEL r2's issue model, 1.57 mainloop MACs at apv's issue
+    "c_tail_pv": 1.57 * 21.47 / 4096,   # a strip product: the checked kernels' issue model, 1.57 mainloop MACs at apv's issue
                                         # bound (JI3n_0, 21.47 a MMA); a served-checked cheater pays its ¼, the 4th IMMA
     "apv_tail_macs": 1.57,   # the same mainloop MACs a strip product, on a device with no apv kernel at ♭'s price a MAC
-    "c_vsum": 35 / 32,       # an entry: vsum's 35 per-thread instructions an entry (BC-KERNEL r2), a warp's a cycle
+    "c_vsum": 35 / 32,       # an entry: vsum's 35 per-thread instructions an entry, a warp's a cycle
     "c_vfold": 0.7265,       # an entry: vfold's sums, vfold - vfold_x by ncu, 0.6884 / 0.7265 / 0.7221 warp instructions
-                             # at 2K / 8K / 32K, the most (D2S-KERNEL r3, #2300, r20261017-113844-b913)
+                             # at 2K / 8K / 32K, the most
     "c_apv_serve": 4.4 / 128,  # a cell: the served f's 4.4 warp instructions a 128-cell tile
-    "t_quant": 0.56e-12,     # s an element, plain activation quantizer (COMMIT-GPU r5: +23 ms at 8 x 4K, 40.8 G elements)
-    "t_dither": 0.48e-12,    # s an element, the dither's bits (EGEMM r20261016-104404-700b: qdither - qplain 0.016 ms, 8192 x 4096)
-    "t_wedit": 0.86e-12,     # s a weight element a draw, W' = W + U written (EGEMM: wedit 0.0144 ms, 4096 x 4096)
-    "t_xcommit": 1.10e-12,   # s an operand element, SHA-512 tile leaves R = 128 (COMMIT-GPU r5: +45 ms at 8 x 4K)
-    "receipt_commit": 0.016,  # of plain prefill time, S = 128 (COMMIT-GPU r5)
-    "draws": 0.019,           # of plain prefill time, 0.3 ms simulated draws at 8 x 4K (COMMIT-GPU r5)
-    "tokens_per_draw": 32768,  # prefill stage set a GPU (STAGE-COST's recommendation)
+    "t_quant": 0.56e-12,     # s an element, plain activation quantizer (commit_gpu: +23 ms at 8 x 4K, 40.8 G elements)
+    "t_dither": 0.48e-12,    # s an element, the dither's bits (egemm: qdither - qplain 0.016 ms, 8192 x 4096)
+    "t_wedit": 0.86e-12,     # s a weight element a draw, W' = W + U written (egemm: wedit 0.0144 ms, 4096 x 4096)
+    "t_xcommit": 1.10e-12,   # s an operand element, SHA-512 tile leaves R = 128 (commit_gpu: +45 ms at 8 x 4K)
+    "receipt_commit": 0.016,  # of plain prefill time, S = 128 (commit_gpu)
+    "draws": 0.019,           # of plain prefill time, 0.3 ms simulated draws at 8 x 4K (commit_gpu)
+    "tokens_per_draw": 32768,  # prefill stage set a GPU (stage_cost's recommendation)
     "softmax": 0.25,     # estimate: exp, max, sum and P's quantize per (query head, key) against 256 MACs a pair; MUFU at
                          # 16 a SM a clock against 1014 MACs gives 0.25 of the attention's tensor time (range 0.12-0.5)
-    "nongemm_token": 4.68e-6,  # s a token of non-GEMM kernels at prefill, Llama-3.1-8B, vLLM (note:20261016T0215Z §2)
-    "nongemm_step": 1.09e-3,   # s a decode step floor of the same kernels (same note)
-    "bw": 1.41e12,       # B/s, decode attention's measured KV read (same note, dcap r20261016-023229-185e)
-    "lin_bw_b32": 6.98e9 / 5.9e-3,  # B/s, 32-layer int8 linears at M = 32: 5.64 ms (M = 1) to 6.18 ms (M = 64) (same run)
-    "step_fixed": 0.293e-3,    # s a decode step, the step model's constant (same note: within 1.7% of 14 steps)
+    "nongemm_token": 4.68e-6,  # s a token of non-GEMM kernels at prefill, Llama-3.1-8B, vLLM
+    "nongemm_step": 1.09e-3,   # s a decode step floor of the same kernels
+    "bw": 1.41e12,       # B/s, decode attention's measured KV read (dcap)
+    "lin_bw_b32": 6.98e9 / 5.9e-3,  # B/s, 32-layer int8 linears at M = 32: 5.64 ms (M = 1) to 6.18 ms (M = 64)
+    "step_fixed": 0.293e-3,    # s a decode step, the step model's constant (within 1.7% of 14 steps)
     "comm_tp2_b32": 5.2e-3,    # s a TP-2 decode step of all-reduces, calibrated to HC-COMM r6's base step at B 32, 2K
     "decode_commit": 0.012,   # of the decode step, committing its operands (STAGE-COST: 0.9-1.4%)
 }
@@ -147,7 +146,7 @@ def decode_step(name: str, ctx: int, rates: dict = RATES) -> dict:
 #: The served model's components. The first four are the registry's PRODUCTS (`COMP`), each noised as its design's
 #: `[noise]` names. Every design derives each stage's operand by C1′ from the previous stage's served output (the
 #: epilogue and quantizer are checked) and serves decode edited, under one σ a request drawn once the circuit and its
-#: inputs are committed (decision 72), so softmax and forming are never skippable and no pass is deferred.
+#: inputs are committed, so softmax and forming are never skippable and no pass is deferred.
 COMPONENTS = ("linears", "lm_head", "QKᵀ", "P·V", "softmax", "forming", "noise, commitments, draws")
 COMP = {"linears": "linears", "lm_head": "lm_head", "QKᵀ": "qk", "P·V": "pv"}
 #: co32c's digit limbs: the residue sums of an 8-bit served side over k / 32 terms take up to 3 base-128 digits
@@ -270,11 +269,11 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
 # ------------------------------------------------- the tensor–scalar model: checked leaves' vector work, pv's units
 
 #: The tensor–scalar (TS) model's facets in SMSP-cycles, (MMA coefficient, coefficient of every other vector-pipe warp
-#: instruction): `M` (the tensor pipe) and JI3e_0..2, benchmarks/pouw/machine_model/data/rows.csv (CHECKED-STRIP's
-#: TS_FACETS, note:20261017T0030Z-draft-checked-strip).
+#: instruction): `M` (the tensor pipe) and JI3e_0..2, benchmarks/pouw/machine_model/data/rows.csv (checked_strip's
+#: TS_FACETS).
 TS_FACETS = ((16.0, 0.0), (8.115, 1.0), (15.030, 0.317), (15.539, 0.172))
-#: pv's vector work a tile (16 queries by 8 channels: 128 cells, 4 a lane) beyond the folds, as BC-KERNEL measured it
-#: (exact ncu counts, note:20261017T0645Z-draft-bc-kernel): one digit of one Ycum entry, 7 per-thread instructions
+#: pv's vector work a tile (16 queries by 8 channels: 128 cells, 4 a lane) beyond the folds, as the checked kernels measured it
+#: (exact ncu counts): one digit of one Ycum entry, 7 per-thread instructions
 #: (cpv.cu's vdig without z's hashing; checked_strip's PV_DIGIT_OPS), the epilogue's 2.8 a cell over a dequantizing one
 #: (pv_l7qs − pv_plain; PV_SERVE_OPS, warp instructions a tile), and a unit's I2F and FMULs into the float output, 3 a
 #: cell (c_l7qs_v − c_l7qs, less its epilogue's 2.2), which every block of P adds once.
@@ -287,12 +286,12 @@ PV_DIGIT_OPS, PV_SERVE_OPS, PV_SCALE_OPS = 7.0, 11.2, 12.0
 #:   this leaves the recombination out of ♭'s credit, which is sound (the module docstring).
 #: - cohalf (Q Kᵀ, k = 128): every zero-instance route at X_BITSLICED; its O = T_last − U·Y is a receipted word.
 #: Two-sided's served outputs are its last checked words and its
-#: bit × bit words cost more than an IMMA (QSTAR's timed r20261017-055042-7c59), so it has none; pv's is `pv_ts`.
+#: bit × bit words cost more than an IMMA (qstar's timed), so it has none; pv's is `pv_ts`.
 TS_EPS = {"co32c": {"llama-3.1-8b": {"linears": 7.63e-4, "lm_head": 4.9e-5},
                     "llama-3.1-70b": {"linears": 3.91e-4, "lm_head": 4.9e-5}},
           "cohalf": {"llama-3.1-8b": {"QKᵀ": 1.984e-3}, "llama-3.1-70b": {"QKᵀ": 1.984e-3}}}
 TS_FOLD = 3.0
-#: Warp instructions a bit-sliced 32 × 128 binary product takes (QSTAR's bx, note:20261017T0344Z-draft-eps1-qstar).
+#: Warp instructions a bit-sliced 32 × 128 binary product takes (qstar's bx).
 X_BITSLICED = 10.66
 
 
@@ -416,14 +415,13 @@ def decode_dram(name: str, ctx: int, rates: dict = RATES) -> float:
 
 #: ♭'s committed words a transcript product, by leaf where it isn't one: cohalf's QKᵀ commits 5 words for every 4
 FLOOR_WORDS = {"cohalf": 1.25}
-#: Adopted P·V's tail stage a 128-cell tile at L = 32 (66 strip products a cell), warp instructions by class, BC-KERNEL
-#: r2's exact ncu counts on sm_120 (checked_strip's APV_TAIL_OPS): its 4 IMMAs (the 4th, 64·S_diag, only the served
+#: Adopted P·V's tail stage a 128-cell tile at L = 32 (66 strip products a cell), warp instructions by class, the
+#: checked kernels' exact ncu counts on sm_120 (checked_strip's APV_TAIL_OPS): its 4 IMMAs (the 4th, 64·S_diag, only the served
 #: output needs), the 256·Y1 combine's 4 IMADs and the other 11.5 (LDGs, NOPs, an LDSM, control), priced as ALU's.
 APV_TAIL = {"IMMA": 4, "IMAD": 4.0, "ALU": 11.5}
 #: The same peel kernels' counts in a device's own SASS, where they exceed sm_120's: the tail by class as APV_TAIL, and
 #: RATES' c_apv_serve and c_vfold, which they replace there. sm_90a's are static counts, not ncu: nvdisasm of apv.cu's
-#: sm_90a build with ncu's rule applied (eps_counts.py; RT-ISA-7, run r20261019-093003-2795,
-#: art:cadf255937a4792d0b347c3540d1c0709a15c7bb697fc0c121153ad4e6f22be4): the tail 27.02 a tile (+39%), the served f
+#: sm_90a build with ncu's rule applied (eps_counts.py): the tail 27.02 a tile (+39%), the served f
 #: 6.15 a tile (+40%) and vfold's sums 0.760 an entry, the most over shapes. sm_100a's (tail 17.26, served f 4.53,
 #: vfold 0.706) are under sm_120's, so the B200 keeps sm_120's, which overstate its ε_skip.
 SASS = {"sm_90": {"APV_TAIL": {"IMMA": 4, "IMAD": 6.93, "ALU": 16.09}, "c_apv_serve": 6.15 / 128, "c_vfold": 0.760}}
@@ -468,7 +466,7 @@ def prices(name: str, data: Path = DATA, vector: str = "") -> Prices:
 
 def floor_skip(name: str, ctx: int, d: Design, rates: dict = RATES, data: Path = DATA, vector: str = "",
                phase: str = "prefill") -> tuple[float, dict, dict]:
-    """Corollary D3's ε_skip pieces (SPEC §2.9, note:20261017T0324Z-draft-eps1-spec), SMSP-cycles a token-layer on
+    """Corollary D3's ε_skip pieces, SMSP-cycles a token-layer on
     `data`'s device: (♭'s committed words, the skippable work n^s_♭ by component with no downstream check assumed, the
     same with P·V's served output checked). n^s_♭ leaves co32c's recombination and g1's correction out, so ♭'s credit
     does too, which is sound (the module docstring). The words are `prices` ♭ a MMA on the transcript products (k a

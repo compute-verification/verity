@@ -341,7 +341,7 @@ class Deployment:
     coin record and the draw's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
-    # TODO(NET-50): the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
+    # TODO: the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
     # the caller does.
     certifier_key: Any
     run_id: bytes
@@ -865,7 +865,7 @@ class Challenger:
         self.signed: dict | None = None
         self.deployment: Deployment | None = None
         if certifier is not None:
-            # TODO(RT4-INT-7): no Lean statement covers a certified window's timing, and no run measures the commit
+            # TODO: no Lean statement covers a certified window's timing, and no run measures the commit
             # pipeline the certifier's reveal deadline must be sized against.
             if params.get("registration_deadline") is not None or predates_deadline:
                 raise ValueError(CERTIFIED_DEADLINE)

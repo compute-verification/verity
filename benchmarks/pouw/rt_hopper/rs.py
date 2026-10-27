@@ -2,7 +2,7 @@
 `wgli_*`), and its cycles a MMA at the plain GEMM's 122.41 SMSP-cycles over that fraction (dc90-licpw-redux-l32's
 measured 204.25 is wgli_redux's). RT-HOPPER-1 is a real escape only if the RS (or U8S8) form beside the same LI fold runs
 more than 2% faster than SS does; otherwise it is a model gap (the joint rows' default), not a hardware one. The
-`wgli_true` loops fold the wgmma's own accumulators after each wait (RT-HOPPER-8): their cycles a MMA against
+`wgli_true` loops fold the wgmma's own accumulators after each wait: their cycles a MMA against
 wgli_redux's say how far the stand-in loop behind honest's measured time, and so γ, is from the receipt's own:
 unordered (wgli_true), ping-pong on named barriers (wgli_pp, wgli_pp2) and double-buffered on two N128 tiles (wgli_db).
 A N128 wgmma counts as half a N256 one throughout. The b1 form (BGMMA m64n256k256) and sm90_forms.cu's s8-exact

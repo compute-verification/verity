@@ -1,9 +1,9 @@
 """RT2-FP: the routes outside design A's ring-program scope, priced on the FP machine against design A's word.
 
-FP-NATIVE's scope card (note:20261019T0525Z-draft-fp-native, "Card: the ring-program scope premise") quotes no ε for
-design A until the machine model prices the shift class (RT-ALGO-3, Proposition Q's class) on sm_120 and B200 at no less
+FP-NATIVE's scope card ("Card: the ring-program scope premise") quotes no ε for
+design A until the machine model prices the shift class (Proposition Q's class) on sm_120 and B200 at no less
 than the honest word, since an FP32 accumulator's rounding makes its shift free. This prices it, with the two other
-routes outside the scope (note:20261019T1100Z-draft-rt2-fp, target 2), against design A's honest row (FPX-DESIGN's
+routes outside the scope (target 2), against design A's honest row (FPX-DESIGN's
 `fpx-a1-e4m3i-fp`) and its credit row (`-x0`), on the data sheets (DS-120, DS-100) and the measured vectors
 (VF3r-16, DC-100-ri):
 
@@ -45,7 +45,7 @@ from verity_machine_model.eps import machine  # noqa: E402
 L = 32
 LANES = 32
 
-# FPX-DESIGN's design-A rows (benchmarks/pouw/fpx_design/fpx_eps.py at d7d292f583, PR #2710): the base design and the
+# FPX-DESIGN's design-A rows (benchmarks/pouw/fpx_design/fpx_eps.py at d7d292f583): the base design and the
 # extraction it adds to the base's fold, lane instructions a word. The credit row (`-x0`) adds none.
 DEVICES = {
     "sm_120": dict(data=MM / "data", base="dither-c-peel-fx1", fold_add={"ALU": 1.0, "IMAD": 1.0},

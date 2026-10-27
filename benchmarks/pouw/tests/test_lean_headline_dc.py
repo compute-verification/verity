@@ -40,7 +40,7 @@ def test_the_committed_instances_are_the_exporters():
 
 def test_each_certificate_is_one_and_prices_the_bound():
     """Each π* is a certificate (weights ≥ 0 summing to 1 exactly), the bound is the larger branch at its prices, χ* is
-    0 on every reading (the form `headline_of_branches` proves), and a uniform writer heads 2 words (RT-HOPPER-7). A6's
+    0 on every reading (the form `headline_of_branches` proves), and a uniform writer heads 2 words. A6's
     vector classes hold both catch-alls, where an instruction no class names counts."""
     for fam in H.FAMILIES:
         for v in (fam.sheet, fam.measured):
@@ -91,9 +91,9 @@ def test_folds_meet_fold_opt_at_pi_star():
     `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at all five π*, and on the H200
     a premise only about folds off the cheater's menu, which holds every counted fold known (RT4-SHEET-13, -14, -17,
     -22): at the (I3) twin's π* li-bulk's trimmed W = ∞ member is that menu's cheapest. Every class a fold issues prices above 0 at
-    each π* (the stores carry the JI90 lines r20261021-161119-62ac measured). ♭'s fold meets it, and so does ♭'s fold
+    each π* (the stores carry the JI90 lines measured). ♭'s fold meets it, and so does ♭'s fold
     with each IMAD (its one IMAD-pipe class) replaced by 32 ALU shift-adds, at over ten times N_w·φ*. On the B200 that
-    fold is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked (RT3-LOGIC-6): at 1/20 issue + 19/20 IMAD
+    fold is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked: at 1/20 issue + 19/20 IMAD
     on the sheet and 1/20 I + 19/20 UP on the measured rows it prices below N_w·φ*. On the H200 it falsifies FOLD-OPT at
     no certificate: N_w times a menu route with its multiplies as IMAD.WIDE prices at most it on every row."""
     for fam in H.FAMILIES:
@@ -125,7 +125,7 @@ def test_folds_meet_fold_opt_at_pi_star():
 
 ROUTES = ["cp-seg4", "cp-seg4u", "cp-ats", "cp-ats2", "cp-ats8", "cp-red", "cp-red2", "cp-red8", "cp-red-generic",
           "cp-red2-generic", "cp-red8-generic", "cp-xt"]
-#: the H200's moves of LI on li and each route (RT4-SHEET-13, -14), counted
+#: the H200's moves of LI on li and each route (-14), counted
 MOVED = [r + m for r in ("li", *ROUTES) for m in ("-rt3", "-wideh", "-rt3-wideh")]
 #: the H200's routes in the design's order: the loops, the moves, then li-bulk (built, at its measured cost) and its
 #: two counted members
@@ -137,15 +137,15 @@ BUILT = ROUTES + ["li-bulk"]
 
 def test_the_fold_menu_is_every_bit_exact_checkpoint_loop():
     """RT3-DC-1, -4: on both devices the fold menu is the design's fold and every bit-exact checkpoint loop rt3_dc times
-    (r20261019-183610-89bd on the H200, r20261019-192247-8771 on the B200), with RT4-SHEET-7's L2 XORs through a generic
-    address (ATOM.E, bit-exact on the H200 and the B200, r20261020-031119-3113 and r20261020-031119-013a), and each of
+    (on the H200, on the B200), with RT4-SHEET-7's L2 XORs through a generic
+    address (ATOM.E, bit-exact on the H200 and the B200), and each of
     the four readings' π* at A6's ½ prices each class each of them issues above 0, so no route folds for free at the
     certificate FOLD-OPT is asked at. On the H200 the counted folds come after them, none built: RT4-SHEET-13's and
-    -14's moves of LI on li and each route, and li-bulk's BT1024 and trimmed W = ∞ members (RT4-SHEET-22), beside
-    li-bulk itself, built, at its measured cost (RT4-SHEET-17; r20261021-161119-62ac). Each reading's catch-all is priced at
+    -14's moves of LI on li and each route, and li-bulk's BT1024 and trimmed W = ∞ members, beside
+    li-bulk itself, built, at its measured cost. Each reading's catch-all is priced at
     its issue slot: the sheet's at DS_issue alone, the measured reading's on the measured issue row (DC-CENSUS-13) and,
     once a run has timed its instructions beside the tensor, the joint-issue lines every timed scalar class carries
-    (DC-90-ri: LD.E and IMAD.WIDE, r20261021-070616-d06c)."""
+    (DC-90-ri: LD.E and IMAD.WIDE)."""
     for fam in H.FAMILIES:
         for v in (fam.sheet, fam.measured):
             x = H.reading(fam, v).data
@@ -166,9 +166,9 @@ def test_the_h200_measured_menu_is_honests_form():
     """On DC-90-ri the writer kinds are honest's IGMMA_S8_N256 and UNI: every other tensor form carries the scalar
     coefficient there, which leaves the full menu's bound far above 1%. Its ♭ is `setup`'s floor, which heads every
     word on the IGMMA, as the sheet's does, and folds by the generic CP_RED2 and CP_RED8 alone, both built: ATOME32
-    and REDUX carry the joint-issue lines their runs measured (r20261021-070616-d06c, r20261021-074303-da7f), so the
+    and REDUX carry the joint-issue lines their runs measured, so the
     uniform and shared-memory checkpoints no longer undercut them, and the global reds tie with the generic ones (AT90
-    has slack), so ♭'s shares keep the fewest routes. The reading is over 1% (RT-HB-HEAD-1)."""
+    has slack), so ♭'s shares keep the fewest routes. The reading is over 1%."""
     r, s = H.reading(H.SM90, "DC-90-ri"), H.reading(H.SM90, "DS-90")
     assert [k for k, _ in r.data.writers] == ["IGMMA_S8_N256", "UNI"] and r.menu == "honest"
     assert 0.01 < r.machine_core <= r.bound

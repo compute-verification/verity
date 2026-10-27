@@ -6,7 +6,7 @@ with T_s extending T_(s-1), that H1 has no attention unit, that a near-zero P ro
 running-partial word, that a two-coin entry is a single square mod 2^m iff v₂(c) >= ⌈(m + 1)/2⌉, that design A's grids
 meet `AdmWrap` at s32, and that a shift pairs design A's entries. It would fail if a change made another prefix word
 final-only, gave H1 an attention unit, or moved a grid's valuations or the two-coin threshold
-(note:20261019T0618Z-draft-rt-algo-r2)."""
+."""
 from __future__ import annotations
 
 import importlib.util

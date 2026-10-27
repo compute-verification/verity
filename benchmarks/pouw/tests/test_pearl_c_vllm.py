@@ -348,7 +348,7 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
 
 def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(device_run, tmp_path):
     """The call runs as vLLM runs it, under inference mode, so its shape's buffers are inference tensors; the retained pass
-    begins outside it (window r20260930-141053-b3c0's verify pass failed there)."""
+    begins outside it (window 's verify pass failed there)."""
     make, kernel, weights, *_ = device_run
     run = make()
     with torch.inference_mode():
@@ -994,7 +994,7 @@ def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
 
 def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_index(tmp_path):
     """Two honest passes of one epoch whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
-    both, so the run is refused (``repeated-call``) before any pass is replayed (CMP-84)."""
+    both, so the run is refused (``repeated-call``) before any pass is replayed."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (1, 2))))
     assert json.loads(a.read_text())["salt"] == json.loads(b.read_text())["salt"]
@@ -1235,7 +1235,7 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
 
 @pytest.mark.slow
 def test_served_debit_per_input_bounds_each_input_on_its_own(honest_pass, tmp_path):
-    """Per-input mode (lean's ruling on #923): each chosen input is one matmul of the pass, measured in full or by
+    """Per-input mode (lean's ruling on): each chosen input is one matmul of the pass, measured in full or by
     work-weighted draws, with its own failures, `W`, `w_max` and a simultaneous upper limit; nothing is pooled."""
     path, s, epoch, prover, tr, splits, records = honest_pass
     out = tmp_path / "out"
@@ -1416,7 +1416,7 @@ FH = load("pearl_c_vllm_forming_headroom", KERNEL.parent / "pearl_c_vllm" / "for
 
 
 def test_forming_headroom_on_a_recorded_line(tmp_path):
-    """A real decode line (Qwen3-8B's down projection, pass r20261003-210254-47a3) recomputes at Prices.sm120, and at the
+    """A real decode line (Qwen3-8B's down projection, pass) recomputes at Prices.sm120, and at the
     cited Prices.sm120Loop its verdict flips only past 11.0% salt-dead elements, by hand."""
     line = {"tile": 1769828, "matmul": 7179, "m": 32, "k": 12288, "n": 4096, "credited_rows": 32, "credited_cols": 64,
             "ok": True, "atoms": 14, "later_zero_promotions": 0, "debit_exact": "476", "cap": 27426.816}
@@ -1519,7 +1519,7 @@ def test_clopper_pearson_upper():
 
 
 def test_served_debit_input_bounds():
-    """The per-input limits (lean's rulings on #923): the work-weighted rule of three for a census and for n draws at no
+    """The per-input limits (lean's rulings on): the work-weighted rule of three for a census and for n draws at no
     failure, Bernstein no tighter than the observed rate, and no bound for a sampled input with failures."""
     row = {"method": "census", "failures": 0, "failures_weighted": 0, "W": 64 * 4096, "w_max": 4096}
     assert SD.input_bound(row, 0.05)[0] == pytest.approx(math.log(20) / 64)

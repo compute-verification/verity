@@ -264,7 +264,7 @@ PH_HD void sha256_iv(uint32_t h[8]) {
 #pragma unroll
   for (int i = 0; i < 8; ++i) h[i] = IV[i];
 }
-// One compression of 16 big-endian words (#468's `tile_compress`): h + K + W summed a round ahead, Ch and Maj as one
+// One compression of 16 big-endian words ('s `tile_compress`): h + K + W summed a round ahead, Ch and Maj as one
 // three-input operation each, each message word scheduled a round before its use, the working variables renamed, not moved.
 PH_HD void sha256_compress(uint32_t h[8], const uint32_t blk[16]) {
   const uint32_t K[64] = {

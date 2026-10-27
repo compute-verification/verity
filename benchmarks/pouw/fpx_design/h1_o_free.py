@@ -26,7 +26,7 @@ g1 on H1 serves 4 O - 2 sum X - 2 sum P^ + k (`g1h_eps.py`), so its correction i
 centred word S as one more receipted word beside O' and the D_d: the cheater then computes S, through the recombination
 or the one-IMMA route, and pays g1's correction too.
 
-The data-centre g1 rows (#2710's `fpx-g1s-i8`: the H200's and B200's Dither-2S records on R + b) serve
+The data-centre g1 rows ('s `fpx-g1s-i8`: the H200's and B200's Dither-2S records on R + b) serve
 4 T_last - 2 sum X - 2 sum P^ + k, and their checks read T_last. Honest's correction, a token: `per_cell` lane
 instructions a cell (1, an IADD3 of the row's and the column's terms on the integer word; 2, an IMAD and an IADD3), sum
 X's one add an X entry a linear (k/32 warp instructions), and sum P^'s k/32 popcounts and adds a weight column shared by

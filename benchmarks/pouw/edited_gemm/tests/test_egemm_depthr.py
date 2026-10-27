@@ -1,4 +1,4 @@
-"""FOLD's same-word depth-R binding proof (egemm_depthr_check.py, note:20261017T0320Z-draft-eps1-fold correction 2): the
+"""The fold's same-word depth-R binding proof (egemm_depthr_check.py): the
 served-GEMM scalar dial absorbs the same committed word R times through the XOR-in(13,19) fold with the same keys, and the
 R-fold still binds the word with no new luck term. The fast tests reuse the proof's functions on a key sample; the slow
 test runs the whole exact_kit check (every odd key exhaustively, n=10/12 key_ok_r11, 32-bit (13,19), and both mutations)."""

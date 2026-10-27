@@ -11,7 +11,7 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   ``H1_TMPL=structural`` the templated statement of its Definition's structural lowering (`h1unit.layout`,
   `h1unit.stager`: struct_lower's template at `h1unit.LAYOUT`, the flat circuit never built; its template, ``unit.tmpl``,
   is what the prover's ``flock-tmpl-unit`` places). The Lean verifier refuses a templated statement once every other
-  check has passed (`TMPL_WHY`), until its proof lands (PRF-133). Such a check is labelled `TEMPLATED`, never ACCEPT, and
+  check has passed (`TMPL_WHY`), until its proof lands. Such a check is labelled `TEMPLATED`, never ACCEPT, and
   counts as passing in place of an expected ACCEPT (summary's ``templated``; ``lean_accepts`` counts the real ones).
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
