@@ -2,7 +2,7 @@
 `wipe_protocol_case.test_answer` (the period hook's `outcome` behind the Lean's decoders) on drawn sessions at every batch
 size, unsigned, under one adversarial edit (`wipe_cases.MUTATIONS`), one JSON edit or params of another server or
 session; and `wipe-protocol serve` under S1's LMS on each named wipe (`wipe_protocol_case.EXPECT`): an honest one, a
-segment certified at `StreamedWipeMeetsReads`' threshold at `k = 2152` and one at `k = 5231` with memory past the fill, a
+segment certified at `StreamedWipeMeetsReads`' threshold at `k = 2152` and one at `k = 2906` with memory past the fill, a
 prover keeping one label past the threshold of foreign content, a late read and a session never signed, each with the
 verdict it is aimed at."""
 
@@ -101,7 +101,7 @@ def test_the_named_wipes(deployed_server):
             assert seen[m]["reason"] == C.answer(c)["reason"], (m, seen[m])
     m = 1 << 28
     for name, k, r, threshold, memory in [("segment", 2152, 24, 11_709_069, m),
-                                          ("reads", 5231, 59, 5_074_062 + (8 << 20), m + (8 << 20))]:
+                                          ("reads", 2906, 33, 8_658_573 + (8 << 20), m + (8 << 20))]:
         p = seen[name]["public"]
         assert (p["certified"], p["k"], p["r"], p["memory_bits"], p["eps"]) == (True, k, r, memory, f"1/{2 ** 128}"), p
         assert p["foreign_bits"] == threshold + p["egress_mib"] * sw.EGRESS_UNIT_BITS, p

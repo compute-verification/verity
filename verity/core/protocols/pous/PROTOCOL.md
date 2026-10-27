@@ -527,16 +527,18 @@ For any read count, `StreamedWipeMeetsReads` (`Security/Definitions/Pous/Guarant
 the same `Family.lean`, the family being its instance at `r = 24`) proves `512 · (⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`
 bits at `2^-128` for every `k` and `r` with `(r − 1)^k · 2^129 ≤ r^k` (that is `(1 − 1/r)^k ≤ 2^-129`), every fill of
 `N ≥ 1` labels and `R` bits of the server outside the fill, which count in full. So `f ≈ 1/r + 1/512` at
-`k ≈ 129 · ln 2 · r ≈ 89.4 · r`. Its H200 instance, `StreamedWipeMeets141GB5`, meets the onsite target of at most
-5 GB a device: at `N = 2,203,125,000` (141·10⁹ bytes) with the 2.3 GB driver reserve, the least ratio is `r = 59` and its
-least read count `k = 5231`, for `39,721,768,854 + E` bits (the fill's 21,321,768,854, about 2.665 GB, plus the reserve:
-about 4.965 GB). At `r = 58` the fill's share alone is 2.706 GB.
+`k ≈ 129 · ln 2 · r ≈ 89.4 · r`. Its H200 instance, `StreamedWipeMeetsH200`, meets the onsite target of at most
+5 GB a device: at the device's 150,754,820,096 bytes (NVML's total, the driver's reserve included) filled whole,
+`N = 2,355,544,064` and `R = 0`, the least ratio is `r = 33` and its least read count `k = 2906`, for
+`38,902,167,181 + E` bits (about 4.863 GB). At `r = 32` (`k = 2817`) it is 5.006 GB. A fill that leaves memory out
+counts it in `R` in full, so the same 5 GB needs a larger `r`: what an accepted session certifies is the threshold at
+its own `N` and `R`.
 
 `verity/wipe/v0` publishes this threshold at the session's `k`, which the memory challenger chooses (`wipe_party
 --reads`, 2152 by default) and its commitment names, at `r = ratio(k)`, the largest `r` the condition allows, with `R`
 every declared tier's bytes past the fill (`wipe_period.certify`, `MemoryChallenger.WipeProtocol.certify`; up to
 `MAX_READS = 2^17` reads). One 32 MiB segment at `k = 2152` (`r = 24`) is 11,709,069 bits plus the egress, under the
-family's `⌈M/19⌉ = 14,128,182`; the H200 at `k = 5231` is `StreamedWipeMeets141GB5`'s figure.
+family's `⌈M/19⌉ = 14,128,182`; the H200 filled whole at `k = 2906` is `StreamedWipeMeetsH200`'s figure.
 
 **What it rests on.** No named assumption. The PRF enters as the advantage term in the conclusion, which C3 bounds for
 an efficient prover. The physical premises are the game's shape, and the deployment must make them true:
@@ -890,7 +892,7 @@ The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger
 | `BandTwoWay220_12`, `BandTwoWay220_12D11`, `BandTwoWay220_16` | the band certificate for the two-directional column game (`Pous.ColumnGame`): `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels | proved |
 | `StreamedWipe`, `StreamedWipeMeets2600GB` | the streamed-label wipe ("The streamed-label wipe"): for every prover of the sequential wipe, `Pr[accepted ∧ the prior content survives] ≤ (g/N)^k + k·C(N, g+1)·2^(M+E)/2^(q+(g+1)·b) + Adv_PRF`, with no named assumption; at 2.6 TB and `k = 74,000`, at most `2^-40 + Adv_PRF` for `q ≥ E + 8.6·10⁹` bits | proved |
 | `StreamedWipeMeetsFamily`, `StreamedWipeMeets96GiB`, `StreamedWipeMeets141GB` | the streamed-label wipe at `k = 2152` reads: for every fill of at least one 32 MiB segment, at most `2^-128 + Adv_PRF` for `q ≥ ⌈M/19⌉ + E`; at 96 GiB and 141 GB the explicit thresholds | proved |
-| `StreamedWipeMeetsReads`, `StreamedWipeMeets141GB5` | the streamed-label wipe at any `k` reads with `(1 − 1/r)^k ≤ 2^-129`, `verity/wipe/v0`'s figure at the session's `k`: for every fill and `R` bits outside it, at most `2^-128 + Adv_PRF` for `q ≥ 512·(⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`; an H200 (141 GB and its 2.3 GB reserve) at `k = 5231`, `q ≥ 39,721,768,854 + E` bits, at most 5 GB | proved |
+| `StreamedWipeMeetsReads`, `StreamedWipeMeetsH200` | the streamed-label wipe at any `k` reads with `(1 − 1/r)^k ≤ 2^-129`, `verity/wipe/v0`'s figure at the session's `k`: for every fill and `R` bits outside it, at most `2^-128 + Adv_PRF` for `q ≥ 512·(⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`; an H200 (its 150,754,820,096 bytes filled whole) at `k = 2906`, `q ≥ 38,902,167,181 + E` bits, at most 5 GB | proved |
 
 **Why N10 fails.** Top label `v` reads only column `v` of the lower layer, so an adversary can pay for a lower label a
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over

@@ -44,8 +44,8 @@ ID = WP.PROTOCOL
 TEST_ID = mc.TEST_PREFIX + ID
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 SERVER = b"vy-nebius-cpu-4"
-REMOTE_READS = 5231
-"""The reads of `StreamedWipeMeets141GB5`, the H200's wipe at 5 GB (`r = 59`)."""
+REMOTE_READS = 2906
+"""The reads of `StreamedWipeMeetsH200`, the H200's wipe at 5 GB (`r = 33`)."""
 
 # --- the mirror --------------------------------------------------------------------------------------------------------
 
