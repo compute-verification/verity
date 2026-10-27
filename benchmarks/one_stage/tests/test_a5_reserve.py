@@ -8,6 +8,8 @@ under `stratified:1`), whose draw reads more than the 16 coins a rank the old re
 
 from __future__ import annotations
 
+import hashlib
+import json
 import random
 import sys
 import tempfile
@@ -245,3 +247,53 @@ def test_a_rank_that_ends_before_planning_opens_nothing(tmp_path, monkeypatch):
         manager.shutdown()
     assert published["plan"]["session"] is None and "was not opened" in published["error"]
     assert nothing_reserved(tmp_path)
+
+
+def test_a_held_v2_session_serves_each_use_once_and_settles_them_in_the_sessions_order(tmp_path, monkeypatch):
+    """A v2 window's held session (`v2_families`, `Draws(held=True)`): no coin before the registration, the draw, then a
+    session's uses through the relay (`Relay`, as `flock-circuit` asks it): its link points, then two rounds. A round asked
+    again and a family of another slot are refused, releasing nothing. The session closes only at `end_uses`, and its
+    evidence settles every use, which `session_segments` puts in the record's order (the link points, then each stream's
+    rounds as the record lists them), whatever order they were asked in."""
+    rule, law, n = "stratified:4", law_of("stratified:4", SILU_MUL), sum(SILU_MUL)
+    rb = "ee" * 64
+    points_after = hashlib.sha512(bytes.fromhex(rb)).hexdigest()
+    r0, r1 = "01" * 64, "02" * 64
+    record = {"link": {"points": [["11" * 16] * 5], "root_b_sha512": {"circuit": rb}},
+              "streams": [{"stream": "circuit/rep0", "rounds": [{"msg_sha512": r0, "coins": ["22" * 16] * 4}]},
+                          {"stream": "circuit/rep1", "rounds": [{"msg_sha512": r1, "coins": ["33" * 16] * 6}]}]}
+    manager, draws, opener = local(tmp_path, monkeypatch, [0], reserve=lambda needs: AC.v2_families(needs, 1), held=True)
+    relay = None
+    try:
+        coins = AC.RankCoins(draws, 0)
+        coins.plan(need_of(rule, SILU_MUL))
+        coins.commit(AFTER)
+        S.select_draw(S.Law(rule), law, n, coins)
+        segment = coins.drawn()
+        draws.skip(0)
+        relay = AC.Relay(draws)
+        assert "refused" in AC.relay_ask(relay.address, "slot/0/session", points_after, 2), "no slot is being proved"
+        draws.slot(0)
+        asked = [("slot/0/session", points_after, 2), ("slot/0/circuit/rep1", r1, 2), ("slot/0/circuit/rep0", r0, 1)]
+        answers = [AC.relay_ask(relay.address, *ask) for ask in asked]
+        assert [len(x.get("coins", "")) for x in answers] == [2 * 128, 2 * 128, 128], answers
+        replayed = AC.relay_ask(relay.address, "slot/0/circuit/rep0", r0, 1)
+        assert "open already" in replayed.get("refused", ""), replayed
+        assert "slot 0" in AC.relay_ask(relay.address, "slot/1/session", points_after, 2).get("refused", "")
+        draws.slot(None)
+        draws.end_uses()
+        opener.join()
+        published = draws.evidence()
+    finally:
+        if relay is not None:
+            relay.close()
+        manager.shutdown()
+    assert "error" not in published, published.get("error")
+    assert published["plan"]["families"] == AC.v2_families({0: 6}, 1)
+    assert {k: v for k, v in published["trusted"]["released"].items() if v} == {AC.FAMILY: 4, "slot/0/session": 2, "slot/0/circuit/rep0": 1,
+                                                "slot/0/circuit/rep1": 2}
+    assert len(segment["openings"]) == 4 and segment["after"] == AFTER.hex()
+    segs = AC.session_segments(published, 0, json.dumps(record))
+    assert [(s["label"], s["after"], len(s["openings"])) for s in segs] == [
+        ("slot/0/session", points_after, 2), ("slot/0/circuit/rep0", r0, 1), ("slot/0/circuit/rep1", r1, 2)]
+    assert all("salt" in o and o["path"] for s in segs for o in s["openings"]), "settled to the full openings"

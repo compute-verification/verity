@@ -48,6 +48,8 @@ import json
 import re
 import secrets
 import shutil
+import socket
+import socketserver
 import subprocess
 import sys
 import tarfile
@@ -62,7 +64,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, remote as R, service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier as V
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, proofs as PF, verifier as V
 from verity.ml.circuits.program import Program
 from verity.ml.crypto import lms
 
@@ -113,6 +115,30 @@ def families(needs: Mapping[int, int]) -> list[list[Any]]:
     """The session's layout for the draws `needs` (rank -> `need`): the family `FAMILY`, with the coin after the window's
     root (`Draws.pre`) and each rank's need, at least `COINS_PER_RANK` coins."""
     return [[FAMILY, 1 + sum(max(COINS_PER_RANK, n) for n in needs.values())]]
+
+
+#: a v2 session slot's reserve: its link points' coins, and each rep stream's (M2's coin tree bounds a rep at 512 rounds of
+#: at most 512 F128s; a RoPE rep reads about 100 rounds, at most 218 F128s in one). Coins no use reads stay unreleased.
+SLOT_POINTS_COINS, REP_COINS = 256, 8192
+#: a session's tables (`flock-circuit`'s `table_names` for one table)
+TABLES = ("circuit",)
+
+
+def v2_families(needs: Mapping[int, int], slots: int, tables: tuple[str, ...] = TABLES) -> list[list[Any]]:
+    """A v2 window's layout (`OneStageZk.roundsWhy`): the draws' `families`, then each of `slots` session slots' families,
+    ``slot/<i>/session`` (its link points) and ``slot/<i>/<table>/rep<r>`` (each round of a rep), sized `SLOT_POINTS_COINS`
+    and `REP_COINS`."""
+    return families(needs) + [[f"slot/{i}/{s}", n] for i in range(slots) for s, n in
+                              [("session", SLOT_POINTS_COINS), *((f"{t}/rep{r}", REP_COINS) for t in tables for r in (0, 1))]]
+
+
+def session_segments(published: Mapping[str, Any], slot: int, record: str) -> list[dict]:
+    """Session `slot`'s ``coins`` in a v2 evidence: for each of its uses, in `proofs.session_uses` order (its link points,
+    then each stream's rounds in its record's order), the settled segment the held session released for it (`Draws.use`).
+    A use the session never asked has none, and v2 refuses the session for the segments it lacks."""
+    by = {(s["label"], s["after"]): s for s in published.get("uses", ())}
+    return [by[label, after.hex()] for label, after, _n, _want in PF.session_uses(slot, record)
+            if (label, after.hex()) in by]
 
 
 def reserve_reason(layout: list, needs: Mapping[int, int]) -> str | None:
@@ -171,10 +197,14 @@ class Draws:
     Once every rank has planned or ended (`wait_planned`), the session either opens (`connect`: its client, one
     `ChallengerCoins` for every rank) or is refused (`refuse`). The session's evidence follows once published. A rank's
     draw holds the client from its `commit` to its `drawn` (its turn), so no other rank's coins open between its commitment
-    and its reads."""
+    and its reads.
 
-    def __init__(self, window_root: str, ranks: list[int]) -> None:
-        self._root = window_root
+    A `held` session is a v2 window's (`v2_families`): no coin after the window's root, since every release must be a use
+    v2 reads, and it stays open once the draws are done, for the sessions' uses (`use`, through `Relay`), until
+    `end_uses` closes it."""
+
+    def __init__(self, window_root: str, ranks: list[int], held: bool = False) -> None:
+        self._root, self._held = window_root, held
         self._lock, self._left, self._closed, self._ready = threading.Lock(), set(ranks), threading.Event(), threading.Event()
         self._unplanned, self._needs, self._planned = set(ranks), {}, threading.Event()
         self._opened, self._refused = threading.Event(), None
@@ -182,6 +212,9 @@ class Draws:
         self._turn, self._current, self._segment = threading.Lock(), None, None
         self._ended: str | None = None
         self._evidence: dict | None = None
+        self._uses_lock, self._slot = threading.Lock(), None
+        self._families: dict[str, CC.ChallengerCoins] = {}
+        self._uses: list[CC.Segment] = []
         if not ranks:
             self._planned.set()
 
@@ -222,9 +255,10 @@ class Draws:
             if commitment is not None and not client.withheld and client.commitment.root.hex() != commitment:
                 raise Ch.CoinError(f"the challenger's hello answered commitment {client.commitment.root.hex()[:16]}…, not "
                                    f"the gate's {commitment[:16]}…")
-            coins = CC.ChallengerCoins(Ch.LiveRecord(client, FAMILY))
-            pre = coins.commit(bytes.fromhex(self._root))
-            coins(Ch.COIN_BYTES)
+            coins, pre = CC.ChallengerCoins(Ch.LiveRecord(client, FAMILY)), None
+            if not self._held:
+                pre = coins.commit(bytes.fromhex(self._root))
+                coins(Ch.COIN_BYTES)
         except Exception as e:  # every waiting rank's plan must end, whatever failed
             if client is not None:
                 try:
@@ -236,7 +270,7 @@ class Draws:
         self._client, self._coins, self._pre = client, coins, pre
         self._opened.set()
         with self._lock:
-            if not self._left and self._current is None:
+            if not self._left and self._current is None and not self._held:
                 self._close()
 
     def refuse(self, why: str) -> None:
@@ -277,7 +311,7 @@ class Draws:
         self._current, self._segment = None, None
         self._turn.release()
         with self._lock:
-            if not self._left:
+            if not self._left and not self._held:
                 self._close()
         return segment
 
@@ -289,6 +323,39 @@ class Draws:
             self._left.discard(rank)
             if rank in self._unplanned:
                 self._settled(rank)
+            if not self._left and self._current is None and self._client is not None and not self._held:
+                self._close()
+
+    def slot(self, slot: int | None) -> None:
+        """The session the uses are for now (`use` takes only slot `slot`'s families); None takes none."""
+        self._slot = slot
+
+    def use(self, label: str, after: str, coins: int) -> dict:
+        """One use of a held session's coins (a v2 session's link points or one of its rounds, `proofs.session_uses`):
+        family `label`'s next `coins` coins after `after` (hex, 64 bytes), asked once: `{"coins": hex}`, or
+        `{"refused": why}` when the family isn't the current slot's, the session isn't open, or its coins after `after`
+        are open already (a replayed round: a retry never redraws)."""
+        with self._uses_lock:
+            try:
+                if self._refused is not None or self._client is None or self._closed.is_set():
+                    raise Ch.CoinError(self._refused or "the window's session is not open for the sessions' coins")
+                if self._slot is None or not label.startswith(f"slot/{self._slot}/"):
+                    raise Ch.CoinError(f"{label} is not a family of the session being proved (slot {self._slot})")
+                if type(coins) is not int or coins < 0:
+                    raise Ch.CoinError("a use asks a number of coins")
+                fam = self._families.get(label)
+                if fam is None:
+                    fam = self._families[label] = CC.ChallengerCoins(Ch.LiveRecord(self._client, label))
+                segment = fam.commit(bytes.fromhex(after))
+                self._uses.append(segment)
+                return {"coins": fam(coins * Ch.COIN_BYTES).hex() if coins else ""}
+            except (Ch.CoinError, ValueError) as e:
+                return {"refused": str(e)}
+
+    def end_uses(self) -> None:
+        """A held session's sessions are done: close it once no rank's draw holds it."""
+        with self._lock:
+            self._held = False
             if not self._left and self._current is None and self._client is not None:
                 self._close()
 
@@ -301,6 +368,8 @@ class Draws:
             if self._client is not None:
                 self._client.close()
                 self._coins.settle()
+                for fam in self._families.values():
+                    fam.settle()
         except Ch.CoinError as e:
             self._ended = str(e)
         self._closed.set()
@@ -315,7 +384,8 @@ class Draws:
         self._closed.wait()
         c = None if self._client is None else self._client.commitment
         return {"commitment": None if c is None else c.root.hex(),
-                "segments": [] if self._coins is None else [s.to_json() for s in self._coins.segments]}
+                "segments": [] if self._coins is None else [s.to_json() for s in self._coins.segments],
+                "uses": [s.to_json() for s in self._uses]}
 
     def wait_closed(self) -> str | None:
         """Once the client has closed the session: None, or why its close failed."""
@@ -363,6 +433,43 @@ class RankCoins(CC.ChallengerCoins):
 
     def drawn(self) -> dict | None:
         return self._draws.drawn(self._rank)
+
+
+class _Ask(socketserver.StreamRequestHandler):
+    def handle(self) -> None:
+        try:
+            ask = json.loads(self.rfile.readline())
+            if not (isinstance(ask, dict) and sorted(ask) == ["after", "coins", "label"]
+                    and isinstance(ask["label"], str) and isinstance(ask["after"], str)):
+                raise ValueError("an ask is one JSON line {label, after, coins}")
+            got = self.server.draws.use(ask["label"], ask["after"], ask["coins"])
+        except ValueError as e:
+            got = {"refused": str(e)}
+        self.wfile.write((json.dumps(got) + "\n").encode())
+
+
+class Relay:
+    """The auditor's relay from a v2 session's coin server (`flock-circuit serve`, ``FC_COIN_RELAY``) to the window's held
+    session (`Draws.use`, the `Draws` proxy `draws`): on 127.0.0.1, one ask a connection, answered with one line."""
+
+    def __init__(self, draws: Any) -> None:
+        self.server = socketserver.TCPServer(("127.0.0.1", 0), _Ask)
+        self.server.draws = draws
+        self.address = "127.0.0.1:%d" % self.server.server_address[1]
+        self._thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self._thread.start()
+
+    def close(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+
+
+def relay_ask(address: str, label: str, after: str, coins: int) -> dict:
+    """One ask of the relay at `address` (HOST:PORT), as `flock-circuit`'s coin server makes it: its answer line."""
+    host, port = address.rsplit(":", 1)
+    with socket.create_connection((host, int(port))) as s:
+        s.sendall((json.dumps({"label": label, "after": after, "coins": coins}) + "\n").encode())
+        return json.loads(s.makefile("rb").readline())
 
 
 class Replay(CC.ChallengerCoins):
@@ -650,7 +757,7 @@ def opened_pin(ledger: list[str], session: str) -> str | None:
 
 def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | Path, *, ssh_key: str | None = None,
           peer: str | None = None, key_record: str | None = None,
-          reserve: Callable[[Mapping[int, int]], list] = families):
+          reserve: Callable[[Mapping[int, int]], list] = families, held: bool = False):
     """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its draws' manager: (the manager, a
     `Draws` proxy, and the thread that opens the session and publishes its evidence). The thread waits until every rank of
     `ranks` has planned its draw (`Draws.plan`), then opens the session with the layout `reserve` gives their needs
@@ -658,7 +765,8 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     rank's draw, when a rank ended before planning (refused before its draw, or failed) or `reserve_reason` refuses the
     layout. The evidence's `plan` is the needs, the layout and the session's id (None when none opened). `main` is the
     verifier's own copy of main's first-parent history (`remote.main_lines`'s file: ``git rev-list --first-parent
-    origin/main``)."""
+    origin/main``). A `held` session is a v2 window's (`Draws`), its `reserve` `v2_families`: the evidence's ``uses`` are the
+    sessions' segments, settled, in the order they were asked."""
     first_parent = R.main_lines(main)
     if challenger == "local":
         session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")), first_parent)
@@ -668,7 +776,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
         raise SystemExit(f"--challenger is local or gate:USER@HOST (with --peer and --challenger-key), not {challenger!r}")
     manager = _Manager(ctx=get_context("spawn"))
     manager.start()
-    draws = manager.Draws(root, ranks)
+    draws = manager.Draws(root, ranks, held)
 
     def finish() -> None:
         needs = draws.wait_planned()
@@ -712,7 +820,8 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
             except Ch.CoinError as e:
                 pinned = str(e)
             draws.publish({"key": key.to_json(), "ledger": led, "main": first_parent, "pins": pins,
-                           "segments": released["segments"], "session": R.session_files(directory),
+                           "segments": released["segments"], "uses": released["uses"],
+                           "session": R.session_files(directory),
                            "trusted": {"commitment": commitment_.root.hex(), "released": {k: len(v) for k, v in roots.items()},
                                        "close": ended, "ledger_sha512": hashlib.sha512(ledger.read_bytes()).hexdigest(),
                                        "pin": opened_pin(led, session.session), "pins_lines": len(pins),
@@ -744,19 +853,20 @@ def evidence(published: dict, segment: dict) -> dict | None:
             "segment": settled, "session": published["session"]}
 
 
-def negatives(ev: dict, pre: dict) -> dict[str, dict | None]:
+def negatives(ev: dict, pre: dict | None) -> dict[str, dict | None]:
     """`ev` altered as a prover would alter it: a tampered opening, the coin opened before the registration (`pre`'s, its
-    `after` rewritten to the registration's) added in front, a segment that skips a coin released after the registration,
-    the verifier's main without any commit the pins log pins (the session's pin off main's first-parent line), no pins log,
-    no evidence at all."""
+    `after` rewritten to the registration's) added in front (none without `pre`: a held session opens no coin before the
+    registration), a segment that skips a coin released after the registration, the verifier's main without any commit the
+    pins log pins (the session's pin off main's first-parent line), no pins log, no evidence at all."""
     s = ev["segment"]
-    earlier = [{**o, "after": s["after"]} for o in pre["openings"]]
     logged = {json.loads(line)["commit"] for line in ev["pins"]}
+    earlier = {} if pre is None else {"coins-opened-before-the-registration": {**ev, "segment": {
+        **s, "openings": [{**o, "after": s["after"]} for o in pre["openings"]] + s["openings"],
+        "start": s["start"] - len(pre["openings"])}}}
     return {
         "coins-tampered-opening": {**ev, "segment": {**s, "openings": [{**s["openings"][0], "coin": "00" * 64},
                                                                        *s["openings"][1:]]}},
-        "coins-opened-before-the-registration": {**ev, "segment": {**s, "openings": earlier + s["openings"],
-                                                                   "start": s["start"] - len(earlier)}},
+        **earlier,
         "coins-segment-skips-a-released-coin": {**ev, "segment": {**s, "openings": s["openings"][1:], "start": s["start"] + 1}},
         "coins-pin-off-main": {**ev, "main": [c for c in ev["main"] if c not in logged]},
         "coins-no-pins-log": {**ev, "pins": None},

@@ -173,11 +173,15 @@ from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity.ml.commitments import row_table as RT  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import proofs as PF, registered as REG  # noqa: E402
 from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
 from verity.ml.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
+#: what a v2 audit (`--v2`, `proofs.check_v2`) covers: v2 verifies one statement a window, one circuit file and one public
+#: file, so one drawn member and its one session, at slot 0 of the window's held session (`a5_coins.v2_families`)
+V2_SCOPE = ("v2 covers one rank's window whose draw falls in one member: its one --zk session, slot 0 of the window's "
+            "held challenger session")
 #: what a plain audit covers until proofs' multi-table coverage lands (verifier PROTOCOL §16.15, `ProvedScope.drawLaw`)
 PLAIN_SCOPE = ("plain covers one table (a window of one member, its one session) under a stratified draw, hidden outputs "
                "included (SoundExecH); J tables and the subset draw, hidden outputs past one table, and registered reads and "
@@ -418,6 +422,59 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why, "outcome": told,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
     return result, neg, record
+
+
+def v2_replayed_round(a: argparse.Namespace, sdir: Path, slot: int) -> dict[str, dict]:
+    """The honest session's first round asked again through the relay, as a prover replaying it would ask (`--v2`): refused,
+    with nothing released, so the window's log keeps one release a use (which v2's accept then shows)."""
+    recs = sorted((sdir / "sessions").glob("*/session.json"))
+    rounds = PF.session_uses(slot, recs[-1].read_text())[1:] if recs else []
+    if not rounds:
+        return {"v2-replayed-round": {"refused": False, "why": "the session recorded no round to replay"}}
+    label, after, n, _want = rounds[0]
+    a.coins.slot(slot)
+    try:
+        got = AC.relay_ask(a.relay.address, label, after.hex(), n)
+    finally:
+        a.coins.slot(None)
+    return {"v2-replayed-round": {"refused": "refused" in got and "coins" not in got, "label": label,
+                                  "why": got.get("refused")}}
+
+
+def v2_audit(a: argparse.Namespace, rec: dict, mine: CS.Window, want: dict, leaf_layer: str | None, part: dict, mm: dict,
+             got: dict, draw: dict, receipt: dict, given: dict, sessions: list[str], statement: dict, verdicts: dict,
+             segment: dict | None, reads: dict) -> tuple[dict, dict[str, dict]]:
+    """The window's v2 audit (`proofs.check_v2`, `OneStageZk`) once its held session has ended: v1's parameters with the
+    partition object, the challenger (its key, the draw's family) and the window root; v1's evidence with the draw's coins;
+    the drawn member's statement files; and its session's ``coins``, the held session's segments in `session_uses` order
+    (`a5_coins.session_segments`). Then the same audit on that session's coins altered: two rounds' segments swapped, and
+    none at all, each to be refused. -> ({accepted, outcome}, the negatives)."""
+    import replay as RP
+
+    published = a.coins.evidence()
+    ev = AC.evidence(published, segment)
+    if ev is None:
+        return {"accepted": False, "outcome": {"error": published.get("error")}}, {}
+    recs = sorted((got["sdir"] / "sessions").glob("*/session.json"))
+    st = mm["st"]["dir"]
+    proof = PF.Proof(st / "circuit.txt", st / f"pub-{mm['m'].n}.bin", tuple(r.parent for r in recs))
+    segs = AC.session_segments(published, got["slot"], recs[-1].read_text()) if recs else []
+    params = {**RP.params(mine.program, mine.query, mine.law, want, leaf_layer,
+                          str(Fraction(a.delta).limit_denominator(10**12)), partition=part, work_table=mine.work_table),
+              "challenger": {"key": published["key"], "label": AC.FAMILY}, "window_root": a.window_root}
+    evidence = {"draw": draw, "instances": given["instances"], "proved_units": given["proved_units"], "receipt": receipt,
+                "served": given["served"], "session_roots": given["session_roots"], "sessions": sessions,
+                "statement": statement, "verdicts": verdicts, "coins": ev}
+    kw = {"circuit_sha512": PF.file_sha512(proof.circuit), "registered": reads.get(mm["m"].key)}
+    out = PF.check_v2(params, rec, evidence, proof, coins=[segs], **kw)
+    bad = {"v2-no-round-coins": []}
+    if len(segs) > 2:
+        bad["v2-round-coins-of-another-round"] = [segs[0], segs[2], segs[1], *segs[3:]]
+    neg = {}
+    for name, alt in bad.items():
+        o = PF.check_v2(params, rec, evidence, proof, coins=[alt], **kw)
+        neg[name] = {"refused": o.get("verdict") not in (None, "accept"), "outcome": o}
+    return {"accepted": out.get("verdict") == "accept", "uses": len(segs), "outcome": out}, neg
 
 
 def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
@@ -673,6 +730,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         counts[m.template] = counts.get(m.template, 0) + sum(1 for u in local if m.base + u in drawn_units)
         if local:
             drawn.append((mm, local))
+    if a.v2 and len(drawn) != 1:
+        summary["refused"] = {"v2-one-statement": {"drawn_members": len(drawn), "scope": V2_SCOPE}}
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+        print("A5 " + json.dumps(summary["refused"]))
+        return summary, False
     archived: dict = {}     # the members' circuit, archived once for every Lean verify (`a0.lean_verify`)
     for mm in members:
         mm["st"]["archived"] = archived
@@ -693,13 +755,20 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         staged_s = time.time() - t
         t = time.time()
         env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
-        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
-                                  zk=not plain(a), env=env, prove_timeout=a.session_timeout)
+        if a.v2:
+            env.update(FC_COINS="challenger", FC_COIN_SLOT=str(i), FC_COIN_RELAY=a.relay.address)
+            a.coins.slot(i)
+        try:
+            record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir,
+                                      draw_file=sdir / "draw.json", zk=not plain(a), env=env, prove_timeout=a.session_timeout)
+        finally:
+            if a.v2:
+                a.coins.slot(None)
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
         return {"mm": mm, "sdir": sdir, "staged_s": staged_s, "session_s": session_s, "record": record, "live": live,
-                "draw_t": draw_t, "draw_check": v}
+                "draw_t": draw_t, "draw_check": v, "slot": i}
 
     def member_checks(s: dict) -> dict:
         """Lean's verdicts on member session ``s`` (`member_session`) and what the audit takes from it. They read only the
@@ -717,9 +786,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
             got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, flags=flags),
                                         "tool": f"flock-verify verify {' '.join(flags)} --archive"}
         else:
-            got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True), "tool": "flock-verify verify --zk --archive"}
+            flags = ("--challenger-slot", str(s["slot"])) if a.v2 else ()
+            got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True, flags=flags),
+                                        "tool": f"flock-verify verify --zk {' '.join(flags)} --archive".replace("  ", " ")}
         lean_v = got[f"lean-verify/m{k}"]
-        return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
+        return {"mm": mm, "sdir": sdir, "slot": s["slot"], "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
                 "roots": {m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
                 "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
@@ -748,6 +819,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
             linked = linked or (mm, got["sdir"])
         statement[mm["m"].key] = got["statement"]
         sessions += got["sessions"]
+    v2_neg: dict[str, dict] = {}
+    if a.v2:
+        v2_neg = v2_replayed_round(a, done[0]["sdir"], done[0]["slot"])
+        a.coins.end_uses()
     coin_neg: dict[str, dict] = {}
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
@@ -764,6 +839,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
             result, coin_neg, summary["coins"] = coins_outcome(
                 a, stream, draw, counts_of, rec, mine, members, want, leaf_layer, read, segment, sessions, verdicts, statement,
                 given)
+            if a.v2:
+                summary["v2"], more = v2_audit(a, rec, mine, want, leaf_layer, part, drawn[0][0], done[0], union_draw,
+                                               receipt, given, sessions, statement, verdicts, segment, reads)
+                coin_neg.update({**v2_neg, **more})
         else:
             result, coin_neg, summary["coins"] = verifier_outcome(
                 a, stream, draw, counts_of, coins, rec, mine, members, want, leaf_layer, sessions, verdicts, statement, given)
@@ -775,6 +854,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
             return summary, False
         result["coins"] = {"source": stream.coin_source, "segment": segment, "read": read.hex(),
                            "outcome": summary["coins"]["outcome"]}
+        if a.v2:
+            result["v2"] = summary["v2"]
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
@@ -840,8 +921,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
                               "drawn": len(drawn), "closure": len(union_draw.get("closure", ()))}
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and result.get("registered_reads", {"ok": True})["ok"] and all(summary["negatives"].values()) \
-        and summary.get("outputs", {"proved": True})["proved"]
-    shown = {x: summary.get(x) for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives", "outputs")}
+        and summary.get("outputs", {"proved": True})["proved"] and (not a.v2 or summary["v2"]["accepted"])
+    shown = {x: summary.get(x) for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives", "outputs", "v2")}
     if "coins" in summary:
         shown["coins"] = {x: summary["coins"].get(x) for x in ("source", "coins_reason", "outcome", "run")}
     print("A5 " + json.dumps(shown, sort_keys=True, default=str))
@@ -1088,9 +1169,11 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
             raise SystemExit(f"--challenger draws every rank from the step's one session, which ends once every rank has drawn: "
                              f"audit the {len(ranks)} ranks at once (--jobs {len(ranks)}), or fewer ranks (--ranks)")
         a.window_root = rec["tp_run_root"]
+        v2 = {"reserve": lambda needs: AC.v2_families(needs, 1), "held": True} if a.v2 else {}
         manager, a.coins, finisher = AC.start(a.challenger, a.window_root, ranks, out / "challenger", a.main,
-                                              ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key)
-        summary["challenger"] = {"challenger": a.challenger, "rule": a.rule}
+                                              ssh_key=a.gate_key, peer=a.peer, key_record=a.challenger_key, **v2)
+        a.relay = AC.Relay(a.coins) if a.v2 else None
+        summary["challenger"] = {"challenger": a.challenger, "rule": a.rule, "v2": a.v2}
     elif a.verifier_coins:
         a.window_root = rec["tp_run_root"]
         summary["coins"] = {"source": "verifier", "stream": VERIFIER, "rule": a.rule,
@@ -1106,6 +1189,9 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
         if a.coins is not None:
             for r in ranks:
                 a.coins.skip(r)
+            a.coins.end_uses()
+            if a.relay is not None:
+                a.relay.close()
             finisher.join()
             published = a.coins.evidence()
             summary["challenger"].update(trusted=published.get("trusted"), error=published.get("error"),
@@ -1175,6 +1261,9 @@ def main() -> int:
     ap.add_argument("--plain", action="store_true", help="with --challenger or --coins verifier: plain sessions, not --zk, "
                     "under the partition's stratified:K law, a window of one member with no registered reads or shared rows "
                     "(PLAIN_SCOPE)")
+    ap.add_argument("--v2", action="store_true", help="with --challenger, one rank (--ranks R): the window's v2 audit "
+                    "(proofs.check_v2), every coin it reads the window's held session's: the draw, then the session's link "
+                    "points and rounds through the auditor's relay (FC_COINS=challenger), one release a use (V2_SCOPE)")
     a = ap.parse_args()
     if bool(a.bundle) == bool(a.tp_commit):
         ap.error("give either --bundle (a deferred Commit) or --tp-commit (a TP Commit)")
@@ -1190,6 +1279,9 @@ def main() -> int:
         ap.error("--challenger and --coins verifier are two coin sources: give one")
     if a.plain and not (a.challenger or a.verifier_coins):
         ap.error("--plain draws through a rank's service.Stream: give --challenger or --coins verifier")
+    if a.v2 and (not a.challenger or a.plain or not a.ranks or "," in a.ranks):
+        ap.error(f"--v2 takes --challenger, one rank (--ranks R) and --zk sessions: {V2_SCOPE}")
+    a.relay = None
     if a.challenger or a.verifier_coins:
         flag = "--challenger" if a.challenger else "--coins verifier"
         if a.bundle:

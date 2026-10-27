@@ -218,19 +218,24 @@ def _canonical(x: Any) -> bytes:
     return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
 
 
-def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict, list[Path]]:
+def evidence_v2(proof: Proof, names: Sequence[str] | None = None,
+                coins: Sequence[Sequence[Mapping[str, Any]]] | None = None) -> tuple[dict, list[Path]]:
     """The v2 evidence's ``proofs`` for `proof`'s files, and the blobs that hold them: the public file's SHA-512 and, per
     session (named `names`, the v1 evidence's ``sessions``; by default its directory's name), its ``session.json``'s and
-    each rep file's (``*.bin``). The blobs are the circuit file, which the parameters name by the auditor's digest, the
-    public file and each session's files."""
+    each rep file's (``*.bin``), and with `coins` its ``coins``: the challenger's segments of its uses, in
+    `session_uses` order, one list a session. The blobs are the circuit file, which the parameters name by the auditor's
+    digest, the public file and each session's files."""
     names = [s.name for s in proof.sessions] if names is None else list(names)
     if len(names) != len(proof.sessions):
         raise ValueError(f"{len(names)} names for {len(proof.sessions)} sessions")
+    if coins is not None and len(coins) != len(proof.sessions):
+        raise ValueError(f"{len(coins)} sessions' coins for {len(proof.sessions)} sessions")
     sessions, blobs = [], [proof.circuit, proof.public]
-    for name, s in zip(names, proof.sessions):
+    for i, (name, s) in enumerate(zip(names, proof.sessions)):
         reps = sorted(s.glob("*.bin"))
         sessions.append({"name": name, "record": file_sha512(s / "session.json"),
-                         "reps": {r.name: file_sha512(r) for r in reps}})
+                         "reps": {r.name: file_sha512(r) for r in reps},
+                         **({} if coins is None else {"coins": [dict(c) for c in coins[i]]})})
         blobs += [s / "session.json", *reps]
     return {"public": file_sha512(proof.public), "sessions": sessions}, blobs
 
@@ -330,12 +335,13 @@ def uses_v2(slot: int, record: Path) -> dict:
 
 
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
-             circuit_sha512: str, registered: Mapping[str, Any] | None) -> dict:
+             circuit_sha512: str, registered: Mapping[str, Any] | None,
+             coins: Sequence[Sequence[Mapping[str, Any]]] | None = None) -> dict:
     """The one-stage audit on `proof` itself (`sampled-proofs-one-stage-zk check`): v1's `params` with ``proofs``, the
     auditor's circuit digest and the verifier's registered file, the registration `record`, and v1's `evidence` with
-    its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`, under the evidence's ``sessions``); the outcome
-    line."""
-    pr, blobs = evidence_v2(proof, evidence["sessions"])
+    its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`, under the evidence's ``sessions``, each with its
+    `coins`); the outcome line."""
+    pr, blobs = evidence_v2(proof, evidence["sessions"], coins)
     p2 = {**params, "proofs": {"circuit": circuit_sha512, "registered": registered}}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
