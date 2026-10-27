@@ -27,10 +27,11 @@
 //                                         the arms (lt: cuBLASLt's int8 GEMM, the baseline; plain: this file's mainloop
 //                                         alone; coins, form, wrap, gemm, commit; call: one call serial; ovl: calls with
 //                                         each commit beside the next call's compute; salt, leaf, leaf_nomem: the
-//                                         commit's parts), one JSON line a shape
+//                                         commit's parts; cutlass: CUTLASS's fastest int8 GEMM, the second baseline,
+//                                         under -DV31_CUTLASS), one JSON line a shape
 //   v31 once PDIR LP T ROW name:M:N:K     one shape's call twice, nothing timed or checked (under a profiler)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1
-//        v31.cu -lcuda -lcublasLt
+//        [-DV31_CUTLASS cutlass_2x.o] v31.cu -lcuda -lcublasLt (run.sh builds the harness's cutlass_2x.cu)
 #include <cublasLt.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -47,6 +48,9 @@
 
 #include "../commit_gpu/commit_gpu.cuh"
 #include "../gpu_kit/bench.cuh"
+#ifdef V31_CUTLASS
+#include "../harness/native/cutlass_api.h"
+#endif
 
 #define CL(x)                                                                                  \
   do {                                                                                         \
@@ -473,14 +477,19 @@ __global__ void __launch_bounds__(256, CW == 128 ? 3 : 2) wrap3_kernel(WrapArgs 
       if (__any_sync(ALL, (int)(cnt[q] & 0xFFFF) + nc > 256)) flush(q);
       const int R = (int)__reduce_max_sync(ALL, (u32)nc);
       const int* Lc = a.listB + (j0 + src) * a.capB + bc;
-      u32 inc = (u32)nc;
+      u32 inc = 0;
       for (int ch = 0; ch < R; ch += 8) {
+        if (ch && (ch & 255) == 0) {   // L' > 256: a column's 257th wrap in one noise tile
+          cnt[q] += inc;
+          inc = 0;
+          flush(q);
+        }
         u32 pl = (u32)lp << 7;   // p: the staged row's offset | negative
         if (ch + i < nc) {
           const int e = __ldg(Lc + ch + i);
           pl = (u32)((e >> 1) - kb) << 7 | (u32)(e & 1);
         }
-        inc += (u32)__popc(__ballot_sync(ALL, pl & 1) >> gl & 0xFF) << 16;
+        inc += (u32)min(max(nc - ch, 0), 8) + ((u32)__popc(__ballot_sync(ALL, pl & 1) >> gl & 0xFF) << 16);
         const int nr = min(8, R - ch);
         for (int r = 0; r < nr; ++r) {
           const u32 p = __shfl_sync(ALL, pl, gl | r);
@@ -496,6 +505,107 @@ __global__ void __launch_bounds__(256, CW == 128 ? 3 : 2) wrap3_kernel(WrapArgs 
       cnt[q] += inc;
     }
     o0 = o1;
+  }
+#pragma unroll
+  for (int q = 0; q < NQ; ++q) flush(q);
+  __syncthreads();
+  wrap_a_side<CW>(a, i0, jb);
+}
+
+// wrap4: wrap3 with its global loads off the rounds' path. A noise tile's offsets are loaded a tile ahead, and the first
+// eight list entries of each of the warp's quads before the staging wait (lane (g, i): entry i of column 4 q + g; a
+// quad's later entries, rare, as wrap3 loads them). Rounds go in pairs, both rows read before either is added; the odd
+// round's partner reads a column's lane past its wraps, so the row of 0x80 bytes.
+template <int CW>
+__global__ void __launch_bounds__(256, CW == 128 ? 3 : 2) wrap4_kernel(WrapArgs a) {
+  constexpr int CPW = CW / 8, NQ = CPW / 4;
+  constexpr u32 ALL = 0xFFFFFFFFu;
+  extern __shared__ __align__(16) uint8_t xs[];
+  const int t = threadIdx.x, lane = t & 31, g = lane >> 3, i = lane & 7, gl = lane & 24, lp = a.lp, nt = a.nt;
+  const size_t i0 = (size_t)blockIdx.y * TILE, jb = (size_t)blockIdx.x * CW, j0 = jb + (t >> 5) * CPW;
+  const int* offc = a.offB + (j0 + (lane < CPW ? lane : 0)) * (nt + 1);   // lane c < CPW: column j0 + c's offsets
+  u32 acc[NQ][8], cnt[NQ], flushed = 0;
+#pragma unroll
+  for (int q = 0; q < NQ; ++q) {
+    cnt[q] = 0;
+#pragma unroll
+    for (int r = 0; r < 8; ++r) acc[q][r] = 0;
+  }
+  if (t < 8) reinterpret_cast<uint4*>(xs + lp * 128)[t] = make_uint4(0x80808080u, 0x80808080u, 0x80808080u, 0x80808080u);
+  auto flush = [&](int q) {
+    int* d = a.dO + (i0 + 16 * i) * a.n + j0 + 4 * q + g;
+    const int cst = (int)(cnt[q] >> 16) - 128 * (int)(cnt[q] & 0xFFFF);
+    const bool first = !(flushed >> q & 1);
+#pragma unroll
+    for (int k = 0; k < 4; ++k)
+#pragma unroll
+      for (int b = 0; b < 4; ++b) {
+        int* p = d + (size_t)(4 * k + b) * a.n;
+        const u32 w = acc[q][2 * k + (b & 1)];
+        *p = (first ? 0 : *p) + (int)(b < 2 ? w & 0xFFFF : w >> 16) + cst;
+      }
+#pragma unroll
+    for (int r = 0; r < 8; ++r) acc[q][r] = 0;
+    cnt[q] = 0;
+    flushed |= 1u << q;
+  };
+  const uint32_t xb = (uint32_t)__cvta_generic_to_shared(xs);
+  const u32 zrow = (u32)lp << 7;
+  const int last = a.capB - 1;
+  int o0 = lane < CPW ? __ldg(offc) : 0, o1 = lane < CPW ? __ldg(offc + 1) : 0;
+  for (int tau = 0; tau < nt; ++tau) {
+    const int o2 = lane < CPW && tau + 2 <= nt ? __ldg(offc + tau + 2) : 0;
+    int pre[NQ];
+#pragma unroll
+    for (int q = 0; q < NQ; ++q) {
+      const int src = 4 * q + g, bc = __shfl_sync(ALL, o0, src);
+      pre[q] = __ldg(a.listB + (j0 + src) * a.capB + min(bc + i, last));
+    }
+    __syncthreads();
+    for (int e = t; e < lp * 8; e += 256) {
+      const int kk = e >> 3, c = e & 7;
+      cp_async16(xb + kk * 128 + (c << 4), a.XT + (size_t)(tau * lp + kk) * a.m + i0 + 16 * c);
+    }
+    cp_async_wait_all();
+    __syncthreads();
+    const int nl = o1 - o0, kb = tau * lp;
+#pragma unroll
+    for (int q = 0; q < NQ; ++q) {
+      const int src = 4 * q + g, nc = __shfl_sync(ALL, nl, src);
+      if (__any_sync(ALL, (int)(cnt[q] & 0xFFFF) + nc > 256)) flush(q);
+      const int R = (int)__reduce_max_sync(ALL, (u32)nc);
+      u32 inc = 0;
+      int e = pre[q];
+      for (int ch = 0; ch < R; ch += 8) {
+        if (ch) {
+          if ((ch & 255) == 0) {   // L' > 256: a column's 257th wrap in one noise tile
+            cnt[q] += inc;
+            inc = 0;
+            flush(q);
+          }
+          const int bc = __shfl_sync(ALL, o0, src);
+          e = ch + i < nc ? __ldg(a.listB + (j0 + src) * a.capB + bc + ch + i) : 0;
+        }
+        const u32 pl = ch + i < nc ? (u32)((e >> 1) - kb) << 7 | (u32)(e & 1) : zrow;   // the staged row's offset | negative
+        inc += (u32)min(max(nc - ch, 0), 8) + ((u32)__popc(__ballot_sync(ALL, pl & 1) >> gl & 0xFF) << 16);
+        const int nr = min(8, R - ch);
+        for (int r = 0; r < nr; r += 2) {
+          const u32 p0 = __shfl_sync(ALL, pl, gl | r), p1 = __shfl_sync(ALL, pl, gl | (r + 1));
+          const uint4 v0 = *reinterpret_cast<const uint4*>(xs + (p0 & ~1u) + 16 * i);
+          const uint4 v1 = *reinterpret_cast<const uint4*>(xs + (p1 & ~1u) + 16 * i);
+          const u32 m0 = 0x80808080u ^ (0u - (p0 & 1u)), m1 = 0x80808080u ^ (0u - (p1 & 1u));
+          const u32 w0[4] = {v0.x ^ m0, v0.y ^ m0, v0.z ^ m0, v0.w ^ m0}, w1[4] = {v1.x ^ m1, v1.y ^ m1, v1.z ^ m1, v1.w ^ m1};
+#pragma unroll
+          for (int k = 0; k < 4; ++k) {
+            acc[q][2 * k] += __byte_perm(w0[k], 0, 0x4240) + __byte_perm(w1[k], 0, 0x4240);
+            acc[q][2 * k + 1] += __byte_perm(w0[k], 0, 0x4341) + __byte_perm(w1[k], 0, 0x4341);
+          }
+        }
+      }
+      cnt[q] += inc;
+    }
+    o0 = o1;
+    o1 = o2;
   }
 #pragma unroll
   for (int q = 0; q < NQ; ++q) flush(q);
@@ -1089,6 +1199,64 @@ static void lt_run(Lt& L, const int8_t* A, const int8_t* B, int* D, cudaStream_t
   CL(cublasLtMatmul(L.h, L.op, &one, B, L.la, A, L.lb, &zero, D, L.ld, D, L.ld, &L.algo, L.ws, L.wsz, st));
 }
 
+// The second baseline: CUTLASS's int8 GEMMs that sm_120 runs (the harness's cutlass_2x.cu, kind 7: mma.sync IMMA.16832
+// at four tile shapes; linked in under -DV31_CUTLASS), the fastest of those that implement the shape (5 calls each), D =
+// A B^T as lt computes it
+struct Cut {
+  phc_prepared* best = nullptr;
+  void* ws = nullptr;
+  std::string name = "none";
+  int ncand = 0;
+};
+static void cut_setup(Cut& C, int m, int n, int k, const int8_t* A, const int8_t* B, int* D, cudaStream_t st) {
+#ifdef V31_CUTLASS
+  int count = 0;
+  const phc_entry* tab = phc_table_2x(&count);
+  cudaEvent_t e0, e1;
+  CK(cudaEventCreate(&e0)); CK(cudaEventCreate(&e1));
+  float best = 1e30f;
+  for (int i = 0; i < count; i++) {
+    if (tab[i].kind != 7 || !tab[i].query) continue;
+    const phc_args a{m, n, k, A, B, nullptr, nullptr, D};
+    size_t ws = 0, sfa = 0, sfb = 0;
+    if (tab[i].query(&a, &ws, &sfa, &sfb)) continue;
+    void* w = nullptr;
+    if (ws) CK(cudaMalloc(&w, ws));
+    phc_prepared* p = nullptr;
+    if (tab[i].prepare(&a, w, ws, st, &p)) { if (w) CK(cudaFree(w)); continue; }
+    C.ncand++;
+    bool ok = p->launch(st) == 0 && p->launch(st) == 0;
+    float ms = 1e30f;
+    if (ok) {
+      CK(cudaEventRecord(e0, st));
+      for (int r = 0; r < 5; r++) ok = p->launch(st) == 0 && ok;
+      CK(cudaEventRecord(e1, st));
+      CK(cudaEventSynchronize(e1));
+      CK(cudaEventElapsedTime(&ms, e0, e1));
+    }
+    if (ok && ms < best) {
+      if (C.best) { delete C.best; if (C.ws) CK(cudaFree(C.ws)); }
+      C.best = p; C.ws = w; C.name = tab[i].name; best = ms;
+    } else {
+      delete p;
+      if (w) CK(cudaFree(w));
+    }
+  }
+  CK(cudaGetLastError());
+  CK(cudaEventDestroy(e0)); CK(cudaEventDestroy(e1));
+#else
+  (void)C; (void)m; (void)n; (void)k; (void)A; (void)B; (void)D; (void)st;
+#endif
+}
+static void cut_run(Cut& C, cudaStream_t st) {
+  if (C.best->launch(st)) { fprintf(stderr, "CUTLASS's %s didn't launch\n", C.name.c_str()); exit(3); }
+}
+__global__ void ne_kernel(const int* a, const int* b, size_t n, unsigned long long* out) {
+  unsigned long long c = 0;
+  for (size_t i = blockIdx.x * (size_t)blockDim.x + threadIdx.x; i < n; i += (size_t)gridDim.x * blockDim.x) c += a[i] != b[i];
+  if (c) atomicAdd(out, c);
+}
+
 template <class T> static T* dalloc(size_t n) {
   T* p = nullptr;
   CK(cudaMalloc(&p, std::max<size_t>(n, 1) * sizeof(T)));
@@ -1132,8 +1300,8 @@ static std::string env_str(const char* name, const char* dflt) {
 // The knobs a bench line records. V31_CARVE: every kernel's preferred shared-memory carveout (percent; < 0 leaves the
 // driver's choice), so commit_gpu's small-path CTAs (no shared memory) can sit beside a GEMM CTA; V31_DYN: the GEMM takes
 // its tiles from a counter; V31_CPRIO: the commit stream's priority against the compute stream's (hi, lo or eq); V31_WRAP:
-// the wrap correction's kernel (1: wrap_kernel, 2: wrap2_kernel, 3: wrap3_kernel), V31_WCW its columns a CTA (256 where N
-// allows, or 128);
+// the wrap correction's kernel (1: wrap_kernel, 2: wrap2_kernel, 3: wrap3_kernel, 4: wrap4_kernel), V31_WCW its columns
+// a CTA (256 where N allows, or 128);
 // V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small);
 // V31_PF: each row's next 128-byte block prefetched as its compression starts (0 none, 1 into L1, 2 into L2).
 struct Knobs {
@@ -1145,7 +1313,8 @@ static void set_carveout(int pct) {
   if (pct < 0) return;
   const void* ks[] = {(const void*)gemm_kernel<true>,  (const void*)gemm_kernel<false>,  (const void*)wrap_kernel,
                       (const void*)wrap2_kernel<128>,  (const void*)wrap2_kernel<256>,   (const void*)wrap3_kernel<128>,
-                      (const void*)wrap3_kernel<256>,  (const void*)form_a_kernel,
+                      (const void*)wrap3_kernel<256>,  (const void*)wrap4_kernel<128>,  (const void*)wrap4_kernel<256>,
+                      (const void*)form_a_kernel,
                       (const void*)form_b_kernel,      (const void*)bits_kernel,         (const void*)noise_kernel,
                       (const void*)perm_kernel,        (const void*)salt_small<true>,    (const void*)leaf_small<V31Row, 0>,
                       (const void*)level_kernel,       (const void*)top_small,           (const void*)salt_persist,
@@ -1242,6 +1411,8 @@ struct Ctx {
     CK(cudaFuncSetAttribute(wrap2_kernel<256>, cudaFuncAttributeMaxDynamicSharedMemorySize, lp * 128));
     CK(cudaFuncSetAttribute(wrap3_kernel<128>, cudaFuncAttributeMaxDynamicSharedMemorySize, (lp + 1) * 128));
     CK(cudaFuncSetAttribute(wrap3_kernel<256>, cudaFuncAttributeMaxDynamicSharedMemorySize, (lp + 1) * 128));
+    CK(cudaFuncSetAttribute(wrap4_kernel<128>, cudaFuncAttributeMaxDynamicSharedMemorySize, (lp + 1) * 128));
+    CK(cudaFuncSetAttribute(wrap4_kernel<256>, cudaFuncAttributeMaxDynamicSharedMemorySize, (lp + 1) * 128));
     for (int b = 0; b < 2; b++) {
       CK(cudaEventCreateWithFlags(&ev_comp[b], cudaEventDisableTiming));
       CK(cudaEventCreateWithFlags(&ev_done[b], cudaEventDisableTiming));
@@ -1284,6 +1455,8 @@ struct Ctx {
     if (kn.wrap == 1) wrap_kernel<<<dim3(n / TILE, m / TILE), 256, TILE * 129 * 4, st>>>(w);
     else if (kn.wrap == 3 && wcw == 256) wrap3_kernel<256><<<dim3(n / 256, m / TILE), 256, (lp + 1) * 128, st>>>(w);
     else if (kn.wrap == 3) wrap3_kernel<128><<<dim3(n / 128, m / TILE), 256, (lp + 1) * 128, st>>>(w);
+    else if (kn.wrap == 4 && wcw == 256) wrap4_kernel<256><<<dim3(n / 256, m / TILE), 256, (lp + 1) * 128, st>>>(w);
+    else if (kn.wrap == 4) wrap4_kernel<128><<<dim3(n / 128, m / TILE), 256, (lp + 1) * 128, st>>>(w);
     else if (wcw == 256) wrap2_kernel<256><<<dim3(n / 256, m / TILE), 512, lp * 128, st>>>(w);
     else wrap2_kernel<128><<<dim3(n / 128, m / TILE), 256, lp * 128, st>>>(w);
   }
@@ -1371,7 +1544,8 @@ static void kernel_attrs(FILE* f) {
                       {"form_a", (const void*)form_a_kernel}, {"form_b", (const void*)form_b_kernel},
                       {"wrap", (const void*)wrap_kernel}, {"wrap2_128", (const void*)wrap2_kernel<128>},
                       {"wrap2_256", (const void*)wrap2_kernel<256>}, {"wrap3_128", (const void*)wrap3_kernel<128>},
-                      {"wrap3_256", (const void*)wrap3_kernel<256>}, {"bits", (const void*)bits_kernel},
+                      {"wrap3_256", (const void*)wrap3_kernel<256>}, {"wrap4_128", (const void*)wrap4_kernel<128>},
+                      {"wrap4_256", (const void*)wrap4_kernel<256>}, {"bits", (const void*)bits_kernel},
                       {"leaf_small", (const void*)leaf_small<V31Row, 0>}, {"salt_small", (const void*)salt_small<true>},
                       {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist},
                       {"leaf_persist_nomem", (const void*)leaf_persist<NoMemRow>}};
@@ -1522,6 +1696,21 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
     const u64 wa = sum_counts(c.cntA, m), wbn = sum_counts(c.cntB, n);
     dump_samples(c, out + "/samples/" + name, pfile, (u32)rng());
     if (fl) { fprintf(stderr, "%s: flags %d (1: a wrap list overflowed, 2: a top digit left int8)\n", name, fl); return 4; }
+    // CUTLASS's fastest, held to cuBLASLt's D (in dO and O[0]: no arm's time depends on their values, and the overlapped
+    // calls after the timing recompute both)
+    Cut cut;
+    cut_setup(cut, m, n, k, c.A, c.B, c.O[0], c.s0);
+    if (cut.best) {
+      lt_run(lt, c.A, c.B, c.dO, c.s0);
+      cut_run(cut, c.s0);
+      unsigned long long* ne = dalloc<unsigned long long>(1);
+      unsigned long long hne = 0;
+      CK(cudaMemsetAsync(ne, 0, 8, c.s0));
+      ne_kernel<<<4 * c.nsm, 256, 0, c.s0>>>(c.dO, c.O[0], (size_t)m * n, ne);
+      CK(cudaMemcpyAsync(&hne, ne, 8, cudaMemcpyDeviceToHost, c.s0));
+      CK(cudaStreamSynchronize(c.s0));
+      if (hne) { fprintf(stderr, "%s: CUTLASS's %s differs from cuBLASLt's D in %llu entries\n", name, cut.name.c_str(), hne); return 4; }
+    }
     std::vector<gk::Arm> arms = {
         {"lt", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) lt_run(lt, c.A, c.B, c.O[0], s); }},
         {"plain", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.gemm(s, 0, false); }},
@@ -1537,6 +1726,7 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
         {"leaf", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.leaves_nodes(s, 0); }},
         {"leaf_nomem", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) c.leaves_nodes_of(s, NoMemRow{(u32)c.row}); }},
     };
+    if (cut.best) arms.push_back({"cutlass", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) cut_run(cut, s); }});
     const gk::Timing tm = gk::timed_items(arms, reps, c.s0, nv);
     CK(cudaGetLastError());
     gk::summary(tm, arms, stderr);
@@ -1562,20 +1752,27 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
     }
     printf("{\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"lp\": %d, \"t\": %d, \"row\": %d, \"S\": %d, \"dz\": %d, \"dy\": %d, "
            "\"leaves\": %llu, \"gpu\": \"%s\", \"sms\": %d, \"grid\": %d, \"copies\": %d, \"wrap_rate_A\": %.6f, \"wrap_rate_B\": %.6f, "
-           "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d, \"splitk\": %d, \"candidates\": %d}, \"steady\": %s, "
+           "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d, \"splitk\": %d, \"candidates\": %d}, "
+           "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"wrap\": %d, \"wcw\": %d, \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"arms\": {",
            name, m, n, k, lp, t, row, c.S, c.dz, c.dy, (unsigned long long)c.leaves, prop.name, c.nsm, c.grid, c.nb,
            (double)wa / ((double)m * k), (double)wbn / ((double)n * k), lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand,
-           tm.steady ? "true" : "false", c.kn.carve, c.kn.dyn, c.kn.cprio.c_str(), c.kn.wrap, c.wcw, c.kn.ccta, c.kn.pf, V31_MAXNREG);
+           cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false", c.kn.carve, c.kn.dyn, c.kn.cprio.c_str(), c.kn.wrap, c.wcw,
+           c.kn.ccta, c.kn.pf, V31_MAXNREG);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
-    printf("}, \"gamma_call\": %.4f, \"gamma_ovl\": %.4f, \"gamma_gemm\": %.4f, \"plain_over_lt\": %.4f, \"kernels\": ", med[7] / med[0],
+    printf("}, \"gamma_call\": %.4f, \"gamma_ovl\": %.4f, \"gamma_gemm\": %.4f, \"plain_over_lt\": %.4f, ", med[7] / med[0],
            med[8] / med[0], med[5] / med[0], med[1] / med[0]);
+    if (cut.best)   // arm 12: over CUTLASS's fastest, and the two baselines' ratio
+      printf("\"gamma_call_cutlass\": %.4f, \"gamma_ovl_cutlass\": %.4f, \"gamma_gemm_cutlass\": %.4f, \"cutlass_over_lt\": %.4f, ",
+             med[7] / med[12], med[8] / med[12], med[5] / med[12], med[12] / med[0]);
+    printf("\"kernels\": ");
     kernel_attrs(stdout);
     printf("}\n");
     fflush(stdout);
     FILE* items = fopen((out + "/items-" + name + ".jsonl").c_str(), "w");
     if (items) { gk::items_jsonl(tm, arms, items); fclose(items); }
+    delete cut.best;
     CK(cudaDeviceSynchronize());
     CK(cudaDeviceReset());
   }

@@ -567,9 +567,12 @@ def verdict(sh: Shape, ch: StubChallenger, call: int, prover: Prover, q: int) ->
 def operands(sh: Shape, rng: np.random.Generator, kind: str = "llm") -> tuple[np.ndarray, np.ndarray]:
     """int8 operands. ``llm``: rows quantized to +-127 by their absolute maximum, activations from a Student t (heavy tails,
     so few wrap at V +-80) and weights from a Gaussian (more wrap at U +-80), the shape of BET-HYBRID-2's densities;
-    ``uniform``: every value on -128..127 (a third of the entries wrap); ``zero``: A = B = 0."""
+    ``uniform``: every value on -128..127 (a third of the entries wrap); ``zero``: A = B = 0; ``max``: A = B = 127 (half
+    the entries wrap: at L' 512 most columns pass 256 wraps in a noise tile)."""
     if kind == "zero":
         return np.zeros((sh.m, sh.k), dtype=np.int8), np.zeros((sh.n, sh.k), dtype=np.int8)
+    if kind == "max":
+        return np.full((sh.m, sh.k), 127, dtype=np.int8), np.full((sh.n, sh.k), 127, dtype=np.int8)
     if kind == "uniform":
         return (rng.integers(-128, 128, size=(sh.m, sh.k)).astype(np.int8), rng.integers(-128, 128, size=(sh.n, sh.k)).astype(np.int8))
     a = rng.standard_t(3, size=(sh.m, sh.k))
@@ -751,15 +754,16 @@ def cmd_table(a: argparse.Namespace) -> int:
     with the variant (ROW, the commit stream's priority, the carveout, the GEMM's tile counter, the wrap kernel and its
     columns a CTA, the commit's CTAs an SM, the GEMM's register cap, and pN when rows are prefetched; a line without them
     ran wrap_kernel and the small path at 208) and the arms' ms, the commit's parts among them (salt, leaf: leaves and
-    nodes, and the leaves' compressions without their rows' loads)."""
+    nodes, and the leaves' compressions without their rows' loads). Gamma is over cuBLASLt's GEMM; CUTLASS's fastest
+    (where the line timed it) and gamma overlapped over it beside."""
     rows = []
     for path in a.files:
         for line in Path(path).read_text().splitlines():
             if line.startswith("{") and '"gamma_ovl"' in line:
                 rows.append(json.loads(line))
-    print("| shape | model | m x N x K | variant | lt ms | ovl ms | gamma ovl | gamma call | gamma gemm | D6 | ovl / D6 "
-          "| form, wrap, gemm, commit ms | salt, leaf, leaf w/o loads ms | wraps A, B |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    print("| shape | model | m x N x K | variant | lt ms | CUTLASS ms | ovl ms | gamma ovl | gamma ovl / CUTLASS | gamma call "
+          "| gamma gemm | D6 | ovl / D6 | form, wrap, gemm, commit ms | salt, leaf, leaf w/o loads ms | wraps A, B |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         model, pred = D6.get((r["k"], r["n"]), ("", float("nan")))
         ms = r["arms"]
@@ -768,9 +772,10 @@ def cmd_table(a: argparse.Namespace) -> int:
                    f"k{r.get('ccta', 0)} n{r.get('maxnreg', 208)}" + (f" p{r['pf']}" if r.get("pf") else ""))
         parts, commit = (", ".join(f"{ms[x]['ms']:.3f}" if x in ms else "-" for x in xs)
                          for xs in (("form", "wrap", "gemm", "commit"), ("salt", "leaf", "leaf_nomem")))
-        print(f"| {r['shape']} | {model} | {r['m']} x {r['n']} x {r['k']} | {variant} | {ms['lt']['ms']:.3f} | {ms['ovl']['ms']:.3f} | "
-              f"{r['gamma_ovl']:.2f} | {r['gamma_call']:.2f} | {r['gamma_gemm']:.2f} | {pred:.2f} | {r['gamma_ovl'] / pred:.2f} | "
-              f"{parts} | {commit} | {100 * r['wrap_rate_A']:.2f}%, {100 * r['wrap_rate_B']:.2f}% |")
+        cut, gcut = ((f"{ms['cutlass']['ms']:.3f}", f"{r['gamma_ovl_cutlass']:.2f}") if "cutlass" in ms else ("-", "-"))
+        print(f"| {r['shape']} | {model} | {r['m']} x {r['n']} x {r['k']} | {variant} | {ms['lt']['ms']:.3f} | {cut} | "
+              f"{ms['ovl']['ms']:.3f} | {r['gamma_ovl']:.2f} | {gcut} | {r['gamma_call']:.2f} | {r['gamma_gemm']:.2f} | {pred:.2f} | "
+              f"{r['gamma_ovl'] / pred:.2f} | {parts} | {commit} | {100 * r['wrap_rate_A']:.2f}%, {100 * r['wrap_rate_B']:.2f}% |")
     return 0
 
 

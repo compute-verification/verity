@@ -21,7 +21,7 @@ def _call(sh: v31.Shape, kind: str = "llm", seed: int = 3):
     return A, B, seeds, c, v31.form(sh, A, B, c)
 
 
-@pytest.mark.parametrize("kind", ["llm", "uniform", "zero"])
+@pytest.mark.parametrize("kind", ["llm", "uniform", "zero", "max"])
 @pytest.mark.parametrize("lp,t,k", [(256, 3, 1536), (192, 3, 1536), (256, 3, 1280), (512, 2, 2048)])
 def test_binding_identity_gives_o(kind, lp, t, k):
     sh = v31.Shape(128, 256, k, lp, t)
@@ -29,6 +29,14 @@ def test_binding_identity_gives_o(kind, lp, t, k):
     v = v31.values(sh, f)
     assert (v31.binding(sh, f, c, v.T_full) == v.O).all()
     assert (f.X + 256 * f.wX == f.Ad + v31.v_full(sh, c)).all() and np.abs(f.X).max() <= 128
+
+
+def test_max_operands_pass_256_wraps_in_a_noise_tile():
+    """g-max512's point: wrap3 and wrap4 hold a column's sums in 16-bit lanes, so they flush within a noise tile."""
+    sh = v31.Shape(128, 256, 2048, 512, 2)
+    _, _, _, _, f = _call(sh, "max")
+    per_tile = (f.wW != 0).reshape(sh.n, sh.k // sh.lp, sh.lp).sum(axis=2)
+    assert (per_tile > 256).mean() > 0.25
 
 
 def test_coins_have_their_ranges():
@@ -143,12 +151,14 @@ def test_table_sets_gamma_beside_d6(tmp_path, capsys):
     arms = {a: {"ms": ms, "mhz": 2000} for a, ms in (("lt", 2.0), ("ovl", 3.4), ("call", 4.0), ("gemm", 2.6))}
     line = {"shape": "8b-qkv", "m": 8192, "n": 6144, "k": 4096, "row": 8192, "cprio": "lo", "carve": 100, "dyn": 1,
             "arms": arms, "gamma_ovl": 1.7, "gamma_call": 2.0, "gamma_gemm": 1.3, "wrap_rate_A": 0.001, "wrap_rate_B": 0.02}
-    new = dict(line, wrap=3, wcw=256, ccta=1, maxnreg=208, pf=2)
+    new = dict(line, wrap=4, wcw=256, ccta=1, maxnreg=208, pf=2, arms=dict(arms, cutlass={"ms": 1.7, "mhz": 2000}),
+               gamma_ovl_cutlass=2.0)
     (tmp_path / "bench.jsonl").write_text("not json\n" + json.dumps(line) + "\n" + json.dumps(new) + "\n")
     assert v31.main(["v31", "table", str(tmp_path / "bench.jsonl")]) == 0
     old, row = capsys.readouterr().out.splitlines()[-2:]
-    assert old.startswith("| 8b-qkv | 8B | 8192 x 6144 x 4096 | r8192 lo c100 d1 w1 k0 n208 |")
-    assert row.startswith("| 8b-qkv | 8B | 8192 x 6144 x 4096 | r8192 lo c100 d1 w3/256 k1 n208 p2 |") and "| 1.70 | 1.00 |" in row
+    assert old.startswith("| 8b-qkv | 8B | 8192 x 6144 x 4096 | r8192 lo c100 d1 w1 k0 n208 | 2.000 | - | 3.400 | 1.70 | - |")
+    assert row.startswith("| 8b-qkv | 8B | 8192 x 6144 x 4096 | r8192 lo c100 d1 w4/256 k1 n208 p2 | 2.000 | 1.700 | 3.400 | 1.70 "
+                          "| 2.00 |") and "| 1.70 | 1.00 |" in row
     assert "| -, -, 2.600, - | -, -, - |" in row
 
 

@@ -4,7 +4,7 @@
 # bench shapes' CGP1 params. Lease 1: every gate (one call each into poisoned buffers, dumped with its no-write control).
 # Then on the CPU, v31.py gpu-check on each gate (every word, O and tree level against the reference, then the verifier's
 # verdict line on the GPU's own commitment: honest gates accepted, cheating gates refused). Lease 2, in bench mode and only
-# if every gate's check passed: v31 bench over SHAPES for each of VARIANTS (cuBLASLt beside the protocol's arms,
+# if every gate's check passed: v31 bench over SHAPES for each of VARIANTS (cuBLASLt and CUTLASS beside the protocol's arms,
 # interleaved). After it: gpu-sample on each bench shape's two sampled tiles, of its checked serial call and of an
 # overlapped call after the timing, and the gamma table beside D6 v1.1.
 #
@@ -15,17 +15,18 @@
 #
 # MODE=prof: after the gates, in place of the bench, Nsight Compute (--set full) on PROF_KERNELS (an ncu -k regex, default
 # the form, wrap and commit kernels; PROF_COUNT launches, default 10) of `v31 once` on each of SHAPES for each of VARIANTS:
-# out/ncu-TAG-SHAPE.ncu-rep and its details page as CSV.
+# out/ncu-TAG-SHAPE.ncu-rep, its details page as CSV and its raw page (every metric, the stall reasons among them).
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
-# cprio (lo), carve (100), dyn (1), wrap (2; 1, 2 or 3), wcw (256), ccta (1), pf (0) (v31.cu's Knobs) and nreg (the GEMM's
+# cprio (lo), carve (100), dyn (1), wrap (2; 1 to 4), wcw (256), ccta (1), pf (0) (v31.cu's Knobs) and nreg (the GEMM's
 # register cap, a build of its own; default v31.cu's), default row=8192; REPS (default 7); Q, the proof blocks a verdict
 # opens (default 64); LP, T, ROW (the gates' default 256 3 1024);
 # GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
 # uv run -q --no-project --with numpy python: the node's python3 has no numpy); LEASE, the command that leases the GPU
 # (default gpu-lease 1 --wait --max-min 25 --; a timed run passes "gpu-lease 8 --wait --timed --max-min 30 --" under
-# `research run --no-sampler`; empty when already under a lease).
+# `research run --no-sampler`; empty when already under a lease); CUTLASS=0 (no CUTLASS baseline), V31_CACHE (CUTLASS's
+# clone and object, default /workspace/pouw/accel_v31).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
@@ -50,9 +51,36 @@ knob_env() {
 }
 export -f knob knob_env
 
+# CUTLASS's int8 GEMMs, the second baseline: the harness's cutlass_2x.cu at the harness's CUTLASS pin, cloned once into
+# V31_CACHE and its object kept there under a hash of its inputs; CUTLASS=0 builds without it (cuBLASLt's baseline alone)
+CUT=()
+if [ "${CUTLASS:-1}" != 0 ]; then
+  H=benchmarks/pouw/harness/native
+  CACHE=${V31_CACHE:-/workspace/pouw/accel_v31}
+  tag=$(sed -n 's/^CUTLASS_TAG="\(.*\)"$/\1/p' $H/build.sh)
+  pin=$(sed -n 's/^CUTLASS_COMMIT="\(.*\)"$/\1/p' $H/build.sh)
+  cdir=$CACHE/cutlass-$tag
+  mkdir -p "$CACHE"
+  if [ ! -d "$cdir/include/cutlass" ]; then
+    git clone -q --depth 1 --branch "$tag" https://github.com/NVIDIA/cutlass "$W/cutlass" > "$O/build-cutlass.log" 2>&1 &&
+      { [ -d "$cdir" ] || mv "$W/cutlass" "$cdir"; }
+  fi
+  [ "$(git -C "$cdir" rev-parse HEAD 2>/dev/null)" = "$pin" ]
+  echo "cutlass $tag rc $?" >> "$O/rc.txt"
+  key=$(cat $H/cutlass_2x.cu $H/cutlass_api.h <(nvcc --version) <(echo "$GENCODE $pin") | sha256sum | cut -c1-16)
+  obj=$CACHE/cutlass_2x-$key.o
+  if [ ! -f "$obj" ]; then
+    nvcc -O3 -std=c++17 -gencode "$GENCODE" --expt-relaxed-constexpr -I$H -I"$cdir/include" -I"$cdir/tools/util/include" \
+      -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1 -DPH_PART=0 -c $H/cutlass_2x.cu -o "$W/cutlass_2x.o" >> "$O/build-cutlass.log" 2>&1 &&
+      cp "$W/cutlass_2x.o" "$obj.$$" && mv "$obj.$$" "$obj"
+  fi
+  [ -f "$obj" ]
+  echo "build cutlass rc $?" >> "$O/rc.txt"
+  CUT=(-DV31_CUTLASS "$obj")
+fi
 build() {   # BIN LOG [nvcc flags]
-  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 "${@:3}" -o "$1" $D/v31.cu -lcuda \
-    -lcublasLt > "$2" 2>&1
+  nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 "${CUT[@]}" "${@:3}" -o "$1" \
+    $D/v31.cu -lcuda -lcublasLt > "$2" 2>&1
 }
 build "$W/v31" "$O/build.log"
 echo "build rc $?" >> "$O/rc.txt"
@@ -64,8 +92,9 @@ done
 
 # gates: NAME M N K OPERANDS CHEAT [LP T ROW]. Honest ones cover a partial last segment (K 1280), wrap-heavy operands
 # (uniform; at N 384 wrap2's 128 columns a CTA, at N 512 its 256), zeros, a third Z digit (K 20480: 208 NT >= 2^14), a
-# third Y digit (K 32768: 128 NT >= 2^14), L' 512 at t 2, rows of 2, 8 and 32 KiB; the cheats skip a noise tile, forge
-# one tile's T_1, or one tile's O (of 4 tiles). The gates run the first variant's knobs (the bench's samples check the rest).
+# third Y digit (K 32768: 128 NT >= 2^14), L' 512 at t 2 (and with A = B = 127, so columns past 256 wraps in a noise
+# tile), rows of 2, 8 and 32 KiB; the cheats skip a noise tile, forge one tile's T_1, or one tile's O (of 4 tiles). The
+# gates run the first variant's knobs (the bench's samples check the rest).
 GATES=${GATES:-"
 g-llm 256 256 1536 llm none
 g-uniform 256 384 1280 uniform none
@@ -74,6 +103,7 @@ g-zero 128 128 768 zero none
 g-dz3 128 128 20480 llm none
 g-dy3 128 256 32768 llm none
 g-lp512 256 256 2048 llm none 512 2 1024
+g-max512 256 256 2048 max none 512 2 1024
 g-row2k 256 256 3072 llm none 256 3 2048
 g-row8k 256 384 3072 llm none 256 3 8192
 g-row32k 256 256 3072 llm none 256 3 32768
@@ -167,6 +197,7 @@ elif [ "$MODE" = prof ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
           "$W/v31${n:+-n$n}" once "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" "$s" > "$f.log" 2>&1
         echo "prof $tag ${s%%:*} rc $?" >> "$O/rc.txt"
         "$NCU" -i "$f.ncu-rep" --csv --page details > "$f.csv" 2>> "$f.log"
+        "$NCU" -i "$f.ncu-rep" --csv --page raw > "$f.raw.csv" 2>> "$f.log"
       done
     done'
   echo "lease prof rc $?" >> "$O/rc.txt"
