@@ -1844,7 +1844,10 @@
    "type_hash": "5c6e19cf151c14a6cdc50b17897d1bf3579dd453f948a1b1788259b5b2291c77"
   },
   "Properties.Pouw.PeriodJ10R.Check.acceptedWindows": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.PeriodJ10R.Check.acceptedWindows : Properties.Pouw.PeriodJ10R.Check.AcceptedWindows"],
+   "assumptions": [],
+   "type_hash": "72992192be18691bb06926791174f402ce66cf12ea385aa44ef09db20c4e9a1d"
   },
   "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": {
    "owner": "@compute-accounting",
@@ -4301,6 +4304,7 @@
     "Properties.Pouw.PeriodCheck.acceptMeans",
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's"
@@ -7107,6 +7111,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
@@ -7226,6 +7231,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -7296,6 +7302,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.Strata.strataTile",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
@@ -7451,6 +7458,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
@@ -7566,6 +7574,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
@@ -7636,6 +7645,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -7659,6 +7669,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
@@ -7692,6 +7703,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
@@ -7932,6 +7944,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -7989,6 +8002,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
@@ -8090,6 +8104,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
@@ -8127,6 +8142,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
@@ -8419,6 +8435,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
@@ -9927,11 +9944,12 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "4d10b8183146b50af9aff1adb821b903fb79699530ae76e69328c63ff7447769",
+   "digest": "fad6a207759a1ba36f3953f5e00068a5ac2c275eb5d5bf77b48614b15ef8613b",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -10070,7 +10088,6 @@
     "PouwCheck.Credit.committedRows": "b61563b721094cb6bfc92642d823529bf400d4f6ee14a99c96e1e2b487281796",
     "PouwCheck.Credit.committedWeights": "a1e3d5bf1d83402aae50ed33bf5bd7167abb1c53309ded491d28ae4ec0df4c2e",
     "PouwCheck.Credit.creditedWork": "f656e6139a00e30a3d5fbecdd52bc84db5915d5331abeeb7db311ef354a159dc",
-    "PouwCheck.Credit.creditedWork.match_1": "5eb3a80be149e9bc1ea896cb18f11a58e19ef3878b7b30db6a905c7645496159",
     "PouwCheck.Credit.descriptorDrawn": "122c903f6ef839f1dc4987eca4b68234a557cd03ae9505cc3ca6882b327e7a6a",
     "PouwCheck.Credit.digest?": "ea819b7766c2e032d006d9105885cecea69a1320e40e6db6bbd4ef0fef769c99",
     "PouwCheck.Credit.digits": "aee492442f29302ffd59023820facd948044f35c0fd063cd006d4464b3d4e040",
@@ -10162,7 +10179,7 @@
     "PouwCheck.Credit.what": "b4f8e37b684ff1870a62a5a3c3c0f20c1fe0cff029b4002a129538dd0bb24491",
     "PouwCheck.Credit.window": "ca5405e0fd84fb9cc9adedcf32c6c6cb7330f8469e5df291ee489bd5fbd658eb",
     "PouwCheck.Credit.windowDrawn": "0e092558126eca17e1307baa9859f6cff023e13ce6f2497b62efc3422074f2a0",
-    "PouwCheck.Credit.windowLayout": "6b8a339bf676e7619492a56ee96fd05fdeaf16677dbfae7993d867f99ab03d9e",
+    "PouwCheck.Credit.windowLayout": "c47a55312c5585bf0279db093d8dc0197e4746c86f477355b1d79d8bfa738cdc",
     "_private.PouwCheck.Credit.0.PouwCheck.Credit.periodBody": "56f4f4609abe8567c2f666be845b7196c3138d882dc60149d592ec0ebc7203c7"
    },
    "guarantees": [
@@ -10173,6 +10190,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.Strata.strataTile"
    ]
@@ -10298,6 +10316,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
@@ -10333,6 +10352,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.Strata.strataTile"
    ]
@@ -10349,6 +10369,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
@@ -10438,13 +10459,15 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
   "PouwCheck.Period": {
-   "digest": "26e5b217b360241a70bb6667fbbab019135ebd73bcf7c97578fc22f73e98b685",
+   "digest": "244af710ad2fcc2d6dddd1788a68ba2a12ebff8906dc008f321d172abd0dec8f",
    "definitions": {
+    "PouwCheck.Period.COVERED_TILE": "aed2fb79f9e7b3aed134da815f88bb53ab4a0a58b78bef72e7a491e023d32e3f",
     "PouwCheck.Period.Commitment": "82328cca12a11746b5f6f1a48da7cfa313eadf501eda7a1a33b129204acc7952",
     "PouwCheck.Period.Commitment.bytes": "2d1112bbec939c85389a65b5fb1d0418f5d5be05d1c29b20a70c38c65bf670e1",
     "PouwCheck.Period.Commitment.digest": "20c645489321f27a61c74aa82076efdad6e6c903c52dd712aae66801b8e8e05e",
@@ -10452,6 +10475,8 @@
     "PouwCheck.Period.Evidence": "537353e49583d0aff695ac4773c95247246cd8849658091812a01ef930b2a026",
     "PouwCheck.Period.Evidence.pins": "a79ddfbf2e251af6ffe4a67fa56313fa3c7808aa164666b644520b357c3aa57b",
     "PouwCheck.Period.Evidence.windows": "5a0a91a0706daa57d496fd7ec3b10eea829eae5f89b872a9ed9aa29c7c2e6f06",
+    "PouwCheck.Period.GUARANTEE": "3688ab195b30d754945fbecddd3a04c89d0945cdba5cc723946c54f11a59f8c2",
+    "PouwCheck.Period.PASS_KEYS": "c885762856160e1e0e3d81393607875c758ce9a604c7c522b9050de7005d537e",
     "PouwCheck.Period.Params": "59a496006e8e63d739d0a44135f8bc10f6e5a15d70c14126b037ae052a9b0395",
     "PouwCheck.Period.Params.key": "c922b52c0d0a8e897f2fefa6c2f739fc9062b9e201bd140cb2e7a35ef703d5a1",
     "PouwCheck.Period.Params.main": "768aa9442a0f6961034ebd6b3ccae48bf1823b45053873eba47f6a05016e5cff",
@@ -10459,23 +10484,36 @@
     "PouwCheck.Period.Profile": "cf55ef09cc109b0919a4371b78f91ebb339444c72641eabfd8ab743c2e36e35c",
     "PouwCheck.Period.Profile.period": "2fc30f8a3231d3a74bd4f87f9d0d3184251fe4e319bd38757d1796944fdd1c1e",
     "PouwCheck.Period.Profile.windows": "31ca41f436edded3f0881714f468e1c8ca06c1244e53597121201dc5ad674519",
-    "PouwCheck.Period.check": "13600a2fc323729c286d2cbba9527188c6b7aa1a539be7bdaa02e32447556351",
+    "PouwCheck.Period.TILE_ID": "823eb950c8ae9f0f2a7fc93c499f0d439e17a97ffa955f0c335b726e6e754c6a",
+    "PouwCheck.Period.check": "90356383eddbfc880f4cac6b98e9da74eb2ce51ef61e5630060957692d7ef981",
     "PouwCheck.Period.commitmentOf": "65a1a8991bee2ce3b2c14addc51b6d8e01253a571417f328aa9e4ecb6736ff23",
     "PouwCheck.Period.commitmentOf._sparseCasesOn_1": "5fccbff13aa018849d9632523ff37f33affa2538f622902ecc16dadf9dd64ba1",
     "PouwCheck.Period.commitmentTag": "b2957c22436f46460cd594a6edba1ce278ba1fbadd5de1775cc29fe4a8640d17",
+    "PouwCheck.Period.count": "1c9ad9c41a41f5500c2a6dfee7a72395620ab90e4dce3c9f4ccd4d6f58e11f1c",
     "PouwCheck.Period.evidenceKeys": "0d253c4240d5740e11d563434d9b1609996d74743b10abaade884576771a0835",
     "PouwCheck.Period.evidenceOf": "6b44d18fb34e8ec541f765b09223ffbe96811e49810d6efb6403128285297d3f",
+    "PouwCheck.Period.form": "fe9d3e4bc3f8ed868dbca52d5939fbe1d6e86ef6af364e82f94b3c2fa695fe7d",
+    "PouwCheck.Period.manyStrata": "292a1c24743d1df6120ed83a2a357cdb4750b98a7a161e56ffd091de2a561e4b",
+    "PouwCheck.Period.notH1": "ec6b3be7f9e17ace2cfa874e41981996c2cc0d13ea930c34930cdea9d396ec63",
+    "PouwCheck.Period.notV5": "24602a5515a6f6d39f380a023606203876028c81809e6b043798a3a2a45c7e17",
     "PouwCheck.Period.paramsKeys": "395868f541fc0f20d6f00afb58ed6f6356476f11c353a41868964a45d756e798",
     "PouwCheck.Period.paramsOf": "35c3c722790afe202742d3793e12d7f8d5a7945cc800507ed8b363473ad6855f",
     "PouwCheck.Period.paramsOf._sparseCasesOn_1": "9499e24e8ff57b6a23c63e3e3ddbb108c3ca4b22c1e7fad9cce02062698d4549",
+    "PouwCheck.Period.passForm": "e3d2f2b4b1e7bf41b3dcacd6a1e1512a29b0ac402ae695d1aead534a03a18320",
+    "PouwCheck.Period.perUnit": "d72cbf4798521639b9a5a4a14a9ad7ba0b360e9f18767584eac0ea8c17d58ac7",
     "PouwCheck.Period.profileJson": "e9e08dc1f0af564825da18419a2e80fe6c8ed3341409f5d1e48a2e1cab30c56c",
     "PouwCheck.Period.protocol": "7adedb2e6f74aae3adfd08df6cf659d834aa03cbe93d711591de1dc20d9626df",
-    "PouwCheck.Period.protocolId": "a633fb232c4d784cd613d42d222261a02272579da552a052a5947fee65edc17d"
+    "PouwCheck.Period.protocolId": "a633fb232c4d784cd613d42d222261a02272579da552a052a5947fee65edc17d",
+    "PouwCheck.Period.windowForm": "8baacede5a261e3ba3efcdcabf1cf0e2f25868a9936bed48ec9e87835f21c8df",
+    "PouwCheck.Period.windowForm._sparseCasesOn_1": "f227db28e53ca132a065f84a120a2ce7b99b01974ec45514a108b0eae582c726",
+    "PouwCheck.Period.windowForm._sparseCasesOn_8": "c3bef3d9438270a9eb4df6d0ba335b090a1c118d4ec3214731c43dcc9fda4275",
+    "PouwCheck.Period.windowForm._sparseCasesOn_9": "9d5bc59b26ee30db7b480a7a19fc2a984dd522b598014c9ed8929ea8ec44d228"
    },
    "guarantees": [
     "Properties.Pouw.PeriodCheck.acceptMeans",
     "Properties.Pouw.PeriodCheck.neverUndecided",
-    "Properties.Pouw.PeriodCheck.refuses"
+    "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows"
    ]
   },
   "PouwCheck.Protocol": {
@@ -10511,7 +10549,9 @@
     "Properties.Pouw.PeriodCheck.acceptMeans",
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
-    "Properties.Pouw.PeriodCheck.refuses"
+    "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
   "PouwCheck.Tile": {
@@ -10646,6 +10686,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
@@ -10695,6 +10736,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
@@ -10735,6 +10777,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
@@ -10770,6 +10813,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
@@ -10820,6 +10864,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.Window.drawMisses",
     "Properties.Pouw.Window.kPrimeExactAtEquality",
     "Properties.Pouw.Window.kPrimeLeast",
@@ -10876,6 +10921,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.Window.bucket8192",
     "Properties.Pouw.Window.bucketCost",
     "Properties.Pouw.Window.bucketCost3",
@@ -10936,6 +10982,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.Strata.strataTile"
    ]
@@ -12173,7 +12220,8 @@
     "Properties.Pouw.PeriodCheck.acceptMeans",
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
-    "Properties.Pouw.PeriodCheck.refuses"
+    "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows"
    ]
   },
   "Properties.Pouw.PeriodJ10R": {
@@ -12239,7 +12287,19 @@
     "Properties.Pouw.PeriodJ10R.tileLayer": "414abffad6ce996ac797d9e02ef17e9b3e5382e07d8861f61e411e2763c447e8",
     "Properties.Pouw.PeriodJ10R.tileRun": "cec0665a41dda106f97939c5975a7ebf6cd1733f2d6211297445ffcc0673a4ca"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+   ]
+  },
+  "Properties.Pouw.PeriodJ10R.Check": {
+   "digest": "637566f198ed1659e25e3636a706bff6204d877ac4016ed75d1e60d000c99da7",
+   "definitions": {
+    "Properties.Pouw.PeriodJ10R.Check.AcceptedWindows": "a2212eeab9a47d7e6fcf9fe045f899ba567f1aa24b5dbe255271d030db645936",
+    "Properties.Pouw.PeriodJ10R.Check.answeredOf": "c63992c16f64507305f76c84c3194492d80ec989d7ad5918cb79caa2853d6722",
+    "Properties.Pouw.PeriodJ10R.Check.registeredOf": "6f6d0a5a1168f0045aed9ba11f84da57b4a1289b6dfb9968e50faece05d85337"
+   },
+   "guarantees": ["Properties.Pouw.PeriodJ10R.Check.acceptedWindows"]
   },
   "Properties.Pouw.Strata": {
    "digest": "8e088b868f61790cb1bfeec1de99b9ea0f019e2b66932ee2ac5eeeedf34876dd",
@@ -13368,6 +13428,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
@@ -13419,6 +13480,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
@@ -13590,6 +13652,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
    ]
   },
@@ -13709,6 +13772,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -13851,6 +13915,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.SampledProofs.haltEndsOpen",
     "Properties.SampledProofs.haltIsFinal",
@@ -13916,6 +13981,7 @@
     "Properties.Pouw.PeriodCheck.neverUndecided",
     "Properties.Pouw.PeriodCheck.periodCreditMeans",
     "Properties.Pouw.PeriodCheck.refuses",
+    "Properties.Pouw.PeriodJ10R.Check.acceptedWindows",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
