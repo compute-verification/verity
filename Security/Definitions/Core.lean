@@ -3,6 +3,7 @@ import Definitions.Core.Partition
 import Definitions.Core.Advice
 import Definitions.Core.PrivatePartition
 import Definitions.Core.Declaration
+import Definitions.Core.MonitoringPeriod
 import Definitions.Core.Boolean
 import Definitions.Core.Game
 import Definitions.Core.Decisive
