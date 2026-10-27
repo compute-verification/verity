@@ -225,7 +225,8 @@ def ResLowJPD : Prop :=
   ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
       OpenLower.JointV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
-        (acceptsLVD rd b aux nOf hd rest wE final w L) x c xs ws → ResLower.XsStaged b.st x xs ws.length →
+        (acceptsLVD rd b aux nOf hd rest wE final w L) x c xs ws →
+        ResLower.XsStaged (bB b aux nOf hd rest).st x xs ws.length →
       ∀ s < nS x, PiecesComputes (bdR rd wE final w) (recL rd b aux nOf hd rest wE final w L) resP
         (resHolds elemAt vvAt) ownR s x c (L.msgs x ws)
 
