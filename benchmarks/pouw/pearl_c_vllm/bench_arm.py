@@ -330,11 +330,11 @@ class PearlCWholeArm(PearlCArm):
                                        "cudagraph_capture_sizes": self.capture}}
 
     def ready(self, target: Any) -> None:
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine import handle
         from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
 
         super().ready(target)
-        self.whole = WholeStep(self.run, self.stack, get_model_runner(target.engine.vllm), target.hooks)
+        self.whole = WholeStep(self.run, self.stack, handle.model_runner(target.engine.vllm), target.hooks)
         self.whole.prepare()
         self.totals = dict(self.whole.take())
 

@@ -120,7 +120,7 @@ def model_shape(hf: dict) -> ModelShape:
     sliding window is kept as `window` (the keys FA2's `window_size_left` admits) for the families whose vLLM code hands it to FA2
     (the `dense2` patterns); `build_program` refuses a history longer than it."""
     from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS, resolve_facts
-    from verity_vllm.engine.profiles.generic import effective_sliding_window
+    from verity_vllm.observe.fold.profiles.generic import effective_sliding_window
     from verity_vllm.program import model as analytic
     family = str(hf.get("model_type", "")).lower()
     ff = FAMILY_FACTS.get(family)

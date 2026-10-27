@@ -15,7 +15,7 @@ import pytest
 from verity_vllm.config import CHECKPOINTS, checkpoints_hf_home
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine.profiles import dense_generic as dg
-from verity_vllm.engine.profiles import generic as G
+from verity_vllm.observe.fold.profiles import generic as G
 from verity_vllm.program import model as M
 
 ENTRIES = json.loads(CHECKPOINTS.read_text())["checkpoints"]
@@ -82,7 +82,7 @@ def test_moe_fp8_pins_derive_fp8_experts_and_bf16_routers():
     moe = [e for e in FP8_PINS if _is_moe(_config(e)[1]["quantization_config"])]
     assert moe
     for e in moe:
-        mod = G.make_module(f"verity_vllm.engine.profiles.{G.module_name(e['role'], 1)}")
+        mod = G.make_module(f"verity_vllm.observe.fold.profiles.{G.module_name(e['role'], 1)}")
         width = {n: t.homogeneous_width() for n, t in dict(M.weights_type(mod.C).fields)["layers"].elem.fields}
         assert {n: width.get(n) for n in ("gate_w", "w13", "w13_ws", "w2", "w2_ws")} == {
             "gate_w": 16, "w13": 8, "w13_ws": 32, "w2": 8, "w2_ws": 32}

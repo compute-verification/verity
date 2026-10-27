@@ -648,8 +648,8 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
         rope:M[:NHEADS]      RoPE_v1{NHEADS,D}, NHEADS the query heads by default
     """
     from verity.ml.circuits.defs import bind
+    from verity_vllm import TargetProfile
     from verity_vllm.program.frontend import targets as TG
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity.ml.definitions.registry import b1, dead_free as DF
 
     fam, model, *arg = shape.split(":")
