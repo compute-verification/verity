@@ -69,7 +69,7 @@ def timed(work: dict[str, tuple[Any, Any]]) -> dict[str, float]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--shared", type=Path, required=True, help="circuits' shared-row Layout JSON (CIR-113)")
+    ap.add_argument("--shared", type=Path, required=True, help="circuits' shared-row Layout JSON")
     ap.add_argument("--sms", type=int, nargs="+", default=[32, 64])
     ap.add_argument("--batch", type=int, default=4096)
     ap.add_argument("--gemm-n", type=int, default=8192)

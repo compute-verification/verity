@@ -143,8 +143,8 @@ kernel tiles and, when the record promotes, of promotion groups, and `k ≤ 2^16
 condition is void: read as `32·0 ∣ k` it would force `k = 0` and leave the domain empty. At the H100 record it is
 `pearlCDomain Params.pi` with `n`'s floor (`pearlCDomainDev_h100`).
 
-The floor on `n` keeps out the units whose output words are cheaper to guess than TT_OUT's `εPearlC` allows (CMP-77,
-lean's red team of the named assumptions). The binding attack is partial guessing: compute most of a unit's words and
+The floor on `n` keeps out the units whose output words are cheaper to guess than TT_OUT's `εPearlC` allows (lean's
+red team of the named assumptions). The binding attack is partial guessing: compute most of a unit's words and
 guess the rest. Under W1 a winning strategy must save the unit's `n·c` (the weight-side forming and `B̃·F_A`, online and
 uncredited) plus `γ₀` of its credit, and the cheapest such saving guesses about 96% of one row: 124 words at `n = 64` on
 the H100 (123 on sm_120), about 995 at `n = 512`. Each guessed word then needs only about 1.04 bits of salt-dependent

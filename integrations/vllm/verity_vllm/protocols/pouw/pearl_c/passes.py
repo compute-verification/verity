@@ -53,7 +53,7 @@ def room(run: Any, tiles: int, rows: int, calls: int) -> Any:
 def call_index(run: Any, calls: int = 1) -> int:
     """The index of ``run``'s next call, numbered across the whole epoch (the install's salt), never per pass: -h3's row
     seed binds the salt and the index but no pass, so two passes of one salt sharing an index would repeat their seeds and
-    tickets (CMP-84).  The pass's own buffers stay positional (``index - run.cur.base``); a pass begun without a base
+    tickets.  The pass's own buffers stay positional (``index - run.cur.base``); a pass begun without a base
     (`finish`'s) takes `EpochCalls.epoch_calls`.  ``RuntimeError`` where ``calls`` more calls would reach
     `protocol.CALL_RANGE`, which the verifier refuses."""
     p = run.cur

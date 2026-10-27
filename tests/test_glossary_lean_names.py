@@ -1,9 +1,9 @@
-"""Every Lean name the one symbol table gives exists (TRN-13; `glossary/README.md`, "Notation").
+"""Every Lean name the one symbol table gives exists (`GLOSSARY.md`, "Notation").
 
 A row's Lean column names declarations of the tree's Lean (`Security/` and the Lean packages under `verity/`), written
 in backticks, full (`Verity.Circuit`) or as a suffix of the full name (`Circuit.size`); a structure's field counts
 (`Verity.Declaration.θ`), and so does a namespace (`Accounting.Compose`). A part of the cell, between semicolons, that
-says "not yet in Lean" or names the PR or issue that adds it (#4613, LEAN-70) is not checked until that lands.
+says "not yet in Lean" is not checked until that lands.
 """
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ import re
 
 from test_repository import ROOT, _tracked
 
-GLOSSARY = "glossary/README.md"
+GLOSSARY = "GLOSSARY.md"
 LEAN_ROOTS = ("Security/", "verity/")
 
 _DECL = re.compile(r"^(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable|partial|unsafe)\s+)*"
                    r"(?:def|abbrev|structure|class|inductive|theorem|lemma|instance|opaque)\s+([^\s(:{\[]+)")
 _FIELD = re.compile(r"^\s+([^\s:(/-][^\s:(]*)\s*:")
 _NAME = re.compile(r"`([^`/\s]+)`")
-_PENDING = re.compile(r"not yet in Lean|#\d+|\b[A-Z]+-\d+\b")
+_PENDING = re.compile(r"not yet in Lean")
 
 
 def lean_names() -> set[str]:

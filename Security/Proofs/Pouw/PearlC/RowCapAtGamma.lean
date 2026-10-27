@@ -5,7 +5,7 @@ import Proofs.Pouw.PearlC.DeviceGamma
 /-!
 # Per-row seeds at a census k: the tile cap `ρ` and a wider row cap `ρr` (compute accounting's file)
 
-Daniel's card a6872606, option (a): at a census `k < 1024` the served check caps each credited row of a tile at
+By ruling (option (a)): at a census `k < 1024` the served check caps each credited row of a tile at
 `ρr = 4ρ` and the tile at `ρ` (`pearlCTilesDevRev1RowCapAt`, `TTOutRowSeed.lean`). The row-seeded γ rests on rev1's
 TT_OUT per tile at `ρr`, through (C2) at `ρr`:
 

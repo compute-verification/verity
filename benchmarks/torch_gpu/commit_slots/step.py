@@ -1,4 +1,4 @@
-"""One streamed step of the commit call at a layout on a CUDA device, timed by phase, its roots checked (HASH-25).
+"""One streamed step of the commit call at a layout on a CUDA device, timed by phase, its roots checked.
 
     uv run python benchmarks/torch_gpu/commit_slots/step.py export --shared [--row-bytes B] OUT.json  # the workspace's
     python benchmarks/torch_gpu/commit_slots/step.py count LAYOUT.json --out OUT.count.json          # host twin, any CPU
@@ -7,14 +7,14 @@
 ``export --shared`` writes FAMILIES' layout at the frozen shape (``benchmarks/e2e_h200``'s map, ``commit.layout``) with
 CIR-113's shared rows, by circuits' row model: in each table a gather reads, only the gather's units stay, so the producers'
 rows go and each gather's commit unit keeps its place. A slot then commits 102,448 rows in 101,718 units; its digest is that
-of circuits' own export (art:f6eb8ebd). With ``--row-bytes B``, a synthetic variant for the row-size curve: each gather's
+of circuits' own export. With ``--row-bytes B``, a synthetic variant for the row-size curve: each gather's
 shared rows, each the next bytes of one tensor, are cut again into one-row units of B bytes (the last of a run what is
 left), and every other unit stays as circuits has it, so a slot commits the same bytes in fewer rows. The file is in
 ``slots._layout_json``'s form, the form circuits' export from its row model takes. ``export`` needs the workspace
 environment, since the map imports ``verity``.
 
 ``count`` commits steps of one and two slots of random outputs with the engine's host twin and reads its counters: the
-compressions and ChaCha20 blocks a slot adds, what a step costs once, the compressions a row-slot (alone, and at a step of
+compressions and ChaCha20 chunks a slot adds, what a step costs once, the compressions a row-slot (alone, and at a step of
 ``--slots``), and how far they are from ``compressions``' model (what a slot adds includes the step tree's growth from one
 slot to two, a few compressions).
 
@@ -27,7 +27,7 @@ of ``--slots`` slots on the plan's side stream (``slots_gpu.StepCommitter``):
   each is the marked step's and the profile's), with the peak memory and how long the host took to enqueue the step (an
   NVTX range, ``enqueue``, for ``launches.py``); on graphs, after a step that captures them, and each step's roots held to
   the marked step's, then one more pair under another salt key;
-- the leaf kernel alone over the widest group's first pass, at 1 and 2 blocks an SM;
+- the leaf kernel alone over the widest group's first pass, at 1 and 2 CTAs an SM;
 - one step under torch's profiler (on graphs if they were timed): each kernel's launches and time, and the side stream's
   time with no kernel running;
 - ``--samples`` random slots plus the first and the last, rebuilt by the CPU reference (``slots.commit_slot``) and checked
@@ -35,7 +35,7 @@ of ``--slots`` slots on the plan's side stream (``slots_gpu.StepCommitter``):
 
 JSON goes to DIR/step.json (with several layouts, DIR/<stem>/step.json), with a line on stdout as each part ends, and the
 host twin's counts from a ``<stem>.count.json`` beside the layout. Each layout ends with a verdict line: its best step
-against CMP-149's <=0.95 s at 4,096 slots, with the ratio, and whether its roots equal the reference's; the run ends with one
+against the <=0.95 s target at 4,096 slots, with the ratio, and whether its roots equal the reference's; the run ends with one
 over them all, which is also ``$RESEARCH_RUN_DIR/result.json``'s validation when research runs it. Exits 1 if a root differs.
 """
 from __future__ import annotations
@@ -64,15 +64,15 @@ KEY = bytes(range(96, 128))
 STEP = 7
 #: commit_gpu's SHA-512 compressions/s on an H200, in G (sha512_rows/README.md), against which each phase's rate is read
 PEAK_G = 4.79
-#: CMP-149's target for a step: at most 25% of the 3.78 s served step, at 4,096 slots
+#: the target for a step: at most 25% of the 3.78 s served step, at 4,096 slots
 TARGET_S, TARGET_SLOTS = 0.95, 4096
 
 
 # --- layouts -----------------------------------------------------------------------------------------------------------
 
 def shared_layout(row_bytes: int = 0) -> S.Layout:
-    """FAMILIES' layout at the frozen shape with CIR-113's shared rows: in every table a gather (``AllGather_v1``) reads, the
-    gather's units alone (circuits' row model, ``shrow_rows.py`` in art:d4fce7df). With ``row_bytes``, a synthetic variant:
+    """The families layout at the frozen shape with circuits' shared rows: in every table a gather (``AllGather_v1``) reads, the
+    gather's units alone (circuits' row model). With ``row_bytes``, a synthetic variant:
     each gather's run of shared rows (one-row units, each the next bytes of its table) cut into rows of ``row_bytes``, the
     run's last row what is left; every other unit as circuits has it. The same bytes in fewer rows."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "e2e_h200"))
@@ -134,7 +134,7 @@ def describe(layout: S.Layout) -> dict[str, Any]:
 def compressions(layout: S.Layout) -> dict[str, int]:
     """A slot's SHA-512 compressions by phase, as the engine hashes them (tests/test_cost.py):
 
-    - a row's digest, one a block after its midstated P(l);
+    - a row's digest, one a chunk after its midstated P(l);
     - a row's leaf, five (c two, h two, its frame leaf one), and a one-row unit's slot-tree leaf one more, in the same thread;
     - a unit of m > 1 rows, its root: two a node of its tree padded to a power of two, a node midstate a level, a pad leaf a
       padded rank; then its slot-tree leaf, one;
@@ -176,7 +176,7 @@ def export(a: argparse.Namespace) -> int:
 
 
 def count(a: argparse.Namespace) -> int:
-    """The layout's compressions and ChaCha20 blocks as the engine's host twin hashes them (its counters), over steps of one
+    """The layout's compressions and ChaCha20 chunks as the engine's host twin hashes them (its counters), over steps of one
     and two slots: what a slot adds, and what a step costs once (each unit's frame table an add)."""
     import slots_gpu as G
 
@@ -453,7 +453,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     ex = sub.add_parser("export", help="write a layout in slots._layout_json's form")
-    ex.add_argument("--shared", action="store_true", required=True, help="FAMILIES' layout with CIR-113's shared rows")
+    ex.add_argument("--shared", action="store_true", required=True, help="the families layout with circuits' shared rows")
     ex.add_argument("--row-bytes", type=int, default=0,
                     help="cut each gather's shared rows into rows of this many bytes (0: circuits' rows)")
     ex.add_argument("path", type=Path)
@@ -470,7 +470,7 @@ def main(argv: list[str] | None = None) -> int:
     tm.add_argument("--reps", type=int, default=3)
     tm.add_argument("--temps", type=int, nargs="+", default=[1 << 30, 4 << 30], help="pass sizes (Plan.temp_bytes)")
     tm.add_argument("--leaf-minb", type=int, nargs="+", choices=(0, 1, 2), default=[0],
-                    help="the leaf kernel's blocks an SM (Plan.leaf_minb; 0, the build's default)")
+                    help="the leaf kernel's CTAs an SM (Plan.leaf_minb; 0, the build's default)")
     tm.add_argument("--graphs", type=int, nargs="+", choices=(0, 1), default=[0],
                     help="1: steps whose adds are CUDA graph launches (StepCommitter(graphs=True)), their roots held to the eager "
                          "step's")

@@ -25,7 +25,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Callable
 
@@ -443,7 +443,7 @@ class Linear:
         `lane` is the issue's `lane:` label, else its team's handle, else NO_LANE.  A team these credentials can't see
         (`unread`) has no issues here, so it adds no finding and no error."""
         now, owners = self.now() if now is None else now, owners or {}
-        today = datetime.fromtimestamp(now, timezone.utc).date().isoformat()
+        today = datetime.fromtimestamp(now, UTC).date().isoformat()
         f: dict = {"state": {"type": {"in": list(OPEN_TYPES)}}}
         if teams:
             f["team"] = {"or": [{"key": {"in": list(teams)}}, {"name": {"in": list(teams)}}]}
