@@ -18,7 +18,7 @@ from typing import Literal
 __all__ = ["ENTRIES", "INSTANCES", "PROPERTIES", "Entry", "Instance", "Property", "assumption", "get"]
 
 Kind = Literal["guarantee", "assumption", "model"]
-# ``conjectured`` is for mathematics only; ``measured``: an assumption about a device, falsified by a measurement (Daniel, 8 Oct)
+# ``conjectured`` is for mathematics only; ``measured``: an assumption about a device, falsified by a measurement
 Standing = Literal["standard", "algebraic", "proven", "conjectured", "measured"]
 
 
@@ -81,7 +81,7 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("ajtai-n64", "Ajtai n = 64", algebraic=True),
     Instance("ajtai-n128", "Ajtai n = 128", algebraic=True),
     Instance("io-getrandombytes", "IO.getRandomBytes"),
-    # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window (#423)
+    # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window
     Instance("python-secrets", "Python's secrets"),
     # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), drawn after the prover's message
     Instance("flock-coin-server", "Flock's coin server"),
@@ -178,7 +178,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "a floor of 0.025 of a root at 512 bits, down to 0.003 at 2,048, against a per-bit price of 0.32), and holds "
           "only for words whose payload is unknown, under Incompressible(W)",
           "Rate codec work", "measured"),
-    # the sketch-then-hash receipt's model, restated by Daniel on 13 Oct: falsified by a prover that passes while holding
+    # the sketch-then-hash receipt's model: falsified by a prover that passes while holding
     # some tier's share of the store as anything other than E's blocks. Accounting.Guarantees.RateSketchTable is why the
     # model is needed: a prover whose memory may hold any function of E (RateAudit's model) passes on every coin reading
     # only the digest's d bits per tile, from a table of |signs| * N * d bits, at any number of rows. What Lean proves is
@@ -236,8 +236,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one
-    # session per audit cites trusted-host as network-accounting widens it
-    # (pending network-accounting's widening, Daniel decision 2)
+    # session per audit cites trusted-host, pending network-accounting's widening (decision 2)
     Entry("pous-ring-device", "model",
           "PoUS ring model of the server: the deployed server is a ring-model server whose state is bounded between "
           "setup, the session and its rounds, with one session per audit (the memory challenger refuses a used session "
@@ -245,10 +244,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity.core.protocols.pous.schemes.p2, P2's SeqRoot):
-    # the timing red team's modelled floor, note:20261004T2102Z-report-relay-p2-redteam-timing
-    # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
-    # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
-    # stated device falsifies it
+    # the timing red team's modelled floor and the 8-core cooperation run r20260929-060834-0ec4; a faster squaring on
+    # the stated device falsifies it
     Entry("pous-ring-speed", "assumption",
           "PoUS ring speed: on the stated device (up to 8 cores of one chiplet cooperating, each at least as slow as a "
           "Zen 5 core at 5.7 GHz with full-rate IFMA), within Δ + RTT (at most 854 µs) no server finishes a 16,447th "
@@ -281,7 +278,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
-    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
+    # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean):
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
     # (Security/Definitions/Accounting/Assumptions/Stages.lean)
     Entry("accounting-ts-facet-ceilings", "assumption",
@@ -315,17 +312,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-nosum", "assumption",
           "NOSUM: on the stated device no unit outside the route menu heads a fresh committed word", "NOSUM",
           "measured"),
-    # What the declared capacity Π rests on, per node and per window (ASK-74 = A; note:20261019T0455Z-draft-rt-scope,
-    # "Device identity and clock"): ε is relative to Π (decision 100), and ASK-65 = A made the floor the node's. Its
-    # trust is the auditor's inventory of the node, as certifier-coverage's is the auditor's placement; nothing checks
-    # it at run time but the prover's own driver, and NVIDIA's attestation states no clock and can't rule out an
-    # undeclared GPU
+    # What the declared capacity Π rests on, per node and per window: ε is relative to Π (decision 100), and the floor
+    # is the node's. Its trust is the auditor's inventory of the node, as certifier-coverage's is the auditor's
+    # placement; nothing checks it at run time but the prover's own driver, and NVIDIA's attestation states no clock
+    # and can't rule out an undeclared GPU
     Entry("accounting-declared-device", "assumption",
           "The node's declared devices are its devices for the window: every GPU on the node is declared, each is the "
           "declared board and vBIOS, and no SM clock exceeds f_max, the top of that vBIOS's clock table (MIG and MPS "
           "need no clause: they can't raise the node's capacity). Trust: the auditor's inventory of the node, onsite "
           "or the host provider's instance record", "Declared device", "standard"),
-    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
+    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
           "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
@@ -483,7 +479,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
-    # the two premises UnitFixed rests on under ASK-40's option A (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
+    # the two premises UnitFixed rests on (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
     Entry("accounting-ts-modes-run", "assumption",
           "The modes are the run's: a unit the run paid for has its words and the values it writes honest, from the "
           "values the layer committed, under its noise, and a unit not skipped whole has its receipt commit the fold of "
