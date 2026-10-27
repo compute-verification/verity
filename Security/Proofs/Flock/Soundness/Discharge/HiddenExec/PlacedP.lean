@@ -36,8 +36,7 @@ theorem stack_zero_blockHP {tags : Tags} {st : Stmt} {pi : HmIn.Ports} (L : Layo
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hneg : Aliased.pubLeaf st.c pi x.val < 0)
     (hz : ZeroIn st.c x.val) {z : Model.Witness (L.model regs).m} (hsat : (L.model regs).Satisfies z)
     (o : Fin (2 ^ (L.model regs).nbl)) :
-    (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
-        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x) = 0 := by
+    (L.model regs).block z o (L.col regs hg x) = 0 := by
   have hx' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by
     have : x.val < st.c.upv * (unitRows st L.unit_built).nIn := hx
     rwa [L.unitRows_nIn] at this
@@ -91,9 +90,7 @@ theorem nbl_eq : 2 ^ (a.L.model a.regs).nbl = 2 ^ T.nbl :=
 
 /-- **Template instance `g`'s columns in the block**, as `AcceptedH.col`. -/
 noncomputable def col {g : ℕ} (hg : g < a.st.c.g) (c : Fin a.rows.w) : Fin (2 ^ T.kLog) :=
-  Fin.cast a.kLog_eq
-    (stackPlace (a.L.model a.regs) (unitRows a.st a.L.unit_built) a.st.c.upv
-      (fun u => a.st.c.unitRange.slot (g * a.st.c.upv + u)) (a.L.hb hg) c)
+  Fin.cast a.kLog_eq (a.L.col a.regs hg c)
 
 /-- **The accepted statement places its template instance rows at every template instance**, in every block. -/
 theorem placement {g : ℕ} (hg : g < a.st.c.g) : Placement T a.rows (a.col hg) :=
@@ -117,7 +114,7 @@ theorem rows_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok
     a.rows = Placed.circuitRows c hU := by
   have hc := a.c_eq hp
   unfold rows Placed.circuitRows unitRows
-  rw [Placed.ofNet_eq hc a.L.unit_built hU, hc]
+  rw [Placed.ofNet_eq (Placed.lunit_of_parse hp hc) a.L.unit_built hU, hc]
 
 /-- **`Layout.Aliased` in `ProgPlaces`' form**, as `AcceptedH.aliased_of_layout`. -/
 theorem aliased_of_layout {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
