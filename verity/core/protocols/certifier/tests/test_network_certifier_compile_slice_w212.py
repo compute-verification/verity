@@ -1,5 +1,5 @@
-"""The compile slice (`compile_slice.CompileSlice_v1`) on a served window: window 212 of vLLM's run
-r20261024-141912-8eb1, which `replay_vectors.py --slice 212` builds from the run's scheduler trace and its seal. Its three
+"""The compile slice (`compile_slice.CompileSlice_v1`) on a served window: window 212 of a vLLM run,
+which `replay_vectors.py --slice 212` builds from the run's scheduler trace and its seal. Its three
 requests' 14 decisions and 20 steps, at the served engine with the slice's sync ReplayStep_v1, whose schedule on this
 window is the served one (the encodings' `test_served_window.py`). `fixtures/compile_slice_w212.json` is the window at
 its own statics; `fixtures/compile_slice_w212_class.json` is the same window padded into the engine's public sizes

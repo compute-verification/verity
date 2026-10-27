@@ -188,7 +188,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
            "chronology_unit": "engine_step", "request_id_convention": "r<k> (k = manifest position; record UUIDs mapped via workload_request_id)",
            "within_step_criterion": within_step,
            "within_step_note": ("sequence: X-09 instance sequence per request step (r14-v1 verdict)" if within_step == "sequence" else
-                                "dag: criterion of record (COORD ruling M-0177 on DECISION M-0021/M-0031; approved by Daniel 21:33Z, M-0281) -- order-insensitive "
+                                "dag: criterion of record (COORD ruling M-0177 on DECISION M-0021/M-0031) -- order-insensitive "
                                 "Merkle DAG multiset per request step, canonical addressing by structural identity, dependency order enforced "
                                 "(G8); the sequence verdict is recorded beside it under alternate_verdict"),
            "checks": [], "requests": []}
