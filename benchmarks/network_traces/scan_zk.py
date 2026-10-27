@@ -99,6 +99,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import socket
 import sys
 import time
 from contextlib import contextmanager
@@ -900,6 +901,14 @@ def warden_roots(members) -> list[dict]:
     return [out[p] for p in sorted(out)]
 
 
+def _free_port() -> int:
+    """A loopback port the OS has free now. A pool's slots share a machine, and the nodes' 7811-7899 are the challenger
+    gate's tunnels, so a fixed port collides across runs."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports, the scan's registrations' roots, and the warden's row registrations
@@ -907,10 +916,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     k` on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's
     `service.Stream` on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the
     firewall and held by Lean with the verifier's own registered reads; then each held unit's ``o0`` opened under the
-    salt the prover sends. A member with no unit drawn runs no session. Writes what the verifier received under
-    ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`) and each member's cost per drawn
-    unit; on the challenger's coins, the outcome of record is the stream's
-    (`coins_outcome`)."""
+    salt the prover sends. A member with no unit drawn runs no session. Member j's session listens on ``port + j``, or
+    with ``port`` 0 on a port the OS picks free. Writes what the verifier received under ``out / "verifier"``. An
+    accepted audit carries its charge terms (`charge_terms`) and each member's cost per drawn unit; on the challenger's
+    coins, the outcome of record is the stream's (`coins_outcome`)."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)
     want, roots, publics, schemas = {}, [], {}, {}
@@ -995,7 +1004,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             log(f"{name}/{m['name']}: no unit drawn, no session")
             continue
         sdir = out / f"session-{m['name']}"
-        record, live, proc = M.a8.session(a, m, sdir, local, port + j, env=WZ.firewall(M, m))
+        record, live, proc = M.a8.session(a, m, sdir, local, port + j if port else _free_port(), env=WZ.firewall(M, m))
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
         verdicts[f"m0-verifier/{m['name']}"] = {
@@ -1266,7 +1275,7 @@ def prove(a) -> int:
             trees = {**at.trees, **({"state": at.swapped} if name == "chain" else {}),
                      **({"prog": at.unread.tree} if name == "unread" else {})}
             trees = {k: v for k, v in trees.items() if pg.templates != ("egress",) or k == "view"}
-            res = audit(M, av, at, pg, name, members, trees, out / name, a.port + (2 * G + 2) * j, ks[name],
+            res = audit(M, av, at, pg, name, members, trees, out / name, a.port and a.port + (2 * G + 2) * j, ks[name],
                         coins if name == "honest" else None)
             if name == "honest":
                 summary["answers"] = answers(at, out, res, Fraction(a.delta))
@@ -1311,7 +1320,8 @@ def main(argv=None) -> int:
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
-    p.add_argument("--port", type=int, default=7811)
+    p.add_argument("--port", type=int, default=0, help="round i's member j listens on PORT + (2G + 2)i + j; 0 (the "
+                                                       "default): a free port for each session")
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--dry", action="store_true", help="the run and the host's read of every round: nothing proved")
     p.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name,
