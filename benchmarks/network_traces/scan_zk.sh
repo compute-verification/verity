@@ -31,7 +31,7 @@ SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 if mkdir -p "$SC_CACHE" 2>/dev/null && [ -w "$SC_CACHE" ]; then export HZ_CACHE=$SC_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/verity/core/difftest/python
 setup
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier sampled-proofs-one-stage-zk) \
   > "$OUT/build-sampled-proofs.log" 2>&1 \
