@@ -12,6 +12,7 @@ of the root it derives (`ImprintRootHidden`); and a receiver delivers only what 
 namespace Verity.Guarantees
 
 open Verity.Transport Verity.Assumptions
+open scoped ENNReal
 
 /-- **Passive zero knowledge of one channel**: what a coalition `C` sees of the channel's private traffic `m` from
 outside its ends (`outside`) is within `η` of what a simulator makes from the public record alone (`record m`, the
@@ -20,10 +21,10 @@ channel's keys hide the traffic against every test (`ChannelHides`, with `fill (
 sizes). The simulator runs the channel on that blank traffic under fresh randomness of its own. -/
 def TransportPassiveZk : Prop :=
   ∀ {Node Ω M W Rec : Type} [Fintype Ω] [Nonempty Ω] (s : Site Node) (c : Channel Node) (C : Node → Prop)
-    (wire : M → Ω → W) (record : M → Rec) (fill : Rec → M) (η : ℝ) (m : M), 0 ≤ η →
+    (wire : M → Ω → W) (record : M → Rec) (fill : Rec → M) (η : ℝ≥0∞) (m : M),
     (WitnessPathPrivate s c ∨ ∀ E, ChannelHides wire (fun m => fill (record m)) E η m) →
     ∀ E : Option W → Prop,
-      ViewIsRecord (fun ω => seen (outside s c.party C) c.readsPrivate (wire m ω)) (fun _ => record m)
+      ViewIsRecord (Ω' := Ω) (fun ω => seen (outside s c.party C) c.readsPrivate (wire m ω)) (fun _ => record m)
         (fun r ω' => seen (outside s c.party C) c.readsPrivate (wire (fill r) ω')) E η
 
 /-- **The imprint root is hidden**: when every node that can read the cable during the imprint exchange is an end of it,
@@ -34,7 +35,8 @@ def ImprintRootHidden : Prop :=
   ∀ {Node R K : Type} [Fintype R] [Nonempty R] (s : Site Node) (c : Channel Node) (C : Node → Prop)
     (root : R → R → K), ImprintPathPrivate s c →
     ∀ E : Option (R × R) × K → Prop,
-      ViewIsRecord (fun x : R × R => (seen (outside s c.party C) c.readsImprint x, root x.1 x.2)) (fun _ => ())
+      ViewIsRecord (Ω' := R × R) (fun x : R × R => (seen (outside s c.party C) c.readsImprint x, root x.1 x.2))
+        (fun _ => ())
         (fun _ (x' : R × R) => ((none : Option (R × R)), root x'.1 x'.2)) E 0
 
 /-- **A receiver delivers what its peer sent, in order**: under `ChannelAuthentic`, the bodies a receiver delivers (the
