@@ -317,8 +317,8 @@ _HOOKS = ("__import__", "import_module", "exec_module")
 
 
 #: the read `importlib.metadata` makes of every `sys.path` entry, held by what it yields: each installed distribution's
-#: name and version (`_distributions`), not each directory's listing (17 Oct: since every workspace member is installed,
-#: every member's root was in every target's reads, and a file added to one made every target miss)
+#: name and version (`_distributions`), not each directory's listing (every workspace member is installed, so
+#: a listing would put every member's root in every target's reads, and a file added to one would make every target miss)
 DISTRIBUTIONS = "<distributions>"
 _METADATA: list[str] = []
 
