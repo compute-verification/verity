@@ -21,9 +21,10 @@ one, `1 − Y·(1 − 41/S)`, where `Y = (N_w w* + N_w φ* + χ*)/B_♭`. Three 
   gap at ♭. The machine model's own certificate doesn't serve: its cheater folds a tensor word on lanes only, where
   the Lean menu prices the fold alone on any route (the uniform datapath's among them, which DS-100's ALU-heavy
   certificate leaves nearly free), so `1 − Y` is at least the LP's ε_machine and ε_skip over ♭, and more;
-- the sheet is `sheet.toml` read by `verity_machine_model.sheet` (`Security/Definitions/Accounting/Sheets/`
-  states it): each tensor class's MACs and its type's peak are the sheet's integers, a pipe's width its results an SM
-  clock (the uniform pipe's the census's measured UP line, a rational), and ω the sheet's `omega`, the destination's
+- the sheet is `sheet.toml` read by `verity_machine_model.sheet` (`Security/Definitions/Accounting/Sheets/B200.lean`
+  states sm_100's; sm_90's reads its card's numbers, whose Lean is `Security/Definitions/Core/Accel/H200.lean`): each
+  tensor class's MACs and its type's peak are the sheet's integers, a pipe's width its results an SM clock (the uniform
+  pipe's the census's measured UP line, a rational), and ω the sheet's `omega`, the destination's
   32-bit words (A6's count). An MMA the sheet rates on no peak (b1) takes its ω from its census name (`shape`: sm_90's
   wgmma as a warp's m16 slice of the m64 warpgroup instruction, sm_100's tcgen05 whole, the mma.sync forms as m16n8),
   and a class the sheet rates on nothing is its issue slot alone (A2).
@@ -100,6 +101,7 @@ LH = _lean_headline()
 E = LH.E
 exact, branches, Q = LH.exact, LH.branches, LH.Q
 
+from verity_machine_model import card  # noqa: E402
 from verity_machine_model import sheet as S  # noqa: E402
 from verity_machine_model.model import device  # noqa: E402
 
@@ -133,7 +135,7 @@ class Family:
 
     @property
     def sh(self) -> S.Sheet:
-        """The device's data sheet (`sheet.toml`), which `Sheets/H200.lean` and `B200.lean` state too."""
+        """The device's data sheet (`sheet.toml`), which `Sheets/B200.lean` states too on sm_100."""
         return S.sheet(self.data)
 
     @property
@@ -173,6 +175,14 @@ CATCH_ALLS = frozenset(CATCH_ALL.values())
 # A run that times the catch-all's instructions beside the tensor (LD.E and IMAD.WIDE on the H200, r20261021-070616-d06c)
 # gives it the census's joint-issue lines, which every timed scalar class carries at one coefficient a row
 SCALAR_REF, JOINT_ISSUE = "FFMA", re.compile(r"JI\d+_\d+")
+
+
+def sheet_lean(fam) -> str:
+    """Where the Lean states the device's data sheet: its own module (`sheet.toml`'s `lean`), else, on a device whose
+    numbers are its card file's, that card's Lean table."""
+    if fam.sh.lean:
+        return f" as `{fam.sh.lean}` states it"
+    return f", whose card numbers are the card file's, as `{card.of(fam.data)['lean']}` states them"
 
 
 def shape(k: str, h: E.Honest) -> tuple[int, int] | None:
@@ -711,8 +721,7 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"`classes`: the {nk} instruction classes of the {fam.sheet} census, in the order `Fin {nk}` indexes them."
         + (f" `{CATCH_ALL[fam.key]}` is A2's catch-all: every warp instruction no other class names counts there, at its "
            f"issue slot alone." if fam.key in CATCH_ALL else ""),
-        f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}), `{S._rel(fam.sh)}` as "
-        f"`{fam.sh.lean}` states it: f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor class's dense MACs a warp "
+        f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}), `{S._rel(fam.sh)}`{sheet_lean(fam)}: f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor class's dense MACs a warp "
         f"instruction ({SHAPES[fam.ns]}) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
         f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()}, each at its width (the Programming "
         f"Guide's, and the uniform datapath's the census's measured UP line, which no document states); no "

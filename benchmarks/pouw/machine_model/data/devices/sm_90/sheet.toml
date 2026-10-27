@@ -2,14 +2,14 @@
 # (`Accounting.TS.Sheet.machine`) reads on the H200, its value, the vendor document that states it and its grade, and
 # each DS-90 class's tensor form or pipe. A constant the card file states (verity/hardware/cards/h200-sxm-141gb.toml) is
 # read from it: `card = "EXPR"`, beside the grade and source the Lean module prints. `machine-model sheet --device sm_90`
-# derives every DS-90 line from it and checks them against census/DS-90.csv; `--lean` prints the Lean module `lean`
-# names, which the tests hold to it.
+# derives every DS-90 line from it and checks them against census/DS-90.csv. It names no Lean module (`lean`): the
+# H200's Lean is its card table, Security/Definitions/Core/Accel/H200.lean, which verity/hardware/tests/test_lean.py
+# holds to the card file, and the headline's DS-90 encoding is HeadlineDc/Sm90.lean (benchmarks/pouw/lean_headline_dc.py).
 # Scope: one GPU's own SMs. A peer GPU's work over NVLink or NVSwitch is outside the sheet, and Device.lean's side
 # channels don't list it (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).
 name = "H200"
 gpu = "H200 SXM (sm_90a)"
 vector = "DS-90"
-lean = "Security/Definitions/Accounting/Sheets/H200.lean"
 
 [fmax]
 card = "clock.sm"

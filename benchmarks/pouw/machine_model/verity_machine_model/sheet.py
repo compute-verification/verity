@@ -82,7 +82,7 @@ class Sheet:
     name: str
     gpu: str
     vector: str
-    lean: str
+    lean: str | None    # the Lean module `sheet --lean` prints, None for a device whose Lean is its card table
     fmax: Const         # MHz
     sms: Const
     issue: Const        # A2: the slots a warp instruction takes, 1
@@ -120,7 +120,7 @@ def sheet(data: Path) -> Sheet:
         kinds[k] = Kind(form, v.get("pipe"))
         if form and kinds[k].pipe:
             raise SystemExit(f"{p}: {k} has a tensor form and a pipe; a class has one or neither")
-    s = Sheet(name=t["name"], gpu=t["gpu"], vector=t["vector"], lean=t["lean"], fmax=_const(t["fmax"], "mhz", "[fmax]"),
+    s = Sheet(name=t["name"], gpu=t["gpu"], vector=t["vector"], lean=t.get("lean"), fmax=_const(t["fmax"], "mhz", "[fmax]"),
               sms=_const(t["sms"], "value", "[sms]"), issue=_const(t["issue"], "slots"),
               uniform_issue=_const(t["uniform_issue"], "slots"),
               clocks={k: _const(v, "mhz", f"[clocks.{k}]") for k, v in t["clocks"].items()},
@@ -344,6 +344,10 @@ def _simp(head: str, names: list[str]) -> list[str]:
 def lean(s: Sheet, data: Path) -> str:
     """The Lean module `s.lean`: the sheet's constants with their sources, `sheet : Sheet Kind Pipe`, the DS census, the
     theorem that the sheet's machine is that census, and the figures' lemmas."""
+    if s.lean is None:
+        raise SystemExit(f"{data / 'sheet.toml'} names no Lean module: {s.name}'s numbers are its card file's, whose Lean "
+                         f"is its card table, and its headline's {s.vector} encoding is `machine-model headline`'s "
+                         f"(benchmarks/pouw/lean_headline_dc.py)")
     epoch = vector(s.vector, data).epoch
     census = census_lines(s, data)
     if not all(census.get(k, {}).get(row("issue")) == 1 for k in s.kinds):

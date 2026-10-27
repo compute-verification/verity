@@ -32,7 +32,7 @@ dram = { value = 151397597184, unit = "B", mark = "ceiling", source = "H200 data
 
 # The resources' rates, each a SM-clock (the Lean's rho is SMs x this x the SM clock).
 [rate]
-tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "the H200 data sheet's 1,979 dense INT8 TOPS over 2 x 132 SMs at the 1830 MHz tensor boost clock (Accounting.TS.Sheets.H200 A3), taken at 1980 MHz (RT-MODEL M14); measured 4095.6 (CALIB, CMP-115, wgmma N >= 64)" }
+tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "the H200 data sheet's 1,979 dense INT8 TOPS over 2 x 132 SMs at the 1830 MHz tensor boost clock (the machine model's DS-90 sheet, A3), taken at 1980 MHz (RT-MODEL M14); measured 4095.6 (CALIB, CMP-115, wgmma N >= 64)" }
 issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "H100 whitepaper, 'H100 SM Architecture': four partitions, each a warp scheduler dispatching one warp instruction a clock" }
 alu = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer add, compare, min, max, logic and shift 64" }
 imad = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer multiply and multiply-add 64" }

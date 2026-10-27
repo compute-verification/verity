@@ -24,7 +24,6 @@ import Proofs.Core.Prims.Round
 import Proofs.Core.TC
 import Proofs.Core.Fp32
 import Proofs.Core.Accel.Model
-import Proofs.Core.Accel.Sheet
 import Proofs.Core.Accel.Witness
 import Proofs.Core.NaiveStrassen
 import Proofs.Core.Bilinear

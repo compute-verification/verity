@@ -20,9 +20,9 @@ record's s8 binding and refuses a contraction outside the record's domain.
   quoted at, f_max, the dense s8 MACs an SM clock, and the data sheet's dense INT8 figure (None where no data sheet states
   one). SMs, f_max and the s8 MACs are the card file's (`verity.hardware`, ``sm.count``, ``clock.sm`` and
   ``rate.tensor``, which counts s8 MACs). sm_90's tensor clock and INT8 figure are the machine model's DS-90 sheet
-  (`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, whose Lean is
-  `Security/Definitions/Accounting/Sheets/H200.lean`); sm_120's DS-120 (`Accounting.TS.Headline.Sm120.ds120`) quotes every
-  peak at f_max.
+  (`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, whose headline encoding is
+  `Security/Definitions/Accounting/HeadlineDc/Sm90.lean`); sm_120's DS-120 (`Accounting.TS.Headline.Sm120.ds120`)
+  quotes every peak at f_max.
 """
 from __future__ import annotations
 

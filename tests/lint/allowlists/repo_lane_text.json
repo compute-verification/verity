@@ -46,7 +46,6 @@
     {"file": "Security/Definitions/Accounting/Remote/Run.lean", "count": 4},
     {"file": "Security/Definitions/Accounting/Responder.lean", "count": 1},
     {"file": "Security/Definitions/Accounting/Sheets/B200.lean", "count": 7},
-    {"file": "Security/Definitions/Accounting/Sheets/H200.lean", "count": 5},
     {"file": "Security/Definitions/Accounting/TS/J10R.lean", "count": 1},
     {"file": "Security/Definitions/Accounting/Window.lean", "count": 1},
     {"file": "Security/Definitions/Claims.lean", "count": 12},
