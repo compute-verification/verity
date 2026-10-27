@@ -3,6 +3,8 @@
 # never under $OUT, kept by `research keep`) and m3draw's roots.json for f3ca's prompts and flags. PHASE=replay re-runs
 # under it with kv_reads' KeepingDriver for inputs/blocks.json's slots, holds every root to inputs/roots.json and leaves
 # the drawn slots' rows beside the secret (m3bundle.py's input). The card is leased for the run only.
+# PHASE=replay (inputs roots.json, step-registration.json, draw.json) keeps the drawn slots beside the secret; PHASE=build
+# (receipt.json, weights-open.json besides) writes the step tree to $OUT/tree on the CPU (m3bundle.py).
 #   research run --on vy-dc-h200-2 --project verity --source . --cwd source --timeout 5400 --env PHASE=commit \
 #     -- bash benchmarks/e2e_h200/m3proper_job.sh
 set -euo pipefail
@@ -27,12 +29,17 @@ if [ "$PHASE" = commit ]; then
     --workers "$(nproc)" "${FLAGS[@]}"
   stat -c '%a %s %n' "$SECRET"
   research keep --owner @compute-accounting --expires 14d --priority keep --root "$HOME" \
-    --why "M3 proper's prover-held salt secret (CMP-161, run $RESEARCH_RUN_ID's roots)" .local/state/m3proper-1de3
+    --why "M3 proper's prover-held salt secret (CMP-161, run $RESEARCH_RUN_ID's roots)" "$SECRET_DIR"
+elif [ "$PHASE" = replay ]; then
+  research keep --owner @compute-accounting --expires 14d --priority keep --root "$HOME" \
+    --why "M3 proper's prover-held salt secret (CMP-161, r20261026-233451-2217's roots)" "$SECRET_DIR" || true
+  I="$RESEARCH_RUN_DIR/inputs"
+  "${LEASE[@]}" uv run --no-sync python benchmarks/e2e_h200/m3bundle.py replay --private "$SECRET_DIR/m3bundle" --secret "$SECRET" \
+    --registered "$I/roots.json" --registration "$I/step-registration.json" --draw "$I/draw.json" --workers "$(nproc)" "${FLAGS[@]}"
+  ls -la "$SECRET_DIR/m3bundle"
 else
-  PRIVATE="$SECRET_DIR/replay-$RESEARCH_RUN_ID"
-  "${LEASE[@]}" uv run --no-sync python benchmarks/e2e_h200/kv_reads.py --phase replay --out "$OUT/kv" --secret "$SECRET" \
-    --private "$PRIVATE" --registered "$RESEARCH_RUN_DIR/inputs/roots.json" --drawn "$RESEARCH_RUN_DIR/inputs/blocks.json" \
-    --workers "$(nproc)" "${FLAGS[@]}"
-  ls -la "$PRIVATE"
+  I="$RESEARCH_RUN_DIR/inputs"
+  uv run --no-sync python benchmarks/e2e_h200/m3bundle.py build --private "$SECRET_DIR/m3bundle" --registration "$I/step-registration.json" \
+    --draw "$I/draw.json" --receipt "$I/receipt.json" --weights "$I/weights-open.json" --out "$OUT/tree" --workers "$(nproc)"
 fi
 ls -la "$OUT"/*
