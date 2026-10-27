@@ -398,7 +398,7 @@ class Registration:
         return out | {"total": sum(out.values())}
 
 
-def measure_cpu(scratch: Path, mib: int = 1024) -> dict:
+def measure_cpu(scratch: Path, mib: int = 256) -> dict:
     """This host's rates as `Registration.cpu_s` prices them, one thread, each over ``mib`` MiB: SHA-512 (`hashlib`) of
     member-sized public bodies (`CAP` units of 6 rows), `json.dumps` of port-root entries as `rows.registration` writes them
     (``indent=1, sort_keys``), 64 MiB files written and fsynced into ``scratch``, and 1 KiB files created there (each removed
@@ -688,6 +688,7 @@ def main(argv: list[str] | None = None) -> int:
     cpu.add_argument("--measure-cpu", default=None, metavar="SCRATCH", help="measure this host's CPU rates (`measure_cpu`), "
                      "writing its test files into SCRATCH, and price the registration at them")
     cpu.add_argument("--cpu-rates", default=None, metavar="FILE", help="price the registration at an earlier --out's rates")
+    ap.add_argument("--measure-mib", type=int, default=256, help="MiB each of --measure-cpu's rates is measured over")
     ap.add_argument("--layout", nargs=2, default=None, metavar=("T,T,...", "DIR"), help="write one slot's output rows at "
                     "each position T as a commit_slots layout, DIR/pos<T>.json (`position_layout`), for step.py time")
     ap.add_argument("--layout-levers", default="L1", help="the levers the layouts are under, comma-separated (default L1)")
@@ -703,7 +704,7 @@ def main(argv: list[str] | None = None) -> int:
         for T in (int(v) for v in a.layout[0].split(",")):
             (d / f"pos{T}.json").write_text(json.dumps(position_layout(rest, heads, levers, T)) + "\n")
         return 0
-    rates = (measure_cpu(Path(a.measure_cpu)) if a.measure_cpu else
+    rates = (measure_cpu(Path(a.measure_cpu), a.measure_mib) if a.measure_cpu else
              json.loads(Path(a.cpu_rates).read_text())["cpu"] if a.cpu_rates else None)
     doc = price(json.loads(Path(a.census).read_text()), a.target, a.served_s, a.step_ms / 1e3, to, rates)
     if a.out:
