@@ -5,6 +5,9 @@ import Properties.Challenger
 
 `liveAnswer`: `Live.factors` turns `answer`'s check into `checkAt` at the coins the evidence reads, and `answerAt` runs
 the same decoders. `coinsFromLog`: ONE-4's target from `liveAnswer` and the reader's property `DrawnByDevice`.
+`drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement.
+`oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
+proved about `check` (`acceptMeans_iff`) hold of what it accepts.
 -/
 
 namespace Properties.Challenger
@@ -40,11 +43,12 @@ theorem liveAnswer : LiveAnswer := by
         | error r =>
           obtain ⟨pub, prof, ho⟩ := hacc
           rw [L.factors, hξ] at ho
-          cases ho
+          simp [Core.atCoins] at ho
         | ok ξ =>
           refine ⟨p, c, ev, ξ, rfl, rfl, rfl, hξ, ?_⟩
           obtain ⟨pub, prof, ho⟩ := hacc
           rw [L.factors, hξ] at ho
+          simp only [Core.atCoins] at ho
           have hp' : (Core.canonicalJson a >>= (L.at ξ).params) = .ok p := hp
           have hc' : (L.at ξ).commitment b = .ok c := hc
           have hev' : (L.at ξ).evidence e = .ok ev := hev
@@ -58,5 +62,32 @@ theorem coinsFromLog (hd : DrawnByDevice) : CoinsFromLog := by
   rcases hd dev d.key d.window d.label d.after (R.record ev) raw hraw with ⟨s, hs, hopen, hrel⟩ | hb
   · exact .inl ⟨s, hs, hopen, by rw [← hrel]; exact hdec⟩
   · exact .inr hb
+
+/-- `DrawnByDevice`'s statement is not trivially true: a reader that accepts every record fails it, since the empty
+device released nothing and the finder finds no break in an empty run. -/
+theorem drawnByDevice_nontrivial : ¬ DrawnByDeviceAt (fun _ _ _ _ _ => .ok ByteArray.empty) := by
+  intro h
+  have hnone : findBreak ⟨fun _ => [], fun _ => []⟩ ⟨Lms.deployed, ByteArray.empty⟩ "" Lean.Json.null = none := rfl
+  rcases h ⟨fun _ => [], fun _ => []⟩ ⟨Lms.deployed, ByteArray.empty⟩ "" "" ByteArray.empty Lean.Json.null
+      ByteArray.empty rfl with ⟨s, hs, -⟩ | ⟨w, hw, -⟩
+  · simp at hs
+  · rw [hnone] at hw
+    cases hw
+
+/-- What one-stage's protocol accepts, its coin-free `check` accepts: `checkAt` only adds the coins' refusals. -/
+theorem oneStage_check_of_accept {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
+    {e : SampledProofs.OneStage.Evidence} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
+    (h : SampledProofs.OneStage.protocol.check p c e = .accept pub prof) :
+    SampledProofs.OneStage.check p c e = .accept pub prof := by
+  change Core.atCoins (SampledProofs.OneStage.coinsOf p c e)
+    (fun ξ => SampledProofs.OneStage.checkAt p c ξ e) = _ at h
+  cases hξ : SampledProofs.OneStage.coinsOf p c e with
+  | error r => rw [hξ] at h; simp [Core.atCoins] at h
+  | ok ξ =>
+    rw [hξ] at h
+    simp only [Core.atCoins, SampledProofs.OneStage.checkAt] at h
+    cases hw : ξ.bind (SampledProofs.OneStage.coinsWhy p c e) with
+    | some why => rw [hw] at h; simp at h
+    | none => rw [hw] at h; exact h
 
 end Properties.Challenger

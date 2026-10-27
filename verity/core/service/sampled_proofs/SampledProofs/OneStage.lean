@@ -32,10 +32,11 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 * **coins** (`coinsOf`): with a challenger, the coins `Challenger.drawCoins` reads from the evidence's `coins` under the
   parameters' key, on their window, of their family, released after the registration's digest, refused when they don't
   read; without one, none, and evidence that carries coins is refused;
-* **check**: at the coins (`checkAt`), R1–R7 (`Registration.check`), then the record's checks (`Record.checks`: the draw, the proved units, the
-  receipt, the served draw, the sessions' roots, and the roots the verifiers of record report opening the sessions'
-  registered reads against, `Record.sessionRegistered`, each the registered one), and with coins, that the draw's units
-  are the ones they draw under the law (`drawnFrom`), every coin opened read. It rejects when one fails or
+* **check** (`checkLive`, at the coins `checkAt`): with coins, that the draw's units are the ones their raw bytes draw
+  under the law (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R7 (`Registration.check`), then the
+  record's checks (`Record.checks`: the draw, the proved units, the receipt, the served draw, the sessions' roots, and the
+  roots the verifiers of record report opening the sessions' registered reads against, `Record.sessionRegistered`, each
+  the registered one). It rejects when one fails or
   a verdict that ran did not accept; it is undecided when they all hold but no verifier of record accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the drawn and proved units with the exact bounds on wrong units at δ (`Bound.boundOf`,
@@ -330,8 +331,9 @@ def coinsReason (v : Registration.Verifier) (law rec_ draw : Json) (src : ByteAr
         some s!"the draw read {read} bytes of {src.size / Challenger.COIN_BYTES} coins: a coin opened and not read"
       else none
 
-/-- The check at the coins `ξ` (module docstring, **check**). -/
-def checkAt (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+/-- R1–R7, the draw's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
+check `checkAt` runs once the coins drew the draw. -/
+def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   let v := p.verifier
   let rec_ := c.record
   let codes := Registration.check rec_ v
@@ -341,7 +343,6 @@ def checkAt (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence)
   | .ok law =>
   let drawCodes := Draw.checkDraw e.draw (getD rec_ "population") law
   if !drawCodes.isEmpty then .reject s!"draw: {", ".intercalate drawCodes.toList}" else
-  if let some why := ξ.bind (coinsReason v law rec_ e.draw) then .reject s!"draw: coins: {why}" else
   let failed := recordChecks rec_ (Flock.hexOf c.digest) e
   if !failed.isEmpty then .reject s!"the audit's checks failed: {", ".intercalate failed.toList}" else
   match verdictOf e.verdicts with
@@ -363,10 +364,24 @@ def checkAt (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence)
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)] }
   | _, _ => .reject "the law the draw passed under has no profile"
 
-def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
-  match coinsOf p c e with
-  | .ok ξ => checkAt p c ξ e
-  | .error r => .reject r
+/-- Why the draw is not the one the coins `src` give under the verifier's law as derived (`coinsReason`); none when it
+is, and when the law doesn't derive, which `check` refuses. -/
+def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Option String :=
+  let v := p.verifier
+  match Draw.derive v.program v.query v.law v.workTable with
+  | .ok law => coinsReason v law c.record e.draw src
+  | .error _ => none
+
+/-- The check at the coins `ξ` (module docstring, **check**): with coins, a refusal when they don't draw the draw
+(`coinsWhy`), then `check`. -/
+def checkAt (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+  match ξ.bind (coinsWhy p c e) with
+  | some why => .reject s!"draw: coins: {why}"
+  | none => check p c e
+
+/-- The audit's check: at the coins `coinsOf` reads (`checkAt`), refused with its reason when none read. -/
+def checkLive (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+  Core.atCoins (coinsOf p c e) (fun ξ => checkAt p c ξ e)
 
 def publicJson (x : Public) : Json :=
   Json.mkObj [("drawn", natsJson x.drawn), ("proved", natsJson x.proved),
@@ -386,7 +401,7 @@ def protocol : Core.Protocol where
   commitment := commitmentOf
   evidence := evidenceOf
   digest c := c.digest
-  check := check
+  check := checkLive
   publicJson := publicJson
   profileJson := Core.Integrity.toJson
 

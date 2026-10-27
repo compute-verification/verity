@@ -15,24 +15,35 @@ what that record shows, for every input: the coins the challenger device drew, o
   accepts, it accepts at coins that are what the device released, or a `Break`; one-stage reads so (`oneStageReads`).
 * `DrawnByDevice`: what `SampledProofs.Challenger.drawCoins` reads, under the verifier's key, window and family, is the
   concatenation of the coins of that family that a session of the device released after `after`, a session the device's
-  own ledger opens on the window (`OpensOn`), or the run carries a `Break`.
+  own ledger opens on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
+  `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
 
 **The device** (`Device`) is the proof service's challenger as `challenger.py` runs it. Under its key it runs sessions
 (`Session`): it draws each coin and its salt by position and publishes the frame-v3 root over their live leaves
 (`Session.commitment`), writes its release log (its head the commitment, then each root it received and the coin it
 released after it), and signs its record before any coin opens and its close over the log once the session ends. It
 also signs the auditor's ledger, line by line. `Signed` is all it signs under a key. One role per key: a key also used
-for another role is outside the model, and `Forged` is then an EUF-CMA break only under that one-role reading.
+for another role is outside the model, and a `forgery` witness is then an EUF-CMA break only under that one-role
+reading.
 
-**The break** (`Break`) is the standing ruling's form (`.agents/skills/lean-proofs/SKILL.md`, "Standing rulings"), every
-`∃` bounded by what the run carries:
-* `Forged`: an LMS signature among those `drawCoins` checks verifies under the verifier's key over a message the device
-  never signed under it (`euf-cma/lms-sha512-n64`);
-* `Collides`: two different strings, each hashed in reading the coins (`readHashed`) or by the device
-  (`deviceHashed`), have one SHA-512 digest (`cr/sha-512`).
+**The coins are raw bits.** A coin is `Challenger.COIN_BYTES` bytes the device drew, and a draw reads the concatenation
+of the coins it was released (`take`, in `SampledProofs.Draw.drawUnits`), with no hash between: no SHA-512-expanded
+stream is read as uniform. In the causal game each coin is one release of `8 * COIN_BYTES` bits (`bitsOf`), after the
+bytes it answers (for one-stage, the registration's digest), at most `MAX_COINS` of them (`oneStageRounds`).
 
-Nothing is assumed of SHA-512 or LMS. What the device releases when, and that it opens each window once, are the device's
-behaviour on `trusted-host`, which these properties don't take: a soundness argument reads them off the device model.
+**The break** (`Break`) is one adversary form's (Daniel, 26 Oct): it is no event of the run but what one fixed finder
+outputs. `findBreak` is a computable function of the run (the record the evidence carries and the device's log), the
+same for every prover; its SHA-512 calls are one per string in `readHashed` and `deviceHashed` and an LMS verification
+per signature `drawCoins` checks, so at most a constant times the reader's and the device's own. It outputs a `Witness`,
+and `Break` is that it outputs a valid one (`Witness.Valid`):
+* `forgery`: an LMS signature among those `drawCoins` checks that verifies under the verifier's key over a message the
+  device never signed under it (`Signed`), the LMS term (`euf-cma/lms-sha512-n64` asked of the finder);
+* `collision`: two different strings, each hashed in reading the coins (`readHashed`) or by the device
+  (`deviceHashed`), with one SHA-512 digest (`ecr/sha-512` asked of the finder).
+
+Nothing is assumed of SHA-512 or LMS here. What the device releases when, and that it opens each window once, are the
+device's behaviour on `trusted-host`, which these properties don't take: a soundness argument reads them off the device
+model.
 -/
 
 namespace Properties.Challenger
@@ -100,13 +111,19 @@ structure Device where
 /-- The key's LMS identifier, its public key's first 16 bytes. -/
 def ident (pk : ByteArray) : ByteArray := pk.extract 0 16
 
-/-- Everything the device signs under the key `pk`: each session's record and close messages, and each of its ledger
-lines' messages. -/
-def Signed (dev : Device) (pk m : ByteArray) : Prop :=
-  (∃ s ∈ dev.sessions pk, ∃ c, s.commitment = some c ∧
-    (recordMessage (ident pk) s.host c = .ok m ∨
-      closeMessage (ident pk) s.host c s.id s.log.length (logChain s.log) s.ended = .ok m)) ∨
-  ∃ line ∈ dev.ledger pk, ∃ e, ledgerEntry? line = some e ∧ ledgerMessage (ident pk) e.entry = .ok m
+/-- Everything the device signs under the key `pk`, in order: each session's record and close messages, and each of
+its ledger lines' messages. -/
+def signedBy (dev : Device) (pk : ByteArray) : List ByteArray :=
+  ((dev.sessions pk).flatMap fun s => match s.commitment with
+    | none => []
+    | some c => (recordMessage (ident pk) s.host c).toOption.toList ++
+        (closeMessage (ident pk) s.host c s.id s.log.length (logChain s.log) s.ended).toOption.toList) ++
+  (dev.ledger pk).filterMap fun line => do
+    let e ← ledgerEntry? line
+    (ledgerMessage (ident pk) e.entry).toOption
+
+/-- The device signed `m` under the key `pk` (`signedBy`). -/
+def Signed (dev : Device) (pk m : ByteArray) : Prop := m ∈ signedBy dev pk
 
 /-- The device's own ledger under `pk` opens window `w` (its open root) for the session `id`, under the ledger's v2
 schema. -/
@@ -116,9 +133,16 @@ def OpensOn (dev : Device) (pk : ByteArray) (w id : String) : Prop :=
 
 /-! ## What the reader checks and hashes -/
 
+/-- Whether the LMS verifier accepts `sig`, once decoded, under the key over the message `m`. -/
+def lmsVerifies (key : ChallengerKey) (m sig : ByteArray) : Bool :=
+  match Lms.Signature.decode key.params sig with
+  | .ok σ => match Lms.verify key.params key.pub m σ with
+    | .ok b => b
+    | .error _ => false
+  | .error _ => false
+
 /-- The LMS verifier accepts `sig`, once decoded, under the key over the message `m`. -/
-def LmsVerifies (key : ChallengerKey) (m sig : ByteArray) : Prop :=
-  ∃ σ, Lms.Signature.decode key.params sig = .ok σ ∧ Lms.verify key.params key.pub m σ = .ok true
+def LmsVerifies (key : ChallengerKey) (m sig : ByteArray) : Prop := lmsVerifies key m sig = true
 
 /-- The signatures `drawCoins` checks under `key`, each with the message it signs: the session's record and close, and
 each line of the ledger. -/
@@ -263,7 +287,10 @@ def readHashed (key : ChallengerKey) (label : String) (coins : Json) : List Byte
   let ofLedger := match getD coins "ledger" with
     | .arr ls => ls.toList.flatMap (ledgerHashed I)
     | _ => []
-  ofSession ++ ofLedger ++ logHashed (lines (getD coins "pins"))
+  let ofPins := match getD coins "pins" with
+    | .arr _ => logHashed (lines (getD coins "pins"))
+    | _ => []
+  ofSession ++ ofLedger ++ ofPins
 
 /-- Everything SHA-512 hashes as the device runs under `pk`: for each session its domain, its tree (every leaf and every
 node of each level below the root), its record, close and release log, and each of its ledger lines. -/
@@ -286,30 +313,66 @@ def deviceHashed (dev : Device) (pk : ByteArray) : List ByteArray :=
       | _, _ => []) ++
   (dev.ledger pk).flatMap (ledgerHashed I)
 
-/-- Two different strings, each among `xs`, with one SHA-512 digest. -/
-def Collides (xs : List ByteArray) : Prop :=
-  ∃ x ∈ xs, ∃ y ∈ xs, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
+/-! ## The finder -/
 
-/-- An LMS signature `drawCoins` checks under `key` verifies over a message the device never signed under it. -/
-def Forged (dev : Device) (key : ChallengerKey) (coins : Json) : Prop :=
-  ∃ x ∈ signatures key coins, LmsVerifies key x.1 x.2 ∧ ¬ Signed dev key.pub x.1
+/-- What the finder outputs: two strings it hashed, or a signature it checked with the message it signs. -/
+inductive Witness where
+  | collision (x y : ByteArray)
+  | forgery (m sig : ByteArray)
 
-/-- **The break the run carries**: an LMS forgery among the signatures read, or a SHA-512 collision among the strings
-the reader and the device hash. -/
+/-- **A witness is a break**: two different strings with one SHA-512 digest, or an LMS signature that verifies under the
+key over a message the device never signed under it. -/
+def Witness.Valid (dev : Device) (key : ChallengerKey) : Witness → Prop
+  | .collision x y => x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
+  | .forgery m sig => LmsVerifies key m sig ∧ ¬ Signed dev key.pub m
+
+/-- The first string of `xs` whose SHA-512 digest another, different string of `xs` has, with that string: each string
+hashed once. -/
+def collisionIn (xs : List ByteArray) : Option (ByteArray × ByteArray) :=
+  let hs := xs.map fun x => (x, Flock.Sha512.hash x)
+  hs.findSome? fun (x, hx) => (hs.find? fun (y, hy) => hy == hx && !(y == x)).map fun (y, _) => (x, y)
+
+/-- **The finder**, one fixed computable function of the run for every prover: the first signature `drawCoins` checks
+under `key` in `coins` that verifies over a message the device didn't sign, else the first collision among the strings
+the reader hashes in `coins` and the device hashes under `key`. -/
+def findBreak (dev : Device) (key : ChallengerKey) (label : String) (coins : Json) : Option Witness :=
+  match (signatures key coins).find? fun x => lmsVerifies key x.1 x.2 && !((signedBy dev key.pub).contains x.1) with
+  | some (m, sig) => some (.forgery m sig)
+  | none => (collisionIn (readHashed key label coins ++ deviceHashed dev key.pub)).map fun (x, y) => .collision x y
+
+/-- **The break**: the finder, run on the record `coins` and the device, outputs a valid witness. -/
 def Break (dev : Device) (key : ChallengerKey) (label : String) (coins : Json) : Prop :=
-  Forged dev key coins ∨ Collides (readHashed key label coins ++ deviceHashed dev key.pub)
+  ∃ w, findBreak dev key label coins = some w ∧ w.Valid dev key
+
+/-! ## The coins, as raw bits -/
+
+/-- A byte string's bits in order, bit `t` being bit `t mod 8` of byte `⌊t/8⌋`: a coin's raw bits, as the device drew them
+and a draw reads them. -/
+def bitsOf (b : ByteArray) : List Bool :=
+  b.toList.flatMap fun x => (List.range 8).map fun i => x.toNat.testBit i
+
+/-- The bits of the coins of family `label` the session released after `after`, in order. -/
+def Session.releasedBits (s : Session) (label : String) (after : ByteArray) : List Bool :=
+  bitsOf (s.released label after)
+
+/-- **The device's rounds in the causal game**: one round per coin it may release, each `8 * COIN_BYTES` raw bits
+released after the bytes the round answers, at most `MAX_COINS` of them. -/
+def oneStageRounds : List Nat := List.replicate MAX_COINS (8 * COIN_BYTES)
 
 /-! ## The property -/
+
+/-- `DrawnByDevice` for the reader `read` in `drawCoins`' place. -/
+def DrawnByDeviceAt (read : ChallengerKey → String → String → ByteArray → Json → Flock.V ByteArray) : Prop :=
+  ∀ (dev : Device) (key : ChallengerKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
+    read key w label after coins = .ok ξ →
+      (∃ s ∈ dev.sessions key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
+        Break dev key label coins
 
 /-- **The coins a draw reads are the ones its challenger drew.** For every challenger device, if `drawCoins` reads `ξ`
 from `coins` under the verifier's key `key`, window `w` (its open root, lowercase hex) and family `label`, released
 after `after`, then `ξ` is the coins of `label` that a session of the device under `key` released after `after`, a
-session the device's own ledger opens on `w`; or the run carries a `Break`. -/
-def DrawnByDevice : Prop :=
-  ∀ (dev : Device) (key : ChallengerKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
-    drawCoins key w label after coins = .ok ξ →
-      (∃ s ∈ dev.sessions key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
-        Break dev key label coins
+session the device's own ledger opens on `w`; or the fixed finder outputs a break from the run (`Break`). -/
+def DrawnByDevice : Prop := DrawnByDeviceAt drawCoins
 
 /-! ## ONE-4's target: a component's coins, from the device's log -/
 
@@ -336,7 +399,7 @@ break.** For every protocol whose check reads its coins through the challenger's
 challenger device: if `answer` accepts `a`, `b`, `e`, they decode to `p`, `c`, `ev`, and `answerAt` accepts them at
 the coins `ξ` the evidence's record shows; and where `p` and `c` name a challenger (`source`), `ξ` is the decoding of
 what a session of the device under its key released of the family after what they name, a session the device's own
-ledger opens on their window, or the record in `ev` carries a `Break`. -/
+ledger opens on their window, or the fixed finder outputs a break from the record in `ev` and the device (`Break`). -/
 def CoinsFromLog : Prop :=
   ∀ (P : Core.Protocol) (L : Core.Live P) (R : ReadsChallenger P L) (dev : Device) (a b e : ByteArray),
     (P.answer a b e).verdict = .accept →

@@ -18,15 +18,20 @@ namespace Core
 
 open Flock (V)
 
+/-- The check at the coins `coins` reads: `k` at them, and a refusal with its reason when it reads none. -/
+def atCoins {Coins Public Profile : Type} (coins : V Coins) (k : Coins → Outcome Public Profile) :
+    Outcome Public Profile :=
+  match coins with
+  | .ok ξ => k ξ
+  | .error r => .reject r
+
 /-- `P`'s check reads its draw's live coins and decides at them: `check p c e` is `checkAt p c ξ e` at the coins `ξ`
-that `coins p c e` reads, and a refusal with its reason when it reads none. -/
+that `coins p c e` reads, and a refusal with its reason when it reads none (`atCoins`). -/
 structure Live (P : Protocol) where
   Coins : Type
   coins : P.Params → P.Commitment → P.Evidence → V Coins
   checkAt : P.Params → P.Commitment → Coins → P.Evidence → Outcome P.Public P.Profile
-  factors : ∀ p c e, P.check p c e = match coins p c e with
-    | .ok ξ => checkAt p c ξ e
-    | .error r => .reject r
+  factors : ∀ p c e, P.check p c e = atCoins (coins p c e) (fun ξ => checkAt p c ξ e)
 
 /-- `P` deciding at the coins `ξ`: its check is `checkAt` at `ξ`, whatever the evidence's record shows. -/
 def Live.at {P : Protocol} (L : Live P) (ξ : L.Coins) : Protocol :=
