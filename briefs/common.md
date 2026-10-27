@@ -87,3 +87,6 @@ First every smell is cleaned up and the remote demo runs on the right names and 
 
 ## Registration scope (Daniel 3:24 PM PDT, 22:35Z)
 Only the site, θ and B are registered (log entries: site, theta, builder). Subprotocol Programs, parameters and the proof system are verifier parameters, not registration. One-stage's `verity/registration/v1|v2` record is the window's commitment record (a homonym): bytes stay, code names move off "registration". Read the AMENDED comment on PRF-268.
+
+## Three-hour rule (Daniel 4:38 PM PDT, 23:55Z)
+A PR is marked within 3 hours of starting it; split longer work into pieces, each within 3 hours. A plan, answer or design note is due within 1 hour of the ask. Your PR's date is on its Linear issue (PRF-266, PRF-268, PRF-270, PRF-272); if it slips, comment there with the new date and why.
