@@ -34,7 +34,7 @@ import queue
 import socket
 import stat
 import time
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol

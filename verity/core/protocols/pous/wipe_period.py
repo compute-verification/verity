@@ -371,12 +371,9 @@ def foreign_labels(foreign_bytes: int | str, p: sw.WipeParams) -> int:
 def dram_available(meminfo: Path = Path("/proc/meminfo")) -> int:
     """The host's DRAM a fill can take without swapping or reclaiming anyone's working set: `MemAvailable` (free
     memory and the page cache the kernel would drop), else the free pages."""
-    try:
-        for line in meminfo.read_text().splitlines():
-            if line.startswith("MemAvailable:"):
-                return int(line.split()[1]) * 1024
-    except OSError:
-        pass
+    for line in meminfo.read_text().splitlines() if meminfo.is_file() else ():
+        if line.startswith("MemAvailable:"):
+            return int(line.split()[1]) * 1024
     return os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
 
 
