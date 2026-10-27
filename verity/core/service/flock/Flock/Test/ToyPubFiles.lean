@@ -49,13 +49,14 @@ def parsed : Circuit := match Desc.parse (tagsAt ByteArray.empty) circuitFile []
   | .ok D => D.unroll
   | .error _ => default
 
-/-- The unit net's A rows: the 1024 input rows, the copy (row 1024 reads input column 0), and the constant. -/
+/-- The unit net's A rows: the 1024 input rows, the copy (row 1024 reads input column 0), and the constant. Built
+from lists, as are `sparseOf`'s fields, since the kernel can't evaluate `Array.range` or `Array.map` at this size. -/
 def rowsA : Array (Array Nat) :=
-  (Array.range 1024).map (#[·]) ++ #[#[0]] ++ Array.replicate 127 #[] ++ #[#[1152]]
+  ((List.range 1024).map (#[·]) ++ [#[0]] ++ List.replicate 127 #[] ++ [#[1152]]).toArray
 
 /-- The unit net's B rows: the 1024 input rows, the 16 output rows against the constant, and the constant. -/
 def rowsB : Array (Array Nat) :=
-  (Array.range 1024).map (#[·]) ++ Array.replicate 16 #[1152] ++ Array.replicate 112 #[] ++ #[#[1152]]
+  ((List.range 1024).map (#[·]) ++ List.replicate 16 #[1152] ++ List.replicate 112 #[] ++ [#[1152]]).toArray
 
 /-- A column's four little-endian bytes, as `pushLe32` writes them. -/
 def le32 (c : Nat) : List UInt8 :=
@@ -70,7 +71,7 @@ def starts (base : Nat) : List (Array Nat) → List Nat
 length. Stated without `ofRows`'s loop, so that the kernel reads a row of it by indexing. -/
 def sparseOf (rows : Array (Array Nat)) : Sparse :=
   ⟨rows.size, 2048, ⟨(rows.toList.flatMap fun r => r.toList.flatMap le32).toArray⟩, (starts 0 rows.toList).toArray,
-    rows.map Array.size⟩
+    (rows.toList.map Array.size).toArray⟩
 
 /-- The unit net. -/
 def unitNet : Net where
