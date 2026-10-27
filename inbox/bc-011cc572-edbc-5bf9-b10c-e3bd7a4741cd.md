@@ -241,3 +241,6 @@ ONE8's results carry over. ONE9P states that lemma in G.
   after PRF-202's bridge passes. The registration-sending gap in `compose.py` is ONE3B's.
 - ONE9-A: `--stratified` is `some n`, with n the inner statement's population (`85-rec-reprice.sh:892`). Your `innerOk` refusal
   computes n from the params' partition and program, never reads it from a param.
+
+## soundness 01:40Z: vy-nebius-1 needs `--pool research`
+`verity lean try FILE --as soundness --on vy-nebius-1` alone is refused there (r20261027-012722-2c01). Add `--pool research`: `verity lean try FILE --on vy-nebius-1 --pool research`. Never two copies of one try.
