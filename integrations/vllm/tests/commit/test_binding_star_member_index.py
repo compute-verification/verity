@@ -1,8 +1,7 @@
-"""[R18 tap, F-r18-tap-2] `binding.coverage_check`'s member-`*` path (the hidden family: one `*` identity per request x step x attention
-layer) scanned the WHOLE map index for every `*` identity: O(|*| x |map|).  At B8 llama32-1b 1024/128 that is 16,512 x 111,239 (minutes,
-unnoticed); at B64 it is 132,096 x ~890k -- the #23 device diagnostic on cp-r18-l40u sat >13 min at 100% CPU on the serving thread AFTER
-the instrumented run completed (faulthandler: binding.py coverage_check <listcomp>).  The fix builds one op-level key index
-(`_op_key_index`) and looks each `*` identity up in O(1); these tests pin that the verdict, the counts and the named lists are those of
+"""`binding.coverage_check`'s member-`*` path (the hidden family: one `*` identity per request x step x attention layer) must not
+scan the WHOLE map index for every `*` identity: O(|*| x |map|) is 16,512 x 111,239 at B8 llama32-1b 1024/128 (minutes) and
+132,096 x ~890k at B64 (more than 13 min at 100% CPU on the serving thread AFTER the instrumented run).  It builds one op-level key
+index (`_op_key_index`) and looks each `*` identity up in O(1); these tests pin that the verdict, the counts and the named lists are those of
 the scan on a B64-shaped fixture with every outcome present (bound, missing, ambiguous, address-mismatch, extra), and that the B64 shape,
 hours for the old scan, is counted exactly."""
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""The build summary (`build_summary.json`): each wrapper's derive (its outcome and Program digests) and GP-01's workload Program,
+"""The build summary (`build_summary.json`): each wrapper's derive (its outcome and Program digests) and the composed workload Program,
 as the Commit's verdict reads the Build's `runtime-correspondence/v1` digest from it (`check.verdict.correspondence_of_build`).
 
 Its writers lay it out three ways (`layout`):
@@ -29,9 +29,9 @@ from verity_vllm.records.fields import RecordError, only, optional, required
 SCHEMA = "verity-vllm/build-summary/v1"
 #: a request shape's derive: `build_request_` + `program.prefix_plan.shape_name`
 SHAPE = r"build_request_LP\d+_T\d+(?:_C\d+)?"
-#: a `tp1` Build's wrappers, and GP-01's `workload`
+#: a `tp1` Build's wrappers, and the composed `workload`
 TP1_WRAPPER = re.compile(rf"^(?:step|request|workload|{SHAPE})$")
-#: a `tp` Build's wrappers on one rank, named by their directories; R19's `row_pod_tp2.sh` globbed the `.log` and `.rc` beside
+#: a `tp` Build's wrappers on one rank, named by their directories; the retired `row_pod_tp2.sh` globbed the `.log` and `.rc` beside
 #: each request derive too, as entries saying `no result.json`
 RANK_WRAPPER = re.compile(rf"^(?:build_step|workload|{SHAPE}(?:\.log|\.rc)?)$")
 RANK = re.compile(r"^rank\d+$")
@@ -47,9 +47,9 @@ R19_ENTRY = frozenset({"ok", "unsupported", "exception", "message", "program_dig
 @dataclass(frozen=True)
 class WrapperBuild:
     ok: bool | None                                   # a `tp` Build's top-level `step` (rank 0's digest alone) has none
-    program_digest: str | None                        # a failed derive, and GP-01's entry (its digest is `workload_digest`), have none
-    workload_digest: str | None                       # GP-01's (`workload`); the derives have none
-    # the Build's `runtime-correspondence/v1` digest: a Build made with the v1 frontend, a `tp` Build and GP-01 record none
+    program_digest: str | None                        # a failed derive, and the composed workload's entry (its digest is `workload_digest`), have none
+    workload_digest: str | None                       # the composed workload's (`workload`); the derives have none
+    # the Build's `runtime-correspondence/v1` digest: a Build made with the v1 frontend, a `tp` Build and the composed workload record none
     correspondence_digest: str | None
     entry: Mapping[str, Any]                          # as written
 

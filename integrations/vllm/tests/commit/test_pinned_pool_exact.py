@@ -1,9 +1,9 @@
-"""[R17 fp8, F-fp8-POW2] The collector's pinned pool holds EXACTLY what it accounts for.
+"""The collector's pinned pool holds EXACTLY what it accounts for.
 
 torch's CachingHostAllocator rounds every pinned request up to the next power of two and never returns freed blocks to the OS (torch
 2.13.0+cu129 on cp-h100: 3 GiB -> RSS +4 GiB; 5 GiB + 7 B -> +8 GiB); pinned pages are committed at allocation, so the process RSS and the
-cgroup carried up to 2x the pool's `bytes_total` -- 21,152 MiB of the B8 FP8 row's run-phase RSS outside every term of the host bound
-(FP8-STAGING §6).  Exact mode (default) registers page-aligned anonymous memory instead: RSS == bytes_total, released on `release()`.
+cgroup carried up to 2x the pool's `bytes_total` -- 21,152 MiB of the B8 FP8 workload's run-phase RSS outside every term of the host bound.
+Exact mode (default) registers page-aligned anonymous memory instead: RSS == bytes_total, released on `release()`.
 """
 from __future__ import annotations
 
@@ -68,8 +68,8 @@ def _cgroup_anon_shmem() -> tuple[int, int] | None:
 
 @pytest.mark.skipif(not GPU, reason="needs CUDA (cudaHostRegister)")
 def test_exact_pool_blocks_are_shared_across_fork_not_copied():
-    """[F-fp8-FORKPIN] the C2 sampled replay forks evaluator children while the frozen pool is live.  Linux >= 5.9 copies DMA-pinned
-    PRIVATE pages eagerly at fork (B8 attempt 2: 59,350 MiB per child, cgroup at the cap, 20 OOM-killed children); the pool's blocks are
+    """The C2 sampled replay forks evaluator children while the frozen pool is live.  Linux >= 5.9 copies DMA-pinned
+    PRIVATE pages eagerly at fork (at B8: 59,350 MiB per child, cgroup at the cap, 20 OOM-killed children); the pool's blocks are
     MAP_SHARED mappings, which fork shares -- measured on cp-h100 with a 2 GiB block: private-registered fork -> cgroup anon +2,653 MiB,
     shared-registered -> +336 (the child's RssShmem 2,048 = the shared pages).  Here: a child that reads a 1 GiB block adds far less
     than the block to the cgroup's anon, and sees the block as RssShmem, not RssAnon."""

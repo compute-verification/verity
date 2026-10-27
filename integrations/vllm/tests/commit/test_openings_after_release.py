@@ -1,4 +1,4 @@
-"""R13 P0 (C-COLLECTOR-FOOTPRINT): openings stay possible after the raw staged bytes are released.
+"""Openings stay possible after the raw staged bytes are released.
 
 The GPU-tree committer used to keep a compact DEVICE copy of every step's packed bytes for lazy openings (the ~9.6 GiB per 1024-token
 Llama prefill step that OOMs at B=2).  The retention policy (`VERITY_RETAIN=device|host|none`) moves that copy to host memory or drops it;
@@ -159,7 +159,7 @@ def test_verdict_fails_closed_on_openings_after_release():
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------
-# [R17 fp8, R17-5] retain=host + excluded families: the excluded interior chunks are NOT on host (`_HostRanges`), every other leaf is;
+# retain=host + excluded families: the excluded interior chunks are NOT on host (`_HostRanges`), every other leaf is;
 # the excluded leaves open by replay -- regenerated value AND regenerated authentication path -- against the ORIGINAL root.
 
 def _sparse(com: NativeHostCommitter, exclude: set[str]) -> dict[int, int]:
@@ -243,7 +243,7 @@ def test_sparse_retention_opens_held_leaves_from_host_and_excluded_leaves_by_rep
     # excluded share: no replay source -> a named error, never zeros
     with pytest.raises(RuntimeError, match="raw bytes released / not retained"):
         orig.open([(0, inside)])
-    # a byte-identical replay: regenerated VALUES + regenerated AUTHENTICATION PATHS verify against the ORIGINAL roots (R17-5)
+    # a byte-identical replay: regenerated VALUES + regenerated AUTHENTICATION PATHS verify against the ORIGINAL roots
     replay = _committer("host")
     rc2 = _run(replay)
     assert rc2.run_root == rc.run_root
@@ -270,7 +270,7 @@ def test_sparse_retention_opens_held_leaves_from_host_and_excluded_leaves_by_rep
 
 
 def test_schedule_stream_bound_reproduces_the_sizing_on_the_measured_b1_row():
-    """[F-dA-15 bounded admission] the declared-schedule stream model, fed the B1 1024/128 sizing record measured on cp-h100 (R17 fp8 16:47Z):
+    """Bounded admission: the declared-schedule stream model, fed the B1 1024/128 sizing record measured on cp-h100:
     its single prefill step must equal the sizing's prefill_step_bytes (same widths, same FA3 launch geometry), its decode steps the sizing's
     decode at the growing kv length, and the run total must sit under the measured run (25,075,721,724 B) by the factor the admission carries."""
     from verity_vllm.commit.committer.native_host import schedule_stream_bound
@@ -296,10 +296,10 @@ def test_schedule_stream_bound_reproduces_the_sizing_on_the_measured_b1_row():
 
 
 def test_bounded_host_bound_term_by_term_covers_every_measured_b1_arm_and_admits_b8():
-    """[F-dA-15 / R17-7.3, revb S-r17b-03 (ii)] the bound is derived term by term (native_host.bounded_host_bound) and must sit ABOVE every
-    RSS peak measured on cp-h100 for the B1 1024/128 bounded arms (FP8-STAGING.md §3, rss_timeline 2 s samples) -- including the three runs
-    that beat the earlier formulas -- while the per-component factors are the ones measured on the same row (hidden exact -> 1.05; other
-    x1.59 -> 2.0).  The B8 row (declared schedule: one 3,537-token prefill) must be admitted under the 239,372 MiB cgroup with margin."""
+    """The bound is derived term by term (native_host.bounded_host_bound) and must sit ABOVE every
+    RSS peak measured on cp-h100 for the B1 1024/128 bounded arms (rss_timeline 2 s samples) -- including the three runs
+    that beat the earlier formulas -- while the per-component factors are the ones measured on the same workload (hidden exact -> 1.05;
+    other x1.59 -> 2.0).  The B8 workload (declared schedule: one 3,537-token prefill) must be admitted under the 239,372 MiB cgroup with margin."""
     from verity_vllm.commit.committer.native_host import bounded_host_bound, schedule_stream_bound
     asz = {"per_token_bytes": 2900996, "per_seq_bytes": 607744, "per_step_bytes": 93184,
            "model": {"hidden": 2560, "heads": 32, "kv_heads": 8, "head_dim": 128, "layers": 36, "hidden_m1": True, "attn_backend": "fa3"},
@@ -310,8 +310,8 @@ def test_bounded_host_bound_term_by_term_covers_every_measured_b1_arm_and_admits
     # measured components (runs.jsonl, bounded-x arm): excluded hidden 19,635,194,880 B (sized 19,636,365,312: exact), other kept 5,440,526,844 B
     assert abs(s1["hidden_bytes"] - 19635194880) < 2 * MiB
     assert 1.5 < 5440526844 / (s1["run_bytes"] - s1["hidden_bytes"]) < 2.0                       # the 'other' under-sizing the 2.0 factor covers
-    # [F-fp8-POW2 / F-fp8-C2PROG] the B1 records of §3 ran on torch's pinned pool with no C2 Programs term: this part of the test keeps
-    # that derivation (pool_exact=False, c2_programs_bytes=0) and the historical numbers; `pool_rounding` is removed from the sums below
+    # the measured B1 records ran on torch's pinned pool with no C2 Programs term: this part of the test keeps
+    # that derivation (pool_exact=False, c2_programs_bytes=0) and the measured numbers; `pool_rounding` is removed from the sums below
     # to compare like with like -- the new terms are asserted in test_bound_phases.py
     common = dict(learn_budget_bytes=4096 * MiB, openings=64, chunk_bytes=256, window_bytes=256 * MiB, bounded=True, open_after_release=True,
                   host_cap_bytes=239372 * MiB, pool_exact=False, c2_programs_bytes=0)
@@ -347,10 +347,10 @@ def test_bounded_host_bound_term_by_term_covers_every_measured_b1_arm_and_admits
     # the B8 row's Commit of record runs row_pod's 3 pairs: the pairs term must still fit the cgroup at --host-admit 0.10
     b8x3 = bounded_host_bound(s8, engine_rss_bytes=2193 * MiB, retain="host", retain_exclude={"fa3_hidden_m1"}, pairs=3, **common)
     assert _legacy(b8x3) < 239372 * MiB * 0.9 and (239372 * MiB - _legacy(b8x3)) / (239372 * MiB) > 0.15, (_legacy(b8x3) // MiB)
-    # ... and WITH the pow2 rounding term the same 3-pair torch-pool B8 run is NOT admissible -- attempt 1 (01:26Z) ran 223,776 MiB against
-    # that 193,827 MiB sum; the new derivation says so before the run (test_bound_phases.py reconstructs the attempt)
+    # ... and WITH the pow2 rounding term the same 3-pair torch-pool B8 run is NOT admissible -- it measured 223,776 MiB against
+    # that 193,827 MiB sum; the derivation says so before the run (test_bound_phases.py reconstructs that run)
     assert b8x3["host_peak_bound_bytes"] > 239372 * MiB * 0.9
-    # [R17-29 planner] the dominant contributor is NAMED: the largest host term and the largest single materialization (the 3,537-token
+    # the dominant contributor is NAMED: the largest host term and the largest single materialization (the 3,537-token
     # prefill step's hidden export) with where it is (excluded from host, opened by replay) -- a refusal never reads merely "predicted OOM"
     dom = b8x3["dominant_contributor"]
     assert dom["host_term"] == "pairs" and dom["host_term_bytes"] == b8x3["pairs_extra_bytes"]                  # 3 pairs: the pairs term leads
@@ -362,7 +362,7 @@ def test_bounded_host_bound_term_by_term_covers_every_measured_b1_arm_and_admits
     assert lm["hidden_bytes"] > 100 * 1024 * MiB and "opened by replay" in lm["where"] and "excluded from host" in lm["where"]
     assert "step" in dom["text"] and "3537 tok" in dom["text"] and "excluded from host" in dom["text"]
     assert bn["dominant_contributor"]["largest_materialization"]["where"].startswith("not retained (retain none)")
-    # [revb F-r17b-20] the derivation names per_pick as the 256 B chunk and where the replay's transient windows are counted
+    # the derivation names per_pick as the 256 B chunk and where the replay's transient windows are counted
     assert "256 B chunk" in b8x3["derivation"] and "learn term" in b8x3["derivation"]
 
 
@@ -401,7 +401,7 @@ def test_verdict_rules_for_host_plus_replay_and_bounded_records():
     rec["openings_after_release"]["deferred_received_n"] = 4                           # one population pick opened nowhere -> FAIL by name
     ok, why = commit_verdict(rec, True)
     assert not ok and "5 population pick(s) deferred" in why, why
-    # [rev F-r17b-13] by POSITION: 24 challenge + 5 population deferred, the after-release phase received 24 -- count-only would pass, the
+    # by POSITION: 24 challenge + 5 population deferred, the after-release phase received 24 -- count-only would pass, the
     # positions say five picks opened nowhere
     pa = [[3, i] for i in range(24)]
     pb = [[7, 100 + i] for i in range(5)]
@@ -417,7 +417,7 @@ def test_verdict_rules_for_host_plus_replay_and_bounded_records():
     rec["openings"]["deferred_positions"] = pa[:-1]                                     # a count without its positions is not a record
     ok, why = commit_verdict(rec, True)
     assert not ok and "positions are not on the record" in why, why
-    # [revb S-r17b-03] the count-only branch is only for records WITHOUT any position key: a positional writer that leaves the lists empty
+    # the count-only branch is only for records WITHOUT any position key: a positional writer that leaves the lists empty
     # (omission) is refused, a pre-positions record (no keys at all) still falls back to the count rule
     rec["openings"] = {"n": 40, "verified": 40, "skipped": "...", "deferred_replay_n": 24, "deferred_positions": []}
     rec["binding"]["openings_population"] = {**po, "deferred_positions": []}
