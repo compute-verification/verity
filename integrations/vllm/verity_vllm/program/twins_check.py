@@ -59,7 +59,7 @@ def _captured_providers(result, vals, store, spec_id: str, rng: np.random.Genera
 
 def check_log(log: str, profile_name: str, snapshots: str | None, *, seed: int, n_random: int, n_edge: int, k: int,
               safetensors: str | None = None, cos_sin: str | None = None, only: set[str] | None = None) -> dict:
-    """Every spec of the log: `check_spec`; plus the family-level small-statics sweep.  Fold WITHOUT Program (D69)."""
+    """Every spec of the log: `check_spec`; plus the family-level small-statics sweep.  Fold WITHOUT Program."""
     from verity_vllm.check.fold_compare import SnapshotStore, Values, WeightSource, _attach_specs, _max_rss_gb, fold_log, load_profile
     t0 = time.time()
     profile = load_profile(profile_name)

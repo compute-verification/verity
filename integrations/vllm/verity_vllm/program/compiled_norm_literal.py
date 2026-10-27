@@ -1,12 +1,12 @@
 """Literal Triton transcriptions of Inductor's generated RMSNorm kernels -- the compiled rows' norm relation of record.
 
-[R16 compiled, Qwen run 8 07:15Z] The torch-modelled relation (compiled_relations._triton_sum_models: hand-modelled tl.sum order, torch
+The torch-modelled relation (compiled_relations._triton_sum_models: hand-modelled tl.sum order, torch
 IEEE division, torch.rsqrt) matched 221 of 224 add1_norm launches and left 3 launches at ONE element / one bf16 ulp each (55-row prefill,
-one row per launch).  Probe of record (r16c_sumprobe.py, 07:45Z, 8192 rows each width): the model's SUM TREE is exact (0 rows differ)
+one row per launch, on Qwen).  Probe of record (r16c_sumprobe.py, 8192 rows each width): the model's SUM TREE is exact (0 rows differ)
 and its epilogue is exact; the residue is the statement pair `tmp15 = tmp7 / 1536.0; tmp17 = tmp15 + 1e-06`, which the compiler (fp
 fusion on) lowers to ONE fma(tmp7, 1/1536, eps) -- reciprocal multiply, add contracted, a single rounding -- while the torch model rounds
 twice (`s / N + eps`): kernel rstd == torch.rsqrt(fma(s, 1/N, eps)) on 8192/8192 rows, == torch.rsqrt(s/N + eps) on 7452.  For N = 2048
-(Llama) 1/N is a power of two, s*(1/N) is exact and both agree on every row -- which is why R15 never saw it.  Rather than model each
+(Llama) 1/N is a power of two, s*(1/N) is exact and both agree on every row -- which is why the Llama rows never show it.  Rather than model each
 such lowering decision (the reduction tree, the contraction, libdevice), as for the SiLU kernel (compiled_relations
 `_silu_mul_triton`), the relation of record is therefore the generated source itself, transcribed statement for statement with the two
 model constants (row width N, epsilon EPS) and the vocabulary bound (embedding form) as constexpr parameters, and LAUNCHED WITH THE

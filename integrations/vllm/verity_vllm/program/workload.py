@@ -170,11 +170,11 @@ def _canonicalize(dp, canon: dict[str, tuple[Any, dict]] | None = None) -> None:
         if isinstance(fn, PrimitiveDefinition):
             continue
         if fn is dp.root:
-            # [R16 global, B64 1024/128 Build FAIL 07:09Z] the request Program's ROOT is never shared: its body becomes the component's
+            # the request Program's ROOT is never shared: its body becomes the component's
             # (`WorkloadRequest{program_digest, program_fn}`, identity = the whole descriptor's digest) and nothing calls it. Its id is
             # derive's `Root[Derived[vLLMRequest[...]]{SRC=...}]` whose SRC static names class/mode/profile/INPUT SHAPES/config -- not T --
             # so two requests of one manifest with the same prompt length and different caps (LP11: T24/T36) carry ONE root id over two
-            # bodies, and comparing roots under that id refused a valid workload (E_IDENTITY) while their digests differ. Callees stay
+            # bodies, and comparing roots under that id would refuse a valid workload (E_IDENTITY) although their digests differ. Callees stay
             # under the fail-closed rule below; the root's identity is the component digest.
             continue
         enc = _encode_definition(fn)
@@ -336,7 +336,7 @@ class WorkloadRequest:
 
 
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
-# `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape -- tp M-0314 (B)); a stochastic
+# `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape); a stochastic
 # wrapper's `seed` and `splits` are its request's own, like the prompt, and so are a warm request's cached `prefix` and a TP rank
 # Program's `schedule` (its MoE align calls' keys, `CollectiveBus.schedule_key`)
 _REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits", "prefix", "schedule")
@@ -498,7 +498,7 @@ class WorkloadProgram:
         self.lag = int(lag)
         # the static keeps the historical ONE-tuple form when uniform (every existing workload digest unchanged) and becomes one
         # tuple per request only when the positions differ (a distinct, self-describing encoding); `lag` is the third static:
-        # every workload digest differs per declared value (and from every pre-R17-1 digest: those Programs declared no lag)
+        # every workload digest differs per declared value (and from the digest of every Program that declared no lag)
         self.fn = WORKLOAD.bind(requests=tuple(r.static() for r in self.requests), shared=shared_idx if uniform else tuple(idx), lag=self.lag)
         self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest}, registered=self.registered,
                                theta=self.theta)
@@ -672,7 +672,7 @@ class WorkloadProgram:
                               "component": r.component.to_json(), **({"prefix": r.prefix} if r.prefix else {})} for r in self.requests],
                 "representation": "hierarchical: Program(Workload_v1{requests, shared}); one call node per request Program component; the "
                                   "request subcircuits are Definitions (not flattened); no scheduler; builder inputs = manifest + request descriptors",
-                "padding_scope": "active-reference only (unchanged from R13): inactive padded interiors are outside this Program's claims; "
+                "padding_scope": "active-reference only: inactive padded interiors are outside this Program's claims; "
                                  "cross-request cache reuse is only the declared prefix-cache hits (`requests[].prefix`)",
                 "x09_inside": "each component is the X-09 request-wrapper Program (its digest is a static of the component); X-09 per-request "
                               "equality is evidence inside the global check, not a substitute for it",

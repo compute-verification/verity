@@ -2,7 +2,7 @@
 `logits / self.soft_cap`).  ATen's CUDA `div_true_kernel_cuda` takes the CPU-scalar fast path: `inv_b = opmath_t(1) / b`
 computed once on the host in f32 (correctly rounded: `f32(1)/f32(30)` = 0x3D088889) and then `f32(x) * inv_b` per element
 (`BUnaryFunctor<MulFunctor<float>>`), converted with `cvt.rn.bf16.f32` (NaN -> 0x7FFF).  On the bf16 domain this equals
-`bf16(f32(x) / 30)` at every one of the 65,536 words (checked offline; wave-1 probe `div30` compared the kernel with the
+`bf16(f32(x) / 30)` at every one of the 65,536 words (checked offline; probe `div30` compared the kernel with the
 true-division form and found all 65,282 non-NaN words equal), so the two readings are indistinguishable here; the body
 follows ATen's actual algorithm.
 

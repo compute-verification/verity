@@ -1,4 +1,4 @@
-"""[BRIEF §5 step 2 -- compact representation] Operand references as RUN PROGRESSIONS instead of one tuple per run.
+"""Compact representation: operand references as RUN PROGRESSIONS instead of one tuple per run.
 
 The checker of record holds every instance operand as its list of MAXIMAL CONTIGUOUS RUNS `(space, idx, lo, hi)` (verity.ml.circuits.refs.runs).
 On a real fold 91 % of all runs are the K/V gathers of Attention (mprof, llama B8 256/32: 3.52 M runs, 200 per Attention

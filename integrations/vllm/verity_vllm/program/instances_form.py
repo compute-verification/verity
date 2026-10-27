@@ -10,7 +10,7 @@ form.  Lossless: `compact.runs_from_file_items` returns the record's run list, i
 
 Every reader accepts both forms and expands on read where it needs runs (compare.load_oracle keeps the "p" runs of either form;
 tp.rank_match and bench.gen_batch_candidate expand); nothing caches an expansion by digest.  The writer is `run_config.persist_program`
-(`VERITY_INSTANCES_FORM=runs|progressions`, default `runs` until coord rules the v2 schema the file of record).  The fold digest of
+(`VERITY_INSTANCES_FORM=runs|progressions`, default `runs`).  The fold digest of
 record (`program.json` digest == `fold_summary.digest`) is over the Program descriptor, not over `instances.jsonl` bytes: the same fold
 has the same digest under both forms; only the tie fact `instances_sha256` (the bytes an oracle READ) differs, as it must.
 
