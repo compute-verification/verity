@@ -27,6 +27,11 @@
    "imports": ["CoreProtocol.Protocol"],
    "except": [],
    "why": "the interface is spec: a protocol's live coins (`Live`, `answerAt`) are stated over `Protocol` alone"
+  },
+  "CoreProtocol.Blobs": {
+   "imports": ["CoreProtocol.Cli", "Flock.Hash"],
+   "except": [],
+   "why": "the interface is spec: a protocol that reads content-addressed files (`BlobProtocol`, `Blobs`) is stated over the same `Protocol`, `Outcome` and `Answer`, so this imports only them (through the protocol's command line) and C-Flock's hash"
   }
  },
  "dependencies": {

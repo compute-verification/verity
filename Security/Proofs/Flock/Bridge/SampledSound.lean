@@ -5,7 +5,7 @@ import Proofs.Flock.Bridge.CircuitOf
 # Sampled proofs' soundness at C-Flock's live audit, prover by prover
 
 Sampled proofs' claim reads the transcript of one fixed extractor, the one `SampledKSLivePub` is stated with
-(`XplurZC`, through `witDep`): at most an `ε` share of the circuit's units are wrong in it (R4′). Its bound holds at
+(`XplurZC`, through `witDep`): at most an `ε` share of the circuit's units are wrong in it. Its bound holds at
 every prover `τ` with no hypothesis on `τ`: `ecr/sha-512` and cr/sha-512 are asked only of the finders C-Flock builds
 from `τ`, and where they fail the bound is `⊤`, as C-Flock's link bound reads its collision premise (`linkBoundZC`).
 
@@ -210,7 +210,7 @@ noncomputable def wrongE (q : Claims.Sampling.Query) (τ : Strategy A.G) : Finse
     ((Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)).val
       Claims.Sampling.sha512Msg A.Cd (Bridge.stmtOf A.P A.κ kd desc q A.roots)))
 
-/-- **Sampled proofs' claim at `τ`** (R4′): at most an `ε` share of the `n` units are wrong in the extractor's
+/-- **Sampled proofs' claim at `τ`**: at most an `ε` share of the `n` units are wrong in the extractor's
 transcript. -/
 def Holds (q : Claims.Sampling.Query) (ε : ℝ) (τ : Strategy A.G) : Prop :=
   ((A.wrongE q τ).card : ℝ) ≤ ε * n
