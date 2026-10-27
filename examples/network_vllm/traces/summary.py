@@ -819,7 +819,7 @@ def readme(s: dict) -> str:
         f"# vLLM V1 scheduler traces under varied traffic: {s.get('model_what')}, {s.get('variant', 'greedy')}", "",
         f"Model `{s.get('model')}` (`{s.get('model_id')}`) on {s.get('host')}, GPU "
         f"`{(s.get('env') or {}).get('CUDA_VISIBLE_DEVICES')}` (`{(s.get('env') or {}).get('GPU_LEASE_UUID')}`); vLLM "
-        f"{v.get('vllm')}, torch {v.get('torch')}. Made by `benchmarks/network_e2e/traces/corpus.py` (its docstring and "
+        f"{v.get('vllm')}, torch {v.get('torch')}. Made by `examples/network_vllm/traces/corpus.py` (its docstring and "
         "`traffic.py`'s say how): plain vLLM's OpenAI server, batch-invariant eager (the integration's bi-eager engine), "
         f"async scheduling {'on' if s.get('async_scheduling') else 'off'}, Model Runner V2, prefix caching on, at most 256 "
         "sequences; a scheduler hook (`vllm_trace_plugin.py`) records each step; an async client streams each request at "

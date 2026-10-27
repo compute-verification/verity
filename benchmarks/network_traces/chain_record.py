@@ -320,7 +320,7 @@ def warden_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
     import subprocess
     import warden_chain as WC
 
-    sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_e2e"))
+    sys.path.insert(0, str(HERE.parents[1] / "examples" / "network_vllm"))
     import chain
 
     dep, params = WC.deployment(run)

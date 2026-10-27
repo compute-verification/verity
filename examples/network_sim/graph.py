@@ -22,7 +22,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-DATACENTER = str(Path(__file__).resolve().parents[1] / "datacenter")
+DATACENTER = str(Path(__file__).resolve().parents[2] / "benchmarks" / "datacenter")
 if DATACENTER not in sys.path:
     sys.path.insert(0, DATACENTER)
 

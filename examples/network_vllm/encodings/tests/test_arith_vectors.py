@@ -28,7 +28,7 @@ def test_the_certifiers_vectors_are_the_coders():
     streams = [{"source": name, **make()} for name, make in AV.sources((), True, (128001,), 600)]
     got = json.loads(json.dumps({"K": AV.K, "streams": streams}))
     assert got == json.loads(AV.FIXTURE.read_text()), \
-        "regenerate: python3 benchmarks/network_e2e/encodings/arith_vectors.py --steps --fixture " + str(AV.FIXTURE)
+        "regenerate: python3 examples/network_vllm/encodings/arith_vectors.py --steps --fixture " + str(AV.FIXTURE)
     tags = {sym[0] for s in streams for win in s["windows"] for sym in win["symbols"]}
     assert tags == {0, 1}
     assert all(AV.check(s, circuit=False)["reference_mismatches"] == 0 for s in streams)

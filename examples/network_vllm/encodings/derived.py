@@ -172,7 +172,7 @@ def _flag(argv: Sequence[str], name: str, default: int | None = None) -> int | N
 def load_corpus_trace(d: str | Path, *, block_size: int = 16, eos_token_id: int = 128001,
                       stop_token_ids: Sequence[int] = (), num_gpu_blocks: int | None = None,
                       row_order: str = "batch") -> dict:
-    """One trace of TRACE-CORPUS's corpus (`benchmarks/network_e2e/traces`, `vllm-trace-corpus/v1`: a directory with the
+    """One trace of TRACE-CORPUS's corpus (`examples/network_vllm/traces`, `vllm-trace-corpus/v1`: a directory with the
     joined `steps.jsonl` and `requests.jsonl`, `meta.json` and, when kept, `server.log`) in `load_trace`'s format.
 
     The registered config is the server's argv; the block size and the stop ids are the model's, which the corpus doesn't

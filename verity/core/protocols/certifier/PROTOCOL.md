@@ -239,7 +239,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   a proof can make without the content, and the only grid check on ingress. It runs on every link-window (RT-NET29
   item 3: a structural check runs in full).
 - **N3, the content check,** is a design and the simulator's behaviour, not part of this protocol: a prototype unit in
-  `benchmarks/network_sim` ("N3 in zero knowledge"), evaluated in the clear, in no proof-service Spec and not proved.
+  `examples/network_sim` ("N3 in zero knowledge"), evaluated in the clear, in no proof-service Spec and not proved.
   Its design runs it on every port-window that recorded frames, holding its N frames to the head's frames root, so to
   Σ n_t, and to the committed layout's frames. A port-window the profile leaves empty passes from public occupancy,
   with no N3 unit. That holds because the profile is fixed by the Program and the placement before the run and bound
@@ -1623,7 +1623,7 @@ checking state row u + 1. Steps past the window's executed count are idle: the n
   window row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a decision to the
   earlier of its step's window and its arrival's ingress window, up to two windows before its step's: at T = 20, 5 of
   async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries from window 0 to their
-  steps in windows 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
+  steps in windows 1 and 2 (`examples/network_vllm/encodings/tests/test_v1.py`).
 - **The end.** `ReplayClose` reads the session's last state row and window row and refuses a session that ends with a
   step to run or a decision unread (`close`). The compile unit charges each decision in the window that commits it,
   A5's, in commit order, which is the order the scan reads them in. So a carried decision is charged where it is
@@ -1695,7 +1695,7 @@ comparators: 470,116 at L = 240 and 1.49 × 10^8 at 40,000. The 60 s llama8b-sha
 would cost 8.67 × 10^10, 70% of it the sort. A public cap on the rows, the sort's permutation as a private input or a
 narrower w_len would each cut that, each a change to what the Definition states.
 
-## Advice v1 (`benchmarks/network_e2e/encodings/v1.py`)
+## Advice v1 (`examples/network_vllm/encodings/v1.py`)
 
 v1 is the advice the compile unit takes: I1 v0 sent as only what the certified record, the scheduler replay and the
 derived rules leave. `v1.encode(advice, record, registered) -> bytes` and `v1.decode(bytes, record, registered) -> I1
@@ -1886,7 +1886,7 @@ composition below): what the bound counts is the charge, not the committed lengt
   uniform one), then a uniform offset, each a general (cum, freq, total) that `ArithCountStep_v1{18, 0, 20}` counts.
   `ChargeCount_v1{N}` lowers a decisions-only window's counts, the slice's one call (docstring), and
   `ChargeCount_v2{N, H, O}` (`window_charge`) the whole window's, its hits and order entries with their counts too.
-- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`): `code_v1` over v1's windows
+- *Held to the coders* (`examples/network_vllm/encodings/arith_vectors.py`): `code_v1` over v1's windows
   (`v1.residual`, a book fit at `v1.TABLE_CAPS`) and ENC-DERIVED's still-sent fields. After every symbol the count's
   interval and `used` are code.py's and its count is the bits consumed. Each window's finish gives v1's charge and
   refuses one bit less, each bit's estimate is the book's model's at context min(run, 2), and the bit-checking variant
@@ -2355,7 +2355,7 @@ sealed under an AEAD built from SHA-512 alone.
   - **The premise:** every link between two spatial units is a sealed pair link between two of the auditor's
     certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-host`.
   - **What it changes:** A1's units are then the facility, not each block.
-- **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on a CPU node: an AMD
+- **What it costs** (run `r20261024-014147-3886`, `examples/network_sim/mockdc.py seal`, on a CPU node: an AMD
   EPYC Genoa, 256 cores at a load of about 30, with `sha_ni` but no SHA-512 instructions, and OpenSSL 3.0.13).
   Figures are bytes of frames a second on one core, on its CPU seconds. Line rate is 400 Gb/s, 50 GB/s, per uplink in
   each direction; its column is the cores one direction takes at each end.

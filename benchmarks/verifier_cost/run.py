@@ -38,7 +38,7 @@ EXE = NCI / ".lake/build/bin/nci-check"
 SCHEMA = "verity/verifier-cost/v1"
 
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(ROOT / "benchmarks/network_sim"))
+sys.path.insert(0, str(ROOT / "examples/network_sim"))
 
 _TINY = dict(layers=1, hidden=8, heads=1, kv_heads=1, head_dim=8, intermediate=16, vocab=8, prompt=1, steps=1, max_pos=8)
 # name -> Config keyword arguments, or ("b0", layers) for `Config.b0`
