@@ -76,7 +76,9 @@ from verity_all_protocols.table import check_answer
 L = T.load("certifier")
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "network_traces"))
+sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
 import certifier_serve as cs  # noqa: E402
+import records_audit as RA  # noqa: E402
 import torch_loop_stub as S  # noqa: E402
 
 
@@ -935,4 +937,7 @@ def test_a_wired_registered_window_gives_the_leg_its_requests_outputs_and_free_i
     assert L.match_outputs([{"stream": 1, "session": "s.0"}, {"stream": 2, "session": "s.1"}], events, FRAMES, outputs,
                            STEPS)["equal"]
     # every activation is a tie and every weight registered: only the requests' step-0 up_proj inputs are free
-    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit)["free"] == 2 * (1024 + 32)
+    pins, untied = RA.window_pins(json.loads((d / "registration.json").read_text())["window"], circuit)
+    pins |= RA.pinned(json.loads(weights["pin"].read_text()))
+    assert not untied
+    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins=pins)["free"] == 2 * (1024 + 32)
