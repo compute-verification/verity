@@ -20,8 +20,8 @@ family of `Lc` bytes over a finite space `Ωc`, cut into one tape per stratum wh
   and wherever the served draw on the coins ends, the model's draw on the tapes is the same set of units.
 * `JointServed`: so `JointStratified`'s bound holds at the served sampling block, with A3 at the challenger's coins in
   place of A3 at the tapes; its other named assumptions are `JointStratified`'s.
-* `ServedDrawHonest`, `ServedDrawNontrivial`, `JointServedHonest`, `JointServedNontrivial`: the honest and nontrivial
-  lemmas.
+* `ServedDraw_honest`, `ServedDraw_nontrivial`, `JointServed_honest`, `JointServed_nontrivial`: the honest and
+  nontrivial lemmas.
 
 The coins are the challenger's, drawn before the epoch and committed under hm96 leaves; the game draws them after the
 prover registers (`auditLive`: the registration, then the coin), so the theorems take them independent of the prover's
@@ -116,30 +116,35 @@ def honestZeros : Fin honestLc → Fin 256 := fun _ => 0
 
 end Served
 
-/-- **`ServedDraw`'s honest lemma**: at the honest instance, a challenger whose coins are independent uniform bytes
-(`Ωc` every `honestLc`-byte string, `coins = id`) meets A3 at its coins, and its draw ends: on the coins all `0` the
-served stratified draw of one of the units `[0, 2)` (`Served.honestSt`, `K = 1`) draws its units from the
-`honestLc ≥ 1` coins. It models the served stratified draw of `select` on the challenger's coins
-(`service.Stream.select`, `coins.draw_first`). -/
-def ServedDrawHonest : Prop :=
+/-- **`ServedDraw`'s honest lemma**: `ServedDraw`'s hypotheses hold at an explicit instance, and its draw ends there.
+The law is one stratum of the units `[0, 2)`, one of them drawn (`Served.honestSt`, `K = 1`, `pop = 2`, read as
+`n = 2` units). The challenger's coins are every `honestLc`-byte string (`Ωc`, nonempty, `coins = id`), with
+`honestLc = 2 · 1 · width 2 + 64 ≥ 1`. A3 holds at its coins, and on the coins all `0` the served stratified draw
+(`SampledProofs.Draw.drawUnits`) ends, having drawn its units. It is a one-stratum miniature of the draw of run
+r20261024-192635-9c4d, accepted: `stratified:1` over 3744 units in three templates, drawn by `service.Stream` from the
+Lean verifier's `IO.getRandomBytes` after the registration (note:20261024T1015Z-report-sparse-mla-window). -/
+def ServedDraw_honest : Prop :=
   0 < Served.honestLc ∧
   Assumptions.UniformRandomBytes (fun _ : Fin 1 => Served.honestLc)
     (fun (c : Fin Served.honestLc → Fin 256) _ => c) ∧
   ∃ units read, SampledProofs.Draw.drawUnits (.stratified 1 (Array.ofFn Served.honestSt)) 2
     (Law.streamOf Served.honestZeros) = .ok (units, read)
 
-/-- **`ServedDraw`'s nontrivial lemma**: with a draw check that accepts every units array in place of the served draw's
-`drawUnits`, `ServedDraw`'s conclusion fails at the honest instance: the live draw on the tapes is not every set. -/
-def ServedDrawNontrivial : Prop :=
-  ¬ ∀ (ω : (Fin Served.honestLc → Fin 256) × Served.Pads 1 Served.honestLc) (units : Array ℕ) (_ : True),
-    (Law.execOS (n := 2) (fun ω : (Fin Served.honestLc → Fin 256) × Served.Pads 1 Served.honestLc =>
-        Served.tapes Served.honestSt ω.1 ω.2) (.stratified 1 (Array.ofFn Served.honestSt)) 2).draw ω =
-      Finset.univ.filter fun u => u.val ∈ units
+/-- **`ServedDraw`'s nontrivial lemma**: with a draw check `acc` that accepts every units array in place of the served
+draw (`drawUnits … = .ok (units, read)`), `ServedDraw`'s conclusion fails at the honest instance: the live draw on the
+tapes is one set at each outcome, not every set the check accepts. -/
+def ServedDraw_nontrivial : Prop :=
+  ∀ acc : Array ℕ → Prop, (∀ units, acc units) →
+    ¬ ∀ (ω : (Fin Served.honestLc → Fin 256) × Served.Pads 1 Served.honestLc) (units : Array ℕ), acc units →
+      (Law.execOS (n := 2) (fun ω : (Fin Served.honestLc → Fin 256) × Served.Pads 1 Served.honestLc =>
+          Served.tapes Served.honestSt ω.1 ω.2) (.stratified 1 (Array.ofFn Served.honestSt)) 2).draw ω =
+        Finset.univ.filter fun u => u.val ∈ units
 
-/-- **`JointServed`'s honest lemma**: at the honest challenger, whose coins are independent uniform bytes (`Ωc` every
-`Lc`-byte string, `coins = id`) of any nonzero length, A3 at the coins holds, and so A3 at every served sampling block's
-tapes, which `JointStratified` takes. -/
-def JointServedHonest : Prop :=
+/-- **`JointServed`'s honest lemma**: at the honest challenger, whose coins are every `Lc`-byte string (`Ωc`, nonempty,
+`coins = id`) of any nonzero length, A3 at the coins holds, and so A3 at every served sampling block's tapes, which
+`JointStratified` takes. The challenger is run r20261024-192635-9c4d's: `service.Stream` reading the Lean verifier's
+`IO.getRandomBytes` after the registration (note:20261024T1015Z-report-sparse-mla-window). -/
+def JointServed_honest : Prop :=
   ∀ (w : StratifiedBlock) (Lc : ℕ), 0 < Lc →
     Assumptions.UniformRandomBytes (fun _ : Fin 1 => Lc) (fun (c : Fin Lc → Fin 256) _ => c) ∧
     Assumptions.UniformRandomBytes (w.served (Fin Lc → Fin 256) Lc id).Lb (w.served (Fin Lc → Fin 256) Lc id).src
@@ -147,7 +152,7 @@ def JointServedHonest : Prop :=
 /-- **`JointServed`'s nontrivial lemma**: with a verifier that accepts every output in place of flock-verify, the bound
 fails at every served sampling block whose wrong units at `τ` are outside its budget and whose errors sum to less than
 `1`. -/
-def JointServedNontrivial : Prop :=
+def JointServed_nontrivial : Prop :=
   ∀ (w : StratifiedBlock) (Ωc : Type) [Fintype Ωc] [Nonempty Ωc] (Lc : ℕ) (coins : Ωc → Fin Lc → Fin 256)
     (δ : ℝ) (ands bits : Fin w.n → ℕ) (τ : Strategy (w.served Ωc Lc coins).game)
     (acc : w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript → Prop), (∀ o, acc o) →

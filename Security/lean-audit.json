@@ -6163,6 +6163,15 @@
    "assumptions": [],
    "type_hash": "20a8497e59180c39414fe50e1e41293894b8d2c6b974786bb7b8d58803dd58cc"
   },
+  "Flock.SecurityProofs.JointServed": {
+   "owner": "@training"
+  },
+  "Flock.SecurityProofs.JointServed_honest": {
+   "owner": "@training"
+  },
+  "Flock.SecurityProofs.JointServed_nontrivial": {
+   "owner": "@training"
+  },
   "Flock.SecurityProofs.JointStratified": {
    "owner": "@lean",
    "signature": ["Flock.SecurityProofs.JointStratified : Flock.Guarantees.JointStratified"],
@@ -6294,6 +6303,15 @@
    "signature": ["Flock.SecurityProofs.SamplingClaimsStated : Flock.Guarantees.SamplingClaimsStated"],
    "assumptions": [],
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b"
+  },
+  "Flock.SecurityProofs.ServedDraw": {
+   "owner": "@training"
+  },
+  "Flock.SecurityProofs.ServedDraw_honest": {
+   "owner": "@training"
+  },
+  "Flock.SecurityProofs.ServedDraw_nontrivial": {
+   "owner": "@training"
   },
   "Flock.SecurityProofs.ServedRowsLinked": {
    "owner": "@proofs",
@@ -12289,7 +12307,13 @@
    "Pous.SecurityProofs.ObligationDemoWide": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the demo's store (1038*2^16 blocks, 105 reads, the state at most S0 at each) by 1% + 2^-129 + 2^-130, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
    "Pous.SecurityProofs.ObligationDemo": "frozen (no-function): Arithmetic at the demo's numbers (1038·2^16 blocks of 16,448 bits, U = 139.64 GiB: S₀ = ⌊ρ·|C|⌋ and U − S₀ ≤ 0.1163·U) and ObligationOfStatic at that block count; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
+   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Flock.SecurityProofs.ServedDraw": "frozen (no-function,world-unlisted): the tie between the served draw (SampledProofs.Draw.drawUnits on the challenger's coins) and the model's live draw on the served tapes (Law.execOS on Served.tapes), not a property of one function's acceptance; it takes A3 at the coins (Assumptions.UniformRandomBytes, uniform/io-getrandombytes), a premise that isn't on the list, as JointStratified does.",
+   "Flock.SecurityProofs.JointServed": "frozen (hash,world-unlisted,scope): JointStratified at the served sampling block (StratifiedBlock.served), so it takes what JointStratified takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy that plays the sampling block) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, here at the challenger's coins, and live-verifier custody, RecordCustodyZK), and hscope (scopeOk), which flock_verify_sound derives from acceptance.",
+   "Flock.SecurityProofs.ServedDraw_honest": "lemma: ServedDraw's honest lemma, its hypotheses at one stratum of 2 units with 1 drawn and coins every 2*1*width 2+64-byte string (A3 by Equiv.funUnique), the served draw computed to end on the coins all 0; a miniature of r20261024-192635-9c4d's stratified:1 draw, not a property of a Lean function.",
+   "Flock.SecurityProofs.ServedDraw_nontrivial": "lemma: ServedDraw's nontrivial lemma, its conclusion false at the honest instance when a check accepting every units array replaces the served draw (the live draw is one set at an outcome, not both #[] and #[0]'s); not a property of a Lean function.",
+   "Flock.SecurityProofs.JointServed_honest": "lemma: JointServed's honest lemma, A3 at the honest challenger's coins (every Lc-byte string, Lc > 0) and so at every served sampling block's tapes; not a property of a Lean function.",
+   "Flock.SecurityProofs.JointServed_nontrivial": "lemma: JointServed's nontrivial lemma, its bound false at a served sampling block whose wrong units are outside the budget and whose errors sum below 1 when a verifier accepting everything replaces flock-verify (the event is certain); not a property of a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
