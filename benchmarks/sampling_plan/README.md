@@ -20,7 +20,8 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`'s of s8 coordinates, and A8's of the remote
   bandwidth audit's opening unit, `BlockOpeningCheck_v1`, at twice their ANDs, its proving only), with the builds and
   hardware they key.
-- `int8_llama.py`: the int8 Llama-3.1-8B row (vLLM's `cursor/vllm-int8-build-8350`). Its units: every s8 dot checks its seed, derives its own noise and opens its rows in circuit. `--model qwen3-8b`
+- `int8_llama.py`: the int8 Llama-3.1-8B row (vLLM's `cursor/vllm-int8-build-8350`). Its units: every s8 dot checks its
+  seed, derives its own noise and opens its rows in circuit. `--model qwen3-8b`
   runs the Qwen3-8B row the same way. A linear's coordinate may be cut into K-chunks that commit their running sums, and
   r × c tiles are offered, each a unit when its outputs fit a size class. It writes the fitted model (`cost-model.json`, a
   cost-model/v1 record), the serve-time commitments, the frontier, the plan at each budget, the tensors committed at
@@ -29,7 +30,7 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   sensitivity (each cost group scaled, each input at its low and high) and the hints (`plan.json`), and prints the
   tables.
 
-- `transformer.py`: the end-to-end demo's transformer, the demo's decoder block over one server-time block of
+- `transformer.py`: the end-to-end demo's transformer (PRF-166), CMP-92's decoder block over one server-time block of
   serving, small (width 128, 2 heads, MLP 512, 2 layers, a byte vocabulary, context 32) or large (`--model large`:
   the Phase 2 model's 70 layers at width 8,192, 128 heads of 64 and an MLP of 32,768, 52.5 GiB of INT8 linears and
   35.0 GiB of KV for 1,023 sequences on one 96 GiB card, its requests a block from an estimated 195 ms step; each
@@ -44,8 +45,8 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   20-minute block: neither is in the census), and the plan as the GPU loop registers it (`handoff`): one
   `IntegrityPeriod` sampling block a subcircuit (`subset:k`, its cap and K0), or the block as one sampling block under the `work:1` law.
   Its tests are this directory's suite.
-- `h200.py`: the demo's plan on one H200: the frozen MQA shape (52 layers, width 16,384, 256
-  query heads of 64 and one KV head, MLP 65,536, context 32; batch and step are named stand-ins) on the demo's partition,
+- `h200.py`: the demo's plan on one H200: the frozen MQA shape (52 layers, width 16,384, 256 query heads of 64 and
+  one KV head, MLP 65,536, context 32; batch and step are named stand-ins) on the demo's partition,
   one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` sampling block, one `--zk` session drawing
   `subset:k` over the tables `_cap` allows, and leads with what Lean proves: each window's K0 (IntegrityPeriodLog) and
   the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and drawn
@@ -57,7 +58,8 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   6.35 s step, 32 steps a request, on the Definition map (`examples/h200/e2e_h200/plan.py`: every subcircuit a
   Definition C-Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
   (J10-R's per-call lane units, `PouwH1LaneZy_v2` over v5, at their traced ANDs), and statements shared per subcircuit
-  per sampling block. The harm is half skipped work (each unit's own ANDs), half leaked output bits, each half weighted at each budget by the least bound that budget certifies for it alone;
+  per sampling block. The harm is half skipped work (each unit's own ANDs), half leaked output bits, each half
+  weighted at each budget by the least bound that budget certifies for it alone;
   each point reports `certify`'s `free_compute` and `leak` from its one draw at δ = 1% and 1e-6, the tile stratum's ε
   (`eps_at`), and the knee. The plan of record is proving within 1% of the sampling block's GPU time, for sampling
   blocks of one serving block, the least that affords a plan, a week, a month and a year, with its draw a subcircuit
