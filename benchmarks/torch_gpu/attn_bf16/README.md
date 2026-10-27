@@ -53,7 +53,7 @@ research run --on vy-dc-h200 --project verity --source . --cwd source --env GPU_
 uv run tools/verity/check/suites.py benchmarks/torch_gpu/attn_bf16      # the CPU suite
 ```
 
-`benchmarks/torch_gpu/attn_ref/` is a shim over the reference path for its remaining callers (`benchmarks/e2e_h200` and
-`benchmarks/torch_gpu/commit_slots/overlap.sh`); new code imports `attn`.
+`benchmarks/torch_gpu/attn_ref/` keeps `attn_ref.py` and `build.sh` for one release, as a shim over the reference path
+for its callers (`benchmarks/e2e_h200` and `benchmarks/torch_gpu/commit_slots/overlap.sh`); new code imports `attn` here.
 
 Results go to the evidence store with the run, never here.
