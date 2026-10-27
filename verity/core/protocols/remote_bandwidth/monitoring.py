@@ -6,7 +6,7 @@ openings' pooled bound's δ, 2^-40, and S the session's draws).
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
 T = machines·⌊period/window_s⌋ sessions in a period, each on its own live coins, against one adaptive prover.
 
-- **Pooled** (`pooled_step`): #4413's count bound (`FlockSoundness.Audit.Periods.prCoin_count_le_choose`). When each
+- **Pooled** (`pooled_step`): the count bound `FlockSoundness.Audit.Periods.prCoin_count_le_choose`. When each
   session, given the earlier ones, is accepted and short of its `q_bytes` with probability at most p = `eps`, at least M
   of the T are with probability at most C(T, M)·p^M. M is the least count within δ (`short_sessions`), so except with δ
   at least T − M + 1 sessions certify their `q_bytes`: the period certifies at least (T − M + 1)·`q_bytes`, and at most
