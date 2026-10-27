@@ -64,11 +64,12 @@ PoUW has other guarantees, outside protocol soundness.
 
 ## The remote protocol in Lean
 
-Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
-site. It composes two subprotocols, sampled proofs' one-stage audit and PoUW's window check, and accepts only when both
-accept and the commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and network certification; memory wipes are a component of neither yet.
+Remote (`verity/core/protocols/remote`, `Core.Onsite.remote`) is the composite for an auditor with no devices at the
+site: onsite restricted to two subprotocols, sampled proofs' one-stage audit and PoUW's window check. It accepts only
+when both accept and the commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and network
+certification; memory wipes are a subprotocol of neither yet.
 
-- **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. On `main`, remote's sampled-proofs component is
+- **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. On `main`, remote's sampled-proofs subprotocol is
   one-stage v1, which takes the sessions' verdicts as evidence; the verifier's run of `flock-verify --zk` produces
   them, and the link from remote's acceptance to that run's comes with v2. The composed statement for the
   remote deployment is not on `main` yet.

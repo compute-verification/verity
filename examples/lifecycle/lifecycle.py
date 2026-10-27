@@ -781,8 +781,8 @@ def _reference() -> Any:
 
 
 def products() -> dict[str, tuple[str, tuple[str, ...]]]:
-    """Each composite's product id and its subprotocols' ids, in the order of their ids (`Core.Onsite`,
-    `Core.Remote`)."""
+    """Each composite's product id and its subprotocols' ids, in the order of their ids (`Core.Onsite.protocol`,
+    `Core.Onsite.remote`)."""
     ref = _reference()
     return {"onsite": (ref.ONSITE.id, tuple(c.id for c in ref.ONSITE.components)),
             "remote": (ref.REMOTE.id, tuple(c.id for c in ref.REMOTE.components))}
