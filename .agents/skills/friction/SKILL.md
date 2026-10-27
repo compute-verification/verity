@@ -148,9 +148,10 @@ Landing:
 
 Protocols and claims:
 
-- (26 Oct, tentative) Credit and every report of computation are in AND gates. 𝓜's resources appear only inside
-  exclusion, which reports in AND gates. Credit is a statement about values; SAK is exclusion's premise only. Whoever
-  finds a reason this is wrong floats it at once.
+- (26 Oct, tentative; 27 Oct, RT-UNITS-3) Credit and every report of computation are in AND gates. 𝓜's resources appear
+  only inside exclusion, which reports counted operations, each labelled with its canonical AND count. Credit of declared
+  size is a statement about values; compute credit also needs values that read live noise and SAK's lower bound on the
+  resources spent. Whoever finds a reason this is wrong floats it at once.
 - (26 Oct) A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
 - (25 Oct) The warden and the network certifier are one device: a tap on each AI server's uplink, whose one code run
