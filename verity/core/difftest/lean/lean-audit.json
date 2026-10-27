@@ -1,33 +1,21 @@
 {
- "roots": [
-  "Difftest",
-  "DifftestExample",
-  "FlockJsonDifftest"
- ],
+ "roots": ["Difftest", "DifftestExample", "FlockJsonDifftest"],
  "exempt": {
   "FlockJsonDifftestMain": "the flock-json-difftest server's entry point, one line: Difftest.serve of FlockJsonDifftest.table, which tests/test_flock_json_port.py drives against the Python mirror; audited under FlockJsonDifftest (a root beside DifftestExample, which declares `main` too)"
  },
  "layers": {
   "Difftest": {
-   "imports": [
-    "Lean",
-    "Flock.Canon"
-   ],
+   "imports": ["Lean", "Flock.Canon"],
    "except": [],
    "why": "the harness is code: Lean core and C-Flock's canonical JSON, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "DifftestExample": {
-   "imports": [
-    "Difftest"
-   ],
+   "imports": ["Difftest"],
    "except": [],
    "why": "the example port reaches Lean only through the harness, as a port does"
   },
   "FlockJsonDifftest": {
-   "imports": [
-    "Difftest",
-    "Flock.JsonParse"
-   ],
+   "imports": ["Difftest", "Flock.JsonParse"],
    "except": [],
    "why": "C-Flock's JSON parser's port reads the parser it holds to its Python mirror, and Lean core's parser through the harness"
   }
