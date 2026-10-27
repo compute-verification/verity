@@ -88,7 +88,8 @@ every machine of a census deployment, the pooled total first and the per-window 
   circuit it registered, its record the window's registration, one IU of the program's units, θ empty (the weights are
   registered reads, not registered parameters). The answer is `nci_reference`'s, and Lean's `nci serve` must agree; it
   writes `nci.case.json`, onsite's registration case, which onsite checks before composing, so a refusal rejects the
-  composed verdict. Its `policy.json`, which the report's `registration` row carries, states what it measured (the toy
+  composed verdict (a period whose leg wrote none uses a deployment's declaration, `period.json`'s `nci`, on the record
+  integrity's case commits to: `compose.registration_input`). Its `policy.json`, which the report's `registration` row carries, states what it measured (the toy
   reads 2,112 bits over 9 gates a unit, about 235 a gate, and its IU's share of Γ), the verdict at α = 256 bits a gate
   and Γ = 2^44, the one onsite composes, labelled `placeholder (toy)` (the composed verdict's `policy`), and the verdict
   at the GLM-5.3 demo's α = 2^-25: it doesn't comply.

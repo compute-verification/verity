@@ -1,11 +1,12 @@
 """The composed verdict through onsite Verity (`core_onsite`, ``verity/onsite/v0``), and the network certifier's K
 pooled over a monitoring period (`communication`, which `monitoring.monitoring` reports).
 
-Onsite's check (verity/core/protocols/composition/README.md) first runs its registration check, NCI's
-(`REGISTRATION`), on the registration's case in its commit phase: a registration it refuses refuses onsite. Then it runs
-each component's own ``answer`` on that component's case and decides, reject first: any component's rejection rejects
-onsite whatever the others answer; otherwise onsite accepts only when every component accepts and its commitment binds
-their digests and the registration's. So the runner decides:
+Onsite's check (verity/core/protocols/composition/README.md) is a registered composition's
+(`Core.Composition.registeredB`): it first runs its registration check, NCI's (`NCI`, `NciCheck.Protocol`), on the
+registration's case in its commit phase, and a registration it refuses refuses onsite. Then it runs each component's own
+``answer`` on that component's case and decides, reject first: any component's rejection rejects onsite whatever the
+others answer; otherwise onsite accepts only when every component accepts and its commitment binds their digests and
+the registration's, the digest of the record NCI's case commits to (`registration_digest`). So the runner decides:
 
 * **reject** as soon as the registration check or one leg's protocol rejects, or the registration check accepted a
   registration other than the one sampled proofs' leg committed to (`COMMITTER_LEAN`; one registration digest in both,
@@ -17,12 +18,17 @@ their digests and the registration's. So the runner decides:
   EVIDENCE [BLOB ...]``, the blobs the files integrity's audit on the proofs reads), and its answer is the composed
   verdict, labelled with the policy the registration check's verdict is at (``policy``).
 
+NCI's case for onsite (`registration_input`) is the registration check's leg's (``legs/nci.py``, the declaration it
+derives from the window's own records), else the deployment's NCI declaration, ``period.json``'s ``nci``, on the record
+integrity's case commits to and its log (`registration_case`), else `NO_CASE`, which NCI refuses: a period with neither
+is **pending-ports** too.
+
 Given onsite's executable, the runner runs ``onsite check`` every period, whatever it decides: the registration check on
-its leg's case, each port on its leg's case, each stub on a case with no statement yet (`STUB_CASE`, undecided), and a
-port or registration check whose leg wrote no case on one its decoders refuse (`NO_CASE`). Its answer is ``answer``,
-where each case came from is ``inputs`` (the registration's under its id), and ``agree`` says onsite rejected on the
-registration's case if its check rejected it, on the registration's digest if it isn't sampled proofs' case's, and
-otherwise on every leg whose own case rejected.
+that case, each port on its leg's case, each stub on a case with no statement yet (`STUB_CASE`, undecided), and a port
+whose leg wrote no case on one its decoders refuse (`NO_CASE`). Its answer is ``answer``, where each case came from is
+``inputs`` (the registration's under `NCI`), and ``agree`` says onsite rejected on the registration's case if its check
+rejected it, on the registration's digest if it isn't sampled proofs' case's, and otherwise on every leg whose own case
+rejected.
 
 A protocol outside onsite's components (`table.Entry.onsite` false) is reported beside the composition, and a rejection
 there rejects the composed verdict too (no accounting accepts over a refused audit), but its acceptance can't complete it.
@@ -40,16 +46,16 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.ml.circuits.codec import canonical_json
 
 ROOT = Path(__file__).resolve().parents[3]
 ONSITE = ROOT / "verity" / "core" / "protocols" / "onsite" / "CoreOnsite.lean"
 PROTOCOL = "verity/onsite/v0"
-#: onsite's registration check (`Core.Onsite.protocol`'s, `onsite_registration`): NCI's check of record, its Lean name
-REGISTRATION, REGISTRATION_LEAN = "verity/nci/v1", "NciCheck.Protocol.protocol"
-#: the component whose commitment is the registration the registration check checks (`Core.Onsite.protocol`'s,
-#: `onsite_registration`): sampled proofs' one-stage audit on the proofs, whose commitment is the run's registration record
-COMMITTER_LEAN = "SampledProofs.OneStageZk.protocol"
+#: the Lean names of onsite's registration check, NCI's check of record (`NCI`), and of the component whose commitment
+#: is the registration it checks (`COMMITTER`), sampled proofs' one-stage audit on the proofs (`Core.Onsite.protocol`'s,
+#: `onsite_registration`)
+REGISTRATION_LEAN, COMMITTER_LEAN = "NciCheck.Protocol.protocol", "SampledProofs.OneStageZk.protocol"
 #: the network certifier's period check, whose public carries K and eps
 CERTIFIER = "verity/certifier/v0"
 #: a proof block's outputs are at most 16 bits (`NetworkCheck.Period`'s faulty bits, `16 · b`)
@@ -84,8 +90,7 @@ def onsite_registration(source: str | None = None) -> tuple[str, str]:
 def mismatch(registration: str, committed: str | None) -> str:
     """Onsite's reason when the registration check checked the registration digest ``registration`` and sampled proofs'
     case committed to ``committed`` (`Core.Composition.mismatch`; hex, None when its case has no digest)."""
-    return (f"registration: {REGISTRATION} checked {registration}, {PORTS[COMMITTER_LEAN][1]} committed "
-            f"{committed or 'no digest'}")
+    return f"registration: {NCI} checked {registration}, {COMMITTER} committed {committed or 'no digest'}"
 
 
 def stub_component(name: str) -> str | None:
@@ -102,35 +107,52 @@ def bind(protocol: str, components: Sequence[tuple[str, str]]) -> bytes:
     return hashlib.sha512(protocol.encode() + b"\0" + body).digest()
 
 
-def onsite_inputs(cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str],
-                  protocol: str = PROTOCOL, registration: Mapping[str, Any] | None = None,
-                  registration_digest: str = "") -> tuple[bytes, bytes, bytes]:
-    """The product ``protocol``'s (onsite's by default) params, commitment and evidence from each component's case and its
-    commitment's digest (its answer's ``commitment``), both keyed by the component's protocol id, and onsite's
-    registration case and digest: what ``onsite check`` and ``product IDS check`` read (the composition README's table).
-    The commitment is the binding of the components' digests, then the registration's digest when there is one."""
+def registration_case(declaration: Mapping[str, Any], integrity: Mapping[str, Any]) -> dict[str, Any]:
+    """NCI's case for onsite's registration (`NciCheck.Protocol`'s module docstring): the deployment's NCI declaration
+    (`NCI_PARAMS` and `NCI_EVIDENCE`) on the run's own registration record, the commitment of integrity's case, and the
+    log before it, that case's params' ``log``: one registration in both."""
+    p = integrity.get("params")
+    log = p.get("log", []) if isinstance(p, Mapping) else []
+    return {"commitment": integrity["commitment"],
+            "evidence": canonical_json({k: declaration[k] for k in NCI_EVIDENCE}).hex(),
+            "params": {**{k: declaration[k] for k in NCI_PARAMS}, "log": log}}
+
+
+def registration_digest(case: Mapping[str, Any]) -> str:
+    """The digest of the registration record a case commits to (`NciCheck.Baseline.digest`, `registration.digest`), or
+    ``""`` when its commitment is no record, which onsite then refuses."""
+    try:
+        record = json.loads(bytes.fromhex(case["commitment"]))
+    except (KeyError, TypeError, ValueError):
+        return ""
+    return R.digest(record) if isinstance(record, dict) else ""
+
+
+def onsite_inputs(cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str], protocol: str = PROTOCOL,
+                  registration: Mapping[str, Any] | None = None) -> tuple[bytes, bytes, bytes]:
+    """The product ``protocol``'s params, commitment and evidence from each component's case and its commitment's digest
+    (its answer's ``commitment``), both keyed by the component's protocol id: what ``product IDS check`` reads (the
+    composition README's table). With NCI's ``registration`` case, the registered composition's, what ``onsite check``
+    reads: the registration's entry and case beside the components', and its digest after their binding."""
     ids = sorted(cases)
-
-    def entry(i: str, c: Mapping[str, Any]) -> dict[str, Any]:
-        return {"commitment": c["commitment"], "evidence": c["evidence"], "id": i, "params": c["params"]}
-
     params: dict[str, Any] = {"components": [{"id": i, "params": cases[i]["params"]} for i in ids]}
-    evidence: dict[str, Any] = {"components": [entry(i, cases[i]) for i in ids]}
     commitment = bind(protocol, [(i, digests[i]) for i in ids])
+    evidence: dict[str, Any] = {"components": [{"commitment": cases[i]["commitment"], "evidence": cases[i]["evidence"],
+                                                "id": i, "params": cases[i]["params"]} for i in ids]}
     if registration is not None:
-        params["registration"] = {"id": REGISTRATION, "params": registration["params"]}
-        evidence["registration"] = entry(REGISTRATION, registration)
-        commitment += bytes.fromhex(registration_digest)
+        params["registration"] = {"id": NCI, "params": registration["params"]}
+        evidence["registration"] = {"commitment": registration["commitment"], "evidence": registration["evidence"],
+                                    "id": NCI, "params": registration["params"]}
+        commitment += bytes.fromhex(registration_digest(registration))
     return canonical_json(params), commitment, canonical_json(evidence)
 
 
 def onsite_check(exe: str | Sequence[str], cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str],
-                 protocol: str = PROTOCOL, registration: Mapping[str, Any] | None = None,
-                 registration_digest: str = "") -> dict[str, Any]:
-    """``onsite check`` (or ``product IDS check``: ``exe`` as an argv, with ``protocol`` its product's id) on the
-    components' cases and onsite's registration case (`onsite_inputs`), with every blob file a case names (``blobs``, the
-    files integrity's audit on the proofs reads) after them: its answer line, parsed."""
-    params, commitment, evidence = onsite_inputs(cases, digests, protocol, registration, registration_digest)
+                 protocol: str = PROTOCOL, registration: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """``onsite check`` (with NCI's ``registration`` case) or ``product IDS check`` (``exe`` as an argv, with
+    ``protocol`` its product's id) on the components' cases (`onsite_inputs`), with every blob file a case names
+    (``blobs``, the files integrity's audit on the proofs reads) after them: its answer line, parsed."""
+    params, commitment, evidence = onsite_inputs(cases, digests, protocol, registration)
     blobs = [str(b) for i in sorted(cases) for b in cases[i].get("blobs") or ()]
     argv = [exe] if isinstance(exe, str) else list(exe)
     with tempfile.TemporaryDirectory() as d:
@@ -160,6 +182,12 @@ PORTS = {
 STUB_CASE = {"commitment": "00" * 32, "evidence": canonical_json({"drawn": 0, "passed": 0}).hex(), "params": {"k": 1}}
 #: The case of a port whose leg wrote none: its own decoders refuse it, so that component rejects.
 NO_CASE = {"commitment": "", "evidence": "", "params": {}}
+#: Onsite's registration check, and the component whose commitment is the run's registration record.
+NCI = "verity/nci/v1"
+COMMITTER = PORTS[COMMITTER_LEAN][1]
+#: A deployment's NCI declaration (``period.json``'s ``nci``): NCI's params but the log, and its evidence.
+NCI_PARAMS = ("alpha", "gamma", "parameters", "program")
+NCI_EVIDENCE = ("owner", "provenance", "theta")
 
 
 def component_of(name: str) -> tuple[str, str, bool]:
@@ -193,55 +221,70 @@ def onsite_cases(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str,
     return got, digests, source, legs
 
 
+def registration_input(registration: Mapping[str, Any], nci_case: Mapping[str, Any] | None,
+                       declaration: Mapping[str, Any] | None,
+                       committed: Mapping[str, Any] | None) -> tuple[Mapping[str, Any], str]:
+    """Onsite's registration case (module docstring) and where it came from: the registration check's leg's case
+    (``leg``), else the deployment's NCI ``declaration`` on ``committed``, the case of the leg whose commitment is the
+    registration (`registration_case`, ``declaration``), else `NO_CASE` (``no case``, saying what is missing), given the
+    registration check's row."""
+    if nci_case is not None:
+        return nci_case, "leg"
+    if declaration and committed is not None:
+        return registration_case(declaration, committed), "declaration"
+    why = f"{COMMITTER} has no case" if declaration else "no NCI declaration"
+    return NO_CASE, f"no case (registration {registration.get('verdict', 'missing')}, {why})"
+
+
 def composed(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str, str | None],
              cases: Mapping[str, Mapping[str, Any] | None], onsite: Sequence[str] | None = None,
-             exe: str | None = None, registration: Mapping[str, Any] | None = None,
-             registration_case: Mapping[str, Any] | None = None) -> dict[str, Any]:
+             exe: str | None = None, declaration: Mapping[str, Any] | None = None,
+             registration: Mapping[str, Any] | None = None, nci_case: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The composed verdict (module docstring) over the period's rows (by leg name, each with its ``verdict``),
-    ``components`` (leg name -> onsite component, or None), the legs' ``cases``, onsite's component list, and the
-    registration check's row (missing when None) and its leg's case. With ``exe``, ``onsite check`` runs on every period
-    (`onsite_cases`), and its answer is ``answer``; ``agree`` says whether it rejected on the registration's case if the
-    registration check rejected it, and otherwise on each leg whose own case rejected."""
+    ``components`` (leg name -> onsite component, or None), the legs' ``cases``, onsite's component list, the
+    deployment's NCI ``declaration``, and the registration check's row (missing when None) and its leg's case
+    (``nci_case``). With ``exe``, ``onsite check`` runs on every period (`onsite_cases`, and NCI's case,
+    `registration_input`), and its answer is ``answer``; ``agree`` says whether it rejected on the registration's case if
+    the registration check rejected it, on the registration's digest if sampled proofs' leg committed to another, and
+    otherwise on each leg whose own case rejected."""
     onsite = onsite_components() if onsite is None else list(onsite)
     reg = registration or {"verdict": "missing"}
     stubs = sorted(c for c in (stub_component(x) for x in onsite) if c is not None)
-    out: dict[str, Any] = {"protocol": PROTOCOL, "registration": REGISTRATION, "onsite_components": onsite,
+    out: dict[str, Any] = {"protocol": PROTOCOL, "registration": NCI, "onsite_components": onsite,
                            "stubs": stubs, "outside_onsite": sorted(n for n, c in components.items() if c is None),
                            **({"policy": reg["policy"]["label"]} if isinstance(reg.get("policy"), dict) else {})}
-    component, committer = PORTS[COMMITTER_LEAN]
+    component = PORTS[COMMITTER_LEAN][0]
+    leg = next((n for n, c in components.items() if c == component), None)
+    committed = (rows.get(leg) or {}).get("commitment") if leg is not None else None
+    moved = bool(reg.get("verdict") == "accept" and reg.get("commitment") and committed and committed != reg["commitment"])
+    rcase, rsource = registration_input(reg, nci_case, declaration, cases.get(leg) if leg is not None else None)
     got = None
     if exe is not None:
         cs, digests, source, legs = onsite_cases(rows, components, cases, onsite)
-        if registration_case is not None:
-            rcase, rdigest, source[REGISTRATION] = registration_case, reg.get("commitment") or "", "leg"
-        else:
-            rcase, rdigest = NO_CASE, ""
-            source[REGISTRATION] = f"no case (registration {reg.get('verdict', 'missing')})"
-        got = onsite_check(exe, cs, digests, registration=rcase, registration_digest=rdigest)
+        source[NCI] = rsource
+        got = onsite_check(exe, cs, digests, registration=rcase)
         reason = got.get("reason") or ""
         if reg.get("verdict") == "reject":
-            agree = got["verdict"] == "reject" and reason.startswith(f"registration: {REGISTRATION} reject: ")
-        elif (reg.get("verdict") == "accept" and registration_case is not None and committer in digests
-              and digests[committer] != rdigest):
-            agree = got["verdict"] == "reject" and reason == mismatch(rdigest, digests[committer] or None)
+            agree = got["verdict"] == "reject" and reason.startswith(f"registration: {NCI} reject: ")
+        elif moved:
+            agree = got["verdict"] == "reject" and reason == mismatch(reg["commitment"], digests.get(COMMITTER) or None)
         else:
             agree = all(got["verdict"] == "reject" and f"{pid} reject: " in reason
                         for pid, n in legs.items() if rows[n].get("verdict") == "reject")
         out.update(inputs=source, answer=got, agree=agree)
     rejected = sorted(n for n, r in rows.items() if r.get("verdict") == "reject")
-    leg = next((n for n, c in components.items() if c == component), None)
-    committed = (rows.get(leg) or {}).get("commitment") if leg is not None else None
-    if reg.get("verdict") == "accept" and reg.get("commitment") and committed and committed != reg["commitment"]:
+    if moved:
         rejected = [f"the registration, which {leg}'s leg did not commit to", *rejected]
     if reg.get("verdict") == "reject":
         rejected = ["the registration check", *rejected]
     if rejected:
         return {**out, "verdict": "reject", "reason": "rejected by " + ", ".join(rejected) + " (reject dominates)"}
     waiting = []
-    if reg.get("verdict") in ("missing", "error"):
-        waiting.append(f"the registration check {reg['verdict']}")
-    elif registration_case is None:
-        waiting.append("the registration check has no case")
+    if reg.get("verdict") == "error":
+        waiting.append("the registration check error")
+    elif rcase is NO_CASE:
+        waiting.append(f"onsite's registration has no case: the registration check {reg.get('verdict', 'missing')}, and "
+                       + (f"{leg} has no case" if declaration else "period.json states no NCI declaration (nci)"))
     if stubs:
         waiting.append("onsite's stubs: " + ", ".join(stubs))
     for n, r in sorted(rows.items()):
@@ -320,7 +363,8 @@ def communication(reports: Sequence[Mapping[str, Any]], period_s: float, spans: 
     return out
 
 
-__all__ = ["CERTIFIER", "COMMITTER_LEAN", "HORIZON_CONDITION", "NO_CASE", "OUT_BITS", "PORTS", "PROTOCOL",
-           "REGISTRATION", "REGISTRATION_LEAN", "STUB_CASE", "bind", "communication", "component_of", "composed",
-           "fleet", "horizon_leak", "mismatch", "onsite_cases", "onsite_check", "onsite_components", "onsite_inputs",
-           "onsite_registration", "stub_component"]
+__all__ = ["CERTIFIER", "COMMITTER", "COMMITTER_LEAN", "HORIZON_CONDITION", "NCI", "NCI_EVIDENCE", "NCI_PARAMS",
+           "NO_CASE", "OUT_BITS", "PORTS", "PROTOCOL", "REGISTRATION_LEAN", "STUB_CASE", "bind", "communication",
+           "component_of", "composed", "fleet", "horizon_leak", "mismatch", "onsite_cases", "onsite_check",
+           "onsite_components", "onsite_inputs", "onsite_registration", "registration_case", "registration_digest",
+           "registration_input", "stub_component"]
