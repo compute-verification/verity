@@ -108,7 +108,7 @@ variable (D : Deployment)
 
 /-- The deployment's compiled verifier. -/
 def protocol : BlobProtocol :=
-  registeredB D.id NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id D.components
+  Core.Composition.registeredB D.id NciCheck.Protocol.protocol SampledProofs.OneStageZk.protocol.id D.components
 
 /-- The deployment composes a component that decides `Audit` `a`'s claim. -/
 def Decides (a : Audit) : Prop := (D.comp a).isSome = true
