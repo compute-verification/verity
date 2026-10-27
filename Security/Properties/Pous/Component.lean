@@ -9,8 +9,8 @@ import Properties.Pous.EndToEndAt
 (`Pous.EndToEnd.AcceptedAt`, read by `AuditsOf.Accepts`) accepts a period with no break while the node held too few
 bit-ticks, over an audit whose verifier's keys and session id are fixed and whose setup commitment, `C*`, setup outputs
 and table are functions of the coins drawn before the memory challenger's (`AuditsOf`). Onsite's verifier of record
-runs `PousCheck.RunProtocol.protocol` on bytes instead: the one-theorem's leg for PoUS
-(`note:proofs/20261026T0332Z-report-onethm`) turns that protocol's acceptance into `AcceptedAt` on fields of that kind.
+runs `PousCheck.RunProtocol.protocol` on bytes instead: the one theorem's leg for PoUS turns that protocol's acceptance
+into `AcceptedAt` on fields of that kind.
 Each statement below is one step of it, about one function of the code, in the shape of the code's properties.
 
 * `RunAccepts`: what the compiled check accepts is `AcceptedAt` at the auditor's point, keys and session id, on the
