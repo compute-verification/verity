@@ -341,14 +341,23 @@ theorem not_survivorBound_cheat {ι : Type} (d : Accounting.Device ι) {C : Circ
   · exact absurd h (not_le.mpr hε)
   · exact fun x => ⟨trivial, storeKeep_hold hF _ _ _⟩
 
+/-- The segment's published `foreign_bits` fit in its store beside its on-chip state. -/
+theorem segment_foreign_le :
+    (WipeProtocol.certify segmentParams 0).foreignBits + segmentDevice.chip ≤ segmentDevice.mem := by
+  rw [certify_zero (q := segmentParams) rfl le_rfl]
+  show (2 ^ 19 * 512 + 18) / 19 + 0 ≤ 2 ^ 19 * 512
+  norm_num
+
+/-- The segment's published `eps` is below 1. -/
+theorem segment_eps_lt :
+    ((WipeProtocol.certify segmentParams 0).eps.num : ℝ≥0∞) / (WipeProtocol.certify segmentParams 0).eps.den < 1 := by
+  rw [certify_zero (q := segmentParams) rfl le_rfl]
+  show ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞) < 1
+  rw [Nat.cast_one, one_div, ENNReal.inv_lt_one]
+  exact_mod_cast (by norm_num : (1 : ℕ) < 2 ^ 128)
+
 theorem wipeSurvivorBoundNontrivial : WipeSurvivorBoundNontrivial := by
   intro C B s b carry κ prf
-  rw [certify_zero (q := segmentParams) rfl le_rfl]
-  refine not_survivorBound_cheat segmentDevice s b carry prf ?_ ?_
-  · show (2 ^ 19 * 512 + 18) / 19 + 0 ≤ 2 ^ 19 * 512
-    norm_num
-  · show ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞) < 1
-    rw [Nat.cast_one, one_div, ENNReal.inv_lt_one]
-    exact_mod_cast (by norm_num : (1 : ℕ) < 2 ^ 128)
+  exact not_survivorBound_cheat segmentDevice s b carry prf segment_foreign_le segment_eps_lt
 
 end MemoryChallenger.Properties.SecurityProofs
