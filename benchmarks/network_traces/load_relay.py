@@ -98,7 +98,8 @@ from verity.ml.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain,
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
 from verity.ml.crypto import chacha20  # noqa: E402
 from verity.core.protocols.certifier import transfer_rows as TR  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer  # noqa: E402
+from verity.core.protocols.certifier.certificate import Certificate, Direction, Issuer  # noqa: E402
+from verity.core.protocols.certifier.period_root import PeriodIssuer  # noqa: E402
 from verity.core.protocols.pous.schemes import p2 as P2  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 
@@ -686,14 +687,15 @@ def heads(link: str, program: str, values: Sequence[Value], roots: Mapping[str, 
                             domain(v).domain_id, roots[v.name], v.word_bits, v.schema) for v in values]
 
 
-def sign_heads(issuer: Issuer, heads_: Sequence[TR.TransferHead]) -> list[dict[str, Any]]:
-    """Each head signed by `issuer` in its session: its registration (`transfer_rows.registration`)."""
+def sign_heads(issuer: Issuer | PeriodIssuer, heads_: Sequence[TR.TransferHead]) -> list[dict[str, Any]]:
+    """Each head signed by `issuer` in its session: its registration (`transfer_rows.registration`). A
+    `period_root.PeriodIssuer`'s heads are records of its period, their registrations without a certificate."""
     out = []
     for head in heads_:
         cert = issuer.sign(head.link, head.direction, head.window, head.digest())
         if cert is None:
             raise Refused(f"{head.value}: the network certifier's signer refused: {issuer.refused}")
-        out.append(TR.registration(head, cert))
+        out.append(TR.registration(head, cert if isinstance(cert, Certificate) else None))
     return out
 
 
@@ -1097,19 +1099,25 @@ def heads_of(doc: Mapping[str, Any]) -> tuple[Shape, list[TR.TransferHead]]:
                         verifier_domain(program))
 
 
-def load_doc(shape: Shape, heads_: Sequence[TR.TransferHead], registrations: Sequence[dict[str, Any]], key: dict,
-             session: bytes) -> dict[str, Any]:
+def load_doc(shape: Shape, heads_: Sequence[TR.TransferHead], registrations: Sequence[dict[str, Any]],
+             key: dict | None, session: bytes, *, attest: dict | None = None) -> dict[str, Any]:
     """``load.json``: the load's registrations, the block record's (`blocks.pins`' ``registrations``, the uplink's
-    certifier the network certifier's key and session it names)."""
+    certifier the network certifier's key and session it names; on device-attest ``attest``, the deployment record's,
+    in the key's place)."""
     h = heads_[0]
+    signer = {"key": key} if attest is None else {"attest": attest}
     return {"format": FORMAT, "shape": shape.name, "link": h.link, "window": WINDOW, "program": h.program.hex(),
-            "link_format": "plain", "key": key, "session": session.hex(), "values": list(registrations)}
+            "link_format": "plain", **signer, "session": session.hex(), "values": list(registrations)}
 
 
-def check_load(doc: Mapping[str, Any], key: Any, session: bytes) -> tuple[dict[str, Any], list[str]]:
+def check_load(doc: Mapping[str, Any], key: Any, session: bytes, *,
+               certified: Callable[[TR.TransferHead], str | None] | None = None) -> tuple[dict[str, Any], list[str]]:
     """A ``load.json`` read as the verifier reads it: each of its shape's values a registration that
     `transfer_rows.check_registration` accepts under `key` and `session` for the value it expects, at the document's
-    program and link. Returns the count and the problems."""
+    program and link. On device-attest `key` is None and `certified` says why a value's head isn't a record of the
+    certifier's period, or None. Returns the count and the problems."""
+    if (key is None) == (certified is None):
+        raise TypeError("a load is read under the certifier's key or, on device-attest, its periods: one of the two")
     try:
         shape = shape_named(doc.get("shape"))
         if doc.get("format") != FORMAT or doc.get("window") != WINDOW or not isinstance(doc.get("link"), str):
@@ -1122,9 +1130,11 @@ def check_load(doc: Mapping[str, Any], key: Any, session: bytes) -> tuple[dict[s
     problems, ok = [], 0
     for v, reg in zip(values, regs):
         try:
-            TR.check_registration(reg, key, session, link=doc["link"], direction=Direction.INGRESS, window=WINDOW,
-                                  kind=KIND, value=v.name, program=doc.get("program"), words=v.reg_words, rows=v.leaves,
-                                  word_bits=v.word_bits, schema=v.schema)
+            head, _ = TR.check_registration(reg, key, session, link=doc["link"], direction=Direction.INGRESS,
+                                            window=WINDOW, kind=KIND, value=v.name, program=doc.get("program"),
+                                            words=v.reg_words, rows=v.leaves, word_bits=v.word_bits, schema=v.schema)
+            if certified is not None and (why := certified(head)) is not None:
+                raise ValueError(why)
             ok += 1
         except ValueError as e:
             problems.append(f"load {v.name}: {e}")

@@ -223,12 +223,13 @@ from pathlib import Path
 
 import active_replay as ar
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import audit as host_audit, calibration, out_commit
+from verity.core import attest as AT
+from verity.core.protocols.certifier import audit as host_audit, calibration, out_commit, period_root as PR
 from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
     Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
-    Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, parameters_digest
+    Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, certificate_digest, parameters_digest
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.schedule import ClockSync, expected_grids, handing_buckets
@@ -373,14 +374,120 @@ def certificate_from_json(doc: dict) -> Certificate:
     return Certificate(**{f: _dec(f, doc[f]) for f in Certificate.__slots__})
 
 
-def certified_json(record: CertifiedRecord) -> dict:
-    return {"salt_c": record.salt.hex(), "head": {f: _enc(getattr(record.head, f)) for f in RecordHead.__slots__},
-            "certificate": certificate_json(record.certificate)}
+def certified_json(record: CertifiedRecord | PR.PeriodRecord) -> dict:
+    """A certified record's line; on device-attest its period entry in the certificate's place."""
+    head = {f: _enc(getattr(record.head, f)) for f in RecordHead.__slots__}
+    if isinstance(record, PR.PeriodRecord):
+        return {"salt_c": record.salt.hex(), "head": head, "entry": record.entry.to_json()}
+    return {"salt_c": record.salt.hex(), "head": head, "certificate": certificate_json(record.certificate)}
 
 
-def certified_from_json(doc: dict) -> CertifiedRecord:
-    return CertifiedRecord(RecordHead(**{f: _dec(f, v) for f, v in doc["head"].items()}), bytes.fromhex(doc["salt_c"]),
-                           certificate_from_json(doc["certificate"]))
+def certified_from_json(doc: dict) -> CertifiedRecord | PR.PeriodRecord:
+    head, salt = RecordHead(**{f: _dec(f, v) for f, v in doc["head"].items()}), bytes.fromhex(doc["salt_c"])
+    if "entry" in doc:
+        return PR.PeriodRecord(head, salt, PR.Entry.from_json(doc["entry"]))
+    return CertifiedRecord(head, salt, certificate_from_json(doc["certificate"]))
+
+
+# Device-attest (`period_root`): the network certifier's party key on its device, and a run's liveness records and
+# periods on disk.
+
+LIVENESS, PERIODS = "liveness.jsonl", "periods.jsonl"
+
+
+def _attest_params(height: int) -> tuple[lms.Params, int]:
+    return lms.Params(64, 1, height), KEYGEN_WORKERS if height > HEIGHT else 1
+
+
+def issue_party_key(directory: Path, deployment: bytes, height: int = HEIGHT) -> lms.PartyKey:
+    """A rehearsal's device: an identity made in `directory` at `height` (`lms.Identity.init`) and a lower key issued
+    to the network certifier (`period_root.PARTY`) in the deployment whose hash is `deployment`."""
+    params, workers = _attest_params(height)
+    return lms.Identity.init(directory, params, workers).issue(deployment, PR.PARTY, workers)
+
+
+def party_key(directory: Path, deployment: bytes, height: int = HEIGHT) -> lms.PartyKey:
+    """The network certifier's newest lower key in the deployment, on the device whose identity is in `directory`."""
+    params, workers = _attest_params(height)
+    return lms.Identity(directory, params, workers).party(deployment, PR.PARTY, workers)
+
+
+def attest_json(key: lms.PartyKey, windows: int) -> dict:
+    """A deployment record's ``attest``, in a certificate key's place: the device's identity, the deployment's hash, the
+    party, the HSS parameters, and the link-windows of a certification period."""
+    return {"identity": key.identity.hex(), "deployment": key.deployment.hex(), "party": key.party,
+            "params": [key.params.N, key.params.W, key.params.H], "windows": windows}
+
+
+def _append(path: Path, doc: dict) -> None:
+    with open(path, "a") as fh:
+        fh.write(json.dumps(doc) + "\n")
+
+
+def live(out: Path, issuer: PR.PeriodIssuer, window: int) -> PR.Liveness | None:
+    """``issuer.live(window)``, written to `out`: its liveness record a line of `LIVENESS` (public), and each period it
+    closed a line of `PERIODS` (`attest.SignedPeriod`, the prover's witness). None when the party key refused."""
+    n = len(issuer.closed)
+    got = issuer.live(window)
+    if got is not None:
+        _append(out / LIVENESS, got.to_json(issuer.link))
+    for period in issuer.closed[n:]:
+        _append(out / PERIODS, period.to_json())
+    return got
+
+
+def close_periods(out: Path, issuer: PR.PeriodIssuer) -> None:
+    """``issuer.close()``, each period it closed a line of `PERIODS`."""
+    n = len(issuer.closed)
+    issuer.close()
+    for period in issuer.closed[n:]:
+        _append(out / PERIODS, period.to_json())
+
+
+class Attested:
+    """A device-attest run read back as `period_root.refusal` reads it, under its deployment record's ``attest`` in the
+    session: its periods (`PERIODS`) and liveness records (`LIVENESS`). Its periods start at link-window 0."""
+
+    def __init__(self, run: Path, doc: dict, session: bytes) -> None:
+        self.params = lms.Params(*doc["params"])
+        self.identity, self.deployment = bytes.fromhex(doc["identity"]), bytes.fromhex(doc["deployment"])
+        self.windows, self.session = doc["windows"], session
+        lines = lambda name: [json.loads(x) for x in (run / name).read_text().splitlines()] \
+            if (run / name).exists() else []  # noqa: E731
+        self.periods = {(p.link, p.period): p for p in map(AT.SignedPeriod.from_json, lines(PERIODS))}
+        self.liveness: dict[tuple[str, int], dict[int, bytes]] = defaultdict(dict)
+        for x in lines(LIVENESS):
+            self.liveness[(x["link"], x["period"])][x["block"]] = bytes.fromhex(x["signature"])
+
+    def problem(self, link: str, of: str, direction: Direction, window: int, digest: bytes) -> str | None:
+        """Why ``digest``, certified on link ``of``'s end ``direction`` in link-window ``window``, isn't a record of
+        link ``link``'s period in a block with a liveness record (`period_root.refusal`, the period's signature and
+        that block's liveness record checked), or None."""
+        period, block = divmod(window, self.windows)
+        closed = self.periods.get((link, period))
+        if closed is None:
+            return f"{link} period {period} has no signed root"
+        try:
+            key_id = lms.HssSignature.decode(self.params, closed.signature).lower[:16]
+            entry = PR.Entry.of(key_id, self.session, of, direction, window, digest)
+        except ValueError as e:
+            return f"{link} period {period}'s signature or the entry doesn't read: {e}"
+        blocks = self.liveness.get((link, period), {})
+        return PR.refusal(closed, {block: blocks[block]} if block in blocks else {}, [entry], identity=self.identity,
+                          deployment=self.deployment, attachment=self.session, link=link, period=period,
+                          windows=self.windows, params=self.params)
+
+    def record(self, link: str, c: PR.PeriodRecord) -> str | None:
+        """Why a certified record isn't: its entry is its head's salted digest on its head's link-window, and a record
+        of link ``link``'s period (`problem`)."""
+        e, h = c.entry, c.head
+        try:
+            digest = certificate_digest(c.salt, h.digest())
+        except ValueError as err:
+            return f"its head doesn't read: {err}"
+        if (e.link, e.direction, e.window, e.digest) != (h.link, h.direction, h.window, digest):
+            return "its entry isn't its head's salted digest on its link-window"
+        return self.problem(link, e.link, e.direction, e.window, e.digest)
 
 
 def clock_json(clock: CertifiedClock) -> dict:

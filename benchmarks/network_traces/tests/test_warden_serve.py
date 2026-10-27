@@ -29,6 +29,9 @@ HERE = Path(__file__).resolve().parents[1]
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
                       ingress_buckets=30, egress_cells=128)
 SESSION = bytes(range(32))
+DEPLOYMENT = bytes(range(64))
+#: the device's HSS trees' height on device-attest: 16 leaves, which a test's few windows and periods stay under
+ATTEST_HEIGHT = 4
 #: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
 PROCESS_CLOCK: list[VirtualClock] = []
 #: what a window's commit takes of its process's time: TRACE-CORPUS's small-KV run measured 378-392 ms
@@ -416,21 +419,31 @@ def refusing_commit(*args, **kwargs):
 
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
          process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
-         id_payload: int | None = None, load_heads: Path | None = None) -> Warden:
+         id_payload: int | None = None, load_heads: Path | None = None, attest: bool = False) -> Warden:
     """A run of the warden at `params` for `windows` windows on a `VirtualClock`, published as `serve` and `client` publish one:
     its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when `process`, which first
     signs the load's heads `load_heads` when given), each window committed by `commit`, `deployment.json`, and
     `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at P =
-    `id_payload` when given; `servers` gets the server's side of each connection, in connect order. Returns the
-    warden."""
+    `id_payload` when given; `servers` gets the server's side of each connection, in connect order. With `attest` the
+    signer is the network certifier's party key on a device made in `key` at height `ATTEST_HEIGHT`, one period of
+    the run's windows (device-attest). Returns the warden."""
     tau = params.bucket_ms / 1000
     if process:
         import warden_serve  # by name, so that the spawned process finds its functions
 
-        ws.cs.load_key(key, 5 if load_heads else 4)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
+        if attest:
+            ws.cs.issue_party_key(key, DEPLOYMENT, ATTEST_HEIGHT)
+        else:
+            ws.cs.load_key(key, 5 if load_heads else 4)
+        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads,
+                                                  attest=(DEPLOYMENT, ATTEST_HEIGHT, windows) if attest else None)
         hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release}
         public = publisher.key
+    elif attest:
+        party = ws.cs.issue_party_key(key, DEPLOYMENT, ATTEST_HEIGHT)
+        publisher = ws.Publisher(out, ws.PR.PeriodIssuer(party, SESSION, ws.LINK, windows), params,
+                                 commit or WR.Cells.of)
+        hooks, public = {"publish": publisher, "withhold": publisher.withhold}, ws.cs.attest_json(party, windows)
     else:
         signer = ws.cs.signer(key, 4)
         publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), params, commit or WR.Cells.of)
@@ -609,6 +622,114 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
     assert {p for p in result["problems"] if "window" in p} == \
         {f"{name} window 0 isn't certified" for name in ws.CERTIFIED} | {
             f"{name} window 0's cells aren't registered" for name in ("requests", "responses")}
+
+
+def _lines(path: Path) -> list[dict]:
+    return [json.loads(x) for x in path.read_text().splitlines()]
+
+
+@pytest.mark.parametrize("process", [False, True])
+def test_on_device_attest_a_window_goes_live_once_its_records_are_kept_and_a_withheld_one_never(tmp_path, process):
+    """Device-attest (`period_root`): the run with a refused connection in window 0, its signer the network certifier's
+    party key, one period of its two windows, inline and in `serve`'s publisher process. Window 0 is withheld, so it
+    has no liveness record and no record in the period; window 1's three records and two cells heads are the period's
+    five records under its signed root (`period_root.refusal` holds), and its liveness record is block 1's. No line
+    carries a certificate, `deployment.json` names the device in the key's place, and the check reads window 1 as
+    certified and refuses window 0 exactly as under a certificate key; a liveness record of another block, or no
+    signed root, leaves window 1 certified nowhere."""
+    out = tmp_path / "run"
+    out.mkdir()
+    requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 20, 30, 40, 50)]
+    responses = [_response([" a"]) for _ in range(4)]
+    warden = _run(out, tmp_path / "device", requests, responses, windows=2, process=process, attest=True)
+    assert warden.refused_windows == {0}
+    dep = json.loads((out / "deployment.json").read_text())
+    assert "key" not in dep and (dep["attest"]["deployment"], dep["attest"]["party"], dep["attest"]["windows"]) == \
+        (DEPLOYMENT.hex(), ws.PR.PARTY, 2)
+    (live,) = _lines(out / ws.cs.LIVENESS)
+    assert (live["link"], live["window"], live["period"], live["block"]) == (ws.LINK, 1, 0, 1)
+    (period,) = map(ws.cs.AT.SignedPeriod.from_json, _lines(out / ws.cs.PERIODS))
+    certified = [ws.cs.certified_from_json(x) for x in _lines(out / "certified.jsonl") if "refused" not in x]
+    registrations = [x["registration"] for x in _lines(out / "cells.jsonl") if "registration" in x]
+    assert [c.head.window for c in certified] == [1] * 3 and all("certificate" not in r for r in registrations)
+    params = ws.lms.Params(*dep["attest"]["params"])
+    key_id = ws.lms.HssSignature.decode(params, period.signature).lower[:16]
+    heads = [WR.check_registration(r, None, SESSION, PARAMS, r["link"], ws.Direction(r["direction"]), r["window"])[0]
+             for r in registrations]
+    entries = [c.entry for c in certified] + \
+        [ws.PR.Entry.of(key_id, SESSION, h.link, h.direction, h.window, h.digest()) for h in heads]
+    assert sorted(e.record for e in entries) == sorted(period.records) and len(period.records) == 5
+    assert ws.PR.refusal(period, {1: bytes.fromhex(live["signature"])}, entries,
+                         identity=bytes.fromhex(dep["attest"]["identity"]), deployment=DEPLOYMENT, attachment=SESSION,
+                         link=ws.LINK, period=0, windows=2, params=params) is None
+    result = ws.check(out)
+    s = result["summary"]
+    assert (s["refused"], s["ended"], s["certified_windows"], s["cell_rows"]["registered"]) == (1, 4, 3, 2)
+    assert s["attest"] == {"periods": 1, "live": 1}
+    window = lambda w: {f"{name} window {w} isn't certified" for name in ws.CERTIFIED} | {  # noqa: E731
+        f"{name} window {w}'s cells aren't registered" for name in ("requests", "responses")}
+    assert {p for p in result["problems"] if "window" in p} == window(0)
+
+    def problems(name: str, edit) -> set[str]:
+        saved = (out / name).read_text()
+        edit(out / name)
+        try:
+            return set(ws.check(out)["problems"])
+        finally:
+            (out / name).write_text(saved)
+
+    other_block = problems(ws.cs.LIVENESS, lambda p: p.write_text(json.dumps(live | {"block": 0}) + "\n"))
+    assert window(1) <= other_block
+    assert window(1) <= problems(ws.cs.PERIODS, lambda p: p.write_text(""))
+
+
+def test_on_device_attest_the_loads_heads_are_records_of_the_uplinks_period_live_before_the_first_window(tmp_path):
+    """The gate's load at the tiny shape on device-attest: the publisher process makes the load's heads records of the
+    load's own link (`load_relay.LINK`) on the run's attachment (`PeriodIssuer.on`), its link-window live as block 0 of
+    the uplink's period, which closes before the run's first window. `load.json` names the device in the key's place
+    and no registration holds a certificate; the first liveness record and period are the uplink's; `check` reads
+    every value as a record of the uplink's period. A value whose root isn't the one recorded is refused as no record
+    of it, and a load read under neither a key nor periods is refused outright."""
+    import hashlib
+    import subprocess
+
+    store, out = tmp_path / "store", tmp_path / "run"
+    store.mkdir()
+    out.mkdir()
+    lr, program = ws.lr, hashlib.sha512(b"the reading program").hexdigest()
+    lr.write_store(store, lr.TINY)
+    sink = subprocess.Popen([sys.executable, str(HERE / "load_relay.py"), "sink", "--listen", "127.0.0.1:0",
+                             "--weights", str(tmp_path / "weights.bin"), "--witness", str(tmp_path / "witness.bin")],
+                            stdout=subprocess.PIPE, text=True)
+    port = json.loads(sink.stdout.readline())["listening"][1]
+    lr.relay_load(store, lr.TINY, [("127.0.0.1", port)] * 4, program, out)
+    assert json.loads(sink.communicate()[0].splitlines()[-1])["accepted"] and sink.returncode == 0
+    requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 30)]
+    _run(out, tmp_path / "device", requests, [_response([" a", " b"]), _response([])], process=True,
+         load_heads=out / "load-heads.json", attest=True)
+    result = ws.check(out)
+    assert result["accepted"], result["problems"]
+    values = lr.manifest(lr.TINY)
+    n = len(values)
+    assert result["summary"]["load"] == {"values": n, "registered": n, "relayed": True}
+    assert result["summary"]["attest"] == {"periods": 2, "live": 2}
+    doc, dep = (json.loads((out / f).read_text()) for f in ("load.json", "deployment.json"))
+    assert "key" not in doc and doc["attest"] == dep["attest"] and all("certificate" not in r for r in doc["values"])
+    assert [(x["link"], x["window"], x["block"]) for x in _lines(out / ws.cs.LIVENESS)] == \
+        [(lr.LINK, 0, 0), (ws.LINK, 0, 0)]
+    periods = [ws.cs.AT.SignedPeriod.from_json(x) for x in _lines(out / ws.cs.PERIODS)]
+    assert [(p.link, p.period, p.count) for p in periods] == [(lr.LINK, 0, n), (ws.LINK, 0, 5)]
+
+    saved = (out / "load.json").read_text()
+    (out / "load.json").write_text(json.dumps(doc | {"values": [doc["values"][0] | {"root": "00" * 64},
+                                                                *doc["values"][1:]]}))
+    try:
+        problems = ws.check(out)["problems"]
+    finally:
+        (out / "load.json").write_text(saved)
+    assert any(p.startswith(f"load {values[0].name}: ") and p.endswith("not a record of the period") for p in problems)
+    with pytest.raises(TypeError, match="one of the two"):
+        lr.check_load(doc, None, SESSION)
 
 
 def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):

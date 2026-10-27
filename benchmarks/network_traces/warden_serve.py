@@ -44,12 +44,13 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         [--temperature T] [--top-p P]
     python warden_serve.py fake --listen HOST:PORT [--token-ms 20] [--id-payload P]
     python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
-        --windows N [--start-in 5] [--load-heads FILE] [schedule]
+        --windows N [--start-in 5] [--load-heads FILE] [--attest DEPLOYMENT [--height H] [--period M]] [schedule]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
     python warden_serve.py check --run DIR
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
         [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--load-store DIR --load-sinks HOST:PORT,...
-        --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
+        --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [--attest [--period M]]
+        [schedule]
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
   the origin, the listener), runs the warden for `--windows` windows, and writes `warden.json` (each connection's
@@ -90,6 +91,18 @@ prover starts on the weights its sink wrote, and runs `serve --load-heads`: the 
 the run's session before its first window (`sign_load`), so one LMS key and one session carry the load and the windows,
 and writes `load.json`, the client's kept registrations of the load. `check` reads it under the deployment's key and
 session (`check_load`) at the relay's roots.
+
+**Device-attest** (`--attest`, `certificate`'s exception retired: `period_root`): the publisher signs as the network
+certifier's party key on its device (`certifier_serve.party_key`, `--key` the device's identity directory) in the
+deployment whose hash `--attest` gives, and certifies no record alone: each digest it certified on a link-window is a
+record of its certification period of `--period` link-windows on `LINK` (the run's, by default), the fails record's
+too. A window goes live once its three records are kept, none withheld: its liveness record a line of
+`liveness.jsonl` (public), each period's records and signed root a line of `periods.jsonl` (the prover's witness), and
+`deployment.json` names the identity, deployment, party and period (``attest``) in the key's place. A withheld window
+never goes live, so nothing of it is certified. The load's heads are records of the load's own link, live as block 0
+of its period before the first window. `check` reads every certified record, registration and load value as a record
+of its period in a live block (`certifier_serve.Attested`, `period_root.refusal`). `rehearse --attest` makes the device
+in its scratch directory at `--height` and draws the deployment's hash.
 """
 
 from __future__ import annotations
@@ -124,9 +137,11 @@ import active_replay as ar
 import certifier_serve as cs
 import load_relay as lr
 import stall_probe
-from verity.core.protocols.certifier import io_tie as IT, warden_rows as WR
+from verity.ml.crypto import lms
+from verity.core.protocols.certifier import io_tie as IT, period_root as PR, warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, PAD, id_request
-from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
+from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, Direction, Issuer, LmsKey, \
+    record_head
 from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count
 from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
 
@@ -449,10 +464,17 @@ class Publisher:
     `fails.records`), and certified by `issuer` under its link name and direction (`CERTIFIED`) with the schedule's
     parameters digest, one line of `certified.jsonl` each, or the link-window under `refused`; the wire's two also
     committed as rows by `commit` (`attest`). `serve` runs it in `PublisherProcess`: on the ticker's thread, or on any
-    thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the issuer's refusals."""
+    thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the issuer's refusals,
+    as JSON.
 
-    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, commit=WR.Cells.of) -> None:
+    On device-attest `issuer` is a `period_root.PeriodIssuer` on `LINK`: each certified record's line holds its period
+    entry in its certificate's place, a registration holds none, and once the three records of a window are kept, none
+    withheld, the window goes live (`certifier_serve.live`: `liveness.jsonl`, and `periods.jsonl` as periods close); a
+    withheld window never does, so none of its records is certified."""
+
+    def __init__(self, out: Path, issuer: Issuer | PR.PeriodIssuer, params: WardenParams, commit=WR.Cells.of) -> None:
         self.out, self.issuer, self.params, self.commit = out, issuer, params, commit
+        self._kept: dict[int, list[bool]] = {}
 
     def __call__(self, record: Record, grid: GridParams) -> None:
         self.keep(record, grid)
@@ -473,6 +495,13 @@ class Publisher:
             fh.write(json.dumps(line) + "\n")
         if record.link != FAILS:
             self.attest(record, link, direction, withheld)
+        if isinstance(self.issuer, PR.PeriodIssuer):
+            kept = self._kept.setdefault(record.window, [])
+            kept.append(withheld)
+            if len(kept) == len(CERTIFIED):
+                del self._kept[record.window]
+                if not any(kept):
+                    cs.live(self.out, self.issuer, record.window)
 
     def attest(self, record: Record, link: str, direction: Direction, withheld: bool = False) -> None:
         """The link-window's cells as rows and its wiring (`warden_rows`), their head signed (never `withheld`'s): one
@@ -486,14 +515,17 @@ class Publisher:
         t2 = time.perf_counter()
         cost = {"rows": len(cells_.rows), "row_bytes": len(cells_.rows[0]), "commit_ms": round((t1 - t0) * 1000, 3),
                 "sign_ms": round((t2 - t1) * 1000, 3)}
-        line = (_refused(link, direction, record.window, withheld) if cert is None
-                else {"registration": WR.registration(head, cert, self.params)})
+        line = (_refused(link, direction, record.window, withheld) if cert is None else
+                {"registration": WR.registration(head, cert if isinstance(cert, Certificate) else None, self.params)})
         ar.write_blobs(self.out / "cells.salts", cells_.witness)
         with open(self.out / "cells.jsonl", "a") as fh:
             fh.write(json.dumps(line | {"cost": cost}) + "\n")
 
     def close(self) -> list:
-        return list(self.issuer.refused)
+        if isinstance(self.issuer, PR.PeriodIssuer):
+            cs.close_periods(self.out, self.issuer)
+            return [list(x) for x in self.issuer.refused]
+        return [[link, d.value, w] for link, d, w in self.issuer.refused]
 
 
 def _refused(link: str, direction: Direction, window: int, withheld: bool) -> dict:
@@ -515,28 +547,47 @@ def grid_digest(grid) -> bytes:
     return h.digest()
 
 
-def sign_load(issuer: Issuer, key: LmsKey, heads: Path, out: Path) -> dict:
+def sign_load(issuer: Issuer | PR.PeriodIssuer, key: LmsKey | dict, heads: Path, out: Path) -> dict:
     """The load's heads (`heads`, the relay's ``load-heads.json``) signed by the warden's `issuer` in its session, before
     it serves: ``load.json`` in `out` (`load_relay.load_doc`), the load's registrations the block record pins, under
-    the key and session that then certify the run's windows. Raises `load_relay.Refused` when the signer refuses."""
+    the key and session that then certify the run's windows. On device-attest (`key` the deployment record's
+    ``attest``) the heads are records of the load's own link, on the issuer's attachment (`PeriodIssuer.on`), and its
+    link-window goes live as block 0 of its period, which then closes. Raises `load_relay.Refused` when the signer
+    refuses."""
     shape, heads_ = lr.heads_of(json.loads(heads.read_text()))
-    doc = lr.load_doc(shape, heads_, lr.sign_heads(issuer, heads_), cs.public_json(key), issuer.session)
+    if isinstance(issuer, PR.PeriodIssuer):
+        load = issuer.on(heads_[0].link)
+        registrations = lr.sign_heads(load, heads_)
+        cs.live(out, load, lr.WINDOW)
+        cs.close_periods(out, load)
+        if load.refused:
+            raise lr.Refused(f"the network certifier's party key refused the load's link-window: {load.refused}")
+        doc = lr.load_doc(shape, heads_, registrations, None, issuer.session, attest=key)
+    else:
+        doc = lr.load_doc(shape, heads_, lr.sign_heads(issuer, heads_), cs.public_json(key), issuer.session)
     (out / "load.json").write_text(json.dumps(doc, indent=1) + "\n")
     return doc
 
 
 def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: WardenParams, commit,
-                    load_heads: Path | None = None) -> None:
-    """`PublisherProcess`'s process: the warden's key and its leaf state are this process's alone. It signs the load's
-    heads first when there are any (`sign_load`), sends the public key, rebuilds each record from its released rows,
-    keeps it as `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and at the end
-    sends the issuer's refusals and its own usage."""
+                    load_heads: Path | None = None, attest: tuple[bytes, int, int] | None = None) -> None:
+    """`PublisherProcess`'s process: the warden's key and its leaf state are this process's alone (with `attest`, the
+    deployment's hash, the HSS height and a period's link-windows: the network certifier's party key on the device
+    whose identity is in `key`, `certifier_serve.party_key`, and a `PeriodIssuer`). It signs the load's heads first
+    when there are any (`sign_load`), sends the public key (the deployment record's ``attest``), rebuilds each record
+    from its released rows, keeps it as `Publisher` does at its close once the rebuilt grid's digest is the close
+    marker's, and at the end sends the issuer's refusals and its own usage."""
     try:
-        own = cs.signer(key)
-        issuer = Issuer(own, session)
+        if attest is None:
+            own = cs.signer(key)
+            issuer, public = Issuer(own, session), own.public_key()
+        else:
+            (deployment, height, windows), own = attest, None
+            party = cs.party_key(key, deployment, height)
+            issuer, public = PR.PeriodIssuer(party, session, LINK, windows), cs.attest_json(party, windows)
         if load_heads is not None:
-            sign_load(issuer, own.public_key(), load_heads, out)
-        results.send(("key", own.public_key()))
+            sign_load(issuer, public, load_heads, out)
+        results.send(("key", public))
         publisher = Publisher(out, issuer, params, commit or WR.Cells.of)
         grids = {INGRESS: params.grid, EGRESS: params.grid, FAILS: params.fails_grid}
         filling: dict[str, list] = {link: [] for link in grids}
@@ -557,7 +608,8 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
             publisher.keep(Record(link, window, got, Status(reason)), grid, withheld=withheld)
             filling[link] = []
         results.send(("done", {"refused": publisher.close(), "usage": ar._usage()}))
-        own.close()
+        if own is not None:
+            own.close()
     except BaseException:
         results.send(("error", traceback.format_exc()))
         raise
@@ -573,17 +625,19 @@ class PublisherProcess:
     is the warden's public key; `close` waits for every record and gives the issuer's refusals; `usage` is then the
     process's own. A process that exits early, killed or failed, raises at the next close or at `close`. `commit`
     stands in for `Cells.of` (a test's). With `load_heads` the process signs the load's heads before anything else
-    (`sign_load`), so construction returns once ``load.json`` is written. The queue's thread is started at
+    (`sign_load`), so construction returns once ``load.json`` is written. With `attest` it signs on device-attest
+    (`_publisher_main`) under the device identity in the directory `key`, and the attribute `key` is the deployment
+    record's ``attest``. The queue's thread is started at
     construction, with a row of the grid's size that the process drops, so that the first tick starts no thread and
     the thread's buffers have grown to a row's; `feeder` is its thread id."""
 
     def __init__(self, out: Path, key: Path, session: bytes, params: WardenParams, commit=None,
-                 load_heads: Path | None = None) -> None:
+                 load_heads: Path | None = None, attest: tuple[bytes, int, int] | None = None) -> None:
         ctx = multiprocessing.get_context("spawn")
         self.rows = ctx.Queue()
         self.results, results = ctx.Pipe(duplex=False)
         self.process = ctx.Process(target=_publisher_main, name="warden-publisher", daemon=True,
-                                   args=(self.rows, results, out, key, session, params, commit, load_heads))
+                                   args=(self.rows, results, out, key, session, params, commit, load_heads, attest))
         self.process.start()
         results.close()
         self.usage: dict | None = None
@@ -591,7 +645,7 @@ class PublisherProcess:
         self._digests: dict[str, object] = {}
         self.rows.put((None, None, bytes(params.grid.allocation * params.cell_bytes)))
         self.feeder: int | None = self.rows._thread.native_id
-        self.key: LmsKey = self._receive("key")
+        self.key: LmsKey | dict = self._receive("key")
 
     def _receive(self, kind: str):
         multiprocessing.connection.wait([self.results, self.process.sentinel])
@@ -652,12 +706,14 @@ def _quantiles(xs: list[float]) -> dict:
     return {"n": len(xs), "p50": pick(0.5), "p99": pick(0.99), "max": pick(1.0)}
 
 
-def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
+def deployment_record(params: WardenParams, key: LmsKey | dict, session: bytes, *, origin_unix: float, windows: int,
                       listen: tuple[str, int], upstream: tuple[str, int], slack: float,
                       run_id: bytes | None = None) -> dict:
-    """`deployment.json`, the auditor's record of a run: the warden's public key and session, the schedule's
-    parameters and their digest, the origin and where it listened, and the run id its server's requests carry."""
-    return {"key": cs.public_json(key), "session": session.hex(), "link": LINK,
+    """`deployment.json`, the auditor's record of a run: the warden's public key (on device-attest ``attest``,
+    `certifier_serve.attest_json`) and session, the schedule's parameters and their digest, the origin and where it
+    listened, and the run id its server's requests carry."""
+    signer = {"key": cs.public_json(key)} if isinstance(key, LmsKey) else {"attest": key}
+    return {**signer, "session": session.hex(), "link": LINK,
             "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000,
             "origin_unix": origin_unix, "windows": windows, "listen": list(listen), "upstream": list(upstream),
             "run_id": None if run_id is None else run_id.hex()}
@@ -736,17 +792,18 @@ def prepare_process(params: WardenParams) -> dict:
 async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
                 session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
                 announce=cs._announce, probe: bool = False, process: dict | None = None,
-                load_heads: Path | None = None) -> dict:
+                load_heads: Path | None = None, attest: tuple[bytes, int, int] | None = None) -> dict:
     """One run of the warden on the host's clock (the module docstring's `serve`), its records published by a
-    `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when given, its
-    threads sampled by `stall_probe` when `probe`. Returns what `warden.json` holds, with `process`, what
-    `prepare_process` did. The loop's errors are kept, not logged: the ticker writes no file."""
+    `PublisherProcess` that holds the key in `key` (with `attest`, the device identity's party key) and first signs
+    the load's heads `load_heads` when given, its threads sampled by `stall_probe` when `probe`. Returns what
+    `warden.json` holds, with `process`, what `prepare_process` did. The loop's errors are kept, not logged: the
+    ticker writes no file."""
     out.mkdir(parents=True, exist_ok=True)
     loop = asyncio.get_running_loop()
     errors: list[str] = []
     loop.set_exception_handler(lambda _, context: errors.append(f"{context.get('message')}: "
                                                                f"{context.get('exception')!r}"))
-    publish = PublisherProcess(out, key, session, params, load_heads=load_heads)
+    publish = PublisherProcess(out, key, session, params, load_heads=load_heads, attest=attest)
     origin = time.monotonic() + start_in
     warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
                     publish=publish, withhold=publish.withhold, release=publish.release, slack=slack)
@@ -768,7 +825,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused,
            "refused_windows": sorted(warden.refused_windows), "ticks": warden.ticks,
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
-           "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
+           "issuer_refused": refused, "usage": ar._usage(),
            "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors}
     (out / "warden.json").write_text(json.dumps(log, indent=1))
     announce({"served": True, "out": str(out)})
@@ -830,7 +887,7 @@ def read_records(run: Path, params: WardenParams) -> dict[str, list[Record]]:
             for name in CERTIFIED}
 
 
-def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], CertifiedRecord], list]:
+def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], CertifiedRecord | PR.PeriodRecord], list]:
     """`certified.jsonl`: the certified records by (link, direction, window), and the link-windows the signer
     refused (not those the warden withheld, `Publisher.withhold`)."""
     got, refused = {}, []
@@ -841,7 +898,7 @@ def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], Certifi
                 refused.append(doc["refused"])
         else:
             record = cs.certified_from_json(doc)
-            got[(record.link, record.direction, record.window)] = record
+            got[(record.head.link, record.head.direction, record.head.window)] = record
     return got, refused
 
 
@@ -856,11 +913,13 @@ def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
     return [(doc, *WR.read_witness(s)) for doc, s in zip(lines, salts)]
 
 
-def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[Record]]) -> tuple[dict, list]:
+def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[Record]],
+                attested: cs.Attested | None = None) -> tuple[dict, list]:
     """Every link-window of the wire's two records has a registration that `warden_rows.check_registration` accepts
-    under the warden's key and session, whose head is the record's rows and wiring under their salts; the per-window
-    cost."""
-    key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    under the warden's key and session (on device-attest, `attested`: none, its head's digest a record of the
+    warden's period), whose head is the record's rows and wiring under their salts; the per-window cost."""
+    key = None if attested is not None else cs.read_public(dep["key"])
+    session = bytes.fromhex(dep["session"])
     got = {}
     for doc, salts, wiring_salt in read_cells(run):
         if "registration" in doc:
@@ -877,6 +936,8 @@ def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, l
                 costs.append(doc["cost"])
                 try:
                     head, _ = WR.check_registration(doc["registration"], key, session, params, link, direction, w)
+                    if attested is not None and (why := attested.problem(LINK, link, direction, w, head.digest())):
+                        raise ValueError(why)
                     ok = WR.Cells.of(link, direction, by_window[w], params, session, salts, wiring_salt).head == head
                 except ValueError as e:
                     problems.append(f"{name} window {w}'s cells: {e}")
@@ -901,10 +962,12 @@ def egress_cells(records: list[Record], params: WardenParams) -> dict[int, list[
     return out
 
 
-def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict | None, list[str]]:
+def check_load(run: Path, dep: dict, key: LmsKey | None, session: bytes,
+               attested: cs.Attested | None = None) -> tuple[dict | None, list[str]]:
     """A run's load read as the verifier reads it, None when it carried none: ``load.json`` signed under the
-    deployment's own key and session, every value's registration accepted (`load_relay.check_load`), each at the root
-    the relay committed (``load-heads.json``)."""
+    deployment's own key and session (on device-attest, `attested`: each value's head a record of its link's period),
+    every value's registration accepted (`load_relay.check_load`), each at the root the relay committed
+    (``load-heads.json``)."""
     doc_path, heads_path = run / "load.json", run / "load-heads.json"
     if not doc_path.exists() and not heads_path.exists():
         return None, []
@@ -912,9 +975,12 @@ def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict 
         doc = json.loads(doc_path.read_text())
     except (OSError, ValueError):
         return {"values": 0, "registered": 0, "relayed": False}, ["load: the relay's heads aren't signed (no load.json)"]
-    problems = [] if (doc.get("key"), doc.get("session")) == (dep["key"], dep["session"]) else \
+    signer = "key" if attested is None else "attest"
+    problems = [] if (doc.get(signer), doc.get("session")) == (dep[signer], dep["session"]) else \
         ["load: not signed under the deployment's key and session"]
-    summary, found = lr.check_load(doc, key, session)
+    certified = None if attested is None else \
+        (lambda h: attested.problem(h.link, h.link, h.direction, h.window, h.digest()))
+    summary, found = lr.check_load(doc, key, session, certified=certified)
     try:
         heads = json.loads(heads_path.read_text())
         relayed = (heads.get("program"), heads.get("link"), list(heads.get("roots", {}).items())) == \
@@ -930,11 +996,13 @@ def check(run: Path) -> dict:
     """The offline check of a served run (the module docstring's `check`)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
-    key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    session = bytes.fromhex(dep["session"])
+    attested = cs.Attested(run, dep["attest"], session) if "attest" in dep else None
+    key = None if attested is not None else cs.read_public(dep["key"])
     certified, refused = read_certified(run / "certified.jsonl")
     records = read_records(run, params)
     problems = [] if params.digest.hex() == dep["digest"] else ["the deployment's digest isn't its parameters'"]
-    load, load_problems = check_load(run, dep, key, session)
+    load, load_problems = check_load(run, dep, key, session, attested)
     problems += load_problems
     windows = []
     for name, (link, direction) in CERTIFIED.items():
@@ -942,7 +1010,8 @@ def check(run: Path) -> dict:
         grid = params.fails_grid if name == FAILS else params.grid
         for w in range(dep["windows"]):
             r, c = got.get(w), certified.get((link, direction, w))
-            ok = (r is not None and c is not None and c.verify(key, session)
+            ok = (r is not None and c is not None
+                  and (c.verify(key, session) if attested is None else attested.record(LINK, c) is None)
                   and c.head == record_head(link, direction, w, r.grid, r.status, grid, params.digest))
             windows.append({"record": name, "direction": direction.value, "window": w, "certified": ok,
                             "status": None if r is None else r.status.reason and r.status.reason.value,
@@ -951,7 +1020,7 @@ def check(run: Path) -> dict:
                 problems.append(f"{name} window {w} isn't certified")
             elif r.status.reason is not None:
                 problems.append(f"{name} window {w}: {r.status.reason.value}")
-    cells_summary, cells_problems = check_cells(run, dep, params, records)
+    cells_summary, cells_problems = check_cells(run, dep, params, records, attested)
     problems += cells_problems
     verdict = audit(params, records[INGRESS], records[EGRESS], records[FAILS])
     if not verdict["accepted"]:
@@ -1005,6 +1074,8 @@ def check(run: Path) -> dict:
         "finish_reasons": {f: sum(r.get("finish_reason") == f for r in served)
                            for f in sorted({str(r.get("finish_reason")) for r in served})},
         **({} if load is None else {"load": load}),
+        **({} if attested is None else {"attest": {"periods": len(attested.periods),
+                                                   "live": sum(map(len, attested.liveness.values()))}}),
     }
     return {"accepted": not problems, "problems": problems[:50], "summary": summary, "windows": windows,
             "connections": rows}
@@ -1082,7 +1153,14 @@ def rehearse(args) -> int:
     scratch = Path(tempfile.mkdtemp(prefix="warden-serve-"))
     procs: list[subprocess.Popen] = []
     try:
-        cs.load_key(scratch / "warden", args.height)
+        signing = []
+        if args.attest:
+            deployment = secrets.token_bytes(lms.DEPLOYMENT_BYTES)
+            cs.issue_party_key(scratch / "warden", deployment, args.height)
+            signing = ["--attest", deployment.hex(), "--height", str(args.height),
+                       *(["--period", str(args.period)] if args.period else [])]
+        else:
+            cs.load_key(scratch / "warden", args.height)
         if load:
             try:
                 lr.relay_load(args.load_store, lr.SHAPES[args.load_shape], args.load_sinks, args.load_program, out,
@@ -1115,7 +1193,7 @@ def rehearse(args) -> int:
             serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0",
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
-                                             str(args.start_in), "--slack", str(args.slack), *_flags(args),
+                                             str(args.start_in), "--slack", str(args.slack), *_flags(args), *signing,
                                              *(["--load-heads", str(out / "load-heads.json")] if load else [])],
                                        stdout=subprocess.PIPE, stderr=log, text=True)
             procs.append(serving)
@@ -1185,6 +1263,16 @@ def parser() -> argparse.ArgumentParser:
                    help="sample the warden's threads every millisecond for D episodes (stall_probe.py; stalls.json)")
     s.add_argument("--load-heads", type=Path,
                    help="the load's heads (load_relay.py's load-heads.json), signed first in the session: load.json")
+    s.add_argument("--attest", metavar="DEPLOYMENT",
+                   help="device-attest: sign as the network certifier's party key in the deployment whose hash this is "
+                        "(64 bytes in hex), --key the device's identity directory (lms.Identity)")
+    s.add_argument("--height", type=int, default=cs.HEIGHT, help="with --attest: the device's HSS trees' height")
+    r.add_argument("--attest", action="store_true",
+                   help="device-attest: a device identity made in the scratch directory at --height, its party key "
+                        "issued to the network certifier in a deployment hash drawn for the run")
+    for q in (s, r):
+        q.add_argument("--period", type=int, help="with --attest: link-windows a certification period (default: the "
+                                                  "run's, one root a run)")
     r.add_argument("--load-store", type=Path,
                    help="relay the load first: the store's directory (load_relay.py write), its stream sent to "
                         "--load-sinks and committed as it crosses, its heads signed by the warden before it serves")
@@ -1248,6 +1336,12 @@ def main(argv=None) -> int:
         session = bytes.fromhex(args.session)
         if len(session) != 32:
             raise SystemExit("--session is 32 bytes in hex")
+        attest = None
+        if args.attest is not None:
+            deployment = bytes.fromhex(args.attest)
+            if len(deployment) != lms.DEPLOYMENT_BYTES:
+                raise SystemExit(f"--attest is the deployment's hash, {lms.DEPLOYMENT_BYTES} bytes in hex")
+            attest = (deployment, args.height, args.period or args.windows)
         own = argv is None or list(argv) == sys.argv[1:]
         if own and os.environ.get("PYTHONMALLOC") != "malloc" and C_ALLOCATOR not in os.environ:
             os.execve(sys.executable, [sys.executable, *sys.orig_argv[1:]],
@@ -1259,7 +1353,7 @@ def main(argv=None) -> int:
             os.environ.pop(name, None)
         asyncio.run(serve(params, args.out, upstream=args.upstream, listen=args.listen, key=args.key,
                           session=session, windows=args.windows, start_in=args.start_in, slack=args.slack,
-                          probe=args.stall_probe, process=process, load_heads=args.load_heads))
+                          probe=args.stall_probe, process=process, load_heads=args.load_heads, attest=attest))
         return 0
     if args.command == "client":
         ar._quiet_runtime()

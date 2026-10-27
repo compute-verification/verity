@@ -336,7 +336,8 @@ in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. 
   Device-attest retires it (Daniel, 26 Oct): `period_root.PeriodIssuer`, in `Issuer`'s place, makes every digest the
   certifier certifies a record of its certification period under one root its party key signs (`verity.core.attest`),
   and publishes one liveness record a link-window, the one output in the clear; `period_root.refusal` is the period's
-  check in the clear. No served path runs it yet, and no proof reads a record.
+  check in the clear. The rows form runs it (`benchmarks/network_traces/warden_serve.py --attest`, the load
+  included); the clock form doesn't yet, and no proof reads a record.
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
