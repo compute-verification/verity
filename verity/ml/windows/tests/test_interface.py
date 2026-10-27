@@ -9,8 +9,10 @@ core's registration, and `of_records` against it, are the records audit's tests
 (`benchmarks/prove_path/tests/test_records_audit.py`), since these may not import core."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
+import re
 import subprocess
 from dataclasses import replace
 
@@ -211,15 +213,16 @@ def chain() -> I.Circuit:
                                    step=(REQUESTS, 1))))
 
 
-def chain_values(seed: int = 0) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    """`chain`'s units' inputs (x, w) and outputs in its order, each unit's input its writer's output."""
+def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """`chain`'s units' inputs (x, w) and outputs in its order, each unit's input its writer's output; ``first``: each
+    request's input at layer 0, step 0 (else drawn)."""
     rng = np.random.default_rng(seed)
 
     def bf16(a: np.ndarray) -> np.ndarray:
         return (np.asarray(a, np.float32).view(np.uint32) >> 16).astype(np.uint16)
 
     w = [bf16(rng.standard_normal((16, 16)) / 4) for _ in range(LAYERS)]
-    x = {(0, 0, r): bf16(rng.standard_normal(16)) for r in range(REQUESTS)}
+    x = {(0, 0, r): bf16(rng.standard_normal(16)) if first is None else first[r] for r in range(REQUESTS)}
     y = {}
     for s in range(STEPS):
         for layer in range(LAYERS):
@@ -479,11 +482,13 @@ def test_coalesce_merges_runs_of_like_patterns():
 
 class Held:
     """A registered value as the committer reads core's ``one_stage.registered.Registered``: its rows of ``words`` u16 words,
-    one salt a row, and a statement's table of the rows at some positions (the paths are core's; none here)."""
+    one salt a row, a root (a stand-in's), and a statement's table of the rows at some positions (the paths are core's;
+    none here)."""
 
     def __init__(self, name: str, rows: np.ndarray) -> None:
         self.name, self.rows, self.words, self.leaves = name, rows, rows.shape[1], len(rows)
         self.salts = [hashlib.shake_256(b"salt %d" % i).digest(CS.SALT_BYTES) for i in range(len(rows))]
+        self.root = hashlib.sha512(b"root " + name.encode()).digest()
 
     def statement(self, positions):
         return ([self.rows[p] for p in positions], [self.salts[p] for p in positions],
@@ -656,6 +661,179 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     with pytest.raises(ValueError, match="own rows"):
         CS.Window(win.window.program, win.window.query, LAW, RUN,
                   (*ms[:1], replace(ms[1], tables=(("x", 1), ("w", 1))), *ms[2:]))
+
+
+class Bound(Held):
+    """`Held` with what core's ``Registered`` carries for a commit by reference (`rows.ValueRows`): 16-bit leaves, its row
+    schema and each row's ``b || c`` under its salt."""
+
+    def __init__(self, name: str, rows: np.ndarray) -> None:
+        super().__init__(name, rows)
+        self.word_bits, self.schema, inner = 16, V2, CS._inner(V2, self.words)
+        self.bcs = [CS.INST.commit_string(CS.INST.default_key, inner(np.ascontiguousarray(r, dtype="<u2").tobytes()), s)
+                    for r, s in zip(rows, self.salts)]
+
+
+def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
+    """``refd`` (some inputs recorded by reference) commits what ``full`` does: every root, string, salt and row, and the
+    files `write` writes, byte for byte."""
+    a, b = full.close(salt_key=bytes(32)), refd.close(salt_key=bytes(32))
+    assert list(a.roots.items()) == list(b.roots.items()) and a.bc == b.bc and a.salts == b.salts
+    assert list(a.rows) == list(b.rows) and all(np.array_equal(a.rows[p], b.rows[p]) for p in a.rows)
+    def record(_program, *x, **k):
+        return {"x": json.dumps(x, sort_keys=True), **k}
+
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "record": staticmethod(record), "digest": staticmethod(lambda rec: "d")})
+    files = []
+    for win, c, d in ((full, a, tmp_path / "full"), (refd, b, tmp_path / "refd")):
+        win.write(c, d, {"by": "test"}, registrar=reg)
+        got = {f.name: f.read_bytes() for f in d.iterdir()}
+        got["window.json"] = {k: v for k, v in json.loads(got["window.json"]).items() if k != "seconds"}
+        files.append(got)
+    assert files[0] == files[1]
+
+
+SRC = bind(G.Gemm, K=32, N=16, **G.GEMM_AMPERE)
+SID = descriptor_id(SRC)
+
+
+def fed_chain() -> tuple[I.Circuit, Bound, list[np.ndarray], list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
+    """`chain` fed by a ``Gemm_v2{K=32, N=16}`` unit a request (layer 0's ``x`` at step 0 its output), each layer's ``w`` a
+    registered row: the circuit, the registered value, the feed's inputs (x, w) and outputs, and the chain's."""
+    rng = np.random.default_rng(3)
+    sx = (rng.standard_normal((REQUESTS, 32)).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    sw = ((rng.standard_normal((REQUESTS, 16, 32)) / 4).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    sy = np.asarray(evaluate_batch(SRC, sx, sw, kernel="reference"), dtype=np.uint16).reshape(REQUESTS, 16)
+    ins, outs = chain_values(first=sy)
+    layer = REQUESTS * STEPS
+    w = Bound("w", ins[1][::layer].reshape(LAYERS, 256))
+    read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
+    circuit = replace(chain(), templates=((SRC, REQUESTS), (GEMM, LAYERS * layer)), external=(f"{SID}/x", f"{SID}/w"),
+                      wires=(I.Wire(GID, "x", SID, "o0", at=0, radix=(REQUESTS,), base=0, step=(1,)), *chain().wires),
+                      registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
+    return circuit, w, [sx, sw], [sy], ins, outs
+
+
+def test_wired_and_registered_rows_recorded_by_reference_commit_as_their_rows_given_in_full(tmp_path):
+    """`fed_chain`'s units recorded with no inputs at all: a wired ``x`` row is its writer's output row and a ``w`` the
+    value's, so the commitment, the rows and every file are the full record's, and the mismatch check gathers the inputs it
+    evaluates on (`Window.input_words`)."""
+    circuit, w, (sx, sw), feed, ins, outs = fed_chain()
+    full, refd = (I.Window(circuit, RUN, LAW, 2, registered={"w": w}) for _ in range(2))
+    for win, given in ((full, ins), (refd, [None, None])):
+        win.record(SRC, [sx, sw], feed)
+        win.record(GEMM, given, outs)
+    assert all(np.array_equal(a, b.reshape(8, -1)) for a, b in zip(refd.input_words(GID, 0, 8), ins))
+    assert refd.mismatches() == full.mismatches() == {}
+    _same_commit(full, refd, tmp_path)
+    with pytest.raises(ValueError, match="no wire or registered read fills it"):
+        free = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+        free.record(SRC, [None, sw], feed)
+        free.record(GEMM, ins, outs)
+        free.close(salt_key=bytes(32))
+
+
+def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(tmp_path):
+    """`sliced`'s position units recorded with ``x`` by reference and ``w`` in full: each cut row ``x#j`` is its slice's
+    output row, committed as the full record commits it; one template's parameter is by reference for all its units or
+    none."""
+    c = sliced()
+    ins8, outs8, ins, outs = sliced_values()
+    full, refd = (I.Window(c, RUN, LAW, 2) for _ in range(2))
+    for win, x in ((full, ins[0]), (refd, None)):
+        win.record(G8, ins8, outs8)
+        win.record(GEMM, [x, ins[1]], outs)
+    assert np.array_equal(refd.input_words(GID, 1, 2)[0], ins[0][1:])
+    assert refd.mismatches() == {}
+    _same_commit(full, refd, tmp_path)
+    mixed = I.Window(c, RUN, LAW, 2)
+    mixed.record(G8, ins8, outs8)
+    mixed.record(GEMM, [None, ins[1][:1]], [outs[0][:1]])
+    mixed.record(GEMM, [ins[0][1:], ins[1][1:]], [outs[0][1:]])
+    with pytest.raises(ValueError, match="by reference for some units"):
+        mixed.close(salt_key=bytes(32))
+
+
+def given_by_reference(monkeypatch) -> tuple[CS.Window, list[dict], Bound]:
+    """`fed_chain` with every chain input recorded by reference: the window and each member's rows as `Window.close` hands
+    them to `rows.commit` (each wired ``x`` `rows.WIRED`, each ``w`` a `rows.ValueRows` of the registered value)."""
+    circuit, w, feed_ins, feed, _ins, outs = fed_chain()
+    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win.record(SRC, feed_ins, feed)
+    win.record(GEMM, [None, None], outs)
+    given = []
+    with monkeypatch.context() as mp:
+        mp.setattr(CS, "commit", lambda window, data, **_: given.append((window, data)))
+        win.close(salt_key=bytes(32))
+    ((window, data),) = given
+    return window, data, w
+
+
+def _first(window: CS.Window, tid: str) -> int:
+    return next(k for k, m in enumerate(window.members) if m.template == tid)
+
+
+def _like(value: Bound, **fields) -> Bound:
+    out = copy.copy(value)
+    vars(out).update(fields)
+    return out
+
+
+def _value_rows(value=None, positions=None):
+    """An edit giving the first chain member's ``w`` as ``positions`` of ``value(registered value)``, each as given when None."""
+    def edit(window: CS.Window, data: list[dict]) -> CS.Window:
+        k = _first(window, GID)
+        src = data[k]["rows"]["w"]
+        data[k]["rows"]["w"] = CS.ValueRows(src.value if value is None else value(src.value),
+                                            src.positions if positions is None else positions)
+        return window
+    return edit
+
+
+def _feed_x_wired(window: CS.Window, data: list[dict]) -> CS.Window:
+    """The feed's external ``x``, which no wire writes, given as `rows.WIRED`."""
+    data[_first(window, SID)]["rows"]["x"] = CS.WIRED
+    return window
+
+
+def _beside_a_row_table(window: CS.Window, data: list[dict]) -> CS.Window:
+    """The feed's ``x`` made the one row of a row table both its units read, the chain's rows still by reference."""
+    k = _first(window, SID)
+    m = window.members[k]
+    data[k]["rows"][CS.LINKED] = data[k]["rows"][CS.LINKED][:1]
+    data[k]["refs"] = np.stack([np.zeros(m.n, dtype=np.int64) if p == CS.LINKED else np.arange(m.n) for p, _ in m.rows], axis=1)
+    linked = replace(m, tables=tuple((p, 1 if p == CS.LINKED else m.n) for p, _ in m.rows), links=((0, 0),),
+                     link_units=(m.n,))
+    table = CS.RowTable(0, "feed", m.template, dict(m.rows)[CS.LINKED], ((0,),))
+    return replace(window, members=(*window.members[:k], linked, *window.members[k + 1:]), row_tables=(table,),
+                   context="cd" * RT.DIGEST_BYTES)
+
+
+REFUSED = {
+    "a value of another row width": (_value_rows(value=lambda v: Bound("w", v.rows.reshape(-1, 128))),
+                                     "rows of 128 words, not 256"),
+    "a value of another schema": (_value_rows(value=lambda v: _like(v, schema=CS.TABLE_SCHEMA)),
+                                  f"{CS.TABLE_SCHEMA} rows, not {V2}"),
+    "a value of 8-bit leaves": (_value_rows(value=lambda v: _like(v, word_bits=8)), "8-bit leaves, not 16"),
+    "a position past the value's rows": (_value_rows(positions=(LAYERS,)), f"positions outside its {LAYERS} rows"),
+    "a negative position": (_value_rows(positions=(-1,)), f"positions outside its {LAYERS} rows"),
+    "two rows for the port's one": (_value_rows(positions=(0, 1)), "2 rows, not 1"),
+    "wired rows on a port no wire writes": (_feed_x_wired, f"given as {CS.WIRED} rows, but no wire writes it"),
+    "rows by reference in a window with row tables": (_beside_a_row_table, "in a window with row tables"),
+}
+
+
+@pytest.mark.parametrize("edit, why", REFUSED.values(), ids=REFUSED)
+def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(monkeypatch, edit, why):
+    """`rows.commit` refuses rows given by reference, naming why: a registered value's rows of another row width, schema or
+    leaf width, at a position outside the value (a negative one included, which indexing would wrap) or of another count
+    than the port's rows; `rows.WIRED` rows on a port no wire writes; and a port by reference in a window with row tables,
+    whose linked members' rows are read off their ``x`` tables. The rows as `Window.close` gives them commit; each one edit
+    is refused."""
+    window, data, _w = given_by_reference(monkeypatch)
+    CS.commit(window, data, salt_key=bytes(32))
+    with pytest.raises(ValueError, match=re.escape(why)):
+        CS.commit(edit(window, data), data, salt_key=bytes(32))
 
 
 class Table(Held):
@@ -832,6 +1010,12 @@ def test_the_catalog_resolves_a_descriptor_id_to_verity_s_definition():
                      (TID.replace("K=64", "K=65"), "refuses this binding")]:
         with pytest.raises(ValueError, match=why):
             I.resolve(bad)
+
+
+def test_a_template_whose_static_is_a_composite_definition_resolves():
+    from verity.ml.circuits.ops.boolean import gemm as BG
+    fn = bind(BG.ScaledMmS8CoordinateRows, K=128, R=2, DOT=BG.GEMM_SM120_S8["DOT"])
+    assert descriptor_id(I.resolve(descriptor_id(fn))) == descriptor_id(fn)
 
 
 def test_the_advice_opens_to_the_root_its_compiler_s_tree_commits():
