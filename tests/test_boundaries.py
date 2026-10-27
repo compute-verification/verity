@@ -60,8 +60,8 @@ ALLOWED = {
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
     "core.claims": set(),
-    # An auditor party's signed period roots and liveness records, stdlib only (its frame-v3-sha512 tree held to
-    # `ml.commitments.merkle` by its test), the signer injected.
+    # An auditor party's signed period roots and liveness records,
+    # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
     "core.attest": set(),
     # 2026-10-27 (memory accounting, the deployment API v3, note:memory-accounting/20261026T2305Z-draft-deployment-api-v3):
     # the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and reads frames with
@@ -77,8 +77,8 @@ ALLOWED = {
     "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile"},
     # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
-    # deployment layer (`wipe_parties`), their messages the wire's. The memory challenger reports its sessions under its
-    # party's per-period root (`core.attest`).
+    # deployment layer (`wipe_parties`), their messages the wire's. The
+    # memory challenger reports its sessions under its party's per-period root (`core.attest`).
     "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                             "ml.crypto", "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
@@ -159,7 +159,7 @@ CORE_ML_EDGES = {
 SOUNDNESS_PATH = {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto", "ml.kernels",
                   "ml.randomness"}
 #: What a test that refuses a new core -> ml edge says.
-LEAN_OF_RECORD = ("a verifier imports no verity.ml code (Daniel, 18 Oct; AGENTS.md \"Design rules\", \"Lean is the definition "
+LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rules\", \"Lean is the definition "
                   "and the verifier of record\"): state it in Lean and import nothing from verity.ml")
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {

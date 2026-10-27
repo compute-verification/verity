@@ -6,7 +6,7 @@
 #            resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository files
 #            nvcc -M names (a bench refuses a library whose sources differ at its own commit)
 #   kbench   kb.so (and kb_pg.so on sm_100a): hb_kbench.py (the honest GEMMs gated, then timed against the plain int8 GEMMs);
-#            verify.py (CA's numpy twin) runs after a `research fetch`, off the node
+#            verify.py (the numpy twin) runs after a `research fetch`, off the node
 #   h1       h1noise.so: h1bench.py (H1's per-unit noise gated, then timed against the plain int8 GEMMs)
 #   h1u      h1u.so, h1noise.so and every h1u_* / h1noise_* variant shipped: h1ubench.py (H1 + fx1's fused unit, and
 #            each build's two-launch kh_unit_ws as arm NAME-ws, gated against receipts.py and h1tile.reference, the
@@ -15,7 +15,7 @@
 #            with the exact wrap correction, gated against h1v3_ca.py (H1V3's reference) at small anchors and against
 #            h1zref.cu's z = X·(B + c)ᵀ at the served shapes, receipts against receipts.py, y = dequant(z), the no-write
 #            control and both faults; then timed against its two-launch receipts-only form, the noise floor and plain)
-#   j10hb    h1zref.so and every h1u*.so shipped: j10hb.py (kernels-j10, measured only: each build's credited one-stream
+#   j10hb    h1zref.so and every h1u*.so shipped: j10hb.py (measured only: each build's credited one-stream
 #            call on per-unit noise against J10 banded noise, both gated, then timed with each form's two launches alone;
 #            with h1noise.so shipped too, its --noise-lib, which BENCH_ARGS --tw's tile-width price needs)
 #   prof     every h1u*.so shipped: hb_prof.py under ncu (--set full, --clock-control none), each build gated as h1ubench.py
@@ -45,7 +45,7 @@
 #
 # Env: VARIANTS (default below), BUILDS (the base libraries a build makes, default "kb h1noise h1u h1zref h1c" and
 # kb_pg on sm_100a; set empty, only the variants), NVCC_EXTRA (nvcc flags every build adds, e.g. --no-compress for the
-# SASS gate), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default kernels-dither-hb), LEASE (gpu-lease flags, default
+# SASS gate), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default dither/ and the run's id), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
@@ -254,7 +254,7 @@ if [ -n "${GPU_LEASE_UUID:-}" ]; then
   bash -c "$bench"
 else
   read -r -a lease <<< "${LEASE:---max-min 14}"
-  GPU_LEASE_WHO=${HB_WHO:-kernels-dither-hb} gpu-lease 1 --wait "${lease[@]}" -- bash -c "$bench"
+  GPU_LEASE_WHO=${HB_WHO:-dither/${RESEARCH_RUN_ID:-local}} gpu-lease 1 --wait "${lease[@]}" -- bash -c "$bench"
 fi
 rc=$?
 echo "lease rc $rc"

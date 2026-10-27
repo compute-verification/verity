@@ -23,11 +23,11 @@ d288169b3dc60861ae150688cdc6facb8ae60d95a9ab91704852285843434db0  ../../../../..
 dd82bf99b9aa863b5018eb81207ed411ead20b6239e8386b139fa1d4ae59a93c  ../../../../../Security/Definitions/Pous/Assumptions/P2.lean
 b677a8872dabcb6219f1ae2c271c35d1d8ca1ca3a4327a880500992691e0f0bc  ../../../../../Security/Definitions/Pous/Game/Oracle.lean
 88069a0c9b4dda40aee828ba450e3eea2cdcf0f87d277834f8374ec12022d8d7  ../../../../../Security/Definitions/Pous/Game/Prob.lean
-16bdbfdeebc9c9be1ba8cbb7306b2eca23ea0f5d28103bf8b3728b77e1af8059  ../../../../../Security/Definitions/Pous/Guarantees.lean
+6ff4a3969982c635a68b660ebc6992c1ef2b5bafc55e27f2442b8ae304ebd6c5  ../../../../../Security/Definitions/Pous/Guarantees.lean
 623df150d61e97496ba6386d5f39cde87ea8f379f0f466ffecb21c5bf5429d72  ../../../../../Security/Definitions/Pous/Guarantees/Obligation.lean
 e42e5066c3a3ad7077406e623e58ffba216e6be149d5b09f4931518da6afb6fc  ../../../../../Security/Definitions/Pous/Guarantees/P2.lean
 3d26ec922ec62fafdedd4fa76f173de48aa00de15f3c38e7f772d7b208ae3c92  ../../../../../Security/Definitions/Pous/Guarantees/SecureErasure.lean
-553dc52a24ef78a0faf6308a1902308b614b513fc59263ab7bc0f81c0fea4e1e  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipe.lean
+f2d7434f6a7db6c365999b18a3415bc1fc7ab37939cc7aa15250e7a8237da7e4  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipe.lean
 2062ab1f060a0ce92f006f2deb4fcd7313fb294cebbd42caa57d60d8a43b70d3  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean
 b1ae1987eaad57aff9246dff623e1ff2f7a662719f7a5f6b43e035125e22b1f1  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean
 11e8efe5ca9c6d092347de8ef8a41bbe2e010e9209c915e98c674f6396d714a4  ../../../../../Security/Definitions/Pous/Model/Audit.lean
