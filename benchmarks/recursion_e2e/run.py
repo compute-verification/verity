@@ -31,7 +31,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import rec_profile as RP  # noqa: E402
-import settings as RS
+import settings as RS  # noqa: E402
 
 NODE = "vy-nebius-1"
 STEPS = RP.ORDER
