@@ -103,7 +103,6 @@ import Proofs.Flock.Soundness.ExecTemplateSetup
 import Proofs.Flock.Soundness.ExecFlatClass
 import Proofs.Flock.Soundness.ExecFlatCopies
 import Proofs.Flock.Soundness.Types.Flat
-import Proofs.Flock.Soundness.Rope.Lowering
 import Proofs.Flock.Soundness.Types.Dag
 import Proofs.Flock.Soundness.Types.Parts
 import Proofs.Flock.Soundness.Types.Flatten

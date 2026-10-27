@@ -4,7 +4,7 @@
     python benchmarks/torch_gpu/commit_slots/step.py count LAYOUT.json --out OUT.count.json          # host twin, any CPU
     python benchmarks/torch_gpu/commit_slots/step.py time LAYOUT.json [...] --out DIR                # on the GPU (gpu.sh)
 
-``export --shared`` writes FAMILIES' layout at the frozen shape (``benchmarks/e2e_h200``'s map, ``commit.layout``) with
+``export --shared`` writes FAMILIES' layout at the frozen shape (``examples/h200``'s map, ``commit.layout``) with
 CIR-113's shared rows, by circuits' row model: in each table a gather reads, only the gather's units stay, so the producers'
 rows go and each gather's commit unit keeps its place. A slot then commits 102,448 rows in 101,718 units; its digest is that
 of circuits' own export. With ``--row-bytes B``, a synthetic variant for the row-size curve: each gather's
@@ -75,7 +75,7 @@ def shared_layout(row_bytes: int = 0) -> S.Layout:
     gather's units alone (circuits' row model). With ``row_bytes``, a synthetic variant:
     each gather's run of shared rows (one-row units, each the next bytes of its table) cut into rows of ``row_bytes``, the
     run's last row what is left; every other unit as circuits has it. The same bytes in fewer rows."""
-    sys.path.insert(0, str(ROOT / "benchmarks" / "e2e_h200"))
+    sys.path.insert(0, str(ROOT / "examples" / "h200"))
     from e2e_h200.commit import layout as families
     from e2e_h200.plan import Map
     from e2e_h200.shape import FROZEN
@@ -427,7 +427,7 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
                           "idle_s": round(r["gpu_s"] - busy, 4), "launches": sum(k["launches"] for k in kernels),
                           "pageable_uploads": sum(k["launches"] for k in kernels if "Pageable -> Device" in k["kernel"]),
                           "kernels": kernels[:25]}
-    except Exception as e:   # a profiler the node lacks costs only this part
+    except Exception as e:  # noqa: BLE001  (a profiler the node lacks costs only this part)
         doc["profile"] = {"error": repr(e)}
     save("profile")
 

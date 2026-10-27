@@ -130,6 +130,7 @@ COMPONENT = "component"
 JOBS = "jobs"
 DTYPE = "dtype"
 STAGED = "staged"
+CIRCUITS = "circuits"
 
 # ---- approach labels: the registry (`research.approaches`), by the owning lane or its coordinator ------------------------------------
 
@@ -404,6 +405,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(STAGED, GROUP_EVIDENCE, TEXT, "on ckpt:<repo>@<revision>: the UTC time a host finished staging the checkpoint's weights and checking every "
        "shard's sha256, written by the step that stages them (`verity-vllm records staged`); its ref names the evidence (the staging run, "
        "or host:path of the verify record)"),
+    _k(CIRCUITS, GROUP_EVIDENCE, TEXT, "on a run: the art: id of a fixture/v1 tree holding the circuit files and lookup tables one of its "
+       "sessions proved, under sha512/<hex> (the Lean verifier's --archive layout), so the run can be verified again from the store; one "
+       "label a session (benchmarks/one_stage/a5_tp.sh)", pattern=r"art:[0-9a-f]{64}"),
     # approach
     _k(APPROACH, GROUP_APPROACH, TEXT, "on a run or artifact: the <campaign>/<slug> of the approach it belongs to"),
     _k(TITLE, GROUP_APPROACH, TEXT, "an approach's title, one line"),
