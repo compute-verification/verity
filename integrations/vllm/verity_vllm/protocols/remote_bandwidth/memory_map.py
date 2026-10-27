@@ -1,41 +1,30 @@
 """memory-map/v1 (`remote_bandwidth.memory_map`, the program's I3), the prover's record of the blocks each serving step
-wrote and freed beside its registered store: `Lines`, the integration's one builder of its lines, which the Commit's map
-(`verity_vllm.commit.memory_map.record`, from the circuit) and a `Store`'s (`MemoryMap`, from its KV events) both drive in
-their own slots.  `Lines`' rules:
+wrote and freed beside its registered store, as `Lines` builds it: the integration's one builder, which the Commit's map
+(`verity_vllm.commit.memory_map.record`, from the circuit) and a `Store`'s (`MemoryMap`, from its KV events) both drive.
 
 ~~~text
-j         an appended block's index: N, the store's blocks when the map began, plus every block appended before it, in
-          append order (`Lines.append`)
-written   an appended block, in the line open when its append lands (`Lines.land`, in append order; deferred residency,
-          remote_bandwidth's ``PROTOCOL.md`` §4: when its encode lands).  Until then it is in no record and uncredited.
-          An append that would write a slot its line writes already waits for the next line, with every append after it
-freed     a slot's block, registered or written, in the line its caller frees it (`Lines.free`), and a written block in
-          the line of its last structural reader (its append's, or `Lines.end`'s), or the line after its write if that
-          is no earlier: a block freed before its write is recorded is written all the same (its j is the session's) and
-          freed a line later (memory-map/v1 withdraws such a block, which `Lines` doesn't emit yet).  A line frees no
-          slot it writes (a write releases the slot's previous block), and a block is freed once
-re-key    a live written block appended again with its digest and reader at a fresh j (`Lines.rekey`): its old j freed
-          in the open line, its new one written where that append lands
-~~~
-
-A `Store`'s map:
-
-~~~text
-slot      the block's store index in the registry's numbering: region ``first`` plus its region block, a KV block of
-          page p, column c in layer l at ``first_l + ids[p, c]``; every region's blocks are 4,096 bytes
-d_j       `codec.digest` of the block's payload, its region codec's decoding of the bytes it holds once written
-          (`Store.payload`)
+slot      a block's store index, a `Store`'s in the registry's numbering: region ``first`` plus its region block, a KV
+          block of page p, column c in layer l at ``first_l + ids[p, c]``; every region's blocks are 4,096 bytes
+j         an appended block's index: N, the store's blocks when the map began, plus every block appended before it
+d_j       `codec.digest` of the block's payload (a `Store`'s: its region codec's decoding of its bytes, `Store.payload`)
 appended  a block `kv_append` completes, once its step's forward and frees are done (`complete`) if a free has not
-          taken it back by then, a step's by slot, and a block re-keyed once its j is as old as the lifetime cap.  Each
-          step's go out as one append (``on_append``), which the session sends and the device encodes in place once its
-          coin arrives (`encoded`), the step before the first whose reads see the block encoded
-freed     an appended block (written since the map began, j >= N) of a page `kv_free` returns, though its bytes stay
-          as filler: the audit credits only the blocks the circuit keeps live, so the store releases it (dirty, out of
-          every plan) until a write completes it again under a new j.  A page's untouched blocks, registered before
-          the seed and never written since, stay resident (`kv_free` leaves them in the filler).  And a live block a
-          step's write reaches, completed or not: its bytes are no registered block until the block's write is
-          recorded (`Store`'s dirty).  A block appended whose page `kv_free` returns before its write is recorded is
-          read last at the open line's step; `kv_alloc` emits nothing
+          taken it back by then, a step's as one append by slot (``on_append``), which the session sends and the device
+          encodes in place once its coin arrives (`encoded`); and a block re-keyed once its j is as old as the lifetime cap
+written   an appended block, in the line open when its append lands (`Lines.land`, in append order: its encode, the step
+          before the first whose reads see it; deferred residency, remote_bandwidth's ``PROTOCOL.md`` §4), uncredited
+          until then.  An append that would write a slot its line writes already waits a line, with every append after it
+freed     a slot's block, registered or written, in the line its caller frees it (`Lines.free`), and a written block in
+          the line of its last structural reader (`Append.lasts`), or the line after its write if that is no earlier: one
+          read last before its write is recorded (a `Store`'s whose page `kv_free` returns first: at the open line's
+          step) is written all the same (its j is the session's) and freed a line later (memory-map/v1 withdraws it,
+          which `Lines` doesn't emit yet).  A line frees no slot it writes (a write releases the slot's previous block).
+          A `Store` frees an appended block (j >= N) of a page `kv_free` returns, though its bytes stay as filler: the
+          audit credits only the blocks the circuit keeps live, so the store releases it (dirty, out of every plan) until
+          a write completes it again.  A page's untouched blocks, registered before the seed and unwritten since, stay
+          resident (`kv_free` leaves them in the filler).  And a live block a step's write reaches, completed or not: its
+          bytes are no registered block until the block's write is recorded (`Store`'s dirty); `kv_alloc` emits nothing
+re-key    a live written block appended again with its d_j at a fresh j (`Lines.rekey`): its old j freed in the open
+          line, its new one written where that append lands
 ~~~
 
 Steps.  `Store.kv_append(appends, s)` opens step s's line: the engine has scheduled step s, whose forward is next.  A
@@ -57,7 +46,7 @@ line closed go in the next line.
 
 Lifetime.  No plan holds a block written after the codec seed L windows or more after the window its append joined
 (`audit.Params.lifetime`, ``lifetime`` here, the session's, or `LIFETIME`).  The map keeps the window each live written
-block's j joined (`joined`): the window open when its append is made, that of the first pass after it.  The verifier's is the
+block's j joined (`Block.window`): the window open when its append is made, that of the first pass after it.  The verifier's is the
 window of the first root it receives after the append, which is that pass's or, if the pass is discarded at a window
 boundary, a later one, so the map's is never later.  Closing a line in window w re-keys every live written block that
 joined at w − L or before and is neither freed nor written in the line: the line frees its old j, which so leaves the
@@ -126,8 +115,8 @@ class Block(NamedTuple):
 
 @dataclass(slots=True)
 class Append:
-    """One append: its first index, its blocks' slots, digests and last structural readers (None: until a free) in index
-    order, and the window open when it was made (`MemoryMap.joined`'s)."""
+    """One append: its first index, its blocks' slots, digests and last structural readers (None: until a free; a caller
+    may set one until its write is taken) in index order, and the window open when it was made."""
 
     first: int
     slots: tuple[int, ...]
@@ -182,13 +171,6 @@ class Lines:
         """The next line frees the blocks ``slots`` hold, registered or written."""
         self._freed.update(slots)
 
-    def end(self, slots: Iterable[int], step: int) -> None:
-        """The blocks appended at ``slots``, whose writes no line has taken, are read last at ``step``."""
-        at = self.unwritten()
-        for x in slots:
-            a, u = at[x]
-            a.lasts[u] = step
-
     def held(self, step: int) -> dict[int, Block]:
         """The written blocks line ``step`` keeps: freed by no `free` and read past it."""
         return {x: b for x, b in self.live.items() if x not in self._freed and (b.last is None or b.last > step)}
@@ -223,8 +205,8 @@ class Lines:
 
 
 class MemoryMap:
-    """memory-map/v1 of ``store``'s KV pool beside ``header``'s store, built by ``lines`` (`Lines`), its lines in ``path``
-    (appended as each closes) or, without one, kept (`text`).  ``replay`` is the map as the audit replays it, which refuses a line that breaks
+    """memory-map/v1 of ``store``'s KV pool beside ``header``'s store, built by ``lines``, its lines in ``path`` (appended
+    as each closes) or, without one, kept (`text`).  ``replay`` is the map as the audit replays it, which refuses a line that breaks
     memory-map/v1 before it is written.  ``on_append(first, slots, digests, payloads)`` gets each append as it is made (the
     remote session's, `verity_vllm.protocols.remote_bandwidth.remote`, which sends it and calls `encoded` once the device has encoded it
     under its coin); without it, each append's encode lands at once, as when the coin is back before the next step's
@@ -254,16 +236,6 @@ class MemoryMap:
     def extent(self) -> int:
         return self.replay.extent
 
-    @property
-    def waiting(self) -> int:
-        """Blocks appended whose writes the record has not taken yet: their encodes still to land, or landed in the
-        open line."""
-        return self.lines.waiting
-
-    @property
-    def joined(self) -> dict[int, int]:
-        return {x: b.window for x, b in self.lines.live.items()}
-
     def slots(self, keys: np.ndarray) -> tuple[int, ...]:
         """The store indices of the pool's blocks ``page * per_page + column``, in every layer region, ascending."""
         if not len(keys):
@@ -275,9 +247,8 @@ class MemoryMap:
     def free(self, keys: np.ndarray) -> np.ndarray:
         """`kv_free` returned the pool's live blocks ``keys``: those appended (held at a j of the map's, or completed in
         the open line) are freed in the open line, the step whose forward ran last, which bounds their last structural
-        reader from above (after the last line closed, in the next); those appended whose writes the record has not taken
-        yet are read last there (`Lines.end`); the rest, registered blocks no write has reached, stay resident.  The mask
-        of those freed."""
+        reader from above (after the last line closed, in the next); those whose writes no line has taken yet are read
+        last there; the rest, registered blocks no write has reached, stay resident.  The mask of those freed."""
         p, lines = self.store.pool, self.lines
         first = self.store.region(p.regions[0]).first
         completed = self._open[1] if self._open is not None else set()
@@ -291,7 +262,9 @@ class MemoryMap:
         lines.free(self.slots(keys[now]))
         if self._open is not None:
             self._open[2].update(self.slots(keys[taken]))
-        lines.end(self.slots(keys[dead]), self.last)
+        for x in self.slots(keys[dead]):
+            a, u = waiting[x]
+            a.lasts[u] = self.last
         return now | taken | dead
 
     def check(self, step: int) -> None:

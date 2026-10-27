@@ -1,7 +1,6 @@
 """memory-map/v1 from the circuit (`verity.core.protocols.remote_bandwidth.memory_map`): the KV blocks each serving step wrote
 and freed, from the Program of record and the engine's page layout, with each block's digest from the values served (the
-Commit's committed words, `pipeline.memory_map`), in the lines `Lines` builds (`verity_vllm.protocols.remote_bandwidth.memory_map`,
-which builds the `Store`'s map too: its indices j, and where it writes, frees and re-keys a block).
+Commit's committed words, `pipeline.memory_map`), as `Lines` builds it (`protocols.remote_bandwidth.memory_map`: j and the rules).
 
 ~~~text
 row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row
@@ -29,8 +28,7 @@ block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `first
 appended  a block whose rows are all born, at the step of the last (its completion), if a later step reads it: a step's
           record, its frees then its writes, takes effect after the step's reads (remote_bandwidth's convention, #2378),
           so a block whose last structural reader is the step that completes it is never read while resident and is in
-          no record; nor
-          is a block with a row no step writes (it stays dirty).  A step's blocks are one append, by slot
+          no record; nor is a block with a row no step writes (it stays dirty).  A step's blocks are one append, by slot
 written   an appended block, where its append's encode landed (the session's `Deferral`; without one, at its completion)
 freed     a written block at its rows' last structural reader (memory-map/v1's free).  And a slot's registered block (a KV
           page's filler, registered before the seed) at the step a write first reaches it, even the one completing it: its

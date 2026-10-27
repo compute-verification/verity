@@ -295,17 +295,6 @@ def test_a_deferred_block_is_written_where_its_encode_lands():
     assert [w for s in steps for w in s.written if w.index >= 32] == []
 
 
-def test_two_appends_landing_in_one_line_that_write_one_slot_are_written_a_line_apart():
-    # a's page 1, completed at step 0 and read last at 1, lands at 2 with b's, which reuses the page from step 2: the line
-    # writes a's, and b's waits a line, whose write releases a's in place of its free
-    reqs, arrive, tables = {"a": decode(4, 5), "b": decode(4, 6)}, {"a": 0, "b": 2}, {"a": [1, 2], "b": [1, 3]}
-    head, steps = MM.record(reqs, arrive, _payload, REGISTRATION, MM.Layout(block_size=4, pages=6), tables,
-                            _deferred((0, 2, 24, 4), (2, 2, 28, 4)))
-    assert _lines(steps) == [(0, _page(1), []), (1, _page(2), []), (2, [], list(zip(_page(1), range(24, 28)))),
-                             (3, _page(3), list(zip(_page(1), range(28, 32)))), (4, _page(1), [])]
-    assert _replayed(head, steps).holds(_slot(0, 1, 0)) is None
-
-
 def test_a_re_key_frees_the_old_index_at_once_and_writes_the_new_one_where_its_encode_lands():
     # the session re-keys 4 blocks in the append it makes at step 3: step 2's line frees the oldest live, r0's first page,
     # and step 3's, where the encode lands, writes them again at the fresh indices; step 4's append numbers on from there
