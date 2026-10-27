@@ -137,16 +137,19 @@ def test_every_file_holding_the_witness_is_moved_out_and_named_by_its_path_alone
 def test_the_gates_public_files_their_reprints_and_a_public_twin_are_no_finds(monkeypatch, tmp_path):
     """A record holding the gate's public files as they are, a certificate written again indented (a witness file holds
     it so, public only through `reprinted`) and the witness's copy of a public file is clean; without the reprints the
-    indented certificate is a find. A run dir with no gate run is read for witness paths alone."""
+    indented certificate is a find. A public line that isn't JSON is counted, not written again. A run dir with no gate
+    run is read for witness paths alone."""
     g = _gate(tmp_path / "G" / "g1")
+    (g / "out" / "torn.jsonl").write_bytes(b'{"window": 0}\n\n{"window": \n')
     run = tmp_path / "run"
     _put(run, {"out/gates/certificates.jsonl": (g / "out" / "certificates.jsonl").read_bytes(),
                "out/verifier/w000-certificates.json": INDENTED, "out/deployment.json": DEPLOYMENT})
     rc, report, _ = _guard(tmp_path, run)
     assert (rc, report["verdict"], report["found"]) == (0, "clean", [])
     assert report["gate_runs"] == [GATE] and report["pieces"] > 0 and report["public_dropped"] > 0
+    assert report["public_unparsed"] == 1
     assert LG.main([str(run), str(tmp_path / "q2")]) == 0
-    monkeypatch.setattr(LG, "reprinted", lambda p: b"")
+    monkeypatch.setattr(LG, "reprinted", lambda p: (b"", 0))
     rc, report, _ = _guard(tmp_path, run, "--dry")
     assert rc == 3 and [d["path"] for d in report["found"]] == ["out/verifier/w000-certificates.json"]
 
@@ -241,7 +244,7 @@ def test_the_declared_data_is_well_formed():
 
 def _chain(tmp: Path, gates: str, *, py: str = sys.executable, **kw) -> subprocess.Popen:
     """chain_record.sh on run dir tmp/runs/r1 (its quarantine by default tmp/quarantine/r1), its gates `gates`."""
-    env = {"PATH": os.environ["PATH"], "HOME": str(tmp), "TMPDIR": str(tmp / "tmp"), "RESEARCH_RUN_DIR": str(tmp / "runs/r1"),
+    env = {"PATH": os.defpath, "HOME": str(tmp), "TMPDIR": str(tmp / "tmp"), "RESEARCH_RUN_DIR": str(tmp / "runs/r1"),
            "CR_MEM_GB": "1", "CR_GATES": gates, "CR_CACHE": str(tmp / "cache"), "PY": py}
     (tmp / "tmp").mkdir(exist_ok=True)
     return subprocess.Popen(["bash", "benchmarks/network_traces/chain_record.sh"], cwd=ROOT, env=env,

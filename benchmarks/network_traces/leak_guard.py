@@ -35,6 +35,7 @@ import bz2
 import fnmatch
 import gzip
 import hashlib
+import importlib.util
 import json
 import lzma
 import os
@@ -45,10 +46,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-try:
-    import numpy as np
-except ImportError:  # the system python3 of an exit before chain_record's setup: `Finder` scans in pure Python
-    np = None
+#: the system python3 of an exit before chain_record's setup has no numpy: `Finder` then scans in pure Python
+np = importlib.import_module("numpy") if importlib.util.find_spec("numpy") else None
 
 DECLARED = Path(__file__).resolve().with_name("leak_guard.json")
 SCHEMA = "network-traces/leak-guard/v1"
@@ -173,28 +172,33 @@ def _dicts(doc):
             yield from _dicts(v)
 
 
-def reprinted(p: Path) -> bytes:
+def reprinted(p: Path) -> tuple[bytes, int]:
     """A public JSON file's dicts written again as a verifier's files write them (indented, keys sorted or not), so a piece
-    that differs from the public file only in its layout reads public."""
+    that differs from the public file only in its layout reads public; and how many of its documents (a .jsonl's lines)
+    aren't JSON, whose pieces then read public only as they are."""
     if p.suffix not in (".json", ".jsonl"):
-        return b""
+        return b"", 0
     text = p.read_text(errors="replace")
-    out = []
+    out, unparsed = [], 0
     for line in text.splitlines() if p.suffix == ".jsonl" else [text]:
+        if not line.strip():
+            continue
         try:
             doc = json.loads(line)
         except ValueError:
+            unparsed += 1
             continue
         for d in _dicts(doc):
             for s in (False, True):
                 out += [json.dumps([d], indent=1, sort_keys=s), json.dumps(d, indent=1, sort_keys=s),
                         json.dumps(d, indent=2, sort_keys=s)]
-    return "\n".join(out).encode()
+    return "\n".join(out).encode(), unparsed
 
 
-def pieces(gates: list[Path]) -> tuple[dict[bytes, tuple[str, int]], int]:
+def pieces(gates: list[Path]) -> tuple[dict[bytes, tuple[str, int]], int, int]:
     """The gate runs' witness pieces, each to the witness file (under its gate run's name) and offset it is first cut
-    from, less the pieces any gate run's public files hold; and how many pieces those dropped."""
+    from, less the pieces any gate run's public files hold; how many pieces those dropped; and how many of the public JSON
+    files' documents weren't JSON, so weren't written again (`reprinted`)."""
     got: dict[bytes, tuple[str, int]] = {}
     public: list[Path] = []
     for g in gates:
@@ -210,12 +214,14 @@ def pieces(gates: list[Path]) -> tuple[dict[bytes, tuple[str, int]], int]:
                 if len(set(x := b[o:o + n])) >= DISTINCT:
                     got.setdefault(x, (f"{g.name}/{f.relative_to(g).as_posix()}", o))
     raw = {nd: x for x in got for nd in forms(x)}
-    finder, out = Finder(raw), set()
+    finder, out, unparsed = Finder(raw), set(), 0
     for p in public:
         with open(p, "rb") as f:
             out |= {raw[nd] for nd in finder.stream(f)}
-        out |= {raw[nd] for nd in finder.find(reprinted(p))}
-    return {x: o for x, o in got.items() if x not in out}, len(out)
+        again, n = reprinted(p)
+        out |= {raw[nd] for nd in finder.find(again)}
+        unparsed += n
+    return {x: o for x, o in got.items() if x not in out}, len(out), unparsed
 
 
 def load_declared(path: Path) -> tuple[set[str], list[dict]]:
@@ -318,7 +324,7 @@ def keypath(doc, at: str, path=()):
 def explain(b: bytes | None, nd: bytes, piece: bytes, origin: tuple[str, int], member: str | None) -> dict:
     """A find's piece by counts and digests: its sha256, the witness file and offset it is cut from, whether it was found
     raw or as hex, its distinct and printable bytes, and in a plain file `b` the offset, line and JSON key path of the
-    find."""
+    find (``"not JSON"`` when its line isn't)."""
     out = {"sha256": hashlib.sha256(piece).hexdigest(), "witness": origin[0], "witness_at": origin[1],
            "form": "raw" if nd == piece else "hex", "distinct": len(set(piece)),
            "printable": sum(32 <= c < 127 for c in piece), "member": member}
@@ -328,7 +334,7 @@ def explain(b: bytes | None, nd: bytes, piece: bytes, origin: tuple[str, int], m
         try:
             kp = keypath(json.loads(b[start:end if end >= 0 else len(b)]), nd.decode("utf-8", "replace"))
         except ValueError:
-            kp = None
+            kp = "not JSON"
         out |= {"at": at, "line": b.count(b"\n", 0, at), "keypath": kp}
     return out
 
@@ -343,7 +349,7 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
     """The guard on `run`, its finds moved under `quarantine` (unless `dry`): (the report, counts and paths only; the
     quarantine's, with each find's pieces)."""
     runs = gate_runs(gates)
-    got, dropped = pieces(runs)
+    got, dropped, unparsed = pieces(runs)
     raw = {nd: x for x in got for nd in forms(x)}
     finder = Finder(raw)
     files = list(_files(run))
@@ -378,7 +384,7 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(run / doc["path"]), dest)
     report = {"schema": SCHEMA, "run": str(run), "quarantine": str(quarantine), "gate_runs": [g.name for g in runs],
-              "pieces": len(got), "public_dropped": dropped, "files_scanned": len(files),
+              "pieces": len(got), "public_dropped": dropped, "public_unparsed": unparsed, "files_scanned": len(files),
               "bytes_scanned": sum(size.values()),
               "excused": [{"entry": i, "witness": allow[i]["witness"], "pieces": len(x), "records": sorted(w)}
                           for i, (x, w) in sorted(used.items())],
