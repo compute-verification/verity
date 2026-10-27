@@ -47,7 +47,7 @@
 #   --dram               the host's DRAM in the same session, after the store (cuda or disk): the DRAM available
 #                        (MemAvailable) less --dram-reserve-gib, the whole DRAM declared, so what the fill doesn't
 #                        reach counts in R. Launch it with research run --mem-gb near the fill, so no admitted run
-#                        takes the memory meanwhile
+#                        takes the memory meanwhile; gpu-lease's memory cap (90% of MemTotal) is MemTotal less 2 GiB
 #   --dram-gb G          the fill on the DRAM, in GB (implies --dram; default: what's available less the reserve)
 #   --dram-reserve-gib G DRAM left out of the fill (default 16)
 #   --lease-min M        gpu-lease's --max-min (default 60; a fill of the disks too takes longer)
@@ -205,7 +205,10 @@ EOF
   cp "$S/periods/p0/period.json" "$O/period.json"
   export DEMO_PERIOD=$S/periods/p0 DEMO_NODE=$NODE DEMO_STORE=$STORE DEMO_GPU=$GPU DEMO_EXPECT=$EXPECT
   if [ "$STORE" = cuda ] && [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease >/dev/null 2>&1; then
-    GPU_LEASE_WHO=memory-accounting gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash "$SELF" leased || rc=$?
+    LEASE_MEM=()
+    [ "$DRAM" = 1 ] && LEASE_MEM=(--mem-gb "$(awk '/^MemTotal:/ {printf "%d", $2 / 1048576 - 2}' /proc/meminfo)")
+    GPU_LEASE_WHO=memory-accounting gpu-lease 1 --wait --max-min "$LEASE_MIN" ${LEASE_MEM[@]+"${LEASE_MEM[@]}"} \
+      -- bash "$SELF" leased || rc=$?
   else
     bash "$SELF" leased || rc=$?
   fi
