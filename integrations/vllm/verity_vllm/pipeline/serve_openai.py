@@ -702,7 +702,8 @@ def main(opts: Options) -> int:
 
         if opts.protocols:
             arm = SH.H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                               config=SH.config_of(opts.protocols_config), sessions=SH.sessions_of(opts))
+                               config=SH.config_of(opts.protocols_config), sessions=SH.sessions_of(opts),
+                               prover=opts.gate.h1_prover)
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,

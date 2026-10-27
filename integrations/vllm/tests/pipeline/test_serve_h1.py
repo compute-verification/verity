@@ -96,6 +96,35 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
     srv.src.uninstall()
 
 
+def test_with_a_prover_dir_each_window_keeps_its_prover_state_and_its_rounds_live_rows(tmp_path, monkeypatch):
+    """``--h1-prover DIR``: each window's salt key and served calls' rows go in ``DIR/w<k>`` (owner-only), and its rounds'
+    live@<s> rows in ``DIR/w<k>/live`` (`pouw_h1_live.dump`: the public window.json at the server's T and S, one
+    directory a round), the outcome's ``live_dump``; without it nothing is kept and the outcome's ``live_dump`` is None."""
+    import stat
+
+    from verity_vllm.protocols.pouw.h1 import prover as PV
+
+    srv = _Server(monkeypatch)
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
+                       prover=tmp_path / "prover")
+    arm.open(0)
+    srv.serve(PROMPTS[0], 0)
+    out = arm.close(0)
+    w0 = tmp_path / "prover" / "w0"
+    assert out["tied"] and out["live_dump"] == {"dir": str(w0 / "live"), "rounds": STEPS}, out["live_dump"]
+    assert stat.S_IMODE(w0.stat().st_mode) == 0o700 and (w0 / PV.KEY).is_file() and any((w0 / PV.CALLS).iterdir())
+    pub = json.loads((w0 / "live" / "window.json").read_text())
+    assert (pub["T"], pub["S"], pub["program"]) == (ROWS, STEPS, arm.digest) and len(pub["served"]) == STEPS
+    assert all((w0 / "live" / str(s) / "rows.npz").is_file() for s in range(STEPS))
+    srv.src.uninstall()
+    bare = _Server(monkeypatch)
+    plain = SH.H1Windows(bare.model, bare.com, ROWS, STEPS, engine=object(), out=tmp_path / "plain", unit=_unit())
+    plain.open(0)
+    bare.serve(PROMPTS[0], 0)
+    assert plain.close(0)["live_dump"] is None and not (tmp_path / "plain" / "prover").exists()
+    bare.src.uninstall()
+
+
 def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout_credit_reads_from_it(tmp_path, monkeypatch):
     """``h1/window-program.json.gz`` is the descriptor whose SHA-512 is the server's Program digest (serve.json's
     ``program``), and its meta's layout is the one core's credit reads from those bytes, so a period-open can commit the
@@ -281,6 +310,8 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert refusal(*h1, *gate) is None
     assert "go together" in refusal(*h1, *gate[:2]) and "go together" in refusal(*h1, *gate[2:])
     assert "needs --protocols" in refusal(*gate)
+    assert refusal(*h1, "--h1-prover", str(tmp_path / "p")) is None
+    assert "--h1-prover keeps PoUW H1's prover state" in refusal("--h1-prover", str(tmp_path / "p"))
     assert "(pouw)" in refusal(*h1, "--protocols-config", json.dumps({"pous": {}}))
     assert "'admission' is one of" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"admission": "never"}}))
     assert "--protocols-config {" in refusal(*h1, "--protocols-config", "{not json")

@@ -158,6 +158,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   local h1=()
   [ -n "${H1_GATE:-}" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
                                --challenger-peer "${H1_PEER:-vy-dc-h200}" --max-num-batched-tokens "${H1_T:-512}")
+  [ -n "${H1_GATE:-}" ] && [ -n "${H1_CIRCUITS:-}" ] && h1+=(--h1-prover "$D/private/h1")
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal --gpu-tree \

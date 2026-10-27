@@ -70,6 +70,11 @@ class GateOptions:
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
                                          help="with --challenger-gate: this machine's name in the auditor host's peers, where its "
                                               "challenger reaches the server (ssh -R)")
+    h1_prover: str | None = option("--h1-prover", default=None, metavar="DIR",
+                                   help="with --protocols: keep each H1 window's prover state (its salt key and each call's "
+                                        "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
+                                        "owner-only, for proving its drawn units and rounds after the close; never a "
+                                        "published path")
 
 
 def config_of(value: str | None) -> dict[str, Any]:
@@ -111,6 +116,8 @@ def refusal(opts: Any) -> str | None:
                 "auditor host's peers, where its challenger reaches the server (ssh -R)")
     if gate and not opts.protocols:
         return f"--challenger-gate draws PoUW H1's coins: it needs --protocols {ENTRY}"
+    if opts.gate.h1_prover and not opts.protocols:
+        return f"--h1-prover keeps PoUW H1's prover state: it needs --protocols {ENTRY}"
     if opts.protocols_config and not opts.protocols:
         return "--protocols-config without --protocols"
     if not opts.protocols:
@@ -262,17 +269,19 @@ class H1Windows:
     runner and each window's coins come from, ``out`` where each window's transcript goes (``h1/w<k>/``). ``key`` is the
     weights' registration key (a fresh one when None); ``unit`` the Program's tile unit at each K (`h1window.tile_unit`
     when None); ``sessions`` each window's session on the auditor host's challenger (`GateSessions`; None: in-process
-    coins)."""
+    coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
+    None: kept nowhere, so no drawn unit or round of it can be proved)."""
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
-                 sessions: GateSessions | None = None) -> None:
+                 sessions: GateSessions | None = None, prover: str | Path | None = None) -> None:
         from verity_vllm.protocols import pouw
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
         from verity_vllm.protocols.pouw.h1 import served as SV
 
         self.model, self.com, self.rows, self.steps, self.engine = model, com, int(rows), int(steps), engine
         self.out, self.config, self.unit, self.sessions = Path(out), dict(config or {}), unit, sessions
+        self.prover = None if prover is None else Path(prover)
         self.layers = PHK.layers(model, pouw.linear_types())
         if not self.layers:
             raise ValueError(f"{ENTRY}: the served model has no int8 linear H1 records (serve an int8 precision)")
@@ -317,8 +326,10 @@ class H1Windows:
         coins = {} if self.sessions is None else {"challenger": AT, "session": self.sessions.reserve(window),
                                                   "gate": self.sessions.open}
         self.tap = HC.tap(self.com, self.model, self.layers, range(self.steps))
+        prover = self.prover_of(window)
         served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap, window=os.urandom(64),
-                           program=self.program, program_digest=self.digest)
+                           program=self.program, program_digest=self.digest,
+                           prover=None if prover is None else str(prover))
         settings = {**self.config.get("pouw", {}), "rows": self.rows, "steps": self.steps, "served": served,
                     "transcript_dir": str(self.out / "h1" / f"w{window}"), **coins}
         ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": settings})
@@ -331,10 +342,20 @@ class H1Windows:
             raise
         self.run, self.window = pouw.h1_run(ENTRY), window
 
+    def prover_of(self, window: int) -> Path | None:
+        """Window ``window``'s prover directory, ``prover/w<k>`` (owner-only, `pouw_h1_prover.private`), or None
+        without ``prover``."""
+        from verity_vllm.protocols.pouw.h1 import prover as PV
+
+        return None if self.prover is None else PV.private(PV.private(self.prover) / f"w{window}")
+
     def close(self, window: int) -> dict[str, Any] | None:
         """Window ``window``'s H1 closed and released (its hooks off, its manifest committed, the draw coin opened, its
         session closed and, with ``sessions``, its end entry waited for), the tap off the committer; its outcome. None
-        when no H1 window is open."""
+        when no H1 window is open. With ``prover``, a window that served a step and registered its live tables has its
+        rounds' live@<s> rows dumped to ``prover/w<k>/live`` (`pouw_h1_live.dump`), its outcome's ``live_dump``."""
+        from verity_vllm.protocols.pouw.h1 import live as LV
+
         if self.comp is None:
             return None
         run, held, end = self.run, self.sessions and self.sessions.held[-1], None
@@ -346,13 +367,19 @@ class H1Windows:
             if held:
                 end = self.sessions.ended(held["session"])
         d, c = run.details, run.commits
+        live_dump = None
+        if self.prover is not None and run.served is not None and run.served.live and d.get("steps_served"):
+            try:
+                live_dump = LV.dump(run, self.prover_of(window) / "live")
+            except (KeyError, ValueError, OSError) as e:
+                live_dump = {"error": f"{type(e).__name__}: {e}"[:300]}
         roots1, gate = d.get("roots1"), d.get("gate", {})
         out = {"entry": ENTRY, "window": window, "rows": self.rows, "steps": self.steps,
                "steps_served": d.get("steps_served"), "roots1": roots1, "requests": d.get("requests"),
                "static": d.get("static"), "u": d.get("u"), "refused": run.refused[:8],
                "gate": {k: gate.get(k) for k in ("coins", "gate_passed", "refused", "padded", "units")},
                "coin_source": c.get("coin_source"), "calls_root": c.get("calls_root"), "weights_root": c.get("weights_root"),
-               "served_refused": list(run.served.refused[:8]) if run.served is not None else None,
+               "served_refused": list(run.served.refused[:8]) if run.served is not None else None, "live_dump": live_dump,
                "tied": bool(roots1["tied"]) if roots1 is not None and d.get("steps_served") else None,
                "session": None if not held else {**held, "unopened": d.get("unopened"),
                                                  "closed": d.get("challenger"), "end": end}}
