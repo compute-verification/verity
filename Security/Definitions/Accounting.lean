@@ -65,7 +65,8 @@ with side sources that answer what the chip sent, over memory tiers and chained 
 close, with partial completion, and its sketch-then-hash variant for a device that reads sectors verbatim, with such
 side sources too and for a prover whose memory holds any function of the store, the deployed game that composes them
 (partial completion, interactive side sources, tiers, ground chained passes and a session of pooled draws), the remote
-bandwidth audit's node and run, the actual circuit, its physical assumptions, a challenge's reach and the device's
+bandwidth audit's node and run, the actual circuit, its physical assumptions, the actual circuit as a fixed machine run
+for a number of steps with its proof blocks' initial information (`FixedMachine`), a challenge's reach and the device's
 schedule it induces, the actual circuit's runs, strategies, soundness and the confidence set, a location's window with
 the ring's oracle locations, its provers' cost model, the tags and sketches the audits read, the headline instances as
 exact data (a device's sheet, a design's TS model and its floor program), a receipt's skipped values
@@ -75,6 +76,5 @@ run's guarantee per run is, PoUW's verdict, credits and help on one node of the 
 device memory whose post-seed contents are a circuit's values, seen through its inputs and encodes, a declared
 circuit's requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are
 its, a pass's layout as the verifier's plan of a schedule of counted bits (`ScheduleDeterministic`), the run tree of
-a prover's wipes that the memory cap's lifetime pool is over, the gate model the lower bounds on a declared
-circuit are proved over (`Gates`), and an actual circuit that is a fixed machine run for a number of steps, with its
-proof blocks' initial information (`FixedMachine`). -/
+a prover's wipes that the memory cap's lifetime pool is over, and the gate model the lower bounds on a declared
+circuit are proved over (`Gates`). -/
