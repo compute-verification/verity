@@ -8,7 +8,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.circuits.ops.boolean import elementwise as BE
-from verity.ml.circuits.refs import tuple_of
+from verity.ml.circuits.refs import Coll, Explicit, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.numerics import program_walk as PW
 
@@ -90,6 +90,25 @@ def test_over_the_bit_budget_it_walks_the_bodies_down_to_gates(words) -> None:
     assert [(c.path, c.via, c.mismatches) for c in w.checks] == [("inner/s", "body", 0), ("inner/t", "body", 0), ("inner", "body", 0)]
     assert any(p.startswith("inner/s[5]/#") for p in w.computed) and not w.unchecked
     assert PW.walk(outer, values, bits_max=0, descend_max=M - 1).unchecked[0][0] == "inner/s"
+
+
+def test_a_call_with_no_parameter_is_walked_through_its_body(words) -> None:
+    """A call of constants, as the training step's -100 and 1.0: its body's constant bits, then an add that reads them."""
+    one = 0x3F80
+
+    def consts(B, S):
+        bit = (B.call(BL.constant(0)).refs[0], B.call(BL.constant(1)).refs[0])
+        return Coll(BF16, Explicit(tuple(bit[(one >> i) & 1] for i in range(16))))
+    k = _probe("WalkConstants", (), BF16, consts)
+
+    def body(B, S, x):
+        c = B.call(k, name="k")
+        return B.batch(ADD, x, Coll(Array(M, BF16), concat([c.refs] * M)), axes=(0, 0), name="s")
+    prog = _probe("WalkReadsConstants", (("x", Array(M, BF16)),), Array(M, BF16), body)
+    s = _add(words["x"], np.full(M, one, np.uint16))
+    w = PW.walk(prog, {"x": words["x"], "k": np.uint16(one), "s": s})
+    assert [(c.path, c.via, c.members, c.mismatches) for c in w.checks] == [("k", "body", 1, 0), ("s", "bits", M, 0)]
+    assert not w.unchecked
 
 
 def test_a_scan_runs_its_step_per_iteration(words) -> None:

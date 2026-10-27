@@ -34,9 +34,10 @@ reads it: a layer's normed input feeds the dW of q, k and v.
     act, mul            SiluTorch_v1 on gate, ACT_N words a call; Bf16MulBf16_v2 of act and up
     h3                  Bf16AddF2fp_v2 of h2 and down, the next layer's input
 
-then ``norm`` (RmsNormTorch_v1) and ``logits`` (LinearTorch_v1 against the embedding), and the loss: HF's labels shifted one
-token left within each sequence with -100 (0xFFFFFF9C, outside [0, V)) at its end; ``loss.rows`` (LogSoftmaxRow_v1 on each
-row), ``loss`` (NllLossTorch_v1, the mean), ``loss.dx`` (NllLossTorchBackward_v1 of the seed 1.0) and ``logits.dx``
+then ``norm`` (RmsNormTorch_v1) and ``logits`` (LinearTorch_v1 against the embedding), and the loss: ``constants``
+(TrainStepConstants_v1, the words -100 and 1.0, so that the body holds no gate of its own), HF's labels shifted one token left
+within each sequence with -100 (0xFFFFFF9C, outside [0, V)) at its end; ``loss.rows`` (LogSoftmaxRow_v1 on each row), ``loss``
+(NllLossTorch_v1, the mean), ``loss.dx`` (NllLossTorchBackward_v1 of the seed 1.0) and ``logits.dx``
 (LogSoftmaxNllBackwardRow_v1 on each row).
 
 **The backward**, in autograd's order and with its operands' order wherever two gradients meet: ``lm_head.dx`` and
@@ -81,7 +82,7 @@ from . import torch_optim as TO
 from . import torch_train as TT
 
 __all__ = ["ACT_N", "ADAM_N", "CONFIG", "EPS", "HYPER", "LAYER", "LinearTorch", "LinearTorchDw", "LinearTorchDx", "STATE",
-           "TrainStep", "params", "weights"]
+           "TrainStep", "TrainStepConstants", "params", "weights"]
 
 BF16, F32, F64, U16, U32 = (Array(w, BL.BIT) for w in (16, 32, 64, 16, 32))
 #: the model's shape
@@ -246,15 +247,21 @@ def _transpose(B, x: Coll, R: int, C: int) -> Coll:
     return Coll(_mat(C, R), concat([out[(r, j - j % T)][j % T].refs for j in range(C) for r, _ in rows]))
 
 
-def _words(B, words: list[int], width: int = 32) -> Explicit:
+def _constants(B, S: Any) -> Coll:
     bit = (B.call(BL.constant(0)).refs[0], B.call(BL.constant(1)).refs[0])
-    return Explicit(tuple(bit[(w >> i) & 1] for w in words for i in range(width)))
+    return Coll(Tuple(U32, F32), Explicit(tuple(bit[(w >> i) & 1] for w in (IGNORE, ONE) for i in range(32))))
 
 
-def _shift(B, labels: Coll, nb: int, s: int) -> Coll:
-    """HF's ``pad(labels, (0, 1), value=-100)[..., 1:]`` on each of nb sequences of s labels."""
-    ig = _words(B, [IGNORE])
-    L = U32.leaves
+TrainStepConstants = CompositeDefinition(
+    "TrainStepConstants", 1, (), lambda S: ((), Tuple(U32, F32)), _constants,
+    doc="the training step's two constant words: IGNORE, HF's ignore index -100 as the low 32 bits of its int64 label, and "
+        "ONE, the loss's gradient seed 1.0",
+    conformance="exact-model-tested; its words are IGNORE and ONE")
+
+
+def _shift(labels: Coll, nb: int, s: int, ignore: Coll) -> Coll:
+    """HF's ``pad(labels, (0, 1), value=-100)[..., 1:]`` on each of nb sequences of s labels, ``ignore`` being the word -100."""
+    L, ig = U32.leaves, ignore.refs
     return Coll(labels.type, concat([p for b in range(nb) for p in (labels.refs.slice(L * (b * s + 1), L * (b + 1) * s), ig)]))
 
 
@@ -336,10 +343,11 @@ class _Step:
         yn, hbn, rn = self.norm("norm", x, p["norm.w"])
         logits = self.linear("logits", yn, p["embed.w"])
 
-        t = _shift(B, p["labels"], self.nb, self.s)
+        k = B.call(TrainStepConstants, name="constants")
+        t = _shift(p["labels"], self.nb, self.s, k[0])
         rows = B.batch(bind(TL.LogSoftmaxRow, V=V), logits, t, axes=(0, 0), name="loss.rows").reshape(Array(M, Array(3, F32)))
         loss = B.call(bind(TL.NllLossTorch, M=M, V=V, MEAN=1), rows.take(1, 2), t, name="loss")
-        g = B.call(bind(TL.NllLossTorchBackward, MEAN=1), Coll(F32, _words(B, [ONE])), loss[1], name="loss.dx")
+        g = B.call(bind(TL.NllLossTorchBackward, MEAN=1), k[1], loss[1], name="loss.dx")
         dlogits = B.batch(bind(TL.LogSoftmaxNllBackwardRow, V=V), logits, t, rows.take(1, 0), rows.take(1, 1), g,
                           axes=(0, 0, 0, 0, None), name="logits.dx")
 

@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.ops.boolean import cast as CA
 from verity.ml.circuits.ops.boolean import elementwise as EW
@@ -91,6 +91,14 @@ def test_the_root_takes_the_weights_and_their_optimizer_state_and_returns_the_ne
 def test_the_root_refuses_a_shape_the_capture_does_not_cover(statics) -> None:
     with pytest.raises(ValueError):
         bind(TS.TrainStep, **statics).signature()
+
+
+def test_the_roots_constants_are_the_ignore_index_and_the_loss_seed() -> None:
+    k = bind(TS.TrainStepConstants)
+    probe = CompositeDefinition("TrainStepConstantsProbe", 1, (), lambda S: ((("x", BL.BIT),), k.signature()[1]),
+                                lambda B, S, x: B.call(k), register=False)
+    assert BS.evaluate_words(bind(probe), np.zeros((1, 1), U32)).reshape(-1).tolist() == [TS.IGNORE, TS.ONE]
+    assert TS.IGNORE == -100 & 0xFFFFFFFF and TS.ONE == np.float32(1).view(U32)
 
 
 LINEARS = [(TS.LinearTorch, "fwd"), (TS.LinearTorchDx, "dX"), (TS.LinearTorchDw, "dW")]

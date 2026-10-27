@@ -13,8 +13,8 @@ of a batch or scan ``PATH[m]/NAME``. A tuple's words may come as one array or as
 A node is evaluated, in this order of preference:
 
 - by its family's numpy model in ``models`` (`Model`), which the Definition's own tests hold to its bits;
-- on bits (`bits.evaluate_bits`), its members side by side, when its gate evaluations and memory are under ``bits_max`` and
-  ``mem_bytes``;
+- on bits (`bits.evaluate_bits`), its members side by side, when it takes a parameter (the evaluator counts members by them)
+  and its gate evaluations and memory are under ``bits_max`` and ``mem_bytes``;
 - else body by body: the walk descends into each member's body (at most ``descend_max`` members), whose nodes it checks the
   same way.
 
@@ -225,7 +225,7 @@ class _Walker:
             parts = res if isinstance(res, tuple) else (res,)
             out = np.concatenate([np.asarray(p).reshape(n, -1).astype(np.uint64) for p in parts], axis=1)
             return _bits(out, ret), "model"
-        if BL.is_boolean(fn) and int(fn.gates) * n <= self.bits_max and peak_bytes(fn, n) <= self.mem_bytes:
+        if args and BL.is_boolean(fn) and int(fn.gates) * n <= self.bits_max and peak_bytes(fn, n) <= self.mem_bytes:
             return np.asarray(evaluate_bits(fn, *args)).reshape(n, -1).astype(np.uint8), "bits"
         if n > self.descend_max:
             self.out.unchecked.append((path, f"{fn.id}: {n} members with no model, over the bit budget"))
