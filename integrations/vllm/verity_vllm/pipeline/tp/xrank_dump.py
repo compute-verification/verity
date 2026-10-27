@@ -276,7 +276,7 @@ def embedding_leg(pk: dict[str, Any], metas: dict[str, Any], step: int, rows: An
         return {"ok": ok, "n_diff": (int((exp.view(torch.int16) != part.view(torch.int16)).sum()) if (exp.shape == part.shape and exp.dtype == torch.bfloat16) else None),
                 "vocab_range": [lo, hi], "masked_rows": int((~mask).sum()), "rows": int(idx.numel()), "why": None if ok else "committed partial != masked gather from this rank's shard"}
     except Exception as e:  # noqa: BLE001
-        return {"ok": None, "why": f"embedding-shard leg error: {e!r}"[:200]}
+        return {"ok": None, "why": f"embedding-shard check error: {e!r}"[:200]}
 
 
 __all__ = ["dump", "route_of", "call_spans", "call_family", "residual_member", "path_disagrees", "program_specs", "embedding_leg", "ROUTED_WORLD"]

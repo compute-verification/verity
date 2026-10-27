@@ -108,7 +108,7 @@ def test_dry_run_all_and_snapshot_steps():
 
 @pytest.mark.slow
 def test_dry_run_snapshot_caps_reach_the_capture_only():
-    # D87 cap and the cov-moe dispatcher-call cap are capture flags.  [R16 global F-global-SNAP, rel r17-int-1] the D87 cap is no longer
+    # D87 cap and the cov-moe dispatcher-call cap are capture flags.  The D87 cap is not
     # absent by default: run_config DERIVES it (rows x widest row x 2 B, never below m1_capture's 32 MiB floor) so every prefill MLP row of a
     # >= 1024-prompt row has snapshot evidence; with an unresolvable workload / checkpoint (this dry run) the derivation is the floor.  The
     # dispatcher-call cap stays absent by default, and an explicit CLI value still wins (below).

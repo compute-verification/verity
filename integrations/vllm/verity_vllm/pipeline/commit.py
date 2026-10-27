@@ -1987,7 +1987,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                             _es, _es_r = _EP.restrict_engine_steps(_es_raw, _rsteps)
                         _man_cov = dict(required_manifest, identities=_ids, engine_steps=_es)
                         if _dropped or _es_r["members_dropped"]:
-                            print(f"[delta] manifest requirement placed over the executed prefix of record (pair {pair}): identities not-executed(R17-1) {_dropped} "
+                            print(f"[delta] manifest requirement placed over the executed prefix of record (pair {pair}): identities not-executed {_dropped} "
                                   f"(by family {_ne_class['by_family']}; manifest of record untouched: {_ids_all_n} identities, digest {str(required_manifest.get('manifest_digest'))[:16]}), "
                                   f"composition members dropped {_es_r['members_dropped']} over {_es_r['steps_changed']} steps, steps not executed {_es_r['steps_dropped']}", flush=True)
                     try:
