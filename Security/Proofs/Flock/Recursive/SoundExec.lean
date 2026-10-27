@@ -49,8 +49,8 @@ V*'s bridge (`Flock.Assumptions.VBridge`), one of five holds:
   shape in range: `Recursion.recursive_sound_compiled_fast100`) as its inner term.
 
 It needs `VBridge` in full, which a protocol whose last round isn't committed (candidate 3 today) doesn't give. Its
-event asks, as `RecursiveSound`'s does, that the inner statement have no witness, which the vacuity sweep found nearly empty (see
-`RecursiveSound`); the knowledge form is `Claims.Recursion.KS`.
+event asks, as `RecursiveSound`'s does, that the inner statement have no witness, which the vacuity sweep found nearly
+empty (see `RecursiveSound`); the knowledge form is `Claims.Recursion.KS`.
 
 **Retired from the lock** with `RecursiveSound`: the lock lists no theorem of it; the recursion's guarantee
 is `Flock.Guarantees.RecursiveKS`. -/

@@ -43,8 +43,8 @@ on it:
 * `IrShaped`: passed (`vstar-difftest ir_shaped` on the stager's inputs from the run's tree:
   both reps open, 448 openings each; one opening fewer, or one past the tops, is refused).
 * `TopsAt`: holds in the same check (the reps' tops differ at levels 1–3).
-* `HonestWitSatisfies`: passed in the same check (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat --session`): all 10
-  parts, each at the table `verify --zk` sets up at the draw its session records, under the zero mask and a random
+* `HonestWitSatisfies`: passed in the same check (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat
+  --session`): all 10 parts, each at the table `verify --zk` sets up at the draw its session records, under the zero mask and a random
   one, 20 of 20 lines with no bad rows, pin or region bits.
 * `NoCollAt`: passed (`test_the_deployed_runs_calls_have_no_collision`, `vstar-trace
   --nocoll`): per part and over all 10 together, no SHA-512 output has two inputs (`findColl = none` on full input
@@ -72,8 +72,8 @@ block and range for range, on parts Python's `rec_vstage.stage` staged:
   its drawn level and cap passed (`test_the_trace_satisfies_the_verifiers_tables`), and so did L0 of the recorded
   session (`test_the_recorded_plain_leaf_sessions_satisfy`).
 
-The checks of `IrShaped`, `TopsAt`, `HonestWitSatisfies` and `NoCollAt` run on the run's own tree. Neither difftest compares `refP`'s inner rounds (the inner prover `Ir`'s
-messages) with Python's builder. -/
+The checks of `IrShaped`, `TopsAt`, `HonestWitSatisfies` and `NoCollAt` run on the run's own tree. Neither difftest
+compares `refP`'s inner rounds (the inner prover `Ir`'s messages) with Python's builder. -/
 def HonestFixture : Prop :=
   ∃ (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)

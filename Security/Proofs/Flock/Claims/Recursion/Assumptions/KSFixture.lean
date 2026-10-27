@@ -58,10 +58,11 @@ Assumption record. No claim: `RecDeploy.lamLin2_deployed_ge_dep`'s scope premise
 statement `λ₂`'s numbers are stated at takes; the parts are V\*'s at the deployed shape, fixed by the deployment, not by
 the fixture's inner statement. Witnessed outside Lean by the fixture's run, which records each part's setup.
 
-The run is `DeployedParses`'s, at the staging run's coin-server record (the inner session and its `public.json` transcript). Each of the 10 parts' `--zk` setup
-gave 1 table, 2 points, `mPts` from 27 to 33 and `(m, k_log, regions)` within `m` 26–32, `k_log` 22–26 and at most 48
-regions, inside `PartIn`, and each was accepted. 10 ≤ `2^16`, and the whole tree is 1.8 GB, under `2^56` inputs. It is
-weaker than the Prop in that the parts are those the staging run's driver staged, not `pick`'s choice, which is `Classical.choose`. -/
+The run is `DeployedParses`'s, at the staging run's coin-server record (the inner session and its `public.json`
+transcript). Each of the 10 parts' `--zk` setup gave 1 table, 2 points, `mPts` from 27 to 33 and `(m, k_log, regions)`
+within `m` 26–32, `k_log` 22–26 and at most 48 regions, inside `PartIn`, and each was accepted. 10 ≤ `2^16`, and the
+whole tree is 1.8 GB, under `2^56` inputs. It is weaker than the Prop in that the parts are those the staging run's
+driver staged, not `pick`'s choice, which is `Classical.choose`. -/
 def PartsInScope (x : Msg) (tr : Msg → List (Msg × Out) → ByteArray) : Prop :=
   (∀ j < nS x, ∃ i spec' sts', PartIn (staged (Stage.ofMsg tr) x (pick (Stage.ofMsg tr) x j) j) i spec' sts') ∧
     nS x ≤ 2 ^ 16 ∧ (innerSetupIns (xIOf x)).length ≤ 2 ^ 56
