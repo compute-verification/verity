@@ -65,7 +65,9 @@ ALLOWED = {
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
     "core.protocols.sampled_proofs": {"core.claims", "ml.circuits", "ml.commitments", "ml.randomness",
                                       "core.protocols.profile"},
-    "core.protocols.pous": {"core.claims", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
+    # 2026-10-26 (Daniel, 4:27 PM PDT, device-attest): the memory challenger reports its sessions under its party's
+    # per-period root (`core.attest`).
+    "core.protocols.pous": {"core.claims", "core.attest", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
