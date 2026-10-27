@@ -414,15 +414,17 @@ class GpuDriver:
         self._poll_clock()
 
     def _poll_clock(self) -> None:
-        """The SM clock, sampled every 200 ms by one nvidia-smi beside the run (none inside a timed block)."""
+        """The SM clock, sampled every 200 ms by one nvidia-smi beside the run (none inside a timed block); HU_CLOCK=0: none
+        (run.sh's nsys runs, where nsys would trace it too)."""
         import threading
         uuid = os.environ.get("GPU_LEASE_UUID")
-        self.clock = 0
+        self.clock, self.smi = 0, None
+        if os.environ.get("HU_CLOCK") == "0":
+            return
         try:
             self.smi = subprocess.Popen(["nvidia-smi", "--query-gpu=clocks.sm", "--format=csv,noheader,nounits", "-lms", "200",
                                          *(["-i", uuid] if uuid else [])], stdout=subprocess.PIPE, text=True)
         except OSError:
-            self.smi = None
             return
 
         def read() -> None:

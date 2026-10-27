@@ -83,7 +83,7 @@ $LEASE bash -c '
   echo "period rc $r" >> "$O/rc.txt"
   if [ "$NSYS" = 1 ]; then
     for arm in plain proto; do
-      nsys profile -o "$O/nsys-$arm" --force-overwrite true --trace cuda $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/nsys-$arm" \
+      HU_CLOCK=0 nsys profile -o "$O/nsys-$arm" --force-overwrite true --trace cuda $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/nsys-$arm" \
         --coins local --main "$MAIN" --blocks 1 --steps 64 --q 64 --periods 1 --negative "" --arms $arm >> "$O/nsys.log" 2>&1
       echo "nsys $arm rc $?" >> "$O/rc.txt"
       nsys stats --report cuda_gpu_kern_sum --format csv -o "$O/nsys-$arm" "$O/nsys-$arm.nsys-rep" >> "$O/nsys.log" 2>&1
