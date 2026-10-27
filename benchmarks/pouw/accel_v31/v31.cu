@@ -1332,8 +1332,8 @@ static std::string env_str(const char* name, const char* dflt) {
 // the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl). Under -DV31_WG (sm_90a):
 // V31_GEMM 1, the protocol's and the plain GEMM on warpgroup MMAs (wg_proto.cuh, the bench's wgl arm wgmma.linear itself),
 // V31_WGBN its tiles' columns (256 where N allows, or 128), V31_CM where it keeps the tail's low halves (0 registers, 1 an
-// L2 scratch slot a CTA), V31_WGG its raster's tile rows a group, V31_RP 2 the register plan that leaves room for a
-// commit CTA beside each GEMM CTA (wg_proto.cuh's gemm_rw; CM 1; the wgl arm keeps RP 0).
+// L2 scratch slot a CTA), V31_WGG its raster's tile rows a group, V31_RP 3 the register plan that leaves room for a
+// commit CTA beside each GEMM CTA (wg_proto.cuh's gemm_r3; CM 1; the wgl arm keeps RP 0).
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
@@ -1522,8 +1522,8 @@ struct Ctx {
 #ifdef V31_WG
     wbn = kn.wgbn == 256 && n % 256 == 0 ? 256 : 128;
     wgrid = std::min((m / wgp::TM) * (n / wbn), nsm);
-    if (kn.rp != 0 && kn.rp != 2) { fprintf(stderr, "V31_RP is 0 or 2 (wg_proto.cuh's register plans)\n"); exit(2); }
-    if (kn.rp && !kn.cm) { fprintf(stderr, "V31_RP 2 needs V31_CM 1\n"); exit(2); }
+    if (kn.rp != 0 && kn.rp != 3) { fprintf(stderr, "V31_RP is 0 or 3 (wg_proto.cuh's register plans)\n"); exit(2); }
+    if (kn.rp && !kn.cm) { fprintf(stderr, "V31_RP 3 needs V31_CM 1\n"); exit(2); }
     const int KQ = kn.wrap >= 6 ? k / wgp::BK : 0;
     if (TT + KQ > wgp::MAX_TT) {
       fprintf(stderr, "the tail's %d k-tiles exceed wg_proto.cuh's MAX_TT %d\n", TT + KQ, wgp::MAX_TT);
@@ -1547,7 +1547,7 @@ struct Ctx {
     };
     wa_proto = mk(X, W, 1); wa_plain = mk(X, W, 0); wa_wgl = mk(A, B, 2);
     const void* ks[] = {(const void*)wgp::gemm<256, 0>, (const void*)wgp::gemm<256, 1>, (const void*)wgp::gemm<128, 0>,
-                        (const void*)wgp::gemm<128, 1>, (const void*)wgp::gemm_rw<256>, (const void*)wgp::gemm_rw<128>};
+                        (const void*)wgp::gemm<128, 1>, (const void*)wgp::gemm_r3<256>, (const void*)wgp::gemm_r3<128>};
     const int sm[] = {wgp::Tile<256>::SMEM, wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM,
                       wgp::Tile<128>::SMEM, wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM};
     for (int i = 0; i < 6; i++) {
@@ -1562,13 +1562,13 @@ struct Ctx {
 #ifdef V31_WG
   // V31_DYN 1: an SM the commit's CTAs share takes fewer tiles (gctr, as gemm_kernel's)
   void wg_launch(cudaStream_t st, wgp::Args g, int cm, int rp) {
-    constexpr int T0 = wgp::threads<0>(), T2 = wgp::threads<2>();
+    constexpr int T0 = wgp::threads<0>(), T3 = wgp::threads<3>();
     constexpr int S256 = wgp::Tile<256>::SMEM, S128 = wgp::Tile<128>::SMEM;
     g.tctr = kn.dyn ? gctr : nullptr;
     g.tbase = gbase;
     gbase += (u32)((m / wgp::TM) * (n / wbn));
-    if (wbn == 256 && rp == 2) wgp::gemm_rw<256><<<wgrid, T2, S256, st>>>(g);
-    else if (rp == 2) wgp::gemm_rw<128><<<wgrid, T2, S128, st>>>(g);
+    if (wbn == 256 && rp == 3) wgp::gemm_r3<256><<<wgrid, T3, S256, st>>>(g);
+    else if (rp == 3) wgp::gemm_r3<128><<<wgrid, T3, S128, st>>>(g);
     else if (wbn == 256 && cm) wgp::gemm<256, 1><<<wgrid, T0, S256, st>>>(g);
     else if (wbn == 256) wgp::gemm<256, 0><<<wgrid, T0, S256, st>>>(g);
     else if (cm) wgp::gemm<128, 1><<<wgrid, T0, S128, st>>>(g);
@@ -1712,7 +1712,7 @@ static void kernel_attrs(FILE* f) {
 #ifdef V31_WG
   const KAttr wk[] = {{"wg_256_c0", (const void*)wgp::gemm<256, 0>}, {"wg_256_c1", (const void*)wgp::gemm<256, 1>},
                       {"wg_128_c0", (const void*)wgp::gemm<128, 0>}, {"wg_128_c1", (const void*)wgp::gemm<128, 1>},
-                      {"wg_256_rw", (const void*)wgp::gemm_rw<256>}, {"wg_128_rw", (const void*)wgp::gemm_rw<128>}};
+                      {"wg_256_r3", (const void*)wgp::gemm_r3<256>}, {"wg_128_r3", (const void*)wgp::gemm_r3<128>}};
   for (const KAttr& w : wk) {
     cudaFuncAttributes a;
     CK(cudaFuncGetAttributes(&a, w.fn));

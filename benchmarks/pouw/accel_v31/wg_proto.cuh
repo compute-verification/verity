@@ -11,7 +11,7 @@
 // acc - tau: tau's low halves are kept (CM 0: packed in 64 registers a thread at BN 256; CM 1: in an L2-resident scratch
 // slot of the CTA's, read back at each segment end), so a tail costs (dz + dy) L' inner indices on the tensor cores and
 // no second accumulator. The tail's step order and events are a table in shared memory, built once a CTA.
-// RP, the register plan (below): 0 is wgmma.linear's, 2 leaves room for one of the commit's CTAs beside each GEMM CTA.
+// RP, the register plan (below): 0 is wgmma.linear's, 3 leaves room for one of the commit's CTAs beside each GEMM CTA.
 //   mode 0  the plain product X W'^T to O (the bench's `plain` arm)
 //   mode 1  the protocol's GEMM (diag 1: no segment stores, 2: no tail, 4: no dO read; timing only)
 //   mode 2  wgmma.linear itself on A, B: bf16(RN(RN(f32(acc) s_a) s_w)) words, the `wgl` arm, gamma's baseline
@@ -31,13 +31,17 @@ namespace wgp {
 // TW: v31's word tile; MAX_TT: the tail's k-tiles a table holds ((dz + dy) L' / BK, 48 at L' 1024 and dz = dy = 3, and
 // KQ more)
 constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW = 128, MAX_TT = 1024;
-// The register plans (RP). A commit CTA (128 threads, SMALL_MINB 5: <= 104 registers a thread, 13,312 in all) fits beside
-// a GEMM CTA when the GEMM's launch leaves that much of the SM's 65,536:
-//   RP 0  384 threads at 168 (wgmma.linear's: the producer warpgroup drops to 40, the consumers rise to 232): no room
-//   RP 2  288 threads at 168 (one producer warp, no setmaxnreg): 17,152 left
-// (RP 1, 384 threads at 136, can't be built: wgmma n256 needs a launch budget of 154, ptxas C7602, whatever setmaxnreg
-// raises it to.)
-template <int RP> __host__ __device__ constexpr int threads() { return RP == 2 ? 2 * 128 + 32 : 3 * 128; }
+// The register plans (RP). An SM's registers are four files of 16,384, one a sub-partition, and a CTA's warps are dealt to
+// them in turn, so a commit CTA (4 warps, SMALL_MINB 5: <= 104 registers a thread, 3,328 a warp) fits beside a GEMM CTA
+// only if every sub-partition has that much left:
+//   RP 0  384 threads at 168 (wgmma.linear's: the producer warpgroup drops to 40, the consumers rise to 232): 3 warps
+//         a sub-partition, 16,128, no room
+//   RP 3  256 threads at 200 (no producer warp: thread 0 issues the loads between its own steps): 2 warps a
+//         sub-partition, 12,800, 3,584 left
+// (384 threads at 136 can't be built: wgmma n256 needs a launch budget of 154, ptxas C7602, whatever setmaxnreg raises it
+// to. 288 threads at 168, one producer warp, puts 3 warps and 16,128 registers on sub-partition 0: the commit's CTAs never
+// landed beside it, r20261027-045150-d9ee.)
+template <int RP> __host__ __device__ constexpr int threads() { return RP == 3 ? 2 * 128 : 3 * 128; }
 
 template <int BN> struct Tile {
   static_assert(BN == 128 || BN == 256, "128 x 128 or 128 x 256 tiles");
@@ -81,6 +85,14 @@ WGD void mbar_wait(uint32_t bar, uint32_t parity) {
 WGD void mbar_wait_warp(uint32_t bar, uint32_t parity) {
   mbar_wait(bar, parity);
   __syncwarp();
+}
+WGD bool mbar_test(uint32_t bar, uint32_t parity) {
+  uint32_t r;
+  asm volatile("{\n .reg .pred p;\n mbarrier.test_wait.parity.shared::cta.b64 p, [%1], %2;\n selp.u32 %0, 1, 0, p;\n}"
+               : "=r"(r)
+               : "r"(bar), "r"(parity)
+               : "memory");
+  return r != 0;
 }
 WGD void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
 WGD void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
@@ -185,40 +197,47 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
   }
   __syncthreads();
 
-  if (wg == NWG) {
+  auto next = [&](int t) {
+    const unsigned q = p.tctr ? gridDim.x + (atomicAdd(p.tctr, 1u) - p.tbase) : (unsigned)t + gridDim.x;
+    return q < (unsigned)tiles ? (int)q : tiles;
+  };
+  auto prefetch = [&]() {
+    wgp::tma_prefetch(&p.a);
+    wgp::tma_prefetch(&p.b);
+    if (TT) { wgp::tma_prefetch(&p.pa); wgp::tma_prefetch(&p.pb); }
+    if (TT && p.KQ) wgp::tma_prefetch(&p.q);
+  };
+  // step i of tile (tm, tn) into the stage at st, its bytes counted on full
+  auto load = [&](uint32_t st, uint32_t full, int i, int tm, int tn) {
+    mbar_expect_tx(full, T::STAGE);
+    if (i < TT) {
+      const int e = tab[i], kt = e & 0xFFFF;
+      if (e & TAIL_Q) {
+        wgp::tma_load(st, &p.a, full, kt * BK, tm * TM);
+        wgp::tma_load(st + T::A_BYTES, &p.q, full, kt * BK, tn * BN);
+      } else {
+        wgp::tma_load(st, &p.pa, full, kt * BK, tm * TM);
+        wgp::tma_load(st + T::A_BYTES, &p.pb, full, kt * BK, tn * BN);
+      }
+    } else {
+      wgp::tma_load(st, &p.a, full, (i - TT) * BK, tm * TM);
+      wgp::tma_load(st + T::A_BYTES, &p.b, full, (i - TT) * BK, tn * BN);
+    }
+  };
+
+  if (RP != 3 && wg == NWG) {
     if constexpr (RP == 0) regs_dec<40>();
     if (tid == NWG * 128) {
-      wgp::tma_prefetch(&p.a);
-      wgp::tma_prefetch(&p.b);
-      if (TT) { wgp::tma_prefetch(&p.pa); wgp::tma_prefetch(&p.pb); }
-      if (TT && p.KQ) wgp::tma_prefetch(&p.q);
+      prefetch();
       int s = 0;
       uint32_t ph = 0;
-      auto next = [&](int t) {
-        const unsigned q = p.tctr ? gridDim.x + (atomicAdd(p.tctr, 1u) - p.tbase) : (unsigned)t + gridDim.x;
-        return q < (unsigned)tiles ? (int)q : tiles;
-      };
       for (int t = blockIdx.x; t < tiles; t = next(t)) {
         int tm, tn;
         raster(t, tiles_m, tiles_n, p.group, tm, tn);
         for (int i = 0; i < steps; i++) {
-          const uint32_t st = base + s * T::STAGE, full = bars + 8 * s;
           mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
           if (i == 0) stile[s] = t;
-          mbar_expect_tx(full, T::STAGE);
-          if (i < TT) {
-            const int e = tab[i], kt = e & 0xFFFF;
-            if (e & TAIL_Q) {
-              wgp::tma_load(st, &p.a, full, kt * BK, tm * TM);
-              wgp::tma_load(st + T::A_BYTES, &p.q, full, kt * BK, tn * BN);
-            } else {
-              wgp::tma_load(st, &p.pa, full, kt * BK, tm * TM);
-              wgp::tma_load(st + T::A_BYTES, &p.pb, full, kt * BK, tn * BN);
-            }
-          } else {
-            wgp::tma_load(st, &p.a, full, (i - TT) * BK, tm * TM);
-            wgp::tma_load(st + T::A_BYTES, &p.b, full, (i - TT) * BK, tn * BN);
-          }
+          load(base + s * T::STAGE, bars + 8 * s, i, tm, tn);
           if (++s == STAGES) { s = 0; ph ^= 1; }
         }
       }
@@ -230,6 +249,44 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
   }
   if constexpr (RP == 0) regs_inc<232>();
 
+  // RP 3: thread 0 is the producer too, between its own steps: issue() fills the next stage (waiting for it to be free),
+  // pump() every stage already free up to STAGES steps past the consumers' cg, need() whatever step cg still lacks
+  int pt = blockIdx.x, pi = 0, ps = 0, pg = 0, ptm = 0, ptn = 0;
+  uint32_t pph = 0;
+  bool pfin = false;
+  auto issue = [&]() {
+    mbar_wait(bars + 8 * (STAGES + ps), pph ^ 1);
+    if (pt >= tiles) {
+      stile[ps] = -1;
+      mbar_arrive(bars + 8 * ps);
+      pfin = true;
+    } else {
+      if (pi == 0) { stile[ps] = pt; raster(pt, tiles_m, tiles_n, p.group, ptm, ptn); }
+      load(base + ps * T::STAGE, bars + 8 * ps, pi, ptm, ptn);
+      if (++pi == steps) { pi = 0; pt = next(pt); }
+    }
+    pg++;
+    if (++ps == STAGES) { ps = 0; pph ^= 1; }
+  };
+  auto pump = [&](int cg) {
+    if constexpr (RP == 3) {
+      if (tid == 0)
+        while (!pfin && pg < cg + STAGES && mbar_test(bars + 8 * (STAGES + ps), pph ^ 1)) issue();
+      __syncwarp();
+    }
+  };
+  auto need = [&](int cg) {
+    if constexpr (RP == 3) {
+      if (tid == 0)
+        while (pg <= cg) issue();
+      __syncwarp();
+    }
+  };
+  if constexpr (RP == 3) {
+    if (tid == 0) prefetch();
+    pump(0);
+  }
+
   const int x = tid % 128, lane = tid % 32;
   const int rloc = wg * 64 + 16 * (x / 32) + (x % 32) / 4, cq = 2 * (x % 4);   // the thread's first row and column in the tile
   int s = 0;
@@ -239,7 +296,9 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
   uint32_t* const cs = CM == 1 ? p.cbuf + (size_t)blockIdx.x * (TM * BN / 2) + tid : nullptr;   // the thread's tau words
   const bool segs = proto && !(p.diag & 1);
   const int kpl = p.L / BK;
+  int cg = 0;   // the steps consumed (RP 3's producer's reference)
   for (;;) {
+    need(cg);
     mbar_wait_warp(bars + 8 * s, ph);
     const int t = stile[s];
     if (t < 0) break;
@@ -248,6 +307,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
     int pend = -1;            // the stage whose release waits on its MMAs
     int segk = 0, segn = 0;   // the main k-tiles into the open segment, and the segments stored
     for (int i = 0; i < steps; i++) {
+      need(cg);
       mbar_wait_warp(bars + 8 * s, ph);
       const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
       WGP_FENCE;
@@ -260,6 +320,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
       if (pend >= 0 && lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
       pend = s;
       if (++s == STAGES) { s = 0; ph ^= 1; }
+      pump(++cg);
       // the events that read the accumulators: a tail digit's end, and a segment's end
       int scale = 0;
       bool capture = false;
@@ -278,6 +339,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
       acc_fence<NA>(d);
       if (lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
       pend = -1;
+      pump(cg);
       if (scale) {
 #pragma unroll
         for (int j = 0; j < NA; j++) d[j] = (int32_t)((uint32_t)d[j] * (uint32_t)scale);
@@ -317,6 +379,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
     WGP_WAIT(0);
     acc_fence<NA>(d);
     if (pend >= 0 && lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
+    pump(cg);
 
     const int row = tm * TM + rloc, col0 = tn * BN + cq;
     // every address below is a base plus a constant (row and col0 are even)
@@ -356,6 +419,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
         }
       }
     }
+    pump(cg);
     const bool add = proto && !(p.diag & 4) && !p.lA;
     int* const o0 = p.O + (size_t)row * N + col0;
     int* const o1 = o0 + (size_t)8 * N;
@@ -382,12 +446,11 @@ __global__ void __launch_bounds__(threads<0>(), 1) gemm(const __grid_constant__ 
   body<BN, CM, 0>(p);
 #endif
 }
-// RP 2 keeps tau in L2 (CM 1: CM 0's 64 registers of it don't fit) and is launched with 288 threads under RP 0's bounds
-// (168)
+// RP 3 keeps tau in L2 (CM 1: CM 0's 64 registers of it don't fit)
 template <int BN>
-__global__ void __launch_bounds__(threads<0>(), 1) gemm_rw(const __grid_constant__ Args p) {
+__global__ void __maxnreg__(200) gemm_r3(const __grid_constant__ Args p) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
-  body<BN, 1, 2>(p);
+  body<BN, 1, 3>(p);
 #endif
 }
 
