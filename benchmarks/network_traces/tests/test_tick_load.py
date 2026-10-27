@@ -4,6 +4,8 @@ the test makes: offsets that follow the bit are told apart, offsets that don't a
 
 from __future__ import annotations
 
+import gzip
+import json
 import random
 import sys
 from pathlib import Path
@@ -65,3 +67,21 @@ def test_offsets_that_ignore_the_bit_are_not():
 def test_too_few_of_a_bit_reports_counts_alone():
     d = tl.distinguish([(1.0, 0), (2.0, 0), (3.0, 1)])
     assert d["by_bit"]["1"]["n"] == 1 and "decoder" not in d
+
+
+def test_jitter_reads_the_pacers_write_starts_and_pairs_each_offset_with_the_next_bit(tmp_path):
+    """A paced run's pacer reports are each bucket's write start, and `next` pairs each bucket's client offset with
+    the next bucket's bit over the buckets whose next was written in: offsets that follow the next bit are decoded."""
+    bits, n = _bits(), 96
+    bits.writes = [[t, 0.0] for t in range(n) if t % 3]
+    (tmp_path / "client").mkdir()
+    lag = [50.0 + bits.draw(t + 1)[0] for t in range(n)]
+    (tmp_path / "client" / "peer.json").write_text(json.dumps({"bucket_lag_ms": lag}))
+    log = {"lateness_ms": {"egress": [0.1] * n},
+           "paced": {"ms": 50.0, "releases": [[t, -40.0, t / 100, 0.2, True] for t in range(n)]}}
+    with gzip.open(tmp_path / "proxy.json.gz", "wt") as fh:
+        json.dump(log, fh)
+    j = tl.jitter(tmp_path, bits)
+    assert j["paced_ms"] == 50.0 and [r[6] for r in j["buckets"]] == [t / 100 for t in range(n)]
+    assert j["next"]["client"]["n"] == sum(1 for t in range(n - 1) if (t + 1) % 3)
+    assert j["next"]["client"]["decoder"]["accuracy"] == 1.0 and "release" in j["written"]

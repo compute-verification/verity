@@ -3,7 +3,7 @@ this process's own CPUs.
 
     python tick_load.py --out DIR [--hogs-per-cpu 3] [--requests 400] [--in-flight 4] [--tokens 64]
         [--token-ms 25] [--delta-buckets 52] [--profile planned|served] [--strategies honest[,late,extra]]
-        [--secret-bit]
+        [--secret-bit] [--paced-ms MS]
 
 It starts a stub OpenAI streaming endpoint on loopback (`/v1/models`, `/tokenize`, and `/v1/completions`, each
 completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes the requests in flight), then
@@ -12,7 +12,8 @@ completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes
 `--profile`), and stops the hogs. It writes
 `ticks.json` in `--out`: the CPUs and hogs, the rehearsal's exit and verdict, and per grid the ticks and their lateness
 (median, p99, p99.9, max in ms, the ticks past the slack with their window and bucket, and the windows the honest run
-was refused on). The rehearsal's own outputs are under `--out`/rehearsal.
+was refused on), and from a paced proxy its pacer's write starts and the buckets it got late or started past the slack
+(`paced`). The rehearsal's own outputs are under `--out`/rehearsal.
 
 **With `--secret-bit`** the stub times its writes by a secret bit per egress bucket, which is J's question
 (`NetTiming.JitterBounded`): does an offset within a bucket that the prover chooses reach a receiver outside?
@@ -20,11 +21,15 @@ The stub draws a secret of its own, never written, and bucket t's bit and lead (
 and t (`SecretBits`). Once `serve` has written the honest run's `deployment.json` (the plan's probes before it are paced
 as without), each token waits from its pacing to the first slot after it: bucket t's is its lead before t's boundary
 when t's bit is 1, and half a bucket more when 0, so both bits write the same tokens a bucket, and they differ only in
-their phase against the egress tick that writes bucket t. `jitter.json` in `--out` holds, per bucket, its bit, its lead,
+their phase against the egress tick that makes bucket t. `jitter.json` in `--out` holds, per bucket, its bit, its lead,
 the tokens written in its slot, the client's offset of the bucket's arrival after its boundary (`peer.json`'s
-`bucket_lag_ms`: the proxy writes a bucket's cells in one write, so each cell's offset is its bucket's) and the egress
-tick's lateness, and, for the buckets written in and the idle ones (the control), whether those offsets tell the bit
-apart (`distinguish`). It holds timing and the bits, none of the run's records, salts or keys.
+`bucket_lag_ms`: the proxy writes a bucket's cells in one write, so each cell's offset is its bucket's), the egress
+tick's lateness and, from a paced proxy (`certifier_serve.py --paced-ms`), when its pacer started the bucket's write
+after the bucket's time; and, for the buckets written in and the idle ones (the control), whether those offsets tell
+the bit apart (`distinguish`). `next` holds the same of each bucket's client offset against the next bucket's bit, over
+the buckets whose next was written in: that bit's 0 writes half a bucket before the next boundary, so at a pacer
+offset of half a bucket (`certifier_serve.PACED_MS`) just before this bucket's write. It holds timing and the bits,
+none of the run's records, salts or keys.
 
 Run it inside one `research run --on auto --cpus N`, so the hog loads only the run's own cores.
 """
@@ -227,6 +232,14 @@ def summary(run: Path) -> dict:
     if (run / "publisher_timing.json").exists():
         out["publisher"] = publisher(json.loads((run / "publisher_timing.json").read_text()), log, buckets)
     check = json.loads((run / "check.json").read_text()) if (run / "check.json").exists() else {}
+    if (paced := log.get("paced")) is not None:
+        rows = paced["releases"]
+        start = [r[2] for r in rows]
+        out["paced"] = {"ms": paced["ms"], "buckets": len(rows), "start_median_ms": _quantile(start, 0.5),
+                        "start_p99_ms": _quantile(start, 0.99), "start_p999_ms": _quantile(start, 0.999),
+                        "start_max_ms": max(start), "arrived_max_ms": max(r[1] for r in rows),
+                        "late": [[t, t // buckets, t % buckets, a, s] for t, a, s, _, w in rows
+                                 if a > 0 or s > slack or not w]}
     out["verdict"] = check.get("verdict")
     out["refused_windows"] = {row["window"]: {d: a["raw"] for d, a in row["audit"].items() if a["raw"]}
                               for row in check.get("rows", []) if not row["n2"]["accepted"]}
@@ -311,25 +324,35 @@ def distinguish(pairs: list[tuple[float, int]], seed: int = 0) -> dict:
 
 def jitter(run: Path, bits: SecretBits) -> dict:
     """`jitter.json`: per egress bucket of the honest run `run` (the module docstring's `--secret-bit`), and
-    `distinguish` of the client's offsets and of the egress ticks' lateness, for the buckets written in and the idle
-    ones, and for the written ones per quarter of the lead's range."""
+    `distinguish` of the client's offsets, of the egress ticks' lateness and of the pacer's write starts, for the
+    buckets written in and the idle ones, of the client's offsets against the next bucket's bit (`next`), and of the
+    written ones' per quarter of the lead's range."""
     lag = json.loads((run / "client" / "peer.json").read_text())["bucket_lag_ms"]
-    ticks = json.loads(gzip.open(run / "proxy.json.gz").read())["lateness_ms"]["egress"]
+    log = json.loads(gzip.open(run / "proxy.json.gz").read())
+    ticks = log["lateness_ms"]["egress"]
+    starts = {t: s for t, _, s, _, _ in (log.get("paced") or {}).get("releases", [])}
     written = Counter(t for t, _ in bits.writes)
     rows = []
     for t, x in enumerate(lag):
         bit, lead = bits.draw(t)
-        rows.append([t, bit, round(lead * 1000, 3), written.get(t, 0), x, ticks[t] if t < len(ticks) else None])
+        rows.append([t, bit, round(lead * 1000, 3), written.get(t, 0), x, ticks[t] if t < len(ticks) else None,
+                     starts.get(t)])
     late = [x for _, x in bits.writes]
     out = {"lead_ms": LEAD_MS, "bucket_ms": None if bits.grid is None else bits.grid[1] * 1000,
+           "paced_ms": (log.get("paced") or {}).get("ms"),
            "writes": {"n": len(late), "late_median_ms": _quantile(late, 0.5) if late else None,
                       "late_p99_ms": _quantile(late, 0.99) if late else None, "late_max_ms": max(late, default=None)},
-           "columns": ["bucket", "bit", "lead_ms", "tokens_written", "client_offset_ms", "tick_lateness_ms"],
+           "columns": ["bucket", "bit", "lead_ms", "tokens_written", "client_offset_ms", "tick_lateness_ms",
+                       "release_start_ms"],
            "buckets": rows}
     for name, keep in (("written", lambda r: r[3] > 0), ("idle", lambda r: r[3] == 0)):
         sel = [r for r in rows if keep(r)]
         out[name] = {"client": distinguish([(r[4], r[1]) for r in sel]),
-                     "tick": distinguish([(r[5], r[1]) for r in sel if r[5] is not None])}
+                     "tick": distinguish([(r[5], r[1]) for r in sel if r[5] is not None]),
+                     "release": distinguish([(r[6], r[1]) for r in sel if r[6] is not None])}
+    following = [(r, n) for r, n in zip(rows, rows[1:]) if n[3] > 0]
+    out["next"] = {"client": distinguish([(r[4], n[1]) for r, n in following]),
+                   "release": distinguish([(r[6], n[1]) for r, n in following if r[6] is not None])}
     quarter = LEAD_MS / 4
     out["written_by_lead"] = {
         f"{q * quarter:g}-{(q + 1) * quarter:g}": distinguish([(r[4], r[1]) for r in rows
@@ -351,6 +374,8 @@ def main(argv=None) -> int:
     ap.add_argument("--strategies", default="honest", help="the rehearsal's strategies, honest, late, extra")
     ap.add_argument("--secret-bit", action="store_true",
                     help="time the stub's writes by a secret bit per egress bucket and write jitter.json")
+    ap.add_argument("--paced-ms", type=float, help="the rehearsal's --paced-ms (certifier_serve.py's default if not "
+                                                   "given; 0: the proxy writes each bucket on its loop)")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     cpus = sorted(os.sched_getaffinity(0))
@@ -364,7 +389,8 @@ def main(argv=None) -> int:
                              "--upstream", f"http://127.0.0.1:{port}", "--requests", str(a.requests),
                              "--in-flight", str(a.in_flight), "--tokens", str(a.tokens),
                              "--delta-buckets", str(a.delta_buckets), "--profile", a.profile,
-                             "--strategies", a.strategies, "--out", str(a.out / "rehearsal")],
+                             "--strategies", a.strategies, "--out", str(a.out / "rehearsal"),
+                             *([] if a.paced_ms is None else ["--paced-ms", str(a.paced_ms)])],
                             env=os.environ | {"CERTIFIER_SERVE_TIMING": "1"}).returncode
     finally:
         for h in hogs:
@@ -373,7 +399,7 @@ def main(argv=None) -> int:
             h.wait()
     doc = {"cpus": cpus, "hogs": len(hogs), "rehearse_exit": rc, "token_ms": a.token_ms, "requests": a.requests,
            "in_flight": a.in_flight, "delta_buckets": a.delta_buckets, "profile": a.profile,
-           "strategies": a.strategies}
+           "strategies": a.strategies, "paced_ms": a.paced_ms}
     run = a.out / "rehearsal" / "honest"
     if (run / "proxy.json.gz").exists():
         doc |= summary(run)
@@ -384,8 +410,9 @@ def main(argv=None) -> int:
     if bits is not None and (run / "client" / "peer.json").exists() and (run / "proxy.json.gz").exists():
         j = jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict")}
         (a.out / "jitter.json").write_text(json.dumps(j))
-        print(json.dumps({"jitter": {k: {g: {m: j[k][g].get(m) for m in ("n", "mann_whitney", "decoder", "information")}
-                                         for g in ("client", "tick")} for k in ("written", "idle")}}), flush=True)
+        print(json.dumps({"jitter": {k: {g: {m: d.get(m) for m in ("n", "mann_whitney", "decoder", "information")}
+                                         for g, d in j[k].items()} for k in ("written", "idle", "next")}}),
+              flush=True)
     return rc
 
 
