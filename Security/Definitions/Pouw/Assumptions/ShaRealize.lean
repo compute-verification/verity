@@ -20,26 +20,28 @@ commitments (R-ACCEL-3, pending Daniel) and its realization, not a premise of it
     root (`RoundProto.opens`, condition 2).
   - The cost clause is the period's, on runs within the cap, with a term `ξ A` for the walk and the log's upkeep
     (B4). `ξ A`, `κx A` and `Badv A` are the prover's own.
-  - The event is on runs whose rounds make at most `Q` oracle calls in their work and answers (`Prover.calls`,
-    RT-LEAN-2 L39). A run whose timed use fits the period's devices makes at most `cap_r / callUse_r` for each
+  - The event is on runs whose sampling blocks' work makes at most `Q` oracle calls (`Prover.calls`, RT-LEAN-2 L39,
+    CMP-154). A run whose timed use fits the period's devices makes at most `cap_r / callUse_r` for each
     resource `r` a call uses (G3), so `WorkSound` reads it at such a `Q`.
 * `Realization` and `ShaRealize`: the realization premise on the no-fold round, prover by prover. On every run whose
   rounds make at most `Q` oracle calls, a prover's commitment-path hashing is its own calls and the verifier's
   evaluations, logged as `q A` black-box SHA-512 queries (the log). Its round words program is the walk of the
   extractor over that log, its commitment program is its own commitment path, and the two cost at most the prover's
   own timed use plus `k · ξw + q A · ξl`. Programs reach the oracle only through calls (`Accel.OracleCalls`, a device
-  premise of `ShaRealize`), so the log can be the prover's calls. The challenger times both of a round's phases,
-  `work` up to the commitment and `answer` up to the answer deadline `τ_ans` (RT-LEAN-2 I1), so the cap bounds every
-  call of the rounds, and an answer's calls that reach a later root are in the log. One budget and schedule serve
-  every prover (L39): `k + 1` segments of `⌈Q⌉ + V` queries, `V` the verifier's evaluations, one ending at each root
-  and one after the last, so `q = (k + 1)(⌈Q⌉ + V)` and `τ_w = (w + 1)(⌈Q⌉ + V)`.
+  premise of `ShaRealize`), so the log can be the prover's calls. The challenger times each sampling block's work,
+  from its coins to its root, so the cap bounds the work's calls (CMP-154). An answer reaches no root, since no later
+  program reads it, and its calls aren't capped (the answers' calls, under Open). One budget and schedule serve every
+  prover's work calls and the verifier's evaluations (L39): `k + 1` segments of `⌈Q⌉ + V` queries, `V` the verifier's
+  evaluations, one ending at each root and one after the last, so `q = (k + 1)(⌈Q⌉ + V)` and
+  `τ_w = (w + 1)(⌈Q⌉ + V)`.
 
 The modelling choices, each a hypothesis or a clause RT-LEAN can check:
 * **(N1) distinct queries**: `QueryLog.fresh`. A repeat needs no query, so `q` counts distinct SHA-512 inputs.
 * **(N2) `q` includes the verifier's evaluations**: `Realization`'s clause that every point an accepted opening's check
-  hashes is a logged query. Round `w`'s evaluations enter the log as queries after its answer and before the next
-  round's coins, so a later query may read them (an evaluation at a point nobody queried is a fresh uniform answer
-  either way).
+  hashes is a logged query. Sampling block `b`'s evaluations enter the log as queries after its answer, which may
+  arrive after later blocks' coins and roots (CMP-154): they sit in the segment the answer arrives in, before the next
+  root or in the last segment, and no root reads them, since no later program reads an answer. A later query may read
+  them (an evaluation at a point nobody queried is a fresh uniform answer either way).
 * **(N3) each prover's own query budget `q A` and schedule `τ A`**: `q A` bounds `A`'s distinct commitment-path
   SHA-512 inputs over the period, with the verifier's evaluations, on runs within the cap `Q`. Round `w`'s root comes
   after the log's first `τ A w` queries and before the rest: the queries before the root, padded with dummy queries
@@ -73,6 +75,20 @@ Open:
   is `k + 1` times the calls'. Charging only the logged calls and evaluations (a count of entries beside `q`), or
   letting each root come at a stopping time of the log instead of a fixed position (`QueryLog.root_dep`, with
   `extract_of_ro_roots` over it), would remove the factor.
+* **The answers' calls** (CMP-154, RT-POOL RP20). Answers are off the state path and untimed, so the cap `Q` bounds
+  only the work's calls. An answer whose opening reads oracle answers it got by its own calls (a search for a point
+  that hashes to a committed node) needs those calls in the log, or the verifier's evaluations don't read only earlier
+  logged answers (`QueryLog.qry_dep`). At each prover's own `q A` such a prover has a larger budget, so `WorkSound`, at
+  each prover's own `κ_x(A)`, and the card headline over it hold. At one budget for every prover, `(k + 1)(⌈Q⌉ + V)`
+  doesn't count them, so `ShaRealize` at it is false on every machine whose programs can call the oracle, and
+  `WorkSoundNoFold` is vacuous there, as it already is by the walk's oracle reach. Three changes would close it:
+  - a causality premise beside `RootAfterCoin`: an answer arrives no sooner than its block's root plus the answer's
+    wall time. On an accepted period it then runs within `T`, so it makes at most `Q` calls (G2, G3,
+    `cap_r ≤ Q callUse_r`). A deadline from the check coin wouldn't bound it, since an answer can start at its root;
+  - `ExtractAdvAt`'s and `Realization`'s runs within the cap reading the answers' calls beside the work's;
+  - the budget. No root reads an answer, so every answer's calls, and the evaluations after them, can be logged
+    after the last root, and only the last segment needs `k ⌈Q⌉` more: `q = (k + 1)(⌈Q⌉ + V) + k ⌈Q⌉`, `τ` unchanged.
+    RT-POOL prices the larger `(k + 1)(⌈Q⌉ + V + k ⌈Q⌉)` at `κ_x ≈ 2^-250` at a week's `k = 10^9` blocks.
 -/
 
 namespace Pouw.Assumptions
@@ -103,10 +119,11 @@ make at most `Q` oracle calls while some round's check fails on `Mw w`'s words, 
   extractor's words read the queries before the round, which the prover's state need not hold.
 * **`Mh w`'s output is `A`'s root** on the advice, the dither and `Mw w`'s words (RT-LEAN-2 L37, condition 1).
 * **The cost clause is the period's** (ξ, ABSORB-THM's B4), on runs within the cap `Q`. Over the period, the words
-  and commitment programs use at most what the prover's rounds use in their timed work and answers
-  (`Prover.timedUse`), plus `ξ r` of resource `r`: the extractor's walk and the upkeep of the query log, which aren't
-  the prover's. A query is logged once in the period, so a per-round clause would count its upkeep `k` times. Past
-  the cap the log isn't the prover's calls, and `WorkSound` reads the clause only on runs that fit the devices.
+  and commitment programs use at most what the prover's sampling blocks use in their timed work
+  (`Prover.timedUse`, CMP-154), plus `ξ r` of resource `r`: the extractor's walk and the upkeep of the query log,
+  which aren't the prover's. A query is logged once in the period, so a per-round clause would count its upkeep `k`
+  times. Past the cap the log isn't the prover's calls, and `WorkSound` reads the clause only on runs that fit the
+  devices.
 * The exchanged bits stay per round, with no `ξ`: the walk exchanges nothing.
 * **The event** reads `RoundProto.ok` on the words and `RoundProto.opens` of the checked cells under `A`'s root
   (condition 2: the verifier's opening check, never prover-supplied), on runs within the cap `Q` (L39). -/
@@ -153,7 +170,7 @@ prover `A` has
   points can walk into another round's tree, and a repeat is already `κ_x`'s `q²` term (RT-LEAN-2 L40). The
   commitment programs `Mh w` read the advice, the dither and the words, and their output is `A`'s root;
 * the cost half, over the period, on every run within the cap. The `Mw w` and `Mh w` use at most the prover's timed
-  use (`Prover.timedUse`, its rounds' work and answers) plus `k · ξw + q · ξl` of each resource: `ξw` the walk's use
+  use (`Prover.timedUse`, its sampling blocks' work) plus `k · ξw + q · ξl` of each resource: `ξw` the walk's use
   per round, `ξl` the upkeep of one log entry.
   - `Mh w` is the prover's commitment path between the round's dither and its root: its SHA-512 calls, each done by
     the public implementation and logged (each of the prover's calls costs at least the public implementation's,

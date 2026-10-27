@@ -87,7 +87,7 @@ def _patch_engine(llm) -> None:
     ``exec|TOKENS|REQUESTS`` and ``sample_tokens`` a range ``sample``, both on the runner instance, so outside the PoUW
     option's class-level hook (`pouw_pass.hook_steps`)."""
     import torch
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
     eng = llm.llm_engine
     step = eng.step
 
@@ -105,7 +105,7 @@ def _patch_engine(llm) -> None:
             _STEPS.append(rec)
 
     eng.step = stepped
-    runner = get_model_runner(llm)
+    runner = handle.model_runner(llm)
     execute = runner.execute_model
 
     def execute_model(so, *a, **kw):

@@ -13,6 +13,12 @@ running max of -inf to 0.  `AttnBlock_v2` guards on every block; on a row whose 
 above it.  `targets.attention_spec` binds `Attention_v4` under `TargetProfile.fa3_construction = "check-inf-per-iteration"` (the default);
 `"guard-every-block"` binds `Attention_v2`.  New versions because the identity changed; v2 stays registered and untouched (registry version
 discipline).
+
+`AttentionHead_v20` and `Attention_v20` are v4 with every step a Call, as `dead_free`'s v19 is FA2's v18, so a head's key blocks can be
+units of their own (VLLM-127: Llama-3.2-1B's head on sm_90 is a 64-dim row over kBlockN 192, up to 6 blocks at the window class of
+record's 1,087 keys).  v4's first iteration, `AttnBlock_v4{FIRST=True, CHECK=True}`, is FA2's word for word (both guard the running max
+before `max * scale`, and a first block has no rescale), so it is `AttnBlockFirst_v1`, which pads only what it reads; v4's epilogue is
+`AttnHeadEnd_v1`'s.
 """
 from __future__ import annotations
 
@@ -21,8 +27,9 @@ from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, c
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2
 from verity.ml.circuits.ops.prims import ZERO32, const
-from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import fa2_check_inf as F2, prims as P
 from verity.ml.definitions.registry.b1 import ZERO16, _lane, scale_log2_bits
+from verity.ml.definitions.registry.dead_free import AttnBlockFirstV1, AttnHeadEndV1
 from verity.ml.definitions.registry.prims import A16, BF16, F32
 
 
@@ -136,6 +143,38 @@ def AttentionV4(B, S, q, kc, vc, *extra, head=AttentionHeadV4):
     return _Coll(Array(NH, Array(D, BF16)), concat([o.refs for o in outs]))
 
 
-FA3_CHECK_INF_COMPOSITES = [AttnBlockV4, AttentionHeadV4, AttentionV4]
+@composite("AttentionHead", 20, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM"],
+           lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.T, Array(S.D, BF16))), ("v", Array(S.T, Array(S.D, BF16)))),
+                      Array(S.D, BF16)),
+           conformance="not-yet-established: AttentionHead_v4's function")
+def AttentionHeadV20(B, S, q, k, v):
+    """`AttentionHead_v4{T, D, BN, DOT, INV, MASKED_FROM}` with every step a Call, so each key block can be a unit of its own: the
+    first visited block `AttnBlockFirst_v1{D, NVIS, BN, DOT}` (keys (nb - 1) BN ... T - 1), block b below it
+    `AttnBlock_v4{D, BN, FIRST=False, BN, DOT, CHECK = b >= MASKED_FROM}`, and the epilogue `AttnHeadEnd_v1{D, INV}`."""
+    T, D, BN, DOT, MF = S.T, S.D, S.BN, S.DOT, S.MASKED_FROM
+    nb = (T + BN - 1) // BN
+    if not 0 <= MF <= nb - 1:
+        raise ValueError(f"AttentionHead_v20: MASKED_FROM {MF} outside blocks 0..{nb - 1} "
+                         "(the first block is always a Check_inf iteration)")
+    lo = (nb - 1) * BN
+    st = B.call(bind(AttnBlockFirstV1, D=D, NVIS=T - lo, BN=BN, DOT=DOT), q, k[lo:T], v[lo:T])
+    for b in range(nb - 2, -1, -1):
+        block = bind(AttnBlockV4, D=D, NVIS=BN, FIRST=False, BN=BN, DOT=DOT, CHECK=b >= MF)
+        st = B.call(block, q, k[b * BN:(b + 1) * BN], v[b * BN:(b + 1) * BN], st[0], st[1], st[2])
+    return B.call(bind(AttnHeadEndV1, D=D, INV=S.INV), st[1], st[2])
 
-__all__ = ["AttnBlockV4", "AttentionHeadV4", "AttentionV4", "FA3_CHECK_INF_COMPOSITES"]
+
+@composite("Attention", 20, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"],
+           lambda S: ((("q", Array(S.NH, Array(S.D, BF16))),
+                       ("kc", Array(S.T, Array(S.KVH, Array(S.D, BF16)))),
+                       ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))),
+                      Array(S.NH, Array(S.D, BF16))),
+           conformance="not-yet-established: Attention_v4's function")
+def AttentionV20(B, S, q, kc, vc):
+    """`Attention_v4{T, NH, KVH, D, BN, DOT, INV, MASKED_FROM}` over `AttentionHead_v20`."""
+    return F2._check_inf_attention(B, S, q, kc, vc, AttentionHeadV20, ())
+
+
+FA3_CHECK_INF_COMPOSITES = [AttnBlockV4, AttentionHeadV4, AttentionV4, AttentionHeadV20, AttentionV20]
+
+__all__ = ["AttnBlockV4", "AttentionHeadV4", "AttentionV4", "AttentionHeadV20", "AttentionV20", "FA3_CHECK_INF_COMPOSITES"]
