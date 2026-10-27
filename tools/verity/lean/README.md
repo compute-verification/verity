@@ -65,8 +65,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   imports it;
 - no source file runs code while it compiles (`initialize`, `#eval`, `run_cmd`, `run_elab`, an `elab`, `macro` or `syntax`
   definition, an elaborator attribute), unless its module is listed under `compile_time` with a reason and the digest of
-  its file as it was reviewed. No listed module may declare a guarantee or a definition a guarantee reads.
-  The package has a `lakefile.toml`, not a `lakefile.lean` (which `lake` runs whenever it loads the package);
+  its file as it was reviewed (below). The package has a `lakefile.toml`, not a `lakefile.lean` (which `lake` runs whenever it loads the package);
 - the `.olean` files of the modules the package imports, as each fetched package (Mathlib's downloaded cache, ArkLib's
   build) and the toolchain provide them, are the ones recorded under `dependencies`. A dependency's other modules may be
   built or not. Lean's `.olean` files are reproducible, so the record holds on any machine. It changes when the package's
@@ -85,13 +84,10 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   `allow`, nothing the `main` of an executable the package builds (each `lean_exe` of its `lakefile.toml`) reaches is
   outside both `allow` and that executable's list in `allow_in`, and the entries reach the `hash` namespace only through
   `stop` (`verifier_failures`). A failure names the root that reaches the constant and the path from it. A `main`'s walk
-  expands everything, `stop` included, so it covers the code the binary runs, which the entries alone may not; what
-  `allow_in` admits for one executable admits nothing in another, so a `Task` another binary runs can't enter the
-  verifier's binary unseen. An executable's root that the audit doesn't import (exempt: two roots that each declare
+  expands everything, `stop` included. An executable's root that the audit doesn't import (exempt: two roots that each declare
   `main` can't share one environment) is read from its `.olean` files as data, and one that isn't built, declares no
   `main` or imports a module outside the audit fails; `--build` builds each root. `allow` and `allow_in` are records:
-  `--update` writes each such constant into them by name (into `allow` what the entries reach, into an executable's
-  `allow_in` list what its `main` reaches past `allow`), so the review (with where the walk reached it from) and the
+  `--update` writes each such constant into them by name, so the review (with where the walk reached it from) and the
   landing DM show one added, and a name that admits nothing fails; a `module:M` entry, which admits every constant of the
   modules under `M`, is kept as written (Flock's lock lists names only). The walk follows definitions' values,
   `implemented_by` targets and `@[csimp]` replacements, the code compiled in place of a constant; a csimp rewrite itself
@@ -162,8 +158,7 @@ its scratch tree, so `Security` reuses what `Security/Proofs` checked in the sam
 through the kernel into an empty environment. It needs one module per root and a lot of memory, and checks the closure
 again on every run, so it is not part of every run: the steward runs `check.py --all --build --fresh` nightly on `main`,
 and `upstream.py --fetch` against ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in
-`tools/research/README.md`). `--closure` with a kept cache, which `check` runs, checks the same closure once per change of its
-`.olean` files.
+`tools/research/README.md`).
 
 `--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/verity/lean` suite runs them, only
 when `tools/verity/lean/` changes): `tests/fixtures/control`, built with each audited package's toolchain (`--build`
@@ -329,8 +324,8 @@ are is decided by code, not by text: every failure carries one (`check.py`'s `Fa
 `orphan.file`, its first part the check its text names first), `report.json` and `audit.json` list them beside the texts
 (`failure_codes`, and `settled_codes` for what `--regenerate` settled), and the record differences are the codes in
 `RECORD_DIFFERENCE`, so rewording a message changes nothing a train commits.
-When the change lands on `main` (`research merge --push`, or drive's landing), Daniel gets a DM with each new, removed
-or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
+When the change lands on `main`, the landing DM (`research.spec_alert`) shows each new, removed or changed guarantee
+and each changed definition; nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
 of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one
 read from another module with the same content is counted on one line.
