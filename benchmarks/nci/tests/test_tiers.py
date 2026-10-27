@@ -55,7 +55,7 @@ def test_without_memory_mechanisms_the_residual_trains_at_full_efficiency():
 
 
 def test_the_residual_charges_pouws_deficit_on_the_certified_work():
-    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `Nci.Guarantees.DampenerRemote`'s bounds (#3646): a certificate
+    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `Nci.Guarantees.DampenerRemote`'s bounds: a certificate
     that isn't wrong may credit up to ε_W of its work without its running. At r̂ = 1/2, so W_cert = C/2, and ε_W = 2%,
     the deficit adds 0.01: r = 0.5 + 0.02 x 0.5 + 0.001 = 0.511. Nothing certified, nothing is in deficit."""
     p = T.DEFAULTS | {"residual": 0.3, "host_share": 0.1, "clock_share": 0.1, "eps_w": 0.02, "eps_agg": 1e-3}

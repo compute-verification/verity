@@ -20,7 +20,7 @@ square. The bitwise codec, which refuted `EncodeChainHardness`, pays a data prod
 
 `Renormalization` has a floor on `ε` because circuits with no budgeted gate refute it below one: on the `a` whose
 squares' column sums don't carry, the column sums (s8-family steps, folded mod `p`) are the square's bytes. The red
-team's families (note:20261017T1859Z-report-property-redteam R4.1) and a sampled one at p1024 are kept here as
+team's families and a sampled one at p1024 are kept here as
 regressions the stated form must survive: each refutes the form with no floor, and sits below the floor `2^−64`.
 
 The model's codec is held to this one: `codecRows` (Security/Proofs/Accounting/Gates.lean) are `codec.encode_word`'s

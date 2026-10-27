@@ -1,5 +1,5 @@
 """`Value<w>` and tensors: a dtype's width, the `Type` of a tensor or pytree, its maximal tensor chunks, and a collection of
-references split into and joined from those chunks. Width only; numerical interpretation belongs to functions (IR §3.1)."""
+references split into and joined from those chunks. Width only; numerical interpretation belongs to functions."""
 
 from __future__ import annotations
 
