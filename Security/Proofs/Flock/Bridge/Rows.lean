@@ -266,7 +266,7 @@ theorem _root_.Flock.Bridge.sampledKSLiveV2_of_xr (hX : Bridge.SampledKSLiveXr) 
   unfold rowsBoundZC
   split_ifs with h3
   · exact (add_assoc _ _ _).symm.le.trans
-      (le_add_right (add_le_add_right (add_le_add_right (add_le_add hmiss hks) _) _))
+      (le_add_right (add_le_add (add_le_add (add_le_add hmiss hks) le_rfl) le_rfl))
   · exact (h3 ⟨hLink, hRows, hon⟩).elim
 
 end Flock.Guarantees
