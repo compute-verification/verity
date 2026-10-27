@@ -298,7 +298,7 @@ class H1Windows:
         self.run, self.window = pouw.h1_run(ENTRY), window
 
     def close(self, window: int) -> dict[str, Any] | None:
-        """Window ``window``'s H1 closed and released (its hooks off, its manifest committed, the draw coin opened, its
+        """Window ``window``'s H1 closed and released (its hooks off, its manifest committed, the sampling coin opened, its
         session closed and, with ``sessions``, its end entry waited for), the tap off the committer; its outcome. None
         when no H1 window is open."""
         if self.comp is None:

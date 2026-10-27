@@ -7,7 +7,7 @@ the rank Program binds at the call (`route_of`: `registry.tp_allreduce`'s route 
 switches at the rank's world and GPU, the fused norm's when `fused_allreduce_rms_norm` takes FlashInfer's path; over several requests,
 the one call per request the Build binds on that route, from the collector's row record `step_rows`), held to the specs the rank's
 Programs bind (`program_binds`); its received member is the norm's `<norm>/all_reduce` on the other path, and the fused norm's are `<norm>/0` and
-`<norm>/1` with its residual (the previous call's `<norm>/1`, the embedding for the first) and the norm's weight.  Picks are drawn
+`<norm>/1` with its residual (the previous call's `<norm>/1`, the embedding for the first) and the norm's weight.  Picks are sampled
 identically on every rank from the pair's combined root (fixed after commitment) -> xrank_pair<k>_rank<r>.pt.
 """
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""An H1 window's private prover state (DRAWN1): what opening a drawn proof block's committed values needs after the
+"""An H1 window's private prover state (DRAWN1): what opening a sampled proof block's committed values needs after the
 window's close, kept in a directory of the prover's own (`pouw_h1.H1Run`'s ``prover``), owner-only (0700, each file 0600),
 never under a run's ``$OUT`` or any published path. The serving node keeps it (`research keep`), and its holder alone reads it.
 
@@ -9,7 +9,7 @@ never under a run's ``$OUT`` or any published path. The serving node keeps it (`
   rows and its z table zero records. A handed-off window (`pouw_h1_handoff`) also keeps its saved state in `STATE`: its
   round log, request entries, slot owners, and each call's A codes and each linear's weight codes (the window's ``a/<K>``
   and ``b/<K>`` rows).
-* **Opening a drawn proof block.** Proof block u of the window is proof block u - base of the call whose manifest row has base ≤ u < base +
+* **Opening a sampled proof block.** Proof block u of the window is proof block u - base of the call whose manifest row has base ≤ u < base +
   units (`locate`). `open_call` rebuilds that call's A table and z table from the kept rows, scales and records under the
   key, the Program salt (from the record's salt coin, `pouw_h1_challenger.program_salt_of`) and the call's
   nonces, and refuses either whose root isn't the one its manifest row carries, which its round's root commits. Then
