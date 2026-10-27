@@ -4,8 +4,8 @@ session, signs its release log when it ends and publishes nothing secret; the ve
 process's `out/` and the auditor's signed ledger alone.  A Lean that can't answer starts no session, a second session
 signs at the key's next leaves, a session id the key has signed for is refused, a key inside `out/` is refused, a refused
 hello is logged and the next connection taken, a broken sequence after the hello ends the session with exit 1, signed as
-such, a salt opens only after `--root`, and with `--peer` the tunnel opens once the challenger listens and a tunnel that
-ends first ends it."""
+such, a salt opens only after `--root`, and with `--peer` (development sessions alone: a window's, with `--root`, is
+refused it) the tunnel opens once the challenger listens and a tunnel that ends first ends it."""
 
 from __future__ import annotations
 
@@ -335,3 +335,14 @@ def test_a_peer_missing_from_the_peers_file_is_refused(tmp_path):
     proc, out, first = start(tmp_path, "out", None, "--peer", "vy-nebius-9", "--peers", str(tmp_path / "peers"))
     code, err = finish(proc)
     assert (code, first) == (2, "") and "no peer vy-nebius-9" in err
+
+
+def test_a_windows_session_never_opens_its_own_tunnel(tmp_path):
+    """A window's session (`--root`) reaches its peer through the peer's certifier coin link alone (PRF-207), so
+    `--peer` with it is refused before any key or coin is touched."""
+    env = fake_ssh(tmp_path, "exec tail -f /dev/null")
+    proc, out, first = start(tmp_path, "out", None, "--root", "ab" * 64, "--peer", "vy-nebius-2", "--peers",
+                             str(tmp_path / "peers"), env=env)
+    code, err = finish(proc)
+    assert (code, first) == (2, "") and "certifier coin link, never its own ssh -R" in err
+    assert not out.exists() and not (tmp_path / "key").exists() and not (tmp_path / "ssh.args").exists()
