@@ -2,6 +2,7 @@
  "roots": [
   "Flock",
   "FlockVerify",
+  "Flock.Test.JsonParse",
   "Flock.Test.Full",
   "Flock.Test.Labels",
   "Flock.Test.PortRoots",
