@@ -45,6 +45,7 @@ from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.ml.windows import rows as CS
+from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
 
@@ -723,7 +724,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
                                                     "requests": {"r0": {"digest": "d0" * 64}, "r1": {"digest": "d1" * 64}}}))
     pub = root if published is None else published
     (run / "serve.json").write_text(json.dumps({"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
-                                                "default_seed": 7, "engine": {"execution": "bi-eager", "pin": {"world": 1}},
+                                                "default_seed": DEFAULT_SEED, "engine": {"execution": "bi-eager", "pin": {"world": 1}},
                                                 "target": TARGET, "run_id": "RUN"}))
     reqs = [_serve_request(0, list(range(5)), 3, [0], "r0"), _serve_request(1, list(range(3)), 2, [0], "r1"),
             _serve_request(2, [9], 1, [1])]
@@ -745,7 +746,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     (adv / "private" / "opening.json").write_text(json.dumps(AW.opening(data, reg)))
 
     def compile_steps(registered, data, ingress):
-        assert set(ingress) == {"r0", "r1"} and registered.default_seed == 7
+        assert set(ingress) == {"r0", "r1"} and registered.default_seed == DEFAULT_SEED
         return SimpleNamespace(requests=[ST.RequestUnit(0, "d0" * 64, 5, 2, {}, None, 0, "r0"),
                                          ST.RequestUnit(1, "d1" * 64, 3, 1, {}, None, 2, "r1")])
 
@@ -864,7 +865,7 @@ def test_a_served_windows_bodies_are_its_requests_ingress_by_i1_id(tmp_path, mon
 
 
 def test_phi_of_a_served_engine_is_advice_compiles_and_reads_its_target_and_execution(tmp_path):
-    serve = {"model": "m/x", "revision": "r", "default_seed": 7, "engine": {"execution": "bi-eager"}, "target": TARGET}
+    serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "engine": {"execution": "bi-eager"}, "target": TARGET}
     phi = PP.phi_of_serve(serve)
     assert (phi.model["repo"], phi.model["revision"], phi.target, phi.execution) == ("m/x", "r", TARGET, "bi-eager")
     assert phi.model["hf_config"] == json.loads(PP.LLAMA32_1B_CONFIG.read_text()) and not phi.requests
@@ -896,13 +897,67 @@ def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
 def test_a_served_windows_compiler_is_the_servers_whatever_phi_it_compiles_under(monkeypatch):
     """The registration names the server's compiler (`verity-vllm advice`'s, over its tree's code identity), so the verifier's I2
     carries that name and digest, and φ (the target, the seed) moves what I2 compiles, not the name it is registered under."""
-    serve = {"model": "m/x", "revision": "r", "default_seed": 7, "execution": "bi-eager", "target": TARGET}
+    serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
     monkeypatch.setattr(PP, "served_identity", lambda: SERVER)
     one = PP.Capped(PP.I2Compiler(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), {}, "", name=SERVER[0], registered_digest=SERVER[1]))
     assert (one.inner.name, one.inner.digest) == SERVER
     assert one.digest == PP.Capped(SimpleNamespace(name=SERVER[0], digest=SERVER[1])).digest
     plain = PP.I2Compiler(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), {}, "")
     assert plain.name == PP.I2 and plain.digest != SERVER[1]
+
+
+def test_a_served_run_registers_the_public_default_seed_and_one_that_records_another_or_none_is_refused(tmp_path, monkeypatch,
+                                                                                                         capsys):
+    """A served window's registration fixes `engine.served_seed.DEFAULT_SEED`, as vllm's advice compiler does (#5063): a run
+    whose serve.json says its server filled in another seed (7, 0, the public one as a string or a float) or none is refused
+    by name, by the served compiler and its commands, never compiled under the seed the run recorded."""
+    serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
+    assert PP.registered_seed(serve) == PP.registered_of_serve(serve, None, None, PP.CAP_BITS).default_seed == DEFAULT_SEED
+    for seed in (7, 0, None, str(DEFAULT_SEED), float(DEFAULT_SEED)):
+        why = f"serve.json: the run's server filled in default seed {seed!r}, and the registered one is engine.served_seed."
+        with pytest.raises(ValueError, match=re.escape(why)):
+            PP.registered_of_serve({**serve, "default_seed": seed}, None, None, PP.CAP_BITS)
+    with pytest.raises(ValueError, match="filled in default seed None"):
+        PP.registered_seed({k: v for k, v in serve.items() if k != "default_seed"})
+    s = _served(tmp_path, monkeypatch)
+    assert s.compiler.inner.registered.default_seed == DEFAULT_SEED
+    recorded = json.loads((s.run / "serve.json").read_text())
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    for doc in ({**recorded, "default_seed": 7}, {k: v for k, v in recorded.items() if k != "default_seed"}):
+        (s.run / "serve.json").write_text(json.dumps(doc))
+        why = f"filled in default seed {doc.get('default_seed')!r}"
+        with pytest.raises(ValueError, match=re.escape(why)):
+            PP.i2_of_serve(str(s.run), 0, s.a.row_dir, None, None)
+        capsys.readouterr()
+        assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
+                        "--advice", str(tmp_path / "advice.bin"), "--out", str(tmp_path / "circuit.json")]) == PP.REFUSED
+        assert why in capsys.readouterr().err and not (tmp_path / "circuit.json").exists()
+
+
+def test_a_stand_in_records_the_public_default_seed_and_its_seedless_sampled_requests_bring_the_records(tmp_path, monkeypatch):
+    """`serve-standin` lays a declared Commit out as serve-openai does, so its serve.json records the public default seed and
+    passes `registered_seed`; a sampled request of the record that named no seed brings the declared run's default seed, the
+    one its draw used, and a greedy or seeded one brings what the record served it under."""
+    phi = SimpleNamespace(model={"repo": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da"},
+                          execution="bi-eager", target=TARGET)
+    ingress = {"r0": {"prompt": [0, 1, 2, 3, 4], "max_tokens": 3, "temperature": 0.0},
+               "r1": {"prompt": [0, 1, 2], "max_tokens": 2, "temperature": 0.8},
+               "r2": {"prompt": [5], "max_tokens": 2, "temperature": 0.8, "seed": 11}}
+    record = SimpleNamespace(row={"label": "ROW"}, run=SimpleNamespace(run_root=bytes.fromhex("aa" * 64)))
+    monkeypatch.setattr(PP, "record1", lambda bundle, row_dir: record)
+    monkeypatch.setattr(PP, "i2_of_record", lambda *a, **k: SimpleNamespace(
+        registered=SimpleNamespace(phi=phi, default_seed=5), ingress=ingress))
+    monkeypatch.setattr(PP, "served_identity", lambda: SERVER)
+    out = tmp_path / "serve"
+    a = argparse.Namespace(bundle="b", row_dir=str(tmp_path / "rows"), workload=str(_workload(tmp_path)), out=str(out),
+                           hf_config=None, cap_bits=PP.CAP_BITS)
+    assert PP.serve_standin(a)["requests"] == 3
+    serve = json.loads((out / "serve.json").read_text())
+    assert serve["default_seed"] == PP.registered_seed(serve) == DEFAULT_SEED
+    brought = {q["user"]: q["ingress"]["brought"] for q in map(json.loads, (out / "requests.jsonl").read_text().splitlines())}
+    assert brought == {"r0": {"max_tokens": 3, "temperature": 0.0}, "r1": {"max_tokens": 2, "temperature": 0.8, "seed": 5},
+                       "r2": {"max_tokens": 2, "temperature": 0.8, "seed": 11}}
+    assert PP.compiler_doc(str(out), None, None, PP.CAP_BITS)["default_seed"] == DEFAULT_SEED
 
 
 def test_the_served_identity_is_verity_vllm_advices_and_refused_where_the_tree_has_none(monkeypatch):
@@ -927,7 +982,7 @@ def test_the_served_compiler_is_what_the_registration_must_name(tmp_path, monkey
     s = _served(tmp_path, monkeypatch)
     doc = PP.compiler_doc(str(s.run), None, None, PP.CAP_BITS)
     assert {"name": doc["name"], "digest": doc["digest"]} == s.bound["compiler"] == {"name": PP.CAPPED, "digest": s.compiler.digest}
-    assert doc["served"] == {"name": SERVER[0], "digest": SERVER[1]} and doc["default_seed"] == 7 and doc["phi"]["target"] == TARGET
+    assert doc["served"] == {"name": SERVER[0], "digest": SERVER[1]} and doc["default_seed"] == DEFAULT_SEED and doc["phi"]["target"] == TARGET
     assert doc["transfer_gates"] == list(PP.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
     assert PP.compiler_doc(str(s.run), None, None, 2 * PP.CAP_BITS)["digest"] != doc["digest"]
     capsys.readouterr()

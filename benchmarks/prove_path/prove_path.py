@@ -549,10 +549,23 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     return Phi(model={"repo": serve["model"], "revision": serve["revision"], "hf_config": hf}, target=dict(prof), execution=execution)
 
 
+def registered_seed(serve: Mapping[str, Any]) -> int:
+    """The default seed a served window's registration fixes, `engine.served_seed.DEFAULT_SEED` (as vllm's advice compiler takes
+    it, #5063); a ValueError when ``serve.json`` says the server filled in another (or says none), since a request that sent no
+    seed would be compiled under a seed its draw didn't use."""
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+
+    seed = serve.get("default_seed")
+    if type(seed) is not int or seed != DEFAULT_SEED:
+        raise ValueError(f"serve.json: the run's server filled in default seed {seed!r}, and the registered one is "
+                         f"engine.served_seed.DEFAULT_SEED ({DEFAULT_SEED}): serve it under that rule")
+    return DEFAULT_SEED
+
+
 def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target: str | None, cap_bits: int) -> Any:
     from verity_vllm.program.predict.steps import Registered
 
-    return Registered.of(phi_of_serve(serve, hf_config, target), int(serve.get("default_seed") or 0), cap_bits)
+    return Registered.of(phi_of_serve(serve, hf_config, target), registered_seed(serve), cap_bits)
 
 
 def served_gates(serve: Mapping[str, Any], given: Sequence[str] = ()) -> tuple[str, ...]:
@@ -568,10 +581,10 @@ def served_gates(serve: Mapping[str, Any], given: Sequence[str] = ()) -> tuple[s
 
 def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None, target: str | None,
                 cap_bits: int = CAP_BITS, transfer_gates: Sequence[str] = (), trace: str | None = None) -> I2Compiler:
-    """I2 over a served window: φ of the served engine (`phi_of_serve`), the server's default seed, the bodies the window's
-    requests brought (`serve_ingress`), each Program's body from the Build's files under ``programs_root`` (the prover's row
-    dir, or with ``trace`` the verifier's own Builds), named as the server registers it (`served_identity`), listing its model's
-    transfer gates of record (`served_gates`, which ``transfer_gates`` may only restate)."""
+    """I2 over a served window: φ of the served engine (`phi_of_serve`), the public default seed (`registered_seed`), the bodies
+    the window's requests brought (`serve_ingress`), each Program's body from the Build's files under ``programs_root`` (the
+    prover's row dir, or with ``trace`` the verifier's own Builds), named as the server registers it (`served_identity`),
+    listing its model's transfer gates of record (`served_gates`, which ``transfer_gates`` may only restate)."""
     serve = json.loads((Path(run) / "serve.json").read_text())
     name, digest = served_identity()
     return I2Compiler(registered_of_serve(serve, hf_config, target, cap_bits), serve_ingress(serve_requests(run, window)),
@@ -1260,22 +1273,33 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
 
 
+def standin_brought(body: Mapping[str, Any], seed: int) -> dict[str, Any]:
+    """What a stand-in request's ingress brought: the record's body without its prompt, a stochastic one that names no seed
+    bringing the declared run's default ``seed``, since the stand-in's server fills in the public one (`registered_seed`)."""
+    out = {k: v for k, v in body.items() if k != "prompt"}
+    return {**out, "seed": int(seed)} if out.get("temperature") and out.get("seed") is None else out
+
+
 def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's dir under ``a.out`` laid out from a single-GPU Commit of record, as serve-openai and `verity-vllm advice` lay
-    one out: ``serve.json`` (the record's model, revision and seed, and the execution and target φ reads from its row,
-    `score.phi_of`), ``windows.jsonl`` (window 0 under the record's run root), ``requests.jsonl`` (each request's I1 id as its
-    ``user``, its prompt and the parameters the record served it under as what its ingress brought) and ``advice/w0/``: the
-    declared run's advice committed under the served compiler (registration.json, private/advice.bin, private/opening.json)."""
+    one out: ``serve.json`` (the record's model and revision, the public default seed `engine.served_seed.DEFAULT_SEED`, and the
+    execution and target φ reads from its row, `score.phi_of`), ``windows.jsonl`` (window 0 under the record's run root),
+    ``requests.jsonl`` (each request's I1 id as its ``user``, its prompt and the parameters the record served it under as what
+    its ingress brought, `standin_brought`) and ``advice/w0/``: the declared run's advice committed under the served compiler
+    (registration.json, private/advice.bin, private/opening.json)."""
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+
     r, rec = record1(str(a.bundle), str(a.row_dir)), i2_of_record(a.bundle, a.row_dir, a.workload, a.hf_config, a.cap_bits)
     phi, out, root = rec.registered.phi, Path(a.out), bytes(record1(str(a.bundle), str(a.row_dir)).run.run_root).hex()
     run_id = f"{r.row.get('label')}/w0"
     out.mkdir(parents=True, exist_ok=True)
     (out / "serve.json").write_text(json.dumps({
-        "model": phi.model["repo"], "revision": phi.model["revision"], "default_seed": rec.registered.default_seed,
+        "model": phi.model["repo"], "revision": phi.model["revision"], "default_seed": DEFAULT_SEED,
         "engine": {"execution": phi.execution, "pin": {"world": 1}}, "target": phi.target, "run_id": run_id,
         "stand_in": f"prove_path.py serve-standin: the Commit of record {r.row.get('label')} laid out as a serve-openai run"}, indent=1))
     reqs = [{"http_id": i, "engine_id": i, "user": i, "prompt_ids": body["prompt"],
-             "ingress": {"brought": {k: v for k, v in body.items() if k != "prompt"}}, "windows": [0]} for i, body in rec.ingress.items()]
+             "ingress": {"brought": standin_brought(body, rec.registered.default_seed)}, "windows": [0]}
+            for i, body in rec.ingress.items()]
     (out / "requests.jsonl").write_text("".join(json.dumps(q) + "\n" for q in reqs))
     (out / "windows.jsonl").write_text(json.dumps({"window": 0, "run_id": run_id, "run_root": root,
                                                    "requests": [q["engine_id"] for q in reqs], "passed": True}) + "\n")
