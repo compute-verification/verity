@@ -404,14 +404,17 @@ def linear_audit(state, ring, now, audit: Callable[[], list[dict]], volume: Call
         for k in keys:
             x = x.get(k) if isinstance(x, dict) else None
         return x
-    body = (f"top: the Linear audit at {iso(now)}: {len(found)} findings{_change(len(found), then('findings'))} ("
-            + ", ".join(f"{k} {n}{_change(n, then('kinds', k))}" for k, n in kinds.items()) + ")")
+    shown = [f"{k} {n}{_change(n, then('kinds', k))}" for k, n in kinds.items() if n or then("kinds", k)]
+    body = f"top: the Linear audit at {iso(now)}: {len(found)} findings{_change(len(found), then('findings'))}"
+    body += f" ({', '.join(shown)})" if shown else ""
     if vol:
         body += f"; #{slack.FRONT_DOOR}'s last 24 h: " + ", ".join(
             f"{vol[k]} {what}{_change(vol[k], then('volume', k))}"
             for k, what in (("posts", "posts"), ("words", "words"), ("over", f"over {slack.VOLUME_WORDS} words")))
-    body += (f"; changes from {earlier['t']}" if earlier else "; no line 24 h earlier yet") + "; by lane: " + ", ".join(
-        f"{lane} {sum(c.values())}" for lane, c in sorted(counts.items(), key=lambda kv: -sum(kv[1].values())))
+    body += f"; changes from {earlier['t']}" if earlier else "; no line 24 h earlier yet"
+    if counts:
+        body += "; by lane: " + ", ".join(
+            f"{lane} {sum(c.values())}" for lane, c in sorted(counts.items(), key=lambda kv: -sum(kv[1].values())))
     once_each(state, f"linear:day:{iso(now)[:10]}", ring, "top", body, None, now)
 
 
