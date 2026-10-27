@@ -141,12 +141,14 @@ def _json(path) -> dict | None:
 
 
 def subset_bound(n: int, k: int, delta: float) -> int | None:
-    """The fewest wrong units b such that an accepted draw of k of n units, uniform without replacement, hides more
-    than b except with probability δ: the least b with C(n − b − 1, k) / C(n, k) ≤ δ. Selection All (k = n) is 0."""
+    """The most wrong units an accepted uniform sample of k of n units hides except with probability δ: the integrity
+    profile's count bound (`Stratified.count_bound`), the largest b with C(n − b, k) / C(n, k) ≥ δ. Selection All
+    (k = n) is 0."""
     if n <= 0 or not 0 < k <= n:
         return None
-    total = math.comb(n, k)
-    return next(b for b in range(n) if math.comb(n - b - 1, k) <= delta * total)
+    from verity.core.protocols.profile import Stratified
+
+    return Stratified.uniform(n, k).count_bound(delta)
 
 
 def eps_at_delta(n: int, k: int, law: str) -> dict:
