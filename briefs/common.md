@@ -62,3 +62,6 @@ main is at 69dcbb8d6c71 (#4928, #5075 too): many PRs landed (#5300, #5309 with t
 
 ## Full tilt, and no moves (27 Oct, 20:10Z)
 Daniel is restructuring the repository himself today: no directory moves or renames until his restructure lands. Edits inside files go ahead. Dates moved in: F2 (every subprotocol proved and marked) Wed 06:00Z; F3 (Verity.Soundness, no subprotocol premise, marked) Wed 13:00Z. Don't wait idle on a run: write the next piece while it runs.
+
+## Use --cwd clone for build-and-test jobs (27 Oct, 20:50Z)
+Runs of one commit with --cwd source share a source tree, and two lake builds there at once delete each other's .oleans (suites then stop with no Lean error). Until infra fixes it, launch any job that builds Lean or runs suites with --cwd clone, so it gets its own tree.
