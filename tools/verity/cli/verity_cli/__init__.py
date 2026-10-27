@@ -69,10 +69,10 @@ def _tree(file: str) -> Path:
     would build its version of the file, or miss the file."""
     p = Path(file)
     where = p.resolve().parent if p.is_file() else Path.cwd()
-    try:
-        tree = Path(_git("rev-parse", "--show-toplevel", cwd=where))
-    except subprocess.CalledProcessError:
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=where, capture_output=True, text=True)
+    if top.returncode:
         return ROOT
+    tree = Path(top.stdout.strip())
     if not (tree / "tools" / "verity" / "lean" / "lean_changed.py").is_file():
         raise SystemExit(f"verity lean try: {tree} is not a Verity checkout (no tools/verity/lean/lean_changed.py)")
     return tree
