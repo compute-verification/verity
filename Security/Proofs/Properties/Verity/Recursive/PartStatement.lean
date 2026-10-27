@@ -684,9 +684,6 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
 
 /-! ## The correspondence -/
 
-/-- The coins compiled part `s`'s session is set up on: the keyed coin tree of its one table. -/
-def partCoins (tags0 : Tags) : Coins := .tree (Zk.coinSpec (tags0.tableNames 1))
-
 /-- **Compiled part `j`'s recursive inputs**, as `partVerdict` hands them to its setup: the statement's tags `tags0`,
 the part's circuit `circuitB` and public file `pubB`, its partition and program (`pj`'s), its registered reads, its draw,
 the inner session held (`h`: the verifier's inner shape, check 5's source, the inner circuit's binding, the commits and

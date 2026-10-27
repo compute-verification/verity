@@ -39,6 +39,13 @@ open RecDeploy
 open FlockDeploy (jsonOf)
 open Lean (Json)
 
+/-- The coins the compiled part's session is set up on: the `--zk` keyed coin tree of one table. -/
+def partCoins (tags0 : Tags) : Coins := .tree (Zk.coinSpec (tags0.tableNames 1))
+
+/-- The tags the compiled part's session is set up under: `--zk`'s, at the part circuit's mask log and one table. -/
+def partTags (tags0 : Tags) (circuitB : ByteArray) : Tags :=
+  Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1
+
 /-- **The inner statement `ri` is the inner session the component holds**, and `w`'s inner shape and registration
 are the component's. -/
 structure InnerNames (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) (bs : Core.Blobs) (w : RecX)

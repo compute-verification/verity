@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.PartsVStar
 import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Properties.Verity.Recursive.Names
 import VStarRecursive
 
 /-!
@@ -32,13 +33,6 @@ namespace Verity.Recursive
 open Flock
 open RecDeploy
 open FlockDeploy (noIdentifier)
-
-/-- The coins the compiled part's session is set up on: the `--zk` keyed coin tree of one table. -/
-def partCoins (tags0 : Tags) : Coins := .tree (Zk.coinSpec (tags0.tableNames 1))
-
-/-- The tags the compiled part's session is set up under: `--zk`'s, at the part circuit's mask log and one table. -/
-def partTags (tags0 : Tags) (circuitB : ByteArray) : Tags :=
-  Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1
 
 /-- **The staged statement's inputs are the compiled part's** (piece C's conclusion, at the fields the recursive setup
 and the scope check read): the model's reading `i` of part `j`'s staged statement holds, field by field, the values the
