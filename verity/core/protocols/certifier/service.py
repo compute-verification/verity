@@ -78,7 +78,7 @@ The count check is the part of the egress grid check that needs no frame's bytes
 It runs on every link-window, as a structural check must. In a proof it is an equality of each head's 32·T count bits
 with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
 
-N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-service Spec, is
+N3, the content check, a prototype in `examples/network_sim` evaluated in the clear and in no proof-service Spec, is
 retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `benchmarks/network_traces/scan_zk.py`
 proves in zero knowledge, outside this protocol.
 

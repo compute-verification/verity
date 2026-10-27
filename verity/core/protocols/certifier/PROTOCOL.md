@@ -231,7 +231,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   sha512/row/v2 digest would share it and save about 1.2M ANDs a head at T = 600. The count check needs no frame's bytes, so it is the part of the egress grid check
   a proof can make without the content, and the only grid check on ingress. It runs on every sampling block: a
   structural check runs in full.
-- **N3, the content check,** a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-service
+- **N3, the content check,** a prototype in `examples/network_sim` evaluated in the clear and in no proof-service
   Spec, is retired, superseded by the network certifier's step-indexed scan (`ingress_scan`, `egress`), which
   `benchmarks/network_traces/scan_zk.py` proves in zero knowledge, outside this protocol.
 - **Its verifier of record** is `LinkWindows.verify`, which decides on the delivered proof (`service.Delivered`) and
@@ -1353,7 +1353,7 @@ checking state row u + 1. Steps past the window's executed count are idle: the n
   window row's unread ones, as it does the queue's arrivals. A5 ("The windows", below) charges a decision to the
   earlier of its step's window and its arrival's ingress window, up to two windows before its step's: at T = 20, 5 of
   async-kv-pressure's 17 decisions and 5 of sync-kv-pressure's 15, which the chain carries from window 0 to their
-  steps in windows 1 and 2 (`benchmarks/network_e2e/encodings/tests/test_v1.py`).
+  steps in windows 1 and 2 (`examples/network_vllm/encodings/tests/test_v1.py`).
 - **The end.** `ReplayClose` reads the session's last state row and window row and refuses a session that ends with a
   step to run or a decision unread (`close`). The compile unit charges each decision in the window that commits it,
   A5's, in commit order, which is the order the scan reads them in. So a carried decision is charged where it is
@@ -1419,7 +1419,7 @@ comparators: 470,116 at L = 240 and 1.49 × 10^8 at 40,000. The 60 s llama8b-sha
 would cost 8.67 × 10^10, 70% of it the sort. A public cap on the rows, the sort's permutation as a private input or a
 narrower w_len would each cut that, each a change to what the Definition states.
 
-## Advice v1 (`benchmarks/network_e2e/encodings/v1.py`)
+## Advice v1 (`examples/network_vllm/encodings/v1.py`)
 
 v1 is the advice the compile unit takes: I1 v0 sent as only what the certified record, the scheduler replay and the
 derived rules leave. `v1.encode(advice, record, registered) -> bytes` and `v1.decode(bytes, record, registered) -> I1
@@ -1579,7 +1579,7 @@ composition below): what the bound counts is the charge, not the committed lengt
   uniform one), then a uniform offset, each a general (cum, freq, total) that `ArithCountStep_v1{18, 0, 20}` counts.
   `ChargeCount_v1{N}` lowers a decisions-only window's counts, the slice's one call (docstring), and
   `ChargeCount_v2{N, H, O}` (`window_charge`) the whole window's, its hits and order entries with their counts too.
-- *Held to the coders* (`benchmarks/network_e2e/encodings/arith_vectors.py`): `code_v1` over v1's windows
+- *Held to the coders* (`examples/network_vllm/encodings/arith_vectors.py`): `code_v1` over v1's windows
   (`v1.residual`, a book fit at `v1.TABLE_CAPS`) and the walk's still-sent fields. After every symbol the count's
   interval and `used` are code.py's and its count is the bits consumed. Each window's finish gives v1's charge and
   refuses one bit less, each bit's estimate is the book's model's at context min(run, 2), and the bit-checking variant

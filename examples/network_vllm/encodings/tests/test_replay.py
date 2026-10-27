@@ -128,7 +128,7 @@ def test_table_counts_every_request_and_step():
 
 
 def corpus_dir(t, d: Path) -> Path:
-    """`t` written as one TRACE-CORPUS trace (`benchmarks/network_e2e/traces/summary.py`'s joined files), with a step that
+    """`t` written as one TRACE-CORPUS trace (`examples/network_vllm/traces/summary.py`'s joined files), with a step that
     scheduled nothing, as the hook records one."""
     seen: set[int] = set()
     with open(d / "steps.jsonl", "w") as f:

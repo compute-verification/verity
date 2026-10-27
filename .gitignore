@@ -59,8 +59,8 @@ verity/ml/flock/tests/fixtures/rec-c3-inner
 verity/ml/flock/tests/fixtures/rec-coins
 verity/ml/flock/tests/fixtures/zk-sessions
 integrations/vllm/tests/protocols/fixtures/challenger_periods
-benchmarks/network_e2e/encodings/tests/fixtures
-benchmarks/network_e2e/tests/data/endpoint_carry/advice_trace.jsonl
+examples/network_vllm/encodings/tests/fixtures
+examples/network_vllm/tests/data/endpoint_carry/advice_trace.jsonl
 benchmarks/network_traces/tests/fixtures/weights-v1-h200-digests.json
 verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json
 verity/core/protocols/certifier/tests/fixtures/cache_step_vectors.json

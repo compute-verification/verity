@@ -6,7 +6,7 @@
     python -m workload.run --out /tmp/netsim-run --workload served --devices 1 --frame-bytes 1024
                                                                         # verity_vllm's serving Program, a stage a block
 
-(run from `benchmarks/network_sim/`, or with it on `PYTHONPATH`). The units serve and commit their values, and over TCP
+(run from `examples/network_sim/`, or with it on `PYTHONPATH`). The units serve and commit their values, and over TCP
 each writes its result, its values' commitment and its certified link directions' frames, to `--out`. It prints a
 summary and exits 1 when the answers aren't the reference's.
 """

@@ -1,4 +1,4 @@
-"""TRACE-CORPUS's vLLM scheduler traces (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`) as this
+"""TRACE-CORPUS's vLLM scheduler traces (`examples/network_vllm/traces`, store kind `vllm-trace-corpus/v1`) as this
 directory's traces: I1 v0's advice, the public anchors, the admission steps, the step durations and the serving caps.
 
 A trace directory holds the joined `steps.jsonl` and `requests.jsonl` and its own `meta.json` (the server's argv); its
