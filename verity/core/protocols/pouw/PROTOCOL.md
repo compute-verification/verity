@@ -170,7 +170,8 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    (`TileGood`) has every one passing.
 The row and tile trees are framed SHA-256 unless the scheme names another frame hash (`commitment_hash`): `"hm96-sha512"`
 (`audit.HM96`, Pearl-C's -h3) is `frame-v3-sha512` with hm96-sha512 leaves, in its section. The BLAKE3 tree modes `frame-b3`
-and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named are in `archive/pouw-blake3/` (one hash, SHA-512: Daniel, 2026-10-06).
+and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named were deleted with the archive in `2091252fe3` (one hash, SHA-512:
+Daniel, 2026-10-06).
 
 7. **Profile.** When every selected tile passes, `WorkProfile` reports what the draw established, ε at δ, and for a scheme
    with a γ_0 the work certified at that ε, under the certificate's conjecture. PoUW has no policy parameter: accounting
@@ -287,22 +288,26 @@ Its Lean port is open.
 
 **Filler periods** (`fill`, CMP-172, CMP-67; Lean `PouwCheck.Fill`). Filler windows run Dither calls
 (`circuit.dither`) on tensor pipes the served windows leave idle, each call's A its per-call pad (`dither.fill_seeds`)
-and its B a published checkpoint's s8 weights, its proof units `PouwDitherBlock_v1` blocks. They count toward the served
+and its B a published checkpoint's s8 weights, its proof blocks `PouwDitherBlock_v1`'s. They count toward the served
 period's companion ``<name>:fill``, whose open commits its circuit (`fill.descriptor`: the filler shape, whose
 t = min(L, K)/L′ is at most 8 (`fill.T_MAX`), the call count and B's checkpoint digest) and K. A period's credit carries
-their ``fill`` beside ``work``, whose rule is unchanged (`period_check`, given ``fills``). Each filler window's root is `fill.open_root` of its circuit and session, and its
-session holds a salt coin, a call coin a call and a draw coin (`fill.families`): the salt coin and every call coin open
+their ``fill`` beside ``work``, whose rule is unchanged (`period_check`, given ``fills``). Each filler window's root is
+`fill.open_root` of its circuit and session, and its session holds a salt coin, a call coin a call and a draw coin (`fill.families`): the salt coin and every call coin open
 after the root, the window's salt is the salt coin's (`h1tile.live_salt`), call c's seeds are `dither.fill_seeds` of
 that salt and call coin c, and the draw coin opens after `fill.draw_root` over the salt and every call's value root, so
 every value is fixed before the draw. The draw is over one stratum of every call's blocks; every drawn block must be
 accepted on its own statement (`fill.statement`) with its values opened at its call's value root, and one refused filler
 window refuses the whole fill. The fill is each window's m·n·K a call at the fill period's K, with its ε at
-`credit.DELTA`. `H1J10RCheckedCreditPeriod` reads ``work`` alone, so ``fill`` is not under it yet.
+`credit.DELTA`. `H1J10RCheckedCreditPeriod` reads ``work`` alone, so ``fill`` is not under it yet, and until a guarantee
+covers it no decision reads it: the period reports its fill, credited or ``{refused: "code: why"}``, and its verdict is
+the same without it (the verifier gains no form ahead of its proof). Beside the fill the credit carries ``gaps``
+(`period_check.GAPS`), which says no guarantee covers the fill yet, so no reader takes it as proved.
 
-**Coverage** (IDLE-COVERED, CMP-67). Given the period's monitored capacity C in MACs (``capacity``, the verifier's
-parameter), the credit carries ``covered``: W_cert, the served work and the fill's together, and W_cert/C. Given a floor
-too (``floor``, ``n/d``, the verifier's parameter and never the protocol's), a period whose W_cert/C is below it is
-refused (``idle``). The ledger holds one open period a lane, so a fill period opens after its served period closes, and
+**Utilization** (IDLE-COVERED, CMP-67). Given the period's monitored capacity C in MACs (``capacity``, the verifier's
+parameter), the credit carries ``utilization``: C, ``certified``, the served work alone, the work
+`H1J10RCheckedCreditPeriod` covers, and its share of C. Nothing named certified holds the fill. The protocol carries no
+policy parameter: the period surfaces what its draw established, and whoever reads it decides whether it was idle. The
+ledger holds one open period a lane, so a fill period opens after its served period closes, and
 filler windows can't yet run while that period's served windows do. `benchmarks/pouw/fill_period` runs one filler period
 on a development gate.
 
@@ -895,7 +900,7 @@ useful    U/(α_A·α_B), glue
   `row_cap=True`, `row_digest="sha512/row-seg/v1"`) is SHA-512 throughout, with E_A seeded per row. It is the one hash
   format besides h0 (Daniel, 2026-10-06: one hash, SHA-512, as the proof service's row commitments; its cost accepted), so
   the scheme assumes SHA-512's collision resistance (`cr/sha-512`). The BLAKE3 formats -h1, -h2 and BLAKE3 -h3, with
-  their vectors and kernels, are in `archive/pouw-blake3/`, unmaintained.
+  their vectors and kernels, were deleted with the archive in `2091252fe3`.
   - Labels: H_ℓ(x) = `pearl_c.s512`(ℓ, x), the first 32 bytes of SHA-512(``pearl-c/h3s/<ℓ>\0`` zero-padded to 128 bytes ‖
     x), for ℓ in seed-A, seed-B, noise-line, line and jackpot; the label's ``h3s`` is the domain tag the format was first
     pinned under. seed_B = H_seed-B(salt ‖ root_B), seed_A = H_seed-A(salt ‖ root_A ‖ root_B ‖ u64 LE index), the roots
@@ -1666,7 +1671,7 @@ receipt (CMP-172): its H1 and J10-R units fold their words into keyed receipts, 
 
 - The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocols/pouw/__init__.py`)
   are gated by these vectors when they land. Pearl-C's sm_120 kernel is `benchmarks/pouw/pearl_c_sm120/`; its H100
-  kernel (-h1, BLAKE3) is kept unmaintained in `archive/pouw-blake3/pearl_c/`.
+  kernel (-h1, BLAKE3) was deleted with the archive in `2091252fe3`.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
 - For Pearl-C's draw: `GγSampled`, `HonestTileCapRate` and `CompleteSampled` take tickets proportional to the whole
   tile's `Wref`, while the audit weighs a tile by its credited cells. The two agree on fully credited tiles. Closing it

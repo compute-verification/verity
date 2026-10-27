@@ -41,6 +41,7 @@ def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
     (hp, bp), (hv, bv) = (b.split(b"\n", 1) for b in (prover, verifier))
     hp, hv = json.loads(hp), json.loads(hv)
     assert set(hv) <= PUBLIC_HEADER and set(hv["frame_v3"]) == PUBLIC_FRAME and hv == dict(hp, rows=False)
+    assert verifier == FC.public_file(hv, bv), "the header line is C-Flock's, so the file's SHA-512 is public_file_sha512"
     ports = [(nm, w) for nm, w, _ in meta["ports"]]
     names = [nm for nm, _ in ports]
     assert names[meta["input_ports"]:] == [nm for nm, _ in meta["out_ports"]], "one output row per output port"
@@ -66,6 +67,13 @@ def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
         words = np.frombuffer(bp[at:at + 2 * w], dtype="<u2").tolist()
         assert any(salt), "a hiding leaf: the salt is not zero"
         assert bv[k * FC.BC_BYTES:][:FC.BC_BYTES] == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(words, 16, ROLE_X), salt)
+
+
+def test_the_verifiers_file_header_is_the_line_c_flock_writes():
+    """`public_file`'s header line is serde_json's of the header (`Instances::public_file`): compact, keys sorted, UTF-8
+    unescaped, ``rows`` false, so the prover's record's ``public_file_sha512`` is the staged file's SHA-512."""
+    got = FC.public_file({"z": [1, {"b": None, "a": "é"}], "rows": True, "m": "s"}, b"\x00\xff")
+    assert got == '{"m":"s","rows":false,"z":[1,{"a":"é","b":null}]}'.encode() + b"\n\x00\xff"
 
 
 @pytest.mark.slow

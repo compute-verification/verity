@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The scan's per-link-window answers through verity/certifier/v0's rows form (NET-75), which refuses each at the scan's
+# The scan's per-link-window answers through verity/certifier/v0's rows form, which refuses each at the scan's
 # answer until one-stage v2 runs the scan (scan_period.py), on a CPU machine: two warden
 # rehearsals at the test class's schedule (scan_zk.sh's SC_REHEARSE), honest and void (the fake answering past the
 # warden's delay, SC_LATE_MS: every connection fails late), each's link-window 0 proved (a group of 1: the rows form

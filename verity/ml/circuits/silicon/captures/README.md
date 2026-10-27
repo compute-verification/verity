@@ -11,9 +11,9 @@ pointer and the store its bytes.
 | `autoproof-SEMANTICS.lock.v1.json` | autoproof `spec/SEMANTICS.lock.v1.json` (+ sha256 of `SCR.lock.v1.json`, `fp4-ref/src/native.rs`, `spec/src/{dyadic,formats}.rs`) | the model5 / gdfs description that `models.BlockScaledAlignAdd` ports |
 | `autoproof-probe-vectors.json` | autoproof `probes/results/probe3_1783788526.json` (1,601 nvfp4 sample vectors of 1,574,998 dots) and `probe2_1783788240.json` (1,400 unscaled-FP4 vectors + 26 K-boundary results) | `sm120.mma.m16n8k64.e2m1.nvf4` -> `BLACKWELL_SM120_NVF4` on an RTX 5090; replayed by `verity/ml/circuits/ops/tests/test_models.py` |
 
-`vectors/` holds the FP8 draft targets' reference vectors (`verity/tc-reference-vector/v0`: `fp8-{hopper-wgmma,ada-mma}-k{32,1536}`),
-model replays of `GemmAccumulator<K>` on `HOPPER_E4M3_K32` / `ADA_E4M3_M16N8K32` from a recorded seed and recipe -- not
-hardware captures; `archive/sp1/tests/proofs/test_fp8_targets.py` replays and regenerates them.
+`vectors/` holds `fp8-hopper-wgmma-k{32,1536}.json` (`verity/tc-reference-vector/v0`), model replays of `GemmAccumulator<K>`
+on `HOPPER_E4M3_K32` from a recorded seed and recipe -- not hardware captures. PoUW's FP8 atom vectors
+(`verity/core/protocols/pouw/lean/scripts/fp8atom_vectors.py`) and `integrations/vllm/tests/program/test_fp8_moe.py` replay them.
 
 Nothing here is a hardware capture taken by this repo: the raw words of the H100 run (143 MB of `.npz`) are not
 replicated, and autoproof's 1.57M dots exist only as the per-suite counts in its result files. `verity/ml/circuits/silicon/discrepancy_log.json`

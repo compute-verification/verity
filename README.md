@@ -1,12 +1,6 @@
 # Verity
 
-Verity verifies how AI datacenters are used. It represents a datacenter's computations exactly as Boolean circuits,
-proves claims about them, and derives compute, memory and network accounting from those proofs. The intended
-application is enforcing an international agreement to
-[deliberately pace AI development](https://www.pacingthefrontier.com/), so it aims for security against a
-developer who controls the hardware and its vendor.
-
-This repository, its code, its Lean and its documents, is written by AI agents.
+[ai-written overview]
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): the design, its layers and the Glossary.
 - [GLOSSARY.md](GLOSSARY.md): the notation every guarantee is stated in, and the older names it replaces.
@@ -113,9 +107,9 @@ GPU machine.
 
 | Demo | What it serves and audits | Command | Details |
 | --- | --- | --- | --- |
-| The toy | A two-layer W8A8 MLP on CPU. Each run is audited by every subprotocol, and the verdicts are composed. | `verity bench all-protocols` | `benchmarks/all_protocols/README.md` |
-| The H200 demo | A fixed multi-query attention shape on one H200. Every proof block's values are committed, and the P2-encoded weights fill the card's memory. PoUS, the bandwidth audit, the network certifier and the wipe run. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity bench e2e_h200` | `benchmarks/e2e_h200/README.md` |
+| The H200 demo | A fixed multi-query attention shape on one H200. Every proof block's values are committed, and the P2-encoded weights fill the card's memory. PoUS, the bandwidth audit, the network certifier and the wipe run. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
 | vLLM | Llama-3.2-1B in int8, served by vLLM on one H200 through the committing endpoint. Live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example vllm` | `examples/vllm/README.md` |
+| Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `examples/dither_full_util/README.md` |
 
 The prover's side serves and proves. The auditor's side runs the verifier, the challenger that draws the live coins,
 the network certifier and the memory challenger, and those must run on machines the prover doesn't control.

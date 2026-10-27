@@ -140,8 +140,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   tests pin. `verity/ml/flock/tests/stratified_agree.py` runs the Lean verifier's draw against `one_stage.draw`.
 - **The parties.** `parties` holds the challenger, the firewall, the workers and the verifier as parties of the
   deployment layer (`verity.core.deploy`), with their manifest and table (`PROTOCOL`), each machine's work a
-  capability it is given. `verity run CONFIG --party ROLE` runs them; on the toy the capabilities are
-  `benchmarks/all_protocols/verity_all_protocols/parties.py`'s (`examples/toy_network`).
+  capability it is given. `verity run CONFIG --party ROLE` runs them.
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with C-Flock's circuit prover and the Lean
   verifier.
 - **The users.** C-Flock draws and checks the draw in its Lean verifier and proves the drawn proof blocks. The vLLM integration

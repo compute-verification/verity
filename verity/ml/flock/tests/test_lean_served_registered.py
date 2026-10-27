@@ -3,9 +3,12 @@ RoPE d64 statement whose 32 units each read their `cs` row from the served tree 
 loopback `--zk` session under a subset draw of 16 (`pod/89-served-registered.sh`, `FIXTURES`), once for each row format a
 served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circuit's rows bit rows of their words, `cs` a
 v2 or a segmented row). The verifier writes its own `--registered` file from the tree as the service holds it
-(`served.json`), with `register_served` on its own program, and `flock-verify verify --zk --registered` accepts the session
-on it, its verdict naming that program's digest (the partition's), and refuses it on the same file with the tree's root changed, or a bit row's port with its words or width changed.
-`--zk` holds the files to the form `SampledKSLiveV3` covers (`Flock.PortRoots`), which all three sessions are in.
+(`served.json`), with `register_served` on its own program, and `flock-verify verify --zk --registered` passes every check
+of the session on it but the last, its verdict naming that program's digest (the partition's), and refuses it on the same
+file with the tree's root changed, or a bit row's port with its words or width changed, at that check.
+`--zk` holds the files to the form `SampledKSLiveV4` covers (`Flock.PortRoots`, `Flock.KsScope`). The rows of all three
+are in it, but their public file is a shared-row file, which `KsScope` refuses under `--zk` until a proof covers it, so
+each session is refused for that alone (`TABLES`).
 A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw) is accepted on that file too,
 and refused with the root changed and without `--registered`.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
@@ -14,6 +17,7 @@ reach."""
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import shutil
 import subprocess
@@ -33,15 +37,18 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: partition.json, served.json, registered.json, tables/), session/ (the drawn --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    G.SCHEMA: "art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b",
-    G.SCHEMA_V2: "art:eedab8e57d1f9c380472fe263ab38d00dc8ec68f1a7e94b035de01d0cb2416db",
-    G.SCHEMA_SEG: "art:d42ad7aedb6b15f351dcddd65fd51ab0e0f91afbbfa48451d192d87273b926e6",
+    G.SCHEMA: "art:48ed507aa908f8a220405467097af6ce986fab36ba32d2d7aede8b7cbc5213d5",
+    G.SCHEMA_V2: "art:2425aa5eff7e781331bda47d22e1fcd7eb813cbd7e64e39965d851b6f843b0cd",
+    G.SCHEMA_SEG: "art:1a17e14138bb6ab7412ad3ee01c62e49c9f84c666ca0fd9848c2688d6311f403",
 }
 #: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified draw of `PLAIN_K`
 #: (stage/draw.json), and session/ a plain session (no --zk, OS coins) drawn by it; vectors/ is vectors.json's live set
 PLAIN = "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9"
 PLAIN_K = 16
 STATEMENT = "verity/flock-circuit"
+#: the last refusal of `verify --zk`, a shared-row public file (`KsScope.TABLES_WHY`)
+TABLES = ("refused: a shared-row public file (header shared_rows) under --zk: a statement form the soundness proof does "
+          "not cover")
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 
@@ -75,7 +82,7 @@ def _verify(fx: Path, registered: Path | None, mode: tuple[str, ...] = ("--zk",)
     return line
 
 
-def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_changed_root_refused(fx, tmp_path):
+def test_a_session_verified_on_the_file_register_served_wrote_passes_every_check_and_a_changed_root_is_refused(fx, tmp_path):
     import served_registered as SR
 
     schema, fx = fx
@@ -88,12 +95,21 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     assert sr.ports["cs"].get(G.SCHEMA_KEY, G.SCHEMA) == schema
     assert sr.partition == json.loads((fx / "stage" / "partition.json").read_text())
     ok = _verify(fx, sr.write(tmp_path / "registered.json"))
-    assert ok["accepted"] is True, ok
+    assert (ok["accepted"], ok["why"]) == (False, TABLES), ok
     assert ok["registered"] == {"cs": {"value": SR.VALUE, "root": tree.root}}
     assert ok["program_sha512"] == sr.partition["program"]
     moved = register_served(program, query, [dataclasses.replace(tree, root="00" * 64)])
     bad = _verify(fx, moved.write(tmp_path / "registered-root.json"))
     assert bad["accepted"] is False and f"does not open {SR.VALUE}'s registered root" in bad["why"], bad
+
+
+def test_the_provers_record_carries_the_sha512_of_the_public_file_the_verifier_reads(fx):
+    """`live.json`'s ``public_file_sha512`` is the SHA-512 of ``stage/pub-32.bin``, the file `verify --public` reads. Its
+    ``public_sha512`` is Σ's public digest, over the drawn statement's header, which no file holds."""
+    _, fx = fx
+    live = json.loads((fx / "live.json").read_text())
+    assert live.get("public_file_sha512") == hashlib.sha512((fx / "stage" / "pub-32.bin").read_bytes()).hexdigest()
+    assert live["public_sha512"] != live["public_file_sha512"]
 
 
 def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tmp_path):
@@ -121,10 +137,11 @@ def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tm
         assert bad["accepted"] is False and f"not {SR.VALUE}'s registered {want}" in bad["why"], (name, bad)
 
 
-def test_ks_form_is_the_default_under_zk_and_accepts_every_row_format(fx, tmp_path):
-    """`--zk` holds the files to the form `SampledKSLiveV3` covers (`Flock.PortRoots.checkOf`), which every served row
-    format is in: the session at a `row/v1` circuit, at `row/v2` rows and with `cs` a `row-seg/v1` row is accepted, and
-    `--ks-form`, the check's old flag, gives the same verdict. `--ks-form` without `--zk` is a usage error."""
+def test_ks_form_is_the_default_under_zk_and_every_row_format_passes_its_rows_check(fx, tmp_path):
+    """`--zk` holds the files to the form `SampledKSLiveV4` covers (`Flock.PortRoots.checkOf`, then `Flock.KsScope.checkOf`),
+    whose rows every served row format is in: the session at a `row/v1` circuit, at `row/v2` rows and with `cs` a
+    `row-seg/v1` row passes the rows check and is refused at the next, its shared-row public file, and `--ks-form`, the
+    check's old flag, gives the same verdict. `--ks-form` without `--zk` is a usage error."""
     import served_registered as SR
 
     _, fx = fx
@@ -132,7 +149,7 @@ def test_ks_form_is_the_default_under_zk_and_accepts_every_row_format(fx, tmp_pa
     tree = ServedTree(**json.loads((fx / "stage" / "served.json").read_text()))
     reg = register_served(program, query, [tree]).write(tmp_path / "registered.json")
     v = _verify(fx, reg, ("--zk", "--ks-form"))
-    assert v["accepted"] is True, v
+    assert (v["accepted"], v["why"]) == (False, TABLES), v
     assert v == _verify(fx, reg), v
     p = subprocess.run([str(BIN), "verify", "--ks-form", "--statement", STATEMENT, "--circuit", str(fx / "stage" / "circuit.txt"),
                         "--public", str(fx / "stage" / "pub-32.bin"), "--session", str(fx / "session")],

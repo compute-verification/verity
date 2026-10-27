@@ -1,5 +1,5 @@
 """The challenger's host on this machine: the ``host`` capability of sampled proofs' challenger party
-(`verity.core.protocols.sampled_proofs.parties`), which `verity_all_protocols.parties` gives it on the toy.
+(`verity.core.protocols.sampled_proofs.parties`).
 
 `Host(root, main).start()` makes a development challenger host (`a5_coins.Local`: the auditor host's own reserve, admit
 and run, then `serve.py`, with no tunnel) under ``root``, which must not exist yet: its LMS key, its signed ledger and its

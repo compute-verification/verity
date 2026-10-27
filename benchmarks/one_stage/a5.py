@@ -33,8 +33,9 @@ A deferred Commit's run takes its window in the other form too, `served` (`a5.sh
 (`commit --serving-rows`, `serving_rows.readers`, which the deferred Commit runs at its C2 site before the bundle is sealed,
 `c2_replay.serving_rows`), serving's own commitment, made before any draw. A5 takes it only over a
 SHA-512 run root of record (64 bytes: serving's record is hm96-sha512 rows in frame-v3-sha512 trees), so a vllm-v1 run's served
-window is refused by name (`source`: `sha512`). The summary reports the form (`source`) and the commitment it names
-(`commitment`).
+window is refused by name (`source`: `sha512`), and only when the record's weights root, the tree its rows' weights were opened
+against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_rows.weights_tree`). The summary reports the form
+(`source`) and the commitment it names (`commitment`).
 
 * **Serving's files.** `--window DIR` (a TP Commit: `--windows DIR`'s `rank<r>/`) is what serving wrote: for a deferred Commit,
   what `verity-vllm serving-rows` wrote (window kind `stand-in`, its run the Commit's run root, its `of` and `link`
@@ -161,7 +162,10 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from verity_vllm.pipeline import advice_windows as AW
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -919,7 +923,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         c = RP.Case("", "a5", rec["format"], "audit", "audit", program, p, rec, e, None)
         (out / "case.json").write_text(json.dumps(c.case(), sort_keys=True))
         (out / "case-python.json").write_text(json.dumps(RP.python(c), sort_keys=True, default=str))
-    except Exception as x:  # noqa: BLE001: the case is a copy of the audit for onsite; its failure leaves the audit's verdict
+    except Exception as x:  # noqa: BLE001 -- the case is a copy of the audit for onsite; its failure leaves the audit's verdict
         (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
         return
     if v2 is None:
@@ -928,7 +932,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         if isinstance(v2, str):
             raise ValueError(v2)
         (out / "case-v2.json").write_text(json.dumps(case_v2(c.case(), sessions, **v2), sort_keys=True))
-    except Exception as x:  # noqa: BLE001 - as the v1 case's
+    except Exception as x:  # noqa: BLE001 -- as the v1 case's
         (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
@@ -1020,8 +1024,10 @@ def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     mine = DRW.window_of(r, a.partition)
     manifest = hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest()
 
+    weights_root = str((r.row["commit"].get("weight_registration") or {}).get("root") or "")
+
     def source(w: dict) -> dict:
-        src = DRW.source(w, mine.run, manifest, r.commitment)
+        src = DRW.source(w, mine.run, manifest, r.commitment, weights_root)
         return {"ok": all(src.values()), "codes": [c for c, v in src.items() if not v],
                 "detail": {"kind": w.get("kind"), "run": w.get("run"), "commitment": w.get("commitment"), "of": w.get("of")}}
 

@@ -23,8 +23,8 @@ verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in
 A spec is `benchmarks/specs/<name>.toml` (`verity-bench/vllm-spec/v0`): the preset (model and revision, precision, GPU,
 vLLM pin, engine settings), its arms and the modules of its experimental arms, its sweep (another file in
 `benchmarks/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
-which never enter identity). Loading is strict: an unknown key, a wrong type or an unknown GPU id is an error before
-anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or a node-local directory with its
+which never enter identity). Loading is strict: an unknown key (an engine setting outside `presets.ENGINE_SETTINGS`
+included), a wrong type or an unknown GPU id is an error before anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or a node-local directory with its
 `model_digest` (`presets.local_checkpoint`'s hash of its files but a Hub snapshot's dot-files and Markdown, which no loader
 reads), which a dispatched point recomputes and refuses to run on when it differs.
 
@@ -178,15 +178,16 @@ on NODE itself instead, for a node whose launcher takes a run only through a slo
 find it the same way, and its command takes one of the node's GPU slots (`/workspace/research/locks/gpu/slots`, one per GPU)
 through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
 `max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
-GPU nodes in `verity_bench.jobs.DIRECT_NODES` (vy-nebius-1, -2 and -3). A preempted direct point is a failed run, which the
+GPU nodes in `verity_bench.jobs.DIRECT_NODES` (vy-nebius-1, -2 and -3, and the single-GPU DC VMs vy-dc-h200, vy-dc-h200-2
+and vy-dc-b200, whose one GPU kernels' leases share). A preempted direct point is a failed run, which the
 next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
 
 `verity-bench run` launches each missing point as one queued, preemptible job of the kind registered for the spec's GPU
-count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, `vllm-bench-8gpu`). The job runs
+count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, the only one). The job runs
 `benchmarks/harness/run_point.sh`, which uses the node's pinned-vLLM environment (`benchmarks/harness/env.sh`, which a
 benchmark's own launcher sources too): `VERITY_BENCH_VENV`, which the dispatcher forwards, else the first that exists of
-`$WORK/venv312` (the integration's `pod_bootstrap.sh`), `$WORK/jobs/venv312` (vy-nebius-2's) and
-`$WORK/pouw/mvp-e2e/venv312`. `benchmarks` is on its path, so a spec names an experimental arm's module from there
+`$WORK/venv312` (the integration's `pod_bootstrap.sh`), `$WORK/jobs/venv312` (vy-nebius-2's),
+`$WORK/pouw/mvp-e2e/venv312` and `$WORK/cp/venv312` (the DC VMs'). `benchmarks` is on its path, so a spec names an experimental arm's module from there
 (`served_commit.prof_arm:SERVED_COMMIT_ROWS`). A point's identity hashes the resolved spec, the commit, `uv.lock`, the
 vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it as the run's key param,
 and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation passed, exit code 0 and a
@@ -218,7 +219,8 @@ the store, never from numbers in code. It has four sections.
   from the per-token ratios over stock FP8. A row stands only when every gate the run records passed: the device gate,
   the tokens at the gate and at every timed rep, and a live window at the run's end on off-node coins. A run that fails
   one is passed over and listed with why.
-- **The served rows on the RTX PRO 6000** (`PROTOCOLS`) each come from a protocol's run of record or, without one, from
+- **The served rows** (`PROTOCOLS`), each on its device (the GPU its run's engines saw, the result's `identity.gpu`: the
+  RTX PRO 6000's, and the Commit's on an H200 and a B200 too), each come from a protocol's run of record or, without one, from
   the newest passing run. A run of record (`Protocol.record`) is named by run id, or by an `art:` id whose `runs` meta
   lists the runs (a list, or a map from point to run). It is read by id, from the remote where this machine lacks it,
   and every point of each run is a row. Without a record, each point of each spec takes the newest passing

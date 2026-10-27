@@ -197,13 +197,13 @@ theorem push_all {I : Flock.Witness.Inputs} {rd : Reads} {programSha : Option St
       cases h
       exact ⟨hall, rfl⟩
 
-theorem step_verdict {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array ByteArray} {scope : V Unit}
+theorem step_verdict {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array ByteArray} {scope ksFiles : V Unit}
     {programSha : Option String} {want : Json} {r r' : Run} {s : Session}
-    (h : step I rd (Core.Blobs.ofArray blobs) scope programSha want r s = .ok r') (hall : r'.all = true) :
+    (h : step I rd (Core.Blobs.ofArray blobs) scope ksFiles programSha want r s = .ok r') (hall : r'.all = true) :
     r.all = true ∧ ∃ b record,
       (Core.Blobs.ofArray blobs).get s.record s!"session {s.name}'s record" = .ok b ∧
       String.fromUTF8? b = some record ∧
-      verdictOf I scope r.coinKeys record (Flock.Witness.recordDraw record)
+      verdictOf I scope ksFiles r.coinKeys record (Flock.Witness.recordDraw record)
         (setupAt I rd (Flock.Witness.recordDraw record))
         (filesOf (Core.Blobs.ofArray blobs) s (setupAt I rd (Flock.Witness.recordDraw record)))
         (coinKeyOf record (setupAt I rd (Flock.Witness.recordDraw record))) = .ok () := by
@@ -217,14 +217,14 @@ theorem step_verdict {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array Byte
     obtain ⟨hr, hv⟩ := push_all h hall
     exact ⟨hr, b, record, hb, hrec, hv⟩
 
-theorem fold_verdict {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array ByteArray} {scope : V Unit}
+theorem fold_verdict {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array ByteArray} {scope ksFiles : V Unit}
     {programSha : Option String} {want : Json} :
     ∀ (l : List Session) (r0 r : Run),
-      l.foldlM (step I rd (Core.Blobs.ofArray blobs) scope programSha want) r0 = .ok r → r.all = true →
+      l.foldlM (step I rd (Core.Blobs.ofArray blobs) scope ksFiles programSha want) r0 = .ok r → r.all = true →
       r0.all = true ∧ ∀ s ∈ l, ∃ ck b record,
         (Core.Blobs.ofArray blobs).get s.record s!"session {s.name}'s record" = .ok b ∧
         String.fromUTF8? b = some record ∧
-        verdictOf I scope ck record (Flock.Witness.recordDraw record)
+        verdictOf I scope ksFiles ck record (Flock.Witness.recordDraw record)
           (setupAt I rd (Flock.Witness.recordDraw record))
           (filesOf (Core.Blobs.ofArray blobs) s (setupAt I rd (Flock.Witness.recordDraw record)))
           (coinKeyOf record (setupAt I rd (Flock.Witness.recordDraw record))) = .ok ()
@@ -257,6 +257,11 @@ def Verdict (o : Own) (pd : String) (blobs : Array ByteArray) (s : Session) : Pr
             (tablesOf (Core.Blobs.ofArray blobs)))
           (Flock.Witness.zkTags (inputsOf tags0 o circuitB pubB (Core.Blobs.ofArray blobs))) true pubB 1 false
           rd.registered.isSome)
+        (Flock.PortRoots.checkOf
+          (Flock.ProvedScope.circuitOf
+            (Flock.Witness.zkTags (inputsOf tags0 o circuitB pubB (Core.Blobs.ofArray blobs))) circuitB
+            (tablesOf (Core.Blobs.ofArray blobs)))
+          (Flock.Witness.zkTags (inputsOf tags0 o circuitB pubB (Core.Blobs.ofArray blobs))) pubB)
         ck record (Flock.Witness.recordDraw record)
         (setupAt (inputsOf tags0 o circuitB pubB (Core.Blobs.ofArray blobs)) rd
           (Flock.Witness.recordDraw record))
@@ -384,9 +389,9 @@ theorem session_verdict {p : Params} {c : OneStage.Commitment} {e : Evidence} {b
 
 /-- An accepting verdict ran `Zk.verify` on the session's setup and proof files, then the scope check, the draw-less
 session's refusal and the record's canonical text. -/
-theorem verdictOf_parts {I : Flock.Witness.Inputs} {scope : V Unit} {ck : Array String} {record : String}
+theorem verdictOf_parts {I : Flock.Witness.Inputs} {scope ksFiles : V Unit} {ck : Array String} {record : String}
     {draw : Option Json} {st : SetUp} {files : V (Array ByteArray)} {coinKey : Option String}
-    (h : verdictOf I scope ck record draw st files coinKey = .ok ()) :
+    (h : verdictOf I scope ksFiles ck record draw st files coinKey = .ok ()) :
     ∃ proofs spec tabs x, files = .ok proofs ∧ st = .ok (spec, tabs, x) ∧
       Flock.Zk.verify spec tabs record proofs = .ok () ∧ scope = .ok () ∧
       (draw.isNone = true → Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false draw = .ok ()) ∧
@@ -402,10 +407,12 @@ theorem verdictOf_parts {I : Flock.Witness.Inputs} {scope : V Unit} {ck : Array 
   obtain ⟨_, _, h⟩ := bind_ok h
   obtain ⟨_, _, h⟩ := bind_ok h
   obtain ⟨_, _, h⟩ := bind_ok h
+  obtain ⟨u4, hrt, _⟩ := bind_ok h
   cases u
   cases u2
   cases u3
-  refine ⟨proofs, spec, tabs, x, hf, hst, hv, hsc, fun hn => ?_, h⟩
+  cases u4
+  refine ⟨proofs, spec, tabs, x, hf, hst, hv, hsc, fun hn => ?_, hrt⟩
   rw [if_pos hn] at hdl
   exact hdl
 

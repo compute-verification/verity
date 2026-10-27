@@ -31,9 +31,7 @@ from __future__ import annotations
 import json
 import secrets
 import shlex
-import socket
 import subprocess
-import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -95,18 +93,6 @@ class Gate:
         return p.returncode, p.stdout
 
 
-def _connect(at: str, given: Mapping[str, Any], tries: int = 60) -> Any:
-    """`pouw_h1_window.connect`, retried while the challenge phase's port on this machine comes up."""
-    for i in range(tries):
-        try:
-            return PHW.connect(at, given)
-        except (ConnectionRefusedError, socket.timeout):
-            if i == tries - 1:
-                raise
-            time.sleep(1)
-    raise AssertionError("unreachable")
-
-
 class Session:
     """The Commit's challenge phase on the auditor host's challenger: reserved for `runs` runs (`reserve`), opened on the first
     run's root of record (`draw` of run 0), a coin of each family a run, closed after the last (`close`)."""
@@ -133,7 +119,7 @@ class Session:
             self.given = PHC.session_of({k: v for k, v in answer.items() if k in (*PHC.SESSION_FIELDS, *PHC.REPLY_FIELDS)})
         except ValueError as e:
             raise CoinError(f"the challenger gate's open answer: {e}") from e
-        self.client = _connect(self._address(int(answer["port"])), self.given)
+        self.client = PHW.connect(self._address(int(answer["port"])), self.given)
         c = self.client.commitment
         if c.scheme != SCHEME or [list(f) for f in c.families] != families(self.runs):
             self.close()

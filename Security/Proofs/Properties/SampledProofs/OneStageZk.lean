@@ -134,9 +134,9 @@ theorem setupAt_ok {I : Flock.Witness.Inputs} {rd : Reads} {draw : Option Json} 
   exact ⟨sts, hset, hshape, rfl⟩
 
 /-- A verdict that accepts ran `Zk.verify` on the session's setup and proof files, and accepted. -/
-theorem verdictOf_ok {I : Flock.Witness.Inputs} {scope : V Unit} {ck : Array String} {record : String}
+theorem verdictOf_ok {I : Flock.Witness.Inputs} {scope ksFiles : V Unit} {ck : Array String} {record : String}
     {draw : Option Json} {st : SetUp} {files : V (Array ByteArray)} {coinKey : Option String}
-    (h : verdictOf I scope ck record draw st files coinKey = .ok ()) :
+    (h : verdictOf I scope ksFiles ck record draw st files coinKey = .ok ()) :
     ∃ proofs spec tabs x, files = .ok proofs ∧ st = .ok (spec, tabs, x) ∧
       Flock.Zk.verify spec tabs record proofs = .ok () := by
   unfold verdictOf at h
@@ -178,9 +178,9 @@ theorem push_ok {I : Flock.Witness.Inputs} {rd : Reads} {programSha : Option Str
         · rfl
 
 /-- A step that leaves the run accepting verified its session. -/
-theorem step_ok {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array ByteArray} {scope : V Unit}
+theorem step_ok {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array ByteArray} {scope ksFiles : V Unit}
     {programSha : Option String} {want : Json} {r r' : Run} {s : Session}
-    (h : step I rd (Core.Blobs.ofArray blobs) scope programSha want r s = .ok r') (hall : r'.all = true) :
+    (h : step I rd (Core.Blobs.ofArray blobs) scope ksFiles programSha want r s = .ok r') (hall : r'.all = true) :
     r.all = true ∧ (∃ h, programSha = some h ∧ (Json.str h == want) = true) ∧
       ∃ record proofs units, SessionAccepted I s record proofs units ∧ r'.proved = r.proved ++ units ∧
         r'.out.size = r.out.size + 1 := by
@@ -198,10 +198,10 @@ theorem step_ok {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array ByteArray
     exact ⟨hr, hp, record, proofs, units, ⟨⟨b, (get_ofArray hb).2, hrec⟩, ⟨spec, sts, hset, hshape, hz⟩, hu⟩, hpr, hsz⟩
 
 /-- The fold of `step` over sessions, from `r0` to an accepting `r`. -/
-theorem fold_ok {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array ByteArray} {scope : V Unit}
+theorem fold_ok {I : Flock.Witness.Inputs} {rd : Reads} {blobs : Array ByteArray} {scope ksFiles : V Unit}
     {programSha : Option String} {want : Json} :
     ∀ (l : List Session) (r0 r : Run),
-      l.foldlM (step I rd (Core.Blobs.ofArray blobs) scope programSha want) r0 = .ok r → r.all = true →
+      l.foldlM (step I rd (Core.Blobs.ofArray blobs) scope ksFiles programSha want) r0 = .ok r → r.all = true →
       r0.all = true ∧ ∃ ss : List (String × Array ByteArray × Array Nat), ss.length = l.length ∧
         (∀ x ∈ l.zip ss, SessionAccepted I x.1 x.2.1 x.2.2.1 x.2.2.2) ∧
         r.proved = ss.foldl (fun acc x => acc ++ x.2.2) r0.proved ∧

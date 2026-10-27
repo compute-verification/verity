@@ -96,7 +96,8 @@ The data, each kind of thing a file or a line of its own:
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
 - `data/cover/`: the coverage table ("Coverage" below): the envelope (`envelope.toml`: MODEL-MIN's `Accel.Op` and the
   proposed entries), a row per opcode and a
-  verdict per unit outside the SM pipes (`rows.toml`), and the SASS corpus's opcodes by form (`corpus.json`).
+  verdict per unit outside the SM pipes (`rows.toml`), and the SASS corpus's opcodes by form (`corpus.json`, a fetched
+  fixture: "Coverage" below).
 
 The code:
 
@@ -521,7 +522,10 @@ dominated by an envelope op at no fewer units of the same resource. `data/cover/
 - **What must be covered**: every opcode of NVIDIA's family tables (CUDA Binary Utilities 12.9 §4.3 and §4.4 in
   `../sass_census/data/bu_12_9.json`, CUDA 13's in `sass_isa_tables.json` beside it), every dotted form of the CUDA 13
   libraries' SASS corpus (`corpus.json`, with instruction counts), every census kind, and every unit θ lists
-  (`theta.UNITS`).
+  (`theta.UNITS`). The three JSON tables are generated, so they are fetched fixtures (`fixtures/artifacts.json`,
+  gitignored): `suites.py` fetches them before the tests, and `uv run research data fetch-fixtures
+  benchmarks/pouw/machine_model/data/cover benchmarks/pouw/sass_census/data` brings them into a checkout. `rows.toml`,
+  the reviewed table, stays in Git.
 - **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, envelope op with its pipe, stores or formats,
   units a warp instruction, register words, rate (θ keys, or `rate_value` with its unit), argument and source. A row
   with `forms` (regexes over the dotted form) covers those forms; the opcode's plain row covers the rest. A unit outside

@@ -55,7 +55,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.check import gates as G
-from verity_vllm.config import RowEngine, UsageError, option
+from verity_vllm.config import RowEngine, UsageError, option, workload_arg
 from verity_vllm.engine.served import ENFORCE_EAGER
 from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline import experiment as EXP
@@ -530,7 +530,7 @@ class Options:
     worker: str | None = option("--worker", choices=["fold"], default=None, help="(internal) run one worker in this process")
     config_id: str | None = option("--config-id", default=None)
     profile: str | None = option("--profile", default=None)
-    workload: str | None = option("--workload", default=None)
+    workload: str | None = option("--workload", type=workload_arg, default=None)
     case: str | None = option("--case", default=None, help="checkpoint role (B0, B1, QWEN05, ... any role in checkpoints.json with a profile module)")
     out: str | None = option("--out", default=None, help="RUN_DIR (driver) or fold_summary.json (--worker fold)")
     run_dir: str | None = option("--run-dir", default=None, help="an existing RUN_DIR: --out plus case/workload/profile/config-id/checkpoint-dir/steps from its run.json " "(the sealed verifier re-runs the CPU phase this way from a fresh checkout)")
