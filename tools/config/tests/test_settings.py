@@ -41,6 +41,9 @@ def test_a_setting_is_parsed_at_each_read_and_unset_or_empty_is_its_default(monk
         r.get("PX_NOPE")
     with pytest.raises(AttributeError):
         _ = r.PX_NOPE
+    assert r.need("PX_N", {"PX_N": "0"}) == 0 and r.need("PX_KEEP", {"PX_KEEP": ""}) == ""
+    with pytest.raises(KeyError, match=r"PX_DIR is not set: where outputs go \(dist/settings.py\)"):
+        r.need("PX_DIR", {"PX_DIR": ""})
 
 
 def test_put_setdefault_and_unset_write_only_declared_variables(monkeypatch) -> None:

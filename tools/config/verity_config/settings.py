@@ -218,6 +218,12 @@ class Registry:
         except ValueError as e:
             raise ValueError(f"{name}={v!r}: {e} ({self.path})") from None
 
+    def need(self, name: str, environ: Mapping[str, str] | None = None) -> Any:
+        """`get` for a setting the caller can't go without (``os.environ[NAME]``): unset, it raises KeyError naming it."""
+        if not self.is_set(name, environ):
+            raise KeyError(f"{name} is not set: {self.settings[name].doc} ({self.path})")
+        return self.get(name, environ)
+
     def put(self, name: str, value: str) -> None:
         """Set a declared variable in this process's environment, which the processes it starts inherit."""
         self.setting(name)
