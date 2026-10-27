@@ -43,3 +43,29 @@
   NONVAC's draft rule (cursor/lean-nonvac-fc8d) doesn't yet accept it. Its head is not RecursiveKSAt, and the premise
   is not in an `Assumptions` module. I asked lean on LEAN-66 (reply to the 21:27Z thread) to unfold Guarantees heads and
   to take `FalseInScope` as a named assumption that a fixture run discharges; else RecursiveKS goes on `unwitnessed`.
+- 00:28Z KSNONTRIV: restated to lean's 23:31Z rule. Branch `cursor/proofs-ksnontriv-27b2` @ 81037941d4; build
+  r20261027-002521-4ef9 (vy-nebius-cpu-4, proofs pool; waiting for a slot; the warm copy is built, so about 10-20 min
+  once it starts). The 22:56Z build (60cdcb9634) failed: one linarith atom mismatch, two names, one arity, and a
+  timeout from a wrong `hO` type. The general lemma, the κ < 1/2 step and the RecDeploy form compiled.
+  Statement:
+    theorem Flock.Guarantees.recursiveKS_nontrivial (h : RecDeploy.FalseInScope) :
+      ∃ aux nOf hd recRest, ∀ b : RecDeploy.Brings,
+        ¬ Claims.Recursion.KSLin2On FlockDeploy.sha512
+          (RecDeploy.recBoundAt relation {deployedB b with tr := recTr aux nOf hd recRest} (layR elemR)).acceptAll
+          (bdDeployed relation (nextR rdR) (deployPlainTrimR relation rdR).cols wER joinR rowInDeployed finalR wR)
+          (deployZkRec relation) CpDep DenseAt
+  That is RecursiveKS's KSLin2On with `.acceptAll` inserted, false at every brings `b`. The earlier note that κ reads
+  `b.st`/`b.zl` was wrong: `tr` is overwritten by `recTr …`, and `Nums.κ` doesn't read `zl`.
+  Built in Lean: accept-all, every brings, the deployed decoders, the silent prover, and M and R.
+  One hypothesis, a closed named assumption in an Assumptions module:
+  `RecDeploy.FalseInScope` (new file `Proofs/Flock/Claims/Recursion/Assumptions/FalseInScope.lean`, beside
+  `PlainLeavesAdmitted`). It says some x, with a coin-server record, is DenseAt, has no Flock witness at xIOf x
+  (deployed bdDeployed), is PlainIn at xIOf x, has PartIn at each staged part, and has nS ≤ 2^16 and setup ≤ 2^56.
+  It's the one unbuildable field: the deployed reader reads only through jsonOf (`partial`, kernel-opaque) and only
+  where each part's circuit is V*'s byte for byte (22 MB), so no statement can be built in Lean.
+  `recursiveKSAtAll_of_readX_none` proves the bound holds at accept-all wherever nothing reads, so some such fact is
+  needed. Its witness would be a fixture: the deployed compiled statement over an inner statement whose claimed output
+  isn't its circuit's. No such run exists yet.
+  Open for lean (LEAN-66): the head is KSLin2On. RecursiveKSAt hardcodes `recBoundAt …`, so no `¬ RecursiveKSAt …`
+  can hold accept-all; `concluded` needs to read through RecursiveKS → RecursiveKSAt → KSLin2On. RecursiveKS's lock
+  name: it isn't in a lock on kslock yet.
