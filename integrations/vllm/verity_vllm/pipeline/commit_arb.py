@@ -1,13 +1,14 @@
 """`verity-vllm commit-arb`: the served Commit under arbitrary traffic, its records held to the streamed I/O.
 
     VERITY_RETAIN=host verity-vllm commit-arb --out DIR --model REPO --revision SHA [--precision int8_exact|verity_int8|pin]
-        --required-manifest ROW/manifest.json [--hidden-so SO] [--norm-tap-so SO] [--tap-cap-mb N]
+        --required-manifest PREDICTED/manifest.json [--hidden-so SO] [--norm-tap-so SO] [--tap-cap-mb N]
         [--requests 32] [--seed 0] [--prompt-range 16:1024] [--tokens 64] [--rate 0.5]
         [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--no-chunked-prefill] [--kv-cache-mb N] [--window-steps 64]
         [--prefix-caching] [--system-prompts N] [--system-tokens 384] [--turns N]
 
 The engine is serve-openai's (`verity_vllm.LLM`, in-process engine core, Model Runner V2) and so is its Commit: rows-sha512
-(`serve_seal.committer`, built from the bench row's ``--required-manifest`` and taps, with serve-openai's step-input port)
+(`serve_seal.committer`, built from the row's ``--required-manifest``, its Build of record's, `serve_seal.row_refusal`, and
+taps, with serve-openai's step-input port)
 committing every step, values retained on host, with a `served_record.SamplerInputsSource` attached and the served default seed (`engine.served_seed`). It is
 stepped here, without HTTP, under seeded varied traffic: CERT-VARLEN's (``varied_requests`` in
 `benchmarks/network_traces/certifier_serve.py`: chat-turn prompts cut to a length log-uniform in ``--prompt-range``,
@@ -104,10 +105,9 @@ class Options:
     window_steps: int = option("--window-steps", type=int, default=64, help="committed steps a Commit window holds at most")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the committer's run id (default $RESEARCH_RUN_ID)")
     required_manifest: str | None = option("--required-manifest", default=None,
-                                           help="the bench row's required manifest (its manifest.json), which serve-openai's rows-sha512 "
-                                                "Commit's parts are built from (serve_seal.committer)")
-    programs_root: str | None = option("--programs-root", default=None,
-                                       help="the Build's row dir of the manifest's partition and attention record (default: the manifest's dir)")
+                                           help="the row's required manifest, DIR/manifest.json of its Build of record (`verity-vllm "
+                                                "predict row --out DIR`), which serve-openai's rows-sha512 Commit's parts are built from "
+                                                "(serve_seal.committer)")
     hidden_so: str | None = option("--hidden-so", default=None, help="the attention hidden tap (as serve-openai's --hidden-so)")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB")
@@ -124,10 +124,11 @@ def committer_opts(opts: Options) -> SimpleNamespace:
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
     """What the committer would refuse after the model has loaded, refused before it."""
     if not opts.required_manifest:
-        raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS} with the Commit of record's parts, which its bench "
-                         "row's manifest names: pass --required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so)")
-    if not Path(opts.required_manifest).is_file():
-        raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
+        raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS} with the Commit of record's parts, which its "
+                         "row's manifest names: pass --required-manifest DIR/manifest.json, DIR the row's Build of record (`verity-vllm "
+                         "predict row --row ROW --out DIR`), and the row's --hidden-so, --norm-tap-so")
+    if why := SS.row_refusal(opts.required_manifest):
+        raise UsageError(why)
     if which("ninja") is None:
         raise UsageError("the rows-sha512 committer JIT-builds its kernels with ninja, which is not on PATH: put the environment's "
                          "bin (where its ninja is) on PATH")

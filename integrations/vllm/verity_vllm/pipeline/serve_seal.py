@@ -2,8 +2,10 @@
 
 `committer` builds the server's committer: ``--scheme rows-sha512`` (the default) the declared Commit of record's
 (`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
-acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the bench row's required manifest
-(``--required-manifest``): the attention hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
+acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the row's required manifest
+(``--required-manifest``), the one the ahead-of-time compiler wrote with the row's Build of record (``verity-vllm predict row``,
+`row_refusal`; a traced Build is only that Build's cross-check, ``predict compare --predicted``):
+the attention hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
 the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``) and a part the manifest names that did not
 attach is refused (`parts_missing`); ``--scheme vllm-v1`` `NativeHostCommitter` (SHA-256, 32-byte roots), which only a recorded
 run's readers take, so a run under it names the recorded vllm-v1 run it serves again (``--of-record``, `scheme_refusal`). Then
@@ -49,6 +51,7 @@ import contextlib
 import copy
 import functools
 import gc
+import hashlib
 import json
 import shutil
 import threading
@@ -110,22 +113,47 @@ def recorded_scheme(rec: Mapping[str, Any]) -> str | None:
     return rec.get("scheme", V1) if rec.get("commit") else None
 
 
+def row_refusal(manifest: str) -> str | None:
+    """Why the served Commit can't bind the row whose required manifest is ``manifest`` (None: it can). The row's Build of record
+    is the ahead-of-time compiler's (`program.predict.aot.write_row`), whose record beside the manifest (`records.predicted_row`)
+    names the manifest's bytes by their sha256: a manifest without that record, a traced Build's among them, is refused."""
+    from verity_vllm.records.predicted_row import FILE, PredictedRow
+
+    m = Path(manifest)
+    if not m.is_file():
+        return f"--required-manifest {manifest}: no such file"
+    how = ("the served Commit binds the row's Build of record, the ahead-of-time compiler's: write it with `verity-vllm predict "
+           "row --row ROW --out DIR` and pass --required-manifest DIR/manifest.json (a traced Build is its cross-check, `verity-vllm "
+           "predict compare ROW_DIR --predicted DIR`)")
+    try:
+        rec = PredictedRow.of(json.loads((path := m.parent / FILE).read_text()), str(path))
+    except (OSError, ValueError) as e:
+        return f"--required-manifest {manifest}: no record of predict's beside it ({type(e).__name__}: {e}): {how}"
+    if (got := hashlib.sha256(m.read_bytes()).hexdigest()) != rec.manifest_sha256:
+        return (f"--required-manifest {manifest}: its sha256 {got[:16]}… is not the {rec.manifest_sha256[:16]}… {path} names, so "
+                f"predict didn't write it: {how}")
+    return None
+
+
 def scheme_refusal(opts: Any) -> str | None:
-    """Why ``opts`` can't commit under its scheme (None: it can). rows-sha512 needs the GPU tree, the bench row's manifest and
-    a token budget of whole step-input port rows (`PORT_IDS`). vllm-v1 commits SHA-256, which only a recorded run's readers
-    take, so it only serves again a recorded vllm-v1 run of the same model, the one ``--of-record`` names."""
+    """Why ``opts`` can't commit under its scheme (None: it can). rows-sha512 needs the GPU tree, the row's manifest and a token
+    budget of whole step-input port rows (`PORT_IDS`); a row's manifest, which the engine's scheduler follows too (`serve_row`),
+    is predict's (`row_refusal`), committing or not. vllm-v1 commits SHA-256, which only a recorded run's readers take, so it
+    only serves again a recorded vllm-v1 run of the same model, the one ``--of-record`` names."""
     if why := retention_refusal(opts):
         return why
     if opts.of_record and opts.scheme != V1:
         return f"--of-record names a recorded {V1} run to serve again under --scheme {V1}, not under --scheme {opts.scheme}"
+    if opts.required_manifest and (why := row_refusal(opts.required_manifest)):
+        return why
     if not opts.commit:
         return None
     if opts.scheme == ROWS and not opts.gpu_tree:
         return f"--scheme {ROWS} (the default) is the windowed collector's, which hashes its rows on the GPU: drop --no-gpu-tree"
     if opts.scheme == ROWS and not opts.required_manifest:
-        return (f"--scheme {ROWS} (the default) commits with the Commit of record's parts, which its bench row's manifest names: "
-                "pass --required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so), or --no-commit to serve "
-                "without a Commit")
+        return (f"--scheme {ROWS} (the default) commits with the Commit of record's parts, which its row's manifest names: pass "
+                "--required-manifest DIR/manifest.json, DIR the row's Build of record (`verity-vllm predict row --row ROW --out DIR`), "
+                "and the row's --hidden-so, --norm-tap-so, or --no-commit to serve without a Commit")
     if opts.scheme == ROWS and int(opts.max_num_batched_tokens) % PORT_IDS:
         return (f"--scheme {ROWS} starts each step's stream with its step-input port, the step's ids in whole "
                 f"{step_rows.ROW_BYTES}-byte rows: pass --max-num-batched-tokens a multiple of {PORT_IDS}, not "
@@ -152,7 +180,7 @@ def scheme_refusal(opts: Any) -> str | None:
 
 def committer_args(opts: Any) -> SimpleNamespace:
     """What `pipeline.commit.make_committer` and `pipeline.commit_attach.attach_of_record` read of a Commit's options, for
-    `DECLARED_COMMITTER` under ``opts.scheme`` and the bench row's manifest ``opts.required_manifest``."""
+    `DECLARED_COMMITTER` under ``opts.scheme`` and the row's manifest ``opts.required_manifest``."""
     from verity_vllm.acquire.sources.taps import TapSources
 
     return SimpleNamespace(layout="chunk-leaf-v1", arena_mb=0, profile_hooks=False, pinned_populate_threads=None,
@@ -164,15 +192,13 @@ def committer_args(opts: Any) -> SimpleNamespace:
 
 
 def programs_root_of(opts: Any) -> str | None:
-    """The Build's row dir the manifest's partition and the attention record are read from: ``--programs-root``, else the
-    manifest's own directory."""
-    if opts.programs_root:
-        return opts.programs_root
+    """The row's Build of record the manifest's partition and the attention record are read from: the manifest's own directory,
+    where `row_refusal` found predict's record."""
     return str(Path(opts.required_manifest).resolve().parent) if opts.required_manifest else None
 
 
 def manifest_of_record(opts: Any) -> dict[str, Any]:
-    """The bench row's required manifest, held to its partition of record (`commit.partition.require_partition`), as the Commit
+    """The row's required manifest, held to its partition of record (`commit.partition.require_partition`), as the Commit
     loads it."""
     from verity_vllm.commit.partition import require_partition
 

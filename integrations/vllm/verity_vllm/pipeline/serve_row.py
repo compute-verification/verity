@@ -1,6 +1,7 @@
 """serve-openai's bench row: the engine schedules as the row's workload Program is specialized for, not as vLLM defaults.
 
-Under ``--required-manifest`` the row's Build records the engine its workload Program models in `WORKLOAD_PROGRAM`
+Under ``--required-manifest`` the row's Build of record (predict's, `serve_seal.row_refusal`) records the engine its workload
+Program models in `WORKLOAD_PROGRAM`
 (`global_program`'s ``applicability.engine``). Its ``async_scheduling`` is the value the Program's ``lag`` static is built
 from, and the one a record of the row must attest. serve-openai reads it (`of`; ``serve.json``'s ``row_scheduling``),
 builds its engine with it (`engine_args`), and refuses a server whose engine resolved another (`checked`) before it
@@ -16,13 +17,14 @@ from typing import Any
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import serve_seal as SS
 
-#: where a bench row's Build records the engine its workload Program models (`global_program`'s ``applicability.engine``)
+#: where a row's Build records the engine its workload Program models (``applicability.engine``: `global_program`'s, and
+#: `program.predict.aot.write_row`'s)
 WORKLOAD_PROGRAM = Path("build_workload", "workload_program.json")
 
 
 def of(opts: Any) -> dict[str, Any] | None:
-    """The scheduler the bench row's workload Program is specialized for, ``{"async_scheduling", "source"}``: what its Build's
-    `WORKLOAD_PROGRAM` in the row dir (`serve_seal.programs_root_of`) declares as ``applicability.engine.async_scheduling``.
+    """The scheduler the bench row's workload Program is specialized for, ``{"async_scheduling", "source"}``: what its Build of
+    record's `WORKLOAD_PROGRAM` (`serve_seal.programs_root_of`) declares as ``applicability.engine.async_scheduling``.
     None without ``--required-manifest``; `UsageError` naming the file when the row has none or it declares no boolean."""
     if not opts.required_manifest:
         return None
