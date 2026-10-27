@@ -439,6 +439,32 @@ theorem roundsWhy_spec {p : Params} {c : OneStage.Commitment} {e : Evidence} {bs
 def beWord (b : ByteArray) (o : Nat) : UInt64 :=
   (List.range' 0 8).foldl (fun s i => s <<< 8 ||| (b.get! (o + i)).toUInt64) 0
 
+/-- Bytes `o + i` of `b`, `i` in `l`, read after `acc` most significant first, as a number. -/
+def beNat (b : ByteArray) (o : Nat) (l : List Nat) (acc : Nat) : Nat :=
+  l.foldl (fun acc i => acc * 256 + (b.get! (o + i)).toNat) acc
+
+theorem foldl_word (b : ByteArray) (o : Nat) : ∀ (l : List Nat) (s : UInt64) (m : Nat),
+    s.toNat < 256 ^ m → m + l.length ≤ 8 →
+    (l.foldl (fun (s : UInt64) i => s <<< 8 ||| (b.get! (o + i)).toUInt64) s).toNat = beNat b o l s.toNat
+  | [], s, _, _, _ => rfl
+  | i :: l, s, m, h1, h2 => by
+    rw [List.foldl_cons]
+    have hb := (b.get! (o + i)).toNat_lt
+    have hm : s.toNat * 256 + (b.get! (o + i)).toNat < 256 ^ (m + 1) := by rw [Nat.pow_succ]; omega
+    have h8 : 256 ^ (m + 1) ≤ 2 ^ 64 :=
+      Nat.le_trans (Nat.pow_le_pow_right (n := 256) (by decide) (by simp at h2; omega)) (by decide : 256 ^ 8 ≤ 2 ^ 64)
+    have hs : (s <<< 8 ||| (b.get! (o + i)).toUInt64).toNat = s.toNat * 256 + (b.get! (o + i)).toNat := by
+      rw [FlockComplete.JsonRT.shift_or]
+      exact Nat.mod_eq_of_lt (by omega)
+    rw [foldl_word b o l _ (m + 1) (by rw [hs]; exact hm) (by simp at h2; omega), hs]
+    rfl
+
+/-- **`f128OfHex`'s word, as a number**: the eight bytes from `o`, most significant first. -/
+theorem beWord_toNat (b : ByteArray) (o : Nat) : (beWord b o).toNat = beNat b o (List.range' 0 8) 0 := by
+  unfold beWord
+  rw [foldl_word b o _ 0 0 (by decide) (by decide)]
+  rfl
+
 /-- **Sixteen bytes' hex reads back as an F128**: `hi` the first eight bytes, `lo` the next eight, each big-endian. -/
 theorem f128OfHex_hexOf (b : ByteArray) (h : b.size = 16) :
     Flock.f128OfHex (Flock.hexOf b) = .ok ⟨beWord b 8, beWord b 0⟩ := by
