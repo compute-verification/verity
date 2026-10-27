@@ -1,4 +1,4 @@
-"""verity_vllm.observe.contract -- ONE value-observation contract over today's on-disk capture formats (v2 Phase 4b).
+"""verity_vllm.observe.contract -- ONE value-observation contract over today's on-disk capture formats.
 
 A *runtime occurrence* is WHERE a value was seen: engine step, invocation (the k-th time the site ran inside the step), tensor-parallel
 rank, the site (an implementation module path such as `model.layers.3.self_attn.qkv_proj`, or a native tap id such as `fa2.m1/L3`), the

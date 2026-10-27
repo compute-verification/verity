@@ -22,7 +22,7 @@ COUNT += 26  # the training kernels: `torch_attention`'s 7, `torch_loss`'s 13 an
 
 COUNT += 1  # dead_free's TokenSelectGroups_v1, a line of its own so it merges with any other change to the count
 
-COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2` (CIR-107), a line of its own
+COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2`, a line of its own
 
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
 

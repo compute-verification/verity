@@ -77,7 +77,7 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
   gates complete at most U/s_× counted operations, s_× the fewest gates of a counted operation in the same count; this
   replaces κ/2.
 - **Credit** is a statement about values. An accepted run credits a size S, and its guarantee is
-  Pr[accept ∧ the AND gates whose committed values are right number fewer than (1 − ε_skip)·S] ≤ δ_coin + δ_crypto. It
+  Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤ δ_coin + δ_crypto. It
   needs no algorithmic premise: SAK (`SAKResidual`) is a premise of exclusion only. For the served PoUW, the
   one computational premise left is `SharedNoiseLucks` (the fold receipts' detection) until it moves to Dither's no-fold
   receipt, which takes none. The
@@ -126,7 +126,8 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effEscape` is P̄_a) |
 | "proof unit", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, the audit record's `wrong_units` and `proved_units`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of C-Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block |
 | "wrong unit", "incorrect unit", "faulty unit"; the Lean's `wrong`, the audit record's `wrong_units` | faulty proof block |
-| "transcript" for the values of a run's gates; `ExecutionTranscript` | trace |
+| "transcript", "committed values" and "the circuit's values" for the values of a run's gates; `ExecutionTranscript` | trace |
+| "verifier of record" | the verifier: the one whose verdict counts and that the guarantees are proved about. Other code that checks the same thing is named for what it is: the Rust cross-check, a Python mirror, or a Python verifier until its Lean verifier replaces it |
 | "δ_link", "the link term"; the Lean's `LinkSound` and `δlink` | ε_bind, the binding error |
 | "verification unit" (VU); `vu_*` identifiers, the `verity/sampled-proofs/vu-sample/v1` domain, the `vllm-vu-set/v1` kind, the `vu-k1536` tier | proof block (C-Flock's statement layout keeps VU in its own sense: Narrower senses) |
 | "M0"; its first statement id, baked into the Lean verifier's `Flock/Tags.lean` | C-Flock's circuit prover: module `verity_flock.circuit`, CLI `flock-circuit`, statement `verity/flock-circuit` |
