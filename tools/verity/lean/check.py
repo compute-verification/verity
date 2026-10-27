@@ -82,8 +82,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
                  a bump that brings such a proof fails until someone has looked at it
     verifier     (a policy with a `verifier` section) an `@[implemented_by]` or `@[extern]` constant that its `entries`
-                 or the `main` of any of the package's executables (`lean_exe`) reaches is outside `allow`, or the entries
-                 reach the `hash` namespace other than through `stop` (`verifier_failures`)
+                 reach is outside `allow`, or that the `main` of one of the package's executables (`lean_exe`) reaches
+                 is outside both `allow` and that executable's list in `allow_in`, or the entries reach the `hash`
+                 namespace other than through `stop` (`verifier_failures`)
     fresh        (`--fresh` only) `leanchecker --fresh` on a root rejects a declaration of its whole import closure,
                  Mathlib and core included
     runs         a test under `runs` (an exempt module: compiled evaluation, not a proof), run beside the replay by
@@ -1387,7 +1388,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     if update and (records or "assumptions" in policy):
         out["assumptions"] = records
     if update and policy.get("verifier") and facts.get("verifier") is not None:
-        out["verifier"] = policy["verifier"] | {"allow": verifier_allow(policy["verifier"], facts["verifier"])}
+        out["verifier"] = ({k: v for k, v in policy["verifier"].items() if k != "allow_in"}
+                           | verifier_allow(policy["verifier"], facts["verifier"]))
     return fails, out
 
 
@@ -1404,11 +1406,33 @@ def allowed_by(allow: list[str], e: dict) -> str | None:
                                       else n == a or n.startswith(a + "."))), None)
 
 
-def verifier_allow(rule: dict, found: dict) -> list[str]:
-    """The `verifier.allow` that `--update` writes: the `module:` entries as they are, and by name each compiled constant on
-    the path that none of them admits, so the record lists it and the landing DM shows one added."""
+def executable_of(e: dict, found: dict) -> str | None:
+    """The executable whose `main`'s walk reached the constant ``e`` (by its `lean_exe` name), None for the entries' walk."""
+    m = e.get("main")
+    return (found.get("executables") or {}).get(m, m) if m else None
+
+
+def verifier_allow(rule: dict, found: dict) -> dict:
+    """The `verifier.allow` and `verifier.allow_in` that `--update` writes: the `module:` entries as they are, and by name
+    each compiled constant on the path that none of them admits, so the record lists it and the landing DM shows one
+    added. `allow` gets what the entries reach; `allow_in`, under each executable, what its `main` reaches that `allow`
+    doesn't admit, and an executable whose `main` the walk couldn't read keeps its list."""
     modules = [a for a in rule.get("allow", []) if a.startswith("module:")]
-    return modules + sorted({e["name"] for _, e in compiled(found) if not allowed_by(modules, e)})
+    allow = modules + sorted({e["name"] for _, e in compiled(found)
+                              if executable_of(e, found) is None and not allowed_by(modules, e)})
+    old = rule.get("allow_in") or {}
+    exes = found.get("executables") or {}
+    unwalked = {exes.get(u["module"], u["module"]) for u in found.get("unwalked", [])}
+    kept = {x: [a for a in v if a.startswith("module:")] for x, v in old.items() if x in exes.values()}
+    named: dict[str, set[str]] = {}
+    for _, e in compiled(found):
+        x = executable_of(e, found)
+        if x is not None and not allowed_by(allow, e) and not allowed_by(kept.get(x, []), e):
+            named.setdefault(x, set()).add(e["name"])
+    allow_in = {x: old[x] if x in unwalked else kept.get(x, []) + sorted(named.get(x, ()))
+                for x in sorted({*kept, *named, *(unwalked & set(old))})}
+    allow_in = {x: v for x, v in allow_in.items() if v}
+    return {"allow": allow} | ({"allow_in": allow_in} if allow_in else {})
 
 
 def reached_from(e: dict, found: dict, entries: str) -> str:
@@ -1428,40 +1452,57 @@ def verifier_failures(rule: dict | None, found: dict | None, update: bool = Fals
     """The verifier's path (`verifier` in the policy: its `entries`, the constants it may reach without being expanded,
     `stop`, and the `hash` namespace), walked from the entries and from the `main` of each of the package's executables
     (`executables`), whose walk expands everything, so it covers the code the binary runs. Every `@[implemented_by]` or
-    `@[extern]` constant either walk reaches is compiled code no proof sees, so one fails unless `allow` admits it
-    (`allowed_by`), naming the root and the path that reach it, and the entries reach the `hash` namespace only through
-    `stop`, so the verifier hashes through its parameter. An executable whose `main` the walk can't read (its root not
-    built, without a `main`, or importing a module the audit doesn't load) fails, update or not. `allow` is a record:
-    `--update` writes each such constant into it by name (`verifier_allow`), a `module:` entry aside, and a name that
-    admits nothing on the path fails. The walk follows `@[csimp]` replacements, so the code compiled in place of a
-    constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
+    `@[extern]` constant a walk reaches is compiled code no proof sees, so one fails unless the record admits it
+    (`allowed_by`), naming the root and the path that reach it: `allow` admits it on every walk, and `allow_in`, by
+    executable, only on that executable's `main`'s, so what one binary may run admits nothing in another. The entries
+    reach the `hash` namespace only through `stop`, so the verifier hashes through its parameter. An executable whose
+    `main` the walk can't read (its root not built, without a `main`, or importing a module the audit doesn't load)
+    fails, update or not, and an `allow_in` list for no executable of the package fails. Both are records: `--update`
+    writes each such constant into them by name (`verifier_allow`), a `module:` entry aside, and a name that admits
+    nothing fails: one in `allow` that the entries' walk doesn't use, one in an `allow_in` list that its `main`'s walk
+    doesn't use past `allow`. The walk follows `@[csimp]` replacements, so the code compiled in place of a constant is on
+    the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
     if not rule:
         return []
     if found is None:
         return [Failure("verifier.no-facts", None, "verifier: `Facts.lean` reported no verifier path; is the audit tool older "
                         "than the policy?")]
     allow = rule.get("allow", [])
+    allow_in = rule.get("allow_in") or {}
     entries = ", ".join(rule.get("entries", []))
     exes = found.get("executables") or {}
-    roots = ", ".join([*rule.get("entries", []), *(f"{m}'s main" for m in sorted(exes))])
+    unwalked = {exes.get(u["module"], u["module"]) for u in found.get("unwalked", [])}
     fails = [Failure("verifier.missing-entry", m, f"verifier: entry {m} is not a constant of the build; fix "
                      f"`verifier.entries`") for m in found.get("missing", [])]
     fails += [Failure("verifier.main-unwalked", u["module"], f"verifier: {u['module']}, the root of the "
                       f"{exes.get(u['module'], u['module'])} executable, {u['why']}, so the walk can't cover the code its "
                       f"`main` runs") for u in found.get("unwalked", [])]
     if not update:
-        used = set()
+        fails += [Failure("verifier.allow-in-unknown", x, f"verifier: `verifier.allow_in` has a list for {x}, which is not "
+                          f"an executable of the package (a `lean_exe` of its `lakefile.toml`); run `check.py --update`")
+                  for x in sorted(allow_in) if x not in exes.values()]
+        used: set[str] = set()
+        used_in: dict[str, set[str]] = {}
         for kind, e in compiled(found):
+            x = executable_of(e, found)
             if a := allowed_by(allow, e):
-                used.add(a)
+                if x is None:
+                    used.add(a)
+            elif x is not None and (a := allowed_by(allow_in.get(x, []), e)):
+                used_in.setdefault(x, set()).add(a)
             else:
+                record = "`verifier.allow`" if x is None else f"the {x} executable's list in `verifier.allow_in`"
                 fails.append(Failure(f"verifier.{kind.replace('_', '-')}", e["name"], f"verifier: {e['name']} (@[{kind}], in "
                                      f"{e.get('module')}) is on the path from {reached_from(e, found, entries)}: compiled "
                                      f"code no proof sees; if it belongs there, run `check.py --update`, which lists it "
-                                     f"under `verifier.allow` (the landing DM shows it), else take it off the path"))
+                                     f"under {record} (the landing DM shows it), else take it off the path"))
         fails += [Failure("verifier.allow-unused", a, f"verifier: `verifier.allow` lists {a}, which admits nothing on the "
-                          f"path from {roots}; run `check.py --update`") for a in allow
+                          f"path from {entries}; run `check.py --update`") for a in allow
                   if not a.startswith("module:") and a not in used]
+        fails += [Failure("verifier.allow-unused", a, f"verifier: `verifier.allow_in` lists {a} for the {x} executable, "
+                          f"which admits nothing its `main` reaches that `verifier.allow` doesn't; run `check.py --update`")
+                  for x, v in sorted(allow_in.items()) if x in exes.values() and x not in unwalked
+                  for a in v if not a.startswith("module:") and a not in used_in.get(x, ())]
     for h in found.get("hash", []):
         fails.append(Failure("verifier.hash", h["name"], f"verifier: {entries} reach {h['name']} outside the hash parameter, "
                              f"by {' -> '.join(h['path'])}; route it through the parameter, or add the public constant it "
@@ -2394,7 +2435,8 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     record of their old names, by their texts under the old names: a guarantee that says what its record says gets one line
     (moved from its old name, lifted), and the definitions that are the same are counted on one line.  One the base already
     records under its new name (a lock re-recorded after the move) is compared with that record.  Each entry added to
-    or dropped from `verifier.allow` gets a line, an added one with where the walk reached it from."""
+    or dropped from `verifier.allow`, or from an executable's list in `verifier.allow_in`, gets a line, an added one with
+    where the walk reached it from."""
     out = []
     op, np = old.get("guarantees", {}), new.get("guarantees", {})
     moves = not facts.get("moved_conflicts")
@@ -2487,14 +2529,22 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     if regrouped_own:
         out.append(f"reads: {regrouped_own} {REGROUPED_OWN}")
     out += assumption_changes(old, new)
-    before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
     path = facts.get("verifier") or {}
     entries = ", ".join((new.get("verifier") or {}).get("entries", []))
-    where = {e["name"]: f" (@[{kind}], in {e.get('module')}" + (f"; from {reached_from(e, path, entries)})" if e.get("path")
-                                                               else ")") for kind, e in compiled(path)}
-    out += [f"verifier: allowed {a}{where.get(a, '')}: compiled code no proof sees, now on the verifier's path"
+    where: dict[tuple[str | None, str], str] = {}
+    for kind, e in reversed(compiled(path)):
+        where[(executable_of(e, path), e["name"])] = f" (@[{kind}], in {e.get('module')}" + (
+            f"; from {reached_from(e, path, entries)})" if e.get("path") else ")")
+    before, after = ((d.get("verifier") or {}).get("allow", []) for d in (old, new))
+    out += [f"verifier: allowed {a}{where.get((None, a), '')}: compiled code no proof sees, now on the verifier's path"
             for a in after if a not in before]
     out += [f"verifier: no longer allowed {a}: off the verifier's path" for a in before if a not in after]
+    was, now = ((d.get("verifier") or {}).get("allow_in") or {} for d in (old, new))
+    for x in sorted({*was, *now}):
+        out += [f"verifier: allowed {a} in the {x} executable{where.get((x, a), '')}: compiled code no proof sees, now "
+                f"on the path its `main` runs" for a in now.get(x, []) if a not in was.get(x, [])]
+        out += [f"verifier: no longer allowed {a} in the {x} executable: off the path its `main` runs"
+                for a in was.get(x, []) if a not in now.get(x, [])]
     return out
 
 

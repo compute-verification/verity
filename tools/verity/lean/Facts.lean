@@ -895,8 +895,9 @@ unsafe def exeRoot (env : Environment) (m : Name) :
   if let some i := env.getModuleIdx? m then
     let own := (env.getModuleIdxFor? `main).map (·.toNat) == some i.toNat
     return if own then .ok none else .error "declares no `main`"
-  let some olean ← (some <$> findOLean m) <|> pure none | return .error "is not built (no `.olean` on the search path)"
-  if !(← olean.pathExists) then return .error s!"is not built ({olean} is missing)"
+  let some olean ← (some <$> findOLean m) <|> pure none
+    | return .error "is not built (no `.olean` on the search path; `check.py --build` builds it)"
+  if !(← olean.pathExists) then return .error s!"is not built ({olean} is missing; `check.py --build` builds it)"
   let mut files := #[olean]
   for level in [OLeanLevel.server, OLeanLevel.private] do
     if ← (level.adjustFileName olean).pathExists then
@@ -926,11 +927,12 @@ open LeanAudit in
 one's root module, with `exeRoot`'s reading of it), through definitions' values, `implemented_by` targets and `@[csimp]`
 replacements (the constant compiled code runs in place of one, by a theorem `@f = @g`), in every imported module. The
 entries' walk expands nothing in `stop`; a `main`'s expands everything, so it covers the code its binary runs, and looks a
-name up in its root module before the environment (two executables' roots both declare `main`). Reported: each reached
-`@[implemented_by]` and `@[extern]` constant and each reached `@[csimp]` rewrite (with its replacement and theorem), with
-the path from the first root that reaches it, the entries before the `main`s (`main`: the root module of the one it is
-from); each constant of the `hash` namespace the entries' walk enters from outside it, with its path; how many constants
-each walk reached; and each executable whose `main` could not be walked, with why. -/
+name up in its root module before the environment (two executables' roots both declare `main`). Reported: each
+`@[implemented_by]` and `@[extern]` constant and each `@[csimp]` rewrite (with its replacement and theorem) a walk
+reaches, once for each walk that reaches it (so each executable's list is whole, whatever another walk reached), with the
+path from its root, the entries' walk first (`main`: the root module of the `main` a walk is from); each constant of the
+`hash` namespace the entries' walk enters from outside it, with its path; how many constants each walk reached; and each
+executable whose `main` could not be walked, with why. -/
 unsafe def verifierInfo (env : Environment) (entries stop : Array Name) (hash : Name)
     (mains : Array (Name × Except String (Option (Array ConstantInfo × Array ModuleData)))) : Json := Id.run do
   let moduleOf (c : Name) : Option Name := (env.getModuleIdxFor? c).map fun i => moduleName env i
@@ -976,25 +978,22 @@ unsafe def verifierInfo (env : Environment) (entries stop : Array Name) (hash : 
       | some y => p := p.push y.toString; x := y
       | none => break
     return p.reverse
-  -- a constant of an executable's root module is its own, apart from the environment's constant of the same name
-  let mut done : NameSet := {}
-  let mut found : Array (Name × String × Json) := #[]
+  let mut found : Array ((Nat × Name) × String × Json) := #[]
+  let mut i := 0
   for w in walks do
     for c in w.order do
-      let mine := w.own.contains c
-      let key := if mine then (w.main.getD .anonymous).mkNum 0 ++ c else c
-      if done.contains key then continue
-      done := done.insert key
-      let loc := [("name", toJson c.toString), ("module", toJson ((if mine then w.main else moduleOf c).map toString)),
+      let loc := [("name", toJson c.toString),
+        ("module", toJson ((if w.own.contains c then w.main else moduleOf c).map toString)),
         ("path", toJson (pathTo w.parent c))] ++ (w.main.map fun m => [("main", toJson m.toString)]).getD []
       if let some t := w.impl[c]? then
-        found := found.push (key, "implemented_by", Json.mkObj (loc ++ [("by", toJson t.toString)]))
+        found := found.push ((i, c), "implemented_by", Json.mkObj (loc ++ [("by", toJson t.toString)]))
       if w.ext.contains c then
-        found := found.push (key, "extern", Json.mkObj loc)
+        found := found.push ((i, c), "extern", Json.mkObj loc)
       if let some e := w.csimp[c]? then
-        found := found.push (key, "csimp", Json.mkObj (loc ++ [("to", toJson e.toDeclName.toString),
+        found := found.push ((i, c), "csimp", Json.mkObj (loc ++ [("to", toJson e.toDeclName.toString),
           ("by", toJson e.thmName.toString)]))
-  let sorted := found.qsort fun a b => Name.lt a.1 b.1
+    i := i + 1
+  let sorted := found.qsort fun a b => a.1.1 < b.1.1 || (a.1.1 == b.1.1 && Name.lt a.1.2 b.1.2)
   let ofKind (k : String) : Json := toJson (sorted.filterMap fun (_, k', j) => if k' == k then some j else none)
   let locOf (c : Name) : List (String × Json) := [("name", toJson c.toString), ("module", toJson ((moduleOf c).map toString))]
   return Json.mkObj [
