@@ -25,10 +25,10 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per example: its workload, placement, commands and doneness; a milestone is (example, run,
-  proof) triples, which top keeps (`examples/README.md`).
-- `benchmarks/`: reproducible workloads and measurements (`benchmarks/one_stage/`, the one-stage audit end to end), GPU
-  probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
+- `examples/`: one directory per example: its workload, placement, commands and level of doneness; a milestone is a set of
+  (example, level) pairs, which top keeps (`examples/README.md`).
+- `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
+  end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/`: `tools/verity/` (the `verity` command, `check/`, `circuit_check/`, and `lean/`, the Lean check),
   `tools/research/` (runs, the evidence store, Slack, pods and deploys; it imports nothing from Verity),
   `tools/agent-guard/` (the VM's secret guard, OOM recorder and shell hook) and `tools/move/`.
@@ -54,7 +54,7 @@ Code reaches the Nebius nodes only through `research deploy install` of a pushed
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
-research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the whole check
+research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the whole check; --record: an Attempt
 research status RUN  # check back on a run (`research run` returns once it starts); --wait: only a run under 20 min
 ~~~
 
@@ -119,12 +119,15 @@ nowhere else.
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.ml.commitments` scheme and registered
   before any coin; and on a draw, the drawn units' openings, to the prover behind the firewall.
-- **Results are per monitoring period, over all compute** (25 Oct). Every result, in a report, a table, a PR or a message
-  to Daniel, is given for monitoring periods (Glossary) of a week, a month and a year, in AND gates, over the world's
-  compute (the adversary resource model) with a datacenter's beside it, though a demo checks one. The datacenter's size
-  (`benchmarks/census/`) and the window's length are stated parameters, and a figure scaled from one machine says what
-  is proved and what is scaled. Give each bound pooled over the period and as a share of the compute it covers, beside
-  the per-window figure, never instead of it: a per-window δ that looks weak is not the result.
+- **Results are per monitoring period, over all compute** (25 Oct). The time length of interest is the monitoring
+  period (Glossary), not the window, the run or the demo. Every result, in a report, a
+  table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
+  all compute: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks one. The
+  datacenter's size (from
+  `benchmarks/census/`) and the window's length are stated parameters, and a figure scaled from one machine says which
+  parts are proved and which are scaled. Give each bound as its pooled total over the period and as a share of the
+  compute it covers, beside the per-window figure, never the per-window figure alone: a per-window δ that looks weak is
+  not the result.
 
 ## Tests
 
@@ -157,12 +160,14 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
 `circuit-check --all`, C-Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
-`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes. A part's verdict is reused
-while a hash of its declared inputs, the base image and its runner is unchanged (9 Oct), so a docs-only change reruns
-nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `check.py --record --on M --pool
-NAME` records `check` as an Attempt of a clean commit in M's NAME pool.
+`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes.
 
-PRs land on an eyeball review, and the full check runs after landing (24 Oct). ci's `research queue drive` lands them
+A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
+unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
+
+A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged (9 Oct), so a
+docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. PRs land
+on an eyeball review, and the full check runs after landing (24 Oct). ci's `research queue drive` lands them
 (`research.drive`'s docstring has the rules; `tools/verity/check/drive.toml` the settings):
 
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F --by
