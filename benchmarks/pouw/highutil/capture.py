@@ -8,7 +8,7 @@ x quantized one scale a token (s_a = absmax / 127, round half to even, |X| <= 12
 quantized input (QKV, 6144 rows of W), gate and up another (UP, 28672). Norms, RoPE (llama3 scaling), causal attention
 (grouped-query) and SiLU run in bf16 with float32 norms.
 
-    capture.py CFG --checkpoint DIR [--seqs 16] [--len 1024]
+    capture.py CFG --checkpoint DIR [--seqs 16] [--len 1024] [--text ARROW|PARQUET]
 
 writes A-NAME.bin for each call in shapes.txt (CFG's blocks x M x K int8, block t's rows at offset t M K; a K-slice of a
 linear, `down.0` and so on, holds the linear's input columns k0..k0 + K) into CFG and
@@ -48,11 +48,16 @@ class Checkpoint:
         return self._open[f].get_tensor(name).to(self.dev)
 
 
-def tokens(ck: Checkpoint, seqs: int, length: int) -> torch.Tensor:
+def tokens(ck: Checkpoint, seqs: int, length: int, path: Path = WIKITEXT) -> torch.Tensor:
     import pyarrow as pa
     from tokenizers import Tokenizer
-    with pa.memory_map(str(WIKITEXT)) as src:
-        text = "".join(pa.ipc.open_stream(src).read_all().column("text").to_pylist())
+    if path.suffix == ".parquet":
+        import pyarrow.parquet as pq
+        table = pq.read_table(str(path))
+    else:
+        with pa.memory_map(str(path)) as src:
+            table = pa.ipc.open_stream(src).read_all()
+    text = "".join(table.column("text").to_pylist())
     ids = Tokenizer.from_file(str(ck.d / "tokenizer.json")).encode(text, add_special_tokens=False).ids
     need = seqs * (length - 1)
     if len(ids) < need:
@@ -103,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--seqs", type=int, default=16)
     ap.add_argument("--len", type=int, default=1024)
+    ap.add_argument("--text", default=str(WIKITEXT), help="wikitext-2-raw-v1's test split: the datasets cache's arrow file, or "
+                    "the hub's parquet at the same revision (wikitext-2-raw-v1/test-00000-of-00001.parquet)")
     a = ap.parse_args(argv)
     cfg_dir, dev = Path(a.cfg), "cuda"
     layers = [ln.split() for ln in (cfg_dir / "shapes.txt").read_text().splitlines() if ln.strip()]
@@ -117,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     c = ck.cfg
     S, L, hd = a.seqs, a.len, c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"]
     nh, nkv, eps = c["num_attention_heads"], c["num_key_value_heads"], c["rms_norm_eps"]
-    ids = tokens(ck, S, L)
+    ids = tokens(ck, S, L, Path(a.text))
     out = {x[0]: np.memmap(cfg_dir / f"A-{x[0]}.bin", mode="w+", dtype=np.int8, shape=(nb, m, int(x[3]))) for x in layers}
     cos, sin = rope_tables(c, L, dev)
     t0 = time.monotonic()
@@ -163,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
         arr.flush()
         with open(cfg_dir / f"A-{n}.bin", "rb") as f:
             digests[n] = hashlib.file_digest(f, "sha256").hexdigest()
-    rec = {"checkpoint": str(a.checkpoint), "text": {"source": "Salesforce/wikitext wikitext-2-raw-v1 test", "file": str(WIKITEXT),
+    rec = {"checkpoint": str(a.checkpoint), "text": {"source": "Salesforce/wikitext wikitext-2-raw-v1 test", "file": a.text,
                                                      "seqs": S, "len": L, "bos": c["bos_token_id"],
                                                      "token_ids_sha256": hashlib.sha256(ids.numpy().astype("<i8").tobytes()).hexdigest()},
            "blocks": nb, "m": m, "a_sha256": digests, "ppl": math.exp(nll / count), "tokens_scored": count,

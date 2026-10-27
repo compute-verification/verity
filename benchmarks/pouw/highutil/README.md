@@ -23,6 +23,8 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
   wait), for the roots and the openings after the check coin.
 - `run.sh`: the build, the config and the periods under a GPU lease (`research run`; its header has the command), and
   with `NSYS=1` each arm's kernel timeline (`timeline.py`: GEMM share, busy share, idle gaps).
-- `v31.cu`, `v31.py` and `v31lib.py` are vendored unmodified from compute-research's V31-GPU, branch
-  `cursor/compute-research-v31-gpu-ea24` at 17a5bac0e8 (its accel_v31 directory), sha256 7ad2ea0d37c1..., 7288206a8e11...
-  and fd7b48ed743a...; `run.sh` records the hashes. Fixes belong upstream there, then a fresh copy here.
+- `v31.cu`, `v31.py` and `v31lib.py` are vendored unmodified from kernels' sm_90a port of compute-research's V31-GPU
+  (branch `cursor/kernels-accel-sm90-7f94` at c8be088fde, its accel_v31 directory, which holds V31-GPU's adbe21c921: leaf
+  pos of a Prover's c-th call salted prf_salt(Ks, c leaves + pos)), sha256 430700478f77..., c5d1cbc35502... and
+  301e2ad03f57...; `run.sh` records the hashes. One copy builds for both cards: sm_120a, and sm_90a with `-DV31_WG=1`
+  (run.sh's header). Fixes belong upstream there, then a fresh copy here.

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# HIGHUTIL on one leased GPU of vy-nebius-1 (RTX PRO 6000, sm_120), cwd = the source tree's root under `research run`:
+# HIGHUTIL on one leased GPU (vy-nebius-1's RTX PRO 6000, sm_120, by default; H200: below), cwd = the source tree's root under
+# `research run`:
 # the build and the config (the checkpoint's weights, params) outside the lease, then under it capture.py's activations
 # (a W8A8 forward of the checkpoint), period.py's diag (one step's openings on the GPU against the prover's recomputed rows)
 # and its interleaved protocol and plain periods and the negative one, and the machine model's θ beside them.
@@ -19,13 +20,17 @@
 # kernels' share of the GPU's time); LEASE (default gpu-lease 1 --wait --max-min 25 --); PY (default uv run -q --no-project
 # --with numpy python) for the prep, TORCH_PY for the rest. v31's V31_* knobs come from the environment when the Provers are
 # made; V31_LTW defaults to 1 (a call at S = 1 takes cuBLASLt's int32 X W'^T in place of v31's GEMM, the same leaf bytes).
+# TEXT: wikitext-2-raw-v1's test split for capture.py (default the datasets cache's arrow file, else its parquet at the same
+# revision, fetched from the hub into the run's scratch). The H200 (vy-dc-h200-2): GENCODE=arch=compute_90a,code=sm_90a
+# NVFLAGS=-DV31_WG=1 THETA_DEVICE=sm_90, CARD its card file, and the checkpoint built into the node's HF cache first
+# (benchmarks/hash/dither/pin.sh).
 set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 D=benchmarks/pouw/highutil
 PY=${PY:-uv run -q --no-project --with numpy python}
 export PYTHONPATH=.
-GENCODE=${GENCODE:-arch=compute_120a,code=sm_120a}
+GENCODE=${GENCODE:-arch=compute_120a,code=sm_120a} NVFLAGS=${NVFLAGS:-} THETA_DEVICE=${THETA_DEVICE:-sm_120}
 TORCH_PY=${TORCH_PY:-uv run -q --no-project --with torch --with numpy --with safetensors --with tokenizers --with pyarrow python}
 CKPT=${CKPT:-/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7}
 ROW=${ROW:-8192} LP=${LP:-512} L=${L:-16384} BLOCKS=${BLOCKS:-4} STEPS=${STEPS:-300} Q=${Q:-2048} PERIODS=${PERIODS:-2} NEGATIVE=${NEGATIVE-skip:2@2}
@@ -41,11 +46,12 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1
 : > "$O/rc.txt"
 export V31_LTW=${V31_LTW-1}
 LIB=$W/libv31.so
-nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 -DV31_LIB -DCOMMIT_GPU_DOMS=8 \
+# shellcheck disable=SC2086
+nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 -DV31_LIB -DCOMMIT_GPU_DOMS=8 $NVFLAGS \
   -Xcompiler -fPIC -shared -o "$LIB" $D/hu_lib.cu -lcuda -lcublasLt > "$O/build.log" 2>&1
 echo "build rc $?" >> "$O/rc.txt"
 [ -s "$LIB" ] || { cat "$O/rc.txt"; tail -30 "$O/build.log"; exit 1; }
-sha256sum $D/v31.cu $D/v31.py $D/v31lib.py $D/hu_lib.cu $D/period.py > "$O/sources.sha256"
+sha256sum $D/v31.cu $D/v31.py $D/v31lib.py $D/hu_lib.cu $D/period.py $D/capture.py $D/terms.py > "$O/sources.sha256"
 if [ "$CKPT" = seeded ]; then SRC=(--seeded); else SRC=(--checkpoint "$CKPT"); fi
 uv run -q --no-project --with numpy --with safetensors python $D/period.py prep "$W/cfg" "${SRC[@]}" --row "$ROW" --lp "$LP" --L "$L" \
   > "$O/prep.log" 2>&1
@@ -56,14 +62,21 @@ cp "$W/cfg/prep.json" "$O/prep.json"
 $TORCH_PY -c "import torch, safetensors, tokenizers, pyarrow; print('torch', torch.__version__, torch.version.cuda)" \
   >> "$O/prep.log" 2>&1
 (cd benchmarks/pouw/machine_model && PYTHONPATH=. uv run -q --no-project --with scipy --with numpy python -m verity_machine_model.cli \
-  --device sm_120 theta) > "$O/theta.txt" 2>&1
+  --device "$THETA_DEVICE" theta) > "$O/theta.txt" 2>&1
 echo "theta rc $?" >> "$O/rc.txt"
+WIKI_REV=b08601e04326c79dfdd32d625aee71d232d685c3
+TEXT=${TEXT:-/workspace/hf/datasets/Salesforce___wikitext/wikitext-2-raw-v1/0.0.0/$WIKI_REV/wikitext-test.arrow}
+if [ "$CKPT" != seeded ] && [ ! -f "$TEXT" ]; then
+  TEXT=$W/wikitext-test.parquet
+  curl -sfL -o "$TEXT" "https://huggingface.co/datasets/Salesforce/wikitext/resolve/$WIKI_REV/wikitext-2-raw-v1/test-00000-of-00001.parquet"
+  echo "text rc $?" >> "$O/rc.txt"
+fi
 GATE=()
 if [ "$COINS" != local ]; then
   GATE=(--peer "${PEER:?}" --challenger-key "${CHALLENGER_KEY:?}" --gate-key "${GATE_KEY:?}")
 fi
 LEASE=${LEASE-gpu-lease 1 --wait --max-min 25 --}
-export D PY TORCH_PY CKPT LIB BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN NSYS=${NSYS:-0}
+export D PY TORCH_PY CKPT TEXT LIB BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN NSYS=${NSYS:-0}
 export GATE_ARGS="${GATE[*]}" CARD_ARGS="${CARD_ARGS[*]}"
 [ -f "$CARD" ] && cp "$CARD" "$O/card.toml"
 $LEASE bash -c '
@@ -74,7 +87,7 @@ $LEASE bash -c '
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/smi.csv" 2>&1 &
   smi=$!
   if [ "$CKPT" != seeded ]; then
-    $TORCH_PY $D/capture.py "$W/cfg" --checkpoint "$CKPT" \
+    $TORCH_PY $D/capture.py "$W/cfg" --checkpoint "$CKPT" --text "$TEXT" \
       > "$O/capture.log" 2>&1
     r=$?
     echo "capture rc $r" >> "$O/rc.txt"

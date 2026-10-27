@@ -19,7 +19,8 @@ in one sequence. Block b's operand-root receipt is H(registration, b, block b-1'
 opens after it. Call (s, layer)'s coin is ``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``, and its six
 seeds (pad dA dB U V P) are dither.call_seeds of that coin under the block's window salt, its operand-root receipt. Each
 call commits its words T_s = X W'^T mod 2^16 every L inner indices (no O, wraps or binding) under a frame-v3-sha512 root,
-its leaves salted under the Prover's own key for that call; block b's value-root receipt is H(registration, b, its
+its leaf pos salted prf_salt(Ks, off + pos) under the Prover's own Ks, off = c leaves for its c-th call (dither.salts);
+block b's value-root receipt is H(registration, b, its
 roots). Its check coin opens after that receipt, with block b+1's seeds coin in the same round trip. The coin draws
 Q W_b / W_reg proof blocks of b (`picks`): a call by its MACs, a cell uniformly, a segment by its length, so each MAC is
 equally likely. Each pick's tree paths come off the host copy of its call's tree before the next block overwrites it.
@@ -349,6 +350,12 @@ def _cheated(cheat: str) -> int | None:
     return int(cheat.split(":")[1]) if cheat.startswith("skip:") else None
 
 
+def salt(key: tuple[bytes, int], pos: int) -> bytes:
+    """Leaf pos's salt in a call whose key is (Ks, off): prf_salt(Ks, off + pos) (dither.salts(Ks, off); the c-th call of a
+    Prover has off = c leaves)."""
+    return v31.cref.prf_salt(key[0], key[1] + pos)
+
+
 def leaf_row(f: v31.Fill, afile: str, bfile: str, t: int, seeds: dict[str, bytes], pos: int, skip: int | None = None) -> bytes:
     """Leaf `pos`'s row as the prover committed it, recomputed from block t's operands and the call's coins: T_s of its
     ROW / 2 cells (a run of a tile's rows, every column), mod 2^16, little-endian, in the tile's row-major order."""
@@ -374,7 +381,7 @@ def answer(job: dict) -> dict:
     f = shape(job["n"], job["k"], job["row"], job["m"])
     seeds = v31.fill_seeds_from(job["seeds"])
     skip = _cheated(job["cheat"])
-    rows = {pos: (leaf_row(f, job["afile"], job["bfile"], job["t"], seeds, pos, skip), v31.cref.prf_salt(job["key"], pos),
+    rows = {pos: (leaf_row(f, job["afile"], job["bfile"], job["t"], seeds, pos, skip), salt(job["key"], pos),
                   tuple(path)) for pos, path in zip(job["positions"], job["paths"])}
     return {"rows": rows, "A_opening": job["A_opening"], "B_opening": job["B_opening"]}
 
@@ -455,7 +462,7 @@ class GpuDriver:
         self.levels = [torch.empty((rmax, 8 * (2 * w - 1)), dtype=torch.int64, pin_memory=True).numpy().view(np.uint64)
                        for w, _, _ in self.geom]
         torch.cuda.synchronize()
-        self.keys: dict[tuple[int, int], bytes] = {}
+        self.keys: dict[tuple[int, int], tuple[bytes, int]] = {}
         self.ready = ["ready", torch.cuda.get_device_name(), f"ltw {os.environ.get('V31_LTW', '0')}"]
         self._poll_clock()
 
@@ -507,7 +514,7 @@ class GpuDriver:
         def collect(s: int, li: int, c: int) -> None:
             p = self.ps[li]
             self.lib.check(self.levels_async(p.h, c, self.levels[li][s].ctypes.data))
-            self.keys[(s, li)] = v31.call_key(p.ks, c)
+            self.keys[(s, li)] = (p.ks, p.calls[c]["off"])
 
         torch.cuda.synchronize()
         t0 = time.monotonic()
@@ -530,7 +537,7 @@ class GpuDriver:
         roots.write_bytes(b"".join(self.levels[li][s][-8:].byteswap().tobytes() for s in range(steps) for li in range(NL)))
         return {"gpu_ms": ms, "host_ms": ms, "flags": 0, "sm_mhz": self._mhz()}
 
-    def key(self, b: int, step: int, layer: int) -> bytes:
+    def key(self, b: int, step: int, layer: int) -> tuple[bytes, int]:
         return self.keys[(step, layer)]
 
     def paths(self, b: int, picks_file: Path, out: Path) -> None:
@@ -562,14 +569,14 @@ class GpuDriver:
 class RefDriver:
     """The GPU driver's commands on the CPU through v31.py's no-fold reference (``period.py run CFG ref ...``, and the
     tests): the same words, roots and paths at small shapes, so the period's coins, picks, answers and verifier run
-    without a GPU. Each layer has its own Ks, and call c of a layer is salted under call_key(Ks, c), as the Prover's."""
+    without a GPU. Each layer has its own Ks, and call c of a layer salts from off = c leaves, as the Prover's."""
 
     def __init__(self, cfg: Path, row: int, secret: bytes | None = None) -> None:
         self.cfg, self.row = cfg, row
         self.ks = [os.urandom(64) if secret is None else H("verity/highutil/ref-ks/v1", secret, u64(li)) for li in range(len(LAYERS))]
         self.calls = [0] * len(LAYERS)
         self.levels: dict[tuple[int, int], list] = {}
-        self.keys: dict[tuple[int, int], bytes] = {}
+        self.keys: dict[tuple[int, int], tuple[bytes, int]] = {}
         self.ready = ["ready", "ref"]
 
     def block_of(self, step: int) -> int:
@@ -589,15 +596,15 @@ class RefDriver:
                 skip = _cheated(kind) if kind != "none" and at in (None, li) else None
                 T = v31.fill_words(f, np.asarray(operand(self.cfg, "A", li, t)), np.asarray(operand(self.cfg, "B", li, t)),
                                    v31.Coins.expand(f, sd), skip)
-                key = v31.call_key(self.ks[li], self.calls[li])
+                key = (self.ks[li], self.calls[li] * f.leaves)
                 self.calls[li] += 1
-                cm = v31.fill_commit(f, v31.words_buffer(f, T), key)
+                cm = v31.fill_commit(f, v31.fill_buffer(f, T), *key)
                 self.levels[(s, li)], self.keys[(s, li)] = cm.levels, key
                 out.append(cm.root)
         roots.write_bytes(b"".join(out))
         return {"gpu_ms": 0.0, "host_ms": 0.0, "flags": 0, "sm_mhz": 0}
 
-    def key(self, b: int, step: int, layer: int) -> bytes:
+    def key(self, b: int, step: int, layer: int) -> tuple[bytes, int]:
         return self.keys[(step, layer)]
 
     def paths(self, b: int, picks_file: Path, out: Path) -> None:
@@ -888,7 +895,7 @@ def cmd_diag(a: argparse.Namespace) -> int:
             path = drv.path(li, 0, p)
             if grow != mine:
                 bad.append(f"leaf {p}: the GPU's row isn't the recomputed one")
-            if gsalt != v31.cref.prf_salt(key, p):
+            if gsalt != salt(key, p):
                 bad.append(f"leaf {p}: salt")
             if b"".join(gpath) != path:
                 bad.append(f"leaf {p}: the host copy's path isn't the GPU's")
