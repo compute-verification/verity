@@ -597,7 +597,8 @@ def families_nvf4(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     def acc_random(n, lo=-30, hi=40):
         return f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
-    zeros = lambda n: np.zeros((n, 16, 8), np.uint32)
+    def zeros(n):
+        return np.zeros((n, 16, 8), np.uint32)
 
     n = n_random
     yield "random_random_scales", codes((n, 16, k)), codes((n, 8, k)), scales((n, 16, nblk)), scales((n, 8, nblk)), acc_random(n)
@@ -745,7 +746,8 @@ def families_fp4_re(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     def pm_zero(shape):
         return np.where(rng.random(shape) < 0.5, np.uint32(0x80000000), np.uint32(0)).astype(np.uint32)
 
-    zeros = lambda n: np.zeros((n, 16, 8), np.uint32)
+    def zeros(n):
+        return np.zeros((n, 16, 8), np.uint32)
 
     # --- D16: the sign-of-zero matrix.  Accumulator +-0 x (a) all-zero A against random B, (b) random A against all-zero B,
     # (c) +-0 against +-0 operands, (d) every product -0 x -0, (e) pairs cancelling exactly inside every group, (f) group 0
@@ -1145,7 +1147,8 @@ def twin_summary(D, models: dict) -> dict:
 
 def families_bf16(rng, n_random: int):
     k = 16
-    cast = lambda x: to_bf16_bits(x.astype(np.float32))
+    def cast(x):
+        return to_bf16_bits(x.astype(np.float32))
     n = n_random
     yield "randn_random_acc", cast(rng.standard_normal((n, 16, k))), cast(rng.standard_normal((n, 8, k))), None, None, \
         f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(-20, 21, (n, 16, 8)))).astype(np.float32))
