@@ -8367,6 +8367,9 @@
    "assumptions": [],
    "type_hash": "cbe091114f7d58bb20b6bfda7500d46b00512a6e5ac0977029fb70e0b4a46905"
   },
+  "Nci.Ldl.SecurityProofs.PairBound": {
+   "owner": "@training"
+  },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ActivationsBoundOn : Nci.Guarantees.ActivationsBoundOn"],
