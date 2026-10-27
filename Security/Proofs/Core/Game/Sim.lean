@@ -15,11 +15,19 @@ strategy node by node, as a reduction runs a prover of `g` against the verifier 
 * a coin of `g` alone is fixed the same way (`dom_coin_left`), and a coin of `G` alone is averaged over
   (`dom_coin_right`);
 * relabelled outputs on either side (`dom_map_left`, `dom_map_right`), and C-Flock's games through core's image
-  (`Dominated.toFlock`).
+  (`Dominated.toFlock`);
+* a coin of `G` read through a map keeping the uniform law, or a factor at a time (`dom_coin_right_map`,
+  `dom_coin_prod`, `dom_coin_equiv`), and drawn in chunks (`Split`, `dom_split`, through `Covers`).
 
 A deterministic strategy of `G` can't toss the coins `g` reads beyond `G`'s, so the reduction fixes them at their best
 value (`exists_avg_le`): the average over them is at most the largest.
+
+`dom_reach` runs the rule over rounds of released bits (`roundsThen`): at each round a plan either leaves the round to
+`g`, its bits at their best value (`Move.skip`), or drives `G` to a coin those bits are an image of (`Move.step`), and
+the domination at the end is asked only at the live states and continuations the plan reaches (`Reach`).
 -/
+
+universe u
 
 namespace Verity.Game
 
@@ -171,5 +179,209 @@ theorem uniform_of_prCoin {C' C : Type} [Fintype C'] [Fintype C] (f : C' → C)
   refine Finset.sum_congr rfl fun v _ => ?_
   congr 1
   exact hf fun c => h c = v
+
+/-! ## Live coins in rounds and in chunks -/
+
+/-- **A coin of `G` drawn through a map that keeps the uniform law**: `G`'s coin may be read as `t`'s image. -/
+theorem dom_coin_right_map {β : Type} {p : α → Prop} {q : β → Prop} {g : Game α} {s : Strategy g} {C C' : Type}
+    [Fintype C] [Nonempty C] [Fintype C'] [Nonempty C'] {K : C' → Game β} (t : C → C') (ht : Uniform t)
+    (h : Dominated p g s q (.coin C' K)) : Dominated p g s q (.coin C fun c => K (t c)) := by
+  obtain ⟨τ, hτ⟩ := h
+  refine ⟨(fun c => τ (t c) : (c : C) → Strategy (K (t c))), ?_⟩
+  exact hτ.trans_eq (ht fun c' => prob q (K c') (τ c')).symm
+
+/-- **A coin of `G` on a product, drawn a factor at a time.** -/
+theorem dom_coin_prod {β : Type} {p : α → Prop} {q : β → Prop} {g : Game α} {s : Strategy g} {C₁ C₂ : Type}
+    [Fintype C₁] [Nonempty C₁] [Fintype C₂] [Nonempty C₂] {K : C₁ × C₂ → Game β}
+    (h : Dominated p g s q (.coin C₁ fun a => .coin C₂ fun b => K (a, b))) :
+    Dominated p g s q (.coin (C₁ × C₂) K) := by
+  obtain ⟨τ, hτ⟩ := h
+  refine ⟨(fun x => τ x.1 x.2 : (x : C₁ × C₂) → Strategy (K x)), ?_⟩
+  show prob p g s ≤ avg fun x : C₁ × C₂ => prob q (K x) (τ x.1 x.2)
+  rw [avg_prod]
+  exact hτ
+
+/-- **A coin of `G` relabelled by an equivalence.** -/
+theorem dom_coin_equiv {β : Type} {p : α → Prop} {q : β → Prop} {g : Game α} {s : Strategy g} {C C' : Type}
+    [Fintype C] [Nonempty C] [Fintype C'] [Nonempty C'] {K : C → Game β} (e : C' ≃ C)
+    (h : Dominated p g s q (.coin C' fun c' => K (e c'))) : Dominated p g s q (.coin C K) := by
+  have h' := dom_coin_right_map (K := fun c' => K (e c')) e.symm (uniform_equiv e.symm) h
+  simpa only [Equiv.apply_symm_apply] using h'
+
+/-! ## Driving a live game through rounds of released bits -/
+
+/-- **Rounds of released bits, then `k`**: in each round the prover sends a message, then the verifier draws `n`
+uniform bits; `mk` records the round, and `k` goes on from the record of the rounds. -/
+def roundsThen {M ρ : Type} (mk : M → List Bool → ρ) (k : List ρ → Game α) : List ℕ → Game α
+  | [] => k []
+  | n :: ns => .send M fun b => .coin (Fin n → Bool) fun x =>
+      roundsThen mk (fun log => k (mk b (List.ofFn x) :: log)) ns
+
+/-- **One round driven through the live game**: from the live state `st`, the reduction's messages bring the live game
+to a coin `C` (`reach`); the round's `m` bits are that coin and extra bits `R` through a map that keeps the uniform law
+(`f`), and the live game goes on at `next c`. -/
+structure Step {β : Type} {St : Type u} (q : β → Prop) (G : St → Game β) (st : St) (m : ℕ) where
+  C : Type
+  [fC : Fintype C]
+  [nC : Nonempty C]
+  R : Type
+  [fR : Fintype R]
+  [nR : Nonempty R]
+  f : C × R → (Fin m → Bool)
+  hf : Uniform f
+  next : C → St
+  reach : ∀ {γ : Type} (p : γ → Prop) (g : Game γ) (s : Strategy g),
+    Dominated p g s q (.coin C fun c => G (next c)) → Dominated p g s q (G st)
+
+attribute [instance] Step.fC Step.nC Step.fR Step.nR
+
+/-- What the reduction does with a round of the play at the live state `st`: leave it to the play, its bits fixed at
+their best value, at a state of the same live game (`skip`), or drive it through the live game (`step`). -/
+inductive Move {β : Type} {St : Type u} (q : β → Prop) (G : St → Game β) (st : St) (m : ℕ) where
+  | skip (st' : St) (h : G st' = G st)
+  | step (S : Step q G st m)
+
+section Drive
+
+variable {M ρ β : Type} {St : Type u} {q : β → Prop} (mk : M → List Bool → ρ) (G : St → Game β)
+  (plan : (st : St) → (m : ℕ) → M → (Σ g : Game α, Strategy g) → Move q G st m) (st₀ : St) (k₀ : List ρ → Game α)
+
+/-- **The live states and play continuations the reduction reaches** from `st₀` and `k₀`, one round at a time; the plan
+sees the round's message and the play's strategy from there on. -/
+inductive Reach : St → (List ρ → Game α) → Prop
+  | start : Reach st₀ k₀
+  | skip {st : St} {K : List ρ → Game α} {m : ℕ} {b : M} {gs : Σ g : Game α, Strategy g} {st' : St}
+      {h : G st' = G st} (x : Fin m → Bool) :
+      Reach st K → plan st m b gs = .skip st' h → Reach st' fun l => K (mk b (List.ofFn x) :: l)
+  | step {st : St} {K : List ρ → Game α} {m : ℕ} {b : M} {gs : Σ g : Game α, Strategy g} {S : Step q G st m}
+      (c : S.C) (r : S.R) :
+      Reach st K → plan st m b gs = .step S → Reach (S.next c) fun l => K (mk b (List.ofFn (S.f (c, r))) :: l)
+
+/-- A reached continuation is `k₀` after the rounds played so far. -/
+theorem Reach.hist {st : St} {K : List ρ → Game α} (h : Reach mk G plan st₀ k₀ st K) :
+    ∃ hs : List ρ, K = fun l => k₀ (hs ++ l) := by
+  induction h with
+  | start => exact ⟨[], rfl⟩
+  | @skip _ _ _ b _ _ _ x _ _ ih =>
+    obtain ⟨hs, rfl⟩ := ih
+    exact ⟨hs ++ [mk b (List.ofFn x)], funext fun l => by simp⟩
+  | @step _ _ _ b _ S c r _ _ ih =>
+    obtain ⟨hs, rfl⟩ := ih
+    exact ⟨hs ++ [mk b (List.ofFn (S.f (c, r)))], funext fun l => by simp⟩
+
+variable {p : α → Prop}
+
+theorem dom_reach_aux
+    (hfin : ∀ st K (s : Strategy (K [])), Reach mk G plan st₀ k₀ st K → Dominated p (K []) s q (G st)) :
+    ∀ (ns : List ℕ) (st : St) (K : List ρ → Game α), Reach mk G plan st₀ k₀ st K →
+      ∀ s : Strategy (roundsThen mk K ns), Dominated p (roundsThen mk K ns) s q (G st)
+  | [], st, K, hR, s => hfin st K s hR
+  | n :: ns, st, K, hR, s => by
+    refine dom_send_left ?_
+    cases hp : plan st n s.1 ⟨_, s.2⟩ with
+    | skip st' hG =>
+      refine dom_coin_left fun x => ?_
+      rw [← hG]
+      exact dom_reach_aux hfin ns st' _ (Reach.skip x hR hp) _
+    | step S =>
+      refine S.reach _ _ _ (dom_coin_split S.f S.hf fun c r => ?_)
+      exact dom_reach_aux hfin ns (S.next c) _ (Reach.step c r hR hp) _
+
+/-- **The play's rounds driven through the live game**: the live game at `st₀` dominates the rounds then `k₀`, given
+the domination at every live state and continuation the reduction reaches. -/
+theorem dom_reach
+    (hfin : ∀ st K (s : Strategy (K [])), Reach mk G plan st₀ k₀ st K → Dominated p (K []) s q (G st))
+    (ns : List ℕ) (s : Strategy (roundsThen mk k₀ ns)) : Dominated p (roundsThen mk k₀ ns) s q (G st₀) :=
+  dom_reach_aux mk G plan st₀ k₀ hfin ns st₀ k₀ .start s
+
+end Drive
+
+/-- Domination carries across an equation of games. -/
+theorem Dominated.of_eq {β : Type} {p : α → Prop} {q : β → Prop} {g g' : Game α} (h : g = g') {G : Game β}
+    {s : Strategy g} (hd : Dominated p g' (h ▸ s) q G) : Dominated p g s q G := by
+  subst h
+  exact hd
+
+/-! ## Covering one game of the verifier by another -/
+
+/-- **`G'` is covered by `G`**: every strategy of `G'` is matched, in the probability of `q`, by one of `G`. -/
+def Covers {β : Type} (q : β → Prop) (G' G : Game β) : Prop :=
+  ∀ τ' : Strategy G', ∃ τ : Strategy G, prob q G' τ' ≤ prob q G τ
+
+theorem Dominated.covers {α β : Type} {p : α → Prop} {q : β → Prop} {g : Game α} {s : Strategy g} {G' G : Game β}
+    (h : Dominated p g s q G') (hc : Covers q G' G) : Dominated p g s q G := by
+  obtain ⟨τ', hτ'⟩ := h
+  obtain ⟨τ, hτ⟩ := hc τ'
+  exact ⟨τ, hτ'.trans hτ⟩
+
+theorem covers_coin {β : Type} {q : β → Prop} {C : Type} [Fintype C] [Nonempty C] {A B : C → Game β}
+    (h : ∀ c, Covers q (A c) (B c)) : Covers q (.coin C A) (.coin C B) := fun τ' => by
+  choose τ hτ using fun c => h c (τ' c)
+  exact ⟨(τ : (c : C) → Strategy (B c)), avg_mono hτ⟩
+
+theorem covers_coin_unit {β : Type} {q : β → Prop} {K : Unit → Game β} : Covers q (K ()) (.coin Unit K) :=
+  fun τ' => ⟨(fun _ => τ' : (u : Unit) → Strategy (K u)), (avg_const (prob q (K ()) τ')).symm.le⟩
+
+theorem covers_coin_prod {β : Type} {q : β → Prop} {C₁ C₂ : Type} [Fintype C₁] [Nonempty C₁] [Fintype C₂]
+    [Nonempty C₂] {K : C₁ × C₂ → Game β} :
+    Covers q (.coin C₁ fun a => .coin C₂ fun b => K (a, b)) (.coin (C₁ × C₂) K) := fun τ' => by
+  refine ⟨(fun x => τ' x.1 x.2 : (x : C₁ × C₂) → Strategy (K x)), ?_⟩
+  show (avg fun a => avg fun b => prob q (K (a, b)) (τ' a b)) ≤ avg fun x : C₁ × C₂ => prob q (K x) (τ' x.1 x.2)
+  rw [avg_prod]
+
+/-! ## A coin drawn in chunks -/
+
+/-- **One chunk of a coin, read as a round of `m` released bits**: the chunk `P` and extra bits `R` through a map that
+keeps the uniform law. -/
+structure Chunk (m : ℕ) where
+  P : Type
+  [fP : Fintype P]
+  [nP : Nonempty P]
+  R : Type
+  [fR : Fintype R]
+  [nR : Nonempty R]
+  f : P × R → (Fin m → Bool)
+  hf : Uniform f
+
+attribute [instance] Chunk.fP Chunk.nP Chunk.fR Chunk.nR
+
+/-- The chunks' values together. -/
+def Chunks {m : ℕ} : List (Chunk m) → Type
+  | [] => Unit
+  | c :: cs => c.P × Chunks cs
+
+instance Chunks.fintype {m : ℕ} : (cs : List (Chunk m)) → Fintype (Chunks cs)
+  | [] => inferInstanceAs (Fintype Unit)
+  | c :: cs => @instFintypeProd c.P (Chunks cs) _ (Chunks.fintype cs)
+
+instance Chunks.nonempty {m : ℕ} : (cs : List (Chunk m)) → Nonempty (Chunks cs)
+  | [] => inferInstanceAs (Nonempty Unit)
+  | c :: cs => @instNonemptyProd c.P (Chunks cs) _ (Chunks.nonempty cs)
+
+/-- The chunks drawn one after the other, then `K` at their values. -/
+def nested {β : Type} {m : ℕ} : (cs : List (Chunk m)) → (Chunks cs → Game β) → Game β
+  | [], K => K ()
+  | c :: cs, K => .coin c.P fun a => nested cs fun r => K (a, r)
+
+theorem covers_nested {β : Type} {q : β → Prop} {m : ℕ} :
+    ∀ (cs : List (Chunk m)) (K : Chunks cs → Game β), Covers q (nested cs K) (.coin (Chunks cs) K)
+  | [], _ => covers_coin_unit
+  | c :: cs, K => fun τ' => by
+    obtain ⟨τ₁, h₁⟩ := covers_coin (B := fun a => Game.coin (Chunks cs) fun r => K (a, r))
+      (fun a => covers_nested cs fun r => K (a, r)) τ'
+    obtain ⟨τ, h⟩ := covers_coin_prod (K := K) τ₁
+    exact ⟨τ, h₁.trans h⟩
+
+/-- **A coin split into chunks**: the first chunk, the rest, and the coin as their values. -/
+structure Split (X : Type) (m : ℕ) where
+  first : Chunk m
+  rest : List (Chunk m)
+  e : Chunks (first :: rest) ≃ X
+
+/-- The coin `X`, drawn chunk by chunk. -/
+theorem dom_split {α β : Type} {p : α → Prop} {q : β → Prop} {g : Game α} {s : Strategy g} {X : Type} [Fintype X]
+    [Nonempty X] {m : ℕ} (sp : Split X m) {K : X → Game β}
+    (h : Dominated p g s q (nested (sp.first :: sp.rest) fun y => K (sp.e y))) : Dominated p g s q (.coin X K) :=
+  dom_coin_equiv sp.e (h.covers (covers_nested _ _))
 
 end Verity.Game
