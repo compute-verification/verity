@@ -86,7 +86,7 @@ from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree,
 from verity.ml.commitments.window import window_domain
 from verity.ml.windows import interface as IF, rows as CS
 
-COMMIT_SLOTS = Path(__file__).resolve().parents[2] / "torch_gpu" / "commit_slots"
+COMMIT_SLOTS = Path(__file__).resolve().parents[4] / "benchmarks" / "torch_gpu" / "commit_slots"
 if str(COMMIT_SLOTS) not in sys.path:
     sys.path.insert(0, str(COMMIT_SLOTS))
 import slots as S  # noqa: E402
