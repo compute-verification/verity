@@ -20,8 +20,8 @@ REPO = Path(__file__).resolve().parents[4]
 
 COUNT = 1261
 
-COUNT += 26  # CIR-117's training kernels: `torch_attention`'s 7, `torch_loss`'s 13 and `torch_embedding`'s 6
-COUNT += 8  # CIR-117's step blocks: `torch_loss`'s cross-entropy 4, `torch_embedding`'s entry and tied, `torch_attention`'s 2
+COUNT += 26  # the training kernels: `torch_attention`'s 7, `torch_loss`'s 13 and `torch_embedding`'s 6
+COUNT += 6  # the step's blocks: `torch_attention`'s 2, `torch_loss`'s 2 rows, `torch_embedding`'s entry and tied
 
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2` (#4623), a line of its own so it merges with any other change to the count
 

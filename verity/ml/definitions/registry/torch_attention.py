@@ -28,7 +28,7 @@ so every lane keeps its own max, and each element's ``e = expf(x - m)`` uses its
 order (the padding's included), and the butterfly adds; IEEE addition is commutative, so every lane ends with the one sum the
 tree makes. The output is ``sum == 0 ? 0x7FC00000 : e / sum`` (div.rn). ``expf`` is libdevice's `__nv_expf`
 (`boolean_moe.nv_expf_in`, MUFU.EX2, `nv_expf_out`). Its MUFU.EX2 is `MufuEx2Ftz_v2`, which sm_120's MUFU.EX2 equals on all
-2^32 inputs (r20261027-024703-41d4).
+2^32 inputs.
 
 `SoftmaxTorchBackward` is `_softmax_backward_data`'s ``tmp = grad * output`` (its own FMUL kernel), then
 `softmax_warp_backward<float, float, float, L>`, which `host_softmax_backward` runs on an f32 row of N <= 1024. The lanes
@@ -332,38 +332,36 @@ def _repeat_kv_sig(S):
 
 
 _POSITION = Ports(params={"n": In(kind="position")})
-#: sm_120's words (an RTX PRO 6000, torch 2.14.0+cu130) from a 2-layer smollm2-135m training step at S = 256 and from the
-#: training run's shapes; `tests/test_torch_training_sm120.py` keeps a cut of each
-SM120_RUN = "the 2-layer smollm2-135m step r20261027-031630-ce8e"
-SM120_STEP = f"{SM120_RUN} (difftest r20261027-035245-3d66)"
-SM120_SHAPES = "the training shapes r20261027-040221-0e4d (difftest r20261027-040917-a3ba)"
-SM120_GPU = "sm_120 (RTX PRO 6000, torch 2.14.0+cu130)"
-SM120 = f"{SM120_GPU}, 0 mismatches; tests/test_torch_training_sm120.py"
-_HEADS = f"exact-model-tested; every q and k head (D = 64) of both layers of {SM120_STEP}: {SM120}"
-_ROWS = f"every row (N = 256) of both layers' 9 heads of {SM120_STEP} and rows of 512 and 1,024 keys of {SM120_SHAPES}"
+#: the words a GPU computed in a 2-layer training step at S = 256 and at the training run's shapes (B 8, S 512);
+#: `tests/test_torch_training_gpu.py` keeps a cut of each
+GPU_STEP = "a 2-layer training step at S = 256"
+GPU_SHAPES = "the training run's shapes"
+ON_GPU = "a cc 12.0 GPU (torch 2.14.0+cu130), 0 mismatches; tests/test_torch_training_gpu.py"
+_HEADS = f"exact-model-tested; every q and k head (D = 64) of both layers of {GPU_STEP}: {ON_GPU}"
+_ROWS = f"every row (N = 256) of both layers' 9 heads of {GPU_STEP} and rows of 512 and 1,024 keys of {GPU_SHAPES}"
 
 SoftmaxTorch = specialized(
     "SoftmaxTorch", 1, ("N",), lambda S: lambda C, *xs: softmax_warp_forward(C, xs), _softmax_sig,
     doc="torch's softmax_warp_forward on an f32 row of N <= 2048: per-lane max then the shfl_xor butterfly, expf(x - m), "
         "per-lane sums from +0 then the butterfly, sum == 0 ? qNaN : e / sum",
-    refuse=_refuse(N=MAX_FORWARD), conformance=f"exact-model-tested; as EagerSoftmax_v1's saved row, on {_ROWS}: {SM120}")
+    refuse=_refuse(N=MAX_FORWARD), conformance=f"exact-model-tested; as EagerSoftmax_v1's saved row, on {_ROWS}: {ON_GPU}")
 SoftmaxTorchBackward = specialized(
     "SoftmaxTorchBackward", 1, ("N",), lambda S: lambda C, *w: softmax_warp_backward(C, w[:S.N], w[S.N:]),
     _softmax_backward_sig,
     doc="torch's _softmax_backward_data on an f32 row of N <= 1024: tmp = g * y, per-lane sums from +0 then the shfl_xor "
         "butterfly, fma(-y, sum, tmp)",
-    refuse=_refuse(N=MAX_BACKWARD), conformance=f"exact-model-tested; inside EagerSoftmaxBackward_v1, on {_ROWS}: {SM120}")
+    refuse=_refuse(N=MAX_BACKWARD), conformance=f"exact-model-tested; inside EagerSoftmaxBackward_v1, on {_ROWS}: {ON_GPU}")
 EagerSoftmax = specialized(
     "EagerSoftmax", 1, ("N", "D"), lambda S: lambda C, *w: eager_softmax(C, S.D, w[:-1], w[-1]), _eager_sig,
     doc="HF eager attention's row: bf16(s * D^-0.5), the bf16 causal mask's add (+0 below n, 0xFF7F from n), "
         "SoftmaxTorch_v1 in f32 (the saved row) and its bf16 copy",
-    refuse=_refuse(N=MAX_FORWARD, D=None), ports=_POSITION, conformance=f"exact-model-tested; both outputs on {_ROWS}: {SM120}")
+    refuse=_refuse(N=MAX_FORWARD, D=None), ports=_POSITION, conformance=f"exact-model-tested; both outputs on {_ROWS}: {ON_GPU}")
 EagerSoftmaxBackward = specialized(
     "EagerSoftmaxBackward", 1, ("N", "D"), lambda S: lambda C, *w: eager_softmax_backward(C, S.D, w[:S.N], w[S.N:]),
     _eager_backward_sig,
     doc="HF eager attention's row backward: SoftmaxTorchBackward_v1 of f32(dp) and the saved row, F2FP, then "
         "bf16(f32(.) * D^-0.5)",
-    refuse=_refuse(N=MAX_BACKWARD, D=None), conformance=f"exact-model-tested; the score's gradient on {_ROWS}: {SM120}")
+    refuse=_refuse(N=MAX_BACKWARD, D=None), conformance=f"exact-model-tested; the score's gradient on {_ROWS}: {ON_GPU}")
 RopeHf = specialized(
     "RopeHf", 1, ("D",), lambda S: lambda C, *w: rope_hf(C, w[:S.D], w[S.D:]), _rope_sig,
     doc="HF apply_rotary_pos_emb on one bf16 head, cs = [cos[0:R] | sin[0:R]]: bf16(bf16(x c) + bf16(rotate_half(x) s))",
@@ -377,7 +375,7 @@ RepeatKvBackward = specialized(
     doc="repeat_kv's backward: sum_to over the NREP query heads, Reduce.cuh's thread fold (four f32 accumulators from +0, "
         "input i into i mod 4, combined in order), one F2FP",
     refuse=_refuse(NREP=None, N=1 << 20),
-    conformance=f"exact-model-tested; the key and value gradients (NREP = 3, N = 64) of both layers of {SM120_STEP}: {SM120}")
+    conformance=f"exact-model-tested; the key and value gradients (NREP = 3, N = 64) of both layers of {GPU_STEP}: {ON_GPU}")
 
 # --- the step's blocks ------------------------------------------------------------------------------------------------------
 
@@ -524,8 +522,8 @@ def _attention_backward_sig(S):
 
 _BLOCK = (f"exact-model-tested; against numerics.torch_blocks' model, composed of its Definitions' models, at N = 16 "
           f"(tests/test_torch_attention.py), "
-          f"which is the GPU's on every output and intermediate of both layers' attention, forward and backward, of {SM120_RUN} "
-          f"at S = 256 (difftest r20261027-051850-ed47, 10,452,992 words): {SM120_GPU}, 0 mismatches; its bmm's are "
+          f"which is the GPU's on every output and intermediate of both layers' attention, forward and backward, of {GPU_STEP} "
+          f"(10,452,992 words): a cc 12.0 GPU (torch 2.14.0+cu130), 0 mismatches; its bmm's are "
           f"cublas_bf16.attention_bmm's wherever that binds (S = 256 and 512 at D = 64, TRAIN_CAPTURE)")
 
 EagerAttentionTorch = CompositeDefinition(
