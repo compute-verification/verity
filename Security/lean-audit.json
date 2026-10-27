@@ -9128,6 +9128,12 @@
    "assumptions": [],
    "type_hash": "b6f79294b8555ef604979d0178cb818abc5d0cc785b14c56841ad73ce13321f6"
   },
+  "Pous.Claims.StreamedWipeMeetsDisk_fails": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Claims.StreamedWipeMeetsDisk_meets": {
+   "owner": "@memory-accounting"
+  },
   "Pous.Claims.StreamedWipeMeetsReadsTight_fails": {
    "owner": "@memory-accounting",
    "signature": [
@@ -9571,6 +9577,12 @@
    "assumptions": [],
    "type_hash": "610f906d2a73a8612b035d1cfe33141715f61fda55f081c36162e0dc9afda003"
   },
+  "Pous.SecurityProofs.StreamedWipeMeetsDisk": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsDisk : Pous.Guarantees.StreamedWipeMeetsDisk"],
+   "assumptions": [],
+   "type_hash": "430273ee4c652edc6128c0c26ade5e47ce423ab8791e58847ba3e6aa0b8621d9"
+  },
   "Pous.SecurityProofs.StreamedWipeMeetsFamily": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.StreamedWipeMeetsFamily : Pous.Guarantees.StreamedWipeMeetsFamily"],
@@ -9600,9 +9612,6 @@
    "signature": ["Pous.SecurityProofs.StreamedWipeMeetsServer5GB : Pous.Guarantees.StreamedWipeMeetsServer5GB"],
    "assumptions": [],
    "type_hash": "fef39696ec0fc39f5753e24cff3467284db50b30844bb991e0472f282a53be5e"
-  },
-  "Pous.SecurityProofs.StreamedWipeMeetsDisk": {
-   "owner": "@memory-accounting"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsServer8H200": {
    "owner": "@memory-accounting",
@@ -24434,6 +24443,13 @@
     "Pous.SecurityProofs.P2RingGradedOfRoundSecure"
    ]
   },
+  "Definitions.Pous.Claims.StreamedWipeDisk": {
+   "digest": "d9e45f5bfa19ab2e87da2aed77b092b8378e674f3879ccd1a553f541a0ed20a9",
+   "definitions": {
+    "Pous.Claims.StreamedWipeMeetsDisk": "2d005ca2e86ad23bd81dbdd9f1d026ef1a601f5f58321001f062fbd49c579d05"
+   },
+   "guarantees": ["Pous.SecurityProofs.StreamedWipeMeetsDisk"]
+  },
   "Definitions.Pous.Claims.StreamedWipeServer": {
    "digest": "e97ff87e58babd6b667a63953722c323216ae99c32daf4c8ecd05a85d71d3683",
    "definitions": {
@@ -24726,6 +24742,7 @@
     "Pous.SecurityProofs.StreamedWipeMeets141GB5",
     "Pous.SecurityProofs.StreamedWipeMeets2600GB",
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
+    "Pous.SecurityProofs.StreamedWipeMeetsDisk",
     "Pous.SecurityProofs.StreamedWipeMeetsFamily",
     "Pous.SecurityProofs.StreamedWipeMeetsReads",
     "Pous.SecurityProofs.StreamedWipeMeetsReadsTight",
@@ -24871,6 +24888,13 @@
     "Pous.Guarantees.StreamedWipeMeets2600GB": "2fe28ace401346f9cfd93b710cc10c4c9e7ac627f1ac2fe3fb98e51a313dc57b"
    },
    "guarantees": ["Pous.SecurityProofs.StreamedWipe", "Pous.SecurityProofs.StreamedWipeMeets2600GB"]
+  },
+  "Definitions.Pous.Guarantees.StreamedWipeDisk": {
+   "digest": "9a33e3c08c8c8d2559eb2941d7cf0626eaa71d258720dcce7142f35fa2f7ac12",
+   "definitions": {
+    "Pous.Guarantees.StreamedWipeMeetsDisk": "17b828a9ac87c832001332827857d859f8e4b2d765a9ee02e915205192e7d62b"
+   },
+   "guarantees": ["Pous.SecurityProofs.StreamedWipeMeetsDisk"]
   },
   "Definitions.Pous.Guarantees.StreamedWipeFamily": {
    "digest": "79bb928a4f65347dcff796f9092b4e582881d0d656b0cdf0fa559ee23d117e5a",
@@ -25582,6 +25606,7 @@
     "Pous.SecurityProofs.StreamedWipeMeets141GB5",
     "Pous.SecurityProofs.StreamedWipeMeets2600GB",
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
+    "Pous.SecurityProofs.StreamedWipeMeetsDisk",
     "Pous.SecurityProofs.StreamedWipeMeetsFamily",
     "Pous.SecurityProofs.StreamedWipeMeetsReads",
     "Pous.SecurityProofs.StreamedWipeMeetsReadsTight",
@@ -25622,6 +25647,7 @@
     "Pous.Claims.StreamedWipeMeetsServerH200_meets",
     "Pous.Claims.StreamedWipeMeetsServer_fails",
     "Pous.Claims.StreamedWipeMeetsServer_meets",
+    "Pous.SecurityProofs.StreamedWipeMeetsDisk",
     "Pous.SecurityProofs.StreamedWipeMeetsReadsTight",
     "Pous.SecurityProofs.StreamedWipeMeetsServer",
     "Pous.SecurityProofs.StreamedWipeMeetsServer5GB",
