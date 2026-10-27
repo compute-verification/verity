@@ -41,7 +41,11 @@ every machine of a census deployment, the pooled total first and the per-window 
   `{"verdict": "missing", "owner": LANE}`, and one whose file raises reports `error`. Neither is ever a verdict.
 - `legs/sampled_proofs.py`: sampled proofs, real. `benchmarks/prove_path/records_audit.py` on the window, from its records
   alone, at k = 64 and δ = 1/100 by default: live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of
-  record's audit record, turned into sampled proofs' answer (`verity/sampled-proofs/one-stage/v1`). It also hands on
+  record's audit record, turned into sampled proofs' answer (`verity/sampled-proofs/one-stage/v1`). Onsite's integrity
+  case is one-stage v2's, the one `SampledProofs.OneStageZk` reads (the audit on the proofs themselves, its `blobs` the
+  session's files, which `onsite check` reads after the evidence): the leg writes it to `sampled-proofs.case.json` when
+  the window has one (v2 verifies one table's `--zk` sessions; otherwise `case-check.json`'s `v2_error` says why, and
+  onsite rejects integrity), and v1's case, below, to `sampled-proofs.v1.case.json`. Before v2 it handed on as
   `sampled-proofs.case.json`, the case `SampledProofs.OneStage` reads (written by `benchmarks/one_stage/a5.py`), with
   whether `OneStage.check`'s Python on it gives the subprotocol's verdict (`case-check.json`).
 - `verity_all_protocols/compose.py`: the composed verdict. A rejecting subprotocol rejects it (onsite's reject dominance). It is
