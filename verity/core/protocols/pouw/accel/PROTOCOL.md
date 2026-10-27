@@ -254,7 +254,8 @@ cap, it multiplies δ_coin by up to the harmonic number H_G, ×16.8 at H200 V4 (
 
 ### Coins
 
-The challenger issues every live coin, in each replica's one sequence of runs. Each coin is derived inside the challenger
+The challenger issues every live coin, in each replica's one sequence of runs; under the MVP it runs on the replica's
+certifier device (see "The boundary"). Each coin is derived inside the challenger
 as `derive(K_ch, "verity/pouw-accel/<kind>/v1", ctx)` (`verity.ml.randomness`), where:
 - K_ch is the challenger's secret for the period, and never leaves it;
 - kind is `weights` (the weight-side coins), `seeds` (a block's dither and noise seeds) or `check` (its check coin);
@@ -286,16 +287,19 @@ k_exfil. ACCEL needs these of the challenger and the certifier:
 - **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
   the certifier counts.
-  - So the challenger and the certifier are one device at the boundary, or the challenger's stream reaches the certifier
-    only over a path on auditor hosts.
-  - **A deployment whose path crosses hosts the prover controls** needs an encrypted, authenticated path, under a key
-    the auditor provisions to both ends, and that key goes to Daniel. A SHA-512 keystream with HMAC-SHA-512, at the
-    measured 0.86 GB/s a core, takes about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an RTX PRO
-    6000 V4 replica's 24.0 GB/s.
+  - **The MVP: the certifier's device is the challenger** (Daniel, 26 Oct, 1:30 PM PDT). The device that runs the
+    replica's network certifier produces its live coins, so each coin is made at the boundary it enters: no path carries
+    one in from outside and no key is needed for it. A multi-node replica's challenger is one of its certifier devices,
+    and its coins reach the other servers only through the certifiers' tunnels.
+  - After the MVP, a challenger on a device of its own may reach the certifier only over a path on auditor hosts. A path
+    across hosts the prover controls would need encryption and authentication under a key the auditor provisions to both
+    ends, and that key would go to Daniel. A SHA-512 keystream with HMAC-SHA-512, at the measured 0.86 GB/s a core, takes
+    about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an RTX PRO 6000 V4 replica's 24.0 GB/s.
   - Without it an outside machine reads the dither on the path and serves the block, and ε_skip rises to the credited
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
-- **The exclusion is exact** (what makes `CertifierSeesImports` true).
+- **The exclusion is exact** (what makes `CertifierSeesImports` true). Under the MVP the coins are made on the
+  certifier's device and are never imports, so k_infil leaves nothing out. A challenger of its own is excluded only so:
   - k_infil leaves out only a coin message that verifies under the challenger's key and carries its expected (period,
     replica, sampling block, kind, sequence number) once, at its expected length.
   - Every other byte counts: malformed, unverifiable, duplicate, replayed or late messages into k_infil, and the
@@ -306,18 +310,21 @@ k_exfil. ACCEL needs these of the challenger and the certifier:
   own schedule: fixed sizes, fixed order, no flow control from inside, and a drop is a visible failure. Otherwise the
   packets' delays and order carry uncounted bits, and V4's ε_net grows ×1.04 to ×7.3.
 - **One clock.** The certifier stamps the coins' entry into the boundary (t_b, tc_b) and every receipt and arrival
-  (the operand roots, arrive_b, ansAt_b) on its own clock. Two clocks would have to stay within 1.03 s of each other.
+  (the operand roots, arrive_b, ansAt_b) on its own clock, which under the MVP is the challenger's too. A challenger of
+  its own would have to keep its clock within 1.03 s of the certifier's.
 - **Receipts are authenticated.** The challenger learns that roots are in only from the certifier's signed receipts,
   whose digests are in the coins' contexts and messages. A forged receipt would draw a check coin before the roots.
-- **A multi-node replica has one boundary**, carried by certifier-to-certifier tunnels: authenticated, encrypted where
-  coins ride them, with the replica's certifiers keeping one count. Everything else crossing between its nodes counts.
+- **A multi-node replica has one boundary**, carried by certifier-to-certifier tunnels, with the replica's certifiers
+  keeping one count and the challenger's device stamping every time. The tunnels are authenticated and encrypted end to
+  end, since coins ride them and the prover chooses whatever else does, under a key the auditor provisions to the
+  replica's certifier devices; that key goes to Daniel. Everything else crossing between its nodes counts.
   V4's replica is 12 H200s (1.5 nodes) or 17 RTX PRO 6000s (2.1 nodes). Counting its inter-node expert and KV traffic
   would fail honest replicas, and excluding that traffic by address would let an outside machine join as a node.
 
 **What each device signs.**
 - The challenger, per coin message: the period, replica, sampling block, kind, sequence number, issue time and the
   payload's digest. A check coin's message also carries the value-root receipt's digest. It signs them with LMS in Merkle
-  batches, one signature per batch root, and the certifier checks each live with HMAC-SHA-512.
+  batches, one signature per batch root. A challenger of its own is checked live by the certifier with HMAC-SHA-512.
 - The certifier: its receipts (operand roots, value roots, answers), the coins' entry times, k_infil and k_exfil, and its
   counts of rejected messages.
 - All of it is witness and never reaches the auditor in the clear.
@@ -414,8 +421,10 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
     the challenger's draw for the weight-side coins (P17's κ_re);
   - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s. Until the Lean is restated at v3.2's words,
     η is priced at the measured p ≤ 2.8e-5, and POOL-THM's ζ at 2^-16.
-- **The challenger's and the certifier's specs** (network-accounting, infra and proofs): confidential coins, the exact
-  exclusion, re-clocking and one clock, as implemented.
+- **The challenger's and the certifier's specs** (network-accounting, infra and proofs): the challenger on the
+  certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node tunnels, as implemented.
+- **The tunnels' key** goes to Daniel: V4's replicas span 1.5 (H200) or 2.1 (RTX PRO 6000) nodes, so D6's V4 rows
+  need it.
 - **The firewall** (@proofs, with C-Flock's ZK server):
   - that it runs a replica's answer sessions concurrently, and its release schedule. If it can't, RT-SIZE's queued check
     coins are the fix (CMP-158, RS5), and `Timed` must then read the check coin's time apart from the selection's;
