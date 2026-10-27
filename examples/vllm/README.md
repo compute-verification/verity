@@ -29,7 +29,7 @@ takes `Claims.Sampling.KS` as a hypothesis, and the theorem that gives it at the
 Llama-3.2-1B (`unsloth/Llama-3.2-1B` at `9535bd9b1d1dea6acafbdc4813b728796aeb28da`), bf16, batch-invariant eager, served
 by vLLM on one RTX PRO 6000 through `verity_vllm`'s committing OpenAI endpoint: this is today's run of record, and
 `run.sh` passes the workload's own model and precision (`--precision pin`). `served_verdicts.sh`'s own default, int8 on an
-H200, is tonight's served run (Tue 27 Oct, 6 PM PDT). Each closed sampling period is sealed, its
+H200, is tonight's served run, Tue 27 Oct, 6 PM PDT. Each closed sampling period is sealed, its
 values committed as the serving runs, and one sampling period is audited by sampled proofs. What attaches Verity to vLLM is
 `integrations/vllm/`, and the chain an audit runs is `benchmarks/one_stage/served_verdicts.sh`'s. This directory holds
 what is the example's own: its workload, its placement and its commands.

@@ -80,7 +80,7 @@ Llama-3.2-1B in bf16 on one RTX PRO 6000 goes through sampled proofs end to end 
 [`examples/vllm`](examples/vllm/README.md): vLLM serves it, its values are committed under SHA-512, live coins draw proof
 blocks, C-Flock `--zk` proves them, and the Lean verifier accepts them and refuses every tampered case. Each drawn proof
 block is part of one serving step's circuit, not yet of the whole served run's. The int8 served run on an H200, the
-default of `benchmarks/one_stage/served_verdicts.sh`, is tonight's (Tue 27 Oct, 6 PM PDT).
+default of `benchmarks/one_stage/served_verdicts.sh`, is tonight's, Tue 27 Oct, 6 PM PDT.
 
 Not yet:
 

@@ -74,8 +74,8 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   values, and audits it: live coins draw proof blocks, C-Flock `--zk` proves them and the Lean verifier checks them, with a
   verdict per sampling period. Its workload is in its own `workloads/`, its placement is `placement.toml`, which `run.sh`
   reads, and its scripts reach the integration by `PYTHONPATH`; it is not a package. It is not `placed`: its runs of record
-  ran the Lean verifier on the GPU node with the endpoint and the prover. The int8 served run on an H200 is tonight's
-  (Tue 27 Oct, 6 PM PDT).
+  ran the Lean verifier on the GPU node with the endpoint and the prover. The int8 served run on an H200 is tonight's,
+  Tue 27 Oct, 6 PM PDT.
 - `h200/` (`run` `runs`, `proof` `none`): remote's sampled-proofs half at a frozen shape on one H200. The
   frozen multi-query attention shape is served on one GPU node with every value committed a step. `verity example h200
   --out OUT` runs its step driver, `run.py` (on the CPU at small shapes, or an H200 at the frozen shape), and writes a

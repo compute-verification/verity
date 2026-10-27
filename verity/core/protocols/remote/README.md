@@ -157,10 +157,10 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
   coin. A protocol-code fact still to prove.
 - `Properties.Pouw.Period.RegisteredBeforeDraw`: each window's registration is fixed before its draw coin. It states
   the order only, and the binding it is used for also needs the rows committed by the registration, which the deployed
-  path doesn't do yet: its registered roots are tags, with no row committed (`anchors []`; CMP-91 is the fix).
+  path doesn't do yet: its registered roots are tags, with no row committed (`anchors []`).
 - `Properties.Pouw.Period.SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet
-  it: the loop is given its salt before it serves, and nothing in the record binds the salt to a live coin (CMP-90 is
-  the fix; `Security/Properties/Pouw/Period.lean`, `SaltIsLiveCoin`'s docstring).
+  it: the loop is given its salt before it serves, and nothing in the record binds the salt to a live coin (`Security/Properties/Pouw/Period.lean`,
+  `SaltIsLiveCoin`'s docstring).
 - `Properties.Pouw.Period.StagedPins`: the staged statement the service proves pins the flat tile the receipts are
   claims of. Neither side has a Lean function yet.
 - `Accounting.Assumptions.TS.OperandHMu` (H-μ⁺, the Duo receipts' premise): a cheater can't predict its skipped words'
