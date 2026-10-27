@@ -86,13 +86,26 @@ FUSED = (("qkv", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")), 
          ("up", ("mlp.gate_proj", "mlp.up_proj")), ("down", ("mlp.down_proj",)))
 ETA = 1 - 2.8e-5
 DELTA = 0.01
-#: θ's sm_120 INT8 dense tensor peak (benchmarks/pouw/machine_model `theta --device sm_120`): 1,024 MACs a clock an SM,
-#: 188 SMs, at the SKU's maximum boost clock; the node's own maximum SM clock beside it
-MACS_PER_CLOCK_SM, SMS, SKU_MHZ, NODE_MHZ = 1024, 188, 2617, 2430
 
 
-def peak_macs(mhz: float) -> float:
-    return MACS_PER_CLOCK_SM * SMS * mhz * 1e6
+def load_card(spec: str) -> dict:
+    """The card's numbers (verity/hardware's card file, one TOML a SKU): a path to the file, or a SKU that
+    `verity.hardware.load` reads."""
+    if Path(spec).is_file():
+        import tomllib
+        return tomllib.loads(Path(spec).read_text(encoding="utf-8"))
+    try:
+        from verity.hardware import load
+    except ImportError:
+        raise SystemExit(f"card {spec!r}: no such file, and verity.hardware isn't in this tree; pass --card with the "
+                         "card file (verity/hardware/cards/<sku>.toml)") from None
+    return load(spec)
+
+
+def theta(card: dict, mhz: float | None = None) -> float:
+    """θ, the card's dense s8 tensor peak in MACs a second: rate.tensor x sm.count x the SM clock (its ceiling, or
+    `mhz`)."""
+    return card["rate"]["tensor"]["value"] * card["sm"]["count"]["value"] * (mhz or card["clock"]["sm"]["value"]) * 1e6
 
 
 def H(tag: str, *parts: bytes) -> bytes:
@@ -762,6 +775,7 @@ def cmd_run(a: argparse.Namespace) -> int:
     configure(prep)
     row = prep["row"]
     plan = Plan(a.blocks, a.steps, a.q)
+    card = load_card(a.card) if a.card else None
     secret = os.urandom(64)
     source = dict(prep["source"])
     if (cfg / "capture.json").exists():
@@ -799,7 +813,7 @@ def cmd_run(a: argparse.Namespace) -> int:
         for p in work.glob("challenger-*"):
             shutil.copytree(p, out / "challenger" / p.name.removeprefix("challenger-"), dirs_exist_ok=True)
         shutil.rmtree(work, ignore_errors=True)
-    summary = summarize(results, plan, source)
+    summary = summarize(results, plan, source, card)
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     print(json.dumps(summary, indent=1))
     neg = [r for r in results if r["arm"] == "proto" and r["cheat"] != "none"]
@@ -858,7 +872,7 @@ def cmd_diag(a: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
-def summarize(results: list[dict], plan: Plan, source: dict | None = None) -> dict:
+def summarize(results: list[dict], plan: Plan, source: dict | None = None, card: dict | None = None) -> dict:
     honest = [r for r in results if r["arm"] == "proto" and r["cheat"] == "none"]
     plain = [r for r in results if r["arm"] == "plain"]
     neg = [r for r in results if r["arm"] == "proto" and r["cheat"] != "none"]
@@ -874,10 +888,7 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None) -> di
         "plan": plan.__dict__, "periods": len(honest),
         "accepted": sum(r["accepted"] for r in honest),
         "credited_macs": credited, "wall_s": wall,
-        "peak_macs_s": {"sku_2617": peak_macs(SKU_MHZ), "node_2430": peak_macs(NODE_MHZ)},
-        "certified_share": {"sku_2617": credited / (peak_macs(SKU_MHZ) * wall) if wall else None,
-                            "node_2430": credited / (peak_macs(NODE_MHZ) * wall) if wall else None},
-        "plain_share_of_peak": {"sku_2617": med([r["macs"] / r["wall_s"] / peak_macs(SKU_MHZ) for r in plain])},
+        "card": None, "peak_macs_s": {}, "certified_share": {}, "plain_share_of_peak": {},
         "proto_s_per_step": med([per_step(r) for r in honest]), "plain_s_per_step": med([per_step(r) for r in plain]),
         "gamma_wall": None, "gamma_gpu": None,
         "gaps_s": med([g for r in honest for g in r["gaps_s"]]),
@@ -887,15 +898,22 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None) -> di
         "verdicts": [r["verdict"] for r in honest + neg],
         "negative_refused": [not r["accepted"] for r in neg],
     }
-    if out["sm_mhz_median"] and wall:
-        run = peak_macs(out["sm_mhz_median"])
-        out["peak_macs_s"]["run_clock"] = run
-        out["certified_share"]["run_clock"] = credited / (run * wall)
-        out["plain_share_of_peak"]["run_clock"] = med([r["macs"] / r["wall_s"] / run for r in plain])
+    if card:
+        out["card"] = {"sku": card["sku"], "clock_mhz": card["clock"]["sm"]["value"], "theta_macs_s": theta(card),
+                       "tensor": card["rate"]["tensor"]["value"], "sms": card["sm"]["count"]["value"],
+                       "clock_source": card["clock"]["sm"]["source"], "tensor_source": card["rate"]["tensor"]["source"]}
+        for key, clock in (("card", None), ("run_clock", out["sm_mhz_median"])):
+            if key == "run_clock" and not clock:
+                continue
+            peak = theta(card, clock)
+            out["peak_macs_s"][key] = peak
+            out["certified_share"][key] = credited / (peak * wall) if wall else None
+            out["plain_share_of_peak"][key] = med([r["macs"] / r["wall_s"] / peak for r in plain])
     if out["proto_s_per_step"] and out["plain_s_per_step"]:
         out["gamma_wall"] = out["proto_s_per_step"] / out["plain_s_per_step"]
-        plain_gpu = med([gpu_step(r) for r in plain])
-        out["gamma_gpu"] = med([gpu_step(r) for r in honest]) / plain_gpu if plain_gpu else None
+        plain_gpu = out["plain_gpu_s_per_step"] = med([gpu_step(r) for r in plain])
+        out["proto_gpu_s_per_step"] = med([gpu_step(r) for r in honest])
+        out["gamma_gpu"] = out["proto_gpu_s_per_step"] / plain_gpu if plain_gpu else None
     return out
 
 
@@ -920,6 +938,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("lib", help="libv31.so (v31lib.build_lib), or `ref`: v31.py's reference on the CPU")
     p.add_argument("out")
     p.add_argument("--coins", default="local", help="local (development, not of record) or gate:USER@HOST")
+    p.add_argument("--card", help="θ's card: verity/hardware's card file, or its SKU (verity.hardware.load)")
     p.add_argument("--main", required=True, help="the verifier's copy of main's first-parent line (git rev-list --first-parent)")
     p.add_argument("--peer")
     p.add_argument("--challenger-key")

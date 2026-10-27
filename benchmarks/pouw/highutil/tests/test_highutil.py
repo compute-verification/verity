@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 import period as P
+import terms
 
 
 def test_eps_skip_at_delta_one_percent():
@@ -41,6 +42,26 @@ def test_seeded_activations_look_quantized_and_rarely_reach_full_range():
     assert a.min() >= -127 and a.max() <= 127
     assert 0 < (np.abs(a) > 32).mean() < 2 / 1024
     assert 7 < a[np.abs(a) <= 32].std() < 11
+
+
+def test_the_card_s_share_and_the_terms_of_the_rest_sum_to_one():
+    P.configure({"layers": [["a", 256, 512]], "m": 1024, "nb": 4})
+    card = {"sku": "test", "clock": {"sm": {"value": 2000, "source": "s"}}, "rate": {"tensor": {"value": 1024, "source": "s"}},
+            "sm": {"count": {"value": 100}}}
+    assert P.theta(card) == 1024 * 100 * 2000e6 and P.theta(card, 1500) == 1024 * 100 * 1500e6
+    steps, macs = 10, 10 * P.step_macs()
+    blocks = lambda gpu_ms: [{"gpu_ms": gpu_ms, "sm_mhz": 1500}]  # noqa: E731
+    results = [{"arm": "proto", "cheat": "none", "credited_macs": macs, "macs": macs, "wall_s": 0.02, "steps": steps,
+                "blocks": blocks(18.0), "gaps_s": [], "session_open_s": 1.0, "q": 64, "eps_skip": 0.07, "accepted": True,
+                "verdict": "ACCEPT"},
+               {"arm": "plain", "cheat": "none", "macs": macs, "wall_s": 0.012, "steps": steps, "blocks": blocks(11.0)}]
+    s = P.summarize(results, P.Plan(1, steps, 64), card=card)
+    assert math.isclose(s["certified_share"]["card"], macs / (P.theta(card) * 0.02))
+    assert math.isclose(s["certified_share"]["run_clock"], s["certified_share"]["card"] * 2000 / 1500)
+    t = terms.terms(s, {"busy_share": 0.9, "gemm_share": 0.7})
+    assert math.isclose(t["sum"], 1) and math.isclose(t["terms"]["clock"], 0.25)
+    assert math.isclose(t["terms"]["certified"], s["certified_share"]["card"])
+    assert math.isclose(t["eps"], 0.07 + 1 - t["terms"]["certified"])
 
 
 @dataclass

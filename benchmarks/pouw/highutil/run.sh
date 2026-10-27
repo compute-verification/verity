@@ -11,7 +11,9 @@
 #
 # COINS: local (default; a development session on this machine, not of record) or gate:USER@HOST (vy-challenger-1 with
 # PEER, CHALLENGER_KEY, the deployment's key record, and GATE_KEY); MAIN (default inputs/main.txt): the verifier's copy of
-# main's first-parent line. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
+# main's first-parent line. CARD (default inputs/card.toml, sent with --send; skipped when absent): θ's card, verity/hardware's
+# card file or its SKU, for summary.json's certified share at the card's clock ceiling and, with NSYS=1, terms.json (terms.py:
+# where the rest of θ x wall goes); nvidia-smi's clock event reasons go to clocks-{before,after}.txt. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
 # (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP and L
 # (default 512 and 16384: S = 1 at every layer): prep's; NSYS=1: after the periods, Nsight Systems over one plain and one protocol period (their
 # kernels' share of the GPU's time); LEASE (default gpu-lease 1 --wait --max-min 25 --); PY (default uv run -q --no-project
@@ -28,6 +30,9 @@ TORCH_PY=${TORCH_PY:-uv run -q --no-project --with torch --with numpy --with saf
 CKPT=${CKPT:-/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7}
 ROW=${ROW:-8192} LP=${LP:-512} L=${L:-16384} BLOCKS=${BLOCKS:-4} STEPS=${STEPS:-300} Q=${Q:-2048} PERIODS=${PERIODS:-2} NEGATIVE=${NEGATIVE-skip:2@2}
 COINS=${COINS:-local} MAIN=${MAIN:-${RESEARCH_RUN_DIR:-.}/inputs/main.txt}
+CARD=${CARD:-${RESEARCH_RUN_DIR:-.}/inputs/card.toml}
+CARD_ARGS=()
+if [ -f "$CARD" ] || [ "${CARD%.toml}" = "$CARD" ]; then CARD_ARGS=(--card "$CARD"); fi
 W=$(mktemp -d /dev/shm/highutil.XXXXXX)
 export W
 trap 'rm -rf "$W"' EXIT
@@ -59,10 +64,12 @@ if [ "$COINS" != local ]; then
 fi
 LEASE=${LEASE-gpu-lease 1 --wait --max-min 25 --}
 export D PY TORCH_PY CKPT LIB BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN NSYS=${NSYS:-0}
-export GATE_ARGS="${GATE[*]}"
+export GATE_ARGS="${GATE[*]}" CARD_ARGS="${CARD_ARGS[*]}"
+[ -f "$CARD" ] && cp "$CARD" "$O/card.toml"
 $LEASE bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
+  nvidia-smi -q -d PERFORMANCE,CLOCK ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/clocks-before.txt" 2>&1
   nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,utilization.gpu,temperature.gpu --format=csv -lms 500 \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/smi.csv" 2>&1 &
   smi=$!
@@ -77,10 +84,11 @@ $LEASE bash -c '
   $TORCH_PY $D/period.py diag "$W/cfg" "$LIB" "$O" > "$O/diag.log" 2>&1
   echo "diag rc $?" >> "$O/rc.txt"
   r=0
-  [ "$PERIODS" = 0 ] || $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$O" --coins "$COINS" --main "$MAIN" $GATE_ARGS --blocks "$BLOCKS" --steps "$STEPS" \
+  [ "$PERIODS" = 0 ] || $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$O" --coins "$COINS" --main "$MAIN" $GATE_ARGS $CARD_ARGS --blocks "$BLOCKS" --steps "$STEPS" \
     --q "$Q" --periods "$PERIODS" --negative "$NEGATIVE" > "$O/period.log" 2>&1
   r=$?
   echo "period rc $r" >> "$O/rc.txt"
+  nvidia-smi -q -d PERFORMANCE,CLOCK ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/clocks-after.txt" 2>&1
   if [ "$NSYS" = 1 ]; then
     for arm in plain proto; do
       HU_CLOCK=0 nsys profile -o "$O/nsys-$arm" --force-overwrite true --trace cuda $TORCH_PY $D/period.py run "$W/cfg" "$LIB" "$W/nsys-$arm" \
@@ -90,6 +98,10 @@ $LEASE bash -c '
       nsys export --type sqlite --force-overwrite true -o "$O/nsys-$arm.sqlite" "$O/nsys-$arm.nsys-rep" >> "$O/nsys.log" 2>&1
       $PY $D/timeline.py "$O/nsys-$arm.sqlite" > "$O/timeline-$arm.json" 2>> "$O/nsys.log"
     done
+    if [ -s "$O/summary.json" ] && [ -n "$CARD_ARGS" ]; then
+      $PY $D/terms.py "$O/summary.json" "$O/timeline-proto.json" > "$O/terms.json" 2>> "$O/nsys.log"
+      echo "terms rc $?" >> "$O/rc.txt"
+    fi
   fi
   kill $smi 2>/dev/null
   exit $r
