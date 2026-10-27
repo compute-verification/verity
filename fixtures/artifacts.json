@@ -109,8 +109,8 @@
   "art:4f366f8dc159047d337d29e0069db6af2b428eaba50830cf1fd8b8c8de886be3": "integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:67f611682f489222d26ee0af3be4eb026fe57860f622f24be20af0667cef1379": "integrations/vllm/tests/protocols/fixtures/challenger_periods",
   "art:b0d3050963bdd8f3ba1a9cf5587f4a6328f703251e4bd90c2f9fdbea0a471d25": "verity/ml/flock/tests/fixtures/f1-gate",
-  "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": "verity/ml/flock/tests/fixtures/forged-proofs",
-  "art:b9cc903cef2f33e1034814e305ebb8bb96ca47cb27038d32c4ca0e783195d8c2": "verity/ml/flock/tests/fixtures/zk-sessions",
+  "art:d3816979b33fb024f9c3352f9592402abfd2f4cccc261e4d24554b8538473fa6": "verity/ml/flock/tests/fixtures/forged-proofs",
+  "art:e42123b32db8b1fa8c31b7a341a2e5e8f20d71093f5815decaa750f9ad488cb4": "verity/ml/flock/tests/fixtures/zk-sessions",
   "art:0278327a962ffc33ccb55d29447bacc30616287a509490caf71215b3e24c63e8": "verity/ml/commitments/tests/fixtures/layouts",
   "art:5a029694eb35f29f9babee787dc9a2d875575e305788eaf59e0356524c9be2ff": "benchmarks/network_e2e/encodings/tests/fixtures",
   "art:ec57810bfc93888b6911fddb9315bc7e840658398e43446d8c4f3bf603f2f850": "benchmarks/network_e2e/tests/data/endpoint_carry/advice_trace.jsonl",
@@ -171,8 +171,12 @@
       "art:cd6a7a1b0c579c5b4ae3553689e9918cc459822bca72ec74144ba2e79a1410ee",
       "art:d0158e94e1964b37d698d880ee8c6944f7271b3dcc48bda55ea0741e3e557073"
     ],
-    "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": [
+    "art:d3816979b33fb024f9c3352f9592402abfd2f4cccc261e4d24554b8538473fa6": [
+      "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5",
       "art:b77622446779b9f9b1e46861300e60973433f96d4edf43322acff35d13502d35"
+    ],
+    "art:e42123b32db8b1fa8c31b7a341a2e5e8f20d71093f5815decaa750f9ad488cb4": [
+      "art:b9cc903cef2f33e1034814e305ebb8bb96ca47cb27038d32c4ca0e783195d8c2"
     ]
   }
 }

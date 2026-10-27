@@ -13,9 +13,10 @@ import pytest
 from verity_flock.rec_algebra import fast100
 from verity_flock.rec_live import PT_LOCAL
 
-#: `art:b9cc903c`, test_lean_zk.py's sessions, which `suites.py` fetches before the suite runs
+#: `art:e42123b3`, test_lean_zk.py's sessions, which `suites.py` fetches before the suite runs
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zk-sessions"
-SESSIONS = {"selftest/honest": 25, "m26/l0000-618392": 26, "j2/l0000-619480": 25, "drawn/l0000-621181": 25}
+#: each set's honest session and its m
+SESSIONS = {"selftest/honest": 25, "m26/l*": 26, "j2/l*": 25, "drawn/l*": 25}
 
 
 def zk_rounds(m: int, k_log: int, regions: int) -> int:
@@ -39,7 +40,8 @@ def test_recorded_sessions_draw_the_derived_schedule(session):
     stage = FIXTURE / "stage" / "circuit.txt"
     assert stage.is_file(), f"{FIXTURE} is not fetched: `uv run research data fetch-fixtures {FIXTURE.relative_to(FIXTURE.parents[5])}`"
     meta = json.loads(stage.read_text().split("\n", 2)[1].removeprefix("META "))
-    rec = json.loads((FIXTURE / "sessions" / session / "session.json").read_text())
+    [path] = (FIXTURE / "sessions").glob(f"{session}/session.json")
+    rec = json.loads(path.read_text())
     hello = json.loads(rec["hello"])
     # m = k_log + nbl, the link's m is PT_LOCAL + nbl; one region a port (`HmRow.regions`)
     m = meta["k_log"] + hello["link"]["m"] - PT_LOCAL

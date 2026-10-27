@@ -22,8 +22,8 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: RoPE d64 staged by verity_flock.circuit with hidden outputs (circuit_sha512 d12a2420…) with the live build's --zk sessions:
 #: sessions/selftest (one table, m = 25, each case's live verdict in case.json), sessions/j2 (two tables of 16 instances),
 #: sessions/m26 (one table of 32) and sessions/drawn (a subset draw of 16 of 32), each with its server's index.jsonl (all
-#: accepted), at the coin schedule of 2^9 rounds (`verity/ml/flock/pod/92-zk-sessions.sh`, run r20261027-022105-c4fb); a fetched
-#: fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs: `art:b9cc903c`
+#: accepted), at the statement's coin schedule, 2^7 rounds (`verity/ml/flock/pod/92-zk-sessions.sh`, run r20261027-074341-f871); a fetched
+#: fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs: `art:e42123b3`
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zk-sessions"
 STATEMENT = "verity/flock-circuit+seed-injection"
 #: the refusal of a session without a draw, which `verify` reaches only when every check has passed
