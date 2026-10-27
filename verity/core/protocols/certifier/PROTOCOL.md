@@ -1,11 +1,30 @@
-# Network accounting: the bucketed timing channel
+# The network certifier
 
-A spatial unit is the machines behind network certifiers. The question is how much a covert sender can move across its
-boundary through **when** frames leave, once the content and order of every frame are fixed by the declared Program.
-This package is the reference for the answer, in the terms of its Lean analysis `NetTiming` (`Security/`: the
-areas `Definitions/NetworkCertifier`, `Definitions/NetworkCertifier` and `Proofs/NetworkCertifier`, whose `README.md` has the modelling choices). The
-tests mirror some of its statements by name; the Tests section lists which. The certifier program (`lean/`, the Lake
-package `certifier_program`, Lean core only) is the code the difftest runs, proved equal to the analysis's definitions.
+The **network certifier** is the auditor's device on a boundary link of a spatial unit (the machines behind network
+certifiers). It shapes each link into a fixed grid of buckets and frames, records exactly that grid and one status per
+link-window, and once per link-window signs a **network certificate** over a salted digest of the record. What it bounds
+is how much a covert sender can move across the boundary through **when** frames leave, once the content and order of
+every frame are fixed by the declared Program.
+
+- **Trust.** The certifier is auditor-trusted: it runs on a host the prover doesn't control, and the auditor trusts it
+  to run the grid and to sign what it ran. That trust, with the custody of its keys and of its LMS leaf state, is the
+  named assumption `trusted-host`.
+- **What it signs.** An LMS signature (SHA-512, n = 64) over a message binding its key, its session, the link-window and
+  the record's digest hidden under a salt the certifier draws ("Network certificates").
+- **Public parameters.** Each direction's grid (T, τ_b, r, B and Q, "The certifier (`grid`)"), the set of clock-sync
+  values Σ_sync, the certifier's key id and session, and the link-windows audited.
+
+Where each part is stated in Lean:
+- the timing analysis `NetTiming`, its guarantees and its modelling choices: `Security/Definitions/NetworkCertifier` and
+  `Security/Proofs/NetworkCertifier` (whose `README.md` has the modelling choices), with each bound's guarantee in
+  "Capacity";
+- the certifier program (`lean/`, the Lake package `certifier_program`, Lean core only): the grid, the schedule and the
+  charges as code, proved equal to the analysis's definitions and held to this package by its difftests;
+- the record and certificate encodings: `NetworkCheck.Certificate` (`verity/core/protocols/network/lean`);
+- the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
+  (`verity/network-records/v3`);
+- one link-window's verdict of record: `NetworkCheck.LinkWindow`;
+- a period, onsite's communication component: `NetworkCheck.Period` (`verity/certifier/v0`).
 
 ## Zero knowledge: what ties the checks, and the named gap
 
@@ -94,42 +113,12 @@ reach the auditor in the clear, so the record's own hashes are unsalted. The aud
 certifier's public key. With an honest certifier every certificate verifies, and the audit's verdicts are those of the
 raw records.
 
-**The record (v2)** is still exactly the grid and one status (W5), with padding elided, in a fixed binary layout
-(`RecordHead.encode`), all integers big-endian:
-
-| field | bytes | |
-|---|---|---|
-| `len(link)`, `link` | 2, len | UTF-8 |
-| direction | 1 | 0 egress, 1 ingress |
-| window | 8 | |
-| T, r, B, τ_b | 4 each | τ_b in ms |
-| status | 1 | 0 complete; 1 monitor-unavailable, 2 overflow, 3 malformed, 4 dropped, 5 delivery-refused, 6 coverage-never-established (`STATUS_CODES`) |
-| deadline | 1 | 1 when the certifier settled the record by the verdict deadline |
-| parameters | 64 | `parameters_digest`: `tagged_sha512("verity-network-certifier/parameters/v1", ·)` of the canonical JSON of every `GridParams` field, Q included, and of Σ_sync (δs, and ρs as fraction strings; null on ingress) |
-| n_0 … n_{T−1} | 4 each | the occupancy |
-| root | 64 | the frame tree's root |
-
-The record digest is `tagged_sha512("verity-network-certifier/record/v2", R)` (`verity.ml.commitments.identity`).
-Every field has a fixed width or a length before it, so R parses one way, and the counts fix where each frame sits in
-the grid (W4). The schedule check reads the counts exhaustively; the frames are in the tree.
-
-**The frame tree** is a binary SHA-512 Merkle tree over the window's N = Σ n_t real frames, in the order `grid.fill`
-places them, each of B bytes:
-
-    leaf(f)    = SHA-512( block("verity-network-certifier/frame/v2\0" ‖ u32be B) ‖ f )
-    E_0        = SHA-512( block("verity-network-certifier/empty/v2\0") )
-    node(a, b) = SHA-512( block("verity-network-certifier/node/v2\0") ‖ a ‖ b ),   E_{l+1} = node(E_l, E_l)
-
-`block(x)` is x zero-padded to one 128-byte SHA-512 block, so each of the three hashes starts from a constant
-midstate, and the tags keep leaves, nodes and empty subtrees apart. The depth is fixed, D = ⌈log2(T·r)⌉: leaf k is
-frame k for k < N and E_0 after, so padding slots never enter the tree, and opening frame k (`open_frame`,
-`verify_frame`) costs D siblings at every occupancy, which is the shape a sampled in-circuit opening needs.
-
-frame-v3's SHA-512 tree (`frame-v3-sha512`) doesn't fit, for three reasons:
-- its `CommitmentDomain` takes a 32-byte SHA-256 `binding`, and its positions compute a SHA-256 identity eagerly, so the
-  record would rest on `cr/sha-256` as well;
-- its `owner` is a weights, boundary or replay block, not a link-window;
-- it pads its leaves to the next power of two of N, so its depth and opening shape change with the occupancy.
+**The record (v2)** is still exactly the grid and one status (W5), with padding elided: a fixed binary head
+(`RecordHead.encode`: the link-window, T, r, B and τ_b, the status, the deadline bit, the parameters digest, the
+occupancy n_0 … n_{T−1}) ending in the root of a fixed-depth SHA-512 tree over the window's real frames. Its layout,
+the frame tree and the record digest are `certificate.py`'s module docstring, stated in Lean by
+`NetworkCheck.Certificate` (`RecordHead.encode`, `RecordHead.digest`, `parametersDigest`, `framesRoot`) and held to the
+Python by `NetworkCheck.Difftest`.
 
 **The signed digest** hides the record digest R under `salt_c`, 64 bytes the certifier draws from its own
 randomness, fresh for each record (`Issuer`'s `coins`), never the prover's:
@@ -294,13 +283,15 @@ with the served computation is left to N3.
 
 ## A warden link (`service.WardenProfile`)
 
-[protocol/warden-link.md](protocol/warden-link.md).
+Stated in Lean: `NetworkCheck.LinkWindow`'s warden form (`Kind.warden`), the plain unit under the active warden's
+records, both ends at the warden's grid and parameters digest, with no sync read; `service.WardenProfile` is the
+Python reference.
 
 ## A period, as onsite's communication component (`verity/certifier/v0`)
 
-Onsite composes the network certifier as one `Core.Protocol`, `NetworkCheck.Period` (`network/lean`, the
-`network-period` executable), which publishes the bound `K` on what left the site with its terms:
-[protocol/period.md](protocol/period.md).
+Stated in Lean: `NetworkCheck.Period` (`verity/core/protocols/network/lean/NetworkCheck/Period.lean`, the
+`network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
+and the bound `K` it publishes.
 
 ## A served link (`served`)
 
@@ -440,20 +431,9 @@ decodes it with the public tokenizer.
   decode (spaces then digits, no leading zero, below 2^32, so each id has one cell). A `PAD` and an `END` are zero
   past the `END`'s payload, and before it each is its kind's bytes but for the stream.
 
-Measured on canonical frames (the real-vLLM rehearsal `r20261024-021333-0ca6`: 40 requests of 16 tokens, 640 events a
-profile; the GLM-4.5 tokenizer, V = 151,329):
-
-| vLLM chunks that merged tokens | honest | late | extra |
-|---|---|---|---|
-| served-40 | 9 | 10 | 12 |
-| planned-40 | 19 | 23 | 19 |
-
-A merged chunk is one frame of several tokens' text and one padding frame, so 2.8% (served, honest) and 5.9%
-(planned, honest) of the frames aren't one token's text. 1,077 of the tokenizer's tokens (0.71%) are invalid UTF-8
-alone, which vLLM holds back and merges into the next chunk, and 124 are longer than an event's 64 bytes. Text =
-vocab[id] in the circuit was set aside: each frame would need a hidden read of the vocabulary (151,329 entries of up to
-512 bytes), a span table, the holdback's UTF-8 rule and the base64, and the grouping would be vLLM's under load, a
-choice of up to F − 1 bits a response that no template fixes.
+Text = vocab[id] in the circuit was set aside: each frame would need a hidden read of the vocabulary, a span table,
+vLLM's UTF-8 holdback rule and the base64, and the grouping of tokens into chunks would be vLLM's under load, a choice
+of up to F − 1 bits a response that no template fixes.
 
 **(b) Decision: every cell, with the advice's map.** The map is a function of the advice: for each slot, the cell
 the warden must have released there (`window_map`). Advice request i's stream is q = order[i] + 1, its ingress
@@ -680,29 +660,6 @@ unit outputs 1 exactly when, in each lane of ordinal q:
     IoTieRequest accepts), a cache hit on another prefix (either kind), and a Commit that differs at a cache source
     (both buckets). The unit is its reference on those and on map, lane and switch tampers
     (`test_the_unit_is_its_reference`, slow).
-  - **Cost.** `IoTieRequestIds{512, 2, 2, 16, 8}` is 431,496 ANDs and the sidecar's `{512, 1, 1, 2, 2}` 69,132.
-    No gate of it hashes: the read rows are registered reads, whose rows the statement's registered-read slots hash,
-    as the bucket row's. Opened in the unit (each row's digest, its hm96 leaf and `FrameV3Read{DS}`), they were 95%
-    of it: 8,832,144 and 1,170,444. At the ingress shape B = 4,096, R = 1, P = 512, S = 6
-    (r20261025-002531-cb26), `IoTieRequestIds{4096, 1, 1, 512, 6}` is 2,701,439 ANDs and `{4096, 16, 1, 512, 6}`
-    20,300,946. Of them, IoTieRequest's scan is 166,816 and 2,669,055, and the sort's `IoTieRoute{CB + 33, D2}`
-    1,978,368 (D2 = 12) and 10,174,464 (D2 = 14). With the port opened in the unit they were 20,569,541 and
-    38,169,048: `IoTiePort{512, 6, 10}` adds 17,868,101 ANDs and a join, as it does to `IoTieBucket{256, 16, 512, 6,
-    10}` (20,009,029, against 2,140,927). Building them takes 1.2 GB and 1.6 GB (19 s and 34 s,
-    r20261025-025302-d60b). With `IoTieIdsChain`'s flat trace they took 1.3 GB and 4.7 GB (29 s and 88 s,
-    r20261025-005959-9e62; the chain alone at D2 = 14 is 4.1 GB and 46 s flat, 0.13 GB and 0.4 s batched), and with
-    `IoTieRoute`'s flat trace too 15.1 GB and 84.7 GB (204 s and 1,241 s). A bucket reads
-    the steps that compute its own fields, so a step whose tokens' fields are in k buckets is read k times, and each
-    bucket's sort is over its NK + E members.
-    A cheaper split has PROVE-PATH also register the session's prompt stream, the requests' prompt ids in arrival
-    order, and hold every computation and cache hit to it in the Commit's units; the tie would then read the
-    bucket's stream entries in order with no map or sort.
-- **Cost.** The unit is its parts: `IoTieRequest{512, 2, 2}` is 84,175 ANDs, of which each of the 4 frames is
-  20,876, each step 135, each lane's end 65 and the final AND 1. `IoTieRequestFrame{4096}` is 166,615 (both readings
-  check every prompt slot). No gate hashes an ingress byte: the registered read holds the row. At REDTEAM's RIN
-  class (B = 4,096, 9 slots a row) a bucket row is 1,500,947, about 9.0 × 10^8 a 600-bucket window, against about
-  1.14 × 10^10 when the unit recomputed the window's rows root (the rows 92% of it), plus each row's hashing in
-  the registered read, which the proof system does outside the unit.
 
 **The unit,** `IoTieBucket{B, R, P, S}`, one a bucket row (R = lanes·r slots):
 - **The cells** are the warden's per-window value, as WARDEN's registration v2 commits them: each bucket's R cells are
@@ -726,35 +683,6 @@ unit outputs 1 exactly when, in each lane of ordinal q:
   the switches.
 - **Output:** one bit, ok. A link-window's tie is its T units'.
 
-A row's digest costs a compression per 128 bytes and one more, and its hm96 leaf, frame-v3 leaf and node about 8.5
-more, whatever its length. With a row a cell at B = 256, each cell's 2 compressions of bytes cost 11.5. With a row a
-bucket, the cells' rows cost 1.05 times their bytes at the rehearsal and 1.004 times served.
-
-**On registered reads** (the flock verifier's §16.10, `--registered`, which WARDEN's #3594 uses to read the warden's
-rows), the statement's own `sha512x3` and `hm96` slots prove each registered row's digest and hiding commit: 58,120
-ANDs a compression, and three compressions for hm96. They must, since the row hides a private value. The verifier
-checks the row's frame-v3 leaf and path from its public b ‖ c. So a registered read takes the tree above the rows out
-of the proof, but not the rows' hashing: no gate of the unit hashes, yet the proof still hashes every byte once. With
-both the cells and the Commit's step rows read as registered rows, by the warden's row layout:
-
-| The warden's rows | Rehearsal | Served | Served, compact B = 16 | Rows and public b ‖ c, served |
-|---|---|---|---|---|
-| v4 as built (both roots in the unit) | 1.020 × 10^9 | 1.419 × 10^11 | 2.85 × 10^10 | none |
-| A row a bucket (S·B bytes) | 7.58 × 10^8 (−25.6%) | 1.252 × 10^11 (−11.7%) | 1.15 × 10^10 (−59.6%) | 600, 77 KB |
-| Rows of 4 KiB | 8.13 × 10^8 (−20.3%) | 1.361 × 10^11 (−4.0%) | 1.21 × 10^10 (−57.4%) | 63,225, 8.1 MB |
-| A row a cell (#3594's) | 1.77 × 10^9 (+73.9%) | 3.015 × 10^11 (+112.5%) | 1.805 × 10^11 (+534%) | 1,011,600, 129 MB |
-
-- **The saving** is what it was: the port's paths (`FrameV3Read{DS}`, 3.96 × 10^6 of a served step's 4.70 × 10^6) and
-  the cells' tree (1.7% at the rehearsal, 0.2% served). The bytes' floor is 90% of the registered window at the
-  rehearsal and 94% served.
-- **A row a cell** multiplies the cells' hashing by the cost of a row: 290,600 for a 256-byte cell (5 compressions
-  for 2 of bytes), and 174,360 for a 16-byte one (3 compressions for an eighth of one). The verifier then climbs a
-  path a cell and reads 128 bytes of b ‖ c a cell.
-- **At WARDEN's schedule** (T = 600, 16 slots, B = 256), a bucket is 4 KiB. The cells cost 1.22 × 10^9 a window as
-  bucket rows, 2.79 × 10^9 as cell rows, and 1.56 × 10^9 as v4's bucket rows in the unit.
-- **Reading one cell** costs its whole row: 2.9 × 10^5 in a cell row, 2.0 × 10^6 in a 4 KiB row and 2.0 × 10^8 in a
-  served bucket row.
-
 So the layout to register is a row a bucket. Row t − w·T holds bucket t's S slots in slot order, slot j at bytes
 j·B to (j + 1)·B: WARDEN's row (t − w·T)·S + j becomes words j·B/2 onward of row t − w·T. At WARDEN's schedule that
 row is 4 KiB. Built that way: `IoTieBucket` reads its one bucket row and its S Commit step rows as registered ports,
@@ -776,161 +704,6 @@ and the map puts output k's cell in row `release[k]` − w·T and nowhere else.
 `window_map` computes the map and the steps. vllm and compute own the port's layout and its binding to
 `c00.input/ids` and `sampled_token_ids`, in zero knowledge what `check/commit_tokens.py` does in the clear. The tie
 reads the Commit's root as public.
-
-**Cost a link-window** in ANDs, by part. The rehearsal is L = 6, T = 60, r = 98 (N = 5,880), with a port of S = 128
-steps of P = 64 from a session of 2^10 (E = M = 8,192). Served is `SERVED`'s shape, L = 9, T = 600, r = 1,686 (N =
-1,011,600), with S = 4,096 steps of P = 256 from a session of 2^23 (E = M = 2^20). Egress cells are 256 bytes and
-ingress frames 4,096. The table is v4's window unit, one a link-window with both roots in it and one routing over
-the window's N cells, the comparison the bucket unit (below the table) is priced against. Each part's formula is
-exact, checked against `HC.ands` at two sizes or more and the whole window at T = 3, R = 4, P = 4, S = 4, DS = 3
-(6,721,770 ANDs: the port's reads 3,534,423, the cells' rows root 3,139,634, the content 47,711 and 2 joining them), and
-extrapolated from there; nothing at these sizes is built.
-
-| Part | Rehearsal | Served | From |
-|---|---|---|---|
-| Cells' rows: digests | 684,933,540 | 117,273,138,600 | T × ⌈(R·B + 17) / 128⌉ compressions of 57,947 (`NetworkRowDigest`) |
-| Cells' rows: hm96 leaves | 12,935,820 | 129,358,200 | T × `Hm96Sha512Leaf`, 215,597 |
-| Cells' tree | 17,487,788 | 282,689,596 | T `FrameV3Leaf`s, the frame-v3 pads to a power of two, the nodes, `LmsEqual` |
-| The port's rows and reads | 277,345,151 | 19,256,418,303 | v4's port read in the unit: S × (`NetworkRowDigest{32P}`, `Hm96Sha512Leaf`, `FrameV3Read{DS}`) + S − 1; 2,166,758 and 4,701,273 a step |
-| Cells' parse | 21,626,640 | 3,720,664,800 | N × `IoTieCell`, 3,678 |
-| Routing | 4,608,000 | 1,063,256,064 | `IoTieRoute`, W = 32 + D ANDs a switch |
-| Match | 764,399 | 131,507,999 | `IoTieMatch`, N·(130 + D − tz(E)) − 1 |
-| Joins | 2 | 2 | the window's |
-| **The window** | **1,019,701,340** | **141,857,033,564** | 173,419 and 140,230 a cell |
-| The target's map read | 30,710,631 | 4,770,375,793 | a range read of ⌈(8N + 4S) / 4,096⌉ rows of 4 KiB (12 and 1,980) at depth 15 and 22, and a join; estimated from the parts above, no range read is built |
-| **The window, the target** | **1,050,411,971** | **146,627,409,357** | 178,641 and 144,946 a cell |
-
-- **The floor.** The window's bytes take ⌈N·B / 128⌉ compressions, 6.81 × 10^8 and 1.172 × 10^11: 67% and 83% of the
-  window. Hashing every byte once with SHA-512 is the floor of any tie that opens every cell under a SHA-512
-  commitment. The port is 27% and 14%, and the tie's own checks are 2.6% and 3.5%.
-- **At B = 4,096** the window is 1.142 × 10^10 and 1.932 × 10^12, with 16 times the bytes to hash.
-- **A served link-day** (1,440 windows) is 2.043 × 10^14: against N2's 9.30 × 10^9 and N3's design at 4.9 to 9.2 ×
-  10^14.
-- **Every part scales with the capacity** (N = T·R cells, S·P port entries), not with what is served: a served
-  window's 35,386 tokens (REDTEAM's figure) fill 3.5% of N, and the pads are hashed, routed and matched as data cells
-  are.
-
-**The bucket unit's cost.** `IoTieBucket{B, R, P, S_t}` is `IoTieContent{B, R, P, S_t}`: R × `IoTieCell{B}`,
-`IoTieRoute{32 + D_t, D_t}` and `IoTieMatch{R, D_t, S_t·P}` (N·(131 + D − tz(E)) − 1), with
-D_t = ⌈log2 max(R, S_t·P)⌉ and S_t the bucket's steps. At the tests' shape `IoTieBucket{256, 8, 4, 4}` is 36,175 ANDs
-(8 × 4,139, routing 2,016, match 1,047), against 3,570,599 when the unit opened its four port rows itself (3,534,423
-of it). Against the table:
-- the cells' tree and the port's paths go (the registered reads climb them), and the rows' digests and hm96 leaves,
-  the cells' and the port's, move into the statement's registered-read slots at about the same ANDs: 389,438 a port
-  row at the rehearsal and 737,120 served, of a read's 2,166,758 and 4,701,273;
-- the parse is 4,139 a cell (the template spans the P-byte event), 12.5% more;
-- the routing and the match are a bucket's, over its own entries;
-- the port is Σ_t S_t step reads, not S: each bucket reads the steps its outputs were sampled in, so a step whose
-  outputs a window releases over several buckets is read by each.
-
-With each step's outputs released in one bucket (S_t = 3 at the rehearsal, 7 served, rounded up), the window is
-7.98 × 10^8 at the rehearsal (−21.7%: 180 port rows read against the table's 128 opened, none with its path) and
-1.254 × 10^11 served (−11.6%). If every output of a served window's 35,386 is its bucket's own step (59 a bucket), the
-port's rows are 2.61 × 10^10 and the window 1.54 × 10^11, 8% over the table's (2.94 × 10^11 when each bucket opened
-its rows in the unit). The engine's steps against the warden's release set where between those a link falls. The
-port's remaining lever is a port laid out by release bucket. The other shape keeps the table's S reads: a window
-unit with T registered row ports, one routing over the window's cells and one port read. It needs a statement of
-T registered ports (600 served, of 431,616 bytes each), which hasn't been measured, where the bucket unit reads one
-row a unit (`warden_rows.bucket_port`).
-
-**Prove seconds and proof bytes, extrapolated, not measured.** N2-ZK's unit was measured (`r20261024-044047-69ad`,
-`r20261024-050601-9e82`): `NetworkHeadCheckRows{6, 60, 1}` at k_log 23, 1,726,108 ANDs, `prove --zk` in 5.40 to 5.63
-s on 23 cores, a 153 KB proof, Lean verify in 4.68 to 4.8 s. This takes it linearly in ANDs, with a machine being one
-such 23-core prover. The machines a link needs are the prove time over the window's span (6 s at the rehearsal, 60 s
-served):
-
-| A window | ANDs | N2-sized units | Prove, 23 cores | Machines a link | Proof | Lean verify |
-|---|---|---|---|---|---|---|
-| Rehearsal, B = 256 (as built) | 1.02 × 10^9 | 591 | 53 to 55 min | 530 to 550 | 90 MB | 46 to 47 min |
-| Served, B = 256 (as built) | 1.419 × 10^11 | 82,183 | 5.1 to 5.4 days | 7,400 to 7,710 | 12.6 GB | 4.5 to 4.6 days |
-| Served, compact B = 16 | 2.85 × 10^10 | 16,487 | 24.7 to 25.8 h | 1,480 to 1,550 | 2.5 GB | 21.4 to 22.0 h |
-| Served, compact B = 8 | 2.48 × 10^10 | 14,372 | 21.6 to 22.5 h | 1,290 to 1,350 | 2.2 GB | 18.7 to 19.2 h |
-| Served, B = 16, port rows of 64 steps | 1.13 × 10^10 | 6,551 | 9.8 to 10.2 h | 590 to 610 | 1.0 GB | 8.5 to 8.7 h |
-| Served, B = 8, port rows of 64 steps | 7.66 × 10^9 | 4,436 | 6.7 to 6.9 h | 400 to 420 | 0.68 GB | 5.8 to 5.9 h |
-| Rehearsal, B = 256, the target | 1.05 × 10^9 | 609 | 55 to 57 min | 550 to 570 | 93 MB | 48 to 49 min |
-| Served, B = 256, the target | 1.466 × 10^11 | 84,947 | 5.3 to 5.5 days | 7,650 to 7,970 | 13.0 GB | 4.6 to 4.7 days |
-| Served, B = 16, port rows of 64 steps, the target | 1.61 × 10^10 | 9,314 | 14.0 to 14.6 h | 840 to 870 | 1.4 GB | 12.1 to 12.4 h |
-
-The target's map read is the same 4.77 × 10^9 at every framing, so it is 3.3% of a served window at B = 256 and 30%
-at B = 16 with port rows of 64 steps (3.32 × 10^10 at B = 16, 2.96 × 10^10 at B = 8, 1.24 × 10^10 at B = 8 with port
-rows of 64 steps). At the compact framing its 8 bytes a cell are half the cells' 16, which makes the entry's width a
-lever there: e needs log2 E bits (20 served) and q log2 of the session's requests, not 32 each.
-
-The proof bytes are an upper bound if one statement's proof grows slower than its ANDs. Before any prove at these
-sizes, `lms`'s `Sha512Compress` needs a `build` (N2-ZK's caveat: C-Flock lowers it gate by gate, and it is most of
-this unit).
-
-**Two ties, and the bound each gives.** The protocol can run the tie on every cell or on K draws a window, with live
-coins. In both, the head's counts are N2's and the release buckets advice v0's. What changes is the term the tie adds
-to the bound: a cell the tie never checks carries whatever the server wrote in it.
-
-| Tie | ANDs a window | Its term in the bound, at δ |
-|---|---|---|
-| **All**: every cell, as built | 1.419 × 10^11 served, 1.02 × 10^9 at the rehearsal | none: every cell is checked, so the bound has no content term from the tie |
-| **K-draw**: K data cells a window | K × 2.02 × 10^8 served at B = 256 with a row a bucket | ε·n·b: ε·n unchecked cells of b free bits each |
-
-- **ε·n.** A window whose wrong data cells are a fraction f_w of its n_w escapes K draws with probability (1 −
-  f_w)^K. So on a link whose windows are all accepted, Σ_w f_w ≤ ln(1/δ)/K at δ over all of them, and ε·n = ln(1/δ)·
-  n_w/K, n_w being the most data cells a window holds. It doesn't grow with the number of windows: REDTEAM's link-day
-  (W = 1,440, ε = ln(1/δ)/(K·W)) is one case of it. If a window can be full to capacity (n_w = N), the bound is 28.6
-  times the one at the served average.
-- **b.** It is log2|V| = 17.21 bits (V = 151,329) only when every other byte of every cell is fixed and the id is
-  below V. On the current framing that needs every cell's form checked, which hashes every byte: the cells' rows and
-  their parse, 1.214 × 10^11 a served window, 86% of the All tie, with an id < V compare that `IoTieCell` doesn't make
-  (it checks below 2^32). N3's design checks every frame's form too, at more than the All tie costs. Without that check,
-  an unchecked cell carries what the server wrote in it, up to B − 9 = 247 bytes at B = 256 (b = 1,976). With the
-  compact framing below, the warden's fixed cut leaves only the id's bytes to the server, so b = 32 with no check (24
-  with 3-byte ids). log2|V| then still needs id < V checked on every cell, and so every cell opened.
-
-  At δ = 2^−40 and n_w = 35,386 (REDTEAM's served average), restated at three values of K:
-
-  | K | ε at W = 1,440 | ε·n, cells | b = log2\|V\| | b = 32 | b = 1,976 |
-  |---|---|---|---|---|---|
-  | 20 | 0.0963% | 49,055 | 844 kbit | 1.57 Mbit | 96.9 Mbit |
-  | 100 | 0.0193% | 9,811 | 169 kbit | 314 kbit | 19.4 Mbit |
-  | 1,000 | 0.00193% | 981 | 16.9 kbit | 31.4 kbit | 1.94 Mbit |
-- **A draw's price** depends on the warden's rows. A draw opens its cell's bucket row and the port row its map entry
-  names. With a row a bucket at B = 256, it hashes the bucket's 431,616 bytes: 2.02 × 10^8 a draw (the port row's 4.7
-  × 10^6 of it), 4.0 × 10^9 a window at K = 20. Other row sizes, with what each costs the All tie's cells against
-  bucket rows' 1.177 × 10^11:
-  - a row a cell: 8.2 × 10^6 a draw, 6.88 × 10^11 for the cells;
-  - 4 KiB rows of 16 cells: 9.2 × 10^6 a draw, 1.528 × 10^11 (30% more);
-  - 64 KiB rows: 3.7 × 10^7 a draw, 1.195 × 10^11 (1.5% more).
-
-  At compact B = 16, a bucket row is 26,976 bytes, and a draw costs 1.89 × 10^7 (3.8 × 10^8 at K = 20).
-- **What else a K-draw tie needs.** A drawn cell's place names its map entry, so a dropped output is caught at its
-  cell as a wrong cell is (a pad where the map names an output). The draws pick among public positions, a cell and its
-  entry's map row (at the target the entry is private, its place isn't), so the coins need no reduction inside the
-  proof. At the target a draw also opens its map row, 5.9 × 10^6 served.
-
-So at B = 256, a K-draw tie whose term is ε·n·log2|V| costs nearly what the All tie does. A term near that at a K-draw
-tie's price needs the compact framing. There it is ε·n·32 bits (24 with 3-byte ids), 1.57 Mbit at K = 20, for K ×
-1.89 × 10^7. With the compact framing, the All tie, which has no term, costs 2.85 × 10^10 a served window as built,
-and 1.13 × 10^10 with port rows of 64 steps.
-
-**The compact-framing lever.** At B = 256, 83% of the All tie is SHA-512 over the cells' bytes, and the 138-byte event
-is what fills a cell. The registered compiler (vllm's NET-61 default) could fix the server's response framing as one
-binary record a token: the id as u32be, with a client-side shim rendering OpenAI SSE from the records with the public
-tokenizer. The warden would then cut the server's bytes every 4 instead of at `\n\n`, a byte rule that still parses
-nothing. It would frame each record as now: its 9-byte header, the 4 bytes and 3 zero bytes, so B = 16. The stream
-stays in the warden's header, so the record carries none. A 5-byte header (a 24-bit stream and a 1-byte length) and
-3-byte ids (V < 2^24) make B = 8. The served window at B = 16 is 2.85 × 10^10, by part:
-- the port, 1.93 × 10^10 (68%);
-- the cells' rows, 7.75 × 10^9 (27%);
-- routing, 1.06 × 10^9; the match, 1.3 × 10^8;
-- the parse, 2.6 × 10^8, estimated at 256 ANDs a cell (no compact cell is built).
-
-At B = 8 it is 2.48 × 10^10. The port is then the largest part, and its layout is vllm's. Its levers, each priced at
-the served shape:
-- **Rows of 64 steps** (64 KiB rows of 2^17 in the tree) cost 5.14 × 10^5 a step against 4.70 × 10^6, 2.1 × 10^9 a
-  window when its steps fall in 64 rows. That takes the served window to 1.13 × 10^10 at B = 16 (590 to 610 machines a
-  link) and 7.66 × 10^9 at B = 8 (400 to 420).
-- **A range read** of the window's consecutive steps shares the path above them: about 1.02 × 10^6 a step, 4.17 × 10^9.
-- **Registered reads** take the paths out of the circuit: 3.96 × 10^6 of each step's 4.70 × 10^6.
-
-The rehearsal window drops from 1.02 × 10^9 to 3.60 × 10^8 at B = 16 (190 to 200 machines), and to 9.9 × 10^7 with
-port rows of 64 steps (52 to 54). `io_tie` takes B ≥ 147 today, and the compact cell (`IoTieCell` over a binary record)
-isn't built.
 
 **The warden's rows, exactly.** The warden registers its cells as the following root a link-window, and each bucket's
 unit reads its row there by a registered read. The reference is `io_tie.data_cell`, `pad_cell`, `end_cell`,
@@ -992,23 +765,8 @@ registered rows, and the egress and ingress-ids ties the Commit's, whose rows th
 hash (`NetworkRowDigest`'s and `Hm96Sha512Leaf`'s work) and whose paths the verifier climbs.
 
 **The prototype** (`io_tie`, on the warden's own egress and a fake upstream's port) has the reference
-(`io_tie.reference`, in the clear), the Boolean Definitions above, and their tests:
-- `test_network_certifier_io_tie.py` holds every circuit to its reference, on cells `warden.Warden._egress` cut and
-  the certifier's grid laid out. It covers honest, idle and busy windows; 15 ways the cells can differ from the map
-  (among them a `FAIL`, an early, late or dropped `END`, two connections' slots swapped, a stream in an unheld slot)
-  and 10 maps other than the verifier's; a connection the warden failed (late); 5 ways the port can differ from the
-  Commit's (a row, a salt, a sibling, a step, another root); a request admitted ahead of an earlier arrival; two ids
-  swapped with the routing that matches them; and a Beneš network that routes every permutation. Every tamper is
-  refused;
-- `test_network_certifier_io_tie_adversarial.py` holds the red team's cases (`cursor/redteam-advice-tests-061a`): no
-  field of a cell but the id is the server's; interleaved responses of any length, with a count one off either way
-  refused; a bucket's cells accepted in the warden's order alone, up to swaps of byte-identical cells; a payload in
-  1, 3 or 17 cells refused, with the K-draw tie's price, about 49,000 cells and 844 kbit over a link, as its
-  comparison;
-- `test_network_certifier_io_tie_phase4.py` holds REDTEAM's v3 cases (`cursor/redteam-phase4-io-061a`), refused. They
-  are a wrong id and a fabricated response, each with a map and a port of the prover's own that match it and with the
-  Commit's rows carrying it (or port rows of its ids). It also shows the only free order in a bucket is byte-identical
-  cells.
+(`io_tie.reference`, in the clear) and the Boolean Definitions above. Its tests hold every circuit to its reference and
+refuse each tamper of the cells, the map, the port and the routing.
 
 Still to build: a unit proved on the warden's registered rows through `bucket_port` (the tests hold each bucket's row to
 the warden's registered row and its port to row t a unit; no proof reads them yet), the port's real layout and
@@ -1034,23 +792,14 @@ and for responses of any length. What it doesn't establish:
 
 ## The Program's logical schedule and the clock-sync advice (`schedule`)
 
-The Program fixes each real frame's content, its **anchor** and its **logical index** λ. The anchor is the recorded
-bucket of the request it answers. λ is its position within its session, from the canonical gate order, so it is never
-negative: `LogicalFrame` rejects a negative index, as Lean's ℕ does. With one, a frame anchored in window 1 could be
-eligible in window 0, and window 0's grid would read window 1's sync.
-
-A window declares one clock-sync value `ClockSync(δ, ρ)`, from the protocol's set `SyncSet`: for example 16 offsets ×
-8 rates, which is 7 bits. δ is a whole number of buckets. ρ is a positive fraction of frames per bucket, below 1 for a
-session slower than one frame per bucket (a POUS band forward takes about 13 buckets). A frame then moves through three
-steps:
-- it is **eligible** at `anchor + δ + ⌊λ/ρ⌋`, using the sync of its anchor's window;
-- the shaper **hands** it to the certifier in canonical order, at `h(k) = max(eligible(k), h(k−1))`;
-- the certifier's own rule then **releases** it.
-
-`expected_grids` is the Program's grid, and `run_shaper` drives a certifier as an honest sender does. Lean's
-`NetTiming.Protocol.Schedule` defines the same objects (`eligible`, `handingBuckets`, `expectedRow`), and the Program
-`constantRate` whose advice is the content advice and one in-set sync per window (`Security/Proofs/NetworkCertifier/README.md`,
-modelling choices 13–17).
+The Program fixes each real frame's content, its **anchor** (the recorded bucket of the request it answers) and its
+**logical index** λ (its position in its session, never negative). A window declares one clock-sync value
+`ClockSync(δ, ρ)` from the public set Σ_sync (`SyncSet`; 16 offsets × 8 rates is 7 bits). A frame is **eligible** at
+`anchor + δ + ⌊λ/ρ⌋` under the sync of its anchor's window, the shaper **hands** it to the certifier in canonical order at
+`h(k) = max(eligible(k), h(k−1))`, and the certifier's grid **releases** it. Stated in Lean:
+`Security/Definitions/NetworkCertifier/Schedule.lean` (`NetTiming`'s `eligible`, `handingBuckets`, `expectedRow` and
+`constantRate`, the Program whose advice is the content advice and one in-set sync per window), with the certifier
+program's `NetworkCertifier.Schedule` as its code; `schedule.py` (`expected_grids`, `run_shaper`) is the Python.
 
 ## An advised link (`advised`)
 
@@ -1234,25 +983,13 @@ premises.
 
 ## The audit (`audit`)
 
-An egress link-window (`Audit.check_link`) is accepted if:
-- its status is complete;
-- every slot equals the Program's grid (for a committed record: its digest equals the Program grid's digest; for a
-  certified record: its head's record digest does);
-- its declared clock sync is in the set, and is the spatial unit's sync for the window;
-- it has exactly one record, present by the verdict deadline;
-- for a certified record, its certificate verifies under the certifier's key (`key`), names the record's link,
-  direction and window, and signs its record digest under the certifier's salt (`certificate_digest`).
-
-Anything else is a violation, and the first that applies names it:
-- `no-verdict`: no record by the deadline (for a certified record, also one whose deadline bit is 0);
-- `duplicate`: more than one record for the link-window, whatever they say (the audit never picks one);
-- `signature`: a certified record's certificate doesn't verify, or names another link-window, or signs another digest;
-- `status:<reason>`: the status is not complete;
-- `advice`: the declared clock sync is outside Σ_sync, or differs from the unit's for the window;
-- `mismatch`: a slot differs from the Program's grid (for a committed record, the digest differs).
-
-A violation is **recorded, and the run is rejected**, as a policy signal. There is no halt: later windows are still
-checked.
+The audit (`Audit.check_link` on every egress link, `Audit.check_ingress_link` on every ingress link) is stated in
+Lean as a core protocol: `NetworkCheck.Check` (`verity/network-certificate/v4`, certified records) and
+`NetworkCheck.Records` (`verity/network-records/v3`, raw, committed and certified records). Their module docstrings give
+the acceptance conditions and the violations, the first that applies naming it (`no-verdict`, `duplicate`, `signature`,
+`status:<reason>`, `advice`, `mismatch`), and `verity/core/protocols/network/tests/test_network_check_protocol.py` and
+`test_network_records_protocol.py` hold them to `audit.py`. A violation is recorded and the run rejected; there is no
+halt, and later windows are still checked.
 
 **One clock per spatial unit.** Every egress link of the unit reads the same sync in a window. The audit keeps each
 window's sync (`Audit.syncs`), set by the first egress link checked for that window. A link that declares a different
@@ -1569,8 +1306,8 @@ and the ingress terms, which stay the K charge's.
 
 ### Attacks
 
-Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md), with the adversarial cases, the
-parts as drafted (24 Oct) and what the guarantees would have to say.
+Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md), with the adversarial cases each
+part's tests carry.
 
 ## Calibration (`calibration`)
 
@@ -1637,12 +1374,6 @@ D + A·DW, and about 2·width for the idle select and the equality. It also cost
 window costs P steps and one `ReplayLoad`, P + 2 state rows and two window rows, and 3P + 4 reads, each a frame-v3
 path of depth ⌈log2(P + 2)⌉, or 1 for a window row. A session adds one `ReplayClose` (13 ANDs at the sync
 KV-pressure trace's shape) and its two reads.
-
-**On the corpus** (run `r20261024-091809-297f`, before the carry): on all 15 of TRACE-CORPUS's sync traces, cut into the certifier's
-60 s windows and walked from the empty rows, every state row and front is the replay's, and both circuits match
-their specifications on the sampled units. A step costs 16,569 ANDs (8B light: R = 19, A = 4, Q = 145) to 80,959
-(heavy: R = 256, A = 35, Q = 1000), against ReplayStep_v1's 521,358 at R = 256; moving the queue and the decisions
-in every state row instead cost 2.3 to 4 times as much a step (run `r20261024-085627-c66d`).
 
 ## Advice v0's validity (`advice_check`)
 
@@ -1743,8 +1474,6 @@ the order is the topological one that:
 - takes the earliest in release order where the rows leave a choice, so an order the schedule never shows costs
   nothing.
 
-On both warden traces this recovers the engine's own order, request for request.
-
 **Sent**, as ENC-CODE's v1 windows (#3591, `code_v1.Window`), and nothing else:
 - *The decisions*, one per open step: whether the next request had arrived.
 - *The order.* The engine admits in the API server's body-read order, which comes after the release and overtakes it
@@ -1805,35 +1534,6 @@ composition below): what the bound counts is the charge, not the committed lengt
   replay and the walk give the advice from the windows, so at most 2^c residuals, and so at most that many advices,
   are accepted at a charge of c or less.
 - *v0's per-window parts.* Each window's part is self-delimited, which settles this item of v0's list above.
-- *Measured* (art:0f5f23d498a7f042fcf2a638d9a1500afbc916a4498569666957754415428c30, run r20261024-111418-79a9). It
-  covers the 14 corpus traces of 1,000 requests with the client's send standing for the release, and the two warden
-  traces' `.released` views. Every trace round-trips, and each trace's book is fit on the other 15. In bits:
-
-  | traces | v1 charged | of it the order | order entries (inversions) | ENC-REPLAY's ideal order | v1 at #3642 |
-  |---|---|---|---|---|---|
-  | heavy, sync | 74–623 | 0–549 | 0–47 (0–323) | 5.81–505.82 | 120 |
-  | heavy, async | 1,828–1,887 | 1,166–1,215 | 176–194 (13,732–17,746) | 2,782.56–3,027.07 | 707–716 |
-  | smallkv, sync | 18,765–23,817 | 0 | 0 | 5.81 | 18,792–23,876 |
-  | smallkv, async | 18,598–23,714 | 24 | 1 (1) | 17.77 | 18,610–23,720 |
-  | chunked | 1,980–2,081 | 0–25 | 0–2 (0–2) | 5.81–30.15 | 2,012–2,090 |
-  | medium | 3,299–3,421 | 0 | 0 | 5.81 | 3,326–3,451 |
-  | light | 4,634–5,610 | 0 | 0 | 5.81 | 4,658–5,633 |
-  | warden heavy, release order | 2,387 | 1,599 | 242 (2,970) | 2,193.66 | |
-  | warden smallkv, release order | 23,200 | 33 | 2 (3) | 30.15 | |
-
-  "v1 at #3642" is art:192413fc108b9b60b5febd9f53493de5418311c49203be56ee280ec40d140013, which took the engine's
-  arrival stamp as the certified order, so it sent none.
-  - On the warden traces the recovered order is the engine's, request for request. Where TRACE-CORPUS counted
-    inversions against the engine's order, the ones v1 sends are the same count: 17,746 without the warden (heavy,
-    the client's send), and 2,970 and 3 behind it.
-  - The order costs less than ENC-REPLAY's ideal code (an adaptive bit a request, and Elias gamma of the rank) where
-    much arrives out of order: 1,166–1,599 bits against 2,194–3,027. Positions skip the in-order arrivals, and the
-    book fits the rank deltas. The uniform book charges the order 1,989–2,757 bits there.
-  - Elsewhere the totals move by the pool header's bits (gone) and the refit books.
-  - At most 12,044 bits fall in one window, and v0 is 6.2–7.5 Mbit. The uniform book charges smallkv 37,525–43,094.
-  - The smallkv pools fill, and async never derives, so every lookup there is sent.
-  - These contexts read no release time: the warden's fixed schedule leaves the engine no timing to read.
-
 **Composition**, all in one ZK proof under the advice's hiding root:
 1. *The values are the committed advice.* The advice's hiding rows (#3507) hold each window's residual raw, as
    `replay_chain`'s window row: its decisions as bits in the scan's order, at most D a window (4,391 on the corpus'
@@ -1959,10 +1659,6 @@ in `ReplayStep_v1`'s scheduling order:
   corpus-smallkv's fixture, whose pool is 100 blocks. An evicting cache never hits past what a cache that never evicts
   holds, so a shortfall is at least 0, and v1's encoder refuses a replay hit past h*. `CacheStep_v1`'s own `sent` = 1
   mode, a hit checked only as a cached prefix, is then unused.
-  - Of the admitting rows past the bound, 14 of corpus-smallkv's 46 and 38 of sync-crush's 100 hit less than the
-    longest cached prefix.
-  - Counting every lookup the scheduler reads (a blocked candidate is looked up again each step), corpus-smallkv's
-    fixture sends 1,495, 380 of them short, at 7,490 bits under the uniform book.
 - *Cost* (`cache_step.size`): a call walks ⌈L / U⌉ units at about N·(2·(U·TW + EW) + 2·RW) ANDs each. That is 5,856
   ANDs at (N, U, TW, RW, L) = (8, 4, 8, 4, 32), and 38.4M at smallkv's (511, 16, 17, 10, 2048): about 1.1G a step at
   (R, W, A) = (4, 8, 4), where `ReplayStep_v1` is 12,235. The linear table is a slice's size class, and its difftest
@@ -2050,9 +1746,8 @@ registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are 
 blocks, its P / G rows (`CompileSliceBlocks_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its charge is
 `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
 chain. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
-advised window is proved, the proof of record at vLLM 8eb1's engine class (w212 under its AsyncScheduler, 1,021,302
-ANDs) and at the sync class (857,866), `--zk` through
-`benchmarks/network_traces/compile_slice_zk.py`, and the slice's earlier ZK runs with its coder.
+advised window is proved, a served window at its engine's class (w212 under its AsyncScheduler, 1,021,302 ANDs, and
+857,866 at the sync class), and its `--zk` runs through `benchmarks/network_traces/compile_slice_zk.py`.
 
 ## The replay at the served shape
 
@@ -2144,9 +1839,6 @@ them.
     so every record, before t_d and after, is a function of the traffic alone, and two salts at the same traffic give
     the same records. The record's formats are unchanged: the v1 digest and the v2 frame tree bind the salt frame like
     any other frame, and N3 checks it against its public payload. Neither the Lean analysis nor the Lean ports change.
-    A placeholder in the commitment's slot was the smaller of the two changes compute accounting offered (18 Oct): the
-    other, the commitment in the record published at t_d, changes the record's format, its digest and certificate,
-    and N3's public input, and with the certifier trusted it binds nothing the reveal doesn't.
   - **The sealed slots.** The certifier's record cells are its grids and two sealed slots per PoUW window:
     `_salts[p]`, which holds the salt and which only `reveal` opens, and `_weights[p]` (next item). So the record's
     open cells (`Accounting.Attribution.openCells`, the record minus those slots, ATTRIB-R4) are the grids, and what
@@ -2355,251 +2047,13 @@ sealed under an AEAD built from SHA-512 alone.
   - **The premise:** every link between two spatial units is a sealed pair link between two of the auditor's
     certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-host`.
   - **What it changes:** A1's units are then the facility, not each block.
-- **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on a CPU node: an AMD
-  EPYC Genoa, 256 cores at a load of about 30, with `sha_ni` but no SHA-512 instructions, and OpenSSL 3.0.13).
-  Figures are bytes of frames a second on one core, on its CPU seconds. Line rate is 400 Gb/s, 50 GB/s, per uplink in
-  each direction; its column is the cores one direction takes at each end.
-
-  | Path | B | Seal | Open | Cores at line rate |
-  |---|---|---|---|---|
-  | Python, one process (`Sealer`, `Opener`) | 512 | 52.7 MB/s | 53.4 MB/s | 948 |
-  | Python, one process | 4096 | 81.5 MB/s | 81.5 MB/s | 614 |
-  | Python, certifier to certifier across the fabric | 512 | 52.2 MB/s | 50.0 MB/s | 999 |
-  | Python, certifier to certifier across the fabric | 4096 | 82.7 MB/s | 80.8 MB/s | 619 |
-  | C over OpenSSL's SHA-512 (`seal_fast.c`, the Python's units) | 512 | 195.5 MB/s | 194.8 MB/s | 257 |
-  | C over OpenSSL's SHA-512 | 4096 | 224.1 MB/s | 223.0 MB/s | 224 |
-
-  A 4096-byte frame costs 98 SHA-512 compressions: 64 for the keystream and 34 for the tag. The C path runs at about
-  5.4 million compressions a second, four fifths of OpenSSL's own rate on long inputs (847 MB/s). So no CPU path on this
-  node reaches line rate. One direction needs about 1.2 × 10⁹ compressions a second.
-  - The construction is parallel (its keystream blocks and its frames are independent), so cores scale it. But 224
-    cores at each end of each direction isn't a certifier.
-  - What would reach line rate:
-    - SHA-512 instructions (x86's SHA512 extension, ARMv8.2's SHA512), which this node lacks and which are unmeasured
-      here;
-    - a GPU kernel (C-Flock has SHA-512 in CUDA, `verity/ml/flock/cuda/sha512.cuh`);
-    - or a pipeline on the uplink's NIC, DPU or FPGA.
-  - The Python path is the reference and the tests' path, not a fast path.
-
 ## Tests
 
-`uv run tools/verity/check/suites.py verity/core/protocols/certifier`. The tests enumerate small
-horizons, so they check the Lean statements on examples and prove nothing. By name, they mirror 19 of the analysis's 35
-statements (in `Security/`, not the certifier program's `lean/`)
-`NetTiming.SecurityProofs.G : NetTiming.Guarantees.G`, 12 of them guarantees (`Security/lean-audit.json`'s `guarantees`)
-and seven lemmas, and three more proved lemmas:
-- **`test_network_certifier_grid.py`:**
-  - Proposition 2's ten statements, by enumeration: `SecurityProofs.CardFree`, `SecurityProofs.CardLeftPacked`,
-    `SecurityProofs.FillInjective`, `SecurityProofs.ExistsFillOfLeftPacked`, `SecurityProofs.CardCountsEqLe`,
-    `SecurityProofs.CardCountsLeLe`, `SecurityProofs.ReleasedSelf`, `SecurityProofs.SumReleasedLe`,
-    `SecurityProofs.EncardFifoGrids` and `SecurityProofs.EncardFifoGridsLeOfAvailable`;
-  - the lemmas `occ_fill`, `leftPacked_occ_fill` and `leftPacked_fifoGrid` (`NetTiming.SecurityProofs.Occupancy`);
-  - the certifier's semantics, which Lean takes as hypotheses (W4 packing, W5's untimed status, W6 fail-closed);
-- **`test_network_certifier_capacity.py`:**
-  - `SecurityProofs.EncardLeProdOfBranching`, the tree lemma;
-  - `SecurityProofs.EncardAccSeqsLeSync`: accepted grids at most `#Σ_sync^W`, over every sender and declaration on a
-    small horizon, with ρ below 1, and with a reacting operator;
-  - `SecurityProofs.EncardAccSeqsLeFixedClock`: the fixed clock's single accepted grid;
-  - `SecurityProofs.EncardObsDecodableLe`: under a fixed clock, accepted secrets all show one grid sequence;
-  - `SecurityProofs.EncardAccSeqsLeBlocks`: the block bound on random Programs;
-  - `SecurityProofs.EncardAccSeqsLeConstantRate` and `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`: the two
-    tests above, for the shipped schedule;
-  - `SecurityProofs.EncardAccSeqsLeConstantRateWindows`: runs accepted on their first m windows show at most
-    `#Σ_sync^m` grid prefixes;
-  - `SecurityProofs.ExpectedRowCausal`: a window's grid is unchanged when later windows' syncs are drawn again, and a
-    negative logical index, which would break it, is rejected;
-- **`test_network_certifier_audit.py`:** record-and-reject and each violation, which no Lean statement names; one clock
-  per spatial unit, the advice `SecurityProofs.EncardAccSeqsLeSync` counts; and the ingress links' status check, Lean's
-  `StatusComplete`;
-- **`test_network_certifier_commitment.py`:**
-  - the elided digest is injective on left-packed grids, by enumeration;
-  - it binds the link, window, status and parameters;
-  - the committed audit's verdicts equal the raw audit's;
-- **`test_network_certifier_certificate.py`:**
-  - record v2's byte layout, rebuilt field by field and pinned by one digest; the status codes;
-  - the head is injective on left-packed grids, by enumeration, and binds every field; padding never enters the tree,
-    and every frame opens at depth D;
-  - the certified audit's verdicts equal the raw and committed audits', per link-window, on egress and ingress;
-  - a certificate moved to another window, link or direction, relabelled, forged, checked under another key or signed
-    by the same key in another of the certifier's sessions (the cross-session replay) is a `signature` violation; an unset deadline bit is a `no-verdict`, another Σ_sync or Q a `mismatch`;
-  - a signer whose state is missing or behind refuses, and that link-window is a `no-verdict`; it signs again once its
-    state is restored, never reusing a leaf. A second signer on held state, or one whose floor is past the state, refuses
-    too. The signer is the certifier's `LmsSigner` on a tree of 2^6 leaves (`tests/signers.py`), not the deployed 2^20;
-  - a second run of the key under a session its state has started is refused at its start, and its link-windows are
-    `no-verdict`s;
-  - the certificate message is LMS's network-certificate role digest, and binds the key, the session, the link-window
-    and the digest;
-- **`test_network_certifier_service.py`:** one link-window through the proof service: the round trip to an exhaustive
-  accept, nothing of a certificate or a violation's kind in what the challenger keeps, each refused registration (an
-  extra field, a certificate in the clear, a window other than the order), and each reject (a bad signature, a digest
-  mismatch, another window or link, a certificate from another session, an unset deadline bit, a late proof, an opening of
-  another root), each held to the stand-in; the unit's id and its gates by size class; N2 compares no grid, so a window
-  whose frames differ from the Program's at the profile's counts (in content, or in order within a bucket) is accepted
-  where the stand-in rejects it, its frames being left to N3, and an egress head under another parameters digest is
-  rejected; a link whose egress end has neither an occupancy profile nor a served profile has no verdict; a head of
-  another size class is a reject;
-- **`test_network_certifier_served.py`:** a served link: honest served traffic is accepted in every window; a window
-  whose response is handed late, or carries a frame more or one fewer, is refused while the audit accepts it; a
-  request straddling a window's end refuses that window and the next, and behind the admission rule the same arrivals
-  are accepted; behind the admission rule, under random dense load, and on random idle runs, each window's derived
-  counts are the Program's grid (`expected_grids`); a window that doesn't end idle has no derivation; the circuit
-  equals its reference on four size classes, sync edge cases included; the served unit's id, public items and spec;
-- **`test_network_certifier_head_check.py`:** N2's head check: the count check is 32·T − 1 ANDs and the fields
-  736 + 8·L − 1; each part equals its reference on honest heads and refuses each tampered input where it belongs (link,
-  direction, window, parameters digest or status: the fields; another profile row or edited counts: the counts; another
-  root, salt or path: the opening), and the deadline byte and frames root are left free; the whole Definition equals its
-  reference (slow);
-- **`test_network_certifier_warden.py`:** the active warden on an injected clock, with in-memory clients and a server
-  whose bytes the test schedules:
-  - honest traffic goes out exactly on its schedule, both directions' bytes pass unchanged, the records are the wire,
-    and the audit accepts them;
-  - each of these fails its connection closed at its egress cell, and the audit refuses the window: a late byte, a
-    server that never answers or whose connection is refused, a response past `egress_cells`, a client cell of another
-    kind, and ingress past its bounds. Each `FAIL` is the same bytes, its reason only in the `fails` record. A
-    response's bytes past its last cell never reach the client. A late tick faults every window;
-  - a server slow to accept its connection moves nothing (egress starts at s + D), and the wire is identical whatever
-    the server's timing, chunking or content at the same n;
-  - past the lanes, connections queue FIFO, then get one `REFUSED` cell;
-  - every cell is B bytes, and `read_cell` refuses anything the warden wouldn't make, a `FAIL` with a payload too;
-  - the server gets each request whole at its `END`'s release with N its index among the signed `END` cells, in
-    release order rather than admission order, a client's own release header dropped and its cells unchanged; a
-    connection that fails before its `END` is unnumbered and its server gets nothing;
-- **`test_network_certifier_release.py`:** the release headers (`release`) go right after the request line, a client's
-  own are dropped whatever their case, bytes that aren't an HTTP/1 request with its whole head pass unchanged, and a
-  shim reads back the first of each;
-- **`test_network_certifier_warden_adversarial.py`:** REDTEAM's cases against the warden, each stating the bits it
-  bounds: the server's connect delay doesn't move the egress base from s + D, and two accept delays give
-  byte-identical client cells and records (regressions for 316f3292b6's open base); at one fail cell the reason isn't
-  on the wire; the server picks the fail cell (the charged term); the cell kinds and buckets don't move with the
-  server's send timing; two contents of one length give one wire shape (content is the tie's); a fail frees its lane
-  early (coupled, within the charged term);
-- **`test_network_certifier_warden_rows.py`:** the warden's cells as rows (`warden_rows`), on the warden's own runs:
-  - a link-window is a row a bucket, loaded, idle or faulted, and the wiring places each connection's cells where its
-    client got them, a bucket's cells sorted by stream;
-  - a wiring that isn't the schedule's, and a record whose cells aren't where the schedule puts them, are refused;
-  - every row opens the signed root at its position, and not at another, with a changed bit, another salt or root;
-  - salts are fresh and never shared, and the witness reads back;
-  - the registration reads back, and any changed field, extra key, root, wiring, key, session, link-window or the
-    record's own certificate is refused;
-  - `port` is a `verity/registered-reads/v1` port that reads the rows the warden's wiring places, and refuses another
-    wiring, an absent connection, a cell past its connection's or read twice; `Issuer.sign` is `certify`'s signature;
-- **`test_network_certifier_warden_rows_phase8.py`:** REDTEAM's phase 8 cases as regressions: real warden-signed
-  roots and certificates replayed across windows or directions, or a certificate over another digest, are refused;
-  the layout is in the signed head; a crossed, duplicate or padding read, and a wiring the warden didn't sign, are
-  refused;
-- **`test_network_certifier_calibration.py`:** the calibration tool, and the honest prover's choice against its rule by
-  brute force, on one link and on several under one clock;
-- **`test_network_certifier_advice.py`:** advice v0, which no Lean statement names yet:
-  - the fixture's bytes are pinned and equal the documented layout rebuilt field by field;
-  - encode, decode and the JSON form round-trip on 50 random schedules from a small vLLM-like scheduler (chunked
-    prefill, same-step and multi-run hits, preemption with resumes that hit their own KV, the row past an EOS,
-    shuffled batch order), and the simulator's schedules hold every one of those decisions;
-  - the split by window sums to the total at five values of T, equals the rule recomputed from the documented
-    records, and puts in windows 0 … w at least what their outputs read;
-  - each of 38 malformed advices is refused, and so are a kind flipped, a start moved and two requests swapped in
-    random schedules;
-  - decode refuses non-canonical strings (a wider width or length prefix, nonzero padding, a trailing byte,
-    truncation, another version, an id that isn't UTF-8), and every single-bit flip and random corruption of an
-    encoding is refused or is itself an advice's canonical encoding;
-- **`test_network_certifier_advice_adversarial.py`:** the red team's cases against advice v0, each named for the
-  attack or assumption it pins (A2, A5, attacks 2 and 7):
-  - the encoding is canonical: every accepted mutation is its own advice's encoding, and wider fields, padding,
-    trailing bytes and another version or type are refused;
-  - the split is causal: windows 0 … m − 1 hold every record their frames read, and an empty session its header;
-  - one writer per value read: rows that read unwritten or rewritten positions, hits on KV no request wrote, a resume
-    reading positions its request never computed, own KV off a resume, a second row past a stop or a resume after it,
-    a flipped `kind`, outputs or releases that aren't the steps', and requests out of first-row order or sharing an id
-    are refused;
-  - schedule choices that leave the outputs unchanged are distinct advices, each with its own bits;
-- **`test_network_certifier_advice_check.py`:** advice v0's validity circuit against `decode`:
-  - the circuit computes `reference` on the fixture, its bit flips and truncations, garbage past the length and a
-    length past L / 8 at L = 240, and (slow) on about 3000 strings at L = 1520: the simulated schedules, their flips,
-    byte corruptions, unchecked mutations encoded field by field, wider widths, padding, trailing bytes and random
-    strings;
-  - over the same strings, decode takes ⇒ `reference` takes, `reference` refuses ⇒ decode refuses, and where they
-    differ decode's reason is a `DEFERRED` one; each deferred refusal is one named string the circuit takes;
-  - the pruned sort sorts every 0-1 input up to 12 events, `comparators` counts it, and `size` is the unit's count,
-    pinned at L = 240 and at the 60 s window;
-- **`test_network_certifier_replay_chain.py`:** the replay's state chain:
-  - both rows' layouts are pinned field by field, sync and with AS and EW. At each shape (8eb1's engine class at
-    AS = 1 among them) the state row's state part is ReplayStep_v1's `_state_fields` and its bits are `arguments`',
-    its circuit's next-state bits are the row's state of the next state it decodes, and the front is its `arr_*` and
-    `bits`. The empty rows and random rows round-trip, and an entry with the wrong fields for the shape is refused.
-    `decode` refuses a gap, an empty slot with a bit set, a head past Q or D, steps past P, nonzero padding, a short row
-    and a non-bit, and `decode_window` refuses a gap, an empty slot with a bit set, a decision past `left`, `left` past
-    D, nonzero padding and a short row;
-  - the front's pruned log shifter is a slice, at every shift its bits express;
-  - `ReplayAdvance`, `ReplayLoad` and `ReplayClose` compute `advance`, `load` and `close` on random rows, each with
-    its next rows right and one bit wrong, and on each refusal. For `ReplayAdvance` these are the step's ok, an
-    arrival or a decision bit that isn't the window row's at the heads, an arrival left out, arrivals taken past what
-    is left or past A, decisions read past what is left or past A, and the idle step. For `ReplayLoad` they are the
-    last window's steps left or a head past its decisions, a queue past Q, steps past P, the carried and new decisions
-    past D, a decision past the count and a gap in the arrivals. A carried load and decisions in a window with no
-    step are taken, and the two window rows the circuit would take without its carry checks are refused;
-  - a three-window session carries decisions from window to window, and `ReplayClose` takes only its end;
-  - a two-window session runs through all three parts, with every unit's reads opened under the window's roots.
-    `check_chain` accepts it, and refuses a short window, the empty state or window under a fresh salt or another
-    program's, the carried state or window under a fresh salt, and another row of the last window;
-  - with AS and EW the load writes the arrivals' caps into `q_cap`, the step's arrivals carry them, and the next
-    state's `fin`, `cap` and `pfx` are the next row's, each refusal the circuit's too;
-  - `size` is the parts' AND counts, which circuit-check pins at the tests' shape, at the sync KV-pressure trace's,
-    and at 8eb1's engine class at AS = 1 with and without walk entries;
-- **`test_network_certifier_compile_slice.py`:** the corpus slice's scan is the replay's (every hit 0), and its
-  negatives, a made-up table and tokens among them, fail exactly `check`'s checks; the circuit is `check` on the
-  demonstration slice with real hits, a cleared enable and a forged carry among the negatives; `size` is pinned;
-- **`test_network_certifier_compile_slice_w212.py`** and **`…_phase14.py`:** the slice on vLLM 8eb1's w212 at its own
-  statics and at the engine class, and REDTEAM phase 14 at the slice
-  ([protocol/compile-slice.md](protocol/compile-slice.md));
-- **`test_network_certifier_served_rows.py`:** the runner's rows are the slice's ``srv`` row, REDTEAM phase 10's six
-  passes are refused at ``rows`` with the registered row and their own row isn't its leaf, and the record is public only;
-- **`test_network_certifier_served_statics.py`:** the served rows held to their Programs' statics, a registered row a
-  block ([protocol/served-statics.md](protocol/served-statics.md));
-- **`test_network_certifier_cache_step_phase9.py`:** REDTEAM's: `CacheStep_v1` alone leaves the table and tokens free;
-- **`test_network_certifier_active.py`:** the active certifier over localhost sockets on an injected clock:
-  - `Shaper` is `run_shaper`'s rule on random instances;
-  - an honest run's records, hand times and wire are the Program's, accepted raw and committed;
-  - senders that burst, spread, or pick their write times at random or by bits give the same wire, byte for byte;
-  - a frame held past every sync is a mismatch;
-  - a late tick, an ingress tick read early (the online prover's refusal), an overrun, a refused stream, a request
-    forwarded a bucket late, a fault that drops a carried queue and out-of-set advice each fail closed;
-  - with the salt on, each window's salt reaches the server on its own connection and nothing else carries it: the
-    wire and the egress records are the unsalted run's, each ingress record holds one salt frame, the placeholder's,
-    at the window's first bucket, and two runs on different salts publish the same records. With PoUW windows of two
-    certifier windows and 256-bit salts, one 256-bit salt is drawn per PoUW window. `reveal` refuses a window
-    without its registration (none, another window's, a receipt or digest that isn't the record's, a provenance its
-    reader doesn't read as the window), until its last ingress record is published, and for a salt never drawn;
-    `check_salts` accepts the revealed salts and rejects a missing one, one of another width and a second salt frame.
-    The bucketer puts the certifier's own frame at the head of each window's queue, ahead of the carried queue, and
-    knows it by its place: a link frame of the same bytes is never taken for it, and one a fault drops is never
-    released. With a carried queue that fills a window's first bucket, the request ends derived from the signed counts
-    are the proxy's anchors, and with the salt queued behind that queue they would come out a bucket late;
-  - back from maintenance at window 2 of a Program with nothing in window 1, a proxy publishes exactly the full run's
-    window-2 records and wire, and hands each frame when the full run does; so do a shaper and a bucketer on random
-    instances. A proxy can't start past its windows or with an online prover;
-  - the served bucketer admits whole requests while the window ends idle, holds the rest for the next window, and
-    every record it publishes derives; it refuses an own frame and a window that can't hold one request;
-  - on a sealed pair link, the records and every verdict are the unsealed run's. The wire is sealed units, padding
-    included, with no frame's bytes in it, and opened in order it is the unsealed wire. A unit with a ciphertext or tag
-    bit flipped, a replayed one, and one sealed at another slot, in another session, under another secret or under the
-    receiver's own direction each make their window and every later one `malformed`;
-- **`test_network_certifier_seal.py`:** the AEAD as the section "Sealed pair links" states it, recomputed from `hashlib`
-  and `hmac` alone and pinned; a unit opens only whole (every bit flip refused) at its own nonce under its own
-  direction's keys of its own session; the sender never seals a slot twice; and the receiver refuses a dropped,
-  replayed, swapped, cut or flipped unit and every unit after it;
+`uv run tools/verity/check/suites.py verity/core/protocols/certifier`. The tests enumerate small horizons, so they
+check the Lean statements on examples and prove nothing. A test that mirrors a statement of the analysis carries its
+name, and each test module's docstring says what it holds.
 
-No test mirrors the other eight statements of Theorems 1(b) and 3 (`SecurityProofs.EncardAcceptedRunsLe`,
-`SecurityProofs.EncardDecodableLe`, `SecurityProofs.NoFaultOfAccepted`, `SecurityProofs.RecordedRowEqFill`,
-`SecurityProofs.EncardAccSeqsLeAdvice`, `SecurityProofs.EncardAccSeqsLeBlocksCounts`,
-`SecurityProofs.EncardDecodableLeBlocks`, `SecurityProofs.EncardDecodableLeConstantRate`), nor the ingress bound's four
-(`SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe`,
-`SecurityProofs.EncardIngressObsDecodableLeContents`, `SecurityProofs.EncardIngressDecodableLeContents`), nor the four
-per-window forms (`SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`,
-`SecurityProofs.EncardDecodableLeConstantRatePerWindow`, `SecurityProofs.EncardIngressObsDecodableLePerWindow`,
-`SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`), and the sixteen witnesses (thirteen in
-`NetTiming.SecurityProofs.Sanity`, three in `NetTiming.SecurityProofs.Schedule`) have no
-Python counterpart.
-
-**The difftest** checks the definitions those statements are about, not the statements. On 10,000 random instances,
+**The difftest** checks the definitions the analysis's statements are about, not the statements. On 10,000 random instances,
 the certifier program (`lean/`, `NetworkCertifier`), evaluated, gives what this package gives. The Lean side is
 `expectedRow`, with `Accepted` of `constantRate` and `StatusComplete` decided per prefix of whole windows. The Python
 side is `expected_grids`, `check_link`'s verdicts with the first differing bucket, `check_ingress_link`, and each
@@ -2638,9 +2092,7 @@ else moves that base: not the bucket the client's ingress ends in (a), not when 
 and not when its response starts or completes. Ingress is released on the client's bytes whether or not the server's
 connection has opened, and what it releases before then is buffered for the server, at most the ingress bound's
 `ingress_cells` cells (past them the connection fails closed). A server that hasn't sent cell i's bytes by its bucket
-fails q there, which is f. (Before this, egress started at a + D, and at 316f3292b6 a waited on the server's connect,
-so a server that delayed its accept moved the whole egress schedule, about log2(`ingress_buckets`) bits a connection;
-`test_network_certifier_warden_adversarial.py` pins it closed.)
+fails q there, which is f.
 
 Every `DATA` and `END` cell's content is the bytes, cut at fixed offsets (byte k is in cell ⌊k/P⌋), never by when or
 how they were read.
@@ -2661,17 +2113,17 @@ how they were read.
     `egress_cells` + 1 outcomes.
   - Every failure sends the same `FAIL` cell, with no payload: a missed deadline, a stream that hasn't ended by the
     last cell, a broken server connection, and the client's own two. The reason is a frame of the warden's `fails`
-    record, in the bucket of the `FAIL`: witness, certified with the others and never on the wire. (At 316f3292b6 the
-    `FAIL` cell carried a reason byte, so at one fail cell a server still chose late or upstream, a bit a failure this
-    term didn't charge.)
+    record, in the bucket of the `FAIL`: witness, certified with the others and never on the wire.
   - A failure the client causes (`ingress`, `malformed`) fails at once, and only returns the client's own bits to it.
   - A failed connection frees its lane at its `FAIL`'s bucket, so f also moves later connections' s. That carries no
     bits beyond f's, which this term charges, though they reach another client.
 
 n is content, not transport: it is the length of the protocol's output, which the proofs bind. It is charged with the
 content, at ε times the output bits of unproved units at δ. So on a run in which no connection failed, the transport
-leaks log2 of the schedule's parameters, and each failed connection adds log2(cells + 1). This is an argument over
-`warden.py`'s schedule, not a Lean statement.
+leaks log2 of the schedule's parameters, and each failed connection adds log2(cells + 1). Lean states the bound over
+the warden's schedule as `Security/Definitions/NetworkCertifier/Warden.lean` models it (`WardenViewEqClientView`,
+`EncardWardenViewsLe`, and for a decoder of the client's view `EncardWardenDecodableLe`; "Capacity"), not over
+`warden.py`'s code.
 
 **Deployment requirement (`trusted-host`).** The bound holds only on a host that gives the warden's process:
 - CPU isolation from every co-tenant (its own cores), so that no co-resident process, the prover's above all, can
@@ -2679,7 +2131,7 @@ leaks log2 of the schedule's parameters, and each failed connection adds log2(ce
 - a monotonic clock that nothing the prover runs can step or slew by more than the slack: buckets are read from it.
 
 Both are part of the named assumption `trusted-host` (the auditor's host and its provider are trusted). Neither is
-checked here, and tonight's runs, on a shared node, meet neither.
+checked here.
 
 **What it attests.** Each direction's records hold exactly the cells sent that way, padding included, so |T| is the
 wire's bits. The third record, `fails`, holds one reason a failed connection.
@@ -2733,7 +2185,6 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - A record's certificate signs certificate v2's SHA-512 frame leaves, one per cell. The same cells are also committed
   as v3's hm96 rows, a row a bucket (8·B transfer gates a cell), under a root the warden signs ("The warden's cells as
   rows").
-- No Lean statement states the bound yet.
 
 ## The warden's cells as rows (`warden_rows`)
 
@@ -2805,12 +2256,6 @@ the verifier: the warden's named gap "The cells' wiring is open to the verifier"
   the head's value and no `Units`: the rows alone fix its reads, and the registered reads hold each row to its unit.
 - Here the warden commits one row per bucket under its own domain and signs the head, so the certificate names the
   root in the clear. The opening is the verifier's registered-read check, and no gate of the unit hashes.
-
-**Cost, per link-window** (`warden-serve`'s `cells.jsonl`). At the served schedule (T = 600, lanes = 8, r = 2,
-B = 256) a link-window is 600 rows of 4 KiB. The commitment, rows, wiring and tree, takes 25 to 38 ms in Python in the
-publisher's process, never the ticker's, where a row a cell (9,600 rows of 256 bytes) took 0.30 to 0.33 s; with every
-slot a data cell it takes 32 to 46 ms. At 256 lanes of 1 KiB cells, 600 rows of 256 KiB take 0.57 to 0.63 s, where
-153,600 cell rows took 5.2 to 5.4 s. The signature takes 2 to 4 ms (LMS H = 10).
 
 **Demonstration** (`benchmarks/network_traces/warden_zk.py`). A toy unit, `WardenRowIdentity{B}` at B a row's S·B
 bytes, takes one row's bits through two NOTs. Each unit reads one of a connection's cells, so its row is that cell's

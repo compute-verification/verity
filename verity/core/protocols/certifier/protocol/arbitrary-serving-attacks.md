@@ -4,9 +4,7 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md), "Advice for arbitrary ser
 
 The prices are estimates for one 60 s window at the llama8b-node1 calibration (T = 600, B = 4,096, r = 1,686, and
 16 × 8 sync values), under an assumed load of 3,000 output tokens a second. That is 180,000 decode rows, 3,000 engine
-steps and 900 requests a window, with Llama-3's V = 128,256 tokens (log2 V ≈ 17). Advice v0's size is measured on a
-synthetic schedule of that shape ("The parts as drafted"). Measurements from the trace corpus and the encodings' table
-replace the other estimates when they land.
+steps and 900 requests a window, with Llama-3's V = 128,256 tokens (log2 V ≈ 17).
 
 | # | Attack | Under the design | Cost to the prover | What closes it |
 |---|---|---|---|---|
@@ -46,8 +44,7 @@ its part's tests as the part lands. Those marked (written) run against the parts
   - schedule choices that leave the outputs unchanged (a chunked prefill, a hit instead of a recomputation, a resume in
     place) are distinct advices, each charged (2, 7, written).
 - **N2's advice mode:**
-  - N2's frames are advice v0's outputs, step, request and index, on every advice v0 accepts (11, written; fails today
-    on the row past a stop, below);
+  - N2's frames are advice v0's outputs, step, request and index, on every advice v0 accepts (11, written);
   - a response handed before its request's anchor plus the window's δ and ⌊λ/ρ⌋ is refused, and with δ = 0 the
     anchor's own bucket is admitted (written);
   - egress counts one frame off in any bucket, a queued frame released early, and ingress over RIN, past or short of
@@ -66,57 +63,3 @@ its part's tests as the part lands. Those marked (written) run against the parts
   - a cache hit with no donor of an equal prefix, and a KV read with no writer, are refused (6);
   - a stochastic request's seed is the body's or the coins', never the advice's (5);
   - `compile` under an unregistered pin either gives the same Programs or refuses (A1).
-
-### The parts as drafted (24 Oct)
-
-- **Advice v0 (`advice`)** holds A5's canonical part and A2's position part. Every row continues at its request's
-  computed position, a hit or a resume reads only KV some request computed by that step, each request runs at most
-  once a step, `kind` is derived, and at most one row runs past a stop. So attack 6's dangerous form is refused at the
-  advice, and `compile` is left two checks: the donor's token prefix equals the request's, and which write a read takes
-  when a position was computed twice.
-  - Measured on a synthetic 60 s window at the llama8b shape (900 requests, 3,080 steps, 180,374 rows, 178,552
-    outputs), it is 10.6 Mbit, 59 bits an output: the steps 8.69 Mbit (48 bits a row), the release 1.79 Mbit (10 bits
-    an output) and the requests 0.11 Mbit. The egress's own token ids are 3.03 Mbit, so the charged length must be a
-    residual code (the encodings'), with v0 as the canonical form the record digests.
-  - `bits_by_window`'s parts are not self-delimiting. The bits charged to windows before m parse only given how many
-    requests and steps they hold, about 2·log2 of the total more a prefix (9). Which outputs fall before m is timing.
-  - It has no seed field, so a request at temperature > 0 with no seed in its body has no advice (5).
-  - It names a request by its body's `user` and orders requests by first row. N2 lists them in ingress order, and the
-    tie's canonical body has no `user`. Every consumer must map advice request r to one certified request by a rule
-    fixed before the run (11, 14).
-  - Its `release` is each output's egress bucket. N2 reads `release` as each step's hand bucket, and adds
-    `ingress_frames` and `received`, which v0 lacks: one name with two meanings (11). Per output it costs 10 bits a
-    frame (20 over a day's buckets), timing that D already pays.
-- **N2's advised counts (`advised`).** On 400 random schedules its frames are v0's outputs, except that `frames` refuses
-  the one row past a stop that async scheduling runs, which v0 accepts and discards. So N2 refuses honest
-  async-scheduled sessions, and the two read one advice differently (11, 15). It checks no position rule, which is
-  sound only if it reads an advice that v0 validated. Its floor takes the hand window's sync where `schedule.eligible`
-  says the anchor window's, a choice inside the declared set either way.
-- **The I/O tie (`io_tie`)** maps frame k to request ⌊k / F⌋'s output k mod F, which needs FIXLEN, request-major order
-  and windows that start and end at request boundaries. Under arbitrary serving the map must come from the advice.
-  Ordering the port by egress position and moving the advice's map into the port's binding to the Commit (compute's)
-  keeps the tie's position wiring. No frame field but the id is free, so concurrent responses need a stream field the
-  ingress fixes per request, and a response's last event (its finish reason, `[DONE]`) must be tied to the advice's
-  `finish` and `output_len`.
-
-### For Daniel: what the guarantees would have to say
-
-These points change what a guarantee says or rests on, so they are claims, and this section changes nothing in
-`Security/`:
-1. **Sampled acceptance.** The accepted-runs bound is exact today (`Accepted`: every recorded row is the Program's).
-   Under sampled step and tie units it holds only except with probability δ_audit, and only with the influence term
-   I_ε added. The bridge from a sampled audit to `Accepted` for some (a, φ) composes `NetTiming` with the one-stage
-   audit's `audit_influence`. It is a new statement, and it rests on the verifier's coins (A3,
-   `uniform/io-getrandombytes`) and the proof system's knowledge soundness, besides what the certifier's bounds rest
-   on.
-2. **The tie's weight.** `audit_influence` prices a faulty proof block by the width it adds to a separator, its exits. That is
-   right for a step unit and wrong for a tie unit, whose exit is one bit while it frees a whole frame. Either the tie is
-   `All`, or the network term weights each tie unit by its frame's free bits. `io_tie`'s design is the second: K
-   draws a link-window, with N3 on `All`, leave ε·N·log2 V bits at δ (844 kbit a link-day at its served numbers), a
-   term the accepted-runs bound doesn't have.
-3. **The length.** "The advice's length is the leak" holds only with A7: a cap registered before the run, or the
-   indexed form (for every c, the runs charged at most c), with each window's part self-delimiting.
-4. **Public advice.** The advice, or the compiled Programs' digests that determine it, is public in this design. That
-   is beyond the four kinds of public things, unless the advice counts as a protocol output. A hiding commitment to the
-   advice, with the universal unit (`private_circuits`) running each step, would keep it private. The network charge
-   would stay the same, since the egress still depends on the advice.
