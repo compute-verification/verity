@@ -7,7 +7,7 @@ Its output is not committed: write it anywhere with --out.
     python tests/dead_code_census.py [--imported imported.json] [--out /tmp/census.json] [--git-dates]
 
 ROOTS (`census_roots.txt`, reviewed by hand): shell entry points (paths or globs: every sweep runner and negatives runner by rule), Python
-entry points, and directories of roots (the R19 regression harness).  A root shell is parsed for `-m module`, `python <path>.py`,
+entry points, and directories of roots (the regression harness).  A root shell is parsed for `-m module`, `python <path>.py`,
 `<name>.py` tokens and `from X import` / `import X` anywhere (heredocs, `-c` strings); every `.sh` a root shell names is a root too.
 Shell scripts are entry points: the census never deletes one.  A module that only a non-root shell runs is non-live and must be kept
 by name in the keep-list.
