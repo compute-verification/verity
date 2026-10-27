@@ -23,7 +23,7 @@ open Accounting Accounting.ServingRoute
 open scoped ENNReal
 
 theorem OnsiteServingEndToEnd : Verity.OnsiteServingEndToEnd := by
-  intro ι α _ d V L σ E _ _ P θ F c play success N δb η hS h1 h2 h3 h4 h5 hcS hqS hbr hcov s
+  intro ι α _ d V L σ E _ P θ F c play success N δb η hS h1 h2 h3 h4 h5 hcS hqS hbr hcov s
   have hV := hS ι α d V h1 h2 h3 h4 h5 θ F c
   have hL2 : ∀ s, Game.prob (fun o => (Accepts o.sent ∧ V.Registered o.params o.file) ∧
       ¬ (Accepts o.sent ∧ V.Registered o.params o.file ∧ ∀ a, V.Holds θ F c s a o)) (V.game θ F c) s ≤
@@ -41,8 +41,8 @@ subprotocol's honest lemma holds (`Vocab.HonestHolds`), `Verity.Soundness` holds
 deployment's honest prover accepts with a failed claim with probability `0`, so under the serving bridge and coverage
 the probability that it is accepted and succeeds on fewer server-windows than `windowsMin N` is at most `δ_b + η`. -/
 theorem OnsiteServingEndToEnd_honest {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) {L σ E : Type}
-    [Fintype σ] [Fintype E] (h : ∀ a, V.HonestHolds a) (P : Params L σ E) (θ F c : ByteArray) (hreg : V.Registered θ F)
-    (play : Game.Strategy (V.game θ F c) → Outcome → Play L σ)
+    [Fintype E] (h : ∀ a, V.HonestHolds a) (P : Params L σ E) (θ F c : ByteArray) (hreg : V.Registered θ F)
+    (play : Game.Strategy (V.game θ F c) → Outcome → Play L)
     (success : Game.Strategy (V.game θ F c) → Outcome → Prop) (N : ℝ) (δb η : Game.Strategy (V.game θ F c) → ℝ≥0∞)
     (hcS : ∀ s, P.hw.compute (P.X s) * P.ω ≤ P.cS) (hqS : 0 < P.qS)
     (hbr : Assumptions.ServingBridge (V.game θ F c) P play
@@ -70,8 +70,8 @@ theorem OnsiteServingEndToEnd_honest {ι α : Type} [Fintype α] {d : Device ι}
 strategy on whose every play the computation succeeds on fewer server-windows than `windowsMin N`, and the
 subprotocols' errors, `δ_b` and `η` summing below one there. -/
 theorem OnsiteServingEndToEnd_nontrivial {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α) {L σ E : Type}
-    [Fintype σ] [Fintype E] (P : Params L σ E) (θ F c : ByteArray)
-    (play : Game.Strategy (V.game θ F c) → Outcome → Play L σ)
+    [Fintype E] (P : Params L σ E) (θ F c : ByteArray)
+    (play : Game.Strategy (V.game θ F c) → Outcome → Play L)
     (success : Game.Strategy (V.game θ F c) → Outcome → Prop) (N : ℝ) (δb η : Game.Strategy (V.game θ F c) → ℝ≥0∞)
     (s : Game.Strategy (V.game θ F c)) (hreg : V.Registered θ F)
     (hwin : ∀ o, success s o ∧ ((play s o).windows : ℝ) < P.windowsMin N)

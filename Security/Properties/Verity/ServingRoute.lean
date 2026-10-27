@@ -11,7 +11,7 @@ and the commitment `c` (`Vocab.game`), onsite's compiled verifier's acceptance o
 circuit (`Accounting.ServingRoute.Play`) is read off each strategy and run.
 
 `OnsiteServingEndToEnd` composes `Verity.Soundness` (Layer 2, a hypothesis until the five targets are proved, pinned at
-#4613's 566733557e) with `Accounting.Guarantees.ServingRoute.ServingEndToEnd` (Layer 3 on the serving route, the serving
+#4613's 80523df29e) with `Accounting.Guarantees.ServingRoute.ServingEndToEnd` (Layer 3 on the serving route, the serving
 bridge and coverage). The bound is the subprotocols' errors at the strategy (each its published `δ` plus its collision
 term at its finder's SHA-512 collisions, `Vocab.error`), the bridge's `δ_b` and coverage's `η`.
 -/
@@ -31,8 +31,8 @@ acceptance and the commit check) put the play in the serving class except with p
 accepts files that passed the commit check and the computation succeeds on fewer server-windows than
 `windowsMin N = (N − n_dark)/(q(c_S, k_S) + μ k_S)` is at most the subprotocols' errors summed plus `δ_b` plus `η`. -/
 def OnsiteServingEndToEnd : Prop :=
-  ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) {L σ E : Type} [Fintype σ] [Fintype E]
-    (P : Params L σ E) (θ F c : ByteArray) (play : Game.Strategy (V.game θ F c) → Outcome → Play L σ)
+  ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) {L σ E : Type} [Fintype E]
+    (P : Params L σ E) (θ F c : ByteArray) (play : Game.Strategy (V.game θ F c) → Outcome → Play L)
     (success : Game.Strategy (V.game θ F c) → Outcome → Prop) (N : ℝ) (δb η : Game.Strategy (V.game θ F c) → ℝ≥0∞),
     Soundness →
     V.SampledProofsSound → V.PouwSound → V.PousSound → V.BandwidthAuditSound → V.NetworkCertifierSound →

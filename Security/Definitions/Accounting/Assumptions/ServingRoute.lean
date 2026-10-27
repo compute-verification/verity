@@ -26,12 +26,12 @@ and where each would come from:
 * causality and the compute rate: the device model (Layer 1; LEAN-70's `FixedMachine` once it lands);
 * the links as declared and each server's boundary capacity at most `F`: the network certifier's claim with the
   declared links, `Covered` and the trusted units (`trusted-nebius-host`); the spine's F12 keeps it a physics premise;
-* windows of at most `ω` ticks with the state at each window's start at most `R` bits: the wipe. Its form here is
-  structural (`Placed.state`, the width a server carries across its wipe tick); the wipe's guarantee bounds information
-  (`Pous.Guarantees.StreamedWipeMeetsInfo`), and the structural width does not follow from it for every strategy (a
-  server that passes a wipe and reads values it held through it carries them as state), so this part restricts the
-  strategies until the informational route lands (MEM-98);
-* the counted operations on the servers or at the dark leaves, and the dark inventory: the deployment's inventory
+* each serving block one server's gates over `ω` ticks from a tick at which its state is at most `R` bits: the wipe.
+  Its form here is structural (`Placed.state`, the width a server carries across its wipe tick); the wipe's guarantee
+  bounds information (`Pous.Guarantees.StreamedWipeMeetsInfo`), and the structural width does not follow from it for
+  every strategy (a server that passes a wipe and reads values it held through it carries them as state), so this part
+  restricts the strategies until the informational route lands (MEM-98);
+* every operation gate in a serving block or at the dark leaves, and the dark inventory: the deployment's inventory
   (`ε_dark`, Daniel 26 Oct 6:55 PM PDT);
 * the per-block cap `q` at `(c_S, k_S)`: `Accounting.Guarantees.ServingRoute.ServingPerBlockCap` gives it from the
   activation premise at serving scale, which is contested (a server-day block can replay training steps from data;
@@ -42,7 +42,7 @@ and where each would come from:
 It fails when a claim leaves room the class doesn't: a link the certifier doesn't see, state a wipe leaves beyond `R`
 bits, hardware outside the servers and the dark inventory, or blocks of the serving budget that compute more than `q`. -/
 def ServingBridge {O L σ E : Type} [Fintype E] (G : Game O) (P : Params L σ E)
-    (play : Game.Strategy G → O → Play L σ) (Claims : Game.Strategy G → O → Prop)
+    (play : Game.Strategy G → O → Play L) (Claims : Game.Strategy G → O → Prop)
     (δb : Game.Strategy G → ℝ≥0∞) : Prop :=
   ∀ s, Game.prob (fun o => Claims s o ∧ ¬ P.Class (play s o)) G s ≤ δb s
 
@@ -53,7 +53,7 @@ actual circuit) is at most `η s`. It fails when the task can be reached with le
 `N`: a shortcut the counting doesn't see, or an `N` above what the task needs. The containment of the reference circuit
 is folded in here (spine §8.1: a task premise, not a bridge). -/
 def ServingCoverage {O L σ E : Type} [Fintype E] (G : Game O) (P : Params L σ E)
-    (play : Game.Strategy G → O → Play L σ) (Success : Game.Strategy G → O → Prop) (N : ℝ)
+    (play : Game.Strategy G → O → Play L) (Success : Game.Strategy G → O → Prop) (N : ℝ)
     (η : Game.Strategy G → ℝ≥0∞) : Prop :=
   ∀ s, Game.prob (fun o => P.Class (play s o) ∧ Success s o ∧ (play s o).J.total < N) G s ≤ η s
 
