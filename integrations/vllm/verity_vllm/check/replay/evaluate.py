@@ -415,7 +415,7 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
                 # (iii) the plane must be COMMITTED at the lifted word's width (u32 / u64): a bf16 plane whose values happen to equal the Active
                 # payloads is a different representation of the identity -- refused by name, never read as Active words
                 rec["why"] = (f"{member}: committed as {why!r} ({_ITEMSIZE.get(str(why))} B words), the query requires the lifted word {dtype} "
-                              f"({RM.LIFTED_DTYPES[dtype][1]} B: Value<{RM.LIFTED_DTYPES[dtype][0] + 1}>) -- representation mismatch (F-r17b-52 (iii))")
+                              f"({RM.LIFTED_DTYPES[dtype][1]} B: Value<{RM.LIFTED_DTYPES[dtype][0] + 1}>) -- representation mismatch")
                 return rec | {"result": None}
             eq, nd, first, verdict = lifted_compare(have, want, active, dtype)
             outs.append({"member": member, "width": width, "equal": eq, "differing_elements": nd, "first_diff": first, "lifted": dtype,

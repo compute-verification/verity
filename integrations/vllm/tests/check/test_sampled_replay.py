@@ -1851,7 +1851,7 @@ def test_a_fault_on_some_picks_inside_an_evaluated_stratum_is_partial_named_neve
     assert rep["strata_unevaluated"] == []                                       # no stratum is FULLY unevaluated: the old rule graded this complete
     assert rep["result"] is None and rep["grade"] == "partial"
     assert rep["why"].startswith(f"{rep['sample']['not_evaluated_n']} pick(s) not evaluated inside evaluated strata (missing-input x {rep['sample']['not_evaluated_n']}) -- run-time fault, not a gap on the record: ")
-    assert "not retained" in rep["why"] and "(F-r16-13)" in rep["why"]
+    assert "not retained" in rep["why"]
     assert RC.why_class("committed bytes not retained for (r0, step 0, x/out) [0, 16)") == "missing-input" and RC.why_class("ambiguous binding: 2 entries for (...)") == "missing-input"
     assert RC.why_class("committed bytes not retained ...") in RC.WHY_CLASSES_FAULT and "missing-input" not in RC.WHY_CLASSES_BY_NAME
     assert all(x["why_class"] == "missing-input" for x in rep["not_evaluated"])

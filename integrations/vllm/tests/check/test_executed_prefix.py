@@ -421,7 +421,7 @@ def test_the_committers_own_count_is_never_sufficient_by_itself(tmp_path):
     e = _mixed_epr()
     L = EPL.link_to_match_account(e, EPL.load_match_account(None), order=ORDER, declared_lag=1)
     assert not L["ok"] and L["required"]
-    assert any("on the committer's own served count alone" in p and "(R17-27 (a))" in p for p in L["problems"]), L["problems"]
+    assert any("on the committer's own served count alone" in p and "(executed-prefix condition (a))" in p for p in L["problems"]), L["problems"]
     # tokens.json present but no global_match.json: linked to the served output only, not to the Match account -> problem
     L2 = EPL.link_to_match_account(e, EPL.load_match_account(_match_account(tmp_path, write_gm=False)), order=ORDER, declared_lag=1)
     assert not L2["ok"] and any("GM-01's account (global_match.json) is not beside" in p for p in L2["problems"]), L2["problems"]
@@ -440,7 +440,7 @@ def test_a_transcript_that_is_not_the_matchs_or_an_unattested_lag_breaks_the_lin
     # (b) tokens.json attests LAG 0 under a Program declaring LAG 1 -> lag not attested on the record (its executed_prefix_len 11 != 12 too)
     d = _match_account(tmp_path / "b", tj_lag=0)
     L = EPL.link_to_match_account(e, EPL.load_match_account(d), order=ORDER, declared_lag=1)
-    assert not L["ok"] and any("lag not attested on the record" in p and "(R17-27 (b))" in p for p in L["problems"]), L["problems"]
+    assert not L["ok"] and any("lag not attested on the record" in p and "(executed-prefix condition (b))" in p for p in L["problems"]), L["problems"]
     assert any("executed_prefix_len 11 != this rule's 12" in p for p in L["problems"]), L["problems"]
     # GM-01 FAILED -> the account this prefix must be linked to did not pass
     d = _match_account(tmp_path / "c", gm_verdict="FAIL")

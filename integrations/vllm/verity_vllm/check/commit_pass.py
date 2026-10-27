@@ -171,7 +171,7 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
                     # closed whatever seeded the replay; form (B) stands in for a named gap, never for a fault
                     sr_why = sr.get("why") or sr.get("grade")
                     return False, (f"C2 of record not established (DECISIONS-2 §4): sampled replay {sr.get('grade')} -- {sr_why}; "
-                                   f"the row's Commit is C1 + C3 only (F-r16-13, whatever seeded the replay: {_swhy})")
+                                   f"the row's Commit is C1 + C3 only (whatever seeded the replay: {_swhy})")
                 c2_notes.append(f"{_swhy}; C2 of record by the complete form (B) alone")
                 _mech = True
         if _mech:

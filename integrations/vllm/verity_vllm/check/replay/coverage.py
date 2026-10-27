@@ -24,8 +24,8 @@ HANDED = "the required-value manifest the replay was handed"
 #: gap under the query of record)
 ATTENTION_INTERIOR_MECHANISM = ("AttnBlock interiors (Q_fine_v1 units: s[c] dots, PV k-step chains, max chain, lane sums, epilogue) live in the "
                                 "fa2/fa3 M1 export stream; the sampled replay evaluates the attention ROW (the Q_module_v1 unit) from its "
-                                "committed q + K/V history to its committed output and does not read those interior words (R17-10 (3) / R17-11). "
-                                "[R17-14] The row evaluator is driven by the row's DECLARED signature, not by an attention-specific hand list: "
+                                "committed q + K/V history to its committed output and does not read those interior words. "
+                                "The row evaluator is driven by the row's DECLARED signature, not by an attention-specific hand list: "
                                 "its inputs are exactly the args the Program row wires (the Definition's arity: q, K history, V history -- each "
                                 "ref resolved to committed words at its producer's step; a row wiring another arity is unresolved by name), its "
                                 "statics come from the spec text (T, NH, KVH, D, BN, and for Attention_v2 DOT / INV by id), and every member "
@@ -46,17 +46,17 @@ QUERY_FAMILY_MECHANISM: dict[str, str] = {
     "sampler_seed": ("prescribed input: prescribed_input_linkage (committed seed == the declared SamplingParams.seed, ruling 36) + C1 / C3; "
                      "CONSUMED BY the sampler VU GumbelTopPTokenSelect_v1's exact replay, which reads the committed seed as its Philox key "
                      "(seed, pos) -- the committed sampled id is reproducible from the committed logits only with it (form (A) per pick; the "
-                     "seed is a bound input of every sampled stratum) -- and by stoch_recompute's R17-2 attribution (served token re-derived "
-                     "from committed logits + seed + splits, every row) [stoch M-0804 wording]"),
-    "sampler_splits": ("prescribed input: prescribed_input_linkage (committed S == SplitsFor_v1(live geometry), REQ-03 / ruling 36) + C1 / C3; "
+                     "seed is a bound input of every sampled stratum) -- and by stoch_recompute's attribution (served token re-derived "
+                     "from committed logits + seed + splits, every row)"),
+    "sampler_splits": ("prescribed input: prescribed_input_linkage (committed S == SplitsFor_v1(live geometry), REQ-03) + C1 / C3; "
                        "CONSUMED BY the same relation (the sampler VU GumbelTopPTokenSelect_v1's exact replay) as its 6th operand: the top-p mask "
                        "kernel's split count S = SplitsFor_v1(|live(s)|, num_SMs), "
-                       "derived, never a static (F-stoch-01 = a wrong S; form (A): S is a bound input of every sampled stratum) and by "
-                       "stoch_recompute's R17-2 attribution (served token re-derived from committed logits + seed + splits) [stoch M-0804 wording]"),
+                       "derived, never a static (a wrong S fails form (A): S is a bound input of every sampled stratum) and by "
+                       "stoch_recompute's attribution (served token re-derived from committed logits + seed + splits)"),
     "fa2_hidden_m1_stream": ("attention interior (the launch's M1 export stream): no VU row of its own; the attention VU it belongs to is state-linked "
-                             "(NOT_YET) -- C1 / C3 + form (B) where present; form (A) over it is an engineering gap, not a domain (R17-3)"),
+                             "(NOT_YET) -- C1 / C3 + form (B) where present; form (A) over it is an engineering gap, not a domain"),
     "fa3_hidden_m1_stream": ("attention interior (the Hopper launch's M1 export stream): no VU row of its own; the attention VU it belongs to is "
-                             "state-linked (NOT_YET) -- C1 / C3 + form (B) where present; form (A) over it is an engineering gap, not a domain (R17-3)"),
+                             "state-linked (NOT_YET) -- C1 / C3 + form (B) where present; form (A) over it is an engineering gap, not a domain"),
     "norm_scales": ("opt-in, never the record (query.norm_scales): a norm's scale, one f32 per row -- interior to the kernel norms' Calls (the "
                     "norm-scale tap) or an ATen-chain norm's rsqrt output: no VU row of its own under Q_module_body_v1; C1 / C3 here, and the "
                     "tapped kernels' scale == the IR model's scale bit for bit is the norm-tap exactness property (properties.norm_tap_exactness)"),
@@ -307,8 +307,8 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
             kind_by_family.setdefault(fam, "static" if st == "*" else "unclassified")
     # --- the uncovered list: row groups by class, then the families with no rows at all -------------------------------------------------
     mech_of_class = {
-        "state-linked": "C1 coverage + C3 openings + form (B) where present; the exact VU (K/V history from committed qkv outputs) is an engineering gap, not a domain (R17-3)",
-        "no-evaluator": "C1 coverage + C3 openings + form (B) where present; a registered evaluator is the engineering gap (form (A) required, R17-3)",
+        "state-linked": "C1 coverage + C3 openings + form (B) where present; the exact VU (K/V history from committed qkv outputs) is an engineering gap, not a domain",
+        "no-evaluator": "C1 coverage + C3 openings + form (B) where present; a registered evaluator is the engineering gap (form (A) required)",
         "plane-fed": "the plane is read as its consumers' committed input; the producer's own relation awaits MAN-06f v3 unit 2 (form (B) required meanwhile)",
         "interior-composed-v2": "C1 / C3 + form (B) required (MAN-06g composed evaluator is the v2 follow-up)",
         "mixed": "rows of two classes under one identity: named, resolve before any claim",
@@ -354,7 +354,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                       "rows_agree": ((not ctrl_disagree) if (own_rows and mq is not None) else None),   # None: no header to agree with
                       "families": (gf if gf is not None else "unstated (older manifest header: guard_rows only)"),
                       "why": ("the lifted Program's guard / controller rows carry no identity under Q_module_v1's rule: RequiredValues(Lift(P), Q) == "
-                              "RequiredValues(P, Q) row for row; the bits are not sampled by C2 -- said here BY NAME (revb S-r17b-16 R4)"),
+                              "RequiredValues(P, Q) row for row; the bits are not sampled by C2 -- said here BY NAME"),
                       "mechanism": ("the lifted record's R8 controller replay through the registered evaluators (LIsEOS / LEmitNext / LSelect; pad "
                                     "Continuation_v1) + the executed prefix derived from r_t (R3, executed_prefix_of_record served=)")}
         uncovered.append(controller)
@@ -394,7 +394,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
               "identities_unreachable_by_alias": {"n": n_unreachable, "first": unreachable, "alias_entries": len(aliases),
                                                   "why": ("invocation >= 1 identities that no `op_path_aliases` entry maps a Program path to: the manifest "
                                                           "carries no (or a partial) alias table; the Program's per-layer rows of the shared module then "
-                                                          "read as vus_outside_query and these identities as identities_without_rows (F-r17b-38)"
+                                                          "read as vus_outside_query and these identities as identities_without_rows"
                                                           if n_unreachable else None)},
               "rows_disagree": {"n": n_rows_disagree, "first": rows_disagree},
               "rows_annotation_inconsistent": {"n": n_rows_annot, "first": rows_annot,
@@ -414,12 +414,12 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                          and not ep_faults and not past_stop and not manifest_cut and not ctrl_disagree))
     _qid0 = _header(man, "query_id") or "Q_module_v1"
     _noun = {"Q_module_v1": ("the module-boundary query of record", "Program row = module-boundary VU"),
-             "Q_module_pad_v1": ("the declared padded-boundary query (revb S-r17b-51 (b))", "Program row = module-boundary VU + every slot unit of a padded MoE row"),
+             "Q_module_pad_v1": ("the declared padded-boundary query", "Program row = module-boundary VU + every slot unit of a padded MoE row"),
              "Q_fine_v1": ("the fine query (vu_canonical) through the RequiredValues path", "fine VU = relation-level partition unit"),
-             "Q_fine_direct_v1": ("the directly-committed fine query (R17-43 s8)", "fine VU ending at a materialised word + the module rows"),
+             "Q_fine_direct_v1": ("the directly-committed fine query", "fine VU ending at a materialised word + the module rows"),
              }.get(_qid0, ("the query of record", (_header(man, "unit") or "per its header")))
     src = ((f"required manifest: {_qid0}(P) -- {_noun[0]} over the Program (unit: {_noun[1]}; "
-            "Q_fine_v1 selects the families, not the unit; R17-3 authority, R17-9 (ii), R17-10)" if man is not None
+            "Q_fine_v1 selects the families, not the unit)" if man is not None
             else f"required manifest REFUSED ({refused}): nothing reconciled; the Program rows' own manifest addresses, NOT a Q(P) statement"
             if refused is not None
             else "NO required manifest supplied: the Program rows' own manifest addresses (the v2 query's population; NOT a Q(P) statement -- "
@@ -427,7 +427,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     # the guard's state travels with Q(P) onto the record: a manifest whose dataflow guard was not armed says so here
     guard = man.guard if man is not None else None
     guard_line = (("guard armed" if guard.get("armed") else "guard NOT armed") + f" ({guard.get('engine')})" if guard is not None
-                  else ("guard state not on the manifest (pre-R17 header)" if man is not None
+                  else ("guard state not on the manifest (its header predates the guard)" if man is not None
                         else "manifest refused" if refused is not None else "no manifest"))
     # the one-release cross-check (traversal of record, inventory beside it) travels onto the record and the scope line
     cc = man.cross_check if man is not None else None
@@ -447,7 +447,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     if uncovered:
         scope += "; uncovered by name: " + ", ".join(f"{u['spec'] or u['family']} x{u['identities']} ({u['class']})" for u in uncovered)
     if n_not_exec or ep_faults:
-        scope += (f"; not-executed(R17-1) {n_not_exec} identities (" + ", ".join(f"{r}: a_r {e['a_r']} LAG {e['lag']} -> steps [{e['n_exec']}, {e['cap']})"
+        scope += (f"; not-executed {n_not_exec} identities (" + ", ".join(f"{r}: a_r {e['a_r']} LAG {e['lag']} -> steps [{e['n_exec']}, {e['cap']})"
                                                                              for r, e in sorted((executed_prefix or {}).items()) if e.get('steps_not_executed')) + ")"
                   + ("; executed-prefix FAULTS: " + "; ".join(f"{f['request_id']}: {f['faults'][0]}" for f in ep_faults) if ep_faults else ""))
     return {"query_total": {"source": src, "identities": int(total), "by_family": {k: int(v) for k, v in sorted(fam_total.items())},
@@ -473,15 +473,14 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                                "strata": (len(strata) if strata is not None else None),
                                "strata_evaluated": (sum(1 for v in strata.values() if int(v.get("evaluated") or 0) > 0) if strata is not None else None),
                                "rule": ("'complete' grades the sampled strata over the REACHED identities only; every required identity outside the "
-                                        "reach is in uncovered_by_name (with its mechanism of record), never inside the grade (R17-3). "
+                                        "reach is in uncovered_by_name (with its mechanism of record), never inside the grade. "
                                         "`identities_under_evaluated_module` counts every identity of a (request, step, module) with >= 1 evaluated pick "
-                                        "-- one pick under a 2-member module counts 2; it is NOT a count of identities whose own elements were evaluated "
-                                        "(revb S-r17b-04 label)")},
+                                        "-- one pick under a 2-member module counts 2; it is NOT a count of identities whose own elements were evaluated")},
             "uncovered_by_name": uncovered, "uncovered_identities": int(n_uncovered),
             "controller": controller,   # [R4] None on an un-lifted Program; on a lifted one the named statement above (also in uncovered_by_name)
             # the two flat keys the readers wait for, emitted from the SAME computation as the block below
             "not_executed_by_family": {k: int(v) for k, v in sorted(not_exec.items())},
-            "not_executed_rule": {"rule": "not-executed(R17-1, a_r, LAG)", "applied": bool(executed_prefix), "n": int(n_not_exec),
+            "not_executed_rule": {"rule": "not-executed(a_r, LAG)", "applied": bool(executed_prefix), "n": int(n_not_exec),
                                   "requests": {r: {"a_r": e["a_r"], "lag": e["lag"], "n_exec": e["n_exec"], "cap": e["cap"], "step_range": e.get("steps_not_executed"),
                                                    "n": int(not_exec_req.get(r, 0)), "faults": e.get("faults"), "mechanism": e.get("mechanism")}
                                                for r, e in sorted((executed_prefix or {}).items())},

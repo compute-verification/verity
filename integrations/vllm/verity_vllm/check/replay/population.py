@@ -47,9 +47,8 @@ def phase_anchor(pi_n_steps: int, ep: dict | None) -> dict[str, Any]:
         last_is = "the lag step" if lag > 0 else "the EOS step (LAG 0: no lag step)"
         return {"last_step": n_exec - 1, "anchor": "n_exec - 1", "cap_last_step": cap_last, "n_exec": n_exec,
                 "lag_step": (n_exec - 1 if lag > 0 else None),
-                "why": (f"the request stopped at a_r {ep.get('a_r')} under LAG {lag}: steps [{n_exec}, {int(ep['cap'])}) are not executed "
-                        f"(R17-1); its last EXECUTED step {n_exec - 1} is {last_is} -- the `last` stratum is anchored there, not at the cap "
-                        f"(F-r17b-39)")}
+                "why": (f"the request stopped at a_r {ep.get('a_r')} under LAG {lag}: steps [{n_exec}, {int(ep['cap'])}) are not executed; "
+                        f"its last EXECUTED step {n_exec - 1} is {last_is} -- the `last` stratum is anchored there, not at the cap")}
     if ep and not ep.get("faults"):
         # an EOS stop at a_r = cap - LAG under LAG > 0 has n_exec == cap: the cap anchors, AND its last step IS a lag
         # step -- the flag follows the STOP (a_r < cap and LAG > 0), not n_exec < cap.
@@ -292,10 +291,10 @@ NOT_EXECUTED_SCOPE = ("NOT-EXECUTED-BY-RULE is an active-reference implementatio
 EXECUTED_PREFIX_RULE = ("R17-1: a request that served a_r < cap tokens (its served token a_r-1 a declared EOS id of the Program's stop rule) "
                         "executed exactly n_exec = min(a_r + LAG, cap) request-relative steps; a request served to its cap executed cap "
                         "(a length stop: no post-EOS row even if the cap token is an EOS). RequiredValues(P, Q_module_v1) stays the "
-                        "cap-length manifest of record (fixed population across stopping points, BRIEF 7B; digest unchanged): its identities "
-                        "at request-relative steps >= n_exec are the named class not-executed(R17-1, a_r, LAG) -- counted in query_total, "
+                        "cap-length manifest of record (fixed population across stopping points; digest unchanged): its identities "
+                        "at request-relative steps >= n_exec are the named class not-executed(a_r, LAG) -- counted in query_total, "
                         "absent from the sampling pool, never 'not evaluated' and never silently absent; reached + uncovered + not-executed "
-                        "== |Q(P)|. CONDITIONS (R17-27): (a) a_r is READ from the Match record of record (G6 lengths_by_request / tokens.json) "
+                        "== |Q(P)|. CONDITIONS: (a) a_r is READ from the Match record of record (G6 lengths_by_request / tokens.json) "
                         "and the Commit's own committed served length must EQUAL it by name -- the committed tokens count only because they "
                         "are linked to the served output and the Match account (C2 boundary linkage + tokens_equal + G6 agree); 'the committer "
                         "says EOS happened here' is never sufficient; (b) LAG is the Program's declared static (workload_lag_static), attested "
@@ -306,7 +305,7 @@ EXECUTED_PREFIX_RULE = ("R17-1: a request that served a_r < cap tokens (its serv
 
 MECH_RECURRENCE = "recurrence(Continuation_v1): n_exec = |{t : r_t = 1}| over the served list (first EOS stops; A = LAG); min(a_r + LAG, cap) is the CHECK"
 MECH_ARITH_NO_SERVED = ("arithmetic(a_r, LAG): n_exec = min(a_r + LAG, cap) -- the served list was not supplied, the class is not derived from r_t "
-                        "(revb S-r17b-20 R3 open on this record: pass served= / eos_ids=)")
+                        "(pass served= / eos_ids= to derive it)")
 
 
 def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive: int = 0, eos_declared: bool | None = None,
@@ -333,11 +332,11 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
         # (e.g. match/capture/ moved to /vault under a queued Commit).  Still fail-closed -- (a) and (b) below fault too --
         # but an operator reads 'input missing: restore tokens.json' and not 'the Program's executed prefix is wrong'.
         faults.append(f"Match account leg(s) missing beside the Commit: {', '.join(str(x) for x in account_missing)} -- the link cannot hold on a "
-                      "missing input (restore the Match record's file(s) and re-run the Commit; not a verdict on the Program) (R17-27 a/b)")
+                      "missing input (restore the Match record's file(s) and re-run the Commit; not a verdict on the Program) (executed-prefix conditions (a), (b))")
     if not isinstance(a_r_source, str) or not a_r_source.strip():
-        faults.append("a_r_source unstated: the record must name where a_r was read (R17-27 (a); S-r17b-09 n1)")
+        faults.append("a_r_source unstated: the record must name where a_r was read (executed-prefix condition (a))")
     if lag not in (0, 1):
-        faults.append(f"LAG {lag} outside the supported profile domain {{0, 1}} (R17-1 N2)")
+        faults.append(f"LAG {lag} outside the supported profile domain {{0, 1}}")
     if a_r < 0 or a_r > cap:
         faults.append(f"served length a_r {a_r} outside [0, cap {cap}]")
     n_exec = cap if a_r >= cap else min(a_r + lag, cap)                        # the arithmetic: the mechanism without a served list, else the CHECK

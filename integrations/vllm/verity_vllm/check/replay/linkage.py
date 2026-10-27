@@ -183,7 +183,7 @@ def linkage_horizon(arrive: int, declared_cap: int, program_steps: int | None, e
     return list(range(int(arrive), int(arrive) + max(n, 0)))
 
 
-SEED_RULE = "committed runner.sampler/seed word == the DECLARED workload seed of the request (i64 exact) at every step with a committed sampled id (constant per request; stoch M-0446)"
+SEED_RULE = "committed runner.sampler/seed word == the DECLARED workload seed of the request (i64 exact) at every step with a committed sampled id (constant per request)"
 SPLITS_RULE = "committed runner.sampler/splits word at step s == SplitsFor_v1(#requests with a committed sampled id at s, num_SMs of record) (REQ-03 derived S)"
 
 

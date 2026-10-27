@@ -83,7 +83,7 @@ def test_the_mechanism_is_in_the_registry_and_the_evaluator_table():
 
 def test_hopper_commit_only_without_form_b_fails_by_name():
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": SR_HOPPER}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (COORD M-0721 (1)): 3616 VUs not evaluable by name (no-evaluator)"), why
+    assert not ok and why.startswith("C2 of record not established: 3616 VUs not evaluable by name (no-evaluator)"), why
     assert "form (B) absent" in why and "3616 x no registered evaluator for Gemm_v2" in why
     assert "RoPE" not in why and "Attention" not in why                           # the domain is not the gap named
 
@@ -98,7 +98,7 @@ def test_hopper_full_row_with_a_complete_oracle_passes_carrying_the_gap():
 def test_hopper_1024_128_with_the_m0217_value_partial_oracle_fails_by_name():
     """The module outputs at the not-snapshotted steps are checked by neither form: named, not a PASS."""
     ok, why = commit_verdict({**BASE, "binding": _bnd(1), "sampled_replay": SR_HOPPER, "oracle_compare": OC_M0217}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (COORD M-0721 (1)): 3616 VUs not evaluable by name (no-evaluator)"), why
+    assert not ok and why.startswith("C2 of record not established: 3616 VUs not evaluable by name (no-evaluator)"), why
     assert "form (B) result None" in why or "form (B) not complete" in why or "instance outputs compared" in why, why
 
 

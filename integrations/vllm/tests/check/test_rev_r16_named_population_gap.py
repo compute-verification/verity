@@ -61,7 +61,7 @@ OC_PARTIAL = {**OC_COMPLETE, "result": None, "grade": "partial", "complete": Fal
 @pytest.mark.parametrize("b", [1, 2])
 def test_named_population_exclusions_without_form_b_do_not_pass_f_r16_02(b):
     ok, why = commit_verdict({**BASE, "binding": _bnd(b), "sampled_replay": SR_COMPLETE_INTERIOR_ONLY}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (COORD M-0721 (1))"), (b, ok, why)
+    assert not ok and why.startswith("C2 of record not established: "), (b, ok, why)
     assert "140 VUs not evaluable by name" in why and "interior-composed-v2" in why and "MAN-06g" in why
     assert "form (B) absent" in why and "140 x fed by interior producer" in why
     assert "RoPE" not in why                                                     # the NOT_YET exclusion is not the gap named here
@@ -125,7 +125,7 @@ def test_partial_or_mismatching_form_b_does_not_lift_the_gap():
     oracle mismatch it is."""
     rec = {**BASE, "binding": _bnd(2), "sampled_replay": SR_COMPLETE_INTERIOR_ONLY}
     ok, why = commit_verdict({**rec, "oracle_compare": OC_PARTIAL}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (COORD M-0721 (1))") and "form (B) result None (partial)" in why
+    assert not ok and why.startswith("C2 of record not established: ") and "form (B) result None (partial)" in why
     assert _form_b_complete_over_values(OC_PARTIAL).startswith("form (B) result None (partial)")
     assert "MATCH_SNAP_STEPS=all" in _form_b_complete_over_values({**OC_COMPLETE, "complete": False, "steps_not_snapshotted": [2]})
     no_io = {**OC_COMPLETE, "compared_by_family": {"input_token_ids": 3}, "not_compared_by_family": {"instance_outputs": 5}}
