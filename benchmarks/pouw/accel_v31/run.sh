@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# ACCEL v3.1's prover (v31.cu) on leased GPUs, judged by v31.py (cwd = the source tree's root, under `research run`).
+# Dither v3.1's prover (v31.cu) on leased GPUs, judged by v31.py (cwd = the source tree's root, under `research run`).
 # Outside the leases: the build, and on the CPU the gates' operands and seeds (v31.py gpu-prep, a stub challenger's) and the
 # bench shapes' CGP1 params. Lease 1: every gate (one call each into poisoned buffers, dumped with its no-write control).
-# Then on the CPU, v31.py gpu-check on each gate (every word, O and tree level against the reference, then the verifier's
+# Then on the CPU, v31.py gpu-check on each gate (every prefix sum, O and tree level against the reference, then the verifier's
 # verdict line on the GPU's own commitment: honest gates accepted, cheating gates refused). Lease 2, in bench mode and only
 # if every gate's check passed: v31 bench over SHAPES for each of VARIANTS (cuBLASLt and CUTLASS beside the protocol's arms,
 # interleaved). After it: gpu-sample on each bench shape's two sampled tiles, of its checked serial call and of an
 # overlapped call after the timing, and the gamma table beside D6 v1.1.
 #
-#   research run --on vy-nebius-1 --project verity --campaign cmp-159 --source . --cwd source --env GPU_LEASE_WHO=V31-GPU \
+#   research run --on vy-nebius-1 --project verity --campaign CAMPAIGN --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     --env HYPOTHESIS="..." -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py \
-#     --by V31-GPU -- bash benchmarks/pouw/accel_v31/run.sh
+#     --by LANE -- bash benchmarks/pouw/accel_v31/run.sh
 # (a node's lane runs go through a slot of its gpu pool; the GPUs come from gpu-lease inside, for the GPU work alone)
 #
 # MODE=prof: after the gates, in place of the bench, Nsight Compute (--set full) on PROF_KERNELS (an ncu -k regex, default
@@ -23,7 +23,7 @@
 # `v31 once`, and over as many wgmma.linear calls (gemm=1), on each of SHAPES for each of VARIANTS: every pipe's duty
 # (duty.metrics) with the kernels concurrent as they run, out/duty-TAG-SHAPE-{ovl,wgl}.csv and duty.py's table, duty.md.
 #
-# MODE=fill: Dither's no-fold call (CMP-172) in place of all the above. libv31.so (v31.cu -DV31_LIB) and, under a lease,
+# MODE=fill: Dither's no-fold call in place of all the above. libv31.so (v31.cu -DV31_LIB) and, under a lease,
 # v31lib.py's gate (the binding's calls: the GPU's pad, values and tree against v31.py's Fill, then the verifier's verdicts
 # on the GPU's own openings, honest and cheating, filler and served, a filler's and a served Prover interleaved;
 # verdicts.txt), once with the protocol GEMM and once (the filler's gates) with V31_LTW=1 (cuBLASLt's GEMM at S = 1;
@@ -316,7 +316,7 @@ $LEASE bash -c '
   done < "$W/gates.txt"'
 echo "lease gates rc $?" >> "$O/rc.txt"
 
-# the device gates' word-for-word check and the verifier's verdicts, on the CPU
+# the device gates' exact check and the verifier's verdicts, on the CPU
 echo "$GATES" | while read -r name _; do
   [ -n "$name" ] || continue
   [ -f "$W/gates/$name/words.bin" ] || { echo "check $name rc missing" >> "$O/rc.txt"; continue; }

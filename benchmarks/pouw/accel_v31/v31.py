@@ -1,13 +1,13 @@
-"""ACCEL v3.1's credited static matmul (verity/core/protocols/pouw/accel/PROTOCOL.md on #4746): the prover's values and
+"""Dither v3.1's credited static matmul (v3.2 is verity/core/protocols/pouw/dither/PROTOCOL.md): the prover's values and
 commitment on the CPU, a stub challenger, and the reference verifier, so v31.cu's output is judged bit for bit and a run is
 accepted or refused by the checks the proof block's Program makes.
 
 A call is O = (A + d_A)(B + d_B)^T over the integers, A m x K and B N x K int8. The challenger's seeds (after the operand
-roots) give the coins, each a stream of SHA-512 counter-mode blocks ``prg(seed, tag, idx) = SHA-512(seed || tag || be64(idx))``
-(one compression a 512-bit block; a stub for the live seed stream, which would give fresh 512-bit seeds at the coin rate
+roots) give the coins, each a stream of SHA-512 counter-mode chunks ``prg(seed, tag, idx) = SHA-512(seed || tag || be64(idx))``
+(one compression a 512-bit chunk; a stub for the live seed stream, which would give fresh 512-bit seeds at the coin rate
 the spec names, at the same cost a bit):
     d_A[i, k]   bit k % 512 (LSB first) of prg(s_dA, "dA", i ceil(K / 512) + k // 512); d_B likewise under "dB"
-    V[i, c]     ((r 161) >> 32) - 80, r the little-endian u32 word (i L' + c) of the "V" stream (16 words a block):
+    V[i, c]     ((r 161) >> 32) - 80, r the little-endian u32 word (i L' + c) of the "V" stream (16 words a chunk):
                 uniform on -80..80 within 161 / 2^32; U[j, c] likewise under "U"
     pi_tau      Fisher-Yates over L' with word tau L' + c of the "P" stream: c from L' - 1 down to 1, x = (w_c (c + 1)) >> 32,
                 swap perm[c] and perm[x]; pi_tau(c) = perm[c]
@@ -18,17 +18,17 @@ O = T_S + 256 (w_X W'^T + X w_W^T + 256 w_X w_W^T) - Z_X U^T - V Y_W^T, Z_X = su
 Y_W = sum_tau (B + d_B)_tau (T_S at full width).
 
 Layout (public structure). Output tiles are 128 x 128 (tile id tm (N / 128) + tn), a tile's cells in row-major order
-(c = 128 r + col). The words buffer holds, per tile and segment, the tile's 16,384 T_s as little-endian u16 (32 KiB); O is
+(c = 128 r + col). The prefix-sum buffer holds, per tile and segment, the tile's 16,384 T_s as little-endian u16 (32 KiB); O is
 the row-major m x N output as little-endian u32. Leaves are rows of ROW bytes (default 1 KiB), LPT = S ROW_W + ROW_O a
 tile, ROW_W = 32768 / ROW and ROW_O = 65536 / ROW: leaf tile LPT + (s - 1) ROW_W + r is bytes [r ROW, (r + 1) ROW) of the
-tile's segment-s words, and leaf tile LPT + S ROW_W + h is the O values of the tile's cells [h ROW / 4, (h + 1) ROW / 4).
+tile's segment-s prefix sums, and leaf tile LPT + S ROW_W + h is the O values of the tile's cells [h ROW / 4, (h + 1) ROW / 4).
 Each row is an hm96-sha512/row/v2 row of 8 ROW bits (``verity.ml.commitments``: rowleaf, hm96.SHA512, merkle) in one
 frame-v3-sha512 tree a call, domain ``CommitmentDomain(identity_digest_sha512(TAG, {shape}), -1, RangeIndexedDomain(0, n))``,
-salts ``prf_salt(Ks, off + pos)`` (commit_gpu's PRF). A proof block (i, j, s) opens the words rows of T_s and T_{s-1}
+salts ``prf_salt(Ks, off + pos)`` (commit_gpu's PRF). A proof block (i, j, s) opens the rows of T_s and T_{s-1}
 (s > 1), and at s = S O's row too.
 
 The verifier opens q proof blocks drawn by the check coin (a cell uniformly, then s with probability its segment's share
-of K: each block's share of the call's MACs), and runs the Program's checks in the clear on the opened rows, a stand-in
+of K: each proof block's share of the call's MACs), and runs the Program's checks in the clear on the opened rows, a stand-in
 for the C-Flock --zk proof (the Definition isn't written yet): the rows' leaves and paths against the root, T_s - T_{s-1}
 against the segment's X W'^T mod 2^16, and at s = S O against (A + d_A)(B + d_B)^T mod 2^32 and the binding identity
 mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments are the previous call's and the period's).
@@ -36,7 +36,7 @@ mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments 
     python3 v31.py cpu-run OUT M N K [--lp 256] [--t 3] [--row 1024] [--q 64] [--seed S] [--cheat KIND]
         one call on the CPU, honest or cheating (skip:TAU, forge:S0[:FRAC], forgeO[:FRAC]), and the verdict line
     python3 v31.py gpu-prep DIR M N K [...]     the challenger's side before a GPU run: A, B, seeds, params (CGP1), meta
-    python3 v31.py gpu-check DIR [--q 64]       a GPU run's dump against the reference (every word, O, tree level), then
+    python3 v31.py gpu-check DIR [--q 64]       a GPU run's dump against the reference (every prefix sum, O, tree level), then
                                                 the protocol's verdict on the GPU's own commitment and values
     python3 v31.py gpu-sample DIR               a bench shape's two sampled tiles (from `v31 bench`) against the reference,
                                                 built from the tiles' A and B rows and those rows' coins alone
@@ -49,7 +49,7 @@ mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments 
     python3 v31.py fill-sample DIR              a fill-bench shape's two sampled tiles against the no-fold reference
     python3 v31.py fill-table BENCH.jsonl ...   the no-fold call's gamma over cuBLASLt and CUTLASS, and where its time goes
 
-Dither's no-fold call (CMP-172, circuit/dither.py on #4974 at 1a428ae983), served or the filler's, is `Fill` below: its
+Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py), served or the filler's, is `Fill` below: its
 reference and verifier here, its GPU prover v31.cu's Fill, and its per-call binding v31lib.py.
 
 Run from the source tree's root with ``PYTHONPATH=.``.
@@ -69,8 +69,7 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "commit_gpu"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "commit_gpu"))
 import reference as cref
 
 from verity.ml.commitments.identity import identity_digest_sha512
@@ -210,7 +209,7 @@ def bits_rows(seed: bytes, tag: str, rows: range, k: int) -> np.ndarray:
 
 
 def noise_rows(seed: bytes, tag: str, rows: range, lp: int) -> np.ndarray:
-    """``noise`` for some rows only: row r's words are blocks r L' / 16 .. (L' a multiple of 16)."""
+    """``noise`` for some rows only: row r's words are chunks r L' / 16 .. (L' a multiple of 16)."""
     per = lp // 16
     w = np.frombuffer(b"".join(prg(seed, tag, r * per + b) for r in rows for b in range(per)), dtype="<u4").astype(np.uint64)
     return (((w * np.uint64(2 * NOISE + 1)) >> np.uint64(32)).astype(np.int64) - NOISE).reshape(len(rows), lp)
@@ -576,12 +575,12 @@ def verdict(sh: Shape, ch: StubChallenger, call: int, prover: Prover, q: int) ->
 
 
 # ------------------------------------------------------------------------- Dither's no-fold call (circuit/dither.py)
-# CMP-172's receipt (#4974 at 1a428ae983): no wrap correction or binding. Per cell, T_s = (X W'^T over the first
+# The no-fold receipt: no wrap correction or binding. Per cell, T_s = (X W'^T over the first
 # min(s L, K) inner indices) mod 2^16 at L of the prover's choosing, and a served call's O = (A + d_A)(B + d_B)^T mod 2^32.
 # A served call (`Fill.o`) commits T_1 .. T_{S-1} and O (T_S is implied by O; at L >= K, O alone) under SERVED_TAG, A the
 # call's activations and its seeds from the challenger's raw coin after the operand roots (dither.seeds); a filler call
-# commits T_1 .. T_S under FILL_TAG, A the per-call pad and its seeds from its live coin after its window's salt
-# (dither.fill_seeds). Per tile, its tile-segments' words (u16, 32 KiB each), then its O (u32, 64 KiB), cells row-major, in
+# commits T_1 .. T_S under FILL_TAG, A the per-call pad and its seeds from its live coin after its period's salt
+# (dither.fill_seeds). Per tile, its tile-segments' prefix sums (u16, 32 KiB each), then its O (u32, 64 KiB), cells row-major, in
 # leaf rows under dither.Shape.domain; leaf pos of a call at salt offset off is salted prf_salt(Ks, off + pos).
 SERVED_TAG = "verity/pouw/dither/call/v1"
 FILL_TAG = "verity/pouw/dither/fill/v1"
@@ -622,7 +621,7 @@ class Fill:
 
     @property
     def W(self) -> int:
-        """Segments whose words are committed: S - 1 when O is (T_S is implied by it), else S."""
+        """Segments whose prefix sums are committed: S - 1 when O is (T_S is implied by it), else S."""
         return self.S - 1 if self.o else self.S
 
     @property
@@ -697,9 +696,9 @@ def served_seeds(coin: bytes, receipt: bytes, call: int) -> dict[str, bytes]:
 
 
 def fill_seeds(salt: bytes, coin: bytes) -> dict[str, bytes]:
-    """dither.fill_seeds: a filler call's seeds from its live coin `coin`, in the window whose salt is `salt`."""
+    """dither.fill_seeds: a filler call's seeds from its live coin `coin`, in the period whose salt is `salt`."""
     if len(salt) != 64 or len(coin) != 64:
-        raise ValueError("the window's salt and the call's coin are 64-byte digests")
+        raise ValueError("the period's salt and the call's coin are 64-byte digests")
     head = FILL_SEEDS_TAG + salt + coin
     return {x: hashlib.sha512(head + _x(x)).digest() for x in FILL_STREAMS}
 
@@ -717,7 +716,7 @@ def fill_seeds_from(b: bytes, served: bool = False) -> dict[str, bytes]:
 
 
 def pad_rows(seeds: dict[str, bytes], rows: range, k: int) -> np.ndarray:
-    """dither.pad_rows: row i is the first k bytes of blocks i ceil(k / 64) .. of the pad stream, as int8."""
+    """dither.pad_rows: row i is the first k bytes of chunks i ceil(k / 64) .. of the pad stream, as int8."""
     kb = -(-k // 64)
     raw = np.frombuffer(stream(seeds["pad"], "pad", rows.start * kb, len(rows) * kb), dtype=np.int8)
     return raw.reshape(len(rows), kb * 64)[:, :k].copy()
@@ -834,7 +833,7 @@ def fill_check(f: Fill, seeds: dict[str, bytes], root: bytes, i: int, j: int, s:
         return int.from_bytes(rows[p][o:o + 2], "little")
 
     if ans.get("A") is None and f.o:
-        return "a served call's block reads A's row"
+        return "a served call's proof block reads A's row"
     Ai = pad_rows(seeds, range(i, i + 1), f.k) if ans.get("A") is None else np.asarray(ans["A"], dtype=np.int8)[None, :]
     Bj = np.asarray(ans["B"], dtype=np.int8)[None, :]
     c = Coins.rows(f, seeds, range(i, i + 1), range(j, j + 1))
@@ -864,7 +863,7 @@ def fill_cells_positions(f: Fill, i: int, j: int, s: int) -> list[int]:
 
 
 def fill_verdict(f: Fill, seeds: dict[str, bytes], root: bytes, picks: list[tuple[int, int, int]], answer, label: str) -> tuple[bool, list[str], str]:
-    """The verifier's verdict on q opened proof blocks: answer(i, j, s) gives each block's opened rows and operand rows."""
+    """The verifier's verdict on q opened proof blocks: answer(i, j, s) gives each proof block's opened rows and operand rows."""
     fails = []
     for (i, j, s) in picks:
         why = fill_check(f, seeds, root, i, j, s, answer(i, j, s))
@@ -981,7 +980,7 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------------------------------------- operands
 def operands(sh: Shape, rng: np.random.Generator, kind: str = "llm") -> tuple[np.ndarray, np.ndarray]:
     """int8 operands. ``llm``: rows quantized to +-127 by their absolute maximum, activations from a Student t (heavy tails,
-    so few wrap at V +-80) and weights from a Gaussian (more wrap at U +-80), the shape of BET-HYBRID-2's densities;
+    so few wrap at V +-80) and weights from a Gaussian (more wrap at U +-80);
     ``uniform``: every value on -128..127 (a third of the entries wrap); ``zero``: A = B = 0; ``max``: A = B = 127 (half
     the entries wrap: at L' 512 most columns pass 256 wraps in a noise tile)."""
     if kind == "zero":
@@ -992,7 +991,9 @@ def operands(sh: Shape, rng: np.random.Generator, kind: str = "llm") -> tuple[np
         return (rng.integers(-128, 128, size=(sh.m, sh.k)).astype(np.int8), rng.integers(-128, 128, size=(sh.n, sh.k)).astype(np.int8))
     a = rng.standard_t(3, size=(sh.m, sh.k))
     b = rng.standard_normal(size=(sh.n, sh.k))
-    q = lambda x: np.clip(np.rint(127 * x / np.abs(x).max(axis=1, keepdims=True)), -127, 127).astype(np.int8)
+    def q(x: np.ndarray) -> np.ndarray:
+        return np.clip(np.rint(127 * x / np.abs(x).max(axis=1, keepdims=True)), -127, 127).astype(np.int8)
+
     return q(a), q(b)
 
 
@@ -1070,7 +1071,7 @@ def cmd_gpu_check(a: argparse.Namespace) -> int:
            "binding_identity": bool((binding(sh, f, c, v.T_full) == v.O).all())}
     if not rep["words_equal"]:
         gw, rw = np.frombuffer(g_words, "<u2"), np.frombuffer(r_words, "<u2")
-        rep["words_bad"] = int((gw != rw).sum()) if gw.size == rw.size else f"{gw.size} vs {rw.size} words"
+        rep["words_bad"] = int((gw != rw).sum()) if gw.size == rw.size else f"{gw.size} vs {rw.size} prefix sums"
     if not rep["O_equal"]:
         go, ro = np.frombuffer(g_o, "<u4"), np.frombuffer(r_o, "<u4")
         rep["O_bad"] = int((go != ro).sum()) if go.size == ro.size else f"{go.size} vs {ro.size}"
@@ -1150,7 +1151,7 @@ def cmd_params(a: argparse.Namespace) -> int:
     return 0
 
 
-# D6 v1.1's predictions (art:6926be1c98b7855aca699278551040538e83843d28b72fdf85044cfd291bf3ef), RTX PRO 6000, v3.1 at
+# D6 v1.1's predictions (the number table verity/core/protocols/pouw/dither/PROTOCOL.md cites), RTX PRO 6000, v3.1 at
 # L' 256, t 3, m 8192, overlapped as served: (K, N) -> (model, gamma). V4's 7168 x 64 and the F32 mHC 28672 x 24 aren't
 # 128-column tiles and are left out here.
 D6 = {
@@ -1230,11 +1231,11 @@ def cmd_timeline(a: argparse.Namespace) -> int:
     """`v31 once` under V31_ONCE_OVL in Nsight Systems (its `nsys stats -r cuda_gpu_trace` CSV): each kernel's time in the
     second serial call and its median over the steady overlapped calls (each one's compute beside the previous call's
     commit, the first overlapped call's left out), with the share of it that ran beside the other stream; the steady
-    period (GEMM end to GEMM end); and the steady window's time with compute alone, the commit alone, both, and neither.
+    period (GEMM end to GEMM end); and the steady calls' time with compute alone, the commit alone, both, and neither.
     The GEMM is the kernel whose name --gemm matches (cuBLASLt's under V31_LTW), and it counts the calls. A kernel's k-th
     launch belongs to call k // (its launches / the calls); a compute kernel launched in some calls only (`v31 fill-once`'s
     weight side, formed once a period) to the call whose GEMM comes next. --from NAME drops what ran before NAME's first
-    launch (cuBLASLt's autotuning). Each kernel's grid, block, registers a thread and shared memory are its first launch's."""
+    launch (cuBLASLt's autotuning). Each kernel's grid, CTA, registers a thread and shared memory are its first launch's."""
     ks, res = [], {}
     with open(a.csv, newline="") as f:
         for r in csv.DictReader(f):
@@ -1276,7 +1277,7 @@ def cmd_timeline(a: argparse.Namespace) -> int:
     comp_spans = spans_union([(s, e) for c in calls[first_ovl:] for s, e, n in c if is_compute[n]])
     comm_spans = spans_union([(s, e) for c in calls[first_ovl:] for s, e, n in c if not is_compute[n]])
     print(f"{a.csv}: {ncalls} calls ({a.serial} serial), steady overlapped calls {steady.start}..{steady.stop - 1}\n")
-    print("| kernel | grid x block, regs, smem | launches a call | serial ms | overlapped ms (median) | overlapped / serial "
+    print("| kernel | grid x CTA, regs, smem | launches a call | serial ms | overlapped ms (median) | overlapped / serial "
           "| beside the other stream |")
     print("|---|---|---|---|---|---|---|")
     names = list(dict.fromkeys(n for _, _, n in calls[a.serial - 1]))
@@ -1303,7 +1304,7 @@ def cmd_timeline(a: argparse.Namespace) -> int:
     comp, comm = sum(e - s for s, e in cs), sum(e - s for s, e in ms)
     both = sum(covered(ms, s, e) for s, e in cs)
     win = w1 - w0
-    print(f"steady window {win / 1e6:.3f} ms: compute alone {(comp - both) / win:.1%}, commit alone {(comm - both) / win:.1%}, "
+    print(f"steady calls {win / 1e6:.3f} ms: compute alone {(comp - both) / win:.1%}, commit alone {(comm - both) / win:.1%}, "
           f"both {both / win:.1%}, neither {(win - comp - comm + both) / win:.1%}")
     return 0
 

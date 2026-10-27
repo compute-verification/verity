@@ -1,5 +1,5 @@
-"""The GPU's no-fold call (v31lib's Prover over libv31.so) checked against DITHER-FILL's reference itself,
-`verity/core/protocols/pouw/circuit/dither.py` (#4974), rather than v31.py's mirror of it, on filler calls (the pad,
+"""The GPU's no-fold call (v31lib's Prover over libv31.so) checked against the reference itself,
+`verity/core/protocols/pouw/circuit/dither.py`, rather than v31.py's mirror of it, on filler calls (the pad,
 `dither.Shape` with `o` False: T_1 .. T_S a tile) and served calls (an operand A, `o` True: T_1 .. T_{S-1} and then O a
 tile). On each case: the seeds the prover hands the device (v31's `fill_seeds` for a filler, `served_seeds` for a served
 call) against `dither.fill_seeds` and `dither.seeds` byte for byte, the device's pad (`dither.pad_rows`), every committed
@@ -24,10 +24,10 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import v31  # noqa: E402
-import v31lib  # noqa: E402
+import v31
+import v31lib
 
-from verity.core.protocols.pouw.circuit import dither  # noqa: E402
+from verity.core.protocols.pouw.circuit import dither
 
 # NAME M N K LP L ROW KIND CHEAT FULL: KIND fill (the pad, from fill seeds) or served (an operand A, from served seeds;
 # operands in -127 .. 126, as a served root refuses a row of A + d_A or B + d_B spanning -128 .. 128); FULL 1: the whole

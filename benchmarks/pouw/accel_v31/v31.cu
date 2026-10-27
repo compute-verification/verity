@@ -1,4 +1,4 @@
-// ACCEL v3.1's credited static INT8 matmul on the GPU (verity/core/protocols/pouw/accel/PROTOCOL.md on #4746), the
+// Dither v3.1's credited static INT8 matmul on the GPU (v3.2 is verity/core/protocols/pouw/dither/PROTOCOL.md), the
 // prover's side of one call, bit for bit v31.py's reference (its docstring has the semantics, the coin streams and the
 // layout; this file follows it):
 //
@@ -11,8 +11,8 @@
 //   wrap     dO = w_X B~^T + X w_W^T, sparse, on the CUDA cores (a 128 x 128 tile a CTA); or (V31_WRAP 5) X w_W^T dense
 //            on the tensor cores (the plain GEMM on X and w_W as int8), then w_X B~^T, sparse
 //   gemm     X W'^T on the tensor cores (mma.sync s8, a 3-stage TMA ring, 128 x 128 tiles of 8 warps); after each segment
-//            of L = t L' inner indices every thread stores its accumulators' low 16 bits (T_s) to the words buffer; then
-//            P_A P_B^T's first two blocks (-Z_0 U^T - V Y_0^T) as more main stages, the tail stages subtracting the rest
+//            of L = t L' inner indices every thread stores its accumulators' low 16 bits (T_s) to the prefix-sum buffer; then
+//            P_A P_B^T's first two terms (-Z_0 U^T - V Y_0^T) as more main stages, the tail stages subtracting the rest
 //            stage by stage at their digit's weight (128^d), and the epilogue adds 256 dO:
 //            O = T_S + 256 dO - Z_X U^T - V Y_W^T = (A + d_A)(B + d_B)^T mod 2^32
 //   commit   commit_gpu's small path (CTAs that fit beside the GEMM's) over the call's rows: hm96-sha512/row/v2 rows of ROW
@@ -80,7 +80,7 @@ __host__ __device__ constexpr uint32_t mix32(uint32_t x) {
 }
 
 // ---------------------------------------------------------------- the coins
-// prg(seed, tag, idx) = SHA-512(seed || tag (8 bytes, zero padded) || be64(idx)): one block of 80 bytes
+// prg(seed, tag, idx) = SHA-512(seed || tag (8 bytes, zero padded) || be64(idx)): one chunk of 80 bytes
 enum { S_DA = 0, S_DB = 1, S_U = 2, S_V = 3, S_P = 4, S_PAD = 5 };
 struct Seeds { u64 w[6][8]; };   // dA, dB, U, V, P, pad (the filler's): each seed's 64 bytes as big-endian words
 HD u64 tag2(char a, char b) { return (u64)(uint8_t)a << 56 | (u64)(uint8_t)b << 48; }
@@ -102,7 +102,7 @@ DEV void prg(const u64* seed, u64 tag, u64 idx, u64* st) {
 // little-endian u32 word i (0..15) of a digest held as big-endian u64 words
 DEV u32 dword(const u64* st, int i) { return bswap32(i & 1 ? (u32)st[i >> 1] : (u32)(st[i >> 1] >> 32)); }
 
-// d_A or d_B: block b = i ceil(K / 512) + k / 512 of row i, its 64 bytes in digest order (bit k % 512 LSB first)
+// d_A or d_B: chunk b = i ceil(K / 512) + k / 512 of row i, its 64 bytes in digest order (bit k % 512 LSB first)
 __global__ void bits_kernel(Seeds sd, int which, u64 blocks, uint8_t* __restrict__ out) {
   const u64 b = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (b >= blocks) return;
@@ -835,15 +835,15 @@ struct GArgs {
   const Maps* maps;
   uint16_t* words;   // [tile][s][128 x 128] T_s, little-endian u16
   const int* dO;     // null: none (the no-fold filler)
-  int* O;            // m x N, row-major (u32 mod 2^32); null: none (the filler commits only its words)
+  int* O;            // m x N, row-major (u32 mod 2^32); null: none (the filler commits only its prefix sums)
   int M, N, K, L, S, TT, group;
-  int lp, dz;        // tail stage ts is block b = ts 128 / L' of P_A P_B^T: b 0 and 1 (-Z_0 U^T, -V Y_0^T) add as main
+  int lp, dz;        // tail stage ts is term b = ts 128 / L' of P_A P_B^T: b 0 and 1 (-Z_0 U^T, -V Y_0^T) add as main
                      // stages do; then Z_{b - 1} U^T (b <= dz) or V Y_{b - dz}^T, at 128^digit, subtract
   u32* ctr;          // the tile counter (null: CTA c takes tiles c, c + grid, ...); a launch advances it by its tiles
   u32 base;          // ctr's value before this launch
   int diag;          // timing only (the bench's gemm_no* arms, wrong values): 1 no segment stores, 2 no tail (TT 0), 4 no dO
 };
-// 128 x 128 tiles, 8 warps of 64 x 32 (MI = 4 row blocks of 16, NI = 4 column blocks of 8), a 3-stage ring of 128 bytes of
+// 128 x 128 tiles, 8 warps of 64 x 32 (MI = 4 row tiles of 16, NI = 4 column tiles of 8), a 3-stage ring of 128 bytes of
 // depth; thread 0 issues every TMA as the CTA releases its slot (floored_gemm's ML, without its receipts and edits). With a
 // counter, a CTA's first tile is its index and each next one the counter's (a CTA that starts late, behind another
 // kernel's CTAs, takes fewer tiles); the issuer writes a tile's index beside its first stage, -1 when none is left.
@@ -975,7 +975,7 @@ struct Ring {
     release(done);
   }
   // a tail stage: acc -= (P_A P_B^T over its 128 columns) << shift. B's fragments are loaded a column pair at a time (again
-  // for each row block), so the tail holds 16 more registers than the mainloop, not 48: the GEMM stays small enough for
+  // for each row tile), so the tail holds 16 more registers than the mainloop, not 48: the GEMM stays small enough for
   // commit_gpu's small-path CTAs to sit beside it.
   DEV void tail(int (&acc)[MI][NI][4], int shift) {
     mbar_wait_warp(full(s), ph);
@@ -1009,7 +1009,7 @@ struct Ring {
 };
 
 // T_s's low 16 bits. Lane q of a quad holds a row's columns 8 ni + 2 q, + 1 (ni < 4) of the warp's 32; two butterfly rounds
-// transpose the quad's 4 x 4 words, so lane q stores columns 8 q .. 8 q + 7 as one 16-byte store and a warp's store
+// transpose the quad's 4 x 4 prefix sums, so lane q stores columns 8 q .. 8 q + 7 as one 16-byte store and a warp's store
 // writes whole sectors (eight rows of 64 bytes, not of four 16-byte pieces)
 DEV void store_words(const int (&acc)[4][4][4], uint16_t* words, size_t tile, int S, int s, int wm, int wn, int g, int q) {
   constexpr u32 ALL = 0xFFFFFFFFu;
@@ -1331,7 +1331,7 @@ static void gemm_attrs() {
 }
 
 // ---------------------------------------------------------------- cheats (a prover the verifier must refuse)
-// forge: the T_s0 words (s0 >= 1) or (s0 = 0) the O values of every stride-th tile, overwritten with hash noise
+// forge: the T_s0 prefix sums (s0 >= 1) or (s0 = 0) the O values of every stride-th tile, overwritten with hash noise
 __global__ void forge_kernel(uint16_t* words, int* O, int S, int s0, int stride, int tiles_n, int N, u32 seed) {
   const size_t tile = (size_t)blockIdx.x * stride;
   const int tm = (int)(tile / tiles_n), tn = (int)(tile % tiles_n);
@@ -1343,13 +1343,13 @@ __global__ void forge_kernel(uint16_t* words, int* O, int S, int s0, int stride,
 }
 
 // ---------------------------------------------------------------- the committed rows
-// pf (hash_after_block's prefetch of the next 128-byte block, V31_PF): 1 into L1, 2 into L2
+// pf (hash_after_block's prefetch of the next 128-byte chunk, V31_PF): 1 into L1, 2 into L2
 DEV void pf_to(const uint8_t* p, u32 pf) {
   if (pf == 2) asm volatile("prefetch.global.L2 [%0];" ::"l"(p));
   else pf_l1(p);
 }
 // a row's 4-byte cell c (from c0) at base + (c >> 7) stride + (c & 127) 4: O's row h of a tile (the tile's first cell,
-// stride N 4, c0 = h ROW / 4), or a words row (stride 512 and c0 = 0: contiguous)
+// stride N 4, c0 = h ROW / 4), or a prefix-sum row (stride 512 and c0 = 0: contiguous)
 struct CellRow {
   const uint8_t* base;
   u64 stride;
@@ -1361,7 +1361,7 @@ struct CellRow {
   DEV uint4 ld16(u32 off) const { return ldg16(at(off)); }
   DEV void pf(u32 off) const { pf_to(at(off), pfm); }
 };
-// leaf pos: tile pos / LPT; j = pos % LPT < S ROW_W a words row (segment j / ROW_W), else O's row j - S ROW_W. Both kinds
+// leaf pos: tile pos / LPT; j = pos % LPT < S ROW_W a prefix-sum row (segment j / ROW_W), else O's row j - S ROW_W. Both kinds
 // go through one CellRow, so a warp whose leaves straddle the two (most warps: LPT isn't a multiple of 32) hashes once,
 // not once a kind.
 struct V31Row {
@@ -1386,9 +1386,9 @@ struct NoMemRow {
   u32 row;
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, NoMemSrc{(u32)pos}, row, x); }
 };
-// A no-fold call's words rows (S = 1) read from cuBLASLt's int32 D = X W'^T (m x N row-major), its low halves: the row's
+// A no-fold call's prefix-sum rows (S = 1) read from cuBLASLt's int32 D = X W'^T (m x N row-major), its low halves: the row's
 // 16-byte piece at off is cells c0 + off / 2 .. + 7 of the tile at base (one tile row's 8 adjacent cells, 32 bytes of D),
-// the bytes V31Row reads from the tile-major words buffer
+// the bytes V31Row reads from the tile-major prefix-sum buffer
 struct LtSrc {
   const int* base;
   u64 N;
@@ -1418,13 +1418,13 @@ struct LtRow {
   }
   DEV void digest(u64 pos, u64* x) const { hash_after_block(C.mid_P, src(pos), row, x, pf != 0); }
 };
-// A served call's rows (dither.Shape(o=True)): per tile its W words rows (the words buffer, W tile-segments a tile), then
-// its O rows: cells c0 + off / 4 .. + 3 of the tile, O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (serve_rows_kernel: rb
+// A served call's rows (dither.Shape(o=True)): per tile its W prefix-sum rows (the prefix-sum buffer, W tile-segments a
+// tile), then its O rows: cells c0 + off / 4 .. + 3 of the tile, O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (serve_rows_kernel: rb
 // carries K tau_j; D = a' b'^T from cuBLASLt). One source for both kinds, so a warp whose leaves straddle them diverges only
 // in its loads; the pointers are the tile's first row and column. LIVE: D is being written by the kernel that reads it
 // (RP 4's hash warps), so its loads are coherent (ld.ca), never the read-only path.
 template <bool LIVE = false> struct ServedSrcT {
-  const uint8_t* w;   // a words row, or null: an O row
+  const uint8_t* w;   // a prefix-sum row, or null: an O row
   const int *D, *ra, *sa, *rb, *sb;
   u64 N;
   u32 c0, pfm;
@@ -1547,12 +1547,12 @@ struct FusedRow {
 // ---------------------------------------------------------------- the commit in at most cap CTAs an SM
 // commit_gpu's small path launches a CTA for every 128 leaves, and up to 5 of them sit on an SM, so a GEMM CTA launched
 // beside the commit waits for an SM to drain while the commit's next CTAs take each freed slot. salt_persist and
-// leaf_persist do the same work (salt_small's and leaf_small's, block by block) in at most cap CTAs an SM: a CTA claims
+// leaf_persist do the same work (salt_small's and leaf_small's, group by group) in at most cap CTAs an SM: a CTA claims
 // one of its SM's slots (claim[smid] = epoch << 8 | count, epoch new each launch) or leaves at once, and the claimants take
-// 128-leaf blocks from ctl[0] until none are left. The last CTA out zeroes the counters for the next launch; launches that
+// 128-leaf groups from ctl[0] until none are left. The last CTA out zeroes the counters for the next launch; launches that
 // share ctl run in one stream's order.
 struct Persist {
-  u32* ctl;     // [0] the next block, [1] the CTAs out, [2 + b] CTA b's current block
+  u32* ctl;     // [0] the next group, [1] the CTAs out, [2 + b] CTA b's current group
   u32* claim;   // a word an SM (smid & 1023)
   u32 epoch, cap, nvb;
 };
@@ -1576,7 +1576,7 @@ DEV bool persist_claim(const Persist& p) {
   }
   return __syncthreads_or(got);
 }
-// the CTA's next block (nvb or more: none left), the same for every thread
+// the CTA's next group (nvb or more: none left), the same for every thread
 DEV u32 persist_next(const Persist& p) {
   volatile u32* slot = p.ctl + 2 + blockIdx.x;
   __syncthreads();
@@ -1587,7 +1587,7 @@ DEV u32 persist_next(const Persist& p) {
 DEV void persist_done(const Persist& p) {
   if (threadIdx.x == 0 && atomicAdd(p.ctl + 1, 1u) == gridDim.x - 1) { p.ctl[0] = 0; p.ctl[1] = 0; }
 }
-// fold_cta for block vb
+// fold_cta for group vb
 DEV void fold_vb(int dom, u64* levels, u64 width, u32 cnt, int L, u64 vb) {
   const u32 t = threadIdx.x;
   for (int l = 1; l <= L; ++l) {
@@ -1641,8 +1641,8 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, co
   st8(S + 16 * pos, my);
   st8(S + 16 * pos + 8, c);
 }
-// salt_small<true> (slot 0) a 128-leaf tile at a time: S and F for positions below n (salted at off + pos), the pads up to
-// width, and the subtrees of tiles that hold only pads (nvb = ceil(width / 128)); KP: Ks from ka, else from C
+// salt_small<true> (slot 0) a group at a time: S and F for positions below n (salted at off + pos), the pads up to width,
+// and the subtrees of groups that hold only pads (nvb = ceil(width / 128)); KP: Ks from ka, else from C
 template <bool KP = false>
 __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     salt_persist(Persist p, int dom, const uint4* __restrict__ Tg, u64 n, u64 width, u64* __restrict__ S, u64* __restrict__ F,
@@ -1665,8 +1665,8 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     }
   persist_done(p);
 }
-// leaf_small (g = 1, no bc, no fused top) a 128-leaf tile at a time (nvb = ceil(n / 128)); MINB its CTAs an SM by
-// registers (4: 128 a thread, no spills, for a leaf phase that has the SMs to itself)
+// leaf_small (g = 1, no bc, no fused top) a group at a time (nvb = ceil(n / 128)); MINB its CTAs an SM by registers (4:
+// 128 a thread, no spills, for a leaf phase that has the SMs to itself)
 template <class Row, int MINB = SMALL_MINB>
 __global__ void __launch_bounds__(SMALL_THREADS, MINB)
     leaf_persist(Persist p, int dom, Row row, const u64* __restrict__ S, const u64* __restrict__ F, u64 n, u64 width,
@@ -1921,7 +1921,7 @@ static std::string env_str(const char* name, const char* dflt) {
 // rest, w_X B~^T, as dO; 7: as 6, and w_X B~^T in the GEMM's epilogue too, a wrap of X at a time from form_a's lists,
 // so no wrap kernel runs and no dO is read), V31_WCW its columns a CTA (256 where N allows, or 128; 1 to 4);
 // V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small);
-// V31_PF: each row's next 128-byte block prefetched as its compression starts (0 none, 1 into L1, 2 into L2); V31_DIAG 1:
+// V31_PF: each row's next 128-byte chunk prefetched as its compression starts (0 none, 1 into L1, 2 into L2); V31_DIAG 1:
 // the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl, Fill::pend's 1 and 2).
 // Under -DV31_WG (sm_90a):
 // V31_GEMM 1, the protocol's and the plain GEMM on warpgroup MMAs (wg_proto.cuh, the bench's wgl arm wgmma.linear itself),
@@ -1931,7 +1931,7 @@ static std::string env_str(const char* name, const char* dflt) {
 // D = a' b'^T on the plain wg GEMM (static schedule), V31_RP 4 hashing the O rows in the GEMM's producer warpgroup
 // (gemm_r4, FusedLeaves; V31_HALL 1: every row there, past the consumers' end, timing the hash warps alone; V31_HCHUNK
 // C > 0: the hash warps' passes over the posted rows, C chunks of each a visit, in place of each row whole in turn;
-// V31_WGW 0: the words segments on gemm_kernel<true> rather than the wg protocol GEMM).
+// V31_WGW 0: the prefix-sum segments on gemm_kernel<true> rather than the wg protocol GEMM).
 // A Fill's commit: V31_LMINB 4, its leaf phase's CTAs at 128 registers (leaf_persist's MINB; 5, the default, 96 with spills
 // but room for a fifth CTA an SM); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued
 // with the call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves.
@@ -1974,7 +1974,7 @@ struct Lanes {
     CK(cudaMemset(ctl, 0, 4 * (2 + 2 * 8 * (size_t)nsm)));
     CK(cudaMemset(claim, 0, 4096));
   }
-  // a capped launch over nvb blocks: twice the CTAs the caps allow, so SMs whose first CTAs land late still get theirs
+  // a capped launch over nvb groups: twice the CTAs the caps allow, so SMs whose first CTAs land late still get theirs
   Persist persist(u64 nvb, int ccta) {
     epoch = (epoch + 1) & 0xFFFFFF;
     return Persist{ctl, claim, epoch, (u32)ccta, (u32)nvb};
@@ -2318,12 +2318,12 @@ struct Ctx {
   }
 };
 
-// ---------------------------------------------------------------- Dither's no-fold call (circuit/dither.py, #4974, CMP-172)
+// ---------------------------------------------------------------- Dither's no-fold call (circuit/dither.py)
 // X and W' as fill_a_kernel and fill_b_kernel form them; T_s = (X W'^T over the first min(s L, K) inner indices) mod 2^16,
 // s = 1 .. S = ceil(K / L), with no wrap correction, tail or binding. A filler call (A the "pad" stream: A[i, k] byte k of
-// blocks i K / 64 ..) commits T_1 .. T_S; a served call (o; A the caller's activations) commits T_1 .. T_W, W = S - 1, from
+// chunks i K / 64 ..) commits T_1 .. T_S; a served call (o; A the caller's activations) commits T_1 .. T_W, W = S - 1, from
 // the protocol GEMM over k < W L, and O = (A + d_A)(B + d_B)^T mod 2^32 from cuBLASLt on serve_rows_kernel's a' and b' (the
-// noise never enters O, so at S = 1 a served call forms no X or W'). Per tile its W (filler: S) words rows, then (served) its
+// noise never enters O, so at S = 1 a served call forms no X or W'). Per tile its W (filler: S) prefix-sum rows, then (served) its
 // O rows (dither.values_buffer at ROW), in a tree under the params file's domain (dither.Shape.domain). Two copies (values
 // and committer): call c's commit runs on s1 beside call c + 1's compute on s0, and call c's values stay until call c + 2
 // is issued. Call c salts leaf pos prf_salt(Ks, off_c + pos) (dither.salts), Ks the params file's, set into C.ks on s1
@@ -2340,14 +2340,14 @@ struct Fill {
   int m = 0, n = 0, k = 0, lp = 0, L = 0, row = 0, S = 0, NT = 0, kb64 = 0, tiles = 0, tiles_n = 0, lpt = 0, grid = 0, nsm = 0,
       items = 0;
   bool pair = false;
-  int Wn = 0;                         // committed word segments: S - 1 served, S filler
+  int Wn = 0;                         // committed prefix-sum segments: S - 1 served, S filler
   u64 leaves = 0;
   Seeds seeds{};
   int8_t *A = nullptr, *B = nullptr, *U = nullptr, *V = nullptr, *X = nullptr, *W = nullptr;
   uint8_t *dA = nullptr, *dB = nullptr;
   uint16_t* perm = nullptr;
   uint16_t* words[2] = {nullptr, nullptr};
-  int* D[2] = {nullptr, nullptr};     // served: cuBLASLt's a' b'^T; V31_LTW at S = 1: its X W'^T in place of words
+  int* D[2] = {nullptr, nullptr};     // served: cuBLASLt's a' b'^T; V31_LTW at S = 1: its X W'^T in place of the prefix sums
   uint8_t* vbuf = nullptr;            // testing: a copy's values buffer
   Lt lt{};
   bool ltw = false;
@@ -2521,7 +2521,7 @@ struct Fill {
     }
   }
   // copy b's operands. Served: a' (and, when wside, b') with their sums and shifts, else copy b takes the other copy's B
-  // side (the weights and their coins unchanged since); then X (and W') when a words segment is committed
+  // side (the weights and their coins unchanged since); then X (and W') when a prefix-sum segment is committed
   void form(cudaStream_t st, const int8_t* a, bool wside, int b) {
     if (o) {
       CK(cudaMemsetAsync(bad + b, 0, 4, st));
@@ -2756,7 +2756,7 @@ struct Fill {
   // positions' rows (row bytes each) and paths (depth digests each, leaf level first) of copy b, gathered on the device
   void open(int b, const u64* pos, int np, uint8_t* rows, uint8_t* paths);
 };
-// a leaf's row bytes: from the words buffer, or (V31_LTW) from cuBLASLt's D
+// a leaf's row bytes: from the prefix-sum buffer, or (V31_LTW) from cuBLASLt's D
 struct WordsPiece {
   const uint8_t* w;
   u32 row;
@@ -2933,7 +2933,7 @@ static int cmd_gate(const std::string& dir, int m, int n, int k, int lp, int t, 
 }
 
 // two sampled tiles of a bench shape's checked call (its values in buffer b), for `v31.py gpu-sample`: their A and B rows,
-// words, O and leaves
+// prefix sums, O and leaves
 static void dump_samples(Ctx& c, const std::string& dir, const std::string& pfile, u32 pick, int b = 0) {
   gk::Dump d(dir);
   std::vector<uint8_t> sd(320);
@@ -3496,7 +3496,7 @@ void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const 
   return c;
 }
 
-// m n k lp L row S tiles lpt leaves depth calls W o, as u64 (W the committed word segments: S - 1 served, S filler)
+// m n k lp L row S tiles lpt leaves depth calls W o, as u64 (W the committed prefix-sum segments: S - 1 served, S filler)
 int v31_info(void* h, uint64_t* out) {
   const Fill& f = ctx_of(h)->f;
   const uint64_t v[14] = {(u64)f.m, (u64)f.n, (u64)f.k, (u64)f.lp, (u64)f.L, (u64)f.row, (u64)f.S, (u64)f.tiles, (u64)f.lpt,
@@ -3585,7 +3585,7 @@ int v31_open(void* h, uint64_t c, const uint64_t* pos, int np, uint8_t* rows, ui
   return 0;
 }
 
-// Testing: call c's committed values (leaves x row bytes, dither.values_buffer: per tile its W words segments, then its O
+// Testing: call c's committed values (leaves x row bytes, dither.values_buffer: per tile its W prefix-sum segments, then its O
 // rows when served), every tree level (leaves first, (2 width - 1) x 64 bytes), or the A operand its last call formed from
 // (the pad, m x k bytes)
 int v31_values(void* h, uint64_t c, uint8_t* out) {

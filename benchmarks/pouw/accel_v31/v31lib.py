@@ -1,4 +1,4 @@
-"""The per-call binding of v31.cu's GPU prover for Dither's no-fold call (CMP-172, circuit/dither.py on #4974 at 1a428ae983):
+"""The per-call binding of v31.cu's GPU prover for Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py):
 ctypes over libv31.so (v31.cu built with -DV31_LIB; `build_lib` below, run.sh's MODE=fill), one `Prover` a shape. v31.py's
 `Fill` is the reference it is checked against and the verifier.
 
@@ -41,15 +41,17 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Self
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import v31
+
+HERE = Path(__file__).resolve().parent
 
 SEED_BYTES = 64 * len(v31.FILL_STREAMS)
 
@@ -102,7 +104,7 @@ class Prover:
         self.f = v31.Fill(m, n, k, lp, L, row, served)
         self.lib = lib if isinstance(lib, Lib) else Lib(lib)
         self.ks = os.urandom(64) if ks is None else ks
-        d = Path(params_dir or os.environ.get("TMPDIR", "/tmp"))
+        d = Path(params_dir or tempfile.gettempdir())
         d.mkdir(parents=True, exist_ok=True)
         self.params_path = d / f"v31lib-{os.getpid()}-{id(self):x}-{v31.fill_params_name(m, n, k, lp, L, row, served)}"
         self.params_path.write_bytes(v31.fill_params(self.f, self.ks))
