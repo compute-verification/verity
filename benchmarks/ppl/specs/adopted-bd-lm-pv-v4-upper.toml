@@ -1,0 +1,130 @@
+description = "adopted-bd-lm-pv with each matmul's error scaled to DeepSeek-V4-Pro's (error_probe.py factors: V4 over V2-Lite per class, attention at the upper end over the points near the fit to V2-Lite's measured errors; CMP-155 proxy)"
+
+[[linear]]
+step = "scale_error"
+factor = 1.3999
+linears = ["self_attn.q_proj"]
+
+[[linear]]
+step = "scale_error"
+factor = 0.8180
+linears = ["self_attn.kv_a_proj_with_mqa", "self_attn.kv_b_proj"]
+
+[[linear]]
+step = "scale_error"
+factor = 1.4582
+linears = ["self_attn.o_proj"]
+
+[[linear]]
+step = "scale_error"
+factor = 1.1891
+linears = ["mlp.experts.E.gate_up_proj"]
+
+[[linear]]
+step = "scale_error"
+factor = 1.1452
+linears = ["mlp.experts.E.down_proj"]
+
+[[linear]]
+step = "scale_error"
+factor = 0.8814
+linears = ["mlp.shared_experts.gate_proj", "mlp.shared_experts.up_proj"]
+
+[[linear]]
+step = "scale_error"
+factor = 1.0300
+linears = ["mlp.shared_experts.down_proj"]
+
+[[linear]]
+step = "scale_error"
+factor = 1.2213
+linears = ["mlp.gate_proj", "mlp.up_proj"]
+
+[[linear]]
+step = "scale_error"
+factor = 1.0763
+linears = ["mlp.down_proj"]
+
+[[linear]]
+step = "scale_error"
+factor = 1.0967
+linears = ["lm_head"]
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+kind = "q"
+
+[[linear]]
+step = "rotate"
+kind = "q"
+linears = ["lm_head"]
+
+[[linear]]
+step = "int8"
+act = "dither"
+act_top = 127
+density = 1.0
+dither_bits = 1
+exact = false
+gptq = false
+group = 0
+weight = "dither"
+weight_top = 127
+
+[[linear]]
+step = "int8"
+act = "dither"
+act_top = 127
+density = 1.0
+dither_bits = 1
+exact = false
+gptq = false
+group = 0
+weight = "dither"
+weight_top = 127
+linears = ["lm_head"]
+
+[[attention]]
+step = "scale_error"
+qk = 1.2489
+pv = 0.7084
+
+[[attention]]
+step = "rotate"
+
+[[attention]]
+step = "center_keys"
+
+[[attention]]
+step = "int8"
+k = "dither"
+k_scale = "token"
+k_sink = false
+k_top = 127
+lut_norm = 0
+lut_res = 16
+lut_round = false
+lut_sink = false
+lut_size = 256
+p = "dither"
+p_block = 0
+p_sink = true
+p_top = 127
+q = "dither"
+q_top = 127
+qk_bits = 1
+softmax = "float"
+v = "dither"
+v_scale = "channel"
+v_top = 127
+
+[[attention]]
+step = "peel"
+offset = 64
+operand = "p"
+width = 64

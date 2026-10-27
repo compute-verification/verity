@@ -22,6 +22,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
             "co32c-pv": ("all", "int8-all", True), "adopted-bd-lm-pv": ("all", "int8-all", True)}
     for b in (256, 512, 1024):
         want[f"co32c-pv{b}"] = want[f"adopted-bd-lm-pv{b}"] = ("all", "int8-all", True)
+    want["adopted-bd-lm-pv-v4"] = want["adopted-bd-lm-pv-v4-upper"] = ("all", "int8-all", True)
     for b in (2, 3, 4):
         want[f"adopted-bd-lm-d{b}"] = want[f"co32c-d{b}"] = ("all", "int8-all", True)
     for side in ("lin-act", "lin-w", "qk-q", "qk-k"):
