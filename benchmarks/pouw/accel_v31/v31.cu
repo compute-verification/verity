@@ -3428,8 +3428,14 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
       arms.push_back({"wgl", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) f.wg_run(s, gw); }});
     }
 #endif
+    // V31_ARMS (a comma-separated list): time those arms alone; fill-table reads lt, ovl, ovl_w, gemm and wgl
+    const std::string only = std::string(",") + (getenv("V31_ARMS") ? getenv("V31_ARMS") : "") + ",";
+    auto keep = [&](const std::string& nm) { return only == ",," || only.find("," + nm + ",") != std::string::npos; };
+    arms.erase(std::remove_if(arms.begin(), arms.end(), [&](const gk::Arm& a) { return !keep(a.name); }), arms.end());
     const int ICUT = (int)arms.size();
-    if (cut.best) arms.push_back({"cutlass", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) cut_run(cut, s); }});
+    if (cut.best && keep("cutlass"))
+      arms.push_back({"cutlass", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) cut_run(cut, s); }});
+    const bool has_cut = (int)arms.size() > ICUT;
     const gk::Timing tm = gk::timed_items(arms, reps, f.s0, nv);
     CK(cudaGetLastError());
     gk::summary(tm, arms, stderr);
@@ -3459,13 +3465,22 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
       fused_blocks = (long long)h[1];
     }
     fill_samples(f, bl, out + "/samples/" + name + "-ovl", pfile, sd, A, (u32)rng());
-    std::vector<double> med(arms.size()), mhz(arms.size());
+    // per arm: the median call's ms, NVML's SM clock, and the board's energy a call (mJ), mean watts over an item and
+    // the most any power sample read (0: no energy counter, or GK_POWER_MS unset)
+    std::vector<double> med(arms.size()), mhz(arms.size()), mj(arms.size()), watts(arms.size()), wmax(arms.size());
     for (size_t a = 0; a < arms.size(); a++) {
-      std::vector<double> v, fq;
+      std::vector<double> v, fq, e, w;
       for (const auto& it : tm.items)
-        if (it.arm == (int)a) { v.push_back(it.ms / it.calls); if (it.sm_mhz()) fq.push_back(it.sm_mhz()); }
+        if (it.arm == (int)a) {
+          v.push_back(it.ms / it.calls);
+          if (it.sm_mhz()) fq.push_back(it.sm_mhz());
+          if (it.energy_mj) { e.push_back((double)it.energy_mj / it.calls); w.push_back(it.energy_mj / it.ms); }
+          wmax[a] = std::max(wmax[a], it.power_max_mw / 1000.0);
+        }
       med[a] = gk::median(v);
       mhz[a] = gk::median(fq);
+      mj[a] = e.empty() ? 0 : gk::median(e);
+      watts[a] = w.empty() ? 0 : gk::median(w);
     }
     auto at = [&](const char* nm) -> double {
       for (size_t a = 0; a < arms.size(); a++)
@@ -3494,7 +3509,8 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            f.kn.rp == 5 ? f.r5h : 0, f.r5w ? 1 : 0, f.tst ? 1 : 0, V31_QORD, V31_R5NOST, f.wgw ? 1 : 0,
            f.kn.lminb, f.kn.sahead ? 1 : 0, fused, f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
-      printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
+      printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"mj\": %.4f, \"w\": %.1f, \"wmax\": %.1f}", a ? ", " : "",
+             arms[a].name.c_str(), med[a], mhz[a], mj[a], watts[a], wmax[a]);
     const double l = at("lt");
     printf("}, \"gamma_ovl\": %s, \"gamma_ovl_w\": %s, \"gamma_ovl_pad\": %s, \"gamma_ovl_nomem\": %s, \"gamma_call\": %s, "
            "\"gamma_gemm\": %s, ",
@@ -3504,7 +3520,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     printf("\"gamma_ovl_wgl\": %s, \"gamma_ovl_w_wgl\": %s, \"gamma_call_wgl\": %s, \"gamma_gemm_wgl\": %s, \"wgl_over_lt\": %s, ",
            jn(at("ovl") / wl).c_str(), jn(at("ovl_w") / wl).c_str(), jn(at("call") / wl).c_str(), jn(at("gemm") / wl).c_str(),
            jn(wl / l).c_str());
-    if (cut.best)
+    if (has_cut)
       printf("\"gamma_ovl_cutlass\": %s, \"gamma_ovl_w_cutlass\": %s, \"gamma_ovl_pad_cutlass\": %s, "
              "\"gamma_gemm_cutlass\": %s, \"cutlass_over_lt\": %s, ",
              jn(at("ovl") / med[ICUT]).c_str(), jn(at("ovl_w") / med[ICUT]).c_str(), jn(at("ovl_pad") / med[ICUT]).c_str(),

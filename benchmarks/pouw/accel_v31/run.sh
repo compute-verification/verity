@@ -36,6 +36,9 @@
 # GEMM, rp=4 hashing its O rows in the GEMM's producer warpgroup (rp=5: and a hash warpgroup of its own, r5h its
 # registers, and the prefix-sum rows in the GEMM of the prefix sums unless r5w=0; tst=1 its stores through shared memory
 # with TMA), and the bench adds wgmma.linear's arm (wgl).
+# Each item's timing, clock and the board's energy go to out/items/TAG/ (GK_ITEM_MS, an item's length; GK_POWER_MS, the
+# power sampled across it: gpu_kit/bench.cuh; V31_ARMS, the arms timed, else all). FILL_GATES=0 skips the gates (the
+# canary and the bench's own sampled tiles still run).
 # FILL_GATE_KNOBS=1 runs the gates (and FILL_DITHER's recheck) under the first variant's knobs (else v31.cu's defaults). FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself; the tree must have
 # circuit/dither.py). FILL_NSYS=1 adds, before the bench, Nsight Systems on `v31 fill-once` (OVL_CALLS overlapped calls
 # after two serial ones) for each variant, L and shape: out/nsys-TAG-L-SHAPE.nsys-rep, its kernel trace and `v31.py
@@ -160,6 +163,7 @@ if [ "$MODE" = fill ]; then
     rc=$?
     echo "canary rc $rc" >> "$O/rc.txt"
     [ $rc = 0 ] || exit 3
+    [ "${FILL_GATES:-1}" = 1 ] || exit 0
     gk=(); [ "${FILL_GATE_KNOBS:-0}" = 1 ] && gk=($(knob_env "${VARIANTS%% *}"))
     for x in 0 1; do
       only=(); [ $x = 1 ] && only=(--only fill)
@@ -271,6 +275,9 @@ if [ "$MODE" = fill ]; then
     name=$(basename "$(dirname "$(dirname "$s")")")-$(basename "$s")
     $PY $D/v31.py fill-sample "$s" > "$O/fill-sample-$name.out" 2> "$O/fill-sample-$name.err"
     echo "fill-sample $name rc $?" >> "$O/rc.txt"
+  done
+  for b in "$W"/fbench/*/; do
+    [ -d "$b" ] && mkdir -p "$O/items/$(basename "$b")" && cp "$b"items-*.jsonl "$O/items/$(basename "$b")/" 2> /dev/null
   done
   ls "$O"/fill-bench-*.jsonl > /dev/null 2>&1 && $PY $D/v31.py fill-table "$O"/fill-bench-*.jsonl > "$O/table.md" 2>> "$O/table.err"
   cat "$O/rc.txt"

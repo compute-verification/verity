@@ -5,6 +5,8 @@
 //
 //   gk::poison_gate(dev, bytes, stream, arm, accept)      the poisoned pass, and the control that writes nothing
 //   gk::timed_items(arms, reps, stream, nvml)             warm-up to a steady clock, then rep by rep, arms rotating
+//                                                         (GK_ITEM_MS: an item's length, default 40; GK_POWER_MS: the
+//                                                         board's power sampled at that period across each item)
 //   gk::summary(timing, arms)                             "GK arm=... ms=... sm_mhz=... clock_gap=...% [tags]"
 //   gk::Dump(dir).bytes(name, dev, n, s) / .digests(...)  DIR/NAME.bin and DIR/dump.jsonl
 #pragma once
@@ -12,6 +14,8 @@
 #include <dlfcn.h>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -20,6 +24,7 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #define GK_CK(x)                                                                                 \
@@ -38,6 +43,10 @@ constexpr uint32_t POISON_WORD = 0xA5A5A5A5u;
 // harness/bench.py: a steady round's SM clock change at most, and the clock gap the summary tags
 constexpr double STEADY = 0.005, CLOCK_GAP = 0.005;
 constexpr double ITEM_MS = 40.0, WARMUP_MS = 10000.0, WARMUP_MAX_MS = 60000.0;
+inline double env_ms(const char* name, double dflt) {
+  const char* e = getenv(name);
+  return e && atof(e) > 0 ? atof(e) : dflt;
+}
 // harness/native.py's BAD_THROTTLE: sw_power_cap, hw_slowdown, sw_thermal, hw_thermal, hw_power_brake
 constexpr unsigned long long BAD_THROTTLE = 0x4 | 0x8 | 0x20 | 0x40 | 0x80;
 
@@ -100,6 +109,8 @@ class Nvml {
     auto init = reinterpret_cast<int (*)()>(dlsym(lib_, "nvmlInit_v2"));
     auto by_uuid = reinterpret_cast<int (*)(const char*, void**)>(dlsym(lib_, "nvmlDeviceGetHandleByUUID"));
     clock_ = reinterpret_cast<int (*)(void*, int, unsigned*)>(dlsym(lib_, "nvmlDeviceGetClockInfo"));
+    power_ = reinterpret_cast<int (*)(void*, unsigned*)>(dlsym(lib_, "nvmlDeviceGetPowerUsage"));
+    energy_ = reinterpret_cast<int (*)(void*, unsigned long long*)>(dlsym(lib_, "nvmlDeviceGetTotalEnergyConsumption"));
     void* r = dlsym(lib_, "nvmlDeviceGetCurrentClocksEventReasons");
     reasons_ = reinterpret_cast<int (*)(void*, unsigned long long*)>(
         r ? r : dlsym(lib_, "nvmlDeviceGetCurrentClocksThrottleReasons"));
@@ -122,13 +133,50 @@ class Nvml {
     if (reasons_) reasons_(h_, &s.throttle);
     return s;
   }
+  // the board's power (NVML's own averaging) and its energy since the driver loaded; 0: unknown
+  unsigned power_mw() const {
+    unsigned v = 0;
+    return h_ && power_ && power_(h_, &v) == 0 ? v : 0;
+  }
+  unsigned long long energy_mj() const {
+    unsigned long long v = 0;
+    return h_ && energy_ && energy_(h_, &v) == 0 ? v : 0;
+  }
 
  private:
   void* lib_ = nullptr;
   void* h_ = nullptr;
   int (*clock_)(void*, int, unsigned*) = nullptr;
+  int (*power_)(void*, unsigned*) = nullptr;
+  int (*energy_)(void*, unsigned long long*) = nullptr;
   int (*reasons_)(void*, unsigned long long*) = nullptr;
   std::string uuid_;
+};
+
+// The board's power sampled every `period_ms` on a thread of its own, from construction to stop(); period 0: none
+class PowerTrace {
+ public:
+  PowerTrace(const Nvml& nv, double period_ms) {
+    if (period_ms <= 0 || !nv.ok()) return;
+    th_ = std::thread([this, &nv, period_ms] {
+      while (!stop_.load()) {
+        if (const unsigned p = nv.power_mw()) { max_mw = std::max(max_mw, p); sum_mw += p; n++; }
+        std::this_thread::sleep_for(std::chrono::microseconds((long long)(1000 * period_ms)));
+      }
+    });
+  }
+  ~PowerTrace() { stop(); }
+  void stop() {
+    stop_ = true;
+    if (th_.joinable()) th_.join();
+  }
+  double mean_mw() const { return n ? sum_mw / n : 0; }
+  unsigned max_mw = 0, n = 0;
+  double sum_mw = 0;
+
+ private:
+  std::atomic<bool> stop_{false};
+  std::thread th_;
 };
 
 // ---- interleaved items ----------------------------------------------------------------------------------------------
@@ -146,6 +194,9 @@ struct Item {
   int arm = 0, rep = 0, calls = 0;
   double ms = 0;
   Sample before, during, after;  // NVML before the item, while the GPU runs it, and after it
+  unsigned long long energy_mj = 0;   // the board's, from just before the item to just after it; 0: unknown
+  unsigned power_max_mw = 0, power_n = 0;
+  double power_mean_mw = 0;           // GK_POWER_MS's samples across the item
   unsigned sm_mhz() const { return during.sm_mhz ? during.sm_mhz : after.sm_mhz; }
 };
 
@@ -171,12 +222,20 @@ class Events {
     Item it;
     it.calls = a.calls;
     it.before = nv.sample();
+    PowerTrace pt(nv, env_ms("GK_POWER_MS", 0));
+    const unsigned long long j0 = nv.energy_mj();
     GK_CK(cudaEventRecord(e0_, s));
     a.enqueue(s, a.calls);
     GK_CK(cudaEventRecord(e1_, s));
     it.during = nv.sample();
     GK_CK(cudaEventSynchronize(e1_));
+    const unsigned long long j1 = nv.energy_mj();
+    pt.stop();
     it.after = nv.sample();
+    it.energy_mj = j0 && j1 >= j0 ? j1 - j0 : 0;
+    it.power_max_mw = pt.max_mw;
+    it.power_n = pt.n;
+    it.power_mean_mw = pt.mean_mw();
     float ms = 0;
     GK_CK(cudaEventElapsedTime(&ms, e0_, e1_));
     it.ms = ms;
@@ -190,7 +249,8 @@ class Events {
 // Size every arm's item to `item_ms`; warm up (rounds of every arm) until at least `warmup_ms` of device time and a
 // round's median SM clock within STEADY of the last round's, or `warmup_max_ms`; then `reps` reps, every arm once a rep,
 // the order rotating so no arm always follows the same one.
-inline Timing timed_items(std::vector<Arm>& arms, int reps, cudaStream_t s, const Nvml& nv, double item_ms = ITEM_MS,
+inline Timing timed_items(std::vector<Arm>& arms, int reps, cudaStream_t s, const Nvml& nv,
+                          double item_ms = env_ms("GK_ITEM_MS", ITEM_MS),
                           double warmup_ms = WARMUP_MS, double warmup_max_ms = WARMUP_MAX_MS) {
   Events ev;
   Timing t;
@@ -256,9 +316,11 @@ inline void items_jsonl(const Timing& t, const std::vector<Arm>& arms, FILE* f) 
   for (const Item& it : t.items)
     fprintf(f,
             "{\"gk\": \"item\", \"arm\": \"%s\", \"rep\": %d, \"calls\": %d, \"ms\": %.6f, \"sm_mhz\": {\"before\": %u, "
-            "\"during\": %u, \"after\": %u}, \"throttle\": \"0x%llx\"}\n",
+            "\"during\": %u, \"after\": %u}, \"throttle\": \"0x%llx\", \"energy_mj\": %llu, \"power_mw\": {\"mean\": %.0f, "
+            "\"max\": %u, \"n\": %u}}\n",
             arms[it.arm].name.c_str(), it.rep, it.calls, it.ms, it.before.sm_mhz, it.during.sm_mhz, it.after.sm_mhz,
-            it.before.throttle | it.during.throttle | it.after.throttle);
+            it.before.throttle | it.during.throttle | it.after.throttle, it.energy_mj, it.power_mean_mw, it.power_max_mw,
+            it.power_n);
 }
 
 // ---- the dump format ------------------------------------------------------------------------------------------------
