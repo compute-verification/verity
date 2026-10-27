@@ -186,7 +186,8 @@ def test_chain_on_vllms_art_reads_requests_jsonl_rebuilt_in_keep_from_its_users_
     (keep / RUN / "fetch.tar.gz").write_bytes(b"")
     for f in ("advice_trace.jsonl", "windows.jsonl", "serve.json"):
         (art / f).write_text("{}\n")
-    (art / SS.USERS).write_text("".join(json.dumps({"id": f"e{j}", "user": f"user-{j}"}) + "\n" for j in range(3)))
+    users = [json.dumps({"engine_id": f"e{j}", "user": f"user-{j}"}) + "\n" for j in range(3)]
+    (art / SS.USERS).write_text("".join(users))
     (tmp_path / "bin" / "research").write_text(f'#!/bin/sh\n[ "$*" = "data fetch art:ep --to $5" ] && cp -a {art.parent}/. "$5/"\n')
     (tmp_path / "bin" / "research").chmod(0o755)
     monkeypatch.setattr(SS, "HERE", here)
@@ -207,6 +208,10 @@ def test_chain_on_vllms_art_reads_requests_jsonl_rebuilt_in_keep_from_its_users_
         ("e1", "user-1", [7], [1, 2], {"reason": "stop", "stop_reason": None}),
         ("e2", "user-2", [8], [1, 2, 3, 4], {"reason": "length", "stop_reason": None})]
     assert not (art / "requests.jsonl").exists()
+    for bad in ({"engine_id": "e3", "user": None}, {"engine_id": "e3", "user": "user-1"}):
+        (art / SS.USERS).write_text("".join(users) + json.dumps(bad) + "\n")
+        assert SS.main(argv) == 2
+        assert f"engine request e3's user {bad['user']!r} is no certified request left" in capsys.readouterr().err
     io["accepted"] = False
     assert SS.main(argv) == 2 and "doesn't read whole off its cells" in capsys.readouterr().err
     (art / SS.USERS).unlink()

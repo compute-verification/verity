@@ -66,7 +66,8 @@ CR_SCAN_ARGS and CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--chal
 
 **The endpoint.** vllm starts it by hand on vy-dc-h200-2 (`HAND_START`) at 11:15Z on 28 Oct, ahead of the session's
 ``--at``, and it listens within about 35 s. Its records art (``--endpoint ART``) is advice_trace.jsonl, windows.jsonl,
-serve.json and `USERS`, each engine request's id and its warden user (``{"id", "user"}`` a line, in admission order).
+serve.json and `USERS`, each engine request's id and its warden user (``{"engine_id", "user"}`` a line, in
+requests.jsonl's order, vllm's #5303).
 requests.jsonl, whose prompt ids are request values, stays in h200-2's serve dir: this runbook neither fetches
 nor publishes it. The endpoint step's advice (`verity-vllm advice`) needs it, the Commit record, so ``chain`` rebuilds
 it (`endpoint_records`) from `USERS` and the kept warden run's certified I/O (`warden_chain.io`), each request's prompt
@@ -141,7 +142,8 @@ ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol i
            "--scheme rows-sha512 --seal --retain-exclude hidden_m1"
 #: serve-openai's default --max-model-len, which the endpoint's flags name only past it
 CONTEXT = 512
-#: vllm's record in its records art: each engine request's id and its warden user, requests.jsonl less its values
+#: vllm's record in its records art (#5303): each engine request's engine_id and its warden user (null for a body that
+#: sent none), a line in requests.jsonl's order: requests.jsonl less its values
 USERS = "request_users.jsonl"
 HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
@@ -149,7 +151,8 @@ HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
               "h200-2 under its 300 GB disk floor "
               "and sends its own smoke and load requests into the records. Its --copy-records-to copies requests.jsonl "
-              "too, which the records art leaves out")
+              "too, so it points at a private dir on h200-2, and the records art is the four public records copied from "
+              "there: request_users.jsonl, advice_trace.jsonl, windows.jsonl and serve.json")
 
 
 class Refused(Exception):
@@ -455,9 +458,10 @@ def endpoint_records(src: str, dest: Path, fetch: Path, eos: list[int]) -> str:
         raise Refused(f"the kept warden run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
     by, lines = {r["user"]: r for r in io["records"]}, []
     for m in map(json.loads, filter(str.strip, (ep / USERS).read_text().splitlines())):
-        if (r := by.get(m["user"])) is None:
-            raise Refused(f"{USERS}: engine request {m['id']}'s user {m['user']!r} is no certified request")
-        lines.append(json.dumps({"engine_id": m["id"], "user": m["user"], "prompt_ids": r["prompt"],
+        if (r := by.pop(m["user"], None)) is None:
+            raise Refused(f"{USERS}: engine request {m['engine_id']}'s user {m['user']!r} is no certified request left "
+                          "(none sent, not the warden's, or an earlier line's)")
+        lines.append(json.dumps({"engine_id": m["engine_id"], "user": m["user"], "prompt_ids": r["prompt"],
                                  "streamed_ids": r["output"], "finish": finish(r["output"], r["max_tokens"], set(eos))}))
     rebuilt = ep / "requests.jsonl"
     rebuilt.write_text("".join(line + "\n" for line in lines))

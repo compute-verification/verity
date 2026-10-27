@@ -262,7 +262,7 @@ def test_on_vllms_records_art_the_endpoint_step_binds_a_requests_jsonl_rebuilt_f
     for f in ("advice_trace.jsonl", "windows.jsonl", "serve.json"):
         (art / f).write_bytes((tmp_path / "ep" / f).read_bytes())
     own = [json.loads(x) for x in (tmp_path / "ep" / "requests.jsonl").read_text().splitlines()]
-    (art / SS.USERS).write_text("".join(json.dumps({"id": r["engine_id"], "user": r["user"]}) + "\n" for r in own))
+    (art / SS.USERS).write_text("".join(json.dumps({"engine_id": r["engine_id"], "user": r["user"]}) + "\n" for r in own))
     io = [{"user": f"user-{j}", "prompt": prompts[j], "max_tokens": 24, "output": S.outputs(prompts[j])}
           for j in range(7)]
     monkeypatch.setattr(SS, "certified_io", lambda fetch: {"accepted": True, "violations": [], "records": io})
@@ -277,6 +277,6 @@ def test_on_vllms_records_art_the_endpoint_step_binds_a_requests_jsonl_rebuilt_f
     assert (bits["bound"], bits["rebuilt"], bits["bound_why"], bits["why"]) == (True, True, None, None), bits
     assert bool(bits["chains"]) == (window_steps == 16) and sum(w["requests"] for w in bits["commit_windows"]) == 7
 
-    (art / SS.USERS).write_text(json.dumps({"id": "cmpl-x-0", "user": "user-9"}) + "\n")
+    (art / SS.USERS).write_text(json.dumps({"engine_id": "cmpl-x-0", "user": "user-9"}) + "\n")
     with pytest.raises(SS.Refused, match="user 'user-9' is no certified request"):
         SS.endpoint_records(str(art), keep / "again", keep / "fetch.tar.gz", [S.VOCAB])
