@@ -125,14 +125,14 @@ theorem auditCheck_tied {i : ℕ} {a : Audit} {reg : Registration} {x : Core.Ans
   | error r =>
     simp only [ha, bind, Except.bind] at h
     by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
-      simp [c1, refuse, pure, Except.pure] at h
+      simp [c1, refuse] at h
   | ok pp =>
     obtain ⟨prof, pub⟩ := pp
     cases hf : factsOf s!"audit {i}" prof pub with
     | error r =>
       simp only [ha, hf, bind, Except.bind] at h
       by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
-        simp [c1, refuse, pure, Except.pure] at h
+        simp [c1, refuse] at h
     | ok g =>
       refine ⟨prof, pub, g, ha, hf, ?_⟩
       simp only [ha, hf, bind, Except.bind] at h
@@ -148,14 +148,14 @@ theorem auditCheck_tied_whole {i : ℕ} {a : Audit} {reg : Registration} {x : Co
   | error r =>
     simp only [ha, bind, Except.bind] at h
     by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
-      simp [c1, refuse, pure, Except.pure] at h
+      simp [c1, refuse] at h
   | ok pp =>
     obtain ⟨prof, pub⟩ := pp
     cases hf : factsOf s!"audit {i}" prof pub with
     | error r =>
       simp only [ha, hf, bind, Except.bind] at h
       by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
-        simp [c1, refuse, pure, Except.pure] at h
+        simp [c1, refuse] at h
     | ok g =>
       simp only [ha, hf, bind, Except.bind] at h ⊢
       by_cases c1 : (reg.record.getObjValD "program" == Lean.Json.str a.program) = true <;>
