@@ -109,14 +109,18 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
   The challenger rests on two premises about where it runs, which the network certifier's spec and ACCEL's cite by
-  name. No Lean statement reads either yet:
+  name:
   - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor hosts
-    (`trusted-nebius-host`), or the challenger and the certifier are one device at the boundary. So no machine outside
-    the boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not
+    (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the
+    boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not
     allowed: it would need an encrypted, authenticated channel, which the challenger doesn't have. Deployed, one
     auditor host, vy-challenger-1, runs both, and a window's coins leave it only on the peer's certifier coin link,
-    which the gate refuses to open without (`auditor.coin_ports`).
-  - `OneClock`: the challenger's release times and the certifier's ingress and receipt times are read on one clock.
+    which the gate refuses to open without (`auditor.coin_ports`). In the Lean it is the Prop
+    `Pouw.Assumptions.CoinsConfidential` (`Security/Definitions/Pouw/Assumptions/Dither.lean`): a replica's prover is
+    the same function whatever the other replicas' coins, the form ACCEL's pooled guarantee
+    `Pouw.Guarantees.Dither.FleetSound` takes as a hypothesis.
+  - `OneClock`, a spec premise that no Lean statement reads: the challenger's release times and the certifier's
+    ingress and receipt times are read on one clock.
     Deployed, that is vy-challenger-1's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
