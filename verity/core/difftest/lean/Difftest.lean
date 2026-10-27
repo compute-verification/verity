@@ -7,8 +7,8 @@ import Flock.Canon
 A port's difftest executable is `def main : IO Unit := Difftest.serve (Difftest.table [("name", fn), …])`. It reads one
 request per line on stdin, `{"fn": NAME, "input": JSON}`, until end of input, and writes one line per request on stdout:
 
-* `{"output": JSON}` when `fn` returns `.ok`, the output in canonical JSON (`Flock.canon`: compact, keys sorted,
-  integers only);
+* `{"output": JSON}` when `fn` returns `.ok`, the output in canonical JSON's form (`Flock.canonLine`: compact, keys
+  sorted, integers only, any string);
 * `{"reject": REASON}` when `fn` returns `.error REASON`: the port refuses the input, as the Python reference must;
 * `{"error": MESSAGE}` for a fault of the protocol rather than a verdict of the port: a line that is not a JSON object
   with a string `fn` and an `input`, an unknown `fn`, or an output that has no canonical form (a non-integer number).
@@ -45,7 +45,7 @@ def respond (dispatch : String → Option Fn) (request : String) : String :=
         match f input with
         | .error reason => line "reject" (Flock.canonStr reason)
         | .ok out =>
-          match Flock.canon out with
+          match Flock.canonLine out with
           | .ok text => line "output" text
           | .error e => fault s!"output of {name}: {e}"
 
