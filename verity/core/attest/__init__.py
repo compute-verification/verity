@@ -17,7 +17,8 @@ the period's index and the record count) and returns the `SignedPeriod`, which g
 party's lower key and the identity's certificate of it are public: every liveness record shows them in the clear. The
 prover opens the records a proof reads (`SignedPeriod.read`); the verifier checks the certificate in the clear
 (`Attest.checkKey`), and the proof runs `Attest.check` (Lean, this directory's ``lean/``, package ``core_attest``): the
-root's LMS signature under the lower key, then each read's path to the root. `Attest.accepts` is both.
+root's LMS signature under the lower key, then each read's path to the root. `Attest.accepts` is both. The period's unit,
+the root's signature as a Boolean Definition, is ``AttestPeriod_v1`` (`verity.ml.commitments.gates.attest`).
 
 The party signs for one attachment at a time: `Period` starts its attachment on the signer (`lms.PartyKey.start`, which
 records it on the key's leaf state before any signature of it), so a restart within the attachment signs nothing more
