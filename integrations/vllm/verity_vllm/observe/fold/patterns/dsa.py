@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.ml.circuits.defs import bind
+from verity_vllm.config import TARGET_NUM_SMS
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_row_major
 from verity_vllm.observe.fold.patterns.kv_cache import kv_slots
@@ -562,8 +563,8 @@ class DsaSparseMla:
             return unsupported(node, "FA3 num_splits is not a nonnegative integer", num_splits=ns_arg)
         valid = [int(position) + 1 for _, position in ctx.start.rows]
         tp = target_of(ctx)[0]
-        if int(tp.num_sms) != 132:
-            return unsupported(node, "GLM-5.3 sparse split heuristic is pinned to the record target's 132-SM launch", num_sms=tp.num_sms)
+        if int(tp.num_sms) != TARGET_NUM_SMS["h200"]:
+            return unsupported(node, "GLM-5.3 sparse split heuristic is pinned to the record target's SM count, the H200 card's", num_sms=tp.num_sms)
         splits = launch_num_splits(valid, int(tp.num_sms), 2048, ns_arg)
         parts = []
         for i, ((req, position), n, ns) in enumerate(zip(ctx.start.rows, valid, splits)):
