@@ -384,10 +384,15 @@ def test_fill_table(tmp_path, capsys):
             "ccta": 1, "sched": 1, "arms": arms, "gamma_ovl": 1.05, "gamma_ovl_cutlass": 2.1 / 1.9, "gamma_ovl_w": 1.06,
             "gamma_ovl_pad": 1.07, "gamma_call": 1.7, "gamma_gemm": 1.025}
     later = dict(line, ltw=1, pf=2, gamma_ovl_nomem=1.02)
-    (tmp_path / "b.jsonl").write_text("x\n" + json.dumps(line) + "\n" + json.dumps(later) + "\n")
+    served_arms = {a: v for a, v in arms.items() if a != "pad"}
+    served = dict(line, o=True, row=16384, arms=served_arms, gamma_ovl_pad=None, gamma_ovl_w=1.25, gamma_ovl_w_cutlass=1.3)
+    (tmp_path / "b.jsonl").write_text("x\n" + "\n".join(json.dumps(x) for x in (line, later, served)) + "\n")
     assert v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")]) == 0
-    row, row2 = capsys.readouterr().out.splitlines()[-2:]
-    assert row.startswith("| 8b-up | 16384 x 28672 x 4096 | 4096 | 1 | r1024 hi k1 s1 | 2.000 | 1.900 | 2.100 | 1.050 | 1.105 |")
+    row, row2, row3 = capsys.readouterr().out.splitlines()[-3:]
+    assert row.startswith("| 8b-up | 16384 x 28672 x 4096 | 4096 | 1 | r1024 hi k1 s1 | 2.000 | 1.900 | 2.100 | 1.050 | 1.105 |"
+                          " 1.060 | - |")
     assert "| 1.070 | - | 1.700 |" in row
     assert "| 95.2% | 0.010, 0.020, 0.030, 0.100, 0.200, 2.050, 1.200 |" in row
     assert "| r1024 hi k1 s1 p2 ltw |" in row2 and "| 1.070 | 1.020 | 1.700 |" in row2
+    assert "| served r16384 hi k1 s1 |" in row3 and "| 1.250 | 1.300 | - | - | 1.700 |" in row3
+    assert "| 80.0% | 0.010, 0.020, -, 0.100, 0.200, 2.050, 1.200 |" in row3
