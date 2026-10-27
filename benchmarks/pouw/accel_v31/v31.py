@@ -961,9 +961,9 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
                    + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
                    + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else ""))
         fused = "-"
-        if (r.get("fused_leaves") or -1) >= 0 and r.get("o_leaves"):
+        if r.get("fused_leaves", -1) >= 0 and r.get("o_leaves"):
             fused = f"{100 * r['fused_leaves'] / r['o_leaves']:.1f}%"
-            if (r.get("fused_blocks") or -1) >= 0 and r.get("row_blocks"):
+            if r.get("fused_blocks", -1) >= 0 and r.get("row_blocks"):
                 fused += f" / {100 * r['fused_blocks'] / (r['o_leaves'] * r['row_blocks']):.1f}%"
         cut = g(ms["cutlass"]["ms"]) if "cutlass" in ms else "-"
         gcut, gcut_w = (r.get("gamma_ovl_cutlass"), r.get("gamma_ovl_w_cutlass")) if "cutlass" in ms else (None, None)
