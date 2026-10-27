@@ -3,12 +3,12 @@ import Definitions.Pouw.PearlC.Sha512
 /-!
 # J10-R: H1's noise from one seed a call, at call scale (trusted; definitions only)
 
-RT-ALGO round 3's J10-R (note:compute-accounting/20261019T0845Z-draft-rt-algo-r3, RT-ALGO-11 and -16): one SHA-512 stream
-per call row (its dither bits b and digit coins z) and one per call column (its coin bits c and `U`), seeded once a call;
-a unit reads its rows' and its columns' slices, and its fold keys stay its own. These are the bits, op for op, of
-`verity/core/protocols/pouw/circuit/seeds.py` (`call_seed`, `receipt_seed`, `noise_block`, `leaves`) and `h1tile.py`
-(`Layout`, `_noise_at`, `j10r_blocks`, `j10r_noise`, `fold_keys`, `unit_compressions`, `j10r_compressions`); the units that
-compute them are `PouwH1Tile_v5` and `_v6`, beside today's per-unit form, which no scheme replaces.
+One SHA-512 stream per call row (its dither bits b and digit coins z) and one per call column (its coin bits c and `U`),
+seeded once a call; a unit reads its rows' and its columns' slices, and its fold keys stay its own. These are the
+bits, op for op, of `verity/core/protocols/pouw/circuit/seeds.py` (`call_seed`, `receipt_seed`, `noise_block`, `leaves`)
+and `h1tile.py` (`Layout`, `_noise_at`, `j10r_blocks`, `j10r_noise`, `fold_keys`, `unit_compressions`,
+`j10r_compressions`); the units that compute them are `PouwH1Tile_v5` and `_v6`, beside today's per-unit form, which no
+scheme replaces.
 
 - `tagged tag salt pos rootA rootB`: SHA-512 of `u64 pos ‖ (tag ‖ salt ‖ rootA ‖ rootB) ⊕ (u64 pos)*`, the bytes XORed with
   the position's eight cyclically (`seeds._tagged`). `seed` and `receiptSeed` are today's seed_j and σ_R; `callSeed` is

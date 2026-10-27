@@ -49,7 +49,7 @@ msg owners PATH...` names each path's owner (longest prefix).
 - **One thread per request**: the root is the ask or announcement, and everything about it is a reply (`research msg
   read --thread T` shows the conversation so far).
 - **Only the names a post starts with ring** (`@name`s, user-group tags, or `handle:` as the first word; slack.py's
-  docstring has the rule), so start with the owner you need (`@circuits #1585 failed`), even under an announcement. A
+  docstring has the rule), so start with the owner you need (`@circuits #<pr> failed`), even under an announcement. A
   reply that names no one rings the root's poster, or, from the poster, everyone the root addressed, so a progress note
   is `send --kind fyi` (or `--quiet`), ringing only its `--to` names.
 - **Status.** On an ask or alert, the owner `pickup`s (👀), `reply`s only when the asker must act or decide, and
