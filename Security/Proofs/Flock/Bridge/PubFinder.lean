@@ -55,7 +55,7 @@ theorem strictCR_of_pr (Fd : StrictCR.Finder StrictCR.Pair) (c : ℝ) {p : ℝ} 
   have hq : (fun b : StrictCR.Pair => ∃ x y, id b = some (x, y) ∧ x ≠ y ∧ H512 x = H512 y) =
       fun b => ∃ u v, id b = some (u, v) ∧ Claims.Collision Claims.Sampling.sha512Msg u v :=
     funext fun b => by simp only [Claims.Collision, H512_eq_iff]
-  rw [hq, Real.sq_sqrt (by positivity), mul_div_assoc, div_self (by positivity), mul_one]
+  rw [hq, Real.sq_sqrt (mul_nonneg hp (by positivity)), mul_div_assoc, div_self (by positivity), mul_one]
   exact hB
 
 /-- **A table's knowledge finders**: level `ℓ + 1`'s rewinding finder of rep `r`, the pads' and `τ`'s of rep `r`, level

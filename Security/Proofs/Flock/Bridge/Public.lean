@@ -156,7 +156,7 @@ theorem _root_.Flock.Bridge.boundPr_le_pub {n mPts : ℕ} {Reg : Type} {I : Inpu
       (Bridge.pubFinder dj y₀ P vb k Rw M qF qS t' R τ).Pr Claims.Sampling.sha512Msg = p at hfam hp0 ⊢
   have h1ρ : 0 < 1 - ρ := sub_pos.2 hρ
   have hq2 : Real.sqrt (p * 2 ^ (513 : ℝ)) ^ 2 / 2 ^ (513 : ℝ) = p := by
-    rw [Real.sq_sqrt (by positivity), mul_div_assoc, div_self (by positivity), mul_one]
+    rw [Real.sq_sqrt (mul_nonneg hp0 (by positivity)), mul_div_assoc, div_self (by positivity), mul_one]
   have hksC : ksClosedM1 k (Real.sqrt (p * 2 ^ (513 : ℝ))) (Real.sqrt (p * 2 ^ (513 : ℝ))) =
       2 ^ (-(203 : ℝ)) + ((2 * 25638 + 2 ^ 14 + 2) * Real.sqrt p + p + Real.sqrt (k * p)) := by
     unfold ksClosedM1
