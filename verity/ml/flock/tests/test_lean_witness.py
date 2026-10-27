@@ -17,7 +17,9 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   statements staged with the inner program; the fixture holds the files these tests read, the circuits and V*'s
   programs xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against
   the art's own listing once decompressed; RecCap's statement and session were staged and proved over the gate's inner
-  session after it (`r20261020-002938-635a`, `85-rec-reprice.sh` STEP=vcap and STEP=oprove LEVELS=cap). Lean's verifier
+  session after it (`r20261020-002938-635a`, `85-rec-reprice.sh` STEP=vcap and STEP=oprove LEVELS=cap). All ten
+  sessions were proved again over those statements at #4319's coin schedule, one firewalled session each (STEP=oprove
+  MODES=firewall WARM=0 RUNS=1: `r20261027-202029-0707`, and L0's in `r20261027-205158-8c3a`). Lean's verifier
   builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s seven staged statements
   are the ones `outerStatementsAt` lists, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
   and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with #1677's OS masks
