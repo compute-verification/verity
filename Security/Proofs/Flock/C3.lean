@@ -11,12 +11,15 @@ import Proofs.Flock.C3.Compose.DecodeFix
 import Proofs.Flock.C3.Compose.HoloStageCoins
 import Proofs.Flock.C3.Compose.LaterHeld
 import Batteries.Recycling.MonadSatisfying.Array
-import Proofs.Flock.Recursive.ValueInner
+import Proofs.Flock.Recursive.HoloSchedCheck
+import Proofs.Flock.Recursive.ValueChecked
 import Proofs.Flock.C3.Compose.HoloCoinTys
 import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.Compose.RowsReg
 import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.VBridge.Family.OutCols
+import Proofs.Flock.C3.Compose.HoloSparseRounds
+import Proofs.Flock.C3.Compose.HoloSparseWords
+import Proofs.Flock.VBridge.Family.PartKeys
 import Proofs.Flock.Soundness.Refine.HoloRepConverse
 import Proofs.Flock.C3.Sparse.Read
 import Proofs.Flock.C3.Sparse.Src
@@ -24,6 +27,11 @@ import Proofs.Flock.C3.Sparse.SrcTie
 import Proofs.Flock.C3.Sparse.SrcLayer
 import Proofs.Flock.C3.Sparse.SessionAt
 import Proofs.Flock.C3.Sparse.MsgsRead
+import Proofs.Flock.C3.Sparse.SrcSessions
+import Proofs.Flock.C3.Sparse.MsgsLayers
+import Proofs.Flock.C3.Sparse.PubTie
+import Proofs.Flock.C3.Sparse.PubLift
+import Proofs.Flock.C3.Sparse.PubChecked
 import Proofs.Flock.C3.VStarList.Statements
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.C3.VStarList.Range
@@ -55,6 +63,8 @@ import Proofs.Flock.C3.Reps.SentKeys
 import Proofs.Flock.C3.Reps.WRead
 import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.C3.Reps.RoundReads
+import Proofs.Flock.C3.Reps.RoundSel
+import Proofs.Flock.C3.Reps.RoundOfHolo
 import Proofs.Flock.C3.Reps.WithReads
 import Proofs.Flock.C3.Reps.KeysInW
 import Proofs.Flock.C3.Reps.LigNames
@@ -74,6 +84,7 @@ import Proofs.Flock.C3.RegLevels.RsT
 import Proofs.Flock.C3.RegLevels.Kappa
 import Proofs.Flock.C3.RegLevels.StackedReg
 import Proofs.Flock.C3.RegLevels.OpensRegs
+import Proofs.Flock.C3.RegLevels.VRows
 import Proofs.Flock.C3.RegLevels.AccReads
 import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.C3.RegLevels.OutRegs
@@ -86,6 +97,7 @@ import Proofs.Flock.C3.RegLevels.ROpens
 import Proofs.Flock.C3.RegLevels.ROpensPR
 import Proofs.Flock.C3.RegLevels.LevelsChecked
 import Proofs.Flock.C3.RegLevels.TopRead
+import Proofs.Flock.C3.Sparse.SessionReg
 
 /-!
 # Candidate 3's recursive guarantee: its open pieces
