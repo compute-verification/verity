@@ -86,7 +86,7 @@ pin's BF16 base.
 1. **Gates before timing.** Every arm runs every point, with the point's sampling, before anything is timed:
    - `tokens`: an arm with a control must produce the control's tokens exactly. A failure records the first divergent
      request, position and tokens.
-   - `kv-pool`: an arm and its control must get the same KV-cache pool, in tokens. vLLM schedules by free KV blocks, and
+   - `kv-pool`: an arm and its control must get the same KV-cache pool, in tokens. vLLM schedules by free KV pages, and
      a step's batch composition reaches the numerics, so unequal pools can flip tokens. The preset pins it with
      `resident_kv_cache_memory_bytes` and `block_kv_cache_memory_bytes`. An engine that doesn't report its pool fails it.
    - `arm`: the arm's own gate, when it provides one.

@@ -21,8 +21,9 @@ the salt in no case), and answered by one-stage with its one unit proved. In the
 each link-window's ingress and egress rows committed and registered under a small drawn schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified, and the scan's
 registration holding both rows' roots and domains, answered by one-stage with a stratified or subset draw at the
-period's δ; the scan's Program is its generator form, stand-ins of its three templates at small widths
-(`scan_descriptor`), and a Program in the checker form is a bad scan (`bad_scans`). Beside them, the compute audits,
+period's δ; the scan's Program is its generator form, stand-ins of its three templates at small widths in the Boolean
+profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in the checker form is a bad
+scan (`bad_scans`). Beside them, the compute audits,
 each registered over its Program, a population of one or two stand-in templates whose units commit from 8 to 320 bits
 (`audit_descriptor`), and answered with a subset or stratified draw (a work law's) and its bound on wrong units.
 `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a decoding failure (`KINDS`), and
@@ -88,6 +89,8 @@ INPUT_ID = re.compile(r"^(?:Registered)?Input([1-9][0-9]*)_v1$")
 FIRST_PARAMS = ("row", "prog")
 INGRESS_PARAMS = ("row", "sin", "prog")
 EGRESS_PARAMS = ("state",)
+#: a byte and a u16 in the Boolean profile, as the scan's Definitions type a row's bytes and the egress bucket's word
+BOOL_BYTE, BOOL_U16 = ["Array", 8, ["Value", 1]], ["Array", OUT_BITS, ["Value", 1]]
 #: the checker form's, which took the rows its units compared as inputs
 CHECKER_PARAMS = (("row", "sin", "prog", "sout", "view"), ("state", "row"))
 
@@ -251,9 +254,9 @@ def _audit(a, ctx: str) -> Audit:
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
-    form of the schedule's link-window, an egress template with a row among its parameters (the checker form) refused
-    first. It reads the descriptor's template nodes and signatures; C-Flock's decoder, which Lean runs on it, refuses no
-    descriptor this module writes."""
+    form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
+    with a row among its parameters (the checker form) refused first. It reads the descriptor's template nodes and
+    signatures; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject("scan: not a Program's descriptor")
     if program_sha512(j) != program:
@@ -261,7 +264,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     defs, callees = j["definitions"], j["callees"]
     nodes = defs[j["root"]]["body"]["nodes"]
     templates = [(x, defs[callees[x["fn"]]]["body"]) for x in nodes if defs[callees[x["fn"]]]["form"] != "primitive"]
-    T, row = s.window, ["Array", s.lanes * s.slots * s.cell_bytes, ["Value", 8]]
+    T, row = s.window, ["Array", s.lanes * s.slots * s.cell_bytes, BOOL_BYTE]
     if not templates:
         raise D.Reject("scan: no template")
     (xf, bf), later, (xe, be) = templates[0], templates[1:-1], templates[-1]
@@ -280,7 +283,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
         raise D.Reject("scan: an ingress template's row is not the schedule's")
     if any(b["params"][2][1] != bf["params"][1][1] or b["ret_type"] != bf["ret_type"] for _, b in later):
         raise D.Reject("scan: the ingress templates' prog or return differ")
-    if be["ret_type"] != ["Tuple", [["Value", OUT_BITS], row]]:
+    if be["ret_type"] != ["Tuple", [BOOL_U16, row]]:
         raise D.Reject("scan: the egress template doesn't return a u16 and the schedule's row")
     inputs = sum(int(w[1]) * _members(x) for x in nodes if (w := INPUT_ID.match(callees[x["fn"]])))
     bits = lambda b: sum(bits_of(t) for _, t in b["params"])  # noqa: E731
@@ -733,50 +736,56 @@ def _small_schedule(r: random.Random, small: bool) -> WardenParams:
 
 
 BIT, BYTE, U16 = Value(1), Value(8), Value(16)
-#: the stand-in egress bucket's one gate: a u16 from a u16 and a byte
-FOLD = PrimitiveDefinition("NetworkPeriodScanFold", 1, (("s", U16), ("b", BYTE)), U16, lambda s, b: s ^ b,
-                           register=False)
-
-
-#: the generator form's stand-ins' gates: a bit from a bit and a byte, a u16 from a byte, a byte from a u16
-MIX = PrimitiveDefinition("NetworkPeriodScanMix", 1, (("a", BIT), ("b", BYTE)), BIT, lambda a, b: a ^ b & 1,
-                          register=False)
-WIDEN = PrimitiveDefinition("NetworkPeriodScanWiden", 1, (("b", BYTE),), U16, lambda b: b, register=False)
+#: the compute audits' stand-in unit's gate: a byte from a u16
 LOW = PrimitiveDefinition("NetworkPeriodScanLow", 1, (("s", U16),), BYTE, lambda s: s & 0xFF, register=False)
+#: a byte and a u16 in the Boolean profile, as the scan's stand-ins type them (`BOOL_BYTE`, `BOOL_U16`)
+BYTE_BITS, U16_BITS = Array(8, BIT), Array(OUT_BITS, BIT)
+
+#: the scan's stand-ins' gate, a bit from two, and `N` bits from two (a byte's or a u16's)
+MIX = PrimitiveDefinition("NetworkPeriodScanMix", 2, (("a", BIT), ("b", BIT)), BIT, lambda a, b: a ^ b,
+                          register=False)
+SPREAD = CompositeDefinition("NetworkPeriodScanSpread", 0, ("N",),
+                             lambda S: ((("a", BIT), ("b", BIT)), Array(S.N, BIT)),
+                             lambda B, S, a, b: B.batch(MIX, a, b, axes=(None, None), n=S.N), register=False)
 
 
 def _ingress_ret(S):
-    return Tuple(U16, Array(S.STATE, BIT), Array(S.VIEW, BIT))
+    return Tuple(U16_BITS, Array(S.STATE, BIT), Array(S.VIEW, BIT))
 
 
 def _first_sig(S):
-    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE), Array(S.PROG, BIT)))), _ingress_ret(S)
+    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE_BITS), Array(S.PROG, BIT)))), _ingress_ret(S)
 
 
 def _ingress_sig(S):
-    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE), Array(S.STATE, BIT), Array(S.PROG, BIT)))), _ingress_ret(S)
+    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE_BITS), Array(S.STATE, BIT), Array(S.PROG, BIT)))), _ingress_ret(S)
 
 
 def _egress_sig(S):
-    return tuple(zip(S.NAMES, (Array(S.WORDS, U16),))), Tuple(U16, Array(S.ROW, BYTE))
+    return tuple(zip(S.NAMES, (Array(S.WORDS, U16_BITS),))), Tuple(U16_BITS, Array(S.ROW, BYTE_BITS))
 
 
 def _first(B, S, row, prog):
-    return tuple_of(B.call(WIDEN, row[0]), B.batch(MIX, prog[0], row[0], axes=(None, None), n=S.STATE),
-                    B.batch(MIX, prog[0], row[0], axes=(None, None), n=S.VIEW))
+    b, p = row[0][0], prog[0]
+    return tuple_of(B.call(bind(SPREAD, N=OUT_BITS), b, p), B.batch(MIX, p, b, axes=(None, None), n=S.STATE),
+                    B.batch(MIX, p, b, axes=(None, None), n=S.VIEW))
 
 
 def _ingress(B, S, row, sin, prog):
-    return tuple_of(B.call(WIDEN, row[0]), B.batch(MIX, sin, row[0], axes=(0, None)),
-                    B.batch(MIX, prog[0], row[0], axes=(None, None), n=S.VIEW))
+    b, p = row[0][0], prog[0]
+    return tuple_of(B.call(bind(SPREAD, N=OUT_BITS), b, p), B.batch(MIX, sin, b, axes=(0, None)),
+                    B.batch(MIX, p, b, axes=(None, None), n=S.VIEW))
 
 
 def _egress(B, S, state):
-    return tuple_of(B.call(WIDEN, B.call(LOW, state[0])), B.batch(LOW, state[0], axes=(None,), n=S.ROW))
+    s = state[0][0]
+    return tuple_of(B.call(bind(SPREAD, N=OUT_BITS), s, s),
+                    B.batch(bind(SPREAD, N=8), s, s, axes=(None, None), n=S.ROW))
 
 
 #: Stand-ins of the scan's templates in the generator form, with their parameters and returns as `IngressScanFirst`,
-#: `IngressScanBucket` and `EgressBucket` have them at small widths: each unit computes and returns its rows.
+#: `IngressScanBucket` and `EgressBucket` have them at small widths, in the Boolean profile's types: each unit computes
+#: and returns its rows.
 _STATICS = ("NAMES", "ROW", "STATE", "PROG", "VIEW")
 FIRST_BUCKET = CompositeDefinition("NetworkPeriodScanFirst", 0, _STATICS, _first_sig, _first, register=False)
 INGRESS_BUCKET = CompositeDefinition("NetworkPeriodScanIngress", 1, _STATICS, _ingress_sig, _ingress, register=False)
@@ -785,21 +794,22 @@ EGRESS_BUCKET = CompositeDefinition("NetworkPeriodScanEgress", 1, ("NAMES", "WOR
 
 
 def _checker_ingress_sig(S):
-    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE), Array(S.STATE, BIT), Array(S.PROG, BIT), Array(S.STATE, BIT),
+    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE_BITS), Array(S.STATE, BIT), Array(S.PROG, BIT), Array(S.STATE, BIT),
                                Array(S.VIEW, BIT)))), BIT
 
 
 def _checker_egress_sig(S):
-    return tuple(zip(S.NAMES, (Array(S.WORDS, U16), Array(S.ROW, BYTE)))), U16
+    return tuple(zip(S.NAMES, (Array(S.WORDS, U16_BITS), Array(S.ROW, BYTE_BITS)))), U16_BITS
 
 
 #: Stand-ins of the checker form's templates, which take the rows they compare as inputs (its egress row an input gate,
-#: which `NetTiming.Layout.Fits` refuses), each one gate.
+#: which `NetTiming.Layout.Fits` refuses).
 CHECKER_INGRESS = CompositeDefinition(
     "NetworkPeriodScanIngress", 0, _STATICS, _checker_ingress_sig,
     lambda B, S, row, sin, prog, sout, view: B.call(BL.XOR, BL.operands(sin[0], sout[0])), register=False)
-CHECKER_EGRESS = CompositeDefinition("NetworkPeriodScanEgress", 0, ("NAMES", "WORDS", "ROW"), _checker_egress_sig,
-                                     lambda B, S, state, row: B.call(FOLD, state[0], row[0]), register=False)
+CHECKER_EGRESS = CompositeDefinition(
+    "NetworkPeriodScanEgress", 0, ("NAMES", "WORDS", "ROW"), _checker_egress_sig,
+    lambda B, S, state, row: B.call(bind(SPREAD, N=OUT_BITS), state[0][0], row[0][0]), register=False)
 
 
 @lru_cache(maxsize=None)
@@ -1191,9 +1201,9 @@ def bad_audits(p: dict) -> list[dict]:
 def _scan_widths(desc: dict) -> tuple[int, int, int, int]:
     """`scan_descriptor`'s widths of a generator-form descriptor it wrote: the ingress templates' state, prog and view
     bits, and the egress template's state words."""
-    sig = {len(d["body"]["params"]): d["body"] for d in desc["definitions"].values()
-           if d["form"] == "composite" and d["body"]["params"]}
-    first, egress = sig[len(FIRST_PARAMS)], sig[len(EGRESS_PARAMS)]
+    sig = {tuple(k for k, _ in d["body"]["params"]): d["body"] for d in desc["definitions"].values()
+           if d["form"] == "composite"}
+    first, egress = sig[FIRST_PARAMS], sig[EGRESS_PARAMS]
     _, state, view = first["ret_type"][1]
     return state[1], first["params"][1][1][1], view[1], egress["params"][0][1][1]
 

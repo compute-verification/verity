@@ -159,7 +159,7 @@ A spec-level reference for network accounting's timing channel:
   certified changes;
 - the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a
   bucket, padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer,
-  beside a salted digest of the window's wiring. The registration is what a proof unit's `--registered` port reads, so
+  beside a salted digest of the window's wiring. The registration is what a proof block's `--registered` port reads, so
   the sender's unit opens a cell's row as its output and the receiver's as its input, and the verifier places each
   read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
   the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
@@ -185,7 +185,17 @@ A spec-level reference for network accounting's timing channel:
   under the network certifier's own salts at the reading port's leaf width and row format, its root in a head the
   certifier signs for the link-window (`TransferHead`, `registration`). `check_registration` is the verifier's read of
   it for the transfer it expects, and `port` the verifier's own `--registered` port of the value at the signed root
-  (the load relayed and committed as it crosses: `benchmarks/network_traces/load_relay.py`);
+  (`benchmarks/network_traces/transfer_zk.py`; the load relayed and committed as it crosses,
+  `benchmarks/network_traces/load_relay.py`);
+- the blocks (`blocks`): the server blocks, the server-time block and the transfer gates of a circuit, schema
+  `verity/blocks/v1`, kept in this module until the window interface carries it in ``circuit.json``. `check` refuses
+  blocks whose servers don't partition the units, a boundary row that is no transfer's (an ``ingress``, a registered
+  read no transfer brings in, a wire between servers, an external port's row no transfer covers), a transfer's read
+  or write that isn't whole rows of its value, an out value a row of which no unit writes or two do, and a wire
+  transfer not paired (one value, its out on one server and its in on another, of one shape and one step a row).
+  `pins` gives the verifier's pinned roots from the certificates alone, so the interface's ``input_count`` under them
+  has no free input, and `certified` refuses a wire whose two certifiers' roots differ (the receiver's commits under
+  the sender's salts, so the rows that arrived are the rows that left);
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
   the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
@@ -308,10 +318,9 @@ in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. 
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
-`LinkWindows.verify`'s verdict of record on a plain or served link is the Lean's, `NetworkCheck.LinkWindow`
+`LinkWindows.verify`'s verdict of record on a plain, served or warden link is the Lean's, `NetworkCheck.LinkWindow`
 (`verity/core/protocols/network/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
-`service.OF_RECORD`; an advised link's stays the Python's, and so does a warden link's, a form the Lean doesn't have
-(`service.NO_LEAN_FORM`), which it isn't run on. `verify` runs both on every other proof, and a link-window where
+`service.OF_RECORD`; an advised link's stays the Python's. `verify` runs both on every proof, and a link-window where
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch went
 to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
 - the gap list is empty for plain and served links. Everything the Python checks, the Lean checks: the findings prove
@@ -322,13 +331,22 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   sessions' SHA-512s, the registration, the draw, and the Program's and partition's digests and the gate ids. On an
   advised link the window view (`advised.view`, from the tie and clock sources) is the Python's and an input to the Lean,
   which is why advised stays `python`. The Lean reads an LMS key only, and rejects any other.
+- on a warden link (`service.WardenProfile`) the gap list is empty too: the Lean's warden form (`Kind.warden`) is the
+  plain unit's public row with both ends' grids at the warden's parameters digest, which both take as an input (the
+  warden's deployment publishes it), and no sync read, as in the Python; it refuses a warden case whose digest isn't 64
+  bytes, whose ends have a profile, or whose two grids differ.
 - every recorded proving run of N2 replays through both to the verdict it recorded, negative controls included
   (`benchmarks/network_traces/n2_lean_replay.py`): 193 link-windows of seven runs, plain and served, 180 accepted and 13
-  refused, each with nine injected controls that both reject (r20261026-050730-1027).
+  refused, each with nine injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
+  warden runs give 30 link-windows from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a draw of 8 on the
+  H200 warden run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused (r20261026-104647-c07b,
+  r20261026-105654-6220). Each has ten controls: nine that both reject, among them another warden's digest, and
+  `unread`, a sync off Σ_sync that changes neither verdict.
 - the Python keeps running beside the Lean as the reference.
 - the Lean's verdict has its property in `Security/Properties/NetworkCertifier/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted link-window was proved, opened to the
-  word 0b11, certified on both ends and synced within Σ_sync, and its public outputs are verdict 1 and deadline 1.
+  word 0b11, certified on both ends and synced within Σ_sync (a warden link's syncs are not asked of), and its public
+  outputs are verdict 1 and deadline 1.
 
 `tie_service.IngressTie.verify`, the ingress tie's verifier, is not ported and stays Python.
 

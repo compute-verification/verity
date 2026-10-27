@@ -12,7 +12,7 @@ a head leaf in the head's two or three SHA-512 compressions instead of the certi
 and heads are witness: the challenger sees the root, never a certificate, a salt or a head.
 
 **Selection** is `All`: every link-window is checked, so an accepted outcome is the exhaustive fact. A registration is
-one link-window, one proof unit. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
+one link-window, one proof block. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
 to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the link-window. The
 network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
 credit: it accepts only when every window of the egress profile (a served or advised link's profile) is registered in
@@ -187,15 +187,17 @@ When the in-the-clear check's audit is the Lean check's (`lean_audit.Audit`), `a
 reference: a link-window where the two differ rejects, and the verdict says `"by": "lean"` and carries the reference's
 accept bit (`reference`), never a violation's kind.
 
-**The verdict of record is the Lean's** on plain and served links: `NetworkCheck.LinkWindow.verdict`
+**The verdict of record is the Lean's** on plain, served and warden links: `NetworkCheck.LinkWindow.verdict`
 (`verity/core/protocols/network/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
 line `OF_RECORD` under the 8 Oct ruling. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects a link-window where they differ or the
-Lean refuses the case. The gap list, what `python_verdict` reads that the Lean takes as an input rather than checks:
+Lean refuses the case. On a warden link the Lean reads the warden's parameters digest (`lean_case`'s ``warden``) for
+both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what `python_verdict` reads that the
+Lean takes as an input rather than checks:
 - an advised link's window view (`advised.view`, under the tie source's IoTieRequest verdict and the clock source's
   syncs), which is why an advised link's verdict of record stays this module's;
-- a warden link (no sync declared, both heads at the warden's parameters digest), a form the Lean doesn't have
-  (`NO_LEAN_FORM`): the Lean isn't run on it, and its verdict of record is this module's;
+- on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
+  as its schedule's, `warden.WardenParams.digest`), which neither derives;
 - what both take from the proof service and the lowering: the findings of the verifier's own run of C-Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the draw, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
@@ -256,10 +258,7 @@ from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
 #: (``"lean"``, `NetworkCheck.LinkWindow`) or this module's (``"python"``). Both run on every proof either way. Setting a
 #: kind to ``"python"`` is the one line that switches it back. An advised link stays Python's: the Lean takes its
 #: window view (`advised.view`) as an input.
-OF_RECORD = {"plain": "lean", "served": "lean", "advised": "python", "warden": "python"}
-#: The kinds of link the Lean has no form for, which `verify` doesn't run it on: a warden link (no sync declared, both
-#: heads at the warden's parameters digest).
-NO_LEAN_FORM = frozenset({"warden"})
+OF_RECORD = {"plain": "lean", "served": "lean", "advised": "python", "warden": "lean"}
 
 SPEC = "verity-network-certifier/service-spec/v0"
 SESSION = "verity-network-certifier/session/v0"
@@ -379,19 +378,19 @@ def _units(check, served, advised=AD.gate) -> tuple[CompositeDefinition, Composi
 
     return (CompositeDefinition(
         "NetworkLinkWindow", 5, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), _OUT), body,
-        doc="the proof unit of network accounting: one link-window, both directions, over the two certificates' signed "
+        doc="the proof block of network accounting: one link-window, both directions, over the two certificates' signed "
             "digests; EGRESS and INGRESS are each end's head check's (L, T, COUNTS). Its two output bits are the "
             "verdict, both head checks, and the deadline, both heads' deadline bits", register=False),
         CompositeDefinition(
         "NetworkServedLinkWindow", 4, ("EGRESS", "INGRESS", "SERVED"),
         lambda S_: (_SIGNED + _heads(S_) + (_SYNC,), _OUT), body_served,
-        doc="the proof unit of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress "
+        doc="the proof block of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress "
             "head's counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, "
             "SERVED its (T, FOUT, FIN, R, RIN)), in its verdict bit", register=False),
         CompositeDefinition(
         "NetworkAdvisedLinkWindow", 2, ("EGRESS", "INGRESS", "ADVISED"),
         lambda S_: (_SIGNED + _heads(S_) + _advice(S_), _OUT), body_advised,
-        doc="the proof unit of network accounting on an advised link: `NetworkLinkWindow`'s checks, and the egress "
+        doc="the proof block of network accounting on an advised link: `NetworkLinkWindow`'s checks, and the egress "
             "head's counts held to the advice's releases, and the advice to the ingress head's counts "
             "(`advised.NetworkAdvisedCounts`, ADVISED its (T, RIN, OWN)), in its verdict bit", register=False))
 
@@ -403,7 +402,7 @@ _PROOF_UNIT, _PROOF_SERVED_UNIT, _PROOF_ADVISED_UNIT = _units(_head_expanded, _s
 
 def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None,
          advised: tuple[int, int, int] | None = None, *, proof: bool = False):
-    """N2's proof unit for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
+    """N2's proof block for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
     and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`), or on an
     advised link the advised counts' `advised`, (T, RIN, OWN) (`advised.unit`). With `proof`, the unit a proof's
     circuit lowers: the same id and signature, so the template the registered query names, with each gate the
@@ -774,7 +773,7 @@ class LinkWindows:
 
     @cached_property
     def unit(self):
-        """N2's proof unit for this link (`unit`): its heads' size classes are the link's, and on a served link its
+        """N2's proof block for this link (`unit`): its heads' size classes are the link's, and on a served link its
         served counts' (`served_key`), on an advised link its advised counts' (`advised_key`)."""
         return unit(self.head_key(0), self.head_key(1), self.served_key(), self.advised_key())
 
@@ -1128,8 +1127,9 @@ class LinkWindows:
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
         as `public_arguments` reads it, the declared syncs, Σ_sync,
-        the key and session, each end's grid and profile, and on an advised link the window's view (`advised.view`)
-        and the advice output. None for a key the Lean doesn't read (not an `LmsKey`)."""
+        the key and session, each end's grid and profile, on an advised link the window's view (`advised.view`) and
+        the advice output, and on a warden link the warden's parameters digest. None for a key the Lean doesn't read
+        (not an `LmsKey`)."""
         if not isinstance(self.key, LmsKey):
             return None
         reg, p = draw.registration.record, self.key.params
@@ -1176,6 +1176,8 @@ class LinkWindows:
             case["view"] = None if v is None else {"released": list(v.released), "floor": list(v.floor),
                                                    "received": v.received}
             case["advice"] = self._advice_output(advice)["advice"]
+        if self.warden is not None:
+            case["warden"] = self.warden.digest.hex()
         return case
 
     def lean_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
@@ -1215,19 +1217,17 @@ class LinkWindows:
         The Lean (`NetworkCheck.LinkWindow`, `lean_verdict`) decides the same on every call beside this Python, and
         `OF_RECORD` names whose verdict is the record's (`by`); the other's accept bit is `reference`'s. Where the two
         differ in the accept bit, the public outputs or the digest, or the Lean refuses the case, the link-window is
-        rejected, with deadline 0. A warden link is a form the Lean doesn't have (`NO_LEAN_FORM`): the Lean isn't run
-        on it, and its verdict of record is this module's, with no reference."""
+        rejected, with deadline 0."""
         self._profiled()
         findings, refused = PF.verify(delivered.proof, circuit_sha512=circuit_sha512, program=self.program,
                                       partition=self._partition)
         findings = None if refused is not None else findings
         sessions = delivered.sessions()
         python = self.python_verdict(draw, certificates, syncs, delivered, findings, sessions, advice)
-        ported = self.kind not in NO_LEAN_FORM
-        lean = self.lean_verdict(draw, certificates, syncs, delivered, findings, sessions, advice) if ported else None
+        lean = self.lean_verdict(draw, certificates, syncs, delivered, findings, sessions, advice)
         by = OF_RECORD[self.kind]
         mine, other = (lean, python) if by == "lean" else (python, lean)
-        if ported and (lean is None or any(lean[k] != python[k] for k in python)):
+        if lean is None or any(lean[k] != python[k] for k in python):
             mine = self._decided(draw, sessions, False, {"verdict": 0, "deadline": 0} | self._advice_output(advice))
         verdict = {"of_record": True, "decided_by": "proof", "by": by, **mine, "sessions": sessions,
                    "reference": {"accepted": None if other is None else other["accepted"]}}

@@ -12,8 +12,10 @@ certifier saw is what the warden sent is a fact of the code, not a premise.
 
 **The record is the wire.** The deployed tap (`benchmarks/network_traces/warden_serve.py`, one relay on the auditor's
 machine) records every cell it sends, padding and fail cells included, a row a bucket, each cell a frame that names its
-connection (`verity/core/protocols/certifier/warden_rows.py`). So the cells read back from the record under the
-schedule (`TapRecord.read_record`). What else the record holds, each step's jitter class and statuses, may depend on
+connection (`verity/core/protocols/certifier/warden_rows.py`; `Definitions.NetworkCertifier.RecordRows` is that
+format). So on every schedule the format holds (`TapRecord.fits`: a record of the monitoring period's buckets, each of
+`S` slots, holds a schedule whose cells fall in them, at most `S` a bucket), the cells read back from the record under
+the schedule (`TapRecord.read_record`). What else the record holds, each step's jitter class and statuses, may depend on
 anything the tap saw. The server's bytes after a connection's fail cell, or past its lane's end, reach the tap but
 neither the client nor the record: the record fixes what the client received, not everything the server sent.
 
@@ -24,12 +26,14 @@ can lift it as it is: `TapRecord` and `tapCode` read nothing of network accounti
 namespace NetTiming
 
 /-- **The tap's record format**: what the tap writes to its record on schedule `s`, from the arrivals `a` it saw and
-the cells `v` it sent on each connection, each with its bucket (`record`), and how the cells read back from a record
-under the schedule (`read`). The record holds every cell the tap sends, in its bucket (`read_record`). -/
+the cells `v` it sent on each connection, each with its bucket (`record`), how the cells read back from a record under
+the schedule (`read`), and the schedules the format holds (`fits`). On a schedule it holds, the record holds every cell
+the tap's code sends, in its bucket (`read_record`). -/
 structure TapRecord (κ Cell Ob : Type) where
   record : WardenSchedule κ → (κ → Arrivals Cell) → (κ → List (ℕ × CellView Cell)) → Ob
   read : WardenSchedule κ → Ob → κ → List (ℕ × CellView Cell)
-  read_record : ∀ s a v, read s (record s a v) = v
+  fits : WardenSchedule κ → Prop
+  read_record : ∀ s, fits s → ∀ a, read s (record s a (wardenCode s a)) = wardenCode s a
 
 /-- **The tap's code**: on schedule `s` and the arrivals `arr c` of each connection `c` on the server's uplink, the
 cells the client receives (`wardenCode`) and the record of them (`f.record`), from one run. -/

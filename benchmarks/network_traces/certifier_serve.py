@@ -83,8 +83,10 @@ or ignore_eos. `--requests` requests arrive as a Poisson process at `--rate` a s
 the middle of the bucket before the one its arrival falls in. Each prompt is a list of the endpoint's token ids, a chat
 turn (a question that the model answers in a word or at length, and filler) cut to a length log-uniform in
 `--prompt-range`, with `max_tokens` uniform in 1 … `--tokens`, a seed of its own, temperature 0 and the model's own
-EOS. Its session is the body's `user`, the request's id, `--name`.j (j its index, five digits), which the shim forwards
-the endpoint, so a run named apart from every other one the endpoint served names each of its requests there as the
+EOS; with `--prompts-file` (a JSON array of prompts of token ids, the gate's `certifier-rehearse --prompts`) request
+j's prompt is the (j mod n)-th of the file's n instead, at the same seed's arrivals, `max_tokens` and seeds. Its
+session is the body's `user`, the request's id, `--name`.j (j its index, five digits), which the shim forwards the
+endpoint, so a run named apart from every other one the endpoint served names each of its requests there as the
 certified I/O does. Each is an id request (`active.id_request`): its sampling
 fields at fixed places, each prompt id in a field of its own, in `active.id_request_frames(prompt length)` link frames,
 a function of its length alone. The proxy opens each request's connection to the shim with the request's ingress
@@ -118,8 +120,8 @@ certified, the I/O, the audit and the salt accept.
     python certifier_serve.py plan --upstream URL --out DIR [--model NAME] [--requests 400] [--in-flight 4]
         [--temperature 0] [--top-p 1]
         [--tokens 64] [--response-frames F] [--prompt-tokens 128] [--probes 8] [--delta-buckets D]
-        [--profile planned|served] [--traffic fixed|varied] [--rate 2] [--prompt-range 16:1024] [--seed 0]
-        [--eos-ids ID,...] [--name varied]
+        [--profile planned|served] [--traffic fixed|varied] [--rate 2] [--prompt-range 16:1024 | --prompts-file FILE]
+        [--seed 0] [--eos-ids ID,...] [--compact B] [--margin 2] [--name varied]
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
         --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10]
         [--tamper late|extra|drop|token|byte] [--out-shape SHAPE.json]
@@ -848,25 +850,31 @@ def varied_body(model: str, q: dict) -> dict:
 
 def varied_requests(url: str, model: str, n: int, *, rate: float = 2.0, prompt_tokens: tuple[int, int] = (16, 1024),
                     max_tokens: int = 64, seed: int = 0, name: str = "varied",
-                    api_key_env: str | None = None) -> list[dict]:
+                    api_key_env: str | None = None, prompts: Sequence[list[int]] | None = None) -> list[dict]:
     """`n` requests of varied traffic: Poisson arrivals at `rate` a second from `START_MS`; each prompt a chat turn
     (`CHAT_HEAD`, one of `QUESTIONS`, `VARIED_FILLER` and `CHAT_TAIL`, in the endpoint's tokens, `/tokenize`) cut to a
-    length log-uniform in `prompt_tokens`; `max_tokens` uniform in 1 … `max_tokens`; a u32 `seed` of its own. Its
+    length log-uniform in `prompt_tokens`, or with `prompts` request j's the (j mod n)-th of them, at the same seed's
+    arrivals, `max_tokens` and seeds; `max_tokens` uniform in 1 … `max_tokens`; a u32 `seed` of its own. Its
     session, the body's `user`, is `name.j` with j its index, five digits."""
     lo, hi = prompt_tokens
     if not 1 <= lo <= hi or max_tokens < 1 or rate <= 0:
         raise ValueError(f"prompts of 1 ≤ {lo} … {hi} tokens, max_tokens ≥ 1 and a positive rate, not {rate}")
-    bos = tokenize(url, model, "", api_key_env)
-    tail = tokenize(url, model, CHAT_TAIL, api_key_env)[len(bos):]
-    filler, k = [], 1
-    while len(filler) < hi:
-        filler, k = tokenize(url, model, VARIED_FILLER * k, api_key_env)[len(bos):], 2 * k
-    heads = [tokenize(url, model, CHAT_HEAD + q, api_key_env) for q in QUESTIONS]
+    if prompts is not None and not (prompts and all(prompts)):
+        raise ValueError("prompts: at least one, each of at least one token id")
+    if prompts is None:
+        bos = tokenize(url, model, "", api_key_env)
+        tail = tokenize(url, model, CHAT_TAIL, api_key_env)[len(bos):]
+        filler, k = [], 1
+        while len(filler) < hi:
+            filler, k = tokenize(url, model, VARIED_FILLER * k, api_key_env)[len(bos):], 2 * k
+        heads = [tokenize(url, model, CHAT_HEAD + q, api_key_env) for q in QUESTIONS]
     rng, seeds, at, out = random.Random(seed), random.Random(f"{seed}/seeds"), START_MS, []
     for j in range(n):
         at += rng.expovariate(rate) * 1000
         length = round(lo * (hi / lo) ** rng.random())
-        prompt = ((heads[rng.randrange(len(heads))] + filler)[:max(0, length - len(tail))] + tail)[:length]
+        head = rng.randrange(len(QUESTIONS))
+        prompt = list(prompts[j % len(prompts)]) if prompts is not None else \
+            ((heads[head] + filler)[:max(0, length - len(tail))] + tail)[:length]
         out.append({"session": f"{name}.{j:05d}", "at_ms": at, "prompt": prompt,
                     "max_tokens": rng.randint(1, max_tokens), "seed": seeds.randrange(1 << 32)})
     return out
@@ -1540,19 +1548,24 @@ def rehearse_one(out: Path, strategy: str, *, url: str, certifier_dir: Path, cha
 def plan_of(args, url: str, clock=time.monotonic, sleep=time.sleep) -> tuple[dict, dict, dict]:
     """(probe, calibration, plan) of the endpoint at `url` (`plan`'s): each request `--tokens` tokens out of a prompt of
     exactly `--prompt-tokens` tokens (`PROMPT` as text with 0), probed and planned `--in-flight` at a time; or, with
-    `--traffic varied`, `--requests` requests of varied traffic (`varied_requests`: `--rate`, `--prompt-range`,
-    `--tokens` the cap, `--seed`, `--name` the users'), the first `--probes` of them probed at their arrival times."""
+    `--traffic varied`, `--requests` requests of varied traffic (`varied_requests`: `--rate`, `--prompt-range` or
+    `--prompts-file`'s prompts, `--tokens` the cap, `--seed`, `--name` the users'), the first `--probes` of them probed
+    at their arrival times."""
     model = args.model or served_model(url, args.api_key_env)
+    prompts_file = getattr(args, "prompts_file", None)
     if getattr(args, "traffic", TRAFFIC[0]) == "varied":
         lo, _, hi = args.prompt_range.partition(":")
         name = getattr(args, "name", None) or "varied"
         requests = varied_requests(url, model, args.requests, rate=args.rate, prompt_tokens=(int(lo), int(hi)),
-                                   max_tokens=args.tokens, seed=args.seed, name=name, api_key_env=args.api_key_env)
+                                   max_tokens=args.tokens, seed=args.seed, name=name, api_key_env=args.api_key_env,
+                                   prompts=None if prompts_file is None else json.loads(prompts_file.read_text()))
         probed = probe_varied(url, model, requests[:args.probes], args.api_key_env, clock, sleep)
         eos = [int(t) for t in args.eos_ids.split(",")] if args.eos_ids else None
         report, plan = varied_plan(probed, requests, seed=args.seed, eos=eos, compact=getattr(args, "compact", None),
                                    margin=getattr(args, "margin", 2.0))
         return probed, report, plan
+    if prompts_file is not None:
+        raise SystemExit("--prompts-file: varied traffic's (--traffic varied); fixed traffic's prompts are --prompts")
     prompts = parse_prompts(args.prompts) if getattr(args, "prompts", None) else None
     if prompts:
         prompt = prompts[0]
@@ -1670,6 +1683,9 @@ def parser() -> argparse.ArgumentParser:
                             "profile)")
         q.add_argument("--rate", type=float, default=2.0, help="varied: arrivals a second")
         q.add_argument("--prompt-range", default="16:1024", help="varied: LO:HI, the prompts' lengths in tokens")
+        q.add_argument("--prompts-file", type=Path,
+                       help="varied: a JSON array of prompts of token ids, request j's the (j mod n)-th of the n "
+                            "(in place of --prompt-range's chat turns); the gate's certifier-rehearse --prompts")
         q.add_argument("--name", default="varied",
                        help="varied: the users' prefix: request j's user, its session, is NAME.j (j five digits)")
         q.add_argument("--seed", type=int, default=0, help="varied: the traffic's seed")

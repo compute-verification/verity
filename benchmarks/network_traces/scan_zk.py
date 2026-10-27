@@ -9,7 +9,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
     python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
         [--class w63|test] [--group G] [--warden-run RUN] [--draw K [--challenger local|gate:USER@HOST --main FILE
         [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
-    python benchmarks/network_traces/scan_zk.py schedule    # PARAMS as warden_serve.py's schedule flags
+    python benchmarks/network_traces/scan_zk.py schedule [--class w63|test]    # its schedule as warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 10, WITHIN 12) with the warden's delay D 21 and KO 64 outputs a request,
@@ -48,6 +48,16 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   the prover's word. Accepted: every o0 opens to 1. The registration's roots also name, as
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden
   port reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
+* **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
+  group, the warden's two row registrations of W and the scan's one-stage answer (`window_answer`), the same for every
+  W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
+  certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit drawn, the bound 0); refused, a
+  reject naming the members Lean refused.
+* **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
+  reason in the ``fails`` record): the scan renders the connection's end where the warden wrote `FAIL`, and that bucket
+  alone differs from the warden's row. Its honest round alone is proved, expected refused by Lean's registered reads
+  ("does not open") at the egress members of its FAIL buckets (`rounds_of`, `targets`), every other member held, and
+  its answer is that refusal, so the period check rejects the link-windows by name.
 * **Negatives**, each refused by Lean's registered reads ("does not open"). ``chain``: the same Program on a state tree
   with S_A and S_{A+1} swapped (leaves A and A + 1): ingress unit A's o1, the S_A it computes, doesn't open leaf A.
   ``tampered``: an egress-only Program of G·T units, one egress row's `DATA` id changed and its link-window re-signed (a
@@ -88,6 +98,7 @@ import sys
 import time
 from contextlib import contextmanager
 from dataclasses import asdict
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 from typing import NamedTuple
@@ -111,7 +122,7 @@ from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSi
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import registered as REG, registration as RG  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k  # noqa: E402
 
 _TRAFFIC = HERE.parents[1] / "verity/core/protocols/certifier/tests/scan_traffic.py"
@@ -172,6 +183,8 @@ TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_
 CHALLENGER = "scan_zk.py on the auditor's challenger's coins"
 WINDOW_ROOT = "verity/certifier/scan-window-root/v2"
 MEMBER_DEADLINE_S = 5 * 3600
+#: the format of ``answers.json`` (`answers`): the honest round's registration and each link-window's answer and rows
+ANSWERS = "verity/certifier/scan-answers/v1"
 
 
 def log(msg: str) -> None:
@@ -307,7 +320,8 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
     return SimpleNamespace(source="the synthetic run (scan_traffic.serve), signed with the driver's own key",
                            params=setup.params, session=SESSION, sides=sides, outputs=served.outputs, run_id=None,
-                           issuer=issuer, key=signer.public_key(), key_of="the run's (the driver's)")
+                           issuer=issuer, key=signer.public_key(), key_of="the run's (the driver's)", failed=0,
+                           fail_buckets=[], failed_why=[])
 
 
 def _found(run: Path, name: str) -> Path:
@@ -325,7 +339,9 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     link-window in ``cells.jsonl`` verified under that key and session (`warden_rows.check_registration`: the warden's
     signature over the head of the rows' root); and the records' rows under ``cells.salts`` (`warden_rows.Cells.of`)
     that head. The units read those rows. The Programs' outputs (the ``prog`` row's stand-in) are each connection's ids
-    as its egress record carries them (`io_tie.parse_cell`), every egress cell an id-form one. The tampered round's
+    as its egress record carries them (`io_tie.parse_cell`), every egress cell an id-form one or a `FAIL` (a void run:
+    ``failed`` the reasons its ``fails`` record has in the link-windows, ``fail_buckets`` the buckets they're in, and
+    ``failed_why`` the run's ``check.json`` problems that name a connection failed closed). The tampered round's
     re-signed link-window is signed by a key of the driver's own (``out``), under which the verifier reads it."""
     import warden_serve as WS
 
@@ -368,18 +384,18 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
                 raise SystemExit(f"--warden-run {run}: {side} link-window {w}'s record under cells.salts isn't the rows "
                                  "whose root the warden signed")
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
-    failed = {r.window: n for r in records[WS.FAILS] if (n := sum(f is not None for row in r.grid for f in row))}
-    if failed:
-        check = next((d / "check.json" for d in (run, run / "witness", run / "out") if (d / "check.json").is_file()),
-                     None)
-        named = [p for p in (json.loads(check.read_text()).get("problems") or []) if "failed closed" in p] if check else []
-        raise SystemExit(f"--warden-run {run}: void run: the warden failed connections closed, {sum(failed.values())} "
-                         f"fail cells in link-windows {sorted(failed)}"
-                         + (f" ({'; '.join(p.removeprefix('audit: ') for p in named)})" if named else ""))
+    fails = [((r.window - windows[0]) * params.window + t, sum(f is not None for f in row))
+             for r in records[WS.FAILS] if r.window in windows for t, row in enumerate(r.grid)]
+    fail_buckets = sorted(t for t, n in fails if n)
+    check = next((d / "check.json" for d in (run, run / "witness", run / "out") if (d / "check.json").is_file()), None)
+    named = [p.removeprefix("audit: ") for p in (json.loads(check.read_text()).get("problems") or [])
+             if "failed closed" in p] if fail_buckets and check else []
     B, outputs = params.cell_bytes, {}
     for rec in sorted(records[WS.EGRESS], key=lambda r: r.window):
         for t, row in enumerate(WR.window_rows(rec, params)):
             for s in range(params.lanes * params.slots):
+                if row[s * B] == W.FAIL:
+                    continue
                 cell = IT.parse_cell(row[s * B:(s + 1) * B])
                 if cell is None:
                     raise SystemExit(f"--warden-run {run}: egress bucket {rec.window * params.window + t} slot {s} "
@@ -393,7 +409,8 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     return SimpleNamespace(source=f"warden run {dep.get('run_id')} (warden_serve.py, its deployment's key)",
                            params=params, session=session, sides=sides,
                            outputs={q: tuple(xs) for q, xs in outputs.items()}, run_id=dep.get("run_id"),
-                           issuer=Issuer(signer, session), key=signer.public_key(), key_of="the driver's own")
+                           issuer=Issuer(signer, session), key=signer.public_key(), key_of="the driver's own",
+                           failed=sum(n for _, n in fails), fail_buckets=fail_buckets, failed_why=named)
 
 
 def _tamper(got: SimpleNamespace, egress: list[bytes], T: int, B: int, R: int) -> SimpleNamespace:
@@ -438,9 +455,14 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
         raise SystemExit(f"the scan refuses link-windows {windows}' rows: {e!r} (the scan reads warden-form id "
                          "requests at its class, answered id-form: warden_serve.py rehearse --ids)")
     bad = [t for t in range(group * T) if EG.outputs(cls.egress, ch.view(t)) != (EG.ACCEPT, ch.egress[t])]
-    if bad:
+    void = [t for t, row in enumerate(ch.egress) if any(row[s * cls.B] == W.FAIL for s in range(cls.egress.R))]
+    if bad != void:
         raise SystemExit(f"egress buckets {bad} don't compute the warden's rows from the views their ingress buckets "
-                         "wrote")
+                         f"wrote, and the warden failed a connection in buckets {void}")
+    if void != got.fail_buckets:
+        raise SystemExit(f"egress buckets {void} hold a FAIL and the warden's fails record has a reason in buckets "
+                         f"{got.fail_buckets}, not the same: a failed connection's reason is in its FAIL's bucket"
+                         + (f" ({'; '.join(got.failed_why)})" if got.failed_why else ""))
     if not 1 <= setup.A < setup.A + 1 < group * T:
         raise SystemExit(f"the chain round swaps S_A and S_(A+1) of ingress units, 1 <= A < {group * T - 1}")
     heads = [w.head for w in got.sides["ingress"]]
@@ -457,13 +479,30 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     return SimpleNamespace(setup=setup, chain=ch, T=T, G=group, windows=windows, params=got.params,
                            session=got.session, source=got.source, run_id=got.run_id, outputs=got.outputs,
                            sides=got.sides, trees=trees, swapped=tree("state", swapped, heads, got.session),
-                           tampered=_tamper(got, ch.egress, T, cls.B, cls.egress.R), ordinals=sorted(admitted),
-                           admitted=dict(sorted(admitted.items())), run_s=round(time.time() - t0, 1))
+                           tampered=None if void else _tamper(got, ch.egress, T, cls.B, cls.egress.R),
+                           ordinals=sorted(admitted), admitted=dict(sorted(admitted.items())), void=void,
+                           failed=got.failed, failed_why=got.failed_why, run_s=round(time.time() - t0, 1))
 
 
 def _bits(reg: ADV.Registration, i: int) -> list[int]:
     row = reg.rows[i]
     return [row[k // 8] >> k % 8 & 1 for k in range(reg.n_bits)]
+
+
+def header_refusal(ports: dict, entries: dict) -> str | None:
+    """The first rule of Lean's registered reads (`Flock.Registered.check`): a statement's header names a port
+    registered only where the verifier's own ports do, since a header entry carries no root and its rows would open
+    none the verifier named. None when it holds."""
+    extra = next((p for p in entries if p not in ports), None)
+    return None if extra is None else (f"registered reads: the statement names port {extra} registered, and the "
+                                       "verifier's registered reads do not")
+
+
+def registered_file(mr: SimpleNamespace) -> dict:
+    """Member `mr`'s `--registered` file, the verifier's own (`stage` writes it, `a0.lean_verify` passes it, and a Lean
+    verdict's `registered` reports its roots): each warden port at the head `warden_rows.check_registration` read
+    under the deployment's key, never a root of the prover's."""
+    return WR.reads_file(mr.ports)
 
 
 def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespace:
@@ -505,7 +544,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         ports[p] = tree_port(kind, reg, ps, mb.base)
         bcs[p] = [None if p in made and made[p][k] is None else tree_bc(reg, i, made[p][k] if p in made else None)
                   for k, i in enumerate(ps)]
-    refused = None
+    refused = header_refusal(ports, entries)
     for p in [r for r, _b in ins] + [o for o, _b in outs]:
         refused = refused or (WR.refusal(ports[p], warden[p].dom, entries[p], bcs[p]) if p in warden else
                               tree_refusal(ports[p], reads[p][1], entries[p], bcs[p]))
@@ -515,23 +554,31 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
                            outputs=outputs, changed=changed, warden={p: s.registration for p, s in warden.items()})
 
 
-def target(at: SimpleNamespace, name: str) -> str | None:
-    """The member a negative round's refusal names: chain's, the ingress member of unit A; tampered's, the egress
-    member of the re-signed link-window."""
+def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
+    """The rounds a run is proved in, each with its templates and outcome: `ROUNDS`; a void run's (the warden failed a
+    connection closed, a `FAIL` in the egress row it signed) its honest round alone, refused by Lean's registered reads
+    ("does not open") at the egress members of its FAIL cells, where the scan renders the connection's end."""
+    return {"honest": (TEMPLATES, "does not open")} if at.void else ROUNDS
+
+
+def targets(at: SimpleNamespace, name: str) -> list[str]:
+    """The members a refused round's refusal names: chain's, the ingress member of unit A; tampered's, the egress
+    member of the re-signed link-window; a void run's honest round, the egress member of each FAIL's link-window."""
     if name == "chain":
-        return f"ingress-{at.setup.A // at.T}"
+        return [f"ingress-{at.setup.A // at.T}"]
     if name == "tampered":
-        return f"egress-{at.tampered.window}"
-    return None
+        return [f"egress-{at.tampered.window}"]
+    return sorted({f"egress-{t // at.T}" for t in at.void})
 
 
 def predicted(at: SimpleNamespace, name: str, members: list[SimpleNamespace]) -> bool:
-    """The host's read of a round before any proof, as the round's: honest, every read held and every output 1; a
-    negative, its target member's reads refused ("does not open") and every other member's held."""
-    if ROUNDS[name][1] == "accepted":
+    """The host's read of a round before any proof, as the round's: accepted, every read held and every output 1;
+    refused, its target members' reads refused ("does not open") and every other member's held."""
+    outcome = rounds_of(at)[name][1]
+    if outcome == "accepted":
         return all(m.refused is None and set(m.outputs) == {1} for m in members)
-    t = target(at, name)
-    return all((ROUNDS[name][1] in (m.refused or "")) if m.name == t else m.refused is None for m in members)
+    t = targets(at, name)
+    return all((outcome in (m.refused or "")) if m.name in t else m.refused is None for m in members)
 
 
 def wired(members) -> list[str]:
@@ -558,7 +605,7 @@ def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Set
     which hold every table row, drawn or not."""
     at = link(out, run, setup, group, start)
     got = {}
-    for name, (templates, outcome) in ROUNDS.items():
+    for name, (templates, outcome) in rounds_of(at).items():
         got[name] = [member(at, name, mb) for mb in members_of(templates, group, at.T)]
         if not predicted(at, name, got[name]) or (name == "honest" and wired(got[name])):
             raise SystemExit(f"{name}: the host's read of the round isn't {outcome}: "
@@ -634,7 +681,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    (out / "registered.json").write_text(json.dumps(WR.reads_file(mr.ports), sort_keys=True))
+    (out / "registered.json").write_text(json.dumps(registered_file(mr), sort_keys=True))
     m = {"tag": f"{mr.round}-{mr.name}", "name": mr.name, "template": mr.template, "window": mr.window,
          "buckets": mr.buckets, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name,
          "n": n, "base": mr.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
@@ -861,7 +908,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     vdir.mkdir(exist_ok=True)
     if not all(v["ok"] for v in checks.values()):
         return {**res, "checks": checks, "accepted": False, "window_accepted": False, "verdicts": {}, "why": {},
-                "opened": {}}
+                "opened": {}, "failed": {c: v.get("codes") for c, v in checks.items() if not v["ok"]}}
     stream = None
     if coins is None:
         p = a0.run([a.lean, "draw", "--program", str(pg.program_file), "--partition", str(pg.partition_file),
@@ -975,6 +1022,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             "draw": {"law": f"stratified:{k}", "coins": source, "units": lean_draw["units"], "of": rec["population"]},
             **({"coins": told, "coin_negatives": {x: y["refused"] for x, y in neg.items()}} if told else {}),
             "audit": {x: result.get(x) for x in ("accepted", "complete", "wrong_units")},
+            "failed": {c: v.get("codes") for c, v in (result.get("checks") or {}).items() if not v.get("ok")},
             "charge": charge_terms(M, result, members, a.delta),
             "per_unit": per_unit(members, statement),
             "verdicts": {x: y.get("accepted") for x, y in verdicts.items()},
@@ -1012,16 +1060,63 @@ def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
     return out
 
 
+def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str) -> dict:
+    """One-stage's answer for the group's registration ``reg`` as a period check reads a link-window's scan answer
+    (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
+    `audit`'s ``audit.json``), its draw and proved units with one-stage's profile and bound on wrong units at
+    ``delta`` (`audit.profile`, `audit.wrong_units`: every unit drawn, the bound 0); else a reject naming ``reason``."""
+    commitment = RG.digest(reg)
+    if record is None:
+        return {"commitment": commitment, "profile": None, "protocol": RG.PROTOCOL, "public": None, "reason": reason,
+                "verdict": "reject"}
+    if record.get("accepted") is not True or RG.digest(record["registration"]) != commitment:
+        raise SystemExit("an accepted scan's audit record is for another registration, or not accepted")
+    draw = record["draw"]
+    profile = AU.profile(reg, draw, delta).to_json()
+    profile["delta"] = str(delta)
+    wrong = AU.wrong_units(reg, draw, delta)
+    return {"commitment": commitment, "profile": profile, "protocol": RG.PROTOCOL,
+            "public": {"bound": wrong["bound"], "drawn": sorted(draw["units"]),
+                       "per_template": wrong.get("per_template"), "proved": sorted(record["proved_units"])},
+            "reason": None, "verdict": "accept"}
+
+
+def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction) -> dict:
+    """``answers.json`` (`ANSWERS`) of the honest round's audit (``res``, its files under ``out / "honest"``): its
+    registration and, for each link-window W of the group, the scan's answer for W and the warden's ingress and egress
+    row registrations of W, the rows form's evidence of W but its certificates. The answer is the group's for every W
+    (`window_answer`: accepted where the round's outputs all open to 1), since its registration holds each W's rows
+    (`warden_roots`). A refused round's (a void run's) names the members Lean refused."""
+    reg = json.loads((out / "honest" / "registration.json").read_text())
+    f = out / "honest" / "audit.json"
+    record = json.loads(f.read_text()) if res.get("window_accepted") and f.exists() else None
+    why = "; ".join(f"{k.split('/', 1)[1]}: {v}" for k, v in sorted(res.get("why", {}).items())
+                    if v and k.startswith("lean-verify/"))
+    failed = "; ".join(f"check {c}: {', '.join(codes or ())}" for c, codes in sorted((res.get("failed") or {}).items()))
+    reason = (f"the scan's audit of link-windows {at.windows} refused: " +
+              (why or failed or f"audit {res.get('audit')}, outputs {res.get('opened')}"))
+    answer = window_answer(reg, record, delta, reason)
+    doc = {"format": ANSWERS, "delta": str(delta), "registration": reg,
+           "windows": [{"window": w, "answer": answer,
+                        "registrations": [at.sides[s][i].registration for s in ("ingress", "egress")]}
+                       for i, w in enumerate(at.windows)]}
+    (out / "answers.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
+    return {"verdict": answer["verdict"], "bound": (answer["public"] or {}).get("bound"), "reason": answer["reason"],
+            "commitment": answer["commitment"]}
+
+
 def expected(at: SimpleNamespace, name: str, res: dict) -> bool:
-    """honest: accepted, every output 1; a negative: refused by Lean's registered reads ("does not open") at its
-    target member (`target`), every other member's proof held."""
+    """An accepted round: accepted, every output 1; a refused one (`rounds_of`): refused by Lean's registered reads
+    ("does not open") at each of its target members (`targets`), every other member's proof held."""
     lean = {k.split("/", 1)[1]: v for k, v in res["verdicts"].items() if k.startswith("lean-verify/")}
-    if ROUNDS[name][1] == "accepted":
+    outcome = rounds_of(at)[name][1]
+    if outcome == "accepted":
         return res["window_accepted"] and all(lean.values())
-    t = target(at, name)
-    why = res["why"].get(f"lean-verify/{t}") or ""
-    return (not res["accepted"] and lean.get(t) is False and "registered reads" in why and ROUNDS[name][1] in why
-            and all(v for x, v in lean.items() if x != t))
+    ts = targets(at, name)
+    whys = [res["why"].get(f"lean-verify/{t}") or "" for t in ts]
+    return (not res["accepted"] and all(lean.get(t) is False for t in ts)
+            and all("registered reads" in why and outcome in why for why in whys)
+            and all(v for x, v in lean.items() if x not in ts))
 
 
 def blobs_of(members: list[dict]) -> tuple[dict[str, bytes], set[str]]:
@@ -1070,25 +1165,30 @@ def prove(a) -> int:
                      "admitted": at.admitted, "anchors": {q: cls.anchor(s, s % cls.EVERY) for q, s in at.admitted.items()},
                      "responses": {q: len(x) for q, x in sorted(at.outputs.items())}, "run_s": at.run_s,
                      "swap": [setup.A, setup.A + 1],
-                     "tampered": {"bucket": at.tampered.bucket, "window": at.windows[at.tampered.window],
-                                  "key": at.tampered.key_of},
+                     "tampered": at.tampered and {"bucket": at.tampered.bucket,
+                                                  "window": at.windows[at.tampered.window], "key": at.tampered.key_of},
+                     "void": at.void and {"buckets": at.void, "failed": at.failed, "why": at.failed_why,
+                                          "refused": targets(at, "honest")},
                      "cells": {side: {"data": sum(r[s * cls.B] == DATA for r in rows for s in range(sh.R)),
                                       "end": sum(r[s * cls.B] == W.END for r in rows for s in range(sh.R))}
                                for side, rows in (("ingress", ch.ingress), ("egress", ch.egress))},
                      "roots": {k: r.root.hex() for k, r in at.trees.items()},
                      "host": {name: [{"member": m.name, "refused": m.refused, "outputs": m.outputs} for m in ms]
                               for name, ms in h.rounds.items()}}
+    void = (f" but its FAIL buckets {at.void} (void: the honest round alone, refused at {targets(at, 'honest')})"
+            if at.void else "")
     log(f"run: {at.source}; {setup.name}'s class, link-windows {at.windows} of {T} buckets, admitted {at.admitted}, "
         f"responses {summary['responses']}, anchors {summary['anchors']}, cells {summary['cells']}; every egress "
-        f"bucket computes the warden's row from its ingress bucket's view; host reads as expected ({at.run_s} s); "
-        f"draw {summary['draw']}")
+        f"bucket computes the warden's row from its ingress bucket's view{void}; host reads as expected "
+        f"({at.run_s} s); draw {summary['draw']}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.dry:
         log("dry: done")
         return 0
     M = WZ._one_stage()
+    rounds = rounds_of(at)
     pgs = {templates: program(M, cls, templates, G, T, out / ("joint" if templates == TEMPLATES else "solo"))
-           for templates in {t for t, _o in ROUNDS.values()}}
+           for templates in {t for t, _o in rounds.values()}}
     summary["stagers"] = {f"{'joint' if k == TEMPLATES else 'solo'}/{tp}": {
         "unit": g.defn.id, "lower_s": g.lower_s, "k_log": g.st.meta["k_log"], "vus_per_block": g.st.meta["vus_per_block"],
         "pin": g.st.pin, "base": g.base, "n": g.n} for k, pg in pgs.items() for tp, g in pg.stagers.items()}
@@ -1100,7 +1200,7 @@ def prove(a) -> int:
             log(f"the honest round draws on the challenger's coins ({coins.challenger}), its session on the group's "
                 f"root {coins.root[:16]}…; the other rounds on the verifier's Lean's own")
         for j, (name, mrs) in enumerate(h.rounds.items()):
-            pg = pgs[ROUNDS[name][0]]
+            pg = pgs[rounds[name][0]]
             members = [stage(M, pg, mr, out / name / f"stage-{mr.name}") for mr in mrs]
             if name == "honest":
                 summary["wires"] = staged_wires(members)
@@ -1117,6 +1217,9 @@ def prove(a) -> int:
             trees = {k: v for k, v in trees.items() if pg.templates != ("egress",) or k == "view"}
             res = audit(M, av, at, pg, name, members, trees, out / name, a.port + (2 * G + 2) * j, ks[name],
                         coins if name == "honest" else None)
+            if name == "honest":
+                summary["answers"] = answers(at, out, res, Fraction(a.delta))
+                log(f"answers: link-windows {at.windows}, each {summary['answers']}")
             blobs, held = blobs_of(members)
             blobs, held, public = LS.public_pieces(M.a8, blobs, held, known(members, at))
             blobs, held, nsparse = sparse(blobs, held)
@@ -1180,11 +1283,12 @@ def main(argv=None) -> int:
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git "
                    "rev-list --first-parent origin/main), which must hold the commit the session's host pins")
-    sub.add_parser("schedule", help="PARAMS as warden_serve.py's schedule flags (serve, rehearse): the warden runs "
-                                    "--warden-run reads")
+    s = sub.add_parser("schedule", help="a setup's schedule (w63's, PARAMS, by default) as warden_serve.py's schedule "
+                                        "flags (serve, rehearse): the warden runs --warden-run reads")
+    s.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name)
     a = ap.parse_args(argv)
     if a.command == "schedule":
-        print(" ".join(f"--{k.replace('_', '-')} {v}" for k, v in asdict(PARAMS).items()))
+        print(" ".join(f"--{k.replace('_', '-')} {v}" for k, v in asdict(SETUPS[a.setup].params).items()))
         return 0
     if a.group < 1:
         p.error(f"--group is 1 or more link-windows, not {a.group}")

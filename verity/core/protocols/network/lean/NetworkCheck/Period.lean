@@ -52,10 +52,11 @@ descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule'
 its root batches one instance of a template whose parameters are `row` and `prog` (`IngressScanFirst`, bucket 0), T − 1
 of one whose are `row`, `sin` and `prog` (`IngressScanBucket`; none when T = 1), each `row` the schedule's (S · B
 bytes) and both returning the same, then T of one whose parameter is `state` and which returns a u16 and the
-schedule's row (`EgressBucket`), and its every input gate is a template's parameter. An egress template that takes its
-row as an input, the checker form, is refused by name: no egress gate is an input (`NetTiming.Layout.Fits`), so `K`
-counts only what a Program that computes its egress rows leaves free. In the rows form the compute audits' layout terms
-and their units' bits are in no term; their Programs are checked as in the clock form.
+schedule's row (`EgressBucket`), in the Boolean profile's types (a byte 8 bits, a u16 16), and its every input gate is
+a template's parameter. An egress template that takes its row as an input, the checker form, is refused by name: no
+egress gate is an input (`NetTiming.Layout.Fits`), so `K` counts only what a Program that computes its egress rows
+leaves free. In the rows form the compute audits' layout terms and their units' bits are in no term; their Programs
+are checked as in the clock form.
 
 **Commitment**, canonical JSON `{"audits": [registration, …], "windows": [registration, …]}`: one-stage's registration
 record of each compute audit and of each link-window, in order, each of format `verity/registration/v1` or `v2`. Its
@@ -86,7 +87,7 @@ device, issued for it:
 the public part of `certificate.CertifiedClock`, which signs the window's sync salted, `clock_commitment` =
 SHA-512("verity/net-cert/v1" ‖ salt_c ‖ `clock_digest(sync)`). What the certifier signs is witness: the sync and its
 salt are in neither the evidence nor the profile, and the check takes neither. The certifier is the auditor's trusted
-device (`trusted-nebius-host`), and its own code picks each window's sync from its schedule set Σ_sync, so no
+device (`trusted-host`), and its own code picks each window's sync from its schedule set Σ_sync, so no
 clear-text check that the sync is in Σ_sync is needed. N2's proof reading each window's sync through its opening
 against that salted digest is a later change to its circuit (the certifier PROTOCOL.md's gap "The clock's opening").
 
@@ -397,9 +398,10 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
 registered Program (`program`, its SHA-512) and the generator form of the schedule's link-window: its root batches one
 instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such template when `T = 1`), both returning
 the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of the egress template, which returns a u16
-and the schedule's row, and every input gate is a template's parameter. An egress template with a row among its
-parameters, the checker form, is refused first, by name: there the egress row is an input gate, which
-`NetTiming.Layout.Fits` refuses, and `K` would count the free inputs of a Program that only compares its egress rows. -/
+and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
+scan's Definitions have them: a byte 8 bits, a u16 16. An egress template with a row among its parameters, the checker
+form, is refused first, by name: there the egress row is an input gate, which `NetTiming.Layout.Fits` refuses, and `K`
+would count the free inputs of a Program that only compares its egress rows. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← match Flock.Program.decode (← Flock.canon j).toUTF8 with
     | .ok prog => pure prog
@@ -410,7 +412,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     | some d => if d.prim then none else some (x, d)
     | none => none
   let T := s.window
-  let row : Flock.Program.Ty := .array (s.allocation * s.cellBytes) (.value 8)
+  let row : Flock.Program.Ty := .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
   let some (xe, de) := templates.back? | throw "scan: no template"
   if de.params.any (fun p => p.1 == "row" || p.2 == row) then
     throw "scan: the egress template takes its row as an input (the checker form): no egress gate is an input \
@@ -432,7 +434,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     throw "scan: an ingress template's row is not the schedule's"
   unless later.all fun (_, d) => d.params[2]!.2 == df.params[1]!.2 && d.ret == df.ret do
     throw "scan: the ingress templates' prog or return differ"
-  unless de.ret == .tuple #[.value outBits, row] do
+  unless de.ret == .tuple #[.array outBits (.value 1), row] do
     throw "scan: the egress template doesn't return a u16 and the schedule's row"
   let inputs := root.body.nodes.foldl (fun n x => n + match prog.defs[x.fn]? with
     | some d => ((Flock.Program.inputWidth? d.key).map (· * x.members)).getD 0

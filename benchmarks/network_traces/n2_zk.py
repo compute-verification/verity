@@ -10,6 +10,7 @@ decides nothing.
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
       --lean flock-verify --out DIR [--jobs 1] [--gpu] [--debug-clear] [--dry]
     python benchmarks/network_traces/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
+      [--draw K]
 
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
   `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
@@ -24,6 +25,12 @@ decides nothing.
   certified it); with ``--late``, its ``late`` run. The prover's references (`head_check.reference_parts`, and the unit's
   output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each member's proofs refuse
   (`expected`).
+* **The period** (``--draw K``): each member's windows sampled rather than all proved, as `n2_advised_zk`'s: every
+  window's salted root committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and
+  only those registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
+  stream's δ, on the Lean verifier of record's draw. ``tampered`` then changes every window (`every_count`), which any
+  draw refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
+  window accepted, which the network verdict refuses by name (``period-draw``).
 * **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_unit` lowered once (the registered unit with each
   gate the Definition its pinned digest names), bound to the registered partition and Program. Each link-window is a
   statement of its own with one instance, unit 0: rows ``pub`` and ``wit`` (`LinkWindows.layout`, `LinkWindows.row`) and
@@ -78,9 +85,12 @@ from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
+from verity.core.protocols.sampled_proofs import service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
 ENDS = ("egress", "ingress")
+#: the sampled period's negative (``--draw K``, K < n): the prover proves another K-subset than the draw of record's
+OTHER = "other_subset"
 ROUNDS = ("honest", "tampered", "extra", "late")
 #: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
 ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'Live coins only')"
@@ -205,12 +215,18 @@ def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRec
     return CertifiedRecord(replace(egress.head, counts=tuple(counts)), egress.salt, egress.certificate), ingress
 
 
+def every_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
+    """Every window's egress head with one count more (`one_count`'s change, in each window): the tampered member of a
+    sampled period (``--draw``), which refuses it whichever windows it draws."""
+    return one_count(lw, 0, pair)
+
+
 def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
-    where no part fails; honest, none fails and every window accepts; tampered, window 0's egress head fails its counts
-    and its signed digest only (its signed digest alone on the advice profile, whose counts the unit leaves to N2's
-    advised unit, and on a warden link, whose counts are its schedule's); extra, egress heads fail their counts alone,
-    on one window or more; late, egress heads
+    where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
+    (every window's, ``rd.every``) fails its counts and its signed digest only (its signed digest alone on the advice
+    profile, whose counts the unit leaves to N2's advised unit, and on a warden link, whose counts are its schedule's);
+    extra, egress heads fail their counts alone, on one window or more; late, egress heads
     fail their fields and counts, on one window or more. The ingress heads fail nothing, and every negative member
     refuses one window or more."""
     xs = rd.windows
@@ -220,11 +236,12 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     if any(x.failed["ingress"] for x in xs):
         return False
     eg = [x.failed["egress"] for x in xs]
-    if name == "honest":
+    if name in ("honest", OTHER):
         return all(x.expect for x in xs)
     if name == "tampered":
         signed = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE or rd.lw.warden is not None
-        return eg[0] == (["signed"] if signed else ["counts", "signed"]) and not any(eg[1:])
+        want = ["signed"] if signed else ["counts", "signed"]
+        return eg[0] == want and all(f == (want if getattr(rd, "every", False) else []) for f in eg[1:])
     allowed = {"extra": ([], ["counts"]), "late": ([], ["fields", "counts"])}[name]
     return all(f in allowed for f in eg) and allowed[1] in eg
 
@@ -605,7 +622,19 @@ def prove(a) -> int:
     summary: dict = {"run": str(run), "extra": a.extra and str(a.extra), "late": a.late and str(a.late),
                      "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
     t = time.time()
-    members = {"honest": link_windows(run, warden=warden), "tampered": link_windows(run, edit=one_count, warden=warden)}
+    members = {"honest": link_windows(run, warden=warden),
+               "tampered": link_windows(run, edit=every_count if a.draw else one_count, warden=warden)}
+    members["tampered"].every = bool(a.draw)
+    n = len(members["honest"].windows)
+    if a.draw and not 1 <= a.draw <= n:
+        raise SystemExit(f"--draw {a.draw}: a period draw takes 1 to {n} of the link's {n} windows")
+    if a.draw and a.draw < n:
+        members[OTHER] = link_windows(run, warden=warden)
+    summary["draw"] = ({"selection": "all", "k": n, "population": n, "coins": None} if not a.draw else {
+        "selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": n, "delta": cs.DELTA,
+        "coins": {"source": "verifier", "by": "the verifier's own: the operating system's bytes through the Lean "
+                  "verifier of record (sampled_proofs verifier.coins), read only after the period's commitment; not "
+                  "the auditor's challenger's"}})
     if warden:
         summary["warden_run"] = members["honest"].plan["warden_run"]
         summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the "
@@ -614,7 +643,7 @@ def prove(a) -> int:
     for name in ("extra", "late"):
         if getattr(a, name):
             members[name] = link_windows(Path(getattr(a, name)))
-    members = {k: v for k, v in members.items() if k in a.rounds}
+    members = {k: v for k, v in members.items() if k in a.rounds or k == OTHER}
     lw0 = next(iter(members.values())).lw
     summary["link"] = {"name": lw0.link, "unit": lw0.unit.id, "keys": {e: lw0.head_key(d) for d, e in enumerate(ENDS)},
                        "program": lw0.partition["program"], "partition": P.digest(lw0.partition),
@@ -653,18 +682,34 @@ def prove(a) -> int:
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
     def go(k: int, name: str) -> tuple[str, dict]:
-        res = member(M, a, sg, name, members[name], out / name, a.port + 100 * k if a.port else 0)
-        res["received"] = _member_scan(M, sg, members[name], out / name)
+        res = member(M, a, sg, name, members[name], out / name, a.port + 100 * k if a.port else 0,
+                     coins=S.V.coins if a.draw else None, forge=other_subset if name == OTHER else None)
+        res["received"] = _member_scan(M, sg, members[name], out / name,
+                                       set(res["period"]["units"]) if "period" in res else None)
         return name, res
 
     done = dict(go(k, name) for k, name in enumerate(members))
     ok = True
     for name, res in done.items():
-        rec = res["received"]
-        good = (all(r["as_expected"] for r in res["windows"]) and res["network"]["accepted"] == (name == "honest")
+        rec, net = res["received"], res["network"]
+        good = (all(r["as_expected"] for r in res["windows"]) and net["accepted"] == (name == "honest")
+                and set(net.get("why") or ()) == ({SVC.PERIOD_DRAWN} if name == OTHER else set())
                 and not rec["leaked"] and rec["control"]["holds_all"])
         ok &= good
         summary["members"][name].update(res, ok=good)
+        if "wrong_units" in net:
+            sel, wu = net["selection"], net["wrong_units"]
+            summary.setdefault("sampled", {})[name] = {
+                "accepted": net["accepted"], "proved": [r["window"] for r in res["windows"]], "why": net["why"],
+                "draw": {"law": f"subset:{sel['k']}", "coins": "verifier", "units": sel["units"],
+                         "of": sel["population"], "commitment": sel["commitment"], "by": sel["by"],
+                         "coin_bytes": len(res["period"]["read"]) // 2},
+                "audit": {"accepted": net["accepted"], "wrong_units": wu},
+                "charge": {"delta": wu["delta"], "wrong_units": wu, "epsilon": wu["epsilon"]} if net["accepted"]
+                else None}
+            log(f"member {name}: the draw of record ({sel['by']}) {sel['units']}, {sel['k']} of {sel['population']}: "
+                f"at most {wu['bound']} wrong, epsilon {wu['epsilon']:.4f} at delta {wu['delta']:.3g}"
+                + (f"; refused by name {sorted(net['why'])}" if net["why"] else ""))
         log(f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
             f"{res['network']['refused']}), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
             f"{rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
@@ -702,6 +747,10 @@ def main(argv=None) -> int:
     p.add_argument("--debug-clear", action="store_true",
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
+    p.add_argument("--draw", type=int, default=0,
+                   help="K: each member's period sampled, K of its windows drawn on the verifier's coins after every "
+                        "window's root is committed, and only those proved (LinkWindows.period_draw); tampered then "
+                        "changes every window, and other_subset proves another K-subset; 0 (the default): every window")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
     a = ap.parse_args(argv)
     if a.command == "virtual":
