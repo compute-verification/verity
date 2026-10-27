@@ -248,8 +248,18 @@ def gate_case(lib: Lib, name: str, m: int, n: int, k: int, lp: int, L: int, row:
         co = v31.Coins.expand(f, seeds)
         skip = int(cheat.split(":")[1]) if cheat.startswith("skip:") else None
         T = v31.fill_words(f, A, B, co, skip)
-        ref = v31.fill_commit(f, v31.words_buffer(f, T), v31.call_key(p.ks, c))
         g_words, g_lv = p.words(c), p.levels(c)
+        words = v31.words_buffer(f, T)
+        if cheat.startswith("forge:"):   # forge_kernel's T_S0 of tiles 0, stride, ..: the GPU's own words there
+            parts = cheat.split(":")
+            s0, frac = int(parts[1]), float(parts[2]) if len(parts) > 2 else 1.0
+            w, changed = bytearray(words), 0
+            for t in range(0, f.tiles, max(1, int(1 / frac + 0.5))):
+                a = (t * f.S + s0 - 1) * 32768
+                changed += g_words[a:a + 32768] != w[a:a + 32768]
+                w[a:a + 32768] = g_words[a:a + 32768]
+            words, rep["forged_tiles_changed"] = bytes(w), changed
+        ref = v31.fill_commit(f, words, v31.call_key(p.ks, c))
         rep["words_equal"] = g_words == ref.words
         if not rep["words_equal"]:
             gw, rw = np.frombuffer(g_words, "<u2"), np.frombuffer(ref.words, "<u2")
@@ -267,7 +277,8 @@ def gate_case(lib: Lib, name: str, m: int, n: int, k: int, lp: int, L: int, row:
 
         ok, fails, line = v31.fill_verdict(f, seeds, root, picks, answer, f"{name} call {c}")
         rep.update(accepted=ok, verdict=line, failures=fails[:8])
-    rep["exact"] = rep["words_equal"] and rep["levels_equal"] and rep.get("pad_equal", True)
+    rep["exact"] = (rep["words_equal"] and rep["levels_equal"] and rep.get("pad_equal", True)
+                    and rep.get("forged_tiles_changed", 1) > 0)
     rep["good"] = (rep["exact"] and ok) if cheat == "none" else (not ok and rep["exact"])
     return rep
 
