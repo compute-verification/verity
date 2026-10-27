@@ -29,10 +29,11 @@ when:
   (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
   change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
   so a list behind its tree catches up, while growth past the base's own findings is held as before.  A change that edits
-  a counted lint's module may raise that lint's list, as far as it records, at each file of the base's tree it leaves
-  untouched: the text there is the base's, so the rise records what the edited lint finds in the base's tree (which the
-  gate can't count without running the change's code), and a list ahead of its tree admits no site, since the source
-  check holds each file a later change touches.  So a lint that comes to count more records its list in the same change;
+  a counted lint's module may raise that lint's list, as far as it records, at each file it leaves untouched: it adds no
+  text there, so the rise records what the edited lint finds in a tree the change didn't write (the base's, or a file of
+  a change queued on `next`), which the gate can't count without running the change's code, and a list ahead of its tree
+  admits no site, since the source check holds each file a later change touches.  So a lint that comes to count more
+  records its list in the same change;
 * among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
   more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``);
 * a command the ``public`` table of P16's list (``allowlists/p16_cli_callers.json``) gains, one run from outside the
@@ -811,9 +812,9 @@ def held(c: Change, before: dict[str, list], after: dict[str, list]) -> tuple[di
     """For each repository list (``CATCH_UP``) whose keys the change raises, what its lint, as the change's base has it, finds
     in the base's tree at those keys: the most each may rise to, since a list that records its base's findings adds none.
     And, for a counted lint whose module the change edits, the keys it raises at files the change leaves untouched, which may
-    rise as far as the change records: the text there is the base's, so the rise records what the change's lint finds in the
-    base's tree, which the gate can't count without running the change's code.  A list ahead of its tree admits no site,
-    since the source check holds each file a later change touches to its own count."""
+    rise as far as the change records: it adds no text there, so the rise records what the change's lint finds in text the
+    change didn't write, which the gate can't count without running the change's code.  A list ahead of its tree admits no
+    site, since the source check holds each file a later change touches to its own count."""
     out, widened = {}, {}
     edited: set[str] | None = None
     for s in CATCH_UP:
@@ -827,9 +828,8 @@ def held(c: Change, before: dict[str, list], after: dict[str, list]) -> tuple[di
             if s in (slug for slug, *_ in COUNTED):
                 if edited is None:
                     edited = set(git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0"))
-                if counted_paths(s)[0] in edited and (kept := files - edited):
-                    there = git("ls-tree", "-r", "-z", "--name-only", c.lo, "--", *sorted(kept)).split("\0")
-                    widened[s] = {key({"file": f}) for f in kept & set(there)}
+                if counted_paths(s)[0] in edited:
+                    widened[s] = {key({"file": f}) for f in files - edited}
     return out, widened
 
 

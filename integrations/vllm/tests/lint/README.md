@@ -86,9 +86,9 @@ expected case and let the rest raise (a narrower handler that still swallows sti
 raise a key, in any file, up to what its lint, as the PR's base has it, finds there in the base's tree: a list that records
 its base's findings adds none, so one left behind by PRs that were on `next` before its lint landed catches up, while growth
 past the base's findings is refused as before. A counted lint that comes to count more records its list in the same PR:
-the gate takes a rise at a file of the base's tree that the PR leaves untouched from a PR that edits that lint's module,
-since the text there is the base's, and the source check still holds each file a later PR touches. A rise at a file the
-PR edits is held as before.
+the gate takes a rise at a file the PR leaves untouched (on `main`, or one a PR on `next` brings) from a PR that edits that
+lint's module, since the PR adds no text there, and the source check still holds each file a later PR touches. A rise at a
+file the PR edits is held as before.
 It holds lane text the same way, in every area, this integration's included: `tests/lint/test_repo_lane_text.py` counts, in
 the prose of each file it reads (comments and docstrings in code, Lean comments, every Markdown file; never a string literal
 or a data file), dated attributions and ISO dates, `note:` ids, Notion URLs, Linear ids, PR numbers, agent ids, Slack

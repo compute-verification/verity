@@ -1292,7 +1292,7 @@ def test_a_lane_text_list_catches_up_to_what_its_base_holds_and_a_pinned_file_ha
 
 def test_a_lint_that_comes_to_count_more_records_its_list_at_the_files_it_leaves_untouched_and_no_others(lane_linted):
     """The base's lint can't count a new kind, so the rise is taken from a change to the lint's module at each file of the
-    base's tree it leaves untouched, where the text is the base's; a file it edits, or a rise with no edit to the lint, is
+    base's tree it leaves untouched, where it adds no text; a file it edits, or a rise with no edit to the lint, is
     held as before, and main stays green after it lands."""
     b = {"file": "docs/b.md", "count": 2}
     lane_linted.git("checkout", "-q", "main")
