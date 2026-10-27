@@ -32,10 +32,8 @@ class Profile:
     # Activations and values
     #: `b_a`: bits per novel activation read (`WeightsIncompressible`'s activation side, `ThreadedThrottled`)
     b_a: float | None = None
-    #: `f`: bits per value read (`ValueReadHardness`, `ActivationReads`)
+    #: `f`: bits per value read (`ValueReadHardness`)
     f: float | None = None
-    #: `a`: an accumulation entry's width (`ActivationReads`, `psRate`)
-    width: float | None = None
     #: `β_x`: fresh bits a block pays per counted activation it uses, at a rate that survives replay (the draft's
     #: Proposition 3; measured on exact blocks)
     beta_x: float | None = None
@@ -80,8 +78,6 @@ class Profile:
     layer_bits: float | None = None
     #: the block size up to which the `Threading` certificate is checked (`ReferenceThreaded`: `S ≤ 2·10⁷`)
     thread_k: float | None = None
-    #: `n`: an accumulation entry's width (`Cube.Wide`; kv_b's 512 in Kimi K2)
-    entry_width: float | None = None
 
     # Prices (`ParameterHardPricedAt`)
     #: `Σ_b p_b / |𝓜*|`: the chained blocks' mean weight price, bits
