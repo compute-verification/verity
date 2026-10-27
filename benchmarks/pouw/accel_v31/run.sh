@@ -8,9 +8,11 @@
 # tiles, and the gamma table beside D6 v1.1.
 #
 #   research run --on vy-nebius-1 --project verity --campaign cmp-159 --source . --cwd source --env GPU_LEASE_WHO=V31-GPU \
-#     -- bash benchmarks/pouw/accel_v31/run.sh
+#     --env HYPOTHESIS="..." -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py \
+#     --by V31-GPU -- bash benchmarks/pouw/accel_v31/run.sh
+# (a node's lane runs go through a slot of its gpu pool; the GPUs come from gpu-lease inside, for the GPU work alone)
 #
-# MODE=gates|bench (default bench: the gates, then the timing; a failed gate times nothing); SHAPES: bench's NAME:M:N:K list
+# HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench (default bench: the gates, then the timing; a failed gate times nothing); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); REPS (default 7); Q, the proof blocks a verdict opens (default 64); LP, T, ROW
 # (default 256 3 1024); GENCODE (default arch=compute_120a,code=sm_120a; H200: arch=compute_90a,code=sm_90a); PY (default
 # uv run -q --no-project --with numpy python: the node's python3 has no numpy); LEASE, the command that leases the GPU (default gpu-lease 1 --wait --max-min 25 --; a timed run passes
@@ -27,6 +29,7 @@ W=$(mktemp -d /dev/shm/accel-v31.XXXXXX)
 export W
 trap 'rm -rf "$W"' EXIT
 git rev-parse HEAD > "$O/commit.txt" 2>&1
+[ -n "${HYPOTHESIS:-}" ] && printf '%s\n' "$HYPOTHESIS" > "$O/hypothesis.txt"
 : > "$O/rc.txt"
 
 nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 -o "$W/v31" $D/v31.cu -lcuda -lcublasLt \
