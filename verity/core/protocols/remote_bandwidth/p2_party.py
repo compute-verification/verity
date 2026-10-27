@@ -10,13 +10,16 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
 
 - The prover opens with the request `{"request": {"deadline_ns", "node", "passes", "samples", "window_ns",
   "windows"}}`, whose node must be the registration's.
-- The verifier answers `{"hold": {"commitment", "registration"}}`: the session's coin commitment and the registration
-  with its plan, which the prover checks against its store and reads each pass in.
+- The verifier answers `{"hold": {"registration"}}`: the registration with its plan, which the prover checks against
+  its store and reads each pass in.
 - It then drives the session on its clock (`session`): `{"run": {"challenge", "i", "previous", "t"}}` asks for pass i
-  of window t under the window's challenge after the root `previous`, answered `{"root": hex}` when the step that read
-  it is done. Once a window's roots are final (the next window's first root, or its deadline for the last) it sends
-  `{"open": {"draws", "t"}}`, answered `{"openings": [opening_json, ...]}`, and verifies them while the prover serves
-  on.
+  of window t under the window's challenge, its value and the root it was opened after (`coins.Released`), after the
+  root `previous`, answered `{"root": hex}` when the step that read it is done. Once a window's roots are final (the
+  next window's first root, or its deadline for the last) it sends `{"open": {"draws", "t"}}`, answered `{"openings":
+  [opening_json, ...]}`, and verifies them while the prover serves on.
+- Once the session has its outcome, `{"end": {"commitment", "openings"}}`: the session's coin commitment and every
+  released coin's opening (`audit.Session.disclose`), against which the prover checks each challenge it was sent
+  (`audit.Prover.end`). The commitment is a function of every coin, so the prover gets it only after its last root.
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
   8,224 bytes each, over the session's span.
@@ -25,8 +28,8 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
 [--sessions N]) [--answer FILE | --device DIR]` is the verifier's side (`main`), each session with fresh coins.
 Listening, it prints `{"listening": port}` and then each session's `{"answer"}` on stdout, the shape of a party the
 auditor's gate starts over ssh with its `--device` directory (`benchmarks/live_verifier/host.py`'s party verbs).
-`prove(reader, writer, prover)` is the prover's: it answers each message with `prover`'s `hold`, `run` and `open` until
-the answer, which it returns.
+`prove(reader, writer, prover)` is the prover's: it answers each message with `prover`'s `hold`, `run`, `open` and
+`end` until the answer, which it returns.
 
 No Lean replays a P2 session yet (`RemoteAudit.P2` checks one opening); the verdict here is the Python session's.
 """
@@ -176,10 +179,11 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
             plan: Plan | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until,
             log: Callable[[str], None] = lambda _m: None, host: str | None = None) -> dict[str, Any]:
-    """The verifier's side of one session over the channel (`f_in`, `f_out`): the prover's request, the coin commitment,
+    """The verifier's side of one session over the channel (`f_in`, `f_out`): the prover's request, the registration,
     each pass asked for in order under `plan` (every unit by default), each window's openings drawn once its roots are
-    final and verified, and the answer, sent last and returned, naming the verifier's `host` (this one's name by
-    default). A message out of form or a closed channel rejects the session (its answer says why)."""
+    final and verified, the session's coins disclosed, and the answer, sent last and returned, naming the verifier's
+    `host` (this one's name by default). A message out of form or a closed channel rejects the session (its answer says
+    why)."""
     host = host or socket.gethostname()
     plan = Plan.whole(registration.blocks) if plan is None else plan
     try:
@@ -191,7 +195,7 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
     W, passes = params.windows, params.min_passes
     s = p2.Session(params, registration, C.local(registration.digest, 0, W, P._Stream(coins, registration.node)),
                    not_before_ns=clock(), clock=clock)
-    send(f_out, {"hold": {"commitment": s.commitment.to_json(), "registration": registration_json(registration, plan)}})
+    send(f_out, {"hold": {"registration": registration_json(registration, plan)}})
 
     def opened(t: int) -> audit.Verdict:
         draws = s.close(t)
@@ -212,7 +216,8 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
         challenge, previous, step = s.start(), registration.digest, 0
         for t in range(W):
             for i in range(passes):
-                send(f_out, {"run": {"challenge": challenge.to_json(), "i": i, "previous": previous.hex(), "t": t}})
+                send(f_out, {"run": {"challenge": C.Released.of(challenge).to_json(), "i": i, "previous": previous.hex(),
+                                     "t": t}})
                 got = recv(f_in, "root")
                 root = bytes.fromhex(got) if isinstance(got, str) else b""
                 v = s.receive(t, i, root, plan.runs, step=step)
@@ -233,12 +238,17 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
         reason = f"the prover's side failed: {type(e).__name__}: {e}"
         if s.outcome is None:
             s._fail(s.filling, "malformed")
-    return _last(f_out, answer(s, reason, plan) | {"host": host})
+    commitment, openings = s.disclose()
+    return _last(f_out, answer(s, reason, plan) | {"host": host},
+                 {"commitment": commitment.to_json(), "openings": [o.to_json() for o in openings]})
 
 
-def _last(f_out: BinaryIO, out: dict[str, Any]) -> dict[str, Any]:
-    """The answer sent, if the prover is still there to read it, and returned."""
+def _last(f_out: BinaryIO, out: dict[str, Any], end: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The session's coins disclosed (`end`, when it has any) and the answer, sent if the prover is still there to read
+    them, and the answer returned."""
     try:
+        if end is not None:
+            send(f_out, {"end": end})
         send(f_out, {"answer": out})
     except OSError:
         pass
@@ -252,15 +262,18 @@ class _Ended(Exception):
 class Prover(Protocol):
     """The prover's side as `prove` drives it."""
 
-    def hold(self, registration: Mapping[str, Any], commitment: C.LiveCommitment) -> None:
-        """The verifier's registration and the session's coin commitment, before any coin: refuse a registration that
-        isn't the store's."""
+    def hold(self, registration: Mapping[str, Any]) -> None:
+        """The verifier's registration, before any coin: refuse a registration that isn't the store's."""
 
-    def run(self, challenge: C.LiveOpening, t: int, i: int, previous: bytes) -> bytes:
+    def run(self, challenge: C.Released, t: int, i: int, previous: bytes) -> bytes:
         """Pass i of window t: one step's reads under the pass's seed, its receipts committed; the root."""
 
     def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[p2.Opening]:
         """Window t's drawn receipts `(pass, position)` opened."""
+
+    def end(self, commitment: C.LiveCommitment, openings: Sequence[C.LiveOpening]) -> None:
+        """The session's coin commitment and every released coin's opening, after its last root: refuse them unless
+        every challenge this prover was sent opens against them (`coins.received_reason`)."""
 
 
 def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Prover, request: Mapping[str, Any],
@@ -271,12 +284,14 @@ def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Prover, request: Mapping[str,
     while True:
         (kind, m), = recv(f_in).items()
         if kind == "hold":
-            prover.hold(m["registration"], C.LiveCommitment.from_json(m["commitment"]))
+            prover.hold(m["registration"])
         elif kind == "run":
-            root = prover.run(C.LiveOpening.from_json(m["challenge"]), m["t"], m["i"], bytes.fromhex(m["previous"]))
+            root = prover.run(C.Released.from_json(m["challenge"]), m["t"], m["i"], bytes.fromhex(m["previous"]))
             send(f_out, {"root": root.hex()})
         elif kind == "open":
             send(f_out, {"openings": [opening_json(o) for o in prover.open(m["t"], [tuple(d) for d in m["draws"]])]})
+        elif kind == "end":
+            prover.end(C.LiveCommitment.from_json(m["commitment"]), [C.LiveOpening.from_json(o) for o in m["openings"]])
         elif kind == "answer":
             return m
         else:
