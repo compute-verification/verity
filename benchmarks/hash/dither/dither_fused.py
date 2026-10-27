@@ -30,9 +30,9 @@ s - 1's (they read the slots step s + 1 overwrites).  What is committed, before 
 
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows (SERVE-H1 admits
 from its queue); the window's registration, queue commit and close are not run (once a window, not a step); a window is
-the engine's life up to `ROUNDS` steps.  The z table and the third round leaf are this lane's rendering of CA's form (a z
-table in AROW's row-table format, a root per step before the coin); the kind, fields and labels are CA's to fix.  Its
-stats, checks and verdict say form=beside (`forms.form_of`): not ASK-71 A's form.
+the engine's life up to `ROUNDS` steps.  The z table and the third round leaf are this harness's rendering of the
+credit's form (a z table in the row-table format, a root per step before the coin); the credit fixes the kind, fields
+and labels.  Its stats, checks and verdict say form=beside (`forms.form_of`): not `forms.FORM_A`.
 """
 from __future__ import annotations
 
@@ -435,8 +435,8 @@ def patch(t: int, h1c: str, h1f: str, key: bytes | None = None, gate: bool = Fal
 
 def hook(llm) -> Window:
     """The step hook around the engine's runner (`execute_model`), and the window (built at the engine's first forward)."""
-    from verity_vllm.engine import engine_profile as prof
-    runner = prof.get_model_runner(llm)
+    from verity_vllm.engine import handle
+    runner = handle.model_runner(llm)
     win = WIN if WIN is not None else _window(torch.device("cuda"))
     orig = runner.execute_model
 

@@ -4,7 +4,7 @@ profile, and each way a link-window fails closed, on injected coins and an injec
 record is decided on a stand-in proof of the unit (`standin`: the prover's rows and output word by the gates'
 references, the Lean run reading its session file), and held to the in-the-clear check on the opening, the debug
 comparison, and to the oracle (`LinkWindows.stand_in`), which compares the Program's egress grid: the same verdict,
-except where only the frames differ from the Program's, which N2 leaves to N3."""
+except where only the frames differ from the Program's, which N2 doesn't hold."""
 
 import itertools
 import json
@@ -254,10 +254,10 @@ def test_the_profile_binds_egress_too_and_ends_where_it_ends(tmp_path):
     assert run.lw.declares(1, 2, ig[2]) and not run.lw.declares(1, 3, ig[2])
 
 
-def test_n2_compares_no_grid_and_leaves_the_frames_to_n3(tmp_path):
+def test_n2_compares_no_grid_and_holds_no_frames(tmp_path):
     """The head check holds the head's status, grid and counts, and N2 compares no grid in the clear: a window whose
     frames differ from the Program's grid in content alone, or in order within a bucket, at the profile's counts, is
-    accepted where the in-the-clear oracle rejects it, since its frames are N3's to hold. An egress head under another
+    accepted where the in-the-clear oracle rejects it, since N2 holds counts only. An egress head under another
     parameters digest is rejected though its certificate verifies."""
     run = Run(tmp_path, occupancy=honest_occupancy())
 
@@ -677,6 +677,44 @@ def test_a_link_without_an_egress_profile_has_no_verdict(tmp_path):
         with pytest.raises(ValueError, match="egress end has no occupancy profile"):
             run.lw.clear(opening, draw, SYNCS)
         assert run.lw.stand_in(opening, draw, FRAMES, SYNCS)
+
+
+WARDEN_DIGEST = bytes(range(64))
+
+
+def test_a_warden_link_holds_both_heads_to_the_wardens_digest_and_reads_no_sync(tmp_path):
+    """A warden link (`WardenProfile`) is the plain unit on the warden's records: its public items are `PUBLIC_WARDEN`
+    and its charge 0, a window whose two records the warden certified under its parameters digest is accepted with no
+    sync declared, by the Lean's verdict of record, the Python beside it and the in-the-clear check alike, and a window
+    whose egress record was certified under the certifier's digest instead is a reject. It takes no occupancy profile,
+    and its two ends are one grid."""
+    run = Run(tmp_path)
+    run.lw = lw = replace(run.lw, occupancy=(None, None), warden=SVC.WardenProfile(3, WARDEN_DIGEST))
+    run.stream = lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
+                           clock=run.clock)
+    assert lw.spec.public == SVC.PUBLIC_WARDEN and lw.charge == 0.0 and lw.windows == 3
+    assert lw.kind == "warden" and SVC.OF_RECORD[lw.kind] == "lean"
+    items = {p.item for p in lw.spec.public}
+    assert items >= {"warden", "parameters"} and not items & {"charge", "occupancy"}
+    assert lw.spec.digest() != replace(lw, warden=SVC.WardenProfile(3, bytes(64))).spec.digest()
+    warden = lambda d, r: run.issuer.certify(r, d, PARAMS, WARDEN_DIGEST)
+    honest = lw.commit(0, warden(EGRESS, egress_records()[0]), warden(INGRESS, ingress_records()[0]), SALTS[0])
+    out = standin.decide(lw, run.stream, run.stream.select(run.register(honest)), honest, (), tmp_path / "p0")
+    assert out.accepted and out.public == {"verdict": 1, "deadline": 1}
+    verdict = run.stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
+    assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": True}
+    other = lw.commit(1, run.egress(egress_records()[1]), warden(INGRESS, ingress_records()[1]), SALTS[1])
+    assert reject(standin.decide(lw, run.stream, run.stream.select(run.register(other)), other, (), tmp_path / "p1"))
+    verdict = run.stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
+    assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": False}
+    with pytest.raises(ValueError, match="counts are its schedule's"):
+        replace(lw, occupancy=honest_occupancy())
+    with pytest.raises(ValueError, match="one grid"):
+        replace(lw, ingress=replace(PARAMS, buckets=PARAMS.buckets + 1))
+    with pytest.raises(ValueError, match="one or more windows"):
+        SVC.WardenProfile(0, WARDEN_DIGEST)
+    with pytest.raises(ValueError, match="64 bytes"):
+        SVC.WardenProfile(3, bytes(32))
 
 
 def test_a_head_leaf_opens_from_the_head_alone(tmp_path):

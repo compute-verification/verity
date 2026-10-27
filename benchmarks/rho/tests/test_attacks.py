@@ -10,16 +10,15 @@ from pathlib import Path
 import pytest
 from rho import attacks
 from rho.attacks import ATTACKS, Measured, Point
-from rho.classes import Outside
+from rho.classes import FlopBudget, Outside
 from rho.profile import Profile
-from rho.theorem import Budget
 
 KIMI = Profile(
     name="full", kappa=0.602, state_bits=1.04e12 * 16, kappa_forward=0.294, token_state_bits=8e10,
     flops_per_token=2.07e11, cut_bits=2 * 28672, token_bits=20, decode_flops=0, state_splits=True,
     shared_state_bits=math.inf, tile_weight_bits=8, beta_x_marginal=2.6, psum_bits=16, tile_inputs=7168,
     tile_outputs=4096)
-DECLARED = Budget(6.4e16, 2e7)
+DECLARED = FlopBudget(6.4e16, 2e7)
 
 
 def _nci_slowdown():
@@ -105,11 +104,11 @@ def test_the_tile_allowance_converts_its_forward_products():
 def test_a_measured_execution_extends_monotonically_and_never_beyond_what_it_ran():
     m = Measured("m", ("full",), (Point(2e7, 1.34e17, 6.8e5), Point(8e6, 5.36e16, 1.25e6)), ("art:x",))
     a = m.allowance(KIMI)
-    assert a(Budget(1.34e17, 2e7)) == pytest.approx(0.602 * 1.34e17 / (2 * 6.8e5))
-    assert a(Budget(6.4e16, 2e7)) == pytest.approx(0.602 * 5.36e16 / (2 * 1.25e6))
-    assert a(Budget(1e17, 7e6)) == 0
-    assert a(Budget(1.34e17 * 3, 2e7 * 3)) == pytest.approx(3 * a(Budget(1.34e17, 2e7)))
-    budgets = [Budget(c, k) for c in (1e16, 6e16, 2e17, 1e19) for k in (1e6, 9e6, 3e7, 1e9)]
+    assert a(FlopBudget(1.34e17, 2e7)) == pytest.approx(0.602 * 1.34e17 / (2 * 6.8e5))
+    assert a(FlopBudget(6.4e16, 2e7)) == pytest.approx(0.602 * 5.36e16 / (2 * 1.25e6))
+    assert a(FlopBudget(1e17, 7e6)) == 0
+    assert a(FlopBudget(1.34e17 * 3, 2e7 * 3)) == pytest.approx(3 * a(FlopBudget(1.34e17, 2e7)))
+    budgets = [FlopBudget(c, k) for c in (1e16, 6e16, 2e17, 1e19) for k in (1e6, 9e6, 3e7, 1e9)]
     for x, y in itertools.product(budgets, budgets):
         if x.compute <= y.compute and x.inputs <= y.inputs:
             assert a(x) <= a(y)
@@ -122,8 +121,8 @@ def test_a_measured_execution_extends_monotonically_and_never_beyond_what_it_ran
 def test_a_measured_state_that_fits_runs_unthrottled():
     p = replace(KIMI, name="rl-elicitation")
     a = ATTACKS["measured-rl-elicitation"].allowance(p)
-    assert a(Budget(6.4e16, 1e5)) == pytest.approx(0.602 * 6.4e16 / 2)
-    assert a(Budget(6.4e16, 7e4)) == 0
+    assert a(FlopBudget(6.4e16, 1e5)) == pytest.approx(0.602 * 6.4e16 / 2)
+    assert a(FlopBudget(6.4e16, 7e4)) == 0
 
 
 def test_the_measured_full_training_points_are_the_c1_rerun_high_ends():

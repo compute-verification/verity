@@ -26,6 +26,12 @@ An `outcome` case is a `drawn` case's arguments and one accepted proof outcome f
 mutations drop one (``missing``), reject one (``failed``), repeat one, add an undrawn unit, prove the units of another
 coin the prover chose (``chosen``), and break the forms.
 
+A `window-drawn` case is what `credit._window_drawn` reads of a window, the draw `Credit.descriptorDrawn` gives the
+J10-R period's statement (`Properties.Pouw.PeriodJ10R.creditDrawn`): the window's open root, its draw (its coin's live
+opening, its root and its receipts), its circuit's descriptor (today's units or J10-R's) and a committed K. Its
+mutations break the coin's opening, the root and receipts the draw is keyed by, the descriptor's hex and K's form, and
+give a K past the window's units.
+
 A `window` case is a `credited` case with its circuit's descriptor (`window_desc`: `h1window.program`'s encoding as far
 as `credit.layout_of` reads it, each call's tiles a call node each or one batch, under a ``PREFIX``), its weights (each
 K's ``<PREFIX>b/<K>``, its linears' B rows under the registered domain of its name and the circuit, binding no window,
@@ -921,6 +927,56 @@ PLAN_K = 27_713
 DRAWN_NAMES = ["budget", "coin-form", "args-form", "layout-form", "named-twice", "unknown-linear", "uncalled", "slot", "kn",
                "blocks", "k-form", "k-past-units"]
 DRAWN_KEYS = ("coin", "stream", "registration", "receipt", "layout", "k")
+
+
+def _draw_coin(rng: random.Random) -> dict:
+    """A live opening of a window's draw coin as the challenger gives it (`challenger.LiveOpening`), at random bytes:
+    `credit._window_drawn` reads only its coin."""
+    return Ch.LiveOpening(rng.randrange(1 << 20), Wd.DRAW, 0, bytes.fromhex(_hex(rng)), bytes.fromhex(_hex(rng)),
+                          bytes.fromhex(_hex(rng))[:32],
+                          tuple(bytes.fromhex(_hex(rng)) for _ in range(rng.randint(0, 3)))).to_json()
+
+
+def window_drawn_instance(rng: random.Random, name: str = "honest") -> dict:
+    """One `window-drawn` case: a window's open root, its draw (its coin's live opening, its root and its receipts), its
+    circuit's descriptor (`descriptor`, today's units or J10-R's) and a committed K, then mutation `name`."""
+    lay, j10r = layout(rng), rng.random() < 0.5
+    if j10r:
+        lay["m"] = 2 * lay["tile"][0]
+    d = {"window": {"root": _hex(rng)}, "draw": {"coin": _draw_coin(rng), "root": _hex(rng), "receipts": _hex(rng)},
+         "descriptor": descriptor(rng, lay, j10r=j10r), "k": _k(rng, lay)}
+    match name:
+        case "honest":
+            pass
+        case "coin-form":
+            o = d["draw"]["coin"]
+            d["draw"]["coin"] = rng.choice([None, 5, {}, {k: v for k, v in o.items() if k != "salt"}, {**o, "extra": 1},
+                                            {**o, "epoch": True}, {**o, "label": 5}, {**o, "coin": "zz"},
+                                            {**o, "path": ["ab"]}, {**o, "path": "x"}])
+        case "args-form":
+            where, bad = rng.choice([("window", {}), ("window", {"root": 5}), ("root", None), ("root", "zz"),
+                                     ("root", d["draw"]["root"].upper()), ("receipts", None), ("receipts", 5),
+                                     ("receipts", 'quote"d')])
+            if where == "window":
+                d["window"] = bad
+            elif bad is None:
+                del d["draw"][where]
+            else:
+                d["draw"][where] = bad
+        case "descriptor-hex":
+            h = d["descriptor"]
+            d["descriptor"] = rng.choice([h.upper(), h[:-1], "", "zz", 5, None])
+        case "k-form":
+            d["k"] = _bad_k(rng)
+        case "k-past-units":
+            d["k"] = units_of(lay) + rng.randint(1, 5)
+        case _:
+            raise ValueError(name)
+    return d
+
+
+WINDOW_DRAWN_NAMES = ["coin-form", "args-form", "descriptor-hex", "k-form", "k-past-units"]
+WINDOW_DRAWN_KEYS = ("window", "draw", "descriptor", "k")
 
 
 def _proofs(rng: random.Random, units: list[int]) -> list[dict]:
