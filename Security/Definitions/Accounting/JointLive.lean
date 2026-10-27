@@ -142,8 +142,8 @@ noncomputable def condError {O : Type} {G : Verity.Game O} (P : Verity.Game.Stra
 
 /-- A horizon of `B` server-time blocks read off one run of the game `G`: each block's period, over its own circuit,
 its PoUS challenge times on the run, and the read deadline. The wipe that opens each block is core's `Verity.Wipe`,
-whose survivor bound is a bound in its own game, not on the run; the joint guarantee takes it beside the horizon
-(`Accounting.Guarantees.JointHorizonBlocksLive`). -/
+read on the run through a map of the run into the wipe's game at its boundary (`Verity.Wipe.OfRun`), which the joint
+guarantee takes beside the horizon (`Accounting.Guarantees.JointHorizonBlocksLive`). -/
 structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : ℕ) (C : Fin B → Verity.Circuit)
     {O : Type} (G : Verity.Game O) where
   /-- block `b`'s period -/

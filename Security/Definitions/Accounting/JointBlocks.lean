@@ -20,9 +20,9 @@ A server's life is cut into server-time blocks, each opened by a certified wipe 
 The wipe that opens block `b` is core's (`Verity.Wipe`, at boundary `b` of a schedule of server-time blocks,
 `Verity.Blocks`), so block 0 has one too, which bounds what survives from before the horizon. What it guarantees is its
 survivor bound (`Verity.Wipe.SurvivorBound`) at the pair its verdict publishes, a bound in the wipe's own game over a
-uniform foreign content, the seed and the spot reads, not an event of the node's run. The joint guarantee takes each
-block's wipe and its survivor bound beside the blocks (`Accounting.Guarantees.JointHorizonBlocksLive`). The blocks are
-fields here, not read off that core vocabulary.
+uniform foreign content, the seed and the spot reads. The joint guarantee reads it on the run through a map of the run
+into the wipe's game at each boundary (`Verity.Wipe.OfRun`), on a run whose coins there are the wipe's
+(`Accounting.Guarantees.JointHorizonBlocksLive`). The blocks are fields here, not read off that core vocabulary.
 -/
 
 namespace Accounting
