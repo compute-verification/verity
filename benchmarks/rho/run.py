@@ -44,13 +44,13 @@ def row(e: Estimate) -> dict:
             "terms": dict(s.terms) if s else {}}
 
 
-def when(s: Scenario, rho: float) -> str:
-    return operating.human(s.seconds(rho))
+def when(s: Scenario, overhead: float) -> str:
+    return operating.human(s.seconds(overhead))
 
 
-def lower(rho: float, unmonitored: float) -> str:
+def lower(overhead: float, unmonitored: float) -> str:
     """A lower bound, flagged where it is below the adversary no protocol encumbers (`Result.unmonitored`)."""
-    return fmt(rho) + (" (vacuous)" if rho < unmonitored * (1 - 1e-9) else "")
+    return fmt(overhead) + (" (vacuous)" if overhead < unmonitored * (1 - 1e-9) else "")
 
 
 def picked(r: Result) -> FamilyResult | None:

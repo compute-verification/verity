@@ -240,8 +240,8 @@ def test_onsite_w63_beside_the_reference():
     """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 90.4 kbit/s
     a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits and the
     overhead's lower bound, which a dark share of 1% caps near 100, rises from 98.7 to 99.8, with the best attack at 249
-    and 250; at line rate both fall to remote's (2.75, at the card table's clock). The cadence feeds the serving rho
-    credits only if outputs outnumber prompts more than 20:1, so it isn't the default."""
+    and 250; at line rate both fall to remote's (2.75, at the card table's clock). The cadence feeds the serving this
+    package credits only if outputs outnumber prompts more than 20:1, so it isn't the default."""
     reg = REG.override({"fleet.world-h200.eps_dark": 0.01})
     ref, w63 = evaluate_named(reg, "reference-onsite-h200"), evaluate_named(reg, "onsite-w63")
     inputs = [r.scenario.regime.budget(r.scenario.context).inputs for r in (ref, w63)]

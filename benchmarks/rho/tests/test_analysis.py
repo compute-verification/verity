@@ -12,13 +12,13 @@ REG = Registry.load()
 NAMES = REG.names("scenario")
 
 
-def synthetic(monkeypatch, rho):
-    """A registry of four ranged parameters `a`, `b`, `c`, `d` (each 1.0 today), whose overhead is `rho(values)`."""
+def synthetic(monkeypatch, overhead):
+    """A registry of four ranged parameters `a`, `b`, `c`, `d` (each 1.0 today), whose overhead is `overhead(values)`."""
     reg = Registry({k: Param(k, 1.0, low=lo, high=hi) for k, lo, hi in
                     (("a", 0.1, 10.0), ("b", 0.5, 2.0), ("c", 0.0, 2.0), ("d", 0.5, 2.0))})
 
     def at(registry, scenario, values=None, metric=LO):
-        return rho({"a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0} | dict(values or {}))
+        return overhead({"a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0} | dict(values or {}))
 
     monkeypatch.setattr(analysis, "at", at)
     monkeypatch.setattr(analysis, "reads", lambda registry, scenario: frozenset(p.key for p in registry.params()))
