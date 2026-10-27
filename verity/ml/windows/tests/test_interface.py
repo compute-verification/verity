@@ -252,6 +252,8 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
     assert set(WI.check_drawn(moved, publics, everyone)) == set(WI.check(moved, publics))
     assert WI.check_drawn(moved, publics, []) == {}
     assert list(WI.check_drawn(moved, publics, [3])) == [moved[1].key]
+    lacking = [replace(m, wired=(("x", "o1", m.wired[0][2]),)) if m.wired else m for m in win.window.members]
+    assert list(WI.check_drawn(lacking, publics, [3])) == [moved[1].key]
     bad = I.Window(chain(), RUN, LAW, 2)
     x = ins[0].copy()
     x[2, 0] ^= 1
