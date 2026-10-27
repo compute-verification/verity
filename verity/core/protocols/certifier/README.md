@@ -169,7 +169,9 @@ A spec-level reference for network accounting's timing channel:
   certifier's fresh salts, and signs the head for the egress link-window; `check_out` reads the public record for the
   link-window it expects at the verifier's own shape and returns the root to pin, or refuses by name (`REFUSALS`:
   another width is ``out-width``, another row count ``out-rows``), so the output units' rows are registered reads of
-  the certifier's root rather than a comparison in the clear;
+  the certifier's root rather than a comparison in the clear. On device-attest the head's digest is an entry of the
+  link-window's certification period (`period_root`), the record holds no certificate, and `check_out` reads it under
+  no key, only through the period's check (``out-period``);
 - the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary``, which names the template
   whose unit ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it computes and returns,
   committed as a registered read of the warden's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
@@ -337,7 +339,8 @@ in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. 
   certifier certifies a record of its certification period under one root its party key signs (`verity.core.attest`),
   and publishes one liveness record a link-window, the one output in the clear; `period_root.refusal` is the period's
   check in the clear. The rows form runs it (`benchmarks/network_traces/warden_serve.py --attest`, the load
-  included); the clock form doesn't yet, and no proof reads a record.
+  included), and so does the clock form (`certifier_serve.py serve --attest`, the out value included), but N2 gives
+  no verdict on it yet, since `LinkWindows` reads each record's certificate, and no proof reads a record.
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 

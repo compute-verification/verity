@@ -125,6 +125,7 @@ certified, the I/O, the audit and the salt accept.
     python certifier_serve.py serve --plan PLAN --calibration REPORT --upstream URL --out DIR --link HOST:PORT
         --reveal HOST:PORT --key KEYDIR --challenger-key PUBLIC.json --session HEX [--start-in 10]
         [--tamper late|extra|drop|token|byte] [--out-shape SHAPE.json]
+        [--attest DEPLOYMENT --device DIR [--height 10] [--period M]]
     python certifier_serve.py client --plan PLAN --calibration REPORT --deployment DEPLOYMENT.json --out DIR
     python certifier_serve.py check --run DIR --challenger KEYDIR [--expect accepted|refused]
     python certifier_serve.py rehearse (--upstream URL | --vllm MODEL) --out DIR [plan's options] [--strategies S,...]
@@ -194,6 +195,19 @@ shows nothing of the head or the sync. No PoUW salt is written, only its SHA-512
 (`active_replay.fingerprint`). With `CERTIFIER_SERVE_TIMING` set, `serve` also writes `publisher_timing.json`: when
 each record was handed over, kept and certified, on the proxy's clock, and each step's CPU seconds (`tick_load.py`
 reads it).
+
+**Device-attest** (`serve --attest`, `period_root`): the certifier process certifies as the network certifier's party
+key on its device (`party_key`, `--device` the identity's directory) in the deployment whose hash `--attest` gives, and
+signs no certificate alone: each record's, clock's and out value's digest is a record of the N2 link's certification
+period of `--period` link-windows (the plan's, by default), and its line holds the entry in the certificate's place
+(an out record holds none). Once both ends of a window are kept, its out value committed, the window goes live: its
+liveness record a line of `liveness.jsonl` (public), which the reveal endpoint serves as the window's one output, and
+each period's records and signed root a line of `periods.jsonl` (the prover's witness). `deployment.json` names the
+identity, deployment, party and period (``attest``); `--key` still signs the reveals, the one signature that isn't a
+period's. The client keeps each liveness record that verifies under the device's identity (`check_liveness`) in its
+`liveness.jsonl`. `check` reads every record, clock and out value as a record of its period in a live block
+(`attested_check`, `period_root.refusal`), and the client's liveness records as the run's, but gives no N2 verdict
+and asks no salt (N2 reads certificates; `NO_N2_ATTEST`), so a device-attest run is refused until N2's period form.
 """
 
 from __future__ import annotations
@@ -229,7 +243,7 @@ from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER,
     Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
-    Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, certificate_digest, parameters_digest
+    Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, certificate_digest, clock_commitment, parameters_digest
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.schedule import ClockSync, expected_grids, handing_buckets
@@ -490,22 +504,27 @@ class Attested:
         return self.problem(link, e.link, e.direction, e.window, e.digest)
 
 
-def clock_json(clock: CertifiedClock) -> dict:
-    """One line of the certifier's `clocks.jsonl`: the sync and its salt, witness, and the certificate."""
-    return {"sync": [clock.sync.delta, str(clock.sync.rho)], "salt_c": clock.salt.hex(),
-            "certificate": certificate_json(clock.certificate)}
+def clock_json(clock: CertifiedClock | PR.PeriodClock) -> dict:
+    """One line of the certifier's `clocks.jsonl`: the sync and its salt, witness, and the certificate (on
+    device-attest, its period entry in the certificate's place)."""
+    sync = {"sync": [clock.sync.delta, str(clock.sync.rho)], "salt_c": clock.salt.hex()}
+    if isinstance(clock, PR.PeriodClock):
+        return sync | {"entry": clock.entry.to_json()}
+    return sync | {"certificate": certificate_json(clock.certificate)}
 
 
-def clock_from_json(doc: dict) -> CertifiedClock:
+def clock_from_json(doc: dict) -> CertifiedClock | PR.PeriodClock:
     if "salt_c" not in doc:
         raise ValueError("a clock certificate without its opening's salt, which opens no salted digest: an unsalted "
                          "one from before the salted form, or the client's public copy")
     delta, rho = doc["sync"]
-    return CertifiedClock(ClockSync(delta, Fraction(rho)), bytes.fromhex(doc["salt_c"]),
-                          certificate_from_json(doc["certificate"]))
+    sync, salt = ClockSync(delta, Fraction(rho)), bytes.fromhex(doc["salt_c"])
+    if "entry" in doc:
+        return PR.PeriodClock(sync, salt, PR.Entry.from_json(doc["entry"]))
+    return CertifiedClock(sync, salt, certificate_from_json(doc["certificate"]))
 
 
-def read_clocks(path: Path) -> list[CertifiedClock]:
+def read_clocks(path: Path) -> list[CertifiedClock | PR.PeriodClock]:
     """The certifier's `clocks.jsonl`: its salted clock certificates with their openings, one for each egress window it
     signed the sync of, witness (a link's clock source of record, `LinkWindows(certified_clocks=…)`); none for a run
     without the file. Raises `ValueError` on a line without its salt: an unsalted clock certificate, or a line of the
@@ -513,7 +532,7 @@ def read_clocks(path: Path) -> list[CertifiedClock]:
     return [clock_from_json(json.loads(line)) for line in path.read_text().splitlines()] if path.exists() else []
 
 
-def read_certified(path: Path) -> tuple[dict[tuple[Direction, int], CertifiedRecord], list]:
+def read_certified(path: Path) -> tuple[dict[tuple[Direction, int], CertifiedRecord | PR.PeriodRecord], list]:
     """`certified.jsonl`: the certified records by (direction, window), and the link-windows the signer refused."""
     got, refused = {}, []
     for line in path.read_text().splitlines() if path.exists() else []:
@@ -522,7 +541,7 @@ def read_certified(path: Path) -> tuple[dict[tuple[Direction, int], CertifiedRec
             refused.append(doc["refused"])
         else:
             record = certified_from_json(doc)
-            got[(record.direction, record.window)] = record
+            got[(record.head.direction, record.head.window)] = record
     return got, refused
 
 
@@ -551,10 +570,12 @@ def out_rows(words: Sequence[int], shape: out_commit.OutShape) -> list[list[int]
     return [list(words[i:i + w]) for i in range(0, len(words), w)]
 
 
-def certify_out(out: Path, record, issuer: Issuer, shape: out_commit.OutShape) -> out_commit.CertifiedOut | None:
+def certify_out(out: Path, record, issuer: Issuer | PR.PeriodIssuer,
+                shape: out_commit.OutShape) -> out_commit.CertifiedOut | None:
     """The network certifier's output value at an egress link-window's close (`--out-shape`): what the record carries
     (`out_words`) cut into `shape`'s rows (`out_rows`) and committed as the reading program's registered value at that
-    shape, its head signed by the running `issuer` in its session for the link-window (`out_commit.commit_out`). Its
+    shape, its head signed by the running `issuer` in its session for the link-window (`out_commit.commit_out`; on
+    device-attest, the head's digest an entry of the link-window, and the record holds no certificate). Its
     public record is one line of `OUT_RECORDS`; the link-window under ``refused`` when the signer refuses, or under
     ``out-shape`` (with its ``detail``) when the output isn't the shape's rows, neither committed; its witness, the
     rows and their salts, one line of `OUT_WITNESS`, which goes to the prover alone. A record that carries no output
@@ -588,26 +609,42 @@ class CertifyingPublisher(ar.Publisher):
     sync's salted clock certificate too (`Issuer.salted_clock`), one line of `clocks.jsonl` with its opening, none when
     the signer refuses. With `out_shape` (`out_commit.OutShape`'s doc), each egress record's output value is committed
     at that shape and signed by the same issuer (`certify_out`). `public` gives a window's certificates without the
-    heads, syncs and salts, for the reveal endpoint to serve."""
+    heads, syncs and salts, for the reveal endpoint to serve.
 
-    def __init__(self, out: Path, setup: ar.Setup, issuer: Issuer, link: str, threaded: bool = True,
-                 out_shape: dict | None = None) -> None:
+    On device-attest `issuer` is a `period_root.PeriodIssuer` on `link`: each record's, clock's and out value's line
+    holds its period entry in its certificate's place, and once both ends of a window are kept (its out value
+    committed) the window goes live (`live`: `liveness.jsonl`, and `periods.jsonl` as periods close), its liveness
+    record `public`'s one output; `close` closes the open period."""
+
+    def __init__(self, out: Path, setup: ar.Setup, issuer: Issuer | PR.PeriodIssuer, link: str,
+                 threaded: bool = True, out_shape: dict | None = None) -> None:
         super().__init__(out, setup, threaded)
         self.issuer, self.link = issuer, link
         self.out_shape = None if out_shape is None else out_commit.OutShape.of(out_shape)
         self.ends = {setup.egress_link: (Direction.EGRESS, parameters_digest(setup.egress_params, setup.sync_set)),
                      setup.ingress_link: (Direction.INGRESS, parameters_digest(setup.ingress_params))}
         self.timing: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
-        self.issued: dict[int, list[tuple[Direction, CertifiedRecord | None, CertifiedClock | None]]] = {}
+        self.issued: dict[int, list[tuple[Direction, CertifiedRecord | PR.PeriodRecord | None,
+                                          CertifiedClock | PR.PeriodClock | None]]] = {}
+        self.lives: dict[int, PR.Liveness | None] = {}
+
+    @property
+    def attest(self) -> bool:
+        return isinstance(self.issuer, PR.PeriodIssuer)
 
     def public(self, window: int) -> dict | None:
         """Window `window`'s certificates' public part once both its records are kept, else None: the session they are
         signed in, each certificate and each clock certificate (`certificate_json`), and the link-windows the signer
         refused (`unsigned`). Each signs a digest salted by its own `salt_c`, a hiding commitment, so it shows nothing
-        of the head or the sync it signs; heads, syncs and salts stay in `certified.jsonl` and `clocks.jsonl`."""
+        of the head or the sync it signs; heads, syncs and salts stay in `certified.jsonl` and `clocks.jsonl`. On
+        device-attest: the session and the window's liveness record (`Liveness.to_json`), None when the party key
+        refused it."""
         kept = list(self.issued.get(window, ()))
         if len(kept) < len(self.ends):
             return None
+        if self.attest:
+            live = self.lives.get(window)
+            return {"session": self.issuer.session.hex(), "liveness": None if live is None else live.to_json(self.link)}
         return {"session": self.issuer.session.hex(),
                 "certificates": [certificate_json(c.certificate) for _, c, _ in kept if c is not None],
                 "clocks": [certificate_json(k.certificate) for _, _, k in kept if k is not None],
@@ -637,30 +674,54 @@ class CertifyingPublisher(ar.Publisher):
         self.issued.setdefault(record.window, []).append((direction, certified, clock))
         if self.out_shape is not None and direction is Direction.EGRESS:
             certify_out(self.out, record, self.issuer, self.out_shape)
+        if self.attest and len(self.issued[record.window]) == len(self.ends):
+            self.lives[record.window] = live(self.out, self.issuer, record.window)
         if self.timing is not None:
             end = time.monotonic(), time.thread_time()
             self.timing.append({"link": record.link, "window": record.window, "start": start[0], "kept": kept[0],
                                 "end": end[0], "keep_cpu": kept[1] - start[1], "certify_cpu": end[1] - kept[1]})
+
+    def close(self) -> None:
+        super().close()
+        if self.attest:
+            close_periods(self.out, self.issuer)
+
+    def refusals(self) -> list[list]:
+        """The issuer's refusals as JSON: a link-window ``[link, direction, window]``, or on device-attest
+        ``["liveness", window]`` and ``["root", period]``."""
+        if self.attest:
+            return [list(x) for x in self.issuer.refused]
+        return [[link, d.value, w] for link, d, w in self.issuer.refused]
 
 
 _CERTIFIER: dict = {}
 
 
 def _certifier_start(key: Path, out: Path, report: dict, session: bytes, link: str,
-                     out_shape: dict | None = None) -> None:
+                     out_shape: dict | None = None, attest: tuple[Path, bytes, int, int] | None = None) -> None:
     own = signer(key)
-    _CERTIFIER.update(signer=own, publish=CertifyingPublisher(out, ar.Setup(report), Issuer(own, session), link,
-                                                              threaded=False, out_shape=out_shape))
+    if attest is None:
+        issuer, public = Issuer(own, session), None
+    else:
+        device, deployment_hash, height, windows = attest
+        party = party_key(device, deployment_hash, height)
+        issuer, public = PR.PeriodIssuer(party, session, link, windows), attest_json(party, windows)
+    _CERTIFIER.update(signer=own, attest=public, publish=CertifyingPublisher(out, ar.Setup(report), issuer, link,
+                                                                             threaded=False, out_shape=out_shape))
 
 
 def _certifier_call(name: str, *args):
     own, publish = _CERTIFIER["signer"], _CERTIFIER["publish"]
     if name == "keep":
         return publish.keep(*args)
+    if name == "end":
+        return publish.close()
     if name == "refused":
-        return publish.issuer.refused, publish.timing
+        return publish.refusals(), publish.timing
     if name == "certificates":
         return publish.public(*args)
+    if name == "attest":
+        return _CERTIFIER["attest"]
     if name == "close":
         return own.close()
     return getattr(own, name)(*args)
@@ -674,14 +735,18 @@ class CertifierProcess:
     signer stays up for the reveals), `refused` gives the issuer's refusals, `certificates` a window's public part
     (`CertifyingPublisher.public`, after every record handed before it) and `shutdown` closes the signer. With
     `out_shape`, each egress link-window's output value is committed at it and signed in that process too
-    (`certify_out`)."""
+    (`certify_out`). With `attest` (the device's identity directory, the deployment's hash, the HSS height and a
+    period's link-windows) the records are certified on device-attest, by a `period_root.PeriodIssuer` under the
+    network certifier's party key on the device (`party_key`), and `attest` is then the deployment record's
+    (`attest_json`); `key` still signs the reveals. `close` then also closes the open period."""
 
     def __init__(self, key: Path, out: Path, report: dict, session: bytes, link: str,
-                 out_shape: dict | None = None) -> None:
+                 out_shape: dict | None = None, attest: tuple[Path, bytes, int, int] | None = None) -> None:
         self.pool = ProcessPoolExecutor(1, mp_context=multiprocessing.get_context("spawn"),
                                         initializer=_certifier_start,
-                                        initargs=(key, out, report, session, link, out_shape))
+                                        initargs=(key, out, report, session, link, out_shape, attest))
         self.key: LmsKey = self.pool.submit(_certifier_call, "public_key").result()
+        self.attest: dict | None = self.pool.submit(_certifier_call, "attest").result()
         self.futures: list = []
         self.submits: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
 
@@ -709,10 +774,11 @@ class CertifierProcess:
     def close(self) -> None:
         for f in self.futures:
             f.result()
+        self.pool.submit(_certifier_call, "end").result()
 
     def refused(self) -> tuple[list, list | None]:
-        """The issuer's refused link-windows, and the publisher's timing (`CERTIFIER_SERVE_TIMING`) with each record's
-        submit time."""
+        """The issuer's refusals (`CertifyingPublisher.refusals`), and the publisher's timing
+        (`CERTIFIER_SERVE_TIMING`) with each record's submit time."""
         refused, timing = self.pool.submit(_certifier_call, "refused").result()
         if timing is not None and self.submits is not None:
             submits = {(link, window): t for link, window, t in self.submits}
@@ -1124,16 +1190,20 @@ class ServedProxy(ar.ReleaseProxy):
 
 
 def deployment(proxy: Proxy, setup: ar.Setup, windows: int, *, session: bytes, n2_link: str, link: tuple[str, int],
-               reveal: tuple[str, int], origin_unix: float, url: str) -> dict:
+               reveal: tuple[str, int], origin_unix: float, url: str, attest: dict | None = None) -> dict:
     """The auditor's record of one served run (`deployment.json`): what the challenger and the check read, the
-    certifier's public key and the proxy's run id among it, and the challenger key's id the proxy registered."""
+    certifier's public key and the proxy's run id among it, and the challenger key's id the proxy registered. On
+    device-attest ``attest`` (`attest_json`: the device's identity, the deployment's hash, the party, the HSS
+    parameters and a period's link-windows) is what the records are certified under, and the key signs the reveals
+    alone."""
     e = setup.egress_params
     return {"certifier_key": public_json(proxy.signer.public_key()), "run_id": proxy.run_id.hex(),
             "session": session.hex(), "links": {"egress": setup.egress_link, "ingress": setup.ingress_link,
                                                 "n2": n2_link},
             "link": list(link), "reveal": list(reveal), "origin_unix": origin_unix, "windows": windows,
             "window_s": e.buckets * e.bucket_ms / 1000, "reveal_deadline_s": proxy.reveal_deadline,
-            "challenger_key_id": proxy.challenger_key.key_id.hex(), "upstream": url}
+            "challenger_key_id": proxy.challenger_key.key_id.hex(), "upstream": url} | \
+        ({} if attest is None else {"attest": attest})
 
 
 def _announce(line: dict) -> None:
@@ -1156,10 +1226,12 @@ def _out_shape(path: str) -> dict:
 async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict, link: tuple[str, int],
                 reveal: tuple[str, int], key: Path, challenger_key: LmsKey, session: bytes,
                 start_in: float = 10.0, reveal_deadline: float | None = None, n2_link: str = N2_LINK,
-                tamper: str | None = None, out_shape: dict | None = None, announce=_announce) -> dict:
+                tamper: str | None = None, out_shape: dict | None = None,
+                attest: tuple[Path, bytes, int, int] | None = None, announce=_announce) -> dict:
     """One served run on the host's clock (the module docstring's `serve`), the certifier's key (the directory `key`)
     held by its `CertifierProcess`, which with `out_shape` also commits each egress link-window's output value at that
-    shape, the deployment's ``out``. Returns what `serve.json` holds."""
+    shape, the deployment's ``out``, and with `attest` certifies on device-attest (`CertifierProcess`), the
+    deployment's ``attest``. Returns what `serve.json` holds."""
     out.mkdir(parents=True, exist_ok=True)
     setup = ar.Setup(report)
     e, i, windows = setup.egress_params, setup.ingress_params, plan["windows"]
@@ -1174,7 +1246,7 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
     shim.start()
     loop = asyncio.get_running_loop()
     shim_port = await loop.run_in_executor(None, conn.recv)
-    certifier = CertifierProcess(key, out, report, session, n2_link, out_shape)
+    certifier = CertifierProcess(key, out, report, session, n2_link, out_shape, attest)
     origin = time.monotonic() + start_in
     proxy = ServedProxy(("127.0.0.1", shim_port), e, i, setup.sync_set,
                         [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]], origin=origin, publish=certifier,
@@ -1200,7 +1272,7 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
     record = deployment(proxy, setup, windows, session=session, n2_link=n2_link,
                         link=(link[0], listening.sockets[0].getsockname()[1]),
                         reveal=(reveal[0], reveals.sockets[0].getsockname()[1]),
-                        origin_unix=time.time() + origin - time.monotonic(), url=url)
+                        origin_unix=time.time() + origin - time.monotonic(), url=url, attest=certifier.attest)
     if out_shape is not None:
         record["out"] = out_shape
     (out / "deployment.json").write_text(json.dumps(record, indent=1))
@@ -1224,8 +1296,7 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
     reveals.close()
     refused, timing = certifier.refused()
     certifier.shutdown()
-    log |= {"revealed": sorted(proxy.revealed), "issuer_refused": [[l, d.value, w] for l, d, w in refused],
-            "shim_exit": shim.exitcode}
+    log |= {"revealed": sorted(proxy.revealed), "issuer_refused": refused, "shim_exit": shim.exitcode}
     (out / "serve.json").write_text(json.dumps(log, indent=1))
     if timing is not None:
         (out / "publisher_timing.json").write_text(json.dumps(
@@ -1310,12 +1381,59 @@ def check_certificates(deployment: dict, window: int, answer: dict,
     return kept["certificate"], kept["clock certificate"], unsigned, refused
 
 
+def check_liveness(deployment: dict, window: int, answer: dict) -> tuple[dict | None, list[str]]:
+    """On device-attest, window `window`'s one public output as the reveal endpoint served it
+    (`CertifyingPublisher.public`): its liveness record, held to the deployment's ``attest`` (`attest_json`) in its
+    session on the N2 link, as block ``window mod m`` of period ``⌊window / m⌋`` (`lms.verify_liveness`): (the record,
+    refusals). An answer that is a refusal, another window's or another session's, a window without a liveness record
+    (the party key refused it) and a record of another place or whose signature doesn't verify are refused."""
+    a, session, link = deployment["attest"], deployment["session"], deployment["links"]["n2"]
+    name = f"window {window}'s liveness record"
+    try:
+        params = lms.Params(*a["params"])
+        period, block = divmod(window, a["windows"])
+        if set(answer) == {"refused"}:
+            raise ValueError(f"the certifier refused it: {answer['refused']}")
+        if (answer["window"], answer["session"]) != (window, session):
+            raise ValueError(f"the answer is window {answer['window']}'s in session {answer['session'][:16]}…, not "
+                             f"the deployment's session {session[:16]}…")
+        live = answer["liveness"]
+        if live is None:
+            return None, [f"{name}: none, the certifier's party key refused to sign it"]
+        if set(live) != {"link", "window", "period", "block", "signature"} or \
+                (live["link"], live["window"], live["period"], live["block"]) != (link, window, period, block):
+            raise ValueError(f"it isn't {link} window {window}'s, block {block} of period {period}: {live}")
+        signature = lms.HssSignature.decode(params, bytes.fromhex(live["signature"]))
+        ok = lms.verify_liveness(params, bytes.fromhex(a["identity"]), bytes.fromhex(a["deployment"]), PR.PARTY,
+                                 bytes.fromhex(session), link, period, block, signature)
+    except (KeyError, TypeError, ValueError) as e:
+        return None, [f"{name}: {e}"]
+    if not ok:
+        return None, [f"{name}: its signature doesn't verify under the device's identity in the session"]
+    return live, []
+
+
 def keep_certificates(deployment: dict, out: Path, ask=ask_certificates) -> list[str]:
     """The client's copy of each window's certificates' public part, asked of the reveal endpoint (`ask`) and held
     to the deployment's key and session (`check_certificates`): those that verify go in `certificates.jsonl`, each
     with its session (a link-window the signer refused as `unsigned`), and the clock certificates in `clocks.jsonl`,
-    each with its session too, beside `peer.json`. Returns the refusals, each naming what it refused."""
+    each with its session too, beside `peer.json`. On device-attest each window's liveness record that verifies
+    (`check_liveness`) goes in `LIVENESS` instead, with its session. Returns the refusals, each naming what it
+    refused."""
     refused: list[str] = []
+    if "attest" in deployment:
+        with open(out / LIVENESS, "w") as lives:
+            for w in range(deployment["windows"]):
+                try:
+                    answer = ask(deployment["reveal"], w)
+                except (OSError, ValueError) as e:
+                    refused.append(f"window {w}'s liveness record: the reveal endpoint gave no answer: {e}")
+                    continue
+                live, no = check_liveness(deployment, w, answer)
+                refused += no
+                if live is not None:
+                    lives.write(json.dumps({"session": deployment["session"]} | live) + "\n")
+        return refused
     seen: dict[bytes, str] = {}
     with open(out / "certificates.jsonl", "w") as certs, open(out / "clocks.jsonl", "w") as clocks:
         for w in range(deployment["windows"]):
@@ -1476,17 +1594,75 @@ def _refusal(err: Exception) -> str:
     return f"refused: {err}"
 
 
+NO_N2_ATTEST = ("none on device-attest: N2 reads each record's certificate, and the salt is asked under N2's "
+                "registration; both are the verifier's period form (NET-90 PR 3)")
+
+
+def _lines(path: Path) -> list[dict]:
+    return [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
+
+
+def attested_check(run: Path) -> dict:
+    """What `check` reads of a device-attest run without N2: every link-window's two certified records, every clock
+    and every out record a record of the N2 link's period in a block with a liveness record (`Attested`, under the
+    deployment's ``attest`` in its session); each clock's entry its sync's salted clock digest on the link's egress
+    (`clock_commitment`), and each out record read under no key, only through that check (`out_commit.check_out`);
+    and the client's liveness records, when it kept them (`keep_certificates`), the run's. Accepted when nothing is
+    refused."""
+    deployment = json.loads((run / "deployment.json").read_text())
+    session, link = bytes.fromhex(deployment["session"]), deployment["links"]["n2"]
+    attested = Attested(run, deployment["attest"], session)
+    certified, refused = read_certified(run / "certified.jsonl")
+    problems = [f"the issuer refused {r}" for r in refused]
+    for w in range(deployment["windows"]):
+        for d in (Direction.EGRESS, Direction.INGRESS):
+            c = certified.get((d, w))
+            if not isinstance(c, PR.PeriodRecord):
+                problems.append(f"{d.value} window {w}: {'no' if c is None else 'a certificate, not a'} period entry")
+            elif (why := attested.record(link, c)) is not None:
+                problems.append(f"{d.value} window {w}'s record: {why}")
+    clocks = read_clocks(run / "clocks.jsonl")
+    for c in clocks:
+        if not isinstance(c, PR.PeriodClock):
+            problems.append(f"window {c.window}'s clock: a certificate, not a period entry")
+            continue
+        e, what = c.entry, f"window {c.entry.window}'s clock"
+        if (e.link, e.direction, e.digest) != (link, Direction.EGRESS, clock_commitment(c.salt, c.sync)):
+            problems.append(f"{what}: its entry isn't its sync's salted clock digest on {link} egress")
+        elif (why := attested.problem(link, e.link, e.direction, e.window, e.digest)) is not None:
+            problems.append(f"{what}: {why}")
+    outs = [doc for doc in _lines(run / OUT_RECORDS) if "format" in doc] if "out" in deployment else []
+    for doc in outs:
+        w = doc.get("window")
+        try:
+            out_commit.check_out(doc, None, session, out_commit.OutShape.of(deployment["out"]), window=w,
+                                 certified=lambda h, w=w: attested.problem(link, out_commit.LINK, out_commit.DIRECTION,
+                                                                           w, h.digest()))
+        except out_commit.OutRefused as err:
+            problems.append(f"window {w}'s out record: {err}")
+    live = _lines(run / LIVENESS)
+    kept = _lines(run / CLIENT / LIVENESS) if (run / CLIENT / LIVENESS).exists() else None
+    if kept is not None and [{k: v for k, v in x.items() if k != "session"} for x in kept] != live:
+        problems.append(f"the client kept {len(kept)} liveness records, not the run's {len(live)}")
+    return {"accepted": not problems, "problems": problems[:50], "records": len(certified), "clocks": len(clocks),
+            "outs": len(outs), "periods": len(attested.periods), "live": len(live),
+            "client_live": None if kept is None else len(kept)}
+
+
 def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: float | None = 60.0,
           proof_deadline: float = PROOF_DEADLINE_S, audit=Audit) -> dict:
     """The auditor's offline check of the served run in `run` (the module docstring's `check`), with `challenger` the
     challenger's signer, whose public key the certifier registered. Its `verdict` is `accepted` when `network_verdict`
     accepts, the certifier's audit accepts every link-window raw and committed, every window's salt was revealed once and
-    only once, and the salt audit accepts; else `refused`."""
+    only once, and the salt audit accepts; else `refused`. On device-attest (the deployment's ``attest``) it gives no N2
+    verdict and asks no salt (`NO_N2_ATTEST`), so its verdict is `refused`: it runs the audit and `attested_check`
+    (``attest``)."""
     plan = json.loads((run / "plan.json").read_text())
     report = json.loads((run / "calibration.json").read_text())
     deployment = json.loads((run / "deployment.json").read_text())
     setup = ar.Setup(report)
     windows, key = plan["windows"], read_public(deployment["certifier_key"])
+    attest = "attest" in deployment
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     profile, served = plan.get("occupancy") or {}, served_profile(plan)
     advice = profile.get("kind") == ADVICE
@@ -1498,7 +1674,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
     stream = lw.stream(budget=windows, delta=DELTA, challenger=CHALLENGER, coins=_no_coins, clock=clock)
     certified, refused = read_certified(run / "certified.jsonl")
     rows, salts, previous, again = [], {}, None, None
-    for w in range(windows):
+    for w in range(0 if attest else windows):
         row: dict = {"window": w}
         rows.append(row)
         pair = certified.get((Direction.EGRESS, w)), certified.get((Direction.INGRESS, w))
@@ -1538,7 +1714,10 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
             row["n2"] = f"no verdict: {err}"
             break
         row["n2"] = {"accepted": outcome.accepted, "codes": list(outcome.verdict.codes), "public": dict(outcome.public)}
-    if advice:
+    if attest:
+        rows = [{"window": w, "n2": NO_N2_ATTEST, "salt": NO_N2_ATTEST} for w in range(windows)]
+        network = {"accepted": None, "windows": windows, "error": NO_N2_ATTEST}
+    elif advice:
         network = {"accepted": None, "windows": windows, "error": NO_N2}
     else:
         try:
@@ -1551,7 +1730,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
     in_records = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
     out_records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     server = json.loads((run / "server.json").read_text())
-    salt = ar.audit_salt(setup, salts, in_records, out_records, server, windows, audit())
+    salt = None if attest else ar.audit_salt(setup, salts, in_records, out_records, server, windows, audit())
     io = None
     if advice:
         io = certified_io(plan, setup, in_records, out_records)
@@ -1579,7 +1758,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
            "network_verdict": network, "audit_accepted": audit_ok, "salt_accepted": salt_ok,
            "salt_again": again, "salt": salt, "profile": profile.get("kind"), "issuer_refused": refused,
            "rows": rows, "comparisons": audited["comparisons"], "timing": audited["timing"],
-           "egress_bytes": egress_bytes(setup, out_records)}
+           "egress_bytes": egress_bytes(setup, out_records)} | ({"attest": attested_check(run)} if attest else {})
     return out if not advice else out | {"certified_accepted": certified_ok, "io": io}
 
 
@@ -1588,6 +1767,10 @@ def table(result: dict) -> str:
     lines = [f"verdict {result['verdict']}: network_verdict {result['network_verdict'].get('accepted')}, audit "
              f"{result['audit_accepted']}, salt {result['salt_accepted']} (window 0 again: {result['salt_again']}), "
              f"N2 on the {result['profile']} profile"]
+    if (at := result.get("attest")) is not None:
+        lines.append(f"  device-attest {at['accepted']}: {at['records']} records, {at['clocks']} clocks and "
+                     f"{at['outs']} out records in {at['periods']} periods, {at['live']} live blocks (the client kept "
+                     f"{at['client_live']}); {at['problems'][:3]}")
     if (io := result.get("io")) is not None:
         lines.append(f"  certified {result['certified_accepted']}; I/O {io['accepted']}: {io['requests']} requests, "
                      f"{io['tokens']} tokens, finish {io['finish']}, ids are the shim's {io['ids_are_the_shims']}, "
@@ -1824,6 +2007,14 @@ def parser() -> argparse.ArgumentParser:
                             "registered read): the network certifier commits each egress link-window's output (the "
                             "hex of u16 words) in its rows and signs its head (out-records.jsonl; its rows and salts "
                             "in out-witness.jsonl, the prover's)")
+    s.add_argument("--attest", metavar="DEPLOYMENT",
+                   help="device-attest: certify the records as the network certifier's party key in the deployment "
+                        "whose hash this is (64 bytes in hex), on the device whose identity is in --device; --key "
+                        "signs the reveals alone")
+    s.add_argument("--device", type=Path, help="with --attest: the device's identity directory (lms.Identity)")
+    s.add_argument("--height", type=int, default=HEIGHT, help="with --attest: the device's HSS trees' height")
+    s.add_argument("--period", type=int, help="with --attest: link-windows a certification period (default: the "
+                                              "plan's, one root a run)")
     s.add_argument("--tamper", choices=TAMPERS,
                    help="late: the shim holds a window-0 session past every sync; extra: it writes one event more; "
                         "drop: one fewer; token: window 0's tokens' bytes changed")
@@ -1860,13 +2051,22 @@ def main(argv=None) -> int:
         session = bytes.fromhex(args.session)
         if len(session) != 32:
             raise SystemExit("--session is 32 bytes in hex")
+        plan, attest = json.loads(args.plan.read_text()), None
+        if args.attest is not None:
+            deployment_hash = bytes.fromhex(args.attest)
+            if len(deployment_hash) != lms.DEPLOYMENT_BYTES or args.device is None:
+                raise SystemExit(f"--attest is the deployment's hash, {lms.DEPLOYMENT_BYTES} bytes in hex, with "
+                                 "--device the device's identity directory")
+            if out == args.device.resolve() or out in args.device.resolve().parents:
+                raise SystemExit(f"the device {args.device} is inside --out {args.out}, which is published")
+            attest = (args.device, deployment_hash, args.height, args.period or plan["windows"])
         ar._quiet_runtime()
-        log = asyncio.run(serve(json.loads(args.plan.read_text()), json.loads(args.calibration.read_text()), args.out,
+        log = asyncio.run(serve(plan, json.loads(args.calibration.read_text()), args.out,
                                 url=args.upstream, upstream=upstream_params(args.upstream, args.api_key_env),
                                 link=args.link, reveal=args.reveal, key=args.key,
                                 challenger_key=read_public(json.loads(args.challenger_key.read_text())),
                                 session=session, start_in=args.start_in, reveal_deadline=args.reveal_deadline,
-                                n2_link=args.n2_link, tamper=args.tamper, out_shape=args.out_shape))
+                                n2_link=args.n2_link, tamper=args.tamper, out_shape=args.out_shape, attest=attest))
         return 1 if "error" in log else 0
     if args.command == "client":
         ar._quiet_runtime()
