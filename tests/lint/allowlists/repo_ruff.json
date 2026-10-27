@@ -416,7 +416,6 @@
     {"file": "benchmarks/remote_session/tests/test_gate_whatif.py", "rule": "RUF100", "count": 6},
     {"file": "benchmarks/remote_session/tunnel_rtt.py", "rule": "E731", "count": 1},
     {"file": "benchmarks/remote_session/verifier.py", "rule": "E731", "count": 1},
-    {"file": "benchmarks/remote_session/verifier.py", "rule": "F401", "count": 1},
     {"file": "benchmarks/resource_accounting/certified.py", "rule": "E731", "count": 1},
     {"file": "benchmarks/resource_accounting/chain.py", "rule": "E402", "count": 1},
     {"file": "benchmarks/resource_accounting/chain.py", "rule": "E731", "count": 4},
