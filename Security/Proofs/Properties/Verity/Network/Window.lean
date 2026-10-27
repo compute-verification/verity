@@ -28,8 +28,10 @@ verdict at the code `Vocab.Coupling.verdict` among them):
 
 S8 rests on S1, S2, S6 and `trusted-host` (`R.trusted`: the record is the device's code's, `obs_eq_record`), the ρ gap,
 and two premises: the window's statement registered as `sw i` (`WindowRegistersAs`, proofs: one-stage's registration
-checks), and the network certifier's record covering the horizon (`RecordCovers`, network-accounting, open: the period
-check reads neither statuses nor jitter; for the rows format it is two facts per bucket, `recordCovers_of_rows`).
+checks), and the network certifier's record covering the horizon (`RecordCovers`, network-accounting, open). For the
+rows format that is two facts per bucket (`recordCovers_of_rows`); for one-stage v2's clock form it is the window's
+statuses alone (`recordCovers_of_clock`), which N2's head check gives only off its soundness error and up to a forgery
+under the device's key (`ClockStatusComplete`).
 
 The realization's fields the steps read beyond `RealizesCommOfPeriodLeakAccepted`'s are `WindowRuns`', in ONE-8's
 `SampledSession` form: each a property of the deployed run, which the named steps tie to the compiled component.
@@ -148,9 +150,9 @@ def WindowRegistersAs (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) : Pro
 
 /-- **S8's coverage premise (network-accounting; open).** Where onsite's network component accepts at `ξ`, the network
 certifier's record of window `i` covers its registered horizon `k (sw i)`: that many steps, each with every status
-complete and its jitter class below `Dj`. The period check reads neither statuses nor jitter, so this needs Period to
-refuse a window whose record has an incomplete step (its fails record) or a jitter class at `Dj`, or a deployment
-assumption. For the rows format it is two facts per bucket (`recordCovers_of_rows`). -/
+complete and its jitter class below `Dj`. Today's period check reads neither statuses nor jitter. For the rows format
+it is two facts per bucket (`recordCovers_of_rows`); at one-stage v2's clock form, whose record is untimed and whose
+statuses N2's head check reads, it is the window's statuses alone (`recordCovers_of_clock`). -/
 def RecordCovers (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) : Prop :=
   ∀ ξ i, ComponentAccepts .network (s ξ) →
     Covered (k (R.sw i)) (W.record ξ i) ∧ (W.record ξ i).length = k (R.sw i) ∧ ∀ y ∈ W.record ξ i, y.jitter < Dj
@@ -192,6 +194,73 @@ theorem recordCovers_of_rows (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent
     exact hst ξ i hca t (by simpa using ht) κ
   · obtain ⟨t, ht, rfl⟩ := List.mem_map.1 hy
     exact hj ξ i hca t (List.mem_range.1 ht)
+
+/-! ## The clock form's record -/
+
+/-- **The clock form's record format** (one-stage v2's link-window, `n2_zk`'s): window `i` is `T` steps of the
+declared grid, each step its bucket's rows, under one status per boundary link for the whole window (the record head's
+one status, W5), and no timing: the record is untimed, so each step's jitter class is 0. -/
+structure ClockFormat (κ Cell : Type) (L K S : ℕ) where
+  T : ℕ
+  rows : WardenSchedule κ → (κ → Arrivals Cell) → (κ → List (ℕ × CellView Cell)) → ℕ → Fin L → Row S (List Bool)
+  status : WardenSchedule κ → (κ → Arrivals Cell) → ℕ → Fin K → Status
+
+namespace ClockFormat
+
+variable {κ Cell : Type} {L K S : ℕ} (F : ClockFormat κ Cell L K S)
+
+/-- **The record** over `n` windows: window `i`'s step `t` is bucket `i·T + t`'s rows, window `i`'s statuses and
+jitter class 0. -/
+def record (n : ℕ) (s : WardenSchedule κ) (a : κ → Arrivals Cell) (v : κ → List (ℕ × CellView Cell)) :
+    Fin n → List (Obs L K S) :=
+  fun i => (List.range F.T).map fun t =>
+    { rows := F.rows s a v (i.val * F.T + t), jitter := 0, status := F.status s a i.val }
+
+/-- **A clock-form window covers the horizon `k`** where it is `k` steps, its statuses are complete and the jitter
+bound `Dj` is at least 1, above the untimed record's 0. -/
+theorem record_covers {n : ℕ} {s : WardenSchedule κ} {a : κ → Arrivals Cell} {v : κ → List (ℕ × CellView Cell)}
+    (i : Fin n) {k Dj : ℕ} (hT : F.T = k) (hst : ∀ c, F.status s a i.val c = .complete) (hDj : 1 ≤ Dj) :
+    Covered k (F.record n s a v i) ∧ (F.record n s a v i).length = k ∧ ∀ y ∈ F.record n s a v i, y.jitter < Dj := by
+  subst hT
+  refine ⟨fun t _ _ c => ?_, by simp [record], fun y hy => ?_⟩
+  · simp [record, hst]
+  · obtain ⟨t, _, rfl⟩ := List.mem_map.1 hy
+    exact hDj
+
+end ClockFormat
+
+/-- **The clock form (network-accounting: the deployed record).** The realization's record format is the clock form
+`F` (`record`); each window is its registered horizon's steps (`horizon`: Period registers every window at the declared
+grid, whose T the network certifier runs, and N2's head check holds each head's T to that grid's); and the jitter bound
+is at least 1 (`jitter`: Period v2's `paramsOf` refuses a declared jitter below 1), above the untimed record's 0. -/
+structure RecordsClock (R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S lay k δ decode reg Dj n)
+    (F : ClockFormat R.Conn R.Cell L Kₒ S) : Prop where
+  record : ∀ sc a v, R.fmt.record sc a v = F.record n sc a v
+  horizon : ∀ i, F.T = k (R.sw i)
+  jitter : 1 ≤ Dj
+
+/-- **The clock form's statuses (open: N2's soundness and the device's key).** Where onsite's network component
+accepts at `ξ`, every boundary link's status in the device's clock-form record of window `i` is complete. N2's head
+check accepts a head only at status complete and the declared grid (`head_check.NetworkHeadFields`), but it runs inside
+N2's proof, on the head N2 commits, and reaches the device's record only through the certificate, whose message names
+the link-window in the clear and signs the head's salted record digest (`certificate.certificate_message`). The device
+signs a head of any status (`Issuer.certify`), and `trusted-host` doesn't keep its key secret. So acceptance gives this
+only off N2's soundness error (S3–S5 take accepted sessions to an accepting sampled run, not to a witness the head check
+holds on), up to a SHA-512 collision between the committed head and the device's, and up to a forgery under the
+device's key: a deterministic premise only once `window_le`'s bound charges those, or the device refuses to certify an
+incomplete status, which leaves the forgery alone. -/
+def ClockStatusComplete (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) (F : ClockFormat R.Conn R.Cell L Kₒ S) :
+    Prop :=
+  ∀ ξ (i : Fin n), ComponentAccepts .network (s ξ) → ∀ c, F.status (W.sched ξ) (R.arr (W.srv ξ)) i.val c = .complete
+
+/-- **The clock form's record covers the horizon** (S8's coverage premise at one-stage v2's record): each window is the
+horizon's steps with jitter class 0 below the bound (`RecordsClock`), so it covers the horizon wherever its statuses
+are complete (`ClockStatusComplete`). -/
+theorem recordCovers_of_clock (W : WindowRuns R) (s : ((i : I) → Ω i) → Sent) (F : ClockFormat R.Conn R.Cell L Kₒ S)
+    (hF : RecordsClock R F) (hst : ClockStatusComplete W s F) : RecordCovers W s := by
+  intro ξ i hca
+  simp only [WindowRuns.record, hF.record]
+  exact F.record_covers i (hF.horizon i) (hst ξ i hca) hF.jitter
 
 /-- **S8: what onsite's network component accepting gives of window `i`'s good event past the leak relation.** At
 `ξ` where the component accepts and the realization's witness is in the leak relation, window `i` is good: in scope
