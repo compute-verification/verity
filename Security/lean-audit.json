@@ -1246,6 +1246,9 @@
    "owner": "@compute-accounting",
    "digest": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
   },
+  "Nci.Assumptions.Coverage": {
+   "owner": "@training"
+  },
   "Nci.Assumptions.Fits": {
    "owner": "@lean",
    "digest": "a01008a9dfd298221a497fc46bddfc00be4ca6c55915429dccc9bcd2bdef6864"
@@ -1282,6 +1285,9 @@
    "owner": "@lean",
    "digest": "41973b0ef31177304eb9dc9239d86f5262bf110fb041b33fa0aa10771bc2d1fd"
   },
+  "Nci.Assumptions.PouwPerWindow": {
+   "owner": "@training"
+  },
   "Nci.Assumptions.PouwSound": {
    "owner": "@lean",
    "digest": "29d44de1ab5d74abaab44bf203879de9c6902fdeb239418a76492aafae28afd0"
@@ -1301,6 +1307,9 @@
   "Nci.Assumptions.SampledDetection": {
    "owner": "@lean",
    "digest": "343f2d282d4407a820a686cfc55f137e17a3b7edc6ffc42dc6cefca6b0409a2f"
+  },
+  "Nci.Assumptions.SampledPerWindow": {
+   "owner": "@training"
   },
   "Nci.Assumptions.TerminalDetection": {
    "owner": "@lean",
@@ -8648,6 +8657,15 @@
    "assumptions": [],
    "type_hash": "104a6c9425013ffea4548e58627a31cf0d67358b3da5a64e483d59379ff1566b"
   },
+  "Nci.SecurityProofs.RemoteEndToEnd": {
+   "owner": "@training"
+  },
+  "Nci.SecurityProofs.RemoteEndToEnd_honest": {
+   "owner": "@training"
+  },
+  "Nci.SecurityProofs.RemoteEndToEnd_nontrivial": {
+   "owner": "@training"
+  },
   "Nci.SecurityProofs.ThreadedContainedInfo": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedContainedInfo : Nci.Guarantees.ThreadedContainedInfo"],
@@ -12282,6 +12300,9 @@
    "Verity.SecurityProofs.NaiveBeatsStrassenServed": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Nci.SecurityProofs.DampenerRemotePeriod": "frozen (no-function): It composes the remote protocol's compute dampener over a monitoring period of T windows on live coins from CertificateSlack, the union over the windows, the per-identity escape tail and VerdictLag, under the named TerminalDetection (Security/Definitions/Nci/Assumptions/Remote.lean), with each protocol's per-window bound (CircuitCredit's conclusion, HiddenWindow.drawMiss_le and EndToEndHiddenDrawn's, NciCheck.Properties.Throttled's) taken as a hypothesis, not from a function's acceptance; joining the windows to their protocols' verifiers is what would give it one.",
+   "Nci.SecurityProofs.RemoteEndToEnd": "frozen (no-function): The remote protocol's end-to-end overhead guarantee in the cheap-success form, the overhead core's EndToEnd at the period's coins with DampenerRemotePeriod's event as the claims and the class, under the named PouwPerWindow and SampledPerWindow (#4653's bridges' conclusions, Security/Definitions/Nci/Assumptions/RemoteEndToEnd.lean), Coverage (the task model) and TerminalDetection, with the remote model's other premises (RemoteModel) as hypotheses and acceptance an arbitrary event of the run, not a function's; joining the windows to their protocols' verifiers is what would give it one.",
+   "Nci.SecurityProofs.RemoteEndToEnd_honest": "frozen (no-function): RemoteEndToEnd's honest witness (LEAN-66): its premises hold at a constructed honest developer over one window (every certificate right, no faulty block, no declared run, the task reached on unmonitored compute at MFU0 = 1/2), at p = 3*2^-40 and eps' = 2p/10^-6, where the run is accepted and reaches the task with probability 1, the bound is at most 10^-6 and 1 < rho on every run; a statement about a constructed instance, of no function.",
+   "Nci.SecurityProofs.RemoteEndToEnd_nontrivial": "frozen (no-function): RemoteEndToEnd's nontrivial witness (LEAN-66): without PouwPerWindow (a PoUW verifier that accepts every certificate) or without Coverage it is false at a constructed instance where every run is accepted, reaches the task and is cheap against a bound of 0; a negated statement, of no function.",
    "Accounting.SecurityProofs.Remote.SketchBoundP2": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the P2 store's receipts (units of four 2,056-byte blocks, 257 sectors, 16 sign rows, SHA-512 tags) and rank 12, as Accounting.SecurityProofs.Remote.SketchBoundDeployed is at 4096-byte blocks' 128 sectors, with at most Q + P candidate seeds and Q receipt-hash queries for Q the hashes the prover can try over the session: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257 under SketchRank 16 257 12 ε and SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (drafted for the P2 store, not decided; note:20261025T2335Z-report-bw-block)",
    "Pouw.SecurityProofs.Dither.WorkSound": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": "frozen (verdict): as WorkSound, on the no-fold round with ExtractOfRealize in place of ExtractAdv (CMP-136, RT-LEAN-2 L39).",

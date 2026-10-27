@@ -14,7 +14,8 @@ own premises it names three, each a `Prop` here:
   `RemoteEndToEnd` takes the bridge's premise instead;
 * the task model, `Coverage` ([COVERAGE]): a run reaches the task with fewer than `N` counted multiplications with
   probability at most `η`. It is the remote form of the spine's `Coverage 𝒢 N η` (note
-  training-20261027T0134Z-draft-e2e-overhead-proof, Step 6), and the overhead core's definition replaces it when it lands.
+  training-20261027T0134Z-draft-e2e-overhead-proof, Step 6), and it gives `Accounting.Guarantees.Overhead.EndToEnd`'s
+  coverage exception at any class, since it does not read the class.
 -/
 
 namespace Nci.Assumptions
