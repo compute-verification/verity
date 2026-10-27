@@ -16,7 +16,8 @@ The named premises:
 * `NoStraddle`: no operation assigned to `R` and computed wholly inside none of the blocks straddles. With `BodySize`
   and `Overlap` it gives the cap `ω_max μ |U| / s` (`Accounting.Guarantees.ServingBlocks.UncertifiedStructural`).
 * `UncertifiedBodySize s`: every counted operation whose representative is in `U` has at least `s` of its gates in `U`.
-  It allows straddling, and gives the same cap plus what the blocks' unregistered inputs bound (`UncertifiedLocal`).
+  `NoStraddle` with `BodySize s` gives it; it allows straddling, and gives the same cap plus what the blocks'
+  unregistered inputs bound (`UncertifiedLocal`).
 
 `crossing d R B` counts the unregistered input bits of `U`, `|in(U) \ θ|`, and of each block, `Σ_i |in(B i) \ θ|`: the
 bits that cross into either side of the certified boundary, or into `R` from outside it. They bound the straddling

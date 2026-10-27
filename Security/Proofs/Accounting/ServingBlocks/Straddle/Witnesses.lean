@@ -189,4 +189,9 @@ example (h : OperationBodies Detached.d Detached.J) : False := by
   obtain ⟨h1, -, h3, h4, h5, h6, hcap⟩ := UncertifiedLocal_nontrivial_bodies
   exact hcap (UncertifiedLocal Detached.d Detached.J _ _ 1 1 2 h1 h h3 h4 h5 h6)
 
+/-- Strictly weaker: at `Straddle` uncertified body size `1` holds where no straddling fails. -/
+example : UncertifiedBodySize Straddle.J Straddle.server Straddle.certified 1 ∧
+    ¬ NoStraddle Straddle.J Straddle.server Straddle.certified := by
+  unfold UncertifiedBodySize NoStraddle; decide
+
 end Accounting.SecurityProofs.ServingBlocks

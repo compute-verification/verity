@@ -164,4 +164,14 @@ theorem UncertifiedLocal : Guarantees.ServingBlocks.UncertifiedLocal := by
         add_le_add hU hBl
     _ = _ := by push_cast; ring
 
+/-- `UncertifiedBodySize` is weaker than `NoStraddle` with `BodySize`: an operation whose representative is uncertified
+is computed wholly inside none of the blocks, so without straddling its whole body is uncertified. -/
+theorem uncertifiedBodySize_of_noStraddle {C : Circuit} {J : Counted C} {R : Finset (Fin C.N)} {ι : Type*}
+    [Fintype ι] {B : ι → Finset (Fin C.N)} {s : ℕ} (hsize : BodySize J s) (hno : NoStraddle J R B) :
+    UncertifiedBodySize J R B s := by
+  intro v hv hvU
+  obtain ⟨hvR, hvB⟩ := mem_uncertified.1 hvU
+  rw [Finset.inter_eq_left.2 (hno v hv hvR fun i h => hvB i (h (J.rep_mem v hv)))]
+  exact hsize v hv
+
 end Accounting.SecurityProofs.ServingBlocks
