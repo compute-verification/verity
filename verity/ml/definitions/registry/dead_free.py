@@ -23,6 +23,8 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
   `AttnBlock_v5` is about 9.2M ANDs at Llama's geometry, a head of 32 blocks past C-Flock's 2^27 block).  v18 writes its first
   visited block and its epilogue in its body; v19 Calls `AttnBlockFirst_v1` (that block's steps and padding, with no running
   state in, which an `AttnBlock_v5{FIRST=True}` Call would be passed and ignore) and `AttnHeadEnd_v1`.
+* `AttnBlockFirst_v2{D, NVIS, BN, DOT, SLICES}`: `AttnBlockFirst_v1` with each key's value as SLICES slices of D / SLICES
+  columns, so that a unit's v port, cut once an element, reads the value projection's output one slice a row.
 
 Each computes its v1's function word for word, except at V = 1, where v1's zero-length scan returns a wrong carry and these return
 index 0 (`tests/program/test_dead_free.py`); the attention versions compute v5's at every binding.
@@ -353,14 +355,38 @@ def AttnBlockFirstV1(B, S, q, k, v):
     """`AttentionHead_v18`'s first visited key block, NVIS = 1 ... BN keys: `AttnBlock_v5{D, NVIS, FIRST=True, BN, DOT, CHECK=True}`'s
     steps with no running state in (the first block reads none) and v18's padding (V rows zero past NVIS to the last k-step it
     runs, no K rows).  Returns the running state (max, lane sums, O) the next block reads."""
+    return _first_block(B, S, q, k, v, "AttnBlockFirst_v1")
+
+
+def _first_block(B, S, q, k, v, name):
     D, NVIS, BN = S.D, S.NVIS, S.BN
     if not 1 <= NVIS <= BN:
-        raise ValueError(f"AttnBlockFirst_v1: NVIS {NVIS} outside 1 ... BN = {BN}")
+        raise ValueError(f"{name}: NVIS {NVIS} outside 1 ... BN = {BN}")
     if NVIS < BN and NVIS % 16:  # the last k-step's V rows past NVIS meet P's zero words
         zero_row = _Coll(Array(D, BF16), concat([B.call(ZERO16).refs] * D))
         v = _Coll(Array(NVIS + -NVIS % 16, Array(D, BF16)), concat([v.refs] + [zero_row.refs] * (-NVIS % 16)))
     first = SimpleNamespace(D=D, NVIS=NVIS, FIRST=True, BN=BN, DOT=S.DOT, CHECK=True)
     return F2._check_inf_block(B, first, q, k, v, None, None, None, None, read_pads_only=True)
+
+
+def _slices_refuse(b: dict) -> str | None:
+    D, n = b.get("D"), b.get("SLICES")
+    if n is not None and not (type(n) is int and n >= 1 and (D is None or D % n == 0)):
+        return f"SLICES must be a positive divisor of D (got D={D!r}, SLICES={n!r})"
+    return None
+
+
+@composite("AttnBlockFirst", 2, ["D", "NVIS", "BN", "DOT", "SLICES"],
+           lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.NVIS, Array(S.D, BF16))),
+                       ("v", Array(S.NVIS * S.SLICES, Array(S.D // S.SLICES, BF16)))),
+                      Tuple(F32, Array(4, F32), Array(S.D, F32))),
+           conformance="not-yet-established: AttnBlockFirst_v1's function", refuse=_slices_refuse)
+def AttnBlockFirstV2(B, S, q, k, v):
+    """`AttnBlockFirst_v1{D, NVIS, BN, DOT}` with each key's value as SLICES slices of D / SLICES columns: v's element
+    ``t·SLICES + s`` is key t's columns [s·D/SLICES, (s+1)·D/SLICES), so a cut of v once an element reads one slice a row (a
+    slice of the value projection's output), where a cut of v1's v holds at least a whole key a row.  Its leaves are v1's v in
+    the same order, so the body is v1's over them, node for node."""
+    return _first_block(B, S, q, k, _Coll(Array(S.NVIS, Array(S.D, BF16)), v.refs), "AttnBlockFirst_v2")
 
 
 @composite("AttnHeadEnd", 1, ["D", "INV"],
@@ -406,7 +432,8 @@ def AttentionV19(B, S, q, kc, vc):
     return F2._check_inf_attention(B, S, q, kc, vc, AttentionHeadV19, ())
 
 
-__all__ = ["AttentionHeadV18", "AttentionHeadV19", "AttentionV18", "AttentionV19", "AttnBlockFirstV1", "AttnHeadEndV1", "CHUNK",
+__all__ = ["AttentionHeadV18", "AttentionHeadV19", "AttentionV18", "AttentionV19", "AttnBlockFirstV1", "AttnBlockFirstV2",
+           "AttnHeadEndV1", "CHUNK",
            "GumbelSelectF32GivenGreedyV2", "GumbelSelectF32V3", "GumbelTopPTokenSelectSharedGreedyV2", "GumbelTopPTokenSelectV3",
            "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectV3", "TokenSelectV4", "TopPKeepWordV2",
            "TopPMaskV3", "TopPMaskV4", "lane0_butterfly", "live_replay"]
