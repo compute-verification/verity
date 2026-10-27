@@ -180,16 +180,15 @@ theorem periodCredit_honest (key ledger pins main : Json) (name : String) (windo
       have hdd : d' = d := Option.some.inj (hd'.symm.trans hd)
       subst hdd
       refine (bind_ok (mapError_ok ha)).trans ?_
-      dsimp only
       split
       · rename_i why hwhy
         exact Option.noConfusion (hp.symm.trans hwhy)
       · refine (bind_ok (mapError_ok hwl)).trans ?_
         rfl
     · rename_i hd'
-      exact Option.noConfusion (hd.symm.trans hd')
+      exact (hd' d hd).elim
   · rename_i hws'
-    exact Option.noConfusion (hws.symm.trans hws')
+    exact (hws' ws hws).elim
 
 /-- **The period check accepts an honest period** (`AcceptMeans`'s honest lemma, a completeness theorem): with its
 `n` windows credited, `n` the evidence's. -/
@@ -207,6 +206,7 @@ theorem honestAccepts (p : Period.Params) (c : Period.Commitment) (e : Period.Ev
   change Period.check p c e = _
   unfold Period.check
   rw [hpc]
+  rfl
 
 theorem refuses : Refuses := by
   refine ⟨{ key := .null, main := .null, name := "" }, { ledger := .null, bytes := .empty },
