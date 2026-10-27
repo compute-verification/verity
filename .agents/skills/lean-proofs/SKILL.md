@@ -181,5 +181,5 @@ The dated text is note:lean/20261020T1000Z-report-lean-proofs-rulings-archive.
 - What a physical region reads is not a premise: it follows from the actual circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
   server-window is stated on `Accounting.Placed` with `WindowsAt` (ASK-141).
-- `check.py` holds each guarantee of what an acceptance means to its two lemmas under `witnesses` (LEAN-66): `nontrivial`
-  is `∀ X, ¬ C` at accept-all, a break included. `unwitnessed`, the guarantees without them when the rule came, only shrinks.
+- `check.py` holds each guarantee of what an acceptance means, or an exclusion's bound, to two lemmas that build their
+  instance (`witnesses`, LEAN-66): `honest` at the deployed verifier, `nontrivial` at accept-all or a circuit beating the bound.
