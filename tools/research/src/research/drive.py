@@ -1,5 +1,5 @@
-"""`research queue drive`: one tick of the landing automation (Daniel, 11 Oct: from an owner's ready mark to `main` moving, no
-agent acts unless the automation refuses).  A loop runs it every few minutes.
+"""`research queue drive`: one tick of the landing automation (from an owner's ready mark to `main` moving, no agent acts
+unless the automation refuses).  A loop runs it every few minutes.
 
 What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns.  `--shadow`
 drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
@@ -9,15 +9,14 @@ What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick app
 at `stale_close_days` drive closes it, its branch kept.  After a landing, the owner of each unmarked open PR whose head contains
 a landed PR's head hears once that its base landed and to merge `main` (`_stacked`; TOP-90 row 23).
 
-Review landing (Daniel, 24 Oct 06:05Z: PRs land on an eyeball review, and the full check runs after landing; drive.toml's
-`land = "check"`, which landed trains on their own check, is gone).  A tick syncs `next` (`Queue.sync`: admit and drop PRs,
-rebuild on a moved `main`), then lands its longest prefix whose every member has a land verdict at its head and no hold
+Review landing, the only landing: PRs land on an eyeball review, and the full check runs after landing.  A tick syncs
+`next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `main`), then lands its longest prefix whose every member has a land verdict at its head and no hold
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `main` (`_land`), then `merge.caught_up` (the spec DM,
 node 1's mirror, the post-train regression, the Lean cache publish, the landing post) and the sweep.  Two gates cut the prefix
 first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source outside `Security/`
 of a package that has one, Lean that runs as code: `queue.lean_change`; Lean proofs alone land on the verdict, checked after
-landing, Daniel 25 Oct 11:19 PM PDT) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean
+landing) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean
 check (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it), or any
 recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
 the locks on top, and `next` is rebuilt on that lock commit at once, each member above with its merge's tree and those records
@@ -28,9 +27,11 @@ own.  While one runs, a Lean change above it, reviewed or not, gets a check stac
 its own; the lower one runs on.  Each Lean check launched or stacked stops at a cut point, just below the Lean
 change after the first ceil(n / f) of the n it would hold, f the Lean checks still free (`lean_cut`), lowest first: a failure
 holds only what's above it, and the lower ones land without waiting for the rest.  `next` is built non-Lean first (drive.toml's
-`nonlean_first`, `queue.Queue._nonlean_order`: what a sync merges anyway, never a member it keeps), so a member that changes
-no Lean seldom waits above a Lean change for its check.  A failed Lean check is run again on the Lean change's own commit, and only a
-failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`, unless a passed Lean check
+`nonlean_first`, `queue.Queue._nonlean_order`: what a sync merges anyway), and while no Lean check of `next` runs or passed, the
+sync moves the reviewed members that change no Lean above its lowest Lean change to its bottom (`_lift`), where they land that
+tick, so a member that changes no Lean seldom waits above a Lean change for its check.  A Lean check lost or failed by its
+machine (killed, out of disk or memory: `_machine_fault`) runs again once on the other machines.  A failed Lean check is run
+again on the Lean change's own commit, and only a failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`, unless a passed Lean check
 of a reviewed commit above it checked the tree that lands (`_past_failed`).  And every .py file the
 landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  While any Lean check of a
 commit of `next` runs, drive's or a hand one of its run registry (`_running_lean`), the members up to it keep their place
@@ -38,8 +39,8 @@ commit of `next` runs, drive's or a hand one of its run registry (`_running_lean
 member up to it has its ready mark and a land verdict (`_landable`), until it lands.  ci's hand Lean check goes through drive
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
-time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), `--no-cache` while
-`after_landing_no_cache`, and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
+time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), `--no-cache
+--circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
 by hand).  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (25-26 Oct:
 cancels 1-63 min into ~4 h runs left the rest unknown).  Each failed suite or step (`_red`, `postland["red"]`) gets a culprit
@@ -102,6 +103,9 @@ LEAN_LAYERS_RE = re.compile(r"^\s+layers: ([A-Za-z][\w.]*) imports ")
 KILLED_RC = (129, 137, 143)
 #: what the Lean check says of a process of its own that was killed (`tools/verity/lean/check.py`: the replay, `--fresh`)
 KILLED_SAYS = "not a kernel verdict"
+#: a failed step's log saying its machine ran out of disk or memory: the machine's fault, not the change's (`Driver._machine_fault`)
+FAULT_RE = re.compile(r"No space left on device|\bENOSPC\b|\[Errno 28\]|Cannot allocate memory|\[Errno 12\]|\bMemoryError\b"
+                      r"|\b[Oo]ut of memory\b")
 #: circuit-check's report of a failure: `FAIL <check> <target>`, and `circuit-check/killed` for a target whose process died
 CIRCUIT_FAIL_RE = re.compile(r"^FAIL (\S+)", re.M)
 CIRCUIT_KILLED = "circuit-check/killed"
@@ -197,14 +201,14 @@ def authed(auth: tuple[str, ...]):
 
 def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = (),
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
-                 detached: bool = False) -> tuple[list[str], str] | dict:
+                 detached: bool = False, circuit_cache: bool = False) -> tuple[list[str], str] | dict:
     """`train.sh COMMIT MACHINE [--agreement]` from the queue's clone: (the run ids it printed, its output's tail); ``detached``,
     started in the background (`detach`) from a copy of train.sh, which reads nothing by its own path (``$0`` only for its
     usage) and finds the tree from its working directory, and returned at once as the record `launched` reads.  Git never
     prompts (12 Oct: train.sh's fetch in the queue's clone, which has no credential helper, waited on a password at the tty)."""
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else []),
             *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
-            *(["--no-regenerate"] if no_regenerate else [])]
+            *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else [])]
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"}
     if detached:
         return detach(repo, argv, env, script=argv[1])
@@ -669,20 +673,21 @@ class Driver:
         #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
         self.stale_days, self.stale_close_days, self.stale_keep = stale_days, stale_close_days, stale_keep
         #: each member lands on a reviewer's verdict, a Lean change once a Lean check passed, and the full check runs after
-        #: landing (`_review`; Daniel, 24 Oct 06:05Z), reusing no pass with ``after_landing_no_cache``
+        #: landing (`_review`), reusing no pass with ``after_landing_no_cache`` but circuit-check's
+        #: per-target ones (`--circuit-cache`)
         self.after_landing_no_cache = after_landing_no_cache
         #: the `reviewed` labels on a PR's head (`StoreLabels.reviews`)
         self.reviews: Callable[[int, str], list] = reviews or (lambda pr, head: StoreLabels(q.store, q.log).reviews(pr, head))
         #: who wrote the ready mark on a PR's head (`StoreLabels.ready_by`), one of those whose verdict doesn't count (`_owners`)
         self.ready_by: Callable[[int, str], str | None] = ready_by or (lambda pr, head: StoreLabels(q.store, q.log).ready_by(pr, head))
-        #: commit the locks a Lean check regenerated onto its commit as it lands (CI-64: Daniel through top, 18 Oct)
+        #: commit the locks a Lean check regenerated onto its commit as it lands
         self.regenerate_locks = regenerate_locks
         #: the after-landing run on `main`'s tip (`postland`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
         #: (`_started`); an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
-            (lambda repo, commit, machine, steps, agreement=False, no_cache=False, no_regenerate=False:
+            (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
-                          no_regenerate=no_regenerate, detached=True))
+                          no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: a Lean change's Lean check before a review landing: `train.sh TOP MACHINES --deferred lean-audit`, detached
         self.launch_lean: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
@@ -1273,11 +1278,12 @@ class Driver:
         steps = ",".join(pl["steps"])
         # the run checks `main` against itself, so it sends the upstream build only when told to: when the landings since
         # the last verified `main` change what lean-agreement checks; lean-changed has no cache to compare with under --no-cache;
-        # lean-audit fails on a record difference, since nothing commits a regenerated record after landing
+        # lean-audit fails on a record difference, since nothing commits a regenerated record after landing; circuit-check
+        # reuses its per-target passes all the same, since a cold `--all` (~4 h) outlasted every after-landing run (24-27 Oct)
         from .merge import required_steps
 
         extra = {"agreement": base or "lean-agreement" in required_steps(self.repo, pl["verified"], main, "check"),
-                 "no_cache": self.after_landing_no_cache, "no_regenerate": True}
+                 "no_cache": self.after_landing_no_cache, "circuit_cache": self.after_landing_no_cache, "no_regenerate": True}
         skip = [s for s, off in (("lean-agreement", not extra["agreement"]), ("lean-changed", extra["no_cache"])) if off]
         flags = "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on)
         if self.dry_run or q.shadow:
@@ -1582,6 +1588,7 @@ class Driver:
             chain = q.chain()
             q.hold = max(max((i + 1 for i, m in enumerate(chain) if m.commit in running), default=0), self._landable(drive, chain))
             q.frozen = {m.pr for m in chain[:q.hold]}
+            q.lift = [] if q.hold or running else self._lift(drive, chain)
             entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}
             self._tell_out(drive, state)
@@ -1600,6 +1607,26 @@ class Driver:
             q.save_state(state)
         q.log(f"research queue drive: {'; '.join(what)}")
         return "; ".join(what)
+
+    def _lift(self, drive: dict, chain: list[Member]) -> list[int]:
+        """The members the sync moves to the bottom of `next` (`queue.Queue.lift`): each above its lowest Lean change, ``chain[i]``,
+        with its ready mark and a land verdict at its head (`_reviewed`'s rule) whose own change is no Lean change, so they land
+        this tick instead of waiting for that Lean change's check (CI-172, 27 Oct: #4828 at the bottom held every reviewed member
+        above it 10:52Z-12:20Z).  Only while no Lean check of `next` runs (`_review` asks only then) or passed, nor a recorded run covers
+        ``chain[i]`` (`_cover`), since a rebuild would take its commit off `next`, and not past a Lean change whose own check
+        failed: that one waits for its owner's fix or hold, not a check again on every lift."""
+        i = next((j for j, m in enumerate(chain) if self._lean_change(m)), None)
+        if self.q.nonlean_first is False or i is None:
+            return []
+        on = {m.commit for m in chain}
+        if any(rec.get("state") == "passed" for c, rec in drive["lean"].items() if c in on) \
+                or (drive["lean"].get(chain[i].commit) or {}).get("state") == "failed":
+            return []
+        lift = [m.pr for m in chain[i + 1:] if self.q.ready(m.pr, m.head)
+                and unreviewed(self.reviews(m.pr, m.head), self._owners(m)) is None and not self._lean_change(m)]
+        if not lift or self._cover(drive, chain, i, len(chain)) is not None:
+            return []
+        return lift
 
     def _running_lean(self, drive: dict) -> set[str]:
         """The commits of `next` a Lean check runs at, which the sync keeps in place with the members below them (`queue.hold`,
@@ -1708,7 +1735,8 @@ class Driver:
             return
         mid = (b["good"] + b["bad"]) // 2
         c = cands[mid].commit
-        extra = {"agreement": "lean-agreement" in b["steps"], "no_cache": b["no_cache"], "no_regenerate": True}
+        extra = {"agreement": "lean-agreement" in b["steps"], "no_cache": b["no_cache"], "circuit_cache": b["no_cache"],
+                 "no_regenerate": True}
         if self.dry_run or self.q.shadow:
             self.q.log(f"research queue drive: would launch train.sh {c[:12]} {self.on} --deferred {','.join(b['steps'])} to bisect")
             return
@@ -2131,7 +2159,8 @@ class Driver:
 
     def _follow_lean(self, drive: dict) -> None:
         """Judge each Lean check that ended: passed when a twin exited 0 with lean-audit passed in its steps.jsonl, gone (launched
-        again) when none started, else failed.  A check whose commit is no longer on `next`, nor a commit of it with the same
+        again) when none started, run again once on the other machines of `on` (`_elsewhere`) when lost or failed by its
+        machine (killed, out of disk or memory: `_machine_fault`), else failed.  A check whose commit is no longer on `next`, nor a commit of it with the same
         prefix and tree (`_rekey_lean`), is dropped, and cancelled, once its train.sh has printed its run ids (`_resolve`); one
         whose train.sh registered no run is dropped, told to `CI`, and launched again."""
         lean = drive.setdefault("lean", {})
@@ -2162,15 +2191,26 @@ class Driver:
             if not lost and any(st in ACTIVE for st, *_ in states.values()):
                 continue
             rcs = [rc for _, rc, *_ in states.values()]
-            if (lost or (0 not in rcs and any(isinstance(rc, int) and (rc < 0 or (rc > 128 and rc != SIGTERM_RC)) for rc in rcs))) \
-                    and not rec.get("resend") and not (self.dry_run or self.q.shadow):
-                again, tail = self._started(self.launch_lean(self.repo, c, self.on))
-                if again:                               # killed or lost, a machine's fault: once more, as `follow_postland`
+            fault = None
+            if rec.get("resend") or self.dry_run or self.q.shadow:
+                pass
+            elif lost:
+                fault = "lost"
+            elif 0 in rcs or all(rc in (NOT_STARTED, SIGTERM_RC) for rc in rcs):
+                pass
+            elif any(isinstance(rc, int) and (rc < 0 or (rc > 128 and rc != SIGTERM_RC)) for rc in rcs):
+                fault = "killed"
+            else:
+                fault = self._machine_fault(rec["ids"])
+            if fault:
+                where = self._elsewhere(states)
+                again, tail = self._started(self.launch_lean(self.repo, c, where))
+                if again:                               # a machine's fault: once more, as `follow_postland`
                     rec.update(**again, at=self.now(), resend=True)
                     rec.pop("carried", None)
                     self.q.save_state({**self.q.load_state(), "drive": drive})
-                    self.q.log(f"research queue drive: the Lean check of {c[:12]} was {'lost' if lost else 'killed'}: again, "
-                               f"once: {_ids(again)}")
+                    self.q.log(f"research queue drive: the Lean check of {c[:12]} was {fault}, a machine's fault: again, once, "
+                               f"on {where}: {_ids(again)}")
                     continue
                 rec.update(state="failed", why=f"its resend registered no run: {tail}")
                 continue
@@ -2192,6 +2232,28 @@ class Driver:
                 del lean[c]
             else:
                 rec.update(state="failed", why=", ".join(f"{rid} {st} rc={rc}" for rid, (st, rc, *_) in states.items()))
+
+    def _machine_fault(self, ids: list[str]) -> str | None:
+        """What says a Lean check that failed failed by its machine rather than by the Lean it checked, or None: a step killed
+        (`killed`), a failed step's log saying its machine ran out of disk or memory (`FAULT_RE`), or lean-audit passed in a run
+        that failed anyway (27 Oct: #4828's check hit ENOSPC after every audit passed, and was counted as #4828's failure)."""
+        for d in self.evidence(self.repo, ids):
+            if d.name not in ids:
+                continue
+            if any(st.get("step") == LEAN_STEP and st.get("status") == "passed" for st in step_records(d)):
+                return f"failed after its {LEAN_STEP} passed"
+            if killed(d):
+                return "killed"
+            for st in failed_steps(d):
+                if m := FAULT_RE.search(_step_log(d, st)):
+                    return f"failed in {st.get('step')} by its machine ({m[0]})"
+        return None
+
+    def _elsewhere(self, states: dict) -> str:
+        """`on` without the machines the runs of ``states`` ran on, for a check run again after a machine's fault; all of `on`
+        when that leaves none (`auto`, or one machine)."""
+        ran = {s[4] for s in states.values() if len(s) > 4 and s[4] and s[1] not in (NOT_STARTED, SIGTERM_RC)}
+        return ",".join(m for m in self.on.split(",") if m not in ran) or self.on
 
     def _compiles(self, drive: dict, chain: list[Member], base: str, t: int) -> int:
         """The highest index at or below ``t`` whose landing compiles: every .py file ``base``..``chain[t]`` leaves, compiled as

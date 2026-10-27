@@ -23,7 +23,7 @@ computes.
   the layout maps to the ingress gates of each request's arrival (IO-TIE's N1).
 - ``req`` (*registered*): each slot's served output length ``a_O`` (and at AS = 1 ``a_cap``, O being its max_tokens),
   the request Program's end, and ``tok``, each slot's first CU·B token ids (its prompt, then its outputs), the request
-  Program's token at each position (vllm's V3).
+  Program's token at each position (vLLM's V3).
 - ``srv`` (*registered*): the served rows, each step's R rows (valid, request, kind, start, n) in slot order, as
   `compile_slice.rows_bits` packs them, zero on an idle step: CompileSlice_v2's ``srv`` row at G = P, the row
   `served_rows` registers and its consumers read. At AS = 1 they stay in slot order: CompileSlice_v2's witnessed

@@ -71,7 +71,10 @@ import traceback
 from pathlib import Path
 from typing import ClassVar
 
-os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+from verity_config.settings import of
+
+settings = of(__file__)
+settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
@@ -249,7 +252,7 @@ def arm_of(mode: str, run, args):
     if mode not in PEARLC:
         return Arm(mode, "bf16")
     return Arm(mode, "bf16", run.entry, spec=PassSpec(hashing=mode != "pearlc-nohash", schedule=getattr(args, "schedule", "serial"),
-                                                      run_id=os.environ.get("RESEARCH_RUN_ID")))
+                                                      run_id=settings.RESEARCH_RUN_ID))
 
 
 def gate(run, weights: dict, whole: bool = False) -> list[dict]:
@@ -308,7 +311,8 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
     gen = torch.Generator(device=dev).manual_seed(20261002)
     xs = {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
     rows = 2 * m * len(weights) if run.hashing else 0
-    forward = lambda: [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
+    def forward():
+        return [run.gemm(w, xs[w], W, None) for w, W in weights.items()]
     keep = ("transcript_root", "activation_roots", "units", "tiles")
 
     def ended(ys):
@@ -489,7 +493,7 @@ def screen_check(run, weights: dict) -> dict:
 
 def gpu() -> str:
     """The GPU nvidia-smi should read: window.sh's E2E_GPU_UUID (the lease's), since NVML ignores CUDA_VISIBLE_DEVICES."""
-    return os.environ.get("E2E_GPU_UUID", "0")
+    return settings.E2E_GPU_UUID
 
 
 def clocks() -> dict:
@@ -763,7 +767,8 @@ class Worker:
 def prompts(reps: int) -> dict:
     """Every mode's prompts, the same in both engines: the prefill warm-up and one prompt per rep, and the decode batch."""
     rng = random.Random(8192)
-    ids = lambda n: [rng.randrange(100, 20000) for _ in range(n)]
+    def ids(n):
+        return [rng.randrange(100, 20000) for _ in range(n)]
     return {"warm": ids(PREFILL), "prefill": [ids(PREFILL) for _ in range(reps)], "decode": [ids(PROMPT) for _ in range(BATCH)]}
 
 
@@ -861,7 +866,7 @@ def epoch_coins(args, epoch: int) -> Coins:
     """The run's epoch coins, committed before any engine starts; with ``--retain`` the commitment is published beside the
     passes (``coins.json``), where `verify_run.py --coins` reads it.  ``POUW_COIN_STATE`` names a file holding the
     challenger's entropy (`state_entropy`)."""
-    state = os.environ.get("POUW_COIN_STATE")
+    state = settings.POUW_COIN_STATE
     coins = Coins(epoch, state_entropy(state)) if state else Coins(epoch)
     if getattr(args, "retain", None):
         Path(args.retain).mkdir(parents=True, exist_ok=True)
@@ -890,7 +895,7 @@ def smoke(args) -> None:
                  "whole_defer_a": getattr(args, "whole_defer_a", False),
                  "whole_fork_stats": getattr(args, "whole_fork_stats", False),
                  "whole_tree_sm": getattr(args, "whole_tree_sm", False),
-                 "capture": getattr(args, "capture", None), "statement": getattr(args, "statement", None), "run": os.environ.get("RESEARCH_RUN_ID"), "steps": [], "resident": False}
+                 "capture": getattr(args, "capture", None), "statement": getattr(args, "statement", None), "run": settings.RESEARCH_RUN_ID, "steps": [], "resident": False}
 
     def step(name, f):
         t0 = time.perf_counter()
@@ -1000,7 +1005,7 @@ def perplexity(args) -> int:
     summary = quality_summary(parts)
     gates = {name: all(g["ok"] for g in (json.loads((d / f"quality-{name}.json").read_text())["gate"] or [{"ok": True}]))
              for name, *_ in groups}
-    doc = {"schema": "verity-pouw/pearl-c-vllm-quality/v1", "run": os.environ.get("RESEARCH_RUN_ID") or os.environ.get("FILL_JOB"),
+    doc = {"schema": "verity-pouw/pearl-c-vllm-quality/v1", "run": settings.RESEARCH_RUN_ID or settings.FILL_JOB,
            "model": args.model, "dataset": {"repo": WIKITEXT[0], "revision": WIKITEXT[1], "file": WIKITEXT[2]},
            "windows": len(windows), "window_tokens": WINDOW, "gates": gates, "summary": summary}
     args.out.write_text(json.dumps(doc, indent=1))
@@ -1021,7 +1026,7 @@ def main() -> None:
     ap.add_argument("--revision")
     ap.add_argument("--kernel", default=str(HERE.parent / "pearl_c_sm120"), help="GPU 1's kernel directory (run.py, fixture.py)")
     ap.add_argument("--cubin", help="build.sh's pearl_c_sm120.cubin (default: the kernel directory's)")
-    ap.add_argument("--out", type=Path, default=Path(os.environ.get("RESEARCH_RUN_DIR", ".")) / "e2e.json")
+    ap.add_argument("--out", type=Path, default=Path(settings.RESEARCH_RUN_DIR or ".") / "e2e.json")
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--batch", type=int, default=BATCH_DEFAULT, help="the decode batch: its prompts, and each decode call's m")
     ap.add_argument("--prompt", type=int, default=PROMPT_DEFAULT, help="each decode prompt's tokens (the context decode starts at)")
@@ -1091,7 +1096,7 @@ def main() -> None:
                  "decode": {"batch": BATCH, "prompt": PROMPT, "steps": STEPS, "key": decode_key()},
                  "whole_step": args.whole_step, "whole_defer": args.whole_defer, "whole_defer_a": args.whole_defer_a,
                  "whole_fork_stats": args.whole_fork_stats, "whole_tree_sm": args.whole_tree_sm, "capture": args.capture,
-                 "statement": args.statement, "run": os.environ.get("RESEARCH_RUN_ID"),
+                 "statement": args.statement, "run": settings.RESEARCH_RUN_ID,
                  "coins": coins.commitment.to_json(), "interleave": args.interleave, "resident_failure": None}
     ready, tokens, verify = {}, {}, {}
 

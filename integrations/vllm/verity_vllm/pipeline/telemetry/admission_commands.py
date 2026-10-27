@@ -10,7 +10,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.pipeline.telemetry.admission import (GiB, RowConfig, cgroup_memory_max, compare, plan_row, predict,
                                                       render_compare_md, render_points_md, retain_exclude_families,
                                                       row_config_from_attempt, row_config_from_workload)
@@ -19,7 +19,7 @@ from verity_vllm.pipeline.telemetry.admission import (GiB, RowConfig, cgroup_mem
 @dataclass(frozen=True, kw_only=True)
 class PlanOptions:
     """ADVISORY admission plan for a sweep row from its workload file (row_pod.sh hook): writes admission.json, prints one line, exit 0"""
-    workload: str = option("--workload")
+    workload: str = option("--workload", type=workload_arg)
     row: str | None = option("--row", default=None)
     out: str | None = option("--out", default=None)
     stages: str = option("--stages", default="build,match,commit")

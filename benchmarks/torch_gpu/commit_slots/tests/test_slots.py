@@ -20,14 +20,16 @@ from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 
 CTX = bytes(range(64))
 KEY = bytes(range(100, 132))
-#: FAMILIES' shared-row layout at 1 KiB rows (art:16f2faa0…), fetched with commitments' layout fixtures, its sha256,
-#: slots' digest of it (the artifact's ``layout_digest``), and a step root over it, from the loader slots had before
-#: ``commitments.layout``
+#: FAMILIES' shared-row layout at 1 KiB rows, fetched with commitments' layout fixtures, its sha256,
+#: slots' digest of it (the artifact's ``layout_digest``), ``commitments.layout``'s ``json_digest`` of it, and a step root
+#: over it, from the loader slots had before ``commitments.layout``
 FAMILIES = (Path(__file__).resolve().parents[4] / "verity" / "ml" / "commitments" / "tests" / "fixtures" / "layouts"
             / "families-shared-1024b.layout.json")
 FAMILIES_SHA256 = "15fd14be19dea4d4d70b18771d0e185881894c3d5e480db35a9dbe4eb5141cd8"
 FAMILIES_DIGEST = ("eb7937f19e2e8e3a0daf9f7b85f33d837b267a079cd0c5c60d3581e8c2b1675b"
                    "095d54fd36f2e8434c67734213533c0aba0e40d9f2601cc4307ca9474e403a03")
+FAMILIES_JSON_DIGEST = ("f8d6252c5933f22c8c276c911a7c22e84c7ea12d846d7de8f9ee90e312c68005"
+                        "3d41a525a4350c921f9cf12b80fc0dc9d43d3034c8b7a33f83bc069c1e656a9f")
 FAMILIES_ROOT = ("2308302c639710775951a9cd16c08b564a43f9b50cd30f61f3f410e2eb9406d6"
                  "64cfa5bd182ea80d96e7535916372ed72afae84b3d23510eac79f3c6e6789137")
 
@@ -100,7 +102,7 @@ def test_a_replay_of_other_rows_is_refused() -> None:
 
 
 def _round_trip(layout: S.Layout, tmp_path: Path) -> S.Layout:
-    """``layout`` written as ``step.py export`` writes it (``_layout_json``, compact, a newline) and loaded back by ``S.load``
+    """``layout`` written in ``_layout_json``'s form (compact JSON, then a newline) and loaded back by ``S.load``
     (``commitments.layout``): an equal layout, its repeated groups one object again, with equal digests, written back to
     the same bytes."""
     assert (S.Part, S.Row, S.Group) == (L.Part, L.Row, L.Group)
@@ -134,7 +136,7 @@ def test_families_shared_layout_round_trips_to_its_digest_and_roots(tmp_path: Pa
     back = _round_trip(S.load(FAMILIES), tmp_path)
     assert (tmp_path / "layout.json").read_bytes() == raw
     assert len(back.groups) == 54 and len({id(g) for g in back.groups}) == 3 and back.unit_count == back.row_count == 21_857
-    assert back.digest.hex() == FAMILIES_DIGEST
+    assert back.digest.hex() == FAMILIES_DIGEST and back.json_digest.hex() == FAMILIES_JSON_DIGEST
     out = S.random_outputs(back, 2, np.random.default_rng(20261027))
     assert S.commit(CTX, back, 5, bytes(range(32)), out, 2).root.hex() == FAMILIES_ROOT
 

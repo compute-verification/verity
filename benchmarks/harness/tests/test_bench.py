@@ -246,6 +246,58 @@ def test_direct_dispatch_refuses_a_cpu_only_node_and_a_spec_without_max_minutes(
     assert _parser().parse_args(["run", "x"]).direct is None
 
 
+@pytest.mark.parametrize("node, gpu", [("vy-dc-h200", "h200"), ("vy-dc-b200", "b200")])
+def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_the_rtx(node, gpu):
+    """The Commit's width spec on an H200 and a B200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine
+    settings) on another GPU, the B200's on FlashAttention 2 as its Build's row declares, and `--direct` takes the DC VM's
+    one GPU through its slot and gpu-lease, the wait for other leases on the node inside the spec's max_minutes."""
+
+    from research.pods.nebius.slot_only import through_slot
+
+    root = Path(__file__).resolve().parents[3]
+    name = f"llama31-8b-fp8-1gpu-commit-served-width-{gpu}"
+    spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
+    assert (spec.arms, spec.arm_modules, spec.arm_settings, spec.sweep, spec.reps, spec.eager) == (
+        rtx.arms, rtx.arm_modules, rtx.arm_settings, rtx.sweep, rtx.reps, rtx.eager)
+    assert (spec.preset.gpu_id, spec.preset.model, spec.preset.revision, spec.preset.precision) == (
+        gpu, rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
+    attention = {"attention_backend": "FLASH_ATTN", "attention_config": {"flash_attn_version": 2}} if gpu == "b200" else {}
+    assert dict(spec.preset.engine_settings) == {**rtx.preset.engine_settings, **attention}
+    from verity_bench.vllm.runner import engine_args
+    assert {key: value for key, value in engine_args(spec.preset, "fp8", resident=False, eager=False).items()
+            if key.startswith("attention")} == attention
+    assert not {key for key in engine_args(rtx.preset, "fp8", resident=False, eager=False) if key.startswith("attention")}
+    assert [point.id for point in expand_sweep(spec.sweep.id)] == ["b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
+
+    assert node in jobs.DIRECT_NODES
+    plan = jobs.make_plan(name, root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    commands = []
+    assert jobs.dispatch(plan, name, root=root, direct=node,
+                         execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
+    assert len(commands) == 3
+    for command in commands:
+        flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
+        assert flags[:4] == ["research", "run", "--on", node] and flags[flags.index("--timeout") + 1] == "120m"
+        assert through_slot(workload)
+        lease = workload[workload.index("--", 4) + 1:]
+        assert lease[:3] == ["gpu-lease", "1", "--wait"] and "--preemptible" in lease[:lease.index("--")]
+
+
+def test_the_launcher_finds_a_dc_vms_environment_after_the_others(tmp_path):
+    """The DC VMs' pinned-vLLM Python is $WORK/cp/venv312: the launcher takes it when none before it exists."""
+
+    root = Path(__file__).resolve().parents[3]
+    launcher = root / "benchmarks/harness/run_point.sh"
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
+    python = tmp_path / "cp" / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "$0"\n')
+    python.chmod(0o755)
+    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.strip() == str(python)
+
+
 def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[3]
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
@@ -330,8 +382,8 @@ def test_an_engine_setting_the_runner_doesnt_read_refuses_by_name(tmp_path):
 
     path = tmp_path / "spec.toml"
     path.write_text((SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text().replace(
-        "[preset.engine_settings]\n", '[preset.engine_settings]\nattention_backend = "FLASH_ATTN"\n'))
-    refusal = f"unknown engine_settings ['attention_backend']; known: {list(ENGINE_SETTINGS)}"
+        "[preset.engine_settings]\n", '[preset.engine_settings]\nmoe_backend = "triton"\n'))
+    refusal = f"unknown engine_settings ['moe_backend']; known: {list(ENGINE_SETTINGS)}"
     with pytest.raises(ValueError, match=re.escape(refusal)):
         load_spec(path)
 
@@ -601,7 +653,7 @@ def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():
 
 @pytest.mark.parametrize("resident_failure", [None, "candidate"])
 def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedule_keeps_them(resident_failure):
-    """A block engine's first timed rep after one warm-up was slow on the bandwidth arms:
+    """A `blocks` engine's first timed rep after one warm-up was slow on the bandwidth arms:
     the count is a spec knob in the identity, each engine runs all of them before it times anything, and each warm-up's
     own summary stays in the schedule."""
 
@@ -690,7 +742,7 @@ def test_a_timed_rep_keeps_its_step_times_request_times_and_host_counters():
     assert "device" not in HostProbe().close()
 
 
-def test_resident_failure_falls_back_to_alternating_blocks():
+def test_resident_failure_falls_back_to_blocks():
     preset, points, arms = inputs()
     factory = FakeFactory(resident_failure="candidate")
     doc = run_benchmark(preset, arms, points, sweep="quick", reps=3, factory=factory, git_commit="abc")
@@ -790,7 +842,7 @@ def test_equal_kv_pools_pass_and_are_recorded_in_the_identity():
     }
 
 
-def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
+def test_blocks_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
     settings = load_spec("llama31-8b-fp8-1gpu").preset.engine_settings
     assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
 
@@ -1045,7 +1097,7 @@ def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_re
 def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
     """Pearl-C's tokens carry the epoch's live salt, so no stock arm is a protocol arm's token control; its own gate is
     the experimental arm's call check on the installed run: y against x·Wᵀ, the commitment twice, the negative control.
-    A live run's coins name its session, its salt epoch and that epoch's root over the weights' root."""
+    A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
     from verity.core.protocols.pouw.salt import epoch_open_root
@@ -1434,8 +1486,8 @@ def test_drift_over_the_run_cancels_in_every_arms_mean_over_even_reps(resident_f
         assert tpot[arm]["ratio_to_stock"]["mean"] == pytest.approx(2, rel=0.005)
 
 
-def test_a_block_engine_unlike_the_gated_one_fails_engine_identity_and_times_nothing_more():
-    """Red team, attacks 1 and 3: in blocks the gate's engine and the timed engines are different lifetimes, and the
+def test_a_blocks_engine_unlike_the_gated_one_fails_engine_identity_and_times_nothing_more():
+    """Red team, attacks 1 and 3: in `blocks` the gate's engine and the timed engines are different lifetimes, and the
     identity recorded the gated one's KV pool, so a timed engine with another pool went unnoticed."""
 
     factory = FakeFactory(resident_failure="candidate", kv_after_gate={"candidate": 491_376})
