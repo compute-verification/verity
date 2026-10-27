@@ -44,4 +44,6 @@ inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py
           "verity/core/protocols/pouw/leaf_lanes.py", "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/partition.py",
           "verity/core/protocols/sampled_proofs/one_stage/produced.py",
-          "verity/core/protocols/sampled_proofs/one_stage/registered.py"]
+          "verity/core/protocols/sampled_proofs/one_stage/registered.py",
+          # H1's device records (verity/core/protocols/pouw/circuit/h1device.py) read the card files
+          "verity/hardware/__init__.py", "verity/hardware/cards"]

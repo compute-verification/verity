@@ -90,13 +90,22 @@ def test_uni_prices_a2u_on_the_sheet(name):
     assert r.sheet < free < r.sheet + 0.012, f"{name}: with a uniform instruction's issue slot free, ε is {free:.4%}"
 
 
-@pytest.mark.parametrize("name", SHEETS)
+@pytest.mark.parametrize("name", ["sm_100"])
 def test_lean_is_generated(name):
     d = DEVICES / name
     s = sheet(d)
     path = ROOT / s.lean
     assert path.read_text() == lean(s, d), (f"{s.lean} isn't sheet.toml's: run `uv run machine-model --device {name} "
                                             f"sheet --lean > {s.lean}`")
+
+
+def test_the_h200s_sheet_has_no_lean_module_of_its_own():
+    """The H200's Lean is its card table (`Verity.Accel.H200.card`, held to the card file its sheet reads), so its sheet
+    names no Lean module and `sheet --lean` refuses it."""
+    s = sheet(DEVICES / "sm_90")
+    assert s.lean is None and not (ROOT / "Security/Definitions/Accounting/Sheets/H200.lean").exists()
+    with pytest.raises(SystemExit, match="names no Lean module"):
+        lean(s, DEVICES / "sm_90")
 
 
 def test_sheet_command_flags_a_changed_line(tmp_path, capsys):

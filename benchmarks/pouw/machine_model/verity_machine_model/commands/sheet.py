@@ -12,7 +12,7 @@ from verity_machine_model.sheet import at_fmax, differences, figures, lean, line
 def add(sub) -> None:
     c = sub.add_parser("sheet")
     g = c.add_mutually_exclusive_group()
-    g.add_argument("--lean", action="store_true", help="print the Lean module sheet.toml's `lean` names")
+    g.add_argument("--lean", action="store_true", help="print the Lean module sheet.toml's `lean` names (refused where it names none)")
     g.add_argument("--eps", action="store_true", help="the headline design's ε on the sheet's lines")
     c.add_argument("--uni", type=float, nargs="+", metavar="COST",
                    help="with --eps: also ε with a uniform instruction at each COST of an issue slot (A2u; the "

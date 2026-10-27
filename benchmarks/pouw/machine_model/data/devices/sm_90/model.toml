@@ -6,6 +6,9 @@
 # async-joint issue row (UNI,JI90_0) to its measured cost beside the saturated async tensor op (RT-ISA r2,
 # note:20261017T1834Z-draft-rt-isa; the old 0.965-of-an-issue-slot price, scaled from a scalar-saturated stream, was
 # optimistic). `current` stays DC-90; the refit is the vector DC-90-ri (read it with `eps --vector DC-90-ri`).
+# The card file, verity/hardware/cards/h200-sxm-141gb.toml: θ, the data sheet and the table route read each ceiling
+# it states from it (`card = "EXPR"`, verity_machine_model/card.py).
+card = "h200-sxm-141gb"
 current = "DC-90"
 epochs = ["DC-90", "DS-90", "DC-90-ri"]
 

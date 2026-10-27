@@ -163,27 +163,21 @@ proposed = "CMP-165 00:55Z item 1: block-scaled E4M3/E5M2, UE8M0 a 32 (QMMA.SF, 
 key = "mxf6"
 proposed = "CMP-165 00:55Z item 1: block-scaled E3M2/E2M3, UE8M0 a 32 (QMMA.SF, sm_120)"
 
-# Each card's numbers (Sm120.lean, H200.lean), a SM-clock: tensor in s8 MACs, issue in warp instructions, the pipes in
-# lanes, smem and l2 in words; dram in words a second, at `sms` SMs and `clock_mhz`. `proposed_rho` are the proposed
-# resources' rates.
+# Each device names its card file (verity/hardware/cards/<card>.toml, which Sm120.lean and H200.lean are held to), and
+# `cover.load` reads its numbers from it: `sms`, `clock_mhz`, `rho` (a SM-clock: tensor in s8 MACs, issue in warp
+# instructions, the pipes in lanes, smem and l2 in words), `dram` (words a second) and the weights of the card's
+# formats. What stays here is what the card doesn't state: `proposed_rho`, the proposed resources' rates, and the
+# proposed formats' weights.
 [device.sm_120]
-sms = 188
-clock_mhz = 2430
-rho = { tensor = 1024, issue = 4, alu = 64, imad = 64, shfl = 32, f64 = 2, sfu = 16, smem = 32, l2 = 5 }
-dram = 3.9925e11
+card = "rtx-pro-6000-server"
 proposed_rho = { collective = 0.5, tex = 4 }
-rho_source = """Sm120.lean (CPG 12.9 Table 7 CC 12.0; tensor IMMA.16832 r20261017-041103-d35d; L2 CALIB \
-r20261017-065855-c8a9; GDDR7 1597 GB/s); collective: MATCH.ANY and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each \
-beside the other (r20261027-004019-4f84); tex: θ tex, 4 texture units a SM, one filtered fetch a unit a clock"""
-weight = { s8 = 1, u8 = 1, b1 = 1, e4m3 = 1, e5m2 = 1, e2m1 = 1, f16 = 2, bf16 = 2, tf32 = 4, nvf4 = 0.5, mxf4 = 0.5, f64 = 32, e3m2 = 1, e2m3 = 1, mxf8 = 1, mxf6 = 1 }
+rho_source = """collective: MATCH.ANY and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each beside the other \
+(r20261027-004019-4f84); tex: θ tex, 4 texture units a SM, one filtered fetch a unit a clock"""
+weight = { e3m2 = 1, e2m3 = 1, mxf8 = 1, mxf6 = 1 }
 
 [device.sm_90]
-sms = 132
-clock_mhz = 1980
-rho = { tensor = 4096, issue = 4, alu = 64, imad = 64, shfl = 32, f64 = 64, sfu = 16, smem = 32, l2 = 512 }
-dram = 1.2e12
+card = "h200-sxm-141gb"
 proposed_rho = { collective = 0.5, tex = 4 }
-rho_source = """H200.lean (CPG 12.9 Table 7 CC 9.0; tensor DS 1,979 TOPS; b1 CALIB; HBM3e 4.8 TB/s); collective: MATCH.ANY \
-and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each beside the other (r20261027-032627-6722, vy-dc-h200-2 at 1980 MHz); \
-tex: θ tex"""
-weight = { s8 = 1, u8 = 1, b1 = 0.125, e4m3 = 1, e5m2 = 1, e2m1 = 1, f16 = 2, bf16 = 2, tf32 = 4, nvf4 = 1, mxf4 = 1, f64 = 32, e3m2 = 1, e2m3 = 1, mxf8 = 1, mxf6 = 1 }
+rho_source = """collective: MATCH.ANY and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each beside the other \
+(r20261027-032627-6722, vy-dc-h200-2 at 1980 MHz); tex: θ tex"""
+weight = { e3m2 = 1, e2m3 = 1, mxf8 = 1, mxf6 = 1 }
