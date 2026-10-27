@@ -229,18 +229,19 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   0.08 sharing every SM in one context. A plan on N SMs runs on graphs too: a graph captured on its green context's
   stream keeps to those SMs when replayed, rekeyed with that context current (`SmPartition.current`; run
   r20261026-181335-1b14, a `%smid` probe on 16 SMs).
-- **Tables dropped at their read** (no `record_stream`: `Plan.hold` and `Plan.release`, `LAG`; runs
-  r20261026-202804-5282 and r20261026-205702-f655, vy-dc-h200-3). The plan holds each add's tables until the side stream
-  has read them, a thread of its own dropping them as soon as the read passes, and at the next add the producer's stream
-  waits for the read of any still unread. A table the forward has freed so goes back to its stream at the read. With the
-  forward on 92 SMs (`low:shared:3:40r`, CIR-113's 256 B rows) a step takes 4.949 s, +1.672 s (1.76 times CMP-149's
-  0.95 s), with no retry, against 6.939 s and 85 retries for `record_stream`. Circuits' 1 KiB rows had no retries
-  before; there, in one lease, today's loop costs +0.424 s (0.45) against +0.427 s for `record_stream`, and the commit
-  at high priority on 88 SMs +0.352 s (0.37) against +0.323 s, the device's memory at today's loop the same (147.94 GB).
-  Every root equals `record_stream`'s. Those runs started the thread anew at each add, which blocks the forward's host
-  thread; the plan now keeps one thread, not yet timed. Holding tables to the next add without the thread kept a freed
-  group from the forward's allocations in between, 1.76 GB more on the device at today's loop, and holding them two adds
-  ran out of HBM at 256 B.
+- **Tables dropped at their read** (no `record_stream`: `Plan.hold` and `Plan.release`, `LAG`; run
+  r20261027-004614-d98c, vy-dc-h200-3, `record_stream`'s module alternating with this one in one lease). The plan holds
+  each add's tables until the side stream has read them, a thread of its own dropping them as soon as the read passes,
+  and at the next add the producer's stream waits for the read of any still unread. A table the forward has freed so
+  goes back to its stream at the read. With the forward on 92 SMs (`low:shared:3:40r`, CIR-113's 256 B rows) a step
+  takes 4.947 s, +1.688 s (1.78 times CMP-149's 0.95 s), with no retry, against 6.939 s and 85 retries for
+  `record_stream` (run r20261026-202804-5282). Circuits' 1 KiB rows had no retries before, and the overheads stay:
+  today's loop +0.420 and +0.422 s (0.44) against +0.423 and +0.424 s, the commit at high priority on 88 SMs +0.331 and
+  +0.328 s (0.35) against +0.337 and +0.335 s, the device's memory the same at today's loop (147.94 GB) and 0.9 GB less
+  on 88 SMs. Every root equals `record_stream`'s. Holding tables to the next add without the thread kept a freed group
+  from the forward's allocations in between, 1.76 GB more on the device at today's loop (run r20261026-202804-5282);
+  holding them two adds ran out of HBM at 256 B; and a thread started anew each add, which blocks the forward's host
+  thread, cost 0.03 s a step on 88 SMs (run r20261026-205702-f655).
 
 ## Files
 
