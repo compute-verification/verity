@@ -7,7 +7,7 @@ is credited at the public best price of its work, and the work the developer cou
 the fixes RT-POOL routed to it (note:compute-research/20261026T1752Z-draft-accel-rt-pool, on CMP-151, CMP-152 and
 CMP-154), written in the shared notation (CMP-158).
 
-Its credit at pub(μ°) against W_reg is superseded (tentative): credit is a sampling block's
+Its credit at pub(μ°) against W_reg is superseded (Daniel, 26 Oct, 6:40 PM PDT, tentative): credit is a sampling block's
 size in AND gates, a statement about values, and 𝓜's resources appear only inside the exclusion argument
 (`GLOSSARY.md`, "Size, credit and exclusion"). CMP-158 restates this document and D6 in it.
 
@@ -19,7 +19,7 @@ card instances `Pouw.Guarantees.DitherInstance.WorkSoundAt` on
 The numbers are D6 v1.1 (art:6926be1c98b7855aca699278551040538e83843d28b72fdf85044cfd291bf3ef, CMP-118), and the segment
 and noise periods NOFOLD-OPT's (see "The segment and the noise period").
 
-**Names**: Dither is the protocol, PoUW's no-fold design, and the ACCEL model is the
+**Names** (Daniel, 26 Oct, 7:51 PM PDT): Dither is the protocol, PoUW's no-fold design, and the ACCEL model is the
 physical model 𝓜 it is proved over (the Lean's `Accel`).
 
 **The receipt is no-fold** (CMP-172, 27 Oct, 03:05Z). Each segment's 16-bit noised prefix sums are committed as SHA-512
@@ -38,7 +38,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
 
 - **Runs.** Dither is part of PoUW, one of the Glossary's subprotocols, and each of its runs goes through the Glossary's
   three phases: commit, challenge (the challenger draws live coins) and response. Every commitment is bound before any
-  challenge. Each of Dither's sampling blocks takes two runs: a dither run, whose response
+  challenge (Daniel, 26 Oct, 11:09 AM PDT). Each of Dither's sampling blocks takes two runs: a dither run, whose response
   is the block's value roots, and a check run, whose commitment they are.
 - **The ACCEL model 𝓜**: a period's devices as the Lean's `Accel` reads them: their resources (tensor cores, issue
   slots, shared-memory and register ports, device memory, links), each at its data-sheet rate, and each run's use of
@@ -71,7 +71,8 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
 
 The Lean predates these names. Its round is a sampling block, and its word is a proof block's committed value. Its `k`
 and `nsb` are k, and `k_draw` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
-a replica, and θ is 𝓜. Two premises have new names, which the Lean takes as it is restated: SHA-512's premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and
+a replica, and θ is 𝓜. A rename follows #4665 and #4662's landing. Two premises have new names (Daniel, 26 Oct, 6:13 PM
+PDT), which the Lean takes in DITHER-E2E's PR: SHA-512's premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and
 the proof service's "the proof system is sound" is `ProofSystemSound` (the Lean's `ServiceSound`).
 
 ## What is committed
@@ -157,7 +158,7 @@ NOFOLD-OPT's picks (CMP-172, runs r20261027-031621-5469 and r20261027-032610-3a3
 - static, RTX PRO 6000: L = 1,024 with L′ = 128 (t = 8), at γ 1.10 / 1.05 / 1.15 for 8B / 70B / V4, when registration
   pins B (the weight root is a published checkpoint's, or the weights expand from a public seed). The credit rests on
   that pin.
-  - **Decided**: the demo registers a published
+  - **Decided** (compute-research, under Daniel's delegation, 26 Oct, 8:46 PM PDT): the demo registers a published
     checkpoint's weights pinned by digest, such as Llama-3.1-8B and 70B quantized to s8, which meets the condition, so
     the RTX PRO 6000 runs L = 1,024 with L′ = 128.
   - For weights the prover chooses, the general case, the setting that leaks nothing is L = 768 with L′ = 256 (t = 3),
@@ -336,7 +337,7 @@ Only expanded coins enter the boundary, never a c, which is stricter than ONE-4'
 raw coin. A c sent in for local expansion would make a whole block's outsourcing cost one coin's bits, and P18's β would
 fail.
 
-**The coin commitment**. The challenger
+**The coin commitment** (soundness's ruling, Daniel, 26 Oct, 6:15 PM PDT; settled 27 Oct, 03:45Z). The challenger
 commits to its coins c before the monitoring period, and the commitment reaches the prover only after the prover has
 committed, so no soundness statement takes a hiding premise on it.
 - The public configuration names each replica's drawing challenger, its identity and LMS key, and never its coin root.
@@ -368,8 +369,9 @@ k_exfil. Dither needs these of the challenger and the certifier:
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
   the certifier counts. In the Lean, `CoinsConfidential` is Dither's premise, and the placement premise
   `WitnessPathPrivate` discharges it: private messages (the devices' signed records and salts, the prover's witness, a
-  server's coins) travel only on private links, and the certifier sits on the server's own uplink.
-  - **The MVP: the certifier's device is the challenger**. The device that runs the
+  server's coins) travel only on private links, and the certifier sits on the server's own uplink (Daniel, 26 Oct,
+  4:41 PM PDT).
+  - **The MVP: the certifier's device is the challenger** (Daniel, 26 Oct, 1:30 PM PDT). The device that runs the
     replica's network certifier produces its live coins, so each coin is made at the boundary it enters: no path carries
     one in from outside and no key is needed for it. A multi-node replica's challenger is the certifier device of its
     lowest-numbered server, and its coins reach the other servers' certifiers only over the auditor's private links.
@@ -496,7 +498,7 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
   the fleet registered before any member's coin (see "The fleet"), and each replica's periods as one sequence. With it,
   ε_S = ln(1/δ_coin)/(ηq) at a fleet whose replicas all accept, and G leaves ε_skip. A headline taking the minimum of
   two tiers holds at δ_coin only with each tier at δ_coin/2.
-- **κ's values** (see "Its budget") and the headline's single κ are still to be decided: κ_dmm and κ_dsha are `SAKMatmul`'s and
+- **κ's values** (see "Its budget") and the headline's single κ go to Daniel: κ_dmm and κ_dsha are `SAKMatmul`'s and
   `SAKSha`'s error terms.
 - **The Lean** (WORKSOUND-5, stacked on #4787):
   - the dither run's commit phase: `reg b` read at the operand roots' arrival, `∀ b, opArrive ob b ≤ t ob b` in
@@ -513,7 +515,7 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
   implemented.
 - **Keyed transport**, in place of `WitnessPathPrivate`'s private links (pre-shared keys, ML-KEM for transport only, or
   keys set at provisioning), is the secure-transport workstream's. Whether ML-KEM may bend the one-hash rule is
-  undecided.
+  Daniel's.
 - **The firewall** (@proofs, with C-Flock's ZK server):
   - that it proves a replica's answers concurrently, and its release schedule. If it can't, RT-SIZE's queued check
     coins are the fix (CMP-158, RS5), and `Timed` must then read the check coin's time apart from the selection's;
@@ -525,7 +527,7 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
   challenger's spec, as remote bandwidth's is on #4968 and the network certifier's coin link's on #4946.
 - **Credit becomes size** (the Glossary's Size, CMP-158): a sampling block's credit becomes its size. Then ε_skip is a
   share of the registered size, and the channel term stays in bits, k_infil and k_exfil, without ε_net's β.
-- **μ° or a fixed published price** (undecided).
+- **μ° or a fixed published price** (Daniel's open Ask).
   - At μ°, plain int8 tensor work beside the credited sampling blocks is valued at little or nothing. Let x be its plain MACs
     for each credited MAC. At x = 0.25 it is 5.1–7.3% of the claim on the H200 and 10.8–13.0% on the RTX PRO 6000, and
     neither ε_skip·W_reg nor the uncredited column bounds it.
@@ -540,7 +542,7 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
     `ShaRealize` for the extraction (ASK-16, pending), and POOL-THM's `CoinsConfidential` (which `WitnessPathPrivate`
     discharges) and `IndependentCoins`.
   - There is no `SharedNoiseLucks` and no `UnitFixed` (NOFOLD-OPT): a word's 2^-16 guess sits in SAK-LB's λ.
-  - `PeriodInventory` is held until it is decided whether host CPUs and DPUs are devices of the period.
+  - `PeriodInventory` is held pending Daniel: whether host CPUs and DPUs are devices of the period.
 - **The RTX PRO 6000's cells at x > 0 are upper bounds.** 𝓜's sm_120 joint issue rows are closed rows (A36), and they
   stay bounds until CALIB moves them to a current vector.
 - **Perplexity** isn't run for V4, or for 70B at 8K.
