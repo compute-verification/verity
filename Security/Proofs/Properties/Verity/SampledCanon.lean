@@ -158,6 +158,105 @@ theorem runs_blocks (g : List String) (us vs : List Use) (xs : List X)
       rw [h1, h2]
       rfl
 
+/-- **A list whose labels are runs is its runs' blocks**: where `ys` reads, element by element, as each of `vs` in turn
+repeated `c` times, `ys` is one block per member of `vs`, in order, each of its count and each element reading as it. -/
+theorem unflatten {α β γ : Type} (f : α → β) (c : γ → Nat) (g : γ → β) :
+    ∀ (vs : List γ) (ys : List α), ys.map f = vs.flatMap (fun u => List.replicate (c u) (g u)) →
+      ∃ bs : List (γ × List α), bs.map Prod.fst = vs ∧ ys = bs.flatMap Prod.snd ∧
+        ∀ b ∈ bs, b.2.length = c b.1 ∧ ∀ y ∈ b.2, f y = g b.1
+  | [], ys, h => by
+    simp only [List.flatMap_nil, List.map_eq_nil_iff] at h
+    exact ⟨[], rfl, by simp [h], by simp⟩
+  | u :: vs, ys, h => by
+    rw [List.flatMap_cons] at h
+    have hl : (ys.take (c u)).map f = List.replicate (c u) (g u) := by
+      rw [List.map_take, h, List.take_left' (by simp)]
+    have hr : (ys.drop (c u)).map f = vs.flatMap (fun u => List.replicate (c u) (g u)) := by
+      rw [List.map_drop, h, List.drop_left' (by simp)]
+    obtain ⟨bs, h1, h2, h3⟩ := unflatten f c g vs _ hr
+    refine ⟨(u, ys.take (c u)) :: bs, by simp [h1], by simp [← h2], ?_⟩
+    intro b hb
+    rcases List.mem_cons.1 hb with rfl | hb
+    · have hlen := congrArg List.length hl
+      simp only [List.length_map, List.length_replicate] at hlen
+      refine ⟨hlen, fun y hy => ?_⟩
+      have : f y ∈ List.replicate (c u) (g u) := hl ▸ List.mem_map_of_mem hy
+      exact (List.mem_replicate.1 this).2
+    · exact h3 b hb
+
+/-- **Releases of `p` before releases of `q` come first**: where every element `p` holds of is before every element
+`q` holds of, and none is both, the elements of either are `p`'s, then `q`'s. -/
+theorem filter_or_of_before {α : Type} (p q : α → Bool) (hpq : ∀ x, p x = true → q x = false) :
+    ∀ (L : List α), (∀ (i j : Nat) (x y : α), L[i]? = some x → L[j]? = some y → p x = true → q y = true → i < j) →
+      L.filter (fun x => p x || q x) = L.filter p ++ L.filter q
+  | [], _ => rfl
+  | x :: L, h => by
+    have h' : ∀ (i j : Nat) (x y : α), L[i]? = some x → L[j]? = some y → p x = true → q y = true → i < j :=
+      fun i j a b ha hb hpa hqb => Nat.lt_of_succ_lt_succ (h (i + 1) (j + 1) a b (by simpa using ha) (by simpa using hb) hpa hqb)
+    have ih := filter_or_of_before p q hpq L h'
+    by_cases hp : p x = true
+    · simp [hp, hpq x hp, ih]
+    · by_cases hq : q x = true
+      · have hnp : L.filter p = [] := by
+          rw [List.filter_eq_nil_iff]
+          intro a ha hpa
+          obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem ha
+          have := h (i + 1) 0 L[i] x (by simp [hi]) rfl hpa hq
+          omega
+        simp [hp, hq, ih, hnp]
+      · simp [hp, hq, ih]
+
+
+/-- Every element `P` holds of is before every element `Q` holds of. -/
+def Bef {α : Type} (L : List α) (P Q : α → Prop) : Prop :=
+  ∀ (i j : Nat) (x y : α), L[i]? = some x → L[j]? = some y → P x → Q y → i < j
+
+theorem bef_tail {α : Type} {P Q : α → Prop} {x : α} {L : List α} (h : Bef (x :: L) P Q) : Bef L P Q :=
+  fun i j a b ha hb hpa hqb => Nat.lt_of_succ_lt_succ (h (i + 1) (j + 1) a b (by simpa using ha) (by simpa using hb) hpa hqb)
+
+/-- **An order survives a filter.** -/
+theorem bef_filter {α : Type} {P Q : α → Prop} (r : α → Bool) : ∀ (L : List α), Bef L P Q → Bef (L.filter r) P Q
+  | [], _ => fun i j x y hx => by simp at hx
+  | x :: L, h => by
+    have ih := bef_filter r L (bef_tail h)
+    by_cases hr : r x = true
+    · rw [List.filter_cons_of_pos hr]
+      intro i j a b ha hb hpa hqb
+      cases i with
+      | zero =>
+        cases j with
+        | zero =>
+          exact absurd (h 0 0 a b (by simpa using ha) (by simpa using hb) hpa hqb) (Nat.lt_irrefl 0)
+        | succ j => exact Nat.succ_pos j
+      | succ i =>
+        cases j with
+        | zero =>
+          have hb' : x = b := by simpa using hb
+          subst hb'
+          obtain ⟨k, hk, hka⟩ := List.getElem_of_mem (List.mem_filter.1 (List.mem_of_getElem? (by simpa using ha))).1
+          exact absurd (h (k + 1) 0 a x (by simp [hk, hka]) rfl hpa hqb) (Nat.not_lt_zero _)
+        | succ j =>
+          exact Nat.succ_lt_succ (ih i j a b (by simpa using ha) (by simpa using hb) hpa hqb)
+    · rw [List.filter_cons_of_neg hr]
+      exact ih
+
+/-- **The runs' first use is the one whose label comes first**: where each use of `vs` has a coin, a use of `vs` is
+labelled `a`, and in the runs' labels every `a` is before every other label, `vs` begins with a use labelled `a`. -/
+theorem runs_head {γ : Type} (lab : γ → String) (c : γ → Nat) (a : String) :
+    ∀ (vs : List γ), (∀ u ∈ vs, c u ≠ 0) → (∃ u ∈ vs, lab u = a) →
+      Bef (vs.flatMap fun u => List.replicate (c u) (lab u)) (· = a) (· ≠ a) →
+      ∃ u rest, vs = u :: rest ∧ lab u = a
+  | [], _, ⟨_, hu, _⟩, _ => absurd hu (List.not_mem_nil)
+  | u :: vs, hc, ⟨u', hu', hl'⟩, hb => by
+    refine ⟨u, vs, rfl, Classical.byContradiction fun hne => ?_⟩
+    have hmem : a ∈ (u :: vs).flatMap fun u => List.replicate (c u) (lab u) :=
+      List.mem_flatMap.2 ⟨u', hu', List.mem_replicate.2 ⟨hc u' hu', hl'.symm⟩⟩
+    obtain ⟨j, hj, hja⟩ := List.getElem_of_mem hmem
+    have h0 : ((u :: vs).flatMap fun u => List.replicate (c u) (lab u))[0]? = some (lab u) := by
+      obtain ⟨k, hk⟩ := Nat.exists_eq_succ_of_ne_zero (hc u List.mem_cons_self)
+      simp [List.flatMap_cons, hk, List.replicate_succ]
+    exact absurd (hb j 0 a (lab u) (by rw [List.getElem?_eq_getElem hj, hja]) h0 rfl hne) (Nat.not_lt_zero _)
+
 end SampledProofs.Challenger
 
 namespace SampledProofs.OneStageZk
