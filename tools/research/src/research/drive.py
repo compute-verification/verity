@@ -42,6 +42,11 @@ broken before them); a run the machine killed runs again once.
 
 `--shadow` drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
+What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick applies the stale rule (`research.stale`, drive.toml's
+`stale_days` and `stale_close_days`: `_stale`): a PR unmarked at its head and idle `stale_days` rings its owner once a day, and
+at `stale_close_days` drive closes it, its branch kept.  After a landing, the owner of each unmarked open PR whose head contains
+a landed PR's head hears once that its base landed and to merge `main` (`_stacked`; TOP-90 row 23).
+
 `--per-pr-shadow N` (drive.toml's `per_pr_shadow`, 0 is off) runs the per-PR landing (parallel landing's step 3) in shadow beside
 the trains, to measure it: it lands, ejects and posts nothing, and never touches `next`, `main` or the trains' records.  Each
 ready PR, oldest mark first, while fewer than N of its checks run, gets one check (`train.sh`, as an ordinary quiet job,
@@ -152,6 +157,8 @@ CIRCUIT_FAIL_RE = re.compile(r"^FAIL (\S+)", re.M)
 CIRCUIT_KILLED = "circuit-check/killed"
 #: how often drive sweeps the repository's branches (`merge.sweep_branches`)
 BRANCH_SWEEP_S = 86400
+#: how often drive applies the stale rule (`Driver._stale`), which reads the labels of every idle PR: its rings are daily
+STALE_EVERY_S = 3600
 #: what `Driver.culprit` says of a failure that names no file and was a kill
 KILLED = "it was killed (a signal or 128+N) and names no file: a machine's fault"
 #: what it says of one whose files, and the declared inputs of what failed, no PR's change touches: a machine's fault too
@@ -892,10 +899,13 @@ class Driver:
                  regenerate_locks: bool = False, per_pr_shadow: int = 0,
                  slots: Callable[[Path, str], dict[str, int]] = free_slots, land: str = "check",
                  after_landing_no_cache: bool = False, reviews: Callable[[int, str], list] | None = None,
-                 ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2):
+                 ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2,
+                 stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = ()):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
         #: the review landing's Lean checks that may run at once, a lower one and those stacked above it (`lean_stack`)
         self.max_lean_checks = max_lean_checks
+        #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
+        self.stale_days, self.stale_close_days, self.stale_keep = stale_days, stale_close_days, stale_keep
         #: `land = "review"` (Daniel, 24 Oct 06:05Z): each member lands on a reviewer's verdict, a Lean change once a Lean check
         #: passed, and the full check runs after landing (`_review`), reusing no pass with ``after_landing_no_cache``
         self.review, self.after_landing_no_cache = land == "review", after_landing_no_cache
@@ -1984,6 +1994,7 @@ class Driver:
         tip = _out(self.repo, "rev-parse", "HEAD")
         q.log(f"research queue drive: landed {prs} on `main` at {tip[:12]} (check {v.attempt})"
               + (f", with the locks it regenerated for {', '.join(sorted(locks))}" if locks else ""))
+        self._stacked(drive, members, tip)
         if v.why.startswith(DEFERRED):
             self._hand_over(drive, m, prs, tip, main, v)
         elif v.why.startswith(REVIEWED):
@@ -2995,6 +3006,7 @@ class Driver:
             self._stack_lean(drive, dry_run)
         what.insert(0, f"landed #{landed.pr}" if landed else why)
         self._sweep(drive, dry_run)
+        self._stale(drive, dry_run)
         self.start_postland(drive)
         self._behind(drive)
         if not dry_run:
@@ -3678,6 +3690,7 @@ class Driver:
             return self._review(state, drive, dry_run)
         landed = self.land(drive, dry_run)
         self._sweep(drive, dry_run)
+        self._stale(drive, dry_run)
         if landed is None and (why := self.held(drive)):
             self.per_pr(drive)
             if not dry_run:
@@ -3834,12 +3847,127 @@ class Driver:
     def _sweep(self, drive: dict, dry_run: bool) -> None:
         q = self.q
         if not dry_run and not q.shadow and self.now() - drive.get("branches_swept", 0) > BRANCH_SWEEP_S:
-            from .merge import sweep_branches
+            from .merge import SWEEP_LIMIT, sweep_branches
 
             with authed(q.auth):
-                deleted, archived = sweep_branches(self.repo, "origin", log=q.log)
-            drive["branches_swept"] = self.now()
-            q.log(f"research queue drive: branch sweep: {deleted} deleted (on main), {archived} archived (unmerged, idle)")
+                deleted, archived = sweep_branches(self.repo, "origin", log=q.log, keep=drive.get("stale_closed", {}))
+            more = SWEEP_LIMIT in (deleted, archived)
+            if not more:
+                drive["branches_swept"] = self.now()
+            q.log(f"research queue drive: branch sweep: {deleted} deleted (on main), {archived} archived (unmerged, idle)"
+                  + (f"; at its limit of {SWEEP_LIMIT}, so the next tick sweeps again" if more else ""))
+
+    # -- what only a PR's owner acts on: a stale PR (TOP-90 row 36), a stacked PR whose base landed (row 23)
+
+    def _open(self) -> dict[int, PR]:
+        if self._prs is None:
+            self._prs = {p.number: p for p in self.q.github.open_prs()}
+        return self._prs
+
+    def tell(self, drive: dict, keys: list[str], text: str, handle: str | None) -> None:
+        """Tell ``handle``, a PR's owning lane (`CI` when no handle owns it), unless every one of ``keys`` was told; unlike
+        `refuse`, not `CI` beside it.  With --shadow or --dry-run, only log it."""
+        if keys and all(k in drive["told"] for k in keys):
+            return
+        to = (f"@{handle}",) if handle else (CI,)
+        if self.q.shadow or self.dry_run:
+            self.q.log(f"research queue drive: would tell {to[0]}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
+            return
+        if self.post(f"{to[0]} queue: {text}", to):
+            drive["told"].extend(k for k in keys if k not in drive["told"])
+            self.q.log(f"research queue drive: told {to[0]}: {text}")
+        else:
+            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {to[0]}: {text}")
+
+    def _stale(self, drive: dict, dry_run: bool) -> None:
+        """The stale rule (`research.stale`): ring each stale PR's owner once a UTC day (`idle:N@DAY`), one post per owner, and
+        close each PR `stale_close_days` idle with `stale.close_comment`, but not one on `next` or a draft that says "keep open"
+        (`stale.keep_open`); a closed PR's branch is kept (`stale_closed`, which `_sweep` never archives).  Ring keys of other
+        days, and the stacked-PR keys (`_stacked`) of PRs no longer open, leave `told`.  At most once in `STALE_EVERY_S`."""
+        q, now = self.q, self.now()
+        if not self.stale_days or now - drive.get("stale_judged", 0) < STALE_EVERY_S:
+            return
+        from .stale import DAY_S, close_comment, keep_open, stale_prs
+
+        day = time.strftime("%Y-%m-%d", time.gmtime(now))
+        try:
+            prs = self._open()
+            idle = stale_prs(q, prs.values(), now, self.stale_days, lambda n, h: [lab.ts for lab in self.reviews(n, h)],
+                             keep=self.stale_keep)
+        except QueueError as e:
+            q.log(f"research queue drive: stale PRs not judged this tick: {e}")
+            return
+        drive["told"] = [k for k in drive["told"] if not (k.startswith("idle:") and not k.endswith(f"@{day}"))
+                         and not (k.startswith("stacked:") and int(k[len("stacked:"):].partition("<")[0]) not in prs)]
+        if not (dry_run or q.shadow):
+            drive["stale_judged"] = now
+        on_next = {m.pr for m in q.chain()}
+        ring: dict[str | None, list[str]] = {}
+        keys: dict[str | None, list[str]] = {}
+        closed: dict[str | None, list[str]] = {}
+        for n, since in sorted(idle.items()):
+            p, days = prs[n], int((now - since) // DAY_S)
+            if n in on_next or keep_open(p):
+                continue
+            who = self._handle(n)
+            if self.stale_close_days and now - since >= self.stale_close_days * DAY_S:
+                if dry_run or q.shadow:
+                    q.log(f"research queue drive: would close #{n}: {days} days unmarked and idle")
+                    continue
+                try:
+                    q.github.close(n, close_comment(self.stale_close_days))
+                except QueueError as e:
+                    q.log(f"research queue drive: closing #{n} ({days} days unmarked and idle) failed; the next tick tries again: {e}")
+                    continue
+                if p.branch:
+                    drive.setdefault("stale_closed", {})[p.branch] = n
+                q.log(f"research queue drive: closed #{n}: {days} days unmarked and idle")
+                closed.setdefault(who, []).append(f"#{n}")
+            elif f"idle:{n}@{day}" not in drive["told"]:
+                ring.setdefault(who, []).append(f"#{n} ({days} d)")
+                keys.setdefault(who, []).append(f"idle:{n}@{day}")
+        for who in dict.fromkeys([*ring, *closed]):
+            said = []
+            if ring.get(who):
+                said.append(f"stale, not marked ready at their heads and idle {self.stale_days}+ days: {', '.join(ring[who])}. Push, "
+                            "mark ready or close each" + (f"; drive closes one {self.stale_close_days} days idle, its branch kept"
+                                                          if self.stale_close_days else ""))
+            if closed.get(who):
+                said.append(f"closed after {self.stale_close_days} days unmarked and idle, branches kept (reopen one to go on): "
+                            f"{', '.join(closed[who])}")
+            self.tell(drive, keys.get(who, []), "; ".join(said), who)
+
+    def _stacked(self, drive: dict, members: list[Member], tip: str) -> None:
+        """After a landing at ``tip``, tell the owner of each open PR whose head contains a landed member's head (a PR stacked
+        on it) that its base landed, once per (PR, base) (`stacked:P<Q`): not one marked ready at its head, which lands from
+        `next` as it is, and whose merge of `main` would need a new mark."""
+        from .stale import pull_refs
+
+        q = self.q
+        landed = {x.pr for x in members}
+        try:
+            rest = {n: p for n, p in self._open().items() if n not in landed}
+            refs = pull_refs(q, rest.values())
+        except QueueError as e:
+            q.log(f"research queue drive: PRs stacked on {', '.join(f'#{n}' for n in sorted(landed))} not found: {e}")
+            return
+        bases: dict[int, list[int]] = {}
+        for x in members:
+            out = _git(self.repo, "for-each-ref", "--contains", x.head, "--format=%(refname:lstrip=3)", "refs/queue/pr/").stdout
+            for n in (int(s) for s in out.split() if s.isdigit()):
+                if n in rest and refs.get(n) == rest[n].head and f"stacked:{n}<{x.pr}" not in drive["told"]:
+                    bases.setdefault(n, []).append(x.pr)
+        for n, below in sorted(bases.items()):
+            try:
+                if q.ready(n, rest[n].head):
+                    continue
+            except QueueError as e:
+                q.log(f"research queue drive: #{n}'s ready mark can't be read, so it isn't told its base landed now: {e}")
+                continue
+            names = ", ".join(f"#{b}" for b in below)
+            self.tell(drive, [f"stacked:{n}<{b}" for b in below],
+                      f"#{n}'s base{'s' if len(below) > 1 else ''} {names} landed in main at {tip[:12]}; merge main into #{n}",
+                      self._handle(n))
 
     def _run_after(self) -> None:
         pending, self._after = self._after, None
