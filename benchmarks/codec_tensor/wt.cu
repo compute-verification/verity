@@ -2146,7 +2146,7 @@ __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u6
 
 // --- the fused decode GEMM --------------------------------------------------------------------------------------------
 //
-// The copy lane bulk-copies task i's TW stored words (SB bytes) into stage i mod stages; the D decoder warps decode
+// The copy lane copies task i's TW stored words (SB bytes) in bulk into stage i mod stages; the D decoder warps decode
 // them in place; warp D, the MMA warp, takes the tasks in order and runs the plain kernel's 16 tiles on each. The copy
 // lane is the MMA warp's lane 0, which copies task i + stages once the warp's loads of task i are behind `empty`, or
 // with two MMA warps, or a sketch, a producer warp's after them (fused_producers), which copies once `empty` lets it. The warps after these, if any, tag the layer's store (`tag_warp`), read through L2 behind the bulk copies.
