@@ -7,8 +7,9 @@ parse, `NciCheck.parse`, three of the decoder's parts on their own (the program 
 SHA-512 of that, each a step `Flock.Program.decode` takes, on the whole descriptor), C-Flock's decoder
 (`Flock.Program.decode`, which parses the program's text again and hashes it),
 `NciCheck.Widths.reinterpretation`, `Prog.orderViolation`, the layout checks, `walkable`, `analyze` split into each reached
-Definition's summary (`summarize`, callees first, the `TOP` slowest named with their body nodes and return pieces; one of
-at least `BIG` body nodes, 2^17 unless given, step by step: `summarizeTimed`) and the
+Definition's summary (`summarize`, callees first, the `TOP` slowest named with their body nodes and return pieces, and
+the `TOP` with the most return pieces; one of at least `BIG` body nodes, 2^17 unless given, step by step, with its
+return's pieces before and after `coalesce`: `summarizeTimed`) and the
 root's reads (`nodeReads`), and the verdict (θ, the owners, `intoOf`, `novelWidth`). The last line is the verdict, which
 `nci_cost.sh` holds to `nci-check --policy`'s. A measurement, not a verifier: it runs what `NciCheck.Desc.evaluate`
 runs, in its order.
@@ -38,20 +39,16 @@ def orFail {α : Type} (what : String) : Except String α → IO α
 
 def msSince (t : Nat) : IO Nat := return ((← IO.monoNanosNow) - t) / 1000000
 
-/-- `Ivs.norm` with `List.mergeSort` in place of `Array.qsort`: the same intervals in the same order. -/
-def normMerge (xs : Array (Nat × Nat)) : Ivs :=
-  ((xs.filter fun p => p.1 < p.2).toList.mergeSort fun x y => x.1 ≤ y.1).foldl (init := #[]) fun acc (a, b) =>
-    match acc.back? with
-    | some (c, e) => if a ≤ e then acc.pop.push (c, max b e) else acc.push (a, b)
-    | none => acc.push (a, b)
+/-- A return's pieces, segments of copies counted once. -/
+def pieceCount (segs : Array Seg) : Nat := segs.foldl (fun n s => n + s.ps.size) 0
 
 /-- The most intervals of `xs` sharing one start. -/
 def maxMult (xs : Array (Nat × Nat)) : Nat :=
   (xs.foldl (fun (m : Std.HashMap Nat Nat) x => m.insert x.1 (m.getD x.1 0 + 1)) {}).fold (fun a _ v => max a v) 0
 
-/-- `summarize P memo d`, step by step, each timed: the return's pieces (`down`), every node's reads (`nodeReads`, with
-the time of each `CHUNK` nodes), and per parameter `ivsOf` and `Ivs.norm`, with `normMerge`'s time beside it; the
-summary is `summarize`'s, and `PHASE` gives the steps and the parameters `Ivs.norm` takes longest on. -/
+/-- `summarize P memo d`, step by step, each timed: the return's pieces (`down`, then `coalesce`), every node's reads
+(`nodeReads`, with the time of each `CHUNK` nodes), and per parameter `ivsOf` and `Ivs.norm`; the summary is
+`summarize`'s, and `PHASE` gives the steps and the parameters `Ivs.norm` takes longest on. -/
 def summarizeTimed (P : Flock.Program.Prog) (memo : Array Summary) (d : Nat) (topN : Nat) : IO Summary := do
   let CHUNK := 2 ^ 17
   let defn := P.defs[d]!
@@ -62,6 +59,8 @@ def summarizeTimed (P : Flock.Program.Prog) (memo : Array Summary) (d : Nat) (to
   let mut ret := #[]
   for s in (ofSeq body.ret).segs do
     for q in s.ps do ret := ret ++ (← orFail "ret" (down c Flock.Steps.FUEL q))
+  let downPieces := pieceCount ret
+  let joined := coalesce ret
   let retMs ← msSince t
   let t ← IO.monoNanosNow
   let mut tc ← IO.monoNanosNow
@@ -82,11 +81,9 @@ def summarizeTimed (P : Flock.Program.Prog) (memo : Array Summary) (d : Nat) (to
   chunks := chunks.push (← msSince tc)
   let readsMs ← msSince t
   let mut used : Array Ivs := #[]
-  let mut stats : Array (Nat × Nat × Nat × Nat × Nat × Nat) := #[]
+  let mut stats : Array (Nat × Nat × Nat × Nat × Nat) := #[]
   let mut ivsMs := 0
   let mut normMs := 0
-  let mut mergeMs := 0
-  let mut same := true
   for i in [0:acc.size] do
     let qs := acc[i]!
     let t ← IO.monoNanosNow
@@ -94,24 +91,20 @@ def summarizeTimed (P : Flock.Program.Prog) (memo : Array Summary) (d : Nat) (to
     let a ← IO.monoNanosNow
     let n ← IO.lazyPure fun _ => Ivs.norm iv
     let b ← IO.monoNanosNow
-    let m ← IO.lazyPure fun _ => normMerge iv
-    let e ← IO.monoNanosNow
-    same := same && n == m
     ivsMs := ivsMs + (a - t)
     normMs := normMs + (b - a)
-    mergeMs := mergeMs + (e - b)
     used := used.push n
-    stats := stats.push ((b - a) / 1000000, (e - b) / 1000000, i, qs.size, iv.size, maxMult iv)
-  let top := (stats.qsort fun x y => x.1 > y.1).extract 0 topN |>.map fun (ms, mms, i, nq, ni, mult) =>
+    stats := stats.push ((b - a) / 1000000, i, qs.size, iv.size, maxMult iv)
+  let top := (stats.qsort fun x y => x.1 > y.1).extract 0 topN |>.map fun (ms, i, nq, ni, mult) =>
     Json.mkObj [("param", toJson i), ("name", Json.str ((body.params[i]?.map (·.1)).getD "")), ("norm_ms", toJson ms),
-      ("merge_ms", toJson mms), ("pieces", toJson nq), ("intervals", toJson ni), ("max_same_start", toJson mult)]
+      ("pieces", toJson nq), ("intervals", toJson ni), ("max_same_start", toJson mult)]
   report "summarize_steps" t0 [("key", Json.str (String.ofList (defn.key.toList.take 80))),
     ("body_nodes", toJson body.nodes.size), ("params", toJson body.params.size), ("ret_ms", toJson retMs),
+    ("ret_down_pieces", toJson downPieces), ("ret_pieces", toJson (pieceCount joined)),
     ("reads_ms", toJson readsMs), ("reads", toJson reads), ("reads_chunk_ms", toJson chunks), ("chunk", toJson CHUNK),
-    ("ivsOf_ms", toJson (ivsMs / 1000000)), ("norm_qsort_ms", toJson (normMs / 1000000)),
-    ("norm_merge_ms", toJson (mergeMs / 1000000)), ("norm_same", toJson same),
+    ("ivsOf_ms", toJson (ivsMs / 1000000)), ("norm_ms", toJson (normMs / 1000000)),
     ("pieces", toJson (acc.foldl (fun n qs => n + qs.size) 0)), ("top", Json.arr top)]
-  return { ret := PS.of ret, used }
+  return { ret := PS.of joined, used }
 
 def main (args : List String) : IO UInt32 := do
   let some (path : String) := args[0]? | IO.eprintln "usage: nci-phases INSTANCE [TOP [BIG]]"; return 2
@@ -179,7 +172,14 @@ def main (args : List String) : IO UInt32 := do
       ("ret_pieces", toJson (sm.ret.segs.foldl (fun n s => n + s.ps.size) 0)),
       ("out_leaves", toJson defn.outLeaves)]
   let reachedN := (List.range P.defs.size).countP fun d => seen[d]!
-  report "summaries" t0 [("reached", toJson reachedN), ("top", Json.arr top)]
+  let byPieces := ((Array.range P.defs.size).filter (seen[·]!)).map fun d => (pieceCount memo[d]!.ret.segs, d)
+  let frag := (byPieces.qsort fun a b => a.1 > b.1).extract 0 topN |>.map fun (n, d) =>
+    let defn := P.defs[d]!
+    Json.mkObj [("key", Json.str (String.ofList (defn.key.toList.take 160))), ("ret_pieces", toJson n),
+      ("ret_segments", toJson memo[d]!.ret.segs.size), ("out_leaves", toJson defn.outLeaves),
+      ("body_nodes", toJson defn.body.nodes.size)]
+  report "summaries" t0 [("reached", toJson reachedN),
+    ("ret_pieces", toJson (byPieces.foldl (fun n x => n + x.1) 0)), ("top", Json.arr top), ("most_pieces", Json.arr frag)]
   let t ← IO.monoNanosNow
   let c : Ctx := { P, memo, d := P.root, args := body.nodes.map fun n => n.args.map (ofSeq ·.seq) }
   let mut reads : Array (Array Seg) := #[]
