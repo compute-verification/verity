@@ -1,5 +1,5 @@
 # The toy's integrity by sampled proofs: one run of the torch loop (integrations/torch_loop) audited by the proof service.
-# `verity run integrations/torch_loop/configs/sampled-proofs.toml --local` runs every role on this machine; on several,
+# `verity run examples/toy-network/config.toml --local` runs every role on this machine; on several,
 # each machine runs `verity run CONFIG --party ROLE` for the roles placed on it. The roles are README.md's.
 format = "verity/config/v0"
 protocols = ["sampled-proofs"]

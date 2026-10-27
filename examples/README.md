@@ -5,5 +5,7 @@ each party runs), and the commands a person runs to serve and audit it. What att
 integration's (`integrations/`), and the protocols it runs stay in core (`verity/core/`). `verity` imports nothing from
 `examples/` (`tests/test_boundaries.py`), and `verity example NAME` runs `examples/<NAME>/`'s `run.py` or `run.sh`.
 
+- `toy-network/`: the toy (`integrations/torch_loop`) audited by sampled proofs, every role from `config.toml` through
+  `verity run`, on CPU; the network certifier joins its `protocols` once its role exists.
 - `vllm/`: Llama-3.2-1B served by vLLM on one GPU through `verity_vllm`'s committing endpoint, each closed Commit window
   audited on the prove path. Its scripts reach the integration by `PYTHONPATH`; it is not a package.

@@ -1,26 +1,31 @@
-# The toy's configurations
+# toy-network
 
-A configuration is the one Verity artifact a run needs: the subprotocols it runs (`protocols`), the workload's shape, the
-proof service's selection (`[service] law`), each role's machine and principal (`[[party]]`), and the channels between
-them with their ordering (`[[channel]]`'s `after`; `private` for a channel that carries the prover's witness). It holds
-no ε or δ: what a run's draw establishes is in its verdict. `verity config new | check | hash` writes, checks and hashes
-one, and `verity run CONFIG --party ROLE` runs a role (`--local`: every role, on this machine).
+The toy (`integrations/torch_loop`, a W8A8 MLP on CPU) served and audited by sampled proofs, with the network
+certifier to join. `config.toml` is the example's one Verity artifact: the subprotocols it runs (`protocols`), the
+workload's shape, the proof service's selection (`[service] law`), each role's machine and principal (`[[party]]`), and
+the channels between them with their ordering (`[[channel]]`'s `after`; `private` for a channel that carries the
+prover's witness). It holds no ε or δ, because what a run's draw establishes is in its verdict. `verity config new |
+check | hash` writes, checks and hashes a configuration, and `verity run CONFIG --party ROLE` runs a role (`--local`:
+every role, on this machine).
+
+`protocols` lists only `sampled-proofs` until the network certifier's role exists. A configuration that lists
+`certifier` before then gets `"certifier": "absent"` in its verdict line, and the product rejects.
 
 ## Sampled proofs, from a fresh clone
 
-`sampled-proofs.toml` runs the toy's integrity by sampled proofs. Every role runs on CPU.
+`config.toml` runs the toy's integrity by sampled proofs. Every role runs on CPU.
 
 ~~~text
 git clone https://github.com/compute-verification/verity && cd verity && git fetch origin main
 uv sync --all-packages --extra torch-cpu
-verity run integrations/torch_loop/configs/sampled-proofs.toml --local
+verity run examples/toy-network/config.toml --local
 ~~~
 
 Until `verity run` is in the tree, the roles' own entry point runs the same thing:
 
 ~~~text
 PYTHONPATH=benchmarks/all_protocols uv run python -m verity_all_protocols.parties \
-    integrations/torch_loop/configs/sampled-proofs.toml --state STATE --local
+    examples/toy-network/config.toml --state STATE --local
 ~~~
 
 The first run builds what the roles run into `STATE/build` (`benchmarks/all_protocols/build.sh`: C-Flock's
@@ -54,5 +59,8 @@ this order, and each can run alone with `--party ROLE` on the same `STATE`:
    coins are `simulated`.
 
 `--tamper 0` (the roles' entry point only) makes block 0's workers record outputs that are not the model's, and the
-verifier rejects it. In step 0 the roles share `STATE` on one machine. Running them on separate machines, with their
-channels on the wire, comes with the roles as deploy-core `Party`s.
+verifier rejects it. In step 0 the roles share `STATE` on one machine, and they live in
+`benchmarks/all_protocols/verity_all_protocols/parties.py`, because they run the toy loop, the one-stage audit driver
+and the development challenger host, none of which `verity.core` may import. They move into
+`verity/core/protocols/sampled_proofs/` as deploy-core `Party`s, which also puts their channels on the wire between
+machines.
