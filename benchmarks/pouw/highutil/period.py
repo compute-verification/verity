@@ -28,7 +28,8 @@ equally likely. Each pick's tree paths come off the host copy of its call's tree
 **The verifier** (`verify_pick`), after the period: the prover's answer (`answer`: the opened rows recomputed from the
 operands and coins, their salts and paths, and A's and B's rows with their operand openings) against v31.py's
 ``fill_check``, on the verifier's own seeds from the coins, the opened operand rows and the call's root. Credit is
-all-or-nothing: the period's MACs if every pick passes, else none. ε_skip = ln(1/δ)/(ηQ) at δ = 1%.
+all-or-nothing: the period's MACs if every pick passes, else none. ε_skip is the least ε with (1 − ηε)^Q ≤ δ at
+δ = 1%, PoUW's `window.eps_at`.
 
 **Deviations from v3.2**, each named in the report: the picks are a fixed Q W_b / W_reg a block, not ``poisson:Q``;
 the coins are 64-byte session coins expanded here, not the challenger's streamed seeds; no certifier signs the receipts
@@ -45,7 +46,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import os
 import shutil
 import subprocess
@@ -54,6 +54,7 @@ import tempfile
 import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -71,6 +72,7 @@ sys.path.insert(0, str(TREE / "benchmarks" / "pouw" / "accel_v31"))
 
 import v31  # noqa: E402
 
+from verity.core.protocols.pouw import window as Wd  # noqa: E402
 from verity.ml.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.ml.commitments.limits import VerificationLimits  # noqa: E402
@@ -96,8 +98,10 @@ CHECKPOINT = {"repo": "verity-int8/Llama-3.1-8B-INT8", "revision": "723d342ac443
 #: hu's layers from the checkpoint's modules, fused as served: (name, the modules whose rows it stacks)
 FUSED = (("qkv", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")), ("o", ("self_attn.o_proj",)),
          ("up", ("mlp.gate_proj", "mlp.up_proj")), ("down", ("mlp.down_proj",)))
-ETA = 1 - 2.8e-5
-DELTA = 0.01
+#: η = 1 − p, p the free-guess rate Dither's D6 prices (a pick on a skipped MAC catches it w.p. η); δ = 1% is this
+#: period's own
+ETA = Fraction(999_972, 10 ** 6)
+DELTA = Fraction(1, 100)
 #: the ANDs of a MAC under main's Boolean lowering of an s8 x s8 linear into int32: GemmAccumulatorS8_v2{K, DOT} on the
 #: card's IMMA step (BlackwellS8ImmaDot32_v2; sm_90's step costs the same) is 8,316 ANDs at K = 64 and linear in K. It is
 #: not creditSize's lowering pinned at registration: Dither's Fill has no Definition yet.
@@ -173,8 +177,9 @@ def step_macs() -> int:
     return sum(M * n * k for _, n, k in LAYERS)
 
 
-def eps_skip(q: int, delta: float = DELTA) -> float:
-    return math.log(1 / delta) / (ETA * q)
+def eps_skip(q: int) -> float:
+    """The least ε (on `eps_at`'s grid) with (1 − ηε)^q <= δ: q picks, each MAC equally likely, credited/n = η, n > q."""
+    return float(Wd.eps_at(q, DELTA, ETA.numerator * q, ETA.denominator * q, 1))
 
 
 # --------------------------------------------------------------------------------------------------------- operands
@@ -838,7 +843,7 @@ class Period:
         return {"period": pid, "arm": "proto", "cheat": cheat, "registration": reg, "registration_digest": reg_digest.hex(),
                 "blocks": blocks, "steps": plan.blocks * plan.steps, "wall_s": t_last, "session_open_s": t_open,
                 "verify_s": t_verify, "macs": macs, "credited_macs": macs if ok else 0, "accepted": bool(ok), "q": len(jobs),
-                "eps_skip": eps_skip(len(jobs)), "delta": DELTA, "eta": ETA, "failures": [f"{all_picks[i][0]}: {w}" for i, w in fails[:8]],
+                "eps_skip": eps_skip(len(jobs)), "delta": float(DELTA), "eta": float(ETA), "failures": [f"{all_picks[i][0]}: {w}" for i, w in fails[:8]],
                 "failed": len(fails), "coins": ev, "verdict": line,
                 "gaps_s": [blocks[b]["t_done_s"] - blocks[b - 1]["t_done_s"] - blocks[b]["host_ms"] / 1e3
                            for b in range(1, len(blocks))]}
@@ -991,7 +996,7 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None, card:
         "gamma_wall": None, "gamma_gpu": None,
         "gaps_s": med([g for r in honest for g in r["gaps_s"]]),
         "session_open_s": med([r["session_open_s"] for r in honest]),
-        "q": med([r["q"] for r in honest]), "eps_skip": med([r["eps_skip"] for r in honest]), "delta": DELTA,
+        "q": med([r["q"] for r in honest]), "eps_skip": med([r["eps_skip"] for r in honest]), "delta": float(DELTA),
         "sm_mhz_median": med(mhz),
         "verdicts": [r["verdict"] for r in honest + neg],
         "negative_refused": [not r["accepted"] for r in neg],

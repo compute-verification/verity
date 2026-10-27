@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -17,9 +18,11 @@ import pipes
 import terms
 
 
-def test_eps_skip_at_delta_one_percent():
-    assert math.isclose(P.eps_skip(2048), math.log(100) / (P.ETA * 2048))
-    assert P.eps_skip(462) < 0.01 < P.eps_skip(460)
+def test_eps_skip_at_delta_one_percent_is_the_least_on_the_grid_and_under_first_order():
+    e, step = Fraction(P.eps_skip(2048)), Fraction(1, 2 ** 32)
+    assert (1 - P.ETA * e) ** 2048 <= P.DELTA < (1 - P.ETA * (e - step)) ** 2048
+    assert P.eps_skip(2048) < math.log(100) / (float(P.ETA) * 2048)
+    assert P.eps_skip(459) < 0.01 < P.eps_skip(458)
 
 
 def test_picks_are_the_coin_s_and_weigh_each_mac_equally():

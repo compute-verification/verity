@@ -38,7 +38,7 @@ of the proof block and its selection rule, 0 at 100% sampling. Each term is a fr
   overhead above ♭ leave ε for γ, as the factor T_H/B_♭ · f_max/f_H (`credit_ratio`; f_max/f_H = 1/(1 − ε_clock)).
 - **ε_luck** is Theorem S inside the same LP: an accepted cheater writes (1 − d̄) of the words and folds them all, d̄ =
   ln(1/δ)/((1 − p)·S) over S spot checks (note:20261016T0005Z-draft-luck-loss-round4), each filler's blocks at their
-  own p (`budget`), and ε_luck is what that saves it, d̄·w*/B(H) at π*. The terms add up to the LP exactly.
+  own p (`first_order_budget`), and ε_luck is what that saves it, d̄·w*/B(H) at π*. The terms add up to the LP exactly.
 - **ε_sched** is honest's measured time above its model time (`[measured]` in data/honest/), when the design runs the
   profile's fold at its L (with its fillers, the measured time plus their model cost). Unmeasured, it is 0: honest is
   certified at the model's bound, which moves it into γ.
@@ -706,17 +706,17 @@ def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: fl
                folds={r: x[i] for r, i in zip(menu, iz) if x[i] > 1e-12})
 
 
-def budget(d: Design) -> float:
+def first_order_budget(d: Design) -> float:
     """Theorem S with each block at its own p: Pr[accept ∧ Σ_w (1 − p_w)·d_w ≥ B] ≤ e^{−B}, so at acceptance δ an
     accepted cheater's deficient blocks, each weighted by 1 − p, are at most ln(1/δ)/S of the S checked ones. This is
     CALC's reading of the theorem's proof (a window passes w.p. ≤ 1 − (1 − p_w)·d_w ≤ e^{−(1 − p_w)·d_w}), which states
-    one p; with one p it is the theorem."""
+    one p; with one p it is the theorem. First order, not PoUW's `window.eps_at`: the LP needs it linear in the d_w."""
     return math.log(1 / d.delta) / d.checks
 
 
-def deficit(d: Design) -> float:
+def first_order_deficit(d: Design) -> float:
     """d̄ = ln(1/δ)/((1 − p)·S): the words an accepted cheater skips when it skips words alone."""
-    return budget(d) / (1 - d.p)
+    return first_order_budget(d) / (1 - d.p)
 
 
 @dataclass(frozen=True)
@@ -741,7 +741,7 @@ class Setup:
         qu = q_uniform if q_uniform is not None else (d.q_uniform if d.q_uniform is not None else q)
         return fastest(d, self.honest, self.machine, q=q if lanes else None, q_uniform=qu if uniform else None,
                        baseline=True, fillers=self.fillers, cheat=True,
-                       tensor_mma=self.honest.tensor(self.operands, d.floor), budget=budget(d) if luck else 0.0,
+                       tensor_mma=self.honest.tensor(self.operands, d.floor), budget=first_order_budget(d) if luck else 0.0,
                        table=self.table, forms=self.forms)
 
     def machine_eps(self, q: float, **routes) -> float:
@@ -891,7 +891,7 @@ def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = 
                mand=sum(p.eps for p in d.mand.values()), machine_eps=machine_eps,
                machine_as_built=max(0.0, 1 - c.T / s.as_built.T),
                cert=min(machine_eps, max(0.0, 1 - c.price(pi, base.n) / base.T)), floor=s.floor(),
-               deficit=deficit(d), luck=max(0.0, (c.T - lucky.T) / base.T),
+               deficit=first_order_deficit(d), luck=max(0.0, (c.T - lucky.T) / base.T),
                clock=d.clock.eps if credit == "H" else 0.0, adapt=adapt)
 
 

@@ -214,10 +214,10 @@ def test_the_certificate_and_the_terms_add_up():
 
 def test_luck_and_the_total():
     """Theorem S inside the LP: the cheater skips d̄ of the words, saving their MMA and operands and not their fold."""
-    assert E.deficit(DUO) == pytest.approx(41 * math.log(2) / (0.25 * 48000))
+    assert E.first_order_deficit(DUO) == pytest.approx(41 * math.log(2) / (0.25 * 48000))
     e = E.eps(DUO, PI, 8, operands="honest", lanes=False, uniform=False)
     assert e.cheat.binding == ("JI3e_0",)
-    assert e.luck == pytest.approx(E.deficit(DUO) * (JI + 0.375) / (JI + 12.375), rel=1e-6)
+    assert e.luck == pytest.approx(E.first_order_deficit(DUO) * (JI + 0.375) / (JI + 12.375), rel=1e-6)
     e = E.eps(DUO, PI, 8)
     assert e.sched is None and e.mand == 0 and e.skip == 0.123
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.clock))
@@ -278,7 +278,7 @@ def test_luck_spends_one_budget_on_words_and_filler():
     assert [(f.p, f.luck.split(":")[0]) for f in d.filler] == [(0.0, E.PINNED.split(" ")[0])]
     e = E.eps(d, PIU, 8, operands="floor", credit="floor")
     assert e.lucky.short["filler 1"] == 0
-    assert (1 - d.p) * e.lucky.short["words"] == pytest.approx(E.budget(d), rel=1e-6)
+    assert (1 - d.p) * e.lucky.short["words"] == pytest.approx(E.first_order_budget(d), rel=1e-6)
 
     def at(p: float, operands: str = "floor") -> E.Eps:
         return E.eps(replace(d, filler=tuple(replace(f, p=p) for f in d.filler)), PIU, 8, operands=operands,
@@ -286,7 +286,7 @@ def test_luck_spends_one_budget_on_words_and_filler():
 
     s = at(0.854).lucky.short
     assert s["filler 1"] > 0 and (1 - d.p) * s["words"] + (1 - 0.854) * s["filler 1"] == pytest.approx(
-        E.budget(d), rel=1e-6)
+        E.first_order_budget(d), rel=1e-6)
     assert at(0.854).luck > e.luck
     assert at(1.0).lucky.short["filler 1"] == pytest.approx(1)
     assert at(1.0, "free").core() > at(0.0, "free").core() > at(0.0).core()

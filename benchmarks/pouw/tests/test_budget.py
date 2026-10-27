@@ -22,7 +22,7 @@ GAMMA = {"sm_120": 2.1868, "H200": 2.3435, "B200": 2.5611, "L40S": 3.0144, "A100
 
 
 def test_luck_is_the_drawn_units_deficient_branch_and_the_sum_bounds_the_mix():
-    assert B.DEFICIT == pytest.approx(0.002368, rel=1e-3)
+    assert B.FIRST_ORDER_DEFICIT == pytest.approx(0.002368, rel=1e-3)
     for f in B.FAMILIES:
         t = B.today(f)
         assert t.eps_luck == pytest.approx(t.eps_sample * t.sigma_w / (1 - B.P_PASS))

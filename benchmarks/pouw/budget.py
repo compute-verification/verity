@@ -47,7 +47,8 @@ from pathlib import Path
 LN_INV_DELTA = 41 * math.log(2)   # ℓ_s at δ_s = 2⁻⁴¹, the machine model's luck budget (deficit 0.002368 at p = ¾)
 ROUNDS = 48_000                   # S: one week of 12.6 s rounds (Theorem S; SPEC)
 P_PASS = 0.75                     # a deficient unit's pass probability at 1-bit coins (Theorem S)
-DEFICIT = LN_INV_DELTA / ((1 - P_PASS) * ROUNDS)   # d̄: full checking's deficit; the machine model's luck = σ_w·d̄
+#: d̄: full checking's deficit, Theorem S to first order as the machine model's LP takes it; its luck = σ_w·d̄
+FIRST_ORDER_DEFICIT = LN_INV_DELTA / ((1 - P_PASS) * ROUNDS)
 
 #: cost-model/v1 (art:551e804f4585f234f9c64b7e12655788e7af0fbe2eb75977fe1e913b8f2f22f2) is GPU-seconds of an RTX PRO
 #: 6000 proving and CPU-seconds at 1/55 of one, so a family pays it at this price (vy-nebius-1/2, measured price; that
@@ -332,7 +333,7 @@ def point(f: Family, c: Config, b_s: float, *, leaf: int = 128, p: float = P_PAS
     s = sample(f, b_s, y, c.regime)
     if s is None:
         return None
-    sigma_w = luck_full / DEFICIT
+    sigma_w = luck_full / FIRST_ORDER_DEFICIT
     luck = s.eps * sigma_w / (1 - p)
     served = -f.served * skip if c.served else 0.0
     hashing = hash_leaves(leaf) + HASH_RECEIPTS + DRAWS
