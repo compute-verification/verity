@@ -36,14 +36,16 @@ python tools/verity/lean/check.py --lift LIFTS.json PKG  write each guarantee {"
                                                   `--update --moved LIFTS.json.moved.json PKG` (below)
 python tools/verity/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
+python tools/verity/lean/conventions.py [--json F] [PKG...]  the Lean's form counted from the text, no build: namespaces against
+                                                  module paths, casing, name forms, retired words, file sizes, heartbeat
+                                                  overrides, docstrings, where guarantees and assumptions live; no audit reads it
+python tools/verity/lean/map.py [--moves MAP.toml]       packages, areas by tree, the area graph, module sizes; no build
 ~~~
 
-A lane's edit loop is `verity lean try FILE [--on NODE]`: through `research run` (default vy-nebius-cpu-1's `research` pool) it runs
-`lean_changed.py --try FILE` on this checkout, its uncommitted edits included, which takes one of the node's `build` Lean slots and
-that slot's tree, the one `--records` keeps warm, syncs the closure of the package that owns FILE and its dependencies there, runs
-`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`, and prints Lean's output with the
-run's wall time, exiting with lean's status. It never runs this audit and never writes a record: `--records PKG --update` is for the
-lock and the mark only (`lean_changed.py`'s docstring).
+A lane's edit loop is `verity lean try FILE [--on NODE]`: `lean_changed.py --try FILE` on this checkout, uncommitted edits included,
+through `research run` on the warm tree of a node's `build` Lean slot. It builds only what changed among FILE's imports, then runs
+`lake env lean FILE` and exits with its status. It never runs this audit and never writes a record: `--records PKG --update` is for
+the lock and the mark only (`lean_changed.py`'s docstring).
 
 ## What it checks
 
@@ -240,9 +242,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   guarantees that read them, and a `digest` of those hashes (which the record therefore determines). Without `--update`
   the audit fails on any difference, so a statement, or a definition it depends on, cannot change without a visible diff
   of this file. A record holds the statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof
-  with allowed axioms replaces it. A record written before guarantees were called that holds them (and each module's
-  readers) under `pins`: the audit reads it so, `--update` rewrites it under today's names, and a record holding both
-  is refused.
+  with allowed axioms replaces it.
 - `owner`, in each guarantee's entry: the handle of the lane that answers for it (`@proofs`, `@compute-accounting`), whom
   a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
   `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
@@ -308,13 +308,11 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
-  therefore the same statement, and a different term is a different one. Records written with `Expr.hash`, which has
-  32 bits, are still checked as they are, and the run notes them. `--update` rewrites them, and its review says
-  "rehashed" where the 32-bit hash still matches, which Daniel's DM (below) leaves out.
+  therefore the same statement, and a different term is a different one. A record of `Expr.hash`'s 32 bits (none is
+  left) is checked as it is; `--update` rewrites it, "rehashed" in its review and left out of Daniel's DM (below).
 
 **A changed guarantee reaches Daniel.** A weakened definition leaves every proof valid, so the axiom checks and the
-replay pass it: only the records see it, and only a person can judge it. (A redefinition of `Collision` once made a
-Merkle binding guarantee vacuous for unsalted schemes; the records flagged it and a review caught it.) `--update` records
+replay pass it: only the records see it, and only a person can judge it. `--update` records
 the change and prints it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
 An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions or
@@ -339,13 +337,12 @@ are, and in place of `G as` the value of `G` at the type's universe levels with 
 `Meta.unfoldDefinition?` unfolds an applied constant), the proofs Lean abstracts out of a definition (its `G._proof_<n>`
 theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
 type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
-read by no other guarantee, needs no reading of its own; the review then holds no statement change. (No merge needs a
-statement reviewer, for a lift or any other change: Daniel, 8 Oct.) Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+read by no other guarantee, needs no reading of its own; the review then holds no statement change. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
 (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
 theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
 lists a lifted guarantee as changed.
 
-`four_names` lists the namespace roots (`["Nci", "NetTiming"]`) whose guarantees are all in the four-name form: each is
+`four_names` lists the namespace roots whose guarantees are all in the four-name form: each is
 `X.SecurityProofs.G : X.Guarantees.G` (universe parameters aside), with `G` a definition of a `Guarantees` module, and the
 audit fails on any other guarantee under a listed root. A package's owner adds its root once every guarantee there is
 lifted, or no longer a guarantee.
@@ -421,9 +418,8 @@ conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python t
 it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
 or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
 the digest is recomputed. Guarantees arrive byte for byte from their branches, and a hand-written section one side extends
-(a module added to `meaning`) is kept. A side written before guarantees were called that (`pins`) is read under today's
-names. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the other side's
-restatement both apply.
+(a module added to `meaning`) is kept. A guarantee's `owner` merges apart from the rest of its entry, so one side's new
+owner and the other side's restatement both apply.
 
 What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
 `reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates

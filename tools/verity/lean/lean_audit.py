@@ -152,8 +152,10 @@ FLAGS = ["--build", "--closure"]
 #: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and of the scratch tree, where a
 #: read of one fails the audit
 NOT_READ = {
+    "conventions.py": "the survey of the Lean's form (naming, structure, organization), run by hand",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "check's lean-changed step and the Lean fast path, which run beside the audit",
+    "map.py": "the map of the repository's Lean (packages, areas, imports), run by hand",
     "merge.py": "git's merge driver for lean-audit.json",
     "run_daily.py": "the build cache's daily publish",
     "tool.py": "the store's declarations of the scheduled runs",
