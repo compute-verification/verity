@@ -1,6 +1,6 @@
-# ACCEL: protocol v3.2
+# Dither v3.2
 
-ACCEL credits the int8 matmuls of a served model. Each call is computed on dithered and noised operands, its running
+Dither credits the int8 matmuls of a served model. Each call is computed on dithered and noised operands, its running
 sums are committed while it runs, and live coins pick which of them the developer proves. An accepted monitoring period
 is credited at the public best price of its work, and the work the developer could have done instead is bounded by
 ε_skip·W_reg. This is v3.2: v3.1 (CMP-108's D1, [#4746](https://github.com/compute-verification/verity/pull/4746)) with
@@ -13,27 +13,37 @@ size in AND gates, a statement about values, and 𝓜's resources appear only in
 
 The protocol is experimental. Its guarantee is stated in Lean on open PRs: `Pouw.Guarantees.Dither.WorkSound` and its
 card instances `Pouw.Guarantees.DitherInstance.WorkSoundAt` on
-[#4665](https://github.com/compute-verification/verity/pull/4665), over the machine model `Accel` on
+[#4665](https://github.com/compute-verification/verity/pull/4665), over the ACCEL model `Accel` on
 [#4662](https://github.com/compute-verification/verity/pull/4662), with the clocks of `Timed` on
 [#4787](https://github.com/compute-verification/verity/pull/4787). The PR whose Lean covers this document deletes it.
-The numbers are D6 v1.1 (art:6926be1c98b7855aca699278551040538e83843d28b72fdf85044cfd291bf3ef, CMP-118).
+The numbers are D6 v1.1 (art:6926be1c98b7855aca699278551040538e83843d28b72fdf85044cfd291bf3ef, CMP-118), and the segment
+and noise periods NOFOLD-OPT's (see "The segment and the noise period").
 
-Under "One proof service" (`AGENTS.md`), ACCEL owns what is committed, which proof blocks need proofs, the public Program
+**Names** (Daniel, 26 Oct, 7:51 PM PDT): Dither is the protocol, PoUW's no-fold design, and the ACCEL model is the
+physical model 𝓜 it is proved over (the Lean's `Accel`).
+
+**The receipt is no-fold** (CMP-172, 27 Oct, 03:05Z). Each segment's 16-bit noised prefix sums are committed as SHA-512
+hiding leaves before the check coin, and the sampled cells are opened after it; no word is folded into a keyed receipt.
+The served PoUW moves to this receipt, and `SharedNoiseLucks`, the premise its folds' detection rests on, has no place in
+Dither: detection rests on the value root's binding before the coin, SHA-512's extraction and the proved sampling rate.
+
+Under "One proof service" (`AGENTS.md`), Dither owns what is committed, which proof blocks need proofs, the public Program
 each must pass, and what it does with the outcome. Coins, selection, timing, proving, verifying and the record are the
-service's. The second half of this document states what ACCEL needs from the service, each need as a requirement on the
+service's. The second half of this document states what Dither needs from the service, each need as a requirement on the
 challenger, the certifier or the firewall, with the premise it makes true.
 
 ## Terms
 
 The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and these:
 
-- **Runs.** ACCEL is part of PoUW, one of the Glossary's subprotocols, and each of its runs goes through the Glossary's
+- **Runs.** Dither is part of PoUW, one of the Glossary's subprotocols, and each of its runs goes through the Glossary's
   three phases: commit, challenge (the challenger draws live coins) and response. Every commitment is bound before any
-  challenge (Daniel, 26 Oct, 11:09 AM PDT). Each of ACCEL's sampling blocks takes two runs: a dither run, whose response
+  challenge (Daniel, 26 Oct, 11:09 AM PDT). Each of Dither's sampling blocks takes two runs: a dither run, whose response
   is the block's value roots, and a check run, whose commitment they are.
-- **The machine model 𝓜**: a period's devices as the Lean's `Accel` reads them: their resources (tensor cores, issue
-  slots, shared-memory and register ports, device memory, links), each at its data-sheet rate, and each run's use of
-  each. On the H200 and the RTX PRO 6000 it is read at 𝓜's floors (`Card.floors`, #4662). A price μ ≥ 0 is per unit of
+- **The ACCEL model 𝓜**: a period's devices as the Lean's `Accel` reads them: their resources (tensor cores, issue
+  slots, shared-memory and register ports, device memory, links), each rate a ceiling, and each run's use of each. On
+  the H200 and the RTX PRO 6000 the ceilings are a data sheet's or a cited measurement's: `Card.floors` bounds the open
+  cost parameters from below (#4662). A price μ ≥ 0 is per unit of
   each resource; a run's cost at μ is Σ_r μ_r u_r.
 - **pub_μ(b)**: sampling block b's least cost at μ over D5 v2.1's menu of public methods, which holds the named matmul
   programs (with route (iii) on the RTX PRO 6000) and the pinned SHA-512 schedules (the Lean's `PubBest`).
@@ -42,7 +52,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
   their runs together. Unlike the Glossary's default, its draw is not stratified by subcircuit (see "The sampling
   design").
 - **Proof block**: what one check proves with C-Flock `--zk`: one segment of one output cell of a call, the Glossary's
-  proof block in ACCEL's partition.
+  proof block in Dither's partition.
 - **W_b and W_p**: sampling block b's and proof block p's public cost, the honest cost at μ° from the public shape. W_b
   is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's W_cert.
 - **W_reg**: a replica's budget for a monitoring period, registered before its first coin.
@@ -53,7 +63,8 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
 - **Replica**: the devices serving one copy of the model, behind one network certifier boundary, whose runs the challenger
   puts in one sequence. **G** is the number of replicas a claim registers.
 - **W_ans**: the honest cost at μ° of the period's answers, the selected proof blocks' proofs.
-- **ε_skip**: ACCEL's ε, the share of W_reg a period may skip. **δ_coin** is the sampling failure probability and
+- **ε_skip**: Dither's ε, the share of W_reg a period may skip: the Notation's ε_W, PoUW's part of the fleet's ε_skip
+  (`glossary/README.md`, "Narrower senses"). **δ_coin** is the sampling failure probability and
   **δ_crypto** the cryptographic one. **k_infil** and **k_exfil** are the bits the certifier counts into and out of the
   replica.
 - **F**: the adversary resource model's total over a period: census `world-inference-2027`, 9.36e30 FP8 FLOP a year
@@ -61,7 +72,9 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
 
 The Lean predates these names. Its round is a sampling block, and its word is a proof block's committed value. Its `k`
 and `nsb` are k, and `k_draw` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
-a replica, and θ is 𝓜. A rename follows #4665 and #4662's landing.
+a replica, and θ is 𝓜. A rename follows #4665 and #4662's landing. Two premises have new names (Daniel, 26 Oct, 6:13 PM
+PDT), which the Lean takes in DITHER-E2E's PR: SHA-512's premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and
+the proof service's "the proof system is sound" is `ProofSystemSound` (the Lean's `ServiceSound`).
 
 ## What is committed
 
@@ -71,21 +84,50 @@ weights (for PV, A is P and B is the value cache).
 **Noise.** The live coins give each call its dithers d_A ∈ {0,1}^{m×K} and d_B ∈ {0,1}^{N×K}, and HYB noise:
 - U is N×L′ and V is m×L′, both uniform on ±80, periodic along K with period L′.
 - U's columns are permuted afresh (π_τ) in every noise tile τ.
-- A segment is t tiles, so L = t·L′: t = 2 on the H200 and t = 3 on the RTX PRO 6000.
+- A segment is t noise tiles, so L = t·L′. L, the word interval (one 16-bit word a cell every L inner indices), and L′,
+  the noise period, are separate parameters (see "The segment and the noise period").
 
 **The tensor operands** are X = wrap8(A + d_A + V) and W′ = wrap8(B + d_B + U π_τ), tile by tile, with wrap indicators
 w_X and w_W.
 
 **Per output cell (i, j)**, the committed values are:
-- the prefix sums T_s = Σ over the first s·L inner indices of X W′ᵀ, mod 2^16, for s = 1..S with S = ⌈K/L⌉;
+- the prefix sums T_s = Σ over the first s·L inner indices of X W′ᵀ, mod 2^16, for s = 1..S − 1 with S = ⌈K/L⌉;
 - O at 32 bits, bound to them by O = T_S + 256(w_X W′ᵀ + X w_Wᵀ + 256 w_X w_Wᵀ) − Z_X Uᵀ − V Y_Wᵀ. Here
   Z_X = Σ_τ (A + d_A + V)_τ π_τᵀ, Y_W = Σ_τ (B + d_B)_τ, and T_S is taken at full width.
 
-**Leaves and roots.** Values go in SHA-512 hiding leaves (8 SHA-512 chunks, one 128-bit salt, 7,935 data bits) in 16-ary
-frame-v3-sha512 trees.
+T_S is implied by O, not committed: the s = S proof block, which opens the whole rows, derives it from O by that
+identity (NOFOLD-OPT; it takes no premise). At L ≥ K a cell commits O alone.
+
+**Leaves and roots.** Every root is a binary frame-v3-sha512 tree of hm96-sha512/row/v2 rows of 16 KiB, hiding leaves
+under the prover's salts (`verity.ml.commitments`: `rowleaf`, `hm96`, `merkle`). A 16 KiB row costs 8.6 SHA-512
+compressions a KiB, against 8.9 for an 8-chunk leaf in a 16-ary tree, so Dither has no leaf format of its own
+(NOFOLD-OPT, CMP-172).
 - Each call has an operand root, bound in its sampling block's dither run's commit phase, and a value root holding its
-  T_s and O, bound in that run's response phase (see "A sampling block's runs").
+  T_s and O, bound in that run's response phase (see "A sampling block's runs"), both before the block's check coin.
+  The sampled cells are opened after it.
 - The weights are in the period's weight root, bound once a period, before any of the period's coins.
+
+**The value root's layout**, pinned for kernels (KCOMMIT-FB, HASH-27). It is V31-GPU's `v31.py` layout at 16 KiB rows,
+under Dither's tag and without segment S's rows:
+- A call's m × N output is cut into 128 × 128 tiles, tile t = t_m·(N/128) + t_n, each tile's cells row-major
+  (c = 128 r + col). m and N are multiples of 128, and L′ a multiple of 32 dividing K.
+- A tile's words of segment s, for s = 1..S − 1, are its 16,384 T_s as little-endian u16 (32 KiB, two rows). Its O
+  values are 16,384 little-endian u32 (64 KiB, four rows). So a tile takes P = 2(S − 1) + 4 rows, and no row is padded:
+  - row t·P + 2(s − 1) + r, for r = 0, 1, is bytes [16,384 r, 16,384 (r + 1)) of tile t's segment-s words;
+  - row t·P + 2(S − 1) + h, for h = 0..3, is the O of tile t's cells 4,096 h to 4,096 h + 4,095.
+- A row's leaf is hm96's leaf over the row's `sha512/row/v2` digest (131,072 bits), salted with `prf_salt(Ks, off + pos)`:
+  192 bytes of commit_gpu's PRF (`benchmarks/pouw/commit_gpu/reference.py`), keyed by the prover's private Ks, at the
+  call's salt offset off plus the row's position pos. No coin feeds a salt. frame-v3-sha512's leaf prefix (the domain id
+  and the position) is `row_leaf`'s, around the hm96 digest.
+- The tree is binary, one a call (`merkle.tree_levels`). Its domain is `CommitmentDomain(identity_digest_sha512(TAG,
+  label), -1, RangeIndexedDomain(0, leaves), hash="sha512")`, with TAG = `verity/pouw/dither/call/v1` and label
+  {m, n, k, lp, t, row, leaves}.
+- A proof block (i, j, s) opens the rows holding T_s (for s < S) and T_{s−1} (for s > 1), and for s = S the row holding
+  O. The filler's leaves are this layout without O's rows (DITHER-FILL, `verity/pouw/dither/fill/v1`).
+
+**The prover hashes the words on-chip**, in the GEMM's epilogue, and doesn't write them to DRAM: they are 2/L bytes a MAC,
+0.49 tensor-times of the RTX PRO 6000's GDDR7 at L = 1,024, and hashing them from DRAM doubles that. An opened row is
+recomputed on demand rather than stored.
 
 **Each call class's operands.** Every operand a credited call reads is bound before its sampling block's seeds: in the
 weight root, in an earlier block's value root, or in the call's own operand root.
@@ -109,12 +151,26 @@ check passes, and O = −V·Y_Wᵀ costs L′/K + 1/m of the call's MACs. That f
 **What is credited.** Static matmuls and attention's PV, with O bound and a fresh dither bit on P. QKᵀ and V4's
 indexer are served plain and uncredited.
 
-**L′ per class of sampling block** follows the 07:04Z rule. It maximizes credited value per honest second,
-pub_μ°(L′)/T_honest(L′), subject to γ ≤ 10 for that class. A class with no L′ at γ ≤ 10 is credited at its least-γ L′
-only where that adds credited value per honest second; otherwise it is served plain. D6 v1.1 lists the picks:
-- static, H200: L′ 512 at most shapes, 384 on V4's K 1536;
-- static, RTX PRO 6000: L′ 256;
-- PV: an L′ for each attended length.
+**The segment and the noise period** per class of sampling block follow the 07:04Z rule. The pair (L, L′) maximizes
+credited value per honest second, pub_μ°/T_honest, subject to γ ≤ 10 for that class. A class with no pair at γ ≤ 10 is
+credited at its least-γ pair only where that adds credited value per honest second; otherwise it is served plain.
+NOFOLD-OPT's picks (CMP-172, runs r20261027-031621-5469 and r20261027-032610-3a37), all with T_S implied by O and
+16 KiB rows, γ being the call's time over the plain s8 GEMM's at η 0.85 with the hashing overlapped:
+- static, RTX PRO 6000: L = 1,024 with L′ = 128 (t = 8), at γ 1.10 / 1.05 / 1.15 for 8B / 70B / V4, when registration
+  pins B (the weight root is a published checkpoint's, or the weights expand from a public seed). The credit rests on
+  that pin.
+  - **Decided** (compute-research, under Daniel's delegation, 26 Oct, 8:46 PM PDT): the demo registers a published
+    checkpoint's weights pinned by digest, such as Llama-3.1-8B and 70B quantized to s8, which meets the condition, so
+    the RTX PRO 6000 runs L = 1,024 with L′ = 128.
+  - For weights the prover chooses, the general case, the setting that leaks nothing is L = 768 with L′ = 256 (t = 3),
+    at γ 1.38 / 1.22 / 1.53.
+- The decided L = 4,096 to 8,192 at L′ = 512 is peel-bound on the RTX PRO 6000, at γ 1.20 to 1.41: the peel costs 4L′/K
+  of extra tensor work, so what lowers γ is a small L′ at t ≤ 8, not a large L. t stays at most 8 because a proof
+  block's cost at A = 0 falls as c_t/t, and at t = 8 it is 1.15 times the public best.
+- static, H200: hash-bound, at γ 1.40 to 2.15 (L ≈ K, t ≤ 8). Its levers are the SHA-512 kernel and the filler, not L.
+- PV: an L′ for each attended length (D6 v1.1).
+
+ε_skip is the same at every L.
 
 ## A sampling block's runs
 
@@ -151,7 +207,7 @@ Block b + 1's dither run starts at b's value-root receipt, beside b's check run.
 **A proof block** is one cell (i, j) and one segment s of a call. Its Program opens these from their hiding leaves,
 inside the proof:
 - A's and B's row segments s (for s = S, the whole rows A[i,·] and B[j,·]), each from where its class binds it;
-- T_{s−1} (with T_0 = 0) and T_s, and for s = S also O, from the call's value root.
+- T_{s−1} (with T_0 = 0), and T_s for s < S or O for s = S, from the call's value root.
 
 The call's coins are public inputs. **Its only output is its pass bit.** A proof block's outputs are at most 16 bits, and
 T_s and O are exact functions of private operands (O of the LM head is a user's logit). Published, they would be
@@ -159,9 +215,9 @@ T_s and O are exact functions of private operands (O of the LM head is a user's 
 
 **The Program** is one Definition for each (K, L′, t, s = S or not, and how the class binds A), with the call's coins as
 public inputs. It rebuilds the segment's X and W′ from the opened operands and the coins, and checks
-T_s − T_{s−1} ≡ Σ X W′ᵀ (mod 2^16) over the segment. For s = S it also checks:
-- O ≡ Σ_ℓ (A + d_A)_{iℓ}(B + d_B)_{jℓ} (mod 2^32);
-- the binding identity above, mod 2^16.
+T_s − T_{s−1} ≡ Σ X W′ᵀ (mod 2^16) over the segment. For s = S it takes T_S from O by the binding identity above,
+mod 2^16, from the whole rows, their wraps and the coins, and also checks O ≡ Σ_ℓ (A + d_A)_{iℓ}(B + d_B)_{jℓ}
+(mod 2^32).
 
 C-Flock `--zk` proves it on the committed values. The Definition and its circuit-check sidecar are not written yet.
 
@@ -185,8 +241,8 @@ which is what its draw established, and a fleet's W_F or W_cap beside W_S.
 replica's devices did in the period, valued at μ°, is at most the honest optimum plus ε_skip·W_reg (`WorkSound`). Here:
 - δ_coin is the draw's failure probability;
 - δ_crypto = κ_S + κ_x(A) + κ_sha(A): the proof service's soundness error, and SHA-512's as a random oracle in the
-  extraction and in `ShaSpeed`;
-- κ_dmm and κ_dsha are `SAKMatmul`'s and `ShaSpeed`'s degenerate-dither terms at the prover's advice B_adv(A), paid once
+  extraction and in `SAKSha`;
+- κ_dmm and κ_dsha are `SAKMatmul`'s and `SAKSha`'s degenerate-dither terms at the prover's advice B_adv(A), paid once
   per sampling block.
 
 **Its budget.** For a fleet of G replicas to keep these terms within δ_coin in total, each replica's are at most
@@ -215,7 +271,7 @@ replica's devices did in the period, valued at μ°, is at most the honest optim
     RoPE rows, since the proof block's Definition isn't written.
 - Over P one-week periods, P26 adds ln(P)/(ηq): +0.011% a month and +0.029% a year.
 
-## What ACCEL needs from the service
+## What Dither needs from the service
 
 ### The sampling design
 
@@ -228,12 +284,12 @@ Inside a selected block, its proof block p is drawn with probability W_p/W_b.
   `SAKMatmul` holds only at this one.
 - π_b ≤ 1 needs W_b ≤ W_reg/q (see "Registration").
 - q is the service's. D6 takes q = 13,816 a replica-week on average. The count is random, about √q = 118 either side,
-  and 14,378 at the 1 − 1e-6 quantile on the H200. ACCEL surfaces ε_skip at δ_coin for whatever q the draw sets.
+  and 14,378 at the 1 − 1e-6 quantile on the H200. Dither surfaces ε_skip at δ_coin for whatever q the draw sets.
 
 **This is a sampling design main doesn't have**, proposed name `poisson:Q`:
 - `bernoulli:NUM/DEN` and `rate:NUM/DEN[:T]` give every sampling block one flat rate (`rate` as a subset of size ⌈qN⌉), not a
   rate proportional to its cost.
-- `work:K` and `stratified:K` draw a fixed-size subset per template stratum once, over the whole registration. ACCEL
+- `work:K` and `stratified:K` draw a fixed-size subset per template stratum once, over the whole registration. Dither
   has no strata, a random count, and a draw interleaved with serving.
 
 It needs a law object beside `draw.parse_law`'s and the Lean verifier's `Flock.Draw`. Its acceptance probability bound
@@ -259,26 +315,48 @@ cap, it multiplies δ_coin by up to the harmonic number H_G, ×16.8 at H200 V4 (
 ### Coins
 
 The challenger issues every live coin, in each replica's one sequence of runs; under the MVP it runs on the replica's
-certifier device (see "The boundary"). Each coin is derived inside the challenger
-as `derive(K_ch, "verity/pouw-accel/<kind>/v1", ctx)` (`verity.ml.randomness`), where:
-- K_ch is the challenger's secret for the period, and never leaves it;
+certifier device (see "The boundary"). Before the monitoring period it draws a random coin c for each draw and commits
+to them in one root (see "The coin commitment"). Once the receipt a draw follows is in, it opens that draw's c against
+the root and derives the draw's coins from c and the receipt, inside the challenger,
+as `derive(c, "verity/pouw/dither/<kind>/v1", ctx)` (`verity.ml.randomness`: SHA-512 over the domain tag, the coin and
+the receipt, as v3.2's RP25 and RP26 derive them, under tags distinct from PoUW's noise-seed tags), where:
+- c's opening is checked by the certifiers against the root they hold privately. The prover gets no Merkle path and no
+  root before its last root, and receives the paths and the root at close (@proofs, 27 Oct, 04:16Z; ONE-4's withheld
+  mode, #4888): opening draw j to it early would hand it the root before later blocks' roots;
 - kind is `weights` (the weight-side coins), `seeds` (a block's dither and noise seeds) or `check` (its check coin);
 - ctx = {period, replica, sampling block index, receipt}, where receipt is the digest of the certifier's signed receipt
   of what the coin follows: the registration for `weights`, the block's operand roots for `seeds`, and its value roots
   for `check`.
 
-No context repeats under a key, and no coin can be computed before the receipt it reads. Keyed by roots alone, a
+So a derived coin never has to open against the root; its c does. No c serves two draws, no context repeats, and no
+coin can be computed before the receipt it reads. Derived from roots alone, a
 repeated junk root would repeat its "not selected", and repeated operands would repeat their dither: either raises
 ε_skip to the credited share. This is the premise POOL-THM's `IndependentCoins` rests on, with SHA-512 as the
 derivation's random oracle.
 
-Only expanded coins leave the challenger. A key sent for local expansion would make a whole block's outsourcing cost 256
-bits, and P18's β would fail.
+Only expanded coins enter the boundary, never a c, which is stricter than ONE-4's withheld mode, where the prover gets the
+raw coin. A c sent in for local expansion would make a whole block's outsourcing cost one coin's bits, and P18's β would
+fail.
+
+**The coin commitment** (soundness's ruling, Daniel, 26 Oct, 6:15 PM PDT; settled 27 Oct, 03:45Z). The challenger
+commits to its coins c before the monitoring period, and the commitment reaches the prover only after the prover has
+committed, so no soundness statement takes a hiding premise on it.
+- The public configuration names each replica's drawing challenger, its identity and LMS key, and never its coin root.
+- Before the monitoring period, the challenger sends its committed root to the network certifiers over their private
+  links (`WitnessPathPrivate`), never to the prover first.
+- A draw's c opens against the root, to the certifiers, only after the receipt the draw follows, and the draw's coins
+  are derived from c and that receipt (see above). So the challenger can't choose a block's seeds after seeing its roots, and the prover
+  can't know them before it sends the roots.
+- A multi-server replica has one draw, from the challenger on its lowest-numbered server. Each server's certifier exempts
+  from k_infil only the coin frames derived from a c that opened against that root, with the receipt they name, and
+  counts everything else as ingress (RP5). Each
+  certifier re-clocks the forwarded coins on its own ingress grid (RP6), with the certifiers' clocks synced under the
+  one-clock rule (see "The boundary").
 
 **Seeds.** Every credited coin comes from streamed 512-bit seeds, each covering at most 512·N_max MACs, that is, at
 least 1/N_max unpredictable bits a credited MAC. That is 0.97 to 2.38 GB/s a GPU, and 7.7 to 19.0 GB/s an 8-GPU node.
 - Each replica's seeds are its own: no stream is broadcast across replicas.
-- ACCEL takes no Fiat–Shamir exception: its seeds are live coins, not main's per-matmul noise seeds.
+- Dither takes no Fiat–Shamir exception: its seeds are live coins, not main's per-matmul noise seeds.
 
 **Weight-side coins** (d_B, U and the permutations) are drawn per replica from the registration receipt, after the
 weight root is bound, and never shared between replicas. They are reused across the period's calls as part of the registered instance (P14, P17).
@@ -286,18 +364,18 @@ weight root is bound, and never shared between replicas. They are reused across 
 ### The boundary
 
 The network certifier watches the replica's boundary, signs its receipts and arrival times, and counts k_infil and
-k_exfil. ACCEL needs these of the challenger and the certifier:
+k_exfil. Dither needs these of the challenger and the certifier:
 
 - **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
-  the certifier counts. In the Lean, `CoinsConfidential` is ACCEL's premise, and the placement premise
+  the certifier counts. In the Lean, `CoinsConfidential` is Dither's premise, and the placement premise
   `WitnessPathPrivate` discharges it: private messages (the devices' signed records and salts, the prover's witness, a
   server's coins) travel only on private links, and the certifier sits on the server's own uplink (Daniel, 26 Oct,
   4:41 PM PDT).
   - **The MVP: the certifier's device is the challenger** (Daniel, 26 Oct, 1:30 PM PDT). The device that runs the
     replica's network certifier produces its live coins, so each coin is made at the boundary it enters: no path carries
-    one in from outside and no key is needed for it. A multi-node replica's challenger is one of its certifier devices,
-    and its coins reach the other servers' certifiers only over the auditor's private links.
+    one in from outside and no key is needed for it. A multi-node replica's challenger is the certifier device of its
+    lowest-numbered server, and its coins reach the other servers' certifiers only over the auditor's private links.
   - After the MVP, a challenger on a device of its own may reach the certifier only over a private link. A keyed path
     across hosts the prover controls is the secure-transport workstream's. A SHA-512 keystream with HMAC-SHA-512, at
     the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
@@ -305,25 +383,28 @@ k_exfil. ACCEL needs these of the challenger and the certifier:
   - Without it an outside machine reads the dither on the path and serves the sampling block, and ε_skip rises to the credited
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
-- **The exclusion is exact** (what makes `CertifierSeesImports` true). Under the MVP the coins are made on the
-  certifier's device and are never imports, so k_infil leaves nothing out. A challenger of its own is excluded only so:
-  - k_infil leaves out only a coin message that verifies under the challenger's key and carries its expected (period,
-    replica, sampling block, kind, sequence number) once, at its expected length.
+- **The exclusion is exact** (what makes `CertifierSeesImports` true). Under the MVP the drawing server's coins are made
+  on its certifier's device and are never imports there. Every other server's certifier, and any certifier whose
+  challenger has a device of its own, excludes them only so (RP5):
+  - k_infil leaves out only a coin frame derived from a c that opened against the drawing challenger's committed root,
+    with the receipt it names, and carrying its expected (period, replica, sampling block, kind, sequence number) once,
+    at its expected length.
   - Every other byte counts: malformed, unverifiable, duplicate, replayed or late messages into k_infil, and the
     stream's reverse traffic (acknowledgements, flow control) into k_exfil.
-  - The certifier holds the key (or the challenger's LMS public key and each batch's Merkle paths) and the schedule of
-    expected messages and lengths. It needs no coin value beyond verifying it.
-- **The certifier re-clocks the stream.** It terminates the challenger's stream and sends it into the boundary on its
-  own schedule: fixed sizes, fixed order, no flow control from inside, and a drop is a visible failure. Otherwise the
-  packets' delays and order carry uncounted bits, and V4's ε_net grows ×1.04 to ×7.3.
+  - The certifier holds the committed root, the challenger's LMS public key from the configuration, and the schedule
+    of expected frames and lengths. It needs each opened c only to check the frames derived from it.
+- **Each certifier re-clocks the stream** (RP6). It terminates the forwarded stream and sends it into its boundary on
+  its own ingress grid: fixed sizes, fixed order, no flow control from inside, and a drop is a visible failure.
+  Otherwise the packets' delays and order carry uncounted bits, and V4's ε_net grows ×1.04 to ×7.3.
 - **One clock.** The certifier stamps the coins' entry into the boundary (t_b, tc_b) and every receipt and arrival
   (the operand roots, arrive_b, ansAt_b) on its own clock, which under the MVP is the challenger's too. A challenger of
-  its own would have to keep its clock within 1.03 s of the certifier's.
+  its own would have to keep its clock within 1.03 s of the certifier's, and so does every other certifier of a
+  multi-server replica against the drawing server's.
 - **Receipts are authenticated.** The challenger learns that roots are in only from the certifier's signed receipts,
   whose digests are in the coins' contexts and messages. A forged receipt would draw a check coin before the roots.
 - **A multi-node replica has one boundary**, carried by certifier-to-certifier traffic on auditor-private links under
-  `WitnessPathPrivate`, never through the prover's network, with the replica's certifiers keeping one count and the
-  challenger's device stamping every time. Everything else crossing between its nodes counts.
+  `WitnessPathPrivate`, never through the prover's network, with the replica's certifiers keeping one count, each
+  stamping its own server's ingress on its synced clock. Everything else crossing between its nodes counts.
   V4's replica is 12 H200s (1.5 nodes) or 17 RTX PRO 6000s (2.1 nodes). Counting its inter-node expert and KV traffic
   would fail honest replicas, and excluding that traffic by address would let an outside machine join as a node.
 
@@ -331,6 +412,7 @@ k_exfil. ACCEL needs these of the challenger and the certifier:
 - The challenger, per coin message: the period, replica, sampling block, kind, sequence number, issue time and the
   payload's digest. A check coin's message also carries the value-root receipt's digest. It signs them with LMS in Merkle
   batches, one signature per batch root. A challenger of its own is checked live by the certifier with HMAC-SHA-512.
+  It signs its committed coin root once, for the certifiers (see "Coins").
 - The certifier: its receipts (operand roots, value roots, answers), the coins' entry times, k_infil and k_exfil, and its
   counts of rejected messages.
 - All of it is witness and never reaches the auditor in the clear.
@@ -345,7 +427,7 @@ k_exfil. ACCEL needs these of the challenger and the certifier:
 - **No q(Δ + τ_ans) ≤ T.** #4787's `Timed` covers any number of sampling blocks, with answers beside later ones: their
   sampling periods telescope to T. Selections arrive about every 43.8 s a replica (T/q).
 - **τ_ans isn't set.** v3.1's 10 s on an "8 s latency floor" rested on run r20261024-092255-2edd, which failed (rc 2) and
-  measured no ACCEL proof block. τ_ans is to be set from a passing `--zk` run of the proof block with live coins, the
+  measured no Dither proof block. τ_ans is to be set from a passing `--zk` run of the proof block with live coins, the
   release slot included, with a wide margin.
   - One late answer refuses the week. An honest week fails 76.3% of the time if 1e-4 of answers are late and 1.43% at
     1e-6, and failing at most 0.1% of honest weeks needs a lateness rate ≤ 7.0e-8 (RT-POOL's run J).
@@ -383,6 +465,8 @@ Notes on the headline:
 - Without the registration (P21's variant, the draw normalised by wall-clock time), ε_skip would be 0.270–0.424%.
 - Coverage counts V4's 48.85e9 static MACs a token at their own shapes. With mHC's F32 GEMMs uncredited, V4's coverage
   is 96.4% on the H200 and 95.7% on the RTX PRO 6000.
+- The γ column is D6 v1.1's. At NOFOLD-OPT's picks (see "The segment and the noise period"), the static calls' γ is
+  1.05–1.15 on the RTX PRO 6000 with B pinned and 1.40–2.15 on the H200; the headline isn't restated at them yet.
 - What v3.2 changes and D6 v1.1 doesn't price:
   - E with the answers' proofs raises ε_net by at most 0.0006%.
   - Hashing the operand roots (A for the residual-stream calls, P for PV) adds to γ and lowers the credited share.
@@ -416,7 +500,7 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
   ε_S = ln(1/δ_coin)/(ηq) at a fleet whose replicas all accept, and G leaves ε_skip. A headline taking the minimum of
   two tiers holds at δ_coin only with each tier at δ_coin/2.
 - **κ's values** (see "Its budget") and the headline's single κ go to Daniel: κ_dmm and κ_dsha are `SAKMatmul`'s and
-  `ShaSpeed`'s error terms.
+  `SAKSha`'s error terms.
 - **The Lean** (WORKSOUND-5, stacked on #4787):
   - the dither run's commit phase: `reg b` read at the operand roots' arrival, `∀ b, opArrive ob b ≤ t ob b` in
     `Timed`, and the phase's oracle calls logged before root b;
@@ -436,10 +520,12 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
 - **The firewall** (@proofs, with C-Flock's ZK server):
   - that it proves a replica's answers concurrently, and its release schedule. If it can't, RT-SIZE's queued check
     coins are the fix (CMP-158, RS5), and `Timed` must then read the check coin's time apart from the selection's;
-  - main's batch rule fixes every staged statement before any run's challenge phase. ACCEL's statements are staged
+  - main's batch rule fixes every staged statement before any run's challenge phase. Dither's statements are staged
     through the period, each fixed before its own run's challenge phase but after earlier answers' releases, so the rule
     is to be read per statement for a stream (RS6).
 - **τ_ans**, from a passing measured run (see "Timing").
+- **The coin root** (see "Coins"): how a certifier checks a forwarded frame's derivation from its opened c is the
+  challenger's spec, as remote bandwidth's is on #4968 and the network certifier's coin link's on #4946.
 - **Credit becomes size** (the Glossary's Size, CMP-158): a sampling block's credit becomes its size. Then ε_skip is a
   share of the registered size, and the channel term stays in bits, k_infil and k_exfil, without ε_net's β.
 - **μ° or a fixed published price** (Daniel's open Ask).
@@ -452,9 +538,11 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
 - **The premises**, named and unproved:
   - `SAKMatmul` (`pouw-sak-matmul`): no program computes the committed values more cheaply at μ than the public best.
     It is false wherever a known cheaper route is missing from the menu.
-  - `ShaSpeed` (`pouw-sha512-speed`): nobody hashes meaningfully faster than the pinned public SHA-512.
-  - Beside them are `OutsourceWithinEgress`, `CertifierSeesImports`, `RootAfterCoin` and `ServiceSound`, and
-    POOL-THM's `CoinsConfidential` (which `WitnessPathPrivate` discharges) and `IndependentCoins`.
+  - `SAKSha` (`pouw-sha512-speed`): nobody hashes meaningfully faster than the pinned public SHA-512.
+  - Beside them are `OutsourceWithinEgress`, `CertifierSeesImports`, `RootAfterCoin` and `ProofSystemSound`,
+    `ShaRealize` for the extraction (ASK-16, pending), and POOL-THM's `CoinsConfidential` (which `WitnessPathPrivate`
+    discharges) and `IndependentCoins`.
+  - There is no `SharedNoiseLucks` and no `UnitFixed` (NOFOLD-OPT): a word's 2^-16 guess sits in SAK-LB's λ.
   - `PeriodInventory` is held pending Daniel: whether host CPUs and DPUs are devices of the period.
 - **The RTX PRO 6000's cells at x > 0 are upper bounds.** 𝓜's sm_120 joint issue rows are closed rows (A36), and they
   stay bounds until CALIB moves them to a current vector.

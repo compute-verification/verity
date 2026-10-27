@@ -1,4 +1,4 @@
-# The accelerator model: opcode coverage
+# The ACCEL model: opcode coverage
 
 `Accel.Machine` is the model and `Accel.Isa` its instruction set. `Accel.H200` and `Accel.Sm120` are the two cards. The
 model claims that **the card can do no more than this machine**. That claim needs every SASS opcode of the card to be
@@ -10,7 +10,7 @@ Sources:
 - **BU**: CUDA Binary Utilities 12.9, the instruction-set tables: §4.3 for Hopper (sm_90) and §4.4 for Blackwell (CC
   10.0 to 12.0, sm_120 among them).
 - **PTX**: PTX ISA 9.0.
-- **Sheet**: the machine model's device sheets for sm_90 and sm_100.
+- **Sheet**: `benchmarks/pouw/machine_model/`'s device sheets for sm_90 and sm_100.
 - **Census**: the DS-120 and DC-90 SASS census.
 
 Marks:
