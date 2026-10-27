@@ -214,7 +214,7 @@ def fill_window(g: Any, A: Any, layout: dict, desc: bytes, weights: list[dict], 
         receipts = F.entries_root(entries)
         root = F.draw_root(salt, receipts)
         draw = client.open(Wd.DRAW, 0, root)
-    directory, ledger, pins, key = g.finish(dest)
+    directory, _ledger, _pins, key = g.finish(dest)
     d = {"window": {"root": r.hex()}, "salt": salt.hex(), "opening": opening.to_json(), "entries": entries,
          "descriptor": desc.hex(), "session": remote.session_files(directory),
          "draw": {"receipts": receipts.hex(), "root": root.hex(), "coin": draw.to_json()}}
