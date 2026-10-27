@@ -1641,8 +1641,8 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, co
   st8(S + 16 * pos, my);
   st8(S + 16 * pos + 8, c);
 }
-// salt_small<true> (slot 0) a block at a time: S and F for positions below n (salted at off + pos), the pads up to width,
-// and the subtrees of blocks that hold only pads (nvb = ceil(width / 128)); KP: Ks from ka, else from C
+// salt_small<true> (slot 0) a 128-leaf tile at a time: S and F for positions below n (salted at off + pos), the pads up to
+// width, and the subtrees of tiles that hold only pads (nvb = ceil(width / 128)); KP: Ks from ka, else from C
 template <bool KP = false>
 __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     salt_persist(Persist p, int dom, const uint4* __restrict__ Tg, u64 n, u64 width, u64* __restrict__ S, u64* __restrict__ F,
@@ -1665,8 +1665,8 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     }
   persist_done(p);
 }
-// leaf_small (g = 1, no bc, no fused top) a block at a time (nvb = ceil(n / 128)); MINB its CTAs an SM by registers (4:
-// 128 a thread, no spills, for a leaf phase that has the SMs to itself)
+// leaf_small (g = 1, no bc, no fused top) a 128-leaf tile at a time (nvb = ceil(n / 128)); MINB its CTAs an SM by
+// registers (4: 128 a thread, no spills, for a leaf phase that has the SMs to itself)
 template <class Row, int MINB = SMALL_MINB>
 __global__ void __launch_bounds__(SMALL_THREADS, MINB)
     leaf_persist(Persist p, int dom, Row row, const u64* __restrict__ S, const u64* __restrict__ F, u64 n, u64 width,
