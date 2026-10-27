@@ -1555,6 +1555,8 @@ struct Persist {
   u32* ctl;     // [0] the next block, [1] the CTAs out, [2 + b] CTA b's current block
   u32* claim;   // a word an SM (smid & 1023)
   u32 epoch, cap, nvb;
+  u32* q;       // null, or the next of each SM's own blocks (q[s]: SM s's blocks are s, s + nsm, s + 2 nsm, ...)
+  u32 nsm;
 };
 DEV u32 smid() {
   u32 s;
@@ -1576,16 +1578,33 @@ DEV bool persist_claim(const Persist& p) {
   }
   return __syncthreads_or(got);
 }
-// the CTA's next block (nvb or more: none left), the same for every thread
-DEV u32 persist_next(const Persist& p) {
+// the CTA's next block (nvb or more: none left), the same for every thread. With q, its SM's own blocks first (SM smid %
+// nsm), so each SM takes ceil or floor nvb / nsm of them: from one counter, an SM's cap CTAs free together and take cap
+// blocks each round, so with 1.7 rounds of blocks some SMs run 2 rounds of cap and others 1. Once its SM's are out, a CTA
+// takes other SMs' (an SM with no CTAs), jn its place in that scan.
+DEV u32 persist_next(const Persist& p, u32& jn) {
   volatile u32* slot = p.ctl + 2 + blockIdx.x;
   __syncthreads();
-  if (threadIdx.x == 0) *slot = atomicAdd(p.ctl, 1u);
+  if (threadIdx.x == 0) {
+    u32 vb = p.nvb;
+    if (!p.q) vb = atomicAdd(p.ctl, 1u);
+    else
+      for (const u32 s0 = smid() % p.nsm; jn < p.nsm; ++jn) {
+        const u32 s = (s0 + jn) % p.nsm;
+        const u64 t = (u64)atomicAdd(p.q + s, 1u) * p.nsm + s;
+        if (t < p.nvb) { vb = (u32)t; break; }
+      }
+    *slot = vb;
+  }
   __syncthreads();
   return *slot;
 }
 DEV void persist_done(const Persist& p) {
-  if (threadIdx.x == 0 && atomicAdd(p.ctl + 1, 1u) == gridDim.x - 1) { p.ctl[0] = 0; p.ctl[1] = 0; }
+  if (threadIdx.x == 0 && atomicAdd(p.ctl + 1, 1u) == gridDim.x - 1) {
+    p.ctl[0] = 0; p.ctl[1] = 0;
+    if (p.q)
+      for (u32 s = 0; s < p.nsm; ++s) p.q[s] = 0;
+  }
 }
 // fold_cta for block vb
 DEV void fold_vb(int dom, u64* levels, u64 width, u32 cnt, int L, u64 vb) {
@@ -1641,15 +1660,15 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, co
   st8(S + 16 * pos, my);
   st8(S + 16 * pos + 8, c);
 }
-// salt_small<true> (slot 0) a block at a time: S and F for positions below n (salted at off + pos), the pads up to width,
-// and the subtrees of blocks that hold only pads (nvb = ceil(width / 128)); KP: Ks from ka, else from C
+// salt_small<true> (slot 0) a 128-leaf tile at a time: S and F for positions below n (salted at off + pos), the pads up to
+// width, and the subtrees of tiles that hold only pads (nvb = ceil(width / 128)); KP: Ks from ka, else from C
 template <bool KP = false>
 __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     salt_persist(Persist p, int dom, const uint4* __restrict__ Tg, u64 n, u64 width, u64* __restrict__ S, u64* __restrict__ F,
                  u64* levels, u64 off, const __grid_constant__ KsArg ka) {
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
   if (persist_claim(p))
-    for (u32 vb; (vb = persist_next(p)) < p.nvb;) {
+    for (u32 vb, jn = 0; (vb = persist_next(p, jn)) < p.nvb;) {
       const u64 pos = (u64)vb * SMALL_THREADS + threadIdx.x;
       if (pos < n) {
         salt_one_at(pos, off, reinterpret_cast<const uint8_t*>(Tg), S, KP ? &ka : nullptr);
@@ -1665,15 +1684,15 @@ __global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
     }
   persist_done(p);
 }
-// leaf_small (g = 1, no bc, no fused top) a block at a time (nvb = ceil(n / 128)); MINB its CTAs an SM by registers (4:
-// 128 a thread, no spills, for a leaf phase that has the SMs to itself)
+// leaf_small (g = 1, no bc, no fused top) a 128-leaf tile at a time (nvb = ceil(n / 128)); MINB its CTAs an SM by
+// registers (4: 128 a thread, no spills, for a leaf phase that has the SMs to itself)
 template <class Row, int MINB = SMALL_MINB>
 __global__ void __launch_bounds__(SMALL_THREADS, MINB)
     leaf_persist(Persist p, int dom, Row row, const u64* __restrict__ S, const u64* __restrict__ F, u64 n, u64 width,
                  u64* levels) {
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
   if (persist_claim(p))
-    for (u32 vb; (vb = persist_next(p)) < p.nvb;) {
+    for (u32 vb, jn = 0; (vb = persist_next(p, jn)) < p.nvb;) {
       const u64 pos = (u64)vb * SMALL_THREADS + threadIdx.x;
       if (pos < n) {
         u64 x[8], out[8];
@@ -1934,13 +1953,14 @@ static std::string env_str(const char* name, const char* dflt) {
 // V31_WGW 0: the words segments on gemm_kernel<true> rather than the wg protocol GEMM).
 // A Fill's commit: V31_LMINB 4, its leaf phase's CTAs at 128 registers (leaf_persist's MINB; 5, the default, 96 with spills
 // but room for a fifth CTA an SM); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued
-// with the call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves.
+// with the call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves;
+// V31_LBAL 1, the salt and leaf phases' 128-leaf tiles a list an SM (persist_next), ceil or floor tiles / SMs each.
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
       gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16),
       rp = env_int("V31_RP", 0), lminb = env_int("V31_LMINB", SMALL_MINB), sahead = env_int("V31_SAHEAD", 0),
-      ltw = env_int("V31_LTW", 0);   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
+      lbal = env_int("V31_LBAL", 0), ltw = env_int("V31_LTW", 0);   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -1965,19 +1985,22 @@ static void set_carveout(int pct) {
 // A committer's salt and leaf phases in at most ccta CTAs an SM (salt_persist, leaf_persist; ccta 0: commit_gpu's small
 // path), then its levels above the leaves' CTAs. Launches that share ctl run in one stream's order.
 struct Lanes {
-  u32 *ctl = nullptr, *claim = nullptr, epoch = 0;
-  int nsm = 1, lminb = SMALL_MINB;
+  u32 *ctl = nullptr, *claim = nullptr, *q = nullptr, epoch = 0;
+  int nsm = 1, lminb = SMALL_MINB, bal = 0;
   void init(int nsm_) {
     nsm = nsm_;
     ctl = dalloc<u32>(2 + 2 * 8 * (size_t)nsm);
     claim = dalloc<u32>(1024);
+    q = dalloc<u32>((size_t)nsm);
     CK(cudaMemset(ctl, 0, 4 * (2 + 2 * 8 * (size_t)nsm)));
     CK(cudaMemset(claim, 0, 4096));
+    CK(cudaMemset(q, 0, 4 * (size_t)nsm));
   }
-  // a capped launch over nvb blocks: twice the CTAs the caps allow, so SMs whose first CTAs land late still get theirs
+  // a capped launch over nvb blocks: twice the CTAs the caps allow, so SMs whose first CTAs land late still get theirs;
+  // bal: each SM's own blocks first (persist_next)
   Persist persist(u64 nvb, int ccta) {
     epoch = (epoch + 1) & 0xFFFFFF;
-    return Persist{ctl, claim, epoch, (u32)ccta, (u32)nvb};
+    return Persist{ctl, claim, epoch, (u32)ccta, (u32)nvb, bal ? q : nullptr, (u32)nsm};
   }
   unsigned grid(u64 nvb, int ccta) const { return (unsigned)std::min<u64>(nvb, 2ull * ccta * nsm); }
   // leaf pos salted prf_salt(Ks, off + pos), Ks from ka when given, else from C; commit_gpu's small path (ccta 0) salts at
@@ -2434,11 +2457,13 @@ struct Fill {
     CK(cudaMemset(gctr, 0, 4));
     pl.init(nsm);
     pl.lminb = kn.lminb;
+    pl.bal = kn.lbal;
     if (kn.sahead) {
       int pr;
       CK(cudaStreamGetPriority(s1, &pr));
       CK(cudaStreamCreateWithPriority(&s2, cudaStreamNonBlocking, pr));
       pls.init(nsm);
+      pls.bal = kn.lbal;
       for (int b = 0; b < 2; b++) CK(cudaEventCreateWithFlags(&ev_salt[b], cudaEventDisableTiming));
     }
     const size_t mk = (size_t)m * k, nk = (size_t)n * k;
@@ -2479,7 +2504,8 @@ struct Fill {
                     (void*)words[1], (void*)D[0], (void*)D[1], (void*)vbuf, (void*)maps, (void*)gctr, (void*)pl.ctl,
                     (void*)pl.claim, (void*)opos, (void*)obuf, (void*)Ap, (void*)Bp, (void*)ra[0], (void*)sa[0], (void*)rb[0],
                     (void*)sb[0], (void*)ra[1], (void*)sa[1], (void*)rb[1], (void*)sb[1], (void*)bad, (void*)xd[0],
-                    (void*)xd[1], (void*)xf[0], (void*)xf[1], (void*)wsa, (void*)wsw, (void*)pls.ctl, (void*)pls.claim})
+                    (void*)xd[1], (void*)xf[0], (void*)xf[1], (void*)wsa, (void*)wsw, (void*)pls.ctl, (void*)pls.claim,
+                    (void*)pl.q, (void*)pls.q})
       cudaFree(p);
     if (ltw || o) lt_free(lt);
     for (int b = 0; b < 2; b++) {
@@ -3403,13 +3429,13 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
-           "\"hall\": %d, \"hchunk\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, \"fused_leaves\": %lld, \"o_leaves\": %llu, "
+           "\"hall\": %d, \"hchunk\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, \"lbal\": %d, \"fused_leaves\": %lld, \"o_leaves\": %llu, "
            "\"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
            f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk, f.wgw ? 1 : 0,
-           f.kn.lminb, f.kn.sahead ? 1 : 0, fused, f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
+           f.kn.lminb, f.kn.sahead ? 1 : 0, f.kn.lbal ? 1 : 0, fused, f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     const double l = at("lt");

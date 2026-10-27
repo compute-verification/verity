@@ -960,7 +960,8 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
                    + (f" wg{r.get('wbn', '')}" if r.get("wg") else "") + (f" rp{r['rp']}" if r.get("wg") and r.get("rp") else "")
                    + (" hall" if r.get("hall") else "") + (f" c{r['hchunk']}" if r.get("hchunk") else "")
                    + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
-                   + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else ""))
+                   + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else "")
+                   + (" lb" if r.get("lbal") else ""))
         fused = "-"
         if r.get("fused_leaves", -1) >= 0 and r.get("o_leaves"):
             fused = f"{100 * r['fused_leaves'] / r['o_leaves']:.1f}%"
