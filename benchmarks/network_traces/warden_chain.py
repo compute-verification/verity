@@ -1,4 +1,4 @@
-"""warden-chain: the network chain's reads of an active warden's run (`warden_serve.py`'s directory, or the gate's
+"""warden-chain: the network chain's reads of an active warden's run (`cell_certifier_serve.py`'s directory, or the gate's
 ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
 rehearsal's. A certifier rehearsal's run (`certifier_serve.py`, whose records come through `active.Proxy` in front of
 the endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the warden path
@@ -11,7 +11,7 @@ none of its records enters the chain.
   clock and signs none, so no clock certificate enters N2 here).
 * `pairs`: each link-window's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the first
   window missing one.
-* `certificates`: the warden's own offline check (`warden_serve.check`: every link-window of the three records
+* `certificates`: the warden's own offline check (`cell_certifier_serve.check`: every link-window of the three records
   certified under the warden's key and session with its head the record's, its rows' registration, the audit, and the
   client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's, `auditor.warden_outcome`)
   exactly the certified lines' certificates and refusals, in order.
@@ -32,18 +32,18 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs
-import warden_serve as WS
+import cell_certifier_serve as WS
 
 from verity.core.protocols.network_certifier import io_tie as IT
 from verity.core.protocols.network_certifier import service as SVC
-from verity.core.protocols.network_certifier import warden as W
+from verity.core.protocols.network_certifier import cell_certifier as W
 from verity.core.protocols.network_certifier.active import DATA, id_request
 from verity.core.protocols.network_certifier.certificate import Direction
 from verity.core.protocols.network_certifier.schedule import SyncSet
 from verity.ml.crypto import lms
 
 PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through active.Proxy in front of the endpoint): "
-         "the warden path reads an active warden's own run (warden_serve.py's, or the gate's warden-rehearse)")
+         "the warden path reads an active warden's own run (cell_certifier_serve.py's, or the gate's warden-rehearse)")
 #: what only a certifier rehearsal's run holds (`certifier_serve.py rehearse`'s, per strategy under ``out/``)
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`active.id_request`'s keywords but the frame's)
@@ -68,7 +68,7 @@ def witness(run: Path) -> Path:
     return found(run, "certified.jsonl").parent
 
 
-def deployment(run: Path) -> tuple[dict, W.WardenParams]:
+def deployment(run: Path) -> tuple[dict, W.CellCertifierParams]:
     """The run's ``deployment.json`` and the warden's schedule, refused by name where the run is a certifier
     rehearsal's (`PROXY`) or its digest isn't its parameters'."""
     for d in (run, run / "witness", run / "out", run / "out" / "honest", run / "honest"):
@@ -77,7 +77,7 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
     dep = json.loads(found(run, "deployment.json").read_text())
     if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != WS.LINK:
         raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a warden's)")
-    params = W.WardenParams(**dep["params"])
+    params = W.CellCertifierParams(**dep["params"])
     if params.digest.hex() != dep.get("digest"):
         raise SystemExit(f"{run}: deployment.json's digest isn't its parameters'")
     if not dep.get("run_id"):
@@ -85,7 +85,7 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
     return dep, params
 
 
-def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.WardenParams]:
+def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.CellCertifierParams]:
     """N2's link on the run (the module docstring's `link`), its deployment and the warden's schedule."""
     dep, params = deployment(run)
     lw = SVC.LinkWindows(dep["link"], params.grid, UNREAD_SYNCS, cs.read_public(dep["key"]), dep["run_id"],

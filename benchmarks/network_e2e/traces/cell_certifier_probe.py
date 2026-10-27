@@ -1,21 +1,21 @@
-"""`python warden_probe.py ARGS...`: `benchmarks/network_traces/warden_serve.py ARGS...`, with probes the warden doesn't
-keep, for telling a late tick's cause: every tick's lateness (`Warden.lateness`, which warden.json keeps only as
-quantiles), how long each tick's own work took (`Warden._tick`), when the publisher packed, signed and committed each
-record (`Publisher.keep`) and every garbage collection of the warden's process (serve turns the collector off, so any is
+"""`python cell_certifier_probe.py ARGS...`: `benchmarks/network_traces/cell_certifier_serve.py ARGS...`, with probes the cell certifier doesn't
+keep, for telling a late tick's cause: every tick's lateness (`CellCertifier.lateness`, which warden.json keeps only as
+quantiles), how long each tick's own work took (`CellCertifier._tick`), when the publisher packed, signed and committed each
+record (`Publisher.keep`) and every garbage collection of the cell certifier's process (serve turns the collector off, so any is
 an explicit one).
 
-A warden whose publisher is a spawned process (`PublisherProcess`) keeps its records there: that process runs this file
-as `__mp_main__`, which times its `Publisher.keep` into `PUBLISHER_KEEPS` in `--out`, and the warden's own process
+A cell certifier whose publisher is a spawned process (`PublisherProcess`) keeps its records there: that process runs this file
+as `__mp_main__`, which times its `Publisher.keep` into `PUBLISHER_KEEPS` in `--out`, and the cell certifier's own process
 records when it handed each record's close over (`PublisherProcess.__call__`) and how long serve's `close` waited for
 the last one, and writes the process's pid to `PUBLISHER_PID` once it has started (for `host_sample.py`).
 
-When serve ends they go to `ticks.json` in its `--out` directory, times in seconds after the warden's origin:
+When serve ends they go to `ticks.json` in its `--out` directory, times in seconds after the cell certifier's origin:
 `lateness_ms` (tick t's lateness past its deadline, origin + t·τ, in ms), `tick_ms` (tick t's `_tick`, in ms), `publish`
 ([start, ms, link, window] each, an inline publisher's), `gc` ([start, generation, ms, objects collected] of each
 collection of generation 1 or 2, or of `GC_MS` or more) and `gc_counts` (all collections, by generation), with `origin`,
-`bucket_ms`, `window`, `slack_ms`, `gc_enabled`, `switch_ms` and `cpus` (the warden's affinity, which its publisher
+`bucket_ms`, `window`, `slack_ms`, `gc_enabled`, `switch_ms` and `cpus` (the cell certifier's affinity, which its publisher
 process inherits); and for a spawned publisher `publisher`: its `pid`, `handoff` ([time, link, window] each), `keep`
-([start, ms, link, window] each, in its process) and `close` ([start, seconds waited]). The warden's code and schedule
+([start, ms, link, window] each, in its process) and `close` ([start, seconds waited]). The cell certifier's code and schedule
 are unchanged; this only wraps its methods and adds a `gc.callbacks` entry.
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-SERVE = ROOT / "benchmarks" / "network_traces" / "warden_serve.py"
+SERVE = ROOT / "benchmarks" / "network_traces" / "cell_certifier_serve.py"
 #: a collection kept in `gc` by its own: any of generation 1 or 2, else one that took at least this long
 GC_MS = 1.0
 #: in `--out`: the spawned publisher's keeps, one JSON line [monotonic start, seconds, link, window] each
@@ -60,7 +60,7 @@ class Collections:
 
 
 class Probe:
-    """The wrappers' shared record; `install` puts them on the warden's and the publisher's classes. `out` is serve's
+    """The wrappers' shared record; `install` puts them on the cell certifier's and the publisher's classes. `out` is serve's
     `--out` (where a spawned publisher's keeps are, and its pid goes)."""
 
     def __init__(self, clock=time.monotonic, out: Path | None = None) -> None:
@@ -160,15 +160,15 @@ def _path() -> None:
 def main(argv: list[str]) -> int:
     out = Path(argv[argv.index("--out") + 1]) if "--out" in argv else None
     _path()
-    import warden_serve
+    import cell_certifier_serve
 
-    from verity.core.protocols.network_certifier import warden
+    from verity.core.protocols.network_certifier import cell_certifier
 
     probe = Probe(out=out)
     gc.callbacks.append(probe.collections)
-    probe.install(warden.Warden, warden_serve.Publisher, getattr(warden_serve, "PublisherProcess", None))
+    probe.install(cell_certifier.CellCertifier, cell_certifier_serve.Publisher, getattr(cell_certifier_serve, "PublisherProcess", None))
     try:
-        return warden_serve.main(argv)
+        return cell_certifier_serve.main(argv)
     finally:
         if out is not None and probe.warden is not None:
             (out / "ticks.json").write_text(json.dumps(probe.doc(), separators=(",", ":")))
@@ -178,6 +178,6 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 elif __name__ == "__mp_main__":
     _path()
-    import warden_serve
+    import cell_certifier_serve
 
-    time_keeps(warden_serve.Publisher)
+    time_keeps(cell_certifier_serve.Publisher)

@@ -9,7 +9,7 @@ RUN is the gate's `fetch RUN` bundle (a gzipped tar) or the directory it unpacks
 T1 are the wipe's session on its challenger host's real-time clock, in Unix ns. It prints the record (and writes it to
 FILE), and exits 0 when the record is covered, 1 when it isn't.
 
-**The count.** The warden's schedule (`WardenParams`) fixes what each 3.2 s link-window can carry out of the node: its
+**The count.** The warden's schedule (`CellCertifierParams`) fixes what each 3.2 s link-window can carry out of the node: its
 egress record's ``lanes · slots`` cells a bucket and its fails record's ``lanes``, each of B bytes, for ``window``
 buckets (`capacity_bits`, 2,621,440 bits at the scan's schedule). The record's windows are every link-window that meets
 [t0 − pad, t1 + pad), counted from the deployment's ``origin_unix`` on the warden host's clock (`covering`); the pad
@@ -38,7 +38,7 @@ from pathlib import Path
 
 import certifier_serve as cs
 from verity.core.protocols.network_certifier.certificate import Direction
-from verity.core.protocols.network_certifier.warden import WardenParams
+from verity.core.protocols.network_certifier.cell_certifier import CellCertifierParams
 from verity.core.protocols.pous import streamed_wipe as sw
 
 FORMAT = "wipe-egress/v1"
@@ -49,12 +49,12 @@ END, DEPLOYMENT, CERTIFICATES = "end.json", "out/deployment.json", "out/certific
 FILES = (END, DEPLOYMENT, CERTIFICATES)
 
 
-def capacity_bits(params: WardenParams) -> int:
+def capacity_bits(params: CellCertifierParams) -> int:
     """The most bits one link-window carries out: every cell of its egress and fails records, B bytes each."""
     return sum(g.buckets * g.allocation * g.frame_bytes * 8 for g in (params.grid, params.fails_grid))
 
 
-def window_ns(params: WardenParams) -> int:
+def window_ns(params: CellCertifierParams) -> int:
     return params.window * params.bucket_ms * 1_000_000
 
 
@@ -93,7 +93,7 @@ def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict
     if missing:
         raise ValueError(f"the gate run has no {', '.join(missing)}: give its `fetch` bundle or the directory it unpacks to")
     end, dep = json.loads(files[END]), json.loads(files[DEPLOYMENT])
-    params = WardenParams(**dep["params"])
+    params = CellCertifierParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     origin, width, n = origin_ns(dep["origin_unix"]), window_ns(params), dep["windows"]
     windows = covering(origin, width, t0, t1, pad)

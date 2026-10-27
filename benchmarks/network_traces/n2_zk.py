@@ -15,7 +15,7 @@ decides nothing.
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
   `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
   against a stub endpoint that answers at once (certifier-serve's tests' run), honest, extra and late, with fresh keys.
-  Or, with ``--warden-run``, an active warden's run (`warden_serve.py`'s, or the gate's ``warden-rehearse``'s), read by
+  Or, with ``--warden-run``, an active warden's run (`cell_certifier_serve.py`'s, or the gate's ``warden-rehearse``'s), read by
   `warden_chain`: its own certified records under its key and session, on the warden link (`service.WardenProfile`:
   both heads at the warden's grid and parameters digest, no sync declared or charged), a certifier rehearsal's run
   refused by name; its members are honest and tampered, the tampered head failing its signed digest alone.
@@ -714,7 +714,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("prove", help="each link-window's unit proved --zk and decided by N2's verifier of record")
     run = p.add_mutually_exclusive_group(required=True)
     run.add_argument("--run", type=Path, help="the honest run's directory")
-    run.add_argument("--warden-run", type=Path, help="an active warden's run (warden_serve.py's, or the gate's "
+    run.add_argument("--warden-run", type=Path, help="an active warden's run (cell_certifier_serve.py's, or the gate's "
                      "warden-rehearse's): its own certified records, no certifier rehearsal (warden_chain)")
     p.add_argument("--extra", type=Path, help="certifier-serve's extra run of the same plan")
     p.add_argument("--late", type=Path, help="certifier-serve's late run of the same plan")

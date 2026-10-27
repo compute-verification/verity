@@ -1,4 +1,4 @@
-"""What a warden trace records to tell a late tick's cause: the warden's probe (each tick's lateness and work, each
+"""What a cell certifier trace records to tell a late tick's cause: the cell certifier's probe (each tick's lateness and work, each
 publish, each collection), the host sampler, the cores each process gets, and the summary's layout of the late ticks."""
 from __future__ import annotations
 
@@ -16,9 +16,9 @@ import pytest
 
 
 def test_probe_records_every_ticks_work_each_publish_and_the_collections(mod):
-    probe_mod = mod("warden_probe")
+    probe_mod = mod("cell_certifier_probe")
 
-    class Warden:
+    class CellCertifier:
         def __init__(self) -> None:
             self.origin, self.slack, self.lateness, self.params = 10.0, 0.025, [], NS(bucket_ms=100, window=600)
 
@@ -37,8 +37,8 @@ def test_probe_records_every_ticks_work_each_publish_and_the_collections(mod):
 
     ticks = itertools.count(10.0, 0.5)
     probe = probe_mod.Probe(clock=lambda: next(ticks))
-    probe.install(Warden, Publisher)
-    w = Warden()
+    probe.install(CellCertifier, Publisher)
+    w = CellCertifier()
     with pytest.raises(ValueError):
         asyncio.run(w.run())
     Publisher().keep(NS(link="requests", window=0), None)
@@ -55,11 +55,11 @@ def test_probe_records_every_ticks_work_each_publish_and_the_collections(mod):
 
 
 def test_probe_follows_a_spawned_publisher_from_both_sides(tmp_path, mod):
-    """The warden's side (handoffs, the close's wait, the pid) and the publisher process's (`time_keeps`), joined in
+    """The cell certifier's side (handoffs, the close's wait, the pid) and the publisher process's (`time_keeps`), joined in
     ticks.json's `publisher`."""
-    probe_mod = mod("warden_probe")
+    probe_mod = mod("cell_certifier_probe")
 
-    class Warden:
+    class CellCertifier:
         def __init__(self) -> None:
             self.origin, self.slack, self.lateness, self.params = 10.0, 0.025, [0.0], NS(bucket_ms=100, window=600)
 
@@ -88,8 +88,8 @@ def test_probe_follows_a_spawned_publisher_from_both_sides(tmp_path, mod):
 
     ticks = itertools.count(10.0, 0.5)
     probe = probe_mod.Probe(clock=lambda: next(ticks), out=tmp_path)
-    probe.install(Warden, type("Inline", (), {"keep": lambda self, r, g: None}), PublisherProcess)
-    asyncio.run(Warden().run())
+    probe.install(CellCertifier, type("Inline", (), {"keep": lambda self, r, g: None}), PublisherProcess)
+    asyncio.run(CellCertifier().run())
     p = PublisherProcess(tmp_path)
     p(NS(link="requests", window=0), None)
     p(NS(link="responses", window=0), None)
@@ -106,7 +106,7 @@ def test_probe_follows_a_spawned_publisher_from_both_sides(tmp_path, mod):
 
 def test_collections_sees_the_interpreters_own_collections(mod):
     ticks = itertools.count()
-    c = mod("warden_probe").Collections(clock=lambda: next(ticks))
+    c = mod("cell_certifier_probe").Collections(clock=lambda: next(ticks))
     gc.callbacks.append(c)
     try:
         gc.collect(1)

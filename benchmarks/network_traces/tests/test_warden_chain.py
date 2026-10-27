@@ -1,5 +1,5 @@
 """The network chain on an active warden's run (`warden_chain`, `chain_record`'s warden path), here the synthetic run
-published as `warden_serve.Publisher` publishes a served one, in the gate's layout (its witness under ``witness/``, its
+published as `cell_certifier_serve.Publisher` publishes a served one, in the gate's layout (its witness under ``witness/``, its
 public files under ``out/``, ``certificates.jsonl`` as `auditor.warden_outcome` writes it): the certificates step
 reruns the warden's own check and holds the public certificates to the certified lines, refusing a changed one and a
 changed cell; the certified I/O read off the cells is the requests and responses served; N2's link is the warden's

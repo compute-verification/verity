@@ -1,4 +1,4 @@
-"""Warden-form id requests and their responses served through the warden's own ingress and egress, both links' rows and
+"""CellCertifier-form id requests and their responses served through the warden's own ingress and egress, both links' rows and
 the scan of the ingress rows: the joint scan's traffic (`test_network_certifier_ingress_scan.py`'s cross-check of the
 warden, and `benchmarks/network_traces/scan_zk.py`'s). It imports no test framework, so a node's bare venv runs it."""
 
@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.core.protocols.network_certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W
-from verity.core.protocols.network_certifier import warden_rows as WR
+from verity.core.protocols.network_certifier import egress as EG, ingress_scan as IS, io_tie as IT, cell_certifier as W
+from verity.core.protocols.network_certifier import cell_certifier_rows as WR
 from verity.core.protocols.network_certifier.grid import Certifier, Record
 
 
@@ -20,7 +20,7 @@ class Served:
     each connection's admission bucket and response ids (ordinal q = k + 1), and the warden's `fails` frames and the
     `fails` records its grid closed."""
 
-    params: W.WardenParams
+    params: W.CellCertifierParams
     ingress: tuple[Record, ...]
     egress: tuple[Record, ...]
     admitted: tuple[int, ...]
@@ -33,17 +33,17 @@ class Served:
         return {k + 1: xs for k, xs in enumerate(self.responses)}
 
     def rows(self) -> tuple[list[bytes], list[bytes]]:
-        """The warden's registered ingress and egress rows, bucket by bucket (`warden_rows.window_rows`)."""
+        """The warden's registered ingress and egress rows, bucket by bucket (`cell_certifier_rows.window_rows`)."""
         return tuple([x for rec in recs for x in WR.window_rows(rec, self.params)]  # type: ignore[return-value]
                      for recs in (self.ingress, self.egress))
 
 
-def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
+def serve(params: W.CellCertifierParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
           responses: Sequence[Sequence[int]], windows: int, late: Sequence[int] = ()) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], its client's bytes arriving
     rate[k] a bucket from its admission, and response responses[k] (its ids, each one id event, then `TRAILER`, all
     there by its egress; a connection of `late` gets no byte from its server, so the warden fails it late at its first
-    egress cell), and the warden ticks both links and `fails` for `windows` link-windows as `Warden._tick` does:
+    egress cell), and the warden ticks both links and `fails` for `windows` link-windows as `CellCertifier._tick` does:
     admitted in arrival order at the first bucket with a free lane, `_ingress` until its `END`, `_egress` until its own
     `END` or `FAIL`, its lane free the bucket after."""
     B, P = params.cell_bytes, params.payload
@@ -76,9 +76,9 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
             c.ingress += requests[k][c.bytes_in:sent]
             c.bytes_in, c.ingress_ended = sent, sent == len(requests[k])
             if c.ingress_end is None and c.failed is None:
-                for frame in W.Warden._ingress(warden, c, t):
+                for frame in W.CellCertifier._ingress(warden, c, t):
                     grids[0].enqueue(frame)
-            for frame in W.Warden._egress(warden, c, t):
+            for frame in W.CellCertifier._egress(warden, c, t):
                 grids[1].enqueue(frame)
         active = [c for c in active if c.ended is None]
         for grid in grids:

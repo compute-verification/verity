@@ -6,8 +6,8 @@ that runs it: its mirror, `answer` (as `reference`), and its cases, `build` and 
 and checks a period with the Python the period's pieces already have: one-stage's answers and integrity profiles as PoUW
 reads them (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates and clock certificates
 under its LMS key (`certifier.certificate`), Σ_sync (`certifier.schedule`), `registration.digest`, and in the rows form
-the schedule (`warden.WardenParams`) and the verifier's read of each row registration
-(`warden_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
+the schedule (`warden.CellCertifierParams`) and the verifier's read of each row registration
+(`cell_certifier_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. Public is `K` and its terms over
 `PeriodLeakAccepted`'s windows (the clock form's audits, the rows form's scans, all at one δ), each with its `delta`,
@@ -19,7 +19,7 @@ parameters, commitments, evidence and cases). In the clock form: the link-window
 drawn network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
 each link-window's ingress and egress rows committed and registered under a small drawn schedule
-(`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
+(`cell_certifier_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
 none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
 registration holding both rows' roots and domains, answered by one-stage with a stratified or subset draw at the
 period's δ; the scan's Program is its generator form, stand-ins of its three templates at small widths in the Boolean
@@ -46,11 +46,11 @@ from functools import lru_cache
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.core.protocols.network_certifier import warden_rows as WR
+from verity.core.protocols.network_certifier import cell_certifier_rows as WR
 from verity.core.protocols.network_certifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
                                                             certificate_digest, clock_digest)
 from verity.core.protocols.network_certifier.schedule import ClockSync, SyncSet
-from verity.core.protocols.network_certifier.warden import WardenParams
+from verity.core.protocols.network_certifier.cell_certifier import CellCertifierParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
 from verity.ml.circuits import boolean as BL, codec, population
@@ -73,7 +73,7 @@ ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 ROWS_PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule",
                     "session", "windows"]
-SCHEDULE_KEYS = sorted(f.name for f in dataclasses.fields(WardenParams))
+SCHEDULE_KEYS = sorted(f.name for f in dataclasses.fields(CellCertifierParams))
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
 ROWS_WINDOW_KEYS = ["answer", "certificates", "registrations"]
@@ -123,7 +123,7 @@ class Params:
     sync_set: SyncSet | None
     windows: int
     #: the rows form's schedule and the scan's terms, read off its Program; None in the clock form
-    schedule: WardenParams | None = None
+    schedule: CellCertifierParams | None = None
     scan: Scan | None = None
 
 
@@ -204,12 +204,12 @@ def _sync_set(j) -> SyncSet:
     return SyncSet(tuple(deltas), tuple(rhos))
 
 
-def _schedule(j) -> WardenParams:
-    """`scheduleOf`: `WardenParams`' fields, each a positive integer, B past a cell's header, and B, S and T u32s."""
+def _schedule(j) -> CellCertifierParams:
+    """`scheduleOf`: `CellCertifierParams`' fields, each a positive integer, B past a cell's header, and B, S and T u32s."""
     _exactly(j, SCHEDULE_KEYS, "schedule")
     values = {k: _nat(j[k], "schedule") for k in SCHEDULE_KEYS}
     try:
-        s = WardenParams(**values)
+        s = CellCertifierParams(**values)
     except ValueError as e:
         raise D.Reject(f"schedule: {e}") from None
     if not (s.cell_bytes < U32 and s.lanes * s.slots < U32 and s.window < U32):
@@ -253,7 +253,7 @@ def _audit(a, ctx: str) -> Audit:
     return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units))
 
 
-def _scan(j, program: str, s: WardenParams) -> Scan:
+def _scan(j, program: str, s: CellCertifierParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
     form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
     with a row among its parameters (the checker form) refused first. It reads the descriptor's template nodes and
@@ -477,7 +477,7 @@ def _window_check(p: Params, clear: set[bytes], earlier: list[bytes], w: int, re
 
 
 def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
-    """`rowsCheck`: the verifier's own read of the registration (`warden_rows.check_registration`)."""
+    """`rowsCheck`: the verifier's own read of the registration (`cell_certifier_rows.check_registration`)."""
     try:
         WR.check_registration(doc, p.key, p.session, p.schedule, p.link, d, w)
     except ValueError as e:
@@ -492,7 +492,7 @@ def _holds(reg: Registration, doc: dict) -> bool:
 
 
 def records(link: str) -> tuple[tuple[str, Direction], ...]:
-    """The rows form's certified records of a link-window (`warden_serve.CERTIFIED`): requests, responses, fails."""
+    """The rows form's certified records of a link-window (`cell_certifier_serve.CERTIFIED`): requests, responses, fails."""
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
 
 
@@ -724,15 +724,15 @@ SAME_SHAPE = ("bucket_ms", "delay", "egress_cells", "ingress_buckets", "ingress_
 SWAPS = ((0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
 
 
-def schedule_json(s: WardenParams) -> dict:
+def schedule_json(s: CellCertifierParams) -> dict:
     return {k: getattr(s, k) for k in SCHEDULE_KEYS}
 
 
-def _small_schedule(r: random.Random, small: bool) -> WardenParams:
+def _small_schedule(r: random.Random, small: bool) -> CellCertifierParams:
     """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T at most 3 (2 if
     `small`), and a timestep `every` that divides T."""
     T = r.randint(1, 2 if small else 3)
-    return WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
+    return CellCertifierParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
                         delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8), window=T,
                         ingress_cells=r.randint(1, 8), ingress_buckets=r.randint(1, 4), egress_cells=r.randint(1, 16),
                         every=r.choice([d for d in range(1, T + 1) if T % d == 0]))
@@ -893,7 +893,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         c = Certificate(k.I, link, d, w, digest, b"")
         return dataclasses.replace(c, signature=lms.sign_at(k, next(signed) % 2 ** k.params.H, c.message(s)).encode())
 
-    def registrations(w: int, s: WardenParams | None = None, on: str = link, ses: bytes = session) -> list[dict]:
+    def registrations(w: int, s: CellCertifierParams | None = None, on: str = link, ses: bytes = session) -> list[dict]:
         """Link `on`'s ingress and egress rows at window `w`, committed under schedule `s` (the period's) in session
         `ses` and registered, each head signed there."""
         s = s or sched

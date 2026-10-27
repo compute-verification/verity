@@ -1,7 +1,7 @@
-"""The gate's warden rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
+"""The gate's cell certifier rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
 the gate refuses a request it can't check, one whose minutes the traffic doesn't fit in, a read-only key, and a second
-rehearsal (a certifier's or a warden's) while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
-warden through the tunnel into `witness/`, publishes to `out/` only the warden's deployment, registrations and
+rehearsal (a certifier's or a cell certifier's) while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
+cell certifier through the tunnel into `witness/`, publishes to `out/` only the cell certifier's deployment, registrations and
 certificates, and writes its end; `fetch` gives `witness/` to the run's own lane and vy-admin alone."""
 
 from __future__ import annotations
@@ -152,7 +152,7 @@ def test_one_warden_session_takes_the_gates_most_requests_at_height_13_in_an_hou
 
 
 def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
-    """A warden window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
+    """A cell certifier window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
     so height 12's 4096 sign 819 windows and 1031 (55 minutes of the scan's 3.2 s windows) take 13; a load's heads come
     first. 1559 requests at the gate's rate are `warden_windows` 1031 and fit 55 minutes at height 13, which the gate
     takes; at 12 it refuses them with the height that fits, writing nothing, rather than run a session whose signer
@@ -187,7 +187,7 @@ CHECK = {"accepted": True, "problems": [], "summary": {
     "wire_bits": {"ingress": 18432, "egress": 63488}, "cells_in_their_bucket": [31, 31], "tick_lateness_ms": {"n": 9},
     "data_bytes": {"egress": 4242}, "completion_tokens": 77, "prompt_tokens": [16, 99], "arrival_lag_ms": {"n": 31},
     "finish_reasons": {"length": 4}}, "connections": [{"ordinal": 1, "outcome": "end", "text_bytes": 300}]}
-#: a stand-in for `warden_serve.py rehearse`'s files: public, then witness
+#: a stand-in for `cell_certifier_serve.py rehearse`'s files: public, then witness
 WARDEN_FILES = (
     f'(out / "deployment.json").write_text(json.dumps({{"upstream": url, "session": "00" * 32}}))\n'
     f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {{"rows": 600}}}}) + "\\n"'
@@ -202,7 +202,7 @@ WARDEN_FILES = (
 
 
 def rehearsal(source: str, seen: list | None = None):
-    """A stand-in for `warden_serve.py rehearse`: Python `source` run with `out` and `url` bound."""
+    """A stand-in for `cell_certifier_serve.py rehearse`: Python `source` run with `out` and `url` bound."""
     def command(req, out, url):
         if seen is not None:
             seen.append((req, out, url))
@@ -289,7 +289,7 @@ def test_the_warden_rehearsal_runs_warden_serve_on_the_gates_traffic_through_the
     """A request.json written before the gate took `--height` runs at the deployed key's, 20, as one that gives none."""
     req = {"device": "warden", "requests": 100}
     argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
-    assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/warden_serve.py", "rehearse",
+    assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/cell_certifier_serve.py", "rehearse",
                     "--upstream", "127.0.0.1:40001", "--out", str(tmp_path), "--height", "20", "--requests", "100",
                     "--rate", "0.5", "--seed", "0", "--tail", "60", "--temperature", "0.0", "--top-p", "1.0"]
     assert A.warden_command(req | {"height": 20}, tmp_path, "http://127.0.0.1:40001",
@@ -301,7 +301,7 @@ def test_the_warden_rehearsal_runs_warden_serve_on_the_gates_traffic_through_the
 def test_a_scan_rehearsal_is_recorded_only_when_asked_and_runs_id_requests_at_the_scans_schedule(host, tmp_path):
     """`--scan` is recorded (`scan: true`) only when given, and its run is the same rehearsal with `--ids` and
     `SCAN_SCHEDULE` added: the same traffic, sampling, height and tokens, so `warden_minutes` bounds it as it does any
-    (`test_warden_serve` holds the schedule to `scan_zk.PARAMS`)."""
+    (`test_cell_certifier_serve` holds the schedule to `scan_zk.PARAMS`)."""
     rc, out = gate(host, REQUEST + ["--scan", "--tokens", "64"], started=[])
     assert rc == 0, out
     scan = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
@@ -322,7 +322,7 @@ def test_a_scan_rehearsal_is_recorded_only_when_asked_and_runs_id_requests_at_th
 
 def test_a_warden_rehearsals_sampling_is_recorded_and_passed_on_every_request(host, tmp_path):
     """The defaults, temperature 0 and top_p 1, and given values alike are recorded and passed on, so that every request
-    of the traffic carries both (`warden_serve.varied_traffic`) and an endpoint's own generation config never applies;
+    of the traffic carries both (`cell_certifier_serve.varied_traffic`) and an endpoint's own generation config never applies;
     a request.json written before the gate took them runs at the defaults."""
     for k, (given, recorded) in enumerate((([], (0.0, 1.0)), (["--temperature", "0.6", "--top-p", "0.9"], (0.6, 0.9)),
                                           (["--temperature", "2", "--top-p", "0.0001"], (2.0, 0.0001)))):
@@ -409,7 +409,7 @@ def test_the_gate_refuses_prompts_it_cant_check_and_writes_nothing(host, argv, s
 
 
 def test_a_scan_rehearsals_prompt_may_be_the_scans_ki_ids_and_no_more():
-    """A scan rehearsal's prompt is at most the scan's KI = 1024 ids (`WARDEN_PROMPT_IDS`; `test_warden_serve` holds
+    """A scan rehearsal's prompt is at most the scan's KI = 1024 ids (`WARDEN_PROMPT_IDS`; `test_cell_certifier_serve` holds
     it to `scan_zk.CLASS.KI`): the scan refuses a request of more, so the gate takes exactly KI and refuses KI + 1 at
     input. A varied certifier rehearsal's prompts, which no scan reads, keep the varied plan's 2048
     (`CERTIFIER_PROMPTS`)."""
@@ -420,7 +420,7 @@ def test_a_scan_rehearsals_prompt_may_be_the_scans_ki_ids_and_no_more():
 
 
 def test_a_groups_windows_are_the_scans_delay_and_its_tokens_buckets_and_their_minutes_the_groups_windows():
-    """`test_warden_serve` holds `scan_group_windows` to `warden_serve.group_windows` and the warden's schedule."""
+    """`test_cell_certifier_serve` holds `scan_group_windows` to `cell_certifier_serve.group_windows` and the cell certifier's schedule."""
     assert [A.scan_group_windows(t) for t in (1, 2, 11, 12, 139, 140)] == [1, 1, 1, 2, 2, 3]
     assert [A.warden_group_minutes(g, 2, 10) for g in (1, 10, 100, 400)] == [4, 4, 9, 25]
     assert A.warden_group_minutes(400, 64, 10) == 46 and A.warden_group_minutes(1, 2) == 8

@@ -109,7 +109,7 @@ from verity.core.protocols.network_certifier.active import (CANONICAL_STREAM, DA
                                                      encode_frame, id_event_data, id_request)
 from verity.core.protocols.network_certifier.certificate import (CertifiedRecord, Direction, frames_root,  # noqa: E402
                                                           real_frames)
-from verity.core.protocols.network_certifier import tie_service as TS, warden as W  # noqa: E402
+from verity.core.protocols.network_certifier import tie_service as TS, cell_certifier as W  # noqa: E402
 from verity.core.protocols.network_certifier.schedule import ClockSync, SyncSet  # noqa: E402
 from verity.core.protocols.network_certifier.service import LinkWindows  # noqa: E402
 
@@ -118,14 +118,14 @@ ADVICE_MODULE = "verity.core.protocols.network_certifier.advice"
 ADVISED_MODULE = "verity.core.protocols.network_certifier.advised"
 IO_TIE_MODULE = "verity.core.protocols.network_certifier.io_tie"
 IO_REQUEST_MODULE = "verity.core.protocols.network_certifier.io_request"
-WARDEN_ROWS_MODULE = "verity.core.protocols.network_certifier.warden_rows"
+WARDEN_ROWS_MODULE = "verity.core.protocols.network_certifier.cell_certifier_rows"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
 ADVISED = "NetworkAdvisedCounts_v1"
 TIE = "IoTieWindow"
 REQUEST_TIE = "IoTieRequest"
-#: the verifier's registered read of a warden cell at its position under the warden's signed root (`warden_rows.opens`,
+#: the verifier's registered read of a warden cell at its position under the warden's signed root (`cell_certifier_rows.opens`,
 #: the Lean verifier's check of a unit's registered port)
 WARDEN_READ = "Flock.Registered.checkPort"
 #: the part of the I/O tie (`TIE`) that refuses each negative it reads; None: one it must accept while its outputs are
@@ -205,8 +205,8 @@ def frames_edit(src: Path, dst: Path) -> Path:
 
 
 def cell_reads(WR, cells, k: int, row: bytes) -> bool:
-    """Whether `row`, opened at position `k` of the warden's committed `cells` (`warden_rows.Cells`, a row a bucket)
-    under that position's salt and path, climbs to their root: the verifier's registered read (`warden_rows.opens`)."""
+    """Whether `row`, opened at position `k` of the warden's committed `cells` (`cell_certifier_rows.Cells`, a row a bucket)
+    under that position's salt and path, climbs to their root: the verifier's registered read (`cell_certifier_rows.opens`)."""
     return WR.opens(cells.domain, cells.root, k, WR.bc(row, cells.salts[k]), cells.path(k))
 
 
@@ -218,7 +218,7 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
     default) changed in its bucket's row, and the row opened at its position. The honest row's read climbs to the
     signed root and the changed one's doesn't (`WARDEN_READ`)."""
     try:
-        WR, WS = importlib.import_module(WARDEN_ROWS_MODULE), importlib.import_module("warden_serve")
+        WR, WS = importlib.import_module(WARDEN_ROWS_MODULE), importlib.import_module("cell_certifier_serve")
     except ModuleNotFoundError as err:
         raise NotApplicable(f"no warden cells yet: {err.name} (WARDEN) hasn't landed") from None
     link, direction = WS.CERTIFIED[WS.EGRESS]
@@ -226,7 +226,7 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
         raise NotApplicable(f"{run}: no {' or '.join(missing)}: the run kept its registrations only (public), so "
                             "no unit can open its cells")
     dep = json.loads((run / "deployment.json").read_text())
-    params = WS.WardenParams(**dep["params"])
+    params = WS.CellCertifierParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     records = {r.window: r for r in WS.read_records(run, params)[WS.EGRESS]}
     regs = {r["window"]: (r, salts, wiring_salt) for d, salts, wiring_salt in WS.read_cells(run)
@@ -815,7 +815,7 @@ def certified_ingress(Q, requests: list[bytes], received: list[int], *, T: int, 
         arrivals.append(w * T + k[w] % (T - 1))
         k[w], at = k[w] + 1, at + c
     lanes = max([1, *(sum(a <= t <= a + 1 for a in arrivals) for t in range(len(received) * T))])
-    params = W.WardenParams(cell_bytes=frame_bytes, slots=max([1, *cells]), lanes=lanes, window=T, delay=1)
+    params = W.CellCertifierParams(cell_bytes=frame_bytes, slots=max([1, *cells]), lanes=lanes, window=T, delay=1)
     link = Q.serve(params, requests, arrivals, [len(r) for r in requests], buckets=len(received) * T)
     return Ingress(Q.Shape(frame_bytes, lanes, params.slots), tuple(tuple(r) for r in link.rows),
                    tuple(link.releases), T)

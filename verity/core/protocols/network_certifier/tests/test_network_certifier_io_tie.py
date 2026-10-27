@@ -1,6 +1,6 @@
 """The I/O tie's prototype (`io_tie`) on the warden's own egress: variable-length responses on a link served through
-the warden's schedule (`warden.Warden._egress` cuts every cell, the certifier's grid lays them out a row a bucket, as
-`warden_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's map (through
+the warden's schedule (`cell_certifier.CellCertifier._egress` cuts every cell, the certifier's grid lays them out a row a bucket, as
+`cell_certifier_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's map (through
 advice v1's order permutation where the engine's numbering isn't the arrival order, as on TRACE-CORPUS's heavy trace);
 and the Commit's sampled ids, one hiding row a step, which each bucket's unit reads at its outputs' steps as
 registered rows. The reference accepts every honest window and refuses every way the cells can differ from the map and
@@ -24,7 +24,7 @@ from verity.ml.commitments import advice as ADV
 from verity.ml.commitments.gates.frame_v3 import _part, opens
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import row_leaf
-from verity.core.protocols.network_certifier import head_check as HC, io_tie as IT, warden as W, warden_rows as WR
+from verity.core.protocols.network_certifier import head_check as HC, io_tie as IT, cell_certifier as W, cell_certifier_rows as WR
 from verity.core.protocols.network_certifier.active import DATA, HEADER, PAD
 from verity.core.protocols.network_certifier.certificate import Direction
 from verity.core.protocols.network_certifier.grid import Certifier
@@ -42,9 +42,9 @@ def _h(label: bytes) -> bytes:
     return hashlib.sha512(label).digest()
 
 
-def wardens(shape: IT.Shape, slots: int, delay: int) -> W.WardenParams:
+def wardens(shape: IT.Shape, slots: int, delay: int) -> W.CellCertifierParams:
     """The warden's schedule a shape reads: B, T and lanes·r = R."""
-    return W.WardenParams(cell_bytes=shape.B, slots=slots, delay=delay, lanes=shape.R // slots, window=shape.T)
+    return W.CellCertifierParams(cell_bytes=shape.B, slots=slots, delay=delay, lanes=shape.R // slots, window=shape.T)
 
 
 class Link(NamedTuple):
@@ -53,7 +53,7 @@ class Link(NamedTuple):
     and arrival order (`order`), the Commit's rows of sampled ids (one a step of the session), the warden's
     `fails` frames, and the egress records its grid closed, a window each."""
 
-    params: W.WardenParams
+    params: W.CellCertifierParams
     rows: list[list[bytes]]
     outputs: list[IT.Output]
     release: list[int]
@@ -64,10 +64,10 @@ class Link(NamedTuple):
     records: tuple = ()
 
 
-def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], responses: list[list[int]], buckets: int,
+def serve(shape: IT.Shape, params: W.CellCertifierParams, arrivals: list[int], responses: list[list[int]], buckets: int,
           engine: list[int] | None = None, late: frozenset[int] = frozenset()) -> Link:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with response responses[k] (its ids), and the warden's
-    own egress (`warden.Warden._egress`) serves it for `buckets` buckets: admitted at the first bucket with a free lane
+    own egress (`cell_certifier.CellCertifier._egress`) serves it for `buckets` buckets: admitted at the first bucket with a free lane
     in arrival order, its server's bytes all there (its events of P bytes each, then `TRAILER`), but for a connection
     in `late`, whose last event never comes, so the warden fails it there. Advice request i is arrival engine[i] (the
     identity by default), its output j sampled at step r·s + (i mod 2) + j, in the batch row of its rank by i among
@@ -90,7 +90,7 @@ def serve(shape: IT.Shape, params: W.WardenParams, arrivals: list[int], response
             c.admitted, c.pad = t, W.cell(PAD, c.ordinal, b"", B)
             active.append(c)
         for c in active:
-            for frame in W.Warden._egress(warden, c, t):
+            for frame in W.CellCertifier._egress(warden, c, t):
                 grid.enqueue(frame)
         active = [c for c in active if c.ended is None]
         rows.append([bytes(B) if f is None else f for f in grid.tick()])
@@ -273,7 +273,7 @@ def test_every_window_of_the_wardens_egress_is_accepted(link, big):
 
 
 def test_each_buckets_row_is_the_wardens_registered_row(link):
-    """The units read the warden's registration v2 (`warden_rows`): bucket t's row is row t of the record the grid
+    """The units read the warden's registration v2 (`cell_certifier_rows`): bucket t's row is row t of the record the grid
     closed (`window_rows`, its wiring read off it), it opens the warden's root at t, and the verifier's port
     (`bucket_port`) has unit t read row t, an idle window's too."""
     p = link.params
@@ -412,7 +412,7 @@ def test_a_connection_the_warden_failed_is_refused():
 
 def port_statement(inst: IT.Instance, s: int) -> tuple[dict, list[bytes]]:
     """A statement's registered entry of port row s over the window's T bucket units (unit t's s-th read row at its
-    step, with its path) and each table row's b ‖ c, as `warden_rows.Cells.statement` gives the bucket rows'."""
+    step, with its path) and each table row's b ‖ c, as `cell_certifier_rows.Cells.statement` gives the bucket rows'."""
     T = inst.shape.T
     entry = {"value": IT.SAMPLED, "positions": [inst.steps[t][s] for t in range(T)],
              "paths": [b"".join(inst.paths[t][s]).hex() for t in range(T)]}
@@ -420,7 +420,7 @@ def port_statement(inst: IT.Instance, s: int) -> tuple[dict, list[bytes]]:
 
 
 def port_refusals(inst: IT.Instance, link: Link, seed: bytes = b"w") -> list[str | None]:
-    """The Lean verifier's registered reads of the window's port rows (`warden_rows.refusal`) against the verifier's
+    """The Lean verifier's registered reads of the window's port rows (`cell_certifier_rows.refusal`) against the verifier's
     own ports (`port_reads`), a port row at a time: None where they accept."""
     count = len(link.port)
     ports = IT.port_reads(inst.steps, inst.port_root, inst.port_domain, count, inst.shape.P)
@@ -525,7 +525,7 @@ def serve_trace(shape: IT.Shape, trace: dict) -> tuple[Link, list[int]]:
     def token(i: int, k: int) -> int:
         return (1_000_003 * i + 7_919 * k) % V
 
-    params = W.WardenParams(cell_bytes=shape.B, slots=1, delay=delay, lanes=trace["lanes"], window=shape.T,
+    params = W.CellCertifierParams(cell_bytes=shape.B, slots=1, delay=delay, lanes=trace["lanes"], window=shape.T,
                             egress_cells=1 << 20)
     responses = [[token(i, k) for k in range(lens[i])] for i in arrival]
     end = max(a + delay + n for a, n in zip(admitted, lens)) + 1

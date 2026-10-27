@@ -18,7 +18,7 @@ from fractions import Fraction
 import pytest
 
 from verity.core.protocols.network_certifier import advice as I1, advised as AD, io_request as Q, tie_service as TS
-from verity.core.protocols.network_certifier import warden as W
+from verity.core.protocols.network_certifier import cell_certifier as W
 from verity.core.protocols.network_certifier.active import id_request, id_request_frames
 from verity.core.protocols.network_certifier.grid import GridParams
 from verity.core.protocols.network_certifier.schedule import ClockSync, SyncSet
@@ -65,7 +65,7 @@ class CellsTie:
 
     @classmethod
     def of(cls, prompt_lens, admitted):
-        params = W.WardenParams(cell_bytes=B, slots=1, lanes=2, window=T, delay=1)
+        params = W.CellCertifierParams(cell_bytes=B, slots=1, lanes=2, window=T, delay=1)
         reqs = [id_request(model="m", user=f"u{i}", prompt=[(7919 * i + 104729 * k) % 151329 for k in range(n)],
                            max_tokens=1, frame_bytes=B, offset=0) for i, n in enumerate(prompt_lens)]
         served = Q.serve(params, reqs, admitted, [len(r) for r in reqs], len(INGRESS) * T)

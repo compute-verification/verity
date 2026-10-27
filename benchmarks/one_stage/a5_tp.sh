@@ -17,15 +17,15 @@
 #     and combines, each combine slot wired to its part), run as the entry row-tables is.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
-#     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
-#     one connection's cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (warden_serve.py
+#     The STANDIN entries warden and warden:KIND are a5_cell_certifier.py: transfer-gate chunks whose ports open the bucket rows of
+#     one connection's cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (cell_certifier_serve.py
 #     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection admitted in its
-#     link-window with a5_warden.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
+#     link-window with a5_cell_certifier.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
 #     and check.json are kept), on a local challenger's coins (A5_CHALLENGER=local) or the verifier's own (A5_COINS=verifier);
 #     warden:altered reads one cell a bit off, and warden:pad, warden:pad-named and warden:swapped make the egress chunk's
 #     statement for another units' wiring (--made-for); each is to be refused by Lean's registered reads. A5_WARDEN_RUN=DIR
-#     audits that warden run instead of rehearsing one (e.g. warden_replay.py's, a served window's traffic through the
-#     warden), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_warden.py --units, default 16).
+#     audits that warden run instead of rehearsing one (e.g. cell_certifier_replay.py's, a served window's traffic through the
+#     warden), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_cell_certifier.py --units, default 16).
 #     The STANDIN entries tp-gates and tp-gates:KIND are a5_tp_gates.py: both ranks of a synthetic Llama TP2 step of two
 #     requests, each rank's AllReduce2 chunks reading both ranks' registered partials of each request (layer 0's embedding,
 #     o_proj and down_proj at H = 2048), beside a drawn rest, on the verifier's own coins (A5_COINS=verifier); tp-gates:altered
@@ -245,13 +245,13 @@ else
         ln -s $A5_WARDEN_RUN $W/warden-run
       fi
       if [ ! -d $W/warden-run ]; then
-        (cd benchmarks/network_traces && $PY warden_serve.py rehearse --fake --out $W/warden-run --requests 6 --rate 1 --tail 5 \
+        (cd benchmarks/network_traces && $PY cell_certifier_serve.py rehearse --fake --out $W/warden-run --requests 6 --rate 1 --tail 5 \
           --max-tokens 64 --prompt-max 2048 --start-in 2) > $O/warden-rehearse.log 2>&1; r=$?
         mkdir -p $O/warden-run && cp $W/warden-run/{deployment.json,cells.jsonl,check.json} $O/warden-run/
         [ $r = 0 ] || { tail -20 $O/warden-rehearse.log; $PY -c 'import json, sys; print(*json.load(open(sys.argv[1])).get("problems", []), sep="\n")' \
           $O/warden-run/check.json; exit 8; }
       fi
-      $TIME $PY benchmarks/one_stage/a5_warden.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL \
+      $TIME $PY benchmarks/one_stage/a5_cell_certifier.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL \
         "${DRAW[@]}" "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_WARDEN_UNITS:+--units $A5_WARDEN_UNITS} \
         --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
       grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err

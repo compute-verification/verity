@@ -35,7 +35,7 @@ makes that source the certifier's signed record.
   certificate, the head and `active.py` are unchanged.
 - **Domain separation.** The record certificate of the same sampling block signs SHA-512("verity/net-cert/v1" ‖ salt_c ‖
   R), R a record digest, and the clock certificate the same over a clock digest, each digest under its own tag. So one
-  opens as the other only on a SHA-512 collision, as with the network certifier's cells certificate (`warden_rows`). Nor can the
+  opens as the other only on a SHA-512 collision, as with the network certifier's cells certificate (`cell_certifier_rows`). Nor can the
   head check take a clock certificate as a record's: that needs a head whose record digest is the clock digest.
 - **The verifier of record** is `LinkWindows(certified_clocks=…)`, whose `clock_source` is `advised.SignedClocks` under
   the link's own certifier key and session. It reads each window's sync through its opening, against the salted digest

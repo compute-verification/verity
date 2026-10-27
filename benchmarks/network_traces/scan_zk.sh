@@ -9,8 +9,8 @@
 #      writable; hidden_zk's by default)  SC_DRY=1 (the run and the host's read of every round only)
 #      SC_CLASS=w63|test (`prove --class`: test is the certifier tests' class, a CPU window)  SC_GROUP=G (`prove
 #      --group G`: link-windows 0 … G − 1 in one registration)
-#      SC_WARDEN_RUN=DIR (a warden_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
-#      `warden_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
+#      SC_WARDEN_RUN=DIR (a cell_certifier_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
+#      `cell_certifier_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
 #      fake's id-form answer SC_FIRST_MS after each (past the warden's delay: a void run), SC_PROMPT_MAX and
 #      SC_MAX_TOKENS its traffic's sizes, and prove its run)  SC_DRAW=K (`prove --draw K`: Lean draw --stratified K on
 #      the verifier's coins)
@@ -57,7 +57,7 @@ fi
 if [ -n "${SC_REHEARSE:-}" ]; then
   log "sczk: rehearsing the warden at scan_zk's schedule"
   # shellcheck disable=SC2046
-  "$PY" benchmarks/network_traces/warden_serve.py rehearse --fake --ids --out "$W/warden" \
+  "$PY" benchmarks/network_traces/cell_certifier_serve.py rehearse --fake --ids --out "$W/warden" \
     --requests "${SC_REQUESTS:-12}" --rate "${SC_RATE:-2}" --tail "${SC_TAIL:-6}" --start-in 2 \
     ${SC_FIRST_MS:+--first-ms "$SC_FIRST_MS"} ${SC_PROMPT_MAX:+--prompt-max "$SC_PROMPT_MAX"} \
     ${SC_MAX_TOKENS:+--max-tokens "$SC_MAX_TOKENS"} \

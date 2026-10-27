@@ -4,7 +4,7 @@ injected: `weights-write` needs the store disk and a lane's own key, and its run
 unless the store holds the shape as `weights-write` wrote it, its program, sink port, streams and shape check, and its
 minutes cover the load and then the rehearsal; its run opens a tunnel to the sink a stream beside the endpoint's, gives
 the rehearsal their local ends and the store, and publishes the load's signed registrations and the relay's counts,
-never a salt. `test_warden_serve` holds `warden_command`'s load flags to `warden_serve.py rehearse`'s, and
+never a salt. `test_cell_certifier_serve` holds `warden_command`'s load flags to `cell_certifier_serve.py rehearse`'s, and
 `test_load_relay` the relay itself."""
 
 from __future__ import annotations
@@ -189,7 +189,7 @@ def test_the_longest_minutes_fit_in_the_rehearsal_units_runtime_and_leave_an_h20
 SALT = "5a" * 64
 LOAD_SUMMARY = {"values": 19, "registered": 19, "relayed": True}
 RELAY = {"shape": "tiny", "values": 19, "bytes": 34240, "streams": 4, "sinks": [{"accepted": True}] * 4}
-#: a stand-in for `warden_serve.py rehearse --load-store`'s files: public, then witness
+#: a stand-in for `cell_certifier_serve.py rehearse --load-store`'s files: public, then witness
 LOAD_FILES = (
     '(out / "deployment.json").write_text(json.dumps({"upstream": url, "session": "00" * 32}))\n'
     '(out / "cells.jsonl").write_text("")\n'

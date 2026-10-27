@@ -16,12 +16,12 @@ import dataclasses
 import pytest
 
 import signers
-from verity.core.protocols.network_certifier import warden_rows as W
+from verity.core.protocols.network_certifier import cell_certifier_rows as W
 from verity.core.protocols.network_certifier.active import DATA
 from verity.core.protocols.network_certifier.certificate import Direction, Issuer, certificate_digest
 from verity.core.protocols.network_certifier.grid import Record, Status
-from verity.core.protocols.network_certifier.tests.test_network_certifier_warden import PARAMS
-from verity.core.protocols.network_certifier.warden import cell
+from verity.core.protocols.network_certifier.tests.test_network_certifier_cell_certifier import PARAMS
+from verity.core.protocols.network_certifier.cell_certifier import cell
 
 SESSION = signers.SESSION
 T, R, S, B = PARAMS.window, PARAMS.slots, PARAMS.lanes * PARAMS.slots, PARAMS.cell_bytes
@@ -90,7 +90,7 @@ def test_a_real_cross_direction_replay_is_refused(tmp_path):
 
 
 def test_a_warden_certificate_over_another_digest_is_not_a_cells_certificate(tmp_path):
-    """The wire record's certificate signs `certificate_digest(salt, record_digest)`. A certificate the warden really
+    """The wire record's certificate signs `certificate_digest(salt, record_digest)`. A certificate the cell certifier really
     signed over such a digest verifies on its own, but is refused here: `cert.digest` must be `head.digest()`."""
     issuer = _issuer(tmp_path)
     c0 = _commit(0, Direction.EGRESS)
@@ -109,7 +109,7 @@ def test_a_warden_certificate_over_another_digest_is_not_a_cells_certificate(tmp
 def test_the_layout_is_bound_by_the_signed_head(tmp_path):
     """Was `test_the_layout_is_schedule_checked_but_not_bound_by_the_root`. A disagreeing layout is refused by the field
     check, and the head's signed bytes now carry the layout: B, S, T and the wiring's digest. A head of another slot
-    count, row count or wiring is another digest, which the warden's certificate doesn't sign."""
+    count, row count or wiring is another digest, which the cell certifier's certificate doesn't sign."""
     issuer = _issuer(tmp_path)
     c0 = _commit(0, Direction.EGRESS)
     cert = _attest(issuer, c0)
@@ -132,7 +132,7 @@ def test_the_layout_is_bound_by_the_signed_head(tmp_path):
 
 def test_the_wiring_reads_are_tied_to_the_wardens_layout(tmp_path):
     """Was `test_the_wiring_reads_are_unconstrained_prover_witness`, the main finding. A read is (connection, cell),
-    and the verifier places it with the wiring the warden signed: the honest reads open A's cells at their row and
+    and the verifier places it with the wiring the cell certifier signed: the honest reads open A's cells at their row and
     slot; a duplicate, a read of a cell no connection sent (past B's cells, or of a connection that isn't there) and a
     crossed or padded wiring are refused. So no read opens a foreign connection's cell, a cell twice or an empty slot."""
     issuer = _issuer(tmp_path)

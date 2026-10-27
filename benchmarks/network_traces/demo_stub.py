@@ -15,7 +15,7 @@ connection, each answered and the connection closed:
 - **A warden's id request of the class** (`warden_request`): the warden's copy of the client's bytes, its release
   headers right after the request line (`release.with_release`: ``x-verity-release: N`` and
   ``x-verity-release-run: HEX``), around exactly `active.id_request` of its own fields in the scan's B = P + 9-byte
-  cells from their first byte (``offset`` 0), as `warden_serve.py rehearse --ids` sends one. The class (`refusal`): the
+  cells from their first byte (``offset`` 0), as `cell_certifier_serve.py rehearse --ids` sends one. The class (`refusal`): the
   model above, greedy (temperature 0, top_p 1), a prompt of exactly ``--prompt-ids`` ids each below ``--vocab`` (the
   prompt's bytes), and ``max_tokens`` exactly ``--tokens``. It is answered id-form with no HTTP head (`answer`): each
   generated id (`outputs`, below ``--vocab``) as an `io_tie.id_event` of P = ``--id-payload`` bytes, then

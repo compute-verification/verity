@@ -3,19 +3,19 @@ network-accounting, `note:network-accounting/20261024T0558Z-finding-redteam-v3`)
 316f3292b6, where the egress base and the fail reason were open; the warden now closes both, and the first two cases and
 the regression after them pin that.
 
-The warden's own tests show the honest path: the egress cells, their sizes and buckets are a function of (admission s,
+The cell certifier's own tests show the honest path: the egress cells, their sizes and buckets are a function of (admission s,
 the egress length, the fail cell) and the public parameters, and the server's timing never reaches the wire. These show
 where a *malicious server* still gets bits to the client beyond the stated v3 bound (ε·egress bits at δ, plus log2 of
 the schedule, plus the fail-closed term log2(cells+1) a failed connection), and confirm which channels close.
 
 Each case states the bits it bounds.
 
-- **the egress base (CLOSED).** At 316f3292b6 egress started at a + D, a the bucket the warden released the client's
+- **the egress base (CLOSED).** At 316f3292b6 egress started at a + D, a the bucket the cell certifier released the client's
   ingress END, which waited on the server's connect: the server shifted a by delaying its accept, ~log2(ingress_buckets)
   bit a connection. Egress now starts at s + D, s the admission bucket, and nothing the server does moves s.
 - **the fail reason (CLOSED).** At 316f3292b6 a FAIL cell carried a reason byte the client's shim read, so at one fail
   cell the server still picked late vs upstream, ≥1 bit a fail beyond the fail-closed term. Every FAIL is now the same
-  bytes; the reason is in the warden's `fails` record, witness.
+  bytes; the reason is in the cell certifier's `fails` record, witness.
 - **the fail cell (CHARGED).** The server picks which egress cell a connection fails at — the fail-closed term.
 - **data vs padding (CLOSED to timing).** For a fixed (s, egress length) the cell kinds and buckets don't move with
   the server's send timing: 0 bit from timing.
@@ -31,8 +31,8 @@ from __future__ import annotations
 import asyncio
 
 from verity.core.protocols.network_certifier.active import PAD, VirtualClock
-from verity.core.protocols.network_certifier.warden import DATA, FAIL, Warden, audit, cells
-from verity.core.protocols.network_certifier.tests.test_network_certifier_warden import (
+from verity.core.protocols.network_certifier.cell_certifier import DATA, FAIL, CellCertifier, audit, cells
+from verity.core.protocols.network_certifier.tests.test_network_certifier_cell_certifier import (
     B, D, EOF, P, PARAMS, R, TAU, Client, Server, ServerConn, expected_egress, reasons, records, request, run)
 
 
@@ -44,8 +44,8 @@ def _verdict(warden):
 
 
 def test_the_servers_connect_delay_doesnt_move_the_egress_base_from_the_admission_bucket():
-    """At 316f3292b6 the egress schedule started at a + D, a the bucket the warden released the client's END, and the
-    warden released nothing until the server's connection was open: a server that connected at bucket 1 or 4 set a to
+    """At 316f3292b6 the egress schedule started at a + D, a the bucket the cell certifier released the client's END, and the
+    cell certifier released nothing until the server's connection was open: a server that connected at bucket 1 or 4 set a to
     1 or 4, and the client read it from the padding before the first live cell. Now egress starts at s + D (s = 0
     here) whatever the connect: a server that connects at 1 or 2 gives the client the same bytes in the same cells, and
     one that connects at 4, past its first cell's deadline, fails there (the charged fail term), still at s + D."""
@@ -62,7 +62,7 @@ def test_the_servers_connect_delay_doesnt_move_the_egress_base_from_the_admissio
             conn.fed, conn.eof = len(b"hi"), True  # so `settle` sees the read complete
             return conn.reader, conn
 
-        warden = Warden(PARAMS, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+        warden = CellCertifier(PARAMS, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
         running = asyncio.create_task(warden.run())
         client = Client(warden, cells(request(5), B))  # one-cell request, fully buffered at once
         await warden.until(lambda w: w.ordinals == 1)
@@ -116,7 +116,7 @@ def test_at_one_fail_cell_the_reason_is_not_on_the_wire():
     """Two connections that both fail at egress cell 0: one whose server connects but never sends (late), one whose
     server connection is refused (upstream). At 316f3292b6 the FAIL cell carried the reason byte and the shim read
     "late" vs "upstream". Now the clients get the same bytes, a FAIL with no payload, and the reason is only in the
-    warden's `fails` record, witness the client never sees; the audit reads it there."""
+    cell certifier's `fails` record, witness the client never sees; the audit reads it there."""
     late_w, (late_c,), _ = run([[]], {0: [cells(request(5), B)]})  # connects, never answers: late at cell 0
     up_w, (up_c,), _ = run(Server([[]], refuse=(0,)), {0: [cells(request(5), B)]})  # refused: upstream at cell 0
     assert late_w.log[0]["failed_at"] == up_w.log[0]["failed_at"] == 0  # same fail cell

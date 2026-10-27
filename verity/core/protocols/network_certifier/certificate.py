@@ -567,7 +567,7 @@ class Issuer:
     def sign(self, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
         """A certificate of the 64-byte `digest` for the link-window in this session, or None when the signer refuses
         (the link-window is then listed in `refused`). `certify` signs a record's salted digest with it,
-        `salted_clock` a window's salted sync, and the warden's cell rows their head's digest (`warden_rows`)."""
+        `salted_clock` a window's salted sync, and the warden's cell rows their head's digest (`cell_certifier_rows`)."""
         key_id = self.signer.key_id
         message = certificate_message(key_id, self.session, link, direction, window, digest)
         try:

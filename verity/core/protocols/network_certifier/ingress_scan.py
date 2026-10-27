@@ -4,7 +4,7 @@ the Programs' row at t, and computes S_t from them and S_t's egress view, its ou
 form); the first bucket's, `IngressScanFirst`, reads no state and starts from the empty one. Every switch is computed
 from the state and the rows; none is witness. Nothing here is in a Spec.
 
-**The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
+**The row** is `cell_certifier_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
 are the warden's (`warden.read_cell`): `DATA` of P = B − 9 bytes, `END` with the request's last 1 … P bytes, `PAD` of
 none, each on the connection's ordinal q. A connection's ingress is one warden-form id request
@@ -85,7 +85,7 @@ egress view at t. Where a check fails, o1 and o2 are what the gates compute (`re
 them.
 
 **The warden it serves** (`Class.serves`): a class takes every run of a warden whose B, r, lanes and timestep `every`
-are its own (B, r, lanes and EVERY; the warden's window is whole timesteps, `WardenParams`), whose `ingress_cells` is
+are its own (B, r, lanes and EVERY; the warden's window is whole timesteps, `CellCertifierParams`), whose `ingress_cells` is
 at most C, whose `ingress_buckets` is at most WITHIN (a request's `END` is in S_{A−1}, or its ingress failed), whose
 delay is D (at least WITHIN + EVERY − 1, so a request's anchor is at most admitted + D, where its egress starts) and
 whose `egress_cells` is at most KO + 1 (a response's ids fit `out`). The warden frees a lane after its
@@ -100,7 +100,7 @@ one bucket's ingress to a later bucket's gates: each step reads the state the st
 and the prompt lengths, which stay private.
 
 **Where it runs.** `row`, `sin` and `prog` are each a registered read, an input port `Registered.checkPort` accepts:
-`row` the warden's signed row t (`warden_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog` the Programs'
+`row` the warden's signed row t (`cell_certifier_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog` the Programs'
 row t. o1 and o2 are gates, never inputs: the unit's statement commits o1 as the scan's state row t and o2 as its view
 row t, each registered as a read of its row (`checkPort` accepts a hidden-output statement's output row, the
 verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's `state`, which read those rows, read what
@@ -130,7 +130,7 @@ from verity.core.protocols.network_certifier import head_check as HC
 from verity.core.protocols.network_certifier import io_ids as II
 from verity.core.protocols.network_certifier import io_request as Q
 from verity.core.protocols.network_certifier.active import DATA, HEADER, ID_DIGITS, ID_FIELD_BYTES, PAD
-from verity.core.protocols.network_certifier.warden import END, WardenParams
+from verity.core.protocols.network_certifier.cell_certifier import END, CellCertifierParams
 
 BIT, BYTE = HC.BIT, HC.BYTE
 #: the state's head: `now`, `phase`, `last`
@@ -224,7 +224,7 @@ class Class:
         x -= self.EVERY if x >= self.EVERY else 0
         return (now + self.WITHIN + (self.EVERY - x if x else 0)) % (1 << 32)
 
-    def serves(self, params: WardenParams) -> None:
+    def serves(self, params: CellCertifierParams) -> None:
         """ValueError, naming the fix, unless the scan takes every run of the warden at `params` (the module
         docstring's "The warden it serves")."""
         need = {"cell_bytes": (params.cell_bytes == self.B, f"= B = {self.B}"),

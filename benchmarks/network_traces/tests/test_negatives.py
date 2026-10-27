@@ -872,9 +872,9 @@ def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root()
     WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
     from verity.core.protocols.network_certifier.active import DATA, HEADER, PAD
     from verity.core.protocols.network_certifier.grid import COMPLETE, Record
-    from verity.core.protocols.network_certifier.warden import WardenParams, cell
+    from verity.core.protocols.network_certifier.cell_certifier import CellCertifierParams, cell
 
-    params = WardenParams(cell_bytes=64, slots=2, lanes=2, window=2)
+    params = CellCertifierParams(cell_bytes=64, slots=2, lanes=2, window=2)
     B, S = params.cell_bytes, params.grid.allocation
     grid = ((cell(DATA, 1, b"abc", B), cell(PAD, 1, b"", B)) + (None,) * (S - 2), (None,) * S)
     salts = [bytes([k + 1]) * WR.SALT_BYTES for k in range(params.window)]
@@ -889,13 +889,13 @@ def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root()
 
 
 def test_frame_on_a_warden_run_reads_its_data_cells_row_and_refuses_the_changed_byte(tmp_path):
-    """`warden_frame` on a warden-serve run driven tick by tick (`test_warden_serve._run`): its egress registration
+    """`warden_frame` on a warden-serve run driven tick by tick (`test_cell_certifier_serve._run`): its egress registration
     (v2) is read under the warden's key and the schedule, its bucket rows and signed wiring are committed under the
     run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest and not
     with a payload byte changed; a run that kept no salts is not applicable."""
     pytest.importorskip(NG.WARDEN_ROWS_MODULE)
     sys.path.insert(0, str(HERE / "tests"))
-    import test_warden_serve as tws
+    import test_cell_certifier_serve as tws
 
     run, key = tmp_path / "run", tmp_path / "key"
     run.mkdir()

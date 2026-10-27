@@ -43,7 +43,7 @@
   `block_certifier.block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is
   ``network-period check``'s own on its case (`decide_period`; `block_entry`).
 * **The warden path** (``--job``'s ``path``, `WARDEN`): every step reads an active warden's own run (the gate's
-  ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's, whose input is
+  ``warden-rehearse``, or `cell_certifier_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's, whose input is
   refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the warden's own offline check on its witness
   and holds the public ``certificates.jsonl`` to the certified lines (`warden_chain.certificates`; no clock
   certificate: the warden signs none). ``endpoint`` binds the endpoint's own advice to the certified I/O read off the
@@ -88,7 +88,7 @@ CLEAR = {
             "(IoTieRequest) stays in the clear tonight, outside the proofs",
     "lean": "nothing: each proof is decided by the verifier's own Lean `flock-verify verify --zk` run",
     "warden_certificates": "at the auditor, on the warden's witness: the warden's own offline check "
-                           "(warden_serve.check: each record's certificate and its rows' registration under the "
+                           "(cell_certifier_serve.check: each record's certificate and its rows' registration under the "
                            "warden's key and session, the audit and the client's view), and the public "
                            "certificates.jsonl held to the certified lines",
     "warden_endpoint": "at the auditor, on the endpoint's records and the warden's certified I/O (warden_chain.io, off "
@@ -123,7 +123,7 @@ REHEARSAL_ACCEPTS = ("honest", "token")
 OUT_BITS = 16
 #: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, not met there until a run shows the written
 #: buckets tell a receiver no more than an idle one. The warden hands each bucket to a pacer that releases it at a time
-#: fixed before the bucket is made (`warden.Warden(paced=…)`), as the served proxy does (`active.Proxy(paced=…)`)
+#: fixed before the bucket is made (`cell_certifier.CellCertifier(paced=…)`), as the served proxy does (`active.Proxy(paced=…)`)
 JITTER = "assumed (J)"
 #: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
@@ -638,12 +638,12 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     registered, 32 + KO·IDB a request if ``prog`` were an input only at its anchored entries), no faulty term with
     every unit drawn, b = NS + NV, and Dj = 1. The period's link-windows and requests scale the run's own."""
     import scan_zk as SZ
-    from verity.core.protocols.network_certifier import ingress_scan as IS, warden as W
+    from verity.core.protocols.network_certifier import ingress_scan as IS, cell_certifier as W
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}
     if not dep or not v.get("windows") or not v.get("requests"):
         raise SystemExit(f"leak: {run} has no deployment.json, or no end.json verdict with its windows and requests")
-    params, cls = W.WardenParams(**dep["params"]), SZ.CLASS
+    params, cls = W.CellCertifierParams(**dep["params"]), SZ.CLASS
     cls.serves(params)
     T, units = params.window, 2 * params.window
     drawn = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units

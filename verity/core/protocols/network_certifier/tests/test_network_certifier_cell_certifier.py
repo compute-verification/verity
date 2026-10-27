@@ -1,4 +1,4 @@
-"""The active warden (`warden`), a relay that knows bytes only: driven tick by tick on a `VirtualClock`, its clients
+"""The cell certifier (`cell_certifier`), a relay that knows bytes only: driven tick by tick on a `VirtualClock`, its clients
 in-memory connections speaking cells and its server an in-memory one whose bytes the test schedules, it releases honest
 traffic exactly on its schedule, fails a late byte closed, queues past its lanes then refuses (and withholds that
 window's records from `publish`), passes both directions'
@@ -17,11 +17,11 @@ import pytest
 from verity.core.protocols.network_certifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.core.protocols.network_certifier.grid import Reason
 from verity.core.protocols.network_certifier.release import release_of, with_release
-from verity.core.protocols.network_certifier.warden import (END, FAIL, KIND_NAMES, REASONS, REFUSED, Shim, Warden,
-                                                    WardenParams, audit, cell, cells, read_cell, read_reason,
+from verity.core.protocols.network_certifier.cell_certifier import (END, FAIL, KIND_NAMES, REASONS, REFUSED, Shim, CellCertifier,
+                                                    CellCertifierParams, audit, cell, cells, read_cell, read_reason,
                                                     reason_frame)
 
-PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=2, window=24, ingress_cells=8,
+PARAMS = CellCertifierParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=2, window=24, ingress_cells=8,
                       ingress_buckets=6, egress_cells=12)
 B, P, R, D = PARAMS.cell_bytes, PARAMS.payload, PARAMS.slots, PARAMS.delay
 TAU = PARAMS.bucket_ms / 1000
@@ -96,7 +96,7 @@ class ServerConn:
 class Client:
     """One client connection: its cells in its reader, and every write with the bucket it was made in."""
 
-    def __init__(self, warden: Warden, data: bytes | tuple[bytes, bool]) -> None:
+    def __init__(self, warden: CellCertifier, data: bytes | tuple[bytes, bool]) -> None:
         self.warden, self.writes, self.closed = warden, [], False
         self.transport = self
         data, eof = data if isinstance(data, tuple) else (data, True)
@@ -139,10 +139,10 @@ class Client:
 
 
 class SocketClient(Client):
-    """A client whose connection's warden end is a socket, the one a paced warden's pacer writes to, and whose other
+    """A client whose connection's cell certifier end is a socket, the one a paced cell certifier's pacer writes to, and whose other
     end the test reads (`received`) once the run is over."""
 
-    def __init__(self, warden: Warden, data: bytes | tuple[bytes, bool]) -> None:
+    def __init__(self, warden: CellCertifier, data: bytes | tuple[bytes, bool]) -> None:
         self.ours, self.peer = socket.socketpair()
         self.ours.setblocking(False)
         super().__init__(warden, data)
@@ -162,7 +162,7 @@ class SocketClient(Client):
         return bytes(out)
 
 
-def settled(warden: Warden, server: Server) -> bool:
+def settled(warden: CellCertifier, server: Server) -> bool:
     cap = PARAMS.egress_cells * P
     if sum(c.server is None and c.upstream is None for c in warden.active) != len(server.held):
         return False
@@ -177,13 +177,13 @@ def settled(warden: Warden, server: Server) -> bool:
 
 
 async def drive(server: Server, arrivals: dict[int, list[bytes]], *, windows: int = 1, late: dict | None = None,
-                params: WardenParams = PARAMS, client: type[Client] = Client, **hooks):
+                params: CellCertifierParams = PARAMS, client: type[Client] = Client, **hooks):
     """Connect `arrivals[t]` (each a client's raw cell bytes) just before bucket t's tick, let the server answer what is
-    due and the warden read it, then tick, and with `paced` wait for the pacer to report the bucket's release, for
-    `windows` windows; `late[t]` puts tick t that many seconds late. `hooks` are the warden's `publish`, `release` and
+    due and the cell certifier read it, then tick, and with `paced` wait for the pacer to report the bucket's release, for
+    `windows` windows; `late[t]` puts tick t that many seconds late. `hooks` are the cell certifier's `publish`, `release` and
     `paced`."""
     clock = VirtualClock(-TAU / 2)
-    warden = Warden(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
+    warden = CellCertifier(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
     running = asyncio.create_task(warden.run())
     clients: list[Client] = []
     for t in range(windows * params.window):
@@ -207,11 +207,11 @@ def run(answers, arrivals, **kw):
     return warden, clients, server
 
 
-def records(warden: Warden):
+def records(warden: CellCertifier):
     return tuple([r for r in warden.records if r.link == link] for link in ("requests", "responses", "fails"))
 
 
-def reasons(warden: Warden) -> list[tuple[int, int, str]]:
+def reasons(warden: CellCertifier) -> list[tuple[int, int, str]]:
     """(bucket, ordinal, reason) of every frame of the `fails` record."""
     return [(r.window * PARAMS.window + b, *read_reason(f, B)) for r in records(warden)[2]
             for b, row in enumerate(r.grid) for f in row if f is not None]
@@ -414,7 +414,7 @@ def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_
         [(r.link, r.window, faulted(r)) for r in plain.records]
     assert [r.t for r in paced.releases] == live and all(r.written for r in paced.releases)
     with pytest.raises(ValueError, match="past the slack"):
-        Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
+        CellCertifier(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
 
 
 def test_the_audit_refuses_a_record_whose_cells_are_not_the_schedules():
@@ -450,7 +450,7 @@ def test_over_capacity_queues_fifo_then_refuses():
 
 
 def test_a_window_with_a_refusal_goes_to_withhold_whole():
-    """The warden certifies no record of a window in which it refused a connection (traffic past its Program slots):
+    """The cell certifier certifies no record of a window in which it refused a connection (traffic past its Program slots):
     of two windows, the second's refusal, just before its second bucket, gives its three records to `withhold` in place
     of `publish`, and the first's three are published."""
     T = PARAMS.window
@@ -527,7 +527,7 @@ def http(body: bytes, extra: bytes = b"") -> bytes:
 def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends():
     """Two requests admitted in one bucket, the first two buckets long and the second one, so their `END`s are
     released in the other order: each reaches the server once, whole, at its `END`'s release, with
-    `x-verity-release: N`, N its `END`'s index among the `END` cells of the signed ingress records, and the warden's
+    `x-verity-release: N`, N its `END`'s index among the `END` cells of the signed ingress records, and the cell certifier's
     run id; a client's own release header is dropped there, while the cells, the records and the audit hold the
     client's bytes as sent, which the audit accepts."""
     reqs = [http(b'{"prompt":"%s"}' % (b"a" * 140)), http(b"{}", b"X-Verity-Release: 0\r\n")]
@@ -554,7 +554,7 @@ def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends
 
 def test_a_connection_that_fails_before_its_end_is_never_numbered_and_its_server_gets_nothing():
     """A client that never ends fails at s + D with nothing sent to its server, and takes no place in the order: the
-    next request's N is 0. Each warden draws its own run id."""
+    next request's N is 0. Each cell certifier draws its own run id."""
     slow = (cell(DATA, 0, b"a" * P, B), False)
     warden, _, server = run([[], [(0, b"r"), (0, EOF)]], {0: [slow], 4: [cells(http(b"{}"), B)]})
     log = {e["ordinal"]: e for e in warden.log}
@@ -565,7 +565,7 @@ def test_a_connection_that_fails_before_its_end_is_never_numbered_and_its_server
 
 
 def test_the_parameters_digest_binds_every_parameter():
-    fields = [f.name for f in dataclasses.fields(WardenParams)]
+    fields = [f.name for f in dataclasses.fields(CellCertifierParams)]
     digests = {PARAMS.digest} | {dataclasses.replace(PARAMS, **{f: getattr(PARAMS, f) + 1}).digest for f in fields}
     assert len(digests) == len(fields) + 1 and all(len(d) == 64 for d in digests)
     assert set(KIND_NAMES) == {PAD, DATA, END, FAIL, REFUSED} and len(set(REASONS)) == len(REASONS)

@@ -4,8 +4,8 @@ and each round's host read (`scan_zk.member`, as Lean's registered reads make it
 round's: honest accepted with every output 1, its state and view chains wires through the registered roots
 (`scan_zk.wired`); chain's ingress member refused at unit A's o1 and tampered's egress member at the re-signed row
 ("does not open"). A group of link-windows (IO-TIE's) is one registration, a member a template and link-window, its
-members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the synthetic run published as
-`warden_serve.Publisher` publishes a served one) is read under its deployment's key, its registration's
+members the Program's ranges. A cell_certifier_serve run's directory (`--warden-run`, here the synthetic run published as
+`cell_certifier_serve.Publisher` publishes a served one) is read under its deployment's key, its registration's
 ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in ``cells.jsonl``,
 and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the challenger's coins
 (``--challenger``): its flags refused by name where they can't draw, the group's root bound to the warden's signed
@@ -43,7 +43,7 @@ def _load():
 
 
 sz = _load()
-import warden_serve as WS
+import cell_certifier_serve as WS
 
 
 def test_each_rounds_host_read_is_the_rounds(tmp_path):
@@ -131,7 +131,7 @@ def test_the_members_are_the_programs_ranges(G):
 
 def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
               late: tuple[int, ...] = ()) -> Path:
-    """The synthetic run's records over ``windows`` link-windows (the setup's by default) published as warden_serve's
+    """The synthetic run's records over ``windows`` link-windows (the setup's by default) published as cell_certifier_serve's
     `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration and salts),
     under a warden key of its own, beside its `deployment.json`; the connections of ``late`` failed late (a void run,
     their reasons in ``fails.records``)."""
@@ -205,7 +205,7 @@ def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp
 def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the_prover_committed(tmp_path):
     """The verifier's own ``--registered`` file of each member (`registered_file`: `stage` writes it, `a0.lean_verify`
     passes it, and a Lean verdict's ``registered`` reports its roots) holds each warden port at the root and domain of
-    the row registration the deployment's key signed (`warden_rows.check_registration`, read here afresh from the
+    the row registration the deployment's key signed (`cell_certifier_rows.check_registration`, read here afresh from the
     run's ``cells.jsonl``), the root `warden_roots` registers for that direction and link-window. A member whose rows
     the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
     statement whose header names a port registered that the verifier's file doesn't is refused, as Lean refuses it
@@ -214,7 +214,7 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
     run = published(tmp_path / "run", sz.TEST, windows=G)
     h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
     dep = json.loads((run / "deployment.json").read_text())
-    key, session, params = WS.cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), sz.W.WardenParams(**dep["params"])
+    key, session, params = WS.cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), sz.W.CellCertifierParams(**dep["params"])
     signed = {}
     for (d, w), doc in _cells(run).items():
         head, dom = sz.WR.check_registration(doc, key, session, params, WS.LINK, sz.Direction(d), w)
@@ -436,7 +436,7 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     dep["params"] = asdict(replace(sz.PARAMS, delay=20))
     dep["digest"] = replace(sz.PARAMS, delay=20).digest.hex()
     (other / "deployment.json").write_text(json.dumps(dep))
-    with pytest.raises(SystemExit, match="warden_serve.py rehearse at scan_zk's schedule"):
+    with pytest.raises(SystemExit, match="cell_certifier_serve.py rehearse at scan_zk's schedule"):
         sz.host(tmp_path / "h3", other)
 
 

@@ -21,12 +21,12 @@ from __future__ import annotations
 
 import pytest
 
-from verity.core.protocols.network_certifier import warden_rows as W
+from verity.core.protocols.network_certifier import cell_certifier_rows as W
 from verity.core.protocols.network_certifier.active import DATA, PAD
 from verity.core.protocols.network_certifier.certificate import Direction
 from verity.core.protocols.network_certifier.grid import COMPLETE, Record
-from verity.core.protocols.network_certifier.warden import cell
-from verity.core.protocols.network_certifier.tests.test_network_certifier_warden import PARAMS
+from verity.core.protocols.network_certifier.cell_certifier import cell
+from verity.core.protocols.network_certifier.tests.test_network_certifier_cell_certifier import PARAMS
 
 B, R, LANES = PARAMS.cell_bytes, PARAMS.slots, PARAMS.lanes
 S, T = PARAMS.grid.allocation, PARAMS.window

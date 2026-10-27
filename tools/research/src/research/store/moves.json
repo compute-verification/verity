@@ -1526,6 +1526,30 @@
         "benchmarks/rho/": "benchmarks/overhead/",
         "benchmarks/rho/rho/": "benchmarks/overhead/overhead/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/live_challenger/tests/test_auditor_warden.py": "benchmarks/live_challenger/tests/test_auditor_cell_certifier.py",
+        "benchmarks/network_e2e/traces/tests/test_warden_probes.py": "benchmarks/network_e2e/traces/tests/test_cell_certifier_probes.py",
+        "benchmarks/network_e2e/traces/warden_probe.py": "benchmarks/network_e2e/traces/cell_certifier_probe.py",
+        "benchmarks/network_traces/tests/test_warden_serve.py": "benchmarks/network_traces/tests/test_cell_certifier_serve.py",
+        "benchmarks/network_traces/tests/test_warden_serve_phase10.py": "benchmarks/network_traces/tests/test_cell_certifier_serve_phase10.py",
+        "benchmarks/network_traces/tests/test_warden_zk.py": "benchmarks/network_traces/tests/test_cell_certifier_zk.py",
+        "benchmarks/network_traces/warden_serve.py": "benchmarks/network_traces/cell_certifier_serve.py",
+        "benchmarks/network_traces/warden_zk.py": "benchmarks/network_traces/cell_certifier_zk.py",
+        "benchmarks/network_traces/warden_zk.sh": "benchmarks/network_traces/cell_certifier_zk.sh",
+        "benchmarks/one_stage/a5_warden.py": "benchmarks/one_stage/a5_cell_certifier.py",
+        "benchmarks/one_stage/tests/test_a5_warden.py": "benchmarks/one_stage/tests/test_a5_cell_certifier.py",
+        "benchmarks/one_stage/tests/test_warden_replay.py": "benchmarks/one_stage/tests/test_cell_certifier_replay.py",
+        "benchmarks/one_stage/warden_replay.py": "benchmarks/one_stage/cell_certifier_replay.py",
+        "verity/core/protocols/network_certifier/tests/test_network_certifier_warden.py": "verity/core/protocols/network_certifier/tests/test_network_certifier_cell_certifier.py",
+        "verity/core/protocols/network_certifier/tests/test_network_certifier_warden_adversarial.py": "verity/core/protocols/network_certifier/tests/test_network_certifier_cell_certifier_adversarial.py",
+        "verity/core/protocols/network_certifier/tests/test_network_certifier_warden_rows.py": "verity/core/protocols/network_certifier/tests/test_network_certifier_cell_certifier_rows.py",
+        "verity/core/protocols/network_certifier/tests/test_network_certifier_warden_rows_phase11.py": "verity/core/protocols/network_certifier/tests/test_network_certifier_cell_certifier_rows_phase11.py",
+        "verity/core/protocols/network_certifier/tests/test_network_certifier_warden_rows_replay.py": "verity/core/protocols/network_certifier/tests/test_network_certifier_cell_certifier_rows_replay.py",
+        "verity/core/protocols/network_certifier/warden.py": "verity/core/protocols/network_certifier/cell_certifier.py",
+        "verity/core/protocols/network_certifier/warden_rows.py": "verity/core/protocols/network_certifier/cell_certifier_rows.py"
+      }
     }
   ]
 }

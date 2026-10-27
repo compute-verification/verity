@@ -16,13 +16,13 @@ and DIR/README.md. `compare` does the same comparison across corpora that serve 
 prefill, an 8192-token budget): ``honest`` under vLLM's own scheduler, the others under `vllm_adversarial_plugin`'s hostile
 one, with its seed and prefix-cache mode. If a request's output ids moved with the hostile choices, `compare` shows it.
 
-`WARDEN`'s traces serve a trace's server and load through the active warden: `warden_serve.py serve` in front of the
+`WARDEN`'s traces serve a trace's server and load through the active warden: `cell_certifier_serve.py serve` in front of the
 server, a process beside it on its host (``warden beside the server, not on the auditor host``), and the client
 (`drive_warden`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
-their own (`cpu_plan`), the relay under `warden_probe.py` (its every tick, publish and collection) and the host's load
+their own (`cpu_plan`), the relay under `cell_certifier_probe.py` (its every tick, publish and collection) and the host's load
 sampled every 100 ms (`host_sample.py`), so that a late tick can be told apart from a stalled client. DIR/<trace>/warden/
 holds what the relay published (its deployment, certified records and connection log), the probes' records and the
-shim's record of every connection; `summarize` runs `warden_serve.py check` on it first. Which relay served (its
+shim's record of every connection; `summarize` runs `cell_certifier_serve.py check` on it first. Which relay served (its
 egress from the release a, or from the admission s) is the trace's meta.json `warden.egress_base`
 (`egress_base`). Every trace's server also loads `vllm_accept_stamp`, which records each request's
 TCP accept, headers and body in the API server, so that the order requests arrived in can be told apart on each side of
@@ -113,7 +113,7 @@ TRACES |= {name: (["--enable-chunked-prefill", "--max-num-batched-tokens", "8192
                   f"preemptions, hold-backs, order and prefill splits; {CACHE_WHAT[h[0]]})")
            for name, h in HOSTILE.items()}
 #: warden trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
-#: active warden (`verity.core.protocols.network_certifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
+#: active warden (`verity.core.protocols.network_certifier.cell_certifier`, run by `benchmarks/network_traces/cell_certifier_serve.py serve`), in
 #: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the warden's egress base
 #: (`egress_base`), covers the slowest request's send to last token without the warden (heavy 10.7 s, small KV 55.7 s,
 #: async greedy).
@@ -130,7 +130,7 @@ WARDEN_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 10
 #: seconds the warden runs past the last arrival's D, for the last responses' egress cells
 WARDEN_TAIL_S = 60.0
 #: seconds the trace waits for the warden past its last window: a spawned publisher may still be committing the last
-#: windows' records (`warden_probe`'s `publisher`)
+#: windows' records (`cell_certifier_probe`'s `publisher`)
 WARDEN_END_S = 900.0
 TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active warden, D = {d} buckets of 100 ms "
                                    f"({WARDEN_WHERE})")
@@ -387,14 +387,14 @@ def read_response(data: bytes, times: list[float], payload: int, sent: float) ->
 
 
 def warden_modules():
-    """`verity`'s warden and `warden_serve` (benchmarks/network_traces), imported only for a warden trace."""
+    """`verity`'s warden and `cell_certifier_serve` (benchmarks/network_traces), imported only for a warden trace."""
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
-    from verity.core.protocols.network_certifier import warden
+    from verity.core.protocols.network_certifier import cell_certifier as warden
 
-    import warden_serve
-    return warden, warden_serve
+    import cell_certifier_serve
+    return warden, cell_certifier_serve
 
 
 async def drive_warden(deployment: dict, served: str, requests: list[dict], arrivals: list[float], ids: list[str], out: Path,
@@ -402,7 +402,7 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
     """`drive` through the warden: from the warden's origin, each request at its arrival on a connection of its own to the
     warden's listener, sent as cells and read through the client shim (`warden.cells`, `warden.Shim`), to the warden's
     close. client.jsonl has `drive`'s fields (`read_response`) and each request's warden ordinal and outcome, and
-    warden/client.json the shim's record of every connection in `warden_serve.connection_log`'s form, for its `check`.
+    warden/client.json the shim's record of every connection in `cell_certifier_serve.connection_log`'s form, for its `check`.
 
     The shim times each cell when the event loop reads it, so the loop must not stall: on `cpus` when given (`cpu_plan`),
     every thread of the process with it (numpy's among them), with the garbage collector off and every object made
@@ -410,10 +410,10 @@ async def drive_warden(deployment: dict, served: str, requests: list[dict], arri
     table grown to hold every connection before the first is opened
     (`reserve_fds`). warden/client_loop.json records what the loop did: every stall of `LOOP_LAG_S` or more ([seconds
     after the origin, ms]), every collection that still ran, and the table's size."""
-    from warden_probe import Collections
+    from cell_certifier_probe import Collections
 
     warden, ws = warden_modules()
-    params = warden.WardenParams(**deployment["params"])
+    params = warden.CellCertifierParams(**deployment["params"])
     B, origin, listen = params.cell_bytes, deployment["origin_unix"], tuple(deployment["listen"])
     host = "%s:%d" % tuple(deployment["upstream"])
     loop = asyncio.get_running_loop()
@@ -501,7 +501,7 @@ def reserve_fds(n: int) -> int:
     """Grow the process's descriptor table to hold `n` descriptors (at most RLIMIT_NOFILE's soft limit) now; returns its
     size. The kernel grows it as descriptors pass 64, 128, 256 …, and in a process of more than one thread each growth
     waits for an RCU grace period (`expand_fdtable`), the growing thread asleep in D: on a loaded node, every connection's
-    cell read a bucket late (`warden_serve.reserve_fds`). The table never shrinks."""
+    cell read a bucket late (`cell_certifier_serve.reserve_fds`). The table never shrinks."""
     n = min(n, resource.getrlimit(resource.RLIMIT_NOFILE)[0])
     fd = os.open(os.devnull, os.O_RDONLY)
     try:
@@ -548,7 +548,7 @@ def egress_base(warden) -> str:
 
 def start_warden(d: Path, port: int, delay: int, span_s: float, key: Path, env: dict,
                  cpus: list[int] | None = None) -> tuple[subprocess.Popen, dict]:
-    """`warden_serve.py serve` in front of the server at `port`, a process beside it on `cpus`, through `warden_probe.py`
+    """`cell_certifier_serve.py serve` in front of the server at `port`, a process beside it on `cpus`, through `cell_certifier_probe.py`
     (its ticks, publishes and collections to d/warden/ticks.json), writing to d/warden/ (its log to serve.log) with a
     fresh session and the LMS key in `key`, for enough windows to cover the last arrival's D and `WARDEN_TAIL_S`. Returns
     the process and its deployment record."""
@@ -557,11 +557,11 @@ def start_warden(d: Path, port: int, delay: int, span_s: float, key: Path, env: 
     windows = math.ceil((span_s + delay * tau + WARDEN_TAIL_S) / (params["window"] * tau))
     w = d / "warden"
     w.mkdir(parents=True, exist_ok=True)
-    subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py"), "keys", "--dir", str(key)],
+    subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/cell_certifier_serve.py"), "keys", "--dir", str(key)],
                    check=True, stdout=subprocess.DEVNULL, env=env)
     flags = [x for k, v in params.items() for x in (f"--{k.replace('_', '-')}", str(v))]
     with open(w / "serve.log", "w") as log:
-        proc = subprocess.Popen([*taskset(cpus), sys.executable, str(HERE / "warden_probe.py"), "serve", "--upstream",
+        proc = subprocess.Popen([*taskset(cpus), sys.executable, str(HERE / "cell_certifier_probe.py"), "serve", "--upstream",
                                  f"127.0.0.1:{port}", "--listen", "127.0.0.1:0", "--out", str(w), "--key", str(key),
                                  "--session", secrets.token_hex(32), "--windows", str(windows), "--start-in", "2", *flags],
                                 stdout=subprocess.PIPE, stderr=log, text=True, env=env)
@@ -572,11 +572,11 @@ def start_warden(d: Path, port: int, delay: int, span_s: float, key: Path, env: 
 
 
 def check_warden(d: Path) -> int:
-    """`warden_serve.py check` of a warden trace's d/warden (its certificates, the audit of its records and the client's
+    """`cell_certifier_serve.py check` of a warden trace's d/warden (its certificates, the audit of its records and the client's
     cells against them), into d/warden/check.json."""
     env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
     with open(d / "warden" / "check.log", "w") as log:
-        return subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/warden_serve.py"), "check", "--run",
+        return subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/cell_certifier_serve.py"), "check", "--run",
                                str(d / "warden")], stdout=log, stderr=subprocess.STDOUT, env=env).returncode
 
 

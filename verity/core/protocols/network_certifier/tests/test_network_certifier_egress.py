@@ -1,5 +1,5 @@
 """N2's egress side of the scan (`egress`) on the warden's own egress: links of variable-length responses served
-through the warden's schedule (`egress_traffic`, `warden.Warden._egress`), and the slot state each bucket's egress
+through the warden's schedule (`egress_traffic`, `cell_certifier.CellCertifier._egress`), and the slot state each bucket's egress
 reads. The reference renders every bucket row the warden registered from that state; the Boolean Definition computes
 its reference's outputs, bit for bit, on honest and adversarial states (the row of a state that renders none too); it
 reads only the state; and the verifier's registered read of its row output holds the computed rows to the warden's."""
@@ -12,12 +12,12 @@ import pytest
 from egress_traffic import IB, busy, rows, serve, shape, states
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.core.protocols.network_certifier import egress as EG, head_check as HC, io_tie as IT, warden as W, warden_rows as WR
+from verity.core.protocols.network_certifier import egress as EG, head_check as HC, io_tie as IT, cell_certifier as W, cell_certifier_rows as WR
 from verity.core.protocols.network_certifier.active import DATA, PAD
 from verity.core.protocols.network_certifier.certificate import Direction
 
 #: the warden's schedule the tests serve: T = 6 buckets of 4 lanes of r = 2 slots, D = 2
-PARAMS = W.WardenParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
+PARAMS = W.CellCertifierParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
 SESSION = bytes(range(32))
 #: the request slots and outputs a slot the served links' states hold
 NR, K = 4, 16
@@ -108,7 +108,7 @@ def test_the_map_is_the_wardens_slots():
 
 @pytest.mark.parametrize("seed", [1, 2, 3])
 def test_the_state_renders_the_wardens_registered_rows(seed):
-    """Every bucket row of a busy link, idle ones too, is the warden's registered row (`warden_rows.window_rows` of
+    """Every bucket row of a busy link, idle ones too, is the warden's registered row (`cell_certifier_rows.window_rows` of
     the record its grid closed), rendered from the state the scan's ingress step wrote at that bucket (each request
     in the lowest free slot from its admission to its last egress bucket)."""
     served = busy(seed, PARAMS, 14, 15, 6)
@@ -208,7 +208,7 @@ def _committed(served, w):
 
 
 def test_the_registered_read_holds_the_row_output_to_the_wardens_rows():
-    """The verifier's registered read of the unit's row output o1 (`warden_rows.refusal` on `bucket_port`: unit 3 + t
+    """The verifier's registered read of the unit's row output o1 (`cell_certifier_rows.refusal` on `bucket_port`: unit 3 + t
     reads row t) accepts the rows a window's units compute from its states, committed under the warden's salts, and
     refuses a row with one bit flipped and a row moved to another bucket, at its own position and at the other's."""
     served = busy(6, PARAMS, 14, 15, 6)

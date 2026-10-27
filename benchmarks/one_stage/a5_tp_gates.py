@@ -9,7 +9,7 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   embedding, end in `AllReduce2_v1{H}`: each rank's partial row (one a token) and the other rank's, summed element by
   element, ``bf16_rn(f32(a) + f32(b))``. The stand-in step is layer 0's: the embedding's, o_proj's and down_proj's, at
   H = ``--hidden`` (2048, LLAMA32_1B's). The logits' `AllGather2_v1` is a copy, and the sampling
-  rank's units that read it are egress, a gate already (`a5_warden`).
+  rank's units that read it are egress, a gate already (`a5_cell_certifier`).
 * **Request by request.** The step serves ``--requests`` requests, each its own ``--tokens`` token rows (positions 0 to
   T − 1 of its prefill). The registered compiler's TP2 request Programs read each collective's peer row as an Input of the
   request's own (``peers_k``, k = pass·34 + site: site 0 the embedding, 1 + 2L layer L's o_proj, 2 + 2L its down_proj), and
@@ -44,7 +44,7 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   request's partial as its peer's, naming a partial under another TP run's domain, and the other rank's registration as its
   own, each refused by `source`; rank r's ports built before the peer's registration is read, refused by `reads`; and the
   receiving port of request 0's c0 opened by the statement of each `TRANSFERS` kind, each refused by the host's read of
-  Lean's registered reads (`warden_rows.refusal`) by name.
+  Lean's registered reads (`cell_certifier_rows.refusal`) by name.
 * **Refused runs**, each to pass every check before the draw on both ranks, accept rank 0, draw rank 1's q0c0 and be refused
   by Lean's registered reads by name: ``--altered``, rank 1's ``part0`` row 0 (rank 0's embedding partial of request 0 as
   rank 1 received it) one bit off, under rank 0's salt, the advice bit moved through the transfer, its sum computed from the
@@ -76,13 +76,13 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "network_traces"))
 
-from a5_warden import composer as row_composer, free_ports, refusal  # noqa: E402
-from warden_zk import WardenRowIdentity  # noqa: E402
+from a5_cell_certifier import composer as row_composer, free_ports, refusal  # noqa: E402
+from cell_certifier_zk import WardenRowIdentity  # noqa: E402
 from verity.ml.circuits import evaluation as E  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as W  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.core.protocols.network_certifier import warden_rows as WR  # noqa: E402
+from verity.core.protocols.network_certifier import cell_certifier_rows as WR  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, produced, registration as R  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
@@ -105,7 +105,7 @@ RECEIVER = 1
 #: must span more than one SHA-512 block for the composer
 REST_BYTES = 128
 #: the receiving port's statement made for another read than the Program's (`statement`), and what Lean's registered reads,
-#: and the host's read of them (`warden_rows.refusal`), refuse it by
+#: and the host's read of them (`cell_certifier_rows.refusal`), refuse it by
 MADE_FOR = {"swapped": "reads position", "other-collective": "not another value", "other-request": "not another value",
             "own": "not another value"}
 TRANSFERS = {"altered": "does not open", **MADE_FOR}
@@ -330,7 +330,7 @@ def source_of(mine: CS.Window, r: int, regs: dict[int, dict]):
 
 def transfer_refusals(mine: CS.Window, parts: dict, r: int, regs: dict[int, dict]) -> dict[str, dict]:
     """Rank r's q0c0 port of the sender's partial (``part<1 − r>``) opened by the statement of each `TRANSFERS` kind, read as
-    Lean's registered reads read it (`warden_rows.refusal`) against the verifier's own port: each refused by its reason."""
+    Lean's registered reads read it (`cell_certifier_rows.refusal`) against the verifier's own port: each refused by its reason."""
     j, (q, k, m) = 1 - r, chunks(mine)[0]
     port = reads(mine, r, regs)[m.key]["ports"][f"part{j}"]
     dom = domain(j, q, k, dict(m.rows)["part0"], m.n)

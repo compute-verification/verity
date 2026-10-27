@@ -1,14 +1,14 @@
-"""The warden's cells as the rows a proof block reads (design v3: the transfer gates are the cells' bits). Each
+"""The cell certifier's cells as the rows a proof block reads (design v3: the transfer gates are the cells' bits). Each
 link-window's cells are committed one `hm96-sha512/row/v2` row a bucket, each under a hiding salt, in a frame-v3-sha512
-tree. The warden signs a head that names the root and a salted digest of the link-window's wiring with the certifier's
+tree. The cell certifier signs a head that names the root and a salted digest of the link-window's wiring with the certifier's
 signer (`certificate.Issuer.sign`, LMS n = 64). A unit opens a cell's row as its output port (the sender's) or its input
 port (the receiver's) by the Lean verifier's registered reads (`flock-verify --registered`,
 `Flock.Registered.checkPort`): the port's table row is the unit's row committed under the row's salt, and it must climb
 its path to the signed root at the row the verifier reads for the unit. The verifier derives that row from the unit's
-(connection, cell) and the warden's wiring (`port`). No gate of the unit hashes the row, and the verifier receives no
+(connection, cell) and the cell certifier's wiring (`port`). No gate of the unit hashes the row, and the verifier receives no
 row and no salt.
 
-**The rows** (`window_rows`). A link-window w of the warden's schedule (`WardenParams`: T buckets of S = lanes·r slots
+**The rows** (`window_rows`). A link-window w of the cell certifier's schedule (`CellCertifierParams`: T buckets of S = lanes·r slots
 of B-byte cells) is T rows of S·B bytes. Row t − w·T is bucket t, slot j at bytes j·B to (j + 1)·B (words j·B/2
 onward), in the grid's order: a bucket's cells sorted by stream (the connection's ordinal), a connection's r cells
 together and in order, and a slot no connection holds B zero bytes. So T and a row's size are the schedule's, whatever
@@ -18,11 +18,11 @@ its S·B/2 little-endian u16 words (`words`), which the unit's port carries.
 **The wiring** (`Wiring`, read off the record by `wiring`) says which connection holds which slots. Connection q, live
 in `cells`/r rows from row `first`, holds slots ρ·r … ρ·r + r − 1 of each, ρ its rank by ordinal among the row's live
 connections; its cell k of the link-window (k = 0 … cells − 1) is in row first + ⌊k/r⌋ at slot ρ·r + (k mod r)
-(`Wiring.place`). The warden commits it as (q, first, cells) by q under a 64-byte salt it draws for the link-window:
+(`Wiring.place`). The cell certifier commits it as (q, first, cells) by q under a 64-byte salt it draws for the link-window:
 
     wiring = tagged_sha512(WIRING_TAG, salt ‖ u32be count ‖ (u32be q ‖ u32be first ‖ u32be cells) by q)
 
-**The commitment** is a registered value's (`one_stage.registered`), under the warden's own domain:
+**The commitment** is a registered value's (`one_stage.registered`), under the cell certifier's own domain:
 
     x_k    = the sha512/row/v2 digest of row k's 8·S·B bits
     b‖c_k  = hm96.SHA512.commit_string(default_key, x_k, salt_k)
@@ -31,9 +31,9 @@ connections; its cell k of the link-window (k = 0 … cells − 1) is in row fir
     domain = CommitmentDomain(identity_digest_sha512(DOMAIN_TAG, {parameters, session, link, direction, window,
              cell_bytes, slots, rows, row_schema}), -1, RangeIndexedDomain(0, T), hash="sha512")
 
-so a root opens under one link-window of one session's schedule alone. salt_k is 192 bytes the warden draws from the
+so a root opens under one link-window of one session's schedule alone. salt_k is 192 bytes the cell certifier draws from the
 operating system for each row, never for another. The opening (`Cells`: the rows, their salts and the wiring with its
-salt) is witness, which the warden hands to the prover alone (`Cells.witness`: the salts, since the rows and the
+salt) is witness, which the cell certifier hands to the prover alone (`Cells.witness`: the salts, since the rows and the
 wiring are the record's).
 
 **The signed head** (`CellsHead`) is public, as a hiding root is:
@@ -55,7 +55,7 @@ digest instead, so neither verifies as the other (each would need a SHA-512 prei
 `value` is the registered value's name (`<link>/<direction>/<window>`), `words` and `word_bits` a row's S·B/2 leaves of
 16 bits, and `layout` the rows' order: row t − first_bucket is bucket t, of `slots` slots, `connection_slots` = r a
 connection. `check_registration` is the verifier's read of it: the head is the link-window's, its domain, rows, row
-format and layout are the ones the schedule's parameters give, and its certificate verifies under the warden's key in
+format and layout are the ones the schedule's parameters give, and its certificate verifies under the cell certifier's key in
 the session over the head's digest.
 
 **How a unit reads it** (`port`). The verifier's own `--registered` port (`verity/registered-reads/v1`) names the value,
@@ -72,7 +72,7 @@ structure alone (the schedule, the ordinals and the signed wiring, never the cel
 prover's. The port's value names its digest, `<link>/<direction>/<window>/units/<digest>`, and the Lean verifier
 refuses a statement whose header names another value (`Flock.Registered.entry`), so a statement made for any other
 units' wiring is refused even where its rows are the same: a pad opened where the Program reads a data cell of the
-same row, say. A bare sequence of reads binds nothing (the value is the head's alone): it is a5_warden's form until
+same row, say. A bare sequence of reads binds nothing (the value is the head's alone): it is a5_cell_certifier's form until
 it states `Units`. `bucket_port` names the head's value too, and needs no `Units`: its unit t reads row t whole, so a
 statement's positions are all it can vary, and Lean's registered reads hold each to its unit's row.
 
@@ -100,7 +100,7 @@ from verity.core.protocols.network_certifier.active import HEADER
 from verity.core.protocols.network_certifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text,
                                                          _u)
 from verity.core.protocols.network_certifier.grid import Record
-from verity.core.protocols.network_certifier.warden import WardenParams
+from verity.core.protocols.network_certifier.cell_certifier import CellCertifierParams
 from verity.core.protocols.sampled_proofs.one_stage import produced
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -116,17 +116,17 @@ SALT_BYTES = _INST.salt_bytes
 WIRING_SALT_BYTES = DIGEST_BYTES
 
 
-def rows_of(params: WardenParams) -> int:
+def rows_of(params: CellCertifierParams) -> int:
     """A link-window's rows: one a bucket, T."""
     return params.window
 
 
-def row_bytes(params: WardenParams) -> int:
+def row_bytes(params: CellCertifierParams) -> int:
     """A row's bytes: its bucket's S = lanes·r slots of B bytes."""
     return params.grid.allocation * params.cell_bytes
 
 
-def window_rows(record: Record, params: WardenParams) -> list[bytes]:
+def window_rows(record: Record, params: CellCertifierParams) -> list[bytes]:
     """The link-window's rows: each bucket's slots in order, a slot no connection holds B zero bytes."""
     grid = params.grid
     if len(record.grid) != grid.buckets or any(len(row) != grid.allocation for row in record.grid):
@@ -151,7 +151,7 @@ class Wiring:
     def digest(self) -> bytes:
         return tagged_sha512(WIRING_TAG, self.salt + self.encode())
 
-    def live(self, params: WardenParams) -> list[list[int]]:
+    def live(self, params: CellCertifierParams) -> list[list[int]]:
         """Each row's live connections by ordinal, or ValueError naming how the wiring isn't the schedule's."""
         T, r = params.window, params.slots
         if len(self.salt) != WIRING_SALT_BYTES:
@@ -178,7 +178,7 @@ class Wiring:
                 raise ValueError(f"row {t} has {len(live)} live connections, past the schedule's {params.lanes} lanes")
         return rows
 
-    def place(self, params: WardenParams, reads: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
+    def place(self, params: CellCertifierParams, reads: Sequence[tuple[int, int]]) -> list[tuple[int, int]]:
         """The (row, slot) of each read (q, k), connection q's cell k of the link-window: the row its bucket's, the cell
         at the slot's words j·B/2 … (j + 1)·B/2 − 1. ValueError for a wiring that isn't the schedule's (`live`), or a
         read of a connection the wiring doesn't hold, of a cell past its cells, or of a cell another read opens."""
@@ -204,7 +204,7 @@ class Wiring:
         return out
 
 
-def wiring(record: Record, params: WardenParams, salt: bytes | None = None) -> Wiring:
+def wiring(record: Record, params: CellCertifierParams, salt: bytes | None = None) -> Wiring:
     """The link-window's wiring, read off its record (a cell's stream field is its connection's ordinal), under `salt`
     (default: 64 bytes fresh from the operating system); ValueError when the record's cells aren't where the schedule
     puts them."""
@@ -260,7 +260,7 @@ def words(row: bytes) -> list[int]:
     return [int.from_bytes(row[i:i + 2], "little") for i in range(0, len(row), 2)]
 
 
-def domain(params: WardenParams, session: bytes, link: str, direction: Direction, window: int) -> CommitmentDomain:
+def domain(params: CellCertifierParams, session: bytes, link: str, direction: Direction, window: int) -> CommitmentDomain:
     """The frame-v3-sha512 domain of one link-window's rows in one session of one schedule."""
     binding = identity_digest_sha512(DOMAIN_TAG, {
         "parameters": params.digest.hex(), "session": session.hex(), "link": link, "direction": direction.value,
@@ -286,7 +286,7 @@ def opens(dom: CommitmentDomain, root: bytes, position: int, bc_: bytes, path: b
 
 @dataclass(frozen=True, slots=True)
 class CellsHead:
-    """What the warden signs for a link-window's rows: public, since its root and wiring digest are hiding."""
+    """What the cell certifier signs for a link-window's rows: public, since its root and wiring digest are hiding."""
 
     link: str
     direction: Direction
@@ -318,13 +318,13 @@ class CellsHead:
 
 @dataclass(frozen=True)
 class Cells:
-    """The warden's opening of one link-window's rows, witness: the rows, their salts and the wiring, and what they
+    """The cell certifier's opening of one link-window's rows, witness: the rows, their salts and the wiring, and what they
     commit to."""
 
     link: str
     direction: Direction
     window: int
-    params: WardenParams
+    params: CellCertifierParams
     session: bytes
     rows: tuple[bytes, ...]
     salts: tuple[bytes, ...]
@@ -332,7 +332,7 @@ class Cells:
 
     @classmethod
     def commit(cls, link: str, direction: Direction, window: int, rows: Sequence[bytes], wiring: Wiring,
-               params: WardenParams, session: bytes, salts: Sequence[bytes] | None = None) -> Cells:
+               params: CellCertifierParams, session: bytes, salts: Sequence[bytes] | None = None) -> Cells:
         """`rows` and `wiring` as the link-window's (`of` reads both off a record). `salts`: one a row, drawn once
         (default: fresh from the operating system) and never for another row."""
         rows = tuple(bytes(r) for r in rows)
@@ -347,7 +347,7 @@ class Cells:
         return cls(link, direction, window, params, bytes(session), rows, salts, wiring)
 
     @classmethod
-    def of(cls, link: str, direction: Direction, record: Record, params: WardenParams, session: bytes,
+    def of(cls, link: str, direction: Direction, record: Record, params: CellCertifierParams, session: bytes,
            salts: Sequence[bytes] | None = None, wiring_salt: bytes | None = None) -> Cells:
         """`record`'s rows and wiring committed as `link`'s link-window in `direction`."""
         return cls.commit(link, direction, record.window, window_rows(record, params),
@@ -355,7 +355,7 @@ class Cells:
 
     @property
     def witness(self) -> bytes:
-        """What the warden keeps for the prover beside the record: the rows' salts, then the wiring's
+        """What the cell certifier keeps for the prover beside the record: the rows' salts, then the wiring's
         (`read_witness`)."""
         return b"".join(self.salts) + self.wiring.salt
 
@@ -417,19 +417,19 @@ def read_witness(blob: bytes) -> tuple[list[bytes], bytes]:
     return [blob[i:i + SALT_BYTES] for i in range(0, rows, SALT_BYTES)], blob[rows:]
 
 
-def attest(issuer: Issuer, record: Record, params: WardenParams, direction: Direction,
+def attest(issuer: Issuer, record: Record, params: CellCertifierParams, direction: Direction,
            salts: Sequence[bytes] | None = None, wiring_salt: bytes | None = None) -> tuple[Cells, Certificate | None]:
     """The link-window's rows and wiring committed and their head signed by `issuer` (None when its signer refuses)."""
     cells = Cells.of(record.link, direction, record, params, issuer.session, salts, wiring_salt)
     return cells, issuer.sign(record.link, direction, record.window, cells.head.digest())
 
 
-def _layout(params: WardenParams, window: int) -> dict[str, int]:
+def _layout(params: CellCertifierParams, window: int) -> dict[str, int]:
     return {"buckets": params.window, "slots": params.grid.allocation, "connection_slots": params.slots,
             "first_bucket": window * params.window}
 
 
-def registration(head: CellsHead, certificate: Certificate, params: WardenParams) -> dict[str, Any]:
+def registration(head: CellsHead, certificate: Certificate, params: CellCertifierParams) -> dict[str, Any]:
     """The public record a unit's registered port reads: the head, the rows' format and order, and the certificate."""
     return {"format": REGISTRATION, "value": head.value, "link": head.link, "direction": head.direction.value,
             "window": head.window, "parameters": head.parameters.hex(), "cell_bytes": head.cell_bytes,
@@ -440,9 +440,9 @@ def registration(head: CellsHead, certificate: Certificate, params: WardenParams
                             "signature": certificate.signature.hex()}}
 
 
-def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: WardenParams, link: str,
+def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: CellCertifierParams, link: str,
                        direction: Direction, window: int) -> tuple[CellsHead, CommitmentDomain]:
-    """The verifier's read of a registration for the link-window it expects, under the warden's key and session and the
+    """The verifier's read of a registration for the link-window it expects, under the cell certifier's key and session and the
     schedule's parameters: the head and the domain the verifier derived, or ValueError naming what fails."""
     B, S, T = params.cell_bytes, params.grid.allocation, rows_of(params)
     dom = domain(params, session, link, direction, window)
@@ -471,7 +471,7 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
     return head, dom
 
 
-def _schedules(head: CellsHead, params: WardenParams) -> None:
+def _schedules(head: CellsHead, params: CellCertifierParams) -> None:
     if (head.parameters, head.cell_bytes, head.slots, head.rows) != \
             (params.digest, params.cell_bytes, params.grid.allocation, rows_of(params)):
         raise ValueError("the head isn't of the schedule's rows")
@@ -484,13 +484,13 @@ def _port(head: CellsHead, value: str, rows: Sequence[int], reads_from: int) -> 
         ({G.READS_FROM: int(reads_from)} if reads_from else {})
 
 
-def port(head: CellsHead, wiring_: Wiring, params: WardenParams, reads: Units | Sequence[tuple[int, int]],
+def port(head: CellsHead, wiring_: Wiring, params: CellCertifierParams, reads: Units | Sequence[tuple[int, int]],
          reads_from: int = 0) -> dict[str, Any]:
     """The verifier's own `--registered` port of a unit population that opens the head's rows: unit `reads_from + i`
-    opens the row of its read (q, k), connection q's cell k of the link-window, under the warden's wiring
+    opens the row of its read (q, k), connection q's cell k of the link-window, under the cell certifier's wiring
     (`Wiring.place`, which refuses what no honest read is). `reads` is the Program's `Units`, whose value
     (`Units.value`) the port names, so a statement must name it too; a bare sequence of reads binds nothing, and the
-    port names the head's value (a5_warden's form until it states `Units`). ValueError for a wiring the head doesn't
+    port names the head's value (a5_cell_certifier's form until it states `Units`). ValueError for a wiring the head doesn't
     name."""
     _schedules(head, params)
     if wiring_.digest() != head.wiring:
@@ -500,7 +500,7 @@ def port(head: CellsHead, wiring_: Wiring, params: WardenParams, reads: Units | 
     return _port(head, head.value if units is None else units.value(head), rows, reads_from)
 
 
-def bucket_port(head: CellsHead, params: WardenParams, reads_from: int = 0) -> dict[str, Any]:
+def bucket_port(head: CellsHead, params: CellCertifierParams, reads_from: int = 0) -> dict[str, Any]:
     """The verifier's own `--registered` port of a population of one unit a bucket (IO-TIE's `IoTieBucket`): unit
     `reads_from + t` opens row t, its bucket's every slot, held or not. It names no connection, so it reads no
     wiring, and the head's rows alone fix its reads, so there is no units' wiring to name: the port names the head's

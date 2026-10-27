@@ -7,7 +7,7 @@ order it reads their bodies in, and the advice needn't carry the permutation bet
 The headers are the certifier's, put on the server's copy of a request only. The link's frames, the warden's cells
 and every record hold the client's bytes, so what is certified and tied (cell counts, prompt lengths, the I/O tie's
 request frames) is the same with them or without, and N is read back from the signed ingress records: the warden's
-`END` cells in record order (`warden.Warden`), and on the active certifier's link request s in `active.Requests`'
+`END` cells in record order (`cell_certifier.CellCertifier`), and on the active certifier's link request s in `active.Requests`'
 cut, which ends before s + 1 starts, so it is release s − 1 (`benchmarks/network_traces/active_replay.ReleaseProxy`).
 A client's own release headers are dropped; bytes that aren't an HTTP/1 request with its whole head pass unchanged.
 A live shim that rebuilds the POST copies them onto it (`release_of`, `release_head`)."""

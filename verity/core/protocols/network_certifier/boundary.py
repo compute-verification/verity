@@ -23,7 +23,7 @@ the field with `Boundary.record`, and the verifier reads it with `parse`.
 * **Egress** (`egress.EgressBucket`, the scan's egress side, in generator form): ``frame`` is an output row of R·B
   bytes, the row the unit computes from its state, slot σ's cell at bytes σ·B … (σ + 1)·B − 1, row bit 8k + i bit i of
   byte k, which the unit's statement commits under the salt of the warden's egress row t of link ℓ and registers as a
-  read of it (`warden_rows.bucket_port`), so the proof opens only when the row the unit computes is the warden's.
+  read of it (`cell_certifier_rows.bucket_port`), so the proof opens only when the row the unit computes is the warden's.
   ``verdict`` is an output row of one u16 word whose bit 0 is every slot's presence gate: 1 (`egress.ACCEPT`) exactly
   when the state renders a row. So `Layout.egress t ℓ σ` is (bit 0 of unit ℓ·T + t's verdict row, bits 8σB …
   8(σ + 1)B − 1 of its frame row), gates the unit computes and returns, none an input. Only the verdict is public: a

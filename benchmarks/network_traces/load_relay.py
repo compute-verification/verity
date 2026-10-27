@@ -31,7 +31,7 @@ The demo's load (CMP-97 option (a)) is the gate's (``vy-challenger-gate weights-
   kept on the H200's host and never on the certifier's. The relay writes ``load-heads.json`` (`heads_doc`) and
   ``load-relay.json`` (its counts and the sink's acknowledgements), and signs nothing.
 * **The signature** (`heads_of`, `sign_heads`, `load_doc`): the serving network certifier's one signer signs the
-  heads in its session before it serves (``warden_serve.py serve --load-heads``), so one LMS key and one session
+  heads in its session before it serves (``cell_certifier_serve.py serve --load-heads``), so one LMS key and one session
   carry the load and the windows' transfers; it writes ``load.json``, the client's kept registrations of the load
   that the block record pins (`blocks.pins`' ``registrations``), which `check_load` reads as the verifier does.
 

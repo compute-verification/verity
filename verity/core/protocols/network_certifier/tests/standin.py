@@ -14,7 +14,7 @@ from typing import Any, Sequence
 
 from verity.ml.commitments import hm96
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
-from verity.core.protocols.network_certifier import service as SVC, tie_service as TS, warden_rows as WR
+from verity.core.protocols.network_certifier import service as SVC, tie_service as TS, cell_certifier_rows as WR
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
@@ -72,7 +72,7 @@ def prove_tie(tie: Any, cells: Any, draw: S.Draw, lanes: Any, out: Path, *, prog
               salts: dict[int, dict[str, bytes]] | None = None, units: Sequence[int] | None = None,
               rows: Sequence[bytes] | None = None) -> TS.Delivered:
     """The delivered proof of the drawn ingress-tie units (`tie_service.IngressTie`) on the warden's opening `cells`
-    (`warden_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: unit t's ``wit`` row its
+    (`cell_certifier_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: unit t's ``wit`` row its
     bucket row under the warden's salt and its header's registered read of the warden's root (`Cells.statement`), its
     ``pub`` row its lanes and its output bit by IoTieRequest's reference (`io_request.reference`), which IO-TIE's tests
     hold to the circuit. `rows` are the rows the prover proves on instead, under the warden's salts and paths; where a
@@ -114,7 +114,7 @@ def circuit_sha512(delivered: SVC.Delivered) -> str:
 
 
 def _registered(public: Path, registered: dict) -> str | None:
-    """The stand-in for Lean's registered reads (`warden_rows.refusal`): each of the verifier's ports read by the
+    """The stand-in for Lean's registered reads (`cell_certifier_rows.refusal`): each of the verifier's ports read by the
     statement's header entry, its table rows (a shared-row file's, port-major) the public file's commitments; None when
     they hold."""
     data = public.read_bytes()

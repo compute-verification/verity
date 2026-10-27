@@ -1,12 +1,12 @@
-"""warden_zk's host side on a warden run driven tick by tick (`test_warden_serve._run`): the driver reads the egress
-registration under the deployment's key and session and holds the warden's opening to its head; the Program's units
+"""cell_certifier_zk's host side on a cell certifier run driven tick by tick (`test_cell_certifier_serve._run`): the driver reads the egress
+registration under the deployment's key and session and holds the cell certifier's opening to its head; the Program's units
 read the egress cells of the connection admitted in the link-window with the most cells, from cell D·r on, chosen
-from the wiring and the schedule alone, each at its bucket's row and the slot the warden's wiring places it; each
+from the wiring and the schedule alone, each at its bucket's row and the slot the cell certifier's wiring places it; each
 member's statement is accepted or refused by the host's read of Lean's registered reads exactly as the member says
 (sender and receiver accepted; unsigned and altered by their rows; pad and swapped, made for other units' wiring, by
 their value, swapped at the Program's own rows; pad-named, under the Program's value, by its row's position); the
-scan's public pieces hold every pad the warden wrote, pad's read among them, and none of the Program's cells; the toy
-unit is the identity on a row's bits. Nothing here lowers or proves (`warden_zk.prove` does, on a node)."""
+scan's public pieces hold every pad the cell certifier wrote, pad's read among them, and none of the Program's cells; the toy
+unit is the identity on a row's bits. Nothing here lowers or proves (`cell_certifier_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -19,18 +19,18 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.core.protocols.network_certifier import warden_rows as WR
+from verity.core.protocols.network_certifier import cell_certifier_rows as WR
 from verity.core.protocols.network_certifier.active import DATA, HEADER, PAD
-from verity.core.protocols.network_certifier.warden import END
+from verity.core.protocols.network_certifier.cell_certifier import END
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE / "tests"))
-import test_warden_serve as tws  # noqa: E402
+import test_cell_certifier_serve as tws  # noqa: E402
 
 
 def _load():
     sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_warden_zk", HERE / "warden_zk.py")
+    spec = importlib.util.spec_from_file_location("network_traces_cell_certifier_zk", HERE / "cell_certifier_zk.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

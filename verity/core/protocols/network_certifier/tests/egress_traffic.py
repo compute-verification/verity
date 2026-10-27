@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.core.protocols.network_certifier import egress as EG, io_tie as IT, warden as W, warden_rows as WR
+from verity.core.protocols.network_certifier import egress as EG, io_tie as IT, cell_certifier as W, cell_certifier_rows as WR
 from verity.core.protocols.network_certifier.grid import Certifier, Record
 
 #: the token ids' range (GLM's vocabulary), and the bits an id takes
@@ -20,18 +20,18 @@ IB = (V - 1).bit_length()
 
 @dataclass(frozen=True)
 class Served:
-    """A link served through the warden's own egress (`warden.Warden._egress`): its schedule, the egress records its
+    """A link served through the warden's own egress (`cell_certifier.CellCertifier._egress`): its schedule, the egress records its
     grid closed (one a link-window), each connection's request (ordinal q = k + 1, its admission bucket, its n
     outputs) and response ids, and the warden's `fails` frames."""
 
-    params: W.WardenParams
+    params: W.CellCertifierParams
     records: tuple[Record, ...]
     requests: tuple[EG.Request, ...]
     responses: tuple[tuple[int, ...], ...]
     fails: tuple[bytes, ...]
 
 
-def serve(params: W.WardenParams, arrivals: Sequence[int], responses: Sequence[Sequence[int]], windows: int) -> Served:
+def serve(params: W.CellCertifierParams, arrivals: Sequence[int], responses: Sequence[Sequence[int]], windows: int) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with response responses[k] (its ids, each one id
     event of P bytes, then `TRAILER`, all there by their deadlines), and the warden serves the link for `windows`
     link-windows: admitted at the first bucket with a free lane in arrival order."""
@@ -51,7 +51,7 @@ def serve(params: W.WardenParams, arrivals: Sequence[int], responses: Sequence[S
             c.admitted = t
             active.append(c)
         for c in active:
-            for frame in W.Warden._egress(warden, c, t):
+            for frame in W.CellCertifier._egress(warden, c, t):
                 grid.enqueue(frame)
         active = [c for c in active if c.ended is None]
         grid.tick()
@@ -63,7 +63,7 @@ def serve(params: W.WardenParams, arrivals: Sequence[int], responses: Sequence[S
     return Served(params, tuple(records), requests, tuple(tuple(xs) for xs in responses), tuple(fails))
 
 
-def busy(seed: int, params: W.WardenParams, count: int, longest: int, windows: int) -> Served:
+def busy(seed: int, params: W.CellCertifierParams, count: int, longest: int, windows: int) -> Served:
     """`count` connections arriving over the link's first half, responses of 0 … `longest` ids."""
     rng = random.Random(seed)
     arrivals = sorted(rng.randrange(max(1, windows * params.window // 2)) for _ in range(count))
@@ -71,7 +71,7 @@ def busy(seed: int, params: W.WardenParams, count: int, longest: int, windows: i
     return serve(params, arrivals, responses, windows)
 
 
-def shape(params: W.WardenParams, NR: int, K: int) -> EG.Shape:
+def shape(params: W.CellCertifierParams, NR: int, K: int) -> EG.Shape:
     return EG.Shape(params.cell_bytes, params.grid.allocation, params.slots, NR, K, IB, params.delay)
 
 
@@ -100,5 +100,5 @@ def states(served: Served, NR: int, K: int) -> list[EG.State]:
 
 
 def rows(served: Served) -> list[bytes]:
-    """The warden's registered egress rows of the link, bucket by bucket (`warden_rows.window_rows`)."""
+    """The warden's registered egress rows of the link, bucket by bucket (`cell_certifier_rows.window_rows`)."""
     return [x for record in served.records for x in WR.window_rows(record, served.params)]

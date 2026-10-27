@@ -52,7 +52,7 @@ A spec-level reference for network accounting's timing channel:
   the warden's and the Commit's (`port_reads`), then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš
   routing of the port's entries `IoTieRoute`, `IoTieMatch`);
 - the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on the warden's own ingress (`serve`): one unit a
-  registered bucket row (`warden_rows.bucket_port`), each live connection's lane of r slots read as the warden's cells
+  registered bucket row (`cell_certifier_rows.bucket_port`), each live connection's lane of r slots read as the warden's cells
   (a `PAD` on its ordinal, a `DATA` of exactly B − 9 bytes, its `END`), each request cell a cell of CERT-VARLEN's id
   request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out, which
   hold each request's prompt_len to the advice's and which N2-ADVICE's advised verdict (`advised.IoTieVerdict`) is
@@ -65,7 +65,7 @@ A spec-level reference for network accounting's timing channel:
   t (`EgressBucket`) that reads the scan's slot state S_t, a registered read, and computes the bucket's row of cells
   from it with every switch computed and none witness (the generator form): its outputs are a u16, `ACCEPT` exactly
   when the state renders a row, the one public output, and the row, committed as a registered read of the warden's
-  egress row t (`warden_rows.bucket_port`), which opens only if the computed row is the warden's. It has the reference
+  egress row t (`cell_certifier_rows.bucket_port`), which opens only if the computed row is the warden's. It has the reference
   (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout (`Shape`'s offsets), which the
   scan's ingress step writes;
 - the calibration of honest runs;
@@ -152,17 +152,17 @@ A spec-level reference for network accounting's timing channel:
   direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
   reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
-  `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
+  `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/cell_certifier_serve.py` runs it;
 - the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
   0-based place in its run's release order) and `x-verity-release-run: ID` on the server's copy of each request it
   releases, for `serve-openai --admit release-order`. The headers never appear in a cell or record, so nothing
   certified changes;
-- the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a
+- the warden's cells as rows (`cell_certifier_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a
   bucket, padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer,
   beside a salted digest of the window's wiring. The registration is what a proof block's `--registered` port reads, so
   the sender's unit opens a cell's row as its output and the receiver's as its input, and the verifier places each
   read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
-  the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+  the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/cell_certifier_zk.py`);
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the
@@ -266,7 +266,7 @@ A spec-level reference for network accounting's timing channel:
 - the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
   units, one a bucket row of the warden's registered ingress cells, proved as `NetworkIngressTieBucket` (one gate
   naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
-  (`warden_rows.bucket_port`), decided by the verifier of record on its own lanes from the advice and the warden's
+  (`cell_certifier_rows.bucket_port`), decided by the verifier of record on its own lanes from the advice and the warden's
   release, and `IngressTie.tie`, which builds `advised.IoTieVerdict` on the link and the stream's registrations from
   the stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the `LinkWindows.ties` the
   advised link reads. A size class no sidecar pins has no accepted proof.

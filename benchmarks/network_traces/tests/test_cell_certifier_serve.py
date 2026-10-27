@@ -1,9 +1,9 @@
 """warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
-the offline check of a run whose warden is driven tick by tick on a `VirtualClock`, its records certified by an LMS
+the offline check of a run whose cell certifier is driven tick by tick on a `VirtualClock`, its records certified by an LMS
 key: the check accepts the run, whose server got each request with its release order under the run id `deployment.json`
 names, and refuses a record that isn't what was certified, a cell that reached its client in
-another bucket, and a response that isn't the record's; a window in which the warden refused a connection is certified
-and signed nowhere; and a window's slow commit, which faults the next window when it runs in the warden's process,
+another bucket, and a response that isn't the record's; a window in which the cell certifier refused a connection is certified
+and signed nowhere; and a window's slow commit, which faults the next window when it runs in the cell certifier's process,
 moves no tick in `serve`'s publisher process."""
 
 from __future__ import annotations
@@ -18,15 +18,15 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.network_certifier import warden_rows as WR
+from verity.core.protocols.network_certifier import cell_certifier_rows as WR
 from verity.core.protocols.network_certifier.active import DATA, VirtualClock
 from verity.core.protocols.network_certifier.grid import Reason
 from verity.core.protocols.network_certifier.release import with_release
-from verity.core.protocols.network_certifier.warden import (END, REFUSED, Shim, Warden, WardenParams, cells, read_cell,
+from verity.core.protocols.network_certifier.cell_certifier import (END, REFUSED, Shim, CellCertifier, CellCertifierParams, cells, read_cell,
                                                     reason_frame)
 
 HERE = Path(__file__).resolve().parents[1]
-PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
+PARAMS = CellCertifierParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
                       ingress_buckets=30, egress_cells=128)
 SESSION = bytes(range(32))
 #: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
@@ -37,7 +37,7 @@ SLOW_COMMIT_S = 0.4
 
 def _load():
     sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_warden_serve", HERE / "warden_serve.py")
+    spec = importlib.util.spec_from_file_location("network_traces_cell_certifier_serve", HERE / "cell_certifier_serve.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -174,9 +174,9 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
 
 
 def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows_which_its_key_signs(tmp_path):
-    """The gate sizes a warden rehearsal's key on `warden_windows` of its requests (`warden_height`), so for every
+    """The gate sizes a cell certifier rehearsal's key on `warden_windows` of its requests (`warden_height`), so for every
     request count it takes, those are at least the link-windows `rehearse` runs (its traffic's last arrival and tail):
-    at the scan's schedule on the gate's id traffic and on `--prompts`' arrivals, and at `warden_serve.py`'s default
+    at the scan's schedule on the gate's id traffic and on `--prompts`' arrivals, and at `cell_certifier_serve.py`'s default
     (`WARDEN_WINDOW_MS`) on its varied traffic; a request count's traffic is the first of the most's. The gate's most
     requests are 1064 link-windows of `--prompts`, about 57 minutes, which height 13 signs and 12 doesn't."""
     sys.path.insert(0, str(HERE))
@@ -276,7 +276,7 @@ def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_group
 
 
 def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_group_windows(tmp_path):
-    """The bound `group_windows` rests on, on the warden itself at the scan's schedule: a group of `lanes` id requests
+    """The bound `group_windows` rests on, on the cell certifier itself at the scan's schedule: a group of `lanes` id requests
     admitted together at a window's first bucket, each answered with `tokens` id events and the trailer (the loop's
     two, and the gate's most, 64), ends every connection with its last cell D + ⌊tokens/r⌋ buckets after its
     admission, so that one admitted two buckets late (`prompt_traffic`'s half a bucket, and the client's lag) still
@@ -304,8 +304,8 @@ def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_grou
 def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_and_the_check_accepts_its_answers(
         tmp_path):
     """`warden-rehearse --scan --prompts --tokens 24` of the demo stand-in's prompts (`demo_stub.py prompts`) sends each
-    prompt as it is, with exactly 24 tokens and greedy; on the warden at the scan's schedule, the stand-in, given exactly
-    what the warden sent the server (its release headers on), serves every request and answers the bytes the warden
+    prompt as it is, with exactly 24 tokens and greedy; on the cell certifier at the scan's schedule, the stand-in, given exactly
+    what the cell certifier sent the server (its release headers on), serves every request and answers the bytes the cell certifier
     certified, every connection ends within the two link-windows 24 tokens take at D = 27, and the check accepts the
     run."""
     sys.path.insert(0, str(HERE))
@@ -415,7 +415,7 @@ def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_rea
 
 
 class _Writer:
-    def __init__(self, warden: Warden | None = None) -> None:
+    def __init__(self, warden: CellCertifier | None = None) -> None:
         self.warden, self.writes, self.closed, self.transport = warden, [], False, self
 
     def write(self, data: bytes) -> None:
@@ -452,20 +452,20 @@ def refusing_commit(*args, **kwargs):
 
 
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
-         process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
-         id_payload: int | None = None, load_heads: Path | None = None) -> Warden:
-    """A run of the warden at `params` for `windows` windows on a `VirtualClock`, published as `serve` and `client` publish one:
+         process: bool = False, servers: list | None = None, params: CellCertifierParams = PARAMS,
+         id_payload: int | None = None, load_heads: Path | None = None) -> CellCertifier:
+    """A run of the cell certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and `client` publish one:
     its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when `process`, which first
     signs the load's heads `load_heads` when given), each window committed by `commit`, `deployment.json`, and
     `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at P =
     `id_payload` when given; `servers` gets the server's side of each connection, in connect order. Returns the
-    warden."""
+    cell certifier."""
     tau = params.bucket_ms / 1000
     if process:
-        import warden_serve  # by name, so that the spawned process finds its functions
+        import cell_certifier_serve  # by name, so that the spawned process finds its functions
 
         ws.cs.load_key(key, 5 if load_heads else 4)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
+        publisher = cell_certifier_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
         hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release}
         public = publisher.key
     else:
@@ -483,12 +483,12 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
             servers.append(writer)
         return reader, writer
 
-    def settled(w: Warden) -> bool:
+    def settled(w: CellCertifier) -> bool:
         return all(c.server is not None and c.ingress_ended and c.egress_ended for c in w.active)
 
-    async def main() -> tuple[list[_Writer], Warden]:
+    async def main() -> tuple[list[_Writer], CellCertifier]:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
+        warden = CellCertifier(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
         running = asyncio.create_task(warden.run())
         clients, tasks = [], []
         for request in requests:
@@ -649,7 +649,7 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
 
 
 def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):
-    """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the warden's process
+    """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the cell certifier's process
     as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
     (`monitor-unavailable`) and the check refuses it. In `serve`'s `PublisherProcess` the same commit runs in the
     spawned process, which signs and commits from the rows released to it: every tick is on time, and the check
@@ -681,7 +681,7 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
 
 def test_the_load_is_signed_by_the_serving_publisher_in_the_runs_session_before_its_windows(tmp_path):
     """The gate's load end to end at the tiny shape: the store relayed over four streams to the prover's sink on
-    loopback (`load_relay.py sink`, a process), then a run whose `PublisherProcess`, the warden's one signer, signs
+    loopback (`load_relay.py sink`, a process), then a run whose `PublisherProcess`, the cell certifier's one signer, signs
     the relay's heads first: `load.json` is under the deployment's key and session, on the key's first leaves, and
     `check` reads every value's registration at the relay's roots; another session's, values swapped, heads that
     aren't the relay's and an unsigned load are refused."""

@@ -1,17 +1,17 @@
-"""The active warden: the network certifier as a relay that knows bytes only and retransmits everything on a fixed
+"""The cell certifier: the network certifier as a relay that knows bytes only and retransmits everything on a fixed
 schedule, so it rebuilds the framing of every connection it carries.
 
 The warden runs on an auditor host (`trusted-host`; co-located with the server for tonight's demo, a named
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
-bytes unchanged in content: no tokenizer, API, request or stop string is the warden's. The one addition is the release
-order on the server's copy of an HTTP request (`release`): what the warden decides is the framing and the timing, both
-public functions of the schedule (`WardenParams`), and it certifies every cell it sends with the certifier's grid
+bytes unchanged in content: no tokenizer, API, request or stop string is the cell certifier's. The one addition is the release
+order on the server's copy of an HTTP request (`release`): what the cell certifier decides is the framing and the timing, both
+public functions of the schedule (`CellCertifierParams`), and it certifies every cell it sends with the certifier's grid
 (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `active.encode_frame(kind, ordinal, payload)`: the header (kind u8,
 the connection's ordinal u32, the payload's length u32), at most P = B − 9 payload bytes, zero fill. `DATA` carries
 exactly P bytes, `END` the last 0 … P of a direction, `PAD` none (marked padding), `FAIL` none (the connection failed
-closed, for whatever reason), and `REFUSED` none (a connection the warden doesn't take). Both directions are cut
+closed, for whatever reason), and `REFUSED` none (a connection the cell certifier doesn't take). Both directions are cut
 the same way: byte k of a direction is in its cell ⌊k/P⌋, so a cell's content is fixed by the bytes and never by how
 they were read. The client speaks cells both ways through a thin, workload-blind shim (`cells`, `Shim`); the server
 gets the ingress payloads as bytes (co-located tonight; deployed, its own shim strips the cells as the client's does).
@@ -22,18 +22,18 @@ taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell,
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
 until its last bucket. Nothing admitted is dropped or reordered. A refusal is traffic past what the window's Programs
 can hold (`every`: a timestep of `every` buckets has `program_slots` = `lanes` Program slots, the scan's
-`ingress_scan.Class`), so the warden certifies no record of a window in which it refused a connection: `withhold`
+`ingress_scan.Class`), so the cell certifier certifies no record of a window in which it refused a connection: `withhold`
 gets that window's three records in place of `publish`, and the period check refuses a link-window missing any
 record's certificate.
 
-**The schedule.** Connection q, admitted at bucket s on the warden's own schedule, carries r = `slots` cells a bucket
+**The schedule.** Connection q, admitted at bucket s on the cell certifier's own schedule, carries r = `slots` cells a bucket
 each way from s on:
 - ingress: the client's bytes as `DATA` cells, as soon as a whole cell's bytes have arrived, then `END` once the
   client's `END` cell (or its end of stream) has arrived, `PAD` in a slot with neither; the bucket of the `END` is a,
   and ingress has no cells after it. Ingress must end within `ingress_buckets` buckets and `ingress_cells` cells. Its
   release never waits on the server: the server gets a connection's ingress whole once its `END` is released, as
-  `release.with_release` puts it, N the count of `END`s the warden released before (so the order of the `END` cells
-  in the ingress records) and the run the warden's `run_id`; what it releases before then, or before the server's
+  `release.with_release` puts it, N the count of `END`s the cell certifier released before (so the order of the `END` cells
+  in the ingress records) and the run the cell certifier's `run_id`; what it releases before then, or before the server's
   connection opens, is held for the server (at most the `ingress_cells` cells' bytes the ingress bound allows; past
   them the connection fails closed, and the server gets none of it);
 - egress: `PAD` in every slot of the buckets before s + D, D = `delay`; then egress cell i is in bucket
@@ -49,12 +49,12 @@ rule; the ingress cells are a function of s and the client's bytes.
 a server that hasn't ended by the last of `egress_cells` cells (limit), the server's connection failing (upstream),
 ingress past its bounds (ingress), a client cell of another kind than `DATA` or `END` (malformed). Its `FAIL` cell is
 in the slot of the next egress cell, and it is in the egress record. Every `FAIL` is the same bytes: the reason is a
-frame of the warden's `fails` record (`reason_frame`), witness the client never sees. The server's three reasons show
+frame of the cell certifier's `fails` record (`reason_frame`), witness the client never sees. The server's three reasons show
 only at an egress slot, so the server, which controls whether and where a connection fails, chooses one of at most
 (cells + 1) outcomes; the client's two fail at once, and are the client's own doing. A tick that runs more than
 `slack` past its boundary faults every grid's window (`monitor-unavailable`), as the active certifier's do.
 
-**The pacer** (`Warden(paced=…)`, off by default): a bucket written on the loop leaves when its tick runs, and the
+**The pacer** (`CellCertifier(paced=…)`, off by default): a bucket written on the loop leaves when its tick runs, and the
 loop reads every server, so when a server writes within a bucket, which the prover chooses, moves when the bucket
 reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket, every live connection's cells as a
 part for that connection's socket, to a process of its own (`pacer.Pacer`), which releases it at `origin` + t·τ +
@@ -66,13 +66,13 @@ next window's first tick, faulted `monitor-unavailable` if one isn't by then. A 
 own bytes in the pacer, and one more than `WRITE_BACKLOG` behind is closed, as on the loop.
 
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
-cells the warden sent that way: every connection's r cells of the bucket, in ordinal order, padding included. So the
+cells the cell certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included. So the
 records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it. The third,
 `fails`, has `lanes` slots a bucket and one frame a failed connection, its reason, in the bucket of its `FAIL`
-(`WardenParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
+(`CellCertifierParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
 schedule's, every `FAIL` has its one reason, and no connection failed.
 
-`PROTOCOL.md`'s "The active warden" has the leak bound. The module imports only the standard library and `verity`.
+`PROTOCOL.md`'s "The cell certifier" has the leak bound. The module imports only the standard library and `verity`.
 """
 
 from __future__ import annotations
@@ -96,20 +96,20 @@ from verity.core.protocols.network_certifier.pacer import Pacer, Report
 from verity.core.protocols.network_certifier.release import with_release
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v3"
-#: the warden's cell kinds, beside `active`'s PAD and DATA
+#: the cell certifier's cell kinds, beside `active`'s PAD and DATA
 END, FAIL, REFUSED = 0x20, 0x21, 0x22
 KIND_NAMES = {PAD: "pad", DATA: "data", END: "end", FAIL: "fail", REFUSED: "refused"}
 #: why a connection failed: the server's three, then the client's two; only the `fails` record holds them
 REASONS = ("late", "limit", "upstream", "ingress", "malformed")
-#: the bytes the warden reads from a server at once
+#: the bytes the cell certifier reads from a server at once
 READ_BYTES = 1 << 16
-#: the most a client connection may hold unwritten before the warden stops writing to it
+#: the most a client connection may hold unwritten before the cell certifier stops writing to it
 WRITE_BACKLOG = 1 << 22
 
 
 @dataclass(frozen=True)
-class WardenParams:
-    """The schedule's public parameters, fixed before the run (`WardenParams.digest` binds them)."""
+class CellCertifierParams:
+    """The schedule's public parameters, fixed before the run (`CellCertifierParams.digest` binds them)."""
 
     cell_bytes: int = 256  # B
     slots: int = 4  # r: a connection's cells a bucket, each way
@@ -134,7 +134,7 @@ class WardenParams:
 
     @property
     def program_slots(self) -> int:
-        """A timestep's Program slots, one a lane (`ingress_scan.Class.SLOTS`, for a class that serves the warden)."""
+        """A timestep's Program slots, one a lane (`ingress_scan.Class.SLOTS`, for a class that serves the cell certifier)."""
         return self.lanes
 
     @property
@@ -169,7 +169,7 @@ def cell(kind: int, ordinal: int, payload: bytes, cell_bytes: int) -> bytes:
 
 
 def read_cell(data: bytes, cell_bytes: int) -> tuple[int, int, bytes]:
-    """(kind, ordinal, payload) of a cell the warden makes, or ValueError: its kind, length and zero fill exact."""
+    """(kind, ordinal, payload) of a cell the cell certifier makes, or ValueError: its kind, length and zero fill exact."""
     if len(data) != cell_bytes:
         raise ValueError(f"a cell is {cell_bytes} bytes, not {len(data)}")
     kind, ordinal, payload = decode_frame(data)
@@ -200,7 +200,7 @@ def read_reason(data: bytes, cell_bytes: int) -> tuple[int, str]:
 
 def cells(data: bytes, cell_bytes: int, ordinal: int = 0) -> bytes:
     """A direction's bytes as cells: `DATA` cells of P bytes, then one `END` with the rest (the client shim's sending
-    half, and the warden's own cut)."""
+    half, and the cell certifier's own cut)."""
     p = cell_bytes - HEADER.size
     whole = (len(data) - 1) // p if data else 0
     out = [cell(DATA, ordinal, data[i * p:(i + 1) * p], cell_bytes) for i in range(whole)]
@@ -209,7 +209,7 @@ def cells(data: bytes, cell_bytes: int, ordinal: int = 0) -> bytes:
 
 @dataclass
 class Shim:
-    """The client's thin shim, reading half: every cell the warden sends on one connection, until it closes, each kept
+    """The client's thin shim, reading half: every cell the cell certifier sends on one connection, until it closes, each kept
     with the time it arrived; `data` is the `DATA` and `END` payloads, `outcome` "end", "fail" or "refused", or "cut"
     when the connection closed before any of those, or inside a cell."""
 
@@ -254,9 +254,9 @@ class _Connection:
     ingress: bytearray = field(default_factory=bytearray)  # received, not yet released
     held: bytearray = field(default_factory=bytearray)  # released, held for the server until the END's release
     unsent: bytearray = field(default_factory=bytearray)  # released whole before the server's connection opened
-    release: int | None = None  # N: its END's place in the warden's release order
+    release: int | None = None  # N: its END's place in the cell certifier's release order
     ingress_ended: bool = False  # the client's END has been received
-    ingress_end: int | None = None  # a: the bucket the warden released ingress's END
+    ingress_end: int | None = None  # a: the bucket the cell certifier released ingress's END
     ingress_cells: int = 0
     egress: bytearray = field(default_factory=bytearray)  # the server's bytes, not yet released
     egress_ended: bool = False
@@ -278,8 +278,8 @@ def _pad(c: _Connection, cell_bytes: int) -> bytes:
     return c.pad
 
 
-class Warden:
-    """The active warden (the module docstring): `handle(reader, writer)` serves one client connection, `run()` ticks
+class CellCertifier:
+    """The cell certifier (the module docstring): `handle(reader, writer)` serves one client connection, `run()` ticks
     the schedule from `origin`, the clock's time of bucket 0, for `windows` record windows, then cuts whatever is still
     served or queued. `connect()` opens a server connection, a (reader, writer) pair.
 
@@ -297,9 +297,9 @@ class Warden:
       the module docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock,
       `origin`'s clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each
       bucket's `pacer.Report` once its writes end;
-    - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
+    - `until(predicate)` waits until the cell certifier's state satisfies it, for a caller that drives a `VirtualClock`."""
 
-    def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
+    def __init__(self, params: CellCertifierParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  windows: int, clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = precise_sleep,
                  publish: Callable[[Record, GridParams], None] | None = None,
@@ -339,7 +339,7 @@ class Warden:
         self.ticks = 0
         self._changed = asyncio.Event()
 
-    async def until(self, predicate: Callable[[Warden], bool]) -> None:
+    async def until(self, predicate: Callable[[CellCertifier], bool]) -> None:
         while not predicate(self):
             self._changed.clear()
             await self._changed.wait()
@@ -479,7 +479,7 @@ class Warden:
 
     async def _client(self, c: _Connection) -> None:
         """Read the client's cells into `c.ingress` until its `END` (or its end of stream), at most `ingress_cells`
-        cells' bytes. Only the payload of each passes: the warden makes every cell it sends."""
+        cells' bytes. Only the payload of each passes: the cell certifier makes every cell it sends."""
         B, p = self.params.cell_bytes, self.params.payload
         try:
             while not c.ingress_ended:
@@ -626,8 +626,8 @@ class Warden:
                          "failed": c.failed, "failed_at": c.failed_at, "upstream": c.upstream, "cut": cut})
 
 
-def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Record], fails: Sequence[Record]) -> dict:
-    """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a warden
+def audit(params: CellCertifierParams, ingress: Sequence[Record], egress: Sequence[Record], fails: Sequence[Record]) -> dict:
+    """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a cell certifier
     cell; in every bucket of each direction each live connection has r cells, in ordinal order, and admissions are in
     ordinal order; each connection's ingress is data and padding, then one `END` and padding to its bucket a; and its
     egress is exactly the schedule's for (its admission s, its egress cells): padding through bucket s + D − 1 (up to

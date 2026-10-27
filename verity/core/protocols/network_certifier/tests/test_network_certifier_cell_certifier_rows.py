@@ -1,7 +1,7 @@
-"""The warden's cells as registered rows (`warden_rows`): a link-window is a row a bucket whatever the load, each row is
+"""The cell certifier's cells as registered rows (`cell_certifier_rows`): a link-window is a row a bucket whatever the load, each row is
 its bucket's cells in slot order, the wiring places each connection's cells where its client got them, each row opens
-the signed root at its position and only there, the registration reads back under the warden's key and session and the
-schedule, and refuses any field, key, session or certificate but its own, and the port reads only what the warden's
+the signed root at its position and only there, the registration reads back under the cell certifier's key and session and the
+schedule, and refuses any field, key, session or certificate but its own, and the port reads only what the cell certifier's
 wiring places."""
 
 from __future__ import annotations
@@ -14,13 +14,13 @@ import pytest
 import signers
 from verity.ml.commitments import hm96
 from verity.ml.crypto import lms
-from verity.core.protocols.network_certifier import warden_rows as W
+from verity.core.protocols.network_certifier import cell_certifier_rows as W
 from verity.core.protocols.network_certifier.active import DATA
 from verity.core.protocols.network_certifier.certificate import Direction, Issuer, LmsKey
 from verity.core.protocols.network_certifier.grid import Reason, Record, Status
-from verity.core.protocols.network_certifier.tests.test_network_certifier_warden import (B, EOF, P, PARAMS, cells, records,
+from verity.core.protocols.network_certifier.tests.test_network_certifier_cell_certifier import (B, EOF, P, PARAMS, cells, records,
                                                                                  request, run)
-from verity.core.protocols.network_certifier.warden import cell
+from verity.core.protocols.network_certifier.cell_certifier import cell
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 T, R, S = PARAMS.window, PARAMS.slots, PARAMS.lanes * PARAMS.slots
@@ -60,7 +60,7 @@ def test_a_link_window_is_a_row_a_bucket_whatever_the_load(traffic):
 
 def test_the_wiring_places_each_connections_cells_where_its_client_got_them(traffic):
     """Connection q's cell k of the link-window is at its row's slot `place` gives: the cells its client got that
-    window, in order. Ordinals count connections from 1 in the order they reached the warden (the wire's ingress
+    window, in order. Ordinals count connections from 1 in the order they reached the cell certifier (the wire's ingress
     ordinal: the active certifier's `Requests` and IO-TIE's map number them so). A bucket's cells are sorted by
     stream."""
     warden, clients = traffic

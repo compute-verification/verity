@@ -21,13 +21,13 @@ from verity.core.protocols.network_certifier import head_check as HC
 from verity.core.protocols.network_certifier import io_ids as I
 from verity.core.protocols.network_certifier import io_request as Q
 from verity.core.protocols.network_certifier import io_tie as IT
-from verity.core.protocols.network_certifier import warden as W
-from verity.core.protocols.network_certifier import warden_rows as WR
+from verity.core.protocols.network_certifier import cell_certifier as W
+from verity.core.protocols.network_certifier import cell_certifier_rows as WR
 from verity.core.protocols.network_certifier.active import id_request
 
 PL = (5, 60, 12, 100, 1)
 B, P = 512, 16
-PARAMS = W.WardenParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
+PARAMS = W.CellCertifierParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
 #: request 2 trickles in so that its `END` shares bucket 4 with request 3's first two cells
 ARRIVALS, RATES = (0, 0, 2, 2, 7), (10 ** 6, 10 ** 6, 300, 10 ** 6, 10 ** 6)
 #: the buckets that hold prompt fields: request 0's and 1's first, 1's last, 2's and 3's first, 3's last, 4's
@@ -148,7 +148,7 @@ def test_a_commit_that_differs_at_a_source_is_refused_in_both_buckets():
 def test_the_read_rows_are_the_commits_at_the_maps_steps():
     """Each bucket's read rows are the Commit's registered rows (`verity.ml.commitments.advice`'s registration) at its
     map's steps: the verifier's own ports (`port_reads`, `INPUT_IDS`) have unit u read bucket u's steps, and the Lean
-    verifier's registered reads (`warden_rows.refusal`) accept every bucket's rows and refuse a row, a salt or a step
+    verifier's registered reads (`cell_certifier_rows.refusal`) accept every bucket's rows and refuse a row, a salt or a step
     other than the Commit's, as `reads_open` does in the clear."""
     insts, count = _link(ACROSS), len(_steps(ACROSS))
     seed = hashlib.sha512(b"commit").digest()

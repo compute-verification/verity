@@ -24,10 +24,10 @@ import period_case as PC
 import verity_difftest as D
 from period_case import (ACCEPT, EXPECT, FORMS, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most,
                          build, clog2, public, reference, verdict_of)
-from verity.core.protocols.network_certifier import warden_rows as WR
+from verity.core.protocols.network_certifier import cell_certifier_rows as WR
 from verity.core.protocols.network_certifier.certificate import Certificate
 from verity.core.protocols.network_certifier.schedule import SyncSet
-from verity.core.protocols.network_certifier.warden import WardenParams
+from verity.core.protocols.network_certifier.cell_certifier import CellCertifierParams
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
 
@@ -201,7 +201,7 @@ def test_an_audit_is_held_to_its_program(server):
 
 
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
-    """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
+    """The rows form's honest registrations are `cell_certifier_rows.registration`'s documents, which its own
     `check_registration` reads back under the period's key, session and schedule."""
     for n in range(4):
         case = build("rows-honest", n, small=n % 2 == 0)
@@ -282,7 +282,7 @@ def test_the_rows_forms_bound_counts_what_it_says():
     units (T = 10) drawn at δ = 1/15 with at most 3 wrong (1351 sets), 1,120 free inputs, instances committing 300 and
     512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no faulty term; and eps over the scans' δ
     alone."""
-    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
+    p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, CellCertifierParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [Facts(20, 5, Fraction(1, 15), 3)])
     (scan,) = out["scans"]

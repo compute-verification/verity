@@ -21,7 +21,7 @@ from typing import Any
 
 from verity.core.deploy import runtime
 from verity.core.deploy.config import Channel, Component, Refused, Workload
-from verity.core.protocols.network_certifier.warden import WardenParams
+from verity.core.protocols.network_certifier.cell_certifier import CellCertifierParams
 from verity.core.protocols.sampled_proofs import parties as SP
 from verity.core.protocols.sampled_proofs.one_stage.draw import parse_law
 from verity.ml.circuits.codec import canonical_json
@@ -54,15 +54,15 @@ def _work_law(law: str, params: Mapping[str, Any]) -> None:
 
 
 def _warden(params: Mapping[str, Any]) -> dict[str, Any]:
-    """The network certifier's parameters: `WardenParams`' fields, and ``tie``, which is true."""
-    names = [f.name for f in fields(WardenParams)]
+    """The network certifier's parameters: `CellCertifierParams`' fields, and ``tie``, which is true."""
+    names = [f.name for f in fields(CellCertifierParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
-        raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: WardenParams' "
+        raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: CellCertifierParams' "
                                      f"{', '.join(names)}, and tie)")
     if params.get("tie") is not True:
         raise Refused("tie", "tie = true: the network certifier ties the workers' outputs to the ones it relayed")
     try:
-        WardenParams(**{k: params[k] for k in names})
+        CellCertifierParams(**{k: params[k] for k in names})
     except (TypeError, ValueError) as e:
         raise Refused("params", f"verity/certifier/v0: {e}") from None
     return {**{k: params[k] for k in names}, "tie": True}
@@ -103,7 +103,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("network-certifier", "verifier", ("out-record",))),
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_warden,
-              default_params={**asdict(WardenParams()), "tie": True}, law=_work_law, default_law="work:64"),
+              default_params={**asdict(CellCertifierParams()), "tie": True}, law=_work_law, default_law="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER, messages={}, product=False),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay"}), {"workers": "developer"}, _toy,

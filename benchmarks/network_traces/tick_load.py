@@ -379,11 +379,11 @@ def jitter(run: Path, bits: SecretBits) -> dict:
 
 def warden_lags(run: Path) -> list[float | None]:
     """Per bucket of a warden rehearsal `run`, when its first cell reached a client after its boundary, in ms (None: no
-    connection's): each cell's bucket is the egress record's (`warden_serve.egress_cells`), its arrival the client's."""
-    import warden_serve as ws
+    connection's): each cell's bucket is the egress record's (`cell_certifier_serve.egress_cells`), its arrival the client's."""
+    import cell_certifier_serve as ws
 
     dep = json.loads((run / "deployment.json").read_text())
-    params = ws.WardenParams(**dep["params"])
+    params = ws.CellCertifierParams(**dep["params"])
     schedule = ws.egress_cells(ws.read_records(run, params)[ws.EGRESS], params)
     lag: list[float | None] = [None] * (dep["windows"] * params.window)
     for conn in json.loads((run / "client.json").read_text())["connections"]:
@@ -450,10 +450,10 @@ def main(argv=None) -> int:
     ap.add_argument("--secret-bit", action="store_true",
                     help="time the stub's writes by a secret bit per egress bucket and write jitter.json")
     ap.add_argument("--paced-ms", type=float, help="the rehearsal's --paced-ms (certifier_serve.py's or "
-                                                   "warden_serve.py's default if not given; 0: each bucket is written "
+                                                   "cell_certifier_serve.py's default if not given; 0: each bucket is written "
                                                    "on the certifier's loop)")
     ap.add_argument("--warden", action="store_true",
-                    help="rehearse the warden (warden_serve.py rehearse) instead of the proxy: --requests at --rate a "
+                    help="rehearse the warden (cell_certifier_serve.py rehearse) instead of the proxy: --requests at --rate a "
                          "second, each of at most --tokens, windows of --window buckets")
     ap.add_argument("--rate", type=float, default=1.0, help="with --warden: the requests' Poisson arrivals a second")
     ap.add_argument("--window", type=int, default=60, help="with --warden: the warden's window, in buckets")
@@ -465,7 +465,7 @@ def main(argv=None) -> int:
     cpu_list = ",".join(map(str, cpus))
     paced = [] if a.paced_ms is None else ["--paced-ms", str(a.paced_ms)]
     if a.warden:
-        command = [sys.executable, str(HERE / "warden_serve.py"), "rehearse", "--upstream", f"127.0.0.1:{port}",
+        command = [sys.executable, str(HERE / "cell_certifier_serve.py"), "rehearse", "--upstream", f"127.0.0.1:{port}",
                    "--model", "stub-model", "--requests", str(a.requests), "--rate", str(a.rate), "--max-tokens",
                    str(a.tokens), "--window", str(a.window), "--tail", str(a.window / 10),
                    "--out", str(a.out / "rehearsal"), *paced]

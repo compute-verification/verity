@@ -5,7 +5,7 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
         NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, no compute audit, jitter
+  and one schedule), the link `cell_certifier_serve.LINK`, the Program the scan's registration's, no compute audit, jitter
   bound 1 (K's jitter term 0, assumed (J), not met at 1), and the scan that Program's
   descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the scan's
   registration; the evidence the scan's answer, the certificates of W's three records (``certified.jsonl``:
@@ -33,7 +33,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import scan_zk as SZ  # noqa: E402
-import warden_serve as WS  # noqa: E402
+import cell_certifier_serve as WS  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
@@ -42,7 +42,7 @@ CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "windo
 
 def certificates(run: Path, w: int) -> list[dict]:
     """Link-window w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
-    responses, fails: `warden_serve.CERTIFIED`), each the certificate's own fields."""
+    responses, fails: `cell_certifier_serve.CERTIFIED`), each the certificate's own fields."""
     docs = [json.loads(x)["certificate"] for x in SZ._found(run, "certified.jsonl").read_text().splitlines()
             if "certificate" in json.loads(x)]
     out = []

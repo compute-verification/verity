@@ -159,9 +159,9 @@ whose view `advised.view` refuses, and reports the advice it read as a third pub
 (`advised.digest`); the network verdict refuses a window that names another advice than the first accepted window's,
 so every window's counts are one advice's. The in-the-clear check runs `advised_check` too.
 
-**A warden link** (`LinkWindows(warden=WardenProfile(…))`) is the active warden's (`warden.Warden`) own two records
+**A warden link** (`LinkWindows(warden=WardenProfile(…))`) is the active warden's (`cell_certifier.CellCertifier`) own two records
 of each link-window: its responses on egress and its requests on ingress, on its one grid, certified under its
-schedule's parameters digest (`warden.WardenParams.digest`, which its deployment publishes) rather than a certifier's
+schedule's parameters digest (`warden.CellCertifierParams.digest`, which its deployment publishes) rather than a certifier's
 (`certificate.parameters_digest`). The warden is the auditor's device, and its code puts every bucket's cells, r for
 each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's units in zero
 knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms charge them
@@ -194,7 +194,7 @@ Lean takes as an input rather than checks:
 - an advised link's window view (`advised.view`, under the tie source's IoTieRequest verdict and the clock source's
   syncs), which is why an advised link's verdict of record stays this module's;
 - on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
-  as its schedule's, `warden.WardenParams.digest`), which neither derives;
+  as its schedule's, `warden.CellCertifierParams.digest`), which neither derives;
 - what both take from the proof service and the lowering: the findings of the verifier's own run of C-Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the draw, and the registered
   Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
@@ -455,7 +455,7 @@ PUBLIC_ADVISED = tuple(p for p in PUBLIC_SERVED if p.item not in ("served", "syn
 )
 #: a warden link's: no occupancy profile and no sync, the warden's schedule instead, which puts its counts
 PUBLIC_WARDEN = tuple(p for p in PUBLIC if p.item not in ("charge", "occupancy")) + (
-    S.Public("warden", "structure", "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads "
+    S.Public("warden", "structure", "the active warden's schedule (`warden.CellCertifierParams`, the digest both ends' heads "
              "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r for "
              "each live connection), so its counts are the schedule's, which the period's schedule terms charge"),
 )
@@ -621,7 +621,7 @@ class Opening:
 @dataclass(frozen=True)
 class WardenProfile:
     """A warden link's profile (`LinkWindows.warden`, the module docstring's "A warden link"): the link's windows and the
-    warden's parameters digest (`warden.WardenParams.digest`), which both ends' heads bind, both fixed before the run."""
+    warden's parameters digest (`warden.CellCertifierParams.digest`), which both ends' heads bind, both fixed before the run."""
 
     windows: int
     digest: bytes

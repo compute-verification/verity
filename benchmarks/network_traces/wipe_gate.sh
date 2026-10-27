@@ -12,7 +12,7 @@
 # to bundle.tgz only what `fetch` gives any other key, the bundle less witness/. Exits with the gate run's rc.
 #
 # 1700 requests, the gate's most (`auditor.WARDEN_REQUESTS`), on the gate's most prompts, 400 (`WARDEN_PROMPTS`; request
-# j sends the (j mod n)-th), are 1064 link-windows at its fixed seed (`warden_serve.prompt_traffic`): 3404.8 s from the
+# j sends the (j mod n)-th), are 1064 link-windows at its fixed seed (`cell_certifier_serve.prompt_traffic`): 3404.8 s from the
 # session's origin, which is about 16 s after the request at HEIGHT 13. At about 5 one-time signatures a link-window
 # they take about 5300 of height 13's 8192 (height 12's 4096 sign about 819 windows). A gate pinned before 1700 takes
 # 400 requests at most, 259 link-windows: give it REQUESTS=400 HEIGHT=12 MINUTES=20. A wipe whose [t0, t1) lies within

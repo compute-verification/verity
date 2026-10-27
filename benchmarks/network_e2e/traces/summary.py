@@ -257,7 +257,7 @@ def arrival_order(reqs: list[dict], steps: list[dict], w: dict | None) -> dict:
 
 def warden_summary(d: Path) -> dict | None:
     """What the warden in front of a trace's server did, from what it published (warden/deployment.json, warden.json)
-    and its check (warden/check.json, `warden_serve.py check`); None for a trace without one."""
+    and its check (warden/check.json, `cell_certifier_serve.py check`); None for a trace without one."""
     w = d / "warden"
     if not (w / "deployment.json").exists():
         return None
@@ -297,7 +297,7 @@ def warden_cores(meta: dict) -> list[int]:
 
 
 def late_ticks(w: Path, origin_unix: float, cores: list[int]) -> dict | None:
-    """The warden's ticks from `warden_probe`'s ticks.json, laid against `host_sample`'s host.jsonl: the lateness
+    """The warden's ticks from `cell_certifier_probe`'s ticks.json, laid against `host_sample`'s host.jsonl: the lateness
     histogram (ms), what each tick's own work and each publish took, the collections, the host's load over the run, and
     for each tick later than the slack (the `LATE_SHOWN` latest), what ran around it: the tick before's work, the
     publishes and collections between that tick's deadline and this one's start, and the host samples whose period
@@ -349,7 +349,7 @@ def late_ticks(w: Path, origin_unix: float, cores: list[int]) -> dict | None:
 
 
 def publisher_pace(pub: dict, window_s: float, end_s: float) -> dict:
-    """Whether a spawned publisher (`warden_probe`'s `publisher`) kept up: each record's lag, from the warden's handing
+    """Whether a spawned publisher (`cell_certifier_probe`'s `publisher`) kept up: each record's lag, from the warden's handing
     its close over to the publisher's having kept it (packed, certified, and for the wire's links committed and signed),
     the most behind, how many lagged a whole window or more, the share of each window's span its keeps took (every link's
     keeps of that window, summed), and serve's wait in `close` for the last records, which ended the run that long past
@@ -797,8 +797,8 @@ FIELDS = """\
 - `<trace>/warden/`, a warden trace's: what the warden published (`deployment.json`, `requests.records`,
   `responses.records`, an admission-based relay's `fails.records`, `certified.jsonl`, `warden.json` with every
   connection's buckets and outcome), its `serve.log`, the client shim's record of every connection (`client.json`) and
-  `warden_serve.py check`'s `check.json` and `check.log`; where the trace probed them, the warden's every tick,
-  publish and collection (`ticks.json`, `warden_probe.py`, with a spawned publisher's keeps as it wrote them in
+  `cell_certifier_serve.py check`'s `check.json` and `check.log`; where the trace probed them, the warden's every tick,
+  publish and collection (`ticks.json`, `cell_certifier_probe.py`, with a spawned publisher's keeps as it wrote them in
   `publisher_keeps.jsonl` and its pid in `publisher.pid`), the host's load every 100 ms (`host.jsonl`,
   `host_sample.py`) and the client's event loop (`client_loop.json`, `corpus.drive_warden`); `<trace>.admitted/`,
   `<trace>.released/`: the trace with the warden's order as its certified ingress (`summary.warden_views`).
@@ -865,10 +865,10 @@ def readme(s: dict) -> str:
         where = {w.get("where") for w in wardens.values()}
         lines += ["", "## The warden", "",
                   f"The warden traces reach the server only through the active warden ({', '.join(map(str, where))}): "
-                  "`warden_serve.py serve`, one connection to the server per client connection, each direction in B-byte "
+                  "`cell_certifier_serve.py serve`, one connection to the server per client connection, each direction in B-byte "
                   "cells on its schedule, D counted from the warden's "
                   f"{'; '.join(sorted({w.get('egress_base') or 'base (not recorded)' for w in wardens.values()}))}. Its records, "
-                  "certificates and connection log are in `<trace>/warden/`, and `check` is `warden_serve.py check` of "
+                  "certificates and connection log are in `<trace>/warden/`, and `check` is `cell_certifier_serve.py check` of "
                   "them against the client shim's record of every cell.", "",
                   "| trace | B / r / D (buckets of τ ms) | windows | connections | failed | refused | cut | buckets of "
                   "ingress p50 / max | egress cells p50 / max | tick lateness p99 / max ms (over slack) | check |",
@@ -882,7 +882,7 @@ def readme(s: dict) -> str:
                          f"({late.get('over_slack')}) | {verdict} |")
         probed = {name: w for name, w in wardens.items() if w.get("ticks") or w.get("client_loop")}
         if probed:
-            lines += ["", "Where the trace probed them (`warden_probe.py`, `host_sample.py`, `corpus.drive_warden`), the "
+            lines += ["", "Where the trace probed them (`cell_certifier_probe.py`, `host_sample.py`, `corpus.drive_warden`), the "
                       "warden's ticks and the client's event loop: each tick's lateness in ms, its own work (`_tick`), the "
                       "publisher's keep of each record (pack, sign and commit), the warden's collections, the host's 1-minute load "
                       "and CPU pressure, and the client loop's stalls of 20 ms or more. The late ticks one by one, with what "

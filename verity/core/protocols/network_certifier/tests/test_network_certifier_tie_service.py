@@ -19,7 +19,7 @@ import pytest
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
 from verity.core.protocols.network_certifier import advice as ADV, advised as AD, head_check as HC, io_request as Q, \
-    service as SVC, tie_service as TS, warden as W, warden_rows as WR
+    service as SVC, tie_service as TS, cell_certifier as W, cell_certifier_rows as WR
 from verity.core.protocols.network_certifier.active import id_request
 from verity.core.protocols.network_certifier.certificate import Direction
 from verity.core.protocols.network_certifier.grid import GridParams
@@ -33,7 +33,7 @@ from advised_traffic import StandInClocks
 
 B = 512
 #: two lanes of r = 2 slots, 4-bucket windows
-PARAMS = W.WardenParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
+PARAMS = W.CellCertifierParams(cell_bytes=B, slots=2, lanes=2, window=4, delay=1)
 LINK, RUN = "requests", "r-tie-test"
 SESSION = hashlib.sha512(b"tie-test").digest()
 #: REDTEAM phase 9's span: request 1 (40 tokens) takes 2 cells, its DATA in bucket 3 and its END in bucket 4, so it
@@ -74,7 +74,7 @@ SERVED = _serve()
 
 
 class Run:
-    """An ingress link's tie: the warden's cells of each window (`warden_rows.Cells`, under fixed salts), the
+    """An ingress link's tie: the warden's cells of each window (`cell_certifier_rows.Cells`, under fixed salts), the
     challenger's stream on injected coins and clock, and each window decided by the verifier of record on a stand-in
     proof, the in-the-clear check beside it."""
 
@@ -306,7 +306,7 @@ def test_an_advice_whose_received_isnt_the_release_refuses_every_window(tmp_path
 
 
 def test_a_row_that_isnt_the_wardens_is_refused(tmp_path):
-    """Each unit's witness row is read off the warden's root at its own bucket (`warden_rows.bucket_port`): a proof on
+    """Each unit's witness row is read off the warden's root at its own bucket (`cell_certifier_rows.bucket_port`): a proof on
     another row (window 1's bucket 1, which IoTieRequest accepts on its own lanes) or on the window's rows read by
     swapped units fails the registered read, and so do its sessions."""
     advice = _advice(SPAN)
@@ -358,7 +358,7 @@ def test_the_tie_gate_names_its_pinned_circuit_digest():
 def test_an_unpinned_size_class_is_refused(tmp_path):
     """IoTieRequest at L = 3 has no pinned circuit digest, so its gate names none and no proof of its unit is accepted,
     even one Lean accepts."""
-    params = W.WardenParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1)
+    params = W.CellCertifierParams(cell_bytes=B, slots=2, lanes=3, window=4, delay=1)
     served = _serve(params=params, windows=2)
     run, advice = Run(tmp_path, params=params, served=served), _advice(SPAN)
     assert not HC.pinned(run.tie.gates()[0])

@@ -18,7 +18,7 @@
 # The hostile-scheduler test serves corpus.HOSTILE's traces, honest first, synchronous and async, e.g.
 #   CORPORA="llama32_1b/greedy:honest,refuse-1,refuse-2,refuse-3,shortest-4;llama32_1b/async-greedy:honest,refuse-5,shortest-6"
 # and the same for seeded; its OUT (corpus/ and compare/) goes in whole as one vllm-adversarial-schedule/v1 tree.
-# The warden traces (corpus.WARDEN) need benchmarks/network_traces/warden_serve.py and the warden in the shipped tree:
+# The warden traces (corpus.WARDEN) need benchmarks/network_traces/cell_certifier_serve.py and the warden in the shipped tree:
 #   CORPORA="llama32_1b/async-greedy:warden-heavy,warden-smallkv"
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out

@@ -1,5 +1,5 @@
 """The scan (`ingress_scan.IngressScanBucket`, `IngressScanFirst`) and the egress buckets on the views it writes
-(`egress.EgressBucket`), on the warden's own records: the warden, driven tick by tick (`test_network_certifier_warden`'s
+(`egress.EgressBucket`), on the warden's own records: the warden, driven tick by tick (`test_network_certifier_cell_certifier`'s
 harness), carries three warden-form id requests on two lanes, the third queued until a lane frees, and their responses
 of id events. The reference's scan of its ingress rows from the empty state, the Programs' rows its responses, holds
 each request's prompt ids at their positions, its head's fields, its admission bucket and its anchor until the anchor
@@ -30,19 +30,19 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import scan_traffic as ST
-from test_network_certifier_warden import EOF, Server, drive
+from test_network_certifier_cell_certifier import EOF, Server, drive
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.core.protocols.network_certifier import egress as EG
 from verity.core.protocols.network_certifier import ingress_scan as IS
 from verity.core.protocols.network_certifier import io_tie as IT
-from verity.core.protocols.network_certifier import warden_rows as WR
+from verity.core.protocols.network_certifier import cell_certifier_rows as WR
 from verity.core.protocols.network_certifier.active import HEADER, id_request
-from verity.core.protocols.network_certifier.warden import DATA, END, PAD, WardenParams, cells
+from verity.core.protocols.network_certifier.cell_certifier import DATA, END, PAD, CellCertifierParams, cells
 
 B = 512
-PARAMS = WardenParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
+PARAMS = CellCertifierParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
                       ingress_buckets=3, egress_cells=9, every=2)
 CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 UNIT = bind(IS.IngressScanBucket, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
@@ -224,7 +224,7 @@ def test_the_state_is_the_layout_neg_sized():
         IS.Class(B=512, r=4, lanes=4, C=47, KI=2083)
     with pytest.raises(ValueError, match=re.escape("KI <= 147")):
         IS.Class(B=512, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8)
-    served = WardenParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
+    served = CellCertifierParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
                           egress_cells=65, window=32, every=16)
     w63.serves(served)
     assert (served.program_slots, served.window_programs) == (w63.SLOTS, 8)

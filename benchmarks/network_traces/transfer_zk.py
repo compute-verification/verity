@@ -3,7 +3,7 @@ n units of ``ScaledMmS8Coordinate_v1{K}`` on one uplink, every input row a regis
 certifier committed and signed as it crossed the server's boundary and every output row a row of the response it signed.
 The verifier pins each root from its certificate alone (`certifier.blocks`), C-Flock `prove --zk` proves the statement
 behind the Lean firewall, and the Lean verifier's registered reads hold it (`flock-verify verify --zk --registered`),
-through the one-stage audit as warden_zk.py's.
+through the one-stage audit as cell_certifier_zk.py's.
 
     python benchmarks/network_traces/transfer_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--units 8]
       [--shape tiny|h200] [--dry]
@@ -73,7 +73,7 @@ from verity.ml.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.ml.circuits.ops import gemm as GM  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
-from verity.core.protocols.network_certifier import blocks as BK, transfer_rows as TR, warden_rows as WR  # noqa: E402
+from verity.core.protocols.network_certifier import blocks as BK, transfer_rows as TR, cell_certifier_rows as WR  # noqa: E402
 from verity.core.protocols.network_certifier.certificate import Certificate, Direction, Issuer, LmsSigner  # noqa: E402
 
 UPLINK, WINDOW = "s0/uplink", 1
@@ -342,7 +342,7 @@ def member_ports(name: str, at: SimpleNamespace) -> dict[str, tuple[list[bytes],
 
 def refused(at: SimpleNamespace, v: SimpleNamespace, mp: dict, base: int, name: str = "honest") -> dict[str, str]:
     """The host's read of each registered port of member `name`'s statement against the verifier's, as Lean's registered
-    reads make it (`warden_rows.refusal`): the ports it refuses, with why."""
+    reads make it (`cell_certifier_rows.refusal`): the ports it refuses, with why."""
     out, rows = {}, member_rows(name, at)
     for p in PORTS:
         h = head(v.heads, at.block, p)
@@ -354,7 +354,7 @@ def refused(at: SimpleNamespace, v: SimpleNamespace, mp: dict, base: int, name: 
     return out
 
 
-# --- the audit (warden_zk's flow on one-stage's a0, a7 and a8) ----------------------------------------------------------
+# --- the audit (cell_certifier_zk's flow on one-stage's a0, a7 and a8) ----------------------------------------------------------
 
 def _one_stage():
     sys.path.insert(0, str(ONE_STAGE))

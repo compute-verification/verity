@@ -292,7 +292,7 @@ class Certifier:
     """A network certifier on each host's links, and the channels it doesn't read.
 
     With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
-    inference block runs on a single server (ruled). At the warden form's public parameters (the `WardenParams` of
+    inference block runs on a single server (ruled). At the warden form's public parameters (the `CellCertifierParams` of
     `benchmarks/network_traces/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
     `IDB` bits an id, `D`, `T`) a request's declared input is at most
 

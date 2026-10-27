@@ -78,6 +78,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/network_certifier/egress.circuit-check.json",
           "verity/core/protocols/network_certifier/audit.py", "verity/core/protocols/network_certifier/commitment.py",
           "verity/core/protocols/network_certifier/online.py", "verity/core/protocols/profile.py",
+          "verity/core/protocols/network_certifier/cell_certifier.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/coins.py",
           "verity/core/protocols/sampled_proofs/remote.py",
           "verity/core/protocols/network_certifier/io_request.py", "verity/core/protocols/network_certifier/io_request.circuit-check.py",
@@ -130,7 +131,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/network_certifier/compile_slice_v3.py",
           "verity/core/protocols/network_certifier/compile_slice_v3.circuit-check.py",
           "verity/core/protocols/network_certifier/compile_slice_v3.circuit-check.json",
-          "verity/core/protocols/network_certifier/served_rows.py", "verity/core/protocols/network_certifier/warden.py",
+          "verity/core/protocols/network_certifier/served_rows.py", "verity/core/protocols/network_certifier/cell_certifier.py",
           "verity/core/protocols/network_certifier/release.py",
           "verity/core/protocols/network_certifier/advised.py", "verity/core/protocols/network_certifier/advised.circuit-check.py",
           "verity/core/protocols/network_certifier/advised.circuit-check.json"]

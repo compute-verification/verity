@@ -1,6 +1,6 @@
-"""A warden run (`warden_serve.py rehearse`'s files) over a served window's traffic, for `a5_warden.py --run`: the requests of
-a `verity-vllm serve-openai` run's closed Commit window K, sent through the warden in the order the run recorded them, and an
-upstream that answers each with the tokens the server streamed it, so the warden's cells carry that window's requests and
+"""A cell certifier run (`cell_certifier_serve.py rehearse`'s files) over a served window's traffic, for `a5_cell_certifier.py --run`: the requests of
+a `verity-vllm serve-openai` run's closed Commit window K, sent through the cell certifier in the order the run recorded them, and an
+upstream that answers each with the tokens the server streamed it, so the cell certifier's cells carry that window's requests and
 responses.
 
 * **The requests** (`traffic`): each request of ``requests.jsonl`` with rows in window K, as a streamed ``/v1/completions`` body:
@@ -11,14 +11,14 @@ responses.
   streamed it (``streamed_ids``), one server-sent event a token in vLLM's completion form (``token_ids``, no text), its finish
   reason the recorded one, then its usage and ``[DONE]``. serve-openai records token ids, not the HTTP bytes it sent, so the
   bytes are rendered again from them; a request the window doesn't hold is answered 404.
-* **The run** (`rehearse`): as `warden_serve.py rehearse` runs one (a key in scratch, ``serve`` and ``client`` as processes, then
-  ``check``), with that traffic and that upstream. ``--out`` holds the warden's files (``deployment.json``, the records,
+* **The run** (`rehearse`): as `cell_certifier_serve.py rehearse` runs one (a key in scratch, ``serve`` and ``client`` as processes, then
+  ``check``), with that traffic and that upstream. ``--out`` holds the cell certifier's files (``deployment.json``, the records,
   ``cells.jsonl``; ``cells.salts`` is witness) and ``check.json``.
 
-    python benchmarks/one_stage/warden_replay.py rehearse --serve-run RUN --serve-window K --out DIR [--gap S] [--token-ms 20] [schedule]
-    python benchmarks/one_stage/warden_replay.py endpoint --serve-run RUN --serve-window K --listen HOST:PORT [--token-ms 20]
+    python benchmarks/one_stage/cell_certifier_replay.py rehearse --serve-run RUN --serve-window K --out DIR [--gap S] [--token-ms 20] [schedule]
+    python benchmarks/one_stage/cell_certifier_replay.py endpoint --serve-run RUN --serve-window K --listen HOST:PORT [--token-ms 20]
 
-``--serve-window`` is the served run's Commit window; ``--window`` is the warden's own, in buckets (`WardenParams`).
+``--serve-window`` is the served run's Commit window; ``--window`` is the cell certifier's own, in buckets (`CellCertifierParams`).
 """
 from __future__ import annotations
 
@@ -41,8 +41,8 @@ HERE = Path(__file__).resolve().parent
 TRACES = HERE.parent / "network_traces"
 sys.path.insert(0, str(TRACES))
 
-import warden_serve as ws  # noqa: E402
-from verity.core.protocols.network_certifier.warden import WardenParams  # noqa: E402
+import cell_certifier_serve as ws  # noqa: E402
+from verity.core.protocols.network_certifier.cell_certifier import CellCertifierParams  # noqa: E402
 
 
 def served_requests(run: str | Path, window: int) -> list[dict]:
@@ -82,7 +82,7 @@ def arrivals(run: str | Path, requests: list[Mapping[str, Any]]) -> list[float]:
 
 
 def traffic(run: str | Path, window: int, *, start_s: float = 1.0, gap_s: float | None = None) -> list[dict]:
-    """`warden_serve`'s traffic form, {"at", "body"} a request, of window ``window``'s requests in the order they arrive: at
+    """`cell_certifier_serve`'s traffic form, {"at", "body"} a request, of window ``window``'s requests in the order they arrive: at
     the times the run recorded (`arrivals`), or ``gap_s`` apart in the order it recorded them."""
     model, requests = served_model(run), served_requests(run, window)
     at = arrivals(run, requests) if gap_s is None else [i * gap_s for i in range(len(requests))]
@@ -162,7 +162,7 @@ def rehearse(args) -> int:
     params = ws._params(args)
     sent = traffic(args.serve_run, args.serve_window, start_s=args.start, gap_s=args.gap)
     (out / "traffic.json").write_text(json.dumps(sent))
-    warden = [sys.executable, str(TRACES / "warden_serve.py")]
+    warden = [sys.executable, str(TRACES / "cell_certifier_serve.py")]
     scratch = Path(tempfile.mkdtemp(prefix="warden-replay-"))
     procs: list[subprocess.Popen] = []
     try:
@@ -201,9 +201,9 @@ def rehearse(args) -> int:
 
 
 def parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="warden_replay.py", description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(prog="cell_certifier_replay.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    e, r = sub.add_parser("endpoint", help="the window's recorded answers"), sub.add_parser("rehearse", help="the warden run")
+    e, r = sub.add_parser("endpoint", help="the window's recorded answers"), sub.add_parser("rehearse", help="the cell certifier run")
     for q in (e, r):
         q.add_argument("--serve-run", required=True, type=Path, help="a serve-openai run dir (serve.json, requests.jsonl)")
         q.add_argument("--serve-window", required=True, type=int, help="the served run's closed Commit window K")
@@ -214,9 +214,9 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--gap", type=float, help="seconds between requests (default: the times the run recorded, `arrivals`)")
     r.add_argument("--tail", type=float, default=10.0, help="seconds the run lasts past the last request's time")
     r.add_argument("--height", type=int, default=ws.cs.HEIGHT, help="the LMS key's tree height")
-    r.add_argument("--start-in", type=float, default=2.0, help="the origin, seconds after the warden is up")
+    r.add_argument("--start-in", type=float, default=2.0, help="the origin, seconds after the cell certifier is up")
     r.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
-    for f in dataclasses.fields(WardenParams):
+    for f in dataclasses.fields(CellCertifierParams):
         r.add_argument(f"--{f.name.replace('_', '-')}", type=int, default=ws.SCHEDULE[f.name])
     return ap
 

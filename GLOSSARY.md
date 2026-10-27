@@ -167,7 +167,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "row" for a server's window (s, w), "per-row bound" | serving block, serving-block bound |
 | "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until they are restated in AND gates; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the exclusion statement's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
-| "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | a sampling block of transfer blocks, over a sampling period |
+| "link-window", "link window"; code and records' `window` (`CellCertifierParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | a sampling block of transfer blocks, over a sampling period |
 | "window" for a span of time; `Accounting.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: a sampling period, a certification period (`NetworkCheck.Period`), or a period of T ticks |
 | "Commit window", for the steps one Commit covers | Commit period |
 | "session"; code and records' `session` (`session_id`, `core-firewall session`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the firewall's one outer proof per statement); a certifier's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
@@ -311,9 +311,9 @@ Vocabulary that one area uses, moved here from `ARCHITECTURE.md`'s Glossary so t
   bytes where vLLM computes it, through a Python hook or a native tap, a capture compiled into a kernel. A tap is never
   the network certifier (Older names).
 - **Transfer block**: the transfer gates a network certifier releases on one link, in one direction, at one tick of its
-  clock (one bucket, `bucket_ms`): one bucket's row of that direction's record (`WardenParams.grid`), proved as its own proof
+  clock (one bucket, `bucket_ms`): one bucket's row of that direction's record (`CellCertifierParams.grid`), proved as its own proof
   block (`IngressScanBucket`, `EgressBucket`, `scan_zk.py`). The code's link-window is a sampling block of
-  2T transfer blocks, T buckets each way under one registration (`WardenParams.window`), its Program the T ingress then the
+  2T transfer blocks, T buckets each way under one registration (`CellCertifierParams.window`), its Program the T ingress then the
   T egress proof blocks chained through the scan state; all are proved today (`scan_zk --draw K` samples), each certified
   one with one liveness bit. The signed `fails` record is the certifier's own. A certifier's *attachment* to a link, its
   32-byte id, is one key and schedule on that link across many periods.

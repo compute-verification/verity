@@ -301,7 +301,7 @@ The terms, in LEAK-LEAN's generator reading (note:network-accounting/20261025T22
 - No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
   not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
   warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
-  (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
+  (`cell_certifier.CellCertifier(paced=…)`, `cell_certifier_serve.py --paced-ms`).
 
 The two forms:
 - The pooled form (`HorizonLeakAccepted`, #4367) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and

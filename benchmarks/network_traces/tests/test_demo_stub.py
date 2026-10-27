@@ -21,7 +21,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "live_challenger"))
 import auditor as G  # noqa: E402
 import demo_stub as S  # noqa: E402
-import warden_serve as ws  # noqa: E402
+import cell_certifier_serve as ws  # noqa: E402
 
 P = S.ID_PAYLOAD
 NAME = S.Shape().name
@@ -78,7 +78,7 @@ def test_the_class_is_eight_byte_ids_in_and_twenty_four_out_and_its_model_says_s
 def test_a_wardens_id_request_of_the_class_is_answered_id_form_its_ids_below_the_vocabulary_then_the_trailer():
     """With or without the release headers the warden puts on the server's copy, the answer is the prompt's 24 ids
     (`outputs`, fixed by the prompt alone), each an id event of P bytes, then the trailer: whole id-form, as the warden's
-    rehearsal reads it (`warden_serve.parse_id_response`), and the scan's cells' payloads cut from it."""
+    rehearsal reads it (`cell_certifier_serve.parse_id_response`), and the scan's cells' payloads cut from it."""
     ids = S.outputs(PROMPT)
     want = b"".join(IT.id_event(t, P) for t in ids) + IT.TRAILER
     assert len(ids) == 24 and all(0 <= t < 256 for t in ids) and len(set(ids)) > 1
