@@ -106,7 +106,13 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `Security/Proofs/Properties/SampledProofs/OneStageZkPublic.lean`). It names the draw's size too
   (`window.draw_coins`, the 64-byte coins the draw opens, `proofs.with_draw`), and the check refuses a draw of another
   size and a session past `MAX_ROUNDS` rounds or with a use of 2^64 F128s (`sizesWhy`, mirrored by `proofs.draw_why`
-  and `proofs.rounds_why`; `draw_of_accept` and `rounds_of_accept` in that file). The check runs
+  and `proofs.rounds_why`; `draw_of_accept` and `rounds_of_accept` in that file). It reads exactly one session, and
+  refuses a verifier's law that is no subset law over the registered population, a record whose draw is not a subset
+  draw of the verifier's `k` over that population, whose draw file is not the verifier's own byte for byte, or whose
+  units are not the evidence's `proved_units`, and a public file whose `units.indices` is not the identity
+  (`recordWhy`, mirrored by `proofs.sessions_why`, `verifier_subset`, `record_why` and `units_identity_why`;
+  `oneSession_of_accept`, `drawLaw_of_accept`, `drawFile_of_accept`, `provedUnits_of_accept` and
+  `unitsIdentity_of_accept` in that file). The check runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
   evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `check`.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds

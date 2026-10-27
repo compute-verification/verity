@@ -443,3 +443,104 @@ def test_session_uses_of_the_fixtures_record_is_the_v2_audits_own(fx):
     assert mine == PF.uses_v2(0, rec), mine
     rounds = sum(len(s["rounds"]) for s in json.loads(rec.read_text())["streams"])
     assert len(mine["uses"]) == 1 + rounds, mine
+
+
+#: the verifier's own draw in the record tests below: a subset draw of 4 over a registered population of 8
+OWN = {"law": "subset", "population": 8, "k": 4, "units": [1, 2, 5, 7]}
+
+
+def _drew(d) -> str:
+    return json.dumps({"link": {}, "unit_draw": d})
+
+
+#: session records, and whether the draw-law, draw-file and proved-units refusals each refuse it, at `OWN`'s population,
+#: size and units, proved as they are
+RECORDS = {"the verifier's own draw": (_drew(OWN), (False, False, False)),
+           "its keys in another order": (_drew(dict(reversed(list(OWN.items())))), (False, False, False)),
+           "another unit": (_drew({**OWN, "units": [1, 2, 5, 6]}), (False, True, True)),
+           "another population": (_drew({**OWN, "population": 9}), (True, True, False)),
+           "a closure": (_drew({**OWN, "closure": [3]}), (True, True, False)),
+           "another law": (_drew({"law": "bernoulli", "population": 8, "p": "1/2", "units": [1, 2, 5, 7]}),
+                           (True, True, False)),
+           "units out of order": (_drew({**OWN, "units": [2, 1, 5, 7]}), (True, True, True)),
+           "a null draw": (_drew(None), (True, True, True)), "no draw": (json.dumps({"link": {}}), (True, True, True)),
+           "not JSON": ("{", (True, True, True))}
+#: the verifier's own units of a draw `draw_law_why` refuses before it reads the record
+BAD_UNITS = {"out of order": [2, 1, 5, 7], "one too few": [1, 2, 5], "one past the population": [1, 2, 5, 8],
+             "one twice": [1, 2, 2, 7]}
+#: verifier's laws and registrations, and the population and subset size v2 reads at them
+SUBSETS = {"a subset law": ({"law": "subset", "k": 4}, {"population": 8}, (8, 4)),
+           "a subset of all": ({"law": "subset", "k": 8}, {"population": 8}, (8, 8)),
+           "past the population": ({"law": "subset", "k": 9}, {"population": 8}, None),
+           "a stratified law": ({"law": "stratified", "k": 4, "strata": []}, {"population": 8}, None),
+           "a key beside k": ({"law": "subset", "k": 4, "p": "1/2"}, {"population": 8}, None),
+           "a k not a number": ({"law": "subset", "k": "4"}, {"population": 8}, None),
+           "no population": ({"law": "subset", "k": 4}, {"window": {}}, None),
+           "a population of true": ({"law": "subset", "k": 1}, {"population": True}, None)}
+#: public files, and whether v2 takes their ``units.indices`` as the identity
+PUBLIC_FILES = {"the identity": (b'{"units": {"indices": [0, 1, 2]}}\nbody', True),
+                "no units": (b'{"units": {"indices": []}}\nbody', True),
+                "a unit skipped": (b'{"units": {"indices": [0, 2]}}\nbody', False),
+                "a unit of true": (b'{"units": {"indices": [0, true]}}\nbody', False),
+                "no indices": (b'{"units": {}}\nbody', False), "a header not an object": (b"[1]\nbody", False),
+                "a header not JSON": (b"{\nbody", False), "a header not UTF-8": (b"\xff\nbody", False)}
+
+
+def test_v2_reads_one_session_whose_record_carries_the_verifiers_own_draw():
+    """v2 refuses evidence of other than one session (`sessions_why`, Lean `OneStageZk.sessionsWhy`); a verifier's law
+    that is no subset law over the registered population (`verifier_subset`, `subsetAt`); a record whose draw is not a
+    subset draw of the verifier's own `k` over that population with no closure, of the verifier's own units ascending
+    and below it (`draw_law_why`, `drawLawAt`), whose draw file is not the verifier's own byte for byte in canonical
+    JSON (`draw_file_why`, `drawFileAt`), or whose units are not the evidence's ``proved_units`` (`proved_why`,
+    `provedAt`); and a public file whose ``units.indices`` is not the identity (`units_identity_why`,
+    `unitsIdentityWhy`). These are the facts the record step of the sampled soundness proof reads off an acceptance."""
+    assert [PF.sessions_why(n) is None for n in (0, 1, 2)] == [False, True, False]
+    for name, (law, rec, want) in SUBSETS.items():
+        assert PF.verifier_subset(law, rec) == want, name
+    for name, (text, refused) in RECORDS.items():
+        got = PF.record_why(8, 4, OWN["units"], OWN["units"], text)
+        assert (got["law"] is not None, got["file"] is not None, got["proved"] is not None) == refused, (name, got)
+    for name, us in BAD_UNITS.items():
+        assert PF.draw_law_why(8, 4, us, _drew(OWN)) is not None, name
+    for name, (pub, ok) in PUBLIC_FILES.items():
+        assert (PF.units_identity_why(pub) is None) is ok, name
+    assert PF.drawn_units(OWN) == OWN["units"] and PF.draw_file(4, 8, OWN["units"]) == OWN
+
+
+@lean
+@pytest.mark.slow
+def test_the_record_refusals_are_the_v2_audits_own(tmp_path):
+    """`sessions_why`, `verifier_subset`, `record_why` and `units_identity_why` against `sampled-proofs-one-stage-zk
+    sessions`, `subset`, `record` and `identity` (Lean `sessionsWhy`, `subsetAt`, `drawLawAt`, `drawFileAt`, `provedAt`
+    and `unitsIdentityWhy`, which `recordWhy` refuses on): the same reason, or none, on each case above. Slow for the v2
+    executable's build, which the v2 tests above share."""
+    for n in (0, 1, 2):
+        assert PF.sessions_v2(n) == {"why": PF.sessions_why(n)}, n
+    for name, (law, rec, want) in SUBSETS.items():
+        (tmp_path / "law.json").write_bytes(PF._canonical(law))
+        (tmp_path / "record.json").write_bytes(PF._canonical(rec))
+        assert PF.subset_v2(tmp_path / "law.json", tmp_path / "record.json") == {
+            "subset": list(want) if want else None}, name
+    cases = {**{name: (text, OWN["units"]) for name, (text, _) in RECORDS.items()},
+             **{f"units {name}": (_drew(OWN), us) for name, us in BAD_UNITS.items()}}
+    for name, (text, us) in cases.items():
+        (tmp_path / "session.json").write_text(text)
+        assert PF.record_v2(8, 4, us, OWN["units"], tmp_path / "session.json") == PF.record_why(
+            8, 4, us, OWN["units"], text), name
+    for name, (pub, _) in PUBLIC_FILES.items():
+        (tmp_path / "pub.bin").write_bytes(pub)
+        assert PF.identity_v2(tmp_path / "pub.bin") == {"why": PF.units_identity_why(pub)}, name
+
+
+@lean
+@pytest.mark.slow
+def test_the_fixtures_record_carries_its_own_draw_by_v2s_refusals(fx):
+    """On the pinned session's own record (C-Flock's, a subset draw of 16 over 32), the draw-law, draw-file and
+    proved-units refusals name no reason at its draw's units, in Python and in Lean, and its public file's
+    ``units.indices`` is the identity: the record refusals refuse no honest one-session record."""
+    rec = fx / "session" / "session.json"
+    want = {"file": None, "law": None, "proved": None}
+    assert PF.record_why(32, 16, DRAWN, DRAWN, rec.read_text()) == want
+    assert PF.record_v2(32, 16, DRAWN, DRAWN, rec) == want
+    pub = fx / "stage" / "pub-32.bin"
+    assert PF.units_identity_why(pub.read_bytes()) is None and PF.identity_v2(pub) == {"why": None}

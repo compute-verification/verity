@@ -16,7 +16,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   SHA-512 as `flock-verify --archive` finds them;
 * **check**: a public file other than the one the registration names rejects (`publicWhy`), as does a registration that
   names none; so does a draw that opens other than the registration's coins, a registration that names no count, or a
-  session past `MAX_ROUNDS` rounds or with a use of `2 ^ 64` F128s or more (`sizesWhy`); then
+  session past `MAX_ROUNDS` rounds or with a use of `2 ^ 64` F128s or more (`sizesWhy`); so does evidence of other than
+  one session, a verifier's law that is no subset law over the registered population, a record whose draw is not the
+  verifier's own (a subset draw of the verifier's `k` over that population with no closure, its draw file the
+  verifier's own byte for byte and field for field, its units the evidence's `proved_units`), or a public file whose
+  `units.indices` is not the identity (`recordWhy`); then
   `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path); then v1's `check` on those verdicts, one of
@@ -189,7 +193,8 @@ def programDigest (b : ByteArray) : Option String := do
     | x => x
   return Flock.hexOf (Flock.Sha512.hash (← (Flock.canon bare).toOption).toUTF8)
 
-private def headerLine (b : ByteArray) : ByteArray := Id.run do
+/-- A public file's header: its bytes up to the first newline. -/
+def headerLine (b : ByteArray) : ByteArray := Id.run do
   for i in [0:b.size] do
     if b[i]! == 10 then return b.extract 0 i
   return b
@@ -488,6 +493,169 @@ def sizesWhy (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) : Option
   | some why => some why
   | none => sessionsSizesWhy bs e.sessions.toList 0
 
+/-- Why the evidence's `count` sessions are not the one session v2 reads; none when there is exactly one. -/
+def sessionsWhy (count : Nat) : Option String :=
+  if count == 1 then none else some s!"the evidence names {count} sessions, and v2 reads exactly one"
+
+/-- The units a draw object names, as v1 reads them (`OneStage.coinsReason` holds the evidence's draw's to the
+verifier's coins). -/
+def drawnUnits (draw : Json) : Array Nat :=
+  match getD draw "units" with
+  | .arr us => us.filterMap nat?
+  | _ => #[]
+
+/-- The verifier's own draw file: the subset draw of `k` over `[0, n)` of the units `us` (`Flock.Draw.UnitDraw.toJson`). -/
+def drawFile (k n : Nat) (us : Array Nat) : Json :=
+  Flock.Draw.UnitDraw.toJson { law := .subset k, population := n, units := us }
+
+/-- The verifier's own population and subset size: the registration `record`'s `population` `n` and the `k` of the
+subset law the verifier's `law` names over it (`Draw.flockLaw`); none when the law over `n` is no subset law. -/
+def subsetAt (law record : Json) : Option (Nat × Nat) :=
+  match nat? (getD record "population") with
+  | none => none
+  | some n =>
+    match Draw.flockLaw law n with
+    | .ok (.subset k) => some (n, k)
+    | _ => none
+
+/-- `subsetAt` of the verifier's law and the registration. -/
+def subsetOf (p : Params) (c : OneStage.Commitment) : Option (Nat × Nat) := subsetAt p.base.verifier.law c.record
+
+/-- A record's `unit_draw` as it parsed, when it is a draw (not absent, not null): what `Flock.Witness.recordDraw`
+rebuilds (`Flock.norm`). -/
+def rawDraw (record : String) : Option Json :=
+  match Flock.JsonParse.parse record with
+  | .ok j =>
+    match j.getObjVal? "unit_draw" with
+    | .ok Json.null => none
+    | .ok d => some d
+    | .error _ => none
+  | .error _ => none
+
+/-- Two JSON values that are equal and neither a list nor an object. -/
+def atomEq : Json → Json → Bool
+  | .null, .null => true
+  | .bool a, .bool b => a == b
+  | .num a, .num b => decide (a = b)
+  | .str a, .str b => a == b
+  | _, _ => false
+
+/-- `atomEq` elementwise. -/
+def atomsEq : List Json → List Json → Bool
+  | [], [] => true
+  | a :: as, b :: bs => atomEq a b && atomsEq as bs
+  | _, _ => false
+
+/-- Two JSON values that are equal atoms (`atomEq`) or equal lists of atoms. -/
+def valueEq (a b : Json) : Bool :=
+  match a, b with
+  | .arr x, .arr y => atomsEq x.toList y.toList
+  | _, _ => atomEq a b
+
+/-- Two lists of fields with the same keys in the same order, each pair of values `valueEq`. -/
+def fieldsEq : List (String × Json) → List (String × Json) → Bool
+  | [], [] => true
+  | (k, a) :: as, (l, b) :: bs => k == l && valueEq a b && fieldsEq as bs
+  | _, _ => false
+
+/-- An object's fields in its tree's order, each value rebuilt (`Flock.normFields`); none for anything else. -/
+def fieldsOf : Json → Option (List (String × Json))
+  | .obj ⟨⟨t⟩⟩ => some (Flock.normFields t)
+  | _ => none
+
+/-- Two objects with the same fields (`fieldsEq` of `fieldsOf`). -/
+def sameFields (a b : Json) : Bool :=
+  match fieldsOf a, fieldsOf b with
+  | some x, some y => fieldsEq x y
+  | _, _ => false
+
+/-- A subset law of `k`. -/
+def subsetLaw (l : Flock.Draw.Law) (k : Nat) : Bool :=
+  match l with
+  | .subset j => j == k
+  | _ => false
+
+/-- Why the record's draw is not a subset draw of the verifier's own `k` over the registered population `n` (draw-law),
+with the evidence's draw's units `us` ascending and below `n`, `k` of them; none when it is: it decodes
+(`Flock.Draw.UnitDraw.ofJson`) to a subset law of `k` over `n` with no closure. -/
+def drawLawAt (n k : Nat) (us : Array Nat) (record : String) : Option String :=
+  if !(decide (us.toList.Pairwise (· < ·)) && us.toList.all (fun x => decide (x < n)) && us.size == k) then
+    some s!"the draw's units are not {k} ascending units below the registered population {n}"
+  else
+    match Flock.Witness.recordDraw record with
+    | none => some "the record names no draw"
+    | some j =>
+      match Flock.Draw.UnitDraw.ofJson j with
+      | .error why => some s!"the record's draw does not decode: {why}"
+      | .ok D =>
+        if subsetLaw D.law k && D.population == n && D.closure.isEmpty then none
+        else some s!"the record's draw is not a subset draw of {k} over the registered population {n}"
+
+/-- Why the record's draw file is not the verifier's own, `drawFile k n us` (draw-file); none when it is: its canonical
+encoding is the verifier's own draw's byte for byte, and its fields are the verifier's own draw's (`sameFields`). -/
+def drawFileAt (n k : Nat) (us : Array Nat) (record : String) : Option String :=
+  match rawDraw record with
+  | none => some "the record names no draw"
+  | some d =>
+    let want := drawFile k n us
+    if (Flock.canon (Flock.norm d)).toOption != (Flock.canon want).toOption then
+      some "the record's draw file is not the canonical encoding of the verifier's own draw"
+    else if !sameFields d want then some "the record's draw file's fields are not the verifier's own draw's"
+    else none
+
+/-- Why the evidence's proved units `proved` are not the units the record's draw names (proved-units); none when they
+are. -/
+def provedAt (proved : Array Nat) (record : String) : Option String :=
+  match Flock.Witness.recordDraw record with
+  | none => some "the record names no draw"
+  | some j =>
+    if drawnUnits j == proved then none
+    else some "the evidence's proved_units are not the units the record's draw names"
+
+/-- The identity on `is`'s positions: `is[i]` is `i` for each `i`. -/
+def isIdentity (is : Array Json) : Bool :=
+  (List.range is.size).all fun i => nat? (is.getD i Json.null) == some i
+
+/-- Why the public file's header does not name the identity as its `units.indices` (units-identity); none when it does,
+so a record's instance is the unit of its own index (`provedUnits`). -/
+def unitsIdentityWhy (pubB : ByteArray) : Option String :=
+  match String.fromUTF8? (headerLine pubB) with
+  | none => some "the public file's header is not UTF-8"
+  | some line =>
+    match Json.parse line with
+    | .error _ => some "the public file's header is not JSON"
+    | .ok h =>
+      match getD (getD h "units") "indices" with
+      | .arr is => if isIdentity is then none else some "the public file's units.indices is not the identity"
+      | _ => some "the public file's header names no units.indices"
+
+/-- Why the session record `record` does not carry the verifier's own draw: the draw-law, draw-file and proved-units
+refusals at the verifier's own population and subset size (`subsetOf`) and the evidence's draw's units. -/
+def recordDrawWhy (p : Params) (c : OneStage.Commitment) (e : Evidence) (record : String) : Option String :=
+  match subsetOf p c with
+  | none => some "v2 reads a subset draw, and the verifier's law over the registered population is no subset law"
+  | some (n, k) =>
+    (drawLawAt n k (drawnUnits e.base.draw) record).or
+      ((drawFileAt n k (drawnUnits e.base.draw) record).or (provedAt e.base.provedUnits record))
+
+/-- Why the window is not one session whose record carries the verifier's own draw; none when it is: exactly one session
+(`sessionsWhy`), whose record the blobs hold, carrying the verifier's own draw (`recordDrawWhy`), over a public file
+whose `units.indices` is the identity (`unitsIdentityWhy`). -/
+def recordWhy (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) : Option String :=
+  match e.sessions.toList with
+  | [s] =>
+    match bs.get s.record s!"session {s.name}'s record" with
+    | .error why => some why
+    | .ok b =>
+      match String.fromUTF8? b with
+      | none => some s!"session {s.name}'s record is not UTF-8"
+      | some record =>
+        ((recordDrawWhy p c e record).map (s!"session {s.name}: " ++ ·)).or
+          (match bs.get e.pub "public file" with
+           | .error why => some why
+           | .ok pubB => unitsIdentityWhy pubB)
+  | ss => sessionsWhy ss.length
+
 /-- v2's check on the statement's files: the sessions' verdicts (`verdicts`), then v1's check at the draw's coins
 (`OneStage.coinsOf`, `OneStage.checkAt`), and an accept only when every coin the window read is the challenger's, one
 release a use (`roundsWhy`). -/
@@ -503,8 +671,9 @@ def checkProofs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core
       | none => .accept x y
     | o => o
 
-/-- v2's check: a refusal when the evidence's public file is not the one the registration names (`publicWhy`), or when
-the window's sizes are not the ones v2 reads (`sizesWhy`), else `checkProofs`. -/
+/-- v2's check: a refusal when the evidence's public file is not the one the registration names (`publicWhy`), when
+the window's sizes are not the ones v2 reads (`sizesWhy`), or when the window is not one session whose record carries
+the verifier's own draw (`recordWhy`), else `checkProofs`. -/
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match publicWhy c e.pub with
@@ -512,7 +681,10 @@ def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.
   | none =>
     match sizesWhy c e bs with
     | some why => .reject s!"proofs: {why}"
-    | none => checkProofs p c e bs
+    | none =>
+      match recordWhy p c e bs with
+      | some why => .reject s!"proofs: {why}"
+      | none => checkProofs p c e bs
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
@@ -541,7 +713,14 @@ when it is) or `{"refused": why}` for a record v2 can't decode, which `one_stage
 `draw RECORD N`: why a draw opening `N` coins is not the one the registration record `RECORD` names (`drawCountWhy`),
 which `one_stage.proofs.draw_why` is held to. `rounds SLOT RECORD`: why the session record's uses at slot `SLOT` are past
 v2's caps (`roundsCapWhy` of `sessionUses`), which `one_stage.proofs.rounds_why` is held to. Both write one line
-`{"why": why}` (null when there is none) or `{"refused": why}`. -/
+`{"why": why}` (null when there is none) or `{"refused": why}`. `sessions N`: why `N` sessions are not the one v2 reads
+(`sessionsWhy`), one line `{"why": why}`. `subset LAW RECORD`: the verifier's population and subset size
+(`subsetAt`) at the law object `LAW` and the registration record `RECORD`, one line `{"subset": [n, k] | null}`.
+`record N K UNITS PROVED RECORD`: the draw-law, draw-file and proved-units reasons (`drawLawAt`, `drawFileAt`,
+`provedAt`) on the session record `RECORD` at population `N`, subset size `K`, the draw's units `UNITS` and the proved
+units `PROVED` (JSON lists), one line `{"file": why, "law": why, "proved": why}`. `identity PUBLIC`: why the public
+file's `units.indices` is not the identity (`unitsIdentityWhy`), one line `{"why": why}`. Each of these is
+`one_stage.proofs`' function of the same name with `_why`, which it is held to. -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | "verdicts" :: own :: proofs :: blobs =>
@@ -595,6 +774,42 @@ def main (args : List String) : IO UInt32 := do
       | .error e => Json.mkObj [("refused", Json.str e)]
     IO.println ((Flock.canon line).toOption.getD line.compress)
     return if r.toBool then 0 else 1
+  | ["sessions", n] =>
+    let r : V Nat := match n.toNat? with | some k => pure k | none => throw "the count is not a natural number"
+    let line := match r with
+      | .ok k => Json.mkObj [("why", match sessionsWhy k with | some w => Json.str w | none => Json.null)]
+      | .error e => Json.mkObj [("refused", Json.str e)]
+    IO.println ((Flock.canon line).toOption.getD line.compress)
+    return if r.toBool then 0 else 1
+  | ["subset", law, record] =>
+    let lawB ← IO.FS.readBinFile law
+    let recB ← IO.FS.readBinFile record
+    let r : V (Option (Nat × Nat)) := return subsetAt (← Core.canonicalJson lawB) (← Core.canonicalJson recB)
+    let line := match r with
+      | .ok s => Json.mkObj [("subset", match s with | some (n, k) => natsJson #[n, k] | none => Json.null)]
+      | .error e => Json.mkObj [("refused", Json.str e)]
+    IO.println ((Flock.canon line).toOption.getD line.compress)
+    return if r.toBool then 0 else 1
+  | ["record", n, k, units, proved, record] =>
+    let text ← IO.FS.readFile record
+    let r : V (Nat × Nat × Array Nat × Array Nat) := do
+      let (some n, some k) := (n.toNat?, k.toNat?) | throw "the population and the subset size are not natural numbers"
+      let nats (s : String) : V (Array Nat) := do
+        let .arr xs ← Json.parse s | throw "the units are not a list"
+        xs.mapM fun x => match nat? x with | some u => pure u | none => throw "a unit is not a natural number"
+      return (n, k, ← nats units, ← nats proved)
+    let why (w : Option String) : Json := match w with | some w => Json.str w | none => Json.null
+    let line := match r with
+      | .ok (n, k, us, ps) => Json.mkObj [("file", why (drawFileAt n k us text)), ("law", why (drawLawAt n k us text)),
+          ("proved", why (provedAt ps text))]
+      | .error e => Json.mkObj [("refused", Json.str e)]
+    IO.println ((Flock.canon line).toOption.getD line.compress)
+    return if r.toBool then 0 else 1
+  | ["identity", pub] =>
+    let b ← IO.FS.readBinFile pub
+    let line := Json.mkObj [("why", match unitsIdentityWhy b with | some w => Json.str w | none => Json.null)]
+    IO.println ((Flock.canon line).toOption.getD line.compress)
+    return 0
   | _ => protocol.main args
 
 #guard registeredInputName "RegisteredInput96_v1"
@@ -632,6 +847,30 @@ private def windowed (w : List (String × Json)) : OneStage.Commitment :=
 #guard roundsCapWhy [] == none
 #guard (roundsCapWhy (List.replicate (MAX_ROUNDS + 2) ({ label := "l", after := .empty, coins := 0 }, #[]))).isSome
 #guard roundsCapWhy (List.replicate (MAX_ROUNDS + 1) ({ label := "l", after := .empty, coins := 0 }, #[])) == none
+#guard sessionsWhy 1 == none
+#guard (sessionsWhy 0).isSome && (sessionsWhy 2).isSome
+#guard subsetAt (Json.mkObj [("law", "subset"), ("k", Lean.toJson (2 : Nat))])
+  (Json.mkObj [("population", Lean.toJson (4 : Nat))]) == some (4, 2)
+#guard subsetAt (Json.mkObj [("law", "subset"), ("k", Lean.toJson (5 : Nat))])
+  (Json.mkObj [("population", Lean.toJson (4 : Nat))]) == none
+/-- A session record whose `unit_draw` is `d`. -/
+private def drew (d : String) : String := "{\"link\":{},\"unit_draw\":" ++ d ++ "}"
+
+#guard [drawLawAt 4 2 #[1, 3], drawFileAt 4 2 #[1, 3], provedAt #[1, 3]].all
+  fun f => f (drew "{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[1,3]}") == none
+#guard [drawLawAt 4 2 #[1, 3], drawFileAt 4 2 #[1, 3], provedAt #[1, 3]].all
+  fun f => f (drew "{\"units\":[1,3],\"population\":4,\"law\":\"subset\",\"k\":2}") == none
+#guard (drawFileAt 4 2 #[1, 2] (drew "{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[1,3]}")).isSome
+#guard (drawFileAt 5 2 #[1, 3] (drew "{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[1,3]}")).isSome
+#guard (drawFileAt 4 2 #[1, 3]
+  (drew "{\"closure\":[],\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[1,3]}")).isSome
+#guard (drawLawAt 4 2 #[3, 1] (drew "{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[3,1]}")).isSome
+#guard (drawLawAt 4 3 #[1, 3] (drew "{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[1,3]}")).isSome
+#guard (drawLawAt 4 2 #[1, 3] (drew "null")).isSome
+#guard (provedAt #[1] (drew "{\"k\":2,\"law\":\"subset\",\"population\":4,\"units\":[1,3]}")).isSome
+#guard unitsIdentityWhy "{\"units\":{\"indices\":[0,1,2]}}\nrest".toUTF8 == none
+#guard (unitsIdentityWhy "{\"units\":{\"indices\":[0,2]}}\nrest".toUTF8).isSome
+#guard (unitsIdentityWhy "{\"units\":{}}".toUTF8).isSome
 #guard coinsMismatch #["00".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0)) == none
 #guard (coinsMismatch #["01".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0))).isSome
 
