@@ -1,6 +1,7 @@
 import Properties.Verity.Soundness
 import Proofs.Properties.Composition
 import Proofs.Core.Game.Prob
+import Proofs.Accounting.JointLive
 
 /-!
 # Soundness at the verifier of record, from its subprotocols' targets
@@ -8,7 +9,8 @@ import Proofs.Core.Game.Prob
 Onsite's acceptance is NCI's on the registration sampled proofs committed to, and every component's on its own case
 (`accepts_registered`, `accepts_components`, from `Properties.Composition`'s `answerAccepts` at onsite and
 `acceptRegistration`). So the event `Verity.Soundness` bounds lies inside the union of the subprotocols' events, each at
-most its target's error at the strategy (`prob_exists_finset_le`).
+most its target's error at the strategy: `Accounting.Guarantees.JointPeriodLive` at the period `Vocab.live`, each target
+being `Accounting.PeriodLive.Sound` there.
 
 Beside it, the two checks every guarantee carries: `soundness_of_subprotocols_honest`, at the honest deployment (the
 deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
@@ -29,18 +31,20 @@ theorem component_mem (a : Audit) : component a ∈ Onsite.components := by
 
 /-- **What the verifier of record accepts, NCI accepted on the registration sampled proofs committed to.** -/
 theorem accepts_registered {s : Sent} (h : Accepts s) : RegistrationAccepts s := by
-  obtain ⟨⟨n, ps⟩, ⟨b, d⟩, ⟨k, ev⟩, hp, hc, he, pub, prof, hch⟩ := Properties.Composition.answerAccepts _ _ _ _ h
+  obtain ⟨⟨n, ps⟩, ⟨b, d⟩, ⟨k, ev⟩, hp, hc, he, pub, prof, hch⟩ :=
+    Properties.Composition.answerAccepts (Onsite.protocol.on s.blobs) s.params s.commitment s.evidence h
   exact ⟨n, ps, b, d, k, ev, ⟨hp, hc, he⟩, pub, prof,
     Properties.Composition.acceptRegistration "verity/onsite/v0" NciCheck.Protocol.protocol
-      SampledProofs.OneStage.protocol.id Onsite.components n ps b d k ev pub prof hch⟩
+      SampledProofs.OneStageZk.protocol.id s.components n ps b d k ev pub prof hch⟩
 
 /-- **What the verifier of record accepts, every component accepts on its own case.** -/
 theorem accepts_components {s : Sent} (h : Accepts s) (a : Audit) : ComponentAccepts a s := by
   obtain ⟨n, ps, b, d, k, ev, hdec, pub, prof, hreg⟩ := accepts_registered h
   obtain ⟨-, -, -, -, -, -, ⟨-, -, hfst, -⟩, hcases, -⟩ := hreg
-  have hm : component a ∈ (Properties.Composition.triples Onsite.components ps ev).map (·.1) := by
+  have hm : (component a).onBlobs (Blobs.ofArray s.blobs) ∈
+      (Properties.Composition.triples s.components ps ev).map (·.1) := by
     rw [hfst]
-    exact component_mem a
+    exact List.mem_map.2 ⟨_, component_mem a, rfl⟩
   obtain ⟨x, hx, hx1⟩ := List.mem_map.mp hm
   exact ⟨n, ps, b, d, k, ev, hdec, x, hx, hx1, hcases x hx⟩
 
@@ -73,12 +77,13 @@ theorem soundness_of_subprotocols : Soundness := by
     | network => exact hN
   calc Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c σ a o)
           (V.game θ F c) σ
-      ≤ Game.prob (fun o => ∃ a ∈ Finset.univ, V.Verdict a o ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ :=
+      ≤ Game.prob (fun o => ∃ a, (V.live θ F c).accepts a o ∧ ¬ (V.live θ F c).Holds (V.certOf θ) σ a o)
+          (V.game θ F c) σ :=
         Game.prob_mono (fun o ⟨hacc, hreg, a, hfail⟩ =>
-          ⟨a, Finset.mem_univ a, ⟨hreg, accepts_registered hacc, accepts_components hacc a⟩, hfail⟩) _ σ
-    _ ≤ ∑ a, Game.prob (fun o => V.Verdict a o ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ :=
-        prob_exists_finset_le _ _ _ σ
-    _ ≤ ∑ a, V.error a θ F c σ := Finset.sum_le_sum fun a _ => hT a θ F c σ
+          ⟨a, (⟨hreg, accepts_registered hacc, accepts_components hacc a⟩ : V.Verdict a o), hfail⟩) _ σ
+    _ ≤ ∑ a, V.error a θ F c σ :=
+        Accounting.SecurityProofs.JointPeriodLive ι α d (V.circuitOf F) Outcome (V.game θ F c) (V.live θ F c)
+          (V.certOf θ) (fun a => V.error a θ F c) (fun a => hT a θ F c) σ
 
 /-- An event every play after `θ`, `F` and `c` meets has probability one. -/
 theorem prob_play_eq_one (ns : List ℕ) (θ F c : ByteArray) (p : Outcome → Prop)
