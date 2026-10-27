@@ -36,7 +36,8 @@ the binary-by-int8 MMAs beside the wrap MMA, never a product of A itself: y is t
 
 Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows; the window is the
 engine's life; the epoch round's root (a b-step tree over the B roots) and the z table (AROW's row-table format) are this
-lane's rendering of CA's forms.  Its stats, checks and verdict say form=beside (`forms.form_of`): not ASK-71 A's form.
+harness's rendering of the credit's forms.  Its stats, checks and verdict say form=beside (`forms.form_of`): not
+`forms.FORM_A`.
 """
 from __future__ import annotations
 
@@ -69,9 +70,9 @@ UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp
 MIX_FORMS = {"mix": ("block2", "split")}
 # "1": z = A B^T from O (CA's peel of b and c: `h1o_unitsbp` / `h1o_unitssp`), so y is today's served y; the warp form has none
 PEEL_ENV = "DITHER_PEEL"
-# ASK-64's perCall, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
+# the per-call challenger round, measured only: a file of waits (ns, one a line; "0": no wait) that h1o_percall replays, a call each
 PERCALL_ENV = "DITHER_PERCALL"
-# "1" (dither_so's -aom/-aomn without -ov; CA's ruling of 23 Oct, core's form not yet landed): one A table a K a step,
+# "1" (dither_so's -aom/-aomn without -ov; the credit's form, not yet in core): one A table a K a step,
 # a/<K>@<s> (`a_step_fields`), its rows every call of that K's slots in call order (call c's slot r at row c T + r: the K
 # slots' buffer and their scales' rows of `scale_all`), built once after the forward; the a-step leaf of call w is the
 # root of its K's table.  Past K = 4096 a row is n = `weights.chunks` (K) leaves (SPLITK): leaf n i + c its codes
