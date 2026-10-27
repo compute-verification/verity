@@ -106,7 +106,7 @@ $\mathrm{miss}(\sum_s a_s) = \prod_s \binom{n_s - a_s}{k_s}/\binom{n_s}{k_s}$. A
 is `Stratified.miss` and discharges `audit_exfiltration`'s `hk` for a stratified sampling design.
 
 **Theorems, the work sampling design** (`Audit/Work.lean`, the default sampling design's second version;
-`../../PROTOCOL.md` §7.3): `Law.work σ w f K` is `Law.stratified` with stratum $s$ sampling
+`Flock.Draw`): `Law.work σ w f K` is `Law.stratified` with stratum $s$ sampling
 $k_s = \min(n_s, \max(f_s, \lceil K w_s n_s / W \rceil))$, where $w_s$ is the PoUW work of each of its units,
 $W = \sum_s w_s n_s$ and $f_s \ge 1$ its floor, set per stratum in the verifier's work table; every stratified and
 one-stage theorem holds of it as stated, and the theorems below hold for every such $f$. `floor_le_workK`, **the
@@ -160,7 +160,7 @@ It fixes each audit's sampling design in advance by its index, over one $n$; `ha
 choose the design. For cumulative harm this replaces the union bound of `audits_seq`: $e^{-\lambda H}$ is paid once for
 the whole run.
 
-**Theorems, closure samples** (`Audit/Closure.lean`; `../../PROTOCOL.md` §7.3): `Law.closure L cl` is `L` widened on its coins
+**Theorems, closure samples** (`Audit/Closure.lean`; `Flock.Draw`): `Law.closure L cl` is `L` widened on its coins
 by the verifier's closure map, each sampled proof block proved with its closure. `closure_escape`: its acceptance probability is
 the base sampling design's acceptance probability of $B \cup \mathrm{unsound}(B)$, $\mathrm{unsound}(B)$ being the units
 whose closure meets $B$, so a faulty proof block that is never sampled on its own is charged to the units above it. `unsoundWork`
