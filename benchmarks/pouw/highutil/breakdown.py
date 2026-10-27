@@ -63,8 +63,9 @@ def role(name: str) -> str | None:
 
 
 def short(name: str) -> str:
-    """Nsight Compute's demangled name as Nsight Systems' short name: `void leaf_persist<LtRow, 4>(...)` -> leaf_persist."""
-    return re.split(r"[<(]", name.removeprefix("void "), maxsplit=1)[0].strip()
+    """Nsight Compute's demangled name as Nsight Systems' short name: `void leaf_persist<LtRow, 4>(...)` -> leaf_persist,
+    `void cutlass::Kernel2<...>(...)` -> Kernel2."""
+    return re.split(r"[<(]", name.removeprefix("void "), maxsplit=1)[0].strip().rsplit("::", 1)[-1]
 
 
 def kernels(db: Path) -> list[tuple[int, int, str]]:
@@ -277,7 +278,7 @@ def breakdown(out: Path, pipes_from: Path | None = None, profile_steps: int = 64
     shares = {arm: tensor_active(pipes.get(arm)) for arm in ("plain", "proto")}
     rows = {arm: kernels(out / f"nsys-{arm}.sqlite") for arm in ("plain", "proto") if (out / f"nsys-{arm}.sqlite").exists()}
     profs = {"proto": split(proto_window(rows.get("proto", [])))}
-    for base in P.BASELINES:
+    for base in dict.fromkeys(r.get("baseline", P.OLD_BASELINE) for r in results if r["arm"] == "plain"):
         profs[base] = split(plain_window(rows.get("plain", []), base, profile_steps * len(P.LINEARS)))
     samples = smi_samples(out / "smi.csv")
     periods = [period_breakdown(r, profs["proto"] if r["arm"] == "proto" else profs[r.get("baseline", P.OLD_BASELINE)],
@@ -292,7 +293,8 @@ def breakdown(out: Path, pipes_from: Path | None = None, profile_steps: int = 64
                           for b, v in summary.get("baselines", {}).items()},
             "work_per_step": wl, "profile": {"steps": profile_steps, "span_ms_per_step": {
                 k: v["span"] / 1e6 / profile_steps for k, v in profs.items() if v["span"]}},
-            "tensor_pipe_from": str(pdir) if pipes else None, "periods": periods}
+            "tensor_pipe_from": (m.group(0) if (m := re.search(r"r\d{8}-\d{6}-[0-9a-f]{4}", str(pdir))) else str(pdir))
+            if pipes else None, "periods": periods}
 
 
 def main(argv: list[str] | None = None) -> int:

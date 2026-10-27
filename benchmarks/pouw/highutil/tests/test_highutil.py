@@ -159,9 +159,11 @@ def test_the_breakdown_splits_each_period_s_gpu_time_exclusively_and_aligns_the_
 
 def test_a_kernel_s_tensor_pipe_share_is_its_own_else_its_family_s():
     pipes_json = {"kernels": [{"name": "void leaf_persist<LtRow, 4>(Persist, int)", "tensor_active": 0.0, "s": 1.0},
-                              {"name": XMMA + "_a", "tensor_active": 0.9, "s": 1.0}, {"name": XMMA + "_b", "tensor_active": 0.7, "s": 3.0}]}
+                              {"name": XMMA + "_a", "tensor_active": 0.9, "s": 1.0}, {"name": XMMA + "_b", "tensor_active": 0.7, "s": 3.0},
+                              {"name": "void cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8>(Params)", "tensor_active": 0.7, "s": 1.0}]}
     shares = breakdown.tensor_active(pipes_json)
     assert shares["leaf_persist"] == 0.0 and breakdown.active_share(XMMA + "_a", shares) == (0.9, "kernel")
+    assert breakdown.active_share("Kernel2", shares) == (0.7, "kernel")
     share, src = breakdown.active_share(XMMA + "_c", shares)
     assert math.isclose(share, 0.8) and src == "sm90_xmma family"
     assert breakdown.active_share("gemm_kernel", shares) == (None, "not measured")
