@@ -55,7 +55,6 @@
     {"file": "benchmarks/network_traces/record.py", "count": 4},
     {"file": "benchmarks/network_traces/stall_probe.py", "count": 7},
     {"file": "benchmarks/network_traces/tick_load.py", "count": 1},
-    {"file": "benchmarks/network_traces/torch_loop_stub.py", "count": 2},
     {"file": "benchmarks/network_traces/warden_chain.py", "count": 1},
     {"file": "benchmarks/network_traces/warden_serve.py", "count": 6},
     {"file": "benchmarks/numerical/python/verity_numerical/bench/contract.py", "count": 3},
