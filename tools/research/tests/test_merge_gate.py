@@ -462,8 +462,8 @@ def _pr_train(tmp_path: Path, monkeypatch) -> tuple[Path, Path, str, str]:
 
 
 def test_a_tip_lands_only_while_each_pr_it_merges_is_at_its_pinned_head(tmp_path, monkeypatch, capsys):
-    """A tip merging `Merge #1126 (83c25a27b)` would have landed after #1126 moved to a head that fixed two red-team findings
-    against that one (the lander, 4 Oct): pins were read at `--prepare` only.  The gate reads them again at landing: #7's head
+    """A tip merging a PR at a pinned head mustn't land after that PR moved to a head that fixes findings against the pinned
+    one, as it would if pins were read at `--prepare` only.  The gate reads them again at landing: #7's head
     on origin must still be the merged one, or add nothing the tip lacks; a check of the tip doesn't stand in for it.  No ready
     mark is asked: the train's own check is the gate (Daniel, 6 Oct)."""
     main, _origin, a, _tip = _pr_train(tmp_path, monkeypatch)
