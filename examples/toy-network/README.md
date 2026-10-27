@@ -42,7 +42,16 @@ uv run verity run config.toml --state /tmp/toy-network
 `verity run examples/toy-network/config.toml` and `verity example toy-network` run this file instead. `config check`
 prints `ok` and the configuration's hash. `verity run` prints a `RUN` line, a `PARTY` line as each party exits (the
 challenger's twice: ready, first, and stopped, last), and one `VERDICT` line a period, also written to
-`STATE/record/verdicts.jsonl`. It exits 0 when every period accepts, 1 when one rejects, and 2 otherwise.
+`STATE/record/verdicts.jsonl`. It exits 0 when every period accepts, 1 when one rejects, and 2 otherwise. Run
+`r20261027-010850-30d7` (`--periods 2`, on a 192-core CPU node) printed:
+
+~~~text
+VERDICT {"block": 0, "coins": "simulated", "components": {"certifier": "accept", "sampled-proofs": "accept"}, "product": "verity/product/v0", "reason": null, "run": "r20261027-010850-30d7", "simulated": ["challenger shares local with the developer's firewall, workers: Faithful and Secret unmet"], "verdict": "accept"}
+VERDICT {"block": 1, "coins": "simulated", "components": {"certifier": "accept", "sampled-proofs": "accept"}, "product": "verity/product/v0", "reason": null, "run": "r20261027-010850-30d7", "simulated": ["challenger shares local with the developer's firewall, workers: Faithful and Secret unmet"], "verdict": "accept"}
+~~~
+
+It took 83 minutes: the build 2, each period's sampled-proofs audit about 34 (64 units drawn under `work:64`, each
+drawn unit's proof through the firewall one at a time), and the network certifier's checks of both periods 11.
 
 The parties can also run one command at a time on the same state, in the order above. The challenger runs beside the
 verifier, which is the one party that talks to it:
