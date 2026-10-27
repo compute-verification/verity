@@ -224,11 +224,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
           "Certifier coverage", "standard"),
-    # `Accounting.Placed.LatencyAtMost` (Security/Definitions/Accounting/Physical.lean) is its Lean form, a premise of the
-    # proof-of-space pool's count (Accounting.Guarantees.Actual.AnsweredOfQuiet, WipeReadHeld): with the memory
-    # challenger's acceptance of late answers only (Accounting.Assumptions.LateAnswers) it refuses a label sent before
-    # its read (red team 3's H2). Falsified by a delivery slower than the ceiling, measured on the server's certified
-    # egress links
+    # `Accounting.Placed.LatencyAtMost` (Security/Definitions/Accounting/Physical.lean) is its Lean form. Falsified by a
+    # delivery slower than the ceiling, measured on the server's certified egress links
     Entry("latency-ceiling", "assumption",
           "Latency ceiling: every wire from the audited server to the network certifier on its egress delivers within "
           "the stated ceiling of its send, and nothing between them holds a value longer",
