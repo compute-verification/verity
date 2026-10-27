@@ -65,10 +65,10 @@ def _finish_pair(low: int, s: str, i: int, o: int) -> tuple[int, int, str] | Non
     """The low half of a surrogate pair, or None where Lean's `attempt` fails and falls back to U+FFFD."""
     if not (s[i:i + 2] == "\\u" and i + 2 < len(s) and s[i + 2] in "dD"):
         return None
-    try:
-        i, o, v = _hex_n(3, s, i + 3, o + 3)
-    except Refuse:
+    digits = s[i + 3:i + 6]
+    if len(digits) < 3 or any(c not in "0123456789abcdefABCDEF" for c in digits):
         return None
+    i, o, v = _hex_n(3, s, i + 3, o + 3)
     if v < 0xC00:
         return None
     cv = (low % 0x400) * 0x400 + v % 0x400 + 0x10000
