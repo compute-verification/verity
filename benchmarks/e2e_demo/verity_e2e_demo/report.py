@@ -17,7 +17,7 @@ once at the top and in the sources table.
 
 **Demo A** composes sampled proofs, PoUW and the network certifier (`DEMO_A`): accept when all three accepted on the
 block's server, reject when one rejected, pending otherwise, with their errors summed as
-``Accounting.Guarantees.JointHorizon`` states it. PoUS, the bandwidth audit and the wipe are not in Demo A.
+``Accounting.Guarantees.JointHorizon`` states it. PoUS, the bandwidth audit and the wipe compose at M4 (Demo B).
 
 **The guarantee** cites ``Flock.Guarantees.JointStratified`` when ``JOINT_LOCKED`` is true (it is in the lock), else
 the per-subcircuit bound, with the joint figure labelled unlocked.
