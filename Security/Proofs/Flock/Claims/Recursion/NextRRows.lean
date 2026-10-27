@@ -16,8 +16,8 @@ rep's round's (`repRows`). They do, at every statement that sets up, so the hone
 * **Values** (`vals_repFrames_le`, `vals_chunk_le`): a rep's frames absorb the 64-value vectors and the `2^(ext+1)`
   residual `ProofSizes` fixes, `128` values a claim, and a bounded number of single values, so at an honest rep of a
   `TableOk` table with at most 2,050 claims every round's value row is shorter than `2^44` bytes.
-* **Rows** (`honestRows_rows`, `repRows_fit`, `capRows_fit`): each row is a cap node of at most 64 bytes (`digestLen` of
-  a scheme in `MerkleScheme.all`) or a round's value row; a round has at most its rep's recursive caps' nodes and one
+* **Rows** (`honestRows_rows`, `repRows_fit`, `capRows_fit`): each row is a cap node's row (`nodeRow`), at most 128 bytes
+  (a node is at most 64, `digestLen` of a scheme in `MerkleScheme.all`), or a round's value row; a round has at most its rep's recursive caps' nodes and one
   value row, and round 0 at most 64 tables' level-0 caps.
 
 The bounds' hypotheses hold together at the concrete honest rep `honest₀` (`rowsFit₀`).
@@ -249,21 +249,22 @@ theorem flatMap_length_le {B : ℕ} : ∀ {l : List (Array ByteArray)}, (∀ a �
     have := flatMap_length_le (l := l) fun b hb => h b (by simp [hb])
     omega
 
-/-- **Each honest round's rows** are at most the caps' nodes and one value row, each a cap's node or a chunk's value
-row. -/
+/-- **Each honest round's rows** are at most the caps' nodes and one value row, each a cap node's row or a chunk's
+value row. -/
 theorem honestRows_rows : ∀ (ss : List RecVStar.SchedRound) (chs : List (List Frame)) (caps : List (Array ByteArray)),
     ∀ rs ∈ honestRows ss chs caps, rs.length ≤ (caps.flatMap Array.toList).length + 1 ∧
-      ∀ r ∈ rs, (∃ a ∈ caps, r ∈ a) ∨ ∃ ch ∈ chs, r = ⟨(colBytes (vals ch)).toArray⟩
+      ∀ r ∈ rs, (∃ a ∈ caps, ∃ b ∈ a, r = nodeRow b) ∨ ∃ ch ∈ chs, r = ⟨(padRow (colBytes (vals ch))).toArray⟩
   | s :: ss, ch :: chs, caps, rs, hrs => by
     simp only [honestRows, List.mem_cons] at hrs
     rcases hrs with rfl | hrs
     · refine ⟨?_, fun r hr => ?_⟩
       · have := flatMap_take_drop caps s.2.1.size
-        rw [List.length_append]
+        rw [List.length_append, List.length_map]
         split <;> simp only [List.length_singleton, List.length_nil] <;> omega
       · rcases List.mem_append.1 hr with hr | hr
-        · obtain ⟨a, ha, hra⟩ := List.mem_flatMap.1 hr
-          exact Or.inl ⟨a, List.mem_of_mem_take ha, Array.mem_toList_iff.1 hra⟩
+        · obtain ⟨b, hb, rfl⟩ := List.mem_map.1 hr
+          obtain ⟨a, ha, hba⟩ := List.mem_flatMap.1 hb
+          exact Or.inl ⟨a, List.mem_of_mem_take ha, b, Array.mem_toList_iff.1 hba, rfl⟩
         · split at hr
           · exact Or.inr ⟨ch, List.mem_cons_self .., List.mem_singleton.1 hr⟩
           · cases hr
@@ -317,26 +318,32 @@ theorem repRows_fit {c : RepCtx} {p : Flock.Proof} (T : F128) (hs : SchedOf c) (
   unfold repRows at hrs
   obtain ⟨hlen, hmem⟩ := honestRows_rows _ _ _ rs hrs
   refine ⟨by omega, fun r hr => ?_⟩
-  rcases hmem r hr with ⟨a, ha, hra⟩ | ⟨ch, hch, rfl⟩
+  rcases hmem r hr with ⟨a, ha, b, hb, rfl⟩ | ⟨ch, hch, rfl⟩
   · obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 ha)
-    have : r.size = c.st.merkle.digestLen := (hps.rcapsEach i hi).2 r hra
+    have : b.size = c.st.merkle.digestLen := (hps.rcapsEach i hi).2 b hb
+    rw [size_nodeRow]
     omega
-  · show (colBytes (vals ch)).toArray.size < 2 ^ 64
-    rw [List.size_toArray, Frame.colBytes_length]
+  · show (padRow (colBytes (vals ch))).toArray.size < 2 ^ 64
+    rw [List.size_toArray]
+    have hp := padRow_length_le (colBytes (vals ch))
+    rw [Frame.colBytes_length] at hp
     have := vals_chunk_le (fs := repFrames c.st c.sch c.dom c.n p T) hch
     omega
 
 /-- **Round 0's rows fit a message**: at most 64 caps, each of at most `2^7` nodes of at most 64 bytes. -/
 theorem capRows_fit {caps : Array (Array ByteArray)} (hn : caps.size ≤ 64)
-    (hc : ∀ a ∈ caps, a.size ≤ 128 ∧ ∀ b ∈ a, b.size ≤ 64) : RowsFit (capRows caps) := by
+    (hc : ∀ a ∈ caps, a.size ≤ 128 ∧ ∀ b ∈ a, b.size ≤ 64) : RowsFit ((capRows caps).map nodeRow) := by
   refine ⟨?_, fun r hr => ?_⟩
   · have h := flatMap_length_le (B := 128) (l := caps.toList) fun a ha => (hc a (Array.mem_toList_iff.1 ha)).1
     have e : caps.toList.length = caps.size := Array.length_toList
+    rw [List.length_map]
     show (caps.toList.flatMap Array.toList).length < 2 ^ 64
     omega
-  · obtain ⟨l, hl, hr⟩ := List.mem_flatten.1 hr
+  · obtain ⟨b, hb, rfl⟩ := List.mem_map.1 hr
+    obtain ⟨l, hl, hb⟩ := List.mem_flatten.1 hb
     obtain ⟨a, ha, rfl⟩ := List.mem_map.1 hl
-    have := (hc a (Array.mem_toList_iff.1 ha)).2 r (Array.mem_toList_iff.1 hr)
+    have := (hc a (Array.mem_toList_iff.1 ha)).2 b (Array.mem_toList_iff.1 hb)
+    rw [size_nodeRow]
     omega
 
 /-- **Rep `k`'s context at a `TableOk` table**: a scheme of at most 64-byte digests, `k_log ≤ 35`, and at most 2,050
@@ -371,7 +378,7 @@ end Rows
 
 /-- **`repRows_fit`'s and `capRows_fit`'s hypotheses hold together** at the honest rep `c₀`, `p₀` (`honest₀`): its rows
 fit a message, and so does a round 0 of its cap. -/
-theorem rowsFit₀ (T : F128) : (∀ rs ∈ repRows c₀ p₀ T, RowsFit rs) ∧ RowsFit (capRows #[p₀.cap]) :=
+theorem rowsFit₀ (T : F128) : (∀ rs ∈ repRows c₀ p₀ T, RowsFit rs) ∧ RowsFit ((capRows #[p₀.cap]).map nodeRow) :=
   ⟨Rows.repRows_fit T honest₀.1 honest₀.2.1 (by decide +kernel) (by decide +kernel) (by decide +kernel),
     Rows.capRows_fit (by simp) fun a ha => by
       obtain rfl : a = p₀.cap := by simpa using ha
@@ -391,13 +398,13 @@ theorem sessionRun_decides_fit {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs))
     (hfc : FilesFinalC spec sts c₁ cs.tail.dropLast pfs) (hrd : rd last = some fl)
-    (hps : fl.ps = filePs spec sts c₁ pfs) :
+    (hps : fl.ps = filePs spec sts c₁ pfs) (hst : fl.stmt = x) :
     ∃ d, decR rd x (honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
       repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) (filePs spec sts c₁ pfs)[k]!
         (Ts k)) last) cs = some d := by
   obtain ⟨h64t, hts⟩ := setup_tables hx
   obtain ⟨hsz, hall⟩ := sessionS_reps h64 hc hts.symm htab hS (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast
-  refine sessionRun_decides h64 hx hcs hc hts.symm htab hS hfc ?_ ?_ hrd hps
+  refine sessionRun_decides h64 hx hcs hc hts.symm htab hS hfc ?_ ?_ hrd hps hst
   · refine capRows_fit (by rw [fileCaps_size]; exact h64t) fun a ha => ?_
     obtain ⟨i, hi, rfl⟩ := Array.mem_map.1 ha
     have hi' := Array.mem_range.1 hi

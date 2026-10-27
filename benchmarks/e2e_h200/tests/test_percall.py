@@ -84,4 +84,4 @@ def test_the_steps_root_binds_every_receipt(params):
     for sub in (a, b, c):
         serve(params, sub)
     assert a.steps[0]["root"] == b.steps[0]["root"] != c.steps[0]["root"]
-    assert a.manifest()["credit"]["eps"] is None and len(a.manifest()["credit"]["blockers"]) == 3
+    assert a.manifest()["credit"]["eps"] is None and len(a.manifest()["credit"]["blockers"]) == 2
