@@ -15,8 +15,9 @@ its output in ``STATE/logs/<party>.log``; a party that serves the others (the ch
 they are done. A party that fails stops the run, and the verifier's verdict is composed anyway, so a component that
 didn't run reads ``absent`` and the product rejects.
 
-When the verifier runs here, each period's verdict is the product over exactly the listed components (the table's
-``compose``), printed as a line and written to ``STATE/record/verdicts.jsonl``:
+When the verifier runs here, each component's verifier decides that component alone (it sees ``protocols`` as just
+its own), and each period's verdict is the product over exactly the listed components (the table's ``compose``),
+printed as a line and written to ``STATE/record/verdicts.jsonl``:
 
     VERDICT {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
              "reason": R, "run": RUN, "simulated": [...], "verdict": V}
@@ -258,11 +259,12 @@ def begin(cfg: Mapping[str, Any], state: Path, periods: int, machine: str, hooks
 # --- running the parties -----------------------------------------------------------------------------------------------
 
 def run_party(cfg: Mapping[str, Any], reg: Registry, state: Path, party: str, local: bool) -> int:
-    """``party``'s entries here, one after another; for the verifier every one runs whatever the one before it
-    returned (each decides its own components), for any other the first that fails stops it."""
+    """``party``'s entries here, one after another. Each of the verifier's sees the configuration with ``protocols``
+    its own component alone, which it decides (the verdict over all of them is `execute`'s), and runs whatever the one
+    before it returned; for any other party the first that fails stops it."""
     rc = 0
-    for _, entry in reg.entries(cfg, party):
-        got = entry(cfg, state, local)
+    for name, entry in reg.entries(cfg, party):
+        got = entry({**cfg, "protocols": [name]} if party == VERIFIER else cfg, state, local)
         rc = rc or got
         if got and party != VERIFIER:
             break

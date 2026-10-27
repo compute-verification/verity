@@ -158,6 +158,7 @@ def periods(state: Path) -> range:
 
 def verifier_of(component: str, verdicts: dict):
     def entry(cfg, state, local):
+        assert cfg["protocols"] == [component]
         for i in periods(state):
             v = verdicts.get((component, i), "accept")
             if v == "raise":
