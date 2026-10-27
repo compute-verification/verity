@@ -20,7 +20,8 @@ maximum on the deployed node, note:20261017T0452Z-draft-eps1-dc). Data-sheet num
 * issue: 4 warp instructions (four schedulers, one a clock each);
 * `alu`, `imad`: 64 lanes each; `shfl` 32 (CALIB); `f64` 64; `sfu` 16 (reciprocal, square root, logarithm,
   exponential, sine and cosine);
-* shared memory: 32 bank words; L2's reads: 512 words (the lane loads' issue bound: θ's `l2.read` row is open);
+* shared memory: 32 bank words; L2: 512 words read or written (the lane loads' issue bound: θ's `l2.read` row
+  is open);
 * HBM: 4.8 TB/s (data sheet), 1.2 · 10¹² words a second.
 -/
 

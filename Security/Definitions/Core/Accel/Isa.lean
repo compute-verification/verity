@@ -40,7 +40,7 @@ inductive Store
 
 /-- The resources, each pooled over the card: the tensor core in `s8` MACs; the warp schedulers' issue slots in warp
 instructions; the integer, multiply-add, shuffle, FP64 and special-function pipes in lanes; shared memory's banks, L2's
-reads and device memory's bandwidth in words. -/
+bandwidth (reads and writes) and device memory's in words. -/
 inductive Res
   | tensor | issue | alu | imad | shfl | f64 | sfu | smem | l2 | dram
   deriving DecidableEq

@@ -18,23 +18,24 @@ instructions onto it; MODEL-COVER (CMP-166) owns the per-opcode table and its so
 | `exact` | (P1)'s range: an integer MMA is exact while `|C| + Σ|a·b| < 2^exact` |
 | `text` | code space, instructions (device memory at 16 bytes an instruction) |
 
-The table refines the device model (`Card.toDevice`, `Accounting.Device`): at a tick of `τ` seconds the device's
-on-chip and device-memory bits are the stores', and its tensor MACs, lane ops, oracle queries and device-memory bits
-a tick are the rates', rounded up; a run that meets the model stays within them summed over a window (`fits_toDevice`).
+The table gives the device model's limits (`Card.toDevice`, `Accounting.Device`): at a tick of `τ` seconds the
+device's on-chip and device-memory bits are the stores', and its tensor MACs, CUDA-core ops (32 an issue slot and every
+pipe's lanes), oracle queries and device-memory bits a tick are the rates', rounded up. A run that meets the model
+stays within them summed over a window (`fits_toDevice`); no per-tick `Accounting.Schedule` is built from a run.
 
 Resources: `tensor` (s8 MACs), `issue` (warp instructions), `alu`, `imad`, `shfl`, `f64` and `sfu` lanes, `smem`
-(bank words), `l2` (words read) and `dram` (words).
+(bank words), `l2` (words read or written) and `dram` (words).
 
 ## The envelope opcodes (`Accel.Op`, `Card.use`)
 
 | Opcode | Reads → writes | Units |
 |---|---|---|
-| `mma o sh sa sb` | an `m × n × k` tile of the card's MMA opcode `o` (formats, 32- or 64-bit accumulators): `A` from `sa`, `B` from `sb`, accumulators in registers → the accumulators | `m·n·k·weight` tensor, one issue slot, each operand word's read at its store |
-| `mmaSp o sh sa sb` | as `mma`, 2:4 sparse: `k/2` kept pairs a row, chosen by metadata | `m·n·(k/2)·weight` tensor, one issue slot, reads |
+| `mma o sh sa sb` | an `m × n × k` tile of the card's MMA opcode `o` (formats, 32- or 64-bit accumulators): `A` from `sa`, `B` from `sb`, accumulators in registers → the accumulators | `m·n·max(k, 1)·weight` tensor, one issue slot, each operand word's read at its store |
+| `mmaSp o sh sa sb` | as `mma`, 2:4 sparse: `k/2` kept pairs a row, chosen by metadata | `m·n·max(k/2, 1)·weight` tensor, one issue slot, reads |
 | `lane o` | one of the card's lane functions on its pipe: up to 4 register words (6 on `f64`) → 2 | `1/32` issue slot and a lane of the pipe (`fma` has none: issue-bound) |
 | `move s t n k` | `n` words of `s`, read once → `k` copies in `t`, unchanged | `max k 1 / 32` issue, each word's read and each copy's write, a register-to-register copy an `alu` lane |
-| `atom s o` | a word of `s` and two registers → the word's new value and a returned word (the card's function) | `1/32` issue, the word's read |
-| `red s t n o` | `n` words of `s` into `n` words of `t` (the card's function) | `1/32` issue, a read at each end a word |
+| `atom s o` | a word of `s` and two registers → the word's new value and a returned word (the card's function) | `1/32` issue, the word's access, an `alu` lane if `s` is the registers |
+| `red s t n o` | `n` words of `s` into `n` words of `t` (the card's function) | `1/32` issue, an access at each end a word, an `alu` lane a word if `t` is the registers |
 | branch | a predicate bit → the program counter, to a fixed, register or immediate target, optionally writing the return index | `1/32` issue |
 
 The hash oracle has no opcode: programs reach it only through the accelerator's priced calls (`Pouw.Dither.Accel.G3`,

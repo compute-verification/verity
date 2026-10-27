@@ -2316,7 +2316,7 @@
   "Definitions.Core": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Accounting.Device"],
    "except": [],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; the accelerator model (Definitions.Core.Accel) is a card's table of numbers and its envelope ISA, on the tensor-core classes (Definitions.Core.TC.Spec), and the table refines the device model (Card.toDevice), which is trusted text that imports only Mathlib; the server-time blocks and their wipes (Definitions.Core.Blocks) sit on the device model, which is trusted text that imports only Mathlib"
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; the accelerator model (Definitions.Core.Accel) is a card's table of numbers and its envelope ISA, on the tensor-core classes (Definitions.Core.TC.Spec), and the table gives the device model's limits (Card.toDevice), which is trusted text that imports only Mathlib; the server-time blocks and their wipes (Definitions.Core.Blocks) sit on the device model, which is trusted text that imports only Mathlib"
   },
   "Definitions.Core.TC.Pipeline": {
    "imports": [],
