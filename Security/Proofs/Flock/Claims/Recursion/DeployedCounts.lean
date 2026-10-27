@@ -192,11 +192,11 @@ theorem setupTables_counts
       | (intro s hs
          simp at hs
          subst hs
-         exact setupHidden_counts (by assumption))
+         exact setupHidden_counts (ok_of_refuse (by assumption)))
       | (obtain ⟨-, hall⟩ := range_mapM_ok (by assumption)
          intro s hs
          obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hs)
-         exact setupHidden_counts (hall j hj))
+         exact setupHidden_counts (ok_of_refuse (hall j hj)))
   · have hn : ¬ tags.hiddenOutputs = true := by simp [hh]
     simp only [throw_bind', pure_bind, ite_eq_right hn] at h
     repeat' walk_step
