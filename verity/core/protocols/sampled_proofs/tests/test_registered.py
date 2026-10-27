@@ -23,7 +23,7 @@ XOR8 = PrimitiveDefinition("RegisteredTestXor8", 1, (("a", Value(8)), ("b", Valu
                            register=False)
 MIX = bind(CompositeDefinition("RegisteredTestMix", 0, (), lambda S: ((("x", Array(2, Value(8))), ("w", Array(2, Value(8)))), Value(8)),
                                lambda B, S, x, w: B.call(XOR8, B.call(XOR8, x[0], w[0]), B.call(XOR8, x[1], w[1])), register=False))
-#: the row of the table W each unit reads, fixed by the program
+#: the row of the table W each proof block reads, fixed by the program
 POS = (3, 3, 0, 2, 1, 3)
 TABLE = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -37,7 +37,7 @@ ROOT_32 = ("111850c621f50137b50e36ee9e22fe8cefd28761e8b7ad98b175eaf0e8c7413d"
            "27364f184783f7680bf638c9b039154a53ef8908faba261a4eb208c22552c40f")
 
 
-#: each unit's seed group: the row of `pouw.roots` it reads
+#: each proof block's seed group: the row of `pouw.roots` it reads
 GROUPS = (0, 0, 1, 1, 1, 0)
 SEEDED = bind(CompositeDefinition(
     "RegisteredTestSeeded", 0, ("BITS",),
@@ -200,7 +200,7 @@ def test_reads_come_from_the_verifiers_own_program():
 
 
 def test_a_read_that_is_not_one_whole_row_is_refused():
-    """A unit reading across two rows, or a parameter that reads the table in one unit and not in another, has no public
+    """A proof block reading across two rows, or a parameter that reads the table in one proof block and not in another, has no public
     position."""
     def straddle(B, S, x, W):
         flat = [W[r][j] for r in range(len(TABLE)) for j in range(2)]
@@ -292,14 +292,14 @@ XOR1 = PrimitiveDefinition("RegisteredTestXor1", 1, (("a", Value(1)), ("b", Valu
 #: an A row of K = 64 int8 codes, its bits one-bit leaves: a `row/v2` row of K/2 = 32 u16 words
 K = 64
 A_ROW = Array(8 * K, Value(1))
-#: a tile reading R = 2 rows of A (H1's tile unit: its parameter `a`, the circuit's ports `a0` and `a1`)
+#: a tile reading R = 2 rows of A (H1's tile proof block: its parameter `a`, the circuit's ports `a0` and `a1`)
 TILE = bind(CompositeDefinition("RegisteredTestTile", 0, (), lambda S: ((("a", Array(2, A_ROW)),), Value(1)),
                                 lambda B, S, a: B.call(XOR1, a[0][0], a[1][0]), register=False))
 QT = P.template_instance_query(TILE.id)
 
 
 def _tiles(rows=lambda A, B, u: A[2 * u:2 * u + 2]) -> Program:
-    """Two tiles over A's four rows, unit u reading `rows(A, B, u)` (default rows 2u and 2u + 1); B is another value of A's
+    """Two tiles over A's four rows, proof block u reading `rows(A, B, u)` (default rows 2u and 2u + 1); B is another value of A's
     shape."""
     def sig(S):
         return (("A", Array(4, A_ROW)), ("B", Array(4, A_ROW))), Array(2, Value(1))
@@ -326,7 +326,7 @@ def test_a_bit_row_value_counts_its_parameters_leaves_in_its_bits():
 
 
 def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
-    """A tile's parameter of R whole rows reads each at its own key `a[i]` (the circuit's port `a{i}`): unit u's rows 2u
+    """A tile's parameter of R whole rows reads each at its own key `a[i]` (the circuit's port `a{i}`): proof block u's rows 2u
     and 2u + 1. The reads file names each as a port of A, in A's row format, with its own positions; a parameter that is
     exactly one row keeps its name."""
     prog = _tiles()
@@ -726,7 +726,7 @@ def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
 
 def _seeded(bits: int = 32) -> Program:
     """Units that read a row of x, a row of the registered table W and their seed group's row of `pouw.roots`, a pair of
-    digests, as PoUW's compiled units read theirs."""
+    digests, as PoUW's compiled proof blocks read theirs."""
     unit = bind(SEEDED, BITS=bits)
 
     def sig(S):
@@ -784,7 +784,7 @@ def test_a_supplied_value_is_the_records_roots_as_its_leaves():
                                G.registered_entries(check["program"], check["registered"])["pouw.roots"],
                                ["pouw.roots"]) == roots.root.hex()
         assert R.check(rec, **check).ok, bits
-        # its reads are a registered value's: each unit's row is its seed group's
+        # its reads are a registered value's: each proof block's row is its seed group's
         assert G.reads(check["program"], check["query"], check["registered"])["roots"] == {"value": "pouw.roots",
                                                                                          "rows": list(GROUPS)}
 
@@ -878,10 +878,10 @@ def _mixed_case(base, sup=MIXED, log=(), window=BOUND, binding=BINDING):
 
 
 def test_a_position_follows_the_logs_units():
-    """W-a: a position source is K after every unit of the log's earlier records, as a u64 big-endian, so a unit served
+    """W-a: a position source is K after every proof block of the log's earlier records, as a u64 big-endian, so a proof block served
     again in a later record takes another position and so another seed (the red team's replay, two calls of one A and B
     at one position under one salt, gets no second receipt); a record that names the positions it would have had first,
-    or a source past its own units, is `R7-supplied`."""
+    or a source past its own proof blocks, is `R7-supplied`."""
     assert G.log_base([]) == 0 and G.log_base([{"population": 6}, {"population": 3}]) == 9
     for bad in ([{"population": -1}], [{"population": True}], [{}], [{"population": 1.0}], ["r"]):
         with pytest.raises(ValueError):

@@ -95,7 +95,7 @@ def entry(program: str, value: str, leaves: int, words: int, registration: str,
 
 def port(value: str, e: Mapping[str, Any], root: str, rows: Sequence[int | None], schema: str = G.SCHEMA) -> dict[str, Any]:
     """The Lean verifier's ``--registered`` port (`registered.reads_file`'s form) reading ``value`` at ``rows`` (one per
-    unit, None where the unit doesn't read it): ``e`` its entry (`entry`, or a registered value's from the accepted
+    proof block, None where the proof block doesn't read it): ``e`` its entry (`entry`, or a registered value's from the accepted
     registration) and ``root`` the accepted record's."""
     return {"value": value, "root": root, "leaves": int(e["leaves"]), "words": int(e["words"]),
             "word_bits": int(e.get("word_bits", G.WORD_BITS)), "domain": e["domain"], **G.schema_entry(schema),

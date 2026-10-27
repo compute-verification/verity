@@ -21,7 +21,7 @@ XOR8 = PrimitiveDefinition("ServedTestXor8", 1, (("a", Value(8)), ("b", Value(8)
                            register=False)
 MIX = bind(CompositeDefinition("ServedTestMix", 0, (), lambda S: ((("x", Array(2, Value(8))), ("w", Array(2, Value(8)))), Value(8)),
                                lambda B, S, x, w: B.call(XOR8, B.call(XOR8, x[0], w[0]), B.call(XOR8, x[1], w[1])), register=False))
-#: the row of the served tree W each unit reads
+#: the row of the served tree W each proof block reads
 POS = (3, 3, 0, 2, 1, 3)
 TABLE = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
 SCHEME = "frame-v3-sha512/hm96-sha512"

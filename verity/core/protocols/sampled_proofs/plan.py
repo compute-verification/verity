@@ -42,8 +42,8 @@ class UnconditionalObligation:
 
     The prover supplies a proof that every gate the class selects satisfies its relation on the committed
     boundary values, and the verifier checks that proof on every audit, before any sampling -- exactly as it
-    checks the public inputs.  A transcript violating a covered gate is rejected with probability 1 up to
-    the proof system's soundness error, so covered fault classes have survival 0 in the acceptance law.
+    checks the public inputs.  A trace violating a covered gate is rejected with probability 1 up to
+    the proof system's soundness error, so covered fault classes have acceptance probability 0.
     This is NOT p = 1: a class's rate is a draw, and the obligation holds outside it.  `statement` names the relation
     the proof establishes (e.g. the authenticated boundary relation of an inactive region)."""
 
