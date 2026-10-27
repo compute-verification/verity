@@ -14,7 +14,7 @@ sys.path.insert(0, str(HERE))
 import sass_gate as SG  # noqa: E402
 import wgmma as W  # noqa: E402
 
-#: the H100's and H200's opt-in shared memory a block (227 KiB)
+#: the H100's and H200's opt-in shared memory a CTA (227 KiB)
 SM90_SMEM = 232448
 
 

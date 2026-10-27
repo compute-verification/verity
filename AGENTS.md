@@ -40,7 +40,9 @@ Dependencies point inward (`tests/test_boundaries.py`; every list it holds only 
 that `CORE_ML_EDGES` lists. `verity.ml` never imports `verity.core` (`ML_IMPORTS_CORE` names the exceptions).
 Inside `verity` each unit imports only what `ALLOWED` lists, and `verity` imports no other distribution of the workspace.
 Nothing outside `infra/` imports it (`INFRA_IMPORTERS`), and nothing under `verity/` imports an integration (`KNOWN` in
-`tests/test_integration_boundaries.py`).
+`tests/test_integration_boundaries.py`). `benchmarks/` is measurement only: nothing outside it imports its code, by
+package name or by a path put on `sys.path` or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a
+protocol uses reaches it through a card file citing an `art:` id.
 
 `verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|example NAME`, `verity --help`.
 
