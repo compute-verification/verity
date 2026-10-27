@@ -25,9 +25,11 @@ def LIVENESS_TAG : String := "verity/liveness/v1"
 /-- `lms.DEPLOYMENT_BYTES`: a deployment configuration's hash, SHA-512 of the file. -/
 def DEPLOYMENT_BYTES : Nat := 64
 
-/-- `lms._digest(role, I, context, record)`, refused unless `I` is 16 bytes. -/
+/-- `lms._digest(role, I, context, record)`, refused unless `I` is 16 bytes, and for a context or record of `2^64` bytes
+or more, whose length is no u64 (Python's `int.to_bytes(8, "big")` raises there). -/
 def roleDigest (tag : String) (I context record : ByteArray) : E ByteArray := do
   if I.size ≠ 16 then throw s!"an LMS identifier is 16 bytes, not {I.size}"
+  if 2 ^ 64 ≤ context.size ∨ 2 ^ 64 ≤ record.size then throw "a field's length is a u64"
   pure (Sha512.hash (lenField tag.toUTF8 ++ I ++ lenField context ++ lenField record))
 
 /-- `lms._u64`: eight bytes big-endian, refused at `2^64` and above. -/
@@ -51,19 +53,27 @@ def periodContext (deployment : ByteArray) (party : String) (attachment : ByteAr
 def partyKeyMessage (I deployment : ByteArray) (party : String) (lower : ByteArray) : E ByteArray := do
   roleDigest PARTY_KEY_TAG I (← partyContext deployment party) lower
 
+/-- A period root's context: the period's, then the record count (u64). -/
+def periodRootContext (deployment : ByteArray) (party : String) (attachment : ByteArray) (link : String)
+    (period count : Nat) : E ByteArray := do
+  pure ((← periodContext deployment party attachment link period) ++ (← u64 count "a period's record count"))
+
 /-- `lms.period_root_message(I, deployment, party, attachment, link, period, count, root)`: what a party's lower key
 signs once per certification period. -/
 def periodRootMessage (I deployment : ByteArray) (party : String) (attachment : ByteArray) (link : String)
     (period count : Nat) (root : ByteArray) : E ByteArray := do
-  let context := (← periodContext deployment party attachment link period) ++ (← u64 count "a period's record count")
-  roleDigest PERIOD_ROOT_TAG I context root
+  roleDigest PERIOD_ROOT_TAG I (← periodRootContext deployment party attachment link period count) root
+
+/-- A liveness record's context: the period's, then the sampling block's index (u64). -/
+def livenessContext (deployment : ByteArray) (party : String) (attachment : ByteArray) (link : String)
+    (period block : Nat) : E ByteArray := do
+  pure ((← periodContext deployment party attachment link period) ++ (← u64 block "a sampling block's index"))
 
 /-- `lms.liveness_message(I, deployment, party, attachment, link, period, block)`: a party's public record that sampling
 block `block` of the period was certified, with no content. -/
 def livenessMessage (I deployment : ByteArray) (party : String) (attachment : ByteArray) (link : String)
     (period block : Nat) : E ByteArray := do
-  let context := (← periodContext deployment party attachment link period) ++ (← u64 block "a sampling block's index")
-  roleDigest LIVENESS_TAG I context ByteArray.empty
+  roleDigest LIVENESS_TAG I (← livenessContext deployment party attachment link period block) ByteArray.empty
 
 /-- A two-level HSS signature: the party's lower public key (`I ‖ T[1]`), the identity's signature of its
 `partyKeyMessage` (its certificate), and the lower key's signature of the message. -/
