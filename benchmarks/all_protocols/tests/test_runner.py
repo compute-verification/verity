@@ -359,8 +359,8 @@ def test_the_loop_window_keeps_only_public_files(tmp_path):
     d, loop = RN.loop_window(0, "test", a, tmp_path / "scratch", tmp_path / "out")
     kept = sorted(f.name for f in (tmp_path / "out" / "window").iterdir())
     assert "registration.json" in kept and "circuit.json" in kept and "period.json" in kept
-    assert not [f for f in kept if "private" in f]
-    assert [f for f in (x.name for x in d.iterdir()) if f.endswith("-private.bin")]
+    assert not [f for f in kept if "private" in f or f.startswith("index")]
+    assert [f for f in (x.name for x in d.iterdir()) if f.endswith("-private.bin")] and (d / "index.json").exists()
     p = T.period_of(d)
     reg = json.loads((d / "registration.json").read_text())
     assert reg["window"]["circuit"] == p["circuit"] == loop["circuit_before"]

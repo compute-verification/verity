@@ -825,6 +825,7 @@ def index_leaf(ib: bytes, salt: bytes) -> bytes:
 def _private(path: Path, data: bytes) -> None:
     """``data`` at ``path``, readable by its owner alone: a file only the prover reads."""
     with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        os.fchmod(f.fileno(), 0o600)
         f.write(data)
 
 

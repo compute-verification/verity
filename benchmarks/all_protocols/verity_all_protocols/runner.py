@@ -96,7 +96,7 @@ from .table import ANSWERS, PERIOD, TABLE, Entry, LegFn, check_answer, leg_of
 FORMAT = "verity/all-protocols-window/v1"
 ROOT = Path(__file__).resolve().parents[3]
 LOOP = ROOT / "integrations" / "torch_loop"
-PUBLIC = ("registration.json", "window.json", "index.json", "circuit.json", "serve.json", PERIOD)
+PUBLIC = ("registration.json", "window.json", "circuit.json", "serve.json", PERIOD)
 #: ``--registered``'s weights, committed once a run: their opening (the prover's salts) in scratch, the verifier's pin
 #: of their roots in ``DIR``
 WEIGHTS_OPENING, WEIGHTS_PIN = "weights-opening.json", "weights-pin.json"
