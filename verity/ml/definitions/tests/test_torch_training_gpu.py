@@ -7,7 +7,14 @@ sha256 of the GPU's words.
 
 The training run's own shapes (B 8, S 512) take kernels the 2-layer step doesn't: the embedding's sort path (M = 4096 ids),
 the mean loss's 256-thread tree, and rows of 512 and 1,024 keys. `fixtures/torch-training-shapes/shapes.npz` is cut from a
-dump at those shapes (the same GPU and torch), every word of which was checked."""
+dump at those shapes (the same GPU and torch), every word of which was checked.
+
+`fixtures/torch-training-clip/clip.npz` is cut from a probe of ``clip_grad_norm_(params, 1.0, foreach=True)``'s kernels on the
+same GPU and torch: ``_foreach_norm`` of tensors a test regenerates from splitmix64 (`_gen`), ``vector_norm`` of 32 lengths,
+the coefficient of every bf16 total and ``_foreach_mul_`` of every bf16 word by 24 coefficients (as sha256 of the GPU's
+words), and the norms and totals of the 2-layer step (B 1, S 256, three AdamW steps) and of the 30-layer model at B 8, S 512,
+with the 2-layer step's five 576-element gradients before and after the clip. Every norm, total, coefficient and clipped word
+of the probe was checked, the 2-layer step's 28,311,552-element embedding gradient and the 30-layer cut's tensors among them."""
 from __future__ import annotations
 
 import hashlib
@@ -20,7 +27,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.definitions.numerics import torch_blocks as TB
 from verity.ml.definitions.numerics import torch_kernels as TK
-from verity.ml.definitions.registry import torch_embedding as TE, torch_loss as TL
+from verity.ml.definitions.registry import boolean_dense as BDN, torch_clip as TC, torch_embedding as TE, torch_loss as TL
 
 FIXTURES = Path(__file__).parent / "fixtures"
 V, D = 49152, 64
@@ -39,6 +46,44 @@ def step():
 @pytest.fixture(scope="module")
 def shapes():
     return _load(FIXTURES / "torch-training-shapes" / "shapes.npz")
+
+
+@pytest.fixture(scope="module")
+def clip():
+    return _load(FIXTURES / "torch-training-clip" / "clip.npz")
+
+
+_M64 = np.uint64(0xFFFFFFFFFFFFFFFF)
+#: kind: (least exponent field, how many)
+_KINDS = {"wide": (97, 54), "narrow": (112, 16), "tiny": (0, 72), "big": (180, 75), "pos": (100, 40)}
+
+
+def _gen(seed: int, n: int, kind: str) -> np.ndarray:
+    """The probe's n bf16 words at (seed, kind): splitmix64 of i + seed * 2^40 for i = 1 .. n, its bit 0 the sign, bits 1..7
+    the mantissa, the rest the exponent field mod the kind's span; "pos" clears the sign, "+nan" puts 0xFFC1 at n // 2,
+    "+inf" 0xFF80 at n // 3, "+zeros" keeps only the signs."""
+    with np.errstate(over="ignore"):
+        z = (np.arange(1, n + 1, dtype=np.uint64) + np.uint64(seed) * np.uint64(1 << 40)) * np.uint64(0x9E3779B97F4A7C15)
+        z = (z ^ (z >> np.uint64(30))) * np.uint64(0xBF58476D1CE4E5B9)
+        z = (z ^ (z >> np.uint64(27))) * np.uint64(0x94D049BB133111EB)
+        z = z ^ (z >> np.uint64(31))
+    lo, span = _KINDS[kind.split("+")[0]]
+    e = (z >> np.uint64(8)) % np.uint64(span) + np.uint64(lo)
+    w = ((z & np.uint64(1)) << np.uint64(15)) | (e << np.uint64(7)) | ((z >> np.uint64(1)) & np.uint64(0x7F))
+    w = (w & np.uint64(0x7FFF) if kind == "pos" else w).astype(np.uint16)
+    if kind.endswith("+nan"):
+        w[n // 2] = 0xFFC1
+    if kind.endswith("+inf"):
+        w[n // 3] = 0xFF80
+    if kind.endswith("+zeros"):
+        w &= np.uint16(0x8000)
+    return w
+
+
+def _cases(clip, most: int):
+    for (k, n, off, ptr, b, f), kind in zip(clip["norm_cases"], clip["norm_kinds"]):
+        if n <= most:
+            yield _gen(int(k), int(n + off), str(kind))[off:], ptr == 0 and n % 4 == 0, int(b), int(f)
 
 
 def _same(got, want) -> None:
@@ -179,3 +224,65 @@ def test_the_sort_path_definition_is_the_gpus(shapes) -> None:
     got = evaluate_words(bind(TE.EmbeddingBackwardEntry, M=len(t), H=F), vs, np.broadcast_to(t, (len(vs), len(t))),
                          np.broadcast_to(g.T, (len(vs), *g.T.shape)))
     _same(np.asarray(got).reshape(len(vs), F), rows[pick])
+
+
+def test_the_tensor_norms_are_the_gpus(clip) -> None:
+    """``_foreach_norm``'s model on 43 tensors of 1 to 884,736 elements, both paths (a view at element 1 takes the strided
+    one), with NaN, inf, zeros, squares below f32's normal range and squares that overflow: the f32 norm and its bf16."""
+    n = 0
+    for x, aligned, b, f in _cases(clip, 1 << 20):
+        got = TK.lpnorm_cleanup(TK.lpnorm_chunks(x, aligned))
+        assert (got, int(TK.bf16(np.array([got], np.uint32))[0])) == (f, b), (x.size, aligned)
+        n += 1
+    assert n == len(clip["norm_cases"]) == 43
+
+
+def test_the_norm_definitions_are_the_gpus(clip) -> None:
+    """`ForeachNorm_v1` on the crafted tensors of at most 8,188 elements at aligned pointers, `LpNormChunk_v1{ALIGNED=0}` and
+    `LpNormCleanup_v1` on those at element 1, and `ForeachNorm_v1{N=576}` on the 2-layer step's five 576-element gradients."""
+    for x, aligned, b, _ in _cases(clip, 8188):
+        if aligned or x.size % 4:
+            got = evaluate_words(bind(TC.ForeachNorm, N=x.size), x[None])
+        else:
+            o = np.asarray(evaluate_words(bind(TC.LpNormChunk, N=x.size, ALIGNED=0), x[None]), np.uint32).reshape(1, 1)
+            got = evaluate_words(bind(TC.LpNormCleanup, C=1), o)
+        _same(np.asarray(got).reshape(-1), [b])
+    g, i = clip["small_g_before"], clip["small_g_index"]
+    _same(np.asarray(evaluate_words(bind(TC.ForeachNorm, N=g.shape[1]), g)).reshape(-1), clip["small_norms"][i])
+
+
+def test_the_vector_norms_are_the_gpus(clip) -> None:
+    """``vector_norm`` of 32 crafted lengths of 1 to 4,096 (the model and `VectorNormBf16_v1`), and the totals of the 2-layer
+    step (L = 20) and the 30-layer model (L = 272) from their norms, which are the f32 norms' F2FP."""
+    for seed, L, b, f in clip["vnorm_cases"]:
+        h = _gen(int(seed), int(L), "pos")
+        assert TK.vector_norm(h) == (f, b), L
+        _same(np.asarray(evaluate_words(bind(TC.VectorNormBf16, L=int(L)), h[None])).reshape(-1), [b])
+    for tag in ("small", "full30"):
+        n = clip[f"{tag}_norms"]
+        _same(TK.bf16(clip[f"{tag}_norms_f32"]), n)
+        assert TK.vector_norm(n) == (int(clip[f"{tag}_total_f32"][0]), int(clip[f"{tag}_total"][0]))
+        _same(np.asarray(evaluate_words(bind(TC.VectorNormBf16, L=len(n)), n[None])).reshape(-1), clip[f"{tag}_total"])
+
+
+def test_the_coefficient_is_the_gpus(clip) -> None:
+    """``clamp(1.0 / (t + 1e-6), max=1.0)`` on every bf16 word t as one tensor (the model, against the sha256 of the GPU's
+    words), and on 2,034 of them as 0-dim tensors, clip_grad's own shape (the model and `ClipCoef_v1`)."""
+    w = np.arange(1 << 16, dtype=np.uint16)
+    assert _sha(TK.clip_coef(w), "<u2") == str(clip["coef_sha256"])
+    t, want = clip["coef0_words"], clip["coef0"]
+    _same(TK.clip_coef(t), want)
+    _same(np.asarray(evaluate_words(TC.ClipCoef, t, np.full(t.size, 0x3FF0000000000000, np.uint64))).reshape(-1), want)
+
+
+def test_the_clip_multiply_is_the_gpus(clip) -> None:
+    """``_foreach_mul_`` of every bf16 word by 24 0-dim coefficients (the model, against sha256), and of the 2-layer step's
+    five 576-element gradients by its coefficient, `ClipCoef_v1` of its total, through `Bf16MulScalarTensor_v2`."""
+    w = np.arange(1 << 16, dtype=np.uint16)
+    for c, h in zip(clip["mul_coefs"], clip["mul_sha256"]):
+        assert _sha(TK.bf16_mul(w, np.array([c], np.uint16)), "<u2") == str(h), hex(int(c))
+    total = clip["small_total"]
+    coef = np.asarray(evaluate_words(TC.ClipCoef, total, np.array([0x3FF0000000000000], np.uint64)), np.uint16).reshape(1, 1)
+    g = clip["small_g_before"]
+    got = evaluate_words(bind(BDN.Bf16MulScalarTensor, N=g.shape[1]), g, np.repeat(coef, len(g), axis=0))
+    _same(np.asarray(got).reshape(g.shape), clip["small_g_after"])
