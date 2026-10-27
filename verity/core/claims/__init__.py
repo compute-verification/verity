@@ -18,7 +18,7 @@ from typing import Literal
 __all__ = ["ENTRIES", "INSTANCES", "PROPERTIES", "Entry", "Instance", "Property", "assumption", "get"]
 
 Kind = Literal["guarantee", "assumption", "model"]
-# ``conjectured`` is for mathematics only; ``measured``: an assumption about a device, falsified by a measurement (Daniel, 8 Oct)
+# ``conjectured`` is for mathematics only; ``measured``: an assumption about a device, falsified by a measurement
 Standing = Literal["standard", "algebraic", "proven", "conjectured", "measured"]
 
 
@@ -178,7 +178,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "a floor of 0.025 of a root at 512 bits, down to 0.003 at 2,048, against a per-bit price of 0.32), and holds "
           "only for words whose payload is unknown, under Incompressible(W)",
           "Rate codec work", "measured"),
-    # the sketch-then-hash receipt's model, restated by Daniel on 13 Oct: falsified by a prover that passes while holding
+    # the sketch-then-hash receipt's model: falsified by a prover that passes while holding
     # some tier's share of the store as anything other than E's blocks. Accounting.Guarantees.RateSketchTable is why the
     # model is needed: a prover whose memory may hold any function of E (RateAudit's model) passes on every coin reading
     # only the digest's d bits per tile, from a table of |signs| * N * d bits, at any number of rows. What Lean proves is
@@ -233,8 +233,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("transparent-setup", "guarantee", "Transparent setup (no trusted setup)", "Transparent setup"),
     # `Pous.EndToEnd.EndToEndRing`'s steps to the deployed system (Security/Properties/Pous/EndToEnd.lean), beside
     # prf/sha-512 for the memory challenger's index streams: the model, the numbers and the instantiation.  Its one
-    # session per audit cites trusted-host as network-accounting widens it
-    # (pending network-accounting's widening, Daniel decision 2)
+    # session per audit cites trusted-host.
     Entry("pous-ring-device", "model",
           "PoUS ring model of the server: the deployed server is a ring-model server whose state is bounded between "
           "setup, the session and its rounds, with one session per audit (the memory challenger refuses a used session "
