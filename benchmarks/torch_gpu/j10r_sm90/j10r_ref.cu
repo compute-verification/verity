@@ -22,7 +22,7 @@
 #include <cstdint>
 #include <cuda_runtime.h>
 
-#include "../sha512_rows/sha512x.cuh"
+#include "../../../verity/ml/kernels/sha512.cuh"
 
 typedef unsigned long long u64;
 typedef unsigned int u32;

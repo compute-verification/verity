@@ -1,9 +1,9 @@
 // A P2 unit's sketch-sha512 receipt (verity/core/protocols/remote_bandwidth/PROTOCOL.md §11): y_g = SHA512(Z(prefix) ||
 // u64be g || sigma_g), sigma_g the unit's 16 int32 little-endian (64 bytes). The prefix is one 128-byte block, so y is one
 // compression from its midstate over a block holding the 72 message bytes, 0x80 and the 1,600-bit length. On the device
-// and the host, with sha512_rows' compression (every word a big-endian u64).
+// and the host, with the GPU's one SHA-512 compression (every word a big-endian u64).
 #pragma once
-#include "../sha512_rows/sha512x.cuh"
+#include "../../../verity/ml/kernels/sha512.cuh"
 
 namespace p2r {
 
