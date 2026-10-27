@@ -46,7 +46,10 @@ many (commit_slots' `Plan(sms=)`). Calls run on the current torch stream.
 
 What each hash costs, and what is shared (a row's leaf is five compressions and three ChaCha20 blocks):
 
-- x: P(8 nbytes) is one block, midstated a row (`row_setup`); a row of at most 111 bytes is one compression more.
+- x: P(8 nbytes) is one block, midstated a row (`row_setup`); a row of at most 111 bytes is one compression more. When
+  n mod 128 is 0 or at least 112 the last block is padding alone (`pad_alone`), the same in every slot, so `row_setup`
+  schedules it once (`RowSpec.kw`) and the row ends with `compress_kw` (a 1 KiB row: 8 full compressions and one without
+  its message expansion).
 - c = SHA-512(salt prefix ‖ y): the prefix is one block, midstated once; y is 192 bytes, all of them salt (8 |y| =
   2 |x| + 512), so two compressions, and no ChaCha20 block has bytes to spare for another row.
 - h = SHA-512(leaf prefix(key) ‖ b ‖ c): the prefix is midstated once; b ‖ c is one block, and the padding block is a

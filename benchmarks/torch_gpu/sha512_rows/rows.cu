@@ -40,6 +40,12 @@ struct Sx {
 };
 struct Pouw {
   static __host__ __device__ __forceinline__ void run(u64* st, u64* w) { sha::compress(st, w); }
+  static __host__ __device__ __forceinline__ void kw(u64* st, const u64* kw) {   // the block is K + W's first 16, less K
+    u64 w[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) w[i] = kw[i] - sx::kconst()[i];
+    sha::compress(st, w);
+  }
 };
 using D = Sx<SX_V, SX_ROLL>;
 

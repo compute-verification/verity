@@ -288,4 +288,15 @@ SX_HD void compress_kw(u64* st, const u64* KW) {
   st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
 }
 
+// compress_kw's K[t] + W[t] for the block w (w is not changed): for a block that every slot hashes alike, computed once
+SX_HD void kw_of(const u64* w, u64* kw) {
+  const u64* K = kconst();
+  u64 W[16];
+  for (int t = 0; t < 16; ++t) W[t] = w[t];
+  for (int t = 0; t < 80; ++t) {
+    if (t >= 16) W[t & 15] += s1<0>(W[(t + 14) & 15]) + W[(t + 9) & 15] + s0<0>(W[(t + 1) & 15]);
+    kw[t] = K[t] + W[t & 15];
+  }
+}
+
 }  // namespace sx
