@@ -19,8 +19,9 @@ device's log, more than `K` bits went through the network certifiers, and there 
   (`NetworkBound.RowsSigned`: `warden_rows.check_registration`'s conditions, held by the scan's registration); and
   whose scans and audits the proof service accepted. LMS's completeness
   (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`) and the period check's converse
-  (`Properties.NetworkCertifier.periodAccepts_of`) carry it. What stays a hypothesis is the proof service's: the answers' acceptance (`PeriodRowsProved`, `PeriodAuditsProved`) and what the prover sent
-  decoding to the period (`NetworkPeriod`).
+  (`Properties.NetworkCertifier.periodAccepts_of`) carry it. What stays a hypothesis is the proof service's: the
+  answers' acceptance (`PeriodRowsProved`, `PeriodAuditsProved`) and what the prover sent decoding to the period
+  (`NetworkPeriod`).
 * nontrivial (`networkComponentBound_nontrivial`): with the compiled check replaced by one that accepts everything
   (`Vocab.NetworkBoundBy`, which at `ComponentAccepts .network` is the bound, `Vocab.componentBound_network_by`), a
   strategy whose every play sends more than `K`, with every release read logged and no break, makes the event certain,
