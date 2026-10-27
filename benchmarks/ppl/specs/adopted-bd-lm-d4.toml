@@ -1,4 +1,4 @@
-description = "adopted-bd-lm with a 4-bit dither (Daniel 05:07Z): every coin on the linears, lm_head, Q and K is R uniform on {0..15}, served as floor(x / s) - 7 + R (the 1-bit dither's mean given x); the linears' scales absmax / 119 (served within [-126, 127]), Q's and K's keep x / s in [-121, 120) (served within [-128, 127]); V keeps its bit"
+description = "adopted-bd-lm with a 4-bit dither: every coin on the linears, lm_head, Q and K is R uniform on {0..15}, served as floor(x / s) - 7 + R (the 1-bit dither's mean given x); the linears' scales absmax / 119 (served within [-126, 127]), Q's and K's keep x / s in [-121, 120) (served within [-128, 127]); V keeps its bit"
 
 [[linear]]
 step = "smooth"

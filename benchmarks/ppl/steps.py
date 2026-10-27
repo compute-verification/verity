@@ -1,7 +1,7 @@
-"""The built-in steps. Linears (from tonight's `linears_layerwise.py` / `exact_grid.py`): `smooth` (SmoothQuant, its
-foldable variant under `kv_shared`), `rotate` (one orthogonal Q per k on x and W), `int8` (activations one scale per
-token, rounded or dithered; weights one scale per output row or per group of inputs, capped at `weight_top`, rounded or
-by GPTQ). Attention (from `attention.py`): `rotate` (one random Hadamard R of the head dimension on Q, K, V and R^T on
+"""The built-in steps. Linears: `smooth` (SmoothQuant, its foldable variant under `kv_shared`), `rotate` (one
+orthogonal Q per k on x and W), `int8` (activations one scale per token, rounded or dithered; weights one scale per
+output row or per group of inputs, capped at `weight_top`, rounded or by GPTQ). Attention: `rotate` (one random
+Hadamard R of the head dimension on Q, K, V and R^T on
 the output), `center_keys` (K minus its per-channel mean), `int8` (one limb: Q, K per (head, token) or K per (layer, KV
 head), P per query row or per key block, `p_sink` putting key 0 alone, V per channel; K and V rounded or dithered; the
 float softmax or fattn.cu's integer LUT softmax, `lut_softmax`) and `peel` (a low-rank noise
@@ -755,9 +755,9 @@ def to_grid(v: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None,
 
 
 def dither3(v: torch.Tensor, grid: str, b: torch.Tensor, b2: torch.Tensor) -> torch.Tensor:
-    """FP-NATIVE's design A activations (note:20261019T0525Z-draft-fp-native): the nearest level n moved by d (b + b2 - 1),
-    two fair bits, d the larger of n's two gaps so that n - d and n + d are levels (14, 16, 18 at a binade, not 15, 16,
-    17); at the grid's ends, where n has one neighbour, the three levels step inward (448, 416, 384: RT-FP-7)."""
+    """The three-level dither of activations on a float grid: the nearest level n moved by d (b + b2 - 1), two fair
+    bits, d the larger of n's two gaps so that n - d and n + d are levels (14, 16, 18 at a binade, not 15, 16, 17); at
+    the grid's ends, where n has one neighbour, the three levels step inward (448, 416, 384)."""
     table = torch.tensor(LEVELS[grid], dtype=v.dtype, device=v.device)
     lo, hi = bracket(v, grid)
     n = torch.where(v - lo <= hi - v, lo, hi)
@@ -1148,7 +1148,7 @@ def native_gptq(w: torch.Tensor, h: torch.Tensor, grid: str, scale: str, amax: t
 
 
 #: a native operand's modes: GRID_MODES, `g1`, the nearest level moved by a fair coin of 1 in its row's unit, centred,
-#: and (activations only) `dither3`, design A's two coins (`dither3`)
+#: and (activations only) `dither3`, the three-level dither's two coins
 NATIVE_MODES = GRID_MODES + ("g1", "dither3")
 
 
@@ -1199,9 +1199,8 @@ def native_linear(mm, nxt, *, grid: str, scale: str = "channel", act: str = "dit
     integers m q + b (in int8 for e4m3i120 and nvi10; in H1's weights, +-110, with H1's U on +-16 in s8, for e4m3i104
     and nvi9; in co32c's 7-bit weights, Dither-C's, for e4m3i60 and nvi5), less its rank-one terms. `clip = n`: every
     per-row scale (each token's, each weight row's) searched over n clip ratios (`native_parts`); the honest prover's
-    choice of levels, which no check reads. `act = dither3`: FP-NATIVE's design A,
-    each activation its nearest level moved by its gap times b + b' - 1 (`dither3`), beside dithered weights: the
-    dithered product is the one served."""
+    choice of levels, which no check reads. `act = dither3`: each activation its nearest level moved by its gap times
+    b + b' - 1 (`dither3`), beside dithered weights: the dithered product is the one served."""
     hkey = (mm.name, tuple(s.key for s in mm.prefix[:-1]))
     if mm.run.hessian is not None:
         if gptq:

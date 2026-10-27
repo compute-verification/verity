@@ -8,7 +8,7 @@ small and past anything walked one by one (2^22 to 2^52). `NciCheck/DescLiveness
 `NciCheck.Desc.check` gives on `small` what `NciCheck.check` gives on it expanded gate by gate, and on `big` a verdict
 equal to `small`'s (`mode` `same`) or with the same novel reads per IU (`novel`, where the gates grow with `n`).
 
-The shapes are PRF-151's (training's fuzzer, `cursor/nci-desc-fuzz-4207` at 292b190044), on which `NciCheck.Desc` once
+The shapes are the fuzzer's, on which `NciCheck.Desc` once
 overflowed its stack, ran for a time linear in `n` or ran out of memory, and the closed forms that replaced those walks:
 
 * `passscan`: a gate reading the carry of a scan of `n` iterations of a step that passes its carry through (training's
