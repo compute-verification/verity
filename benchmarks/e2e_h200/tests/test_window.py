@@ -1,6 +1,7 @@
 """The H200 window writer (`window`, CIR-115).
 
-- At the frozen shape, FAMILIES' shared-row layout and its writers are circuits' artifacts.
+- At the frozen shape, FAMILIES' shared-row layout and its writers are circuits' artifacts, and `commitments.layout`'s
+  shared-row check refuses a layout that isn't one.
 - Every read a proof block's ports make lies in rows its producers wrote, and K and V are read at the steps that wrote them.
 - A linear's weight reads are whole rows of the weights' registration (CMP-160).
 - A run served by continuous batching on the CPU at MINI: for proof blocks of every family drawn at every step, the ports
@@ -25,6 +26,8 @@ from e2e_h200.slots import Request, SlotKV, SlotShape
 from e2e_h200.store import GeneratorStore
 from e2e_h200.units import Replayer
 from e2e_h200.weights import Weights
+from verity.errors import InvalidArtifact
+from verity.ml.commitments import layout as L
 from verity_torch_loop import weights as SW
 
 #: art:8ce57586b2176a6364260a10963c9703b5b8919b26bd965a4f907667846323e9's writers, `window.writers_digest`
@@ -44,8 +47,17 @@ def frozen() -> W.Window:
 
 def test_the_shared_layout_and_its_writers_are_circuits_at_the_frozen_shape(frozen) -> None:
     assert frozen.layout.row_count == W.FROZEN_ROWS and frozen.layout.digest.hex() == W.FROZEN_DIGEST
+    assert L.Layout(frozen.layout.name, frozen.layout.groups).json_digest.hex() == W.FROZEN_JSON_DIGEST
     ws = frozen.writers()
     assert len(ws) == 1203 and W.writers_digest(ws) == FROZEN_WRITERS
+
+
+def test_a_layout_that_isnt_shared_rows_is_refused() -> None:
+    """Rows of 255 B split the embedding's coordinate 127; ``families/v1``'s gathers re-commit their parts' bytes."""
+    with pytest.raises(InvalidArtifact, match="group 0 tensor 0: bytes 254..256 aren't a window of one row"):
+        W.shared_layout(MINI, 255)
+    with pytest.raises(InvalidArtifact, match="group 0 tensor 0: bytes 0..2 are committed twice"):
+        W.Window(MINI, lockstep(1, 1), families_layout(MINI)).writers()
 
 
 def _written(writers: list[dict]) -> dict[int, list[tuple[int, int]]]:
