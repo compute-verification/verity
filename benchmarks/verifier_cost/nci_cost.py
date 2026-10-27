@@ -8,14 +8,15 @@ must be `nci-check --policy`'s.
   serve --out DIR --phases EXE --scratch DIR [--config NAME ...]
       Serve_v1 (`run.serve`) at each config, word-level and on bits (`lift.on_bits`), θ its registered inputs, one IU
       per Call (`run.instance`)
-  glm --out DIR --phases EXE --scratch DIR --workload PATH
+  glm --out DIR --phases EXE --scratch DIR --workload PATH [--word-only]
       GLM-5.3's rank 0 workload Program of the B1 Build (root: its inputs and one Call, the request) word-level as built,
       then on bits: `verity.ml.definitions.boolean.dry_run`'s gaps, and where there are none the request lifted
       (`lift.on_bits`) and called once by a root of its inputs. θ empty (its weights are bound per run), one IU, the
       request, at `nci_glm.GAMMA`, `nci_glm.ALPHA`
 
 DIR/CASE.jsonl has a row per check: the description's sizes, `nci-check --policy`'s seconds, peak RSS and verdict, and
-`nci-phases`'s PHASE lines (DIR/phases/<name>.log keeps them as they come).
+`nci-phases`'s PHASE lines (DIR/phases/<name>.log keeps them as they come). `--big N` is the body size from which
+`nci-phases` times a summary step by step; `--no-policy` runs `nci-phases` alone.
 """
 from __future__ import annotations
 
@@ -79,11 +80,15 @@ def check(args, name: str, path: Path, row: dict) -> dict:
     """`nci-phases` then `nci-check --policy` on the instance `path`, one row."""
     logs = Path(args.out) / "phases"
     logs.mkdir(parents=True, exist_ok=True)
-    ph = launch([str(args.phases), str(path), "20"], logs / f"{name}.log")
+    ph = launch([str(args.phases), str(path), "20", str(args.big)], logs / f"{name}.log")
     pv = verdict_of(ph.pop("lines"))
     phases = [json.loads(x[len("PHASE "):]) for x in (logs / f"{name}.log").read_text().splitlines() if x.startswith("PHASE ")]
-    d = launch([str(args.exe), "--policy", str(path)])
-    dv = verdict_of(d.pop("lines"))
+    if args.no_policy:
+        d = {"seconds": ph["seconds"], "max_rss_kb": ph["max_rss_kb"], "rc": ph["rc"], "skipped": True}
+        dv = pv
+    else:
+        d = launch([str(args.exe), "--policy", str(path)])
+        dv = verdict_of(d.pop("lines"))
     row = row | {"case": name, "desc": d, "verdict": small(dv), "phases_run": ph, "phases": phases, "agrees": pv == dv}
     with open(Path(args.out) / f"{args.cmd}.jsonl", "a") as f:
         f.write(json.dumps(row) + "\n")
@@ -184,6 +189,8 @@ def glm(args) -> int:
     r = check(args, "glm-r0-word", inst, {"ir": "word", "body_nodes": nodes, **size})
     inst.unlink()
     bad += r["desc"]["rc"] != 0 or not r["agrees"]
+    if args.word_only:
+        return 1 if bad else 0
 
     t = time.perf_counter()
     prog, digest = BB.load_program(path)
@@ -230,6 +237,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--exe", type=Path, default=run.EXE)
     ap.add_argument("--config", action="append", choices=list(run.CONFIGS))
     ap.add_argument("--workload")
+    ap.add_argument("--big", type=int, default=2**17, help="nci-phases times a body of this many nodes step by step")
+    ap.add_argument("--no-policy", action="store_true", help="nci-phases only, its verdict standing for nci-check's")
+    ap.add_argument("--word-only", action="store_true", help="glm: the word-level descriptor only, no Boolean lift")
     args = ap.parse_args(argv)
     Path(args.out).mkdir(parents=True, exist_ok=True)
     return {"suite": suite, "serve": serve, "glm": glm}[args.cmd](args)
