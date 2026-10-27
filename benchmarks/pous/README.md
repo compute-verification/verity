@@ -157,7 +157,7 @@ research run --on <RTX PRO 6000 node> --project verity --source . --cwd source -
   -- bash benchmarks/pous/streamed_wipe/run.sh
 ~~~
 
-`streamed_wipe/served_wipe.sh` is the wipe's piece of a served window (VLLM-33, MEM-96): `demo.sh`'s wipe of the H200 a
+`streamed_wipe/served_wipe.sh` is the wipe's piece of a served window: `demo.sh`'s wipe of the H200 a
 window is served on, before its engine loads, with the memory challenger on vy-auditor-2. It writes the core answer
 (verity/wipe/v0) to `DIR/answer.json`, with demo.sh's outputs and `served.json` beside it.
 `benchmarks/one_stage/served_verdicts.sh` runs it as

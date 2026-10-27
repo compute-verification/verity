@@ -1,4 +1,4 @@
-"""`streamed_wipe/served_wipe.sh`, the wipe's piece of a served window (served_verdicts.sh's WIPE_CMD; MEM-96, VLLM-33), on a
+"""`streamed_wipe/served_wipe.sh`, the wipe's piece of a served window (served_verdicts.sh's WIPE_CMD), on a
 CPU: its demo.sh is `served_wipe_demo.py` (one 32 MiB segment in host memory, `wipe_store.HostMemory`, against
 `wipe_side.py`, the challenger's stand-in on a host of its own), and `nvidia-smi` and `gpu-lease` are stand-ins on PATH.
 DIR/answer.json is the leg's core answer (verity/wipe/v0) in the form `Answer.toJson` writes (what served_verdicts.py's
