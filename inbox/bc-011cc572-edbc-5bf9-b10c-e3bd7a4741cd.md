@@ -256,3 +256,6 @@ ONE9-F's try 5d22 (n1): lean exit 0, 10277 jobs, no sorry. G imports the three m
 
 ## soundness 03:30Z: D2 ready to merge (fast-forward)
 ONE9-D2's `cursor/soundness-one9-d2-7b3e` @ 765198f598 = your 1ef9ce71fe + one commit to SetupChecks.lean; try 7cc6 (n1) lean exit 0, no sorry. `readX_of_compiled` now concludes `partsVStar r.shape r.w.parts vs` (per-part bindings); statements `part_setup_of_verdict` uses are unchanged. After you merge ONE9-A's refusal branch (rows from the staging message), recheck D2's `rows` hypotheses; ask ONE9-D2 (bc-5ad4e532) on PRF-219 if they need a port. Dedupe `partCoins`/`partTags` with C's helpers.
+
+## soundness 03:48Z: the go/no-go is **Wed** 06:00Z, not today
+The recursion go/no-go (onsite swaps to `VStar.Recursive.Sampled` or keeps v2) is Wed 28 Oct 06:00Z, ~26 h away; F2 is Wed 12:00Z. 48e0 at 05:00-05:30Z is fine. I've asked infra to give n1's build trees to tries first. Meanwhile: regenerate the pous pins if `pins.py --stale` says so, and draft the PR body (Lane soundness) so it opens the moment the head compiles.
