@@ -43,9 +43,9 @@ openings), and `ScanCountsRequests`, the count of one window's frame streams the
 class's Program checked by enumeration at toy classes. Each window's prover may read every other window's coins
 (`WindowTape`), so the period's provers may be adaptive.
 
-**The form.** The rows form accepts a window only on a `verity/registration/v2` answer, and until `rowsWindowCheck`
-accepts v2's members form no answer reaches it, so `PerServerIngress` holds vacuously; `PerServerIngressHonest` reads
-acceptance through `HonestWindowsAccepted`, which v2 answers give once it does.
+**The answers.** `rowsWindowCheck` reads each link-window's answer from the evidence (`answered`) and does not run the
+sampled verifier itself, so `AnswersOfRecord` is what ties an accepted answer to that window's coins.
+`PerServerIngressHonest` reads acceptance through `HonestWindowsAccepted`.
 -/
 
 namespace Properties.NetworkCertifier
@@ -387,9 +387,9 @@ def PerServerIngressDrawn : Prop :=
 
 /-! ## Its honest and nontrivial statements -/
 
-/-- **Every window's and audit's answer is accepted, at one δ** (named assumption; v2's members form): the counts
-are the parameters', every link-window's rows-form check accepts with its scan's facts at one `δ`, and every audit's
-check accepts. An honest prover's period gives it once the rows form accepts v2 answers. -/
+/-- **Every window's and audit's answer is accepted, at one δ** (named assumption): the counts are the parameters',
+every link-window's rows-form check accepts with its scan's facts at one `δ`, and every audit's check accepts. An honest
+prover's period gives it where the service accepts every window's and audit's proof at one `δ`. -/
 def HonestWindowsAccepted (p : Params) (s : Schedule) (sd : ByteArray) (c : NetworkCheck.Period.Commitment)
     (e : Evidence) : Prop :=
   c.windows.size = p.windows ∧ c.audits.size = p.audits.size ∧ e.windows.size = p.windows ∧
