@@ -120,7 +120,7 @@ def test_a_recorded_package_passes_and_its_record_is_the_statement():
     assert pol["guarantees"]["P.t"] == {"owner": "@lean", "signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"],
                                         "assumptions": ["P.Hyp"], "type_hash": sha("00000000000000aa")}
     assert len(pol["reads"]["P.Defs"]["digest"]) == 64 and len(pol["reads"]["P.Defs"]["definitions"]["P.f"]) == 64
-    assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["guarantees"] == ["P.t"]
+    assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and set(pol["reads"]["P.Defs"]) == {"digest", "definitions"}
     assert all(g["digest"] == A.module_digest(g["definitions"]) for g in pol["reads"].values())
     assert A.judge(pol, facts(), FILES) == ([], pol)
     assert A.judge(POLICY, facts(), FILES)[0] == ["guarantees: P.t has no record; run `check.py --update` and commit the record",
@@ -133,9 +133,24 @@ def test_every_field_of_a_reads_record_is_checked():
     stale = pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64}}}
     assert A.judge(stale, facts(), FILES)[0] == ["guarantees: the digest recorded for P.Defs is not the SHA-256 of its definitions; "
                                                  "`python tools/verity/lean/merge.py --normalize` recomputes it"]
-    readers = pol | {"reads": pol["reads"] | {"P.Defs": group | {"guarantees": ["P.t", "P.u"]}}}
-    assert A.judge(readers, facts(), FILES)[0] == ["guarantees: those that read P.Defs are P.t; the record lists "
-                                                   "P.t, P.u; run `check.py --update`"]
+
+
+
+def test_a_lock_listing_its_readers_is_a_record_difference_an_update_drops():
+    """A lock from before LEAN-74 lists each module's readers (`guarantees`, or `pins` from before the rename), which the
+    type hashes and the definitions' hashes determine: it fails as `guarantees.readers`, a record difference, and the record
+    regenerated (or updated) is today's, with nothing in the review."""
+    pol = recorded()
+    for key in A.READER_KEYS:
+        listed = pol | {"reads": {m: g | {key: ["P.t"]} for m, g in pol["reads"].items()}}
+        assert A.with_readers(listed) == sorted(pol["reads"])
+        fails = A.judge(listed, facts(), FILES)[0]
+        assert fails == [f"guarantees: `reads` lists the guarantees that read {', '.join(sorted(pol['reads']))}, which the "
+                         "type hashes and the definitions' hashes determine and the record no longer holds; run `check.py "
+                         "--update`, or `python tools/verity/lean/merge.py --normalize` drops them"]
+        assert [f.code for f in fails] == ["guarantees.readers"] and A.RECORD_DIFFERENCE.match(fails[0])
+        assert A.regenerated(listed, facts(), FILES, fails) == pol == A.judge(listed, facts(), FILES, update=True)[1]
+        assert A.review(listed, pol, facts(), {}) == []
 
 
 def test_every_guarantee_has_an_owner_and_an_update_keeps_it():
@@ -1143,8 +1158,7 @@ def test_regrouped_records_of_unchanged_declarations_are_one_line_the_dm_leaves_
     sha_ = lambda *rs: A.digest([{**r, "sha256": sha(r["hash"])} for r in rs])
     by_parent = {"P.Enc": sha_(enc, mk, cases), "P.g": sha_(g)}
     first = A.judge(pol, now, FILES, update=True)[1]
-    old = first | {"reads": first["reads"] | {"P.Defs": {"digest": A.module_digest(by_parent), "definitions": by_parent,
-                                                          "guarantees": ["P.t"]}}}
+    old = first | {"reads": first["reads"] | {"P.Defs": {"digest": A.module_digest(by_parent), "definitions": by_parent}}}
     new = A.judge(old, now, FILES, update=True)[1]
     notes = A.review(old, new, now, {})
     assert notes == [f"reads: 2 {A.REGROUPED_OWN}"] and A.statement_changes(notes) == []
@@ -1167,6 +1181,8 @@ def test_update_prints_each_changed_guarantee_and_definition(tmp_path):
     assert text[5] == "definition P.f (P.Defs), read by P.t: changed" and text[-1] == "    def f (n : Nat) : Nat := n"
     assert A.statement_changes(text) == text
     assert A.review(new, new, now, {}) == []
+    gone = facts(pins={"P.t": fact(reads=fact()["reads"][2:])})
+    assert "definition P.f (P.Defs): gone" in A.review(old, A.judge(old, gone, FILES, update=True)[1], gone, {})
     reprinted = dict(new["guarantees"]["P.t"], signature=["P.t (h : P.Hyp) (n : Nat) : LE.le (P.f n) n"])
     text = A.review(new, dict(new, guarantees={"P.t": reprinted}), now, {})
     assert text == [f"guarantee P.t: {A.REPRINTED}"] and A.statement_changes(text) == []
@@ -2142,13 +2158,10 @@ def test_a_package_without_a_policy_gets_a_template(tmp_path):
 def test_a_record_from_before_the_rename_is_read_as_guarantees_and_one_holding_both_is_refused(tmp_path):
     pol = recorded()
     old = {("pins" if k == "guarantees" else k): v for k, v in pol.items()}
-    old["reads"] = {m: {("pins" if k == "guarantees" else k): v for k, v in g.items()} for m, g in pol["reads"].items()}
     assert A.as_guarantees(json.loads(json.dumps(old))) == pol
     assert A.judge(A.as_guarantees(old), facts(), FILES) == ([], pol)
     with pytest.raises(ValueError, match=r"the record holds both `pins` and `guarantees`"):
         A.as_guarantees(pol | {"pins": {"P.u": {}}})
-    with pytest.raises(ValueError, match=r"reads\[P.Defs\] holds both"):
-        A.as_guarantees(pol | {"reads": {"P.Defs": pol["reads"]["P.Defs"] | {"pins": ["P.u"]}}})
     pkg = tmp_path / "p"
     pkg.mkdir()
     (pkg / A.POLICY).write_text(A.text(pol | {"pins": {"P.u": {}}}))

@@ -67,8 +67,8 @@ def test_two_branches_that_each_add_guarantees_merge_to_the_record_of_the_merged
     tree = record(t=thm([F]), u=thm([F, G], "P.g n = n", "00000000000000bb"), v=thm([H, K], "P.h n = P.k n", "00000000000000cc"),
                   deps={"mathlib": "b" * 64, "toolchain": "c" * 64})
     assert A.text(merged) == A.text(tree)
-    assert merged["reads"]["P.Defs"]["guarantees"] == ["P.t", "P.u", "P.v"] and list(merged["reads"]["P.Defs"]["definitions"]) == [
-        "P.f", "P.g", "P.h"]
+    assert list(merged["reads"]["P.Defs"]["definitions"]) == ["P.f", "P.g", "P.h"]
+    assert all(set(g) == {"digest", "definitions"} for g in merged["reads"].values())
     assert text_conflicts(base, ours, theirs, tmp_path)
     assert M.merge(base, ours, ours) == (ours, [])
 
@@ -158,7 +158,7 @@ def test_a_definition_one_side_stops_reading_merges_as_the_union_when_the_other_
                                           v=thm([H], "P.h n = n", "00000000000000cc"))["guarantees"]
     group = merged["reads"]["P.Defs"]
     assert group["definitions"] == theirs["reads"]["P.Defs"]["definitions"] and list(group["definitions"]) == ["P.f", "P.g", "P.h"]
-    assert group["guarantees"] == ["P.t", "P.v"] and group["digest"] == A.module_digest(group["definitions"])
+    assert group["digest"] == A.module_digest(group["definitions"])
     other = record(t=thm([F, read("P.g", "P.Defs", "7" * 16)]), v=thm([H], "P.h n = n", "00000000000000cc"))
     merged, why = M.merge(base, ours, other, candidate := [])
     assert why == [] and candidate == ["reads[P.Defs].definitions[P.g]"]
@@ -167,7 +167,9 @@ def test_a_definition_one_side_stops_reading_merges_as_the_union_when_the_other_
     assert M.merge(base, ours, record(t=thm([F, G]), v=thm([K], "P.k n = n", "00000000000000cc")))[1] == []
 
 
-def test_a_module_one_side_stops_reading_merges_as_the_union_and_one_left_unread_is_dropped():
+def test_a_module_one_side_stops_reading_merges_as_the_union_and_the_train_drops_one_left_unread():
+    """The record doesn't say which guarantees read a module, so one that no guarantee of the merged tree reads stays in the
+    candidate, and the merged build's `reads-gone` regenerates it away."""
     base = record(t=thm([F, K]))
     ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
     m = read("P.m", "P.More", "6" * 16)
@@ -177,11 +179,13 @@ def test_a_module_one_side_stops_reading_merges_as_the_union_and_one_left_unread
     assert why == [] and candidate == ["reads[P.More]"]
     assert merged["reads"]["P.More"]["definitions"] == theirs["reads"]["P.More"]["definitions"]
     assert list(merged["reads"]["P.More"]["definitions"]) == ["P.k", "P.m"]
-    assert merged["reads"]["P.More"]["guarantees"] == ["P.w"], "t stopped reading it on ours"
-    rehashed = read("P.k", "P.More", "5" * 16)
-    merged, why = M.merge(base, ours, record(t=thm([F, rehashed])), candidate := [])
-    assert why == [] and "P.More" not in merged["reads"] and candidate == ["reads[P.More]"] * 2, \
-        "no guarantee of the merged record reads it: dropped"
+    theirs = record(t=thm([F, read("P.k", "P.More", "5" * 16)]))
+    merged, why = M.merge(base, ours, theirs, candidate := [])
+    assert why == [] and candidate == ["reads[P.More]"] and merged["reads"]["P.More"] == theirs["reads"]["P.More"]
+    tree = built(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
+    fails = A.judge(merged, tree, FILES)[0]
+    assert [f.code for f in fails] == ["guarantees.reads-gone"], fails
+    assert "P.More" not in A.regenerated(merged, tree, FILES, fails)["reads"]
 
 
 def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merges_and_regenerates():
@@ -217,24 +221,22 @@ def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_change
 FIXTURES = HERE / "fixtures" / "merge"
 
 
-def test_4406_onto_next_merges_its_reads_as_a_candidate(tmp_path, capsys):
+def test_4406_onto_next_takes_the_side_that_changed_the_definitions(tmp_path, capsys):
     """#4406 (cursor/lean-vocab-hash-fc8d at 172198e129) onto `next` at aa5d70a9f1, base main's b6b9338dcb (26 Oct): #4406
     moves `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused the train.
-    The fixture is that group on each side with the records of its readers (a sample of #4406's new ones)."""
+    The fixture is that group on each side with the records of its readers (a sample of #4406's new ones), as locks listed
+    them then. Read without them, `next`'s group is the base's, so the merge is #4406's group, cleanly."""
     sides = json.loads((FIXTURES / "hash-basic-4406-onto-next.json").read_text())
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
     assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
-    err = capsys.readouterr().err.strip().splitlines()
-    assert err == ["merge.py: Security/lean-audit.json: merged derived records as a candidate (the union, or ours' value where "
-                   "marked), which the train's Lean check regenerates: reads[Definitions.Hash.Basic].definitions[Hash.Digest]; "
-                   "reads[Definitions.Hash.Basic].definitions[Hash.Digest.bytes]"]
+    assert capsys.readouterr().err == ""
     group = json.loads((tmp_path / "ours").read_text())["reads"]["Definitions.Hash.Basic"]
-    theirs = sides["theirs"]["reads"]["Definitions.Hash.Basic"]["definitions"]
-    assert group["definitions"] == dict(sorted({**theirs, **{d: sides["ours"]["reads"]["Definitions.Hash.Basic"]["definitions"][d]
-                                                            for d in ("Hash.Digest", "Hash.Digest.bytes")}}.items()))
-    assert set(group["guarantees"]) == set(sides["ours"]["reads"]["Definitions.Hash.Basic"]["guarantees"]) | set(
-        sides["theirs"]["reads"]["Definitions.Hash.Basic"]["guarantees"])
+    hash_basic = {n: sides[n]["reads"]["Definitions.Hash.Basic"] for n in sides}
+    assert hash_basic["ours"]["guarantees"] != hash_basic["base"]["guarantees"]
+    assert hash_basic["ours"]["definitions"] == hash_basic["base"]["definitions"]
+    assert group == {"digest": A.module_digest(hash_basic["theirs"]["definitions"]),
+                     "definitions": dict(sorted(hash_basic["theirs"]["definitions"].items()))}
 
 
 def test_a_32_bit_group_merged_with_a_rehashed_one_is_a_candidate_the_train_regenerates():
@@ -251,10 +253,36 @@ def test_a_32_bit_group_merged_with_a_rehashed_one_is_a_candidate_the_train_rege
 
 
 def before_the_rename(rec: dict) -> dict:
-    """``rec`` as a branch from before guarantees were called that writes it: `pins`, and each module's readers as `pins`."""
-    out = {("pins" if k == "guarantees" else k): v for k, v in rec.items()}
-    out["reads"] = {m: {("pins" if k == "guarantees" else k): v for k, v in g.items()} for m, g in rec["reads"].items()}
-    return out
+    """``rec`` as a branch from before guarantees were called that writes it: under `pins`."""
+    return {("pins" if k == "guarantees" else k): v for k, v in rec.items()}
+
+
+def listing_readers(rec: dict, key: str = "guarantees", **guarantees: dict) -> dict:
+    """``rec`` as a lock from before LEAN-74 writes it, each `reads` group listing under ``key`` the guarantees that read it
+    (``guarantees``, as for `record`)."""
+    by = A.readers(A.guarantee_reads(built(**guarantees)))
+    return rec | {"reads": {m: g | {key: by[m]} for m, g in rec["reads"].items()}}
+
+
+def test_a_side_whose_reads_list_their_readers_merges_to_today_s_record_and_normalizes(tmp_path):
+    """A branch from before LEAN-74 merged with one from after, either way round, or two such branches (one from before
+    the rename too) are read without their readers, so the merge is the merged tree's record; `--normalize` drops them from
+    a lock alone."""
+    t, u, v = thm([F]), thm([F, G], "P.g n = n", "00000000000000bb"), thm([H, K], "P.h n = P.k n", "00000000000000cc")
+    base, ours, theirs, tree = record(t=t), record(t=t, u=u), record(t=t, v=v), record(t=t, u=u, v=v)
+    old = {"base": listing_readers(base, t=t), "ours": before_the_rename(listing_readers(ours, "pins", t=t, u=u)),
+           "theirs": listing_readers(theirs, t=t, v=v)}
+    assert all(A.with_readers(A.as_guarantees(d)) for d in old.values())
+    for sides in ({"base": old["base"], "ours": ours, "theirs": old["theirs"]},
+                  {"base": base, "ours": old["ours"], "theirs": theirs}, old):
+        for n, d in sides.items():
+            (tmp_path / n).write_text(A.text(d))
+        assert M.main([str(tmp_path / n) for n in ("base", "ours", "theirs")]) == 0
+        assert (tmp_path / "ours").read_text() == A.text(tree)
+    path = tmp_path / "lean-audit.json"
+    path.write_text(A.text(listing_readers(tree, t=t, u=u, v=v)))
+    assert M.main(["--normalize", str(path)]) == 0 and path.read_text() == A.text(tree)
+    assert M.normalize(path) == 0
 
 
 def test_a_side_from_before_the_rename_merges_under_today_s_names(tmp_path):

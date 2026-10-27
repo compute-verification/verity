@@ -17,8 +17,8 @@ def _g(sig: str, h: str) -> dict:
     return {"signature": [sig], "assumptions": [], "type_hash": h}
 
 
-def _doc(guarantees: dict, defs: dict | None = None, readers: tuple[str, ...] = ("P.t",)) -> dict:
-    return {"guarantees": guarantees, "reads": {"P.Defs": {"digest": "x", "definitions": defs or {}, "guarantees": list(readers)}}}
+def _doc(guarantees: dict, defs: dict | None = None) -> dict:
+    return {"guarantees": guarantees, "reads": {"P.Defs": {"digest": "x", "definitions": defs or {}}}}
 
 
 class Api:
@@ -54,13 +54,23 @@ def test_a_reprint_and_a_rehash_send_nothing():
     assert spec.changes(_doc({"P.t": _g("P.t : A", "1234")}), _doc({"P.t": _g("P.t : B", H1)})) != []
 
 
-def test_a_changed_definition_names_the_guarantees_that_read_it():
-    readers = ("P.t", "P.u", "P.v", "P.w", "P.x", "P.y")
-    old = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1, "P.E": H2}, readers)
-    new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H3, "P.E": H2}, readers)
-    assert spec.changes(old, new) == ["• definition `P.D` changed; read by `P.t`, `P.u`, `P.v`, `P.w` and 2 more"]
-    moved = {"reads": {"P.Other": {"definitions": {"P.D": H1, "P.E": H2}, "guarantees": ["P.t"]}}, "guarantees": old["guarantees"]}
+def test_a_changed_definition_names_its_module():
+    old = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1, "P.E": H2})
+    new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H3, "P.E": H2})
+    assert spec.changes(old, new) == ["• definition `P.D` (`P.Defs`) changed"]
+    moved = {"reads": {"P.Other": {"definitions": {"P.D": H1, "P.E": H2}}}, "guarantees": old["guarantees"]}
     assert spec.changes(old, moved) == []                                   # same names and hashes in another module
+
+
+def test_a_lock_that_drops_its_readers_sends_nothing(tmp_path):
+    """LEAN-74 dropped the guarantees each `reads` group listed from every lock, its definitions and hashes as they were."""
+    repo = _repo(tmp_path)
+    listed = _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H1})
+    listed["reads"]["P.Defs"]["guarantees"] = ["P.t"]
+    old = _commit(repo, "pkg/lean-audit.json", listed, "base")
+    _source(repo, "pkg/P.lean")
+    new = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H1}), "m")
+    assert spec.message(repo, old, new) is None
 
 
 def test_an_assumption_no_reads_record_holds_is_shown_when_its_digest_changes_or_is_first_recorded():
@@ -75,7 +85,7 @@ def test_an_assumption_no_reads_record_holds_is_shown_when_its_digest_changes_or
     new = doc({"P.Leaves": {"owner": "@proofs", "digest": H2}, "P.Bare": {"owner": "@proofs", "digest": H3},
                "P.Hyp": {"digest": H2}, "P.New": {"digest": H3}}, {"P.Hyp": H2})
     assert spec.changes(old, new) == [
-        "• definition `P.Hyp` changed; read by `P.t`",
+        "• definition `P.Hyp` (`P.Defs`) changed",
         "• assumption `P.Bare` recorded: its statement and the definitions it reads are now digested in its record",
         "• assumption `P.Leaves` changed: its statement or a definition it reads"]
     assert spec.changes(new, new) == []
@@ -117,12 +127,12 @@ def test_compiled_code_newly_allowed_on_a_verifiers_path_is_shown():
 
 
 def test_a_record_from_before_the_rename_compares_by_what_it_says():
-    new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1}, ("P.t",))
+    new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1})
     old = {"pins": new["guarantees"], "reads": {"P.Defs": {"digest": "x", "definitions": {"P.D": H1}, "pins": ["P.t"]}}}
     assert spec.changes(old, new) == []
     assert spec.changes(old, _doc({"P.t": _g("P.t : E", H2)}, {"P.D": H3})) == [
         "• changed guarantee `P.t`, before:\n```\nP.t : D\n```\nafter:\n```\nP.t : E\n```",
-        "• definition `P.D` changed; read by `P.t`"]
+        "• definition `P.D` (`P.Defs`) changed"]
 
 
 def _repo(tmp_path: Path) -> Path:
@@ -161,13 +171,13 @@ def test_a_definition_rehashed_or_regrouped_with_no_lean_input_changed_is_tallie
     with_guarantee = _doc({"P.t": _g("P.t : A", H1), "P.n": _g("P.n : N", H2)}, {"P.D": H3, "P.E": H2})
     tallied = _commit(repo, "pkg/lean-audit.json", with_guarantee, "m")
     text = spec.message(repo, old, tallied)
-    assert "• `pkg`: guarantees: 1 new; definitions: 1 rehashed" in text and "P.D" not in text
+    assert "• `pkg`: guarantees: 1 new; definitions: 1 rehashed" in text and "`P.D`" not in text
     prev, h = regrouped, H3
     for source in ("pkg/P.lean", "pkg/lean-toolchain", "other/lake-manifest.json", "other/lakefile.toml"):
         _source(repo, source)
         h = H1 if h == H3 else H3
         cur = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": h, "P.E": H2}), "m")
-        assert spec.message(repo, prev, cur).endswith("*pkg*\n• definition `P.D` changed; read by `P.t`"), source
+        assert spec.message(repo, prev, cur).endswith("*pkg*\n• definition `P.D` (`P.Defs`) changed"), source
         prev = cur
 
 
@@ -183,7 +193,7 @@ def test_a_newly_pinned_dependency_bundle_is_a_lean_input_and_a_rekeyed_or_dropp
     assert spec.message(repo, old, rekeyed) is None
     _commit(repo, spec.DEPS_PINS, pins(k3=H1, k4=H3), "a new bundle")
     pinned = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : A", H1)}, {"P.D": H2}), "m")
-    assert spec.message(repo, rekeyed, pinned).endswith("*pkg*\n• definition `P.D` changed; read by `P.t`")
+    assert spec.message(repo, rekeyed, pinned).endswith("*pkg*\n• definition `P.D` (`P.Defs`) changed")
 
 
 def test_the_dm_names_the_package_the_pull_requests_and_the_compare_link(tmp_path):
@@ -213,10 +223,10 @@ def test_records_that_moved_between_lock_files_are_matched_by_name_and_tallied_a
     the six and 990 new in the one, where all but a handful kept their names and type hashes."""
     repo = _repo(tmp_path)
     _commit(repo, "a/lean-audit.json", _doc({"P.t": _g("P.t : A", H1), "P.u": _g("P.u : B", H2)}, {"P.D": H1}), "a")
-    old = _commit(repo, "b/lean-audit.json", _doc({"Q.v": _g("Q.v : C", H3)}, {"Q.E": H2}, ("Q.v",)), "b")
+    old = _commit(repo, "b/lean-audit.json", _doc({"Q.v": _g("Q.v : C", H3)}, {"Q.E": H2}), "b")
     subprocess.run(["git", "-C", str(repo), "rm", "-q", "a/lean-audit.json", "b/lean-audit.json"], check=True)
     both = _doc({"P.t": _g("P.t : A", H1), "P.u": _g("P.u : B", H2), "Q.v": _g("Q.v : C", H3)})
-    both["reads"] = {"P.Defs": {"definitions": {"P.D": H1, "Q.E": H2}, "guarantees": ["P.t", "Q.v"]}}
+    both["reads"] = {"P.Defs": {"definitions": {"P.D": H1, "Q.E": H2}}}
     moved = _commit(repo, "c/lean-audit.json", both, "Layout move (#9)")
     assert spec.message(repo, old, moved) is None
     both["guarantees"]["Q.v"] = _g("Q.v : D", H1)
@@ -225,8 +235,8 @@ def test_records_that_moved_between_lock_files_are_matched_by_name_and_tallied_a
     edited = _commit(repo, "c/lean-audit.json", both, "m")
     text = spec.message(repo, old, edited)
     assert "• `c`: guarantees: 1 changed, 2 moved here; definitions: 1 changed" in text
-    assert "removed" not in text and "new guarantee" not in text and "P.D" not in text
-    assert "*c*\n• changed guarantee `Q.v`" in text and "• definition `Q.E` changed; read by `P.t`, `Q.v`" in text
+    assert "removed" not in text and "new guarantee" not in text and "`P.D`" not in text
+    assert "*c*\n• changed guarantee `Q.v`" in text and "• definition `Q.E` (`P.Defs`) changed" in text
 
 
 def test_a_long_dm_ends_with_the_compare_link_and_closes_its_code_block(tmp_path, monkeypatch):
@@ -247,7 +257,7 @@ def test_the_dm_opens_with_a_tally_and_a_cut_loses_new_guarantees_first(tmp_path
     new = _commit(repo, "pkg/lean-audit.json", _doc({"P.t": _g("P.t : B", H2), **many}, {"P.D": H3}), "m")
     text = spec.message(repo, old, new, None)
     assert text.split("\n")[1] == "• `pkg`: guarantees: 1 changed, 20 new; definitions: 1 changed"
-    assert text.index("changed guarantee `P.t`") < text.index("definition `P.D` changed") < text.index("new guarantee")
+    assert text.index("changed guarantee `P.t`") < text.index("definition `P.D` (`P.Defs`) changed") < text.index("new guarantee")
     assert "P.n19" not in text and text.endswith(f"… the rest is in {old[:9]}..{new[:9]}.")
 
 
