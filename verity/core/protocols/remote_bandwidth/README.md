@@ -12,19 +12,19 @@ this replaces, `PROTOCOL.md`, is in the history at commit `08da379cb780`.
   drawn and committed before it starts (`coins.py`, `verity/remote-bandwidth/coins/v1`). The verifier is the Lean
   process `remote-audit-verifier`, run as a party of its own on a host the prover doesn't control (`verifier_party.py`,
   `p2_party.py`; `trusted-host`).
-- **Registration.** The node registers its store before any coin: `N` blocks of 4,096 bytes, a payload root over
+- **Registration.** The node registers its store before any coin: `N` chunks of 4,096 bytes, a payload root over
   hm96-salted payload leaves, a codec seed and its codec (kv/v0: Sloth over 2^1024 − 1, `p1024/k3/masked`), the
-  receipt kind and the block layout. A node has one live registration. The store binding decides whether the store is
+  receipt kind and the chunk layout. A node has one live registration. The store binding decides whether the store is
   the one a pinned model fixes.
 - **Windows and passes.** Each window opens on a live challenge coin. Inside a window the node reads its store in
-  passes, each a plan of distinct blocks and one receipt a block in a frame-v3-sha512 tree. A pass's seed is derived
+  passes, each a plan of distinct chunks and one receipt a chunk in a frame-v3-sha512 tree. A pass's seed is derived
   from the window's challenge and the previous pass's root, so the passes are chained (Fiat–Shamir inside a window,
-  which Daniel allowed for this protocol on 12 Oct because a live coin a pass is impractical at its rate). Each root is
-  due by the window's deadline, so every read serves at most one receipt. KV pages written during the session join the
-  store as appends, each under its own append coin drawn after its root, and leave it by releases; a block appended
-  `L` or more windows before is in no plan (the lifetime cap).
+  allowed for this protocol because a live coin a pass is impractical at its rate). Each root is due by the window's
+  deadline, so every read serves at most one receipt. KV pages written during the session join the store as appends,
+  each under its own append coin drawn after its root, and leave it by releases; a chunk appended `L` or more windows
+  before is in no plan (the lifetime cap).
 - **Openings and verdict.** Once a window's roots are final, its openings coin draws receipts, and the prover opens
-  each: the block decodes to its payload, the payload leaf is on the payload root (or its append's root), and the
+  each: the chunk decodes to its payload, the payload leaf is on the payload root (or its append's root), and the
   receipt recomputes. The verifier accepts the session once every window verifies, and publishes the reads it
   certifies and the error that holds at, `{"eps", "q_bytes"}`, from the pooled bound over the session's windows at
   δ = 2^-40.
@@ -33,12 +33,12 @@ this replaces, `PROTOCOL.md`, is in the history at commit `08da379cb780`.
   sampling, on-chip storage, AuditRO's slack, rebuilds, the host tier, links and carriers. The memory line held over
   time is the line of record a gate run publishes (`HeldOverTime`, `HeldOverTimeLinks`).
 - **The P2 store.** Over PoUS's P2-encoded weights store (`p2.py`), the registration comes from PoUS's setup, a
-  receipt is a unit of four 2,056-byte blocks that the decode kernel sketches as it decodes, and the openings are
+  receipt covers four 2,056-byte labels that the decode kernel sketches as it decodes, and the openings are
   checked on PoUS's `vk`.
 
 ## Where each part is defined
 
-The Lean is the verifier of record (Daniel, 18 Oct). Python mirrors it and is held to it by `lean/tests/`' difftest,
+The Lean is the verifier of record. Python mirrors it and is held to it by `lean/tests/`' difftest,
 every refusal compared.
 
 | Part | Lean (`lean/RemoteAudit/`) | Python |
@@ -83,7 +83,7 @@ The guarantees are in `Security/`:
 ## Which side decides
 
 `benchmarks/remote_session/verifier.py` runs both verifiers, by its one switch line `VERDICT` (`--verdict`). Under
-`lean`, the default since the 8 Oct ruling (the friction skill), the Lean process decides each registration, event and
+`lean`, the default, the Lean process decides each registration, event and
 window, an accepted session's record is the one it returns, and the ledger reads that record. `audit.Session` keeps the
 books beside it as the reference, and a registration, event, window verdict or record field on which they differ
 refuses the session at that window as `disagreement`. Under `both` `audit.Session` checks every window's openings too;
@@ -91,10 +91,10 @@ under `python` there is no Lean. The driver's scheduling (`Session.next_boundary
 diagnostic reads, and the window and draw counts `verifier.json` keeps are still read from the books; the Lean checks
 the same plans event by event.
 
-The store binding's decision is the Lean's: the verifier's process takes the pin's bytes and the weights blocks'
+The store binding's decision is the Lean's: the verifier's process takes the pin's bytes and the weights chunks'
 digests at startup (`bind`) and decides each hello (`hold`), and the gate line (`auditor_line.py`) credits `bound` only
 where the Lean held the hello's root. Reading the files stays Python only: the pin's bytes, `check`, the safetensors
-headers and config.json, the arena's layout (`tensors`, `arena`) and the weights blocks' digests (`weight_digests`).
+headers and config.json, the arena's layout (`tensors`, `arena`) and the weights chunks' digests (`weight_digests`).
 The binding lives in this tree because a period's circuit is this tree's git hash (`verity/remote-bandwidth/v0
 verifier tree <tree>`, `sampled_proofs.challenger.credited_session`), so a change here gives later periods a new
 circuit.
@@ -116,7 +116,7 @@ uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py record
 uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript CASE.json ... [--record VERIFIER.json ...]
 ~~~
 
-A transcript written before it named its session's pace (20 Oct) replays only with the pace its `verifier.json` gives
+A transcript written before it named its session's pace replays only with the pace its `verifier.json` gives
 (`--record`), matched by the transcript's sha256.
 
 ## Code
@@ -146,7 +146,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound
   (`sketch_reading`, read at `r* = 12`).
 - `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of sessions, pooled by
-  #4413's count bound.
+  the count bound.
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/remote_bandwidth` (the Python), and
 `verity/core/protocols/remote_bandwidth/lean` (the difftest and the replay, which build the Lean).
@@ -156,15 +156,15 @@ Tests: `uv run tools/verity/check/suites.py verity/core/protocols/remote_bandwid
 Each item is memory-accounting's unless it names another owner.
 
 - **Zero-knowledge openings.** The openings are checked in the clear here. Deployed, each drawn receipt is one proof
-  block (`opening.py`: `verifyWindow`'s checks on one opening, plus the link from an appended block's payload to the
-  circuit's committed KV values), and the plans and the schedule are committed, not sent in the clear. The units'
-  circuits are open.
+  block (`opening.py`: `verifyWindow`'s checks on one opening, plus the link from an appended chunk's payload to the
+  circuit's committed KV values), and the plans and the schedule are committed, not sent in the clear. The proof
+  blocks' circuits are open.
 - **The declared outputs.** `RemoteAudit.Protocol` publishes `q_bytes` and `eps` from the pooled bound; γ's terms
   (`ledger.py`) and the stated claim (`timing.stated`) are Python only, read with the node's measured `R` and on-chip
   storage. `μ_host` and `μ_link` are models.
-- **The requirement's link.** Counting the audited reads as the served circuit's needs the memory-map and plan units
-  (I4) to prove the session's appends, releases and plans are the circuit's memory map: every append a write of the
-  map, in its order, no dummy appends, a re-key only at the lifetime cap, every other free at its values' last
+- **The requirement's link.** Counting the audited reads as the served circuit's needs the memory-map and plan proof
+  blocks (I4) to prove the session's appends, releases and plans are the circuit's memory map: every append a write of
+  the map, in its order, no dummy appends, a re-key only at the lifetime cap, every other free at its values' last
   structural reader, and each plan the resident set at its step (`PlanMatches`). `ledger` takes their verdicts as
   given (`RequirementLink`). Owner: proofs; the audit's side (the chain, the heads, the stale bounds) is here.
 - **The schedule check's deployment.** The schedule is witness, so deployed it is committed and its check is a proof
@@ -177,22 +177,14 @@ Each item is memory-accounting's unless it names another owner.
   receipt (`kv_receipt.py`, `kv.cu`) isn't the registration's kind, so no KV page is credited until it is, and serving
   doesn't yet pass the bound key to `kv.cu` and `paged.cu`.
 - **The gap `binding-split`.** `ledger.binding` takes the chance that two runs from a window's cut root it differently
-  as 0, and every line says it is conditional on that (`auditor_line.py`'s `CONDITIONAL_ON`). #4968 sends the coin
-  commitment only after the prover's last root; the statement that the play then fixes each window's receipts by its
-  cut is open.
+  as 0, and every line says it is conditional on that (`auditor_line.py`'s `CONDITIONAL_ON`). Closing it takes the
+  coin commitment sent only after the prover's last root, and the statement that the play then fixes each window's
+  receipts by its cut; both are open.
 - **The P2 session.** `RemoteAudit.P2` holds the P2 store's registration, receipts and openings; the session over a
-  P2 store is the Python's until #4977 makes it the Lean's.
+  P2 store is still the Python's.
 - **A registration that binds `z`.** Both verifiers refuse a registration that binds PoUW's tiles; where `z` comes
   from (Pearl-C's k-slice accumulators) and the schedule of tiles are design only.
 - **The challenger's state.** Persisting a session's unreleased coins across challenger restarts is out of scope.
   Owner: proofs (the proof service's challenger).
-- **Multi-GPU trees.** Each GPU's blocks should be an aligned power-of-two range of leaves, so a pass's root combines
+- **Multi-GPU trees.** Each GPU's chunks should be an aligned power-of-two range of leaves, so a pass's root combines
   its GPUs' subtree roots.
-
-## History
-
-The chained passes and their Fiat–Shamir seeds: Daniel, 12 Oct (the live-coin design they replaced is in the old
-spec's Appendix A). Lean as the definition and verifier of record: Daniel, 18 Oct. The append coin, the lifetime cap
-and the memory map's choices: the red team's KB-2 (note:20261017T1859Z-report-property-redteam) and
-note:20261017T1855Z-report-stacking-lean. The requirement's link: note:20261017T1847Z-draft-a1-requirement and
-note:20261019T0021Z-report-format-r6-r8. The pooled count bound: #4413. The schedule's cap: red team round 5, RD-18.
