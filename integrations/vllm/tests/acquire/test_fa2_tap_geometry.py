@@ -1,4 +1,4 @@
-"""[R15 capacity] FA2 M1 tap portability to sliding-window / softcap models (Gemma-2 hd 256, Phi-3 hd 96): torch-free checks.
+"""FA2 M1 tap portability to sliding-window / softcap models (Gemma-2 hd 256, Phi-3 hd 96): torch-free checks.
 
 1. `fa2_swapped` mirrors flash_api.cpp:646 `seqlenq_ngroups_swapped` exactly: a GQA decode launch is swapped ONLY without a sliding
    window (and dropout 0, D % 8 == 0, no alibi).  The R13 mirror (`max_seqlen_q == 1 and H > Hk`) declared the swapped geometry for

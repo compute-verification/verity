@@ -272,7 +272,7 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
     runs' own collector record (runs.jsonl commit.binding.collector: variant, retention, window_mb, window_slots, arena_mb, layout, gpu_tree),
     `collector_variant` / `retention` ('windowed' iff window_mb > 0 else 'whole-block'; retention from the record, else --retain in cmd),
     `engine_settings` = --engine-arg k=v pairs + --max-num-seqs / --openings / --pairs / --open-after-release / --required-manifest /
-    --expect-root from the command line (open_after_release also when a run records its openings_after_release: the Commit's default).  [P5] this is what `commit_summary.json` used to carry (that file is no longer
+    --expect-root from the command line (open_after_release also when a run records its openings_after_release: the Commit's default).  This is what `commit_summary.json` used to carry (that file is no longer
     written; the harness keeps a reader for old records); verdict.json `execution` is the record."""
     d = Path(row_dir)
     out: dict = {}

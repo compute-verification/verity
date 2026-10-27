@@ -5,7 +5,7 @@ import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Pr
 
 BCHKS25 Theorem 4.6 in its printed form, for Reed–Solomon codes on `Fin n` domains, proved from
 Dao–Kominers–Thaler's Johnson-range MCA bound (`ReedSolomon.mcaError_affineLine_johnson_le`,
-ePrint 2026/2056, in ArkLib since #907). The two agree on everything but the count: at the radius
+ePrint 2026/2056, in ArkLib). The two agree on everything but the count: at the radius
 `δ = 1 − √ρ − η`, DKT26's exception count is below `(8/3)·n·t'³/ρ` with
 `t' = max(⌈√ρ/(2η)⌉, 3) + ½`, and that is at most BCHKS25's printed numerator
 `a = (2(m + ½)^5 + 3(m + ½)·δ·ρ)/(3ρ^{3/2})·n + (m + ½)/√ρ`, `m = max(⌈√ρ/η⌉, 3)`, because

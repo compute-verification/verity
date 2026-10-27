@@ -5,7 +5,7 @@ import Definitions.Pous.Model.M1p
 # The deployed labels over a server's life, and one audit as a distinguisher (trusted)
 
 `Accounting.Assumptions.UniformLabels` draws the labels uniform given the auditor's devices' coins. The deployed labels
-are not: wipe `w`'s label of block `i` is SHA-512 of the wipe's key and `i` (PR #2726), and the wipe's key is derived
+are not: wipe `w`'s label of block `i` is SHA-512 of the wipe's key and `i`, and the wipe's key is derived
 from the auditor's secret for the server and the wipe (`streamed_wipe.wipe_key`), a PRF of the secrets (claim
 `prf/sha-512`). The challenger uses the secrets only to compute labels: it streams them in the fill and compares
 answers to them. So a run is a function of the other coins `ω` (the prover's, the auditor's devices'), the lifetime

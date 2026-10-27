@@ -250,7 +250,9 @@ class _Gen:
                 seqs.append(els)
             return array_of([r.choice(pool) for _ in range(k)])
 
-        sig = lambda S: ((("x", Array(p, V16)), ("y", Array(q, V16))), Array(k, V16))
+        def sig(S):
+            return ((("x", Array(p, V16)), ("y", Array(q, V16))), Array(k, V16))
+
         return Program(CompositeDefinition(f"CodecStreamRoot{self.seed}", 1, (), sig, body, register=False))
 
 

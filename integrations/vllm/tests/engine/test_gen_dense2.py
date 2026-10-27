@@ -1,7 +1,7 @@
-"""[GEN dense2] the lane's tests: the two profile modules are exactly `analytic.config_of` + `build_profile` with the listed hand
+"""The two profile modules are exactly `analytic.config_of` + `build_profile` with the listed hand
 fields; the weight-name maps bind every parameter name of the served models and nothing else; the workloads mirror the B1
 one-request workload (32 prompt tokens, 16 greedy tokens, no accepted tokens); positive AND negative recognizer tests of the
-lane's patterns (`gen_dense2_patterns`, when present)."""
+patterns (`gen_dense2_patterns`, when present)."""
 from __future__ import annotations
 
 import importlib
@@ -56,12 +56,12 @@ def test_gemma2_config_hand_fields_are_listed_and_only_those():
     assert C["tie_word_embeddings"] is False and gemma.C["tie_word_embeddings"] is True
     hand = gemma.PROFILE.notes["hand_fields"]
     assert hand == sorted(gemma.HAND)
-    assert {k for k, v in gemma.PROVENANCE.items() if v == "hand"} <= set(hand)      # [P6] a `key` fact's value is config.json's (hf-config)
+    assert {k for k, v in gemma.PROVENANCE.items() if v == "hand"} <= set(hand)      # a `key` fact's value is config.json's (hf-config)
     assert set(hand) == {"model", "revision", "tie_word_embeddings", "attn_logit_softcapping", "final_logit_softcapping",
                          "query_pre_attn_scalar", "sliding_window", "hidden_act", "embed_normalizer", "rmsnorm_plus_one",
                          "layer_norms", "extra_layer_norms"}
     assert gemma.C["embed_normalizer"] == 48.0 == gemma.C["H"] ** 0.5 and gemma.C["query_pre_attn_scalar"] == gemma.C["D"]
-    # tied: the shared weights Record has no lm_head field; the sqrt(H) embedding-scale buffer is the LAST field (lane cov-dense)
+    # tied: the shared weights Record has no lm_head field; the sqrt(H) embedding-scale buffer is the LAST field
     assert [f for f, _ in analytic.weights_type(gemma.C).fields] == ["embed", "layers", "norm", "cos_sin", "normalizer"]
 
 
@@ -104,7 +104,7 @@ def test_phi3_weight_field_binds_llama_fused_names_and_untied_lm_head():
     assert phi3.root_class("model.normalizer") == "unknown"
     # the fused checkpoint map covers exactly the per-layer fields of the weights Record
     layer_rec = dict(analytic.weights_type(phi3.C).fields)["layers"].elem
-    # [P6] the fused-name map is the base module's (`make_weight_field`): every per-layer Record field is bound by exactly one root name
+    # the fused-name map is the base module's (`make_weight_field`): every per-layer Record field is bound by exactly one root name
     bound = {}
     for suffix in ("input_layernorm.weight", "self_attn.qkv_proj.weight", "self_attn.o_proj.weight", "post_attention_layernorm.weight",
                    "mlp.gate_up_proj.weight", "mlp.down_proj.weight"):
@@ -123,11 +123,11 @@ def test_gemma2_weight_field_adds_the_two_mlp_norms_and_ties_lm_head():
     assert wf("model.layers.4.pre_feedforward_layernorm.weight") == ("layers", 4, "ln_pre_mlp")
     assert wf("model.layers.4.post_feedforward_layernorm.weight") == ("layers", 4, "ln_post_mlp")
     assert wf("lm_head.weight") == ("embed",)                    # tied (vLLM computes the logits with model.embed_tokens)
-    assert wf("model.normalizer") == ("normalizer",)              # the one-word analytic table (lane cov-dense; was None / "unknown")
+    assert wf("model.normalizer") == ("normalizer",)              # the one-word analytic table
     assert wf("model.layers.0.self_attn.qkv_proj.bias") is None
 
 
-# --- the sqrt(H) embedding-scale buffer as an analytic-table root (lane cov-dense 2026-09-17) --------------------------------
+# --- the sqrt(H) embedding-scale buffer as an analytic-table root --------------------------------
 
 def _f32_path_word(H: int) -> int:
     """The other plausible construction (`torch.tensor(sqrt(H))` as f32, then `.to(bf16)`): must agree for every Gemma-2 width."""

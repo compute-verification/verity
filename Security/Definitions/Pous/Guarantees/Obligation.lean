@@ -6,7 +6,7 @@ import Definitions.Pous.Assumptions.P2
 
 The store is the weights' P2 encoding, each block under the key pair of its tag
 (`Security/Definitions/Pous/P2/Mutable.lean`), and the weights are fixed content: the KV cache and activations are
-undeclared, in the slack (ASK-132). A window's reads are answered against its snapshot. The snapshot's key pairs are the
+undeclared, in the slack. A window's reads are answered against its snapshot. The snapshot's key pairs are the
 oracle's values at distinct tags, so they are uniform and independent of every other tag's (`SnapshotFresh`). A window
 is then P2's audit of the snapshot with whatever the prover holds about the other tags as advice: at every block count,
 a payload and a responder fixed by the other tags' keys pass with probability at most any bound on P2's audit at that

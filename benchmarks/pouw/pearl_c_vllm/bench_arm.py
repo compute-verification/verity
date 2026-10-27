@@ -29,11 +29,13 @@ is H1's the arm refuses before reserving (`pouw_h1_window.period_reason`).
 from __future__ import annotations
 
 import hashlib
-import os
 from pathlib import Path
 from typing import Any
 
+from verity_config.settings import of
+
 HERE = Path(__file__).resolve().parent
+settings = of(__file__)
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
 #: the scheme each of the tree's kernel directories runs (`pouw_pearl_c_device.SCHEMES`' device records)
@@ -107,14 +109,14 @@ class PearlCArm:
     run_options: dict[str, Any] = {}
 
     def __init__(self) -> None:
-        self.kernel_dir = Path(os.environ.get("PEARLC_KERNEL", str(HERE.parent / "pearl_c_sm120")))
-        self.cubin = os.environ.get("PEARLC_CUBIN") or None
-        self.scheme = os.environ.get("PEARLC_SCHEME") or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
-        self.schedule = os.environ.get("PEARLC_SCHEDULE", "deferred")
-        self.epoch = int(os.environ.get("PEARLC_BENCH_EPOCH", "20261014"))
-        self.gate_command = os.environ.get("PEARLC_CHALLENGER_GATE") or None
-        self.peer = os.environ.get("PEARLC_CHALLENGER_PEER") or None
-        self.lane = os.environ.get("PEARLC_CHALLENGER_LANE") or "vllm"
+        self.kernel_dir = Path(settings.PEARLC_KERNEL or HERE.parent / "pearl_c_sm120")
+        self.cubin = settings.PEARLC_CUBIN
+        self.scheme = settings.PEARLC_SCHEME or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
+        self.schedule = settings.PEARLC_SCHEDULE
+        self.epoch = settings.PEARLC_BENCH_EPOCH
+        self.gate_command = settings.PEARLC_CHALLENGER_GATE
+        self.peer = settings.PEARLC_CHALLENGER_PEER
+        self.lane = settings.PEARLC_CHALLENGER_LANE
         self.run = self.stack = self.weights = self.session = None
         self.coins: dict[str, Any] = {"source": "in-process"}
 
@@ -124,12 +126,12 @@ class PearlCArm:
     def engine_overrides(self, target: Any) -> dict[str, Any]:
         """Headroom for the run's own device memory, which sits beside vLLM's budget: B̃ about a byte per weight, the
         pass's leaf and flag buffers, and the per-shape ring buffers whose A (FP32) and C̃/U scale with the step's rows
-        times n. Without the utilization cap the block mode's 0.90 left nothing (OOM at 94.8 of 95 GiB,
-        r20261014-062817-4c45); without the step cap a 16,384-token prefill step's rings cost about 36 GiB and the full
-        sweep's big points OOMed in the gate (93.5 GiB torch-allocated, r20261014-065819-c0c3). The step cap applies to
+        times n. Without the utilization cap the block mode's 0.90 left nothing (OOM at 94.8 of 95 GiB);
+        without the step cap a 16,384-token prefill step's rings cost about 36 GiB and the full sweep's big points OOMed
+        in the gate (93.5 GiB torch-allocated). The step cap applies to
         this arm's engine only, so its chunking differs from the controls'; the per-token ratio stays the metric."""
-        return {"gpu_memory_utilization": float(os.environ.get("PEARLC_GPU_UTIL", "0.55")),
-                "max_num_batched_tokens": int(os.environ.get("PEARLC_STEP_TOKENS", "4096"))}
+        return {"gpu_memory_utilization": settings.PEARLC_GPU_UTIL,
+                "max_num_batched_tokens": settings.PEARLC_STEP_TOKENS}
 
     def kernel_digest(self, target: Any) -> str | None:
         path = Path(self.cubin) if self.cubin else self.kernel_dir / f"{self.kernel_dir.name}.cubin"
@@ -195,7 +197,7 @@ class PearlCArm:
         if bad:
             raise RuntimeError(f"{scheme} refuses the model: " + "; ".join(bad))
         vllm_site.attach(stack, sites, target.hooks)
-        spec = PassSpec(hashing=True, schedule=self.schedule, run_id=os.environ.get("RESEARCH_RUN_ID"))
+        spec = PassSpec(hashing=True, schedule=self.schedule, run_id=settings.RESEARCH_RUN_ID)
         stack.activate(StackArm("pearlc", "bf16", run.entry, spec=spec))
 
         eng = target.engine.vllm.llm_engine
@@ -261,8 +263,7 @@ class PearlCWholeArm(PearlCArm):
     --graphs --whole-step --whole-defer --whole-defer-a --whole-fork-stats`): vLLM's FULL decode graphs at the preset's
     capture sizes, without torch.compile, each captured with every call's graph steps inside it, each call's tile hashing
     beside the next call, its A tree beside its own forming and GEMM (`whole_defer_a`, which needs a kernel whose pipeline
-    splits A's commitment: served b8, 23.90 ms a step against 28.25 without it and compiled stock's 7.39,
-    r20261024-130722-5c44), the GEMM leaving the tree's CTA its SM (`whole_tree_sm`), and its A scales beside its A
+    splits A's commitment), the GEMM leaving the tree's CTA its SM (`whole_tree_sm`), and its A scales beside its A
     commitment (`whole_fork_stats`), so a decode step launches one
     graph after one slot upload and runs no call's Python. Prefill and mixed steps run eagerly, each call of at most
     `pouw_pearl_c_graphs.GRAPH_ROWS` rows as its own graph. The serial schedule (the graph path's), one pass per engine
@@ -277,16 +278,14 @@ class PearlCWholeArm(PearlCArm):
     keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it),
     ``PEARLC_WHOLE_FORK_STATS=0`` each call's A scales (`whole_fork_stats`: by default they run beside its A commitment),
     ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, ``PEARLC_WHOLE_SHAPE_JOINS=1`` joins each call's
-    side steps only before the next call of its shape (`whole_shape_joins`; off by default: on the H200 it lost 0.12 ms a
-    step, its side steps slowing the next calls' GEMMs, r20261025-104353-9adc), ``PEARLC_LAG_ENDS=0`` reads each pass's
+    side steps only before the next call of its shape (`whole_shape_joins`; off by default: its side steps slow
+    the next calls' GEMMs), ``PEARLC_LAG_ENDS=0`` reads each pass's
     commitment back at its own end, and ``PEARLC_ASIDE_ENDS=0`` runs a lagged end's tile tree on the step's stream (by
     default, `aside_ends`, on a stream of its own, so the next step doesn't wait for it).  On pearl_c_sm120 (`RTX_ONLY`)
     the stats stream also prefetches each call's B̃ into L2 (`whole_prefetch_b`, run.py's ``prefetch_b`` in its
-    ``PEARLC_PREFETCH_FORM``, default form 2; ``PEARLC_WHOLE_PREFETCH_B=0`` turns it off): served b8's ITL p50 went from
-    21.85 ms to 20.61 ms, 2.77x compiled stock's 7.43 (r20261024-193651-3ef1, bound to the GPU's NUMA node).  There a step
+    ``PEARLC_PREFETCH_FORM``, default form 2; ``PEARLC_WHOLE_PREFETCH_B=0`` turns it off).  There a step
     that runs eagerly (a prefill or mixed step) takes ``deferred-a`` in place of the serial schedule (`whole_eager`,
-    `PearlCDeviceRun.eager_forward`: its calls' tile hashing and A trees on side lanes; served b8 TPOT 3.05x compiled stock
-    against 3.43x, TTFT 157.7 ms against 253.1, ITL p50 unchanged, r20261024-191449-82e7); ``PEARLC_WHOLE_EAGER`` names
+    `PearlCDeviceRun.eager_forward`: its calls' tile hashing and A trees on side lanes); ``PEARLC_WHOLE_EAGER`` names
     another schedule, on any kernel, or 0 none.
     A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
@@ -303,29 +302,28 @@ class PearlCWholeArm(PearlCArm):
         for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS"),
                             ("lag_ends", "PEARLC_LAG_ENDS"), ("whole_tree_sm", "PEARLC_WHOLE_TREE_SM"),
                             ("aside_ends", "PEARLC_ASIDE_ENDS"), ("whole_prefetch_b", "PEARLC_WHOLE_PREFETCH_B")):
-            if os.environ.get(env) == "0":
+            if not settings.get(env):
                 self.run_options = {k: v for k, v in self.run_options.items() if k != option}
-        if os.environ.get("PEARLC_WHOLE_SHAPE_JOINS") == "1":
+        if settings.PEARLC_WHOLE_SHAPE_JOINS:
             self.run_options = {**self.run_options, "whole_shape_joins": True}
         if "whole_defer_a" not in self.run_options:
             self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_tree_sm"}
         if "lag_ends" not in self.run_options:
             self.run_options = {k: v for k, v in self.run_options.items() if k != "aside_ends"}
-        eager = os.environ.get("PEARLC_WHOLE_EAGER")
+        eager = settings.PEARLC_WHOLE_EAGER
         if eager == "0":
             self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_eager"}
         elif eager:
             self.run_options = {**self.run_options, "whole_eager": eager}
         self.schedule = "serial"
-        self.vllm_execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
+        self.vllm_execution = settings.PEARLC_WHOLE_EXECUTION
         # Not ``execution``: the harness reads that as "build at vLLM's serving defaults", and this engine is FULL
         # decode graphs at compilation mode 0 (no torch.compile), which PoUW requires.
         self.engine_label = "graphs-mode0" + ("" if self.vllm_execution == "compiled" else f"-{self.vllm_execution}")
         self.whole, self.totals, self.capture = None, {}, [1, 8, 32, 128]
 
     def engine_overrides(self, target: Any) -> dict[str, Any]:
-        sizes = os.environ.get("PEARLC_CAPTURE_SIZES")
-        self.capture = [int(x) for x in sizes.split(",")] if sizes else [1, 8, 32, 128]
+        self.capture = list(settings.PEARLC_CAPTURE_SIZES or (1, 8, 32, 128))
         return {**super().engine_overrides(target), "enforce_eager": False, "execution": self.vllm_execution,
                 "compilation_config": {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
                                        "cudagraph_capture_sizes": self.capture}}

@@ -5,14 +5,14 @@ import Definitions.Claims.Recursion
 
 `RecursionClaimsStated` reads every claim of `Definitions.Claims.Recursion`, the shared claims they instantiate, and the
 named assumptions and trusted base they use, so the Lean check records each one's text (and every definition it reads)
-under `reads`: a changed claim is a changed record, which reaches Daniel when it lands. It says nothing about the
+under `reads`: a changed claim is a changed record, which is reported when it lands. It says nothing about the
 compiled verifier. A claim leaves it when a guarantee states that claim at the deployed compiled verifier, and the
 guarantee's own record holds the text from then on.
 
 The recursion's KS (`KS`, `Bits`, `KSFlock`, `KSBound`, and the private variant's) is at its level
 `Claims.Recursion.lam`, about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, the deployed
-bound record's weight at `IVStar` at `coverW`, ASK-72), below the 100-bit floor and the `2^-128` target under every
-weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+bound record's weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every
+weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
 `RecDeploy.DenseAt`) only follows from premises still open: `PartChecksBV`, `PartOpensB` and `DecompB`
 (`RecDeploy.ksLin2_deployed_full`, at the coin server's record, which reads back, and the last round's pieces

@@ -7,7 +7,7 @@ import collections
 import json
 
 from verity_vllm.check.match import program_compare as C
-from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch]
+from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  #
 
 def _producer(P: C.Prog, t) -> int | None:
     if t[0] != "N":
@@ -28,7 +28,7 @@ def live_cone(P: C.Prog) -> set[int]:
     token: the fold records that final-norm row / lm_head row / TokenSelect, the request-wrapper Program never computes it.
     Producers precede consumers, so one reverse pass closes the cone."""
     order = [i for idxs in P.steps for i in idxs]
-    ts = [i for i in order if _is_sampling_event(P.inst[i]["spec"])]   # [R15 stoch] any sampling-event family
+    ts = [i for i in order if _is_sampling_event(P.inst[i]["spec"])]   # any sampling-event family
     if not ts:
         return set(order)
     live = {ts[-1]}
@@ -61,7 +61,7 @@ def dag_hashes(P: C.Prog, only: set[int] | None = None) -> dict[int, str]:
             r = P.inst[i]
             parts = []
             for arg in P.canon(i, False):
-                if compact:   # [R17 mfast] the record's per-run payload: a gather's producers carry one hash EACH
+                if compact:   # the record's per-run payload: a gather's producers carry one hash EACH
                     arg = expand_mixed(arg)
                 row = []
                 for t in arg:
