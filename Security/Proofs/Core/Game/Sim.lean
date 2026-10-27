@@ -1,6 +1,6 @@
 import Mathlib.Data.Fintype.Lattice
 import Mathlib.Logic.Equiv.Fin.Basic
-import Proofs.Core.Game.Tape
+import Proofs.Core.Game.Prob
 import Proofs.Pouw.PearlC.FlockTile.Bridge
 
 /-!
@@ -41,6 +41,16 @@ variable {α β γ : Type}
 /-- **`s` in `g` is dominated by `G`**: some strategy of `G` makes `q` at least as likely as `s` makes `p` in `g`. -/
 def Dominated (p : α → Prop) (g : Game α) (s : Strategy g) (q : β → Prop) (G : Game β) : Prop :=
   ∃ τ : Strategy G, prob p g s ≤ prob q G τ
+
+/-- An average over pairs is the average of the averages over the second factor. -/
+theorem avg_prod {C P : Type} [Fintype C] [Fintype P] (f : C × P → ℝ≥0∞) :
+    avg f = avg fun c => avg fun p => f (c, p) := by
+  unfold avg
+  rw [Fintype.sum_prod_type, Fintype.card_prod, Nat.cast_mul,
+    ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
+  refine Finset.sum_congr rfl fun c _ => ?_
+  rw [Finset.mul_sum]
+  exact Finset.sum_congr rfl fun p _ => by rw [mul_assoc]
 
 /-- **A map of coins that keeps the uniform law**: every average over `C` is its composite's average over `C'`. -/
 def Uniform {C' C : Type} [Fintype C'] [Fintype C] (f : C' → C) : Prop :=
