@@ -66,6 +66,7 @@ noncomputable abbrev rs :=
 /-- An opening's salt. -/
 def salt (o : w.vb.Opening) : List UInt8 := (o : w.lay.Pos × w.lay.Val × List UInt8).2.2
 
+open Classical in
 /-- The probability that the session's draw reads commit string `c`. -/
 noncomputable def readP (c : w.vb.Pos) : ℝ :=
   (Fintype.card (ΩcZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb w.L c) : ℝ) / Fintype.card w.L.Ω
@@ -93,6 +94,11 @@ abbrev TrialAt (W : ℕ → SamplingBlock) : Type :=
 /-- An opening from some session. -/
 abbrev OpenAt (W : ℕ → SamplingBlock) : Type := Option (Σ t : ℕ, (W t).vb.Opening)
 
+/-- A trial's cost: its session's trial's (`cTZC`). -/
+noncomputable def trialCost {W : ℕ → SamplingBlock} : TrialAt W → ℝ
+  | none => 0
+  | some ⟨t, τ, o⟩ => cTZC (planZHJ (W t).dj (W t).y₀) (reg ((W t).sim τ)) (W t).t' o
+
 namespace CarriedLeaf
 
 variable {W : ℕ → SamplingBlock} (x : CarriedLeaf W)
@@ -103,28 +109,34 @@ abbrev Ses : Type := {t // t ∈ x.sessions}
 instance : Nonempty x.Ses := x.nonempty.coe_sort
 
 /-- The bytes the leaf's sessions encode its values as. -/
-def encs : Finset (List UInt8) := x.sessions.biUnion fun t => Finset.univ.image ((W t).rs.enc (x.pos t))
+noncomputable def encs : Finset (List UInt8) :=
+  x.sessions.biUnion fun t => Finset.univ.image ((W t).rs.enc (x.pos t))
 
 /-- The leaf's common values: its sessions' bytes. -/
 abbrev V : Type := Option {l // l ∈ x.encs}
 
 /-- Session `t`'s value as a common value: its bytes. -/
-def e (t : ℕ) (v : (W t).vb.Val) : x.V :=
+noncomputable def e (t : ℕ) (v : (W t).vb.Val) : x.V :=
   if h : (W t).rs.enc (x.pos t) v ∈ x.encs then some ⟨_, h⟩ else none
+
+/-- A draw of session `t` reads the leaf. -/
+abbrev Read (t : ℕ) : Prop :=
+  Nonempty (ΩcZ execArith (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb (W t).L (x.pos t))
+
+/-- `trialGZC` at the leaf in session `t`, at the strategy `τ` that plays it. -/
+noncomputable def trialG (t : ℕ) (τ : Strategy (W t).game) (h : x.Read t) : Game (TrialAt W) :=
+  haveI := h
+  (trialGZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
+    (reg ((W t).sim τ)) (cont ((W t).sim τ)) (x.pos t) (W t).k (W t).Rw).map fun o => (some ⟨t, τ, o⟩ : TrialAt W)
 
 /-- **The leaf's trial in session `t`**, at the strategy `τ` that plays it: `trialGZC` at the leaf, when a draw reads
 it. -/
 noncomputable def trial (t : ℕ) (τ : Strategy (W t).game) : Game (TrialAt W) :=
-  optG (Nonempty (ΩcZ execArith (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb (W t).L
-      (x.pos t)))
-    (fun h => haveI := h
-      (trialGZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
-        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (x.pos t) (W t).k (W t).Rw).map fun o => (some ⟨t, τ, o⟩ : TrialAt W))
-    none (Classical.dec _)
+  optG (x.Read t) (x.trialG t τ) none (Classical.dec _)
 
 /-- The prover's session strategy in the trial. -/
 noncomputable def trialS (t : ℕ) (τ : Strategy (W t).game) : Strategy (x.trial t τ) :=
-  optS _ _ _ (fun h => haveI := h
+  optS (x.Read t) (x.trialG t τ) none (fun h => haveI := h
     Strategy.map _ _ (trialStratZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀)
       (W t).vb (reg ((W t).sim τ)) (cont ((W t).sim τ)) (x.pos t) (W t).k (W t).Rw)) (Classical.dec _)
 
@@ -136,14 +148,9 @@ noncomputable def rd : TrialAt W → Finset x.V
         (reg ((W t).sim τ)) (cont ((W t).sim τ)) (x.pos t) o).image (x.e t)
     else ∅
 
-/-- A trial's cost: its session's trial's (`cTZC`). -/
-noncomputable def cost : TrialAt W → ℝ
-  | none => 0
-  | some ⟨t, τ, o⟩ => cTZC (planZHJ (W t).dj (W t).y₀) (reg ((W t).sim τ)) (W t).t' o
-
 /-- **The finder's cost per trial**: `t'_j` for each session `j` played before the one it picked, and that session's
 trial's. -/
-noncomputable def costMix (y : Σ _ : x.Ses, TrialAt W) : ℝ := (∑ j ∈ Finset.range y.1.1, (W j).t') + x.cost y.2
+noncomputable def costMix (y : Σ _ : x.Ses, TrialAt W) : ℝ := (∑ j ∈ Finset.range y.1.1, (W j).t') + trialCost y.2
 
 /-- An opening a trial found for a common value: its session's opening of the value's preimage. -/
 noncomputable def op : (Σ _ : x.Ses, TrialAt W) → x.V → OpenAt W
@@ -153,7 +160,7 @@ noncomputable def op : (Σ _ : x.Ses, TrialAt W) → x.V → OpenAt W
 
 /-- **The collision from two openings of the leaf**, from any two sessions: `hm96`'s extractor on their bytes and
 salts. -/
-def col : OpenAt W → OpenAt W → List UInt8 × List UInt8
+noncomputable def col : OpenAt W → OpenAt W → List UInt8 × List UInt8
   | some ⟨t, o⟩, some ⟨t', o'⟩ => hm96Pair ((W t).rs.enc (x.pos t) ((W t).vb.val o)) ((W t).salt o)
       ((W t').rs.enc (x.pos t') ((W t').vb.val o')) ((W t').salt o')
   | _, _ => ([], [])
@@ -216,7 +223,7 @@ noncomputable def wrongSet (t : ℕ) (τ : Strategy (S.W t).game) : Finset (Fin 
       (S.Xcar s t (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ))))
 
 /-- Session `t`'s record, its wrong units those of `wrongSet`. -/
-def record (t : ℕ) (τ : Strategy (S.W t).game) (o : (S.W t).Reg × Finset (Fin (S.W t).n) × Discharge.Exec.Transcript) :
+noncomputable def record (t : ℕ) (τ : Strategy (S.W t).game) (o : (S.W t).Reg × Finset (Fin (S.W t).n) × Discharge.Exec.Transcript) :
     WindowRec :=
   ⟨t, LiveAcceptsZK (S.W t).I o, (S.wrongSet s t τ).card, ∃ u ∈ o.2.1, u ∈ S.wrongSet s t τ⟩
 
