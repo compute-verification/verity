@@ -71,10 +71,13 @@ against that precomputation (O-IO's lookup routes):
 the fresh dither is the round's `Draw`. A dither that makes the noised product's words computable from the advice
 (the zero noise, `W' = B` with `B = 0`) is in `Deg`; the operands stay worst case.
 
-**The rate** (RT-LEAN-2 L38). A program that skips a fraction `f` of the words and guesses them passes a checked cell
-it skipped with probability `p` (a free guess: `2^{-32}` for a uniform word, more where the words are structured), so
-the premise holds only at `η · pub ≤ π s (1 − p)`, `π` the round's selection probability (RT-PROTO-2 P15, P20) and `s`
-its checked cells. -/
+**The rate** (RT-LEAN-2 L38, CMP-167). A program that skips a fraction `f` of the words and guesses them passes a
+checked cell it skipped with probability `p` (a free guess: `2^{-32}` for a uniform word, more where the words are
+structured), so the premise needs `η · pub ≤ π s (1 − p)`, `π` the sampling block's selection probability
+(RT-PROTO-2 P15, P20) and `s` its checked cells. That is necessary only against small skipped fractions: for `s ≥ 2`,
+skipping the whole sampling block binds first. The sufficient condition is `η · pub ≤ π` (`Pouw.SakLb.rate_bern`),
+sharp at `−log(1 − π (1 − p^s))` (`rate_bern_sharp`, at `p = 0`: past `−log(1 − π)` a program that skips the block
+wins). -/
 def SAKMatmul (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (Reg : Set P.Inst) (pub η : P.Inst → ℝ)
     (κdeg : ℕ → ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ a ∈ Reg, ∀ (B : ℕ) (St : Type), (∃ e : St → Fin (2 ^ B), Function.Injective e) →
