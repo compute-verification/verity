@@ -1,4 +1,4 @@
-"""An H1 period's registered weights (VLLM-71, RT4-INT's model registry): each contraction K's ``<prefix>b/<K>``, the B
+"""An H1 period's registered weights (the model registry): each contraction K's ``<prefix>b/<K>``, the B
 rows of the window Program's linears of that K, and `weights_root`, their fold, the weights' root a period-open signs.
 
 * **A B row** (`row_bytes`) is one output row of a linear: its K int8 codes, then the 4 bytes of its f32 scale s_w,

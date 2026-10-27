@@ -58,7 +58,7 @@ def test_windowed_slot_wait_timeout_is_fail_named():
 
 
 def test_abandoned_step_fails_by_its_name_first():
-    # WS-D (r20261018-190716-bc01): the worker abandoned a learning step past the transient host budget.  The collector names the run's
+    # The worker abandoned a learning step past the transient host budget.  The collector names the run's
     # failure (extra.collector_failure, also errors[0]); the verdict leads with that name, ahead of the lost acquisitions it caused.
     why0 = ("worker failed on windowed step 0: RuntimeError('bounded staging: learning step 0 exceeds the transient host budget 4096 MiB at "
             "window 16 (4352 MiB): its plan was not pre-learned (warm-up learn-only pass) -- step not committed')")
