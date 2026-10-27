@@ -21,8 +21,6 @@
     {"file": "verity_vllm/pipeline/gc_tuning.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn"},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "flag-name", "symbol": "WriteOptions", "detail": "--tp3"},
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "flag-name", "symbol": "Options", "detail": "--tp2-match"},
-    {"file": "verity_vllm/target_family.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn", "count": 4},
-    {"file": "verity_vllm/target_family.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/workload.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "doc-date", "symbol": "dump_normalizer", "detail": "date"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "module-name", "symbol": "<module>", "detail": "m1_capture"},

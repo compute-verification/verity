@@ -1,4 +1,4 @@
-// HASH-24's control for hashcat's SHA-512 rate: sha512x.cuh's default compression (sx::compress<0, ROLL>) timed in the
+// The control for hashcat's SHA-512 rate: sha512x.cuh's default compression (sx::compress<0, ROLL>) timed in the
 // shapes of hashcat's -m 1700 optimized kernel (OpenCL/m01700_a3-optimized.cl, v7.1.2), so the difference between our raw
 // rate and hashcat's can be attributed to what each form leaves out. Each thread runs REPS compressions a launch:
 //
