@@ -10,10 +10,11 @@
 # exit code is in $OUT/rc.txt; exits non-zero if any failed.  The ship must arrive as inputs/ship.tar: --send keeps the
 # file's name.  (The card's canary of sm90.mma.m16n8k16.bf16 is its own run, benchmarks/tc_probe's.)
 # VERITY_BENCH_VENV names the Python with numpy and CUDA torch (default /workspace/cp/venv312, else /workspace/jobs/venv312);
-# ATTN_EXPECT the card's name prefix (default "NVIDIA H200"); GPU_LEASE_WHO the lease's holder (default kernels).
+# ATTN_EXPECT the card's name prefix (default "NVIDIA H200"); GPU_LEASE_WHO the lease's holder (default attn_bf16/ and the
+# run's id).
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
-export O ATTN_EXPECT=${ATTN_EXPECT:-NVIDIA H200} GPU_LEASE_WHO=${GPU_LEASE_WHO:-kernels}
+export O ATTN_EXPECT=${ATTN_EXPECT:-NVIDIA H200} GPU_LEASE_WHO=${GPU_LEASE_WHO:-attn_bf16/${RESEARCH_RUN_ID:-local}}
 V=${VERITY_BENCH_VENV:-}
 if [ -z "$V" ]; then for c in /workspace/cp/venv312 /workspace/jobs/venv312; do [ -x "$c/bin/python" ] && V=$c && break; done; fi
 export PY=${V:-/usr}/bin/python3 PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH} PATH=/usr/local/cuda/bin:$PATH

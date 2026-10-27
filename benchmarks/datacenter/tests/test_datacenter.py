@@ -205,10 +205,10 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
 
 
 def test_work_is_credited_in_ands_and_takes_time_by_kind_at_its_rate():
-    """Compute credit is the declared circuit's AND count under one pinned lowering (LEAN-63, RT-UNITS-3), with the
-    multiply-adds reported by format beside it (U3). A device's rate depends on the operand format, so each primitive's
+    """Compute credit is the declared circuit's AND count under one pinned lowering, with the
+    multiply-adds reported by format beside it. A device's rate depends on the operand format, so each primitive's
     gates are work of its kind, timed at the block's rate for it. Kinds on one facet (the tensor cores' `mac:*`) add
-    up; the roundings on the CUDA cores run beside them (compute's review 3), so the block's busy share is the busiest
+    up; the roundings on the CUDA cores run beside them, so the block's busy share is the busiest
     facet's, and the ledger credits and caps each facet."""
     row8 = Array(32, word(8))
     qk = bind(GemmCoordinateE4m3, K=32, **GEMM_SM120_E4M3)
@@ -339,11 +339,11 @@ def test_the_links_where_two_machines_the_auditor_doesnt_control_meet_are_uncove
 
 
 def test_the_export_is_reported_by_port_and_charged_only_when_certifiers_cover_every_link(setup):
-    """Training's red team, W6: the covert budget is only what goes beyond the committed computation, so committed
+    """The covert budget is only what goes beyond the committed computation, so committed
     values leaving a block were free, and something off the block can read them. The export, λ_out, is the committed
     bits that cross a certified boundary out of a block, to another block or outside, by egress port and within the
     epoch, read from the declared crossings: h out of a and y out of b, 512 bits each, and not x, which comes in.
-    Daniel (19 Oct): it counts as novel information read by its receivers once network certifiers cover every link,
+    It counts as novel information read by its receivers once network certifiers cover every link,
     and not before. The test datacenter's world-to-leaf link is uncovered, so the export is reported and not
     applicable; with the world behind a certifier, the same run's export is charged. The covert budget is the same in
     both."""
@@ -364,7 +364,7 @@ def test_the_export_is_reported_by_port_and_charged_only_when_certifiers_cover_e
 
 
 def test_with_every_pair_link_sealed_the_export_is_charged_at_the_facility_boundary_only(setup):
-    """NET-47: with the certifiers' pair links sealed (`Datacenter(sealed=True)`, off by default), h's crossing from a
+    """With the certifiers' pair links sealed (`Datacenter(sealed=True)`, off by default), h's crossing from a
     to b is ciphertext between a.cert and b.cert, which only they open, so it leaves the export; y, which b delivers to
     the world, stays, at b.cert's egress. The rest of the account is the unsealed one's. A fleet's pair links are
     sealed when every site's are, and a site renamed into a fleet keeps its own."""
@@ -465,7 +465,7 @@ NOISED = program("Noised", {"x": VEC, "w1": MAT, "w2": MAT, "z": VEC}, VEC, nois
 
 
 def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named_premise(setup):
-    """Compute's review 1: a helper holding the registered weights needs only small inputs and outputs, so crossing bytes
+    """A helper holding the registered weights needs only small inputs and outputs, so crossing bytes
     alone attribute nothing. Fresh data from a trusted device that only the block receives pins the work there: a helper
     could get it only through the block's certified egress. So does the named premise that the fleet is closed."""
     dc, p = setup
@@ -490,7 +490,7 @@ def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named
 
 
 def test_a_salt_in_its_certifiers_custody_pins_the_work_that_depends_on_it():
-    """Compute's third anchor (ATTRIB). Block a's certifier releases a 512-bit salt into a alone. The noised product p
+    """The salt anchor. Block a's certifier releases a 512-bit salt into a alone. The noised product p
     (PoUW's proof work) depends on it and never leaves, so a helper off the block can't have computed it. That holds
     while k, the bits that could carry the salt out before registration, stays at most 384: a's egress timing advice
     (4 windows × 7 bits) and nothing else here. A 512-bit telemetry input delivered out of a voids it, and so does a
@@ -527,7 +527,7 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     bits read from it and the bit-ticks it held, and `capacity` says what each can give a tick. Two 50 Gbit stores held
     on one 64 Gbit GPU at once is more than it has, so that account is unsound. And the same night entered twice in a
     ledger credits the wiped GPU's memory twice over the wipe, which `joint` refuses, though each account alone is
-    sound. A block's compute is the block's only as far as attribution places it there (compute's review 3): without
+    sound. A block's compute is the block's only as far as attribution places it there: without
     an anchor it comes out of the whole datacenter's capacity, and under one it carries that anchor as its grade."""
     dc, p = setup
     stores = (Store("s1", 5e10, "a.gpu"), Store("s2", 5e10, "a.gpu"))
@@ -545,7 +545,7 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     closed = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night), assume=(FLEET_CLOSED,))
     assert {(x.unit, x.grade) for x in closed.credits if x.resource.startswith("compute")} == {
         ("a", "fleet-closed"), ("b", "fleet-closed")}
-    # PoUW's proved bound, when the scheme gives it, is the block's compute credit (compute's review 3, 15:12Z): one
+    # PoUW's proved bound, when the scheme gives it, is the block's compute credit: one
     # number per block per window, at 1 block-tick a tick, in place of the honest routing's per-facet loads
     timed = p.public(night, ticks={"a": 2.0})
     pouw = account(audit(run(p, INPUTS, night), timed), timed, assume=(FLEET_CLOSED,))
@@ -605,7 +605,7 @@ def test_an_image_pull_is_a_registered_input_free_unless_its_bytes_differ():
 
 
 def test_the_occupancy_profile_is_one_of_those_the_registration_commits_and_costs_the_log_of_their_number(setup):
-    """Training's red team, W9: choosing the occupancy profile is advice worth log2 of how many the developer may choose
+    """Choosing the occupancy profile is advice worth log2 of how many the developer may choose
     from, so that number is fixed before the run and public. The registration commits the profiles' digests, each
     counted from its epoch's first bucket, and the plan reads their number from it: here the night's schedule may start
     at any of 8 ticks, 3 bits, in any epoch. A declared occupancy that isn't one of them is refused, and so is a plan
@@ -681,12 +681,12 @@ def test_a_ledger_adds_covert_bits_across_nights_and_wipes_bound_what_each_night
 
 
 def test_custody_is_the_share_of_the_registered_weights_the_ledgers_epochs_could_have_carried_out():
-    """NET-37: what could leave adds up over a horizon, so weight custody is a cumulative check. Over the ledger's
+    """What could leave adds up over a horizon, so weight custody is a cumulative check. Over the ledger's
     epochs it adds each one's covert budget, its export where it is charged, and σ from each server (a block's GPU)
     over the epoch's real duration, under `DEDICATED_RACKS` (1 kbit/s a server), against the registered weights' bits:
     three 16 ms nights on two GPUs give 96 bits of side channel. On the leaf datacenter the export isn't charged and is
     reported beside the bits; with every link covered it is charged. At a co-resident DRAM channel's rate (DRAMA, about
-    2 Mbit/s, training's red team W4) the same nights could have carried more than the weights."""
+    2 Mbit/s) the same nights could have carried more than the weights."""
     registered = 2 * 32 * 32 * 16
 
     def nights(dc: Datacenter) -> Ledger:
