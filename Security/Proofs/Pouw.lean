@@ -25,7 +25,6 @@ import Proofs.Pouw.Dimension.H100MeasuredProofs
 import Proofs.Pouw.Dimension.H100PeakTcProofs
 import Proofs.Pouw.Dimension.H100Proofs
 import Proofs.Pouw.Dimension.H100WProofs
-import Proofs.Pouw.Dimension.LiftProofs
 import Proofs.Pouw.Dimension.MinRankProofs
 import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.Dimension.OpenPipeProofs
@@ -141,7 +140,6 @@ import Proofs.Pouw.PearlC.Sm120Checks
 import Proofs.Pouw.PearlC.Tile4Circuit
 import Proofs.Pouw.PearlC.TileCapRev1Gamma
 import Proofs.Pouw.PearlC.TileCircuit
-import Proofs.Pouw.PearlC.TileProtocol
 import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.TileGamma
 import Proofs.Pouw.PearlC.TileUOnlyGamma
