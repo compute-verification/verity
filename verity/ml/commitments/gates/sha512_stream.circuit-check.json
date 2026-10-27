@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "Sha512StreamEnd_v1{LEN=1024}": {
+   "and": 44675,
+   "type": "21d2ef235fb070929edba734a0460c55f7264453ac8b654c92beb289b94439251142bf8243b2ffc20bc540a5d8171bb57c41c925a307f9b2c3fdc272cc02dca8"
+  },
+  "Sha512StreamRow_v1{H=2,W=3}": {
+   "and": 0,
+   "type": "eba73b11b0a4d4523f9f71f64af67ddbba6eb40a64e8e5c8204930f29bbb0708aa8fe36c1bb4dbfbb23e226694bd84d83081666edab9b5b3ff7e644d99a6880f"
+  }
+ }
+}
