@@ -85,7 +85,7 @@ What changes from the rehearsal: the gate is vy-challenger-1's forced command ov
 registered for, ``vllm``), not ``python -I local_gate.py DIR``; `MODEL`'s registration under the period's circuit is
 vy-admin's, made before the run (the run registers nothing); its key is ``lms.DEPLOYED``, pinned by ``--key-sha512``
 (the auditor's ``public_sha512``, art:d12f85becc, which the run checks against ``GATE pubkey``), not a test key made in a
-temporary directory; serve.py runs on vy-challenger-1 and reaches the serving node through ``ssh -R`` to the peer named
+temporary directory; serve.py on vy-challenger-1 reaches the serving node by its certifier coin link, the peer named
 in ``/etc/vy/peers`` (``--peer``, the serving node), whose 127.0.0.1:PORT the window connects to, PORT the one the open
 answers (7811..7899, `pouw_h1_window.at_port`), not 27811.. on the node itself; its coins are the Lean verifier's on
 vy-challenger-1; the session's end is read from ``GATE status`` (the live gate has no ``wait``); and no session is
