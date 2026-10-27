@@ -684,7 +684,7 @@ def test_pod_sh_prepare_builds_the_lean_verdicts_and_touches_no_gpu(tmp_path):
 def test_pod_sh_python_path_loads_the_lean_verdict_without_site_packages():
     """The pod's venv holds numpy, torch and gmpy2 alone, and pod.sh's PYTHONPATH the rest: with that path and no
     site-packages at all, the memory challenger's Lean verdict (`verdict.py`, through `verity_difftest`, Hypothesis
-    unimportable) and `live.py` load.  r20261009-034919-c88c's five arms signed their sessions and then lost them to
+    unimportable) and `live.py` load.  A run's five arms once signed their sessions and then lost them to
     `No module named 'verity_difftest'`."""
     line = next(s for s in (BENCH / "pod.sh").read_text().splitlines() if s.startswith("export PYTHONPATH="))
     path = line.split("=", 1)[1].replace("$REPO", str(ROOT))

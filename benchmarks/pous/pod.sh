@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The POUS benchmark on a GPU pod, as a research Attempt:
 #
-#   git -C <tree> archive -o impl.tar <commit>        # the implementation's tree: #188's cursor/dense-decode-opt-6667
+#   git -C <tree> archive -o impl.tar <commit>        # the implementation's tree: cursor/dense-decode-opt-6667
 #   research run --on <pod> --project verity --source . --cwd source --send impl.tar --campaign pous \
 #     -- bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=<commit> [WS=qwen2.5-0.5b/linears+head] [AUDITS=20]
 #   research run --on <pod> --project verity --source . --cwd source --campaign pous \
@@ -29,7 +29,7 @@
 # POUS_BUILD=<dir> is the pous_native JIT build directory (default $W/pous_build). A timed run needs a directory no other run
 # builds into: a rebuild inside a timed lease is a compile the node's ops daemon stops.
 # A timed run there goes inside the node's quiet slice, `gpu-lease 1 --on N --max-min M -- vy-pous-quiet CMD`, with VCPU and
-# RCPU among its cores: outside it, neighbours' load makes honest answers late (r20261005-231145-6d0f accepted 18 of 20).
+# RCPU among its cores: outside it, neighbours' load makes honest answers late (a run there accepted 18 of 20).
 # AUDITS=0 is an untimed placement (a preemptible fill slot): the gates, encode, the synthetic loop and the step floor run, no
 # limit, audit or control does, and the result is labelled timed: false, audits: skipped (untimed placement).
 # LOAD_TOKENS=T (band-gpu and the P2 arms, bench.py --load-tokens) is T of the POUS forwards run during the honest audit (0: none,
