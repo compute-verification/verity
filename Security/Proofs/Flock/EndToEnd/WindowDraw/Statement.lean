@@ -1,3 +1,4 @@
+import Mathlib.Data.Fin.VecNotation
 import Definitions.Flock.Assumptions
 import Proofs.Flock.Soundness.Audit.Stratified
 
