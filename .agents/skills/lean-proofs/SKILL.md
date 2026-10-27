@@ -120,9 +120,9 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   passing run kept needs no new run. A train regenerates records that differ only because another PR moved what yours
   reads; re-record only what it can't (a refused conflict, `shape`, a move's map).
 
-## Standing rulings (Daniel)
+## Standing rulings
 
-The dated text is note:lean/20261020T1000Z-report-lean-proofs-rulings-archive.
+Daniel's Lean rulings in force, each stated as itself; who set each one, when and why, are in his decisions log.
 
 - A guarantee is a proved `Prop` under named assumptions, with no third status; proving an assumption removes it from
   every guarantee that took it. Lean is the one source of truth for what we assume.
@@ -151,6 +151,6 @@ The dated text is note:lean/20261020T1000Z-report-lean-proofs-rulings-archive.
 - Probability and games are our own minimal definitions over Mathlib's `PMF`; soundness bridges to VCVio where needed.
 - What a physical region reads is not a premise: it follows from the actual circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
-  server-window is stated on `Accounting.Placed` with `WindowsAt` (ASK-141).
+  server-window is stated on `Accounting.Placed` with `WindowsAt`.
 - `check.py` holds each guarantee of what an acceptance means, or an exclusion's bound, to two lemmas that build their
-  instance (`witnesses`, LEAN-66): `honest` at the deployed verifier, `nontrivial` at accept-all or a circuit beating the bound.
+  instance (`witnesses`): `honest` at the deployed verifier, `nontrivial` at accept-all or a circuit beating the bound.

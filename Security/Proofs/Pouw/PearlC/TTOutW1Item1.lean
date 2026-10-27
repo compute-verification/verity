@@ -3,9 +3,9 @@ import Proofs.Pouw.PearlC.HonestWords
 import Proofs.Pouw.Copy
 
 /-!
-# CMP-77 item 1 at W1: guessing a `1 × 1 × k` unit's two output words
+# The TT_OUT red team's item 1 at W1: guessing a `1 × 1 × k` unit's two output words
 
-Lean's red team of the TT_OUT forms (CMP-77) argued that on the domain before #3675 (`pearlCDomainDevOld`, which admits
+Lean's red team of the TT_OUT forms argued that on the earlier domain (`pearlCDomainDevOld`, which admits
 a single `1 × 1 × k` unit) a W1 program that guesses the unit's ticket word and useful word costs `2·fetch` and wins with
 probability at least `Pr[E]/2^64`, above `εPearlC 0 1 = 2^−128`. This file proves it, and what the narrowed domain
 (`64 ≤ n ∧ 64 ∣ n`, `pearlCDomainDev`) does to that program. It is analysis: it states and lists no assumption.

@@ -28,7 +28,7 @@ first id (a prompt has at least one); every other takes ``slot[1]`` while ``slot
 ``slot[0]`` positive on every slot but ``slot[0]`` = −2^31, else ``sel``: the sign of the count it carries on, so the count's one
 carry chain is the test. Each outputs its token and the next position's slot.
 
-A window has a fixed number of slots, each a class Program whether or not it carries a request (ASK-122), so whether a slot
+A window has a fixed number of slots, each a class Program whether or not it carries a request, so whether a slot
 is occupied is a private word of its ingress row. `SlotRow_v1{NP}` opens that row, (occupancy, lp, ids[0], …, ids[NP − 1]),
 NP + 2 i32s, into its occupancy word and the first position's `TokenFeed_v1` slot (a copy, no gates). `SlotMask_v1` is a
 slot's output at a position: the token selected there while the slot is occupied (its occupancy word's low bit is 1), else
