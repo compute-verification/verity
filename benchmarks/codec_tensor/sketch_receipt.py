@@ -1,18 +1,18 @@
-"""`sketch-sha512`: the remote bandwidth driver's second receipt kind, a pass-keyed ±1 sketch of each block and SHA-512
-over the sketch, in place of SHA-512 over the block (`receipts.Receipter`). Leaves, salts and the tree are the
+"""`sketch-sha512`: the remote bandwidth driver's second receipt kind, a pass-keyed ±1 sketch of each chunk and SHA-512
+over the sketch, in place of SHA-512 over the chunk (`receipts.Receipter`). Leaves, salts and the tree are the
 driver's own (`hm96-sha512/row/v2`, frame-v3-sha512): a `SketchReceipter` drops in where a `Receipter` goes, and
 `receipts.tree` and `receipts.verify_leaf` take its receipts unchanged.
 
 ~~~text
-S_i      k_s × 4096 signs of pass i (k_s = 16, or 64 for a block's 2^−64): K = derive(seed_i, SIGN_DOMAIN, {"tag":
+S_i      k_s × 4096 signs of pass i (k_s = 16, or 64 for a chunk's 2^−64): K = derive(seed_i, SIGN_DOMAIN, {"tag":
          KIND, "k": k_s, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB
          first) 1 → −1, 0 → +1; re-keyed every pass by the chained seed, so no sketch exists before the previous
          pass's root
-E_j      the store's block j, its 4096 bytes 4096 j … in store order, whole codec words (the registration's layout,
+E_j      the store's chunk j, its 4096 bytes 4096 j … in store order, whole codec words (the registration's layout,
          store-order/v0). A weight GEMM's store (wt.cu's fused decode GEMM, SB = 8192 bytes a task at p1024 and p512)
-         is two blocks a task, task q's halves blocks 2 q and 2 q + 1 (`gemm_blocks`), so a launch receipts its own
-         store's blocks j0 + v, whatever its groups and grid: the sketch warps (receipt_warp) take a block a B column
-         of mma.m16n8k32, each byte against its own position's sign (`fragment_sketch`). The KV's block is a
+         is two chunks a task, task q's halves chunks 2 q and 2 q + 1 (`gemm_blocks`), so a launch receipts its own
+         store's chunks j0 + v, whatever its groups and grid: the sketch warps (receipt_warp) take a chunk a B column
+         of mma.m16n8k32, each byte against its own position's sign (`fragment_sketch`). The KV's chunk is a
          token-layer (kv.cu at 128-byte words: 32 words, 4 KiB, whole), and attention (kv_attn form 13) sketches it
          a KV head's 4 words at a time, a token a B column, A the signs at those words' positions
          (`kv_fragment_sketch`), the 8 heads' shares summed before the hash
@@ -23,7 +23,7 @@ y_(i,p)  SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ σ_j)
          SKETCH_RECEIPT_DOMAIN = "verity/remote-bandwidth/sketch-receipt/v0\0"
 ~~~
 
-Its soundness rests on the sketch (`RateAuditSketch`), which the full-block receipt does not need: a block that
+Its soundness rests on the sketch (`RateAuditSketch`), which the full-block receipt does not need: a chunk that
 differs from E_j ⊕ spread(z) passes a row with probability at most 1/2 over S_i, all k_s with at most 2^−k_s.
 """
 from __future__ import annotations
@@ -45,7 +45,7 @@ SKETCH_RECEIPT_DOMAIN = b"verity/remote-bandwidth/sketch-receipt/v0\0"
 ROWS = 16
 BLOCK = 4096
 LANES = 32
-SK_G = 4                                  # receipt_warp's tasks a group: 2 SK_G blocks, mma.m16n8k32's B columns
+SK_G = 4                                  # receipt_warp's tasks a group: 2 SK_G chunks, mma.m16n8k32's B columns
 ROWS64 = 64
 SIGN_WORDS = ROWS * BLOCK // 32           # a WT_RECEIPT pass's signs (`sign_words`)
 FRAG_WORDS = 2 * SIGN_WORDS               # receipt_warp's selectors (`sign_frags`)
@@ -57,7 +57,7 @@ KV_STEPS = KV_WORD // 8                   # its k-steps a tile: 8 bytes of each 
 
 def sign_bits(seed: bytes, rows: int = ROWS) -> np.ndarray:
     """S_i's sign bits, rows × 512 bytes: bit u of row c (byte u // 8, LSB first) is 1 where S_i[c][u] = −1. A sketch
-    of k_s = rows (16, or 64 for a block's 2^−64) derives its own matrix, the key binding k."""
+    of k_s = rows (16, or 64 for a chunk's 2^−64) derives its own matrix, the key binding k."""
     key = derive(rb._digest(seed, "a pass seed"), SIGN_DOMAIN, {"tag": KIND, "k": rows, "n": BLOCK})
     return np.stack([np.frombuffer(key.stream(("row", c), BLOCK // 8), np.uint8) for c in range(rows)])
 
@@ -77,7 +77,7 @@ def sketch(s: np.ndarray, block: bytes, z: bytes) -> bytes:
 
 
 def sketches(s: np.ndarray, blocks: np.ndarray) -> np.ndarray:
-    """σ of many already-masked blocks at once (n × 4096 uint8 or int8): n × k_s int32."""
+    """σ of many already-masked chunks at once (n × 4096 uint8 or int8): n × k_s int32."""
     e = np.asarray(blocks).view(np.int8).reshape(-1, BLOCK).astype(np.int64)
     return (e @ s.astype(np.int64).T).astype("<i4")
 
@@ -146,8 +146,8 @@ def _tasks(nbs: int, nchunks: int, groups: int):
 
 
 def gemm_receipts(nbs: int, nchunks: int, sb: int, groups: int) -> np.ndarray:
-    """The receipt indices v (receipt_warp's tag_base + v) of a launch's blocks in the order its CTAs take them: per
-    CTA, group a of SK_G tasks, block n its task SK_G a + n // 2's half n mod 2, v = 2 q + n mod 2."""
+    """The receipt indices v (receipt_warp's tag_base + v) of a launch's chunks in the order its CTAs take them: per
+    CTA, group a of SK_G tasks, chunk n its task SK_G a + n // 2's half n mod 2, v = 2 q + n mod 2."""
     if sb != 2 * BLOCK:
         raise ValueError(f"a task is two {BLOCK}-byte blocks at SB = {2 * BLOCK}, not SB = {sb}")
     return np.array([2 * q + h for qs in _tasks(nbs, nchunks, groups) for q in qs for h in range(2)], np.int64)
@@ -155,8 +155,8 @@ def gemm_receipts(nbs: int, nchunks: int, sb: int, groups: int) -> np.ndarray:
 
 def gemm_vectors(nbs: int, nchunks: int, sb: int, groups: int) -> np.ndarray:
     """A launch's map from its receipts' bytes to the store's (`receipts.plan_of`'s `vectors`): row v the store byte
-    at each of block v's 4096 positions, from receipt_warp's loads, lane (n, t)'s uint4 at 128 pp + 64 e + 16 t of task
-    q's half h the positions 64 (2 pp + e) + 16 t …; −1 where no block of the launch is receipt v."""
+    at each of chunk v's 4096 positions, from receipt_warp's loads, lane (n, t)'s uint4 at 128 pp + 64 e + 16 t of task
+    q's half h the positions 64 (2 pp + e) + 16 t …; −1 where no chunk of the launch is receipt v."""
     out = np.full((nbs * nchunks * sb // BLOCK, BLOCK), -1, np.int64)
     pp, e, t, c = np.meshgrid(np.arange(BLOCK // 128), np.arange(2), np.arange(4), np.arange(16), indexing="ij")
     load = (128 * pp + 64 * e + 16 * t + c).reshape(-1)
@@ -168,7 +168,7 @@ def gemm_vectors(nbs: int, nchunks: int, sb: int, groups: int) -> np.ndarray:
 
 
 def gemm_blocks(store: np.ndarray, sb: int) -> np.ndarray:
-    """A weight GEMM's store (`wt.cu`: SB = sb stored bytes a task) as its blocks, (blocks × 4096) uint8, block v the
+    """A weight GEMM's store (`wt.cu`: SB = sb stored bytes a task) as its chunks, (chunks × 4096) uint8, chunk v the
     launch's receipt v (`gemm_vectors`)."""
     if sb % BLOCK:
         raise ValueError(f"a task of {sb} bytes is not whole {BLOCK}-byte blocks")
@@ -180,9 +180,9 @@ def _int8(x: np.ndarray) -> np.ndarray:
 
 
 def fragment_sketch(store: np.ndarray, nbs: int, nchunks: int, sb: int, groups: int, frags: np.ndarray) -> np.ndarray:
-    """σ of a launch's blocks as receipt_warp computes them, row v receipt v: per CTA, group of SK_G tasks, and k-step
+    """σ of a launch's chunks as receipt_warp computes them, row v receipt v: per CTA, group of SK_G tasks, and k-step
     (p, s), A (16 × 32) from each lane's prmt registers of its selectors (`sign_frags`), B (32 × 8) from each lane's
-    uint4 of block g at 128 pp + 64 e + 16 t (x, y b0 and b1 of k-step 2 p, z, w of 2 p + 1, p = 2 pp + e), one
+    uint4 of chunk g at 128 pp + 64 e + 16 t (x, y b0 and b1 of k-step 2 p, z, w of 2 p + 1, p = 2 pp + e), one
     mma.m16n8k32 (D[row][n] += Σ_k A[row][k] B[k][n]) at a time."""
     import sketching
 
@@ -204,7 +204,7 @@ def fragment_sketch(store: np.ndarray, nbs: int, nchunks: int, sb: int, groups: 
 
 
 def _group_sketches(st, nbs, nchunks, sb, groups, rows, mma) -> np.ndarray:
-    """Each sketch warp group's 2 SK_G blocks as B (BLOCK // 64 p, 2 s, 32 k, 2 SK_G n): lane (n, t)'s uint4 of block
+    """Each sketch warp group's 2 SK_G chunks as B (BLOCK // 64 p, 2 s, 32 k, 2 SK_G n): lane (n, t)'s uint4 of chunk
     n at 64 p + 16 t, b0 of k-step 2 p + s its bytes 8 s …, b1 8 s + 4 …; `mma(b)` the rows × 2 SK_G sketches."""
     out = np.full((nbs * nchunks * sb // BLOCK, rows), np.iinfo(np.int64).min, np.int64)
     for qs in _tasks(nbs, nchunks, groups):
@@ -263,7 +263,7 @@ def kv_head_words(g: int) -> list[int]:
 
 
 def kv_positions(g: int) -> np.ndarray:
-    """The 512 positions of a token-layer's block that head g's words hold."""
+    """The 512 positions of a token-layer's chunk that head g's words hold."""
     return np.concatenate([np.arange(KV_WORD * w, KV_WORD * (w + 1)) for w in kv_head_words(g)])
 
 
@@ -338,7 +338,7 @@ def receipt_of(head, j: int, sigma: bytes) -> bytes:
 
 
 def receipts_of(seed: bytes, sk: np.ndarray, j0: int) -> list[bytes]:
-    """y of blocks j0, j0 + 1, … from their sketches (n × k_s integers)."""
+    """y of chunks j0, j0 + 1, … from their sketches (n × k_s integers)."""
     head, w = hashlib.sha512(prefix(seed)), np.asarray(sk).astype("<i4")
     return [receipt_of(head, j0 + v, w[v].tobytes()) for v in range(w.shape[0])]
 
