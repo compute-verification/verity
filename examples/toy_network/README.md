@@ -66,7 +66,7 @@ VERDICT {"block": 1, "coins": "simulated", "components": {"certifier": "accept",
 
 ## Parties on different machines
 
-`--machine NAME`, or `--party ROLE`, runs only the parties placed there. The challenger, the firewall and the workers
+`--on MACHINE`, or `--party ROLE`, runs only the parties placed there. The challenger, the firewall and the workers
 then listen for the verifier at their `listen` port (on their `address`, loopback by default), and the verifier dials
 the ones that run elsewhere. A party that has to listen or be dialed and has no `listen` is refused by name
 (`listen`). Each channel's handshake is signed with a party key made for the run, and the configuration's hash leaves
