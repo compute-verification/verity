@@ -87,11 +87,11 @@ def test_without_facts_no_guarantee_is_proved(tmp_path):
     assert not any(read for _, _, read in _status(doc).values())
 
 
-def test_results_of_record_come_from_an_examples_evidence_and_run_ids_are_only_counted(tmp_path):
-    example = f'[evidence]\nruns = ["{ART}", "r20260101-000000-abcd"]\n[evidence.premises]\nbandwidth = "art:{"b" * 64}"\n'
-    doc, runs = se.export(_repo(tmp_path, {"Sec/lean-audit.json": LOCK, "demos/demo/example.toml": example}))
-    assert doc["results"] == [{"art": ART, "kind": None, "what": "the demo example's run of record", "table": None},
-                              {"art": "art:" + "b" * 64, "kind": None, "what": "bandwidth, measured for the demo example", "table": None}]
+def test_results_of_record_come_from_a_demos_evidence_and_run_ids_are_only_counted(tmp_path):
+    demo = f'[evidence]\nruns = ["{ART}", "r20260101-000000-abcd"]\n[evidence.premises]\nbandwidth = "art:{"b" * 64}"\n'
+    doc, runs = se.export(_repo(tmp_path, {"Sec/lean-audit.json": LOCK, "demos/toy/demo.toml": demo}))
+    assert doc["results"] == [{"art": ART, "kind": None, "what": "the toy demo's run of record", "table": None},
+                              {"art": "art:" + "b" * 64, "kind": None, "what": "bandwidth, measured for the toy demo", "table": None}]
     assert runs == 1
 
 

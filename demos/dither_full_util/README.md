@@ -8,6 +8,6 @@ lands (DITHER-FILL) it decides them in C-Flock `--zk` and Lean. The figure the r
 capacity that isn't certified, with its terms: model slack, idle pipes, ε_skip at δ = 1%, and exchanged bits. Beside ε it
 reports γ and a refused negative.
 
-It stands at level 0 with no runner (`example.toml`). HIGHUTIL's runner is still on `cursor/highutil-demo-1de3`, and no
-run of record exists yet. When the H200's run of record exists, its id goes in `example.toml`, and a `run.sh` that calls
+It stands at level 0 with no runner (`demo.toml`). HIGHUTIL's runner is still on `cursor/highutil-demo-1de3`, and no
+run of record exists yet. When the H200's run of record exists, its id goes in `demo.toml`, and a `run.sh` that calls
 the runner in place makes it level 1.

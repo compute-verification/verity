@@ -1,10 +1,10 @@
-# The H200 example: the walking skeleton
+# The H200 demo: the walking skeleton
 
 The GPU serving loop of the one-H200 demo: steps of the frozen MQA shape (`shape.FROZEN`, `served_weights`'s `H200`) on the
 plain INT8 weights, loaded once into the card's memory and resident across steps (`--weights staged` decodes them from the
 store into staging instead), every op's output committed through the per-step commit call, drawn slots
 opened by replaying their requests and drawn units replayed bit for bit against the Definitions, each subprotocol run against the
-step or named, and a replay bundle and block record written. `verity example h200 --out OUT [...]` runs it
+step or named, and a replay bundle and block record written. `verity demo h200 --out OUT [...]` runs it
 (`run.py --help`).
 
 Its protocol is the composite `onsite` in skeleton form (`e2e_h200/legs.py`): sampled proofs are the replay and the
@@ -12,17 +12,17 @@ opening, PoUW is H200-PERCALL's per-call tiles as a `--subcircuit`, PoUS is spot
 path's store, the network certifier's digests are a fixture, and the bandwidth audit isn't run. `interfaces/` holds the
 interfaces between its subprotocols, the drawn-unit replay bundle and the block record, a suite of its own (its README).
 
-It is an example, not an integration: it composes pieces from several owners (memory's store and decode call, kernels'
+It is a demo, not an integration: it composes pieces from several owners (memory's store and decode call, kernels'
 GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run. When the real pieces land
 they replace the fixtures here, one module each, and the record's `stands_in_for` fields go to `null`.
 
 ## Workload and placement
 
 The workload is the frozen MQA shape on ALLP-IFACE's seeded INT8 weights (`e2e_h200/served_weights.py`), with `--shape
-tiny|small|slice` for CPU runs; it isn't an integration yet (`example.toml`: `workload = "none"`). Every party runs in the
+tiny|small|slice` for CPU runs; it isn't an integration yet (`demo.toml`: `workload = "none"`). Every party runs in the
 one run on one GPU node (`vy-dc-h200-2` for `percall_job.sh`): the driver and its commit call on the prover's side, and the
-replay and the opening on the verifier's, on fixture coins. Where the run of record's parties ran, the example's rung on the
-ladder and the runs behind it are `example.toml`'s (`demos/README.md`).
+replay and the opening on the verifier's, on fixture coins. Where the run of record's parties ran, the demo's rung on the
+ladder and the runs behind it are `demo.toml`'s (`demos/README.md`).
 
 ## What runs, and what stands in
 

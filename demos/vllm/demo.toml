@@ -1,4 +1,4 @@
-# The vLLM example's doneness (demos/README.md), placed where its runs of record ran. Placed needs the Lean verifier off
+# The vLLM demo's doneness (demos/README.md), placed where its runs of record ran. Placed needs the Lean verifier off
 # the nodes the prover runs: those runs ran it on vy-nebius-1 with the endpoint and the prover. Its proof is none: no theorem
 # yet ties the session verdicts the verifier of record runs to NetTiming.Guarantees.SampledAuditAccepted
 # (benchmarks/prove_path/README.md).

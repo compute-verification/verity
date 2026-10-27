@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# `verity example vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM example's runs, started by `research run` on the
+# `verity demo vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM demo's runs, started by `research run` on the
 # node placement.toml places it on, with that node's paths and the run's own variables as its environment, and the model the
-# example's row names (the one file workloads/SHA256SUMS lists, fetched by its art id and checked: `model`, `case` and
+# demo's row names (the one file workloads/SHA256SUMS lists, fetched by its art id and checked: `model`, `case` and
 # `engine.revision`; bf16, served as pinned, `--precision pin`):
 #   window   the default: one served window through every subprotocol, benchmarks/one_stage/served_verdicts.sh: the endpoint
 #            committing under the row's Commit of record, its requests (serve_load.py --varied), every closed window sealed, the
@@ -31,7 +31,7 @@ here, run = Path(sys.argv[1]), sys.argv[2]
 script = {"window": "benchmarks/one_stage/served_verdicts.sh", "commit": "demos/vllm/commit.sh", "serve": "demos/vllm/serve.sh"}[run]
 sums = [line.split() for line in (here / "workloads" / "SHA256SUMS").read_text().splitlines() if line.strip()]
 if len(sums) != 1:
-    sys.exit(f"run.sh: demos/vllm/workloads/SHA256SUMS lists {len(sums)} row files; the example's row is its one")
+    sys.exit(f"run.sh: demos/vllm/workloads/SHA256SUMS lists {len(sums)} row files; the demo's row is its one")
 (want, name), = sums
 f = here / "workloads" / name
 if not f.is_file():
