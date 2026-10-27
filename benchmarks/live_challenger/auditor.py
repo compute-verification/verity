@@ -223,7 +223,10 @@ first coin.
   request says otherwise; recorded in every request and passed on every one. `certifier_serve.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
   a certifier rehearsal makes two keys (the certifier's and the challenger's) and a warden rehearsal one, which
-  `warden_minutes` counts. The rehearsal draws each serve's session itself (32 fresh random bytes, `--session`), as
+  `warden_minutes` counts. A warden rehearsal's key signs `WARDEN_WINDOW_LEAVES` one-time signatures a link-window,
+  after a load's heads, and its signer refuses every window past its 2^H: so a request whose `warden_windows` its
+  height can't sign is refused, with the least height that can (`warden_height`; the gate's most requests at the
+  scan's schedule take 13). The rehearsal draws each serve's session itself (32 fresh random bytes, `--session`), as
   the challenger it plays: the challenger here draws none, since a rehearsal is none of its windows.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, `end`'s, and `serve.py`'s record and close,
@@ -319,6 +322,13 @@ KEYGEN_LEAVES_S = 4096
 #: `WARDEN_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s link-windows, past the 745 that
 #: memory-accounting's whole-node wipe needs (H200-GATE, 27 Oct)
 WARDEN_REQUESTS = (4, 1700)
+#: the one-time signatures a warden rehearsal's key gives a link-window: a certificate for each of its three links'
+#: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
+#: (`warden_serve.Publisher.keep` and `attest`)
+WARDEN_WINDOW_LEAVES = 5
+#: a warden rehearsal's link-window without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
+#: buckets of 100 ms)
+WARDEN_WINDOW_MS = 60_000
 WARDEN_TOKENS = (16, 256)
 #: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
 #: `WARDEN_RATE` a second drawn from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
@@ -1152,6 +1162,36 @@ def _minutes(arrivals_s: int, height: int) -> int:
     return -(-(arrivals_s + 3 * WARDEN_TAIL_S + 2 ** height // KEYGEN_LEAVES_S) // 60)
 
 
+def warden_windows(requests: int, scan: bool = True) -> int:
+    """The most link-windows a warden rehearsal of `requests` requests runs (`warden_serve.rehearse` counts its
+    traffic's last arrival and tail): `warden_minutes`'s arrivals and three tails, in link-windows of the scan's
+    schedule with `scan` and of `WARDEN_WINDOW_MS` otherwise."""
+    window_ms = SCAN["--window"] * SCAN["--bucket-ms"] if scan else WARDEN_WINDOW_MS
+    return -(-(round(requests / WARDEN_RATE) + 3 * WARDEN_TAIL_S) * 1000 // window_ms)
+
+
+def warden_height(windows: int, heads: int = 0) -> int:
+    """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's) and then
+    `windows` link-windows at `WARDEN_WINDOW_LEAVES` each."""
+    return max(REHEARSAL_HEIGHT[0], (heads + WARDEN_WINDOW_LEAVES * windows - 1).bit_length())
+
+
+def load_heads(shape: str) -> int:
+    """The heads a load of `shape` signs before the rehearsal's first window: one a value (`load_relay.manifest`)."""
+    lr = _load_relay()
+    return len(lr.manifest(lr.SHAPES[shape]))
+
+
+def warden_key(windows: int, height: int, what: str, heads: int = 0) -> None:
+    """Refuses a warden rehearsal whose key at `height` can't sign its `windows` link-windows after a load's `heads`,
+    with the least height that can (`warden_height`)."""
+    if height < (least := warden_height(windows, heads)):
+        load = f" after the load's {heads} heads" if heads else ""
+        raise Refused(f"--height {height}: {what} take {windows} link-windows, "
+                      f"{heads + WARDEN_WINDOW_LEAVES * windows} one-time signatures ({WARDEN_WINDOW_LEAVES} a "
+                      f"window{load}), past the key's {1 << height}: give --height {least} or more, or fewer --requests")
+
+
 def scan_group_windows(tokens: int) -> int:
     """The link-windows a `--window-per-group` group takes at the scan's schedule, each request answered by at most
     `tokens` id events (`warden_serve.group_windows`, which `test_warden_serve` holds this to)."""
@@ -1212,6 +1252,8 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
         raise Refused(f"--minutes {minutes}: {requests} requests take {least} minutes (arrivals at {WARDEN_RATE} a "
                       f"second, a {WARDEN_TAIL_S} s tail, the window they end in, the check and the key at height "
                       f"{a.height}){_after_load(spent)}: give --minutes {least + spent} or more, or fewer --requests")
+    warden_key(warden_windows(requests, a.scan), a.height, f"{requests} requests",
+               load_heads(loaded["load"]["shape"]) if load else 0)
     return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "requests": requests,
             "height": a.height} | a.sampling | given | loaded
 
@@ -1315,11 +1357,14 @@ def warden_prompts(req: dict, data: bytes) -> bytes:
     spent = req.get("load", {}).get("minutes", 0)
     if req.get("window_per_group"):
         least, what = warden_group_minutes(-(-requests // n), tokens, height), f"{-(-requests // n)} groups"
+        windows = -(-requests // n) * scan_group_windows(tokens)
     else:
         least, what = warden_minutes(requests, height), f"{requests} requests"
+        windows = warden_windows(requests)
     if minutes - spent < least:
         raise Refused(f"--minutes {minutes}: {what} take {least} minutes (with the check and the key at height "
                       f"{height}){_after_load(spent)}: give --minutes {least + spent} or more, or fewer --requests")
+    warden_key(windows, height, what, load_heads(req["load"]["shape"]) if "load" in req else 0)
     req.update(requests=requests, prompts={"count": n, "ids": sum(map(len, prompts))})
     return json.dumps(prompts, separators=(",", ":")).encode()
 
