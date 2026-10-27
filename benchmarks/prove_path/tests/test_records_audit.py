@@ -315,16 +315,20 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
 def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entries_roots():
     """`window_roots`: the roots a window's registration records for its parameters are its ``registered_roots`` and each
     entry's root of the committed values it names, ``{program, values}`` (`ENTRY_GROUPS`: per-window ``activations``,
-    pinned ``registered``), one root a parameter; a group that isn't one, an entry with no root of hex digits, or two
-    roots for one parameter are refused."""
+    PoUW's operands among them, and pinned ``registered``, PoUW's weights), one root a parameter; a group that isn't one,
+    an entry with no root of hex digits, or two roots for one parameter are refused."""
     def group(**roots: str) -> dict:
         return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
+
+    from verity.core.protocols.pouw import operands as OP
 
     w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
          "registered": group(w="cd" * 64)}
     assert RA.window_roots(w) == {"e": "01" * 64, "x": "ab" * 64, "w": "cd" * 64}
-    a = REG.Registered.commit("test/model", "a", [[1] * 4], schema=REG.SCHEMA_V2).entry()
-    assert RA.window_roots({"context": RUN, "activations": {"program": "p", "values": {"a": a}}}) == {"a": a["root"]}
+    a, b = (REG.Registered.commit("test/model", v, [[i] * 4], schema=REG.SCHEMA_V2) for i, v in enumerate("ab"))
+    pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
+            "registered": OP.block("test/model", {"b": b})}
+    assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
     assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.registration_roots({"window": 63})
     assert RA.registration_roots({"window": w}) == RA.window_roots(w)
     for bad, why in [({"registered": {"w": "cd" * 64}}, r"is \{program, values"), ({"activations": group(x=7)}, "hex digits"),

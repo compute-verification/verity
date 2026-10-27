@@ -1,9 +1,9 @@
 """What an integration hands Verity (Daniel, 24 Oct: integrations are frontends, and Verity is agnostic to them), one window
 at a time, in four records:
 
-1. **A circuit in proof units** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
+1. **A circuit in proof blocks** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
    (`catalog`), with its unit count, in order. Their population program and template query (`rows.population_program`)
-   partition it into proof units, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
+   partition it into proof blocks, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
    names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
    (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as network-accounting's N1 states it. The
    window's ``circuit.json`` (`circuit_record`) holds the whole layout the verifier reads, stated per template and wire
@@ -41,8 +41,9 @@ The circuit also declares what fills its other inputs (`Registered`, `Ingress`):
 public positions (`Read`), a registered table's root or domain id (`TableRead`), a table's row opened at a hidden key
 (`Opening`), and the system's ingress at its step (`Ingress`). Every input row is wired, one of these, or free, and no row
 is two of them (`check_inputs`); `input_count` counts the free rows' bits from the record alone, at the size of its
-description, a registered row free unless the window's root for its parameter is the one the verifier pinned before the
-run. The window's registration records each registered parameter's root (``registered_roots``, `Window.write`), and
+description, a registered row free unless the window's root under its pin's name (the parameter's, or ``P`` for ``P/…``)
+is the one the verifier pinned before the run (`held`). The window's registration records each registered parameter's
+root (``registered_roots``, `Window.write`), and
 commits the first kind
 (`Window`'s ``registered``): a member whose units read a registered parameter is a shared-row member, each
 read port a table of the registered rows its units read (`member_reads`), committed under the registered value's salts
@@ -814,7 +815,7 @@ def server_ends(network: Mapping[str, Any] | None, units: Mapping[str, int]) -> 
 
 @dataclass(frozen=True)
 class Circuit:
-    """An integration's circuit in proof units: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
+    """An integration's circuit in proof blocks: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
     and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
     layout (network-accounting's N1, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
@@ -913,6 +914,24 @@ class Circuit:
         raise KeyError(f"{tid}: no template of {self.name}")
 
 
+def read_shape(circuit: Circuit, value: str) -> dict[str, Any]:
+    """Registered parameter ``value``'s rows as the circuit's reads fix them, the shape an outside committer (a network
+    certifier's output value, `out_commit.OutShape`) commits it at: ``words``, the row width of the port every read of it
+    names; ``rows``, its leaves over that; 16-bit leaves in ``hm96-sha512/row/v2`` rows (`unit_rows`). Refused
+    (ValueError) when no read names it, two read it at two widths, or its leaves aren't whole rows."""
+    lays = circuit.layouts
+    widths = {dict(lays[r.reader][0].rows + lays[r.reader][0].outs)[r.port] for r in circuit.reads if r.param == value}
+    leaves = (circuit.registered.params if circuit.registered is not None else {}).get(value)
+    if not widths or leaves is None:
+        raise ValueError(f"{circuit.name}: no registered read of {value!r}")
+    if len(widths) != 1:
+        raise ValueError(f"{circuit.name}: {value!r} is read at {sorted(widths)} words a row, not one width")
+    (w,) = widths
+    if leaves % w:
+        raise ValueError(f"{circuit.name}: {value!r}'s {leaves} leaves aren't whole rows of {w} words")
+    return {"value": value, "words": w, "rows": leaves // w, "word_bits": 16, "row_schema": V2}
+
+
 def members(circuit: Circuit, cap: int) -> tuple[CS.Member, ...]:
     """The window's members: each template's units in the partition's order, cut where a wire's reader units begin or end and
     where a server block's units begin or end (`Circuit.server_ends`), in chunks ``<descriptor id>/c<j>`` of at most ``cap``
@@ -955,7 +974,8 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
     """`members` of ``templates`` (``(Definition, units)``) under their population ``program`` and ``query``. A member's row
     is wired on all its units or on none (`rows.Member.wired`), so a template's units are cut at every wire's ends first, and
     a member's units are one server's, so they are cut at ``servers``' ends too (by template, `server_ends`). A registered
-    read covers whole members (`_reads_of`), and a member it covers is a shared-row member: each read port's table the
+    read covers whole members (`_reads_of`), so they are cut at every read's ends, and a member it covers is a shared-row
+    member: each read port's table the
     registered rows its units read, each other input row's its units' own rows."""
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
@@ -973,7 +993,8 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
         rows = tuple((p, w) for p, w, _ in lay.cut(kv))
         schemas = tuple((p, V2) for p, _ in rows + lay.outs)
         mine = sorted(by.get(tid, ()), key=lambda w: w.at)
-        ends = sorted({0, n, *(x for w in mine for x in (w.at, w.at + w.reader_units)), *(servers or {}).get(tid, ())})
+        ends = sorted({0, n, *(x for w in mine for x in (w.at, w.at + w.reader_units)), *(servers or {}).get(tid, ()),
+                       *(x for r in reads if r.reader == tid for x in (r.at, r.at + r.reader_units))})
         live: list[Wire] = []
         nxt, j = 0, 0
         for a, b in zip(ends, ends[1:]):
@@ -1198,6 +1219,14 @@ def held_params(pins: Mapping[str, str] | str | None, roots: Mapping[str, str] |
     return frozenset(p for p, r in pins.items() if r.lower() == str(roots.get(p, "")).lower())
 
 
+def held(pins: Mapping[str, str] | str | None, roots: Mapping[str, str] | None) -> Callable[[str], bool]:
+    """Whether a registered parameter is held (`held_params`): its pin is its own where the verifier pinned it, else its
+    prefix's (a pin ``P`` names every ``P/…``: a model's weights, one parameter a weight and row width, under one pin),
+    and the window's root under that pin's name is the pinned root."""
+    ok, named = held_params(pins, roots), () if isinstance(pins, str) else (pins or {})
+    return lambda param: (param if param in named else param.split("/", 1)[0]) in ok
+
+
 def registered_roots(window: Mapping[str, Any]) -> dict[str, str]:
     """The roots a window's registration records for its registered parameters (its ``registered_roots``, `Window.write`:
     core's registration's window, or an integration's own window registration), by parameter; none where it records
@@ -1215,12 +1244,13 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     `SampledProofs.Wires`' ``wiredBits``), its registered reads of input rows (a read of an output port fills none, `Read`),
     table reads and openings of a held parameter (``registered``) and its ingress (``ingress``); ``free`` the rest, which
     only the prover chose. ``pins`` are the verifier's own, never the record's: the roots it fixed before the run, by the
-    names the record gives the registered parameters (``{param: root}``); ``roots`` the window's, as its registration
-    records them (`Window.write`). A parameter is held where the window's root for it is the pinned root (`held_params`).
-    A read of any other parameter, or a table read or opening of a table over one, is free, since a root the prover
-    commits after serving, or another root than the pinned one, constrains nothing; with no pins (a bare string is none)
-    every registered read is free. Refused unless the declarations are well-formed for the record's templates
-    (`check_wires`, `check_inputs`), so no row counts twice."""
+    names the record gives the registered parameters (``{param: root}``), a pin ``P`` naming ``P`` and every ``P/…`` it
+    doesn't pin on its own (a registration of several parameters: a model's weights, one a weight and row width);
+    ``roots`` the window's, as its registration records them (`Window.write`). A parameter is held where the window's
+    root under its pin's name is the pinned root (`held_params`, `held`). A read of any other parameter, or a table read
+    or opening of a table over one, is free, since a root the prover commits after serving, or another root than the
+    pinned one, constrains nothing; with no pins (a bare string is none) every registered read is free. Refused unless
+    the declarations are well-formed for the record's templates (`check_wires`, `check_inputs`), so no row counts twice."""
     if "wires" not in doc:
         raise ValueError("a circuit record whose members are listed is counted from its members, not its description")
     defs = [(resolve(t), int(n)) for t, n in doc["templates"]]
@@ -1234,10 +1264,10 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
 
     inputs = sum(16 * sum(w for _, w in lay.rows) * n for lay, n in lays.values())
     wired = sum(w.units * row_bits(w.reader, w.port) for w in wires)
-    reg, held = reg or Registered({}), held_params(pins, roots)
-    pinned = {t.name for t in reg.tables if t.param in held}
+    reg, fixed = reg or Registered({}), held(pins, roots)
+    pinned = {t.name for t in reg.tables if fixed(t.param)}
     registered = (sum(r.units * row_bits(r.reader, r.port) for r in reg.reads
-                      if r.param in held and r.port in dict(lays[r.reader][0].rows))
+                      if fixed(r.param) and r.port in dict(lays[r.reader][0].rows))
                   + sum(r.units * 16 * dict(lays[r.reader][0].rows)[r.port] for r in reg.roots if r.table in pinned)
                   + sum(o.units * 16 * dict(lays[o.reader][0].rows)[p] for o in reg.openings if o.table in pinned
                         for p in o.ports))
@@ -1373,10 +1403,6 @@ class Window:
     _entries: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.circuit.cuts:
-            raise ValueError(f"{self.circuit.name}: a window commits whole uncut rows; a circuit with cuts "
-                             f"({sorted(self.circuit.cuts)}) is recorded by its description (`descriptor_record`) until the "
-                             "committer reads cut rows")
         _committable(self.circuit.registered, self.circuit.ingress, self.circuit.name)
         params = self.circuit.registered.params if self.circuit.registered is not None else {}
         for r in self.circuit.reads:
@@ -1445,12 +1471,17 @@ class Window:
             if m.template not in cat:
                 got = self._recorded[m.template]
                 cat[m.template] = [np.concatenate([b.words[g] for b in got]) for g in range(len(lay.rows) + len(lay.outs))]
-            ports, lo = cat[m.template], m.base - base[m.template]
-            d = {"rows": {p: ports[g][lo:lo + m.n] for g, (p, _) in enumerate(lay.rows)},
-                 "outs": {p: ports[len(lay.rows) + j][lo:lo + m.n] for j, (p, _) in enumerate(lay.outs)}}
+            ports, lo, kv = cat[m.template], m.base - base[m.template], self.circuit.cuts.get(m.template, {})
+            d = {"rows": {}, "outs": {p: ports[len(lay.rows) + j][lo:lo + m.n] for j, (p, _) in enumerate(lay.outs)}}
+            for g, (p, w) in enumerate(lay.rows):
+                k = int(kv.get(p, 1))
+                for j in range(k):
+                    # row j of a port cut k ways is its outer elements [j·n/k, (j+1)·n/k): its words' j-th k-th (`Layout.cut`)
+                    d["rows"][row_name(p, j, k)] = (ports[g][lo:lo + m.n] if k == 1 else
+                                                    np.ascontiguousarray(ports[g][lo:lo + m.n, j * w // k:(j + 1) * w // k]))
             reads = member_reads(self.circuit, m, base[m.template])
             if reads:
-                d["refs"] = np.stack([reads[p][2] if p in reads else np.arange(m.n) for p, _ in lay.rows], axis=1)
+                d["refs"] = np.stack([reads[p][2] if p in reads else np.arange(m.n) for p, _ in m.rows], axis=1)
                 for p, (param, positions, refs) in reads.items():
                     if (v := (self.registered or {}).get(param)) is None:
                         raise ValueError(f"{m.key} {p} reads registered parameter {param!r}: give its committed value")
@@ -1489,11 +1520,11 @@ class Window:
 
     def circuit_record(self) -> dict[str, Any]:
         """The window's ``circuit.json`` (`circuit_record`), its members stated by its cap and the circuit's wires, each
-        template's statement its bit rows (`unit_rows`)."""
+        template's statement its bit rows under its cuts (`unit_rows`)."""
         sts = {}
-        for fn, _ in self.circuit.templates:
-            i, o = unit_rows(fn)
-            sts[descriptor_id(fn)] = {"in_rows": i, "out_rows": o, "reads": "inline"}
+        for fn, tid in zip((f for f, _ in self.circuit.templates), self.circuit.ids):
+            i, o = unit_rows(fn, self.circuit.cuts.get(tid))
+            sts[tid] = {"in_rows": i, "out_rows": o, "reads": "inline"}
         blocks = self.circuit.blocks
         return circuit_record(self.window, self.circuit.name, list(zip(self.circuit.ids, (n for _, n in self.circuit.templates))),
                               sts, self.circuit.external, cap=self.cap, wires=self.circuit.wires, boundary=self.circuit.boundary,

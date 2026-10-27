@@ -1,8 +1,9 @@
-"""egress-zk: N2's egress bucket in zero knowledge. Every bucket of one egress link-window checked by its own
-`EgressBucket_v1` unit, its ``row`` input port registered against the warden's signed root (`warden_rows.bucket_port`:
-unit base + t reads row t), proved by C-Flock `prove --zk` behind the Lean firewall and held by the Lean verifier's
-registered reads (`flock-verify verify --zk --registered`); each unit's one output, its 16-bit verdict, opened to the
-verifier. Standalone: no Spec holds these units yet (`verity.core.protocols.certifier.egress`).
+"""egress-zk: N2's egress bucket in zero knowledge, the generator form. Every bucket of one egress link-window computed
+by its own `EgressBucket_v1` unit, its computed row, output ``o1``, registered against the warden's signed root
+(`warden_rows.bucket_port`: unit base + t reads row t), proved by C-Flock `prove --zk` behind the Lean firewall and held
+by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
+16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
+(`verity.core.protocols.certifier.egress`).
 
     python benchmarks/network_traces/egress_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
 
@@ -12,20 +13,21 @@ verifier. Standalone: no Spec holds these units yet (`verity.core.protocols.cert
   is read by the verifier (`warden_rows.check_registration`) before its port is built from the head it names.
 * **The units** (`EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`, circuit-check's pinned shape), one a bucket, T
   of them: each reads row ``state`` (the egress view of the slot state the scan's ingress step wrote at its bucket,
-  `egress_traffic.states`; a hidden row under a fresh salt here, where the scan registers it) and row ``row`` (the
-  warden's row, registered), and writes ``o0``, its verdict word, 1 when the cells the state renders are the row.
-* **Members.** ``honest``: accepted, every verdict 1. ``lying``: one rendered output id of one bucket's state changed,
-  the row the warden's: the proof holds and that unit's verdict opens to 0, so the window is refused on its verdict.
-  ``forged``: the same state, its row the one that state renders under the warden's salt, so the verdict is 1 and the
-  row opens no row the warden signed: refused by Lean ("does not open"). ``moved``: units t and t + 1 given each
-  other's state and row, their positions and salts swapped to match, so each row opens at the other unit's position:
-  refused by Lean ("reads position"). Each is registered, every unit drawn by the verifier's Lean (`flock-verify draw
-  --stratified n`), proved ``--zk`` behind the firewall (``FC_FIREWALL=1``) and held by Lean `verify --zk --partition
-  --program --registered`; the verifier opens each held unit's ``o0`` under the salt the prover sends for it.
+  `egress_traffic.states`; a hidden row under a fresh salt here, where the scan registers it), and computes ``o0``, 1
+  when the state renders a row, and ``o1``, the row, committed under the salt of the warden's row t and registered as
+  a read of it, so the proof opens the warden's row only when the row the state renders is it.
+* **Members.** ``honest``: accepted, every ``o0`` 1. ``lying``: one rendered output id of one bucket's state changed:
+  the unit computes a row the warden didn't sign, so its ``o1`` opens no registered row: refused by Lean ("does not
+  open"). ``moved``: units t and t + 1 given each other's state, their positions and salts swapped to match, so each
+  ``o1`` opens at the other unit's position: refused by Lean ("reads position"). Each is registered, every unit drawn
+  by the verifier's Lean (`flock-verify draw --stratified n`), proved ``--zk`` behind the firewall (``FC_FIREWALL=1``)
+  and held by Lean `verify --zk --partition --program --registered`; the verifier opens each held unit's ``o0`` under
+  the salt the prover sends for it.
 * **What the verifier receives** is scanned for every 16-byte piece of every unit's state and row and every salt but
-  the verdicts' (`a8.received`), less the pieces public anyway: the staged circuit, zero bytes, and the pad and `END`
+  ``o0``'s (`a8.received`), less the pieces public anyway: the staged circuit, zero bytes, and the pad and `END`
   cells of the window's ordinals (a piece of them is a small integer among zeros). The prover's instance file, which
-  holds them all, is the control.
+  holds them all, is the control; it lays the ``state`` table's 204-byte rows back to back, each followed by the next
+  rather than by zeros, so a state's zero-padded last chunk isn't held there (`leak_scan.public_pieces`' ``fields``).
 """
 from __future__ import annotations
 
@@ -60,8 +62,8 @@ SHAPE = traffic.shape(PARAMS, NR, K)
 LINK, SESSION = "responses", bytes(range(32))
 #: the fake upstream: (seed, connections, longest response) of `egress_traffic.busy`, over `WINDOWS` link-windows
 SEED, CONNECTIONS, LONGEST, WINDOWS = 6, 14, 15, 6
-#: each member's outcome: accepted, refused on a verdict the verifier opens, or refused by Lean's registered reads
-MEMBERS = {"honest": "accepted", "lying": "verdict", "forged": "does not open", "moved": "reads position"}
+#: each member's outcome: accepted, or refused by Lean's registered reads
+MEMBERS = {"honest": "accepted", "lying": "does not open", "moved": "reads position"}
 
 
 def log(msg: str) -> None:
@@ -113,28 +115,27 @@ def _changed_state(at: SimpleNamespace) -> tuple[int, EG.State, dict]:
 
 
 def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
-    """A member's units' state and row, in unit order, the salts its registered rows are committed under, the
-    header's `registered` entry (the warden's positions and paths for the rows it names), and each unit's verdict."""
+    """A member's units' state, in unit order, the row each computes (`egress.outputs`, its ``o1``), the salts its
+    ``o1`` rows are committed under, the header's `registered` entry (the warden's positions and paths for the rows
+    it names), and each unit's ``o0``."""
     cells, T = at.cells, PARAMS.window
-    states, rows, order, changed = list(at.states), list(cells.rows), list(range(T)), {}
-    if name in ("lying", "forged"):
+    states, order, changed = list(at.states), list(range(T)), {}
+    if name == "lying":
         t, states[t], changed = _changed_state(at)
-        if name == "forged":
-            rows[t] = EG.rendered(SHAPE, states[t])
     if name == "moved":
-        t = next(t for t in range(T - 1) if rows[t] != rows[t + 1])
+        t = next(t for t in range(T - 1) if cells.rows[t] != cells.rows[t + 1])
         order[t], order[t + 1] = t + 1, t
         changed = {"units": [t, t + 1]}
-    states, rows = [states[b] for b in order], [rows[b] for b in order]
+    states = [states[b] for b in order]
     _words, salts, entry = cells.statement(order)
-    return SimpleNamespace(states=states, rows=rows, words=[EG.state_words(SHAPE, s) for s in states], salts=salts,
-                           entry=entry, order=order, changed=changed,
-                           verdicts=[EG.verdict(SHAPE, s, r) for s, r in zip(states, rows)])
+    got = [EG.outputs(SHAPE, s) for s in states]
+    return SimpleNamespace(states=states, rows=[r for _o, r in got], words=[EG.state_words(SHAPE, s) for s in states],
+                           salts=salts, entry=entry, order=order, changed=changed, verdicts=[o for o, _r in got])
 
 
 def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int) -> str | None:
-    """The host's read of a member's registered port against the verifier's own (`warden_rows.bucket_port`), as
-    Lean's registered reads make it (`warden_rows.refusal`): None when they accept, else why not."""
+    """The host's read of a member's registered ``o1`` port against the verifier's own (`warden_rows.bucket_port`),
+    as Lean's registered reads make it (`warden_rows.refusal`): None when they accept, else why not."""
     port = WR.bucket_port(at.head, PARAMS, reads_from)
     return WR.refusal(port, at.dom, mr.entry, [WR.bc(r, s) for r, s in zip(mr.rows, mr.salts)])
 
@@ -142,8 +143,8 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int) -> str | 
 # --- the statement ----------------------------------------------------------------------------------------------------
 
 def stager(M, n: int, out: Path) -> SimpleNamespace:
-    """The statement program and partition (one template, a unit a bucket) and the unit's stager: rows ``state`` and
-    ``row`` in, row ``o0`` out."""
+    """The statement program and partition (one template, a unit a bucket) and the unit's stager: row ``state`` in,
+    rows ``o0`` and ``o1`` out."""
     sh = SHAPE
     defn = bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D)
     program = M.P.mixed_population_program([(defn, n)])
@@ -154,9 +155,8 @@ def stager(M, n: int, out: Path) -> SimpleNamespace:
     (out / "program.json").write_bytes(M.canonical_json(M.encode_program(program)))
     bound = {"partition": M.P.digest(part), "program": part["program"]}
     t = time.time()
-    st = M.CS.UnitStager(defn, "unit/egress-bucket", [("state", M.V2, sh.state_bits, ["state"]),
-                                                      ("row", M.V2, 8 * sh.R * sh.B, ["row"])],
-                         [(M.V2, (0,))], circuit=out / "circuit.txt", bind=bound)
+    st = M.CS.UnitStager(defn, "unit/egress-bucket", [("state", M.V2, sh.state_bits, ["state"])],
+                         [(M.V2, (0,)), (M.V2, (1,))], circuit=out / "circuit.txt", bind=bound)
     st.pin
     (tid, base, cnt), = M.P.ranges(program, query)
     assert tid == M.P.template_id(defn) and cnt == n
@@ -185,9 +185,9 @@ def verdict_bcs(m: dict) -> list[bytes]:
 
 
 def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
-    """Member `name`'s statement: its units' ``state`` and ``row`` rows in a shared-row file (each instance its own
-    table row), ``state`` and ``o0`` under fresh salts and ``row`` under the salts and paths of its registered entry;
-    and the verifier's own `--registered` file at the warden's root."""
+    """Member `name`'s statement: its units' ``state`` rows in a shared-row file (each instance its own table row),
+    ``state`` and ``o0`` under fresh salts and ``o1`` under the salts and paths of its registered entry; and the
+    verifier's own `--registered` file at the warden's root. The units' outputs are the reference's."""
     t0 = time.time()
     st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"
     nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
@@ -195,24 +195,25 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
         raise SystemExit(f"{name}: m = {st.meta['k_log']} + {nbl} is outside 25 .. {M.a7.M_MAX}")
     mr = member_rows(name, at)
     words = M.np.asarray(mr.words, dtype=M.np.uint16)
-    row = M.np.asarray([WR.words(r) for r in mr.rows], dtype=M.np.uint16)
     set_name = f"{st.iset.name}-{name}"
     fresh = {p: [os.urandom(WR.SALT_BYTES) for _ in range(n)] for p in ("state", "o0")}
-    got = st.stage({"state": words, "row": row}, out, os.urandom(32), salts={**fresh, "row": mr.salts},
-                   indices=range(sg.base, sg.base + n), set_name=set_name, tables={"state": words, "row": row},
-                   refs={"state": list(range(n)), "row": list(range(n))}, registered={"row": mr.entry})
+    got = st.stage({"state": words}, out, os.urandom(32), salts={**fresh, "o1": mr.salts},
+                   indices=range(sg.base, sg.base + n), set_name=set_name, tables={"state": words},
+                   refs={"state": list(range(n))}, registered={"o1": mr.entry})
     o0 = [int(x[0]) for x in M.np.asarray(got["outs"]["o0"])]
     if o0 != mr.verdicts:
-        raise SystemExit(f"{name}: the units' verdicts {o0} are not the reference's {mr.verdicts}")
+        raise SystemExit(f"{name}: the units' o0 {o0} are not the reference's {mr.verdicts}")
+    if [M.np.asarray(x, dtype="<u2").tobytes() for x in M.np.asarray(got["outs"]["o1"])] != mr.rows:
+        raise SystemExit(f"{name}: a unit's o1 row is not the reference's")
     (out / "inst.bin").rename(out / f"inst-{n}.bin")
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    reads = WR.reads_file({"row": WR.bucket_port(at.head, PARAMS, sg.base)})
+    reads = WR.reads_file({"o1": WR.bucket_port(at.head, PARAMS, sg.base)})
     (out / "registered.json").write_text(json.dumps(reads, sort_keys=True))
     m = {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512,
          "set": set_name, "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
-         "salts": got["salts"], "ports": st.ports, "port": "row", "rows": mr.rows, "words": mr.words,
+         "salts": got["salts"], "ports": st.ports, "port": "o1", "rows": mr.rows, "words": mr.words,
          "verdicts": mr.verdicts, "partition_file": sg.partition_file, "program_file": sg.program_file,
          "registered_file": out / "registered.json", "predicted": refused(at, mr, sg.base), "changed": mr.changed,
          "order": mr.order, "stage_s": round(time.time() - t0, 1)}
@@ -303,8 +304,8 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
 
 
 def blobs_of(m: dict) -> tuple[dict[str, bytes], set[str]]:
-    """The witness pieces the verifier must not receive: each unit's state and row and every salt of the statement
-    but the verdicts', all of which the prover's instance file holds."""
+    """The witness pieces the verifier must not receive: each unit's state and row (its ``o1``) and every salt of the
+    statement but ``o0``'s, all of which the prover's instance file holds."""
     blobs = {f"row {i}": r for i, r in enumerate(m["rows"])}
     blobs.update({f"state {i}": b"".join(w.to_bytes(2, "little") for w in ws) for i, ws in enumerate(m["words"])})
     blobs.update({f"salt {p} {i}": s for p, ss in m["salts"].items() if p != "o0" for i, s in enumerate(ss)})
@@ -319,22 +320,22 @@ def known(sg: SimpleNamespace, at: SimpleNamespace) -> bytes:
 
 
 def expected(name: str, res: dict) -> bool:
-    """The honest member's window is accepted; ``lying``'s proof holds and its changed unit's verdict opens to 0; the
-    others are refused by Lean's registered reads, each by its `MEMBERS` reason."""
+    """The honest member's window is accepted; the others are refused by Lean's registered reads, each by its
+    `MEMBERS` reason."""
     lean = res["verdicts"].get(f"lean-verify/{name}")
     if MEMBERS[name] == "accepted":
         return res["window_accepted"] and lean is True
-    if MEMBERS[name] == "verdict":
-        return res["accepted"] and lean is True and not res["window_accepted"] and 0 in res["opened"]
     why = res["why"].get(f"lean-verify/{name}") or ""
     return not res["accepted"] and lean is False and "registered reads" in why and MEMBERS[name] in why
 
 
 def predicted(name: str, m: dict) -> bool:
-    """The host's read of a member's statement before any proof: its registered port and its verdicts."""
-    if MEMBERS[name] in ("accepted", "verdict"):
-        return m["predicted"] is None and (EG.ACCEPT in m["verdicts"]) and (
-            (0 in m["verdicts"]) == (MEMBERS[name] == "verdict"))
+    """The host's read of a member's statement before any proof: its registered ``o1`` port, and every unit's ``o0``
+    1 (each member's states render rows)."""
+    if set(m["verdicts"]) != {EG.ACCEPT}:
+        return False
+    if MEMBERS[name] == "accepted":
+        return m["predicted"] is None
     return MEMBERS[name] in (m["predicted"] or "")
 
 
@@ -365,8 +366,8 @@ def prove(a) -> int:
         summary.setdefault("members", {})[name] = {"ands": m["ands"], "stage_s": m["stage_s"], "changed": m["changed"],
                                                    "order": m["order"], "verdicts": m["verdicts"],
                                                    "predicted": m["predicted"] or "accepted"}
-        log(f"staged {name}: {m['ands']} ANDs a unit, {m['changed'] or 'unchanged'}, verdicts {m['verdicts']}; the "
-            f"host's read of the row port: {m['predicted'] or 'accepted'}")
+        log(f"staged {name}: {m['ands']} ANDs a unit, {m['changed'] or 'unchanged'}, o0 {m['verdicts']}; the "
+            f"host's read of the o1 port: {m['predicted'] or 'accepted'}")
         if not predicted(name, m):
             raise SystemExit(f"{name}: the host's read of its statement is not the member's ({MEMBERS[name]})")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
@@ -377,7 +378,7 @@ def prove(a) -> int:
     ok = True
     for j, (name, m) in enumerate(staged.items()):
         res = audit_member(M, av, sg, m, at, out / name, a.port + j)
-        blobs, held, public = WZ.public_pieces(M.a8, *blobs_of(m), known(sg, at))
+        blobs, held, public = WZ.public_pieces(M.a8, *blobs_of(m), known(sg, at), fields=True)
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": public}
         good = expected(name, res) and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"]
@@ -398,7 +399,7 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="egress_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("prove", help="an egress link-window's EgressBucket units, the row port registered, proved --zk")
+    p = sub.add_parser("prove", help="an egress link-window's EgressBucket units, the o1 port registered, proved --zk")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)

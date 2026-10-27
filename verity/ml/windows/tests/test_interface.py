@@ -355,8 +355,47 @@ def test_a_cut_port_is_rows_each_wired_from_its_own_writer():
             sliced(wires=(replace(c.wires[0], **edit),))
     with pytest.raises(ValueError, match="both fill rows"):
         sliced(wires=(*c.wires, I.Wire(GID, "x", G8ID, "o0", at=2, radix=(1,), base=0, step=(0,), cut=(1, 1))))
-    with pytest.raises(ValueError, match="cut rows"):
-        I.Window(c, RUN, LAW, 2)
+
+
+def sliced_values(seed: int = 0) -> tuple[list[np.ndarray], ...]:
+    """`sliced`'s units' values: the six slices' (x, w) and outputs, then the three positions' (x, w) and outputs, a
+    position's ``x`` its two slices' outputs."""
+    rng = np.random.default_rng(seed)
+
+    def bf16(a: np.ndarray) -> np.ndarray:
+        return (np.asarray(a, np.float32).view(np.uint32) >> 16).astype(np.uint16)
+
+    x8, w8 = bf16(rng.standard_normal((6, 16))), bf16(rng.standard_normal((6, 8, 16)) / 4)
+    y8 = np.asarray(evaluate_batch(G8, x8, w8, kernel="reference"), dtype=np.uint16).reshape(6, 8)
+    x, w = y8.reshape(3, 16), bf16(rng.standard_normal((3, 16, 16)) / 4)
+    return [x8, w8], [y8], [x, w], [np.asarray(evaluate_batch(GEMM, x, w, kernel="reference"), dtype=np.uint16).reshape(3, 16)]
+
+
+def test_a_window_commits_a_cut_ports_rows_each_under_its_writers_salt():
+    """A port cut in two is committed as two rows, each its words' half: a position's ``x#0`` and ``x#1`` are its slices'
+    outputs, the wiring check holds on the committed bodies, the verifier derives the same members from the record, which
+    states the cut rows, and a cut row that isn't its writer's output doesn't commit."""
+    c = sliced()
+    ins8, outs8, ins, outs = sliced_values()
+    win = I.Window(c, RUN, LAW, 2)
+    win.record(G8, ins8, outs8)
+    win.record(GEMM, ins, outs)
+    assert win.mismatches() == {}
+    got = win.close(salt_key=bytes(32))
+    ms, y8 = win.window.members, outs8[0]
+    assert np.array_equal(got.rows[ms[3].port("x#0")], y8[[0, 2]]) and np.array_equal(got.rows[ms[3].port("x#1")], y8[[1, 3]])
+    publics = {m.key: got.public_body(k) for k, m in enumerate(ms)}
+    assert WI.check(ms, publics) == {} and WI.check_drawn(ms, publics, range(9)) == {}
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    assert doc["cuts"] == {GID: {"x": 2}} and doc["statements"][GID]["in_rows"][1][:3] == ["x#1", V2, 128]
+    assert I.window_of_record(doc, LAW, {GID: GEMM, G8ID: G8}.__getitem__).members == ms
+    x = ins[0].copy()
+    x[1, 8] ^= 1
+    bad = I.Window(c, RUN, LAW, 2)
+    bad.record(G8, ins8, outs8)
+    bad.record(GEMM, [x, ins[1]], [np.asarray(evaluate_batch(GEMM, x, ins[1], kernel="reference"), dtype=np.uint16).reshape(3, 16)])
+    with pytest.raises(ValueError, match="x#1 row is not the o0 row"):
+        bad.close(salt_key=bytes(32))
 
 
 def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_the_description():
@@ -476,6 +515,14 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
                                                            "ingress": 0, "free": bits - 12 * 8 * K}
     assert I.input_count(doc, BY_ID.__getitem__, "weights")["registered"] == 0
     assert I.input_count(doc, BY_ID.__getitem__, w, {"w": "cd" * 64})["registered"] == 0
+    nested = {**doc, "registered": {**doc["registered"], "params": {"w/a@8": 6 * K // 2},
+                                    "reads": [{**doc["registered"]["reads"][0], "param": "w/a@8"}]}}
+    assert I.input_count(nested, BY_ID.__getitem__, w, w)["registered"] == 12 * 8 * K
+    own, other = {"w/a@8": "ef" * 64}, {"w/a@8": "12" * 64}
+    assert I.input_count(nested, BY_ID.__getitem__, {**w, **own}, {**w, **own})["registered"] == 12 * 8 * K
+    for pins, roots in [({"w/b@8": "ab" * 64}, {"w/b@8": "ab" * 64}), (w, {"w": "cd" * 64}), (w, {"w/a@8": "ab" * 64}),
+                        ({**w, **own}, {**w, **other})]:
+        assert I.input_count(nested, BY_ID.__getitem__, pins, roots)["registered"] == 0, (pins, roots)
     assert "registered" not in json.loads(I.circuit_bytes(window()[0].circuit_record()))
     for bad, why in [({**doc["registered"], "params": {"w": 5 * K // 2}}, "leaves"),
                      ({**doc["registered"], "reads": [{**doc["registered"]["reads"][0], "port": "frames"}]}, "names no parameter"),
@@ -485,11 +532,33 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
             I.input_count({**doc, "registered": bad}, BY_ID.__getitem__)
 
 
+def test_a_registered_values_shape_is_the_width_of_the_port_its_reads_name():
+    """`read_shape`: ``w``'s rows are ``wrow``'s width, its leaves over that, and a value no read names, one read at two
+    widths or one whose leaves aren't whole rows is refused."""
+    win, _ = registered()
+    wrow = dict(I.layout(COORD).rows)["wrow"]
+    assert I.read_shape(win.circuit, "w") == {"value": "w", "words": wrow, "rows": 6 * K // 2 // wrow, "word_bits": 16,
+                                              "row_schema": I.V2}
+    with pytest.raises(ValueError, match="no registered read of 'v'"):
+        I.read_shape(win.circuit, "v")
+    other = next(p for p, n in I.layout(COORD).rows if n != wrow)
+    two = I.Circuit("two", ((COORD, 12),), registered=I.Registered(
+        {"w": 6 * K // 2}, reads=(READ, I.Read(TID, other, "w", 0, (12,), 0, (0,)))))
+    with pytest.raises(ValueError, match="not one width"):
+        I.read_shape(two, "w")
+    odd = I.Circuit("odd", ((COORD, 12),), registered=I.Registered({"w": 6 * K // 2 + 1}, reads=(READ,)))
+    with pytest.raises(ValueError, match="aren't whole rows"):
+        I.read_shape(odd, "w")
+
+
 def test_a_read_covers_whole_members_and_reads_whole_rows():
+    """Members are cut where a read's units begin or end, as where a wire's do, so a read covers whole members: units 2..11
+    read the weight's rows as tables and units 0 and 1 hold their own rows."""
     reg = lambda r: I.Registered({"w": 6 * K // 2}, reads=(r,))  # noqa: E731
-    with pytest.raises(ValueError, match="covers part of"):
-        I.Window(I.Circuit("part", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 2, (5, 2), 0, (K // 2, 0)))),
-                 RUN, LAW, 4)
+    win = I.Window(I.Circuit("part", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 2, (5, 2), 0, (K // 2, 0)))),
+                   RUN, LAW, 4)
+    assert [(m.base, m.n, bool(m.tables)) for m in win.window.members] == [(0, 2, False), (2, 4, True), (6, 4, True),
+                                                                           (10, 2, True)]
     with pytest.raises(ValueError, match="whole registered rows"):
         I.Window(I.Circuit("half", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 0, (12,), 0, (K // 8,)))),
                  RUN, LAW, 4)
@@ -530,6 +599,36 @@ def test_the_window_commits_each_read_port_as_a_table_of_the_registered_rows_und
     twice._recorded[TID][0].words[2][1, 0] ^= 1
     with pytest.raises(ValueError, match="two rows for one row"):
         twice.close()
+
+
+def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
+    """`chain` with each layer's ``w`` a registered row: every member is a shared-row member, its wired ``x`` a table of its
+    units' own rows, and the wiring check reads a unit's string through its ref, the row its statement reads. The verifier
+    derives the same members, a wire moved to other writers is refused, and so is a ref moved to another unit's row."""
+    ins, outs = chain_values()
+    layer = REQUESTS * STEPS
+    w = Held("w", ins[1][::layer].reshape(LAYERS, 256))
+    read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
+    circuit = replace(chain(), registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
+    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    ms = win.window.members
+    assert [(m.base, m.tables, m.wired) for m in ms] == [
+        (0, (("x", 2), ("w", 1)), ()), (2, (("x", 2), ("w", 1)), (("x", "o0", (4, 5)),)),
+        (4, (("x", 2), ("w", 1)), (("x", "o0", (0, 1)),)), (6, (("x", 2), ("w", 1)), (("x", "o0", (2, 3)),))]
+    win.record(GEMM, ins, outs)
+    c = win.close(salt_key=bytes(32))
+    publics = {m.key: c.public_body(k) for k, m in enumerate(ms)}
+    assert WI.check(ms, publics) == {} and WI.check_drawn(ms, publics, range(8)) == {}
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    assert I.window_of_record(doc, LAW, {GID: GEMM}.__getitem__).members == ms
+    moved = [replace(m, wired=(("x", "o0", m.wired[0][2][::-1]),)) if m.wired else m for m in ms]
+    assert set(WI.check(moved, publics)) == {m.key for m in ms if m.wired}
+    body, at = bytearray(publics[ms[1].key]), WI.BC_BYTES * sum(CS.port_leaves(ms[1]).values())
+    body[at:at + 4] = (1).to_bytes(4, "little")
+    assert list(WI.check_drawn(ms, {**publics, ms[1].key: bytes(body)}, [2])) == [ms[1].key]
+    with pytest.raises(ValueError, match="own rows"):
+        CS.Window(win.window.program, win.window.query, LAW, RUN,
+                  (*ms[:1], replace(ms[1], tables=(("x", 1), ("w", 1))), *ms[2:]))
 
 
 def test_the_boundary_is_carried_as_given():

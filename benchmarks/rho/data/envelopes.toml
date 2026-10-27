@@ -1,0 +1,85 @@
+# Layer 2, the envelopes (rho/envelopes.py): the NCI check's registration (a policy) and each regime's envelopes, one
+# flat table per regime whose every key is a field of one envelope (Pouw, Detection, Wipe, Certifier) or the regime's
+# own form. A regime's `base` is a table it inherits and overrides.
+
+[policy.kimi-k2-1m-raw]
+gamma = { value = 6.4e16, unit = "FLOP", source = "benchmarks/nci/calibrations.json kimi-k2-1m-raw: 1M tokens x 2 x 32B active", status = "declared" }
+k = { value = 2e7, unit = "bit", low = 2.2e6, high = 8.8e7, source = "benchmarks/nci/calibrations.json kimi-k2-1m-raw (2.5 MB); low: kimi-k2-1m-coded; high: kimi-k2-11mb-raw", status = "declared" }
+
+[regime.unmonitored]
+kind = "unmonitored"
+
+# Nci.Guarantees.DampenerRemote's terms, each at benchmarks/nci/tiers.py's DEFAULTS (tests/test_envelopes.py holds them).
+# PoUW: residual, clock_share, host, eps_w, eps_agg, window_delta_*; detection: identities, lag_s (and, sampled, the rest).
+[regime.remote]
+kind = "remote"
+residual = { value = 0.323, low = 0.01, high = 1, source = "benchmarks/nci/tiers.py DEFAULTS residual: the floor credit at the locked clock, honest kernels at 1.72x the floor (run r20261017-123922-e558); low: best plausible design; high: nothing credited, as in a training window today", status = "measured" }
+clock_share = { value = 0.064, low = 0, high = 0.3, source = "benchmarks/nci/tiers.py DEFAULTS clock_share: 2,597 MHz against the credited 2,430 (C4 dossier, RTX PRO 6000); low: credit at the true maximum or an auditor-read clock offset", status = "measured" }
+host = { value = 1, low = 0, high = 1, source = "benchmarks/nci/tiers.py audited_residual: the host CPUs count at their INT8 datasheet peak until something credits or bounds them; low: credited or bounded", status = "assumed" }
+eps_w = { value = 0.00744, low = 6e-4, high = 0.00917, source = "benchmarks/nci/tiers.py DEFAULTS eps_w (CircuitCredit, draft #2638); low: best plausible design (C7 dossier); high: CircuitCredit at r = 4 (exposure.RANGES)", status = "derived" }
+eps_agg = { value = 1e-4, low = 1e-6, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg: per-window failure 3 x 2^-40 at the theorem's delta 2.7e-8 (Markov over the windows)", status = "derived" }
+window_delta_coin = { value = 9.09e-13, source = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks = 3 x 2^-40 (eps_agg's source): delta_s = 2^-40, the coins' draw", status = "derived" }
+window_delta_crypto = { value = 1.82e-12, source = "CircuitCredit's per-window failure: delta_bind + delta_ks = 2 x 2^-40, commitment binding (SHA-512) and the proof system's knowledge soundness", status = "derived" }
+identities = { value = 1, unit = "identity", low = 1, high = 1000, source = "benchmarks/nci/tiers.py DEFAULTS identities: detection is terminal (J = 1); high: identities a detection doesn't end", status = "assumed" }
+lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "benchmarks/nci/tiers.py DEFAULTS lag_s: a window plus the verdict delay", status = "assumed" }
+
+# tiers T5: sampled proofs at 1% on top of serve-time commitments, today's sparse-draw cost.
+[regime.remote-sampled]
+base = "remote"
+sampled = true
+proof_share = { value = 0.01, low = 1e-3, high = 0.1, source = "benchmarks/nci/tiers.py DEFAULTS share", status = "declared" }
+overhead = { value = 4.8e12, low = 1.6e8, high = 1e13, source = "benchmarks/nci/tiers.py DEFAULTS overhead: sparse draws today; low: batched throughput", status = "measured" }
+replay = { value = 1.1e5, low = 1e3, high = 1e6, source = "benchmarks/nci/tiers.py DEFAULTS replay", status = "measured" }
+step_flop = { value = 1.43e4, unit = "FLOP", low = 1e3, high = 1e6, source = "benchmarks/nci/tiers.py DEFAULTS step_flop", status = "declared" }
+p_evade = { value = 9.094947017729282e-13, low = 1e-15, high = 9.5367431640625e-7, source = "benchmarks/nci/tiers.py DEFAULTS p_evade: the planner's 2^-40; high: 2^-20", status = "declared" }
+luck = { value = 8, low = 1, high = 32, source = "benchmarks/nci/tiers.py DEFAULTS luck: F/(1-p), spec sheet 8", status = "declared" }
+step_bits = { value = 16, unit = "bit", low = 8, high = 32, source = "benchmarks/nci/tiers.py DEFAULTS step_bits: a proof block's outputs are at most 16 bits; high: one 32-bit gate", status = "ruled" }
+floor_steps = { value = 1, low = 1, high = 1e12, source = "benchmarks/nci/tiers.py DEFAULTS floor_steps: steps in a class drawn at a floor of one", status = "declared" }
+chord = { value = 5.7568542e7, unit = "product/bit", source = "benchmarks/nci/tiers.py chord at DEFAULTS and the injected bits: the steepest secant to S_1 = sqrt(2 b_w b_a Gamma), on the (1, 0) piece", status = "derived" }
+chord_kappa = { value = 0.6, source = "benchmarks/nci/tiers.py DEFAULTS kappa (the products-to-FLOP rate tiers values chi at)", status = "declared" }
+
+# The remote envelopes plus a wipe every 24 h at Daniel's operating point (5 GB per server, of its whole memory M_s), a
+# certifier on each host and side channels. Wipe: wipe_s, per, k_wipe, game_delta_coin, prf_advantage; certifier:
+# intake, timing, side.
+[regime.onsite]
+kind = "onsite"
+base = "remote"
+wipe_s = { value = 86400, unit = "s", low = 3600, high = 604800, source = "ruling: Daniel 25 Oct, 24 h wipes", status = "ruled" }
+per = "server"
+k_wipe = { value = 4e10, unit = "bit/server", low = 2e10, high = 9.32e11, source = "ruling: Daniel 26 Oct 12:16 PM PDT, the wipe leaves at most 5 GB of the server's assumed memory capacity M_s, every tier included (the operating point; the per-server statement is memory-accounting's, Wed 28 Oct 06:00Z); low: half; high: the per-device measurement's 116.5 GB a server (8 x 10 GB of HBM and 36.5 GB of host, DPU, BMC and flash unwiped: regime.onsite-per-device)", status = "ruled" }
+game_delta_coin = { value = 2.938735877055719e-39, source = "the streamed wipe's retention game (#4707): accepted with probability at most 2^-128 + Adv_PRF; the coins' 2^-128", status = "derived" }
+prf_advantage = { value = 2.938735877055719e-39, source = "Adv_PRF of the streamed wipe's label function, taken at the PoUS statements' epsilon_crypto = 2^-128 (Security/Definitions/Pous/Guarantees.lean)", status = "assumed" }
+intake = { value = 1, unit = "x", low = 1, high = 1.3e6, source = "benchmarks/nci/tiers.py DEFAULTS intake_x: the declared novel intake at alpha Phi once NET-35's count check is in the ZK flow; high: line rate until then", status = "assumed" }
+timing = { value = 860, unit = "bit/s/host", low = 61.3, high = 1e4, source = "benchmarks/nci/tiers.py DEFAULTS tau: the network appendix's program format; low: the llama8b-node1 calibration's requests (51.3) and coin (10) links", status = "derived" }
+side = { value = 1e3, unit = "bit/s/host", low = 0.1, high = 1e6, source = "ruling: Daniel 25 Oct, 1 kb/s per server (benchmarks/datacenter account.py DEDICATED_RACKS sigma); range: the plausible covert channels", status = "ruled" }
+form = "certified"
+
+# Today's wipe: about 12 GB a server, every tier but the boot disk, which it doesn't reach. memory-accounting's Tuesday
+# measurement decides whether the 5 GB of regime.onsite is reached.
+[regime.onsite-today]
+base = "onsite"
+k_wipe = { value = 9.6e10, unit = "bit/server", low = 4e10, high = 9.32e11, source = "today's wipe, about 12 GB a server, as the training lane's coordinator relayed it (26 Oct; memory-accounting's Tuesday measurement decides whether 5 GB is reached); low: Daniel's 5 GB; high: the per-device measurement's 116.5 GB a server", status = "assumed" }
+boot_disk_bits = { value = 1.536e13, unit = "bit/server", low = 0, high = 3.072e13, source = "NVIDIA DGX H200 datasheet: the OS on 2 x 1.92 TB NVMe M.2, mirrored, taken whole as what today's wipe leaves there; pending a datasheet reading or a measurement of what the wipe reaches; low: a wipe that reaches it; high: the two drives written apart", status = "assumed" }
+
+# The sensitivity: per device on HBM only, with each host's memory, DPU, BMC and flash unwiped (10 GB a device, measured
+# 26 Oct).
+[regime.onsite-per-device]
+base = "onsite"
+per = "device"
+residual_bits = { value = 8e10, unit = "bit/device", low = 4e10, high = 1.6e11, source = "memory-accounting r20261026-003454-bfd2: 10 GB per H200 today (7.8 fill floor + 2.3 driver reserve + 0.1 chip); low: Daniel's 5 GB per device target", status = "measured" }
+host_residual_bits = { value = 2.92e11, unit = "bit/host", low = 0, high = 1.2e12, source = "benchmarks/nci/tiers.py unfilled_gb less the GPUs': the 29.5 GB host gap and about 7 GB of DPU, BMC and flash; low: a fill that reaches it; high: 150 GB", status = "measured" }
+
+# Per device at Daniel's earlier 5 GB a device target, the host still unwiped.
+[regime.onsite-5gb]
+base = "onsite-per-device"
+residual_bits = { value = 4e10, unit = "bit/device", low = 2e10, high = 8e10, source = "ruling: Daniel's 5 GB per device target; high: today's 10 GB", status = "ruled" }
+
+# What Lean proves today: Windows, every server's whole memory M_s and the location's line rate over the window.
+[regime.onsite-links]
+base = "onsite"
+form = "links"
+
+# Wipes and certifiers with nothing credited: the serving cut alone.
+[regime.onsite-no-pouw]
+base = "onsite"
+residual = { value = 1, source = "no PoUW: none of a location's time is certified", status = "declared" }

@@ -148,9 +148,11 @@ def test_one_session_an_id():
         challenger(log=log)
 
 
-def test_the_fill_covers_every_declared_tier():
-    with pytest.raises(ValueError, match="covers every declared tier"):
-        sw.WipeParams(N, K, 1, LIMIT, (("gpu", 128 * sw.LABEL_BYTES),))
+def test_the_declared_tiers_hold_the_fill():
+    with pytest.raises(ValueError, match="the declared tiers hold the fill"):
+        sw.WipeParams(N - 1, K, 1, LIMIT, (("gpu", (N - 2) * sw.LABEL_BYTES),))
+    p = sw.WipeParams(N - 1, K, 1, LIMIT, (("gpu", N * sw.LABEL_BYTES), ("host-dram", 3)))
+    assert p.outside_bits == sw.LABEL_BITS + 24
     with pytest.raises(ValueError, match="each named once"):
         sw.WipeParams(N, K, 1, LIMIT, (("gpu", 128 * sw.LABEL_BYTES), ("gpu", 128 * sw.LABEL_BYTES)))
     with pytest.raises(ValueError):
@@ -196,6 +198,48 @@ def test_deployed_bound():
     d = 15_610_000
     assert k * math.log2(1 - d / n) < -41
     assert math.log2(k) + 36 * (d - 1) + (d - 1) * sw.LABEL_BITS + 41 <= 8_600_000_000
+
+
+@pytest.mark.parametrize("n", [1 << 19, (1 << 19) + 7, 1_610_612_736, 2_203_125_000, 1 << 50])
+def test_bound_at_2152_reads(n: int) -> None:
+    """The Lean family's point (`Pous.Guarantees.StreamedWipeMeetsFamily`, `⌈M/19⌉ + E` at `2^-128` with 2152 reads):
+    `D = ⌈n/24⌉` labels missed, its crude count `C(n, r) ≤ 2^n`, each term `2^-129`; the exact count needs less."""
+    k, m = 2152, n * sw.LABEL_BITS
+    d = -(-n // 24)
+    assert k * d / n >= 129 * 0.6931471808 and k * math.log2(1 - d / n) < -129
+    assert 12 + n + (d - 1) * sw.LABEL_BITS + 129 <= -(-m // 19)
+    q, _ = sw.retained_bits(n, k, m, 0, -128)
+    assert q <= -(-m // 19)
+    assert 18**k * 2**128 <= 19**k  # (18/19)^2152 ≤ 2^-128, though the proof's sampling is at 23/24
+
+
+def reads_threshold(n: int, r: int, k: int, reserve_bits: int = 0) -> int:
+    """`Pous.Guarantees.StreamedWipeMeetsReads`'s threshold before the egress: `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R`."""
+    return sw.LABEL_BITS * (-(-n // r) - 1) + n + (k.bit_length() - 1) + 130 + reserve_bits
+
+
+def least_reads(r: int) -> int:
+    """The least `k` with `(r − 1)^k · 2^129 ≤ r^k`, the statement's sampling condition."""
+    k = math.floor(129 / -math.log2(1 - 1 / r))
+    while (r - 1) ** k * 2**129 > r**k:
+        k += 1
+    while (r - 1) ** (k - 1) * 2**129 <= r ** (k - 1):
+        k -= 1
+    return k
+
+
+def test_h200_at_5GB() -> None:
+    """`StreamedWipeMeets141GB5`: at 141·10^9 bytes with 2.3 GB of driver reserve, `r = 59` is the least ratio whose
+    threshold is at most 5 GB, `k = 5231` the least read count for it, and the threshold `39,721,768,854` bits; the
+    family's own point, `r = 24` and `k = 2152`, is `512·(⌈n/24⌉ − 1) + n + 141`."""
+    n, reserve, cap = 2_203_125_000, 23 * 10**8 * 8, 5 * 10**9 * 8
+    assert least_reads(59) == 5231 and least_reads(24) == 2101
+    assert reads_threshold(n, 59, 5231, reserve) == 39_721_768_854 <= cap
+    assert reads_threshold(n, 59, 5231) == 21_321_768_854 <= cap - reserve
+    assert reads_threshold(n, 58, least_reads(58), reserve) > cap
+    assert reads_threshold(n, 24, 2152) == sw.LABEL_BITS * (-(-n // 24) - 1) + n + 141
+    q, _ = sw.retained_bits(n, 5231, n * sw.LABEL_BITS + reserve, 0, -128)
+    assert q <= reads_threshold(n, 59, 5231, reserve)  # the exact count needs less
 
 
 def test_bound_against_an_exhaustive_count():
