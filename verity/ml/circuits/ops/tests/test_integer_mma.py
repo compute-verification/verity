@@ -122,10 +122,9 @@ def test_the_s8_limit_is_2_17_and_tight() -> None:
 def test_registry_entry() -> None:
     ins = INSTRUCTIONS["sm120.mma.m16n8k32.s8"]
     assert ins.model is SAT and ins.status == "pinned" and ins.acc_dtype == "s32" and ins.shape == (16, 8, 32)
-    assert ins.evidence[0] == SAT.validated
-    probe, library_kernel = EVIDENCE_IDS[SAT.name]["runs"]
-    assert {probe, library_kernel} <= set(INSTRUCTION_IDS[ins.id]["runs"])
-    assert ins.dossier == EVIDENCE_IDS[SAT.name]["dossier"] and ins.dossier.startswith("art:")
+    ids = EVIDENCE_IDS[SAT.name]
+    assert ins.evidence[0] == SAT.validated and "`run`" in SAT.validated and "`int_mm`" in SAT.validated
+    assert ids["run"] != ids["int_mm"] and ins.dossier == ids["dossier"] == INSTRUCTION_IDS[ins.id]["dossier"]
     assert "HYPOTHESIS" not in SAT.validated and "HYPOTHESIS" not in WRAP.validated
     assert MODELS[SAT.name] is SAT and MODELS[WRAP.name] is WRAP
 
@@ -135,7 +134,8 @@ def test_u8s8_sibling_wraps_the_exact_dot() -> None:
     from verity.ml.circuits.ops import prims as P
 
     assert (U8S8.dtype, U8S8.b_dtype, U8S8.satfinite) == ("u8", "s8", False) and MODELS[U8S8.name] is U8S8
-    assert EVIDENCE_IDS[U8S8.name]["runs"] == EVIDENCE_IDS[SAT.name]["runs"][:1] and "u8.s8" in U8S8.validated
+    assert EVIDENCE_IDS[U8S8.name]["run"] == EVIDENCE_IDS[SAT.name]["run"] and "`run`" in U8S8.validated
+    assert "u8.s8" in U8S8.validated
     rng = random.Random(5)
     cases = [([255] * 32, [127] * 32, S32_MAX), ([255] * 32, [-128] * 32, S32_MIN), ([0] * 32, [0] * 32, -1)]
     cases += [([rng.randrange(256) for _ in range(32)], [rng.randrange(-128, 128) for _ in range(32)],
