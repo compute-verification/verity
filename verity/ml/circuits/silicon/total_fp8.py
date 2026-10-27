@@ -25,9 +25,7 @@ On finite operands this is :func:`verity.ml.circuits.silicon.silicon.tc_dot` on 
 the *pipeline parameters* (groups, adder width, exponent floor -- in particular the behaviour with a NON-ZERO
 accumulator, which Hawkeye did not validate and which every k32 step after the first of a K=1536..8960 chain
 exercises) are what a hardware campaign measured on the device.  The registry primitive that wraps it
-(``verity.ml.circuits.ops.prims.HopperE4m3QgmmaDot32``) carries the campaign's outcome in its conformance status.  The
-store ids and datasets each pipeline's ``validated`` string cites are :data:`EVIDENCE_IDS` (``total_fp8_evidence.json``),
-keyed by pipeline name and then by role, which the string names in backticks.
+(``verity.ml.circuits.ops.prims.HopperE4m3QgmmaDot32``) carries the campaign's outcome in its conformance status.
 
 E5M2 (:func:`tc_dot_total_e5m2`) differs only in its operand classes: it is IEEE-like, so exponent field 31 is an
 infinity (fraction 0) or a NaN, and the product rules are BF16's (:func:`~verity.ml.circuits.silicon.total.bf16_product_total`):
@@ -38,9 +36,7 @@ accumulator, so infinities of both signs in one group are a NaN.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Sequence
-from pathlib import Path
 
 from .errors import InvalidArtifact
 from .silicon import HOPPER_E4M3_K32, Pipeline, e4m3_product
@@ -48,7 +44,6 @@ from .term import e5m2_product
 from .total import NAN, Inf, Value, fp32_value, group_step_total, pack_value
 
 __all__ = [
-    "EVIDENCE_IDS",
     "HOPPER_E4M3_MMAV2_K32",
     "HOPPER_E4M3_WGMMA_K32",
     "HOPPER_E4M3_FAMILY_VERSION",
@@ -61,9 +56,6 @@ __all__ = [
     "tc_dot_total_e4m3",
     "tc_dot_total_e5m2",
 ]
-
-#: Pipeline name -> role -> the run id or dataset its ``validated`` string names by that role.
-EVIDENCE_IDS: dict[str, dict] = json.loads(Path(__file__).with_name("total_fp8_evidence.json").read_text())
 
 
 def e4m3_class(byte: int) -> str:
@@ -163,7 +155,8 @@ HOPPER_E4M3_WGMMA_K32 = Pipeline(
     validated="pinned (H100 80GB HBM3, driver 580.126.09, triton 3.7.1 probe "
               "wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3 / QGMMA.64x64x32.F32.E4M3.E4M3): 16 families, "
               "35,289 tiles x3, 144,543,744 words, 0 mismatches; groups=(32,) and width=14 unique in the fit grid, "
-              "floor bounded to [-152, -126] (indistinguishable below -126 for E4M3 operands; -139 kept) -- `dataset`",
+              "floor bounded to [-152, -126] (indistinguishable below -126 for E4M3 operands; -139 kept) -- "
+              "docs/data/tc-fp8-2026-09-08/",
 )
 
 HOPPER_E4M3_FAMILY_VERSION = "1"
@@ -199,8 +192,8 @@ HOPPER_E4M3_MMAV2_K32 = Pipeline(
     width=26,
     zero_exponent=-133,
     validated="Triton 3.7.1's MMAv2 e4m3 dot on sm_90 (two chained f16 HMMA.16816.F32 per k32, the operands in "
-              "MMAV2_E4M3_K_ORDER); HMMA.16816.F32 from +0 measured on the H100 (`h100`), "
-              "the chain with its nonzero f16 accumulator in fused_moe_kernel on the H200 (`h200`, 638,976 words, "
+              "MMAV2_E4M3_K_ORDER); HMMA.16816.F32 from +0 measured on the H100, "
+              "the chain with its nonzero f16 accumulator in fused_moe_kernel on the H200 (638,976 words, "
               "0 mismatches)",
     executes="f16",
 )
