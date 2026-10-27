@@ -9,7 +9,7 @@ CMP-154), written in the shared notation (CMP-158).
 
 Its credit at pub(μ°) against W_reg is superseded (Daniel, 26 Oct, 6:40 PM PDT, tentative): credit is a sampling block's
 size in AND gates, a statement about values, and 𝓜's resources appear only inside the exclusion argument
-(`glossary/README.md`, "Size, credit and exclusion"). CMP-158 restates this document and D6 in it.
+(`GLOSSARY.md`, "Size, credit and exclusion"). CMP-158 restates this document and D6 in it.
 
 The protocol is experimental. Its guarantee is stated in Lean on open PRs: `Pouw.Guarantees.Dither.WorkSound` and its
 card instances `Pouw.Guarantees.DitherInstance.WorkSoundAt` on

@@ -559,7 +559,7 @@
         "AGENTS.md",
         "README.md",
         "ARCHITECTURE.md",
-        "glossary/",
+        "GLOSSARY.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",
