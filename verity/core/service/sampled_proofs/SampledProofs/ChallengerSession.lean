@@ -190,11 +190,11 @@ def event (line : String) : V Json := do
   unless text == line do throw LOG_MALFORMED
   pure j
 
-private def pairs : List String → List (String × String)
+def pairs : List String → List (String × String)
   | a :: b :: rest => (a, b) :: pairs rest
   | _ => []
 
-private def isTime (j : Json) : Bool := (nat? j).isSome
+def isTime (j : Json) : Bool := (nat? j).isSome
 
 /-- The roots the challenger received, by family in order. -/
 abbrev Roots := List (String × List ByteArray)

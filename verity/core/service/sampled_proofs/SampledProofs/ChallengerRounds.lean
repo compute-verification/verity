@@ -52,11 +52,15 @@ def exactlyReason (c : LiveCommitment) (roots : Roots) (us : List Use) : Option 
 /-- `received_order` (module docstring): the family of each root the release log `log` shows the challenger received,
 in the log's order (a log `releasedRootsOf` has read: its head, then a root and its release in turn). -/
 def receivedOrder (log : List String) : List String :=
-  log.tail.zipIdx.filterMap fun (line, i) =>
-    if i % 2 != 0 then none else
-    match Flock.JsonParse.parse line with
-    | .ok r => match getD r "label" with | .str l => some l | _ => none
-    | .error _ => none
+  log.tail.zipIdx.filterMap labelAt
+where
+  /-- The family of the root line `line` at an even place `i` after the log's head. -/
+  labelAt : String × Nat → Option String
+    | (line, i) =>
+      if i % 2 != 0 then none else
+      match Flock.JsonParse.parse line with
+      | .ok r => match getD r "label" with | .str l => some l | _ => none
+      | .error _ => none
 
 /-- `release_order_reason` (module docstring): why the log's order `labels` receives a root of some family `b` before the last
 of family `a`'s, for a pair `(a, b)` of `order`; `none` when every pair's releases are in order. -/
