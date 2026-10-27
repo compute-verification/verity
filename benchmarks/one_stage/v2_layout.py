@@ -8,12 +8,15 @@ A use of n F128s reads ceil(n/4) coins of 64 bytes, and every count is public: t
 points (``points * m``) and `session --schedule` its rounds. So a family's count is the sum of its uses' coins.
 
 The layout only bounds the uses. A family too small refuses an honest session's use; coins past the uses stay
-unreleased, and v2 refuses any release no use reads (`coins.exactly_reason`). The layout is fixed before the draw, and
-a session's table grows with the units it proves (m = k_log + max(3, ceil(log2 ceil(n/g)))), so a reserve made before the
-draw sizes each slot by `slot_families` over every statement the slot may prove, the population's (draw None) among
-them."""
+unreleased, and v2 refuses any release no use reads (`coins.exactly_reason`). The layout is fixed before the draw, and a
+schedule reads the draw: a session's table grows with the units it proves (m = k_log + max(3, ceil(log2 ceil(n/g)))), and
+a drawn statement also proves its units against the population, so the population's own schedule (draw None) is no
+bound on a drawn one. A subset or stratified law fixes how many units its draw proves, so a reserve made before the draw
+sizes each slot at `stand_in`, a draw of the registration's law, which for units of one table proves as many units of
+the same shapes as the verifier's draw will."""
 from __future__ import annotations
 
+import itertools
 import json
 import subprocess
 from collections.abc import Mapping, Sequence
@@ -52,6 +55,21 @@ def schedule(flags: Sequence[str], draw: Mapping[str, Any] | None = None, firewa
     if not lines or not lines[0].startswith("ok ") or len(lines) != 1 + int(lines[0][3:]):
         raise ValueError(f"flock-firewall session --schedule: {(lines[0] if lines else p.stderr.decode()).strip()}")
     return link["points"] * link["m"], [(s, int(n)) for s, n in (x.rsplit(" ", 1) for x in lines[1:])]
+
+
+def stand_in(law: Mapping[str, Any], population: int) -> dict[str, Any]:
+    """A draw of `law`, the registration's (``{law, k}``, and ``strata`` for ``stratified``), over `population` units: the
+    first ``k`` units, or each stratum's first ``k`` of its ranges, as `unit_draw` holds a draw. Raises ValueError for a
+    law whose draw doesn't fix how many units it proves (``bernoulli``; ``work``, whose closure adds the units the drawn
+    ones depend on)."""
+    if law.get("law") == "subset":
+        return {"law": "subset", "population": population, "k": law["k"], "units": list(range(law["k"]))}
+    if law.get("law") == "stratified":
+        units = sorted(u for s in law["strata"]
+                       for u in itertools.islice((u for lo, hi in s["units"] for u in range(lo, hi)), s["k"]))
+        return {"law": "stratified", "population": population, "k": law["k"], "strata": list(law["strata"]),
+                "units": units}
+    raise ValueError(f"a {law.get('law')!r} draw doesn't fix how many units it proves: size the slot over its counts")
 
 
 def slot_families(slot: int, *schedules: Schedule) -> list[list[Any]]:

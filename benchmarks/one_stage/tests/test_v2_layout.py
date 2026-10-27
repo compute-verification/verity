@@ -96,6 +96,16 @@ def test_a_slot_over_several_schedules_holds_each_familys_largest():
     assert V2L.slot_families(0, (0, [("a/rep0", 1)])) == [["slot/0/a/rep0", 1]]
 
 
+def test_a_stand_in_draws_the_laws_count_from_each_stratums_first_units():
+    assert V2L.stand_in({"law": "subset", "k": 3}, 8) == {"law": "subset", "population": 8, "k": 3, "units": [0, 1, 2]}
+    strata = [{"template": "a", "units": [[0, 2], [5, 8]], "k": 3}, {"template": "b", "units": [[2, 5]], "k": 1}]
+    assert V2L.stand_in({"law": "stratified", "k": 4, "strata": strata}, 8) == {
+        "law": "stratified", "population": 8, "k": 4, "strata": strata, "units": [0, 1, 2, 5]}
+    for law in ({"law": "bernoulli", "p": "1/2"}, {"law": "work", "k": 4, "strata": strata}):
+        with pytest.raises(ValueError, match="doesn't fix how many units"):
+            V2L.stand_in(law, 8)
+
+
 def test_what_is_no_layout_is_refused():
     with pytest.raises(ValueError, match="the link points' family"):
         V2L.slot_families(0, (4, [("session", 1)]))
@@ -135,14 +145,17 @@ def _flags(fx: Path) -> list[str]:
 @pytest.mark.slow
 def test_the_pinned_sessions_schedule_is_its_uses_family_for_family(fx):
     """At the session's own draw, its statement's schedule gives each family exactly the coins v2 reads of its record:
-    ``slot/0/session`` and the table's two reps, ``slot/0/circuit/rep0`` and ``rep1``. The population's schedule (no
-    draw, all 32 units) holds each family at least as large. An in-process challenger of the window's layout releases
-    every use once and shows exactly the uses. Slow for three m = 25 setups and the firewall's build."""
+    ``slot/0/session`` and the table's two reps, ``slot/0/circuit/rep0`` and ``rep1``. Its law's stand-in, and the last
+    16 units, give the same families, so a reserve made before the draw from the law alone is the draw's. An in-process
+    challenger of the window's layout releases every use once and shows exactly the uses. Slow for four m = 25 setups and
+    the firewall's build."""
     text = (fx / "session" / "session.json").read_text()
     uses = PF.session_uses(0, text)
-    slot = V2L.slot_families(0, V2L.schedule(_flags(fx), json.loads(text)["unit_draw"]))
+    draw = json.loads(text)["unit_draw"]
+    slot = V2L.slot_families(0, V2L.schedule(_flags(fx), draw))
     assert slot == families_of(uses), slot
     assert [label for label, _ in slot] == ["slot/0/session", "slot/0/circuit/rep0", "slot/0/circuit/rep1"]
-    whole = dict(V2L.slot_families(0, V2L.schedule(_flags(fx))))
-    assert all(n <= whole[label] for label, n in slot), (slot, whole)
+    assert (draw["law"], draw["k"], draw["population"]) == ("subset", 16, 32)
+    for other in (V2L.stand_in({"law": "subset", "k": 16}, 32), {**draw, "units": list(range(16, 32))}):
+        assert V2L.slot_families(0, V2L.schedule(_flags(fx), other)) == slot, other["units"]
     assert exactly(V2L.window_layout(AC.SCHEME, AC.families({0: 4}), slot), uses) is None
