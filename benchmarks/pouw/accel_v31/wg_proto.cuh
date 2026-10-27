@@ -185,6 +185,11 @@ template <int BN, bool SPLIT> WGD void imma_atom(int32_t* d, uint32_t a, uint32_
 #ifndef V31_QORD
 #define V31_QORD 0
 #endif
+// V31_R5NOST 1, a timing build: RP 5 stores no O (neither its direct stores nor TST's boxes and their TMA stores) and still
+// posts each tile, so the hash warps read whatever O holds
+#ifndef V31_R5NOST
+#define V31_R5NOST 0
+#endif
 template <int BN, bool SPLIT, bool CHAIN> WGD void imma_ktile(int32_t* d, uint32_t a, uint32_t b, uint32_t sd) {
   if constexpr (CHAIN && SPLIT && BN == 256) {
 #pragma unroll
@@ -300,7 +305,7 @@ template <int BN>
 WGD void store_tiles(const Args& p, uint32_t stg, uint32_t sbar, uint32_t* posted, int tiles_m, int tiles_n, int nseg) {
   if (p.O) tma_prefetch(&p.tso);
   if (nseg) tma_prefetch(&p.tsw);
-  const int items = nseg + (p.O ? 1 : 0);
+  const int items = nseg + (p.O && !V31_R5NOST ? 1 : 0);
   unsigned n = 0;   // the boxes each warpgroup has filled
   int prev = -1;    // the slot of the last store issued, while it's held
   for (int t = blockIdx.x; t < tiles_m * tiles_n; t += gridDim.x) {
@@ -613,7 +618,7 @@ __device__ void body(const Args& p, const H& h = H{}) {
       // O a box at a time: box b holds columns 32 b to 32 b + 31, of which the thread's pair 8 jj + cq is unit 2 jj + cq / 4's
       // half cq / 2 % 2
 #pragma unroll
-      for (int b = 0; b < BN / 32; b++) {
+      for (int b = 0; b < (V31_R5NOST ? 0 : BN / 32); b++) {
         const int sl = slot();
         uint8_t* const q = sbuf + sl * TSLOT + 128 * br + 8 * (x % 2);
 #pragma unroll
@@ -673,7 +678,7 @@ __device__ void body(const Args& p, const H& h = H{}) {
     const int* const e0p = p.dO + (size_t)row * N + col0;
     const int* const e1p = e0p + (size_t)8 * N;
 #pragma unroll
-    for (int j = 0; j < NA / 4; j++) {
+    for (int j = 0; j < (RP == 5 && V31_R5NOST ? 0 : NA / 4); j++) {
       int2 lo = make_int2(d[4 * j], d[4 * j + 1]), hi = make_int2(d[4 * j + 2], d[4 * j + 3]);
       if (add) {
         const int2 e0 = __ldg(reinterpret_cast<const int2*>(e0p + 8 * j)), e1 = __ldg(reinterpret_cast<const int2*>(e1p + 8 * j));
