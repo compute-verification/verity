@@ -237,6 +237,12 @@ on an eyeball review, and the full check runs after landing (24 Oct). ci's `rese
 - Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
   deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
   machinery rather than accumulating them.
+- **The tree gets smaller over time** (Daniel, 26 Oct). Each lead owns its areas' size: make two interfaces or
+  definitions of one thing one, make things extensible, delete dead and superseded code, and move data and logs to the
+  evidence store. A PR that adds code says in its body what it deletes or unifies, or why nothing can go. top's hourly
+  consolidation reading tracks `main`'s size.
+- **Parked work gets done** (Daniel, 26 Oct). We have parallelism: a lead starts each Backlog or Todo issue worth doing on
+  its own worker and closes the rest with a reason. Being busy is no reason to park one. Set more goals, not fewer.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
   procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, the skills, READMEs,
   docstrings and CLI help. When code must change first, the ruling's relay names the owner and the PR that changes the
