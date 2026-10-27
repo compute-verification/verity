@@ -385,7 +385,7 @@ def test_todays_path_without_a_retained_z_is_refused_as_no_z():
 
 
 def test_serve_h1s_wrapper_is_refused_too():
-    """SERVE-H1's run tree (cursor/serve-h1-run-ea24, `pouw_h1.served`): the arm's apply serves y, then the wrapper
+    """The served H1 run's tree (`pouw_h1.served`): the arm's apply serves y, then the wrapper
     quantizes the same activations again and takes z from `int_mm`; the trace refuses it the same way."""
     layer = Linear(32, 1, TodayArm())
     x = (torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16()
@@ -406,7 +406,7 @@ def test_records_from_a_second_scaled_mm_zy_beside_the_served_scaled_mm_are_refu
 
 
 def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_nothing():
-    """RT4-INT-21: the call passes the gate, but the window's coins were held in the serving process (no pouw setting
+    """The call passes the gate, but the window's coins were held in the serving process (no pouw setting
     'challenger'), so no verifier trusts them and the window credits nothing, naming why."""
     _y, run = _serve(FusedArm())
     (v,) = run.verdicts.values()

@@ -354,7 +354,6 @@ def link_windows(tie: TS.IngressTie, link: Q.Link, adv: AD.LinkAdvice, edit=None
 def stager(M, tie: TS.IngressTie, out: Path) -> SimpleNamespace:
     """The one circuit: `IngressTie.proof_unit` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
     to the registered partition and Program, which are written beside it as the verifier's own."""
-    Z.builders()
     rows = [(r, M.V2, tie.bits(r), list(tie.layout[r])) for r in TS.ROWS]
     out.mkdir(parents=True, exist_ok=True)
     (out / "partition.json").write_text(json.dumps(tie.partition, sort_keys=True))

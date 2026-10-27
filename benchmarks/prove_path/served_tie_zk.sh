@@ -3,7 +3,7 @@
 # hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean
 # frame and the sampled-proofs verifier built in the tree. From a clone:
 #   research run --on vy-nebius-cpu-2 --project verity --cwd clone --timeout 180m --env STZK_MEM_GB=56 \
-#     --env STZK_RUN=/workspace/research/network-accounting/vllm-serve-seal/RUN --env STZK_WINDOW=5 -- \
+#     --env STZK_RUN=RUN_DIR --env STZK_WINDOW=5 -- \
 #     bash benchmarks/prove_path/served_tie_zk.sh
 # env: STZK_MEM_GB (what job.sh's stages may take, within the slot's)  STZK_RUN, STZK_WINDOW (the sealed run and window)
 #      STZK_FORM (tie, the default: served_tie_zk.py, the routed tie; statics: served_statics_zk.py, the rows held to

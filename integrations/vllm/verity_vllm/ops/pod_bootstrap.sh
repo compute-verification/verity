@@ -16,9 +16,8 @@
 #     wheel + torch cu129, the pinned checkpoints (manifests/checkpoints.json: sha256 per safetensors shard), the native taps
 #     (hidden_gpu chunk tree, FA2 matReq tap, FA3 tap on cc 9.0) and a mechanical readiness record.
 #   Inputs: --cases B0[,B1] (checkpoint roles of checkpoints.json), --out DIR, --cpu | --gpu (force a mode), --dry-run; the env above.
-#   Modes: gpu (default when `nvidia-smi` is on PATH) runs every step.  cpu (`--cpu`, or auto-selected when `nvidia-smi` is absent --
-#     until 2026-09-23 a GPU-less pod died at step 4 with BOOTSTRAP_FAIL_CUDA, before readiness.json existed, and the fleet operator
-#     hand-wrote the record) runs steps 1-3 unchanged, skips the native taps (step 4), and writes the same readiness record with the
+#   Modes: gpu (default when `nvidia-smi` is on PATH) runs every step.  cpu (`--cpu`, or auto-selected when `nvidia-smi` is absent)
+#     runs steps 1-3 unchanged, skips the native taps (step 4), and writes the same readiness record with the
 #     GPU checks (torch_cuda, hidden_gpu_so, fa2_tap_so, fa3_tap_so) replaced by torch_cpu, plus "mode": "cpu",
 #     "cuda_available": <torch.cuda.is_available()> and a cpu{nproc, model} measurement; `ok` = AND of the CPU checks.  The gpu-mode
 #     record is unchanged (no "mode" key = gpu).  `--dry-run` prints the resolved mode and the steps it would run, touches nothing, exits 0.
@@ -68,7 +67,7 @@ $PY -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version' || fail
 # ---- 2. vLLM d9105ea80 (cu129 wheel, sha pinned) + torch cu129 + the Python deps ---------------------------------------------------
 W="vllm-0.28.1rc1.dev472+gd9105ea80.cu129-cp38-abi3-manylinux_2_28_x86_64.whl"
 WSHA=7aa52ac71500caf74643135a340eb2d03ae0386d4282fc0b23846940029fbbb3
-# torchcodec from PyPI (0.17.0, built for another torch) breaks `import vllm` and cuteDSL on H200 (vy-glm53-h1, 12 Oct): the cu129 build
+# torchcodec from PyPI (0.17.0, built for another torch) breaks `import vllm` and cuteDSL on H200: the cu129 build
 TORCHCODEC="torchcodec==0.16.0+cu129"
 if ! $PY -c "import vllm, torch" 2>/dev/null; then
   [ -f "$WORK/wheels/$W" ] || curl -fLo "$WORK/wheels/$W" \
@@ -76,8 +75,8 @@ if ! $PY -c "import vllm, torch" 2>/dev/null; then
     || fail WHEEL "vLLM wheel download"
   echo "$WSHA  $WORK/wheels/$W" | sha256sum -c >/dev/null || fail WHEEL_SHA "vLLM wheel sha256 != $WSHA"
   log "installing vLLM + torch cu129 into $VENV"
-  # UV_HTTP_TIMEOUT: uv's default 30 s per response timed out twice on a 2x L40S pod fetching nvidia-cuda-cccl-cu12 (22 Sep, vyv-l40s2b,
-  # 'operation timed out') while a sibling pod in the same DC installed in 30 s; one retry of the whole install before failing by name.
+  # UV_HTTP_TIMEOUT: uv's default 30 s per response can time out on a slow pod fetching nvidia-cuda-cccl-cu12 ('operation timed out')
+  # where a sibling pod installs in 30 s; one retry of the whole install before failing by name.
   export UV_HTTP_TIMEOUT=${UV_HTTP_TIMEOUT:-600}
   for _try in 1 2; do
     uv pip install --python "$PY" --extra-index-url https://download.pytorch.org/whl/cu129 --index-strategy unsafe-best-match \
@@ -246,12 +245,12 @@ r["identities"] = {"python": sys.version.split()[0], "executable": sys.executabl
                    "tree": {"integration_root": root, "verity_core": core, "research": research},
                    "native": {k: r["checks"][k].get("value") for k in ("hidden_gpu_so", "fa2_tap_so", "fa3_tap_so") if k in r["checks"]}}
 r["ok"] = all(c["ok"] for c in r["checks"].values())
-# ---- measurements [r19-int-20]: the pod's non-GPU admission resources, MEASURED at bootstrap and recorded beside the checks.  Advisory:
+# ---- measurements: the pod's non-GPU admission resources, MEASURED at bootstrap and recorded beside the checks.  Advisory:
 # none fails the bootstrap (a slow or small pod can still compute); the launcher and the attempt's conditions read them.  Why each:
-#   network  -- vyv-l40s2b (EUR-IS-2) moved 2.6 MB/s to /vault and 6-8 MiB/s to R2 while its neighbours did 84-287 MiB/s (F-r19-mirror-3;
-#               R2 probe 16:30Z): a 30 GB row landed on the one pod that could not ship its evidence.  One 64 MiB download + one 16 MiB
+#   network  -- one pod can move a few MB/s to /vault and R2 while its neighbours do hundreds, and a 30 GB workload placed there can't
+#               ship its evidence.  One 64 MiB download + one 16 MiB
 #               upload against Cloudflare's public speed endpoint (a User-Agent is required: the default python-urllib UA is refused 403).
-#   disk     -- the container overlay is an unmodelled admission resource (F-r19-int-14): l40s4 filled under two rows' captures.
+#   disk     -- the container overlay is an unmodelled admission resource: two workloads' captures can fill it.
 #   memory   -- the cgroup ceiling, not the host's RAM, is what a Match / Commit is admitted against (351 vs 1511 GiB on tp2).
 import shutil, time, urllib.request
 UA = {"User-Agent": "verity-pod-readiness/1 (python-urllib)"}

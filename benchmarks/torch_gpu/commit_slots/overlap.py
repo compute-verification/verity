@@ -1,4 +1,4 @@
-"""On one CUDA device: how much of the serve-time commit (`slots_gpu`, this directory's call) hides behind ALLP-H200's
+"""On one CUDA device: how much of the serve-time commit (`slots_gpu`, this directory's call) hides behind the H200's
 served step (`examples/h200`'s `Driver` at the frozen shape, resident weights), as JSON to ``--out``/overlap.json
 and a summary to ``--out``/summary.txt.
 
@@ -33,6 +33,11 @@ every SM, or the exit is 1. An nvidia-smi thread samples the device through ever
 memory, clock event reasons), each run's statistics skipping its first ``--skip`` seconds; HBM is torch's peak
 allocation in each run, and each run records its allocator's counters (`ALLOCATOR`). ``--leaf-minb`` is `slots_gpu.Plan`'s ``leaf_minb`` (a tree whose Plan takes it). The summary
 ends with a ``VERDICT`` line a run, each number beside its target and their ratio.
+
+``--fused`` names the fusions the forward serves (`e2e_h200.plan.FUSIONS`), the layout's, and ``--uncommitted`` the
+tables the forward writes but the layout doesn't hold (``softmax``: each layer's, for a layout fused past the served
+map); each group's tables must be the layout's tensors (`committed`), or the exit is 1 (``--shared``'s before the
+weights load).
 """
 from __future__ import annotations
 
@@ -54,6 +59,7 @@ from typing import Any
 
 import numpy as np
 import torch
+from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
 E2E = HERE.parents[2] / "examples" / "h200"
@@ -176,6 +182,9 @@ class Null:
     """Serving alone: the step writes and drops its tables, and nothing is committed."""
     streams = True
 
+    def __init__(self, fused: frozenset[str] = frozenset()) -> None:
+        self.fused = fused
+
     def begin(self, st: CM.StepTables, salt_key: bytes | None = None, nonce0: int = 0) -> None:
         pass
 
@@ -189,11 +198,12 @@ class Null:
 class LayoutCommitter(CM.Committer):
     """`e2e_h200.commit.Committer`'s slots backend on a given plan (its layout), unchanged otherwise: today's loop."""
 
-    def __init__(self, plan: G.Plan, context: bytes, key: bytes, shape: Any, salt: Any) -> None:
-        self.backend, self.context, self.key, self.salt = "slots", context, key, salt
+    def __init__(self, plan: G.Plan, context: bytes, key: bytes, shape: Any, salt: Any, fused: frozenset[str] = frozenset(),
+                 uncommitted: frozenset[str] = frozenset()) -> None:
+        self.backend, self.context, self.key, self.salt, self.fused = "slots", context, key, salt, fused
         self.streams = True
         self.S, self.G, self.E = S, G, G.E
-        self.groups = CM.tables(shape)
+        self.groups = committed(shape, fused, uncommitted)
         self.layout, self.bases, self.plan = plan.layout, {}, plan
 
 
@@ -206,8 +216,8 @@ class Pipelined(LayoutCommitter):
     #: allocator frees its cache for them, waiting on every stream (the side stream's pending reads included)
     host_lag = False
 
-    def __init__(self, *args: Any, depth: int = 1) -> None:
-        super().__init__(*args)
+    def __init__(self, *args: Any, depth: int = 1, **kw: Any) -> None:
+        super().__init__(*args, **kw)
         self._read, self.depth = [], depth
         self.inflight: list[tuple[int, Any]] = []
         self.roots: dict[int, bytes] = {}
@@ -245,8 +255,8 @@ class Threaded(Pipelined):
     over, the forward's stream records an event the side stream waits on; ``LAG`` groups later the forward's stream waits
     on that group's reads, once the thread has issued them."""
 
-    def __init__(self, *args: Any, depth: int = 1) -> None:
-        super().__init__(*args, depth=depth)
+    def __init__(self, *args: Any, depth: int = 1, **kw: Any) -> None:
+        super().__init__(*args, depth=depth, **kw)
         self._q: queue.Queue = queue.Queue()
         self._worker = threading.Thread(target=self._serve, daemon=True)
         self._worker.start()
@@ -312,13 +322,32 @@ def prompts_for(run_id: str, batch: int, p: int) -> np.ndarray:
     return rng.integers(32, 127, size=(batch, p), dtype=np.int64)
 
 
-def stand_in(shape: Any, batch: int, dev: torch.device, seed: int) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
-    """Every table of a step, uniform bytes: the embedding's and the head's own, one layer's shared by every layer."""
+def committed(shape: Any, fused: frozenset[str], uncommitted: frozenset[str]) -> list[list[Any]]:
+    """Each group's tables the commit adds: the served map's at the fusions ``fused`` (`e2e_h200.commit.tables`), less the
+    ops ``uncommitted`` names (``softmax``: every ``l<i>.softmax``)."""
+    return [[t for t in g if t.op.split(".")[-1] not in uncommitted] for g in CM.tables(shape, fused)]
+
+
+def check_sources(groups: list[list[Any]], layout: S.Layout) -> None:
+    """Refuses a layout whose groups' tensors aren't ``groups``' tables (each one's codes, then a quantizer's word)."""
+    if len(groups) != len(layout.groups):
+        raise SystemExit(f"the layout has {len(layout.groups)} groups and the served map {len(groups)}")
+    for i, (g, lg) in enumerate(zip(groups, layout.groups, strict=True)):
+        have = [n for t in g for n in ((t.nbytes, 4) if t.quant else (t.nbytes,))]
+        if have != list(lg.sources):
+            raise SystemExit(f"group {i}: the layout's tensors are {list(lg.sources)} bytes a slot and the served tables' "
+                             f"{have}: --fused names the layout's fusions, --uncommitted the tables it doesn't hold")
+
+
+def stand_in(shape: Any, batch: int, dev: torch.device, seed: int,
+             groups: list[list[Any]] | None = None) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
+    """Every table of a step (of ``groups``, by default the unfused map's), uniform bytes: the embedding's and the head's
+    own, one layer's shared by every layer."""
     g = torch.Generator(device=dev)
     g.manual_seed(seed)
     bufs: dict[tuple, tuple[torch.Tensor, torch.Tensor]] = {}
     out = {}
-    for i, group in enumerate(CM.tables(shape)):
+    for i, group in enumerate(CM.tables(shape) if groups is None else groups):
         layer = 1 <= i <= shape.layers
         for t in group:
             k = ("layer", t.op.split(".", 1)[1]) if layer else (i, t.op)
@@ -352,13 +381,15 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
             fwd = torch.cuda.Stream(dev, priority=HIGH)
     if rest:
         fwd = part.rest_stream(HIGH if mode.startswith("low") else 0)
-    committer: Any = Null() if mode == "serve" else \
-        Threaded(plan, ctx, key, shape, salt) if mode.endswith("-thread") else \
-        Pipelined(plan, ctx, key, shape, salt) if mode in OVERLAPPED else LayoutCommitter(plan, ctx, key, shape, salt)
+    fu = {"fused": a.fused, "uncommitted": a.uncommitted}
+    committer: Any = Null(a.fused) if mode == "serve" else \
+        Threaded(plan, ctx, key, shape, salt, **fu) if mode.endswith("-thread") else \
+        Pipelined(plan, ctx, key, shape, salt, **fu) if mode in OVERLAPPED else \
+        LayoutCommitter(plan, ctx, key, shape, salt, **fu)
     host_lag = isinstance(committer, Pipelined) and a.host_lag
     committer.host_lag = host_lag
     d.committer, d.results, d.device_sync = committer, [], mode not in OVERLAPPED
-    tabs = stand_in(shape, a.batch, dev, a.table_seed) if mode == "commit" else None
+    tabs = stand_in(shape, a.batch, dev, a.table_seed, committer.groups) if mode == "commit" else None
     torch.cuda.synchronize(dev)
     torch.cuda.reset_peak_memory_stats(dev)
     m0, c0 = torch.cuda.memory_allocated(dev), torch.cuda.memory_stats(dev)
@@ -417,7 +448,7 @@ def run_one(name: str, mode: str, steps: int, d: OverlapDriver, plan: G.Plan | N
         "telemetry": smi.stats(t0 + a.skip, t1),
     }
     del tabs, committer
-    d.committer = Null()
+    d.committer = Null(a.fused)
     torch.cuda.empty_cache()
     return r
 
@@ -521,7 +552,7 @@ def verdicts(doc: dict) -> list[str]:
 
 def summary(doc: dict) -> str:
     lines = [(f"{doc['env'].get('name')} {doc['env'].get('uuid', '')} batch {doc['batch']} micro-batch {doc['micro_batch']}; "
-              f"limits {doc['env'].get('limits')}")]
+              f"limits {doc['env'].get('limits')}; fused {doc.get('fused')}, uncommitted {doc.get('uncommitted')}")]
     for lay in doc["layouts"].values():
         lines.append(f"layout {lay['name']} {lay['digest'][:16]}: {lay['units_a_slot']:,} units, {lay['rows_a_slot']:,} rows, "
                      f"{lay['bytes_a_slot']:,} B a slot")
@@ -594,17 +625,25 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--leaf-minb", type=int, default=0, help="the plan's leaf kernel CTAs an SM (0: the plan's default)")
     ap.add_argument("--host-lag", action="store_true",
                     help="overlapped runs: the forward's host waits for the side stream's reads LAG groups back (Pipelined.host_lag)")
+    ap.add_argument("--fused", nargs="*", default=[],
+                    help="the fusions the forward serves (e2e_h200.plan.FUSIONS), the layout's")
+    ap.add_argument("--uncommitted", nargs="*", default=[],
+                    help="tables the forward writes and the layout doesn't hold (softmax: every layer's)")
     a = ap.parse_args(argv)
+    a.fused, a.uncommitted = frozenset(a.fused), frozenset(a.uncommitted)
     a.out.mkdir(parents=True, exist_ok=True)
     from e2e_h200 import served_weights as SW
     dev = torch.device("cuda")
     shape = SHAPES[a.shape]
-    smi = Smi(os.environ.get("GPU_LEASE_UUID") or "0")
+    if a.shared:
+        check_sources(committed(shape, a.fused, a.uncommitted), S.load(a.shared))
+    smi = Smi(SHARED.GPU_LEASE_UUID or "0")
     props = torch.cuda.get_device_properties(dev)
-    doc: dict[str, Any] = {"env": {"name": props.name, "uuid": os.environ.get("GPU_LEASE_UUID"), "sms": props.multi_processor_count,
+    doc: dict[str, Any] = {"env": {"name": props.name, "uuid": SHARED.GPU_LEASE_UUID, "sms": props.multi_processor_count,
                                    "hbm_gb": round(props.total_memory / 1e9, 2), "torch": torch.__version__,
                                    "cuda": torch.version.cuda, "smi_fields": list(smi.fields), "limits": smi.limits()},
-                           "shape": shape.name, "batch": a.batch, "micro_batch": a.micro_batch, "layouts": {}, "runs": []}
+                           "shape": shape.name, "batch": a.batch, "micro_batch": a.micro_batch, "fused": sorted(a.fused),
+                           "uncommitted": sorted(a.uncommitted), "layouts": {}, "runs": []}
 
     def write() -> None:
         doc["roots_equal"] = roots_equal(doc["runs"])
@@ -619,7 +658,7 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps({"params": doc["params"]}), flush=True)
     ctx, key = CM.fixture_secrets(a.run_id)
     prompts = prompts_for(a.run_id, a.batch, a.prompt_bytes)
-    d = OverlapDriver(shape, params, a.batch, Null(), "cuda", keep=False, micro_batch=a.micro_batch)
+    d = OverlapDriver(shape, params, a.batch, Null(a.fused), "cuda", keep=False, micro_batch=a.micro_batch)
     for t in range(a.warm):
         d.step(t, prompts[:, t])
     d.results = []
@@ -643,9 +682,10 @@ def main(argv: list[str] | None = None) -> int:
         nonlocal current
         if current is None or current[0] != lay:
             drop(False)
-            layout = S.load(a.shared) if lay == "shared" else CM.layout(shape) if lay == "families" else None
+            layout = S.load(a.shared) if lay == "shared" else CM.layout(shape, a.fused) if lay == "families" else None
             if layout is None:
                 raise SystemExit(f"--runs: {lay!r} is shared or families")
+            check_sources(committed(shape, a.fused, a.uncommitted), layout)
             current = (lay, layout)
             doc["layouts"][lay] = describe(layout)
             print(json.dumps({"layout": doc["layouts"][lay]}), flush=True)
@@ -683,7 +723,7 @@ def main(argv: list[str] | None = None) -> int:
             r = run_one(spec, mode, steps, d, plan, a, ctx, key, prompts, smi, sms, rest, alone)
         except Exception as e:  # noqa: BLE001  (recorded; the next run starts clean)
             r = {"run": spec, "mode": mode, "layout": lay, "error": f"{type(e).__name__}: {(str(e).splitlines() or [''])[0]}"}
-            d.committer, d.results = Null(), []
+            d.committer, d.results = Null(a.fused), []
             torch.cuda.empty_cache()
         if alone is not None:
             torch.cuda.synchronize(dev)

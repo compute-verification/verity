@@ -11,6 +11,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from verity_vllm.config import workload_file
 from verity_vllm.observe import capture_log as CL
 from verity_vllm.check.match import derived_index as DI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
@@ -95,10 +96,10 @@ def manifest_sampling(wl: Workload | Mapping[str, Any], variant: str | None = No
 
 def mock_global_program(workload_path: str, component_dirs: list[str], eos_token_ids: list[int] | None = None, lag: int | None = None) -> dict:
     """The rooted workload Program's INTERFACE assembled from the declared workload and the Build's request components, so the
-    global check can run before lane gprog's builder lands.  It reads the manifest and the components only -- never the record.
+    global check can run without a built `workload_program.json`.  It reads the manifest and the components only -- never the record.
     `lag` = the declared scheduler's post-EOS rows (0/1) the mock Program is specialized for; None = an older Program that
     declares no lag (G6 then fails by name on any EOS stop)."""
-    wl = Workload.load(workload_path)
+    wl = Workload.load(workload_file(workload_path))
     comps = {}
     for d in component_dirs:
         sh = component_shape(d)
@@ -127,11 +128,11 @@ def mock_global_program(workload_path: str, component_dirs: list[str], eos_token
         lag_block = {"value": int(lag), "async_scheduling": bool(lag), "source": "mock_global_program(lag=...)", "declared_explicitly": True}
     return {"schema": GP_SCHEMA, "builder": "cb_a.global_match.mock_global_program (manifest + Build components; gprog's rooted Program replaces this)",
             "workload": {"path": workload_path, "sha256": sha256_file(workload_path), "n_requests": len(reqs)},
-            # the mock models GP-01's eager conditions (M-0063 (1)); G1 fails closed on a Program without a declaration (M-0261)
+            # the mock models GP-01's eager conditions; G1 fails closed on a Program without a declaration
             "applicability": {"execution": "bi-eager", "row_execution": "bi-eager", "engine": engine, "refusal": None},
-            # [F-pm-24] the stop rule: the EOS ids an early stop must end in (None = not declared -> G6 fails closed on early stops)
+            # the stop rule: the EOS ids an early stop must end in (None = not declared -> G6 fails closed on early stops)
             "stop_rule": stop_rule,
-            "lag": lag_block,   # [R17-1] the declared LAG block (None = pre-R17-1 Program)
+            "lag": lag_block,   # the declared LAG block (None = the Program declares none)
             "shared_inputs": [{"name": "weights", "role": "prescribed", "global_param": "the fold's Input nodes after the request-owned parameters "
                                                                                           "(one per leaf field of a mixed-width Record; one for bf16)"}],
             "requests": reqs,
@@ -168,7 +169,7 @@ def workload_lag_static(desc: dict) -> int | None:
     if v_pf is not None and v_root is not None and v_pf != v_root:
         raise ValueError(f"descriptor program_fn lag static {v_pf} != root id lag static {v_root}: not one Program")
     v_ids = v_pf if v_pf is not None else v_root
-    # [rev S-r17-03 n2] an explicit bindings.lag must agree with the spec-id suffixes when both are present
+    # an explicit bindings.lag must agree with the spec-id suffixes when both are present
     if v_bind is not None and v_ids is not None and v_bind != v_ids:
         raise ValueError(f"descriptor root bindings.lag {v_bind} != the spec-id lag static {v_ids}: not one Program")
     return v_bind if v_bind is not None else v_ids
@@ -200,7 +201,7 @@ def relocate_components(derived: dict, artifact_path: str) -> dict:
 
 
 def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
-    """Lane gprog's `workload_program.json` (GP-01, `verity/workload-program/v1`) -> this checker's interface.  The rooted Program's
+    """The builder's `workload_program.json` (GP-01, `verity/workload-program/v1`) -> this checker's interface.  The rooted Program's
     component dirs come from `inputs.derived` ("lp,t" -> derive_step dir); its address map and chronology are carried through and
     cross-checked (component digests, per-request instance counts, programmed steps).  The manifest it was built from
     (`workload_path`, else `inputs.manifest`) is read through the workload record, and one that declares no prompt for a request (a
@@ -208,7 +209,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     art = json.load(open(artifact_path))
     if not art.get("ok", True):
         raise ValueError(f"{artifact_path}: builder result not ok ({art.get('reason')}: {art.get('missing_derived')})")
-    # [R15 global, rev-pm M-0112] the artifact's `workload_digest` field is a CLAIM: recompute it from the descriptor GP-01 wrote beside the
+    # the artifact's `workload_digest` field is a CLAIM: recompute it from the descriptor GP-01 wrote beside the
     # artifact (descriptor.json.gz) and refuse a mismatch, so a digest edited/zeroed in the Build's artifact cannot flow into this checker's
     # copy (global_match_global_program.json) and the finalizer's same-attempt rule.  Absent descriptor (an evidence dir pulled without the
     # 17-25 MB file) -> recorded as unverified, never as verified.
@@ -227,7 +228,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
         if declared_sha and declared_sha != dsha:
             raise ValueError(f"{artifact_path}: descriptor.sha256 {declared_sha[:16]} != the descriptor file's {dsha[:16]}")
         digest_verification = {"verified": True, "recomputed_from": dpath, "descriptor_sha256": dsha}
-        # [R17-1] the artifact's `lag` block is a CLAIM beside the Program: the Program's own `lag` static (inside the digest just verified)
+        # the artifact's `lag` block is a CLAIM beside the Program: the Program's own `lag` static (inside the digest just verified)
         # must carry the same value -- an edited block cannot make G6 consume another lag than the Program's
         static_lag = workload_lag_static(desc)
         claimed = (art.get("lag") or {}).get("value") if isinstance(art.get("lag"), dict) else None
@@ -241,7 +242,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     relocation = relocate_components(derived, artifact_path)
     derived = relocation["derived"]
     wl_path = workload_path or (art.get("inputs") or {}).get("manifest")
-    wl = Workload.load(wl_path) if wl_path and os.path.exists(wl_path) else None
+    wl = Workload.load(wl_path) if wl_path and workload_file(wl_path).is_file() else None
     declared = () if wl is None else wl.requests
     for i, q in enumerate(declared):
         if q.prompt_token_ids is None:
@@ -282,10 +283,10 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
             "shared_inputs": [{"name": "weights", "role": "prescribed", "global_param": f"root parameter {art.get('shared_param_index')} (gprog shared)"}],
             "requests": reqs, "chronology": art.get("chronology"), "address_space": art.get("address_map", {}).get("convention"),
             "applicability": art.get("applicability"),
-            "stop_rule": art.get("stop_rule"),   # [F-pm-24] the declared EOS set (None on a pre-fix artifact -> G6 fails closed on early stops)
-            "lag": art.get("lag"),               # [R17-1] the declared LAG block (None on a pre-R17-1 artifact -> G6 fails by name on EOS stops)
+            "stop_rule": art.get("stop_rule"),   # the declared EOS set (None on a pre-fix artifact -> G6 fails closed on early stops)
+            "lag": art.get("lag"),               # the declared LAG block (None on an older artifact -> G6 fails by name on EOS stops)
             "lengths": art.get("lengths"),
-            "moe_construction": art.get("moe_construction"),   # [R17-42 route A (3)] GP-01's declared-and-bound construction block (None pre-R17-42)
+            "moe_construction": art.get("moe_construction"),   # GP-01's declared-and-bound construction block (None on an older artifact)
             "gprog_artifact": {"path": artifact_path, "gates": art.get("gates"), "input_gates": art.get("input_gates"), "descriptor": art.get("descriptor"),
                                "digest_verification": digest_verification,
                                # component dirs resolved beside the artifact (recorded absolute paths absent here); {} when none moved
@@ -295,7 +296,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
 # ------------------------------------------------------------------------------------------ the record's engine facts (G1)
 
 ENGINE_FACT_KEYS = ("enforce_eager", "enable_prefix_caching", "enable_chunked_prefill",
-                    "async_scheduling")   # [M-0213 / ruling 21] G6 reads the scheduler's EOS lag rows from THIS attested fact; no default
+                    "async_scheduling")   # G6 reads the scheduler's EOS lag rows from THIS attested fact; no default
 
 
 def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
@@ -430,10 +431,10 @@ def requests_declared(run: MatchRun) -> tuple[dict, list[dict], dict, list[str]]
 
 def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, oracle_dir: str) -> dict:
     """The engine and compilation conditions the record attests, against the Program's declared applicability; returns the facts."""
-    # [COORD M-0063 (1)(3)] the Program declares the execution profile + engine conditions it models (GP-01 applicability); the record's
+    # the Program declares the execution profile + engine conditions it models (GP-01 applicability); the record's
     # RunHeader carries the EFFECTIVE engine kwargs -- a run outside the declaration is not a Match for this Program (named)
     app = gp.get("applicability") or {}
-    # [rev-pm BLOCKER M-0261 / F-pm-21, COORD M-0285 (c)] the recorder (vllm_adapter build_manifest -> RunHeader.profile) nests the
+    # the recorder (vllm_adapter build_manifest -> RunHeader.profile) nests the
     # effective engine kwargs and the compilation facts under RunHeader.profile.*; read EVERY location the record may attest them
     # (profile.*, top level, capture/versions.json), require the locations to agree, and FAIL CLOSED when the record attests nothing
     facts = record_engine_facts(header, oracle_dir)
@@ -441,11 +442,11 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
     res["execution"] = {"declared_execution": app.get("execution"), "row_execution": app.get("row_execution"), "declared_engine": app.get("engine"),
                         "effective_engine": eff or None, "effective_compilation": hc or None,
                         "source": facts["sources"] or "not recorded (RunHeader.profile.engine_kwargs / RunHeader.engine_kwargs / capture/versions.json)"}
-    # [R17-42 route A (3)] the fused-MoE CONSTRUCTION the Program is of (GP-01 `moe_construction` block: indexed-read = MOE-01 / padded =
+    # the fused-MoE CONSTRUCTION the Program is of (GP-01 `moe_construction` block: indexed-read = MOE-01 / padded =
     # MoeFfnFixedL_v1 per token) is a Program static -- declared-and-bound, NEVER attested: the record is construction-agnostic (the same
     # trace serves both Programs), so nothing of the record is compared with it here; it is REPORTED so the verdict names which
-    # representation of the workload it is a Match of (PADDED-TABLE labels the row with its actual population, R17-45 (1)).  A Program that
-    # binds a fused-MoE block without the block (pre-R17-42 Build) is labelled indexed-read by its Definitions, never assumed padded.
+    # representation of the workload it is a Match of (PADDED-TABLE labels the row with its actual population).  A Program that
+    # binds a fused-MoE block without the block (an older Build) is labelled indexed-read by its Definitions, never assumed padded.
     _mc = gp.get("moe_construction") if isinstance(gp.get("moe_construction"), dict) else None
     res["moe_construction"] = ({"value": _mc.get("value"), "moe_block_present": _mc.get("moe_block_present"), "population_label": _mc.get("population_label"),
                                 "declared_explicitly": _mc.get("declared_explicitly"), "attested": False,
@@ -463,9 +464,9 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
         if not eff:
             c.fail("the record does not attest its engine conditions (no enforce_eager / enable_prefix_caching at RunHeader.profile.engine_kwargs, "
                    "RunHeader.engine_kwargs or capture/versions.json engine_kwargs): applicability cannot be checked, fail closed (M-0261)")
-        # [M-0213 / ruling 21] async_scheduling joins the compared keys only when the Program declares it (one source, two readers)
+        # async_scheduling joins the compared keys only when the Program declares it (one source, two readers)
         for k in ("enforce_eager", "enable_prefix_caching") + (("async_scheduling",) if app["engine"].get("async_scheduling") is not None else ()):
-            # [rev-pm M-0464] EACH declared key must be attested -- a record that omits one knob (prefix caching: vLLM V1 default ON)
+            # EACH declared key must be attested -- a record that omits one knob (prefix caching: vLLM V1 default ON)
             # does not get applicability by absence
             if eff and k not in facts["values"]:
                 c.fail(f"the record does not attest {k}, which the Program's applicability declares ({k}={app['engine'].get(k)!r}): "
@@ -473,7 +474,7 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
             for v in facts["values"].get(k, ()):
                 if v != app["engine"].get(k):
                     c.fail(f"record engine {k}={v!r} is outside the Program's declared applicability ({k}={app['engine'].get(k)!r})")
-    # [compiled M-0153 (4a)] a Program modelling a COMPILED execution declares its compilation facts; the record must attest the same
+    # a Program modelling a COMPILED execution declares its compilation facts; the record must attest the same
     # (RunHeader.profile.compilation / .compilation / engine_kwargs.compilation_config); a compiled Program against a header without them
     # FAILS (fail closed).  An EAGER Program against a record whose compilation facts attest cudagraphs / torch.compile FAILS too.
     from verity_vllm.pipeline.global_program import compilation_facts
@@ -508,9 +509,9 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
     workload record (named)."""
     wl_path = (gp.get("workload") or {}).get("path")
     wl = None
-    if wl_path and os.path.exists(wl_path):
+    if wl_path and workload_file(wl_path).is_file():
         try:
-            wl = Workload.load(wl_path)
+            wl = Workload.load(workload_file(wl_path))
         except RecordError as e:
             c.fail(f"the workload manifest is not a workload record: {e}")
             return None
@@ -524,7 +525,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                 continue
             if g.get("workload_request_id") is not None and w.request_id != str(g["workload_request_id"]):
                 c.fail(f"{request_id_of(i)}: manifest workload request id {w.request_id!r} != the Program's {g['workload_request_id']!r}")
-            # [rev-pm M-0302 (a)] a manifest whose per-request fields were edited after the Build is named per request, not only by digest
+            # a manifest whose per-request fields were edited after the Build is named per request, not only by digest
             for name, wv, gv in (("prompt_len", w.prompt_length, g.get("prompt_len")), ("max_tokens", w.max_tokens, g.get("max_tokens")),
                                  ("arrive_step", wl.arrive_step(i), g.get("arrive_step"))):
                 if wv is not None and gv is not None and int(wv) != int(gv):
@@ -534,7 +535,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
         c.info["workload_sha256"] = have
         if want and want != have:
             c.fail("workload manifest sha256 differs from the global Program's")
-        # [rev-pm M-0570 (2)] the manifest of record must be the manifest the RUN was captured with: the driver records its sha256 in
+        # the manifest of record must be the manifest the RUN was captured with: the driver records its sha256 in
         # RunHeader.workload.sha256 -- a manifest edited after the run (seeds swapped, a seed deleted) composes the same Program and
         # passed G1 by ids/prompts/caps/arrivals alone; and per request the header's sampling fields are compared with the manifest's
         hw = (header.get("workload") or {}).get("sha256")
@@ -561,7 +562,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                 c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records seed={hs} [M-0570]")
         m_s, h_s = manifest_sampling(wl), dict((header.get("workload") or {}).get("sampling") or {})
         c.info["sampling"] = {"manifest": m_s, "header": {k: h_s.get(k) for k in ("variant", "temperature", "top_p", "top_k") if k in h_s}}
-        # [rev-pm M-0667 N5] the manifest's own sources (variants table = the driver's, label, explicit fields) must agree: fail closed
+        # the manifest's own sources (variants table = the driver's, label, explicit fields) must agree: fail closed
         for conf in m_s.get("conflict") or []:
             c.fail(f"manifest of record is not one sampling declaration -- {conf} [M-0667 N5]")
         for k in ("variant", "temperature", "top_p", "top_k"):
@@ -571,7 +572,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
             same = (str(mv) == str(hv)) if k == "variant" else (abs(float(mv) - float(hv)) <= 1e-9)
             if not same:
                 c.fail(f"manifest of record declares sampling {k}={mv!r} but the run header records {k}={hv!r} [M-0570]")
-        # a request pinning ANOTHER variant (vllm_adapter [ov-sampling]): its table entry vs the header's per-request fields
+        # a request pinning ANOTHER variant (vllm_adapter): its table entry vs the header's per-request fields
         for i, w in enumerate(wl.requests):
             h = hdr_by_id.get(request_id_of(i))
             rv = w.variant
@@ -580,7 +581,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
             r_s = manifest_sampling(wl, variant=rv) if rv is not None else m_s
             for conf in (r_s.get("conflict") or []) if rv is not None else []:
                 c.fail(f"{request_id_of(i)}: manifest variant {rv!r} is not one declaration -- {conf} [M-0667 N5]")
-            # [rev-pm BLOCKER M-0717 (i)] a manifest that pins a per-request variant against a header WITHOUT a per-request sampling
+            # a manifest that pins a per-request variant against a header WITHOUT a per-request sampling
             # record is not agreement: the run was not pinned (mirror of the seed rule above) -- a pin added after the run fails closed
             if rv is not None and all(h.get(k) is None for k in ("variant", "temperature", "top_p", "top_k")):
                 c.fail(f"{request_id_of(i)}: manifest pins variant {rv!r} for the request but the run header records no per-request "
