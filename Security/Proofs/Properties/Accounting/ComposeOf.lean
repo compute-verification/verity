@@ -254,8 +254,9 @@ theorem gateOf_ok {i : ℕ} {d : Flock.Program.Defn} {ops : Array ℕ} {rs : Lis
     (h : gateOf i d ops rs = .ok g) :
     ∃ c w, Accounting.Gates.classOf d.id = some c ∧ c ≠ .input .coin ∧
       opBinding (opOf i c) = bindingOf d.binding ∧ (∀ j ∈ ops.toList, j < i) ∧
-      g = { op := opOf i c, args := ops.toList, lo := -2 ^ (w - 1), hi := 2 ^ (w - 1) - 1, step := 0,
-        prim := d.id, site := .other, commit := rs.contains i } := by
+      g =
+        { op := opOf i c, args := ops.toList, lo := -2 ^ (w - 1), hi := 2 ^ (w - 1) - 1, step := 0, prim := d.id,
+          site := .other, commit := rs.contains i } := by
   unfold gateOf at h
   rcases hc : Accounting.Gates.classOf d.id with _ | c
   · rw [hc] at h

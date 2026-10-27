@@ -1,3 +1,4 @@
+import Definitions.Accounting.Gates.Registry
 import Properties.Accounting.Compose
 
 /-!
@@ -70,8 +71,9 @@ def gateOf (i : ℕ) (d : Flock.Program.Defn) (ops : Array ℕ) (rs : List ℕ) 
     if c = .input .coin then .error s!"gate {i}: a coin class for {d.id}"
     else if opBinding (opOf i c) ≠ bindingOf d.binding then .error s!"gate {i}: {d.id}'s class and binding disagree"
     else if !ops.toList.all (· < i) then .error s!"gate {i} reads a later gate"
-    else .ok { op := opOf i c, args := ops.toList, lo := -2 ^ (w - 1), hi := 2 ^ (w - 1) - 1, step := 0,
-      prim := d.id, site := .other, commit := rs.contains i }
+    else .ok
+      { op := opOf i c, args := ops.toList, lo := -2 ^ (w - 1), hi := 2 ^ (w - 1) - 1, step := 0, prim := d.id,
+        site := .other, commit := rs.contains i }
   | none, _ => .error s!"gate {i}: primitive {d.id} has no class"
   | some _, _ => .error s!"gate {i}: primitive {d.id} returns more than one word"
 
