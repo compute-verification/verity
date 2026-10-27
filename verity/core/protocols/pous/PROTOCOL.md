@@ -954,7 +954,11 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   cooperating squaring, 16,447 rounds take 1,704 µs, 1.995× `Δ + RTT`, and 1.64× and 1.25× under the red team's sync
   model. `HonestPassesRing` and
   `HonestPassesAccepts` prove that the honest full-state server passes P2's ring audit, and the end-to-end event, with
-  probability 1.
+  probability 1. Beside each ring-game and period guarantee sit its honest and nontrivial lemmas
+  (`endToEndRing_honest` and `endToEndRing_nontrivial`, likewise for `endToEndRingAt`, `periodHeld`, `periodHeldAt`,
+  `periodCapacity`, `obligationHeld` and `SpaceOfPeriodHeld`; `periodHeldHonest` and `periodHeldNontrivial` for
+  `periodHeldDeployed`): the first shows the premises hold at an instance, the second that the bound fails for a
+  verifier that accepts everything.
 
 `P2RingAuditSecure` is also derived from the per-round conjecture `P2RingRoundSecure p ε₀ D Q L` (Daniel's ruling of
 12 Oct, item 5): at every block count from `2^19` to `2^25`, at a boundary where the server holds at most `⌊ρ·|C|⌋`
