@@ -1,6 +1,5 @@
 """`check.py --record --on M --pool NAME`: a lane's own recorded check in a slot of M's NAME pool, `research run --pool`'s pools,
-since the CPU nodes' merge-check slots are only=trains (CI-192: training's and vllm's recorded checks couldn't place, and proofs
-ran lean-agreement by hand). And `--record` inside a `research run`, which can't launch one of its own, names the command that
+since the CPU nodes' merge-check slots are only=trains. And `--record` inside a `research run`, which can't launch one of its own, names the command that
 records it instead."""
 from __future__ import annotations
 
@@ -65,6 +64,13 @@ def test_a_pooled_deferred_record_is_a_post_landing_run_of_those_steps(launched)
     assert "--tool" not in head and head[head.index("--env") + 1] == f"CHECK_SLOTS={slot_only.POOLS['research']}"
     assert tail[:5] == ["python3", "tools/verity/check/slot.py", "--by", "ci", "--"]
     assert tail[-2:] == ["--deferred", "lean-agreement"] and post_landing(tail, TOOL) == "lean-agreement"
+
+
+def test_a_records_timeout_is_its_runs_not_the_checks(launched):
+    assert CHECK.record(["--base", "HEAD", "--on", CPU1, "--pool", "research", "--timeout", "14400", "--deferred", "lean-agreement"]) == 0
+    [cmd] = launched
+    head, tail = _split(cmd)
+    assert head[head.index("--timeout") + 1] == "14400" and "--timeout" not in tail
 
 
 @pytest.mark.parametrize("argv, why", [

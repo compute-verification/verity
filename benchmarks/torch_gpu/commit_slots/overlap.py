@@ -1,5 +1,5 @@
 """On one CUDA device: how much of the serve-time commit (`slots_gpu`, this directory's call) hides behind ALLP-H200's
-served step (`benchmarks/e2e_h200`'s `Driver` at the frozen shape, resident weights), as JSON to ``--out``/overlap.json
+served step (`examples/h200`'s `Driver` at the frozen shape, resident weights), as JSON to ``--out``/overlap.json
 and a summary to ``--out``/summary.txt.
 
 Today's loop (`e2e_h200.driver.Driver.step_slots`) streams each group (the embedding, a layer, the head) to the commit's
@@ -56,7 +56,7 @@ import numpy as np
 import torch
 
 HERE = Path(__file__).resolve().parent
-E2E = HERE.parents[1] / "e2e_h200"
+E2E = HERE.parents[2] / "examples" / "h200"
 sys.path[:0] = [str(HERE), str(E2E)]
 import slots as S
 import slots_gpu as G
@@ -151,21 +151,6 @@ class Smi:
     def stop(self) -> None:
         if self.proc is not None:
             self.proc.terminate()
-
-
-def load_layout(path: Path) -> S.Layout:
-    """circuits' Layout JSON (`slots._layout_json`), equal groups shared (CIR-113's loader)."""
-    doc, memo = json.loads(path.read_text()), []
-
-    def group(g: dict) -> S.Group:
-        for raw, built in memo:
-            if raw == g:
-                return built
-        built = S.Group(tuple(g["sources"]),
-                        tuple(tuple(S.Row(tuple(S.Part(*p) for p in r)) for r in u) for u in g["units"]))
-        memo.append((g, built))
-        return built
-    return S.Layout(doc["name"], tuple(group(g) for g in doc["groups"]))
 
 
 def describe(layout: S.Layout) -> dict[str, Any]:
@@ -321,7 +306,7 @@ class Threaded(Pipelined):
 
 
 def prompts_for(run_id: str, batch: int, p: int) -> np.ndarray:
-    """`benchmarks/e2e_h200/run.py`'s prompts."""
+    """`examples/h200/run.py`'s prompts."""
     h = hashlib.sha512(b"e2e-h200/prompts-fixture\0" + run_id.encode()).digest()
     rng = np.random.Generator(np.random.PCG64(int.from_bytes(h[:16], "big")))
     return rng.integers(32, 127, size=(batch, p), dtype=np.int64)
@@ -658,7 +643,7 @@ def main(argv: list[str] | None = None) -> int:
         nonlocal current
         if current is None or current[0] != lay:
             drop(False)
-            layout = load_layout(a.shared) if lay == "shared" else CM.layout(shape) if lay == "families" else None
+            layout = S.load(a.shared) if lay == "shared" else CM.layout(shape) if lay == "families" else None
             if layout is None:
                 raise SystemExit(f"--runs: {lay!r} is shared or families")
             current = (lay, layout)

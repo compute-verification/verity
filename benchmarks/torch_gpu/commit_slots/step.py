@@ -4,7 +4,7 @@
     python benchmarks/torch_gpu/commit_slots/step.py count LAYOUT.json --out OUT.count.json          # host twin, any CPU
     python benchmarks/torch_gpu/commit_slots/step.py time LAYOUT.json [...] --out DIR                # on the GPU (gpu.sh)
 
-``export --shared`` writes FAMILIES' layout at the frozen shape (``benchmarks/e2e_h200``'s map, ``commit.layout``) with
+``export --shared`` writes FAMILIES' layout at the frozen shape (``examples/h200``'s map, ``commit.layout``) with
 CIR-113's shared rows, by circuits' row model: in each table a gather reads, only the gather's units stay, so the producers'
 rows go and each gather's commit unit keeps its place. A slot then commits 102,448 rows in 101,718 units; its digest is that
 of circuits' own export. With ``--row-bytes B``, a synthetic variant for the row-size curve: each gather's
@@ -75,7 +75,7 @@ def shared_layout(row_bytes: int = 0) -> S.Layout:
     gather's units alone (circuits' row model). With ``row_bytes``, a synthetic variant:
     each gather's run of shared rows (one-row units, each the next bytes of its table) cut into rows of ``row_bytes``, the
     run's last row what is left; every other unit as circuits has it. The same bytes in fewer rows."""
-    sys.path.insert(0, str(ROOT / "benchmarks" / "e2e_h200"))
+    sys.path.insert(0, str(ROOT / "examples" / "h200"))
     from e2e_h200.commit import layout as families
     from e2e_h200.plan import Map
     from e2e_h200.shape import FROZEN
@@ -116,21 +116,6 @@ def uniform(row_bytes: int, units: int) -> S.Layout:
     """``units`` one-row units of ``row_bytes`` each, the next bytes of one tensor: what a row of that size costs alone."""
     rows = tuple((S.Row((S.Part(0, i * row_bytes, row_bytes),)),) for i in range(units))
     return S.Layout(f"commit-slots/step/uniform-{units}x{row_bytes}b/v1", (S.Group((units * row_bytes,), rows),))
-
-
-def load(path: Path) -> S.Layout:
-    """A layout in ``slots._layout_json``'s form. Groups with the same tensors and units become one object, as a layout's
-    repeated groups (its layers) are, so the plan lays each out once."""
-    doc = json.loads(path.read_text())
-    seen: dict[str, S.Group] = {}
-    groups = []
-    for g in doc["groups"]:
-        k = json.dumps(g, separators=(",", ":"))
-        if k not in seen:
-            seen[k] = S.Group(tuple(g["sources"]),
-                              tuple(tuple(S.Row(tuple(S.Part(*p) for p in r)) for r in u) for u in g["units"]))
-        groups.append(seen[k])
-    return S.Layout(doc["name"], tuple(groups))
 
 
 def describe(layout: S.Layout) -> dict[str, Any]:
@@ -196,7 +181,7 @@ def count(a: argparse.Namespace) -> int:
     import slots_gpu as G
 
     t = time.perf_counter()
-    layout = load(a.layout) if a.layout else uniform(a.uniform, a.units)
+    layout = S.load(a.layout) if a.layout else uniform(a.uniform, a.units)
     plan = G.Plan(CTX, layout, "host")
     got = {}
     for slots in (1, 2):
@@ -308,7 +293,7 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
         print(json.dumps({"part": part, **{k: doc[k] for k in doc if k in (part, "ok")}}), flush=True)
 
     t = time.perf_counter()
-    layout = load(path)
+    layout = S.load(path)
     doc["layout"] = {"load_s": round(time.perf_counter() - t, 2), **describe(layout)}
     comp = {k: slots * v for k, v in compressions(layout).items()}
     doc["layout"]["compressions_a_slot"] = {k: v // slots for k, v in comp.items()}
@@ -442,7 +427,7 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
                           "idle_s": round(r["gpu_s"] - busy, 4), "launches": sum(k["launches"] for k in kernels),
                           "pageable_uploads": sum(k["launches"] for k in kernels if "Pageable -> Device" in k["kernel"]),
                           "kernels": kernels[:25]}
-    except Exception as e:   # a profiler the node lacks costs only this part
+    except Exception as e:  # noqa: BLE001  (a profiler the node lacks costs only this part)
         doc["profile"] = {"error": repr(e)}
     save("profile")
 

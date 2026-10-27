@@ -274,7 +274,7 @@ def sweeps(check: str, arch: str) -> list[dict]:
         if words and diff:
             try:
                 row["differences"] = [SW.first_difference(op, c, SW.gpu_words(op, c)) for c in diff[:DIFF_CHUNKS]]
-            except Exception as e:  # the models read verity: the row's verdict stands without its diagnosis
+            except Exception as e:  # noqa: BLE001  (the models read verity: the row's verdict stands without its diagnosis)
                 row["differences_error"] = repr(e)
         rows.append(row)
     return rows

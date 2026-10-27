@@ -158,7 +158,7 @@ GUARD = HERE / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
 CACHE = Path(os.environ.get("VERITY_TEST_CACHE") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "tests")
-#: Files every key includes: the code that decides a suite's verdict, the runner and its guard and tracer (Daniel, 9 Oct). Not
+#: Files every key includes: the code that decides a suite's verdict, the runner and its guard and tracer. Not
 #: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
 #: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file.
 RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/guard/verity_suite_guard.py",
@@ -197,7 +197,7 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
         'export PATH="$HOME/.elan/bin:$PATH"; ')
 #: `lake build` in the verifier, one at a time per tree: on a node every run of a commit shares its source tree, and a train's
 #: check and its touched-suites run built `.lake` there at once (21 Oct: 4430e936c3d8's link of flock-verify found its output
-#: gone, and drive bisected a failure no PR caused; CI-147)
+#: gone, and drive bisected a failure no PR caused)
 LAKE_BUILD = ELAN + "mkdir -p .lake && exec flock .lake/verity-build.lock lake build"
 QUICK = ["-m", "not slow"]
 REGISTRY = "fixtures/artifacts.json"
@@ -1547,7 +1547,7 @@ def sweep_basetemps(tmp: Path | None = None, proc: Path = Path("/proc"), now: fl
 
     One is in use while its marker shows this boot and pid namespace and an owner alive with its start time, or a process left
     in pytest's session (pytest outlives a suites.py killed by SIGKILL: on vy-nebius-1, 18 Oct, the next suites.py's sweep took
-    two running flock suites' basetemps, INF-95). One without such a marker (an older suites.py's, the guard's
+    two running flock suites' basetemps). One without such a marker (an older suites.py's, the guard's
     `verity-suite-host-*`, another namespace's or boot's) is removed only once nothing in it changed for `UNOWNED_AGE_S`."""
     now = time.time() if now is None else now
     try:
@@ -1791,9 +1791,8 @@ RUN_MEM_ENV = "RESEARCH_RUN_MEM_GB"
 
 
 def slot_mem_gb() -> float | None:
-    """The memory this run may use: its check slot's, else its `research run --mem-gb` reservation's, else its cgroup's cap (17 Oct:
-    a quick tier in proofs' 480 GB pool slot ran circuit_check's suite on 94 workers, 784 GB, since only `check` passed `--mem-gb`;
-    19 Oct, INF-118: a quick tier on a 32 GB reservation on cpu-2, where nothing caps it, reached 900 GiB and OOM-killed others)."""
+    """The memory this run may use: its check slot's, else its `research run --mem-gb` reservation's, else its cgroup's cap: a
+    suite sized to the whole node outgrows a slot or a reservation that nothing else caps."""
     for env in (SLOT_MEM_ENV, RUN_MEM_ENV):
         v = os.environ.get(env, "")
         if v.replace(".", "", 1).isdigit():
@@ -1834,8 +1833,8 @@ def worker_gb(s: Suite) -> float:
 def wide_gb(mem_gb: float | None, serial: int) -> float | None:
     """The GB the parallel suites share: ``mem_gb`` less `TEST_PROCESS_GB` for each of the ``serial`` processes that run the
     one-process suites beside them. Parallel suites that overlap draw their workers' GB from it in turn, so two side by side can't
-    each size to the whole (17 Oct, note:proofs/20261017T0625Z-friction-suites-mem-gb-concurrent: circuit_check's 53 workers and
-    flock's 30, each sized to all of --mem-gb, reached 800 GB together on cpu-2)."""
+    each size to the whole (circuit_check's 53 workers and flock's 30, each sized to all of --mem-gb, reached 800 GB
+    together)."""
     return None if mem_gb is None else max(0.0, mem_gb - serial * TEST_PROCESS_GB)
 
 
@@ -1991,7 +1990,7 @@ _stopping = False
 
 def _first_sigterm_stops(signum: int, frame: object) -> None:
     """The first SIGTERM raises KeyboardInterrupt; a later one is dropped, since `uv run` forwards the SIGTERM the group got and the
-    second one would interrupt the stop the first started (INF-93)."""
+    second one would interrupt the stop the first started."""
     global _stopping
     if not _stopping:
         _stopping = True

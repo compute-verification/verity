@@ -28,18 +28,12 @@ ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "
 ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 #: Layout/spec documents left in place by the 2026-09-22 migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
-    "archive/direct/V2_AIR.md",
-    "archive/direct/encode/V2_SHAPE.md",
-    "archive/vole/ASSUMPTIONS.md",
     "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
-    "benchmarks/numerical/python/verity_numerical/redteam/TRANSCRIPT_CHECKLIST.md",
 )
 #: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. C-Flock
-#: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full), ligero-verify's
-#: discrepancies (indexed by its ``DISCREPANCIES.md``) and the network certifier's sections (``protocol/<topic>.md``, each
+#: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
 SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
-                       "archive/ligero-verify/discrepancies/": "archive/ligero-verify/DISCREPANCIES.md",
                        "verity/core/protocols/certifier/protocol/": "verity/core/protocols/certifier/PROTOCOL.md"}
 #: Generated output, by where it sits or what it is: no tracked path has one of these directories, suffixes or stamps.
 GENERATED_DIRS = frozenset({"reports", "results", "renders", "previews", "plots", "evidence", "assets", "outputs"})
@@ -54,7 +48,7 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
-#: (Daniel, 20 Oct: "this shouldn't be like a database of shit that went wrong"; `.agents/skills/authoring-skills/`).
+#: (`.agents/skills/authoring-skills/`).
 SKILL_SIZE_CAP = 16 * 1024
 #: Skills over SKILL_SIZE_CAP on 20 Oct, each capped at its size then (the largest at any open PR's head, rounded up, plus
 #: 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
@@ -78,13 +72,13 @@ ALLOWLIST = {
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
-#: what Daniel is shown when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
+#: what the spec alert shows when a guarantee changes; it grows 3-5 KiB per pin and with every definition under `meaning` (following the whole
 #: executable verifier, `Flock`, took soundness's record past 2 MiB, and `Security`'s holds every package's guarantees).
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES and audit records) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be. Audit records are left out: they must stay in Git and each has its own
 #: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB since 26 Oct:
-#: the E2E demo's fixtures (#4454, #4455) took the tree to 40.1 MiB; register the next large one rather than raising it again.
+#: the E2E demo's fixtures took the tree to 40.1 MiB; register the next large one rather than raising it again.
 DATA_BUDGET = 48 * 1024 * 1024
 REGISTRY = "fixtures/artifacts.json"
 
@@ -175,8 +169,7 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
         assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
-    assert markdown_over_cap("archive/ligero-verify/DISCREPANCIES.md", MD_SIZE_CAP + 1).endswith("archive/ligero-verify/discrepancies/")
-    assert markdown_over_cap("archive/ligero-verify/README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
+    assert markdown_over_cap(soundness + "README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
     certifier = "verity/core/protocols/certifier/"
     assert markdown_over_cap(certifier + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {certifier}protocol/")
     assert markdown_over_cap(certifier + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{certifier}protocol/")
@@ -210,8 +203,8 @@ def test_markdown_size_caps() -> None:
     assert not offenders, "maintained documents are small:\n" + "\n".join(offenders)
 
 
-#: Frozen backends whose other test files need torch, a GPU or cargo, and were never part of `check` (archive/README.md).
-UNSUITED_TEST_DIRS = ("archive/direct/", "archive/gkr/", "archive/shared/hash_gpu/", "verity/ml/kernels/")
+#: Test files that need torch, a GPU or cargo, and were never part of `check`.
+UNSUITED_TEST_DIRS = ("verity/ml/kernels/",)
 
 
 def _testpaths(tracked: list[str]) -> list[str]:
