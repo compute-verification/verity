@@ -434,4 +434,28 @@ theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .
   · assumption
   · cases h
 
+/-- The refusal of a plain session whose coins are not the OS's (§7.2, §17.2), which `verify` reaches only when every
+check has passed. -/
+def SEED_COINS : String :=
+  "refused: a plain session whose coins are not the OS's (--coins os at a statement whose prover takes every coin from the OS): every plain soundness claim reads its coins as uniform and unknown to the prover before its round, and none covers coins derived from a seed"
+
+/-- **A plain session's coins are the OS's**: `--coins os` at a statement whose prover takes every coin from the OS
+(`Tags.liveOs`, read before `Tags.withCoins`); a `--zk` session's keyed coin tree passes. A seed's coins, or `os` at a
+statement whose prover seeds, are refused (`SEED_COINS`), whatever else the session passes. -/
+def plainCoins (tags : Tags) : Coins → Except String Unit
+  | .tree _ => .ok ()
+  | .os => if tags.liveOs then .ok () else .error SEED_COINS
+  | .seed => .error SEED_COINS
+
+theorem plainCoins_ok {tags : Tags} {coins : Coins} (h : plainCoins tags coins = .ok ()) :
+    (∃ s, coins = .tree s) ∨ (coins = .os ∧ tags.liveOs = true) := by
+  cases coins with
+  | tree s => exact .inl ⟨s, rfl⟩
+  | os =>
+    unfold plainCoins at h
+    split at h
+    · exact .inr ⟨rfl, by assumption⟩
+    · cases h
+  | seed => cases h
+
 end Flock.ProvedScope

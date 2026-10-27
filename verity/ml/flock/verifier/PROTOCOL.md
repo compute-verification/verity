@@ -282,6 +282,11 @@ the round.
 
 M0 draws `os` coins under `FC_COINS=os`; `verify --coins os` binds its live-OS identity (`Tags.withCoins`).
 
+`verify` accepts a plain session only on `os` coins at a statement whose prover takes every coin from the OS
+(`Tags.liveOs`): every plain soundness claim reads its coins as this section's, so a session on `seed` coins (§7.2), or
+`--coins os` at a `+seed-injection` statement or one before `967b8d06`, is refused once every check has passed
+(`ProvedScope.plainCoins`).
+
 ### 7.2 `seed` (PR #83, `coin-commit/sha256/v1`, `coin-commit/sha256`, `coin-commit/sha512`)
 
 The server draws a 32-byte `seed` and a 32-byte `nonce` when it accepts `Hello`, answers `Hello` with the commitment
@@ -1906,7 +1911,10 @@ expectation):
   upstream accepts, and of every other session without a draw its own reason (`agree.py --lean-refuses-drawless`).
   So, too, a session verified without the verifier's own program (`--program`, `ProvedScope.NO_PROGRAM`), which the
   Lean verifier alone refuses, last: every session of a set with no program (upstream reads none) is compared as
-  accepted when refused for that alone (`agree.py`'s `NO_PROGRAM`).
+  accepted when refused for that alone (`agree.py`'s `NO_PROGRAM`). So, too, a plain session whose coins are not the
+  OS's (§7.1, `ProvedScope.plainCoins`), which the Lean verifier alone refuses, last: every session of a plain set
+  without `--coins os` (each replayable set on `seed` coins) is compared as accepted when refused for that alone
+  (`agree.py`'s `SEED_COINS`).
   `agree.py`'s `passed_every_check` counts the sessions refused last and for nothing else. So, too, under `--zk`, a
   statement whose Δ or regions meet the mask slot (§16.14, `Zk.maskFree`), which the Lean verifier alone refuses (the
   live server and upstream verify it); honest `--zk` statements avoid it, and no vector exercises it;
@@ -1992,7 +2000,8 @@ Soundness of a verdict rests on:
   4.6) is proved from DKT26 in ArkLib, and ring switching and Ligerito's list-decoding analysis are proved there too
   (`lean/soundness/README.md` §1.1 and §1.6, and its `ASSUMPTIONS.md`).
 - **Coins:** with `os` coins, each coin is uniform and unknown to the prover before it sent the round the coin answers.
-  With `seed` coins, additionally: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF (§7.2).
+  With `seed` coins, additionally: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF (§7.2). No
+  soundness claim takes those two, so `verify` refuses a plain session on `seed` coins (§7.1).
 - **Hashes:** SHA-256 collision resistance for the Merkle trees, the round digests and the statement binding (Table 1:
   `cr/sha-256`); the tight Merkle bound is in the random-oracle model. For the target statement, the Merkle trees and the
   Halevi–Micali leaves rest on SHA-512 collision resistance instead (`cr/sha-512`). With retained round bytes (§6.2), R2

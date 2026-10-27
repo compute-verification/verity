@@ -38,10 +38,15 @@ or without a closure, and a subset draw without `--zk` at a statement with publi
 `refused: a session without a draw: every soundness claim is about a drawn session (D12)`, last, after the form's
 refusal (`lean_refuses_drawless`). Under `--rec-inner`, a V* session whose draw is not the `subset` draw of every unit of
 its population is refused after that, and so is a recursive session (`--rec-part`, `--rec-bindings` or `--rec-rows`)
-without `--rec-inner` (`Flock.RecSetup.fullDraw`, PROTOCOL.md). Last of all, a session verified without the verifier's
+without `--rec-inner` (`Flock.RecSetup.fullDraw`, PROTOCOL.md). Then a session verified without the verifier's
 own `--program` is refused (`refused: a session without the verifier's program (--program): …`,
 `Flock.ProvedScope.programHeld`), with or without `--zk`: a verifier that cannot read the Program cannot know what it
 verifies, and the agreement check compares a session refused for that alone as accepted (`agree.py`'s `NO_PROGRAM`).
+After that, a plain session whose coins are not the OS's is refused (`refused: a plain session whose coins are not the
+OS's …`, `Flock.ProvedScope.plainCoins`): one without `--coins os`, or with it at a statement whose prover seeds (the
+`+seed-injection` selftest statements and those before `967b8d06`), since every plain soundness claim reads its coins
+as unknown to the prover before its round; the agreement check compares a plain set without `--coins os` the same way
+(`agree.py`'s `SEED_COINS`).
 
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
 (`rec_part`) and the SHA-512 of the shared rows file it checked (`rec_rows_sha512`). `flock-verify rec-compose
@@ -87,8 +92,8 @@ the agreement job's sessions from upstream's binaries are. Each refuses the othe
   statement digest and Σ as SHA-512, and from `967b8d06` shared-row public files (header `shared_rows`, §16.10), with
   public outputs. Runs staged from `68ae79f2` until hidden outputs use this name. A proving build's session of this
   statement or a later one (the hidden-output and typed ones) on per-round OS coins (`FC_COINS=os`) needs `--coins os`,
-  which binds the identity that mode writes, not who drew the coins (PROTOCOL.md §7.1, §17.2); a seeded one needs
-  `--coins seed`, the default.
+  which binds the identity that mode writes, not who drew the coins (PROTOCOL.md §7.1, §17.2); a seeded one passes the
+  checks under `--coins seed`, the default, and is refused last for its coins (`Flock.ProvedScope.plainCoins`).
 - `verity/flock-circuit@e51e2b86` (and `+seed-injection`): PR #83 from `e51e2b86`, for the runs staged before `68ae79f2`.
 - `verity/flock-circuit@eb90718f` (and `+seed-injection`): the same without the e2e bindings.
 - `verity/flock-circuit@631567f7`, `@fd02e847` and `@19c7269a`, and `verity/flock-netlist/v1`. These need `--comp`.
