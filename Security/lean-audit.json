@@ -1426,6 +1426,9 @@
    "owner": "@compute-accounting",
    "digest": "e1e59f7569d7baa02fa14dca3be9f25d1ee520b7975c05df13083b151eb78739"
   },
+  "Pouw.Assumptions.AnswerAfterWork": {
+   "owner": "@compute-research"
+  },
   "Pouw.Assumptions.CertifierSeesImports": {
    "owner": "@compute-research",
    "digest": "966a0d751ac558f6a4796279d246e233492835d7e2f6ae06f17d654ff3d79f4e"
@@ -1449,6 +1452,9 @@
   "Pouw.Assumptions.CoinsConfidential": {
    "owner": "@compute-research",
    "digest": "d8393ab6968720ddd2ebc0ab09931d9b238144a58e0fb8b5391cf9385cd23115"
+  },
+  "Pouw.Assumptions.CommitAfterWork": {
+   "owner": "@compute-research"
   },
   "Pouw.Assumptions.ExtractAdv": {
    "owner": "@compute-research",
@@ -2608,7 +2614,7 @@
    "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Pouw.DitherWitness": "the honest and nontrivial witnesses (LEAN-66) of WorkMoment and FleetSound state their premises and the accept-everything break at RT-LEAN L7's toy instance (`tw`, `twRound`, `twPd`, `twVerdict`, `honest`), which is proof-only; CMP-152"
+   "Proofs.Pouw.DitherWitness": "the honest and nontrivial witnesses (LEAN-66) of WorkSound, WorkMoment and FleetSound state their premises and the accept-everything break at RT-LEAN L7's toy instance (`tw`, `twRound`, `twPd`, `twVerdict`, `honest`), which is proof-only; CMP-152, CMP-154"
   }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
@@ -9313,6 +9319,12 @@
    "signature": ["Pouw.SecurityProofs.Dither.WorkSound : Pouw.Guarantees.Dither.WorkSound"],
    "assumptions": [],
    "type_hash": "d6773d52a6c5d776bb73acfb2282f6e4087777d1cce85e4aa4ae1c7d9d2a1d6b"
+  },
+  "Pouw.SecurityProofs.Dither.WorkSound_honest": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Dither.WorkSound_nontrivial": {
+   "owner": "@compute-research"
   },
   "Pouw.SecurityProofs.Dither.WorkSoundNoFold": {
    "owner": "@compute-research",
@@ -46014,6 +46026,10 @@
   "Pouw.SecurityProofs.Dither.WorkMoment": {
    "honest": ["Pouw.SecurityProofs.Dither.WorkMoment_honest"],
    "nontrivial": "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.WorkSound": {
+   "honest": ["Pouw.SecurityProofs.Dither.WorkSound_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
   }
  }
 }
