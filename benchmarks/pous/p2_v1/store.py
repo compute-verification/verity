@@ -1,4 +1,4 @@
-"""The encoded weights store (CMP-95 item 2): the frozen MQA model's INT8 weights as `W` under the registered P2
+"""The encoded weights store: the frozen MQA model's INT8 weights as `W` under the registered P2
 (`p2-16448/v4`), laid out so that one layer, or one matrix, decodes alone into a staging buffer, and the reference
 decode a kernel's `decode_layer` matches byte for byte.
 

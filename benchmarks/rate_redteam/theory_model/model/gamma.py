@@ -27,8 +27,8 @@ import math
 from dataclasses import dataclass, replace
 
 # RTX PRO 6000 Blackwell Server (sm_120).
-R_READ = 1.488e12  # B/s, measured (art:51a27942); the datasheet's 1.597e12
-S_CHIP = 239_992_832  # B: registers + shared memory + L2 + the red team's allowance (#1805)
+R_READ = 1.488e12  # B/s, measured; the datasheet's 1.597e12
+S_CHIP = 239_992_832  # B: registers + shared memory + L2 + the red team's allowance
 M_DEVICE = 103_079_215_104  # B
 CLOCK_LOCKED_MHZ = 2092
 CLOCK_MAX_MHZ = 2430
@@ -192,7 +192,7 @@ class Codec:
     slot_bits: int = 64
 
 
-# Measured at 2^61 − 1 (art:51a27942, 60 payload bits in 64-bit slots, batch 1–8).
+# Measured at 2^61 − 1 (60 payload bits in 64-bit slots, batch 1–8).
 MEASURED = {
     1: Codec(0.28, 23, 1.16, 0.15, p_bits=61, payload_bits=60),
     2: Codec(0.46, 29, 1.24, 0.15, p_bits=61, payload_bits=60),
@@ -273,7 +273,7 @@ class Point:
     context: int
     kv_certified: bool
     codec: Codec
-    s_c: float = 0.19  # FP8 weights per payload byte: measured 0.17 (8B, art:23672ef9), 0.19 (70B, art:f989de1d)
+    s_c: float = 0.19  # FP8 weights per payload byte: measured 0.17 (8B), 0.19 (70B)
     kv_rounds: int = 1  # Sloth rounds on the KV cache's words, k for E: its payloads are free, so it may want more
     kv_codec: Codec | None = None  # the KV words' codec, at one round (E's when None); its ε, r and slot are used
     kv_extra: float = 0.0  # passes a KV pass takes past E's fused step with the KV decode in place of E's

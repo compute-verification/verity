@@ -1,4 +1,5 @@
-"""Red-team witness (W5, target 3): NET-18's ingress record as a function of the salt at fixed traffic.
+"""Red-team witness (W5, target 3): the ingress certifier's record, with its own salt frame, as a function of the
+salt at fixed traffic.
 
 Accounting.Assumptions.BoundaryObs asks that dX's certifiers' records placed during the window be a function of the
 block's leak and the boundary's observations. Here the block leaks nothing and the link's traffic is identical in both
