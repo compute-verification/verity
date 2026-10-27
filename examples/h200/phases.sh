@@ -73,12 +73,12 @@ uv run --no-sync research keep "$ST" --owner @compute-accounting --expires 30d -
   coin)
     have benchmarks/e2e_h200/m3coin.py $BR
     need REG; named "$REG" step-registration.json
-    CMD=("${RR[@]}" --on "$CPU" --send "$REG" --send "$(main_txt)" "$@" -- bash -c 'uv sync -q && uv run --no-sync python \
+    CMD=("${RR[@]}" --on "$CPU" --cwd source --send "$REG" --send "$(main_txt)" "$@" -- bash -c 'uv sync -q && uv run --no-sync python \
 benchmarks/e2e_h200/m3coin.py --registration "$RESEARCH_RUN_DIR/inputs/step-registration.json" --gate-key \
 "$HOME/.ssh/vy-gate-compute-accounting" --peer '"$CPU"' --minutes 20 --main "$RESEARCH_RUN_DIR/inputs/main.txt" --out "$OUT/coin"') ;;
   withheld)
     need REG; named "$REG" step-registration.json
-    CMD=("${RR[@]}" --on "$CPU" --mem-gb 4 --send "$REG" --send "$(main_txt)" --env PIN="$(git rev-parse origin/main)" "$@" \
+    CMD=("${RR[@]}" --on "$CPU" --cwd source --mem-gb 4 --send "$REG" --send "$(main_txt)" --env PIN="$(git rev-parse origin/main)" "$@" \
          -- bash -c 'uv sync -q && uv run --no-sync python benchmarks/e2e_h200/m3withheld.py --registration \
 "$RESEARCH_RUN_DIR/inputs/step-registration.json" --main "$RESEARCH_RUN_DIR/inputs/main.txt" --pin "$PIN" \
 --utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --peer '"$CPU"' --out "$OUT/withheld"') ;;
