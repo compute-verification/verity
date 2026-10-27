@@ -1,13 +1,13 @@
 // libvc (vc.h, README.md): the served path's SHA-512 commitments, one code base. SHA-512's compression is
-// verity/ml/kernels/sha512.cuh's (included by path); the rest is vendored from three seeds, each piece re-pointed
-// from __constant__ memory to kernel parameters (__grid_constant__) so that plans of many domains run back to back on one
-// stream with no symbol copy:
-//   * native_rows.cu (934d0bcbd): LeafK / NodeK, the frame leaf, pad and node templates,
-//     hash_after_block, salt_prf, salt_digest, the nibble-table mask, the leaf, the level kernels and the host builder;
-//   * sharaw.cu (4369ae62): the byte-table mask (mask8) and the salt / data split (sr_salt8,
-//     sr_data), with commit_gpu's tree schedule (a level a launch while a level is wider than 512 nodes, then one block for
-//     the rest); sr_data's fold and climb (k_leaf_fold), its nodes by length or (sm_100) through compress_compact /
-//     node_rt; sr_leaf4 (k_leaf_spec) with mask_roll;
+// verity/ml/kernels/sha512.cuh's, and frame-v3-sha512's leaf, pad and node, the hm96-sha512 leaf and their builders are
+// verity/ml/kernels/row_commit.cuh's (both included by path, through vc_device.cuh); the rest is vendored from three seeds,
+// each piece re-pointed from __constant__ memory to kernel parameters (__grid_constant__) so that plans of many domains run
+// back to back on one stream with no symbol copy:
+//   * native_rows.cu (934d0bcbd): LeafK, hash_after_block, salt_prf, the level kernels and the host builder;
+//   * sharaw.cu (4369ae62): the salt / data split (sr_salt8 over the byte-table mask, sr_data), with commit_gpu's tree
+//     schedule (a level a launch while a level is wider than 512 nodes, then one block for the rest); sr_data's fold and
+//     climb (k_leaf_fold), its nodes by length or (sm_100) through compress_compact / node_rt; sr_leaf4 (k_leaf_spec)
+//     with the rolled nibble-table mask;
 //   * hash_fast.cuh (benchmarks/pouw/pearl_c_sm120): row-seg's segments a thread from their header's state, then a fold a unit;
 //     rows take one launch with their digests in shared memory, as hash_h3.cuh's s512_rows (benchmarks/pouw/pearl_c) does.
 // The device functions and the plan's builders are vc_device.cuh's, header only, for kernels of other libraries to call.
@@ -310,8 +310,7 @@ __global__ void __launch_bounds__(256, 2) k_salt8(const __grid_constant__ LeafK 
   const uint4* Tn = reinterpret_cast<const uint4*>(tab);
   for (int k = threadIdx.x; k < 256 * 16; k += blockDim.x) {
     const int b = k >> 4, c = k & 15;
-    const uint4 lo = Tn[16 * c + (b & 15)], hi = Tn[256 + 16 * c + (b >> 4)];
-    T8[17 * b + c] = make_uint4(lo.x ^ hi.x, lo.y ^ hi.y, lo.z ^ hi.z, lo.w ^ hi.w);
+    T8[17 * b + c] = byte_chunk(Tn, b, c);
   }
   __syncthreads();
   const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
