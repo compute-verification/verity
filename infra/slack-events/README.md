@@ -1,6 +1,6 @@
 # Slack events service
 
-Slack's Events and Interactivity requests, onto a Vercel queue, routed by `research msg`'s own code (COMM-32). A person's
+Slack's Events and Interactivity requests, onto a Vercel queue, routed by `research msg`'s own code. A person's
 post in a chat channel (`#chat-NAME`), `#ask-the-team` or `#resource-accounting` rings the lanes it names, as
 `research msg deliver --channel KEY --event -` does today on @top's watcher. A post that names no one goes to @top, with
 a routing line in its thread: `sent to @top: no lane named; routing by model is off`. Nothing is routed in
@@ -63,8 +63,8 @@ best effort): the cache is regional and may drop a value at any time, so a cold 
 - `last_success_at`: when a delivery or a cron last finished.
 - `last_done_at`: when the consumer last finished a message (no cron writes it), and `last_enqueued_at`: when the app
   last published an event. An enqueued time after the done time means events wait. The watchdog rings @comms when that
-  has lasted 10 minutes, at most hourly (`crons.stall`): from 19 to 23 Oct production consumed nothing while
-  `last_success_at`, which the crons keep fresh, looked healthy.
+  has lasted 10 minutes, at most hourly (`crons.stall`), since `last_success_at`, which the crons keep
+  fresh, looks healthy while nothing is consumed.
 - `canary_sent_at` and `canary_done_at`: each hour the watchdog publishes a synthetic `canary` event, stamped as an
   enqueue, which only the consumer can mark done. So the stall check proves the drain on a day no person posts.
 - `oldest_unprocessed_age_s`: the age now of the oldest unrouted post reconciliation found on its last run (0 when it
