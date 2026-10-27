@@ -25,7 +25,7 @@ releases (`LiveDrive.reached`). `LiveDrive.dom_live` is the reduction, generic i
 releases bring the reduction into the session's rounds, and the live audit's transcript at the proof files is
 accepted.
 
-`dominated_of_canon` states that hypothesis as ONE-4's refusals read in the play (`RoundsByDevice` with v2's
+`dominated_of_canon` states that hypothesis as the device's refusals read in the play (`RoundsByDevice` with v2's
 `coinsMismatch`: each round's coins the device's release after its digest, one release per (session, round), in the
 live order). An untagged release never moves the reduction (`reached_filter`); where the tagged releases are the draw's
 block, the link points', then one block per round, each one release per chunk, the reduction is in the rounds at what
@@ -397,7 +397,7 @@ theorem run_rounds (x : Xd) (rB : Array ByteArray) (pts : Fin 2 → Fin mPts →
     congr 2
     omega
 
-/-- **The record's releases, in the live order, reach the rounds** (ONE-4's refusals, read in the play): where the
+/-- **The record's releases, in the live order, reach the rounds** (the device's refusals, read in the play): where the
 play's tagged releases are the draw's block, then the link points', then one block per round, each block one release
 per chunk of its coin (one release per (session, round), the draw before the points before the rounds), the reduction
 is in the session's rounds at the draw, roots, points and rounds those releases read back to. -/
@@ -534,7 +534,7 @@ theorem dominated_of_drive {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
   exact Game.LiveDrive.dom_live Game.LiveDrive.nOfJ Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) _ mPts N _ src m
     (uniform_of_A3 hA3) tagOf spΩ spP spR rootOf bytesOf _ _ pfOf hok (V.rounds θ) _
 
-/-- **`prob_le`'s domination from ONE-4's refusals, read in the play**: where sampled proofs' verdict accepts the
+/-- **`prob_le`'s domination from the device's refusals, read in the play**: where sampled proofs' verdict accepts the
 play's outcome off the break, its tagged releases are the draw's block, then the link points', then one block per round, each one release per
 chunk of its coin (one release per (session, round), in the live order: `hcanon`'s first five conjuncts), and the
 transcript `proj` reads is the live audit's at the draw, roots, points and rounds those releases read back to, and the
@@ -580,7 +580,7 @@ theorem dominated_of_canon {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
 sampled proofs' verdict accepts, a session's transcript of v2's evidence at `A`'s inputs, `covers`), the registration
 it sends the live audit (`R₀`), and how it reads the device's releases: their bits (`m`), their tags, the chunks of the
 draw, the link points and the rounds, the roots and the rounds' bytes the releases answer, and the proof files the
-evidence holds. `canon` is ONE-4's refusals and v2's coins, read in the play (`dominated_of_canon`). -/
+evidence holds. `canon` is the device's refusals and v2's coins, read in the play (`dominated_of_canon`). -/
 structure Drive (V : Vocab d α) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (Brk : Outcome → Prop)
     {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.unroll.unit} {kd K₀ : ℕ} {desc : Claims.Msg}
     (A : Flock.Guarantees.LiveAt n D hU kd K₀ desc) where

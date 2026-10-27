@@ -4,7 +4,7 @@ import Proofs.Properties.SampledProofs
 import Proofs.Core.Game.Sim
 
 /-!
-# `SampledDeploy.accept_le` from a coupling of the play to the live audit (ONE-8's field, PRF-205)
+# `SampledDeploy.accept_le` from a coupling of the play to the live audit
 
 `SampledDeploy.accept_le` bounds the probability that sampled proofs' verdict accepts outside the break by the
 probability that flock-verify `--zk` accepts the live audit's transcript at the session's inputs. It has two halves.
@@ -14,12 +14,12 @@ probability that flock-verify `--zk` accepts the live audit's transcript at the 
   the evidence is flock-verify `--zk`'s acceptance of its transcript (the record and proof files the blobs hold under
   the session's digests, `SessionTranscript`) at the session's inputs (`SessionInputs`): `acceptsZK_of_transcript`.
   `AcceptsZK` reads no coin, so this needs no run of the deployed Flock verifier, no `Shows` and no `LiveCoins`; it is
-  ONE-3t's `session_verdict` read up to the decision.
+  `session_verdict` read up to the decision.
 * **The coupling, `PlayCoupling`, open.** A transcript of the play (`proj`) that, off the break and wherever v2
   accepts, is a session's of the evidence, at the coupling's inputs `I` (`covers`); and the transport of the verdict
   with `AcceptsZK I ∘ proj` off the break from the play at `σ` to the live audit at `τ` (`prob_le`). `prob_le` is where the
   device's releases become the session's coins: the play's raw release bits against `auditLive`'s draw (A3's `src`)
-  and the live session's points, with ONE-4's `DrawnByDevice` putting a record whose coins no device session released
+  and the live session's points, with `DrawnByDevice` putting a record whose coins no device session released
   in the break.
 
 `accept_le_of_coupling` is `accept_le` in the field's shape from a `PlayCoupling` at the session's setting `A`

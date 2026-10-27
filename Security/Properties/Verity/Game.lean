@@ -53,7 +53,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
   break in the event. The collision finder `B` (`finder a`, a `Claims.Finder`) is a fixed construction applied to the
   strategy whose SHA-512 calls are at most `c · calls(τ) + d` (`finder_calls`); the LMS forger (`forger a`) is a fixed
   function of the play's outcome, whose output is a forgery (`forgery`, defined here and no field) when it verifies
-  under the device's registered LMS key (`key`) and the play's device never signed the message (`Signed`).
+  under the device's registered LMS key (`registeredKey`) and the play's device never signed the message (`Signed`).
   Subprotocol `a`'s error at a strategy (`error`) is, where `B^τ` outputs a SHA-512 collision with probability at most
   the published `ε_cr` at the strategy's calls (`FinderCR`, quantitative), its published `δ` at those calls plus its
   loss at `Pr[B^τ]` plus the probability that the forger succeeds in the play (`forges`); elsewhere `⊤`. That admits
@@ -81,9 +81,9 @@ reading at `D`, and the onsite name is it at `onsite` by definition. `Verity.Sou
 claims a deployment decides.
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the blob), `place`, `programDigest` and
-`registered`, `rounds`, the device's fixed parameters and registered key (`device`, `key`) and `coinsRead`, `extract`, the finders
-and the forgers, `computed`, `world` (the runs PoUS, the bandwidth audit and the network certifier realize), and
-`certOf`, `delta` and `loss` (what the product publishes, functions of the parameters alone).
+`registered`, `rounds`, the device's fixed parameters (`device`) and `coinsRead`, `extract`, the finders and the
+forgers, `computed`, `world` (the runs PoUS, the bandwidth audit and the network certifier realize), and `certOf`,
+`delta` and `loss` (what the product publishes, functions of the parameters alone).
 -/
 
 namespace Verity
@@ -350,6 +350,14 @@ def device (D : PlayDevice) (pk : ByteArray) (rs : List Release) : Properties.Ch
 
 end PlayDevice
 
+/-- **The device's registered LMS key at `θ`**: the challenger key v2's compiled check reads from the registered
+components' parameters (`Properties.Challenger.keyOfParams`, on the components `Composition.decodeRegisteredParams`
+decodes from `θ`), as LMS's parameters and public key (`Properties.Challenger.lmsKey`). The compiled check's LMS verify
+is `LmsVerifies` at it wherever v2 reads a key (`Properties.Challenger.verifies_registered`). -/
+def registeredKey (θ : ByteArray) : Lms.Params × ByteArray :=
+  Properties.Challenger.lmsKey ((canonicalJson θ >>= Composition.decodeRegisteredParams).toOption.bind
+    fun r => Properties.Challenger.keyOfParams r.2)
+
 /-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
 def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
 
@@ -410,7 +418,7 @@ abbrev World {ι : Type} (d : Device ι) (α : Type) [Fintype α] := Accounting.
 
 /-- **The names the subprotocols define.** v2's reading of the committed blob; the positions from the files and the
 commitment, the circuit file's digest in the parameters and the registered blob; the device's rounds, the device's
-fixed parameters and registered LMS key, and the releases each component's check read, decoded from the device's signed
+fixed parameters, and the releases each component's check read, decoded from the device's signed
 log in what the prover sent; the extractor applied to a strategy, and each subprotocol's collision finder, with the
 finder's SHA-512 calls bounded by the strategy's (`finder_calls`); each subprotocol's LMS forger on the play's outcome;
 the committed circuit's gates a play computed after their window's coin; the world each play realizes; the deployment's
@@ -428,8 +436,6 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   /-- The challenger device's fixed parameters at `θ` (`PlayDevice`): what it writes and signs is defined from the
   play's releases (`PlayDevice.device`). -/
   device : ByteArray → PlayDevice
-  /-- The device's registered LMS key at `θ`: its parameters and its public key. -/
-  key : ByteArray → Lms.Params × ByteArray
   coinsRead : Audit → Sent → List Release
   extract : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → (read F).circuit.Transcript
   finder : Audit → (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Claims.Finder
@@ -534,12 +540,12 @@ def FinderCR (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c
 
 /-- **The play's device at `θ`**, under its registered key, after the releases of the play that ended with `o`. -/
 def deviceOf (θ : ByteArray) (o : Outcome) : Properties.Challenger.Device :=
-  (V.device θ).device (V.key θ).2 o.log
+  (V.device θ).device (registeredKey θ).2 o.log
 
 /-- **The device signed `m`** in the play that ended with `o`: `m` is its session's record or close message, or one of
 the auditor's ledger lines for it, under its registered key (`Challenger.Signed` of `deviceOf`). -/
 def Signed (θ : ByteArray) (o : Outcome) (m : ByteArray) : Prop :=
-  Properties.Challenger.Signed (V.deviceOf θ o) (V.key θ).2 m
+  Properties.Challenger.Signed (V.deviceOf θ o) (registeredKey θ).2 m
 
 /-- **`sig` is a forgery on `m` at `θ`** in the play that ended with `o`: it verifies under the device's registered
 LMS key at `θ` (the compiled `Lms.verify`, through `MemoryChallenger.Properties.LmsVerifies`), and the device never
@@ -547,7 +553,7 @@ signed `m` in the play (`Signed`). The challenger's `Witness.Valid` at `.forgery
 (`deviceOf`), and the memory challenger's `WipeBreak` on the game's one device and key. It is defined, never a field, so
 no vocabulary can empty the forger's term. -/
 def forgery (θ : ByteArray) (o : Outcome) (m sig : ByteArray) : Prop :=
-  MemoryChallenger.Properties.LmsVerifies (V.key θ).1 (V.key θ).2 m sig ∧ ¬ V.Signed θ o m
+  MemoryChallenger.Properties.LmsVerifies (registeredKey θ).1 (registeredKey θ).2 m sig ∧ ¬ V.Signed θ o m
 
 /-- **Subprotocol `a`'s forger succeeds** on the outcome `o`: it outputs a message and a signature that are a forgery
 at `θ` and `o`. -/
