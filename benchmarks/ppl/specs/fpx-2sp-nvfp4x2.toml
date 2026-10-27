@@ -1,4 +1,4 @@
-description = "FPX-DESIGN FP4-2SP's served path: the whole E2M1 grid as integers (twice its values: 0..4, 6, 8, 12) in blocks of 16 with odd UE4M3 scales (1..15), one FP32 scale per token and per output row, on every linear and lm_head, both operands rounded to nearest (the coined twin is peeled off in the proof), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
+description = "FP4-2SP's served path: the whole E2M1 grid as integers (twice its values: 0..4, 6, 8, 12) in blocks of 16 with odd UE4M3 scales (1..15), one FP32 scale per token and per output row, on every linear and lm_head, both operands rounded to nearest (the coined twin is peeled off in the proof), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
 
 [[linear]]
 step = "smooth"

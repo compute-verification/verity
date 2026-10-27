@@ -1,9 +1,10 @@
-"""Operating points: what ρ means in time, at the work and exfiltration references (`work.*`, `exfil.*` in the registry).
+"""Operating points: what the overhead means in time, at the work and exfiltration references (`work.*`, `exfil.*` in
+the registry).
 
 * **Work** (`work.<name>.flops`, reference-algorithm FLOPs, `T_0` gates through `hardware.Units`): the inventory does it
-  in `ρ T_0 / Φ_total` seconds at ρ's lower end and at the best attack's (`Scenario.seconds`, the idealized
-  normalization); the reference itself in `T_0 / (MFU₀ Φ_total)` (`unencumbered`, at the training MFU), and the dark
-  leaves alone in `T_0 / (mfu_dark ε_dark Φ_total)`.
+  in at least the overhead times `T_0 / Φ_total` seconds at the overhead's lower bound, and in that at the best known
+  attack's (`Scenario.seconds`, the idealized normalization); the reference itself in `T_0 / (MFU₀ Φ_total)`
+  (`unencumbered`, at the training MFU), and the dark leaves alone in `T_0 / (mfu_dark ε_dark Φ_total)`.
 * **Exfiltration** (`exfil.<name>.bits`): onsite, what monitored locations produce reaches the dark leaves only through
   the channels no certifier reads (the certifier's `timing` and `side` bit/s per host, times the location's hosts;
   certified egress is the declared circuit's output, fixed by its registered inputs), from one location or from every
@@ -34,7 +35,7 @@ class Point:
 
 
 def _inner(regime: Any) -> Any:
-    """The regime a wrapper (`pofc.Pofc`, `analysis.restrict`'s) runs inside."""
+    """The regime a wrapper (`analysis.restrict`'s) runs inside."""
     while hasattr(regime, "regime"):
         regime = regime.regime
     return regime
@@ -45,8 +46,8 @@ def work(result: Result, flops: float) -> dict[str, float]:
     f, phi = s.context.fleet, s.total_phi
     gates = s.context.units.gates(flops)
     dark = f.eps_dark * f.dark_mfu * phi
-    return {"unencumbered": gates / (f.mfu_train * phi), "lower end": result.lo * gates / phi,
-            "best attack": result.hi * gates / phi, "dark pool": gates / dark if dark > 0 else math.inf}
+    return {"unencumbered": gates / (f.mfu_train * phi), "lower bound": result.lo * gates / phi,
+            "best attack": result.attack * gates / phi, "dark pool": gates / dark if dark > 0 else math.inf}
 
 
 def exfil(scenario: Scenario, bits: float) -> dict[str, float]:

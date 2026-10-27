@@ -72,6 +72,7 @@ from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.scalar import F32_NAN_PTX, F32Eq, F32Fabs, F32Fmaxf, F32Fminf
 from verity.ml.circuits.ops.sqrt import PouwF32SqrtRn
 from verity.ml.definitions.registry import act, b1
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.moe import F32GtStrict, MoeRouterPick, RouterArgmaxStep, _array, _lane0_sum
 from verity.ml.definitions.registry.prims import BF16, F32, I32
@@ -112,8 +113,9 @@ LG2_COEFFS = (
 )
 #: the measurement the coefficients reproduce: ``lg2.approx.ftz.f32`` of ``0x3F800000 | m`` for every m (`registry.mla_capture`'s
 #: probe), the SHA-256 of the 2^23 little-endian u32 words
-LG2_MEASURED = {"device": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "cc": "12.0", "run": "r20261004-060203-ba52",
-                "run_record": "art:27ed13d53fac0cf67e3e93693d9ad2b6dd75824401ca5b9f9d48acda27602066", "words": 1 << 23,
+_DIFFTEST, _CAPTURE = EVIDENCE["cc12_difftest"], EVIDENCE["dsv4_moe_capture"]
+LG2_MEASURED = {"device": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "cc": "12.0", "run": _DIFFTEST["run"],
+                "run_record": _DIFFTEST["run_record"], "words": 1 << 23,
                 "sha256": "7fd9be9a924e40a0ee18ba20e7f5158135112947597c8dd86131d3d4d8f9dbfa"}
 
 
@@ -151,9 +153,9 @@ def mufu_lg2_mantissa_bits(x: int) -> int:
 
 @primitive("MufuLg2Mantissa", 1, [("x", F32)], F32,
            conformance="exact-model-tested: lg2.approx.ftz.f32 on every 1.m of [1, 2), 8,388,608 words measured on a cc 12.0 GPU "
-                       "(run r20261004-060203-ba52) equal to the interpolant; captured on a cc 9.0 GPU (132 SMs) too: "
+                       f"(run {_DIFFTEST['run']}) equal to the interpolant; captured on a cc 9.0 GPU (132 SMs) too: "
                        "lg2.approx.ftz.f32 and lg2.approx.f32 on every 1.m are those words, lg2(2) = 1 and a NaN 0x7FFFFFFF "
-                       "(run r20261013-205619-5c39 at a9be5ce66, tests/properties/dsv4_moe_capture_gpu.py)",
+                       f"(run {_CAPTURE['run']} at {_CAPTURE['harness']}, tests/properties/dsv4_moe_capture_gpu.py)",
            tables=(("lg2", "library"),))
 def MufuLg2Mantissa(x: int) -> int:
     """MUFU.LG2 (``lg2.approx.f32``) of 1.m, m = x's 23 mantissa bits: the unit's quadratic interpolator rounded toward zero on
@@ -170,7 +172,7 @@ PTX_NAN = b1.const(32, F32_NAN_PTX)
 
 #: vLLM d9105ea80 on a cc 9.0 GPU: each kernel run twice on every captured row, both runs bit-exact against the Program's numpy
 #: twin, and the Program itself evaluated on every row (`--check`)
-_CAPTURED = "on a cc 9.0 GPU (132 SMs; run r20261013-205619-5c39 at a9be5ce66, tests/properties/dsv4_moe_capture_gpu.py)"
+_CAPTURED = f"on a cc 9.0 GPU (132 SMs; run {_CAPTURE['run']} at {_CAPTURE['harness']}, tests/properties/dsv4_moe_capture_gpu.py)"
 _ROUTER_ROWS = "8,192 rows of _dsv4_topk_kernel at E=384, SCALE=2.5, both runs bit-exact against this Program"
 _HASH_ROWS = "8,192 rows of dsv4HashTopkSoftplusSqrt<int, int> at E=384, SCALE=2.5, both runs bit-exact against this Program"
 _CLAMP_ROWS = ("act_and_mul_kernel with HAS_CLAMP at LIMIT=10, vectorised at I=384 (7,510 rows) and scalar at I=9 (1,024 rows), "

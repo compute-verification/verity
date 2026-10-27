@@ -3,8 +3,7 @@ import Definitions.Accounting.Confidence
 /-!
 # Physical assumptions (trusted)
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.1, `TrustedUnits` v2.8, `SequentialSpeed`
-and `Links` v2.7), sections 1 and 3.
+The actual-circuit model's physical assumptions.
 A physical assumption is a constraint on the actual circuit `A` of one run, a `Prop` over `Placed` taken as a hypothesis
 by what needs it, never a global assumption; `TrustedUnits` is one on a strategy, a map from coins to runs, since what a
 certifier sends is a function of its record across runs. The *feasible set* is the actual circuits that meet the

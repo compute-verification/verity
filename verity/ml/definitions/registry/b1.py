@@ -24,6 +24,7 @@ from verity.ml.circuits.types import Array, Record, Tuple
 from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2, Gemm as GemmV2, GemmCoordinate as GemmCoordinateV2
 from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.circuits.ops.scalar import BitNot
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.prims import A16, BF16, BIT, F32, I32
 
@@ -60,8 +61,8 @@ B0_CONFIG = {
                 "act": "vllm _C.silu_and_mul", "sampler": "greedy argmax over bf16 logits"},
 }
 
-# [E6 NIGHT 2026-09-12, G3] Two more static configurations of the SAME registered functions (data only; the functions above are unchanged).
-# Values are the checkpoints' config.json (HF revision named; verified by download 2026-09-12T05:20Z), the semantic profile named beside each.
+# Two more static configurations of the SAME registered functions (data only; the functions above are unchanged).
+# Values are the checkpoints' config.json (HF revision named), the semantic profile named beside each.
 # SMOL360 -- same architecture as B0 (LlamaForCausalLM), different checkpoint: only H/NL/NH/KVH/I change (K of the GEMM coordinates, the
 # rmsnorm divisor literal H); V, D, EPS, ROPE_THETA, BIAS are B0's.  Profile: llama-eager-batch-invariant-v3.
 SMOL360_CONFIG = {
@@ -155,10 +156,11 @@ ResidualAdd = CompositeDefinition("ResidualAdd", 1, ("N",),
 
 
 @composite("Bf16MulScalarTensor", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("s", Array(1, BF16))), Array(S.N, BF16)),
-           conformance="exact-model-tested; G4 difftest vs aten.mul.Tensor(bf16 [1,N], bf16 0-d CUDA tensor) on the L40S (lane dense, "
-                       "R13 X-08) and the wave-1 exhaustive probe: bf16(f32(x) * 48) on all 65,282 non-NaN bf16 words (Gemma-2 normalizer)")
+           conformance="exact-model-tested; G4 difftest vs aten.mul.Tensor(bf16 [1,N], bf16 0-d CUDA tensor) on the L40S "
+                       f"({EVIDENCE['bf16_mul_scalar_tensor_difftest']['by']}) and the wave-1 exhaustive probe: bf16(f32(x) * 48) "
+                       "on all 65,282 non-NaN bf16 words (Gemma-2 normalizer)")
 def Bf16MulScalarTensor(B, S, x, s):
-    """[R13 X-08, promoted from `registry.quarantine.dense`] `aten.mul.Tensor(x bf16 [.., N], s bf16 0-d TENSOR)`: ATen's CUDA
+    """`aten.mul.Tensor(x bf16 [.., N], s bf16 0-d TENSOR)`: ATen's CUDA
     `mul_kernel` for bf16 computes in opmath float — `f32(x_j) * f32(s)` (exact widenings, one RN multiply) — and stores with
     `c10::BFloat16(float)` = `cvt.rn.bf16.f32` (NaN -> 0x7FFF, `F2fpBf16`).  Generic: the scalar is a graph VALUE (a buffer /
     input read by the Program), never a constant folded into the specialization — `s` is shared by every row; nothing here
@@ -294,7 +296,7 @@ FUSED_RMS_BLOCK = 1024  # `max_block_size = batch_invariant_launch ? 1024 : ...`
                       Tuple(Array(S.N, BF16), Array(S.N, BF16))),
            conformance="exact-model-tested; evidence: reproduces production on 2,340/2,340 fused-norm rows (1,347,840 words) of "
                        "the B0 store (SmolLM2-135M, N=576, incl. the 13 rows v1 misses; `verity.ml.definitions.registry.rmsnorm_fused_sweep`) "
-                       "and on the B1 (N=1536) L27/t=1 row that v1 missed (typed-b1.md §5.1, closed 2026-09-08: "
+                       f"and on the B1 (N=1536) L27/t=1 row that v1 missed (typed-b1.md §5.1, closed {EVIDENCE['rmsnorm_fused_cuda_b1_row']['closed']}: "
                        "`results/TA1-typed-b1-20260907/corr-B1-L27t1-rmsv2.json`, 14/14 exact)")
 def RMSNormFusedCuda(B, S, x, res, w, eps=None):
     """vLLM `d9105ea80` `csrc/layernorm_kernels.cu` **generic** `fused_add_rms_norm_kernel<c10::BFloat16, 0, true>` —
@@ -364,7 +366,7 @@ BN = 64  # kBlockN of the FA2 kernel at HEAD DIM 128 (W11's measured trait, Qwen
 
 
 def fa2_kblock_n(D: int) -> int:
-    """[E7 D54 2026-09-13] kBlockN of the FA2 kernel vLLM launches at head dim ``D``: vllm-flash-attn `506341a`
+    """kBlockN of the FA2 kernel vLLM launches at head dim ``D``: vllm-flash-attn `506341a`
     `csrc/flash_attn/src/flash_fwd_launch_template.h:172-192` -- paged varlen KV forces `num_splits == 1` (`flash_api.cpp:763`),
     so `run_mha_fwd_splitkv_dispatch` takes `run_mha_fwd_splitkv_align`: `kBlockM = 64; kBlockN = Headdim <= 64 ? 128 : 64`
     (prefill causal and the `seqlen_q == 1` decode launch alike). 64 was measured bit-exact at D = 128 (W11); at D = 64
@@ -387,7 +389,7 @@ def AttnBlock(B, S, q, k, v, m_prev, l_prev, o_prev):
     (64 except the last-visited block); masked columns contribute P = 0 exactly (skipped). Returns
     (m_new, lane sums l[4], o[D]); with `FIRST` the state arguments are ignored (kernel `Is_first`).
 
-    [E7 D54 2026-09-13] `BN` here is the module constant 64 = the kernel's kBlockN at HEAD DIM 128 only.  This body is
+    `BN` here is the module constant 64 = the kernel's kBlockN at HEAD DIM 128 only.  This body is
     what every pinned record so far was produced under and is retained unchanged for their re-verification; the
     head-dim-derived geometry is `AttnBlock_v3` (`fa2_kblock_n(D)`), reached through `Serve_v4`."""
     D, NVIS, FIRST = S.D, S.NVIS, S.FIRST
@@ -726,7 +728,7 @@ def Serve(B, S, prompt, weights):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# [E7 D54 2026-09-13] the kernel-geometry-derived attention chain and the Serve that reaches it
+# the kernel-geometry-derived attention chain and the Serve that reaches it
 # ---------------------------------------------------------------------------------------------------------
 #
 # Finding (D54): the 128×64 SmolLM2-135M record (head dim 64) disagrees with `Serve_v1` from the first query position
@@ -897,7 +899,7 @@ def ServeV4(B, S, prompt, weights):
     `BN = 64` it is `Serve_v1` gate for gate (the legacy geometry); with `BN = 128` (the FA2 split-KV kernel at head dim
     <= 64) it differs from `Serve_v1` exactly at query positions t >= 64 (one 128-key block where v1 had two 64-key blocks).
     The instance pins BN in `program.identity.attention.kBlockN` (D57); E6 fills it from the profile via
-    `fa2_kernel_geometry`; the verifier binds what the identity says.  [E7 D54/D57 2026-09-13]"""
+    `fa2_kernel_geometry`; the verifier binds what the identity says."""
     C, LP, STEPS, BN = S.C, S.LP, S.STEPS, S.BN
     caches, finals = _forward_positions_v4(B, C, BN, prompt, weights, 0, LP, None)
     head = lm_head_of(C, weights)      # [PROPOSED GEN dense2] the embedding when tied (unchanged), `lm_head` when untied
@@ -1179,7 +1181,7 @@ ATTENTION_FA2: dict = {"BN": BN, "DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
 
 
 def attention_fa2(D: int) -> dict:
-    """[E7 D54] The FA2 `ATTENTION` record at head dim ``D``: `BN = fa2_kblock_n(D)` (128 at D <= 64, 64 at D = 128 =
+    """The FA2 `ATTENTION` record at head dim ``D``: `BN = fa2_kblock_n(D)` (128 at D <= 64, 64 at D = 128 =
     `ATTENTION_FA2`), the Ampere k16 step and epilogue -- `Serve_v2`'s binding record of the `Serve_v4` program."""
     return {"BN": fa2_kblock_n(D), "DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
 

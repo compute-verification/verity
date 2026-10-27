@@ -1,6 +1,6 @@
 """The attention family's Definition modules import only `verity` and Definition modules: what the catalog move needs of them.
 
-A Definition module of the family (`DEFINITION_MODULES`, verity#1130's DSA and sparse-MLA modules included) imports the standard
+A Definition module of the family (`DEFINITION_MODULES`, the DSA and sparse-MLA modules included) imports the standard
 library, numpy, `verity`, the family's other Definition modules, and from another family's registry module only the Definitions
 and the word constants of a Definition body that `OTHER_FAMILIES` names.  Its vocabulary (`MOVES`) is `attention_vocab`'s, which no
 Definition module imports.  An import is any import statement, at module level or in a function.
@@ -32,6 +32,8 @@ OTHER_FAMILIES = {
            "accepted chains the Boolean versions lower"),
     "dense": ({"softcap_mul_bits", "softcap_scale_log2_bits"}, "the softcap stage's word constants (`set_params_fprop`)"),
     "hopper": ({"Fa3InvSum", "HopperBF16WgmmaDot16"}, "FA3's reciprocal primitive and the Hopper BF16 dot (the B1 Hopper profile)"),
+    "dead_free": ({"AttnBlockFirstV1", "AttnHeadEndV1"},
+                  "the dead-free first key block and head end, which FA3's per-key-block chain (Attention_v20) reuses"),
     "fp8": ({"E4M3"}, "the e4m3 type of DSA's quantized indexer keys"),
     "topp_word_gates": ({"I32ToF32"}, "the int-to-float conversion primitive DSA's top-k reads"),
     "value_inputs": ({"AttentionHeadV10", "AttentionHeadV12", "AttentionHeadV13", "AttentionV10", "AttentionV12", "AttentionV13",

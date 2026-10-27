@@ -1,11 +1,11 @@
-"""The remote bandwidth session over the node's `Store` end to end on the CPU: `remote.prove` (the prover's side, the
+"""The remote bandwidth audit run over the node's `Store` end to end on the CPU: `remote.prove` (the prover's side, the
 Commit's hook) connects over localhost TCP to `benchmarks/remote_session`'s verifier, registers the store, records its
 memory map against the registration, and runs each pass after an engine step of a serving-like trace (pages written
-over two steps, held, freed and reused, and one long-lived page re-keyed under L = 2 windows).  The honest session is
+over two steps, held, freed and reused, and one long-lived page re-keyed under L = 2 windows).  The honest audit run is
 accepted with the appends, releases, re-keys and steps the verifier saw, each pass's seed chaining the appends sent
-before its root, each append encoded under its own coin, and each block resident only once its encode has landed
+before its root, each append encoded under its own coin, and each chunk resident only once its encode has landed
 (deferred residency: read as plaintext and uncredited until then); one whose prover seeds without them, encodes under
-a zero or stale coin, re-sends an append, appends after the last close or withholds a block it appended is rejected; a
+a zero or stale coin, re-sends an append, appends after the last close or withholds a chunk it appended is rejected; a
 second registration of a node the verifier holds live is refused with its reason.  The verifier's clock is the prover's
 passes, a tick each (`PassClock`)."""
 from __future__ import annotations
@@ -82,7 +82,7 @@ class PassClock:
 @contextlib.contextmanager
 def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.Verifier]:
     """`verifier.Verifier` over the accepted ``sock`` on ``clock``, torn down however the body ends: the socket shut,
-    so a prover waiting on it sees the session end (the verifier's reader thread would hold it open), and the Lean
+    so a prover waiting on it sees the audit run end (the verifier's reader thread would hold it open), and the Lean
     verifier's process (`remote-audit-verifier`) terminated, killed and reaped, so a failing test leaves none waiting
     on its stdin."""
     v = None
@@ -101,8 +101,8 @@ def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.
 
 
 def store() -> Store:
-    """A weights block, one KV layer of 4 pages (K0 K1 V0 V1 each, page p at store blocks 1 + 4p …), and a block of
-    host filler: N = 18.  Each block a backend encodes is 128 square roots at p512/k2, so the store is small."""
+    """A weights chunk, one KV layer of 4 pages (K0 K1 V0 V1 each, page p at store chunks 1 + 4p …), and a chunk of
+    host filler: N = 18.  Each chunk a backend encodes is 128 square roots at p512/k2, so the store is small."""
     s = Store()
     w = np.random.default_rng(0).integers(0, 256, BLOCK, np.uint8)
     s.register("w", "hbm", "weights", ArrayBacking(w), block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT, source="w")
@@ -138,8 +138,7 @@ class TickingBackend(remote.StoreBackend):
 
 
 class HeadlessBackend(TickingBackend):
-    """A prover whose seeds chain only the root before each pass, not the appends sent before it (the seed before
-    the red team's KB-1)."""
+    """A prover whose seeds chain only the root before each pass, not the appends sent before it."""
 
     def launch(self, i: int, after, plan=None) -> dict:
         return {**super().launch(i, after, plan), "head": None}
@@ -182,7 +181,7 @@ def engine(s: Store, at: int = 0):
     """A serving trace in the binder's order: pages 0 to 2 in turn, each a request's for three steps (slots 0 to 3 at
     its first, 4 to 7 at its second, read at its third), freed before the step that reuses it, which is after the
     forward of its last step, its last structural reader; page 3 a request's that never finishes, written at steps 0 and 1.  The
-    engine numbers its steps from ``at`` (one whose binder numbered steps before the session)."""
+    engine numbers its steps from ``at`` (one whose binder numbered steps before the audit run)."""
 
     lives, n = {3: 0}, [0]
 
@@ -201,7 +200,7 @@ def engine(s: Store, at: int = 0):
 
 def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096, lifetime: int = 2,
         backend=TickingBackend, at: int = 0, **kw):
-    """One session of ``plan``, every receipt of a window drawn at the default ``samples``; the backend keeps the
+    """One audit run of ``plan``, every receipt of a window drawn at the default ``samples``; the backend keeps the
     regions the verifier read from its hello (``backend.regions``)."""
     clock = PassClock()
     s = store()
@@ -228,11 +227,11 @@ def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     assert r["accepted"] and p["accepted"] and r["failure"] is None
     # the hello carries the store's layout, which the verifier takes as the memory line's labels
     assert backend.regions == (("weights", "hbm", 0, 1), ("kv", "hbm", 1, 16), ("filler", "host", 17, 1))
-    # step 0's completed blocks are appended once it has run, before pass 0's root, so every pass's seed chains the
+    # step 0's completed chunks are appended once it has run, before pass 0's root, so every pass's seed chains the
     # head of the appends sent before its root (`audit.chained`)
     assert len(backend.heads) > 2 and all(h is not None for h in backend.heads)
     kv, pub = p["kv"], r["record"]["public"]
-    # each append sent was answered with its first index and a coin of its own, under which its blocks were encoded
+    # each append sent was answered with its first index and a coin of its own, under which its chunks were encoded
     sent = backend.trace.appends[:len(backend.coins)]
     assert [f for f, _ in backend.coins] == [a.first for a in sent] and len({c for _, c in backend.coins}) == len(sent)
     assert sum(a.count for a in sent) == kv["sent_appended"]
@@ -245,25 +244,25 @@ def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     lines = list(lines)
     assert head.registration.hex() == pub["registration"] and head.blocks == 18
     # page 0's first request, written at steps 0 and 1 and read at 2, is freed before step 3's write.  Its K0 V0
-    # (blocks 1, 3), written at step 0, and its K1 V1 (2, 4), completed at step 1, appended and encoded before step 2
+    # (chunks 1, 3), written at step 0, and its K1 V1 (2, 4), completed at step 1, appended and encoded before step 2
     # runs (one pass in flight), so written at step 1, are all freed at step 2, the step whose forward read them last
     by = {x.step: x for x in lines}
     assert {1, 3} <= {w.slot for w in by[0].written} and {2, 4} <= {w.slot for w in by[1].written}
     assert {1, 2, 3, 4} <= set(by[2].freed)
     # page 3, written over steps 0 and 1 and never freed, is written again whole in one step (re-keyed) once two
     # windows old, its old indices freed in the line before; its first writes were split, so every line that writes all
-    # four of its blocks is a re-key
+    # four of its chunks is a re-key
     rekeys = [x.step for x in lines if {13, 14, 15, 16} <= {w.slot for w in x.written}]
     assert rekeys and min(rekeys) > 1 and kv["rekeyed"] >= 4 * len(rekeys)
     assert next(x.step for x in lines if {13, 14, 15, 16} <= set(x.freed)) < min(rekeys)
-    # the map, replayed, holds the session's live blocks, its writes are the appends' digests, and the store holds them
+    # the map, replayed, holds the audit run's live chunks, its writes are the appends' digests, and the store holds them
     agree = store_map.agreement(backend)
     assert agree["agrees"] and agree["held_appended"] > 0 and agree["held_wrong"] == []
 
 
 @pytest.mark.slow
 def test_a_completed_block_is_uncredited_until_its_encode_lands_and_resident_from_the_step_after():
-    """Deferred residency end to end: each step's completed blocks go out as one append once the step has run, and
+    """Deferred residency end to end: each step's completed chunks go out as one append once the step has run, and
     their coin comes back before the next step runs (one pass in flight), when the device encodes them.  The map
     writes them at the step whose line is open then, the completing step's, so the passes up to it hold none of them
     (serving reads them as plaintext, uncredited), and the pass after it holds them all, encoded under their own
@@ -302,7 +301,7 @@ def test_a_pass_whose_plan_holds_a_block_not_yet_encoded_is_refused():
 
 @pytest.mark.slow
 def test_a_session_on_an_engine_whose_steps_were_numbered_before_it_adopts_its_first_step():
-    """The Commit's binder numbers the engine's steps from its first run; a session after its runs takes the next."""
+    """The Commit's binder numbers the engine's steps from its first run; an audit run after its runs takes the next."""
     r, p, s, backend = run("serve", at=40)
     assert r["accepted"] and p["accepted"]
     head, lines = memory_map.parse(s.memory_map.text().splitlines())
@@ -313,7 +312,7 @@ def test_a_session_on_an_engine_whose_steps_were_numbered_before_it_adopts_its_f
 
 class Device:
     """kv.cu's encode on the host (`remote.KvDevice`'s interface): each word by `codec.encode_word` under the key
-    set and the offset handed in for its block, so `remote.DeviceEncoded`'s plumbing runs without a GPU.  ``shift``
+    set and the offset handed in for its chunk, so `remote.DeviceEncoded`'s plumbing runs without a GPU.  ``shift``
     moves every offset (a device that keys appends wrongly)."""
 
     def __init__(self, shift: int = 0) -> None:
@@ -378,7 +377,7 @@ class Stats:
 
 
 def served_store() -> Store:
-    """The Commit's store: two weights blocks and two of filler, no KV pool (N = 4)."""
+    """The Commit's store: two weights chunks and two of filler, no KV pool (N = 4)."""
     s = Store()
     w = np.random.default_rng(1).integers(0, 256, 2 * BLOCK, np.uint8)
     s.register("w", "hbm", "weights", ArrayBacking(w), block_bytes=BLOCK, codec=CODEC, receipt=RECEIPT, source="w")
@@ -388,7 +387,7 @@ def served_store() -> Store:
 
 
 def served_engine(s: Store):
-    """The binder's steps with the KV outside the store (`Binder(kv=False)`): each numbered, writing no block of it."""
+    """The binder's steps with the KV outside the store (`Binder(kv=False)`): each numbered, writing no chunk of it."""
     def step(k: int) -> None:
         s.kv_append([], k)
         s.end_step()
@@ -398,9 +397,9 @@ def served_engine(s: Store):
 def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Callable[[], None] | None = None,
              each: Callable[[int], None] | None = None, pace: dict | None = None, step_ms: float = 0.0,
              served: bool = False):
-    """The Commit's session (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 2
+    """The Commit's audit run (`CommitSession.begin` … `end`) over a CPU store, its verifier on a thread at L = 2
     windows (paced at ``pace``, `verifier.pace_of`'s), the run ``run_steps`` steps of the scripted engine, each
-    through the session's `Lockstep` and after ``each(k)``, after ``setup()``, the run's work between `begin` and its
+    through the audit run's `Lockstep` and after ``each(k)``, after ``setup()``, the run's work between `begin` and its
     first step.  ``served``: the Commit's store and steps (`served_store`, `served_engine`), else a KV pool written as
     `engine` writes it."""
     clock = PassClock()
@@ -418,7 +417,7 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
             with verifying(sock, clock, windows=windows, window_ns=5, samples=4096, lifetime=2) as v:
                 v.register()
                 seen.append(v.session(0, v.allowance(v.ping(4)), None, pace=pace))
-        except Exception as e:  # noqa: BLE001  -- a side that stops mid-session drops the connection (`verifying`)
+        except Exception as e:  # noqa: BLE001  -- a side that stops mid-run drops the connection (`verifying`)
             seen.append(e)
 
     th = threading.Thread(target=verify, daemon=True)
@@ -440,7 +439,7 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
             lock.step(lambda: run(k))
         rec = cs.end()
     except BaseException:
-        # a run that fails ends its session, so the verifier's thread ends with it and reaps its process
+        # a run that fails ends its audit run, so the verifier's thread ends with it and reaps its process
         if cs._thread is not None:
             if cs.record is None:
                 cs.end()
@@ -452,8 +451,8 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
 
 @pytest.mark.slow
 def test_the_commits_session_runs_in_lockstep_with_its_run_and_its_map_stops_with_it(tmp_path, monkeypatch):
-    """Each pass's engine step is the run's next step: the session's steps are the run's first steps, from its first,
-    and the run's steps after the session are unaudited and in no map line."""
+    """Each pass's engine step is the run's next step: the audit run's steps are the run's first steps, from its first,
+    and the run's steps after the audit run are unaudited and in no map line."""
     rec, r, cs, steps = lockstep(tmp_path, monkeypatch, 40, windows=3)
     assert r["accepted"] and rec["accepted"] and rec["error"] is None and steps == list(range(40))
     mm, run = rec["memory_map"], rec["run"]
@@ -470,7 +469,7 @@ def test_the_commits_session_runs_in_lockstep_with_its_run_and_its_map_stops_wit
 
 @pytest.mark.slow
 def test_the_commits_session_arms_its_first_window_once_its_runs_first_step_has_run(tmp_path, monkeypatch):
-    """The run's work between `begin` and its first step, and that step, pass 0's, are in no window: the session is
+    """The run's work between `begin` and its first step, and that step, pass 0's, are in no window: the audit run is
     registered by then, and arms its first window (the verifier's first coin follows `armed`) once the step has run,
     so the window's clock starts at pass 0's appends and read."""
     sent, at = [], {}
@@ -488,9 +487,9 @@ def test_the_commits_session_arms_its_first_window_once_its_runs_first_step_has_
 @pytest.mark.slow
 def test_a_paced_commits_session_runs_a_step_a_coin_and_tags_each_pass_with_its_step(tmp_path, monkeypatch):
     """At ``--paced 1:…`` each window is one pass under a coin of its own, its engine step inside it (no pass moves into
-    the next window); the session's record tags each pass with the step the verifier's record has for it, a step of
+    the next window); the audit run's record tags each pass with the step the verifier's record has for it, a step of
     the map; the calibration's pass times carry ``step_ms``, so the allowance covers the step.  The Commit's store is
-    the weights and filler (the KV outside it), so its steps write no registered block, every pass reads all N, and the
+    the weights and filler (the KV outside it), so its steps write no registered chunk, every pass reads all N, and the
     memory line is declared in its time-held form as well as its snapshot."""
     pace = verifier.pace_of("1:1000:4096:2", 1000 / 3)
     assert pace["groups"] == 3
@@ -517,7 +516,7 @@ def test_a_run_that_ends_before_its_session_fails_the_session(tmp_path, monkeypa
 
 
 def test_a_commits_session_that_fails_is_recorded_rejected_and_its_run_goes_on_unaudited(monkeypatch, tmp_path):
-    """The Commit writes its verdict whatever the session does: a session that raises is rejected, its error recorded,
+    """The Commit writes its verdict whatever the audit run does: an audit run that raises is rejected, its error recorded,
     and the run's steps run unaudited."""
     def fails(backend, *a, **kw):
         raise ConnectionRefusedError("no verifier")
@@ -634,8 +633,8 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
 
 
 def test_a_serving_store_defers_residency_so_a_lifetime_of_one_window_is_refused():
-    """The store's appended blocks are resident once their encodes land, and its map re-keys a window ahead, so at
-    L = 1 every line would re-key every live block: its hello says `deferred`, and a verifier of lifetime 1 answers it
+    """The store's appended chunks are resident once their encodes land, and its map re-keys a window ahead, so at
+    L = 1 every line would re-key every live chunk: its hello says `deferred`, and a verifier of lifetime 1 answers it
     `bye` before drawing a registration."""
     registry, s = audit.Registry(), store()
     b = remote.StoreBackend(s, engine(s))
@@ -704,10 +703,10 @@ def test_no_verifier_process_is_left():
 
 @pytest.mark.slow
 def test_a_failing_test_leaves_no_verifier_process(tmp_path):
-    """A pytest whose tests fail with the Lean verifier's process live (the verifier's session raising on the test's
+    """A pytest whose tests fail with the Lean verifier's process live (the verifier's audit run raising on the test's
     thread, its registration raising on `lockstep`'s verifier thread, which hung the suite while the prover waited on
     the socket, and the run's first step raising) finishes, and leaves no `remote-audit-verifier` child, running or
-    unreaped, to the test after them (VLLM-78)."""
+    unreaped, to the test after them."""
     (tmp_path / "test_failing.py").write_text(FAILING)
     r = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-p", "no:xdist",
                         f"--junitxml={tmp_path / 'report.xml'}", str(tmp_path / "test_failing.py")],
