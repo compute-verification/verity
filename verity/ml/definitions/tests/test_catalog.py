@@ -24,13 +24,13 @@ COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with 
 
 COUNT += 3  # io_shell's `ScanSlots_v1`, `OutCollect_v1` and `SlotEntry_v1`, a line of its own so it merges with any other change to the count
 
+COUNT += 2  # `int8_exact`'s Int8RowQuant_v3 and `boolean_int8`'s Int8RowQuant_v4, its σ, a line of its own
+
 COUNT += 14  # `torch_train`'s 7 (Transpose_v1, RmsNormTorchBackward_v1, the SiLU five) and `torch_optim`'s 7
 
 COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1
 
 COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1
-
-COUNT += 2  # `int8_exact`'s Int8RowQuant_v3 and `boolean_int8`'s Int8RowQuant_v4, its σ, a line of its own
 
 
 def test_the_catalog_loads_every_definition_and_no_other():
