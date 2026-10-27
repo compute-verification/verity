@@ -1828,6 +1828,12 @@
    "owner": "@compute-accounting",
    "digest": "4c6906588d3bd24bfe0c02960ad2153360f4fb933cf00700cb76cb6c8a58df8e"
   },
+  "RecDeploy.HonestFixture": {
+   "owner": "@proofs"
+  },
+  "RecDeploy.KSFixture": {
+   "owner": "@proofs"
+  },
   "RecDeploy.PartIn": {
    "owner": "@proofs",
    "digest": "e356858a64b328546a27a057b571cd186e55d9294cd98ab6bc5ea89766a9a884"
@@ -5670,6 +5676,9 @@
    ],
    "assumptions": [],
    "type_hash": "795a1501a9407a0386e6ef5f40629d3ccf38bdfd7d1b98ee6b279260cc983b26"
+  },
+  "Flock.Guarantees.recursiveKS_nontrivial": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.ClaimsStated": {
    "owner": "@proofs",
@@ -10349,6 +10358,9 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "RecDeploy.HonestHalfFixture.honest_half_fixture": {
+   "owner": "@proofs"
   },
   "RecDeploy.lamLin2_deployed_ge": {
    "owner": "@proofs",
@@ -53661,5 +53673,11 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Flock.SecurityProofs.RecursiveKS": {
+   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
+   "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
+  }
  }
 }
