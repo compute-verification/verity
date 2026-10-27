@@ -88,6 +88,7 @@ def test_the_eager_row_masks_from_n_and_writes_both_copies() -> None:
     _same(got[:, N:], p)
 
 
+@pytest.mark.slow
 def test_the_eager_backward_is_the_chain_of_its_kernels() -> None:
     N, D = 6, 64
     rng = np.random.default_rng(7)

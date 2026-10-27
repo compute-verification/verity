@@ -87,7 +87,8 @@ def _labels(rng, M: int) -> np.ndarray:
 @pytest.mark.parametrize("M,MEAN", [(16, 0), (16, 1), pytest.param(40, 1, marks=pytest.mark.slow),
                                     pytest.param(736, 1, marks=pytest.mark.slow)])
 def test_the_loss_is_the_reduce_kernels_threads_and_tree(M, MEAN) -> None:
-    """M = 16 and 40 run 32 threads (one row each, then some two), M = 736 is the least M of 64 threads."""
+    """M = 16 and 40 run 32 threads (one row each, then some two). M = 736 is the least M of 64 threads, the one case of a
+    stride tree with a level above 32 and of T chosen by the rounding of log2(M // 16); it traces about a minute."""
     rng = np.random.default_rng(M)
     lp = TK.neg(_f32(rng.uniform(0, 12, (5, M))))
     lp[1, 3], lp[2] = 0x7FC00000, 0x80000000
