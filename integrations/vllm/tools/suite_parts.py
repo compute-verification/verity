@@ -1,4 +1,4 @@
-"""verity-vllm's tests in N parts, each a `suites.py verity-vllm` run of its own, so N jobs run the suite at once (VLLM-112).
+"""verity-vllm's tests in N parts, each a `suites.py verity-vllm` run of its own, so N jobs run the suite at once.
 
     python3 integrations/vllm/tools/suite_parts.py 2/8             part 2 of 8: its test modules, from integrations/vllm
     python3 integrations/vllm/tools/suite_parts.py --list 8        each part's modules and estimated seconds

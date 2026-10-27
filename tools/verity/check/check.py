@@ -443,26 +443,6 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     return room and free_lean > len(p["waiters"]), ahead, why
 
 
-def spare(doc: dict, priority: bool = False) -> int:
-    """How many more checks could take a slot now on a machine whose `read_slots` documents are ``doc``: its free check slots no
-    window or memory gate blocks, less the live waiters ahead (`placement`), and no more than its free Lean `check` slots less
-    their waiters; 0 where none can run.  A machine without check slots counts one.  Drive moves a train still waiting in
-    another machine's line onto it (`research.drive.free_slots`)."""
-    try:
-        room, ahead, _ = placement(doc, priority)
-    except (ValueError, KeyError, TypeError, AttributeError):
-        return 0
-    if not room:
-        return 0
-    check, lean = doc["check"], doc["lean"]
-    n = 1 if check["slots"] is None else len([s for s in check["slots"] if (priority or not s.get("trains"))
-                                                and s["holder"] is None and not s["blocked"]]) - ahead
-    if lean["pools"] is not None:
-        p = lean["pools"][next(k for k in ("check", "any") if k in lean["pools"])]
-        n = min(n, len([s for s in p["slots"] if s["holder"] is None and not s["past_n"]]) - len(p["waiters"]))
-    return max(n, 0)
-
-
 def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False) -> tuple[str | None, str, list[str]]:
     """`--on auto`'s machine among ``names``, its reason, and each machine skipped with why. The first machine where a check slot
     with no window blocking it and a Lean `check` slot are free for this request (`placement`); else the one with the fewest
@@ -945,8 +925,8 @@ def record(argv: list[str]) -> int:
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
     gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`) waits for a slot of that
-    machine's NAME pool instead of its merge-check slots (`pool_env`)."""
-    on = base = pool = None
+    machine's NAME pool instead of its merge-check slots (`pool_env`); `--timeout S` is the run's (`research run --timeout`, custody 24 h)."""
+    on = base = pool = timeout = None
     agreement = priority = False
     rest = []
     it = iter(argv)
@@ -961,10 +941,12 @@ def record(argv: list[str]) -> int:
             agreement = True
         elif x == "--priority":
             priority = True
+        elif x == "--timeout":
+            timeout = next(it)
         else:
             rest.append(x)
     try:
-        pooled = pool_env(pool, on, priority)
+        pooled = pool_env(pool, on, priority) + (["--timeout", timeout, "--custody-ttl", "24h"] if timeout else [])
     except ValueError as e:
         print(f"check: --pool {e}", file=sys.stderr)
         return 2

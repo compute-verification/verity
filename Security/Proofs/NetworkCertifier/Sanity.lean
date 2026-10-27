@@ -145,8 +145,7 @@ theorem witnessProgram_timing_matters :
 
 /-! ## A joint witness for the composed statement
 
-Adopted from the red team's statement review (`internal/network-transparency/statement-review-witnesses.lean`,
-bc-440a5670): an operator that reacts to what it observes, and a Program that reads that ingress, meet every hypothesis
+An operator that reacts to what it observes, and a Program that reads that ingress, meet every hypothesis
 of `encard_decodable_le_blocks` at once. With no timing advice, exactly one secret is accepted despite the feedback. -/
 
 /-- A reacting operator: its ingress is the previous step's occupancy count. -/
