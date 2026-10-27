@@ -15208,14 +15208,13 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
   "Definitions.Accounting.JointLive": {
-   "digest": "be721b31eb064beb4ae39b07fc8f6715886527c59c10832e3d7f24b3d43da092",
+   "digest": "35dbf07cc82cb3053fd65f2f245367e99bc1e00e6fe8762d9f5891da814c2cb7",
    "definitions": {
-    "Accounting.BlocksLive": "a30e82a7d5045ed7788e669a007b951b822a21d15a3e02af88e0d5c40d559752",
-    "Accounting.BlocksLive.MemoryTerm": "15fafb1ae281d42c63c8694533f5aba095934fe75132bbe7f1cb265ace8bc1cd",
+    "Accounting.BlocksLive": "e93bf0771c51e62e9cc75e9b28498e756ae47b314c6dc610d0a380c93150bf15",
+    "Accounting.BlocksLive.MemoryTerm": "bfba389278b5eb70e3293ae0db911b5a01ad632a4ec3a6c8ec7fbb29368f8ed0",
     "Accounting.BlocksLive.block": "98bece9e624e763e0ef652040cbdb8318feaff090ae90ad20227ccce8ca2bb02",
-    "Accounting.BlocksLive.chal": "d8fc3b37856ebe648c50c261c54558d06ba3614d216d7fede9bc69017c05eb5a",
-    "Accounting.BlocksLive.readDeadline": "8bef0debb3c600b5cd60feadb8ecca04dd2225f2214828ec45ec94ce7626a29d",
-    "Accounting.BlocksLive.weights": "8c034e05cbc97d992223c11c4e70776559c413cce98b76e085337a69682dbe4e",
+    "Accounting.BlocksLive.chal": "803859f27d2972484ac1528549e4603faa0735e0ce1db8732d10da1aa57ac3f8",
+    "Accounting.BlocksLive.readDeadline": "c9c414f2865073ae4de623938b02f25415be570b89267be2472aa817e2e8410a",
     "Accounting.BlocksLive.wipe": "0149a2099bbc80c6599f5c9ee99cdd8bd2985d227e1ffb4d9e441d28e6c54862",
     "Accounting.IntegrityHolds": "a201f9ec16289619168cd277915c44748108b610265e21021f5f2693b943675c",
     "Accounting.PeriodLive": "73b259ba952edbfe601303536fbf70b596b47daebc9171d4cacc64c464525653",
@@ -24101,10 +24100,10 @@
    ]
   },
   "Definitions.Pous.Guarantees.Obligation": {
-   "digest": "8c218e72686bc926354833199623006a71bb76d4cdd3bbbae90bb5ddfed509fb",
+   "digest": "3c9e6e9e76b7b8a6acf17607917df6b2ecc351580ad2fbdb3884435b1d034f8e",
    "definitions": {
-    "Pous.Guarantees.ObligationDemo": "53ce5286079dd7a00fb94a861436c9d742fae447f31ae13ef5400dfcdb127a4f",
-    "Pous.Guarantees.ObligationDemoWide": "4ebd5674e613985970282526622c8bd0ef357db147361b13e8567e938a8def4b",
+    "Pous.Guarantees.ObligationDemo": "477a05a20ed593ebd3efc6354d226e2b99122be7454e38a463f3c8ba369b93a2",
+    "Pous.Guarantees.ObligationDemoWide": "2c05dc28b62b59d9ef1f430c3ba2aeb195dedf0927cf39ca81d152d9b5717604",
     "Pous.Guarantees.ObligationOfRoundSecure": "94292f511eadaa13ece6940b67cc38584dc4e5668e07a68f9d48afec1d9f4b5b",
     "Pous.Guarantees.ObligationOfRoundSecureWide": "08ecc5527c191b57b8cb6515ba8e94f7d363be64f0746801d9910b3f8b41a3ae",
     "Pous.Guarantees.ObligationOfStatic": "28decba2f563aedd1f194ee15864496827f2f5602334bee6a4ac142095949212",
