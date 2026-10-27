@@ -1,4 +1,4 @@
-"""`records.global_match`: GM-01's document loads as the typed Match result and dumps back to the same JSON; a missing or unknown
+"""`records.global_match`: the global match's document loads as the typed Match result and dumps back to the same JSON; a missing or unknown
 field is refused by name.  A document the checker itself writes is held to the same in `tests/check/test_global_match.py`."""
 from __future__ import annotations
 

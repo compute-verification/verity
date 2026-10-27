@@ -110,7 +110,7 @@ class MatchTokensLeg:
 
 @dataclass(frozen=True)
 class GlobalMatchLeg:
-    """GM-01's `global_match.json`, as the Match-account link read it: its verdict and G6's account of each request."""
+    """The global match's `global_match.json`, as the Match-account link read it: its verdict and G6's account of each request."""
     path: str
     sha256: str
     verdict: str
