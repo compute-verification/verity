@@ -1,6 +1,6 @@
 # commit_slots: the serve-time commit call, one subtree per sequence slot
 
-The call that commits a serving step's proof-unit outputs (CMP-95 item 3, Linear HASH-13): every unit's outputs as
+The call that commits a serving step's proof-block outputs (CMP-95 item 3, Linear HASH-13): every unit's outputs as
 `hm96-sha512/row/v2` rows under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a drawn
 unit opens by replaying its own request. `slots.py` is the CPU reference and this file's executable form;
 `slots_gpu.py` runs the same call on the GPU (or on its host twin) on HASH-20's SHA-512 engine

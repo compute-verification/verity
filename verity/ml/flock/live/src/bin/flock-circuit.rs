@@ -46,8 +46,9 @@ use sha2::{Digest, Sha512};
 const TABLE: &str = "circuit";
 /// The most tables in one session (`--session-tables`); their names sort in table order (`circuit-00` to `circuit-63`).
 const MAX_TABLES: usize = 64;
-const BERNOULLI_TABLES: &str = "tables: several tables need a subset draw (a Bernoulli draw's unit count is random, so the tables \
-                                could not split it evenly)";
+/// The Lean verifier's `Draw.TABLES_LAW`: several tables split one draw of fixed count, a subset or a stratified one.
+const TABLES_LAW: &str = "tables: several tables need a subset or stratified draw, whose unit count is fixed (a Bernoulli \
+                          draw's count is random, so the tables could not split it evenly, and a work draw's closure is not split)";
 
 fn arg(k: &str, d: &str) -> String {
     let a: Vec<String> = std::env::args().collect();
@@ -316,6 +317,9 @@ fn identity(c: &Composite) -> Value {
         let v2_run = c.out_rows().iter().enumerate().any(|(j, p)| p.segs.is_none() && c.out_group(j).1 > 1);
         id["outputs"] = json!(if v2_run { OUT_ROWS_V2_IDENTITY } else { OUT_ROWS_SEG_IDENTITY });
     }
+    if c.pinned > 0 {
+        id["outputs"] = json!(PINNED_IDENTITY);
+    }
     id
 }
 
@@ -401,7 +405,7 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
     }
     let units = match draw {
         Some(d) if d["population"].as_u64() != Some(inst.n as u64) => return Err("U: the draw's population is not this registered population".into()),
-        Some(d) if d["law"] != "subset" => return Err(BERNOULLI_TABLES.into()),
+        Some(d) if d["law"] != "subset" && d["law"] != "stratified" => return Err(TABLES_LAW.into()),
         Some(d) => flock_live::unit_draw::check(d)?,
         None => (0..inst.n).collect(),
     };
@@ -755,7 +759,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     if count > 1 {
         let probe = match (&given, &law) {
             (Some(d), _) => Some(d.clone()),
-            (None, Some(Law::Bernoulli { .. })) => refuse(BERNOULLI_TABLES.into()),
+            (None, Some(Law::Bernoulli { .. })) => refuse(TABLES_LAW.into()),
             (None, Some(l)) => l.first(inst.n as u64),
             (None, None) => None,
         };
@@ -4430,16 +4434,21 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         }
         if name == "tables_unsplittable_draw_refused" {
             // both sides refuse, before Hello, a draw two tables cannot split: a Bernoulli law's (its count is random), and an
-            // odd count; the server also refuses them at configuration (`server_tables`)
+            // odd count, subset or stratified; the server also refuses them at configuration (`server_tables`)
             let n = inst.n as u64;
             let units = |k: u64| (0..k).collect::<Vec<_>>();
+            let strat = |k: u64| json!({"law": "stratified", "population": n, "k": k,
+                                        "strata": [{"template": "t", "units": [[0, n]], "k": k}], "units": units(k)});
             let bern = session_tables(st, inst, Some(&json!({"law": "bernoulli", "p": "1/1", "population": n, "units": units(n)})), 2).err();
             let odd = (n >= 3).then(|| session_tables(st, inst, Some(&json!({"law": "subset", "population": n, "k": 3, "units": units(3)})), 2).err());
+            let odd_strat = (n >= 3).then(|| session_tables(st, inst, Some(&strat(3)), 2).err());
             let every = session_tables(st, inst, Some(&json!({"law": "subset", "population": n, "k": n, "units": units(n)})), 2).err();
-            let pass = bern.as_deref() == Some(BERNOULLI_TABLES) && odd.as_ref().is_none_or(|e| e.as_deref().is_some_and(|w| w.contains("do not split")))
-                && every.is_none();
-            return json!({"case": name, "expect": "a Bernoulli draw and an odd count refused; a subset draw of every unit splits", "bernoulli": bern,
-                          "odd": odd, "every_unit": every, "pass": pass});
+            let stratified = (n >= 2).then(|| session_tables(st, inst, Some(&strat(2)), 2).err());
+            let splits_not = |e: &Option<Option<String>>| e.as_ref().is_none_or(|e| e.as_deref().is_some_and(|w| w.contains("do not split")));
+            let pass = bern.as_deref() == Some(TABLES_LAW) && splits_not(&odd) && splits_not(&odd_strat) && every.is_none()
+                && stratified.as_ref().is_none_or(|e| e.is_none());
+            return json!({"case": name, "expect": "a Bernoulli draw and an odd count refused; a subset draw of every unit and an even stratified draw split",
+                          "bernoulli": bern, "odd": odd, "odd_stratified": odd_strat, "every_unit": every, "stratified": stratified, "pass": pass});
         }
         // the public-circuit ZK proof's J = 2: both tables' roots in one Commit, a coin subtree per table and rep, and every
         // proof after the session's last coin. A prover without the barrier sends table 0's proofs before table 1's coins: the

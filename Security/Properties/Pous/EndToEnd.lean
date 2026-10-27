@@ -23,8 +23,8 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
   the challenged block of that `C*`, within `Δ + RTT` on its own clock; or the run's own data holds a SHA-512
   collision (`RunBreak`, `TableBreak`) or an LMS forgery (`RunBreak`). `RunCertifies` adds the
   setup check's acceptance of `C*` (`Accepted`): `C*` decodes to the committed `W` and setup published its root, so
-  every `C*` setup accepts is one `RunCheckAccepts` speaks of. `RunCheckAccepts` is proved; `RunCertifies` follows from
-  it and the setup check's `AcceptsDecodes` and `PublishesRoot`, which are open.
+  every `C*` setup accepts is one `RunCheckAccepts` speaks of. Both are proved: `RunCertifies` from `RunCheckAccepts`
+  and the setup check's `AcceptsDecodes` and `PublishesRoot` (`Properties.Pous`).
 * `EndToEndRing`, `EndToEndRingDeployed`, `DrawExact`, `HonestPassesRing` and `HonestPassesAccepts`, **in the ring
   model, with `ω` uniform**: P2's square–mask–square over `Z/p` with a uniformly random odd labeling and uniformly random
   per-block keys (`p2ring`), against a server that is a `Server S D Q L` of this module, with the memory challenger's
@@ -204,8 +204,8 @@ so the session's `binding` is the root of the `C*` setup checked), the session a
 under the designated id and is signed under a key in `trusted`, and that key's holder ran a session with the accepted
 commitment in which every recorded answer is the challenged block of `C*`, on time on its own clock; or the run's own
 data holds a SHA-512 collision or an LMS forgery under a key in `trusted`. A dishonest commitment (`C*` decoding to a
-`W'` other than the `W` the server was handed) is `CommitBreak`'s. It rests on the setup check's `AcceptsDecodes` and
-`PublishesRoot`, which are open. -/
+`W'` other than the `W` the server was handed) is `CommitBreak`'s. It follows from `RunCheckAccepts` and the setup
+check's `AcceptsDecodes` and `PublishesRoot`, all proved. -/
 def RunCertifies : Prop :=
   ∀ (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
     (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Device),
