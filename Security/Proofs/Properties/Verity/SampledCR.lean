@@ -173,6 +173,29 @@ largest probability of outputting a SHA-512 collision. -/
 noncomputable def crFinder (τ : Strategy A.G) (w : Weights) : Claims.Finder :=
   Claims.Finder.worst Verity.sha512Msg (A.crFam τ w)
 
+theorem strictFinder_cost_le (Fd : StrictCR.Finder StrictCR.Pair) (q : ℝ) (w : ℕ × ℕ) {b : ℕ} (h : ⌈q⌉₊ ≤ b)
+    (x : (strictFinder Fd q w).S) : (strictFinder Fd q w).cost x ≤ b :=
+  Claims.Finder.dilute_cost_le _ _ _ b (fun _ => h) x
+
+/-- **`B^τ`'s cost on every coin** is at most `b` where the rewinding and self-clash budgets are and every link
+finder's run is. -/
+theorem crFinder_cost_le (τ : Strategy A.G) (w : Weights) {b : ℕ} (hF : ⌈A.qF τ⌉₊ ≤ b) (hS : ⌈A.qS τ⌉₊ ≤ b)
+    (hL : ∀ (c : A.vb.Pos) (x : TrialOutZC FlockLevel3.GF128 A.L Dig (List UInt8) ×
+        List (TrialOutZC FlockLevel3.GF128 A.L Dig (List UInt8))),
+      finderCost (rdTZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ))
+        (cont (A.sim τ)) c) (cTZC (planZHJ A.dj A.y₀) (reg (A.sim τ)) (A.t' τ)) x ≤ b)
+    (x : (A.crFinder τ w).S) : (A.crFinder τ w).cost x ≤ b := by
+  refine Claims.Finder.worst_cost_le _ _ b (fun i => ?_) x
+  rcases i with _ | ⟨ω, j, ⟨r, ℓ⟩ | r | r | _ | _⟩ | c
+  · intro _
+    exact Nat.zero_le _
+  · exact strictFinder_cost_le _ _ _ hF
+  · exact strictFinder_cost_le _ _ _ hF
+  · exact strictFinder_cost_le _ _ _ hF
+  · exact strictFinder_cost_le _ _ _ hF
+  · exact strictFinder_cost_le _ _ _ hS
+  · exact Claims.Finder.dilute_cost_le _ _ _ b (fun _ => Nat.ceil_le.mpr (hL c.1 _))
+
 /-- A link trial plays `τ` at least once: its cost is at least `t' τ`. -/
 theorem cTZC_ge (τ : Strategy A.G) (e : TrialOutZC FlockLevel3.GF128 A.L Dig (List UInt8)) :
     A.t' τ ≤ cTZC (planZHJ A.dj A.y₀) (reg (A.sim τ)) (A.t' τ) e := by
