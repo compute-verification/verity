@@ -13,7 +13,7 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 ```
 
 `lifecycle.py` holds the model, the site's `Layout`, the phases as functions and the two parties both composites share
-(developer, verifier); `onsite.py` adds the network certifier, the memory challenger and the onsite verifier's components;
+(developer, verifier); `onsite.py` adds the network certifier, the memory challenger and the onsite verifier's subprotocols;
 `remote.py` is the two-party deployment; `tests/test_lifecycle.py` runs both, honest and with every deviation.
 
 **The proofs are a stand-in.** `prove(statement, witness) -> proof` returns the drawn unit's openings, and
@@ -36,7 +36,7 @@ It is sound for the example and not zero-knowledge; C-Flock behind the firewall 
 Every party is a sans-IO party of the deployment layer (`verity/core/deploy/`), run by `runtime.run` in simulated mode:
 in one process, on seeded coin sources and virtual clocks, with the manifest's channels and latencies. The model is two
 4x4 int8 matmuls (`forward`: y = sat(W2 relu(W1 x) >> 7) >> 7) with a 16-bit running state; one request is one proof
-unit, the Boolean Definition `LifecycleRequest` (5,200 AND gates), and a declaration block is `LifecycleBlock(N)`: N units
+block, the Boolean Definition `LifecycleRequest` (5,200 AND gates), and a declaration block is `LifecycleBlock(N)`: N units
 chained through the state wire. The monitoring period is three declaration periods of 3, 4 and 2 requests.
 
 1. **Hardware registration** (`Hardware`; `check_registration(layout, registration)`). The site is one `Layout`: cards
@@ -49,7 +49,7 @@ chained through the state wire. The monitoring period is three declaration perio
    challenger that isn't one of the auditor's own devices with its key), and onsite `uncertified` (a boundary link no
    certifier splits) and `challenger-reach`. After declaration 1 a later entry adds gpu2 with its HBM, and a disk.
 2. **Registration** (`Register`; `register`, `check_baseline`). B's descriptor (format, advice cap of 32 bits a
-   declaration, its static placement: gpu0 and gpu1, gpu2 too from declaration 2, theta in hbm0), and the baseline:
+   declaration, its static placement: gpu0 and gpu1, gpu2 too from declaration 2, theta in hbm0), and the registered information:
    theta's 8 rows and the initial state, each committed as hm96-sha512 leaves in a frame-v3-sha512 tree under B's
    digest. Only roots are public. Onsite, the verifier then starts the certifier.
 3. **Operation** (`operate`). Remote, the developer serves its own load. Onsite, the certifier is the outside world's only
@@ -64,14 +64,14 @@ chained through the state wire. The monitoring period is three declaration perio
    record, the placement, the block's Program digest and its values' root, all before any coin.
 5. **Audit of declaration k.** After the `Declare`, the verifier draws its live coins and sampled proofs' `draw_first`
    picks subset:K′ of the block's units, at PoUW's `k_prime` for ε = 1/2, δ = 1/4 (`Draw`). The developer proves each
-   drawn unit (`Proofs`: the stand-in), whose statement reads three commitments: the block's row, the unit's input state
-   (the row before, the previous block's last row, or the baseline's), and theta. Onsite, the certifier's signed view
+   drawn proof block (`Proofs`: the stand-in), whose statement reads three commitments: the block's row, the unit's input state
+   (the row before, the previous block's last row, or the registered initial state), and theta. Onsite, the certifier's signed view
    (`View`: two LMS signatures over `lms.certificate_message`, under the key its registered location carries) gives the
    count and the frame commitments each drawn unit's I/O gates are held to; the memory challenger's round (`Open`,
    `Challenge`, `Answer`, `Report`) picks 2 theta rows on its own coins and times the answer on its own clock. PoUS holds
    the openings to theta's root; the bandwidth audit holds the time to twice the challenger's link latency plus the rows'
-   bits at the rate of the device theta is placed on, both read from the layout (`theta_reach`). Each component answers
-   in `Core.Protocol`'s shape, and the composite is the composition's rule and binding over exactly its components.
+   bits at the rate of the device theta is placed on, both read from the layout (`theta_reach`). Each subprotocol answers
+   in `Core.Protocol`'s shape, and the composite is the composition's rule and binding over exactly its subprotocols.
 6. **Accounting** (`account`). The chain from the registration through every record, each declaration's composite, the
    period's verdict by the same rule, the credited AND gates (PoUW's grid point at or below the real units, fillers
    credited nothing) against the compute the layout held in each declaration period, the advice bits charged as leakage,
@@ -123,7 +123,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `io-mismatch`: the wire carries other outputs than the committed ones | audit | the certifier's frames, onsite |
 | `lost-theta`: an answer with a row that isn't theta's | audit | PoUS, onsite |
 | `off-node`: theta fetched from elsewhere, 3 ms a round trip | audit | the bandwidth audit, onsite |
-| `fork`: record 2 names the registration, not record 1 | accounting | the chain; every component accepts |
+| `fork`: record 2 names the registration, not record 1 | accounting | the chain; every subprotocol accepts |
 
 `test_check_registration` and `test_check_placement` hold every refusal of phase 1 and of the placement to a case.
 
@@ -142,11 +142,11 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `commit`, `opens`, `committed` | developer, verifier | rows and salts; an opening | a root; whether it opens | `verity/core/protocols/sampled_proofs/one_stage/registered.py` over `verity.ml.commitments.hm96` |
 | `UNIT`, `BLOCK`, `block_digest(n)` | B | — | Boolean Definitions; a Program digest | `verity.ml.circuits` (`boolean.trace`, `defs.CompositeDefinition`, `codec`) |
 | `evaluate_unit` | the stand-in verifier | theta, state, x | y, state′ | `verity.ml.circuits.evaluation.evaluate_words` |
-| `draw(coins, block)`, `draw_size` | verifier | live coins | the drawn units | `verity/core/protocols/sampled_proofs/coins.py` (`draw_first`), `verity/core/protocols/pouw/window.py` (`bucket`, `k_prime`) |
+| `draw(coins, block)`, `draw_size` | verifier | live coins | the drawn proof blocks | `verity/core/protocols/sampled_proofs/coins.py` (`draw_first`), `verity/core/protocols/pouw/window.py` (`bucket`, `k_prime`) |
 | `prove(statement, witness)` | firewall | a `Statement`, the openings | a proof | STAND-IN for C-Flock |
-| `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for C-Flock's verifier of record |
+| `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for C-Flock's verifier |
 | `sampled_proofs`, `pouw_window`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
-| `compose(protocol, answers)` | verifier | the components' outcomes | the composite verdict and binding | `verity/core/protocols/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
+| `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/core/protocols/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
 | `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the example |
 | `Certifier`, `certified(I, view, direction)` | network certifier | frames seen | a signed view | `verity/ml/crypto/lms.py` (`certificate_message`, `sign_at`, `verify`) |
 | `Challenger`, `theta_reach(layout, store)` | memory challenger, verifier | an open round; the layout | PoUS and bandwidth report; rate and latency | missing: written in the example |
@@ -159,12 +159,12 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
   is not prefix-incremental. `Security/Definitions/Core/Declaration.lean`'s `Declaration` is the declared circuit so far,
   and its file says one Program is the circuit of record: d.D, one `Circuit`, is here every declaration block composed
   along the state wire (block k's state input is block k − 1's state output, not an input gate), which the spec has no
-  operation for; d.θ, the baseline, is theta's and the initial state's input gates. `Baseline` is d before any block,
+  operation for; d.θ, the registered information, is theta's and the initial state's input gates. `Baseline` is d before any block,
   and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
 - **State crosses declaration blocks as a committed value.** A drawn unit at the start of block k opens block k − 1's
-  last row (or the baseline's state), so one unit's statement reads three commitments. `Core.Protocol`'s answer carries
-  one commitment: the cross-block read and the chain live outside every component, in `check_declaration` and
-  `account`, and `fork` passes every component. Nothing composes declarations into a monitoring period; the example
+  last row (or the registered initial state), so one unit's statement reads three commitments. `Core.Protocol`'s answer carries
+  one commitment: the cross-block read and the chain live outside every subprotocol, in `check_declaration` and
+  `account`, and `fork` passes every subprotocol. Nothing composes declarations into a monitoring period; the example
   applies the composition's rule over them.
 - **Where prefix-extending B breaks.** (i) PoUW's grid pads every block (`pad(real + 1)`), so the declared circuit is
   full of filler units, and their count depends on how the work was cut into declarations. (ii) Work that straddles a
@@ -194,7 +194,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
   independent draws, a wrong share ε of the credited work escapes with probability at most q_max^⌈εN⌉ (q = 1 − K′/n, N
   credited units): 1.0 % over the three declarations, 10^-6017 over a week of declarations like these. The theorem from
   a declaration's audit to the period's is the layer the modular math still needs.
-- **Per-declaration components don't exist yet.** PoUW's `core_check` and PoUS's and the bandwidth audit's verifiers take
+- **Per-declaration subprotocol checks don't exist yet.** PoUW's `core_check` and PoUS's and the bandwidth audit's verifiers take
   whole-run cases; the example writes one answer each a declaration. Only sampled proofs draws from the declaration
   block; the memory challenger draws theta rows.
 - **The advice is charged but the toy's circuit doesn't depend on it beyond the count.** Batching enters B only as
@@ -206,7 +206,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 
 In a noun-based layout, each part of the example goes where its noun is:
 
-- `verity/registration`: `Layout`, its entries, `check_registration` and the projections; the baseline (`register`,
+- `verity/registration`: `Layout`, its entries, `check_registration` and the projections; the registered information (`register`,
   `check_baseline`), B's registered descriptor and `grow`, and `placement`; `declare` and `check_declaration` too, as
   what is registered over time.
 - `verity/circuits`: the units, the declaration blocks and the declared circuit as blocks chained by state wires, with a
@@ -215,5 +215,5 @@ In a noun-based layout, each part of the example goes where its noun is:
   `verity.ml.commitments` and the certifier's own).
 - `verity/flock`: `prove` and `verify`, replacing the stand-in, plain or zero-knowledge behind the firewall.
 - `verity/protocols/onsite` and `verity/protocols/remote`: the parties and manifests, each composite's per-declaration
-  components and `account`, over the composition's rule.
+  subprotocol checks and `account`, over the composition's rule.
 - The model, its load and `operate` stay with the integration that serves them (`integrations/`).

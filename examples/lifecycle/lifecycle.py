@@ -10,7 +10,7 @@ The phases, each a function here:
    from an append-only log of `Registration` entries. The first entry comes before anything else; each later one is
    checked against the layout its prefix folds to before anything is placed on what it adds.
 2. **Registration** (`register`, `check_baseline`): the builder B by its descriptor (its advice cap and its static
-   placement plan) and the baseline, theta's and the initial state's hiding commitments, before any coin.
+   placement plan) and the registered information, theta's and the initial state's hiding commitments, before any coin.
 3. **Operation** (`operate`): the developer serves a declaration period's requests through the model (`forward`),
    realizing what only run time decides: the batching.
 4. **Declaration k** (`declare`, `check_declaration`): the developer reports the declared advice a_k; B appends the
@@ -130,7 +130,7 @@ def _request(C: Any, state: Sequence[Any], *rest: Sequence[Any]) -> list[list[An
 
 UNIT = trace.definition("LifecycleRequest", 1, _request, UNIT_PARAMS, UNIT_RET, register=False,
                         doc="one request through the tiny model: y = sat(W2 relu(W1 x) >> 7) >> 7, state' = state + sum(y)")
-"""The proof unit: one request, as a Boolean Definition (And/Xor/Not gates)."""
+"""The proof block: one request, as a Boolean Definition (And/Xor/Not gates)."""
 
 
 def _block_signature(S: Any) -> tuple[tuple[tuple[str, Any], ...], Any]:
@@ -637,7 +637,7 @@ class Builder:
 
 @dataclass(frozen=True)
 class Baseline:
-    """The registration: the product, B's descriptor and the baseline, theta's and the initial state's hiding
+    """The registration: the product, B's descriptor and the registered information, theta's and the initial state's hiding
     commitments: public digests and roots, no value. With the declaration blocks it is Lean's `Declaration` (d.D, d.θ)
     so far: B's blocks are d.D, and the gates theta and the initial state are committed to are d.θ."""
 
@@ -836,7 +836,7 @@ def prove(statement: Statement, witness: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def verify(statement: Statement, proof: Mapping[str, Any]) -> dict[str, str | None]:
-    """STAND-IN for the verifier of record: each opening against its commitment, then the unit's circuit evaluated in the
+    """STAND-IN for C-Flock's verifier: each opening against its commitment, then the unit's circuit evaluated in the
     clear on the opened inputs and held to the opened outputs; onsite, the opened I/O held to the frames the certifier
     committed to. The reason for each failure, by check (`values`, `io`), None where it holds."""
     out: dict[str, str | None] = {"values": None, "io": None}
@@ -926,14 +926,14 @@ def _reference() -> Any:
 
 
 def products() -> dict[str, tuple[str, tuple[str, ...]]]:
-    """Each composite's product id and its components' ids, in the order of their ids (`Core.Onsite`, `Core.Remote`)."""
+    """Each composite's product id and its subprotocols' ids, in the order of their ids (`Core.Onsite`, `Core.Remote`)."""
     ref = _reference()
     return {"onsite": (ref.ONSITE.id, tuple(c.id for c in ref.ONSITE.components)),
             "remote": (ref.REMOTE.id, tuple(c.id for c in ref.REMOTE.components))}
 
 
 def compose(protocol: str, answers: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
-    """A declaration's composite verdict: the composition's rule over exactly the product's components (any reject
+    """A declaration's composite verdict: the composition's rule over exactly the product's subprotocols (any reject
     rejects, then any undecided leaves it undecided), and its commitment the binding of their digests
     (`Core.Composition.bind`)."""
     ref = _reference()
@@ -1049,8 +1049,8 @@ class Declared:
 
 
 class Developer:
-    """The developer: registers its hardware and its baseline, serves each declaration period's requests, declares, and
-    proves the drawn units behind the firewall. Its capabilities: `theta`, `state0`, `layout` (its first hardware
+    """The developer: registers its hardware and its registered information, serves each declaration period's
+    requests, declares, and proves the drawn proof blocks behind the firewall. Its capabilities: `theta`, `state0`, `layout` (its first hardware
     registration entry), `later` (the one it adds after its first declaration), `plan` (B's placement), `product`, `load`
     (remote: its declaration periods' requests; onsite they arrive through the certifier) and `cheat`, the one way it
     deviates, if any (`CHEATS`)."""
@@ -1195,8 +1195,8 @@ class Developer:
 
 class Verifier:
     """The verifier: checks each hardware registration, the registration, and each declaration; draws on its live coins
-    after the commitment; checks the drawn units' proofs; runs PoUW's window check; composes each declaration's verdict
-    with the components the composite lists (onsite: the certifier's view and the memory challenger's report); and
+    after the commitment; checks the drawn proof blocks' proofs; runs PoUW's window check; composes each declaration's verdict
+    with the subprotocols the composite lists (onsite: network certification and the memory challenger's report); and
     accounts for the monitoring period. Its outcome is every phase's public output."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
@@ -1296,7 +1296,7 @@ class Verifier:
         return "proofs" in self.parts[k]
 
     def answers(self, k: int, checks: Mapping[int, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
-        """The components' answers for declaration k beyond sampled proofs and PoUW (onsite: the certifier, PoUS and the
+        """The subprotocols' answers for declaration k beyond sampled proofs and PoUW (onsite: the certifier, PoUS and the
         bandwidth audit)."""
         return {}
 
