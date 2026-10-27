@@ -321,7 +321,7 @@ def test_verdict_b2_requires_a_live_oracle_compare():
     assert not ok and why.startswith("C2 of record not established")
     # with the C2 of record present the oracle stays a diagnostic: PASS at B2 without any Match record
     c2 = {"sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6},
-          "weights_pin": {"result": True, "compared": 98}}                                   # [MAN-09] the checkpoint pin is part of the record
+          "weights_pin": {"result": True, "compared": 98}}                                   # the checkpoint pin is part of the record
     ok_, why_ = commit_verdict({**base, **c2, "binding": _bnd(2)}, True, min_openings=64)
     assert ok_ is True and why_.startswith("PASS (B=2: per-(step,request) attribution not verified on this record"), why_   # PASS, gap named
 

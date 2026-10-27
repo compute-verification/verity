@@ -73,7 +73,6 @@ PROTOCOL SUMMARY (Match stage: the record checker -- GM-01, the runtime match ve
     without the declaration); X-09 is evidence inside G3, never the verdict; the other within-step criterion is recorded beside the verdict,
     never merged; MATCH_IMPL selects fast (the Match of record, the CLI's default) | record (the audit checker) -- an unknown name is an
     error, never a fallback; capture/tokens.json is required on a row of record.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 from __future__ import annotations
 
