@@ -16,7 +16,7 @@ Notes are records, never messages.
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
   research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
-  research msg traffic [--hours H] [--replay] [--json]             # the monitor: doorbells, pauses, dropped names, unanswered asks
+  research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (by record), median and p90 minutes
   research msg watch --as NAME [--every S] [--polls N]             # block until a new doorbell; the hook a wake script runs
   research msg pickup --thread TS                                  # 👀 on an ask you own
@@ -194,7 +194,6 @@ PR_RE = re.compile(r"(?<![\w&/#])#(\d{3,6})\b")
 BRANCH_RE = re.compile(r"\bcursor/([a-z0-9._-]*[a-z0-9])")
 TRAIN_PREP_RE = re.compile(r"^train-prep-((?:\d+-)+)")                  # `cursor/train-prep-1585-1586-on-041c30713-4292`
 RUN_ID_RE = re.compile(r"\br\d{8}-\d{6}-([0-9a-f]{4})\b|(?<![\w./#@-])([0-9a-f]{4})(?![\w/@-])")   # a run, or its last 4
-HISTORY_S = 86400                                                # how far back the replay reads a thread before its window
 TAG_SEP = " \u00b7 "
 _TAG = r"(?:[a-z0-9][a-z0-9._-]*|\([a-z]+\))"
 FOOTER_RE = re.compile(rf"\n_({_TAG}(?: \u00b7 {_TAG})*)_\s*$")                                  # `_ask · urgent_`
@@ -2503,119 +2502,6 @@ class Pages:
         return self.seen[page]
 
 
-def _stamp_epoch(stamp: str | None) -> float | None:
-    try:
-        return datetime.strptime(stamp, "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc).timestamp() if stamp else None
-    except ValueError:
-        return None
-
-
-def replay(api: Slack, reg: dict, routes: Routes, ch: str, since: float, log=None) -> list[dict]:
-    """Each post in `ch` since `since` whose doorbells differ from what `route_targets` says it should have rung: the
-    names `missed` (expected, no doorbell in their inbox) and `extra` (a doorbell nothing called for).  A name is expected
-    when its inbox existed then and wasn't closed yet (or forwards); a route closed and reopened inside the window can
-    show false misses for the span it was closed, since routes keep no history."""
-    posts, threads = [], {}
-    for m in api.paged("conversations.history", "messages", channel=ch, oldest=f"{since - HISTORY_S:.6f}"):
-        if (m.get("text") or "").startswith(INBOX_HEAD):
-            continue
-        if float(m["ts"]) > since:
-            posts.append((m, None))
-        if m.get("reply_count") and float(m.get("latest_reply") or 0) > since:
-            threads[m["ts"]] = [x for x in api.paged("conversations.replies", "messages", channel=ch, ts=m["ts"],
-                                                     oldest=f"{since - HISTORY_S:.6f}") if x.get("ts") != m["ts"]]
-            posts += [(x, m) for x in threads[m["ts"]] if float(x["ts"]) > since]
-    for n in {n for m, _ in posts for n in lead_names(m.get("text") or "", reg)}:
-        routes.get_route(n)                                          # a name this clone lacks: its published route
-    reg = with_routes(reg, routes)
-    book, inboxes = routes.all(), routes.inboxes()
-    by_inbox = {r["inbox_ts"]: n for n, r in sorted(book.items(), key=lambda kv: not kv[1].get("closed"))}
-    rang: dict[tuple[str | None, str], set[str]] = {}                # (the channel a doorbell names, the post's ts)
-    for its, name in by_inbox.items():
-        for m in api.paged("conversations.replies", "messages", channel=ch, ts=its, oldest=f"{since:.6f}"):
-            if m.get("ts") != its and is_doorbell(m, reg) and (d := DOORBELL_RE.match(m.get("text") or "")):
-                rang.setdefault((doorbell_channel(m.get("text") or ""), d[4] or d[3]), set()).add(name)
-    posts = [(m, root) for m, root in posts if (root or m)["ts"] not in inboxes and m["ts"] not in inboxes]
-    humans = people_names(reg)
-
-    def expected(name: str, t: float) -> str | None:
-        to, r = routes.resolve(name)
-        own = routes.get_route(name)
-        if not own or float(own.get("inbox_ts") or 0) > t:
-            return None
-        closed = _stamp_epoch(own.get("closed"))
-        if closed is None or closed > t:
-            return name
-        return to if r and not r.get("closed") else None
-
-    out = []
-    for m, root in posts:
-        if PIECE_RE.match(m.get("text") or "") and is_quiet(m.get("text") or ""):
-            continue                                                 # a long post's later piece wakes nobody, by design
-        t, author = float(m["ts"]), poster(m, reg)
-        got = rang.get((None, m["ts"]), set())
-        own = author in got                                          # only a poster other than the holder rings its own inbox
-        want = {e for n in route_targets(m, root, reg, inboxes, author_rings=own)
-                if n not in humans and (e := expected(n, t))}
-        missed, extra = sorted(want - got - {author}), sorted(got - want)
-        if missed or extra:
-            out.append({"ts": m["ts"], "by": author, "missed": missed, "extra": extra,
-                        "first": " ".join(plain(m.get("text") or "").split())[:80]})
-    return out + replay_people(api, reg, rang, inboxes, humans, expected, since, log)
-
-
-ASK_CHANNELS = ("ask-the-team", "resource-accounting")          # people's questions, routed by the Slack events service
-SETTLE_S = 120                                                  # a person's post younger than this is still in flight
-
-
-def replay_people(api: Slack, reg: dict, rang: dict, inboxes: set[str], humans: set[str],
-                  expected: Callable[[str, float], str | None], since: float, log=None) -> list[dict]:
-    """The people's channels (ASK_CHANNELS and each open chat), which the Slack events service routes: each person's post
-    since `since` whose doorbells differ from the rule's names.  A post that names no one is a miss only when nothing
-    rang for it (the service sends it to its routing line's lanes, @top without the model).  A chat post's text is
-    private, so its line carries none.  A channel the bot can't read is said and skipped."""
-    log = log or sys.stderr
-    chats = chat_channels(reg)
-    keys = {k: c["id"] for k, c in reg["channels"].items() if k in ASK_CHANNELS and c.get("id")}
-    keys.update({k: c["id"] for k, c in chats.items()})
-    settled, out = _now().timestamp() - SETTLE_S, []
-    for key, cid in sorted(keys.items()):
-        try:
-            roots = api.paged("conversations.history", "messages", channel=cid, oldest=f"{since - HISTORY_S:.6f}")
-            threads = [api.paged("conversations.replies", "messages", channel=cid, ts=r["ts"], oldest=f"{since - HISTORY_S:.6f}")
-                       if r.get("reply_count") else [r] for r in roots]
-        except SlackError as e:
-            if not _unreadable(e):
-                raise
-            log.write(f"replay: #{key} unreadable ({e}), skipped\n")
-            continue
-        for thread in threads:
-            root = thread[0] if thread and thread[0].get("ts") == (thread[0].get("thread_ts") or thread[0].get("ts")) else None
-            for m in thread:
-                t, text = float(m["ts"]), m.get("text") or ""
-                if not since < t <= settled or person(m, reg) is None:
-                    continue
-                if key in chats:
-                    rule = chat_targets(m, [x for x in thread if x.get("ts") != m["ts"]], reg)
-                    unaddressed = rule == [CHAT_WATCHER] and CHAT_WATCHER not in lead_names(text, reg)
-                else:
-                    rule = route_targets(m, root if root is not m else None, reg, inboxes)
-                    unaddressed = not rule and not is_quiet(text)
-                got, author = rang.get((key, m["ts"]), set()), poster(m, reg)
-                if unaddressed:
-                    missed, extra = ([] if got else [CHAT_WATCHER]), []
-                else:
-                    want = {e for n in rule if n not in humans and (e := expected(n, t))}
-                    missed, extra = sorted(want - got - {author}), sorted(got - want)
-                if missed or extra:
-                    out.append({"ts": m["ts"], "by": author, "channel": key, "missed": missed, "extra": extra,
-                                "first": "" if key in chats else " ".join(plain(text).split())[:80]})
-    return out
-
-
-PIECE_RE = re.compile(r"^\(\d+/\d+\) ")                          # `_post`'s later pieces: `(2/3) ...`, quiet
-
-
 def is_ask(m: dict) -> bool:
     """Whether a top-level post asks the names it rang: not an announcement, a status line, an inbox's head, quiet or an fyi."""
     text = m.get("text") or ""
@@ -2826,10 +2712,8 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     old_enough = [(x, ok) for x, ok in asks if now - float(x["ts"]) > ns.stale_h * 3600]
     stale = [x for x, ok in old_enough if ok is False]
     unchecked = [x for x, ok in old_enough if ok is None]
-    replayed = replay(api, reg, routes, ch, since) if ns.replay else None
     if ns.json:
-        print(json.dumps({"inboxes": rows, "dropped": dropped, "answered": answered_by, "unanswered": stale, "unchecked": unchecked,
-                          **({"replay": replayed} if replayed is not None else {})}, indent=2))
+        print(json.dumps({"inboxes": rows, "dropped": dropped, "answered": answered_by, "unanswered": stale, "unchecked": unchecked}, indent=2))
         return 0
     print(f"traffic over the last {ns.hours:g} h (to {both(now)})")
     for x in rows:
@@ -2847,13 +2731,6 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                  "slack": f"Slack, no record: {s['state']}"}[s["record"]])
     if unchecked:
         print(f"  UNCHECKED: {len(unchecked)} ask(s) whose record can't be read: {unchecked[0]['state']}")
-    for x in replayed or []:
-        what = "; ".join(f"{k} {' '.join('@' + n for n in x[k])}" for k in ("missed", "extra") if x[k])
-        where = f"#{x['channel']} " if x.get("channel") else ""
-        print(f"  REPLAY {where}{x['ts']} by @{x['by']}: {what}"
-              + (f": {x['first']}" if x["first"] else " (private)" if x.get("channel") else ""))
-    if replayed is not None:
-        print(f"  replayed: {len(replayed)} post(s) whose doorbells differ from route_targets")
     return 0
 
 
@@ -3964,7 +3841,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    help="an ask its record doesn't show answered after this many hours is unanswered: its Linear issue still "
                         "in Backlog with no comment but the asker's, Daniel's page still Waiting on Daniel, or (no record) no "
                         "👀, ✅, ❌ or reply; one whose record can't be read is unchecked")
-    p.add_argument("--replay", action="store_true", help="also compare each post's doorbells with what route_targets says it rings")
     p.add_argument("--latency", action="store_true", help="instead: per lane (and @daniel), its asks, how many its record shows "
                                                          "answered (Linear, Notion, or Slack where there's no record), and the "
                                                          "median and p90 minutes to the first answer")

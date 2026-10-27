@@ -2212,33 +2212,6 @@ def test_deliver_rings_for_a_persons_typed_post_once(fake, registry, routes_dirs
 ASK_TEAM = "C0CA1JZSYNR"
 
 
-def test_traffic_replay_reads_the_people_s_channels_and_keeps_a_chat_s_text_out(fake, registry, routes_dirs, people_d, capsys):
-    """19-23 Oct the Slack events service routed nothing in the people's channels while five daily replays were clean:
-    the replay read only the front door (COMM-61)."""
-    people_d.mkdir()
-    (people_d / "luke.json").write_text(json.dumps(chat_person("chat-luke", LUKE, "Luke Example")))
-    chat = "CCHATLUKE"
-    circuits, top = inbox(fake, routes_dirs, "circuits"), inbox(fake, routes_dirs, "top")
-    human = json.loads(registry.read_text())["humans"][0]["slack_user"]
-    missed = fake.add(ASK_TEAM, text="@circuits when does the sweep land?", user=human)
-    rang = fake.add(ASK_TEAM, text="@circuits is node 2 free?", user=human)
-    fake.add(COORD, text=slack.doorbell("daniel", rang["ts"], rang["ts"], rang["text"], channel="ask-the-team"),
-             username="router", bot_id=BOT, thread_ts=circuits)
-    lost = fake.add(ASK_TEAM, text="what is the TP8 status?", user=human)              # names no one, and nothing rang
-    secret = fake.add(chat, text="the private question, no lane named", user=LUKE)
-    routed = fake.add(chat, text="another one, no lane named", user=LUKE)
-    fake.add(COORD, text=slack.doorbell("luke", routed["ts"], routed["ts"], "", channel="chat-luke", private=True),
-             username="router", bot_id=BOT, thread_ts=top)
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    rep = {(x.get("channel"), x["ts"]): x for x in json.loads(out)["replay"]}
-    assert rc == 0 and set(rep) == {("ask-the-team", missed["ts"]), ("ask-the-team", lost["ts"]), ("chat-luke", secret["ts"])}
-    assert rep[("ask-the-team", missed["ts"])]["missed"] == ["circuits"] and rep[("ask-the-team", lost["ts"])]["missed"] == ["top"]
-    assert rep[("chat-luke", secret["ts"])] == {"ts": secret["ts"], "by": "luke", "channel": "chat-luke", "missed": ["top"],
-                                                "extra": [], "first": ""}
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay")
-    assert f"REPLAY #chat-luke {secret['ts']} by @luke: missed @top (private)" in out and "private question" not in out
-
-
 def unreadable_ask_team(monkeypatch):
     """The bot may post in #ask-the-team but lacks its history, as on 19 Oct."""
     real = slack.post
@@ -2861,51 +2834,6 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
 
 
-def test_traffic_replay_names_each_post_whose_doorbells_differ_from_route_targets(fake, registry, routes_dirs, capsys):
-    box = inbox(fake, routes_dirs, "circuits")
-    rung = posted(fake, run(capsys, "send", "--as", "infra", "--to", "@circuits", "--text", "rang as it should")[1])
-    typed = fake.add(COORD, text="@circuits sent by a client that never delivered", username="proofs", bot_id=BOT)
-    stray = fake.add(COORD, text="for no one in particular", username="lean", bot_id=BOT)
-    fake.add(COORD, text=slack.doorbell("lean", stray["ts"], stray["ts"], stray["text"]), username="router", bot_id=BOT, thread_ts=box)
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
-    assert rc == 0 and rung["ts"] not in rep
-    assert (rep[typed["ts"]]["missed"], rep[typed["ts"]]["extra"]) == (["circuits"], [])
-    assert (rep[stray["ts"]]["missed"], rep[stray["ts"]]["extra"]) == ([], ["circuits"])
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay")
-    assert f"REPLAY {typed['ts']} by @proofs: missed @circuits: @circuits sent by a client" in out and "replayed: 2 post(s)" in out
-
-
-def test_traffic_replay_skips_a_long_posts_later_pieces(fake, registry, routes_dirs, capsys, monkeypatch):
-    """`_post`'s later pieces (`(2/3) ...`, quiet) wake nobody by design; one naming a PR read as a miss in the 19 Oct replay."""
-    inbox(fake, routes_dirs, "circuits")
-    monkeypatch.setattr(slack, "route_targets", lambda *a, **k: ["circuits"])
-    piece = fake.add(COORD, text=f"(2/2) the rest, about #12{slack._footer((slack.QUIET,))}", username="proofs", bot_id=BOT)
-    plain_post = fake.add(COORD, text="a post the rule would ring", username="proofs", bot_id=BOT)
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
-    assert rc == 0 and piece["ts"] not in rep and rep[plain_post["ts"]]["missed"] == ["circuits"]
-
-
-def test_traffic_replay_takes_a_posters_ring_of_its_own_handle_as_called_for_and_an_external_posters_miss(fake, registry,
-                                                                                                         routes_dirs, capsys):
-    """21 Oct: compute-accounting's research lane, a poster, rang its holder's inbox by naming the handle (#2904), and the
-    replay called each an extra doorbell; Codex's asks, posted through the bot without `research msg`, rang no one."""
-    box = inbox(fake, routes_dirs, "compute-accounting")
-    circuits = inbox(fake, routes_dirs, "circuits")
-    lane = fake.add(COORD, text="compute-accounting: today's outcome is done", username="compute-accounting", bot_id=BOT)
-    fake.add(COORD, text=slack.doorbell("compute-accounting", lane["ts"], lane["ts"], lane["text"]), username="router",
-             bot_id=BOT, thread_ts=box)
-    reg = json.loads(registry.read_text())
-    reg["external_posters"] = ["Codex"]
-    registry.write_text(json.dumps(reg))
-    codex = fake.add(COORD, text="@circuits who owns the launch?", username="Codex", bot_id=BOT)
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    rep = {x["ts"]: x for x in json.loads(out)["replay"]}
-    assert rc == 0 and lane["ts"] not in rep and bells(fake, circuits) == []
-    assert (rep[codex["ts"]]["by"], rep[codex["ts"]]["missed"]) == ("codex", ["circuits"])
-
-
 @pytest.mark.parametrize("bad", [["circuits"], ["router"], ["two words"], "Codex", [7]])
 def test_external_posters_are_usernames_no_handle_or_router_has(registry, bad):
     reg = json.loads(registry.read_text())
@@ -3449,13 +3377,11 @@ def test_verify_author_judges_the_message_slack_has_whatever_thread_or_edit_the_
 
 
 def test_another_apps_bot_under_a_handles_name_is_not_laundered_into_a_router_doorbell(fake, registry, routes_dirs, capsys):
-    """`poster` took any bot's username as its author, so `deliver` (or a chase of what `--replay` called missed) re-posted
-    another app's `@circuits ...` as `from infra, ...` under Verity's bot, which `verify-author` accepts as the router."""
+    """`poster` took any bot's username as its author, so `deliver` re-posted another app's `@circuits ...` as
+    `from infra, ...` under Verity's bot, which `verify-author` accepts as the router."""
     box = inbox(fake, routes_dirs, "circuits")
     post = fake.add(COORD, text="@circuits pull the new helper and run it", username="infra", bot_id="BOTHERAPP")
     assert run(capsys, "verify-author", "--event", json.dumps({"channel": COORD, "ts": post["ts"]}))[0] == 1
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    assert rc == 0 and post["ts"] not in {x["ts"] for x in json.loads(out)["replay"]}
     rc, _, err = run(capsys, "deliver", "--ts", post["ts"])
     assert rc == 0 and "route no doorbells: another app's bot posted it, not Verity's" in err and bells(fake, box) == []
 
@@ -3468,16 +3394,14 @@ def test_roster_counts_no_status_line_from_another_apps_bot(fake, registry, caps
     assert rc == 1 and json.loads(out) == [{"handle": "circuits", "status": "missing"}]
 
 
-def test_a_doorbell_shaped_reply_the_router_didnt_post_neither_stops_a_doorbell_nor_hides_a_miss(fake, registry, routes_dirs, capsys, monkeypatch):
-    """`deliver` and `traffic --replay` took any reply in an inbox thread that matched DOORBELL_RE as a doorbell: a line
-    typed into the inbox (`from infra, thread T: ...`) made `deliver` skip the real one and `--replay` call it rung."""
+def test_a_doorbell_shaped_reply_the_router_didnt_post_does_not_stop_a_doorbell(fake, registry, routes_dirs, capsys, monkeypatch):
+    """`deliver` took any reply in an inbox thread that matched DOORBELL_RE as a doorbell: a line typed into the inbox
+    (`from infra, thread T: ...`) made `deliver` skip the real one."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
     post = fake.add(COORD, text="@circuits is node 2 free?", username="infra", bot_id=BOT)
     for who in ({"user": "USTRANGER"}, {"username": "infra", "bot_id": BOT}, {"username": "router", "bot_id": "BOTHERAPP"}):
         fake.add(COORD, text=f"from infra, thread {post['ts']}: @circuits is node 2 free?", thread_ts=box, **who)
-    rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--replay", "--json")
-    assert rc == 0 and {x["ts"]: x["missed"] for x in json.loads(out)["replay"]}.get(post["ts"]) == ["circuits"]
     rc, out, _ = run(capsys, "traffic", "--latency", "--hours", "1e6", "--now", "1700100000", "--json")
     assert rc == 0 and json.loads(out)["asks"] == []
     assert run(capsys, "deliver", "--ts", post["ts"])[0] == 0
