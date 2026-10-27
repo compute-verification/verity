@@ -30,6 +30,7 @@ CIRCUIT = "9f" * 64
 def host(tmp_path) -> A.Host:
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
+    (tmp_path / "coin-ports").write_text("vy-nebius-1 7811-7899\n")
     (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
     return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
