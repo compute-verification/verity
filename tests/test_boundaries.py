@@ -62,6 +62,9 @@ ALLOWED = {
     # it, and signs and verifies only through keys its caller hands it, so neither gains an ml edge.
     "core.wire": set(),
     "core.deploy": {"core.wire"},
+    # 2026-10-26 (Daniel, 4:27 PM PDT, device-attest): an auditor party's signed period roots and liveness records,
+    # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
+    "core.attest": set(),
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
@@ -87,8 +90,10 @@ ALLOWED = {
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
                             "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
     # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
-    # are LMS signatures (`ml.crypto.lms`).
-    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
+    # are LMS signatures (`ml.crypto.lms`).  2026-10-26 (Daniel, 4:27 PM PDT, device-attest): the certifier's records go
+    # under its party's per-period root (`core.attest`).
+    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs",
+                                 "core.attest"},
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
