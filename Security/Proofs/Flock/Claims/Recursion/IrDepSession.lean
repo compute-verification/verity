@@ -79,7 +79,7 @@ def repProof (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
   let shape : Flock.Shape :=
     { m := st.m, kLog := st.kLog, claims := 2 + extras.size, sched := sch, hashLen := st.merkle.digestLen, saltLen }
   let p ← ofE name (decodeProof shape bytes)
-  let prog : TM F128 := do
+  let prog : Transcript.TM F128 := do
     let zc ← bindAndZerocheck st.m st.digest (p.cap.foldl (· ++ ·) ByteArray.empty) p.zerocheck
     let lc ← Flock.lincheck st.fold zc p.lincheck
     let (T, _) ← Flock.ringSwitch st.m (abcClaims st.m st.kLog zc lc ++ extras) p.ringSwitches
