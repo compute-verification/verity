@@ -91,10 +91,11 @@ def facts_of(eng: Any) -> dict[str, Any]:
 
 def device_of(facts: dict[str, Any]) -> Any:
     """The served Build's device (`served_device.device_of`) from the engine's facts, held to the card its name is registered on
-    (`served_device.CARD`); `Unmodelled` names each field that is not the card's, else every binding it lacks."""
+    (`engine.profiles.devices.CARD`); `Unmodelled` names each field that is not the card's, else every binding it lacks."""
     from verity_vllm.acquire import served_device as SD
+    from verity_vllm.engine.profiles.devices import CARD
 
-    return SD.device_of(facts["cc"], facts["sms"], card=SD.CARD.get(facts["device"]), attention=facts["attention"],
+    return SD.device_of(facts["cc"], facts["sms"], card=CARD.get(facts["device"]), attention=facts["attention"],
                         max_model_len=facts["max_model_len"])
 
 

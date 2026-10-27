@@ -43,6 +43,7 @@ from verity_vllm.acquire.inductor_templates import Unmodelled
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles.dense_generic import find_hf_config
+from verity_vllm.engine.profiles.devices import CARD
 from verity_vllm.observe.fold.profiles.generic import router_vpt_bf16
 from verity_vllm.program.model import config_of
 from verity.ml.definitions.registry.bf16_gemm_check import device_pin
@@ -282,7 +283,7 @@ def predict(role: str, device: str, schedule: list[dict[str, Any]], steps: int, 
     return SV.assemble(wired, plans, residual, b.kernels, pin["artifact"]["winners"],
                        source={"predicted": {"role": role, "device": device, "config": found[1], "pin": f"pins/served/{pin_file(role, device)}"}},
                        schedule=schedule, steps=steps, routes=dev["cublas"], capture_sizes=d["capture_sizes"], max_num_seqs=d["max_num_seqs"],
-                       device=SD.device_of(dev["compute_capability"], dev["sms"], card=SD.CARD.get(device),
+                       device=SD.device_of(dev["compute_capability"], dev["sms"], card=CARD.get(device),
                                            max_model_len=d.get("max_model_len")),
                        split_cap=SV.SPLIT_CAP, lm_head=lm_head, rank=rank)
 

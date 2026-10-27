@@ -11,8 +11,8 @@ A Build vouches for its own device only.  What the served Program binds is the d
   * the Triton kernels' compile target (`inductor_templates.FLAGS`).
 
 A device without one of them is refused with every missing binding by name (`device_of`), never bound to another device's.  A served
-target with a card file (`CARD`, `verity.hardware`) is held to it first: a device whose compute capability or SM count is not its
-card's is refused, naming each field, both values and the card file.
+target with a card file (`engine.profiles.devices.CARD`, `verity.hardware`) is held to it first: a device whose compute capability or
+SM count is not its card's is refused, naming each field, both values and the card file.
 
 FA2 (vllm-flash-attn 506341a1 `mha_varlen_fwd`, at the `num_splits = 0` vLLM's FA2 metadata passes) runs a launch whose every
 sequence has one query row as a non-causal swapped decode (a GQA model's query heads as rows), its split count `fa2_num_splits` at the
@@ -47,9 +47,6 @@ from verity.ml.definitions.registry.prims import Fa2InvSum
 #: the FLASH_ATTN version each step family's served attention Definitions model
 ATTENTION = {"hopper": 3, "blackwell_consumer": 2, "blackwell": 2}
 BACKEND = "FLASH_ATTN"
-#: the card (`verity.hardware.load`) each served target is registered on, by the name its device reports (`torch.cuda.get_device_name`);
-#: a target without a card file (the B200) is held to none
-CARD = {"NVIDIA H200": "h200-sxm-141gb", "NVIDIA RTX PRO 6000 Blackwell Server Edition": "rtx-pro-6000-server"}
 
 
 @dataclass(frozen=True)
@@ -72,10 +69,10 @@ class Device:
 
 def device_of(cc: Any, sms: int, *, card: str | None = None, attention: list[dict[str, Any]] | None = None,
               max_model_len: int | None = None) -> Device:
-    """The Device of compute capability `cc`; `card` the SKU of the card the served target is registered on (`CARD`), whose compute
-    capability and SM count the device must have; `attention` the attention kernels the serving engine selected
-    (`served_match.facts_of`: [{"backend", "fa_version"}]), held to the device's when a process reports them.  Raises `Unmodelled`
-    naming each field that is not the card's, else every binding the device lacks."""
+    """The Device of compute capability `cc`; `card` the SKU of the card the served target is registered on
+    (`engine.profiles.devices.CARD`), whose compute capability and SM count the device must have; `attention` the attention kernels
+    the serving engine selected (`served_match.facts_of`: [{"backend", "fa_version"}]), held to the device's when a process reports
+    them.  Raises `Unmodelled` naming each field that is not the card's, else every binding the device lacks."""
     cc = (int(cc[0]), int(cc[1]))
     if card is not None:
         check_card(cc, int(sms), card)

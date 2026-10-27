@@ -4,7 +4,7 @@ keys by it.
 vLLM keys its tuned kernel configs by that name (`get_device_name_as_file_name`: GLM-5.3's fused-MoE tiles, `program.registry.fp8_moe`),
 so a GPU-free Build answers its row's (`export_compat.select_cuda_platform`) and reads the config file the class's GPU does.  On a
 class not listed the platform answers nothing, and a construction that reads the name fails there by name.  `FUSED_MOE_CONFIGS` holds
-the files a prediction reads without vLLM (`predict`)."""
+the files a prediction reads without vLLM (`predict`).  `CARD` is the card each served target is registered on, by that name."""
 from __future__ import annotations
 
 import json
@@ -12,6 +12,10 @@ import json
 from verity_vllm.target_family import device_token_of_row
 
 DEVICE_NAME: dict[str, str] = {"h200": "NVIDIA H200"}
+
+#: the card file (`verity.hardware.load`) each served target is registered on, by the name its device reports, which
+#: `acquire.served_device` holds the device to; a target without a card file (the B200) is held to none
+CARD: dict[str, str] = {"NVIDIA H200": "h200-sxm-141gb", "NVIDIA RTX PRO 6000 Blackwell Server Edition": "rtx-pro-6000-server"}
 
 #: vLLM d9105ea80's tuned fused-MoE configs (model_executor/layers/fused_moe/configs/<file>, `get_config_file_name`), batch size ->
 #: (BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M, num_warps, num_stages); the file below is sha256 ade035ab90cbce92...
