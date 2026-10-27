@@ -2,8 +2,7 @@
 
 * the lowering projected from a probe of 3 positions is, template for template, TINY's exact lowering at a class of 7
   positions (`window_circuit.class_circuit`), and at TINY of 2,048 positions at a class of 261, past two key blocks of 128:
-  every template but the heads and their key gathers is a fixed count a position, `TokenFeed_v1` one a prompt position and
-  `SlotRow_v1` one a Program;
+  every template but the heads and their key gathers is a fixed count a position, `TokenFeed_v1` one a prompt position;
 * v19's heads, at a block of 3 keys: a head over T keys is its first block, ceil(T / 3) - 1 full ones (none
   guarded: a one-row decode's FA2 guards its first visited block only) and its end; its keys reach it through one gather a
   full block, shared, and its first block's own where that block is neither one key nor full;
@@ -133,7 +132,7 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured():
         CZ.size({"AllGather_v1{WORLD=128,N=4}": 4, "AllGather_v1{WORLD=256,N=4}": 2})
     assert CZ.measured("TokenFeed_v1{NP=1024,FIRST=false}")[:2] == (62, 23)
     assert CZ.measured("TokenFeed_v1{NP=2048,FIRST=true}")[:2] == (30, 24)
-    assert (CZ.measured("SlotRow_v1{NP=1024}")[:2], CZ.measured("SlotMask_v1{}")[:2]) == ((0, 23), (32, 22))
+    assert CZ.measured("SlotMask_v1{}")[:2] == (32, 22)
 
 
 def test_window_circuit_and_class_size_default_to_the_class_of_record():

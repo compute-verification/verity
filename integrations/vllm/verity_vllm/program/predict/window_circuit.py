@@ -8,11 +8,11 @@ record is boundary b's lane j, anchored at bucket 16b. Its circuit is one class 
 (`class_circuit`): the Build's greedy request Program at one prompt row and P - 1 decode steps, P = prompt + outputs - 1
 positions, every position computing the whole stack, the LM head and the token select, position p attending to keys 0..p.
 So the circuit is a function of the class alone: which slots carry a request, arrival steps, prompt lengths, output lengths
-and key counts are values, never structure. A slot's row (`SLOT_ROW`'s input, row k of the window's slot rows `SLOT_ROWS`,
-a per-window registered value) carries its occupancy word, its prompt's length and its ids, the system's ingress at the
-slot's anchor. Position p's token is `io_shell.TokenFeed_v1{prompt, FIRST}`'s
-while p is below the class's prompt cap (the prompt's id below its length, else the previous position's select; the slot it
-carries starts as the row's), and past it the previous position's select. Each position's output is its select masked by
+and key counts are values, never structure. A slot's ingress at its anchor is row k of two per-window registered values,
+its occupancy word (`SLOT_OCCUPANCY`) and its prompt's length and ids (`SLOT_ROWS`), each read by the units that use it.
+Position p's token is `io_shell.TokenFeed_v1{prompt, FIRST}`'s
+while p is below the class's prompt cap (the prompt's id below its length, else the previous position's select; the first's
+slot is its `SLOT_ROWS` row), and past it the previous position's select. Each position's output is its select masked by
 the slot's occupancy word (`io_shell.SlotMask_v1`), so an empty slot's outputs are `io_shell.EMPTY` wherever they are read.
 A request decodes to the class's outputs, its selects past its finish masked by what reads them (external until N1's
 Programs' tie, IO-TIE's, is in the circuit). `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window
@@ -72,8 +72,7 @@ its slots or units; so does the lowering's own state (a node's output rows are r
 
 The circuit's blocks (`interface.Blocks`) carry its inference block: a unit's slot is its slot (its class Program; the
 blocks' slots are the class's S) and its step its position, T the class's positions. An embedding opens its position, the
-stack, LM head, token select and mask after it are that position's, a slot's row is its first position's, and a
-gather is its reader's. An allocation's units are one entry, its slots' runs at one step side by side (the slot digit, then
+stack, LM head, token select and mask after it are that position's, and a gather is its reader's. An allocation's units are one entry, its slots' runs at one step side by side (the slot digit, then
 the run), and like entries that follow on merge, at one step and then at consecutive steps (`_inference`).
 
 Refused by name (`Unexpressible`): a window past its class's slots (more requests than slots, more anchored at a boundary
@@ -114,14 +113,13 @@ from .window_builder import WEIGHTS, Grain, Row, _Builder, _step
 NAME = "verity-vllm/window"
 PROMPT = "prompt"
 GREEDY = {"kind": "greedy"}
-#: the Definition that reads a slot's row, (occupancy, prompt length, ids). A placeholder for network
-#: accounting's row: token ids in a committed row with a private occupancy word, tied to the certified bytes by their
-#: id form; the lowering reads a slot's row only through this
-SLOT_ROW = IO.SlotRow
-#: the window's slot rows, a per-window registered value: row k is slot k's `SLOT_ROW` row, committed under the window's
-#: run root before its draw. The circuit doesn't tie them to the certified bytes yet (the scan registration's state row,
-#: #4853, does), so the audit counts their reads free
-SLOT_ROWS = "slot-rows"
+#: the window's slot values, per-window registered values of a row a slot committed under the window's run root before its
+#: draw: `SLOT_OCCUPANCY`'s row k slot k's occupancy word, which each of its `io_shell.SlotMask_v1` units reads, and
+#: `SLOT_ROWS`' its prompt's length and ids, its first `io_shell.TokenFeed_v1`'s slot. Core's registration refuses a
+#: template of no gate, so no unit opens one row into both. The circuit doesn't tie them to the certified bytes yet, so the
+#: audit counts their reads free
+SLOT_OCCUPANCY, SLOT_ROWS = "slot-occupancy", "slot-rows"
+SLOT_VALUES = (SLOT_OCCUPANCY, SLOT_ROWS)
 #: a request held across the window's end, which the class doesn't take: whether the network certifier's lanes hold one
 #: across a window boundary is open, and a slot that does needs a Program running into the next
 #: window
@@ -227,8 +225,8 @@ class _Keys:
 
 
 class _Program:
-    """Slot ``slot``'s class Program lowered into ``b``'s units, its row of `SLOT_ROWS` the system's ingress at the slot's anchor
-    (`WindowClass.anchor`): each node's output as the rows that hold it, ``(lo, hi, row)`` its words [lo, hi) as ``row`` and
+    """Slot ``slot``'s class Program lowered into ``b``'s units, its rows of `SLOT_VALUES` the system's ingress at the slot's
+    anchor (`WindowClass.anchor`): each node's output as the rows that hold it, ``(lo, hi, row)`` its words [lo, hi) as ``row`` and
     the units after it, (hi - lo) / ``row.words`` rows of one output at consecutive units."""
 
     def __init__(self, b: _Builder, fn: Any, cls: WindowClass, name: str, slot: int) -> None:
@@ -248,10 +246,9 @@ class _Program:
         self.keys: dict[tuple[str, tuple[str, Any, int, int]], _Keys] = {}
         self.position = 0
         self.slot: Row | None = None
-        self.occ: Row | None = None
-        #: the units a node makes beyond its output rows: each position's `TokenFeed_v1` unit and (at position 0) its
-        #: `SLOT_ROW` unit, None past the class's prompt cap; each token select's chunks, ``x0`` unit and `IO.SlotMask` unit
-        self.tokens: list[tuple[tuple[str, int] | None, tuple[str, int] | None]] = []
+        #: the units a node makes beyond its output rows: each position's `TokenFeed_v1` unit, None past the class's prompt
+        #: cap; each token select's chunks, ``x0`` unit and `IO.SlotMask` unit
+        self.tokens: list[tuple[str, int] | None] = []
         self.selects: dict[int, tuple[tuple[tuple[str, int], ...], tuple[str, int], tuple[str, int]]] = {}
         #: each attention cut by key block: its cut's plan (`_plan`) and each Call's first unit, a unit a head
         self.heads: dict[int, tuple[Any, tuple[tuple[str, int], ...]]] = {}
@@ -346,8 +343,8 @@ class _Program:
         self.outs[j] = [(0, H, Row(tid, u, "o0", H))]
 
     def _token(self, tok: Any) -> tuple[Row, ...]:
-        """The next position's token: its `TokenFeed_v1`'s below the class's prompt cap (the first's slot its slot's row
-        opened by `SLOT_ROW`, every other's its predecessor's, ``sel`` the previous position's select), past it the previous
+        """The next position's token: its `TokenFeed_v1`'s below the class's prompt cap (the first's slot its slot's row of
+        `SLOT_ROWS`, every other's its predecessor's, ``sel`` the previous position's select), past it the previous
         position's select."""
         p, NP = self.position, self.cls.prompt
         self.position += 1
@@ -356,19 +353,15 @@ class _Program:
             raise Unexpressible(f"{self.name}: position {p}'s token reads {segs[0][:2]}; a class Program reads its one prompt row "
                                 "at position 0 and every other position's token from its predecessor's select")
         if p >= NP:
-            self.tokens.append((None, None))
+            self.tokens.append(None)
             return self.rows(tok.refs)
         tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=p == 0))
         if p == 0:
-            rtid, ru = self.b.unit(bind(SLOT_ROW, NP=NP))
-            self.b.value(rtid, "row", ru, SLOT_ROWS, self.slot_index, self.cls.slots)
-            self.b.feed(tid, "slot", u, 1, (Row(rtid, ru, "o1", 2 * (NP + 1)),))
-            self.occ = Row(rtid, ru, "o0", 2)
-            self.tokens.append(((tid, u), (rtid, ru)))
+            self.b.value(tid, "slot", u, SLOT_ROWS, self.slot_index, self.cls.slots)
         else:
             self.b.feed(tid, "slot", u, 1, (self.slot,))
             self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
-            self.tokens.append(((tid, u), None))
+        self.tokens.append((tid, u))
         self.slot = Row(tid, u, "o1", 2 * (NP + 1))
         return (Row(tid, u, "o0", 2),)
 
@@ -593,10 +586,8 @@ class _Program:
         self.b.read(xtid, "w", xu, (1,), wlo + lo * fn.bindings["K"], (0,))
         self.b.feed(ctid, "x0", cu, 1, (Row(xtid, xu, "o0", 1),))
         self.outs[j] = [(0, 2, Row(ctid, cu, "o0", 2))]
-        if self.occ is None:
-            raise Unexpressible(f"{node.fn.id}: a token select before its Program's first position's token")
         mtid, mu = self.b.unit(bind(IO.SlotMask))
-        self.b.feed(mtid, "occ", mu, 1, (self.occ,))
+        self.b.value(mtid, "occ", mu, SLOT_OCCUPANCY, self.slot_index, self.cls.slots)
         self.b.feed(mtid, "tok", mu, 1, self.outs[j][0][2:])
         self.selects[j] = (tuple(parts), (xtid, xu), (mtid, mu))
 
@@ -676,7 +667,7 @@ class Lowered:
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
                   name: str = NAME) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading
-    row k of `SLOT_ROWS` (the system's ingress at its anchor, `WindowClass.anchor`) and each allocation's slots side by side in its
+    row k of `SLOT_VALUES` (the system's ingress at its anchor, `WindowClass.anchor`) and each allocation's slots side by side in its
     template; its blocks' slots are the slots.
     A window's circuit is every slot's; ``programs`` is the first slots only, a probe's census (`class_size`)."""
     return lower(registered, cls, programs, grain, name).circuit
@@ -702,10 +693,10 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                      lambda x, n: IF.Opening(x.reader, x.table, x.key, x.ports, x.verdict, x.at, n))
     reg = IF.Registered(dict(sorted(b.params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings))
-    rows = {r.reader for r in b.reads if r.param == SLOT_ROWS}
-    masks = {f.tid for f in b.feeds if f.port == "occ"}
+    ingress = {(r.reader, r.port) for r in b.reads if r.param in SLOT_VALUES}
+    masks = {t for t, p in ingress if p == "occ"}
     circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
-                         external=tuple(sorted({f"{t}/row" for t in rows} | {f"{t}/o0" for t in masks})),
+                         external=tuple(sorted({f"{t}/{p}" for t, p in ingress} | {f"{t}/o0" for t in masks})),
                          wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg,
                          blocks=IF.Blocks(programs, cls.positions, tuple(_inference(b.spans, programs))))
     return Lowered(circuit, fn, tuple(progs), b.spans)
@@ -756,5 +747,5 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
                                 f"{cls.outputs}")
 
 
-__all__ = ["ACROSS", "CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "KEYS", "Lowered", "NAME", "Row", "SLOT_ROW", "SLOT_ROWS",
-           "WindowClass", "class_circuit", "class_program", "lower", "takes", "window_circuit"]
+__all__ = ["ACROSS", "CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "KEYS", "Lowered", "NAME", "Row", "SLOT_OCCUPANCY",
+           "SLOT_ROWS", "SLOT_VALUES", "WindowClass", "class_circuit", "class_program", "lower", "takes", "window_circuit"]

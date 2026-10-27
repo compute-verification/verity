@@ -71,11 +71,11 @@ def _registered():
 @pytest.fixture(scope="module")
 def window():
     """The class circuit lowered, its weights, its registered values under `KEY` (each weight's parameter and the slot
-    rows, as `Rows` and `Window` take them) and each slot's `Slot`."""
+    values, as `Rows` and `Window` take them) and each slot's `Slot`."""
     low = WC.lower(_registered(), CLASS, None, GRAIN)
     fields = _weights(low.fn)
     values = {**WW.weight_values(_registered(), fields, KEY, GRAIN, keep_rows=True),
-              WC.SLOT_ROWS: WR.slot_rows_value(PROGRAM, SLOTS, KEY, 0, window=RUN)}
+              **WR.slot_values(PROGRAM, SLOTS, KEY, 0, window=RUN)}
 
     def weights(label: str, lo: int, hi: int) -> np.ndarray:
         return fields[label][lo:hi]
@@ -119,7 +119,7 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     """Every unit is filled: an embedding read's row is the table's at its token and its opening (row, salt and path, as
     `gates.embedding.arguments` encodes them) opens to the table's root, its verdict 1; each token select's chunks, ``x0``
     and combine give the node's token, and its mask the token for an occupied slot; each feed holds its token and carried
-    slot, each slot row its row opened; each head's first key block (`Attention_v20`'s cut) is evaluated, and its end's
+    slot, and row k of the slot values is slot k's row; each head's first key block (`Attention_v20`'s cut) is evaluated, and its end's
     Definition on that block's state is the node's value, the row kernel's. With no served values every unit is computed
     or evaluated."""
     low, fields, tables, _w, slots = window
@@ -128,7 +128,8 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     emb = _position(low.fn, "Embedding")
     table = tables[TABLE]
     root, dom = table.root, table.domain.domain_id
-    for P, s, row in zip(low.programs, slots, SLOTS):
+    for k, (P, s, row) in enumerate(zip(low.programs, slots, SLOTS)):
+        assert _i32(tables[WC.SLOT_OCCUPANCY].rows[k]) == row[:1] and _i32(tables[WC.SLOT_ROWS].rows[k]) == row[1:]
         for p, j in enumerate(emb):
             (_, _, r), = P.outs[j]
             t = s.tokens[p]
@@ -142,14 +143,11 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
                 w = 16 if q == "row" else 64
                 e = np.ascontiguousarray(ins[q]).view(f"<u{w // 8}").astype(np.uint64)
                 assert [(int(x) >> k) & 1 for x in e for k in range(w)] == bits
-            feed, slot_row = P.tokens[p]
-            assert (feed is None) == (p >= CLASS.prompt) and (slot_row is None) == (p > 0)
+            feed = P.tokens[p]
+            assert (feed is None) == (p >= CLASS.prompt)
             if feed is not None:
                 f = rows.outs[feed[0]]
                 assert _i32(f[0][feed[1]]) == [t] and _i32(f[1][feed[1]]) == s.carried[p]
-            if slot_row is not None:
-                assert _i32(rows.outs[slot_row[0]][0][slot_row[1]]) == row[:1]
-                assert _i32(rows.outs[slot_row[0]][1][slot_row[1]]) == row[1:]
         for j, (chunks, x0, mask) in P.selects.items():
             token = int(s.values[j][0][0])
             run, run_i = int(rows.outs[x0[0]][0][x0[1]][0]), 0
@@ -360,29 +358,32 @@ def test_a_node_served_under_other_statics_is_held_to_its_class_nodes_value(wind
         WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(bad)))
 
 
-def test_the_registered_values_are_each_weights_rows_and_the_slot_rows(window):
+def test_the_registered_values_are_each_weights_rows_and_the_slot_values(window):
     """Each weight's parameter is its words in rows of its reading port's (``row/v2``), the table's its V rows of H
-    (``row-seg``), and the slot rows the slots' rows of i32s under the window's root, each committed under the committer's
-    key at a nonce of its own: the table and a weight are core's commits of those rows under the weights record's program
-    and `audit.hm96_salt`'s salts at `window_weights.weight_nonces`' (the registration's roots, `weights_registration`),
-    the slot rows at `SLOT_NONCE` plus the window's index, and the entries name nothing but each value's size, domain and
-    hiding root. Another parameter is refused."""
+    (``row-seg``), and the slot values the slots' occupancy words and the rest of their rows of i32s under the window's
+    root, each committed under the committer's key at a nonce of its own: the table and a weight are core's commits of
+    those rows under the weights record's program and `audit.hm96_salt`'s salts at `window_weights.weight_nonces`' (the
+    registration's roots, `weights_registration`), the slot values at `OCCUPANCY_NONCE` and `SLOT_NONCE` plus the window's
+    index, and the entries name nothing but each value's size, domain and hiding root. Another parameter is refused."""
     low, fields, got, *_ = window
     assert set(got) == set(low.circuit.registered.params)
     t = got[TABLE]
     assert (t.leaves, t.words, t.schema, t.window) == (256, 64, CR.SCHEMA_SEG, None) and t.schema == E.SCHEMA
     assert np.array_equal(t.rows[:].reshape(-1), fields[EMBED])
     nonces, program = WW.weight_nonces(got), WC.class_program(_registered(), WW.WEIGHTS_CLASS).digest
-    assert set(nonces) == set(got) - {WC.SLOT_ROWS} and {v.program for p, v in got.items() if p in nonces} == {program}
+    assert set(nonces) == set(got) - set(WC.SLOT_VALUES) and {v.program for p, v in got.items() if p in nonces} == {program}
     for name, rows, schema in ((TABLE, fields[EMBED].reshape(-1, 64), CR.SCHEMA_SEG),
                                (WB.weight_param(EMBED, 512), fields[EMBED].reshape(-1, 512), CR.SCHEMA_V2)):
         salts = [hm96_salt(KEY, nonces[name], j) for j in range(len(rows))]
         ref = CR.Registered.commit(program, name, rows.tolist(), salts, schema=schema)
         assert got[name].entry() == ref.entry() and got[name].levels == ref.levels and got[name].schema == schema
         assert set(got[name].entry()) == {"value", "root", "leaves", "words", "domain"}
-    s = got[WC.SLOT_ROWS]
-    assert (s.leaves, s.words, s.window, s.schema) == (2, 12, RUN, CR.SCHEMA_V2) and _i32(s.rows[:][1]) == SLOTS[1]
-    assert bytes(s.salts[0]) == hm96_salt(KEY, WR.SLOT_NONCE, 0) and WR.SLOT_NONCE > max(nonces.values())
+    for name, nonce, words, cut in ((WC.SLOT_OCCUPANCY, WR.OCCUPANCY_NONCE, 2, slice(0, 1)),
+                                    (WC.SLOT_ROWS, WR.SLOT_NONCE, 10, slice(1, None))):
+        s = got[name]
+        assert (s.leaves, s.words, s.window, s.schema) == (2, words, RUN, CR.SCHEMA_V2)
+        assert _i32(s.rows[:][1]) == SLOTS[1][cut]
+        assert bytes(s.salts[0]) == hm96_salt(KEY, nonce, 0) and nonce > max(nonces.values())
     assert len({bytes(v.salts[0]) for v in got.values()}) == len(got)
     s8 = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 512)].rows[:]
     assert s8.shape == (8, 512) and np.array_equal(s8.reshape(-1).view(np.uint8), fields["model.layers.0.mlp.down_proj.weight"])

@@ -13,8 +13,8 @@ attention isn't the class Program's one-row decode's, though at as few keys as o
 
 A unit its node's lowering filled holds its rows of that value (`_Program.outs`). Every other unit holds its Definition's
 function of the window's values:
-- a position's `TokenFeed_v1` its token and the slot it carries (`io_shell.feed_reference`), the first position's
-  `SlotRow_v1` the slot's row opened, and each token select's `SlotMask_v1` the token or `io_shell.EMPTY`;
+- a position's `TokenFeed_v1` its token and the slot it carries (`io_shell.feed_reference`), and each token select's
+  `SlotMask_v1` the token or `io_shell.EMPTY`;
 - each token select's chunks the first maximum above -inf of their logits and its index (`chunk_best`), and its ``x0``
   unit ``logits[0]``;
 - each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
@@ -27,7 +27,7 @@ function of the window's values:
 `Rows.record` gives a `Window` each template's units in runs of one step, one slot and one form (`FORMS`: a node's value,
 or its Definition's function of the window's values), every input by reference but an opening's ports. The lowering
 fixes all three, so a label is class structure and never a value: which slots are occupied, at what lengths, and where a
-node's value came from (`SOURCES`) are the slot rows' and the rows' own, committed hiding, and the labels show none of
+node's value came from (`SOURCES`) are the slot values' and the rows' own, committed hiding, and the labels show none of
 them. The window takes `FORMS` as its ``forms`` (`interface.Window.record`).
 """
 from __future__ import annotations
@@ -53,7 +53,7 @@ from verity_vllm.query.manifest import format as RM
 
 from . import window_weights as WW
 from .window_builder import WEIGHTS
-from .window_circuit import SLOT_ROWS, Lowered, WindowClass, _spans
+from .window_circuit import SLOT_OCCUPANCY, SLOT_ROWS, Lowered, WindowClass, _spans
 
 #: a unit's source: its node's served value, the class Program's value at a node the engine didn't compute, or its
 #: Definition's function of the window's values. It follows occupancy and lengths, so it is the committer's own bookkeeping
@@ -66,9 +66,10 @@ FORMS = ("node", "evaluated")
 
 #: a weight's elements [lo, hi) in its leaves' unsigned width: ``weights(label, lo, hi)``
 Weights = Callable[[str, int, int], np.ndarray]
-#: the salt nonce of window 0's slot rows under the committer's key, each next window's the next: above every weight
-#: parameter's (`window_weights.weight_nonces`, from 2^62) and below 2^63
+#: the salt nonces of window 0's slot rows and its occupancy words under the committer's key, each next window's the
+#: next: above every weight parameter's (`window_weights.weight_nonces`, from 2^62) and below 2^63
 SLOT_NONCE = WW.WEIGHTS_NONCE + (1 << 32)
+OCCUPANCY_NONCE = SLOT_NONCE + (1 << 32)
 
 
 def positions(fn: Any) -> list[int]:
@@ -138,8 +139,8 @@ def _pinned(family: str) -> str | None:
 
 
 class Slot:
-    """Slot ``row``'s class Program ``fn`` of class ``cls`` evaluated (module docstring): ``row`` its `SLOT_ROW` row
-    (occupancy, prompt length, ids), ``weights`` the weights record's fields and ``served`` its request's served values,
+    """Slot ``row``'s class Program ``fn`` of class ``cls`` evaluated (module docstring): ``row`` its ingress (occupancy,
+    prompt length, ids; `slot_values`), ``weights`` the weights record's fields and ``served`` its request's served values,
     None for an empty slot. Each node's value (its return fields) and source, each position's token and, below the class's
     prompt cap, the slot its `TokenFeed_v1` reads and the one it carries on."""
 
@@ -380,7 +381,7 @@ class Served:
 class Rows:
     """Every unit's output rows of ``lowered``'s circuit (module docstring) as u16 words by template and output, with each
     unit's source and an embedding read's opening ports, from each slot's `Slot` (in slot order) and the circuit's
-    registered values by parameter (`window_weights.weight_values` with their rows kept, and `slot_rows_value`), of which
+    registered values by parameter (`window_weights.weight_values` with their rows kept, and `slot_values`), of which
     an embedding read opens its table's (its ``rows``, ``salts`` and ``path``). Refused unless every unit's every row is
     filled once."""
 
@@ -428,7 +429,7 @@ class Rows:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
                 self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
         emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
-        for p, (j, (feed, row)) in enumerate(zip(emb, P.tokens)):
+        for p, (j, feed) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]
             self._put(r.tid, r.unit, "o1", np.ones((1, 1), dtype=np.uint16), EVALUATED)
             if t < nodes[j].fn.bindings["V"]:
@@ -436,9 +437,6 @@ class Rows:
                 ins["row"][r.unit] = np.asarray(table.rows[t], dtype=np.uint16)
                 ins["salt"][r.unit] = _be_words(table.salts[t])
                 ins["path"][r.unit] = _be_words(table.path(t))
-            if row is not None:
-                self._put(*row, "o0", _i32(S.row[:1]), EVALUATED)
-                self._put(*row, "o1", _i32(S.row[1:]), EVALUATED)
             if feed is not None:
                 self._put(*feed, "o0", _i32([t]), EVALUATED)
                 self._put(*feed, "o1", _i32(S.carried[p]), EVALUATED)
@@ -550,16 +548,18 @@ def _elements(words: np.ndarray, width: int) -> np.ndarray:
     return np.ascontiguousarray(words, dtype=np.uint16).view(f"<u{width // 8}")
 
 
-def slot_rows_value(program: str, slot_rows: Sequence[Sequence[int]], key: bytes, index: int, *,
-                    window: str) -> G.Registered:
-    """`SLOT_ROWS`: the slots' rows (``row/v2``), a per-window value under the window's root ``window``, committed under
-    the committer's secret ``key`` at salt nonce `SLOT_NONCE` plus the window's ``index``, which no other value under
-    ``key`` takes."""
+def slot_values(program: str, slot_rows: Sequence[Sequence[int]], key: bytes, index: int, *,
+                window: str) -> dict[str, G.Registered]:
+    """The slots' values by parameter from their ingress rows (occupancy, prompt length, ids), each ``row/v2``, a per-window
+    value under the window's root ``window``: `SLOT_OCCUPANCY` a row of each one's occupancy word and `SLOT_ROWS` a row of
+    the rest, committed under the committer's secret ``key`` at salt nonces `OCCUPANCY_NONCE` and `SLOT_NONCE` plus the
+    window's ``index``, which no other value under ``key`` takes."""
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
-    return H1R.commit(program, SLOT_ROWS, np.concatenate([_i32(r) for r in slot_rows]), key, SLOT_NONCE + index,
-                      keep_rows=True, window=window)
+    return {name: H1R.commit(program, name, np.concatenate([_i32(r[cut]) for r in slot_rows]), key, nonce + index,
+                             keep_rows=True, window=window)
+            for name, cut, nonce in ((SLOT_OCCUPANCY, slice(0, 1), OCCUPANCY_NONCE), (SLOT_ROWS, slice(1, None), SLOT_NONCE))}
 
 
-__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SLOT_NONCE", "SOURCES", "Served", "Slot", "positions",
-           "slot_rows_value"]
+__all__ = ["COMPUTED", "EVALUATED", "FORMS", "OCCUPANCY_NONCE", "Rows", "SERVED", "SLOT_NONCE", "SOURCES", "Served", "Slot",
+           "positions", "slot_values"]

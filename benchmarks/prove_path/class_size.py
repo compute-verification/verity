@@ -7,7 +7,7 @@ projection (`project`) from an exact lowering of one Program of the same registr
 key block, which the tests hold to the exact lowering past one block and two, and at the class of record itself:
 
 * every template but the heads and their key gathers is a fixed number of units a position (`TokenFeed_v1` a prompt
-  position, `SlotRow_v1` one a Program), read off the probe, which is refused unless each divides evenly;
+  position), read off the probe, which is refused unless each divides evenly;
 * a head over T keys is `AttentionHead_v19`'s Calls: `AttnBlockFirst_v1{NVIS}` (its last NVIS = T - (nb - 1)·BN keys),
   nb - 1 `AttnBlock_v5` and `AttnHeadEnd_v1`, nb = ceil(T / BN), a full block's CHECK whether FA2 guards it (its
   ``MASKED_FROM``, `attention_vocab.fa2_masked_from` of the Program's one-row decode: its first visited block only). Its
@@ -37,7 +37,6 @@ FIRST = "AttnBlockFirst_v1"
 END = "AttnHeadEnd_v1"
 BLOCK = "AttnBlock_v5"
 FEED = "TokenFeed_v1"
-ROW = "SlotRow_v1"
 GATHER = "AllGather_v1"
 
 
@@ -96,10 +95,6 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
             out[lab.replace(f"NP={NP0}", f"NP={cls.prompt}")] += 1 if s["FIRST"] else cls.prompt - 1
             if n != (1 if s["FIRST"] else NP0 - 1):
                 raise ValueError(f"the probe has {n} {lab} units, not one a prompt position")
-        elif fam == ROW:
-            out[lab.replace(f"NP={NP0}", f"NP={cls.prompt}")] += 1
-            if n != 1:
-                raise ValueError(f"the probe has {n} {lab} units, not one a Program")
         elif n % P0:
             raise ValueError(f"the probe has {n} {lab} units, not a fixed count at each of its {P0} positions")
         elif n:
@@ -175,9 +170,6 @@ def measured(lab: str) -> tuple[int, int, str]:
     if fam == FEED and (k := next((k for most, k in FEED_K if s["NP"] <= most), None)) is not None:
         return 30 if s["FIRST"] else 62, k, "circuit-check r20261025-174007-faec; k_log " + COMPOSED + (
             "" if s["NP"] in dict(FEED_K) else ", an upper bound")
-    if fam == ROW and (k := next((k for most, k in FEED_K if s["NP"] <= most), None)) is not None:
-        return 0, k, ("a copy (circuit-check r20261026-172423-b1a4); k_log an estimate, not composed: TokenFeed_v1{NP, "
-                      "FIRST=true}'s, whose rows it holds but for one i32 more")
     if lab == "SlotMask_v1{}":
         return 32, 22, "circuit-check r20261026-172423-b1a4; k_log the least block, its 3 rows of one i32 each"
     raise ValueError(f"no measured ANDs or k_log for {lab} at Llama-3.2-1B: add its measurement to MEASURED")
