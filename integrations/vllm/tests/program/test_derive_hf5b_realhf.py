@@ -5,7 +5,8 @@ the held-out model makers of `test_derive_hf5_heldout` reused unchanged.
 Groups (`GROUP` in the JSONL row):
   * `grh14`   — `OlmoForCausalLM` (pad 1), `GemmaForCausalLM` (pad 0), f32: the `padding_idx` targets;
   * `grh7`    — `LlamaForCausalLM`, `Qwen2ForCausalLM`, `Qwen3ForCausalLM` in bf16: the bf16 `inv_freq` targets;
-  * `reconf`  — Llama / Qwen2 / GPT-2 (`gelu_pytorch_tanh`) / Qwen3 f32 greedy: the digests `test_derive_hf5_heldout` reports must not move;
+  * `reconf`  — Llama / Qwen2 / GPT-2 (`gelu_pytorch_tanh`) / Qwen3 f32 greedy: the digests `test_derive_realhf` and
+                `test_derive_hf5_heldout` report must not move;
   * `heldout` — `Phi3ForCausalLM` (primary), `GPTNeoXForCausalLM`, `StableLmForCausalLM` (secondary), f32: classes nobody used to
                 build the `padding_idx` / `inv_freq` support, run once as-is; a refusal is a valid result, never patched here;
     * `open`    — the open gaps (below): must still refuse with their (stable part of the) strings;
