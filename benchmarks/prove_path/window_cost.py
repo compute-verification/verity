@@ -41,8 +41,8 @@ scores and probabilities at every key and each key block's running state), which
 circuit's units read wired, registered (weights) and ingress rows only, its key blocks' running states are its own units'
 outputs (`window_rows` evaluates them), and a served window draws no openings.
 
-    python window_cost.py CENSUS.json [--target h200|sm120] [--served-s 1.7] [--step-ms 23] [--project S,PROMPT,OUTPUTS]
-        [--measure-cpu SCRATCH | --cpu-rates FILE] [--stream SIZING] [--out FILE]
+    python window_cost.py CENSUS.json [--target h200|sm120] [--served-s 1.7] [--step-ms 23]
+        [--project S,PROMPT,OUTPUTS[,LANES,EVERY]] [--measure-cpu SCRATCH | --cpu-rates FILE] [--stream SIZING] [--out FILE]
 """
 from __future__ import annotations
 
@@ -54,7 +54,13 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from verity_vllm.program.predict import scan_state as SS
+from verity_vllm.program.predict.window_circuit import WindowClass
+
 from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
+from verity.ml.circuits.defs import bind
+from verity.ml.definitions.registry import io_shell as IO
+from verity.ml.windows import interface as IF
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -529,57 +535,69 @@ def stream(sizing: dict, cls: dict, target: str, served_ands: float, served_s: f
     return out
 
 
-def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "h200") -> tuple[list[Unit], Heads, dict]:
-    """A census of one Program at a probe class within one key block (`class_rows.py --probe`), projected to ``slots``
-    Programs of ``prompt`` ids and ``outputs`` outputs as `class_size.project` projects one: outside attention a fixed count
-    of each template a position (`TokenFeed_v1` a prompt position and `SlotRow_v1` one a Program, each reading and writing
-    its prompt's row of 4 bytes an id), refused unless each divides evenly; the heads rebuilt at the class's positions
-    (`Heads.units`)."""
+def _slot_definition(lab: str, cls: WindowClass) -> object:
+    """A slot's template (`class_size.placed`) at class ``cls``: its Definition, ``lab``'s statics bound (the entry's stop ids
+    none, which its rows don't read)."""
+    fam, s = CS.statics(lab)
+    if fam == CS.SCAN:
+        return SS.bridge(cls.scan, cls.prompt)
+    make = {CS.FEED: IO.TokenFeed, CS.ROW: IO.SlotRow, CS.COLLECT: IO.OutCollect, CS.ENTRY: IO.SlotEntry}[fam]
+    return bind(make, **s, **({"STOP": ()} if fam == CS.ENTRY else {}))
+
+
+def _slot_unit(u: Unit, lab: str, at: WindowClass, cls: WindowClass) -> Unit:
+    """The probe's slot template ``u`` (at class ``at``) as ``lab`` at class ``cls``: its Definition's rows there (as
+    class_rows counts them, uncut), read through ``u``'s one kind of row; refused unless ``u`` is its Definition's at ``at``."""
+    kind = [k for k in ("wired", "registered", "other") if getattr(u, k)]
+    if len(kind) != 1:
+        raise ValueError(f"the probe's {u.label} reads its rows through {len(kind)} kinds of row, not one")
+
+    def rows(lab: str, c: WindowClass) -> Unit:
+        fn = _slot_definition(lab, c)
+        ins, outs = IF.unit_rows(fn, None)
+        ob = [2 * w for _, w in IF.layout(fn).outs]
+        return replace(u, label=lab, out=len(outs), out_bytes=sum(ob), x=sum(CR.blocks(128 + b) for b in ob),
+                       **{kind[0]: len(ins), f"{kind[0]}_bytes": sum(bits // 8 for _, _, bits, _ in ins)})
+
+    if rows(u.label, at) != u:
+        raise ValueError(f"the probe's {u.label} is not its Definition's rows at the probe's class, uncut")
+    return rows(lab, cls)
+
+
+def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "h200", lanes: int = 0,
+            every: int = 16) -> tuple[list[Unit], Heads, dict]:
+    """A census of one Program at a probe class within one key block (`class_rows.py --probe`), projected to the class of
+    ``slots`` Programs of ``prompt`` ids and ``outputs`` outputs (``lanes`` and ``every`` `window_circuit.WindowClass`'s), each
+    template outside attention at `class_size.projected`'s label and count, a slot's at its Definition's rows there; the
+    heads rebuilt at the class's positions (`Heads.units`)."""
     c0 = census["class"]
     if c0["slots"] != 1:
         raise ValueError(f"a probe of {c0['slots']} Programs: project one")
     rest, heads = split(units_of(census), c0, target)
-    P0, NP0, P = c0["positions"], c0["prompt"], prompt + outputs - 1
+    at, to = WindowClass(1, c0["prompt"], c0["outputs"]), WindowClass(slots, prompt, outputs, lanes, every)
     out = []
     for u in rest:
-        fam, s = CS.statics(u.label)
-        lab = u.label.replace(f"NP={NP0}", f"NP={prompt}")
-        if fam in (CS.FEED, CS.ROW):
-            d = 4 * (prompt - NP0)
-            grow = {k: getattr(u, k) + d for k in ("wired_bytes", "registered_bytes", "other_bytes") if getattr(u, k)}
-            if len(grow) != 1:
-                raise ValueError(f"the probe's {u.label} reads its prompt through {len(grow)} kinds of row, not one")
-            u = replace(u, out_bytes=u.out_bytes + d, x=u.x - CR.blocks(128 + 4 * NP0) + CR.blocks(128 + 4 * prompt), **grow)
-        if fam == CS.FEED:
-            n = 1 if s["FIRST"] else prompt - 1
-        elif fam == CS.ROW:
-            n = 1
-        elif u.n % P0:
-            raise ValueError(f"the probe has {u.n} {u.label} units, not a fixed count at each of its {P0} positions")
-        else:
-            n = u.n // P0 * P
+        lab, n = CS.projected(u.label, u.n, at, to)
+        if CS.placed(u.label, 1, at.positions) is not None:
+            u = _slot_unit(u, lab, at, to)
         out.append(replace(u, label=lab, n=slots * n))
-    cls = {"slots": slots, "prompt": prompt, "outputs": outputs, "positions": P}
-    return out, replace(heads, S=slots, P=P), cls
+    cls = {"slots": slots, "prompt": prompt, "outputs": outputs, "positions": to.positions}
+    return out, replace(heads, S=slots, P=to.positions), cls
 
 
 def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: int) -> dict:
     """One slot's output rows at position T under ``levers`` as a `commit_slots` step layout (`slots._layout_json`'s form,
     for ``step.py time`` at ``--slots S``): a group a template, one tensor of its units' bytes, each unit its rows, a unit's
     bytes split evenly over its rows (the census keeps a unit's total, not each row's). A template outside attention is at
-    every position as often (`TokenFeed_v1` at its prompt position, `SlotRow_v1` at the first). No lever but ``P``, whose
-    shared rows are another layout (`e2e_h200.window.shared_layout`), changes a template's output rows outside attention."""
+    every position as often, a slot's where it places it (`class_size.placed`). No lever but ``P``, whose shared rows are
+    another layout (`e2e_h200.window.shared_layout`), changes a template's output rows outside attention."""
     if "P" in levers:
         raise ValueError("P's shared rows are FAMILIES' shared-row layout (e2e_h200.window.shared_layout), not this one")
     S, P, BN = heads.S, heads.P, EXACT_KEYS if "L1" in levers else heads.BN
     here = []
     for u in rest:
-        fam, s = CS.statics(u.label)
-        if fam == CS.FEED:
-            k = int(T == 1) if s["FIRST"] else int(1 < T <= s["NP"])
-        elif fam == CS.ROW:
-            k = int(T == 1)
-        else:
+        k = CS.placed(u.label, T, P)
+        if k is None:
             k, r = divmod(u.n, S * P)
             if r:
                 raise ValueError(f"{u.n} {u.label} units are not a fixed count at each of {S} × {P} positions")
@@ -621,18 +639,18 @@ PLAN = ("L1", "L2", "L4", "W", "R", "L3a", "L3b", "P")
 
 
 def price(census: dict, target: str = "h200", served_s: float = 1.7, step_s: float = 0.023,
-          to: tuple[int, int, int] | None = None, cpu: dict | None = None, sizing: dict | None = None) -> dict:
-    """Every figure the report prints, as data, for ``census`` or its projection ``to`` a class (slots, prompt, outputs): each
-    lever alone and the `PLAN` stacked. Every compression counts in ANDs wherever it runs. In seconds, the window's rows (and
-    under ``L4`` the member tree) run on the GPU at `RATES`; the registration without ``L4`` runs on the committer's CPU, at
-    ``cpu``'s measured rates (`measure_cpu`), else at the GPU's (``registration_cpu`` None: a lower bound). With an arena
-    ``sizing`` record, serving's own stream commit too (`stream`)."""
+          to: tuple[int, ...] | None = None, cpu: dict | None = None, sizing: dict | None = None) -> dict:
+    """Every figure the report prints, as data, for ``census`` or its projection ``to`` a class (slots, prompt, outputs[,
+    lanes, every]): each lever alone and the `PLAN` stacked. Every compression counts in ANDs wherever it runs. In seconds,
+    the window's rows (and under ``L4`` the member tree) run on the GPU at `RATES`; the registration without ``L4`` runs on
+    the committer's CPU, at ``cpu``'s measured rates (`measure_cpu`), else at the GPU's (``registration_cpu`` None: a lower
+    bound). With an arena ``sizing`` record, serving's own stream commit too (`stream`)."""
     if to is None:
         cls = census["class"]
         rest, heads = split(units_of(census), cls, target)
         total = census["total"]["compressions"]
     else:
-        rest, heads, cls = project(census, *to, target)
+        rest, heads, cls = project(census, *to[:3], target, *to[3:])
         total = None
     out = {"class": cls, "target": target, "served_s": served_s, "step_s": step_s, "sha512_ands": SHA512_ANDS,
            "census_compressions": total, "projected_from": None if to is None else census["class"], "cpu": cpu}
@@ -747,7 +765,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--served-s", type=float, default=1.7, help="the served window's seconds (V3c's estimate: 4 prefill and 63 "
                     "decode steps)")
     ap.add_argument("--step-ms", type=float, default=23.0, help="a batch decode step's ms (a dry run's)")
-    ap.add_argument("--project", default=None, metavar="SLOTS,PROMPT,OUTPUTS",
+    ap.add_argument("--project", default=None, metavar="SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]",
                     help="price a one-Program probe's projection to this class (`project`)")
     cpu = ap.add_mutually_exclusive_group()
     cpu.add_argument("--measure-cpu", default=None, metavar="SCRATCH", help="measure this host's CPU rates (`measure_cpu`), "
@@ -765,7 +783,7 @@ def main(argv: list[str] | None = None) -> int:
     to = tuple(int(v) for v in a.project.split(",")) if a.project else None
     if a.layout:
         census = json.loads(Path(a.census).read_text())
-        rest, heads = (project(census, *to, a.target)[:2] if to else
+        rest, heads = (project(census, *to[:3], a.target, *to[3:])[:2] if to else
                        split(units_of(census), census["class"], a.target))
         levers, d = frozenset(v for v in a.layout_levers.split(",") if v), Path(a.layout[1])
         d.mkdir(parents=True, exist_ok=True)
