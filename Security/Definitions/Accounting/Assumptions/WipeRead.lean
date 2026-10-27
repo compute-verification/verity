@@ -3,8 +3,8 @@ import Definitions.Accounting.Actual.WipeHeld
 /-!
 # Timed reads on the actual circuit: the lifetime pool's premises, restated (trusted)
 
-The MEM-55 restatement of the lifetime pool's premise (owner memory-accounting; the guarantees that take these premises
-are proved in `Proofs/Accounting/Actual/WipeReadPool.lean` and `WipeBridge.lean`, not yet carded). The lemma
+The restatement of the lifetime pool's premise (the guarantees that take these premises are proved in
+`Proofs/Accounting/Actual/WipeReadPool.lean` and `WipeBridge.lean`, not yet ruled on). The lemma
 `Accounting.SecurityProofs.Actual.WipePool` takes `WipePlay.UnheldFails`, which reads only `Accounting.WipePlay`'s
 labels: at every wipe, a passing draw challenges no block of `U`. Taking `U` as the blocks whose every challenge fails
 makes it true by definition, and taking `U = ∅` makes it true of any tree, so it says nothing about a server. Here `U`
@@ -38,14 +38,14 @@ cheating server can break by cheating keeps that cheat out of the theorem instea
   to `Y` (`Accounting.Placed.LatencyAtMost`, the listed claim `latency-ceiling`) each such answer left `X` during the
   deadline, so one label sent before the arrival, or relayed from outside `X`, binds no verdict.
 * `UniformLabels`: the labels of a read's wipe are uniform `b`-bit values, independent across blocks, given the
-  devices' coins `ζ`. A model: the deployed labels are a PRF of the challenger's secret (PR #2726), for which it is
+  devices' coins `ζ`. A model: the deployed labels are a PRF of the challenger's secret, for which it is
   false. `Accounting.Guarantees.Actual.WipeReadHeldPrf` takes the step to them, as the PRF's advantage, and doesn't
   take this.
 
 `QuietReads`, `LateAnswers` and `LiveVerdicts` are what the challenger's code checks or does, stated on a verdict
 `acc` read off the coins; once the challenger has a Lean function they are its refusals, proved of it, and the world
 facts left are the certifier's coverage and records (`Accounting.Covered`, `Accounting.TrustedUnits`) and the latency
-ceiling of `X`'s certified egress (note:20261019T2210Z-report-timed-round-redteam-3).
+ceiling of `X`'s certified egress.
 -/
 
 namespace Accounting.Assumptions
@@ -97,8 +97,8 @@ carries the label of the challenged block.
 With a latency ceiling of `ℓ⁺` from `X` to `Y` (`Placed.LatencyAtMost`), every such answer left `X` during
 `[arrive r j, arrive r j + D)`, so it is among what `X` did in the window (`Actual.Run.sent`) and the verdict binds one
 label to what `X` sent then. Answers that land before `arrive r j + ℓ⁺` are ignored, and the deadline loses `ℓ⁺`: a
-label `X` sent before the arrival lands there, and red team 3's pre-send (note:20261019T2210Z-report-timed-round-redteam-3,
-H2) is refused. A relay, a machine outside `X` that holds the labels, answers on wires that don't come from `X`. A
+label `X` sent before the arrival lands there, and a pre-send
+attack is refused. A relay, a machine outside `X` that holds the labels, answers on wires that don't come from `X`. A
 challenger that accepts when some answer is the label is broken by `X` sending several guesses, and the deployed one
 (`streamed_wipe.Challenger.receive`) compares whatever 64 bytes reach it. -/
 def LateAnswers {Ω₀ B L : Type*} {n : ℕ} (S : Ω₀ × (Fin n → B) → Actual.Run L) (X Y : Finset L)
@@ -112,7 +112,7 @@ open Classical in
 /-- **Uniform labels** (a model of the labels): for each read `j`, any set `A` of blocks, any values `v` and any value
 `z` of the auditor's devices' own coins `ζ`, the labels of `A` at read `j` are `v` on at most a `2^{-|A| b}` share of
 the `ω₀` with `ζ ω₀ = z`: uniform, and independent of the devices' jitter. With `ζ` constant it is the labels' marginal.
-The deployed labels are SHA-512 of a 32-byte key and the index (PR #2726), on which one label fixes the rest; this is
+The deployed labels are SHA-512 of a 32-byte key and the index, on which one label fixes the rest; this is
 their ideal, and the step to them is the PRF's advantage against the distinguisher that runs the system once and
 outputs `Accounting.Guarantees.Actual.WipeReadHeld`'s event. `Accounting.Guarantees.Actual.WipeReadHeldPrf` states
 that step, and its ideal world, a uniform label table, meets this. -/

@@ -1,4 +1,4 @@
-description = "FPX-DESIGN FP8-g1's served path: E4M3's integers up to 120 (0..16, then E4M3's spacing; moved by one they stay in int8) per token and per output row on every linear and lm_head, both operands rounded to nearest (the gap-one twin is peeled off in the proof), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
+description = "FP8-g1's served path: E4M3's integers up to 120 (0..16, then E4M3's spacing; moved by one they stay in int8) per token and per output row on every linear and lm_head, both operands rounded to nearest (the gap-one twin is peeled off in the proof), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
 
 [[linear]]
 step = "smooth"

@@ -27,8 +27,8 @@ configuration") was checked object by object (`tests/engine/test_profiles_generi
 Module names (the `--profile NAME` every consumer imports as `verity_vllm.observe.fold.profiles.NAME`, materialised by the finder in `profiles/__init__.py`):
   `derived_<ROLE>`          -- the TP1 profile of a checkpoint role (any architecture),
   `derived_<ROLE>_tp<W>`    -- ONE rank of a W-way tensor-parallel engine,
-  `derived_<ROLE>[..]_ovs`  -- the experimental sampled-row variant (`TokenSampleGumbel` first; lanes cov-difr / ov-sampling),
-  `dense_<ROLE>`            -- [X-07] the pre-P6 name, still accepted for dense-architecture roles (recorded runs cite it).
+  `derived_<ROLE>[..]_ovs`  -- the experimental sampled-row variant (`TokenSampleGumbel` first),
+  `dense_<ROLE>`            -- the legacy name, still accepted for dense-architecture roles (recorded runs cite it).
 The role's HF `config.json` is `dense_generic.find_hf_config(role)`: the byte copy `profiles/hf_configs/<ROLE>.config.json` (sha256 checked against
 the manifest entry), else the manifest's local snapshot / the hub cache.
 """
@@ -79,7 +79,7 @@ def module_name(role: str, world: int = 1, *, ov_sampling: bool = False) -> str:
 
 
 def parse_module(name: str) -> tuple[str, int] | None:
-    """`derived_<ROLE>[_tp<W>][_ovs]` -> (ROLE, W); `dense_<ROLE>` -> (ROLE, 1) (the X-07 name); else None."""
+    """`derived_<ROLE>[_tp<W>][_ovs]` -> (ROLE, W); `dense_<ROLE>` -> (ROLE, 1) (the legacy name); else None."""
     short = name.rsplit(".", 1)[-1]
     m = _MODULE_RE.match(short)
     if m:
@@ -90,7 +90,7 @@ def parse_module(name: str) -> tuple[str, int] | None:
 
 def is_ov_sampling(name: str) -> bool:
     """`derived_<ROLE>[_tp<W>]_ovs`: the experimental sampled-row variant (`gen_ov_sampling_patterns.TokenSampleGumbel` registered first;
-    lanes cov-difr / ov-sampling; NOT an accepted profile) -- what the per-role `gen_ov_sampling_b0` / `_b1` modules were before P6."""
+    NOT an accepted profile)."""
     m = _MODULE_RE.match(name.rsplit(".", 1)[-1])
     return bool(m and m.group(3))
 
@@ -588,8 +588,8 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                   hf_config: dict[str, Any] | None = None, repo: str | None = None, revision: str | None = None) -> Profile:
     """The κ profile of a checkpoint role (one rank of a `world`-way engine when `world > 1`) from its HF config.json and the family facts.
 
-    `moe_construction` (MoE roles): None = `TargetProfile.DEFAULT_MOE_CONSTRUCTION`; `indexed-read` = the MOE-01 pairwise fold;
-    `indexed-read-ordered` = MOE-01 with the router in selection order; `padded` = one fixed-slot Compute per token (refused at
+    `moe_construction` (MoE roles): None = `TargetProfile.DEFAULT_MOE_CONSTRUCTION`; `indexed-read` = the pairwise fold;
+    `indexed-read-ordered` = the pairwise fold with the router in selection order; `padded` = one fixed-slot Compute per token (refused at
     fold time under a renormalising router).  `fused_moe_pins` / `..._num_warps` / `..._num_stages`: the fused_moe_kernel tiling to pin instead
     of `gen_ov_moe_patterns.FUSED_MOE_PINS` (a κ fact of the capture; never loosened, only re-pinned from a rank log).  `hf_config`: the
     document to derive from (default: `load_hf_config(role)`; tests pass a synthetic one).  `ov_sampling`: the experimental sampled-row
@@ -624,13 +624,13 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
     elif arch == "dsa-moe":
         patterns = _dsa_patterns(C, list(prof.patterns))
     else:
-        patterns = _dense_patterns(cfg, C, list(prof.patterns))       # [R15 fp8] the fp8 patterns are the base list's own (make_patterns)
+        patterns = _dense_patterns(cfg, C, list(prof.patterns))       # the fp8 patterns are the base list's own (make_patterns)
     patterns = _tp_rank_patterns(patterns, cfg, world)
     notes = dict(prof.notes)
     notes["pins"] = dict(notes["pins"])
     notes["pins"]["gemm_tuned_ada"] = {f"N={n},K={k}": row for (n, k), row in ADA_TUNED_GEMM.items()}
     notes.update({
-        "derived_by": "profiles.generic [P6]: no per-model module; applicability = patterns (kernels) + check_header (facts); family facts = profiles.family_facts",
+        "derived_by": "profiles.generic: no per-model module; applicability = patterns (kernels) + check_header (facts); family facts = profiles.family_facts",
         "family": FF.family_of(cfg), "arch": arch, "vllm_class": fam["vllm_class"],
         "hand_facts": {k: {"value": C.get(k), "provenance": f["provenance"]} for k, f in facts.items() if k in C},
         # the fields NOT read off config.json by `analytic.config_of`'s generic rules: the identity and the family's hand facts (a `key`
@@ -701,9 +701,9 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
     if world > 1:
         notes["tp_rank"] = {"world": world, "rank_config_divided": list(sharded_keys(cfg)), "recomputed": {"QKV": C["QKV"], "GU": C["GU"]},
                             "sampler_vocab": int(cfg["vocab_size"]), "own_patterns": [EmbeddingShardCuda.name, TpCollective.name],
-                            "collectives": "[R17 D90] vllm.all_reduce / vllm.all_gather -> AllReduce2_v1{N} / AllGather2_v1{N} per row over (own partial, "
+                            "collectives": "vllm.all_reduce / vllm.all_gather -> AllReduce2_v1{N} / AllGather2_v1{N} per row over (own partial, "
                                            "peer partial) in rank order; the peer partial is the fold's `peers_<request>` root parameter (root class "
-                                           "collective_received), linked to the other rank's committed partial by the cross-rank leg (tp2_rank_match)"}
+                                           "collective_received), linked to the other rank's committed partial by the cross-rank check (tp2_rank_match)"}
     pid = prof.id
     if ov_sampling:
         from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
@@ -727,7 +727,7 @@ def with_moe_construction(profile: Profile, moe_construction: str | None) -> Pro
 # ------------------------------------------------------------------------------------------------------------------------------- module
 
 def make_module(fullname: str) -> types.ModuleType:
-    """The module object behind `verity_vllm.observe.fold.profiles.derived_<ROLE>[_tp<W>]` (and the X-07 `dense_<ROLE>`): PROFILE / C / PROVENANCE /
+    """The module object behind `verity_vllm.observe.fold.profiles.derived_<ROLE>[_tp<W>]` (and the legacy `dense_<ROLE>`): PROFILE / C / PROVENANCE /
     HF_CONFIG / weight_field / root_class / check_header / build_profile / with_moe_construction."""
     parsed = parse_module(fullname)
     if parsed is None:
@@ -742,7 +742,7 @@ def make_module(fullname: str) -> types.ModuleType:
     except ValueError as e:
         raise ImportError(f"{fullname}: {e}") from e
     mod = types.ModuleType(fullname)
-    mod.__doc__ = f"[P6] configuration-derived κ profile for role {role}" + (f", one rank of TP{world}" if world > 1 else "") + f" ({src['source']}: {src['path']})"
+    mod.__doc__ = f"Configuration-derived κ profile for role {role}" + (f", one rank of TP{world}" if world > 1 else "") + f" ({src['source']}: {src['path']})"
     mod.CASE, mod.ROLE, mod.WORLD, mod.REPO_ID, mod.REVISION = role, role, world, src["repo"], src["revision"]
     mod.MODEL = src["repo"]                                             # the retired hand modules' name for the repo id
     mod.HAND = dict(prof.notes["hand"])                                 # identity + the family's hand facts as resolved for this role

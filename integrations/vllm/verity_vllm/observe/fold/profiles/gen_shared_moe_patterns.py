@@ -138,7 +138,7 @@ def shared_expert(node: TreeNode, ctx: StepContext, mms: tuple[TreeNode, TreeNod
     """The shared expert: two dynamic block-FP8 linears (`fp8.DynamicDeepGemmFp8Linear`) around its activation `act`, which
     `act_pattern` resolves on the token rows at the statics `want` (I the shared intermediate), as `spec` when given; the down linear
     writes the op's first output `out0`."""
-    from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear  # noqa: PLC0415  (registry.deepgemm on use)
+    from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear  # registry.deepgemm on use
     SI = want["I"]
     out: list[tuple[int, Any]] = []
     prev = hidden
@@ -353,7 +353,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
 
     def _routed(self, node, ctx, sc: _Scope, hidden: ViewDesc, outs, hint) -> list[tuple[int, Any]] | Unsupported:
         """The input quant, the alignment schedule, w13, the SiLU and its quant, w2 and moe_sum over the (token, slot) pairs."""
-        from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant  # noqa: PLC0415
+        from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant
         C, G = self.config, self.group
         E, TOPK, H, I, M = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"], hidden.shape[0]
         P = M * TOPK
@@ -424,7 +424,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
     def _silu_quant(self, node, ctx, sc: _Scope, c1: ViewDesc, s_dn, P: int, I: int, G: int, hint: str) -> list[tuple[int, Any]] | Unsupported:
         """`_C.silu_and_mul(cache2!, cache1 as [P, 2I])` then `per_token_group_fp8_quant(cache2)`, the writer of the w2 launch's A and
         a_scale (triton_moe.py's unfused branch)."""
-        from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant  # noqa: PLC0415
+        from verity_vllm.observe.fold.patterns.fp8 import PerTokenGroupFp8Quant
         sr = SiluAndMul().match(sc.rsilu, ctx)
         if not isinstance(sr, Compute) or sr.rows != P or sr.spec.bindings.get("I") != I:
             return unsupported(node, "the routed silu_and_mul did not resolve as SiluMul{I} on the pair rows", child_id=sc.rsilu.id,
@@ -447,7 +447,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
 def served_gate_spec(tp, K: int, N: int, M: int, tier: str) -> tuple[Any, tuple[str, ...]] | None:
     """The Build's gate Definition (`vllm_bindings.bf16_gemm.LlBf16GemmRule` / `CublasRouterRule`) at (K, N, M) on `tier`, or None
     when vLLM dispatches another tier there, the cuBLAS shape and M have no captured route, or the target is not the H200 default."""
-    from verity.ml.definitions.registry import bf16_gemm_check, cublas_bf16, ll_bf16  # noqa: PLC0415
+    from verity.ml.definitions.registry import bf16_gemm_check, cublas_bf16, ll_bf16
 
     if tuple(tp.compute_capability) != (9, 0) or tp.batch_invariant:
         return None

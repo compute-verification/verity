@@ -1,5 +1,5 @@
 """The bandwidth audit's breakdown arms (`verity_bench.vllm.bandwidth_ablation`) and its spec: the top-up-off spans arms are
-memory accounting's `BandwidthArm` built through its supported settings, uncredited and token-controlled by
+the bandwidth audit's `BandwidthArm` built through its supported settings, uncredited and token-controlled by
 bandwidth-plain, and the spec runs them beside the credited and spans arms, plain first. No engine."""
 from __future__ import annotations
 

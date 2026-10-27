@@ -1,0 +1,28 @@
+{
+ "definitions": {
+  "EmbeddingBackwardFeatureChunk_v1{N=32}": {
+   "and": 26943,
+   "type": "bfc9528bbd944fe95b639d2fd14389d14a6a587e301ddfa4a83dbd259c42f3a0425e6bebf4caed90bbf7e1665c5edab117cf4968c3c597d975d8446eda3000c7"
+  },
+  "EmbeddingBackwardFeatureChunk_v1{N=8}": {
+   "and": 6663,
+   "type": "a690655c53dd560cf9402477f904b7010b1699e6ae3388e0427b8c3c3f15183ee5d6a3723bde980ede2712f412384e06b20b1990060cf3748fcfe92fb6d36021"
+  },
+  "EmbeddingBackwardFeature_v1{M=40}": {
+   "and": 33582,
+   "type": "8497583c273ba0bcc1fdfb2cc4ec3032555e6093eac50e863feb5937896a69a2d4b60cd4c912a90d318ab08a7f514e85cf4297efc3d27eb9ce433030f103ebbc"
+  },
+  "EmbeddingBackwardSortEnd_v1": {
+   "and": 847,
+   "type": "09932987e24dbdcd8749ada7e2a96ce4b64fb5b1dcc57446f8220169976c02de8d9a11be6a8df922308140dfb01051d655c2825b3737662b6393e066a3b0d41a"
+  },
+  "EmbeddingBackwardSortRun_v1{N=12}": {
+   "and": 12288,
+   "type": "5401c1b8e35d67adaa073cceb24891ebd38ed4ec64445f2f33df073701c13ae29ebd385bf39ca051825ea18492abc45c409f45d99e6eb912f24037ffb6bef734"
+  },
+  "EmbeddingBackwardSortStep_v1": {
+   "and": 1024,
+   "type": "cc611e2361874321543b928aae0f7c428250008095698326103810848d190a89ce95606a4839648cbf4e55cecf728f755d07655b002efc4a78394cff27ed361a"
+  }
+ }
+}

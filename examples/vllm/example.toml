@@ -1,8 +1,11 @@
-# The vLLM example's rung on the ladder (examples/README.md), placed where its runs of record ran. Level 2 needs the Lean
-# verifier off the nodes the prover runs: those runs ran it on vy-nebius-1 with the endpoint and the prover.
+# The vLLM example's doneness (examples/README.md), placed where its runs of record ran. Placed needs the Lean verifier off
+# the nodes the prover runs: those runs ran it on vy-nebius-1 with the endpoint and the prover. Its proof is none: no theorem
+# yet ties the session verdicts the verifier of record runs to NetTiming.Guarantees.SampledAuditAccepted
+# (benchmarks/prove_path/README.md).
 protocol = "sampled_proofs"
 workload = "vllm"
-level = 1
+run = "runs"
+proof = "none"
 
 [placement]
 endpoint = "gpu-node"        # vy-nebius-1, one leased RTX PRO 6000
@@ -14,5 +17,3 @@ challenger = "auditor-host"  # vy-challenger-1, through infra's gate (PP_CHALLEN
 # the row's Commit of record (commit.sh); the serve run the demo of record audited (serve.sh, port 18091); that demo's gate
 # run, on vy-challenger-1's coins (benchmarks/prove_path/README.md)
 runs = ["r20261024-055630-5377", "r20261025-092311-15a1", "r20261025-100403-334e"]
-guarantee = "NetTiming.Guarantees.SampledAuditAccepted"
-proof = "NetTiming.SecurityProofs.SampledAuditAccepted"

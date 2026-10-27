@@ -38,7 +38,7 @@ from verity.core.protocols.remote_bandwidth import codec as C
 M32 = (1 << 32) - 1
 
 # The stacking-budget classifier's sets (cursor/stack-property-6cd3 4268176afa, count_budgets.py lines 41-50).  Its
-# headline per-byte budget c is cast + act (note:20261017T0814Z-report-stacking-property).  "free(widen)" is dropped
+# headline per-byte budget c is cast + act.  "free(widen)" is dropped
 # entirely (a pass); "int" and "unknown" are counted in the census but are not in c.
 CLASSES = {
     "cast": {"F2fpBf16", "F32ToBf16Rn", "F32ToE4m3Sat", "F32ToE2m1Sat"},

@@ -336,17 +336,49 @@ def ownPorts : VStar.Stmt → List (String × String × Array (Option Nat))
 def roundListed (ss : Array VStar.Stmt) (k : Nat) : Bool :=
   ss.any fun s => (ownPorts s).any fun q => q.2.1 == s!"rec-c{k}" && q.2.2 == #[some 0, some 1]
 
-/-- **V*'s list holds every message round a rep absorbs**: each `k`-th round of the inner shape's rep schedule that
-absorbs a message (`commitRounds` of `repRounds`, `holoRepRounds` when its circuits are private), whose `c_k` the inner
-transcript fixes as `rec-c<k>` (`fixedRow`), is a message-round port of one of its statements at both reps' rows
-(`roundListed`), so some part holds each rep's every absorbed message whatever the coins draw. A list without one is
-refused. -/
+/-- The words of statement `s`'s message-round port `nm`, off its description: the input row V* writes for it
+(`vstarRows` at `s.unit`), an algebra part's `m<k>` its elements in whole 64-word rows (`VStar.innerUnit`'s
+`portWordsOf`), RecSparse's its `RecSparse.ports` words (`VStar.sparseUnit`). None at any other statement. -/
+def ownWords (s : VStar.Stmt) (nm : String) : Option Nat :=
+  match s with
+  | .inner _ _ p => (p.S.ports.find? (·.1 == nm)).map (VStar.portWordsOf ·.2)
+  | .sparse sh _ => ((RecSparse.ports sh).find? (·.1 == nm)).map (·.2)
+  | _ => none
+
+/-- Each of `ss`'s message-round ports under a `rec-c<k>` (`ownPorts`), as `(k, words, statement, port)`. -/
+def roundPorts (ss : Array VStar.Stmt) : List (Nat × Option Nat × String × String) :=
+  ss.toList.flatMap fun s => (ownPorts s).filterMap fun q =>
+    (cIndex q.2.1).map fun k => (k, ownWords s q.1, s.name, q.1)
+
+/-- Why `checkRoundWords` refuses port `p` of `ps`: its round's first port has other words. -/
+def roundWordsWhy (ps : List (Nat × Option Nat × String × String)) (p : Nat × Option Nat × String × String) : String :=
+  let words := fun (w : Option Nat) => (w.map toString).getD "no"
+  let (w0, s0, nm0) := ((ps.find? (·.1 == p.1)).map (·.2)).getD (none, "", "")
+  s!"V*'s list: a rep's message round {p.1} (rec-c{p.1}) is held at {s0}'s port {nm0} as {words w0} words and at " ++
+    s!"{p.2.2.1}'s port {p.2.2.2} as {words p.2.1}"
+
+/-- **The parts that hold one message round's row agree on its words**: every port of V*'s list under one `rec-c<k>`
+(`roundPorts`) has the words of the round's first such port. The deployed layout sizes the round's one row by the part
+that holds it first, and every holder reads that row, so a list whose holders of one round differ is refused. One
+comparison a port, over the list's description. -/
+def checkRoundWords (ss : Array VStar.Stmt) : Except String Unit :=
+  let ps := roundPorts ss
+  match ps.find? fun p => (ps.find? (·.1 == p.1)).any (·.2.1 != p.2.1) with
+  | some p => throw (roundWordsWhy ps p)
+  | none => pure ()
+
+/-- **V*'s list holds every message round a rep absorbs, at one width**: each `k`-th round of the inner shape's rep
+schedule that absorbs a message (`commitRounds` of `repRounds`, `holoRepRounds` when its circuits are private), whose
+`c_k` the inner transcript fixes as `rec-c<k>` (`fixedRow`), is a message-round port of one of its statements at both
+reps' rows (`roundListed`), so some part holds each rep's every absorbed message whatever the coins draw, and every
+holder of a round reads its row at the same words (`checkRoundWords`). A list without one, or with two holders of a
+round at different words, is refused. -/
 def checkRoundsListed (i : Inner) (ss : Array VStar.Stmt) : Except String Unit := do
   let some rs := (if i.holo then holoRepRounds else repRounds) i.m i.kLog i.claims
     | throw s!"V*'s list: the inner shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) has no rep schedule"
   match (List.range (commitRounds rs).length).find? (!roundListed ss ·) with
   | some k => throw s!"V*'s list: a rep's message round {k} (rec-c{k}) is a message-round port of none of its statements"
-  | none => pure ()
+  | none => checkRoundWords ss
 
 /-- V*'s statements at the inner shape (`VStar.statementsOf`: `VStar.statements`, or `VStar.statementsHolo` when its
 circuits are private, `i.holo`), at a shape `RecResiduals.check` accepts a part's name at, whose claims are two and two
@@ -357,7 +389,7 @@ shape one of whose groups holds h's round (`hRound`) as a row port. A part's
 circuit file, compared byte for byte (`checkFile`), carries `i.holo` as its META holo (`RecResiduals.HOLO_KEY`,
 `circuitFile`). Candidate 3's statements follow the table's (`candidate3Statements`), and the list must hold every one
 its session needs (`checkCandidate3`). It holds every level's committed tops (`checkCapListed`) and every message
-round a rep absorbs (`checkRoundsListed`). -/
+round a rep absorbs, each round's holders at one width (`checkRoundsListed`). -/
 def statements (i : Inner) : Except String (Array VStar.Stmt) := do
   let some sh0 := RecResiduals.shape? i.m i.kLog i.claims
     | throw (s!"the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) is not V*'s: a fast100 schedule, " ++
@@ -466,8 +498,9 @@ def vstarRows (sub : VStar.Sub) (u : VStar.UnitC) : List (String × Nat × Nat) 
     (sub.outputs.zip u.outPorts).map fun (nm, w) => (nm, (w + 63) / 64 * 64, 16 * ((w + 63) / 64 * 64))
 
 /-- **The circuit parsed from V*'s file carries V*'s META** (`VStar.metaHead`): one unit per VU, no leaf cuts, the
-unit's input leaves its input words in order, V*'s row ports (`vstarRows`), and the unit's output leaves its output words
-in order (`UnitC.leaves`' `out`). `checkFile` holds the bytes to V*'s;
+unit's input leaves its input words in order, V*'s row ports (`vstarRows`), each a `sha512/row/v1` row as V*'s META writes
+them (`row_schema`, no `row_schemas`), and the unit's output leaves its output words in order (`UnitC.leaves`' `out`).
+`checkFile` holds the bytes to V*'s;
 this holds what the verifier parsed from them, which no proof reads through `Lean.Json.parse`, to what V* wrote. -/
 def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
   let u ← match s.unit with
@@ -478,8 +511,8 @@ def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
   if c.leavesIn.getD 0 #[] != (Array.range u.inWords).map Int.ofNat then
     throw s!"{s.name}: the parsed circuit's input leaves are not V*'s, its {u.inWords} input words in order"
   let ports := c.ports.toList.map fun p => (p.name, p.words, p.bits)
-  if ports != vstarRows s.sub u then
-    throw s!"{s.name}: the parsed circuit's row ports {ports} are not V*'s {vstarRows s.sub u}"
+  if ports != vstarRows s.sub u || c.ports.toList.any (·.v2) then
+    throw s!"{s.name}: the parsed circuit's row ports {ports} are not V*'s {vstarRows s.sub u}, each a sha512/row/v1 row"
   if c.leavesOut.getD 0 #[] != Array.range u.outWords then
     throw s!"{s.name}: the parsed circuit's output leaves are not V*'s, its {u.outWords} output words in order"
 

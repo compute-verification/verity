@@ -1,11 +1,11 @@
-"""The `dither-a` arm: ASK-71's option A (CA's card), the provisional credit form since Daniel's 21:59Z ruling (19 Oct).
+"""The `dither-a` arm: option A of the credit form, the provisional credit form.
 Under it the noised work is credited on the operands A, B of a served product that is value-checked (on every drawn
 unit z_u = A_u B_u^T, proved and committed before the draw, y from the committed z), so the served product may come from
-a plain GEMM beside the receipted one.  Every run is labelled by `forms.form_of` (`Side.label`): form=ASK-71 A
-(provisional) only for -so<D> with -zy (`dither_so`) on a ruled-in form, whose served epilogue commits #3018's per-unit
+a plain GEMM beside the receipted one.  Every run is labelled by `forms.form_of` (`Side.label`): form=`forms.FORM_A`
+only for -so<D> with -zy (`dither_so`) on a ruled-in form, whose served epilogue commits the per-unit
 z/y records under round s's root before coin s (the receipts need no z of their own); form=beside (unadopted arm) for
 -so's -ab/-abn and -ov arms; form=beside, receipts beside the served GEMM, for the row z tables or no z, and for every
-arm outside the -so order (RT4-INT-12), which this module's arms all are.
+arm outside the statement's order (-so), which this module's arms all are.
 
 Serving stream, per int8-exact linear (`dithera::mm`, one op opaque to Inductor): exactlin's quantizer, which also stores
 the call's live rows and scales (rows < m, unless the step's flags say no-write) into the window's A slot
@@ -16,7 +16,7 @@ y = dequant(z), exact-fused's y bit for bit (`dithera_mm`, `dithera_mm_tma`).
 Side stream, forked after the quantizer (it reads only window-owned buffers): the call's A table (`h1c_a_call`, the
 window's form: DITHER_A_FORM, 3 unless set), its seeds (h1r version 0, from the window's salt and root(A_j), root(B_j))
 and its receipts of the noised product T = (A + N_A)(B + N_B)^T only, no peel and no z: h1r's block or split form per
-call (`unit="h1r"`: versions 3 and 4, wide where the call's column blocks outnumber the SMs, as dither-1s-mix's units)
+call (`unit="h1r"`: versions 3 and 4, wide where the call's column tiles outnumber the SMs, as dither-1s-mix's units)
 or h1u.cu's kh_unit_ws (`unit="kh"`), or the K split build's kh_one (`unit="hbk"`, h1k where the call's live units
 fit, its z and y to scratch, read under a flagless copy of the step; `unit="hbr"`, the same call in the H1K_RONLY
 build, which writes no z or y and skips their MMA), into a staging buffer.  At the forward's last call `dithera_commit` copies the
@@ -26,11 +26,11 @@ stream at the forward's last call, and under piecewise graphs at every qkv call 
 forks, and a piece ends at an attention).  Between steps dither_one's Window builds the admit and z tables, the step
 trees, the round and the receipt trees, as dither-1s's: the A table before the call's units, z before the draw, the
 step and receipt trees between steps, and nothing waits on the side stream but those.  With z="zy" (the arms' -zy) z
-is committed as CA's leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
+is committed as the per-unit z/y leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
 then its y = dequant(z); a slot past m is zero codes under s_a = +0, so its z is 0 and its y h1zy's dq(0, +0, s_w), as
 `scaled_mm_zy`'s) and the window builds every call's leaf table between steps in the row z tables'
 place, beside the receipt trees, each root the call's leaf of the z-step tree, so the round over them still comes before
-the draw (CA, 00:33Z: every leaf in its registered root before the draw coin, nothing written after it).  With ao="a" (the arms' -ao) the
+the draw (every leaf in its registered root before the draw coin, nothing written after it).  With ao="a" (the arms' -ao) the
 A tables run on a third stream above the units' priority: A_w waits on its quantizer and the units of call w on
 A_w, so each call's A table still precedes its seeds and units, and A_(w+1) runs beside call w's units (the same
 launches; only the streams they wait on change); with ao="as" (-aos; kh and hbk, whose seeds are a launch of their own)
@@ -45,10 +45,10 @@ The round's leaves are a-step, admit-step, z-step, then y-step (under "zy") and 
 Under "zy" the serving stream copies each call's served y, the bytes the next layer reads, into y records after its GEMM
 (`dithera_ycommit`, dq(0, +0, s_w) past m as the records'); between steps the window builds the served y's tables, whose
 roots are the y-step leaves, and a y table over the zy records' y halves, and a call whose two roots differ refuses its
-step (CA's RT4-INT-11). The
-receipt-step leaf is the calls' receipt-table roots, so the round recorded before the next coin fixes the receipts
-(RT4-INT-13); the round waits on the receipt trees for it. Open: the z/y leaves still go under the round recorded after
-the coin the step's noise read (RT4-INT-12, which needs the units after their round's coin, beside the next step).
+step. The
+receipt-step leaf is the calls' receipt-table roots, so the round recorded before the next coin fixes the receipts;
+the round waits on the receipt trees for it. Open: the z/y leaves still go under the round recorded after the coin the
+step's noise read (the statement's order needs the units after their round's coin, beside the next step: dither_so).
 
     import dither_a as DA
     DA.patch(t=T, h1c="libh1c.so", h1o="libh1o.so", unit="h1r")   # before LLM()
@@ -59,7 +59,7 @@ the coin the step's noise read (RT4-INT-12, which needs the units after their ro
 A, admit and z roots and the round against commit.py; z = A B^T (int_mm, the A the A table committed) on every call and
 zero past m; the served y (dumped) = dequant(z); every record's y (-zy) = dequant(z) at s_a, and dq(0, +0, s_w) past m,
 as the served y's records; every receipt = h1r v1's on the saved slots under the window's salt and
-the CPU's roots (another unit implementation); three units' receipts by CA's definition on the CPU (`h1v3_unit`), and
+the CPU's roots (another unit implementation); three units' receipts by H1V3's Definition on the CPU (`h1v3_unit`), and
 their receipts and z by H1V3's own code with the peel (`h1v3_itself`: this source's h1tile unless DITHER_H1V3_TREE names a
 tree; one without the peel is refused).  The control (nothing written: the A slot, z, receipts) must be refused on z and on the receipts; the
 fault must be refused on the receipts at exactly the flipped words, z and y untouched; "fault_y" (bit 0 of every call's
@@ -72,7 +72,6 @@ cpu and the served h1u build's kh_lanes) to each other and to the receipts, and 
 from __future__ import annotations
 
 import ctypes as C
-import os
 import sys
 from pathlib import Path
 
@@ -91,6 +90,9 @@ from hb_side import auto_j
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
 import exactlin as EL
+from verity_config.settings import of
+
+settings = of(__file__)
 
 
 def arm_label() -> dict:
@@ -104,8 +106,8 @@ CAPTURES = ("gate", "control", "fault", "fault_rr")
 LIB_ENV = DO.LIB_ENV
 LIB = "dithera"
 UNITS = ("h1r", "kh", "hbk", "hbr"); KONE = ("hbk", "hbr")
-# z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" CA's leaf
-# (the coordinator's 22:40Z shape): one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
+# z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" the per-unit
+# leaf: one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
 # (bf16), past m z 0 and y dq(0, +0, s_w) (h1zy's empty slot), which the epilogue writes as one record a unit and the
 # window commits between steps (ZY_KIND, provisional until INT-TIE names the fields); "none" no z stored
 # and no z table, y only: the leaves'
@@ -121,10 +123,10 @@ ZY_KIND = "zy-unit-table"
 # records' y halves) in this one domain and label, so their roots are equal exactly when the bytes are
 Y_KIND = "y-unit-table"
 ZY1_ENV = "DITHER_ZY1"
-# "1": the z/y and y tables' rows in a row block past m take their x from `dead_rows` (hashed once a window, from the
+# "1": the z/y and y tables' rows in a row tile past m take their x from `dead_rows` (hashed once a window, from the
 # bytes such a row holds) and hash no segments; the same leaves and roots
 ZDEAD_ENV = "DITHER_ZDEAD"
-# "1" (-zy under DITHER_ZDEAD): RT4-INT-11's compare of the served y with the records' y halves made on their bytes in
+# "1" (-zy under DITHER_ZDEAD): the compare of the served y with the records' y halves made on their bytes in
 # `dithera_ycommit` (the rows the two y tables hash), a call that differs refusing its step as unequal roots do; the
 # units' y tables are built, and their roots compared, only at a captured step, whose check reads them and whose
 # verdict wants both compares to refuse the same calls
@@ -187,7 +189,7 @@ def _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, o
             if ZL == 1:     # row-major, a slot's N int32 a leaf
                 tl.store(z_ptr + offs_m[:, None] * N + offs_n[None, :], zv, mask=mask)
             else:
-                # one record a UR x UC unit (row block i // UR, column block j // UC; record (i // UR) (N / UC) + j // UC):
+                # one record a UR x UC unit (row tile i // UR, column tile j // UC; record (i // UR) (N / UC) + j // UC):
                 # its z int32 row-major, then its y = dequant(z) bf16 row-major, as dither_a.ZY's leaf; a slot past m is
                 # zero codes under s_a = +0 (scaled_mm_zy's empty row), so its y is h1zy's dq(0, +0, s_w), not 0
                 r = offs_m[:, None] % UR
@@ -302,11 +304,11 @@ def dithera_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S
 @triton.jit
 def dithera_ycommit(y_ptr, sb_ptr, dst_ptr, S_ptr, rec_ptr, bad_ptr, M, N, T, stride_y, UR: tl.constexpr,
                     UC: tl.constexpr, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, CMP: tl.constexpr):
-    # the served y (int16 view; the bytes the next layer reads), rows < m, into the call's y records (unit row block,
-    # then column block; Y_KIND), and past m the epilogue's empty-slot y, dq(0, +0, s_w); F_NW_TILES = 2: nothing
+    # the served y (int16 view; the bytes the next layer reads), rows < m, into the call's y records (unit row tile,
+    # then column tile; Y_KIND), and past m the epilogue's empty-slot y, dq(0, +0, s_w); F_NW_TILES = 2: nothing
     # written; F_FAULT_Y = 64: bit 0 of y[0, 0] flipped in place first, so the next layer and the record read the
     # tampered y.  CMP (YCMP_ENV): those bytes against the y halves of the call's z/y records (rec_ptr, int16) on the
-    # rows of the live UR-row blocks, the rows the y tables hash under DITHER_ZDEAD, and bad_ptr (int32) set to 1 on any
+    # rows of the live UR-row tiles, the rows the y tables hash under DITHER_ZDEAD, and bad_ptr (int32) set to 1 on any
     # that differs
     m = tl.load(S_ptr + 1)
     flags = tl.load(S_ptr + 3)
@@ -393,13 +395,13 @@ class Side:
             raise ValueError(f"dither-a's ao: one of {AO} ({AO_SEEDS} for kh and hbk, whose seeds are a launch of their "
                              f"own), not {ao!r} with unit {unit!r}")
         self.win, self.unit, self.z, self.zl, self.ao, self.pt, dev = win, unit, z, ZMODES[z], ao, pt, win.dev
-        self.zdead = z == "zy" and os.environ.get(ZDEAD_ENV) == "1"
-        if os.environ.get(YCMP_ENV) == "1" and not (self.zdead and not getattr(win, "overlap", 0)):
+        self.zdead = z == "zy" and settings.get(ZDEAD_ENV)
+        if settings.get(YCMP_ENV) and not (self.zdead and not getattr(win, "overlap", 0)):
             raise RuntimeError(f"{YCMP_ENV}=1 needs -zy and {ZDEAD_ENV}=1, without -ov")
         self.ycmp: torch.Tensor | None = None
         # under YCMP_ENV each capture's calls refused by the byte compare and by the roots' (`y_leaves`)
         self.ycmp_at: dict[str, dict] = {}
-        self.side = torch.cuda.Stream(device=dev, priority=int(os.environ.get(UNITS_PRIO_ENV) or 0))
+        self.side = torch.cuda.Stream(device=dev, priority=settings.get(UNITS_PRIO_ENV))
         self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
         if pt:
             win.tree_streams = (torch.cuda.Stream(device=dev), torch.cuda.Stream(device=dev))
@@ -421,7 +423,7 @@ class Side:
         self.work = EL.Workspace(dev)
         self.arch = EL.arch(dev.index)
         self.mm_cfg = {tuple(int(v) for v in nk.split(",")): (EL.Cfg.parse(c), mm_group(c))
-                       for nk, c in (e.split("=") for e in os.environ.get(MM_CFG_ENV, "").split("+") if e)}
+                       for nk, c in (e.split("=") for e in (settings.get(MM_CFG_ENV) or "").split("+") if e)}
         self.stage = torch.empty_like(win.plan.out)
         self.at = torch.tensor([win.plan.offs[w][0] for w in range(win.L)], dtype=torch.int64, device=dev)
         self.shift = int(win.o.h1o_fault_shift())
@@ -450,8 +452,8 @@ class Side:
                                         out=win.pre["mid"].leaves_addr(2) + 64 * w, **(dead[w]["zy"] if dead else {}))
                                     for w in range(win.L)])
             win.pre["z"] = self.zyset
-            # RT4-INT-11: the served y committed under the round (its roots the y-step leaves) and the units' y (the
-            # records' y halves, read in place), compared by root between steps
+            # the served y committed under the round (its roots the y-step leaves) and the units' y (the records' y
+            # halves, read in place), compared by root between steps
             yi = win.round_kinds.index("y-step")
             yb, ub = [y_bytes(u) for u in self.unit_of], [zy_bytes(u) for u in self.unit_of]
             cnt = [zy_count(win, w, self.unit_of[w]) for w in range(win.L)]
@@ -467,10 +469,10 @@ class Side:
             self.y_refused: list[dict] = []
             # DITHER_ZY1=1: the y tables read nothing the z tables write and are built right after them, so the three
             # sets go through one h1c_build in the z tables' place, each table into its own set's buffers
-            self.zy1 = os.environ.get(ZY1_ENV) == "1"
+            self.zy1 = settings.get(ZY1_ENV)
             if self.zy1:
                 win.pre["z"] = win.c.union([self.zyset, self.ysset, self.yuset])
-            if os.environ.get(YCMP_ENV) == "1":
+            if settings.get(YCMP_ENV):
                 self.ycmp = torch.zeros(win.L, dtype=torch.int32, device=dev)
                 if self.zy1:
                     # a step no capture reads builds the union without the units' y tables
@@ -566,8 +568,8 @@ class Side:
                                                                    BLOCK_M=32, BLOCK_N=128, CMP=cmp, **EL.OPTS)
 
     def dead_rows(self) -> list[dict]:
-        """$DITHER_ZDEAD's `Tab` fields, each call's {"zy": its z/y table's, "y": its y tables'}: a row block past m (the
-        window's `live` 0) holds z 0 and y dq(0, +0, s_w) in every step, so each column block's x is hashed here once."""
+        """$DITHER_ZDEAD's `Tab` fields, each call's {"zy": its z/y table's, "y": its y tables'}: a row tile past m (the
+        window's `live` 0) holds z 0 and y dq(0, +0, s_w) in every step, so each column tile's x is hashed here once."""
         from verity_vllm.engine import int8_exact as E
         win, out = self.win, []
         for w in range(win.L):
@@ -585,7 +587,7 @@ class Side:
     def y_leaves(self) -> None:
         """Between steps (the window's `before_mid`): the served y's tables, whose roots are the round's y-step leaves,
         and the units' y tables (under DITHER_ZY1 built with the z tables); `ybad` the calls whose two roots differ (a
-        refused window, RT4-INT-11); under YCMP_ENV, at a step no capture reads, the calls `dithera_ycommit` flagged."""
+        refused window); under YCMP_ENV, at a step no capture reads, the calls `dithera_ycommit` flagged."""
         win = self.win
         roots = self.ycmp is None or win.cap is not None
         if not self.zy1:
@@ -859,7 +861,7 @@ def patch(t: int, h1c: str, h1o: str, unit: str = "h1r", h1u: str | None = None,
     global CAPTURES
     DO.ROUND_EXTRA = (("y-step",) if z == "zy" else ()) + ("receipt-step",)
     CAPTURES = ("gate", "control", "fault") + (("fault_y",) if z == "zy" else ()) + ("fault_rr",)
-    os.environ.setdefault("DITHER_A_FORM", "3")
+    settings.setdefault("DITHER_A_FORM", "3")
     DO.patch(t=t, h1c=h1c, h1o=h1o, key=key, gate=True)
 
     def apply(self, layer, x, bias=None):
@@ -893,7 +895,7 @@ _POOL: list = []
 def table_root(dom, key: bytes, label: str, rows) -> bytes:
     """`CM.levels`' root over each row's `CM.leaf` (rows: byte strings or a 2-D uint8 array), the leaves hashed in
     CHECK_WORKERS_ENV's pool when there are POOL_MIN or more."""
-    n = int(os.environ.get(CHECK_WORKERS_ENV) or 0)
+    n = settings.get(CHECK_WORKERS_ENV)
     if n <= 0 or len(rows) < POOL_MIN:
         return CM.levels(dom, [CM.leaf(dom, key, label, i, bytes(r))[0] for i, r in enumerate(rows)])[-1][0]
     if not _POOL:
@@ -962,7 +964,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
                          torch.zeros(1, dtype=torch.float32, device=win.dev), win.sw[w]).view(torch.int16)
             for w in range(L)] if zy else []
     if zy:
-        # RT4-INT-11: the served y's records (what ycommit read from the served y) hashed here, their step root the
+        # the served y's records (what ycommit read from the served y) hashed here, their step root the
         # round's y-step leaf; the run-time check (device roots of the served y against the units' y) against the
         # CPU's byte compare of the two, which under one domain and label is the roots' compare
         ys_cpu, cpu_bad, dump_bad, fy_bad = {}, [], [], []
@@ -992,7 +994,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             doc["fault_y_bad"] = fy_bad[:4]
     rleaf = None
     if "receipt-step" in kinds:
-        # RT4-INT-13: the receipt roots under the round; three calls' roots rehashed from the captured receipts
+        # the receipt roots under the round; three calls' roots rehashed from the captured receipts
         r_dev = [unwords(g["r_roots"][8 * w:8 * w + 8]) for w in range(L)]
         rs = s if r_round is None else r_round["s"]
         rleaf = CM.step_root(CM.domain({"window": W, "step": rs, "linears": L}, L, "receipt-step"), r_dev)
@@ -1099,7 +1101,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         doc["conforming"] = not fault_bad and not z_bad and not y_bad and not yleaf_bad and commits_ok
         doc["ok"] = not rc_bad and doc["conforming"]
         return doc
-    # three units' receipts by CA's definition on the CPU and by H1V3's own code; its z (peeled: A B^T) against ours
+    # three units' receipts by H1V3's Definition on the CPU and by H1V3's own code; its z (peeled: A B^T) against ours
     units_doc, h1v3_in = [], []
     if which == "gate":
         rng = np.random.default_rng(s)
@@ -1131,7 +1133,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
     doc["ok"] = (not rc_bad and not z_bad and (g["y"] is None or not y_bad) and not yleaf_bad and commits_ok and h1v3_ok
                  and y_match and not (zy and doc["y_refused_steps"])
                  and all(x["receipt_equal"] and x["z_equal_today"] for x in units_doc))
-    lr = os.environ.get(LANE_REFS_ENV)
+    lr = settings.get(LANE_REFS_ENV)
     if which == "gate" and lr:
         import lane_refs as LR
         doc["lane_refs"] = LR.served(win, g, salt[0], getattr(SIDE[0], "h", None) if SIDE else None,

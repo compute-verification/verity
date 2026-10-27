@@ -3,7 +3,7 @@ import Definitions.Accounting.PouwWork
 /-!
 # PoUW's work floor on one node, an open conjecture (trusted)
 
-A3 of CMP-12's converged model (v3.1), over `Accounting.PouwWork`'s vocabulary on the actual circuit: a `Prop` about one
+A3 of the converged model (v3.1), over `Accounting.PouwWork`'s vocabulary on the actual circuit: a `Prop` about one
 strategy `S` and the verifier `P`, taken as a hypothesis by `Accounting.Guarantees.PouwLocalOff`, never an `axiom`. It
 is an open conjecture, so it is not under `shape.premises`: it becomes a premise under `shape.conjectures` once it has a
 falsification test that runs. The other three premises are in `Definitions.Accounting.Assumptions.PouwWork`.

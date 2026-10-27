@@ -1,4 +1,5 @@
 import NetworkCheck.LinkWindow
+import Lms.Sign
 
 /-!
 # N2's link-window verdict of record: what its Lean code (`NetworkCheck.LinkWindow`) does
@@ -13,6 +14,12 @@ public outputs are verdict 1 and deadline 1. `Proofs.Properties.NetworkCertifier
 The predicates below say what the findings, the public file's row commitments, the certificates and the sync are, in the
 verdict's own terms. The public row (`pubRow`), the commitments' parse (`commitments`), the LMS verifier and the
 certificate's message are the code's own functions, read as they are.
+
+Its two lemmas (`Proofs.Properties.NetworkCertifier.LinkWindow`) read the predicates below that, which put another
+function in the verdict's place (`LinkWindowAcceptMeansBy`, `AcceptsAll`) and say what the certifier's device signs
+(`CertifierSigned`): the honest one, that a link-window the property's conclusion holds of is accepted, and on a warden
+link one whose certificates the device signed whatever its syncs; the nontrivial one, that no verifier accepting every
+link-window has the property.
 -/
 
 open NetworkCheck NetworkCheck.LinkWindow
@@ -80,5 +87,30 @@ def WindowVerdict (c : Case) : Prop :=
 warden link, no sync asked), and its public outputs are verdict 1 and deadline 1.** -/
 def LinkWindowAcceptMeans : Prop :=
   ∀ c : Case, (verdict c).map Verdict.accepted = .ok true → WindowAccepted c ∧ WindowVerdict c
+
+/-! ## Another verifier in the verdict's place, and the certifier's device -/
+
+/-- `WindowVerdict` with `v`'s result in place of the verdict's. -/
+def WindowVerdictBy (v : Case → Flock.V Verdict) (c : Case) : Prop :=
+  ∃ w, v c = .ok w ∧ w.outputs = acceptedOutputs c ∧ verdictDigest c true w.outputs = .ok w.digest
+
+/-- `LinkWindowAcceptMeans` with `v` in place of the verdict of record: `v`'s acceptance of a link-window establishes
+what the property says the verdict's does. -/
+def LinkWindowAcceptMeansBy (v : Case → Flock.V Verdict) : Prop :=
+  ∀ c : Case, (v c).map Verdict.accepted = .ok true → WindowAccepted c ∧ WindowVerdictBy v c
+
+/-- `v` accepts every link-window, whatever it publishes. -/
+def AcceptsAll (v : Case → Flock.V Verdict) : Prop :=
+  ∀ c : Case, (v c).map Verdict.accepted = .ok true
+
+/-- The link-window's two certificates as the certifier's device issues them under its key `k` (on a warden link, where
+it functions as an active warden): the link's key is `k`'s public key, and each end's certificate (egress first) names
+the link, the end and the window, carries `k`'s identifier, and its signature is the encoding of the one `Lms.signAt`
+gives, at a leaf of `k`, over the certificate's message in the session. -/
+def CertifierSigned (c : Case) (k : Lms.PrivateKey) : Prop :=
+  c.key = k.publicKey ∧ c.certificates.size = 2 ∧ ∀ d < 2, ∃ x m q sig, c.certificates[d]? = some (some x) ∧
+    x.link = c.link ∧ x.direction.code = d ∧ x.window = c.window ∧ x.keyId = k.I ∧
+    certificateMessage x.keyId c.session x.link x.direction x.window x.digest = .ok m ∧
+    Lms.signAt k q m = .ok sig ∧ x.signature = sig.encode
 
 end Properties.NetworkCertifier

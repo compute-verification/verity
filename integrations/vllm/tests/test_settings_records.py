@@ -11,6 +11,8 @@ import json
 import os
 import sys
 import types
+from collections.abc import Iterator
+from unittest import mock
 
 import pytest
 
@@ -24,10 +26,13 @@ def _digest(doc: object) -> str:
 
 
 @pytest.fixture
-def env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
-    for k in list(os.environ):
-        monkeypatch.delenv(k)
-    return monkeypatch
+def env() -> Iterator[pytest.MonkeyPatch]:
+    """An empty environment, the process's restored whole after the test: the code under test writes settings straight into
+    `os.environ` (`settings.put`, as `commit.staging_environ` does), which no `MonkeyPatch` records.  The test's own `MonkeyPatch`
+    is undone inside that, since one undone after it (the function's `monkeypatch`) would delete what a test set that the process
+    holds too (PATH, HOME)."""
+    with mock.patch.dict(os.environ, clear=True), pytest.MonkeyPatch.context() as mp:
+        yield mp
 
 
 @pytest.fixture(scope="module")

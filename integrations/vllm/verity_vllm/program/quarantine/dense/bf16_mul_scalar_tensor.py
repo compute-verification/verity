@@ -9,8 +9,8 @@ kind `scale_tensor` by the pinned `b1-eager-v3` vocabulary); this module re-expo
 difftest adapter and `ALL_DEFINITIONS` are unchanged.
 
 The 0-d operand is the `model.normalizer` buffer root — a config-derived constant with no checkpoint tensor; the fold binds
-it as `Shared(view)` so the Program reads the buffer honestly, and `root_policy` reports its class as "unknown" (an owner-level
-root-class decision, REPORT §GEMMA2_2B)."""
+it as `Shared(view)` so the Program reads the buffer honestly, and `analytic.check_normalizer` checks its value (its root class
+is an owner-level decision, REPORT §GEMMA2_2B)."""
 from __future__ import annotations
 
 from verity.ml.definitions.registry.b1 import Bf16MulScalarTensor

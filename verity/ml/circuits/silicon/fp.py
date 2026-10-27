@@ -8,7 +8,7 @@ program constants.
 Every piece that produces an f32 ends in :func:`round_f32`, the one rounding routine (round to nearest even, subnormals
 kept, overflow to infinity); :func:`round_fp` and :func:`unpack_fp` are it and :func:`unpack` at any IEEE binary format,
 for the f64 pieces of `verity.ml.circuits.ops.boolean.int8`. A NaN result is the canonical 0x7FC00000 inside composite
-pieces, whose final bf16 casts canonicalize; ``f32_add`` / ``f32_mul`` with ``ir_nan`` return the IR primitives' NaN bit
+pieces, whose final bf16 casts canonicalize; ``f32_add`` / ``f32_mul`` with ``ir_nan`` return the primitives' NaN bit
 for bit (``F32Add_v1`` / ``F32Mul_v1`` are numpy float32 on x86-64: an operand's NaN, quieted, else the default NaN of an
 invalid operation), and ``f32_fma_bits``' NaN is 0x7FC00000. The ``_v2`` primitives' pieces pass
 ``nan_word=F32_NAN_PTX``: every NaN result the GPU's 0x7FFFFFFF, no operand's payload or sign kept.
@@ -27,10 +27,6 @@ F32_INF = 0x7F800000
 
 def ceil_pow2(n: int) -> int:
     return 1 << max(0, (n - 1).bit_length())
-
-
-def is_zero(C, bits):
-    return NOT(or_reduce(C, bits))
 
 
 def select(C, s, x, y):
@@ -192,7 +188,7 @@ def specials(C, word, nan, inf, inf_sign, nan_word: int = F32_QNAN):
 
 
 def ir_specials(C, word, a, b, A, B, invalid, inf, inf_sign):
-    """numpy float32 on x86-64's special results (the IR's ``F32Add_v1`` / ``F32Mul_v1``): b quieted when b is a NaN, else a
+    """numpy float32 on x86-64's special results (the primitives ``F32Add_v1`` / ``F32Mul_v1``): b quieted when b is a NaN, else a
     quieted when a is, else the default NaN 0xFFC00000 of an invalid operation, else the infinity of sign ``inf_sign`` when
     an operand is infinite. An invalid operation always has an infinite operand, so it rides the infinity's select."""
     word = mux(C, inf, [ZERO] * 22 + [invalid] + [ONE] * 8 + [OR(C, invalid, inf_sign)], word)
@@ -203,7 +199,7 @@ def ir_specials(C, word, a, b, A, B, invalid, inf, inf_sign):
 # --- f32 arithmetic ----------------------------------------------------------------------------------------------------
 
 def f32_mul(C, a, b, ir_nan: bool = False, nan_word: int = F32_QNAN):
-    """``RN(a * b)`` (FMUL, no ftz); a NaN result canonical, or with ``ir_nan`` the IR primitive's (:func:`ir_specials`)."""
+    """``RN(a * b)`` (FMUL, no ftz); a NaN result canonical, or with ``ir_nan`` the primitive's (:func:`ir_specials`)."""
     A, B = unpack(C, a), unpack(C, b)
     s = A.s ^ B.s
     P = multiply(C, trim_low(A.sig)[0], trim_low(B.sig)[0])   # E does not depend on trimming zero LSBs
@@ -217,7 +213,7 @@ def f32_mul(C, a, b, ir_nan: bool = False, nan_word: int = F32_QNAN):
 
 def f32_add(C, a, b, ir_nan: bool = False, rz: bool = False, nan_word: int = F32_QNAN):
     """``RN(a + b)`` (FADD, no ftz); IEEE zero signs: ``x + (-x) = +0``, ``(-0) + (-0) = -0``; a NaN result canonical, or with
-    ``ir_nan`` the IR primitive's (:func:`ir_specials`)."""
+    ``ir_nan`` the primitive's (:func:`ir_specials`)."""
     A, B = unpack(C, a), unpack(C, b)
     _, a_lt_b = sub(C, a[:31], b[:31], 31)
     sx, sy = mux(C, a_lt_b, [B.s, A.s], [A.s, B.s])
@@ -310,7 +306,7 @@ def f32_fma(C, a, b, c, rm: bool = False, nan_word: int = F32_QNAN):
 def f32_div(C, a, b, ir_nan: bool = False, nan_word: int = F32_QNAN):
     """``RN(a / b)`` (``div.rn.f32``, no ftz): the normalized significands' quotient to 27 bits by restoring division, the
     remainder as sticky, one :func:`round_f32`. Specials: x / 0 and inf / finite are infinities, finite / inf and 0 / x zeros,
-    0 / 0 and inf / inf invalid; a NaN result canonical, or with ``ir_nan`` the IR's (numpy float32 on x86-64,
+    0 / 0 and inf / inf invalid; a NaN result canonical, or with ``ir_nan`` the primitive's (numpy float32 on x86-64,
     :func:`ir_specials`)."""
     A, B = unpack(C, a), unpack(C, b)
     s = A.s ^ B.s

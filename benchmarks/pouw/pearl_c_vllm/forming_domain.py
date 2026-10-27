@@ -194,7 +194,8 @@ def check_split(path: Path, jobs: int) -> dict:
     worst_slack = sorted(units, key=lambda u: u["slack"])[:5]
     margins = [u for u in units if u["min_margin"] is not None]
     worst_margin = sorted(margins, key=lambda u: u["min_margin"])[:5]
-    total = lambda key: sum(u[key] for u in units)
+    def total(key):
+        return sum(u[key] for u in units)
     return {"units": len(units), "rows_checked": total("m_cred"), "rows_out_of_domain": total("rows_out"),
             "min_margin": worst_margin[0]["min_margin"] if worst_margin else None,
             "min_margin_at": [{"unit": u["index"], "row": u["min_margin_row"], "margin": u["min_margin"]} for u in worst_margin],

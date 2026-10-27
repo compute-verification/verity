@@ -2,18 +2,18 @@
 
 Libraries: `--lib NAME=PATH` for a prototype (`tcsq.cu`, `nttsq.cu`: `fd_config`, `fd_decode` with mode 0 = D(c) and mode 1
 = d(c), and the TC builds' `fd_keys`), `--cgbn NAME=PATH` for a `libp2v1.so` (`p2_v1/p2v1.cu`, the CUDA-core decode in use,
-or its generic CGBN path at another width). Every width a library names gets `--bytes` of uniformly random canonical blocks
+or its generic CGBN path at another width). Every width a library names gets `--bytes` of uniformly random canonical labels
 (at least the ten edge values of `c` first) under v4's keys of a fixed setup at that width (`reference.expand_prefix` frames
-the width's prime), with the payload profile of the block less two bytes.
+the width's prime), with the payload profile of the label less two bytes.
 
 For each library, in this order, nothing timed before its gate passed:
-- the gate: on the pseudo-random picks and the edge blocks, mode 1 equals `reference.d(c)` and mode 0 equals
-  `reference.decode` under `reference.keys` (whose K and t rows the device's expansion must equal), every block of mode 0
+- the gate: on the pseudo-random picks and the edge labels, mode 1 equals `reference.d(c)` and mode 0 equals
+  `reference.decode` under `reference.keys` (whose K and t rows the device's expansion must equal), every label of mode 0
   equals the first library's at the width, and no flag is raised; a failing pick records which limbs differ and whether the
   output is the expected value's negation, its unreduced form or the square without the parity negation;
-- `keys_s` (once a width): the counter-mode SHA-512 expansion of every block's K and t; `sq_s`: mode 1 (one squaring with
+- `keys_s` (once a width): the counter-mode SHA-512 expansion of every label's K and t; `sq_s`: mode 1 (one squaring with
   its fold, loads and stores); `kernel_s`: mode 0 on keys expanded beforehand; `decode_s`: keys, then mode 0;
-  `one_cta_square_ns` (prototypes): mode 1 on 256 blocks by a single CTA, per block, which bounds from above the latency of
+  `one_cta_square_ns` (prototypes): mode 1 on 256 labels by a single CTA, per label, which bounds from above the latency of
   one squaring mod p on one SM (what a sequential root would pay there), its output checked against the full grid's.
 GB/s is payload bytes over the median time.
 
@@ -140,7 +140,7 @@ def diagnose(got: bytes, want: int, c: int, P: R.Params) -> dict:
 
 
 class Width:
-    """One width's blocks, keys and reference rows on the device."""
+    """One width's labels, keys and reference rows on the device."""
 
     def __init__(self, torch, per: int, nbytes: int, gate: int, keys_lib: Lib) -> None:
         self.P = P = params_of(per)

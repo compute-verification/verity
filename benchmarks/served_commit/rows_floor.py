@@ -1,12 +1,12 @@
 """The rows-sha512 floor on one GPU: the windowed worker's kernels (native_rows.cu, built here with nvcc and the JIT's CUDA flags into
 one shared library per leaf-kernel __launch_bounds__ form) over one window of rows (the leaves and the window's whole tree), alone and
 beside a busy stream (bf16 GEMM loops, a square one and decode's skinny one, a device copy loop; at default and at the highest stream
-priority, and in launches capped at a number of blocks), and COMMIT-GPU's raw SHA-512 compression rate on the same device.  Each form's
+priority, and in launches capped at a number of CTAs), and COMMIT-GPU's raw SHA-512 compression rate on the same device.  Each form's
 root of a small padded domain is checked against step_rows before it is timed.  Measurement only; JSON to $OUT/rows_floor.json.
 
     bash benchmarks/served_commit/rows_floor.sh     (ROWS: row bytes, default 256 1024 4096; WINDOW_MB, default 256; REPS, default 9;
-                                                     MINB: the leaf kernel's min blocks per SM, default 1 2 3;
-                                                     CAPS: blocks per launch to time, default none; BESIDE: the row
+                                                     MINB: the leaf kernel's min CTAs per SM, default 1 2 3;
+                                                     CAPS: CTAs per launch to time, default none; BESIDE: the row
                                                      sizes timed beside the busy loops, default the worker's)
 """
 from __future__ import annotations
@@ -213,7 +213,7 @@ def main() -> None:
 
 def size_floor(R: Rows, rb: int, data: torch.Tensor, reps: int, streams: tuple, busy: dict, busy_ms: dict,
                caps: list[int], beside_rows: list[int]) -> dict[str, Any]:
-    """One window of rb-byte rows: its leaves, its tree and both, alone and in launches of at most each cap's blocks; at the row
+    """One window of rb-byte rows: its leaves, its tree and both, alone and in launches of at most each cap's CTAs; at the row
     sizes of beside_rows also all-pad leaves and the commit (whole-grid at both priorities, and capped) beside each busy loop."""
     hs, hs_hi, bs = streams
     window = data.numel()

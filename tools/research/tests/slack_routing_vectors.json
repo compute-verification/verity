@@ -471,7 +471,7 @@
         "thread_ts": "1700000030.000001",
         "bot_id": "B1",
         "username": "circuits",
-        "text": "@proofs please start the train (quiet)\n\n_posted by <https://cursor.com/agents/bc-x|@circuits's agent>_"
+        "text": "@proofs please start the train (quiet)"
       },
       "root": {
         "ts": "1700000030.000001",
@@ -560,18 +560,7 @@
       ]
     },
     {
-      "name": "a footer's agent link is not a name",
-      "msg": {
-        "ts": "1700000035.000001",
-        "bot_id": "B1",
-        "username": "infra",
-        "text": "no names here\n\n_posted by <https://cursor.com/agents/bc-x|@infra's agent>_"
-      },
-      "root": null,
-      "targets": []
-    },
-    {
-      "name": "a reply under an announcement that names no one wakes no one, whatever PRs it names (reach PR 7)",
+      "name": "a reply under an announcement that names no one wakes no one, whatever PRs it names",
       "msg": {
         "ts": "1700000040.000010",
         "thread_ts": "1700000040.000001",
@@ -1103,12 +1092,12 @@
         "doorbell": "from infra, thread 1700000100.000001: @circuits can node 2 take a job?"
       },
       {
-        "name": "an urgent reply: old footer dropped, link label kept with its url, escapes and date tokens undone",
+        "name": "an urgent reply: its footer dropped, link label kept with its url, escapes and date tokens undone",
         "author": "circuits",
         "thread": "1700000100.000001",
         "ts": "1700000200.000002",
         "urgent": true,
-        "text": "@infra yes &lt;after 3 PM&gt; by <!date^1700006400^{time}|1:00 PM PST (21:00Z)>, see <https://x/plan|the plan> &amp; <https://x/z>\n\n_posted by <https://cursor.com/agents/bc-1|@circuits's agent> · urgent_",
+        "text": "@infra yes &lt;after 3 PM&gt; by <!date^1700006400^{time}|1:00 PM PST (21:00Z)>, see <https://x/plan|the plan> &amp; <https://x/z>\n\n_urgent_",
         "doorbell": "from circuits (URGENT), thread 1700000100.000001, reply 1700000200.000002: @infra yes <after 3 PM> by 1:00 PM PST (21:00Z), see the plan (https://x/plan) & https://x/z"
       },
       {

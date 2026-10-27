@@ -9,8 +9,7 @@ import Proofs.Accounting.Actual.Device
 import Proofs.Accounting.Actual.Confidence
 import Proofs.Accounting.Actual.Bridges
 import Proofs.Accounting.Actual.Transducer
-import Proofs.Accounting.Actual.Ticks
-import Proofs.Accounting.Actual.Source
+import Proofs.Accounting.Defs.Actual.Source
 import Proofs.Accounting.Actual.WipePool
 import Proofs.Accounting.Actual.WipeReadPool
 import Proofs.Accounting.Actual.WipeLag
@@ -21,7 +20,7 @@ import Proofs.Accounting.Actual.WipeDraw
 /-!
 # The actual circuit's guarantees
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security/Definitions/Accounting/Actual.lean`):
+The model of `Security/Definitions/Accounting/Actual.lean`:
 
 * `Actual/Split.lean`: what a region reads from outside itself is what its location carried in plus what crossed its
   boundary, and so in any set of gates.
@@ -29,9 +28,9 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   `Links`, ingress and egress are at most `β_X` a tick; compute rate at a pricing of at least one per gate bounds the
   gates; the state is its part in a set of gates plus its part outside.
 * `Actual/Windows.lean`: `WindowsAt`, the capacity form at any cuts and with no memory constraint: the windows divide
-  the developer's region into IUs of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at most the state's
-  part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and `G = univ`, IUs of at
-  most `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
+  the developer's region into isolation blocks of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at
+  most the state's part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and
+  `G = univ`, isolation blocks of at most `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
 * `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
 * `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
   contains a threaded reference circuit, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start
@@ -65,16 +64,11 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   does during `[t, t + n)` is a function of its content at `t` and of its links' signals at each tick (`transducer`,
   `crossing_of_signals`), with an `(M + 1)`-bit state (`transducer_bits`), so it takes at most `2^{M + 1 + β_X n}` values
   (`acts_encard_le_links`; the `+ 1` is the content's length).
-* `Actual/Ticks.lean`: memory accounting's `held_tick` (a width-0 held gate at a coin-dependent tick, causal under
-  v2.2's state as seen) is closed by v2.4's content: no holding makes it causal from every tick (`held_tick_closed`),
-  and it admits one (`tick_holding`).
-* `Actual/Source.lean`: ingress by source adds over disjoint sources, and a cover of the outside bounds ingress; under
-  `Links`, ingress from a source is at most the capacity of the links joining it to `X`.
 * `Actual/WipePool.lean`: `WipePool`, the memory cap's lifetime pool as a lemma, by Ville's inequality over an
   abstract run tree of a prover's wipes: on a tree meeting `UnheldFails`, every wipe passes with the un-held fractions
   summing to at least `H` with probability at most `exp(−k H)`, at any number of wipes; `WipePoolDelta`, at
   `H = ln(1/δ)/k`, at most `δ`. `UnheldFails` holds of every tree once each un-held set is empty, so it is no physical
-  premise; the pool's physical premise is memory-accounting's restatement on the challenger's verdicts (MEM-55).
+  premise; the pool's physical premise is memory-accounting's restatement on the challenger's verdicts.
 * `Actual/WipeReadPool.lean`: `WipeReadPool`, the pool per read on the challenger's verdicts, by Ville's inequality
   on the coins: every read accepted with the un-answered fractions summing to at least `H` on at most `exp(−H)` of
   them, under live verdicts alone.

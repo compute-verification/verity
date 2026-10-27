@@ -17,8 +17,6 @@ decoders), the models in :mod:`verity.ml.circuits.silicon.models` (``GroupSum`` 
 and the instruction registry in :mod:`verity.ml.circuits.silicon.instructions`.  Every name this module exported before is
 re-exported here with the same behaviour; ``tc_dot`` on ``AMPERE_BF16_M16N8K16`` is still the executable
 definition ``verity.ml.circuits.targets.target.FIRST`` names.
-
-Originally promoted verbatim from ``veritor`` ``src/veritor/core/silicon.py`` lines 77-395 (commit eb865ce29).
 """
 from __future__ import annotations
 

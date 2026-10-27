@@ -1,4 +1,4 @@
-"""Ratchet machinery shared by the rule lints in this directory (rules P1-P14).
+"""Ratchet machinery shared by the rule lints in this directory (one rule per ``test_pNN_*.py``).
 
 Each ``test_pNN_*.py`` scans the integration's library code (``verity_vllm/**/*.py`` and ``verity_vllm/**/*.sh``), and the
 circuit Definitions that moved from it to ``verity/ml/definitions/`` (``LIBRARY``: circuits' since the move, held to the

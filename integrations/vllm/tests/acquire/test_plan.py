@@ -189,7 +189,7 @@ def test_prescribed_padding_identities():
     v = {v.value_id: v for v in plan.values}["body.blocks.0.act/out"]
     assert not v.prescribed and v.prescribed_identities == 1 and v.identities == 3 and v.chosen.kind == "producer_output"
     assert [s.kind for s in v.sites] == ["prescribed", "producer_output"]
-    # padding identities as the finalize stage knows them (`padding_steps_of_record`): every identity of a Value -> prescribed as a whole
+    # padding identities as the finalize phase knows them (`padding_steps_of_record`): every identity of a Value -> prescribed as a whole
     pad = [r for r in rows if r["op_path"] == "logits"]
     plan2, _, _ = make_plan(rows) if False else (P.acquisition_plan(manifest(rows), AnnotationCorrespondence(tree()), tables=TABLES, padding_identities=pad), None, None)
     lg = {v.value_id: v for v in plan2.values}["logits/out"]
@@ -239,7 +239,7 @@ def _plan_in_a_fresh_process(tmp_path, mode: str) -> dict:
 
 def test_default_tables_do_not_depend_on_torch(tmp_path):
     """The plan with its default lifetime tables (no `tables=`) where torch imports and where it does not: the same tables, residuals
-    and digest, so a CPU gate without torch and the GPU stage evaluate one plan."""
+    and digest, so a CPU gate without torch and the GPU phase evaluate one plan."""
     from verity_vllm.commit.committer import flush_points
 
     rows = base_rows() + [row("instance_outputs", "body.blocks.0.qkv_proj", "0", spec="Gemm_v1"), row("instance_outputs", "body.norm", "out", spec="Norm_v1")]

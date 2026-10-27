@@ -6,8 +6,8 @@ checks.
 ~~~text
 arenas     each engine exports its arena over CUDA IPC (`engine.<g>.json` in --engines-dir); once every engine has run
            its plain baseline (status baseline), the prover opens each in its GPU's context and takes it as that GPU's
-           HBM shard (`device.DeviceStore`'s `hbm`): the store's blocks are the arenas' in GPU order, then the host
-           tier's, and the hello's layout labels each arena's weights blocks weights and the rest filler. With
+           HBM shard (`device.DeviceStore`'s `hbm`): the store's chunks are the arenas' in GPU order, then the host
+           tier's, and the hello's layout labels each arena's weights chunks weights and the rest filler. With
            --model-dir each arena is first held to the checkpoint's (`held_to_checkpoint`)
 register   the payload tree over the plain weights as served, salted under the verifier's payload key (its first
            message); at the registration the engines pause (ctl.json's
@@ -51,7 +51,7 @@ BLOCK = device.BLOCK
 
 def held_to_checkpoint(model_dir: Path, exports: list[dict], statuses: list[dict], workers: int) -> dict:
     """Each engine's arena held to the one `remote_bandwidth.store.arena` lays out from the checkpoint in `model_dir`: its
-    weights' blocks, its entries (name, offset, bytes) and its plain SHA-256s a GiB, else RuntimeError with why. So a
+    weights' chunks, its entries (name, offset, bytes) and its plain SHA-256s a GiB, else RuntimeError with why. So a
     store a verifier with `--model` would refuse is refused here, before the hello."""
     arena = rstore.arena_of(model_dir)
     want = [[e.name, e.offset, e.nbytes] for e in arena.entries]

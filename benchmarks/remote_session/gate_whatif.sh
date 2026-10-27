@@ -30,7 +30,7 @@ fetch "${RUN_ART:?}" --to "$S/run" --path "${P}request.json" --path "${P}out/ver
 fetch "${AUDITOR_ART:?}" --to "$S/aud" --path out/ledger.jsonl --path out/pins.jsonl
 fetch "${PROVER_ART:?}" --to "$S/prover" --path out/prover.json
 MAIN=()
-# main's first-parent line, fetched as auditor.sh does, where this tree's auditor_line.py takes it (--main, CMP-74)
+# main's first-parent line, fetched as auditor.sh does, where this tree's auditor_line.py takes it (--main)
 if uv run python "$HERE/auditor_line.py" --help | grep -q -- '--main FILE'; then
   UNSHALLOW=()
   [ "$(git -C "$HERE" rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)

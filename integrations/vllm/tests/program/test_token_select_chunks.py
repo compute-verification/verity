@@ -2,7 +2,7 @@
 first maximum above -inf and that index in the chunk) reduced with logits[0] to `TokenSelect_v1{V}`'s token.  The composition
 is the row's Definition word for word: at random widths and cuts over every bf16 word and over the words that decide an argmax
 (NaNs of both signs and payloads, +-0, +-inf, ties), and at the served statics, GLM-5.3's V = 154880 in 32 chunks of 4840
-(the fewest chunks of a whole width whose combine's index row passes one SHA-512 block, which M0 requires of a unit's rows)."""
+(the fewest chunks of a whole width whose combine's index row passes one SHA-512 block, which C-Flock's circuit prover requires of a unit's rows)."""
 from __future__ import annotations
 
 import numpy as np
