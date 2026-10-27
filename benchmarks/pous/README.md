@@ -83,7 +83,7 @@ Implementations:
     it decoded, sketches each block's bytes as it decodes them, and commits one root, which the next step's seed chains
     from; each window's openings are answered before the next step. `serve.py fixture` writes the decode kernel's
     sketch fixture: two chained passes' seeds, sign rows, every block's partial and every unit's sketch and receipt
-    (the interface is `remote_bandwidth`'s `PROTOCOL.md` §11). It isn't tracked: `FIXTURE_SHA512` pins its bytes, and
+    (the interface is the Lean `RemoteAudit.P2`). It isn't tracked: `FIXTURE_SHA512` pins its bytes, and
     they're published as `art:23a1667b4d4515f46fabea029492a1ca3788eef0771b115642f21e18f58f3da2`. `tests/test_pous_p2_serve.py`
     regenerates it.
   - `store.py`: the served model's encoded weights store. It lays the MQA16K INT8 weights out in W with every tensor

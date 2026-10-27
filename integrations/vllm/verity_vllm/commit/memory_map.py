@@ -30,10 +30,10 @@ appended  a block whose rows are all born, at the step of the last (its completi
           so a block whose last structural reader is the step that completes it is never read while resident and is in
           no record; nor
           is a block with a row no step writes (it stays dirty).  A step's blocks are one append, by slot
-written   an appended block, in the record of the step its append's encode landed in (deferred residency, remote_bandwidth's
-          ``PROTOCOL.md`` §4: the session's `Deferral`; without one, at its completion), uncredited until then.  A line
-          writes the appends landed by then in order, and one that would write a slot an earlier one there writes waits a
-          line, with every append after it
+written   an appended block, in the record of the step its append's encode landed in (deferred residency,
+          `remote_bandwidth.memory_map`: the session's `Deferral`; without one, at its completion), uncredited until
+          then.  A line writes the appends landed by then in order, and one that would write a slot an earlier one
+          there writes waits a line, with every append after it
 freed     a written block in the record of its rows' last structural reader (memory-map/v1's free), or of the step after
           its write's if that is no earlier (its page was freed before its encode landed: memory-map/v1 withdraws such a
           block, no write, no free and no credit, which this builder doesn't emit yet, so it writes the block and frees it

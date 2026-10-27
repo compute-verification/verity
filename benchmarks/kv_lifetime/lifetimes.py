@@ -23,9 +23,9 @@ credited: a cached block no request holds may be resident and planned, but carri
   origin (`stock_origin_age_tail`);
 - occupancy: held and cached blocks on a grid;
 - for each window T and lifetime cap L (an appended block joins its window and no plan L or more windows later may
-  hold it, PROTOCOL.md §4) and each policy, the share of held byte-seconds credited and the encode bytes it costs,
-  with caps counted from the block's append (`frontier`, the protocol's cap) and from its content's origin
-  (`frontier_origin`, a life on the whole provenance, where a cap is a recompute from fresh inputs):
+  hold it, the Lean `RemoteAudit.Session`'s `lifetime`) and each policy, the share of held byte-seconds credited and
+  the encode bytes it costs, with caps counted from the block's append (`frontier`, the protocol's cap) and from its
+  content's origin (`frontier_origin`, a life on the whole provenance, where a cap is a recompute from fresh inputs):
     rekey    every resident block is re-keyed (re-encoded under a fresh coin) at each cap it outlives, cached ones
              included, so every held byte-second is credited
     held     a block is re-keyed at a cap only if a request holds it then, and released otherwise (later hits

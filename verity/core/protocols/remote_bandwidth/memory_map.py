@@ -36,7 +36,7 @@ registered block, and the writer records one at its values' last structural read
 credited past it: weights only the first steps read are freed after the last of them, and a gathered table (an
 embedding, the experts a router indexes) stays until the last step whose gather may select any of its rows, whichever
 rows the run selected.  That every free but a re-key's (below), of a registered block or a written one, is at its
-values' last structural reader is the memory-map unit's to prove (I4, `PROTOCOL.md` §8 "The requirement's link").  A
+values' last structural reader is the memory-map unit's to prove (I4, `audit.RequirementLink`).  A
 step's frees apply before its writes; a step frees a slot at most once, only a live one, and writes a slot at most
 once.  A block is written once, complete and encoded (deferred residency):
 a KV block the step's tokens are still filling is not in the record until it is complete, and a complete one is not
@@ -79,7 +79,7 @@ appends sent before whose writes the step records.  The appends are sent before 
 holds them, and that pass's seed binds them (`audit.chained`), so it is computed after they are sent.
 That the session's appends, re-keys and frees are this record's, in its order and at its steps, is the memory-map
 unit's to prove against the record's append chain and each pass's head (`audit.Record.appends`,
-`WindowRecord.heads`, `RequirementLink.mapped`, `PROTOCOL.md` §8 "The memory map's choices"): frees, re-keys and
+`WindowRecord.heads`, `RequirementLink.mapped`): frees, re-keys and
 append order chosen after the seed would otherwise be advice.  So a step's appends are sent after the pass at that
 step's root and before the next pass's, and a re-key's old index is below the stale bound of the pass after its step
 (`WindowRecord.stale`, a value the unit recomputes inside its proof from the committed appends).

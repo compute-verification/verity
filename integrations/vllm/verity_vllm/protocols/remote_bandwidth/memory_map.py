@@ -12,7 +12,7 @@ appended  a block `kv_append` completes, once its step's forward and frees are d
           taken it back by then, and a block re-keyed: written again in its slot, the same payload at a fresh j, once
           its j is as old as the lifetime cap.  Each step's go out as one append (``on_append``), which the session
           sends and the device encodes in place once its coin arrives (`encoded`)
-written   an appended block, once its encode has landed (deferred residency, remote_bandwidth's ``PROTOCOL.md`` §4):
+written   an appended block, once its encode has landed (deferred residency, `remote_bandwidth.memory_map`):
           at the step whose line is open when the encode lands, the step before the first whose reads see the block
           encoded.  Until then it is plaintext, in no record and uncredited, as a dirty block is
 freed     an appended block (written since the map began, j >= N) of a page `kv_free` returns, though its bytes stay

@@ -194,7 +194,7 @@ CONDITIONAL_ON = {"NoOutsideCompute": (
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
     "differently, taken as 0; the deployed prover holds the coin commitment and may compute a window's roots from it, "
     "so that holds only once the verifier sends it no commitment to a window's openings coin before its roots "
-    "(PROTOCOL.md §8)")}
+    "(the gap `binding-split`, the remote audit's README)")}
 """What the line's error rests on that no record of the run discharges, each with what it says: the premises of its
 statement and the gaps in its charge (`GAPS`). A line (`auditor_line.json`'s `conditional_on`, `credit.md`) is
 conditional on them, `NoOutsideCompute` unless a lockdown grounds it (`GROUNDED`), and the `memory-line-of-record`

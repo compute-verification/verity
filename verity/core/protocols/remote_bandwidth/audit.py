@@ -79,10 +79,11 @@ many reads of a node's registered blocks the node made in each window, from rece
    block it credits no receipt of (`linked_bits`, `Accounting.Guarantees.RequirementMoved`; `Ledger.linked`), less the
    share ε of it the units' draw leaves unproved, its δ added to the ledger's error (`Ledger.error`);
    without one the credit is the node's reads of its store.
-   What an accepted window certifies, and on what, is `PROTOCOL.md`.
+   What an accepted session certifies is the Lean `RemoteAudit.Protocol.certify`; on what, the guarantees
+   `README.md` lists.
 
 The verifier's clock is injected (`clock`, nanoseconds, `time.monotonic_ns` by default).  Openings are checked in the
-clear here, as the specification of what each zero-knowledge proof block proves on the deployed path (`PROTOCOL.md` §8).
+clear here, as the specification of what each zero-knowledge proof block proves on the deployed path (`opening.py`).
 """
 
 from __future__ import annotations
@@ -147,7 +148,7 @@ of T in D, so it leaves the credited store within L windows unless the prover ap
 index and a fresh coin, and so a fresh bound key.  A carrier of a declared circuit's may work on a block from its coin
 until it leaves, so what the carriers may hold grows with the passes in L windows
 (`Accounting.Guarantees.DeclaredCircuitRequirement`'s `C`): over 30 s of 61 ms passes it is under 8% of the store at
-both served models' caps (`PROTOCOL.md` §4, "The lifetime cap"), where 60 windows was an hour at the stated window."""
+both served models' caps, where 60 windows was an hour at the stated window."""
 
 
 def lifetime_windows(window_ns: int, deferred: bool = False, life_ns: int = LIFETIME_NS) -> int:
@@ -162,7 +163,7 @@ def lifetime_windows(window_ns: int, deferred: bool = False, life_ns: int = LIFE
 
 @dataclass(frozen=True, slots=True)
 class Pace:
-    """A paced session's schedule (`PROTOCOL.md` §7, "Pacing"): each window is a group of about `k` passes under a live
+    """A paced session's schedule (`RemoteAudit.Session.Pace`): each window is a group of about `k` passes under a live
     coin of its own, the last the closing window, whose reads back the credited span's end (`ledger.memory`).  Window
     t's boundary message is due once t has k − 1 roots, so that the pass in flight is its last (at k = 1, once window
     t − 1 has its root, and window 0's at once), and leaves at the latest at max(its challenge + (k − 1)·A, D_(t−1)),
@@ -393,8 +394,8 @@ def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec
     after the payload root has arrived.  Drawn before it, the prover would register `decode(0)` and hold a store of
     zeros; drawn after, each encoded block costs k square roots a word to produce, whatever the payload.  Every block
     registered here is under the seed's key; a block written after the seed takes its bound key under its append's
-    coin (`codec.binding`, PROTOCOL.md §3) and joins the store by an append (`Store.append`, `Session.append`).  None
-    of the
+    coin (`codec.binding`, the Lean `RemoteAudit.Codec.binding`) and joins the store by an append (`Store.append`,
+    `Session.append`).  None of the
     receipt kind, `bind`, the block layout and the sketch rows (`receipts.sketch_rows`: the kind's default if None) is
     in the codec seed's context, since the store depends on none of them; the digest binds all four.  Each call draws
     afresh: the verifier draws through its `Registry`, which allows a node one live registration."""
@@ -1092,7 +1093,7 @@ class Session:
         and keeps its window's receipts below `RECEIPT_LIMIT`; its rejection, `lifetime`, if it holds an appended block
         that joined a window `Params.lifetime` or more before `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
         is to hold every complete block the circuit reads at it, filler beside them allowed (`PlanMatches`), which the
-        plan's proof block checks against the prover's memory map (`PROTOCOL.md` §8); its rejection, `step`, if it is
+        plan's proof block checks against the prover's memory map (`memory_map.py`); its rejection, `step`, if it is
         missing or not above.  A paced session's window holds at
         most k roots, and a later one is out of turn (`order`), as is, at one window in flight (`Pace.in_flight`), a
         root that passes every other check after its window's boundary.  The root's arrival, the clock now, goes in
@@ -1531,7 +1532,7 @@ class RequirementLink(Protocol):
     through the appends of the steps below the pass's step, so each append was sent after the passes of the steps up to
     its own and before the rest; a re-key only at the lifetime cap, its old index below the stale bound
     (`WindowRecord.stale`, which the unit recomputes from those appends) of the first pass after its step, and of the
-    same payload; and no other (PROTOCOL.md §8, "The memory map's choices").  The units are sampled, so the link
+    same payload; and no other (`memory_map.py`).  The units are sampled, so the link
     holds on what their draw established: `epsilon`, the most share of the linked credit (`linked_bits` summed over
     the passes) that the units it leaves unproved can carry, the passes whose plan unit is wrong and those holding a
     block a wrong memory-map unit wrote, except with probability `delta`.  Those checks are theirs; the ledger takes
@@ -1791,7 +1792,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     its read was made.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an
     approximation for a large store).  A sketch-sha512 record's receipts also rest on `SketchBound`
     (`Accounting.Guarantees.Remote.SketchBoundDeployed`), whose terms add to the failure probability, not to γ:
-    `timing.sketch_failure` of the prover's SHA-512 compressions over the session (`PROTOCOL.md` §4).
+    `timing.sketch_failure` of the prover's SHA-512 compressions over the session.
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on
     `credit_post_seed`, the property's verdict on the circuits that wrote them (I2's; None credits none, and a verdict
     that fails is refused), and only with this session's schedule check (`schedule`, `Session.scheduled`): every

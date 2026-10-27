@@ -1,6 +1,7 @@
 """One-stage audit, run A8: one window of the remote bandwidth audit over a registered store of a few thousand blocks, its
-openings proved in zero knowledge through the proof service in place of opened (PROTOCOL.md §6's checks 1-3 and 5, as §8
-deploys them), so that the verifier receives no block bytes; and the prover's cost per opening.
+openings proved in zero knowledge through the proof service in place of opened (the Lean `RemoteAudit.verifyWindow`'s
+checks, as `remote_bandwidth.opening` deploys them), so that the verifier receives no block bytes; and the prover's cost
+per opening.
 
     python benchmarks/one_stage/a8.py --bin flock-circuit --lean flock-verify --out DIR [--blocks 4096] [--plan 64]
       [--samples 16] [--points 1,4,16] [--arms nofw,fw] [--cold 1] [--gpu [--lease CMD]] [--no-audit]

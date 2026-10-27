@@ -19,9 +19,8 @@ window closes at its deadline.
 
 **The fixture** (`fixture`): two chained passes over the toy's `C*` at 16 sign rows under a fixed challenge and fixed
 leaf salts, each with its seed, the 16 sign rows the kernel reads, every block's partial π, every unit's σ and y, and
-the pass's root. A decode kernel's sketch matches it block for block (`PROTOCOL.md` §11 of
-`verity/core/protocols/remote_bandwidth` is the interface). It is regenerated, not tracked: the repository's data
-budget has no room for it, and `FIXTURE_SHA512` pins its bytes.
+the pass's root. A decode kernel's sketch matches it block for block (the Lean `RemoteAudit.P2` is the interface). It
+is regenerated, not tracked: the repository's data budget has no room for it, and `FIXTURE_SHA512` pins its bytes.
 """
 from __future__ import annotations
 
@@ -271,6 +270,7 @@ def fixture(passes: int = 2) -> dict:
         previous = root
     return {
         "schema": FIXTURE_SCHEMA,
+        # The fixture's bytes, which `FIXTURE_SHA512` pins, carry the interface's old name.
         "interface": "verity/core/protocols/remote_bandwidth/PROTOCOL.md §11",
         "store": {"toy": "toy.json", "c_star_sha512": doc["c_star_sha512"], "blocks": store.params.blocks,
                   "units": units, "unaudited": list(range(p2.UNIT_BLOCKS * units, store.params.blocks))},

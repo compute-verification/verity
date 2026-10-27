@@ -35,7 +35,7 @@ codec and the coins of the appends before it, every layout `slot` of `N` distinc
   `Pr_{ω,κ}[appendCoinBlocks enc choose slot (ω, κ) ∈ ev] ≤ Pr_E[E ∈ ev] + δ`.
 
 `ω` is the codec in the ideal encoding model (its rounds' random function, below). The coins are the appends'
-(remote_bandwidth's PROTOCOL.md §3–§4), drawn at the node's one live registration and after: the registration is
+(`RemoteAudit.Codec.binding`), drawn at the node's one live registration and after: the registration is
 append `0`, whose coin is the seed, drawn after its payload root; every other append's coin `c_a` is 32 bytes, drawn
 once, when the append's root arrives, after that root has committed every digest. A registered block is its payload
 encoded under the seed's key. An appended block is its payload `p_j` encoded with the bound tweak

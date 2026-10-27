@@ -43,8 +43,9 @@ The registration names its receipt kind (`KINDS`): sketch-sha512 (`DEFAULT`, the
 for comparison.  A sketch-sha512 receipt hashes 72 bytes after the seed's block at 16 rows, not 4,104: one SHA-512
 compression where block-sha512 takes 33 (three at 64 rows), and the signs, derived from the pass's seed, exist only
 after the previous pass's root, as the seed does.  Under sketch-sha512 the registration also names k_s
-(`sketch_rows`), which the signs' key binds.  Leaves, salts and the tree are the same under either kind.  What each
-kind rests on is `PROTOCOL.md` §4.
+(`sketch_rows`), which the signs' key binds.  Leaves, salts and the tree are the same under either kind.  Block-sha512
+rests on the random oracle (`Bandwidth.Guarantees.AuditRO`), and sketch-sha512 also on its rank bound
+(`Accounting.Guarantees.Remote.SketchBoundDeployed`, `RateAuditSketch`).
 
 The registration also names its block layout (`LAYOUTS`): how a kernel's sketch vectors map to the registered blocks,
 each block j the encoded store's bytes 4096·j … 4096·j + 4095, whole codec words.  Under store-order/v0, the only one,
@@ -235,7 +236,7 @@ class Plan:
         return cls(tuple(runs), blocks)
 
     def changed(self, added: Sequence[tuple[int, int]], removed: Sequence[tuple[int, int]], blocks: int) -> Plan:
-        """The next pass's plan from its change, the form a plan travels in (PROTOCOL.md §8): this plan's blocks less
+        """The next pass's plan from its change, the form a plan travels in: this plan's blocks less
         `removed`, each of which it holds, plus `added`, none of which it then holds, in store order, in a store of
         `blocks` blocks, at least this plan's.  `added` and `removed` are runs (first, count) in any order, disjoint,
         or empty.  Refused (ValueError) otherwise, or if no block is left."""

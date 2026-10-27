@@ -1,7 +1,7 @@
 # The bandwidth audit, v0
 
 Status: superseded. The bandwidth audit on the served path is the remote bandwidth audit
-(`verity/core/protocols/remote_bandwidth/PROTOCOL.md`), which applies this audit's guarantee, `AuditRO`, per pass. v0's
+(`verity/core/protocols/remote_bandwidth/README.md`), which applies this audit's guarantee, `AuditRO`, per pass. v0's
 tag `ro-blake3/v1` is BLAKE3, which the one-hash rule (6 Oct) takes off the served path, so no deployment runs this
 audit, and no served code reads it: `verity_vllm.protocols.remote_bandwidth`'s receipts are the remote audit's own
 (its `receipts.py`). The code stays for the benchmarks that measure its tags. What follows is v0 as it was granted.
