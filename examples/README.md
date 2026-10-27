@@ -3,7 +3,8 @@
 One directory per example (Daniel, 25 Oct). An example holds what is its own: the workload it serves, its placement (where
 each party runs), and the commands a person runs to serve and audit it. What attaches Verity to the serving stack is the
 integration's (`integrations/`), and the protocols it runs stay in core (`verity/core/`). `verity` imports nothing from
-`examples/` (`tests/test_boundaries.py`), and `verity example NAME` runs `examples/<NAME>/`'s `run.py` or `run.sh`.
+`examples/` (`tests/test_boundaries.py`), and `verity example NAME` runs `examples/<NAME>/config.toml` (`verity run`), else
+its `run.py` or `run.sh`.
 Each example stands on two independent axes of doneness (Daniel, 26 Oct): how far it runs, and how far its guarantee is
 proved. A milestone is a set of (example, run, proof) triples, which top keeps. Its `example.toml` says where it stands
 (`vllm/example.toml` is one): its `protocol` (a package under `verity/core/protocols/`, the composite `onsite` or `remote`,
@@ -43,5 +44,5 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
 - `vllm/`: Llama-3.2-1B served by vLLM on one GPU through `verity_vllm`'s committing endpoint, a served window audited
   through every subprotocol. Its row is in its own `workloads/`, its placement is `placement.toml`, which `run.sh` reads, and
   its scripts reach the integration by `PYTHONPATH`; it is not a package.
-- `toy_network/`: the toy (`integrations/torch_loop`) audited by sampled proofs, every role from `config.toml` through
-  `verity run`, on CPU; the network certifier joins its `protocols` once its role exists.
+- `toy_network/`: sampled proofs and the network certifier on the toy (`integrations/torch_loop`), every party on one
+  CPU machine through `verity run`, its deployment configuration as `verity config new` writes it.
