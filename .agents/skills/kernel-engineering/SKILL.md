@@ -55,7 +55,7 @@ theirs by a PR against their branch or a message, never an edit in their tree.
   compute-accounting's call; the loader keys on digests, so a later move is cheap.
 - **The vLLM executor:** `integrations/vllm`.
 - **Shared tables** (scheme names, hashing formats, schedules, step groups, kernel variants) are defined once, in
-  `verity.core.protocols.pouw.serving`. Replace any local copy you find.
+  `verity.core.protocols.pouw.serving`. Never keep a local copy (tree hashes, keys, arm tables); replace one you find.
 
 ## One attempt
 
@@ -168,5 +168,6 @@ scheme table) is deleted in your next PR or named to its owner.
 ## Before you finish
 
 Every run you started, fill outputs included, is preserved (`research data preserved <run|art>` exits 0); every attempt
-has a record or a row, an outcome and a reason; your PR description says what you fixed and deleted along the way; you
-hold no GPU lease, and no job of yours reads a tree you are about to change.
+has a record or a row, an outcome and a reason; every fact has a gotchas line and every friction is fixed or noted; your
+PR description says what you fixed and deleted along the way; you hold no GPU lease, and no job of yours reads a tree you
+are about to change.
