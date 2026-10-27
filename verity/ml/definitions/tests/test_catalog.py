@@ -20,16 +20,9 @@ REPO = Path(__file__).resolve().parents[4]
 
 COUNT = 1261
 
+COUNT += 26  # CIR-117's training kernels: `torch_attention`'s 7, `torch_loss`'s 13 and `torch_embedding`'s 6
+
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2` (#4623), a line of its own so it merges with any other change to the count
-
-COUNT += 7  # `torch_attention`'s training kernels (CIR-117): the softmax, its backward, the eager row and its backward, RoPE, its
-#             backward and repeat_kv's backward
-
-COUNT += 13  # `torch_loss`'s training kernels (CIR-117): log_softmax's warp trees, lanes, warps, epilogue and row end, nll_loss
-#              and its backward, and log_softmax's backward with its slots and element
-
-COUNT += 6  # `torch_embedding`'s training kernels (CIR-117): the sort path's step, run, end and whole, the feature kernel's
-#             chunk and whole
 
 
 def test_the_catalog_loads_every_definition_and_no_other():

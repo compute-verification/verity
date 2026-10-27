@@ -3,8 +3,8 @@
 for every (entry, feature) of a few small vocabularies: an entry with 25 tokens in a row (three partials of the sort path, and
 a run across a 32-token chunk), entries spread over the tokens, an entry no token has, and gradients with NaN, ±inf, -0, a
 subnormal and the bf16 extremes. The models then match torch's CPU embedding backward in f32 to bf16 rounding: the CPU kernel
-adds each token in position order, without partials or a bf16 rounding per chunk. The CUDA kernels themselves are the GPU
-difftest's."""
+adds each token in position order, without partials or a bf16 rounding per chunk. The CUDA kernels themselves are
+`test_torch_training_sm120.py`'s."""
 from __future__ import annotations
 
 import numpy as np

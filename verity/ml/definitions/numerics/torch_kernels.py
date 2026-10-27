@@ -5,8 +5,8 @@ nothing is flushed.
 
 These are written from the kernels' source independently of the gates, so a test that compares them checks the gates. The two
 libdevice functions are the exception: ``expf`` evaluates `NvExpf_v2` and ``logf`` `NvLogf_v3`, the Boolean Definitions the
-kernels' gates call, which their own modules' tests hold to their word Definitions. A GPU difftest compares the models with the
-CUDA kernels themselves.
+kernels' gates call, which their own modules' tests hold to their word Definitions. `tests/test_torch_training_sm120.py` holds
+the models to the CUDA kernels themselves, on an sm_120 GPU's words from smollm2-135m training steps.
 """
 from __future__ import annotations
 

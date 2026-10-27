@@ -2,7 +2,7 @@
 (`numerics.torch_kernels`) on random rows and on rows of special words (±0, subnormals, ±inf, NaNs, the extremes). The model
 then matches torch's CPU autograd: bit for bit for RoPE and repeat_kv's backward, whose CPU kernels round as the CUDA ones
 do, and to f32 rounding for the softmax, whose CPU kernels sum in another order and with another expf. The CUDA kernels
-themselves are the GPU difftest's."""
+themselves are `test_torch_training_sm120.py`'s."""
 from __future__ import annotations
 
 import numpy as np
