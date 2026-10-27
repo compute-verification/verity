@@ -17,7 +17,7 @@
 # admission order (VLLM-98), else the endpoint stops (exit 14). After UNTIL the check runs again over everything served.
 #   research run --on vy-nebius-1 --project verity --source TREE --cwd source --timeout 200m --env PORT=18084 --env UNTIL=13:30 -- \
 #     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by vllm -- \
-#     gpu-lease 1 --wait --mem-gb 256 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
+#     gpu-lease 1 --wait --mem-gb 256 -- bash examples/vllm/serve.sh
 # Windows are sealed off the engine loop and close at WINDOW_GB committed; the server itself also refuses to start, and later
 # stops taking requests, below DISK_FLOOR_GB free on the serve dir's filesystem, and copies its records into $OUT after each
 # window and at any stop. SEAL_HOLD_GB (64), SEAL_WARM_GB (0), MAX_NUM_SEQS (8), MAX_NUM_BATCHED_TOKENS (2048) and
