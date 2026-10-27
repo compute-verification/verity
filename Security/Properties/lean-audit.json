@@ -204,6 +204,9 @@
    "owner": "@memory-accounting",
    "digest": "87d161476d0c030f0ea03d2e74a6000290492c6e3d8e415189de12b6d5537ce7"
   },
+  "Properties.NetworkCertifier.ScanCountsRequests": {
+   "owner": "@network-accounting"
+  },
   "Properties.Pouw.Period.DrawIsCoin": {
    "owner": "@compute-accounting",
    "digest": "f80df2c5f11cf37bad8e1410b455c5c011a86a3f6cf2d332c1a29daf9974be77"
@@ -418,8 +421,13 @@
   },
   "Properties.NetworkCertifier": {
    "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity", "Lms.Sign"],
-   "except": [],
+   "except": ["Properties.NetworkCertifier.PerServerIngress"],
    "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
+  },
+  "Properties.NetworkCertifier.PerServerIngress": {
+   "imports": ["Properties.NetworkScan", "Definitions.NetworkCertifier.TapRows", "Definitions.NetworkCertifier.Ingress", "Definitions.NetworkCertifier.Assumptions", "Mathlib.Data.Set.Card", "Mathlib.Algebra.BigOperators.Fin"],
+   "except": [],
+   "why": "the server's ingress over a rows-form period is stated against the period check of record (`NetworkCheck.Period.check`), the scan's layout and scope (`Properties.NetworkScan`), the sampled audit's tap and ingress vocabulary and the certifier's named assumptions (`Definitions.NetworkCertifier`), with Mathlib's set cardinality and finite products, never a proof"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
