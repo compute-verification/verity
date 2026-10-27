@@ -5,7 +5,7 @@ at a time, in four records:
    (`catalog`), with its unit count, in order. Their population program and template query (`rows.population_program`)
    partition it into proof blocks, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
    names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
-   (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as network-accounting's N1 states it. The
+   (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as the network certifier states it. The
    window's ``circuit.json`` (`circuit_record`) holds the whole layout the verifier reads, stated per template and wire
    rather than per member, and the registration binds its SHA-512.
 2. **A compiler and its advice** (optional, `advice_binding`): the registered compiler's name and digest (which carries the
@@ -937,7 +937,7 @@ class Circuit:
     """An integration's circuit in proof blocks: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
     and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
-    layout (network-accounting's N1, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
+    layout (the network certifier's, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
     ports read as several rows (`Layout.cut`); ``registered`` and ``ingress``, what fills its other inputs
     (`check_inputs`); ``blocks``, its proof, inference and server blocks (`Blocks`)."""
     name: str

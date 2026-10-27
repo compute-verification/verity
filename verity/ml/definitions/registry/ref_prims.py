@@ -25,7 +25,7 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
       rounding boundary — no binary32 argument is known to (Lefèvre/Muller worst cases for exp are ~2^-60), and the
       evaluator, not the mathematical function, is the registered definition.
   `GatherF32x{V}` the f32 twin of `prims.gather_bf16` (out-of-range token -> 0x7FC00000, documented extension).
-  `I64ToI32`    range-checked int64 -> int32 (DERIVE R4; out of range -> 0x80000000 sentinel, torch wraps).
+  `I64ToI32`    range-checked int64 -> int32 (out of range -> 0x80000000 sentinel, torch wraps).
 
 **Composites** (statics in capitals; see each docstring for the exact order):
   `DotRef{K}`, `LinearRef{K,N,DT,BIAS}`, `RMSNormRef{N,EPS,DT}`, `LayerNormRef{N,EPS,DT}`, `GeluRefElem{APPROX}` /
@@ -636,7 +636,7 @@ def MulRef(B, S, a, b):
 
 @composite("ReluRef", 1, ["N", "DT"], lambda S: ((("x", Array(S.N, _dt(S.DT))),), Array(S.N, _dt(S.DT))), conformance=_REF_CONF)
 def ReluRef(B, S, x):
-    """`aten.relu` (DERIVE R1): `y_i = F32MaxRef(x_i, +0)` per element: x > 0 -> x; x < 0 -> +0.0; ±0 -> the same ±0 (torch
+    """`aten.relu`: `y_i = F32MaxRef(x_i, +0)` per element: x > 0 -> x; x < 0 -> +0.0; ±0 -> the same ±0 (torch
     2.4.1 CPU returns -0.0 for -0.0 on both its vectorised and scalar `clamp_min` paths — measured, `ReluRef_v1-*.json`);
     NaN -> NaN (0x7FC00000, DT NaN word after narrowing).  Widen/narrow are exact, so the kind is exact in either DT."""
     zero = B.call(b1.f32c(0.0))
@@ -650,7 +650,7 @@ def ReluRef(B, S, x):
                       Array(S.D, _dt(S.DT))),
            conformance=_REF_CONF)
 def RoPEInterleavedRef(B, S, x, cos, sin):
-    """HF GPT-J `apply_rotary_pos_emb` (DERIVE R3; interleaved pairing, `rotate_every_two`): with `cos`/`sin` the D/2-long
+    """HF GPT-J `apply_rotary_pos_emb` (interleaved pairing, `rotate_every_two`): with `cos`/`sin` the D/2-long
     table rows (HF `repeat_interleave(2)`s them; the kind indexes them directly), R = D/2, for i < R:
         `a_e = DT(RN(x_{2i} * cos_i))`,  `a_o = DT(RN(x_{2i+1} * cos_i))`,
         `p   = DT(RN(x_{2i+1} * sin_i))`, `q   = DT(RN(x_{2i} * sin_i))`,
@@ -711,7 +711,7 @@ I64 = Value(64)
 
 @primitive("I64ToI32", 1, [("t", I64)], I32, conformance=_REF_CONF)
 def I64ToI32(t: int) -> int:
-    """Range-checked narrowing of a torch int64 index to I32 (DERIVE R4): v = the two's-complement value of the 64-bit word;
+    """Range-checked narrowing of a torch int64 index to I32: v = the two's-complement value of the 64-bit word;
     `-2^31 <= v < 2^31` -> v as a 32-bit two's-complement word (identical to torch `.to(torch.int32)` there); otherwise
     0x80000000 (INT32_MIN — a negative token, which every Gather kind maps to its NaN word: total and visible).  torch's
     conversion WRAPS modulo 2^32 outside the range instead; that divergence is deliberate and recorded."""
@@ -793,7 +793,7 @@ def ref_vocab_manifest() -> dict:
 
 
 def ref_vocab_digest() -> str:
-    """SHA-256 over the canonical JSON of `ref_vocab_manifest()` — what DERIVE records in a derived program's provenance."""
+    """SHA-256 over the canonical JSON of `ref_vocab_manifest()` — what a derived program's provenance records."""
     import json
     m = ref_vocab_manifest()
     return hashlib.sha256(json.dumps(m, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
