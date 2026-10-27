@@ -386,9 +386,13 @@ def test_fill_table(tmp_path, capsys):
     later = dict(line, ltw=1, pf=2, gamma_ovl_nomem=1.02)
     served_arms = {a: v for a, v in arms.items() if a != "pad"}
     served = dict(line, o=True, row=16384, arms=served_arms, gamma_ovl_pad=None, gamma_ovl_w=1.25, gamma_ovl_w_cutlass=1.3)
-    (tmp_path / "b.jsonl").write_text("x\n" + "\n".join(json.dumps(x) for x in (line, later, served)) + "\n")
+    fused = dict(served, arms=dict(served_arms, wgl={"ms": 2.5, "mhz": 1980}), gamma_ovl_w_wgl=1.25 * 2.0 / 2.5, wg=1, rp=4,
+                 wbn=256, fused_leaves=3 * 28672, o_leaves=4 * 28672)
+    (tmp_path / "b.jsonl").write_text("x\n" + "\n".join(json.dumps(x) for x in (line, later, served, fused)) + "\n")
     assert v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")]) == 0
-    row, row2, row3 = capsys.readouterr().out.splitlines()[-3:]
+    row, row2, row3, row4 = capsys.readouterr().out.splitlines()[-4:]
+    assert row.endswith("| - | - | - |") and row3.endswith("| - | - | - |")
+    assert "| served r16384 hi k1 s1 wg256 rp4 |" in row4 and row4.endswith("| 2.500 | 1.000 | 75.0% |")
     assert row.startswith("| 8b-up | 16384 x 28672 x 4096 | 4096 | 1 | r1024 hi k1 s1 | 2.000 | 1.900 | 2.100 | 1.050 | 1.105 |"
                           " 1.060 | - |")
     assert "| 1.070 | - | 1.700 |" in row
