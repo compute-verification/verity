@@ -2672,9 +2672,9 @@
    "sealed": true
   },
   "Definitions.Claims": {
-   "imports": ["Mathlib", "Definitions.Hash.Basic", "Definitions.Claims"],
+   "imports": ["Mathlib", "Definitions.Hash.Basic", "Definitions.Core.Boolean", "Definitions.Claims"],
    "except": [],
-   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof; messages and collisions are the hash area's (Definitions.Hash.Basic)"
+   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof; messages and collisions are the hash area's (Definitions.Hash.Basic), and Flock's block circuit is core's Boolean circuit (Definitions.Core.Boolean)"
   },
   "Definitions.Hash": {
    "imports": ["Mathlib", "Definitions.Core.Digest", "Definitions.Hash"],
