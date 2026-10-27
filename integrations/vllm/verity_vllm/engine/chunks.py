@@ -41,8 +41,8 @@ whose schedule advanced some request ran a forward) and so is the lag (per reque
 advanced it; NOT `iterations - forwards`, which an idle gap between arrivals inflates), and when that disagrees with the arrival
 loop's inference `attribute()` repairs `timing["engine_steps"]`, `timing["output_lag_steps"]` and every request's
 `arrive_step_realized` / `first_step` (the forward index at admission, the loop's meaning) / `finish_step` (the forward that
-scheduled its last token), keeping the loop's values under `timing["chunk_attribution"]["corrections"]`.  `arrivals.py` on `lane/coverage` (integ, 22:12Z) now derives the
-forwards from the scheduler itself; on that loop the correction is a no-op and `corrections` stays None.
+scheduled its last token), keeping the loop's values under `timing["chunk_attribution"]["corrections"]`.  Where `arrivals.py` derives the
+forwards from the scheduler itself, the correction is a no-op and `corrections` stays None.
 
 Request ids.  The pinned vLLM runs the scheduler under an internal id f"{submitted}-{8 hex}" (`input_processor.assign_request_id`)
 and returns outputs under the submitted id; `external_id` maps the scheduler's ids back (run `0917T213719-880581` showed the
@@ -214,8 +214,8 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
         loop_steps = timing.get("engine_steps")
         fwd_s = _forward_map(ran_s)
         # the exact per-request values (the loop's meanings: first_step = forward index at admission, finish_step = the forward
-        # that sampled the last token); a correction is recorded only when a VALUE the loop wrote differs (the loop on
-        # lane/coverage derives the forwards from the scheduler itself and agrees -> corrections None)
+        # that sampled the last token); a correction is recorded only when a VALUE the loop wrote differs (a loop that
+        # derives the forwards from the scheduler itself agrees -> corrections None)
         exact: dict[str, dict[str, int]] = {}
         for rid, rec in recs.items():
             e: dict[str, int] = {}

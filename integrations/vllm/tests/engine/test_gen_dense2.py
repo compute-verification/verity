@@ -61,7 +61,7 @@ def test_gemma2_config_hand_fields_are_listed_and_only_those():
                          "query_pre_attn_scalar", "sliding_window", "hidden_act", "embed_normalizer", "rmsnorm_plus_one",
                          "layer_norms", "extra_layer_norms"}
     assert gemma.C["embed_normalizer"] == 48.0 == gemma.C["H"] ** 0.5 and gemma.C["query_pre_attn_scalar"] == gemma.C["D"]
-    # tied: the shared weights Record has no lm_head field; the sqrt(H) embedding-scale buffer is the LAST field (lane cov-dense)
+    # tied: the shared weights Record has no lm_head field; the sqrt(H) embedding-scale buffer is the LAST field
     assert [f for f, _ in analytic.weights_type(gemma.C).fields] == ["embed", "layers", "norm", "cos_sin", "normalizer"]
 
 
@@ -123,7 +123,7 @@ def test_gemma2_weight_field_adds_the_two_mlp_norms_and_ties_lm_head():
     assert wf("model.layers.4.pre_feedforward_layernorm.weight") == ("layers", 4, "ln_pre_mlp")
     assert wf("model.layers.4.post_feedforward_layernorm.weight") == ("layers", 4, "ln_post_mlp")
     assert wf("lm_head.weight") == ("embed",)                    # tied (vLLM computes the logits with model.embed_tokens)
-    assert wf("model.normalizer") == ("normalizer",)              # the one-word analytic table (lane cov-dense; was None / "unknown")
+    assert wf("model.normalizer") == ("normalizer",)              # the one-word analytic table
     assert wf("model.layers.0.self_attn.qkv_proj.bias") is None
 
 

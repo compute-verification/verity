@@ -170,7 +170,7 @@ def test_no_b7_gemm_shape_is_a_tuned_table_key():
         for (n, k) in shapes.values():
             assert GP.tuned_launch_config(full_table, M, n, k) is None
             assert GP.tuned_launch_config(GP.ADA_TUNED_GEMM, M, n, k) is None
-    # the lane's other two configurations, for the record: QWEN05 hits no key, LLAMA32_1B exactly its o_proj
+    # the other two configurations, for the record: QWEN05 hits no key, LLAMA32_1B exactly its o_proj
     assert not (set(_gemm_shapes(Q.C).values()) & set(ADA_TUNED_KEYS))
     assert set(_gemm_shapes(L.C).values()) & set(ADA_TUNED_KEYS) == {(2048, 2048)} and _gemm_shapes(L.C)["o_proj"] == (2048, 2048)
     # the registry now pins all five ada keys verbatim (block_k per key as vLLM has it), not only (2048, 2048)
@@ -232,7 +232,7 @@ def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
 # the serving-family reference (gen_ov_easy_family): Serve_v4, whose untied binding reads its own lm_head field
 # ---------------------------------------------------------------------------------------------------------
 
-#: the leaf kinds a `Serve_v4` body expands to under this lane's profiles (the base ids of the derived flat bodies of
+#: the leaf kinds a `Serve_v4` body expands to under these profiles (the base ids of the derived flat bodies of
 #: LLAMA32_1B / QWEN05 / B7; `match_program` expands the family down to exactly these)
 LEAF_BASES = {"Attention_v3", "Embedding_v1", "Gemm_v1", "RMSNormFusedCuda_v2", "RMSNormTriton_v1", "RoPE_v1", "SiluMul_v1",
               "TokenSelect_v1", "BiasAdd_v1"}
