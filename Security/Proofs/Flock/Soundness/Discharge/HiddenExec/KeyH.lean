@@ -264,8 +264,8 @@ template instance, in its block. -/
 noncomputable def keyRowAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (k : ℕ) :
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
   if h : u ∈ S then
-    siteAddrH (si.acc S R u h) (si.o S R u h)
-      (Typed.msgCol (si.acc S R u h).st.c (si.vu S R u h) q.val (k / 8) (k % 8))
+    (siteAddrH (si.acc S R u h) (si.o S R u h)
+      (Typed.msgCol (si.acc S R u h).st.c (si.vu S R u h) q.val (k / 8) (k % 8)) :)
   else ⟨0, Nat.two_pow_pos _⟩
 
 /-- **Row `q`'s `b ‖ c` at a drawn unit's site**: its `hm96` slot's output (`Layout.bcAddr`) at the unit's template
@@ -273,7 +273,7 @@ instance. -/
 noncomputable def keyBcAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n) (q : Fin c.ports.size) (j : Fin 128)
     (t : Fin 8) : Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
   if h : u ∈ S then
-    siteAddrH (si.acc S R u h) (si.o S R u h) (Layout.bcAddr (si.acc S R u h).st.c (si.vu S R u h) q.val j.val t.val)
+    (siteAddrH (si.acc S R u h) (si.o S R u h) (Layout.bcAddr (si.acc S R u h).st.c (si.vu S R u h) q.val j.val t.val) :)
   else ⟨0, Nat.two_pow_pos _⟩
 
 /-- **Row `q`'s salt at a drawn unit's site**: its `hm96` slot's salt input (`Hm.saltCol`) at the unit's template
@@ -284,7 +284,7 @@ noncomputable def keySaltAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n)
   if h : u ∈ S then
     match q with
     | .inl (_, q) =>
-      siteAddrH (si.acc S R u h) (si.o S R u h) (Hm.saltCol (si.acc S R u h).st.c (si.vu S R u h) q.val j.val t.val)
+      (siteAddrH (si.acc S R u h) (si.o S R u h) (Hm.saltCol (si.acc S R u h).st.c (si.vu S R u h) q.val j.val t.val) :)
     | .inr _ => ⟨0, Nat.two_pow_pos _⟩
   else ⟨0, Nat.two_pow_pos _⟩
 
@@ -434,16 +434,16 @@ theorem keyRowH_enc {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S) (M
     encPortH c.ports[q.val]! ((keyLayoutH hparse outs popOf ho hrf houts).row S R u M (.inl (u', q))) =
       Hidden.Any.rowMsg c.ports[q.val]!
         (List.ofFn fun j : Fin (2 * c.ports[q.val]!.words) => byteOf fun t => bit (Binding.wit plan tab S R u M
-          (siteAddrH (si.acc S R u hu) (si.o S R u hu)
-            (Typed.msgCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val)))) := by
+          ((siteAddrH (si.acc S R u hu) (si.o S R u hu)
+            (Typed.msgCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) :)))) := by
   have hle : portRowW c q ≤ Finset.univ.sup (portRowW c) + 1 :=
     (Finset.le_sup (Finset.mem_univ q)).trans (Nat.le_succ _)
   have hbytes : (List.ofFn fun j : Fin (2 * c.ports[q.val]!.words) => byteOf fun t =>
       (bitsAt (Binding.wit plan tab S R u M) fun k : Fin (portRowW c q) => keyRowAddrH si S R u q k.val)
         ⟨8 * j.val + t.val, by omega⟩) =
       List.ofFn fun j : Fin (2 * c.ports[q.val]!.words) => byteOf fun t => bit (Binding.wit plan tab S R u M
-        (siteAddrH (si.acc S R u hu) (si.o S R u hu)
-          (Typed.msgCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val))) := by
+        ((siteAddrH (si.acc S R u hu) (si.o S R u hu)
+          (Typed.msgCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) :))) := by
     refine List.ext_getElem (by simp) fun j h1 h2 => ?_
     simp only [List.getElem_ofFn]
     congr 1
@@ -492,13 +492,13 @@ theorem keyRowsH_computes
     show Binding.bytesAt _ (keyBcAddrH si S R u q) = Binding.commitString
       (encPortH c.ports[q.val]! ((keyLayoutH hparse outs popOf ho hrf houts).row S R u M (.inl (u', q))))
       (Binding.bytesAt _ (keySaltAddrH si S R u (.inl (u', q)) (hU := hU)))
-    have e1 : keyBcAddrH si S R u q = fun (j : Fin 128) (t : Fin 8) => siteAddrH (si.acc S R u hu) (si.o S R u hu)
-        (Layout.bcAddr (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) := by
+    have e1 : keyBcAddrH si S R u q = fun (j : Fin 128) (t : Fin 8) => (siteAddrH (si.acc S R u hu) (si.o S R u hu)
+        (Layout.bcAddr (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) :) := by
       funext j t
       simp only [keyBcAddrH, hu, dite_true]
     have e2 : keySaltAddrH si S R u (.inl (u', q)) (hU := hU) = fun (j : Fin 192) (t : Fin 8) =>
-        siteAddrH (si.acc S R u hu) (si.o S R u hu)
-          (Hm.saltCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) := by
+        (siteAddrH (si.acc S R u hu) (si.o S R u hu)
+          (Hm.saltCol (si.acc S R u hu).st.c (si.vu S R u hu) q.val j.val t.val) :) := by
       funext j t
       simp only [keySaltAddrH, hu, dite_true]
     rw [keyRowH_enc hparse outs popOf ho hrf houts hu M u' q hwq hbq, e1, e2]
