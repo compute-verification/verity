@@ -25,15 +25,15 @@ import sys
 if __name__ == "__main__":
     sys.path.insert(0, os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__)))
 
-import torch  # noqa: E402
+import torch
 
-import add as AD  # noqa: E402
-import argmax as AM  # noqa: E402
-import lib as L  # noqa: E402
-import quant as Q  # noqa: E402
-import relu as RL  # noqa: E402
-import rmsnorm as RN  # noqa: E402
-import softmax as SM  # noqa: E402
+import add as AD
+import argmax as AM
+import lib as L
+import quant as Q
+import relu as RL
+import rmsnorm as RN
+import softmax as SM
 
 HEADS = 256
 LAYERS = 52

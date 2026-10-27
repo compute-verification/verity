@@ -29,16 +29,17 @@ import threading
 import time
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
-RS = ROOT / "benchmarks" / "remote_session"
-sys.path.insert(0, str(RS))
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "remote_session"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import verifier as V
 import wire
 
 from verity.core.protocols.remote_bandwidth import audit
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
+RS = ROOT / "benchmarks" / "remote_session"
 
 EVENTS = os.fdopen(os.dup(1), "w", buffering=1)
 os.dup2(2, 1)
