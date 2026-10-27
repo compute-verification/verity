@@ -15,12 +15,12 @@ Where the two differ, the Python is what is wrong. The properties of the Lean's 
 `Security/Properties/RemoteAudit.lean`.
 
 `benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
-is the verifier: it decides each registration, event and window, an accepted session's record is the one
+is the verifier of record: it decides each registration, event and window, an accepted session's record is the one
 it returns, and the ledger reads that record. `audit.Session` keeps the books beside it as the reference, and a
 registration, event, window verdict or record field on which they differ refuses the session at that window as
 `disagreement`. The books check no openings: a window's verdict is the Lean's, and the Python check of its openings
-runs beside the Lean's in a transcript's replay (`lean/tests/replay.py`). The Lean is the verifier on these
-grounds:
+runs beside the Lean's in a transcript's replay (`lean/tests/replay.py`). The Lean became the verifier of record under
+the 8 Oct ruling (the friction skill), on these grounds:
 
 - the gap list is empty. A registration that binds PoUW's tiles is refused by both registries. A paced window's
   (k + 1)-th root is refused as `order` by both sessions. A transcript carries its session's pace. The Lean's record
@@ -82,7 +82,7 @@ uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py record
 uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript CASE.json ... [--record VERIFIER.json ...]
 ~~~
 
-A transcript that doesn't name its session's pace replays only with the pace its `verifier.json` gives
+A transcript written before it named its session's pace (20 Oct) replays only with the pace its `verifier.json` gives
 (`--record`), matched by the transcript's sha256.
 
 ## Code
@@ -105,7 +105,7 @@ A transcript that doesn't name its session's pace replays only with the pace its
 - `p2_party.py`: a P2 session's verifier and its challenger as a party of their own, on a host the prover doesn't
   control: started over ssh with the channel on its stdin and stdout (`--stdio`, as an auditor gate's verb starts it)
   or on a TCP port, it holds the auditor's registration and its plan (the units holding a tensor's block, not the
-  store's padding past them, which is PoUS's), drives the session on its own clock and coins, and answers
+  store's padding past them, which is PoUS's: MEM-72), drives the session on its own clock and coins, and answers
   the verdict with the credited reads (`q_bytes`). `prove` is the prover's side of the channel.
 - `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
   (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
