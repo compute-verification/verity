@@ -190,7 +190,7 @@ def test_softmax_t_is_the_definitions():
         assert np.array_equal(p[b, :, :n], A.softmax(sw[b:b + 1, :, :n]).probs[0]) and not p[b, :, n:].any()
 
 
-#: circuits' FAMILIES table at the frozen shape (PRF-166 db928eb0): a slot's units by key, the embedding's and head's included
+#: circuits' FAMILIES table at the frozen shape: a slot's units by key, the embedding's and head's included
 FAMILIES = {
     "EmbeddingCoordinate_v1{V=256}": 16_384,
     "AllGather_v1{WORLD=128,N=1}": 40_066,

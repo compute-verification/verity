@@ -1,4 +1,4 @@
-# The E2E demo's interfaces (P-CMP-1, CMP-95 items 5 and 6). Not a package: the suite checks the drawn-unit replay bundle
+# The E2E demo's interfaces: the drawn-unit replay bundle and the block record. Not a package: the suite checks the drawn-unit replay bundle
 # (`verity_e2e_demo.replay_bundle`) and the block record (`verity_e2e_demo.block_record`) against their schemas and
 # fixtures.
 [tool.pytest.ini_options]
@@ -8,4 +8,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # `verity`: windows, commitments, the Definitions a unit replays and core's registered values.
-inputs = ["verity"]
+# `benchmarks/torch_gpu/commit_slots/slots.py`: kernels' commit call, which builds the bundle's step commitments.
+inputs = ["verity", "benchmarks/torch_gpu/commit_slots/slots.py"]

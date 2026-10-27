@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# The drawn-unit replay bundle proved (prove_bundle.py; PRF-171's M1): the bundle PB_BUNDLE (its .bin beside it) of the
+# The drawn-unit replay bundle proved (prove_bundle.py; M1): the bundle PB_BUNDLE (its .bin beside it) of the
 # window PB_WINDOW; without PB_WINDOW, the store's art:1cd702b1 (BUNDLE_WINDOW: a W8A8 MLP's window under a test key, its
 # tampered twin and e2e_demo's bundle of four drawn units under the window's registered subset:4, a fixture's draw).
 # Each drawn member is proved by C-Flock `prove --zk` (CPU) behind the Lean firewall, one outer proof at a time, and
 # decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the
-# member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), stopped by the firewall and refused by
-# Lean without it. PB_LIVE=1 requires the bundle's draw to be live, with its receipt.
+# member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), stopped by the firewall
+# and refused by Lean without it. PB_LIVE=1 requires the bundle's draw to be live, with its receipt.
 #   research run --on vy-nebius-cpu-4 --pool proofs --as proofs --project verity --source . --cwd clone \
 #     -- bash benchmarks/one_stage/prove_bundle.sh [PB_BUNDLE=F PB_WINDOW=DIR [PB_TAMPERED=DIR]] [PB_MEMBERS=N] [PB_FLIPS=1] [PB_BINARIES=DIR] [PB_BUILD_ONLY=1]
 # PB_BUILD_ONLY=1 builds the three binaries, keeps them in $OUT/bin with the stamp of the trees they're built from

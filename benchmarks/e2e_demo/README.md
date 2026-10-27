@@ -1,7 +1,7 @@
 # E2E demo interfaces
 
-The interfaces between the six subprotocols of the one-H200 E2E demo (P-CMP-1, CMP-95 items 5 and 6). Not a package: run the
-modules with this directory on `PYTHONPATH` (the suite's `pyproject.toml` sets it).
+The interfaces between the six subprotocols of the one-H200 E2E demo: the drawn-unit replay bundle and the block record.
+Not a package: run the modules with this directory on `PYTHONPATH` (the suite's `pyproject.toml` sets it).
 
 ## The drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`)
 
@@ -13,13 +13,13 @@ member, subset draw and `frame_v3` header entry. A JSON document holds the publi
 binary payload beside it (`<name>.bin`, mode 0600), each named by `[offset, length]`. The payload is each unit's rows in
 order, each row's u16 words little-endian then its 192-byte salt.
 
-The step commitment is kernels' commit call (CMP-95 item 3, `verity/commit-slots/v1`): a step tree over slot trees over
+The step commitment is kernels' commit call (`verity/commit-slots/v1`): a step tree over slot trees over
 unit trees over rows, only each unit's outputs committed. An output row opens in its unit's own commitment unit. An input
 row opens where its producer committed it, and names the producer's coordinates (the fixture's `x` and `sx` open at
 their layer's input quantizer). The bundle adds a block tree over each server-time block's step roots.
-`verity_e2e_demo/commit_slots.py` is kernels' CPU reference vendored at the commit its header names (#4469). Once their
-commit_slots package is on `main`, import it and delete the copy. The suite pins the SHA-512 of their fixture,
-`commit-slots-v1.json` at the commit `REFERENCE` pins, which the copy must reproduce.
+The bundle builds its step commitments with kernels' CPU reference, `benchmarks/torch_gpu/commit_slots/slots.py`,
+imported from the tree. The suite pins the SHA-512 of their fixture, `commit-slots-v1.json` at the commit `REFERENCE`
+pins, which the reference must reproduce.
 
 `target` names the card's binding of the templates' dot: `GEMM_SM90_S8` for the H200's INT8, `GEMM_HOPPER` for its BF16,
 `GEMM_SM120_S8` for the RTX PRO 6000. `check` refuses a template that binds another dot. On `main`, `GEMM_SM90_S8`
@@ -61,11 +61,10 @@ for one server-time block and what the composed verdict reads. It extends the al
     python -m verity_e2e_demo.block_record check tests/fixtures/block-record-r2-period0.json
     python -m verity_e2e_demo.block_record tonight --r2 R2/reports.jsonl --r1 R1/reports.jsonl --wipe WIPE/results.json --out DIR
 
-The fixtures are real. `block-record-r2-period0` is period 0 of all-protocols run r20261025-210358-993e: five
-subprotocols accept, and the wipe of run r20261025-224222-91e2 is carried but not composed, since it ran on another
-server. So the verdict is pending, and the error sum is at least sampled proofs' 1/2 from its 2-unit draw.
-`block-record-r1-window10` is window 10 of r20261025-203534-186b: sampled proofs at δ = 1/100 and the wipe on the same
-server, with the other subprotocols absent.
+The fixtures are records of real runs. `block-record-r2-period0` is one period of an all-protocols run: five
+subprotocols accept, and a wipe is carried but not composed, since it ran on another server. So the verdict is pending,
+and the error sum is at least sampled proofs' 1/2 from its 2-unit draw. `block-record-r1-window10` is one window with
+sampled proofs at δ = 1/100 and the wipe on the same server, the other subprotocols absent.
 
 ## Demo A's report
 
@@ -73,12 +72,12 @@ server, with the other subprotocols absent.
 `demo_a.template`; its module docstring is the contract. A report with an unfilled number is refused; only a draft
 (`render(..., draft=True)`, never the command) shows `⟨NAME⟩`. Part 3 is circuit size in AND gates, with no FLOP figure or
 price; its H and B are one recorded run of proofs' planner (`benchmarks/sampling_plan/demo_a.py --spans week`), filled
-together with `PLANNER`. A measurements file with `sections` or `proved` renders M3's report (`m3.template`): every row is one number with
-its run, its own verdict line quoted and its target, whose misses are listed as visible failures. `proved` is
-DRAWPROVE's run (PRF-172), its VERDICT and PROVEBUNDLE lines verbatim: the first line is the M3 fallback's until all 8
-drawn H200 proof blocks are proved in C-Flock and accepted by Lean, and M3's after. Per-call noise's serving overhead
-is one line, `serve_noise_line` (CMP-126): the seconds it adds a step with both ratios, never γ_step alone, ending the
-section marked `"serve_noise": true`; a row stating it on its own is refused. The rendered report goes to the
+together with `PLANNER`. A measurements file with `sections` or `proved` renders the H200 report (`m3.template`): every row is one number with
+its run, its own verdict line quoted and its target, whose misses are listed as visible failures. `proved` is the
+drawn-block proving run's VERDICT and PROVEBUNDLE lines verbatim: the first line is the fallback's until every drawn
+H200 proof block is proved in C-Flock and accepted by Lean. Per-call noise's serving overhead is one line,
+`serve_noise_line`: the seconds it adds a step with both ratios, never γ_step alone, ending the section marked
+`"serve_noise": true`; a row stating it on its own is refused. The rendered report goes to the
 evidence store (`research data put --kind demo-a-report/v1 --file F --preserve`), never Git.
 
     python -m verity_e2e_demo.report [RECORD.json ...] --measurements M.json --out FILE

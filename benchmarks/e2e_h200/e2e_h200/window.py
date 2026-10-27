@@ -1,7 +1,7 @@
 """The H200 window writer (CIR-115): where each proof block's input ports read their bytes in the step commitments, for
 circuits' FAMILIES map (`plan.Map`).
 
-**The layout.** `shared_layout` is FAMILIES' shared-row commit layout (CIR-113, CMP-149), one commit unit a row of at most
+**The layout.** `shared_layout` is FAMILIES' shared-row commit layout, one commit unit a row of at most
 ``row`` bytes (1 KiB), built from the map's groups (the embedding, each layer, the head):
 
 - tiled: every table its readers share (the linears' coordinates, the embedding, the norm outputs, the residuals, softmax
@@ -11,26 +11,26 @@ circuits' FAMILIES map (`plan.Map`).
 - folded: each quantizer chunk's codes and its table's f32 scale, one row of two parts;
 - kept: K and V (``wk`` and ``wv``), a slot's one row each, since their positions are read at later steps.
 
-At the frozen shape and 1 KiB it is 21,857 rows a slot under ``layout_digest`` `FROZEN_DIGEST` (art:16f2faa0…), and its
-writers (`writers`) are art:8ce57586…'s.
+At the frozen shape and 1 KiB it is 21,857 rows a slot under ``layout_digest`` `FROZEN_DIGEST`, and its
+writers (`writers`) are circuits' writers artifact's.
 
 **The reads.** `Window.locate` gives a proof block's input port as `Piece`\\ s, its bytes theirs in order:
 
 - `Segment`: bytes of one committed row, named by the step whose commitment holds it, the commitment's slot at that step
   (the batch row the sequence ran at), the row's index in the slot's layout, and the bytes within it;
 - `Registered`: bytes of a row of a registered weight, in no step commitment: the tensor's little-endian bytes cut into rows
-  of `Tensor.words` u16 words, the positions its registration opens (CMP-160). At the frozen shape a row of a linear is
+  of `Tensor.words` u16 words, the positions its registration opens. At the frozen shape a row of a linear is
   8,192 codes, so ``wrow{r}`` of coordinate n is its row n R + r whole and ``sw`` the scale's row n;
 - `Run`: a run input of the step's Program, ``token`` (ingress) or ``n`` (position + 1, kind position);
 - `Absent`: a key row at or past ``n``, never opened, which the Definition masks; assembled as zero bytes.
 
 A proof block is unit ``index`` of a family (the map's op path, coords ``op``) at a step and slot; its ports are its
-Definition's (#4687's Program: `PvRowPad_v2`'s ``p, v0 .. v31, n`` for PV). An attention block at step s on a slot at
+Definition's (the Program's: `PvRowPad_v2`'s ``p, v0 .. v31, n`` for PV). An attention block at step s on a slot at
 position p reads key j < n = p + 1 at step s - p + j, in the row that sequence held then (`Replayer.history`'s rule). A
 read opens the widest row holding its bytes and an output the narrowest, so the same calls work on today's
 ``families/v1`` layout (`commit.layout`), where a gather's row re-commits its parts' bytes.
 
-`Window.bundle` gives the same pieces as the drawn-block bundle's ``locate`` returns them (CMP-161: a ``Read``'s
+`Window.bundle` gives the same pieces as the drawn-block bundle's ``locate`` returns them (a ``Read``'s
 commit unit and rank, the port word it fills and its bytes in the row; ``n`` a ``Position``; an output that is one whole
 row as ``(unit, rank, None)``). Binding a port's words to the segments of rows opened under the step roots is that bundle's
 and C-Flock's statement's: the windows wiring reads a row whole, and a port here is pieces of rows.
@@ -408,7 +408,7 @@ class Window:
         return (codes, (self._scale(step, slot, u.table, codes[0]),)) if u.scale else (codes,)
 
     def bundle(self, step: int, slot: int, family: str, index: int, port: str) -> Any:
-        """Port ``port`` of the block as the drawn-block bundle's ``locate`` returns it (CMP-161's stub, KVREADS 20:58Z):
+        """Port ``port`` of the block as the drawn-block bundle's ``locate`` returns it (the bundle's stub):
 
         - an output row (``o0``, a quantizer's scale ``o1``) that is one whole committed row: ``(unit, rank, None)``;
         - otherwise a list of pieces, each a ``Read``'s fields ``{step, slot, unit, rank, at, start, nbytes}`` or a
@@ -487,7 +487,7 @@ class Window:
     # -- the writers
 
     def writers(self) -> list[dict[str, Any]]:
-        """Every producer family's window rule, art:8ce57586's schema (`WRITERS_SCHEMA`): unit i writes bytes
+        """Every producer family's window rule, in circuits' writers schema (`WRITERS_SCHEMA`): unit i writes bytes
         ``row_offset + window_bytes (i % G) ..`` of commit unit ``first + i // G`` (one commit unit a row: the shared
         layout's)."""
         out = []

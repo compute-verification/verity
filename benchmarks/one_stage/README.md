@@ -63,7 +63,7 @@ negatives.
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
-- `served_verdicts.sh` (with `served_verdicts.py`): the Wed 28 run (VLLM-33), one served window through every subprotocol
+- `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol
   (`research run --on vy-dc-h200 --project verity --cwd clone -- bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
   few greedy requests from the certifier's traffic generator, and seals each window. Before the first request, the committer
@@ -75,7 +75,7 @@ negatives.
   `WC_RECORD_TIMEOUT` (default 2h): a timeout or refusal there is reported and never fails the run. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
   and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
   `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
-  gets no verdict. Finally the all-protocols window report and CMP-153's block record. Each step's verdict line is in
+  gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is in
   `out/verdicts.txt`.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
@@ -118,7 +118,7 @@ negatives.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `prove_path/run.sh` builds, with the firewall's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and firewall), which is what a CPU node
-  spends on one drawn statement of a block's draw (PRF-171).
+  spends on one drawn statement of a block's draw.
 - `forged_proofs.sh`: the fixture of C-Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest drawn `--zk` session and two whose committed output word is wrong, proved with the prover's self-check

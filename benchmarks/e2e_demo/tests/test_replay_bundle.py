@@ -1,5 +1,5 @@
 """The drawn-unit replay bundle: the fixture is its pinned digests, checks clean and fits its schema, each kind of tampering
-is refused by name, and the vendored commit call reproduces kernels' fixture."""
+is refused by name, and kernels' commit call reproduces their fixture."""
 from __future__ import annotations
 
 import copy
@@ -10,7 +10,9 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from verity_e2e_demo import commit_slots as S, replay_bundle as B
+from verity_e2e_demo import replay_bundle as B
+
+S = B.S
 
 SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json"
 #: the bundle of units 5, 200, 300 and 511 (slot 0 layer 0, slot 0 layer 1, slot 1 layer 0, slot 1 layer 1) of a W8A8 MLP's

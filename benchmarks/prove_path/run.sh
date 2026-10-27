@@ -10,7 +10,7 @@
 #     from integrations/vllm/workloads/$ROW.json. The honest partition is PP_PARTITION (default a5's step-16 SiluMul_v2,
 #     stratified:4); the forged one SiluMul_v2{I=1536} at step 16, all 3 units drawn, on ranks PP_FORGED_RANKS (default 0).
 #   PP_LLAMA=art:ID: a single-GPU (TP1) Commit's row dir in the store, fetched once per node into PP_CACHE (default
-#     ~/.cache/verity-prove-path): Llama-3.2-1B's Commit r20261024-055630-5377 (art:f7428299…, $LROW, the sealed bundle
+#     ~/.cache/verity-prove-path): Llama-3.2-1B's Commit r20261024-055630-5377 ($LROW, the sealed bundle
 #     commit/replay_bundle_p0 and the Build's build_request_LP*). Its compiler is I2's compile_steps; its advice the declared
 #     run's. The bundle's context records the Commit's absolute node paths, and none is read: the prover's Programs are read from
 #     --row-dir, the verifier's from its own trace of each (PP_VLLM_PYTHON), and the Build manifest falls back to
@@ -19,7 +19,7 @@
 #     one unit only r0 decodes there, drawn (subset:1), forged at PP_FORGE (default 0:0). With PP_SERVE_STANDIN=1, the same
 #     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
 #   PP_SERVE_RUN=DIR|art:ID PP_WINDOW=K PP_SERVE_ROWS=DIR|art:ID: a serve-openai run's closed Commit window K (default 0), its
-#     advice, requests and engine from the run dir, its Commit from the window's sealed row dir (#3532's form); PP_TARGET=F the
+#     advice, requests and engine from the run dir, its Commit from the window's sealed row dir; PP_TARGET=F the
 #     serving device's target profile where serve.json records none. The honest and forged partitions are PP_PARTITION and
 #     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). The window's compiler lists its
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is

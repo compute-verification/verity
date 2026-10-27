@@ -1,5 +1,5 @@
-"""The Wed 28 run's verdicts on one served window (`served_verdicts.sh`): the window it audits, the subprotocols after
-sampled proofs, and the one record of every verdict (CMP-153's block record).
+"""The verdicts on one served window (`served_verdicts.sh`): the window it audits, the subprotocols after
+sampled proofs, and the one record of every verdict (the block record).
 
     served_verdicts.py window SERVE_DIR [--slots N] [--window K]
     served_verdicts.py gate [--gate CMD] [--lane vllm] [--main FILE]
