@@ -47,7 +47,9 @@
   "Properties.Composition",
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
-  "Properties.Verity.Game"
+  "Properties.Verity.Game",
+  "Properties.NetworkCertifier.Period",
+  "Properties.Verity.Network"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -386,9 +388,9 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity"],
+   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity", "NetworkCheck.Period"],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, never a proof"
+   "why": "the properties are stated against the code's own functions, the check's, N2's link-window verdict of record's and the period check's (NetworkCheck.Period), never a proof"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
@@ -508,10 +510,12 @@
     "Definitions.Accounting.JointLive",
     "Definitions.Core.Game",
     "Definitions.Hash.RowLeaf",
-    "Flock.Hash"
+    "Flock.Hash",
+    "Properties.Verity",
+    "Properties.NetworkCertifier.Period"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the period model's vocabulary (Accounting.PeriodLive, the one definition of a period), the shared game and the row-leaf opening it reads the commitment through, never over a proof"
+   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the period model's vocabulary (Accounting.PeriodLive, the one definition of a period), the shared game and the row-leaf opening it reads the commitment through, the network period check's property (PeriodAcceptMeans, which the lift from ComponentAccepts .network reads) and its own modules (the game's vocabulary), never over a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
@@ -2298,6 +2302,9 @@
    "signature": ["Verity.soundness_of_subprotocols : Verity.Soundness"],
    "assumptions": [],
    "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans": {
+   "owner": "@network-accounting"
   }
  },
  "shape": {
@@ -3394,6 +3401,10 @@
    "Properties.Composition.bindCollision": {
     "function": "Core.Composition.bind",
     "outcome": "none"
+   },
+   "Properties.NetworkCertifier.periodAcceptMeans": {
+    "function": "NetworkCheck.Period.protocol.check",
+    "outcome": "accept"
    }
   },
   "frozen": {
