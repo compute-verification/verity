@@ -26,7 +26,9 @@
 //   m2h2_<v>    NM 2, NH 2: 5 warpgroups, four m64n64k32 an atom, the MMA warpgroups at 152
 // v: the hash's compression, lowreg.cu's r (sx::compress<0, 1>) or rs (lowreg.cuh's rounds, the chaining value in shared
 // memory, 8 KiB a hash warpgroup). _sus: every mbarrier wait with a suspend-time hint (SUS_BIT), so the producer's and
-// the MMA warpgroups' waits park rather than reissue try_wait in the hash warps' issue slots.
+// the MMA warpgroups' waits park rather than reissue try_wait in the hash warps' issue slots. _early, _pre: in the
+// handoff the hash frees the O buffer once it has loaded a fill's last chunk, or all of the fill's chunks (the half
+// tile's two, 32 registers more: H 136), rather than once it has compressed them, so the epilogue waits less.
 // Arms (a launch's mode): mma (the hash warpgroups exit at once), hash (the GEMM's warpgroups exit; each hash thread hashes
 // its seed row's bytes in the O buffer, the whole row or its first half, as many times as make the CTA's O tiles' bytes),
 // free (both: the hash passes over the O buffer until the GEMM ends, so the tensor pipe's time beside a busy ALU is the
@@ -81,7 +83,9 @@ DEV void mbar_arrive(uint32_t bar) { asm volatile("mbarrier.arrive.shared::cta.b
 // SUS: try_wait with a suspend-time hint (CUTLASS's ClusterBarrier::wait, 10 ms), so a waiting warp parks until the phase
 // completes rather than reissuing try_wait, and leaves its scheduler's issue slots to the hash warp beside it
 constexpr uint32_t SUSPEND_NS = 0x989680;
-constexpr int SUS_BIT = 16;
+// a hash kernel's VAR: 0 r or 3 rs, with SUS_BIT, and in the handoff EARLY_BIT (the hash frees the O buffer after loading
+// a fill's last chunk rather than after compressing it) or PRE_BIT (after loading every chunk of the fill into registers)
+constexpr int SUS_BIT = 16, EARLY_BIT = 32, PRE_BIT = 64;
 template <bool SUS = false> DEV void mbar_wait(uint32_t bar, uint32_t parity) {
   if constexpr (SUS)
     asm volatile(
@@ -184,6 +188,9 @@ template <int VAR> struct Row {
   DEV void chunk(const uint8_t* p, int sw) {
     u64 w[16];
     sx::load_chunk(p, w, sw);
+    compress(w);
+  }
+  DEV void compress(u64 (&w)[16]) {
     if constexpr (VAR == 0) {
       sx::compress<0, 1>(st, w);
     } else {
@@ -221,8 +228,9 @@ DEV void body(const Params& p) {
   static_assert(NFORM == 64 || NFORM == 128 || (NFORM == 256 && C::LAUNCH >= 154), "ptxas refuses n256 below 154 registers");
   static_assert(P + NM * Y + NH * H <= NWG * C::LAUNCH, "the warpgroups' registers exceed the launch's");
   static_assert(L::SMEM <= 232448, "shared memory");
-  constexpr bool CAN_HANDOFF = NM == 2 && NH == 1, SUS = VAR & SUS_BIT;
+  constexpr bool CAN_HANDOFF = NM == 2 && NH == 1, SUS = VAR & SUS_BIT, EARLY = VAR & EARLY_BIT, PRE = VAR & PRE_BIT;
   constexpr int HV = VAR & 3;
+  static_assert(!PRE || OT == 2, "pre holds a fill's chunks in registers: the half tile's two");
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t s0 = smem_at(smem), base = (s0 + 1023) & ~1023u;
   uint8_t* gb = smem + (base - s0);
@@ -295,9 +303,25 @@ DEV void body(const Params& p) {
           r.init(p.mid);
           for (int f = 0; f < tiles_n * (4 / CH); f++, j++) {
             mbar_wait<SUS>(tfull, j & 1);
+            if constexpr (PRE) {
+              u64 w[CH][16];
+#pragma unroll
+              for (int c = 0; c < CH; c++) sx::load_chunk(row + 128 * c, w[c], sw);
+              mbar_arrive(tempty);
+#pragma unroll
+              for (int c = 0; c < CH; c++) r.compress(w[c]);
+            } else if constexpr (EARLY) {
 #pragma unroll 1
-            for (int c = 0; c < CH; c++) r.chunk(row + 128 * c, sw);
-            mbar_arrive(tempty);
+              for (int c = 0; c < CH - 1; c++) r.chunk(row + 128 * c, sw);
+              u64 w[16];
+              sx::load_chunk(row + 128 * (CH - 1), w, sw);
+              mbar_arrive(tempty);
+              r.compress(w);
+            } else {
+#pragma unroll 1
+              for (int c = 0; c < CH; c++) r.chunk(row + 128 * c, sw);
+              mbar_arrive(tempty);
+            }
           }
           r.finish(p.kw, p.digests + (size_t)(tm * TMC + x) * 8);
           passes += tiles_n * (4 / CH);
@@ -426,6 +450,9 @@ static const Kern KERNS[] = {
     KERN("h128_r_sus", 2, 1, 128, 3, 1, 32, 176, 128, SUS_BIT),
     KERN("h128_r_s4_sus", 2, 1, 128, 4, 2, 32, 176, 128, SUS_BIT),
     KERN("m1h2_r_sus", 1, 2, 128, 4, 1, 24, 232, 128, SUS_BIT),
+    KERN("h128_r_early", 2, 1, 128, 3, 1, 32, 176, 128, EARLY_BIT),
+    KERN("h128_r_s4_early", 2, 1, 128, 4, 2, 32, 176, 128, EARLY_BIT),
+    KERN("h136_r_s4_pre", 2, 1, 128, 4, 2, 24, 176, 136, PRE_BIT),
 };
 static const char* const ARMS[] = {"mma", "hash", "free", "handoff"};
 static const int ARM_MODE[] = {MMA, HASH, MMA | HASH, MMA | HASH | HANDOFF};
