@@ -17,8 +17,9 @@
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
 #     --pins` the registration, and PIN's NAME=ROOT if set; #4317 with #4757), its registered and free input bits at those
 #     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs;
-#     then at the class of record, a measurement within WC_RECORD_TIMEOUT (default 2h) whose timeout or refusal is said and
-#     never fails the run (unless CLASSES names `record`, which then gates instead); then the window audited from its records alone
+#     and at the class of record, a measurement within WC_RECORD_TIMEOUT (default 2h), run last, after the record (step 5),
+#     since nothing reads it, whose timeout or refusal is said and never fails the run (unless CLASSES names `record`, which
+#     then gates here instead); then the window audited from its records alone
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the drawn proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1), not the window circuit's. V3c (VLLM-125) proves the window circuit's own units at
@@ -209,20 +210,24 @@ circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line h
   fi
   return "$rc"
 }
-circuits() {  # in TREE: every class of CLASSES gates (0 iff each counted); the class of record after them gates nothing
+circuits() {  # in TREE: every class of CLASSES gates (0 iff each counted)
   local bad=0 c
   grep -q '"window-circuit"' benchmarks/prove_path/prove_path.py \
     || { say "MISSING V3b's window circuit (#4317 with #4757, VLLM-103): this tree's prove_path.py has no window-circuit"; return 1; }
   for c in $CLASSES; do circuit "$c" "WC_TIMEOUT=${WC_TIMEOUT:-30m}" "WINDOW-CIRCUIT class $c" || bad=1; done
+  return "$bad"
+}
+measure() {  # in TREE: the class of record, unless CLASSES gates on it; it gates nothing, and nothing after it reads it
+  grep -q '"window-circuit"' benchmarks/prove_path/prove_path.py || return 0
   case " $CLASSES " in
     *" record "*) ;;
     *) circuit record "WC_RECORD_TIMEOUT=${WC_RECORD_TIMEOUT:-2h}" "WINDOW-CIRCUIT class record (measurement)";;
   esac
-  return "$bad"
+  return 0
 }
 
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
-if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; exit $?; fi
+if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; rc=$?; measure; exit "$rc"; fi
 
 stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; free -g | head -2; nvidia-smi -L; echo "serve dir $D"; } \
@@ -367,5 +372,6 @@ TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$OUT/sampled-proofs/served" \
   --pieces "$OUT/pieces" --out "$OUT/record" 2>&1 | tee -a "$OUT/verdicts.txt"
 rec=${PIPESTATUS[0]}
+measure
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
 [ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"
