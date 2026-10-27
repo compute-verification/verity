@@ -9,9 +9,9 @@ import Definitions.Core.Declaration
 /-!
 # The working draft's model: Boolean circuits, `(c, k)`-partitions and local description length
 
-The model of the working draft "Distinguishing inference from frontier training" (§3 and §4; Daniel, 26 Oct, LEAN-63),
-on core's one circuit type `Verity.Circuit` and its one `Partition`. Every statement about training, NCI and the
-accounting envelopes is to be stated on these objects.
+The model of the working draft "Distinguishing inference from frontier training" (§3 and §4), on core's one circuit
+type `Verity.Circuit` and its one `Partition`. Every statement about training, NCI and the accounting envelopes is to be
+stated on these objects.
 
 * A **Boolean circuit** (`Circuit.Boolean`) is a circuit whose every gate holds one bit and whose every operation gate
   reads at least one gate: the draft's positive fan-in, with constants as registered input gates. Its gate basis is
