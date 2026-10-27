@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.ExecParse
+import Properties.Flock.Circuit.Keys
 
 /-!
 # A typed template's Δ, and the rows it makes copies
@@ -64,10 +65,6 @@ end rows
 /-! ## The typed tail, as lists -/
 
 namespace Typed
-
-/-- Each row word's first message leaf (`HmRow.delta`'s `starts`). -/
-def starts (c : Circuit) : Array ℕ :=
-  (c.ports.foldl (fun (acc : Array ℕ × ℕ) p => (acc.1.push acc.2, acc.2 + p.words)) (#[], 0)).1
 
 /-- Message bit `t` of byte `byte` of row `p`'s message in template instance `g` (`HmRow.delta`'s `msgCol`): in its
 chain's `sha512x3` slot, or past the chain in its hm96 slot's `pad`. -/
