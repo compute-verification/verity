@@ -46,7 +46,9 @@ import rmsnorm as RN  # noqa: E402
 import softmax as SM  # noqa: E402
 import sweep as SW  # noqa: E402
 import words as W  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 SEED = 20261026
 SPECIALS = np.array([0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0xFFC0, 0x7F81, 0xFFFF, 0x0001, 0x8001, 0x007F, 0x807F,
                      0x0080, 0x7F7F, 0xFF7F, 0x3F80, 0xBF80], np.uint16)
@@ -420,8 +422,8 @@ def _digest(task: tuple[int, int]) -> tuple[int, int, int]:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("out", nargs="?", default="/tmp/units-check")
-    ap.add_argument("--replay", default=os.environ.get("UNITS_REPLAY"))
-    ap.add_argument("--rows", default=os.environ.get("UNITS_ROWS"))
+    ap.add_argument("--replay", default=settings.UNITS_REPLAY)
+    ap.add_argument("--rows", default=settings.UNITS_ROWS)
     ap.add_argument("--no-sweep", action="store_true")
     a = ap.parse_args(argv[1:])
     out, replay_path = a.out, a.replay
@@ -471,7 +473,7 @@ def main(argv: list[str]) -> int:
     if not a.no_sweep:
         t1 = time.time()
         tasks = [(op, c) for op in SW.OPS for c in range(SW.chunks(op))]
-        with mp.get_context("spawn").Pool(int(os.environ.get("PROCS", "8"))) as pool:
+        with mp.get_context("spawn").Pool(settings.PROCS) as pool:
             res = pool.map(_digest, tasks, chunksize=1)
         sw = {str(op): {"name": SW.OPS[op][0], "n": SW.OPS[op][1], "arg": SW.OPS[op][2],
                         "chunks": [f"{d:016x}" for o, c, d in sorted(res) if o == op]} for op in SW.OPS}
