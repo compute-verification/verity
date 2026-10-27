@@ -136,9 +136,8 @@ theorem isAnd_gateOf {N : ℕ} (t : Fin N) : (andDecl N).D.IsAnd (gateOf t) :=
 theorem gateOf_output {N : ℕ} (t : Fin N) : gateOf t ∈ (andDecl N).D.outputs :=
   Finset.mem_filter.mpr ⟨Finset.mem_univ _, show 2 ≤ t.val + 2 by omega⟩
 
-theorem creditSize_gateOf {N : ℕ} (t : Fin N) :
-    Verity.creditSize Verity.Declaration.D (andDecl N) {gateOf t} = 1 := by
-  unfold Verity.creditSize Verity.Circuit.andSize
+theorem andSize_gateOf {N : ℕ} (t : Fin N) : (andDecl N).D.andSize {gateOf t} = 1 := by
+  unfold Verity.Circuit.andSize
   rw [Finset.filter_singleton, if_pos (isAnd_gateOf t), Finset.card_singleton]
 
 /-- **The honest map**: block `t` is AND gate `t + 2`, and word `i` is its one bit, that gate. The lowering is the
@@ -173,7 +172,7 @@ def blocks (N : ℕ) : BlockMap (circuit N) N Verity.Declaration.D (andDecl N) w
 theorem size_blocks {N : ℕ} (t : Fin N) : (blocks N).size ∅ t = 1 := by
   unfold BlockMap.size
   rw [Finset.sdiff_empty]
-  exact creditSize_gateOf t
+  exact andSize_gateOf t
 
 /-! ## The honest witness -/
 

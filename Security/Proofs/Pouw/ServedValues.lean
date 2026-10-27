@@ -17,6 +17,19 @@ namespace Properties.Pouw.ServedValues.SecurityProofs
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
+/-- **The blocks' sizes sum to at most the credit** of the registered declaration under its pinned lowering: the
+blocks are disjoint, so their AND gates outside the ledger are among `lower D`'s AND gates. -/
+theorem sum_size_le_creditSize {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.Declaration → Verity.Circuit}
+    {D : Verity.Declaration} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) :
+    ∑ t, M.size ledger t ≤ Verity.creditSize lower D := by
+  classical
+  unfold BlockMap.size Verity.creditSize Verity.Circuit.andSize
+  rw [← Finset.card_biUnion]
+  · exact Finset.card_le_card (Finset.biUnion_subset.mpr fun t _ =>
+      Finset.filter_subset_filter _ (Finset.subset_univ _))
+  · intro t _ t' _ h
+    exact Finset.disjoint_filter_filter ((M.disjoint t t' h).mono Finset.sdiff_subset Finset.sdiff_subset)
+
 open Classical in
 /-- **The right blocks' words**: the credited words of every block `good` names in each window. -/
 noncomputable def rightWords {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
