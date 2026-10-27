@@ -23,10 +23,10 @@ files through `partial` parses, so its outputs are taken as `Given` fields and t
 every commitment `c`, and sampled proofs' claim reads `c` (`Vocab.Opens`), so at a commitment that opens nothing it
 fails on every play (`Verity.Vocab.not_honestHolds_sampled_of_unopened`, in the proofs). The toy's statement is at the
 honest deployed instance instead: at registered files, the commitment the honest prover sends (`Given.commit`), then
-the honest strategy (`HonestHoldsAt`, the restatement proposed to ONETHM on PRF-193). It takes two named premises
-until their owners define the fields they read: `SampledHonest` (the extractor's transcript at the honest strategy is
-correct and the honest commitment opens it: ONE-8's extractor, ONE-7's positions) and `NetworkHonest`
-(network-accounting's `Verity.networkComponentBound_honest`, stated exactly as named on PRF-193 until it lands).
+the honest strategy (`HonestHoldsAt`). It takes two named premises until their owners define the fields they read:
+`SampledHonest` (the extractor's transcript at the honest strategy is correct and the honest commitment opens it: the
+extractor and the positions) and `NetworkHonest` (network-accounting's `Verity.networkComponentBound_honest`, stated
+as named until it lands).
 -/
 
 namespace Verity.Toy
@@ -75,16 +75,16 @@ def inertFinder : Claims.Finder where
 
 /-- **The `Vocab` fields no owner has defined on `main` yet**, and the toy's prover's outputs, which have no Lean value.
 
-* `read`: v2's reading of the committed blob (ONE-3b, ONE3B).
+* `read`: v2's reading of the committed blob.
 * `place`, `programDigest`, `registered`: the positions, the circuit file's digest in the parameters and the registered
-  blob (ONE-7; #4754 gives `Flock.Bridge.circuitOf`, none of these).
-* `rounds`, `coinsRead`: the device's rounds and the releases each component's check read (ONE-4, #4888).
-* `extract`: the extractor applied to a strategy (ONE-8, `XplurZC`).
+  blob (`Flock.Bridge.circuitOf` gives none of these).
+* `rounds`, `coinsRead`: the device's rounds and the releases each component's check read.
+* `extract`: the extractor applied to a strategy (`XplurZC`).
 * `finder`, `callsMul`, `callsAdd`, `finder_calls`: each decided claim's collision finder and its SHA-512 calls in
-  those of the strategy (ONE-8 for sampled proofs, network-accounting for the network certifier).
-* `cost`: the strategy's SHA-512 calls, declared, as `Vocab.cost` is (`Verity.Game` has no call model; ONETHM).
-* `world`: the world each play realizes (ONE-12, the network certifier's realized run, `commWithin`).
-* `certOf`, `crBound`, `delta`, `loss`: what the product publishes, from the parameters alone (ONE-19; its `deltaPub`
+  those of the strategy (sampled proofs' extractor, network-accounting for the network certifier).
+* `cost`: the strategy's SHA-512 calls, declared, as `Vocab.cost` is (`Verity.Game` has no call model).
+* `world`: the world each play realizes (the network certifier's realized run, `commWithin`).
+* `certOf`, `crBound`, `delta`, `loss`: what the product publishes, from the parameters alone (the model's `deltaPub`
   is in the proofs tree, which a statement can't read).
 * `commit`, `answer`, `evidence`: the honest prover's commitment, each round's bytes from the releases so far, and its
   evidence from the device's log (`records_audit.py`, `serve.py`: C-Flock's prover and the integration's commit). -/
@@ -185,7 +185,7 @@ def HonestHoldsAt {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Voca
     Game.prob (fun o => ¬ V.Holds θ F (commit θ F) (V.honest θ F (commit θ F)) a o) (V.game θ F (commit θ F))
       (V.honest θ F (commit θ F)) = 0
 
-/-- **The honest prover's sampled proofs case** (premise; owners: ONE-8 for the extractor, ONE-7 for the positions):
+/-- **The honest prover's sampled proofs case** (premise; owner soundness, the extractor and the positions):
 at registered files and the honest commitment, the extractor's transcript at the honest strategy is correct on every
 unit, the commitment opens every gate to it (a registered constant to its constant), and the published share `ε` is
 not negative. It leaves the toy's premises once `extract` and `place` are defined and it is proved, from
@@ -196,8 +196,8 @@ def SampledHonest {ι : Type} {d : Device ι} {α : Type} [Fintype α] (G : Give
       (∀ g, (vocab G).Opens θ F (G.commit θ F) g (G.extract θ F (G.commit θ F) (honest G θ F (G.commit θ F)) g)) ∧
       0 ≤ (G.certOf θ).ε
 
-/-- **The network certifier's honest lemma at the toy** (premise; owner network-accounting, ONE-12):
-`Verity.networkComponentBound_honest` (`Properties.Verity.Network`) as named on PRF-193, `Vocab.HonestHolds` at the
+/-- **The network certifier's honest lemma at the toy** (premise; owner network-accounting):
+`Verity.networkComponentBound_honest` (`Properties.Verity.Network`) as named, `Vocab.HonestHolds` at the
 network certifier's claim: on every play of the honest strategy at a registered file, what the network certifiers saw
 the node move is within the published `K`. Its use here becomes a citation once it lands. -/
 def NetworkHonest {ι : Type} {d : Device ι} {α : Type} [Fintype α] (G : Given d α) : Prop :=

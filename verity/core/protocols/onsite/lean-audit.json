@@ -28,7 +28,7 @@
     "SampledProofs.OneStageZk"
    ],
    "except": [],
-   "why": "the toy deployment's verifier is code: the core interface, C-Flock's Lean and its two components' ports, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the toy deployment's verifier is code: the core interface, C-Flock's Lean and its two components' ports, no Mathlib and nothing of Security (the layout ruling)"
   }
  },
  "dependencies": {

@@ -8,7 +8,7 @@ import Proofs.Properties.Verity.Soundness
 every play of its honest prover, sampled proofs' from `Vocab.holds_sampled_of_opens` at the honest prover's case
 (`SampledHonest`), the network certifier's from its honest lemma (`NetworkHonest`) at the honest commitment.
 `soundness_honest_event` is `soundness_at_honest`'s event at the toy, at that instance: the toy's compiled verifier
-accepting registered files while a claim it decides fails has probability `0`. ONE19's model-level instance stays the
+accepting registered files while a claim it decides fails has probability `0`. The model-level instance stays the
 one `_nontrivial` (`soundness_at_nontrivial_of … .sampled`); the toy gets none of its own.
 
 `Vocab.not_honestHolds_sampled_of_unopened` is why the statement is at the honest commitment: `Vocab.HonestHolds
