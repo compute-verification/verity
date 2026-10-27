@@ -35,8 +35,8 @@ blocks, or doesn't vectorize, is refused.
 `SiluTorch_v1` is `silu_kernel`'s ``x / (1 + ::exp(-x))`` in f32, then bf16; `SiluTorchBackward_v1` is `silu_backward_kernel`'s
 ``s = 1 / (1 + exp(-x))``, ``dy * s * (1 + x * (1 - s))`` (the kernel autograd runs when the backward doesn't build a graph).
 ``exp`` is CUDA's ``expf`` (libdevice ``__nv_expf``, `boolean_moe`'s `NvExpfIn_v1` and `NvExpfOut_v1` around its
-``ex2.approx.ftz.f32``), and EX2 is a static: the Definition of MUFU.EX2, `mufu.MufuEx2Ftz_v2` the table measured on sm_89
-until kernels' sm_120 table (KATTN-REF) pins the one the step binds. The divides are ``div.rn.f32``. CONTRACT is the one
+``ex2.approx.ftz.f32``), and EX2 is a static: the Definition of MUFU.EX2, on sm_120 `mufu.MufuEx2Ftz_v2`, which equals that
+unit on every input kernels' sm_120 table read (r20261027-024703-41d4). The divides are ``div.rn.f32``. CONTRACT is the one
 contraction the source leaves to nvcc: 1 reads ``1 + x * (1 - s)`` as ``fma(x, RN(1 - s), 1)``, 0 as ``RN(1 + RN(x * RN(1 -
 s)))``; the sm_120 SASS of ``silu_backward_kernel`` in the wheel's libtorch_cuda.so settles it. Every NaN result is 0x7FFF.
 """
