@@ -1,8 +1,9 @@
 """What compute efficiency eta (``tiers.py``) is most exposed to: a plausible range for every parameter, eta and 1/eta
 across it at each tier, elasticities d ln eta / d ln p in four scenarios, the values at which 1/eta falls below 100, 10
 and 2, and the closed forms of the memory cap mu, NCI's term nu and the cheating share chi checked against
-``tiers.evaluate``. 1/eta is not the compute dampener D (``tiers.evaluate()["dampener"]``): at s = 0 and g = 1,
-D = MFU_0 / eta wherever D > 1. ``statement.py`` gives the thresholds on D.
+``tiers.evaluate``. 1/eta is not the compute dampener D (``statement.dampener``, the overhead calculator's
+``rho.theorem.multiple_bound``): at s = 0 and g = 1, D = MFU_0 / eta wherever D > 1. ``statement.py`` gives the
+thresholds on D.
 
     python benchmarks/nci/exposure.py           # terms, tornado, elasticities, thresholds and closed-form checks
     python benchmarks/nci/exposure.py --json    # the same, for renderers

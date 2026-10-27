@@ -41,10 +41,10 @@ proved.
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
 multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
 against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
-only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The compute dampener D is a hardware
-multiple: how many times more hardware-time the developer needs than an unconstrained developer with the same recipe on
-the same hardware, who reaches model-FLOP utilization mfu. Unmonitored compute trains like the unconstrained developer;
-the other terms are counted at peak, so 1/D <= s + (min(r + nu, mu) + chi) / mfu, and D is at least 1.
+only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The compute dampener D, the
+hardware multiple over an unconstrained developer with the same recipe on the same hardware at model-FLOP utilization
+mfu, isn't computed here: it is the overhead calculator's ``rho.theorem.multiple_bound`` (Lean's
+``Nci.Dampener.remoteDampener``) on these terms (``remote_terms``).
 
 The canvas "Compute efficiency under the verification stack" renders this model.
 
@@ -410,13 +410,18 @@ def evaluate(p: dict, mech: dict) -> dict:
     largest = max(terms, key=lambda t: terms[t])
     if largest == "declared":
         largest = "declared (thread bound)" if declared >= cap_T * (1 - 1e-9) else "declared (partial-sum law)"
-    inverse = terms["unmonitored"] / p["g"] + (terms["residual"] + terms["declared"] + terms["cheat"]) / p["g"] / p["mfu"]
     return {
         "efficiency": sum(terms.values()), **terms, "largest": largest, "memory_caps_residual": capped,
-        "dampener": max(1.0, 1 / inverse) if inverse > 0 else math.inf,
         "rho_T": rho_T, "crossing_bits": B, "wipe_state_bits": wipe_state, "envelope_bits": envelope,
         "state_threshold_bits": state_threshold(p, mech), "cheat_steps": k, "cheat_bits": bits,
     }
+
+
+def remote_terms(p: dict, r: dict) -> tuple[float, float]:
+    """``evaluate``'s terms as the ``s`` and ``x`` of ``Nci.Dampener.remoteDampener mfu s x``: the unmonitored share,
+    which trains like the unconstrained developer, and the rest, counted at peak, each per the compute amplifier g
+    (which cancels against the unconstrained developer's)."""
+    return r["unmonitored"] / p["g"], (r["residual"] + r["declared"] + r["cheat"]) / p["g"]
 
 
 def main(argv: list[str] | None = None) -> int:

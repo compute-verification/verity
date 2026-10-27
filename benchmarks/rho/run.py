@@ -220,6 +220,8 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
     un = r.unmonitored
     verdict = ("the lower bound is below it, so **vacuous**: it doesn't exclude even that adversary" if r.vacuous(r.lo)
                else f"the lower bound is {fmt(r.lo / un)} times it")
+    verdict += (f"; the hardware multiple over it is at least **{fmt(r.multiple)}** (`Result.multiple`, "
+                f"Lean's `remoteDampener`, `max(1, 1/(s + x/MFU))`)")
     st = s.structure
     best = picked(r)
     gates = fmt(st.gates(weight_per_gate(best.profile, c.units))) if best else "—"
@@ -376,6 +378,7 @@ def main() -> None:
             "overhead": r.lo, "status": best.combined.status if best else None,
             "premise": best.combined.premise if best else None, "set_by": sets.argument if sets else None,
             "excluded": list(best.combined.excluded) if best else [], "unmonitored": un, "vacuous": r.vacuous(r.lo),
+            "multiple": r.multiple,
             "inference_overhead": {"value": policy.inference_overhead,
                                    "source": reg.param(f"policy.{policy.name}.inference_overhead").source
                                    if f"policy.{policy.name}.inference_overhead" in reg else "not modeled"},

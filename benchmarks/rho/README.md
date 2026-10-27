@@ -17,6 +17,11 @@ adversary may use, and the bounds and attacks applied. For each one the package 
   implies;
 - **the comparator** `μ / MFU` (`Result.unmonitored`): an adversary that no protocol encumbers trains at its MFU on a
   circuit padded to capacity, so a lower bound below the comparator is **vacuous**, and is marked so;
+- **the hardware multiple** (`Result.multiple`): `ρ = max(1, 1/(s + x/MFU₀))` (`theorem.multiple_bound`, Lean's
+  `Nci.Dampener.remoteDampener`), how many times the hardware that adversary needs the bound demands, with the dark
+  share `s` training like it and the bound's other terms `x` counted at capacity. For a remote regime it is
+  `Nci.Guarantees.DampenerRemote`'s `ρ`; the overhead is that `ρ` at `MFU₀ = 1`. `benchmarks/nci` reads its compute
+  dampener `D` from `multiple_bound`;
 - **the best known attack** (`Result.attack`, `FamilyResult.best_attack`): a construction on a serving block's layout,
   reported beside the bound, not as an end of an interval around it. A bound above an attack is a **contradiction**:
   one of its premises is false for that algorithm at that budget, and the contradiction names it;
@@ -48,7 +53,8 @@ step's design in place of the FLOP model, after a table of the step beside it (`
 - The Lean locks (`Security/lean-audit.json`, `Security/Properties/lean-audit.json`), which `lean.py` reads for each
   citation's status.
 - `benchmarks/census` (devices and the world fleets) and `benchmarks/nci` (the remote regime's terms in `tiers.py`, its
-  algorithms and their traits), which the tests hold the data to.
+  algorithms and their traits), which the tests hold the data to; `Security/Definitions/Nci/Remote.lean`, whose
+  `remoteDampener` `tests/test_envelopes.py` holds `theorem.multiple_bound` to.
 
 ## The model
 
@@ -99,7 +105,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 
 | module | interface |
 |---|---|
-| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServingBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead` |
+| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServingBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
 | `attacks.py` | the same `Argument`, side `attack`, on a serving block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
@@ -126,9 +132,10 @@ uncertified or dark gates at a structure whose `s_×` is above 1, with the struc
 
 The package, its command and its outputs (`benchmarks/rho`, `verity bench rho`, `rho.md`, `rho.json`) and the
 identifiers `Overhead.rho`, `Estimate.rho`, `rho_worst`, `Corner.rho` and the JSON's `rho` all name the overhead;
-`Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. Lean's `Nci.Guarantees.DampenerRemote` and
-`tiers.py`'s `dampener` are their owners' names for the remote composition's overhead. The glossary's `ρ` is the ACCEL
-model's resource rate, not this number.
+`Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The `ρ` of Lean's `Nci.Guarantees.DampenerRemote`
+(`remoteDampener`) and `benchmarks/nci`'s compute dampener `D` are not the overhead but the hardware multiple at the
+unconstrained developer's MFU, `Result.multiple`: the overhead is that multiple at `MFU₀ = 1`. The glossary's `ρ` is the
+ACCEL model's resource rate, not this number.
 
 ## Extending
 

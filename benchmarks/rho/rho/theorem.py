@@ -188,6 +188,12 @@ class Overhead:
         rate = self.dark + (1 - self.eps_dark) * self.g
         return (1 - self.eps_dark) * self.g / rate if rate > 0 else 0.0
 
+    def multiple(self, mfu: float) -> float:
+        """The hardware multiple over an unconstrained developer at `mfu` (`multiple_bound`): the dark leaves train
+        like it, and the monitored share `(1 − ε_dark) g` is counted at capacity, each per the algorithm's
+        `efficiency`. `rho` is this at `mfu = 1`, the reference at capacity, when it is above 1."""
+        return multiple_bound(mfu, self.dark / self.efficiency, (1 - self.eps_dark) * self.g / self.efficiency)
+
 
 def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
              aggregate_only: bool = False, u: float | None = None) -> Overhead:
@@ -216,6 +222,15 @@ def rho(dark: float, g: float, efficiency: float = 1.0, eps_dark: float | None =
     `1 − ε_dark` hold `g` of theirs (`eps_dark` defaults to `dark`)."""
     rate = dark + (1 - (dark if eps_dark is None else eps_dark)) * g
     return efficiency / rate if rate > 0 else math.inf
+
+
+def multiple_bound(mfu: float, s: float, x: float) -> float:
+    """`ρ = max(1, 1/(s + x/MFU₀))`, Lean's `Nci.Dampener.remoteDampener mfu s x`: the hardware multiple a developer
+    needs over an unconstrained one at `MFU₀ = mfu` (`hardwareMultiple`), when the unmonitored share `s` trains like
+    it and the other terms `x` are counted at capacity (`Nci.Guarantees.DampenerRemote`, `DampenerRemotePeriod`).
+    Below `x = MFU₀ (1 − s)` it is 1: those terms alone outrun the unconstrained developer."""
+    rate = s + x / mfu
+    return max(1.0, 1 / rate) if rate > 0 else math.inf
 
 
 def least(*caps: Cap) -> Cap:

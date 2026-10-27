@@ -1,8 +1,9 @@
 """Every number the Notion page "The compute dampener: claims, model and tiers" quotes from ``tiers.py``, ``exposure.py``,
 ``kappa.py`` and ``fit.py``, at the commit this runs on, grouped as the page is: the slide's questions, the symbols,
 section 4's terms, the ladder and the fit bound, years of growth, the regimes, section 6's thresholds and the known holes'
-cheating share. D is ``tiers.evaluate(p, TIERS[t])["dampener"]``, the hardware multiple at MFU_0; every scenario is a set
-of overrides on ``tiers.DEFAULTS``. D by the fit bound (``fit_dampener``) is the same with the fit bound in place of the
+cheating share. D is the overhead calculator's hardware multiple at MFU_0, ``rho.theorem.multiple_bound`` (Lean's
+``Nci.Dampener.remoteDampener``) on ``tiers.evaluate(p, TIERS[t])``'s terms; every scenario is a set of overrides on
+``tiers.DEFAULTS``. D by the fit bound (``fit_dampener``) is the same with the fit bound in place of the
 closed-form memory cap, which the page's memory rungs cite.
 
     python benchmarks/nci/statement.py           # Markdown
@@ -22,11 +23,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(1, str(HERE.parent / "rho"))
 
 import exposure as X  # noqa: E402
 import fit as F  # noqa: E402
 import kappa as K  # noqa: E402
 import tiers as T  # noqa: E402
+from rho.theorem import multiple_bound  # noqa: E402
 
 MB = 8e6
 TODAY = {"residual": 1.0}
@@ -120,7 +123,7 @@ def num(x: float, digits: int = 3) -> str:
 
 
 def dampener(p: dict, tier: str) -> float:
-    return T.evaluate(p, T.TIERS[tier])["dampener"]
+    return multiple_bound(p["mfu"], *T.remote_terms(p, T.evaluate(p, T.TIERS[tier])))
 
 
 def cheat(p: dict) -> float:
@@ -144,7 +147,7 @@ def capped(p: dict, tier: str, mu: float) -> float:
     exhaustion, its monitored terms capped at ``m mu`` of C (the recipe multiplier scales the cap, as there)."""
     r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False})
     monitored = min(r["residual"] + r["declared"], p["g"] * (1 - min(p["unmonitored"], 0.999)) * p["m"] * mu)
-    return max(1.0, p["g"] / (r["unmonitored"] + (monitored + r["cheat"]) / p["mfu"]))
+    return multiple_bound(p["mfu"], *T.remote_terms(p, r | {"residual": monitored, "declared": 0.0}))
 
 
 def fit_dampener(p: dict, tier: str) -> float:
@@ -481,7 +484,8 @@ def render(s: dict) -> str:
     dirty = " (with uncommitted changes in benchmarks/nci)" if s["uncommitted"] else ""
     out = ["# The compute dampener: the page's numbers", "",
            f"Rendered by `benchmarks/nci/statement.py` at commit `{s['commit']}`{dirty}. D is "
-           "`tiers.evaluate(p, TIERS[t])['dampener']`, the hardware multiple at MFU_0 = "
+           "`rho.theorem.multiple_bound` (Lean's `remoteDampener`) on `tiers.evaluate(p, TIERS[t])`'s terms, the "
+           "hardware multiple at MFU_0 = "
            f"{num(T.DEFAULTS['mfu'])}; every case is a set of overrides on `tiers.DEFAULTS`. D by the fit bound "
            "(`fit_dampener`) puts the fit bound at central w_e in place of the closed-form memory cap.", "",
            "## Slide forms: the hardest questions", "", *bullets(s["slide"]),

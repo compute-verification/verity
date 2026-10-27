@@ -1,4 +1,5 @@
-"""Figures for the compute dampener D, the hardware multiple at MFU_0 (``tiers.evaluate()["dampener"]``), with the
+"""Figures for the compute dampener D, the hardware multiple at MFU_0 (``statement.dampener``: the overhead calculator's
+``rho.theorem.multiple_bound`` on ``tiers.evaluate``'s terms), with the
 ladder, its scenarios and its numbers from ``statement.py``: D per rung by status, the (r̂, R_wipe) phase diagram,
 exposure tornados at the best PoUW design and at 6 GB streamed-label wipes, the memory cap by the fit bound and the
 closed form, the cheating share against proving cost, years of delay, and the leaks and their plugs. Generated output:
@@ -94,7 +95,7 @@ EDGE_GB = F.bite_gb(P, N_STAR, P["b_w"])
 SHA, DIRTY = S.commit()
 COMMIT = f"{SHA[:10]}{' with uncommitted changes' if DIRTY else ''}"
 num = S.num
-BASE = (f"D is the hardware multiple at MFU_0 = {num(P['mfu'])} (tiers.evaluate's dampener), at m = {num(P['m'])}, "
+BASE = (f"D is the hardware multiple at MFU_0 = {num(P['mfu'])} (rho.theorem.multiple_bound on tiers.evaluate's terms), at m = {num(P['m'])}, "
         f"kappa = {num(P['kappa'])}, the structural entry fee d = {num(P['d'])} (a run that trains its embedding reads "
         "Layered's lookup columns as updated weights; the Dot16 conjecture's (d, e) = "
         f"({num(CONJECTURE['d'])}, {num(CONJECTURE['e'])}) is conditional), e = {num(P['e'])}, a one-hour verdict lag "
@@ -146,7 +147,7 @@ def parts(p: dict, tier: str, mu: float = math.inf) -> tuple[float, dict[str, fl
     terms = {"unmonitored": r["unmonitored"] / p["g"], "residual": r["residual"] / k if free <= cap else 0.0,
              "memory": cap / k if free > cap else 0.0, "declared": r["declared"] / k if free <= cap else 0.0,
              "cheat": r["cheat"] / k}
-    return max(1.0, 1 / sum(terms.values())), terms
+    return S.capped(p, tier, mu), terms
 
 
 def fit_parts(p: dict, tier: str, **kw: float) -> tuple[float, dict[str, float]]:

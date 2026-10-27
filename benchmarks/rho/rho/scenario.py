@@ -183,6 +183,14 @@ class Result:
         """`μ / MFU`: the overhead of the adversary no protocol encumbers, at its best family's `μ`."""
         return min((f.profile.efficiency for f in self.families), default=1.0) / self.scenario.mfu
 
+    @property
+    def multiple(self) -> float:
+        """The hardware multiple's lower bound over the adversary no protocol encumbers, at the scenario's MFU, at the
+        family the adversary picks: `Overhead.multiple`, which is `Nci.Guarantees.DampenerRemote`'s `ρ` for a remote
+        regime."""
+        return min((f.combined.overhead.multiple(self.scenario.mfu) for f in self.families if f.combined.overhead),
+                   default=math.inf)
+
     def vacuous(self, rho: float) -> bool:
         """A lower bound below `unmonitored`, which excludes no adversary the protocols exist for."""
         return rho < self.unmonitored * (1 - 1e-9)

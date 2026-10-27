@@ -32,7 +32,30 @@ WIPES = {13.0: "Streamed-label wipes, 13 GB", 6.0: "Streamed-label wipes, 6 GB",
 
 
 def dampener(over: dict, tier: str) -> float:
-    return T.evaluate(P | over, T.TIERS[tier])["dampener"]
+    return S.dampener(P | over, tier)
+
+
+def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
+    """Dark fragments of monitored capacity are counted at peak and unmonitored compute trains like the unconstrained
+    developer, so D = 1 / (s + rest / mfu) (audience red team: against a real run at MFU 0.4, D at the defaults is 6.6):
+    the overhead calculator's ``multiple_bound``, Lean's ``remoteDampener``, at tiers' terms."""
+    p = P | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    r = T.evaluate(p, T.TIERS["T4"])
+    rest = r["residual"] + r["declared"] + r["cheat"]
+    assert T.remote_terms(p, r) == (r["unmonitored"], rest)
+    assert S.dampener(p, "T4") == pytest.approx(1 / (r["unmonitored"] + rest / p["mfu"]), rel=1e-9)
+    assert S.dampener(P | {"residual": 1.0}, "T1") == 1.0
+
+
+def test_the_remote_dampener_at_the_defaults_is_1_as_lean_states_it():
+    """At tiers' server (the floor credit, host CPUs at 12.6% of the GPUs) the residual alone, counted at peak, is above
+    MFU_0, so ``Nci.Guarantees.DampenerRemote``'s rho = max(1, 1/(s + x/MFU_0)) is 1 at every tier; 1/eta, the same
+    bound against a reference at capacity (rho at MFU_0 = 1), is 2.2."""
+    for t in T.TIERS:
+        _, x = T.remote_terms(P, T.evaluate(P, T.TIERS[t]))
+        assert x > P["mfu"] and S.dampener(P, t) == 1.0
+    t1 = T.evaluate(P, T.TIERS["T1"])
+    assert 1 / t1["efficiency"] == pytest.approx(2.20, abs=0.01)
 
 
 def quantities(items: list[dict]) -> dict:

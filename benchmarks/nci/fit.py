@@ -44,8 +44,13 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
+from pathlib import Path
 
 import tiers as T
+
+sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "rho"))
+from rho.theorem import multiple_bound
 
 #: loss laws L(N, D) = E + A / N^alpha + B / D^beta in nats per token: Besiroglu et al.'s refit of Chinchilla's Approach 3
 #: (besiroglu-2024-chinchilla-replication/2) and Hoffmann et al.'s original Approach 3 fit, which the refit refutes and
@@ -193,13 +198,13 @@ def residual_with_lag(p: dict) -> float:
 
 
 def dampener(p: dict, mu: float, declared: float, cheat: float = 0.0) -> float:
-    """D under a memory cap ``mu``: 1/D = (min(r + declared, m mu) + cheat) / mfu, as in ``tiers.evaluate``."""
-    return max(1.0, p["mfu"] / (min(residual_with_lag(p) + declared, p["m"] * mu) + cheat))
+    """D under a memory cap ``mu``, with nothing unmonitored: ``multiple_bound`` at x = min(r + declared, m mu) + cheat."""
+    return multiple_bound(p["mfu"], 0.0, min(residual_with_lag(p) + declared, p["m"] * mu) + cheat)
 
 
 def attack_dampener(p: dict, efficiency: float) -> float:
     """D of a developer whose only route to the target is an attack of this efficiency; ``inf`` when it never gets there."""
-    return max(1.0, p["mfu"] / efficiency) if efficiency > 0 else math.inf
+    return multiple_bound(p["mfu"], 0.0, efficiency)
 
 
 def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu", gain: float = 1.0,
@@ -238,7 +243,7 @@ def row(wipe_gb: float, N: float, L: float, fit: str = "besiroglu") -> dict:
     path = replica(p, S, L, B_TRAIN["central"], fit, PATH_GAIN["smalltalk"], PATH_MULTIPLIER["smalltalk"], 0.0)
     return {
         "wipe_gb": wipe_gb, "state_gb": S / T.GB, "visits": visits(S, N, p["b_w"]), "periods": fits["central"][1],
-        "mu_closed": closed_form(p, R), "D_closed": closed["dampener"],
+        "mu_closed": closed_form(p, R), "D_closed": multiple_bound(p["mfu"], *T.remote_terms(p, closed)),
         "mu_fit": mu["central"], "D_fit": dampener(p, mu["central"], declared),
         "D_fit_low": dampener(p, mu["low"], declared), "D_fit_high": dampener(p, mu["high"], declared),
         "fit_over_closed": mu["central"] / closed_form(p, R),

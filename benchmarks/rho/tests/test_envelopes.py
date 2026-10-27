@@ -8,7 +8,7 @@ from rho import envelopes, hardware, lean
 from rho.envelopes import Certifier, Context, Detection, Onsite, Remote
 from rho.params import Param, Registry
 from rho.scenario import build, evaluate_named
-from rho.theorem import Budget, overhead
+from rho.theorem import Budget, multiple_bound, overhead
 
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()
@@ -79,22 +79,54 @@ def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
 def test_with_nothing_else_bounding_the_overhead_is_lean_dampener_remote_at_full_capacity():
     """Lean's `DampenerRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
-    capacity, so its overhead is `DampenerRemote`'s at `MFU₀ = 1`; tiers' `dampener` at its own MFU is 1 at today's
-    defaults."""
+    capacity, so its overhead is `DampenerRemote`'s `ρ` at `MFU₀ = 1`, and `Result.multiple` is that `ρ` at the fleet's
+    MFU."""
     reg = REG.override({"regime.remote.residual": 0.01, "regime.remote.clock_share": 0.0, "regime.remote.host": 0.0})
     ctx = tiers_context(reg)
     remote = envelopes.regime(reg, "remote")
     part = remote.partition(ctx)
     s, u = part.eps_dark, remote.uncertified(ctx)
-    assert overhead(part, lambda b: 0.0, 0.6).rho == pytest.approx(max(1.0, 1 / (s + (1 - s) * u)), rel=1e-12)
-    assert overhead(part, lambda b: 0.0, 0.6).rho > 10
+    o = overhead(part, lambda b: 0.0, 0.6)
+    assert o.rho == pytest.approx(multiple_bound(1.0, s, (1 - s) * u), rel=1e-12) and o.rho > 10
+    assert o.multiple(1.0) == pytest.approx(o.rho, rel=1e-12)
+    assert o.multiple(0.4) == pytest.approx(multiple_bound(0.4, s, (1 - s) * u), rel=1e-12)
     ctx = tiers_context()
-    today = envelopes.regime(REG, "remote")
-    assert all(T.evaluate(tiers_params(ctx), m)["dampener"] == 1.0 for m in T.TIERS.values())
-    s, u = ctx.fleet.eps_dark, today.uncertified(ctx)
+    s, u = ctx.fleet.eps_dark, envelopes.regime(REG, "remote").uncertified(ctx)
     # the inference blocks hold a little weight too, under their caps
     lo = evaluate_named(REG, "remote-tiers-kimi").lo
     assert lo <= 1 / (s + (1 - s) * u) and lo == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
+
+
+#: `Nci.Dampener.remoteDampener` as Security/Definitions/Nci/Remote.lean defines it, and the conclusion of
+#: `Nci.Guarantees.DampenerRemote` (Security/Definitions/Nci/Guarantees/Remote.lean) that names it `ρ`
+REMOTE_DAMPENER = "noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
+REMOTE_CONCLUSION = "remoteDampener mfu (unmonitoredShare C U)"
+
+
+def test_the_remote_rho_is_lean_remote_dampener_at_the_fleets_mfu():
+    """The remote case's `ρ` is `DampenerRemote`'s `remoteDampener MFU₀ s x ≤ hardwareMultiple MFU₀`, at the
+    unconstrained developer's MFU (0.4), not at `MFU₀ = 1`. At tiers' server the residual alone (`x = 0.45`) outruns
+    that developer, so `ρ = 1`, as `benchmarks/nci`'s compute dampener reads it; at the H200 (host CPUs 2.9% of the GPUs,
+    not 12.6%) `ρ = 1.12`, where the overhead, the same bound against the reference at capacity, is 2.80."""
+    lean_dir = ROOT / "Security" / "Definitions" / "Nci"
+    assert REMOTE_DAMPENER in (lean_dir / "Remote.lean").read_text()
+    assert REMOTE_CONCLUSION in (lean_dir / "Guarantees" / "Remote.lean").read_text()
+    for mfu, s, x in ((0.4, 0.001, 0.45), (1.0, 0.0, 0.2), (0.4, 0.0, 0.0), (0.5, 0.2, 0.01)):
+        rate = s + x / mfu
+        assert multiple_bound(mfu, s, x) == (max(1.0, 1 / rate) if rate > 0 else math.inf)
+
+    ctx = tiers_context()
+    t1 = T.evaluate(tiers_params(ctx), T.TIERS["T1"])
+    x = t1["residual"] + t1["declared"] + t1["cheat"]
+    assert x / T.DEFAULTS["mfu"] > 1 and multiple_bound(T.DEFAULTS["mfu"], t1["unmonitored"], x) == 1.0
+    assert evaluate_named(REG, "remote-tiers-kimi").multiple == 1.0
+
+    r = evaluate_named(REG, "remote-h200-kimi")
+    ctx, remote = r.scenario.context, r.scenario.regime
+    s, u = ctx.fleet.eps_dark, remote.uncertified(ctx)
+    assert r.scenario.mfu == ctx.fleet.mfu_train == 0.4
+    assert r.multiple == pytest.approx(multiple_bound(0.4, s, (1 - s) * u), rel=1e-4) == pytest.approx(1.120, abs=1e-3)
+    assert r.lo == pytest.approx(multiple_bound(1.0, s, (1 - s) * u), rel=1e-4) == pytest.approx(2.796, abs=1e-3)
 
 
 def test_the_inference_blocks_are_the_certified_work_that_ran():
