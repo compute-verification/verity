@@ -52,8 +52,9 @@ constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW =
 // to. 288 threads at 168, one producer warp, puts 3 warps and 16,128 registers on sub-partition 0, and the commit's CTAs
 // never land beside it.)
 template <int RP> __host__ __device__ constexpr int threads() { return RP == 3 ? 2 * 128 : RP == 5 ? 4 * 128 : 3 * 128; }
-// RP 5's register splits (HR, the producer and hash warpgroups'), each a build of gemm_r5
-constexpr int R5_SPLITS[] = {104, 96, 88};
+// RP 5's register splits (HR, the producer and hash warpgroups'), each a build of gemm_r5. At 104 the consumers' 152
+// can't keep a 128 x 256 tile's MMAs in flight (ptxas C7512 serializes them) and spill 1 KB; at 88 the hash spills.
+constexpr int R5_SPLITS[] = {96, 88};
 // RP 4's hasher, H: lpt() O rows a 128 x 128 tile; h(ct, j, stop, budget) hashes on O row j of commit tile ct (tm N / 128
 // + tn) by at most budget SHA-512 chunks, until stop() holds, and says whether the row is hashed whole; chunk, a visit's
 // budget (0: a row whole at once)
