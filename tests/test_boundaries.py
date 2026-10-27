@@ -68,8 +68,10 @@ ALLOWED = {
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
-    "core.protocols.sampled_proofs": {"core.claims", "ml.circuits", "ml.commitments", "ml.randomness",
-                                      "core.protocols.profile"},
+    # 2026-10-27 (compute accounting, step 1 of the deployment API): its challenger, firewall, workers and verifier are
+    # parties of the deployment layer (`parties`), their messages the wire's.
+    "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
+                                      "ml.randomness", "core.protocols.profile"},
     # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
     # deployment layer (`wipe_parties`), their messages the wire's.
     "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments", "ml.crypto",
