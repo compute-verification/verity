@@ -1,4 +1,4 @@
-"""The PADDED-TABLE #1 tool (`padded_commit_tiny`) pinned: the explicit one-stage padded Commit of the tiny fixture has every
+"""pad -- the PADDED-TABLE #1 tool (`padded_commit_tiny`) pinned: the explicit one-stage padded Commit of the tiny fixture has every
 required word (inactive included) as one leaf each under one root, the inactive leaves canonical, the s6 fields present, inactive picks
 opened against the root and replayed by relation, and the twin denominators measured -- the criteria of PADDED-TABLE, by name."""
 from __future__ import annotations
@@ -58,5 +58,5 @@ def test_lag1_executes_the_post_eos_step_and_the_twin_is_the_executed_prefix(tmp
     assert PC.main(["--case", "eos-at-event-1", "--lag", "1", "--draws", "16", "--out", str(tmp_path)]) == 0
     row = json.loads((tmp_path / "row_eos-at-event-1_lag1.json").read_text())
     po = row["padded"]["per_owner"]
-    assert po["s=2/step"]["active"] == po["s=2/step"]["words"] > 0 and po["s=3/step"]["bot"] == po["s=3/step"]["words"] > 0  # lag 1: one placeholder step past the EOS
+    assert po["s=2/step"]["active"] == po["s=2/step"]["words"] > 0 and po["s=3/step"]["bot"] == po["s=3/step"]["words"] > 0  # R17-1
     assert row["overhead_vs_twin_executed_prefix"]["twin"]["steps"] == 2 and row["padded"]["events"]["active"] == 2  # served != executed

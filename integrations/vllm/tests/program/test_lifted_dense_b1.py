@@ -1,9 +1,9 @@
-"""Stage DENSE B1, Program side (CPU) — **padded baseline (experimental)**.
+"""Stage DENSE B1, Program side (CPU) — **padded baseline (experimental)**, lane `pad` (R16, BRIEF §7B).
 
 The lifted fixed Program of one real-shape B1 request — SmolLM2-135M (`B0_CONFIG`, the registry's expansion oracle, the model of the
 `smollm2-135m__…__b1__i256__o32` panel row) under the D54-corrected FA2 record (`attention_fa2(64)`, `Serve_v4`'s binding record) at
 `prompt_len = 256`, `max_tokens = cap = 32` (`D_MAX = cap − 1 = 31` decode steps, SPEC §4 [R3]) with a declared EOS set — built from the
-manifest alone and fixed before any execution.  What this module establishes (LIFTING-REVIEW T-1, T-3(ii) arithmetic, PAD-02, PAD-03):
+manifest alone and fixed before any execution.  What this module establishes (LIFTING-REVIEW T-1, T-3(ii) arithmetic, PAD-03, F-pad-06):
 
   * the builder consumes `(C, prompt_len, cap, eos_set)` and the registered Definitions only; a served length is refused by name;
   * the Program, its gate count and digest are functions of the manifest (differ with `cap`, `prompt_len`, `eos_set`; never with a stop);
@@ -13,10 +13,10 @@ manifest alone and fixed before any execution.  What this module establishes (LI
   * the sampling-event population is `cap` structurally, whatever the EOS set; every step's gate range is present;
   * the T-3(ii) exact count under `GUARD=in`: `Σ_{s ≥ a_r} (1 + 2·NL·KVH·D)` ⊥ return leaves — as arithmetic AND as the Program's own
     step return arity; the §7 rule on a served transcript with an early EOS reproduces `out[]` and names the shortfall failure;
-  * PAD-02 leaf layout: `enc(⊥_32) = 2^32` and `Active(2^32 − 1)` survive the `⌈(w+1)/32⌉`-word pack → unpack; a one-word layout
+  * PAD-02 / F-pad-06 leaf layout: `enc(⊥_32) = 2^32` and `Active(2^32 − 1)` survive the `⌈(w+1)/32⌉`-word pack → unpack; a one-word layout
     for a 33-bit leaf is refused by name, never read as Active.
 
-What it does NOT establish (needs a real record with an early EOS, served on a GPU): the active-step bit-for-bit replay against the
+What it does NOT establish (needs a real record with an early EOS on a pod — HELP M-0076): the active-step bit-for-bit replay against the
 active-reference run and the C2 replay at active / transition / inactive steps.  Nothing here is inferred from an active-reference green.
 """
 from __future__ import annotations
@@ -77,7 +77,7 @@ def test_builder_inputs_are_the_manifest_and_a_served_length_is_refused():
     assert params["lag"].default is inspect.Parameter.empty  # DP-pad-02: the lag is declared, never defaulted
     sp = L.lifted_request(C, LP, CAP, EOS, attention=ATT, lag=0)
     assert sp is L.lifted_request(C, LP, CAP, EOS, T=CAP - 1, attention=ATT, lag=0)  # T = cap - 1 is the only admissible T
-    assert sp.bindings["STEPS"] == D_MAX and "D_MAX" not in sp.bindings and sp.bindings["GUARD"] == "in" and sp.bindings["EOS"] == EOS  # the static is STEPS
+    assert sp.bindings["STEPS"] == D_MAX and "D_MAX" not in sp.bindings and sp.bindings["GUARD"] == "in" and sp.bindings["EOS"] == EOS  # F-pad-12
     with pytest.raises(ValueError, match="never from a served length"):
         L.lifted_request(C, LP, CAP, EOS, T=20, attention=ATT, lag=0)  # served 21 of 32 → rebuilt to the served length: refused
     with pytest.raises(ValueError, match="never from a served length"):
@@ -89,8 +89,8 @@ def test_builder_inputs_are_the_manifest_and_a_served_length_is_refused():
 
 
 def test_refusals_fire_eagerly_in_the_builder_and_lazily_on_a_direct_bind_both_by_name():
-    """`lserve()`/`lifted_request()` validate BEFORE the lazy specialization exists (no `Program()` needed); a direct
-    `bind(LServe, …)` that skips the builder is still refused, at `Program()`, by the same names.  The static is `STEPS`
+    """F-pad-13: `lserve()`/`lifted_request()` validate BEFORE the lazy specialization exists (no `Program()` needed); a direct
+    `bind(LServe, …)` that skips the builder is still refused, at `Program()`, by the same names.  F-pad-12: the static is `STEPS`
     (decode steps = cap − 1), so the spec string's population reads `STEPS + 1 = cap`."""
     from verity.ml.circuits import bind
     eager = [
@@ -155,7 +155,7 @@ def _lserve_names(d_max: int, n_eos: int) -> list[str]:
 def test_address_stability_modulo_guard_nodes_vs_serve_v2(programs):
     p_u, p_l = programs
     assert p_u.gates > 10**9  # a real shape, not a toy
-    # the guard (2 per step + |E| + bot) + the Continuation_v1 controller (is_eos, out per slot; emit per slot) over cap = D_MAX + 1 slots
+    # the R17-1 guard (2 per step + |E| + bot) + the Continuation_v1 controller (R17-32: is_eos, out per slot; emit per slot) over cap = D_MAX + 1 slots
     assert p_l.gates == p_u.gates + 2 * D_MAX + len(EOS) + 2 + 3 * (D_MAX + 1) == p_u.gates + L.continuation_gate_count(D_MAX + 1, len(EOS), 0)
     assert p_l.input_gates == p_u.input_gates  # the same prescribed leaves (lifted widths, same count)
     names = [n for n, _ in _root_named(p_l)]
@@ -182,7 +182,7 @@ def test_address_stability_modulo_guard_nodes_vs_serve_v2(programs):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# SPEC §4 [R3]: the population is structural — cap sampling events, every step present, whatever the EOS set
+# R3: the population is structural — cap sampling events, every step present, whatever the EOS set
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -225,7 +225,7 @@ def test_exact_count_rule_and_the_served_prefix_rule_on_the_real_shape(programs)
     assert len(out) == CAP and out[:5] == served and out[5:] == [L.enc_bot(32)] * 27
     assert L.activity_prefix(out, EOS, CAP) == 5 == L.served_count(out)
     with pytest.raises(L.ServedPrefixFailure, match=r"n_r=4 a_r=32: declared activity not executed"):
-        L.assign_inactive("smol/r1", served[:4], EOS, CAP, lag=0)  # stopped without an EOS below the cap
+        L.assign_inactive("smol/r1", served[:4], EOS, CAP, lag=0)  # stopped without an EOS below the cap (F-pm-24's shape)
     with pytest.raises(L.ServedPrefixFailure, match=r"n_r=6 a_r=5: execution past EOS"):
         L.assign_inactive("smol/r2", served + [7], EOS, CAP, lag=0)
     full = [int(x) for x in RNG.integers(1, C["V"], CAP)]
@@ -233,7 +233,7 @@ def test_exact_count_rule_and_the_served_prefix_rule_on_the_real_shape(programs)
 
 
 # ---------------------------------------------------------------------------------------------------------
-# PAD-02: the leaf layout round trip (attack A5)
+# PAD-02 / F-pad-06: the leaf layout round trip (attack A5)
 # ---------------------------------------------------------------------------------------------------------
 
 
