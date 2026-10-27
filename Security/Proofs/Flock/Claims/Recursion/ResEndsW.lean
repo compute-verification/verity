@@ -301,7 +301,7 @@ theorem partPorts_of {sh : _root_.Flock.Shape} {jj : ℕ} {S0 : _root_.Flock.Rec
   unfold RecVStar.partPorts
   simp only [hS, hg, hj, bind, Except.bind, pure, Except.pure]
 
-set_option maxHeartbeats 1000000 in
+set_option maxHeartbeats 4000000 in
 /-- **P3's ends half**, under the commit tie (`InnerAccTie`): in a piece's port context, at a decision, each element
 of the copy past the frame is one of `w`'s last four, `acc0`'s or `acc1`'s element `o` (`acc_elem`), and the copy holds
 there its committed row's element at the piece's instance `n` (`copy_rowElems`), which is the row its port reads
