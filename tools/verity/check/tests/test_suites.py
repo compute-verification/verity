@@ -1971,3 +1971,16 @@ def test_a_changed_run_fails_nothing_on_a_test_red_on_main_and_check_s_own_run_s
 
 def _failed_beside(out: Path) -> bool:
     return out.with_name(f"{out.stem}.failed.json").exists()
+
+
+def test_a_report_a_dying_pytest_left_empty_or_cut_short_is_no_report(monkeypatch, tmp_path):
+    """A suite whose pytest dies in its session finish leaves its report empty or half-written; reading it must not raise,
+    which took the invocation's other suites down before they reported (r20261027-114144-e99b)."""
+    S = _suites(monkeypatch, tmp_path)
+    report = tmp_path / "report.json"
+    assert S.read_report(report) is None
+    for text in ("", '{"reads": {', "[]", "null"):
+        report.write_text(text)
+        assert S.read_report(report) is None, text
+    report.write_text('{"reads": {}, "outside": {}}')
+    assert S.read_report(report) == {"reads": {}, "outside": {}}

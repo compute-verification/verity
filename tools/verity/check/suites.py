@@ -1608,6 +1608,16 @@ def store_custody() -> None:
         os.environ[CUSTODY_ENV], os.environ[STORE_REQUIRED_ENV] = str(d), "1"
 
 
+def read_report(report: Path) -> dict | None:
+    """The guard's report, or None when there is none to read: missing, empty, or cut short by a pytest that died in its
+    session finish.  None fails that suite alone (not `reported`); the invocation's other suites keep their verdicts."""
+    try:
+        rep = json.loads(report.read_text())
+    except (OSError, ValueError):
+        return None
+    return rep if isinstance(rep, dict) else None
+
+
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
         reuse: list[str] = (), timeout_s: float = 0.0, threads: int = 0) -> Result:
     slug = suite.path.replace("/", "_") if suite.path != "." else "repository"
@@ -1675,7 +1685,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     sig = signal.Signals(-rc).name if rc < 0 else ""
     timed_out = timeout_s if expired.is_set() else 0.0
     oom = sig == "SIGKILL" and not timed_out and ooms is not None and (oom_kills() or 0) > ooms
-    rep = json.loads(report.read_text()) if report.exists() else None
+    rep = read_report(report)
     ran_all = rc == 0 or (rc == 5 and bool(reuse))           # 5: nothing left to run, every test's pass reused
     rep = rep or {}
     reported = bool(rep)
