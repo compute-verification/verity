@@ -1,7 +1,7 @@
 import Flock.Tmpl
 
 /-!
-# What `Tmpl.wellFormed` gives the template fold's proof (PRF-133, part 3)
+# What `Tmpl.wellFormed` gives the template fold's proof
 
 `parse` refuses a template that is not `Tmpl.wellFormed`, a total check on the description. Here it gives the hypotheses
 of `fold_eq_foldRef_layout` that read the template: each call's binding is as long as its callee's inputs
